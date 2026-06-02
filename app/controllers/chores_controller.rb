@@ -106,6 +106,12 @@ class ChoresController < ApplicationController
                  .where(user_id: current_user.id)
                  .where("completed_at >= :ts OR updated_at >= :ts", ts: since_ts)
                  .distinct.pluck(:chore_id).to_set
+               # Hot-pick rotation and streak resets don't touch
+               # chore.updated_at, so the basic diff above would miss
+               # chores whose hot_multiplier/streak_multiplier just
+               # changed. Pull their ids in explicitly.
+               touched_ids.merge(ChoreHotPick.where(day_key: @day).where("created_at >= ?", since_ts).pluck(:chore_id))
+               touched_ids.merge(ChoreStreak.where(user_id: current_user.id).where("updated_at >= ?", since_ts).pluck(:chore_id))
                @chores.select { |c| c.updated_at > since_ts || touched_ids.include?(c.id) }
              else
                @chores
@@ -139,7 +145,8 @@ class ChoresController < ApplicationController
   end
 
   def history
-    @balance = current_user.chore_balance
+    @breakdown = current_user.chore_balance_breakdown
+    @balance = @breakdown[:balance]
     @page = [params[:page].to_i, 1].max
     @per = 50
     @q = params[:q].to_s
@@ -195,15 +202,13 @@ class ChoresController < ApplicationController
       .includes(:user)
       .order(completed_at: :desc)
       .limit(50)
-    actors_by_id = User.where(id: completions.map(&:user_id).uniq).index_by(&:id)
     render json: {
       chore: history_chore_json(chore),
       entries: completions.map { |c|
-        actor = actors_by_id[c.user_id]
         {
           id:               c.id,
           user_id:          c.user_id,
-          actor_username:   actor&.username,
+          actor_username:   c.user&.username,
           paid_pebbles:     c.paid_pebbles,
           base_pebbles:     c.base_pebbles,
           hot_multiplier:    c.hot_multiplier.to_f,
@@ -348,7 +353,12 @@ class ChoresController < ApplicationController
     page = @page
     per = @per
 
-    base_completions = current_user.chore_completions.includes(:chore).joins(:chore)
+    # Only JOIN chores when the search needs to filter on chore fields.
+    # The eager `.includes(:chore)` already loads chore via a separate
+    # IN-query, so for the blank-search common case we skip the extra
+    # JOIN entirely — including in the COUNT below.
+    base_completions = current_user.chore_completions.includes(:chore)
+    base_completions = base_completions.joins(:chore) if @q.present?
     base_withdrawals = current_user.chore_withdrawals
     base_transfers   = ChoreTransfer
       .where("from_user_id = :id OR to_user_id = :id", id: current_user.id)
@@ -381,8 +391,9 @@ class ChoresController < ApplicationController
     page_transfers   = @entries.count { |e| e.is_a?(ChoreTransfer) }
     from = ((@page - 1) * @per) + 1
     to   = [@page * @per, @total_count].min
-    today = ChoreDay.current(current_user)
-    today_earnings = current_user.chore_completions.where(day_key: today).sum(:paid_pebbles)
+    # Reuse the breakdown's already-computed today_earnings instead of
+    # firing a second SUM query for the same window.
+    today_earnings = @breakdown[:today_earnings]
 
     {
       page: @page,
@@ -489,7 +500,7 @@ class ChoresController < ApplicationController
     permitted = params.require(:chore).permit(
       :name, :short_name, :icon, :reward_pebbles, :threshold_seconds,
       :one_off, :starts_on, :show_on_daily_view,
-      :sharing_mode, :assigned_to_user_id,
+      :sharing_mode, :assigned_to_user_id, :notes_template,
       aliases: [],
       recurrence: {},
     )

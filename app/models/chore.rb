@@ -7,6 +7,7 @@
 #  archived_at         :datetime
 #  icon                :text
 #  name                :text             not null
+#  notes_template      :text
 #  one_off             :boolean          default(FALSE), not null
 #  recurrence          :jsonb
 #  reward_pebbles      :integer          default(0), not null

@@ -46,6 +46,21 @@
                data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
       </div>
 
+      <%# Completion-time notes. Plain text is stored verbatim on the
+        ChoreCompletion. `{Label}` / `{Label:Numeric}` /
+        `{Label:Select [a, b, "c, d"]}` placeholders trigger a prompt
+        modal on click — fields render in order, values interpolate
+        into the saved note, and raw inputs are persisted in
+        completion.metadata["note_values"]. %>
+      <div class="form-section">
+        <label class="field-label">Completion Notes</label>
+        <textarea data-field="notes_template" rows="2"
+                  placeholder='e.g. Fed Whisper {Food Type:Select [Beef, Chicken, "Turkey, Shredded"]} with {Kibble Ounces:Numeric}oz kibble'
+                  autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                  data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other"></textarea>
+        <span class="field-hint">Use <code>{Label}</code>, <code>{Label:Numeric}</code>, or <code>{Label:Select [a, b, "c, d"]}</code> to prompt for input on completion.</span>
+      </div>
+
       <%# ----- Pebbles ----- %>
       <div class="form-section">
         <label class="field-label">Pebbles</label>
@@ -340,6 +355,26 @@
     <div class="chore-history-body" data-chore-history-body>
       <p style="color:var(--chores-muted);">Loading…</p>
     </div>
+  </div>
+</div>
+
+<%# Note prompt modal — opened on tap for any chore whose notes_template
+  contains `{...}` placeholders. JS builds the field rows from the parsed
+  template; submit interpolates values into the saved note and queues the
+  completion via the same offline-safe path as a plain tap. %>
+<div id="chore-note-prompt-modal" class="chores-modal-backdrop hidden" data-note-prompt-modal>
+  <div class="chores-modal chore-note-prompt-modal">
+    <div class="modal-head">
+      <h3 data-note-prompt-title>Notes</h3>
+      <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+    </div>
+    <form class="chore-form basic" data-note-prompt-form autocomplete="off" novalidate data-form-type="other">
+      <div class="note-prompt-fields" data-note-prompt-fields></div>
+      <div class="form-actions">
+        <button type="button" class="ghost" data-action="cancel">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
   </div>
 </div>
 

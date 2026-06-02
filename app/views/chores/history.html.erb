@@ -226,6 +226,19 @@
       requestAnimationFrame(() => el.classList.add("show"));
       setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 250); }, 2400);
     }
+    // Disable a submit-style button and show the centered .loading
+    // spinner (defined in chores.scss) while an async action runs.
+    // Re-entrant clicks are dropped because the button is disabled.
+    async function withSavingState(btn, fn) {
+      if (!btn || btn.disabled) return;
+      btn.disabled = true;
+      btn.classList.add("loading");
+      try { return await fn(); }
+      finally {
+        btn.disabled = false;
+        btn.classList.remove("loading");
+      }
+    }
 
     // ---------- offline queue (read-only on this page) ----------
     function loadQueue() {
@@ -700,8 +713,9 @@
       }
     });
 
-    modal.querySelector('[data-modal-save]').addEventListener("click", async () => {
+    modal.querySelector('[data-modal-save]').addEventListener("click", async (e) => {
       if (!currentEditTarget) return;
+      const saveBtn = e.currentTarget;
       const note = modal.querySelector('[data-modal-note]').value;
       const completedLocal = modal.querySelector('[data-modal-completed-at]').value;
       const hotMult    = parseFloat(modal.querySelector('[data-modal-hot-mult]').value);
@@ -721,13 +735,15 @@
         const path = currentEditTarget.kind === "withdrawal" ? "withdrawals" : "transfers";
         const payload = { [key]: { amount_pebbles: amount, note: note } };
         if (completedIso) payload[key].created_at = completedIso;
-        try {
-          const data = await api(`/chores/${path}/${row.dataset[idField]}`, "PATCH", payload);
-          if (data?.today_earnings != null) setTodayEarnings(data.today_earnings);
-          await fetchHistory({ push: false });
-          flash("Saved");
-          closeModal();
-        } catch (e) { flash("Save failed: " + e.message, "error"); }
+        await withSavingState(saveBtn, async () => {
+          try {
+            const data = await api(`/chores/${path}/${row.dataset[idField]}`, "PATCH", payload);
+            if (data?.today_earnings != null) setTodayEarnings(data.today_earnings);
+            await fetchHistory({ push: false });
+            flash("Saved");
+            closeModal();
+          } catch (err) { flash("Save failed: " + err.message, "error"); }
+        });
         return;
       }
 
@@ -763,22 +779,25 @@
         },
       };
       if (completedIso) payload.chore_completion.completed_at = completedIso;
-      try {
-        const data = await api(`/chores/completions/${row.dataset.completionId}`, "PATCH", payload);
-        // Header pill stays today_earnings. No fallback to lifetime —
-        // a missing today_earnings would mean a server bug, surface
-        // it rather than mask it with the wrong number.
-        if (data?.today_earnings != null) setTodayEarnings(data.today_earnings);
-        // Refetch the current page so the row sorts to its new position
-        // if the timestamp changed — cheaper than reconciling in place.
-        await fetchHistory({ push: false });
-        flash("Saved");
-        closeModal();
-      } catch (e) { flash("Save failed: " + e.message, "error"); }
+      await withSavingState(saveBtn, async () => {
+        try {
+          const data = await api(`/chores/completions/${row.dataset.completionId}`, "PATCH", payload);
+          // Header pill stays today_earnings. No fallback to lifetime —
+          // a missing today_earnings would mean a server bug, surface
+          // it rather than mask it with the wrong number.
+          if (data?.today_earnings != null) setTodayEarnings(data.today_earnings);
+          // Refetch the current page so the row sorts to its new position
+          // if the timestamp changed — cheaper than reconciling in place.
+          await fetchHistory({ push: false });
+          flash("Saved");
+          closeModal();
+        } catch (err) { flash("Save failed: " + err.message, "error"); }
+      });
     });
 
-    modal.querySelector('[data-modal-delete]').addEventListener("click", async () => {
+    modal.querySelector('[data-modal-delete]').addEventListener("click", async (e) => {
       if (!currentEditTarget) return;
+      const delBtn = e.currentTarget;
       if (currentEditTarget.kind === "pending") {
         const q = loadQueue();
         const removed = q.splice(currentEditTarget.idx, 1)[0];
@@ -796,24 +815,28 @@
           ? "Delete this withdrawal? Balance will be recomputed."
           : "Delete this transfer? Both balances will be refunded.";
         if (!confirm(prompt)) return;
-        try {
-          const data = await api(`/chores/${path}/${row.dataset[idField]}`, "DELETE");
-          if (data?.today_earnings != null) setTodayEarnings(data.today_earnings);
-          await fetchHistory({ push: false });
-          flash("Removed", "warn");
-          closeModal();
-        } catch (e) { flash("Delete failed: " + e.message, "error"); }
+        await withSavingState(delBtn, async () => {
+          try {
+            const data = await api(`/chores/${path}/${row.dataset[idField]}`, "DELETE");
+            if (data?.today_earnings != null) setTodayEarnings(data.today_earnings);
+            await fetchHistory({ push: false });
+            flash("Removed", "warn");
+            closeModal();
+          } catch (err) { flash("Delete failed: " + err.message, "error"); }
+        });
         return;
       }
       const row = currentEditTarget.row;
       if (!confirm("Delete this completion? Balance will be recomputed.")) return;
-      try {
-        const data = await api(`/chores/completions/${row.dataset.completionId}`, "DELETE");
-        if (data?.today_earnings != null) setTodayEarnings(data.today_earnings);
-        await fetchHistory({ push: false });
-        flash("Removed", "warn");
-        closeModal();
-      } catch (e) { flash("Delete failed: " + e.message, "error"); }
+      await withSavingState(delBtn, async () => {
+        try {
+          const data = await api(`/chores/completions/${row.dataset.completionId}`, "DELETE");
+          if (data?.today_earnings != null) setTodayEarnings(data.today_earnings);
+          await fetchHistory({ push: false });
+          flash("Removed", "warn");
+          closeModal();
+        } catch (err) { flash("Delete failed: " + err.message, "error"); }
+      }, "Deleting…");
     });
 
     // ---------- explicit reload only ----------

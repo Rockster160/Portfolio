@@ -166,6 +166,17 @@ RSpec.describe "Chores", type: :request do
     expect(response).to have_http_status(:created)
   end
 
+  it "POST /chores/items persists notes_template and serializes it back" do
+    template = 'Fed Whisper {Food Type:Select [Beef, Chicken, "Turkey, Shredded"]} with {Kibble Ounces:Numeric}oz kibble'
+    post "/chores/items",
+      params: { chore: { name: "Feed Whisper", reward_pebbles: 1, notes_template: template } }.to_json,
+      headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+    expect(response).to have_http_status(:created)
+    body = JSON.parse(response.body)
+    expect(body["chore"]["notes_template"]).to eq(template)
+    expect(Chore.last.notes_template).to eq(template)
+  end
+
   it "POST /chores/items/:id/completion creates a completion + updates balance" do
     chore = create(:chore, created_by_user: user, name: "Walk", reward_pebbles: 5)
     expect {
@@ -177,6 +188,26 @@ RSpec.describe "Chores", type: :request do
     # Canonical chore JSON in response — ChoreStore upserts directly from this.
     expect(body["chore"]["done_count_today"]).to eq(1)
     expect(body["chore"]["last_completed_at"]).to be_present
+  end
+
+  it "POST /chores/items/:id/completion stores note + note_values from the body" do
+    chore = create(:chore, created_by_user: user, name: "Feed Whisper", reward_pebbles: 1,
+                   notes_template: 'Fed Whisper {Food Type} with {Kibble Ounces}oz kibble')
+    post "/chores/items/#{chore.id}/completion",
+      params: {
+        chore_completion: {
+          note: "Fed Whisper Beef with 6oz kibble",
+          note_values: { "Food Type" => "Beef", "Kibble Ounces" => "6" },
+        },
+      }.to_json,
+      headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+    expect(response).to have_http_status(:created)
+    completion = ChoreCompletion.last
+    expect(completion.note).to eq("Fed Whisper Beef with 6oz kibble")
+    expect(completion.metadata["note_values"]).to eq({
+      "Food Type" => "Beef",
+      "Kibble Ounces" => "6",
+    })
   end
 
   it "DELETE completion removes the most recent and updates balance" do

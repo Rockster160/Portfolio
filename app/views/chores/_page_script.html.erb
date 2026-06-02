@@ -98,6 +98,19 @@
     requestAnimationFrame(() => el.classList.add("show"));
     setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 250); }, 2400);
   }
+  // Disable a submit-style button and show the centered .loading
+  // spinner (defined in chores.scss) while an async action runs.
+  // Re-entrant clicks are dropped because the button is disabled.
+  async function withSavingState(btn, fn) {
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    btn.classList.add("loading");
+    try { return await fn(); }
+    finally {
+      btn.disabled = false;
+      btn.classList.remove("loading");
+    }
+  }
 
   // ============================================================
   // ChoreStore — the data model. Every read derives from here.
@@ -857,10 +870,148 @@
       base_pebbles: c.reward_pebbles || 0,
     };
   }
-  async function completeChore(id) {
+  // Parses a chore's `notes_template` into a static-text + field-token
+  // sequence plus a deduped field list. Placeholder syntax:
+  //   {Label}                       → text input
+  //   {Label:Numeric}               → number input
+  //   {Label:Date}                  → date input
+  //   {Label:Select [a, b, "c, d"]} → select; quoted options keep commas
+  // Same-labeled placeholders collapse to one field; the value substitutes
+  // at every occurrence in the saved note.
+  function parseNoteTemplate(template) {
+    const tokens = [];
+    const fields = [];
+    const seen = new Set();
+    if (!template) return { tokens, fields };
+    const re = /\{([^{}]+)\}/g;
+    let last = 0, m;
+    while ((m = re.exec(template)) !== null) {
+      if (m.index > last) tokens.push({ kind: "text", text: template.slice(last, m.index) });
+      const spec = parseNoteFieldSpec(m[1]);
+      if (!seen.has(spec.key)) { seen.add(spec.key); fields.push(spec); }
+      tokens.push({ kind: "field", key: spec.key });
+      last = re.lastIndex;
+    }
+    if (last < template.length) tokens.push({ kind: "text", text: template.slice(last) });
+    return { tokens, fields };
+  }
+  function parseNoteFieldSpec(inner) {
+    const colon = inner.indexOf(":");
+    let label, type = "text", options = null;
+    if (colon === -1) {
+      label = inner.trim();
+    } else {
+      label = inner.slice(0, colon).trim();
+      const rest = inner.slice(colon + 1).trim();
+      const lb = rest.indexOf("[");
+      if (lb >= 0) {
+        type = rest.slice(0, lb).trim().toLowerCase();
+        const optsStr = rest.slice(lb + 1).replace(/\]\s*$/, "");
+        options = parseNoteOptionList(optsStr);
+      } else {
+        type = rest.toLowerCase();
+      }
+    }
+    return { key: label, label: label, type: type || "text", options: options };
+  }
+  function parseNoteOptionList(s) {
+    const out = []; let cur = ""; let q = false;
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (ch === '"') { q = !q; continue; }
+      if (ch === "," && !q) { const v = cur.trim(); if (v) out.push(v); cur = ""; continue; }
+      cur += ch;
+    }
+    const tail = cur.trim(); if (tail) out.push(tail);
+    return out;
+  }
+  function interpolateNoteTemplate(parsed, values) {
+    return parsed.tokens.map(t => {
+      if (t.kind === "text") return t.text;
+      const v = values[t.key];
+      return v == null ? "" : String(v);
+    }).join("");
+  }
+
+  // Note-prompt modal — appears on tap for any chore whose
+  // notes_template carries `{...}` placeholders. Runs entirely client-
+  // side; submit calls doCompleteChore so the same offline-safe queue
+  // path handles the resulting POST.
+  const notePromptModal  = document.querySelector('[data-note-prompt-modal]');
+  const notePromptForm   = notePromptModal?.querySelector('[data-note-prompt-form]');
+  const notePromptFields = notePromptModal?.querySelector('[data-note-prompt-fields]');
+  const notePromptTitle  = notePromptModal?.querySelector('[data-note-prompt-title]');
+  let activeNotePrompt = null;
+
+  function renderNotePromptField(f, i) {
+    const id = `note-prompt-field-${i}`;
+    const keyAttr = esc(f.key);
+    const label = `<label class="field-label" for="${id}">${esc(f.label)}</label>`;
+    let input;
+    if (f.type === "select" && f.options && f.options.length) {
+      const opts = ['<option value=""></option>']
+        .concat(f.options.map(o => `<option value="${esc(o)}">${esc(o)}</option>`))
+        .join("");
+      input = `<select id="${id}" data-prompt-key="${keyAttr}">${opts}</select>`;
+    } else if (f.type === "numeric" || f.type === "number") {
+      input = `<input id="${id}" type="number" inputmode="decimal" data-prompt-key="${keyAttr}" autocomplete="off">`;
+    } else if (f.type === "date") {
+      input = `<input id="${id}" type="date" data-prompt-key="${keyAttr}" autocomplete="off">`;
+    } else {
+      input = `<input id="${id}" type="text" data-prompt-key="${keyAttr}" autocomplete="off">`;
+    }
+    return `<div class="form-section">${label}${input}</div>`;
+  }
+  function openNotePromptModal(chore, parsed) {
+    if (!notePromptModal || !notePromptForm || !notePromptFields) return;
+    activeNotePrompt = { chore, parsed };
+    if (notePromptTitle) notePromptTitle.textContent = chore.short_name || chore.name || "Notes";
+    notePromptFields.innerHTML = parsed.fields.map((f, i) => renderNotePromptField(f, i)).join("");
+    notePromptModal.classList.remove("hidden");
+    scrollModalToTop(notePromptModal);
+    const first = notePromptFields.querySelector("input, select, textarea");
+    first?.focus();
+  }
+  function closeNotePrompt() {
+    notePromptModal?.classList.add("hidden");
+    activeNotePrompt = null;
+    if (notePromptFields) notePromptFields.innerHTML = "";
+  }
+  notePromptForm?.addEventListener("submit", e => {
+    e.preventDefault();
+    if (!activeNotePrompt) { closeNotePrompt(); return; }
+    const { chore, parsed } = activeNotePrompt;
+    const values = {};
+    notePromptFields.querySelectorAll("[data-prompt-key]").forEach(el => {
+      values[el.dataset.promptKey] = el.value;
+    });
+    const note = interpolateNoteTemplate(parsed, values);
+    closeNotePrompt();
+    doCompleteChore(chore, { note: note, noteValues: values });
+  });
+  wireModalDismiss(notePromptModal, { onCancel: closeNotePrompt, onBackdrop: closeNotePrompt });
+
+  function completeChore(id) {
     const c = ChoreStore.get(parseInt(id, 10));
     if (!c) return;
-    const sid = String(id);
+    const template = (c.notes_template || "").toString();
+    if (template) {
+      const parsed = parseNoteTemplate(template);
+      if (parsed.fields.length > 0) {
+        openNotePromptModal(c, parsed);
+        return;
+      }
+      // Template with no placeholders — store the literal text verbatim.
+      doCompleteChore(c, { note: template, noteValues: null });
+      return;
+    }
+    doCompleteChore(c, { note: null, noteValues: null });
+  }
+
+  async function doCompleteChore(c, opts) {
+    const note = opts && opts.note;
+    const noteValues = opts && opts.noteValues;
+    const sid = String(c.id);
     const clickAt = new Date().toISOString();
     localClickTs.set(sid, Date.now());
 
@@ -870,17 +1021,21 @@
       last_actor_username: VIEWER_USERNAME || c.last_actor_username,
     });
 
+    const body = { client_completed_at: clickAt, tab_id: TAB_ID };
+    const overrides = {};
+    if (note != null && note !== "") overrides.note = note;
+    if (noteValues && Object.keys(noteValues).length > 0) overrides.note_values = noteValues;
+    if (Object.keys(overrides).length > 0) body.chore_completion = overrides;
+
     if (!navigator.onLine) {
       enqueue({ url: `/chores/items/${c.id}/completion`, method: "POST",
-                body: { client_completed_at: clickAt, tab_id: TAB_ID },
-                meta: queueMetaFor(c) });
+                body: body, meta: queueMetaFor(c) });
       return;
     }
 
     inFlight.add(sid);
     try {
-      const data = await api(`/chores/items/${c.id}/completion`, "POST",
-        { client_completed_at: clickAt, tab_id: TAB_ID });
+      const data = await api(`/chores/items/${c.id}/completion`, "POST", body);
       reconcile(data);
       if (data.skipped) flash(data.skipped_reason || "Cooldown — no payout", "warn");
       else if (data.paid) flash(`+${formatCount(data.paid)}p`);
@@ -895,8 +1050,7 @@
         // User never sees an "Error" flash — their tap was accepted
         // locally and will sync.
         enqueue({ url: `/chores/items/${c.id}/completion`, method: "POST",
-                  body: { client_completed_at: clickAt, tab_id: TAB_ID },
-                  meta: queueMetaFor(c) });
+                  body: body, meta: queueMetaFor(c) });
         setConnDot("syncing");
         scheduleQueueRetry();
       } else {
@@ -1559,6 +1713,7 @@
     setField("short_name", c.short_name === c.name ? "" : c.short_name);
     setIconField(c.icon || "");
     setField("aliases_csv", (c.aliases || []).join(", "));
+    setField("notes_template", c.notes_template || "");
     const reward = c.reward_pebbles || 0;
     selectRewardPill(reward);
     setField("reward_pebbles", reward);
@@ -1735,6 +1890,7 @@
         sharing_mode: sharingMode,
         assigned_to_user_id: getField("assigned_to_user_id") || null,
         aliases: (getField("aliases_csv") || "").split(",").map(s => s.trim()).filter(Boolean),
+        notes_template: getField("notes_template") || "",
         recurrence: recurrence,
       },
     };
@@ -1807,7 +1963,7 @@
   // edit-chore and quick-multiplier modals need state-reset callbacks
   // on dismissal — those are bound explicitly below; everything else
   // gets the default "just hide" behavior here.
-  const SPECIALIZED_MODAL_SELECTORS = ['[data-chore-modal]', '[data-multiplier-modal]'];
+  const SPECIALIZED_MODAL_SELECTORS = ['[data-chore-modal]', '[data-multiplier-modal]', '[data-note-prompt-modal]'];
   document.querySelectorAll('.chores-modal-backdrop').forEach(m => {
     if (SPECIALIZED_MODAL_SELECTORS.some(sel => m.matches(sel))) return;
 
@@ -1928,6 +2084,7 @@
 
   goalForm?.addEventListener("submit", async e => {
     e.preventDefault();
+    const submitBtn = goalForm.querySelector('button[type="submit"]');
     const id = goalForm.elements["goal_id"].value;
     const fd = new FormData(goalForm);
     const kind = fd.get("kind");
@@ -1945,19 +2102,21 @@
         chore_id:        (goalKindFields[kind] || []).includes("chore_id") ? fd.get("chore_id") : null,
       },
     };
-    try {
-      const res = id
-        ? await api(`/chores/goals/${id}`, "PATCH", payload)
-        : await api("/chores/goals", "POST", payload);
-      if (goalsCards && res?.html) {
-        const existing = goalsCards.querySelector(`[data-goal-id="${res.id}"]`);
-        if (existing) existing.outerHTML = res.html;
-        else goalsCards.insertAdjacentHTML("beforeend", res.html);
-      }
-      if (goalsEmpty) goalsEmpty.style.display = "none";
-      closeModal(goalModal);
-      flash(id ? "Goal updated" : "Goal added");
-    } catch (err) { flash("Couldn't save: " + err.message, "error"); }
+    await withSavingState(submitBtn, async () => {
+      try {
+        const res = id
+          ? await api(`/chores/goals/${id}`, "PATCH", payload)
+          : await api("/chores/goals", "POST", payload);
+        if (goalsCards && res?.html) {
+          const existing = goalsCards.querySelector(`[data-goal-id="${res.id}"]`);
+          if (existing) existing.outerHTML = res.html;
+          else goalsCards.insertAdjacentHTML("beforeend", res.html);
+        }
+        if (goalsEmpty) goalsEmpty.style.display = "none";
+        closeModal(goalModal);
+        flash(id ? "Goal updated" : "Goal added");
+      } catch (err) { flash("Couldn't save: " + err.message, "error"); }
+    });
   });
 
   // ---------- Streak Bonuses (formerly Multipliers) ----------
@@ -2083,21 +2242,24 @@
 
   streakBonusForm?.addEventListener("submit", async e => {
     e.preventDefault();
+    const submitBtn = streakBonusForm.querySelector('button[type="submit"]');
     const id = streakBonusForm.elements["streak_bonus_id"].value;
     const payload = readStreakBonusPayload();
-    try {
-      const res = id
-        ? await api(`/chores/streak_bonuses/${id}`, "PATCH", payload)
-        : await api("/chores/streak_bonuses", "POST", payload);
-      if (streakBonusCards && res?.html) {
-        const existing = streakBonusCards.querySelector(`[data-streak-bonus-id="${res.id}"]`);
-        if (existing) existing.outerHTML = res.html;
-        else streakBonusCards.insertAdjacentHTML("beforeend", res.html);
-      }
-      if (streakBonusEmpty) streakBonusEmpty.style.display = "none";
-      closeModal(streakBonusModal);
-      flash(id ? "Streak bonus updated" : "Streak bonus added");
-    } catch (err) { flash("Couldn't save: " + err.message, "error"); }
+    await withSavingState(submitBtn, async () => {
+      try {
+        const res = id
+          ? await api(`/chores/streak_bonuses/${id}`, "PATCH", payload)
+          : await api("/chores/streak_bonuses", "POST", payload);
+        if (streakBonusCards && res?.html) {
+          const existing = streakBonusCards.querySelector(`[data-streak-bonus-id="${res.id}"]`);
+          if (existing) existing.outerHTML = res.html;
+          else streakBonusCards.insertAdjacentHTML("beforeend", res.html);
+        }
+        if (streakBonusEmpty) streakBonusEmpty.style.display = "none";
+        closeModal(streakBonusModal);
+        flash(id ? "Streak bonus updated" : "Streak bonus added");
+      } catch (err) { flash("Couldn't save: " + err.message, "error"); }
+    });
   });
   // Hydrate the Balance page's "Recent History" block. Per the
   // architecture spec: NEVER cached — every visit, every broadcast,
@@ -2218,45 +2380,51 @@
   document.querySelector("[data-withdraw-form]")?.addEventListener("submit", async e => {
     e.preventDefault();
     const form = e.target;
+    const submitBtn = form.querySelector('button[type="submit"]');
     const fd = new FormData(form);
     const entries = Object.fromEntries(fd.entries());
     const amount = parseInt(entries.amount_pebbles, 10);
     if (Number.isNaN(amount) || amount <= 0) { flash("Enter a positive amount", "warn"); return; }
-    try {
-      const data = await api("/chores/withdrawals", "POST", { chore_withdrawal: entries });
-      flash(`Withdrew ${formatCount(data.amount_pebbles)}p`);
-      // Apply the server's new totals directly (header pill +
-      // lifetime card) and refresh the Recent History block so the
-      // new row shows up — no full page reload, no auto-refresh.
-      // This is the one trigger besides navigation + the manual
-      // reload button that's allowed to refetch the history.
-      if (data.balance != null) setLifetimeBalance(data.balance);
-      if (data.today_earnings != null) setTodayEarnings(data.today_earnings);
-      form.reset();
-      hydrateRecentHistory();
-    } catch (err) { flash("Withdraw failed: " + err.message, "error"); }
+    await withSavingState(submitBtn, async () => {
+      try {
+        const data = await api("/chores/withdrawals", "POST", { chore_withdrawal: entries });
+        flash(`Withdrew ${formatCount(data.amount_pebbles)}p`);
+        // Apply the server's new totals directly (header pill +
+        // lifetime card) and refresh the Recent History block so the
+        // new row shows up — no full page reload, no auto-refresh.
+        // This is the one trigger besides navigation + the manual
+        // reload button that's allowed to refetch the history.
+        if (data.balance != null) setLifetimeBalance(data.balance);
+        if (data.today_earnings != null) setTodayEarnings(data.today_earnings);
+        form.reset();
+        hydrateRecentHistory();
+      } catch (err) { flash("Withdraw failed: " + err.message, "error"); }
+    });
   });
 
   document.querySelector("[data-transfer-form]")?.addEventListener("submit", async e => {
     e.preventDefault();
     const form = e.target;
+    const submitBtn = form.querySelector('button[type="submit"]');
     const fd = new FormData(form);
     const entries = Object.fromEntries(fd.entries());
     const amount = parseInt(entries.amount_pebbles, 10);
     if (Number.isNaN(amount) || amount <= 0) { flash("Enter a positive amount", "warn"); return; }
     if (!entries.to_user_id) { flash("Pick a recipient", "warn"); return; }
-    try {
-      const data = await api("/chores/transfers", "POST", { chore_transfer: entries });
-      const recipientLabel = form.querySelector(`[name="to_user_id"] option[value="${entries.to_user_id}"]`)?.textContent?.trim() || "recipient";
-      flash(`Transferred ${formatCount(data.amount_pebbles)}p to ${recipientLabel}`);
-      if (data.balance != null) setLifetimeBalance(data.balance);
-      if (data.today_earnings != null) setTodayEarnings(data.today_earnings);
-      // Reset amount + note but leave the recipient pinned — the
-      // common pattern is multiple transfers to the same person.
-      form.querySelector('[name="amount_pebbles"]').value = "";
-      form.querySelector('[name="note"]').value = "";
-      hydrateRecentHistory();
-    } catch (err) { flash("Transfer failed: " + err.message, "error"); }
+    await withSavingState(submitBtn, async () => {
+      try {
+        const data = await api("/chores/transfers", "POST", { chore_transfer: entries });
+        const recipientLabel = form.querySelector(`[name="to_user_id"] option[value="${entries.to_user_id}"]`)?.textContent?.trim() || "recipient";
+        flash(`Transferred ${formatCount(data.amount_pebbles)}p to ${recipientLabel}`);
+        if (data.balance != null) setLifetimeBalance(data.balance);
+        if (data.today_earnings != null) setTodayEarnings(data.today_earnings);
+        // Reset amount + note but leave the recipient pinned — the
+        // common pattern is multiple transfers to the same person.
+        form.querySelector('[name="amount_pebbles"]').value = "";
+        form.querySelector('[name="note"]').value = "";
+        hydrateRecentHistory();
+      } catch (err) { flash("Transfer failed: " + err.message, "error"); }
+    });
   });
 
   // ============================================================
@@ -2404,7 +2572,7 @@
   function subscribeMonitor() {
     if (typeof window.Monitor === "undefined") { setTimeout(subscribeMonitor, 200); return; }
     window.Monitor.subscribe("chores", {
-      connected() { setConnDot("online"); flushQueue(); pingSwRefresh(); fullSync(); broadcastRemoteChange("connected"); },
+      connected() { setConnDot("online"); flushQueue(); pingSwRefresh(); if (unifiedPage) fullSync(); broadcastRemoteChange("connected"); },
       disconnected() { setConnDot("offline"); },
       received(data) {
         pingSwRefresh();
@@ -2416,11 +2584,20 @@
           return;
         }
         if (actorTab && String(actorTab) === TAB_ID) return;
+        // Hot picks rotation creates chore_hot_picks rows but doesn't
+        // bump chore.updated_at or completion timestamps, so a diff
+        // sync (since=last) returns nothing and the strip stays empty.
+        // Force a full sync so today's picks are pulled fresh.
+        if (payload.reason === "hot_picks_refreshed") {
+          if (unifiedPage) fullSync({ force: true });
+          broadcastRemoteChange("monitor", payload);
+          return;
+        }
         // Cheap: just re-fetch the chore that changed.
         const choreId = payload.chore_id;
-        if (choreId) {
+        if (choreId && unifiedPage) {
           api(`/chores/items/${choreId}/state`, "GET").then(reconcile).catch(() => {});
-        } else {
+        } else if (unifiedPage) {
           fullSync();
         }
         // Notify off-screen views so the History or Balance content
@@ -2445,7 +2622,7 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       pingSwRefresh();
-      fullSync();
+      if (unifiedPage) fullSync();
     }
   });
   if ("serviceWorker" in navigator) {
@@ -2453,11 +2630,14 @@
       .register("/chores_worker.js", { scope: "/chores", updateViaCache: "none" })
       .then(reg => reg.update())
       .catch(e => console.warn("Chores SW register failed:", e));
-    let didReload = false;
+    // controllerchange fires when a new SW (from a deploy) takes
+    // control via clients.claim(). Reloading immediately would yank
+    // the user out of any open modal, scroll position, or unsaved
+    // input — every deploy turned into a mid-task flicker. Skip the
+    // reload: the next natural navigation will boot under the new SW
+    // with the freshly cached shell, no disruption.
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (didReload) return;
-      didReload = true;
-      location.reload();
+      // Intentionally a no-op.
     });
     navigator.serviceWorker.addEventListener("message", evt => {
       if (evt.data?.kind === "shell_synced") setSyncBadge(false);
@@ -2545,18 +2725,20 @@
   }, 60 * 1000);
   subscribeMonitor();
   flushQueue();
-  // Every chore view boots with a fullSync (chores store is updated
-  // even on Balance/History so when the user navigates to Grid the
-  // data is already there) AND a shell refresh (so the cached HTML
-  // never lags behind the live data).
-  fullSync();
+  // Only the Grid/Today views read the chores store, so only those
+  // need the fullSync round-trip on boot. Skipping it on Balance/
+  // History eliminates a heavy /chores/sync hit that those pages
+  // never display, making navigation to them noticeably faster.
+  // Grid/Today still resync on their own boot, so navigating in from
+  // those pages sees fresh data.
+  if (unifiedPage) fullSync();
   pingSwRefresh();
   // Reconnect after offline: re-sync the chores store, re-ping the
   // shell cache. Monitor's `connected` callback also fires fullSync
   // when the WS reattaches; running both is cheap (fullSync no-ops
   // if one is in flight) and covers the case where the WS lags the
   // window `online` event.
-  window.addEventListener("online", () => { fullSync(); pingSwRefresh(); });
+  window.addEventListener("online", () => { if (unifiedPage) fullSync(); pingSwRefresh(); });
   if (unifiedPage) {
     setActiveView(MODE, { push: false });
   }

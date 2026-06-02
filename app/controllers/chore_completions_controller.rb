@@ -124,9 +124,17 @@ class ChoreCompletionsController < ApplicationController
       overrides[:paid_pebbles]   = amount
       overrides[:payout_skipped] = amount.zero?
     end
+    metadata_updates = {}
     if raw.key?(:hot_pick)
-      flag = ActiveModel::Type::Boolean.new.cast(raw[:hot_pick])
-      overrides[:metadata] = (completion.metadata || {}).merge("hot_pick" => flag)
+      metadata_updates["hot_pick"] = ActiveModel::Type::Boolean.new.cast(raw[:hot_pick])
+    end
+    if raw.key?(:note_values)
+      values = raw[:note_values]
+      values = values.to_unsafe_h if values.respond_to?(:to_unsafe_h)
+      metadata_updates["note_values"] = (values || {}).to_h.transform_keys(&:to_s)
+    end
+    if metadata_updates.any?
+      overrides[:metadata] = (completion.metadata || {}).merge(metadata_updates)
     end
     return if overrides.empty?
 

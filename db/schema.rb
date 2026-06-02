@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_01_230000) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_02_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -504,6 +504,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_01_230000) do
     t.integer "show_on_daily_view", default: 1, null: false
     t.integer "sharing_mode", default: 0, null: false
     t.bigint "assigned_to_user_id"
+    t.text "notes_template"
     t.index ["archived_at"], name: "index_chores_on_archived_at"
     t.index ["assigned_to_user_id"], name: "index_chores_on_assigned_to_user_id"
     t.index ["created_by_user_id"], name: "index_chores_on_created_by_user_id"

@@ -327,6 +327,48 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 10px;
   }
+  // ──────────────────────────────────────────────────────────────────
+  // Chore item slot map — single source of truth for badge / overlay
+  // placement across Grid (.chore-card), Today (.chore-circle), and
+  // Hot strip (.hot-strip-cell wraps a .chore-circle). KEEP THIS IN
+  // SYNC when adding any new overlay so two things never land in the
+  // same slot.
+  //
+  //   ┌───────────────────────────────────────────────┐
+  //   │ hot-badge       card/circle-reward       streak-badge │   (top row)
+  //   │  (top-LEFT)        (top-CENTER)           (top-RIGHT) │
+  //   │                                                       │
+  //   │                  ICON / GLYPH                         │
+  //   │                                                       │
+  //   │ edit-mode ✎    circle-countdown        (reserved)     │   (bottom row)
+  //   │ (bot-LEFT)      (bot-CENTER)                          │
+  //   └───────────────────────────────────────────────┘
+  //              count-badge (slot below the icon box)
+  //
+  // CARD-LEVEL OVERLAYS (.chore-card / .chore-circle)
+  //   top-LEFT     → .hot-badge          — hot-pick multiplier pill (green)
+  //   top-CENTER   → (only inside .icon, see below)
+  //   top-RIGHT    → .streak-badge       — streak multiplier pill (actor-color)
+  //   bot-LEFT     → .edit-mode ::after  — pencil chip (only when toolbar edit mode is on)
+  //   bot-CENTER   → .card-count-slot / .count-slot — done-today counter (only when done_count_today > 1)
+  //
+  // ICON-BOX OVERLAYS (inside .chore-card .icon / .chore-circle .circle-inner)
+  //   top-CENTER   → .card-reward / .circle-reward — pebble reward label (always)
+  //   bot-CENTER   → .circle-countdown   — cooldown countdown pill (only while cooling down)
+  //   full overlay → .done-ring (SVG)    — green check-ring drawn when done_count_today > 0
+  //   full overlay → .circle-ring (SVG)  — cooldown progress ring (Today, fixed-cooldown chores)
+  //
+  // CONDITIONAL CARD-WIDE STATES (class on the wrapper, no slot)
+  //   .hot                  — purple/green outline indicating hot-pick membership
+  //   .done-today / .done   — green tint while marked done for the day
+  //   .sortable-ghost       — drag placeholder (semi-transparent)
+  //   .sortable-chosen      — slight scale on the currently-grabbed item
+  //   [data-actor]          — recolors --actor-color for the actor who last did the chore
+  //
+  // When adding a NEW overlay, pick an unused slot or extend the map
+  // here first — never silently double-up. Two badges in the same slot
+  // is the bug this comment exists to prevent.
+  // ──────────────────────────────────────────────────────────────────
   .chore-card {
     position: relative;
     border: 1px solid var(--chores-card-border);
@@ -469,13 +511,19 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   // outline / box-shadow on the card. Earlier purple rings clashed
   // with the green "done" ring and made hot strips look noisy
   // (purple ring + purple badge + purple pill all at once).
-  // Count slot — top-RIGHT (paired with hot-badge top-LEFT). z-index
-  // above the reward (top-center) so multi-occurrence badges still
-  // read in front of the icon background.
+  // Count slot — bottom-CENTER of the icon to mirror .chore-circle's
+  // count-slot. Keeps the top corners reserved for hot (top-LEFT) and
+  // streak (top-RIGHT) multipliers across every chore view.
   .chore-card .card-count-slot {
     position: absolute;
-    top: 4%;
-    right: 5%;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    height: 16px;
+    min-width: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     pointer-events: none;
     z-index: 4;
   }

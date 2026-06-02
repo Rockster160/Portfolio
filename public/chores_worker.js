@@ -15,7 +15,7 @@
 // clients re-pull the HTML next time they're online.
 
 // Bump CACHE on shipping shell changes so old clients re-pull HTML.
-const CACHE = "chores-v62";
+const CACHE = "chores-v63";
 // Every chore view is a cached shell. Each shell is body-empty for
 // page-specific content — entries on History, recent rows on Balance —
 // because that data is hydrated client-side from JSON (and from a
@@ -103,17 +103,43 @@ async function broadcastToClients(payload) {
   clients.forEach(c => c.postMessage(payload));
 }
 
+// Look in every other chores-* cache for a request/path. Used as a
+// last-resort fallback when the current cache hasn't been populated yet
+// (e.g. a flaky install) so the previous deploy's cache still serves.
+async function matchFromOldCaches(reqOrPath) {
+  const keys = await caches.keys();
+  for (const k of keys) {
+    if (k === CACHE || !k.startsWith("chores-")) continue;
+    const c = await caches.open(k);
+    const hit = await c.match(reqOrPath);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 self.addEventListener("install", evt => {
   evt.waitUntil(refreshAllShells());
   self.skipWaiting();
 });
 
 self.addEventListener("activate", evt => {
-  evt.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k.startsWith("chores-") && k !== CACHE).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
-  );
+  evt.waitUntil((async () => {
+    const newCache = await caches.open(CACHE);
+    // Only purge old chores-* caches when the new cache actually has at
+    // least one shell populated. An offline/flaky install would leave
+    // the new cache empty; if we deleted the previous cache eagerly the
+    // next visit would have NOTHING to serve and the page would render
+    // as a black/blank screen.
+    let hasShell = false;
+    for (const p of SHELL_PATHS) {
+      if (await newCache.match(p)) { hasShell = true; break; }
+    }
+    if (hasShell) {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter(k => k.startsWith("chores-") && k !== CACHE).map(k => caches.delete(k)));
+    }
+    await self.clients.claim();
+  })());
 });
 
 function isShellRequest(url) {
@@ -151,7 +177,12 @@ self.addEventListener("fetch", evt => {
     // also get fetched + cached on demand below.
     evt.respondWith((async () => {
       const cache = await caches.open(CACHE);
-      const cached = await cache.match(url.pathname);
+      let cached = await cache.match(url.pathname);
+      // Defense in depth: an install that finished offline can leave
+      // the current cache empty even after activate has run. Fall back
+      // to any older chores-* cache so the user still sees the last
+      // shell they had instead of a 503/blank page.
+      if (!cached) cached = await matchFromOldCaches(url.pathname);
 
       const revalidate = (async () => {
         try {
@@ -183,9 +214,13 @@ self.addEventListener("fetch", evt => {
       const cache = await caches.open(CACHE);
       const hit = await cache.match(req);
       if (hit) return hit;
+      // Older content-hashed asset might still live in a prior cache —
+      // use it offline so a page served from an old shell still has
+      // its CSS/JS instead of dropping to an unstyled black render.
+      const fallback = await matchFromOldCaches(req);
       const fresh = await fetch(req).catch(() => null);
       if (fresh && fresh.ok) cache.put(req, fresh.clone());
-      return fresh || new Response("offline", { status: 503 });
+      return fresh || fallback || new Response("offline", { status: 503 });
     })());
     return;
   }

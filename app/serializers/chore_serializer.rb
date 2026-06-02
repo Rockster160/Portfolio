@@ -30,6 +30,7 @@ class ChoreSerializer
       icon:                chore.icon,
       icon_kind:           icon_kind, # "emoji" | "image" | "svg" | "empty"
       aliases:             chore.aliases_array,
+      notes_template:      chore.notes_template.to_s,
       reward_pebbles:      chore.reward_pebbles,
       reward_label:        chore.reward_label,
       threshold_seconds:   chore.threshold_seconds,
