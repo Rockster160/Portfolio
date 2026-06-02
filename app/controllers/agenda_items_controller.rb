@@ -650,10 +650,28 @@ class AgendaItemsController < ApplicationController
   end
 
   def item_params
-    params.require(:agenda_item).permit(
+    raw = params.require(:agenda_item).permit(
       :agenda_id, :name, :kind, :color, :local_color, :start_at, :end_at, :all_day,
       :notes, :location, :completed_at, :trigger_expression
     )
+
+    # Time fields cross the wire as integer epoch seconds (UTC) so the FE
+    # owns timezone interpretation end-to-end. Convert here so the rest of
+    # the controller + AR see proper Time values.
+    [:start_at, :end_at, :completed_at].each do |key|
+      raw[key] = epoch_param_to_time(raw[key]) if raw.key?(key)
+    end
+    raw
+  end
+
+  # Accepts: nil, "", integer, integer-string. Anything else returns nil and
+  # logs (likely a stale client sending an ISO string from a pre-epoch build).
+  def epoch_param_to_time(val)
+    return nil if val.blank?
+    return ::Time.at(val.to_i) if val.is_a?(::Numeric) || val.to_s.match?(/\A-?\d+\z/)
+
+    ::Rails.logger.warn("[agenda_items_controller] non-epoch time param: #{val.inspect}")
+    nil
   end
 
   def explicit_schedule_params
@@ -686,8 +704,10 @@ class AgendaItemsController < ApplicationController
     raw = params[:agenda_item][:completed_at]
     val = if raw.blank? || raw.to_s == "false"
       nil
+    elsif raw == "now"
+      Time.current
     else
-      (raw == "now" ? Time.current : raw)
+      epoch_param_to_time(raw)
     end
     { completed_at: val }
   end
@@ -699,14 +719,17 @@ class AgendaItemsController < ApplicationController
     attrs[:location] = item_params[:location] if item_params.key?(:location)
     attrs[:color] = item_params[:color] if item_params[:color].present?
     attrs[:trigger_expression] = item_params[:trigger_expression] if item_params.key?(:trigger_expression)
-    if item_params[:start_at].present?
-      t = Time.zone.parse(item_params[:start_at].to_s)
-      attrs[:start_time] = t.strftime("%H:%M") if t
-    end
-    if item_params[:end_at].present? && item_params[:start_at].present?
-      s = Time.zone.parse(item_params[:start_at].to_s)
-      e = Time.zone.parse(item_params[:end_at].to_s)
-      attrs[:duration_minutes] = ((e - s) / 60).to_i if s && e
+    # item_params has already coerced start_at / end_at to Time. The
+    # schedule's `start_time` column is a wall-clock time-of-day, so
+    # render in the server-anchored user zone (Denver) — this is the only
+    # spot the server is allowed to pick a display zone, because it has
+    # to materialize a tz-naive HH:MM for the recurrence rule.
+    if (s = item_params[:start_at])
+      zone = ::ActiveSupport::TimeZone[current_user.timezone] || ::Time.zone
+      attrs[:start_time] = s.in_time_zone(zone).strftime("%H:%M")
+      if (e = item_params[:end_at])
+        attrs[:duration_minutes] = ((e - s) / 60).to_i
+      end
     end
     attrs
   end

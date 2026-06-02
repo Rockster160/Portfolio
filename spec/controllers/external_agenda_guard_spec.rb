@@ -67,7 +67,7 @@ RSpec.describe "ExternalAgendaGuard", type: :controller do
           agenda_id: gcal_agenda.id,
           name:      "Manual",
           kind:      :task,
-          start_at:  Time.current,
+          start_at:  Time.current.to_i,
         },
       }, format: :json
       expect(response).to have_http_status(:unprocessable_entity)
@@ -80,8 +80,8 @@ RSpec.describe "ExternalAgendaGuard", type: :controller do
           agenda_id: gcal_agenda.id,
           name:      "Meeting",
           kind:      :event,
-          start_at:  1.hour.from_now,
-          end_at:    2.hours.from_now,
+          start_at:  1.hour.from_now.to_i,
+          end_at:    2.hours.from_now.to_i,
         },
       }, format: :json
       expect(response).to be_successful

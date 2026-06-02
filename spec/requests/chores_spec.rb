@@ -197,7 +197,7 @@ RSpec.describe "Chores", type: :request do
       params: {
         chore_completion: {
           note: "Fed Whisper Beef with 6oz kibble",
-          note_values: { "Food Type" => "Beef", "Kibble Ounces" => "6" },
+          note_values: { "Food Type" => "Beef", "Kibble Ounces" => 6 },
         },
       }.to_json,
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
@@ -206,7 +206,7 @@ RSpec.describe "Chores", type: :request do
     expect(completion.note).to eq("Fed Whisper Beef with 6oz kibble")
     expect(completion.metadata["note_values"]).to eq({
       "Food Type" => "Beef",
-      "Kibble Ounces" => "6",
+      "Kibble Ounces" => 6,
     })
   end
 

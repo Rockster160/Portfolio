@@ -99,7 +99,7 @@ RSpec.describe AgendaItemsController, type: :controller do
       expect(MonitorChannel).to receive(:broadcast_to).with(user, hash_including(id: :agenda))
       expect {
         post :create, params: {
-          agenda_item: { agenda_id: agenda.id, name: "Walk dog", kind: "task", start_at: Time.current.iso8601 },
+          agenda_item: { agenda_id: agenda.id, name: "Walk dog", kind: "task", start_at: Time.current.to_i },
         }, format: :json
       }.to change { agenda.agenda_items.count }.by(1)
     end
@@ -108,7 +108,7 @@ RSpec.describe AgendaItemsController, type: :controller do
       other_user = create(:user, phone: "5559876543")
       other = create(:agenda, user: other_user)
       post :create, params: {
-        agenda_item: { agenda_id: other.id, name: "Sneaky", kind: "task", start_at: Time.current.iso8601 },
+        agenda_item: { agenda_id: other.id, name: "Sneaky", kind: "task", start_at: Time.current.to_i },
       }, format: :json
       expect(response).to have_http_status(:not_found)
     end
@@ -119,7 +119,7 @@ RSpec.describe AgendaItemsController, type: :controller do
       AgendaShare.create!(agenda: shared, user: user, permission: :editor)
       expect {
         post :create, params: {
-          agenda_item: { agenda_id: shared.id, name: "Team task", kind: "task", start_at: Time.current.iso8601 },
+          agenda_item: { agenda_id: shared.id, name: "Team task", kind: "task", start_at: Time.current.to_i },
         }, format: :json
       }.to change { shared.agenda_items.count }.by(1)
     end
@@ -129,7 +129,7 @@ RSpec.describe AgendaItemsController, type: :controller do
       shared = create(:agenda, user: other_user)
       AgendaShare.create!(agenda: shared, user: user, permission: :viewer)
       post :create, params: {
-        agenda_item: { agenda_id: shared.id, name: "Hands-off", kind: "task", start_at: Time.current.iso8601 },
+        agenda_item: { agenda_id: shared.id, name: "Hands-off", kind: "task", start_at: Time.current.to_i },
       }, format: :json
       expect(response).to have_http_status(:not_found)
     end
@@ -213,7 +213,7 @@ RSpec.describe AgendaItemsController, type: :controller do
       patch :update, params: {
         id:          origin_phantom,
         scope:       :occurrence,
-        agenda_item: { name: "Moved Standup", start_at: target_time.iso8601 },
+        agenda_item: { name: "Moved Standup", start_at: target_time.to_i },
       }, format: :json
 
       moved = AgendaItem.find_by(name: "Moved Standup")

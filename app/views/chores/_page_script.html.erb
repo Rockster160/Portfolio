@@ -946,21 +946,34 @@
   function renderNotePromptField(f, i) {
     const id = `note-prompt-field-${i}`;
     const keyAttr = esc(f.key);
+    const typeAttr = esc(f.type || "text");
     const label = `<label class="field-label" for="${id}">${esc(f.label)}</label>`;
     let input;
     if (f.type === "select" && f.options && f.options.length) {
       const opts = ['<option value=""></option>']
         .concat(f.options.map(o => `<option value="${esc(o)}">${esc(o)}</option>`))
         .join("");
-      input = `<select id="${id}" data-prompt-key="${keyAttr}">${opts}</select>`;
+      input = `<select id="${id}" data-prompt-key="${keyAttr}" data-prompt-type="${typeAttr}">${opts}</select>`;
     } else if (f.type === "numeric" || f.type === "number") {
-      input = `<input id="${id}" type="number" inputmode="decimal" data-prompt-key="${keyAttr}" autocomplete="off">`;
+      input = `<input id="${id}" type="number" inputmode="decimal" data-prompt-key="${keyAttr}" data-prompt-type="${typeAttr}" autocomplete="off">`;
     } else if (f.type === "date") {
-      input = `<input id="${id}" type="date" data-prompt-key="${keyAttr}" autocomplete="off">`;
+      input = `<input id="${id}" type="date" data-prompt-key="${keyAttr}" data-prompt-type="${typeAttr}" autocomplete="off">`;
     } else {
-      input = `<input id="${id}" type="text" data-prompt-key="${keyAttr}" autocomplete="off">`;
+      input = `<input id="${id}" type="text" data-prompt-key="${keyAttr}" data-prompt-type="${typeAttr}" autocomplete="off">`;
     }
     return `<div class="form-section">${label}${input}</div>`;
+  }
+  // Map a raw form value to the type implied by the placeholder.
+  // Empty strings become null so the server stores `null` rather than
+  // `""` (or `NaN`/0 for numerics) — the template still interpolates
+  // to an empty string at the display layer.
+  function coerceNoteValue(raw, type) {
+    if (raw == null || raw === "") return null;
+    if (type === "numeric" || type === "number") {
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : null;
+    }
+    return String(raw);
   }
   function openNotePromptModal(chore, parsed) {
     if (!notePromptModal || !notePromptForm || !notePromptFields) return;
@@ -983,7 +996,7 @@
     const { chore, parsed } = activeNotePrompt;
     const values = {};
     notePromptFields.querySelectorAll("[data-prompt-key]").forEach(el => {
-      values[el.dataset.promptKey] = el.value;
+      values[el.dataset.promptKey] = coerceNoteValue(el.value, el.dataset.promptType);
     });
     const note = interpolateNoteTemplate(parsed, values);
     closeNotePrompt();

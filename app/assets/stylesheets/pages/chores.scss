@@ -351,6 +351,9 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   //   top-RIGHT    → .streak-badge       — streak multiplier pill (actor-color)
   //   bot-LEFT     → .edit-mode ::after  — pencil chip (only when toolbar edit mode is on)
   //   bot-CENTER   → .card-count-slot / .count-slot — done-today counter (only when done_count_today > 1)
+  //                                                    sits in the icon→title gutter on Grid (.title has
+  //                                                    margin-top to keep room); overflows below the disc
+  //                                                    on Today/Hot circles (wrapper extends past the disc).
   //
   // ICON-BOX OVERLAYS (inside .chore-card .icon / .chore-circle .circle-inner)
   //   top-CENTER   → .card-reward / .circle-reward — pebble reward label (always)
@@ -475,6 +478,10 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     font-size: 13px;
     line-height: 1.2;
     color: var(--chores-text);
+    // Leave room for `.card-count-slot` which overflows the icon by
+    // ~10px on its bottom edge. Without this gap the count badge
+    // overlaps the first character of the title (see slot map above).
+    margin-top: 8px;
     // Cap full names at two lines so a single 4-word chore doesn't
     // bloat the whole row's card height. -webkit-line-clamp is the
     // de-facto cross-browser way to do this; the fallback (no clamp)

@@ -61,17 +61,20 @@
                   data-agenda-color="<%= item.agenda.color %>"
                   data-agenda-source="<%= item.agenda.source %>"
                   data-all-day="<%= item.all_day? %>"
-                  data-end-date="<%= item.end_date&.iso8601 %>"
-                  data-start-at="<%= item.start_at.iso8601 %>"
-                  data-end-at="<%= item.end_at&.iso8601 %>"
+                  data-end-date="<%= item.end_date&.to_time&.to_i %>"
+                  data-start-at="<%= item.start_at.to_i %>"
+                  data-end-at="<%= item.end_at&.to_i %>"
                   data-name="<%= item.name %>"
                   data-notes="<%= item.notes %>"
                   data-location="<%= item.location %>"
                   data-trigger-expression="<%= item.trigger_expression %>"
                   data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>"
-                  style="--item-color: <%= item.display_color %>; --agenda-color: <%= item.agenda.color %>;"
-                  title="<%= item.agenda.name %> · <%= item.start_at.in_time_zone(current_user.timezone).strftime('%-l:%M %p') %> — <%= item.name %>">
-            <span class="cal-item-time"><%= item.start_at.in_time_zone(current_user.timezone).strftime("%-l%P") %></span>
+                  style="--item-color: <%= item.display_color %>; --agenda-color: <%= item.agenda.color %>;">
+            <span class="cal-item-time"
+                  data-time-hydrate
+                  data-start-epoch="<%= item.start_at.to_i %>"
+                  data-format="cal"
+            ></span>
             <span class="cal-item-name"><%= item.name %></span>
           </button>
         <% end %>

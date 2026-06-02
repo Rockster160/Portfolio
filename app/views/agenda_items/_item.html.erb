@@ -10,8 +10,11 @@
     Preview / readonly rows hide the checkbox + pencil.
 %>
 <% preview ||= false %>
-<% local_start = item.start_at.in_time_zone(item.user.timezone) %>
-<% local_end   = item.end_at&.in_time_zone(item.user.timezone) %>
+<%# Time displays are hydrated client-side from integer epoch seconds so
+    every render uses the viewer's browser-local timezone, never the
+    server's. See `app/javascript/src/agenda/time_hydration.js`. %>
+<% start_epoch = item.start_at.to_i %>
+<% end_epoch   = item.end_at&.to_i %>
 <% item_url    = agenda_item_path(item.display_id) %>
 <%# Google items ARE editable now — edits mirror to Google. An editor can
     rename/move/cancel a Google event through the pencil; the controller
@@ -62,10 +65,10 @@
      data-agenda-name="<%= item.agenda.name %>"
      data-agenda-color="<%= item.agenda.color %>"
      data-agenda-source="<%= item.agenda.source %>"
-     data-start-at="<%= item.start_at.iso8601 %>"
-     data-end-at="<%= item.end_at&.iso8601 %>"
+     data-start-at="<%= start_epoch %>"
+     data-end-at="<%= end_epoch %>"
      data-all-day="<%= item.all_day? %>"
-     data-end-date="<%= item.end_date&.iso8601 %>"
+     data-end-date="<%= item.end_date&.to_time&.to_i %>"
      data-name="<%= item.name %>"
      data-notes="<%= item.notes %>"
      data-location="<%= item.location %>"
@@ -89,15 +92,14 @@
   </label>
 
   <button type="button" class="agenda-item-body" data-open-details>
-    <span class="agenda-item-time">
-      <% if item.all_day? %>
-        <%= item.start_at.in_time_zone(item.user.timezone).strftime("%b %-d") %><% if item.end_date != item.occurrence_date %><span class="time-sep">–</span><%= item.end_date.strftime("%b %-d") %><% end %>
-      <% elsif item.event? && local_end %>
-        <%= local_start.strftime("%-l:%M%P") %><span class="time-sep">–</span><%= local_end.strftime("%-l:%M%P") %>
-      <% else %>
-        <%= local_start.strftime("%-l:%M%P") %>
-      <% end %>
-    </span>
+    <span class="agenda-item-time"
+          data-time-hydrate
+          data-start-epoch="<%= start_epoch %>"
+          data-end-epoch="<%= end_epoch %>"
+          data-all-day="<%= item.all_day? %>"
+          data-format="<%= item.all_day? ? :day : (item.event? && end_epoch ? :range : :time) %>"
+    ><%# JS hydrates this on connect; SSR fallback is empty (better than a
+         wrong-zone string flashing in for a frame). %></span>
     <span class="agenda-item-text">
       <span class="agenda-item-name"><%= item.name %></span>
       <% if item.location.present? %>

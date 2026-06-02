@@ -352,6 +352,11 @@ class AgendaItem < ApplicationRecord
     self
   end
 
+  # All time-shaped attributes serialize as integer epoch seconds (UTC).
+  # The server never picks a display timezone — the FE renders in the
+  # viewing browser's local zone, and write paths receive the same shape
+  # back, so an event the user enters as "4pm browser-local" round-trips
+  # without any cross-zone interpretation.
   def serialize(opts={})
     super({
       only: [
@@ -362,11 +367,7 @@ class AgendaItem < ApplicationRecord
         :name,
         :notes,
         :location,
-        :start_at,
-        :end_at,
         :all_day,
-        :completed_at,
-        :detached_at,
       ],
     }.merge(opts)).merge(
       id:                 display_id,
@@ -379,6 +380,10 @@ class AgendaItem < ApplicationRecord
       recurring:          recurring?,
       detached:           detached?,
       trigger_expression: trigger_expression,
+      start_at:           start_at&.to_i,
+      end_at:             end_at&.to_i,
+      completed_at:       completed_at&.to_i,
+      detached_at:        detached_at&.to_i,
       schedule:           agenda_schedule&.serialize_for_edit,
     )
   end

@@ -20,11 +20,15 @@
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
   }
 
-  // Mirrors the ERB strftime("%-l:%M%P") so JS- and server-rendered items
-  // show the same string after a Monitor refresh.
-  function fmtTime(iso) {
-    if (!iso) return "";
-    const d = new Date(iso);
+  // All time values cross the wire as integer epoch seconds (UTC). The
+  // browser is the only consumer that decides the display timezone, so
+  // round-trip is exact: an event entered as "4pm" in the browser's local
+  // zone always re-renders as "4pm" in that same browser. Anything that
+  // takes an `epoch` arg below accepts either a number or a numeric
+  // string (data-* attributes always arrive as strings).
+  function fmtTime(epoch) {
+    if (epoch === null || epoch === undefined || epoch === "") return "";
+    const d = new Date(Number(epoch) * 1000);
     let h = d.getHours();
     const m = d.getMinutes();
     const ampm = h >= 12 ? "pm" : "am";
@@ -32,6 +36,70 @@
     if (h === 0) h = 12;
     return `${h}:${String(m).padStart(2, "0")}${ampm}`;
   }
+
+  // Browser-local "YYYY-MM-DDTHH:MM" string → integer epoch seconds.
+  // This is the canonical write-path conversion: whatever wall-clock the
+  // user typed gets anchored to their browser timezone before being sent
+  // to the server. The server never re-interprets the wall-clock.
+  function localInputToEpoch(localStr) {
+    if (!localStr) return null;
+    const ts = new Date(localStr).getTime();
+    return Number.isFinite(ts) ? Math.floor(ts / 1000) : null;
+  }
+
+  // ---------- server-rendered time hydration ----------
+  // Server emits `<span data-time-hydrate data-start-epoch=... data-format=...>`
+  // empty; the browser fills in the localized string. Keeps all timezone
+  // decisions on the device, never on the server.
+  function fmtDay(epoch)  {
+    const d = new Date(Number(epoch) * 1000);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+  function fmtCalTime(epoch) {
+    // Compact form used in the month-grid cells: "9a", "2:30p"
+    const d = new Date(Number(epoch) * 1000);
+    let h = d.getHours();
+    const m = d.getMinutes();
+    const suffix = h >= 12 ? "p" : "a";
+    h = h % 12 || 12;
+    return m === 0 ? `${h}${suffix}` : `${h}:${String(m).padStart(2, "0")}${suffix}`;
+  }
+  function hydrateOneTimeNode(node) {
+    const start = node.getAttribute("data-start-epoch");
+    const end   = node.getAttribute("data-end-epoch");
+    const fmt   = node.getAttribute("data-format") || "time";
+    if (!start) return;
+    let text = "";
+    switch (fmt) {
+      case "day":
+        text = fmtDay(start);
+        break;
+      case "range":
+        text = end ? `${fmtTime(start)}–${fmtTime(end)}` : fmtTime(start);
+        break;
+      case "cal":
+        text = fmtCalTime(start);
+        break;
+      default:
+        text = fmtTime(start);
+    }
+    node.textContent = text;
+  }
+  function hydrateTimeNodes(root = document) {
+    root.querySelectorAll("[data-time-hydrate]").forEach(hydrateOneTimeNode);
+  }
+  document.addEventListener("DOMContentLoaded", () => hydrateTimeNodes());
+  // Watch for server-rendered fragments inserted after page load (Monitor
+  // updates, modal opens, section replaces) so new items also hydrate.
+  new MutationObserver((records) => {
+    for (const r of records) {
+      r.addedNodes.forEach((n) => {
+        if (n.nodeType !== 1) return;
+        if (n.hasAttribute && n.hasAttribute("data-time-hydrate")) hydrateOneTimeNode(n);
+        if (n.querySelectorAll) hydrateTimeNodes(n);
+      });
+    }
+  }).observe(document.body, { childList: true, subtree: true });
 
   // Promise-returning replacement for `window.confirm()`. Renders into the
   // shared #agenda-confirm-modal (rendered by `_confirm_modal.html.erb`
@@ -281,10 +349,10 @@
       </div>
     `);
 
-    const startTs = new Date(data.start_at).getTime();
+    const startTs = Number(data.start_at) * 1000;
     const existing = Array.from(section.querySelectorAll(".agenda-item"));
     const next = existing.find((node) => {
-      const t = new Date(node.dataset.startAt).getTime();
+      const t = Number(node.dataset.startAt) * 1000;
       return Number.isFinite(t) && t > startTs;
     });
     if (next) section.insertBefore(placeholder, next);
@@ -753,15 +821,15 @@
       // user-specified end-date+1). Matches the Google convention so the
       // overlap query + duration math agree across both write paths.
       const allDayEnd = $(".add-allday-end", form)?.value || date;
-      const startAt = isAllDay ? `${date}T00:00` : `${date}T${startTime}`;
+      const startAt = localInputToEpoch(isAllDay ? `${date}T00:00` : `${date}T${startTime}`);
 
       const endAt = (() => {
         if (activeKind !== "event") return null;
-        if (!isAllDay) return `${date}T${endTime}`;
+        if (!isAllDay) return localInputToEpoch(`${date}T${endTime}`);
         const next = new Date(`${allDayEnd}T00:00`);
         next.setDate(next.getDate() + 1);
         const pad = (n) => String(n).padStart(2, "0");
-        return `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}T00:00`;
+        return localInputToEpoch(`${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}T00:00`);
       })();
       const freq = $(".add-freq", form).value;
       const color = colorInput?.value || null;
@@ -998,8 +1066,8 @@
       syncKind();
 
       // Item's start_at is a UTC ISO; split into local date + time-of-day.
-      const [startDate, startTime] = splitIsoToDateAndTime(d.startAt);
-      const [, endTime] = splitIsoToDateAndTime(d.endAt);
+      const [startDate, startTime] = splitEpochToDateAndTime(d.startAt);
+      const [, endTime] = splitEpochToDateAndTime(d.endAt);
       $(".add-date", form).value = startDate;
       $(".add-start", form).value = startTime || "09:00";
       $(".add-end", form).value = endTime || "10:00";
@@ -1066,9 +1134,9 @@
       if (window.showModal) window.showModal("#agenda-item-edit");
     }
 
-    function splitIsoToDateAndTime(iso) {
-      if (!iso) return ["", ""];
-      const local = isoToLocalInput(iso);
+    function splitEpochToDateAndTime(epoch) {
+      if (!epoch) return ["", ""];
+      const local = epochToLocalInput(epoch);
       return local.split("T");
     }
 
@@ -1128,17 +1196,17 @@
       const endTime = $(".add-end", form).value || "10:00";
       const isAllDay = activeKind === "event" && !!alldayInput?.checked;
       const allDayEnd = alldayEndInput?.value || date;
-      const startAt = isAllDay ? `${date}T00:00` : `${date}T${startTime}`;
+      const startAt = localInputToEpoch(isAllDay ? `${date}T00:00` : `${date}T${startTime}`);
       // For all-day we mirror Google's convention (exclusive end-date): a
       // one-day all-day from May 27 ends at May 28T00:00. Multi-day adds
       // one day to the picked end-date.
       const endAt = (() => {
         if (activeKind !== "event") return null;
-        if (!isAllDay) return `${date}T${endTime}`;
+        if (!isAllDay) return localInputToEpoch(`${date}T${endTime}`);
         const next = new Date(`${allDayEnd}T00:00`);
         next.setDate(next.getDate() + 1);
         const pad = (n) => String(n).padStart(2, "0");
-        return `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}T00:00`;
+        return localInputToEpoch(`${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}T00:00`);
       })();
       const triggerExpression = activeKind === "trigger"
         ? ($(".add-trigger-expression", form).value || null)
@@ -1265,9 +1333,12 @@
     }
   }
 
-  function isoToLocalInput(iso) {
-    if (!iso) return "";
-    const d = new Date(iso);
+  // Integer epoch seconds → "YYYY-MM-DDTHH:MM" in the browser's local zone,
+  // suitable for an <input type="datetime-local">. The inverse of
+  // localInputToEpoch above.
+  function epochToLocalInput(epoch) {
+    if (epoch === null || epoch === undefined || epoch === "") return "";
+    const d = new Date(Number(epoch) * 1000);
     const pad = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
@@ -1516,8 +1587,8 @@
     set("[data-agenda-name-target]", d.agendaName);
     set("[data-name-target]", d.name);
 
-    const start = d.startAt ? new Date(d.startAt) : null;
-    const end = d.endAt ? new Date(d.endAt) : null;
+    const start = d.startAt ? new Date(Number(d.startAt) * 1000) : null;
+    const end = d.endAt ? new Date(Number(d.endAt) * 1000) : null;
     const dayLabel = start ? start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : "";
     let timeLabel = start ? fmtTime(d.startAt) : "";
     if (d.kind === "event" && end) timeLabel += ` – ${fmtTime(d.endAt)}`;
