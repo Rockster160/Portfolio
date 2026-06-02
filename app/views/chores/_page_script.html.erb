@@ -114,7 +114,20 @@
 
   // ============================================================
   // ChoreStore — the data model. Every read derives from here.
+  //
+  // Persistence contract:
+  //   * The store NEVER drops chores on its own. The only paths that
+  //     remove a chore from the store are explicit `remove(id)` calls
+  //     and `archived_chore_ids` deltas from the server.
+  //   * `bootstrap` is ADDITIVE — it merges fresh data into the existing
+  //     store, never clears it. A stale/empty cached shell can never
+  //     wipe a populated UI; the worst case is "we already had these
+  //     chores and now we still do."
+  //   * Every mutation persists to localStorage so a fresh page load
+  //     with an empty inline shell can hydrate from local first, then
+  //     merge whatever the network eventually returns.
   // ============================================================
+  const STORE_LS_KEY = "chores:store:v1";
   const ChoreStore = (() => {
     const map = new Map();
     let lookahead = {};
@@ -126,18 +139,67 @@
     const subs = new Set();
     function notify(kind, id) { subs.forEach(fn => { try { fn(kind, id); } catch (e) { console.error(e); } }); }
     function rebuildDailySet() { dailyIdSet = new Set(dailyIds.map(n => parseInt(n, 10))); }
+    function persist() {
+      try {
+        localStorage.setItem(STORE_LS_KEY, JSON.stringify({
+          chores: Array.from(map.values()),
+          lookahead,
+          dailyIds,
+        }));
+      } catch (e) { /* storage full or unavailable — non-fatal */ }
+    }
+    // Pull last-known state from localStorage. Returns the payload or
+    // null. Caller decides whether to merge it (used when the inline
+    // shell JSON is empty / stale and we'd otherwise paint nothing).
+    function loadPersisted() {
+      try {
+        const raw = localStorage.getItem(STORE_LS_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch (e) { return null; }
+    }
     return {
+      // Additive merge — NEVER clears the map. Bootstrap is just "here
+      // is the latest known data," and removals are handled separately
+      // (`remove` / `archived_chore_ids`). Emits a single "reconcile"
+      // notify so subscribers can diff the DOM against the current store
+      // without ever clearing containers in between.
       bootstrap(items, look, dailies) {
-        map.clear();
-        (items || []).forEach(c => map.set(c.id, c));
-        lookahead = look || {};
-        dailyIds = (dailies || []).map(n => parseInt(n, 10)).filter(Boolean);
-        rebuildDailySet();
-        notify("bootstrap");
+        (items || []).forEach(c => {
+          if (!c || !c.id) return;
+          const existing = map.get(c.id);
+          map.set(c.id, { ...existing, ...c });
+        });
+        if (look && Object.keys(look).length > 0) lookahead = look;
+        if (Array.isArray(dailies)) {
+          // Daily pins come from the server when present. An empty
+          // array IS authoritative — user could have unpinned everything
+          // — but a missing/undefined `dailies` arg means "don't touch
+          // the existing list" (e.g. a partial bootstrap path).
+          dailyIds = dailies.map(n => parseInt(n, 10)).filter(Boolean);
+          rebuildDailySet();
+        }
+        persist();
+        notify("reconcile");
+      },
+      hydrateFromLocal() {
+        const p = loadPersisted();
+        if (!p) return false;
+        (p.chores || []).forEach(c => {
+          if (!c || !c.id) return;
+          if (!map.has(c.id)) map.set(c.id, c);
+        });
+        if (p.lookahead && Object.keys(lookahead).length === 0) lookahead = p.lookahead;
+        if (Array.isArray(p.dailyIds) && dailyIds.length === 0) {
+          dailyIds = p.dailyIds.map(n => parseInt(n, 10)).filter(Boolean);
+          rebuildDailySet();
+        }
+        return true;
       },
       setDailyIds(ids) {
         dailyIds = (ids || []).map(n => parseInt(n, 10)).filter(Boolean);
         rebuildDailySet();
+        persist();
         notify("dailies");
       },
       pinDaily(id) {
@@ -145,6 +207,7 @@
         if (!n || dailyIdSet.has(n)) return;
         dailyIds.push(n);
         dailyIdSet.add(n);
+        persist();
         notify("dailies");
       },
       unpinDaily(id) {
@@ -152,6 +215,7 @@
         if (!dailyIdSet.has(n)) return;
         dailyIds = dailyIds.filter(x => x !== n);
         dailyIdSet.delete(n);
+        persist();
         notify("dailies");
       },
       reorderDailies(ids) {
@@ -166,6 +230,7 @@
         dailyIds.forEach(id => { if (!next.includes(id)) next.push(id); });
         dailyIds = next;
         rebuildDailySet();
+        persist();
         notify("dailies");
       },
       isDaily(id) { return dailyIdSet.has(parseInt(id, 10)); },
@@ -178,6 +243,7 @@
           return false;
         }
         map.set(c.id, { ...existing, ...c });
+        persist();
         notify("upsert", c.id);
         return true;
       },
@@ -185,6 +251,7 @@
         const existing = map.get(id);
         if (!existing) return;
         map.set(id, { ...existing, ...fields });
+        persist();
         notify("upsert", id);
       },
       remove(id) {
@@ -195,6 +262,7 @@
           dailyIds = dailyIds.filter(x => x !== n);
           dailyIdSet.delete(n);
         }
+        persist();
         notify("remove", id);
       },
       // Rebuild the map in the supplied id order so any view that reads
@@ -238,7 +306,7 @@
           .sort((a, b) => (b.hot_multiplier - a.hot_multiplier));
       },
       lookahead() { return lookahead; },
-      setLookahead(l) { lookahead = l || {}; notify("lookahead"); },
+      setLookahead(l) { lookahead = l || {}; persist(); notify("lookahead"); },
       subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
     };
   })();
@@ -288,8 +356,8 @@
           <span class="card-reward">${esc(c.reward_label)}</span>
           ${iconHTML(c)}
           ${cd}
-          <span class="card-count-slot" data-count-slot>${countBadge}</span>
         </div>
+        <span class="card-count-slot" data-count-slot>${countBadge}</span>
         <div class="title">${esc(c.name)}</div>
         <div class="ago-row" data-ago-row></div>
       </div>
@@ -534,46 +602,102 @@
     const emptyOver  = () => document.querySelector("[data-empty-overdue]");
     const lookCt     = () => document.querySelector("[data-chores-lookahead]");
 
-    function clear(el) { if (el) el.innerHTML = ""; }
     function appendTo(el, node) { if (el && node) el.appendChild(node); }
 
+    // Diff a container's children against a desired list of items.
+    // NEVER calls innerHTML="" — chores already on screen stay on
+    // screen, even if a sync is mid-flight or failed. The only writes
+    // are: patch existing nodes in place, move existing nodes to their
+    // new order, append truly-new nodes, remove nodes that the store
+    // says should no longer be visible.
+    function reconcileSection(container, items, opts) {
+      if (!container) return;
+      const { keyFor, renderer, patcher } = opts;
+      const desiredById = new Map(items.map(c => [c.id, c]));
+      const existingByKey = new Map();
+      Array.from(container.children).forEach(child => {
+        const key = keyFor(child);
+        if (key == null || !desiredById.has(key)) {
+          // Item is no longer in this section (archived, unpinned,
+          // filter flipped). Explicit DOM remove — never a clear-all.
+          child.remove();
+        } else {
+          existingByKey.set(key, child);
+        }
+      });
+      let cursor = container.firstElementChild;
+      for (const item of items) {
+        const existing = existingByKey.get(item.id);
+        if (cursor && cursor === existing) {
+          // Already where it belongs — patch in place.
+          patcher(cursor, item);
+          cursor = cursor.nextElementSibling;
+        } else if (existing) {
+          // Lives in this container but in the wrong position. Move it
+          // to the cursor's slot (insertBefore moves rather than dupes
+          // when the node is already a child).
+          container.insertBefore(existing, cursor);
+          patcher(existing, item);
+        } else {
+          // Truly new — insert at the cursor position.
+          const node = renderer(item);
+          if (node) container.insertBefore(node, cursor);
+        }
+      }
+    }
+
+    const cardKey   = el => { const v = parseInt(el?.dataset?.choreId, 10); return Number.isFinite(v) ? v : null; };
+    // Hot cells wrap a chore-circle whose data-chore-id is on the
+    // inner element; key by that.
+    const hotKey    = el => {
+      const inner = el?.querySelector?.("[data-chore-id]");
+      const v = parseInt(inner?.dataset?.choreId, 10);
+      return Number.isFinite(v) ? v : null;
+    };
+    const patchHot  = (cell, c) => {
+      const inner = cell.querySelector(".chore-circle");
+      if (inner) patchCircleCard(inner, c);
+    };
+
     function renderGrid() {
-      const c = grid();
-      if (!c) return;
-      clear(c);
-      ChoreStore.activeForGrid().forEach(item => appendTo(c, renderGridCard(item)));
+      reconcileSection(grid(), ChoreStore.activeForGrid(), {
+        keyFor: cardKey, renderer: renderGridCard, patcher: patchGridCard,
+      });
     }
     function renderDailies() {
       const c = dailies();
-      if (!c) return;
-      clear(c);
-      const items = ChoreStore.dailiesList();
-      items.forEach(item => appendTo(c, renderCircleCard(item)));
-      if (emptyDay()) emptyDay().hidden = items.length > 0;
+      reconcileSection(c, ChoreStore.dailiesList(), {
+        keyFor: cardKey, renderer: renderCircleCard, patcher: patchCircleCard,
+      });
+      if (emptyDay()) emptyDay().hidden = (c?.children.length || 0) > 0;
     }
     function renderOverdue() {
       const c = overdue();
-      if (!c) return;
-      clear(c);
-      const items = ChoreStore.overdueList();
-      items.forEach(item => appendTo(c, renderCircleCard(item)));
-      if (emptyOver()) emptyOver().hidden = items.length > 0;
+      reconcileSection(c, ChoreStore.overdueList(), {
+        keyFor: cardKey, renderer: renderCircleCard, patcher: patchCircleCard,
+      });
+      if (emptyOver()) emptyOver().hidden = (c?.children.length || 0) > 0;
     }
     function renderHot() {
       const c = hot();
       if (!c) return;
-      clear(c);
       const picks = ChoreStore.hotPicks();
-      if (!picks.length) { c.hidden = true; return; }
-      c.hidden = false;
-      picks.forEach(item => appendTo(c, renderHotCell(item)));
+      reconcileSection(c, picks, {
+        keyFor: hotKey,
+        renderer: item => nodeFrom(hotCellHTML(item)),
+        patcher: patchHot,
+      });
+      // Section visibility — hide when no picks, show otherwise. Note
+      // we DON'T innerHTML="" on the hidden branch; if picks come back
+      // later we re-reveal the same DOM (or reconcile adds new cells).
+      c.hidden = (c.children.length === 0);
     }
     function renderLookahead() {
       const c = lookCt();
       if (!c) return;
       const data = ChoreStore.lookahead() || {};
       const keys = Object.keys(data).sort();
-      if (!keys.length) { c.innerHTML = ""; c.hidden = true; return; }
+      if (!keys.length) { c.hidden = true; return; }
       c.hidden = false;
       const parts = [`<h3 class="lookahead-heading">Upcoming</h3>`];
       keys.forEach(day => {
@@ -592,7 +716,11 @@
         const emptyClass = ids.length ? "" : " lookahead-day-empty";
         parts.push(`<div class="lookahead-day${emptyClass}"><div class="day-label">${esc(dayLabel)}</div><div class="day-items">${body}</div></div>`);
       });
-      c.innerHTML = parts.join("");
+      // Only write the DOM when the markup actually changed — the
+      // section never flickers when the lookahead arg comes back
+      // identical to what we already rendered.
+      const want = parts.join("");
+      if (c.innerHTML !== want) c.innerHTML = want;
     }
 
     function upsertOne(c) {
@@ -667,7 +795,12 @@
   })();
 
   ChoreStore.subscribe((kind, id) => {
-    if (kind === "bootstrap") Views.renderAll();
+    // "reconcile" replaces the old destructive "bootstrap" event.
+    // Views.renderAll() now diffs the DOM against the current store
+    // instead of clearing containers, so a fresh sync that overlaps
+    // with what's already on screen produces no flicker and an empty
+    // sync produces no blank.
+    if (kind === "reconcile") Views.renderAll();
     else if (kind === "lookahead") Views.renderLookahead();
     else if (kind === "dailies") {
       Views.renderDailies();
@@ -2925,10 +3058,15 @@
   // boot
   // ============================================================
   if (unifiedPage) {
-    // Always seed from the cached bootstrap so the app renders offline
-    // even when the cached HTML is from a prior chore-day. fullSync
-    // below corrects any stale hot-picks / today_visible / counts when
-    // the network returns.
+    // Order matters: hydrate from localStorage FIRST so we have a
+    // baseline even when the inline bootstrap JSON is empty (cached
+    // shell that was rendered during an error, fresh-installed PWA
+    // with no network, etc). Then merge the inline shell — which
+    // wins on any chore it contains because bootstrap is additive
+    // and per-chore updated_at gates overwrites in `upsert`.
+    // Net effect: a stale-empty shell can never blank the UI; the
+    // worst-case is "we already had these chores and we still do."
+    ChoreStore.hydrateFromLocal();
     ChoreStore.bootstrap(bootstrap.chores, bootstrap.lookahead, bootstrap.daily_ids);
     if (bootstrap.day_key) localStorage.setItem(SYNC_DAY_KEY, bootstrap.day_key);
     // Persist server_ts only when the cached HTML is from today;

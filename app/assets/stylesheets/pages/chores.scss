@@ -237,8 +237,13 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     padding: 0;
     opacity: 0.6;
   }
-  .search-clear:hover { opacity: 1; background: #1F2A44; }
-  .search-clear[hidden] { display: none; }
+  .search-clear:hover {
+    opacity: 1;
+    background: #1F2A44;
+  }
+  .search-clear[hidden] {
+    display: none;
+  }
   .chores-toolbar .toolbar-actions {
     display: inline-flex;
     gap: 8px;
@@ -316,7 +321,7 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     font-size: 9px !important;
   }
   .hot-strip .chore-circle .circle-countdown {
-    bottom: 8%;
+    bottom: 6%;
     font-size: 8px !important;
     padding: 1px 4px;
   }
@@ -340,10 +345,18 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   //   │                                                       │
   //   │                  ICON / GLYPH                         │
   //   │                                                       │
-  //   │ edit-mode ✎    circle-countdown        (reserved)     │   (bottom row)
-  //   │ (bot-LEFT)      (bot-CENTER)                          │
+  //   │ edit-mode ✎    circle-countdown        (reserved)     │   (bottom row of icon)
+  //   │ (bot-LEFT)      (bot-CENTER, fixed)                   │
   //   └───────────────────────────────────────────────┘
-  //              count-badge (slot below the icon box)
+  //   ── permanent count-badge slot (always 14px tall row) ──
+  //                  TITLE
+  //                  AGO TIMESTAMP
+  //
+  // EVERY badge has a SINGLE permanent slot. Its position NEVER moves
+  // based on what other badges are present, what their content is, or
+  // whether they're visible at all. Adding/removing a badge has no
+  // visual effect on any other element on the card — the count slot
+  // reserves its own row in the flex column whether populated or empty.
   //
   // CARD-LEVEL OVERLAYS (.chore-card / .chore-circle)
   //   top-LEFT     → .hot-badge          — hot-pick multiplier pill (green)
@@ -351,9 +364,11 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   //   top-RIGHT    → .streak-badge       — streak multiplier pill (actor-color)
   //   bot-LEFT     → .edit-mode ::after  — pencil chip (only when toolbar edit mode is on)
   //   bot-CENTER   → .card-count-slot / .count-slot — done-today counter (only when done_count_today > 1)
-  //                                                    sits in the icon→title gutter on Grid (.title has
-  //                                                    margin-top to keep room); overflows below the disc
-  //                                                    on Today/Hot circles (wrapper extends past the disc).
+  //                                                    Grid: PERMANENT flex row between icon and title
+  //                                                    that always reserves its height (no :empty
+  //                                                    collapse) so badge presence never shifts layout.
+  //                                                    Today/Hot circles: absolute overlay below the
+  //                                                    disc (wrapper extends past the disc for the title).
   //
   // ICON-BOX OVERLAYS (inside .chore-card .icon / .chore-circle .circle-inner)
   //   top-CENTER   → .card-reward / .circle-reward — pebble reward label (always)
@@ -478,10 +493,6 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     font-size: 13px;
     line-height: 1.2;
     color: var(--chores-text);
-    // Leave room for `.card-count-slot` which overflows the icon by
-    // ~10px on its bottom edge. Without this gap the count badge
-    // overlaps the first character of the title (see slot map above).
-    margin-top: 8px;
     // Cap full names at two lines so a single 4-word chore doesn't
     // bloat the whole row's card height. -webkit-line-clamp is the
     // de-facto cross-browser way to do this; the fallback (no clamp)
@@ -518,19 +529,20 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   // outline / box-shadow on the card. Earlier purple rings clashed
   // with the green "done" ring and made hot strips look noisy
   // (purple ring + purple badge + purple pill all at once).
-  // Count slot — bottom-CENTER of the icon to mirror .chore-circle's
-  // count-slot. Keeps the top corners reserved for hot (top-LEFT) and
-  // streak (top-RIGHT) multipliers across every chore view.
+  // Count slot — PERMANENT row in the flex column between .icon and
+  // .title. Always reserves the same height whether or not a badge
+  // is currently visible — `:empty` is NOT collapsed. That guarantees:
+  //   * the badge sits in exactly the same spot every time
+  //   * adding/removing the badge never shifts the title, ago-row, or
+  //     any other element on the card
+  //   * the badge is fully visible (no clipping from .icon's
+  //     `overflow: hidden`)
   .chore-card .card-count-slot {
-    position: absolute;
-    bottom: -8px;
-    left: 50%;
-    transform: translateX(-50%);
-    height: 16px;
-    min-width: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
+    height: 14px;
+    margin-top: -10px;
     pointer-events: none;
     z-index: 4;
   }
@@ -811,9 +823,17 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     animation: chore-ring-draw 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
   }
   @keyframes chore-ring-draw {
-    0%   { stroke-dashoffset: 100; opacity: 0; }
-    5%   { opacity: 1; }
-    100% { stroke-dashoffset: 0; opacity: 1; }
+    0% {
+      stroke-dashoffset: 100;
+      opacity: 0;
+    }
+    5% {
+      opacity: 1;
+    }
+    100% {
+      stroke-dashoffset: 0;
+      opacity: 1;
+    }
   }
   .chore-circle.done .icon {
     opacity: 0.95;
@@ -990,7 +1010,10 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     justify-content: center;
     cursor: pointer;
     box-shadow: 0 2px 4px #0006;
-    transition: color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+    transition:
+      color 0.15s ease,
+      background 0.15s ease,
+      transform 0.1s ease;
     flex-shrink: 0;
   }
   .modal-head [data-edit-pin-toggle]:hover {
@@ -1441,7 +1464,9 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     gap: 8px;
     margin-bottom: 8px;
   }
-  .balance-section-heading h3 { margin: 0; }
+  .balance-section-heading h3 {
+    margin: 0;
+  }
 
   .multiplier-card-head {
     margin-bottom: 6px;
@@ -1450,8 +1475,12 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     justify-content: space-between;
     gap: 8px;
   }
-  .multiplier-card-head strong { display: block; color: var(--chores-text); }
-  .multiplier-card-actions, .achievement-actions {
+  .multiplier-card-head strong {
+    display: block;
+    color: var(--chores-text);
+  }
+  .multiplier-card-actions,
+  .achievement-actions {
     display: flex;
     gap: 4px;
     flex-shrink: 0;
@@ -1467,7 +1496,9 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     border-radius: 6px;
     font-size: 12px;
   }
-  .btn.ghost.icon:hover { color: var(--chores-text) !important; }
+  .btn.ghost.icon:hover {
+    color: var(--chores-text) !important;
+  }
   .multiplier-levels .level-rewards {
     display: inline-flex;
     align-items: center;
@@ -1497,8 +1528,12 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     gap: 6px;
     margin-bottom: 6px;
   }
-  .multiplier-level-row input { min-width: 0; }
-  .multiplier-level-rows { margin-bottom: 8px; }
+  .multiplier-level-row input {
+    min-width: 0;
+  }
+  .multiplier-level-rows {
+    margin-bottom: 8px;
+  }
   .multiplier-card table.multiplier-levels {
     width: 100%;
     border-collapse: collapse;
@@ -1523,20 +1558,27 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     padding: 2px 0;
     font-size: 13px;
   }
-  .multiplier-card table.multiplier-levels .muted { color: var(--chores-muted); }
+  .multiplier-card table.multiplier-levels .muted {
+    color: var(--chores-muted);
+  }
 
   .form-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
   }
-  .form-row .form-section { min-width: 0; }
+  .form-row .form-section {
+    min-width: 0;
+  }
   .chore-form .field-hint {
     font-size: 11px;
     color: var(--chores-muted);
     margin-top: 2px;
   }
-  .goal-row .goal-title { min-width: 0; flex: 1; }
+  .goal-row .goal-title {
+    min-width: 0;
+    flex: 1;
+  }
   .goal-row .goal-kind {
     font-size: 11px;
     color: var(--chores-muted);
@@ -1570,8 +1612,13 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   .goal-row.achieved .progress-fill {
     background: var(--chores-done);
   }
-  .goal-row .earned-pill i { margin-right: 4px; }
-  .achievement-body { min-width: 0; flex: 1; }
+  .goal-row .earned-pill i {
+    margin-right: 4px;
+  }
+  .achievement-body {
+    min-width: 0;
+    flex: 1;
+  }
   .achievement-desc {
     font-size: 12px;
     color: var(--chores-muted);
@@ -1615,9 +1662,16 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     font-size: 13px;
     align-items: center;
   }
-  .chore-history-row:first-child { border-top: 0; }
-  .chore-history-when { color: var(--chores-muted); }
-  .chore-history-paid { font-weight: 700; color: var(--chores-text); }
+  .chore-history-row:first-child {
+    border-top: 0;
+  }
+  .chore-history-when {
+    color: var(--chores-muted);
+  }
+  .chore-history-paid {
+    font-weight: 700;
+    color: var(--chores-text);
+  }
   .chore-history-actor {
     font-size: 11px;
     padding: 1px 8px;
@@ -1646,8 +1700,12 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     font-weight: 600;
     color: #FFF;
   }
-  .history-mult.hot    { background: var(--chores-hot); }
-  .history-mult.streak { background: var(--actor-color); }
+  .history-mult.hot {
+    background: var(--chores-hot);
+  }
+  .history-mult.streak {
+    background: var(--actor-color);
+  }
 
   // Completion edit modal — small key/value layout
   .completion-details .detail-row {
