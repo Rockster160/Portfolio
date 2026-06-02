@@ -325,29 +325,31 @@ document.addEventListener("DOMContentLoaded", () => {
               "Content-Type": "application/json",
             },
             body: "{}",
-          }).then((resp) => {
-            if (resp.ok) {
-              document.dispatchEvent(new Event("lists:process-queue"));
-            } else if (attempt < 3) {
-              setTimeout(() => refreshList(attempt + 1), 2000 * attempt);
-            } else {
-              const e = document.querySelector(".list-error");
-              if (e) {
-                e.textContent = "Sync failed — please reload";
-                e.classList.remove("hidden");
+          })
+            .then((resp) => {
+              if (resp.ok) {
+                document.dispatchEvent(new Event("lists:process-queue"));
+              } else if (attempt < 3) {
+                setTimeout(() => refreshList(attempt + 1), 2000 * attempt);
+              } else {
+                const e = document.querySelector(".list-error");
+                if (e) {
+                  e.textContent = "Disconnected";
+                  e.classList.remove("hidden");
+                }
               }
-            }
-          }).catch(() => {
-            if (attempt < 3) {
-              setTimeout(() => refreshList(attempt + 1), 2000 * attempt);
-            } else {
-              const e = document.querySelector(".list-error");
-              if (e) {
-                e.textContent = "Sync failed — please reload";
-                e.classList.remove("hidden");
+            })
+            .catch(() => {
+              if (attempt < 3) {
+                setTimeout(() => refreshList(attempt + 1), 2000 * attempt);
+              } else {
+                const e = document.querySelector(".list-error");
+                if (e) {
+                  e.textContent = "Disconnected";
+                  e.classList.remove("hidden");
+                }
               }
-            }
-          });
+            });
         };
         refreshList(1);
       },
