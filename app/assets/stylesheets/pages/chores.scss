@@ -2331,6 +2331,208 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     text-align: center;
     padding: 18px 0;
   }
+  .icon-picker-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .icon-picker-toolbar .icon-picker-search {
+    flex: 1;
+  }
+  .icon-picker-upload {
+    flex: 0 0 auto;
+    width: 38px;
+    padding: 0 !important;
+    border-radius: 8px;
+    background: rgba(15, 27, 51, 0.7) !important;
+    border: 1px solid #334155 !important;
+    color: var(--chores-muted) !important;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+  }
+  .icon-picker-upload:hover {
+    color: var(--chores-text) !important;
+    border-color: var(--chores-accent) !important;
+  }
+  .icon-picker-grid button img.icon-img {
+    width: 80%;
+    height: 80%;
+    object-fit: contain;
+    pointer-events: none;
+  }
+
+  // ---- Icon cropper modal ----
+  .icon-cropper-modal {
+    max-width: 460px;
+    width: 92vw;
+  }
+  .cropper-source {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 4px;
+  }
+  .cropper-hint {
+    color: var(--chores-muted);
+    text-align: center;
+    margin: 0;
+  }
+  .cropper-source-actions {
+    display: flex;
+    justify-content: center;
+  }
+  .cropper-url {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #0F1B33;
+    border: 1px solid #334155;
+    color: var(--chores-text);
+    font-size: 14px;
+  }
+  .cropper-url:focus {
+    outline: none;
+    border-color: var(--chores-accent);
+  }
+  .cropper-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .cropper-canvas-wrap {
+    position: relative;
+    width: 320px;
+    height: 320px;
+    margin: 0 auto;
+    background: #0A1224;
+    border-radius: 12px;
+    overflow: hidden;
+    touch-action: none;
+    cursor: grab;
+  }
+  .cropper-canvas-wrap:active {
+    cursor: grabbing;
+  }
+  .cropper-canvas-wrap canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  // Inverted square mask — solid border ring over the canvas defining
+  // the visible crop area. 64px = quarter inset on a 320 stage = 192px square.
+  .cropper-mask {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    box-shadow: 0 0 0 9999px rgba(2, 6, 23, 0.55) inset;
+    clip-path: polygon(
+      0 0, 100% 0, 100% 100%, 0 100%, 0 0,
+      64px 64px, 64px calc(100% - 64px),
+      calc(100% - 64px) calc(100% - 64px),
+      calc(100% - 64px) 64px, 64px 64px
+    );
+  }
+  .cropper-canvas-wrap::after {
+    content: "";
+    position: absolute;
+    left: 64px; right: 64px; top: 64px; bottom: 64px;
+    border: 2px solid var(--chores-accent);
+    border-radius: 8px;
+    pointer-events: none;
+  }
+  .cropper-zoom-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--chores-muted);
+  }
+  .cropper-zoom-row input[type="range"] {
+    flex: 1;
+  }
+  .cropper-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .cropper-meta input {
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: #0F1B33;
+    border: 1px solid #334155;
+    color: var(--chores-text);
+  }
+  .cropper-error {
+    color: #FCA5A5;
+    margin: 4px 0 0;
+    text-align: center;
+  }
+  .cropper-bg {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(15, 27, 51, 0.5);
+  }
+  .cropper-bg-toggle {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    color: var(--chores-text);
+    cursor: pointer;
+  }
+  .cropper-bg-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-left: 8px;
+    border-left: 2px solid #1E3A5F;
+  }
+  .cropper-bg-controls.hidden {
+    display: none !important;
+  }
+  .cropper-bg-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--chores-muted);
+  }
+  .cropper-bg-row input[type="range"] {
+    flex: 1;
+  }
+  .cropper-bg-threshold-value {
+    min-width: 28px;
+    text-align: right;
+    color: var(--chores-text);
+    font-variant-numeric: tabular-nums;
+  }
+  .cropper-bg-edges {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    color: var(--chores-text);
+    cursor: pointer;
+  }
+  .cropper-preview-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  // Checker pattern so transparency reads clearly without leaking the
+  // dark modal background into the perceived icon colour.
+  .cropper-preview {
+    width: 96px;
+    height: 96px;
+    border-radius: 8px;
+    background:
+      linear-gradient(45deg, #2a3a55 25%, transparent 25%) 0 0 / 12px 12px,
+      linear-gradient(-45deg, #2a3a55 25%, transparent 25%) 0 6px / 12px 12px,
+      linear-gradient(45deg, transparent 75%, #2a3a55 75%) 6px -6px / 12px 12px,
+      linear-gradient(-45deg, transparent 75%, #2a3a55 75%) -6px 0 / 12px 12px,
+      #1a2638;
+    border: 1px solid #334155;
+  }
 
   // ---- Multiplier modal (now shared between Grid + Today) ----
   .chore-multiplier-modal {

@@ -102,7 +102,9 @@ Rails.application.routes.draw do
   get  "/chores/recent_history" => "chores#recent_history", as: :chores_recent_history
   get  "/chores/csrf"           => "chores#csrf",           as: :chores_csrf
   get  "/chores/sync"    => "chores#sync",    as: :chores_sync
+  get  "/chores/household_icons.json" => "household_icons#index", as: :chores_household_icons_index
   scope path: "chores", as: :chore_routes do
+    resources :household_icons, only: [:create, :update, :destroy], controller: :household_icons
     get  "/new"          => "chores#new",            as: :new
     get  "/items/:id/edit" => "chores#edit",         as: :edit
     post "/items"        => "chores#create",         as: :items

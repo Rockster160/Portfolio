@@ -17,7 +17,11 @@ namespace :emoji do
       tags    = Array(e["tags"])
       desc    = e["description"].to_s
       extra   = Array(extras[char])
-      words   = aliases.flat_map { |a| a.split("_") } + tags + desc.split(/\W+/) + extra
+      # Curated extras come FIRST so positional scoring treats them as
+      # the most authoritative aliases. The iconic flower emoji get
+      # "flower" at index 0; novelty rows like 🎴 only get it via the
+      # description split, which lands further down.
+      words   = extra + aliases.flat_map { |a| a.split("_") } + tags + desc.split(/\W+/)
       keywords = expand_inflections(words)
 
       {

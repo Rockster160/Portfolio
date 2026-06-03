@@ -21,7 +21,8 @@ namespace :icons do
       words = bare.split(/[-_]/).reject(&:empty?)
       extra_words = Array(extra).flat_map { |t| t.to_s.split(/[-_\s]/) }
       curated = Array(extras[name.to_s])
-      keywords = expand_inflections(extra_words + words + curated)
+      # Curated extras lead so they get the strongest positional bonus.
+      keywords = expand_inflections(curated + extra_words + words)
       display = bare.tr("_", " ").tr("-", " ").strip
 
       {

@@ -12,9 +12,14 @@
       <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
     </div>
     <div class="icon-picker-body">
-      <input type="search" class="icon-picker-search" data-icon-picker-search
-             placeholder="Search emoji or icons…" autocomplete="off"
-             data-1p-ignore="true" data-lpignore="true">
+      <div class="icon-picker-toolbar">
+        <input type="search" class="icon-picker-search" data-icon-picker-search
+               placeholder="Search emoji or icons…" autocomplete="off"
+               data-1p-ignore="true" data-lpignore="true">
+        <button type="button" class="icon-picker-upload" data-icon-picker-upload title="Upload a custom icon">
+          <i class="fa fa-plus" aria-hidden="true"></i>
+        </button>
+      </div>
       <div class="icon-picker-grid" data-icon-picker-grid></div>
       <div class="icon-picker-empty hidden" data-icon-picker-empty>No matches.</div>
     </div>

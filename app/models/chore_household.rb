@@ -16,6 +16,7 @@ class ChoreHousehold < ApplicationRecord
     dependent: :destroy
   has_many :members, through: :memberships, source: :user
   has_many :chores, dependent: :destroy
+  has_many :icons, class_name: "HouseholdIcon", dependent: :destroy
   # Rails' default inflector mangles "bonuses" → "bonuse"; pin the class.
   has_many :chore_streak_bonuses, class_name: "ChoreStreakBonus", dependent: :destroy
 

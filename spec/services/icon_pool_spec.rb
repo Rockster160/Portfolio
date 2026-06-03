@@ -36,6 +36,36 @@ RSpec.describe IconPool do
       match = described_class.best_match("teeth")
       expect(match&.dig(:c)).to eq("🦷")
     end
+
+    it "weighs later tokens higher: 'Water Flowers' picks a flower, not water" do
+      match = described_class.best_match("Water Flowers")
+      # Could be any of the flower-tagged emoji (🌸 🌹 🌷 🌺 🌼 💐 🌻).
+      expect(%w[🌸 🌹 🌷 🌺 🌼 💐 🌻]).to include(match&.dig(:c))
+    end
+
+    it "verb-form variants reach gerund-only keywords: 'load' → loading icons" do
+      # ⏳ has curated alias "loading"; a "load" query should find it via
+      # the gerund expansion in variants().
+      match = described_class.best_match("load")
+      expect(match).to be_present
+      expect(match[:k]).to include("loading").or include("loadings")
+    end
+
+    it "verb-form variants reach base from gerund query: 'saving' → 'save' keywords" do
+      # 💾 has curated alias "save"; a "saving" query should find it.
+      match = described_class.best_match("saving")
+      expect(match&.dig(:c)).to eq("💾")
+    end
+
+    it "death-related queries hit the curated skull aliases" do
+      match = described_class.best_match("death")
+      expect(%w[💀 ☠️]).to include(match&.dig(:c))
+    end
+
+    it "'jolly roger' resolves to a pirate icon" do
+      match = described_class.best_match("jolly roger")
+      expect(%w[☠️ 🏴‍☠️]).to include(match&.dig(:c))
+    end
   end
 
   describe ".search" do

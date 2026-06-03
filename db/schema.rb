@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_03_120000) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_03_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -701,6 +701,19 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_03_120000) do
     t.index ["user_id"], name: "index_google_accounts_on_user_id"
   end
 
+  create_table "household_icons", force: :cascade do |t|
+    t.bigint "chore_household_id", null: false
+    t.bigint "uploaded_by_user_id", null: false
+    t.text "name", null: false
+    t.text "keywords", default: "", null: false
+    t.text "image_data", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["chore_household_id", "name"], name: "index_household_icons_on_chore_household_id_and_name", unique: true
+    t.index ["chore_household_id"], name: "index_household_icons_on_chore_household_id"
+    t.index ["uploaded_by_user_id"], name: "index_household_icons_on_uploaded_by_user_id"
+  end
+
   create_table "lines", id: :serial, force: :cascade do |t|
     t.integer "flash_card_id"
     t.string "text", limit: 255
@@ -1213,6 +1226,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_03_120000) do
   add_foreign_key "chores", "users", column: "created_by_user_id"
   add_foreign_key "emails", "users"
   add_foreign_key "google_accounts", "users"
+  add_foreign_key "household_icons", "chore_households", on_delete: :cascade
+  add_foreign_key "household_icons", "users", column: "uploaded_by_user_id"
   add_foreign_key "list_builders", "lists"
   add_foreign_key "list_builders", "users"
   add_foreign_key "list_items", "sections"

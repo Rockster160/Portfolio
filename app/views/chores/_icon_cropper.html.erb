@@ -1,0 +1,94 @@
+<%# Cropper modal — opened from the icon picker's "+" button. User picks
+  a source (file / paste / drag-drop / URL), positions a square crop
+  inside the source via zoom + pan, names the result, and saves. The
+  cropper renders to a 128×128 off-screen canvas, encodes to WebP
+  (PNG fallback), and POSTs to /chores/household_icons. %>
+<div id="chore-icon-cropper" class="chores-modal-backdrop hidden" data-icon-cropper-modal>
+  <div class="chores-modal icon-cropper-modal">
+    <div class="modal-head">
+      <h3>Add a custom icon</h3>
+      <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+    </div>
+
+    <%# Source-picker pane — visible until the user picks an image.
+      Accepts file pick, drag-drop, paste anywhere in the pane, or a
+      URL entered into the input. iOS Genmoji come through the
+      paste/drop handlers as image/png. %>
+    <div class="cropper-source" data-cropper-source>
+      <p class="cropper-hint">Drop an image, paste, choose a file, or enter a URL.</p>
+      <div class="cropper-source-actions">
+        <button type="button" class="ghost" data-cropper-file-btn>Choose file…</button>
+        <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+               data-cropper-file hidden>
+      </div>
+      <input type="url" class="cropper-url" data-cropper-url placeholder="…or paste an image URL"
+             autocomplete="off" data-1p-ignore="true" data-lpignore="true">
+      <p class="cropper-error hidden" data-cropper-error></p>
+    </div>
+
+    <%# Crop pane — visible once a source is loaded. The canvas shows
+      the source image with a square overlay; the user drags to pan
+      and uses the zoom slider to scale. Saves the cropped square at
+      128×128 px regardless of source dimensions. %>
+    <div class="cropper-stage hidden" data-cropper-stage>
+      <div class="cropper-canvas-wrap" data-cropper-canvas-wrap>
+        <canvas data-cropper-canvas width="320" height="320"></canvas>
+        <div class="cropper-mask" data-cropper-mask aria-hidden="true"></div>
+      </div>
+      <div class="cropper-controls">
+        <label class="cropper-zoom-row">
+          <span>Zoom</span>
+          <input type="range" min="0.1" max="4" step="0.01" value="1" data-cropper-zoom>
+        </label>
+        <button type="button" class="ghost" data-cropper-reset>Choose different image</button>
+      </div>
+
+      <%# Background-removal tool — samples the corners of the cropped
+        output for a background colour and zeroes alpha on matching
+        pixels. Edges-only (default) walks a flood-fill from the
+        border so an interior white (eyes, highlights) stays intact
+        even when the rest of the surrounding white goes transparent. %>
+      <div class="cropper-bg">
+        <label class="cropper-bg-toggle">
+          <input type="checkbox" data-cropper-bg-enable>
+          <span>Remove background</span>
+        </label>
+        <div class="cropper-bg-controls" data-cropper-bg-controls>
+          <label class="cropper-bg-row">
+            <span>Threshold</span>
+            <input type="range" min="0" max="100" step="1" value="20" data-cropper-bg-threshold>
+            <span class="cropper-bg-threshold-value" data-cropper-bg-threshold-value>20</span>
+          </label>
+          <label class="cropper-bg-edges">
+            <input type="checkbox" checked data-cropper-bg-edges>
+            <span>Edges only</span>
+            <span class="field-hint">(keep interior whites — eyes, highlights)</span>
+          </label>
+          <div class="cropper-preview-row">
+            <span class="field-hint">Preview</span>
+            <canvas data-cropper-preview class="cropper-preview" width="96" height="96"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="cropper-meta">
+        <label class="field-label">
+          Name
+          <input type="text" data-cropper-name placeholder="Whisper" maxlength="60"
+                 autocomplete="off" data-1p-ignore="true" data-lpignore="true">
+        </label>
+        <label class="field-label">
+          Search keywords <span class="field-hint">(comma separated, optional)</span>
+          <input type="text" data-cropper-keywords placeholder="cat, kitty, pet"
+                 autocomplete="off" data-1p-ignore="true" data-lpignore="true">
+        </label>
+      </div>
+      <p class="cropper-error hidden" data-cropper-stage-error></p>
+    </div>
+
+    <div class="form-actions">
+      <button type="button" class="ghost" data-action="cancel">Cancel</button>
+      <button type="button" class="primary" data-cropper-save disabled>Save icon</button>
+    </div>
+  </div>
+</div>
