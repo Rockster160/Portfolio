@@ -2114,6 +2114,12 @@
   // tagged by kind. Lazy-loaded once per page; the picker AND the
   // title-driven suggester both score against this.
   //
+  // MIRRORED in Ruby at `app/service/icon_pool.rb` for server-side
+  // use (Jil `Icon.suggest`, etc.). If you change scoring tiers,
+  // query passes, normalization, variant expansion, the irregular-
+  // plural map, or stop words here, port the same change to the Ruby
+  // module in the same commit. Both consume the same JSON indexes.
+  //
   // Custom icons TODO: when user-uploaded icons land, fetch them
   // from `/chores/custom_icons.json` (or similar), tag with
   // `_kind: "custom"`, and append to the pool. The render path

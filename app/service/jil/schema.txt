@@ -301,6 +301,9 @@
   #notes(String)
   #timestamp(Date)
   #data(content(Hash|Keyval))
+[Icon]
+  #suggest(String:Title)::String
+  #search(String:Query)::Array
 [Prompt]
   #find(String|Numeric)
   #all("complete?" Boolean(false))::Array
