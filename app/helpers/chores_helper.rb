@@ -42,6 +42,7 @@ module ChoresHelper
 
   # An icon may be:
   #   * a plain emoji string (most chores)
+  #   * a Tabler Icons class name (`ti-dev-docker`) — rendered as `<i class="ti …">`
   #   * a data URL (`data:image/png;base64,...`) — uploaded image
   #   * an external image URL (`https://...`)
   #   * inline SVG markup (`<svg ...>`) — pasted directly
@@ -75,6 +76,8 @@ module ChoresHelper
       value.html_safe
     elsif value.start_with?("data:image/", "http://", "https://")
       image_tag(value, class: "icon-img", alt: "", loading: "lazy")
+    elsif value.start_with?("ti-")
+      content_tag(:i, "", class: "ti #{value} icon-ti", "aria-hidden": "true")
     else
       content_tag(:span, value, class: "icon-glyph")
     end

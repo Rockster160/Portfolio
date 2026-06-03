@@ -204,8 +204,9 @@
       const v = (chore?.icon || "").trim();
       const kind = chore?.icon_kind;
       if (!v || kind === "empty") return `<span class="icon-placeholder">🧹</span>`;
-      if (kind === "image") return `<img class="icon-img" src="${esc(v)}" alt="" loading="lazy">`;
-      if (kind === "svg")   return v;
+      if (kind === "image")   return `<img class="icon-img" src="${esc(v)}" alt="" loading="lazy">`;
+      if (kind === "svg")     return v;
+      if (kind === "ti_icon") return `<i class="ti ${esc(v)} icon-ti" aria-hidden="true"></i>`;
       return `<span class="icon-glyph">${esc(v)}</span>`;
     }
     async function api(url, method, body) {

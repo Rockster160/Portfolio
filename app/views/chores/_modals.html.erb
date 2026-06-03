@@ -25,6 +25,9 @@
           <button type="button" class="icon-upload-btn" data-icon-upload title="Upload image">
             <i class="fa fa-camera" aria-hidden="true"></i>
           </button>
+          <button type="button" class="icon-pick-btn" data-icon-pick title="Search emoji & icons">
+            <i class="fa fa-search" aria-hidden="true"></i>
+          </button>
           <div class="icon-preview" data-icon-preview contenteditable="true" spellcheck="false"
                role="textbox" aria-label="Icon — type emoji, paste image, or tap upload"></div>
           <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
@@ -278,6 +281,9 @@
           <button type="button" class="icon-upload-btn" data-icon-upload title="Upload image">
             <i class="fa fa-camera" aria-hidden="true"></i>
           </button>
+          <button type="button" class="icon-pick-btn" data-icon-pick title="Search emoji & icons">
+            <i class="fa fa-search" aria-hidden="true"></i>
+          </button>
           <div class="icon-preview" data-icon-preview contenteditable="true" spellcheck="false"
                role="textbox" aria-label="Image — type emoji, paste image or URL, or tap upload"></div>
           <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
@@ -451,6 +457,8 @@
     </form>
   </div>
 </div>
+
+<%= render "icon_picker" %>
 
 <template data-level-row-template>
   <div class="multiplier-level-row">

@@ -1,0 +1,22 @@
+<%# Unified icon picker modal — singleton on the page. Opens from any
+  [data-icon-stack] cell that includes a [data-icon-pick] trigger.
+  One unified search across both emoji + Tabler icons; emoji come
+  first when there's no query. Emits a `chore-icon-picked`
+  CustomEvent with detail.value carrying either an emoji character
+  or a `ti-*` class name. The caller is responsible for writing
+  the value back via the shared icon-stack setter. %>
+<div id="chore-icon-picker" class="chores-modal-backdrop hidden" data-icon-picker-modal>
+  <div class="chores-modal icon-picker-modal">
+    <div class="modal-head">
+      <h3>Pick an icon</h3>
+      <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+    </div>
+    <div class="icon-picker-body">
+      <input type="search" class="icon-picker-search" data-icon-picker-search
+             placeholder="Search emoji or icons…" autocomplete="off"
+             data-1p-ignore="true" data-lpignore="true">
+      <div class="icon-picker-grid" data-icon-picker-grid></div>
+      <div class="icon-picker-empty hidden" data-icon-picker-empty>No matches.</div>
+    </div>
+  </div>
+</div>

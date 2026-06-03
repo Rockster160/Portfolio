@@ -28,7 +28,7 @@ class ChoreSerializer
       name:                chore.name,
       short_name:          chore.short_name.presence || chore.name,
       icon:                chore.icon,
-      icon_kind:           icon_kind, # "emoji" | "image" | "svg" | "empty"
+      icon_kind:           icon_kind, # "emoji" | "image" | "svg" | "ti_icon" | "empty"
       aliases:             chore.aliases_array,
       notes_template:      chore.notes_template.to_s,
       reward_pebbles:      chore.reward_pebbles,
@@ -71,8 +71,9 @@ class ChoreSerializer
     return :empty if chore.icon.blank?
 
     v = chore.icon.to_s.strip
-    return :image if v.start_with?("data:image/", "http://", "https://")
-    return :svg   if v.start_with?("<svg")
+    return :image   if v.start_with?("data:image/", "http://", "https://")
+    return :svg     if v.start_with?("<svg")
+    return :ti_icon if v.start_with?("ti-")
 
     :emoji
   end

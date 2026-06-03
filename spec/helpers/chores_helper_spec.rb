@@ -41,4 +41,28 @@ RSpec.describe ChoresHelper, type: :helper do
       expect(helper.format_multiplier(1.5)).to eq("1.5")
     end
   end
+
+  describe "#chore_icon_inline ti-* rendering" do
+    let(:user) { create(:user) }
+
+    it "renders a ti-* class as an <i class='ti …'> tag" do
+      chore = build_stubbed(:chore, created_by_user: user, icon: "ti-dev-docker")
+      html = helper.chore_icon_inline(chore)
+      expect(html).to include("<i", 'class="ti ti-dev-docker icon-ti"')
+      expect(html).not_to include("icon-glyph")
+    end
+
+    it "still renders a bare emoji as .icon-glyph" do
+      chore = build_stubbed(:chore, created_by_user: user, icon: "🪥")
+      html = helper.chore_icon_inline(chore)
+      expect(html).to include('class="icon-glyph"', "🪥")
+      expect(html).not_to include("ti-")
+    end
+
+    it "renders ti-* with the inline ChoreSerializer icon_kind" do
+      chore = build_stubbed(:chore, created_by_user: user, icon: "ti-fa-wrench")
+      kind = ChoreSerializer.new(chore, viewer: user).send(:icon_kind)
+      expect(kind).to eq(:ti_icon)
+    end
+  end
 end

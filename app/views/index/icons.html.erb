@@ -7,6 +7,16 @@
       display: inline-block;
       width: 200px;
       text-align: center;
+      cursor: pointer;
+      border-radius: 8px;
+      padding: 4px;
+      transition: background 120ms;
+    }
+    .icon-wrapper:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .icon-wrapper.copied {
+      background: rgba(34, 197, 94, 0.18);
     }
     .icon-name {
       display: block;
@@ -14,20 +24,64 @@
       overflow: auto;
       font-size: 12px;
     }
+    .copy-toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 27, 51, 0.95);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 150ms;
+      pointer-events: none;
+      z-index: 9999;
+    }
+    .copy-toast.visible {
+      opacity: 1;
+    }
   </style>
 <% end %>
 
 <input type="text" autofocus="true" autocomplete="off" placeholder="Quick Search" class="emoji-quick-search">
 
 <% JSON.parse(File.read("icons.json")).each do |icon, terms| %>
-  <span class="icon-wrapper" data-searchable-by="<%= icon.sub(/^ti-/, "") %> <%= terms %>">
+  <span class="icon-wrapper" data-searchable-by="<%= icon.sub(/^ti-/, "") %> <%= terms %>" data-copy-value="<%= icon %>">
     <i title="<%= icon %>" class="ti <%= icon %>"></i>
     <span class="icon-name"><%= icon %></span>
   </span>
 <% end %>
 
+<div class="copy-toast" data-copy-toast>Copied!</div>
+
 <% content_for :after_body do %>
   <script type="text/javascript">
+    const copyToast = document.querySelector("[data-copy-toast]");
+    let toastTimer = null;
+    function showToast(msg) {
+      if (!copyToast) return;
+      copyToast.textContent = msg;
+      copyToast.classList.add("visible");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function() { copyToast.classList.remove("visible"); }, 1200);
+    }
+    document.querySelectorAll(".icon-wrapper").forEach(function(el) {
+      el.addEventListener("click", async function() {
+        const value = el.dataset.copyValue || "";
+        if (!value) return;
+        try {
+          await navigator.clipboard.writeText(value);
+          el.classList.add("copied");
+          setTimeout(function() { el.classList.remove("copied"); }, 600);
+          showToast("Copied " + value);
+        } catch (e) {
+          showToast("Copy failed");
+        }
+      });
+    });
+
     document.querySelector(".emoji-quick-search").addEventListener("input", function() {
       var search_text = this.value.toLowerCase().replace(/[ \_\-\:\@]/, "")
 

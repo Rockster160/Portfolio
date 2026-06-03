@@ -331,6 +331,9 @@
       // pasted as their own icon. Browser will sanitize at parse.
       return v;
     }
+    if (v.startsWith("ti-")) {
+      return `<i class="ti ${esc(v)} icon-ti" aria-hidden="true"></i>`;
+    }
     return `<span class="icon-glyph">${esc(v)}</span>`;
   }
 
@@ -1994,19 +1997,30 @@
     // convention). Either is fine.
     const hidden = stack.querySelector('[data-icon-hidden]')
                 || stack.querySelector('[data-field="icon"]');
-    function setIconValue(v, { renderFromValue = true } = {}) {
+    function setIconValue(v, { renderFromValue = true, source = "user" } = {}) {
       if (hidden) hidden.value = v || "";
+      // `source: "user"` (default) covers typing/paste/drop/upload/picker — any
+      //   direct user action seals the field against future auto-suggest.
+      // `source: "suggest"` is the LLM auto-fill — it must NOT seal so that
+      //   a later title edit can replace the still-untouched suggestion.
+      // `source: "hydrate"` is form load (new or edit) — the caller decides
+      //   the dirty state explicitly (sealed if loaded with an existing icon).
+      if (source === "user") stack.__iconUserDirty = true;
       if (!renderFromValue || !preview) return;
       if (!v) { preview.innerHTML = ""; return; }
       if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://")) {
         preview.innerHTML = `<img src="${esc(v)}" alt="" loading="lazy" draggable="false">`;
       } else if (v.startsWith("<svg")) {
         preview.innerHTML = v;
+      } else if (v.startsWith("ti-")) {
+        preview.innerHTML = `<i class="ti ${esc(v)} icon-ti" aria-hidden="true"></i>`;
       } else {
         preview.textContent = v;
       }
     }
     stack.__setIconValue = setIconValue;
+    stack.__iconUserDirty = false;
+    stack.__suggestFillable = true;
 
     // Typed input is constrained to ONE grapheme cluster (one emoji-ish
     // glyph). Without this, typing letters into the preview showed them
@@ -2086,8 +2100,309 @@
   }
   function setIconField(v) {
     const stack = editForm?.querySelector("[data-icon-stack]");
-    if (stack?.__setIconValue) stack.__setIconValue(v || "");
+    if (!stack?.__setIconValue) return;
+    stack.__setIconValue(v || "", { source: "hydrate" });
+    // Seal against auto-suggest only when hydrated WITH an icon already set
+    // (editing a chore that already has one). Empty hydration leaves the
+    // field open for the title-driven suggester to fill in on first input.
+    stack.__iconUserDirty = !!v;
+    stack.__suggestFillable = !v;
   }
+
+  // ============================================================
+  // Shared icon pool — emoji + Tabler icons + (future) custom icons,
+  // tagged by kind. Lazy-loaded once per page; the picker AND the
+  // title-driven suggester both score against this.
+  //
+  // Custom icons TODO: when user-uploaded icons land, fetch them
+  // from `/chores/custom_icons.json` (or similar), tag with
+  // `_kind: "custom"`, and append to the pool. The render path
+  // already handles arbitrary value strings — only the suggester's
+  // scoring needs to make sure custom-icon keywords are included.
+  // ============================================================
+  const IconPool = (function() {
+    let POOL = null;
+    let loadPromise = null;
+
+    async function load() {
+      if (POOL) return POOL;
+      if (loadPromise) return loadPromise;
+      loadPromise = (async () => {
+        const fetchJson = async url => {
+          try {
+            const res = await fetch(url, { credentials: "same-origin" });
+            return res.ok ? await res.json() : [];
+          } catch (_e) {
+            return [];
+          }
+        };
+        const [emoji, icons] = await Promise.all([
+          fetchJson("/emoji_index.json"),
+          fetchJson("/icons_index.json"),
+        ]);
+        const tagged = (arr, kind) => arr.map(r => ({ c: r.c, n: r.n, k: r.k, _kind: kind }));
+        // Emoji-first concat so default picker view + score tiebreaks
+        // both prefer emoji.
+        POOL = tagged(emoji, "emoji").concat(tagged(icons, "ti"));
+        return POOL;
+      })();
+      return loadPromise;
+    }
+
+    function normalize(q) {
+      return (q || "").toLowerCase().replace(/[\s\-_:]+/g, "");
+    }
+
+    // English irregular plurals — folded both ways so "teeth" → "tooth"
+    // AND "tooth" → "teeth" both produce the partner form.
+    const IRREGULARS = {
+      teeth: "tooth", mice: "mouse", geese: "goose", feet: "foot",
+      knives: "knife", leaves: "leaf", lives: "life", loaves: "loaf",
+      wolves: "wolf", shelves: "shelf", men: "man", women: "woman",
+      children: "child", oxen: "ox", people: "person", cacti: "cactus",
+    };
+    const IRREGULAR_INV = Object.fromEntries(Object.entries(IRREGULARS).map(([k, v]) => [v, k]));
+
+    function variants(q) {
+      const set = new Set([q]);
+      if (IRREGULARS[q]) set.add(IRREGULARS[q]);
+      if (IRREGULAR_INV[q]) set.add(IRREGULAR_INV[q]);
+      if (q.endsWith("ies") && q.length > 4) set.add(q.slice(0, -3) + "y");
+      if (q.endsWith("es")  && q.length > 3) set.add(q.slice(0, -2));
+      if (q.endsWith("s")   && q.length > 2) set.add(q.slice(0, -1));
+      if (q.length >= 3) { set.add(q + "s"); set.add(q + "es"); }
+      return [...set];
+    }
+
+    function scoreOne(name, keys, q) {
+      // 5 = exact match on name           — strongest signal
+      // 4 = exact match on a keyword       — alias precisely matches
+      // 3 = prefix match on name or key    — strong match
+      // 2 = substring match on name or key — weak match
+      // 0 = no match
+      if (name === q) return 5;
+      let best = 0;
+      if (name.startsWith(q))     best = 3;
+      else if (name.includes(q))  best = 2;
+      for (let i = 0; i < keys.length; i++) {
+        const k = keys[i];
+        if (k === q) return 4;                       // beats any name-prefix
+        if (best < 3 && k.startsWith(q)) best = 3;
+        else if (best < 2 && k.includes(q)) best = 2;
+      }
+      return best;
+    }
+
+    function scoreRow(row, queryVariants) {
+      const name = normalize(row.n);
+      if (!row._nk) row._nk = (row.k || []).map(normalize);
+      let best = 0;
+      for (let i = 0; i < queryVariants.length; i++) {
+        const s = scoreOne(name, row._nk, queryVariants[i]);
+        if (s > best) best = s;
+        if (best === 5) break; // can't beat exact-name-match across variants
+      }
+      return best;
+    }
+
+    // English stop words skipped during multi-pass title scoring so
+    // common filler doesn't drown out the real subject ("Take out the
+    // trash" should be dominated by "trash", not "the" / "out").
+    const STOPWORDS = new Set([
+      "the", "a", "an", "and", "or", "to", "of", "in", "on", "at",
+      "for", "with", "from", "by", "is", "are", "was", "were", "be",
+      "do", "does", "did", "out", "off", "up", "down",
+      "my", "your", "our", "this", "that", "these", "those",
+    ]);
+
+    // Break a free-text query into the scoring passes used by both
+    // the suggester AND the picker. Always includes the normalized
+    // joined form (so phrases prefix-match compounds like "toothbrush"),
+    // then each non-stopword token as its own pass so individual
+    // words can rack up cumulative score.
+    function queryPasses(query) {
+      const raw = (query || "").toLowerCase().trim();
+      if (!raw) return [];
+      const full = normalize(raw);
+      const tokens = raw.split(/[^a-z0-9]+/).filter(t => t && !STOPWORDS.has(t));
+      const passes = [];
+      if (full.length >= 2) passes.push(full);
+      for (const t of tokens) if (t.length >= 2 && t !== full) passes.push(t);
+      return passes;
+    }
+
+    function sumScore(row, variantSets) {
+      let total = 0;
+      for (let j = 0; j < variantSets.length; j++) {
+        total += scoreRow(row, variantSets[j]);
+      }
+      return total;
+    }
+
+    // Score-sorted search over the full pool. Empty query returns
+    // the pool in its native (emoji-first) order so the picker can
+    // .slice(0, N) for a "show everything" view.
+    async function search(query, { limit = Infinity } = {}) {
+      const pool = await load();
+      const passes = queryPasses(query);
+      if (passes.length === 0) {
+        return limit === Infinity ? pool.slice() : pool.slice(0, limit);
+      }
+      const variantSets = passes.map(variants);
+      const scored = [];
+      for (let i = 0; i < pool.length; i++) {
+        const total = sumScore(pool[i], variantSets);
+        if (total > 0) scored.push([total, i, pool[i]]);
+      }
+      // Score desc; index asc tiebreaks so emoji beat ti at equal score.
+      scored.sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+      return (limit === Infinity ? scored : scored.slice(0, limit)).map(t => t[2]);
+    }
+
+    // Highest-scoring candidate. Floor at 3 (one prefix match) so we
+    // don't auto-fill on a lone substring hit.
+    async function bestMatch(query) {
+      const pool = await load();
+      const passes = queryPasses(query);
+      if (passes.length === 0) return null;
+      const variantSets = passes.map(variants);
+      let bestRow = null, bestScore = 0;
+      for (let i = 0; i < pool.length; i++) {
+        const total = sumScore(pool[i], variantSets);
+        if (total > bestScore) { bestScore = total; bestRow = pool[i]; }
+      }
+      return bestScore >= 3 ? bestRow : null;
+    }
+
+    return { load, normalize, variants, scoreRow, search, bestMatch };
+  })();
+
+  // ============================================================
+  // Unified icon picker — singleton modal driven by any
+  // [data-icon-stack] that includes a [data-icon-pick] trigger.
+  // Single pool of emoji + Tabler icons (no tabs — users don't care
+  // about the distinction). Emoji come first when there's no search.
+  // ============================================================
+  (function setupIconPicker() {
+    const modal = document.querySelector("[data-icon-picker-modal]");
+    if (!modal) return;
+    const searchEl = modal.querySelector("[data-icon-picker-search]");
+    const gridEl   = modal.querySelector("[data-icon-picker-grid]");
+    const emptyEl  = modal.querySelector("[data-icon-picker-empty]");
+    const MAX_TILES = 240;
+
+    function buildTile(row) {
+      const v = row.c;
+      const safe = esc(v);
+      if (row._kind === "ti") {
+        return `<button type="button" data-pick-value="${safe}" title="${esc(row.n || v)}"><i class="ti ${safe}" aria-hidden="true"></i></button>`;
+      }
+      return `<button type="button" data-pick-value="${safe}" title="${esc(row.n || "")}">${safe}</button>`;
+    }
+
+    async function render() {
+      const rows = await IconPool.search(searchEl.value, { limit: MAX_TILES });
+      // An empty query is a "show everything" view, not "no matches" —
+      // the empty-state copy is reserved for queries that score zero.
+      const hasQuery = (searchEl.value || "").trim().length > 0;
+      emptyEl.classList.toggle("hidden", !hasQuery || rows.length > 0);
+      gridEl.innerHTML = rows.map(buildTile).join("");
+    }
+
+    let searchTimer = null;
+    searchEl?.addEventListener("input", () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(render, 100);
+    });
+
+    gridEl?.addEventListener("click", e => {
+      const btn = e.target.closest("[data-pick-value]");
+      if (!btn) return;
+      const value = btn.dataset.pickValue;
+      const stack = modal.__activeStack;
+      if (stack?.__setIconValue) {
+        stack.__setIconValue(value, { source: "user" });
+        stack.dispatchEvent(new CustomEvent("chore-icon-picked", {
+          bubbles: true, detail: { value: value },
+        }));
+      }
+      modal.classList.add("hidden");
+    });
+
+    document.addEventListener("click", e => {
+      const trigger = e.target.closest("[data-icon-pick]");
+      if (!trigger) return;
+      e.preventDefault();
+      const stack = trigger.closest("[data-icon-stack]");
+      if (!stack) return;
+      modal.__activeStack = stack;
+      // Pre-fill with the form's title so the user sees relevant results
+      // immediately. Selected so a single backspace clears it.
+      const titleField = stack.closest("form")?.querySelector('[data-field="name"]');
+      searchEl.value = (titleField?.value || "").trim();
+      modal.classList.remove("hidden");
+      render();
+      setTimeout(() => {
+        searchEl?.focus();
+        searchEl?.select();
+      }, 0);
+    });
+  })();
+
+  // ============================================================
+  // Auto-suggest an icon from the chore title via PURE-JS scoring
+  // against the shared IconPool — no network.
+  //
+  // Lifecycle (per modal-open):
+  //   * Hydration sets `stack.__suggestFillable` — true when the
+  //     icon field is empty, false when an existing icon hydrated in.
+  //   * focus on title  → if icon non-empty: fillable = false.
+  //   * input on title  → if fillable: re-score and overwrite the
+  //                       icon with the new best match (or clear if
+  //                       no match qualifies). Writes go through
+  //                       source: "suggest" so they don't seal
+  //                       user-dirty — the next input can replace
+  //                       a still-untouched suggestion.
+  //   * blur on title   → if icon non-empty: fillable = false
+  //                       (the auto-fill becomes the user's choice).
+  //   * Any user touch of the icon cell (type/paste/upload/picker)
+  //     flips user-dirty true, which also gates the suggester.
+  // ============================================================
+  (function setupChoreIconSuggest() {
+    if (!editForm) return;
+    const nameField = editForm.querySelector('[data-field="name"]');
+    const stack     = editForm.querySelector("[data-icon-stack]");
+    const hidden    = stack?.querySelector('[data-field="icon"]');
+    if (!nameField || !stack || !hidden) return;
+
+    // Warm the pool so the first keystroke is instant.
+    IconPool.load();
+
+    function canSuggest() {
+      return stack.__suggestFillable === true && !stack.__iconUserDirty;
+    }
+
+    nameField.addEventListener("focus", () => {
+      if ((hidden.value || "").trim() !== "") stack.__suggestFillable = false;
+    });
+
+    let inflight = 0;
+    nameField.addEventListener("input", async () => {
+      if (!canSuggest()) return;
+      const title = (nameField.value || "").trim();
+      const token = ++inflight;
+      const match = title.length >= 2 ? await IconPool.bestMatch(title) : null;
+      if (token !== inflight) return;     // a newer keystroke superseded us
+      if (!canSuggest()) return;          // user touched the icon mid-flight
+      const next = match ? match.c : "";
+      if ((hidden.value || "") === next) return;
+      stack.__setIconValue(next, { source: "suggest" });
+    });
+
+    nameField.addEventListener("blur", () => {
+      if ((hidden.value || "").trim() !== "") stack.__suggestFillable = false;
+    });
+  })();
 
   function openCreateModal(opts = {}) {
     if (!editModal) return;
@@ -2797,8 +3112,9 @@
     const v = (chore.icon || "").trim();
     const kind = chore.icon_kind;
     if (!v || kind === "empty") return `<span class="icon-placeholder">🧹</span>`;
-    if (kind === "image") return `<img class="icon-img" src="${esc(v)}" alt="" loading="lazy">`;
-    if (kind === "svg")   return v;
+    if (kind === "image")   return `<img class="icon-img" src="${esc(v)}" alt="" loading="lazy">`;
+    if (kind === "svg")     return v;
+    if (kind === "ti_icon") return `<i class="ti ${esc(v)} icon-ti" aria-hidden="true"></i>`;
     return `<span class="icon-glyph">${esc(v)}</span>`;
   }
   function truncate(s, n) { return s.length > n ? s.slice(0, n - 3) + "..." : s; }
@@ -3145,16 +3461,15 @@
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (wasControlledAtLoad) requestReloadVerification();
     });
-    navigator.serviceWorker.addEventListener("message", evt => {
-      if (evt.data?.kind === "shell_synced") setSyncBadge(false);
-      if (evt.data?.kind === "shell_sync_failed") setSyncBadge(false, true);
-    });
     // Subtle "vNN" badge of the active SW's cache name. ALWAYS
     // displays the last-known version, even when the worker is
     // momentarily unreachable or the page is uncontrolled — that's the
     // whole signal: "this tab is still running on vNN; if the worker
     // has moved on, the badge will go .stale and you know the page
-    // itself is behind." Re-queried on controllerchange to stay live.
+    // itself is behind." Cleared from stale only by an actual
+    // broadcast from the active SW; we use broadcast rather than a
+    // transferred MessagePort because port-based replies from a SW
+    // silently drop in some iOS PWA contexts.
     const SW_VERSION_KEY = "chores:sw_version:v1";
     function paintSwVersion(v, stale) {
       const el = document.querySelector("[data-sw-version]");
@@ -3163,34 +3478,22 @@
       el.classList.toggle("stale", !!stale && !!v);
     }
     paintSwVersion(localStorage.getItem(SW_VERSION_KEY), true);
-    function refreshSwVersion() {
+    function requestSwVersion() {
       const ctrl = navigator.serviceWorker.controller;
-      if (!ctrl) { paintSwVersion(localStorage.getItem(SW_VERSION_KEY), true); return; }
-      const channel = new MessageChannel();
-      let settled = false;
-      const finish = (ok) => {
-        if (settled) return;
-        settled = true;
-        try { channel.port1.close(); } catch (e) {}
-        if (!ok) paintSwVersion(localStorage.getItem(SW_VERSION_KEY), true);
-      };
-      channel.port1.onmessage = (evt) => {
-        const cache = evt.data?.cache;
-        if (cache) {
-          const v = cache.replace(/^chores-/, "");
-          localStorage.setItem(SW_VERSION_KEY, v);
-          paintSwVersion(v, false);
-          finish(true);
-        } else {
-          finish(false);
-        }
-      };
-      setTimeout(() => finish(false), 5000);
-      try { ctrl.postMessage({ action: "get_version" }, [channel.port2]); }
-      catch (e) { finish(false); }
+      if (!ctrl) return;
+      try { ctrl.postMessage({ action: "get_version" }); } catch (e) {}
     }
-    refreshSwVersion();
-    navigator.serviceWorker.addEventListener("controllerchange", refreshSwVersion);
+    navigator.serviceWorker.addEventListener("message", evt => {
+      if (evt.data?.kind === "shell_synced") setSyncBadge(false);
+      if (evt.data?.kind === "shell_sync_failed") setSyncBadge(false, true);
+      if (evt.data?.kind === "sw_version" && evt.data?.cache) {
+        const v = String(evt.data.cache).replace(/^chores-/, "");
+        localStorage.setItem(SW_VERSION_KEY, v);
+        paintSwVersion(v, false);
+      }
+    });
+    requestSwVersion();
+    navigator.serviceWorker.addEventListener("controllerchange", requestSwVersion);
   }
   setSyncBadge(true);
   function setSyncBadge(syncing, failed = false) {
