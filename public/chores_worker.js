@@ -15,7 +15,7 @@
 // clients re-pull the HTML next time they're online.
 
 // Bump CACHE on shipping shell changes so old clients re-pull HTML.
-const CACHE = "chores-v69";
+const CACHE = "chores-v70";
 // Every chore view is a cached shell. Each shell is body-empty for
 // page-specific content — entries on History, recent rows on Balance —
 // because that data is hydrated client-side from JSON (and from a
@@ -37,12 +37,13 @@ function isPrecachableAssetURL(url) {
 }
 
 // Parse a shell HTML body for asset URLs the page needs to render and
-// warm them into the cache. Without this step, a content-hashed CSS/JS
-// the cached HTML references can either 404 after a deploy (old hash
-// purged from the public/ dir) or fail offline — either way the page
-// boots into a black screen because the JS that hydrates it never
-// loads. Warming the assets alongside the shell keeps the cache
-// internally consistent.
+// warm them into the cache. ATOMIC: returns true only if EVERY
+// precachable asset succeeded. The caller uses this to gate writing
+// the shell itself — a shell is never cached unless all its assets
+// are also in cache. Without this guarantee, a deploy that races with
+// a slow CDN, an offline install, or any asset fetch that 404s would
+// cache a shell referencing dead URLs → JS fails → blank/black page
+// on next boot.
 async function warmShellAssets(cache, shellHtml, baseUrl) {
   const urls = new Set();
   const re = /\b(?:src|href)=["']([^"']+)["']/g;
@@ -52,14 +53,17 @@ async function warmShellAssets(cache, shellHtml, baseUrl) {
     try { u = new URL(m[1], baseUrl); } catch (e) { continue; }
     if (isPrecachableAssetURL(u)) urls.add(u.toString());
   }
-  await Promise.all(Array.from(urls).map(async u => {
+  const results = await Promise.all(Array.from(urls).map(async u => {
     try {
       const existing = await cache.match(u);
-      if (existing) return;
+      if (existing) return true;
       const r = await fetch(u, { credentials: "same-origin", cache: "no-store" });
-      if (r && r.ok) await cache.put(u, r.clone());
-    } catch (e) { /* offline; nothing we can do */ }
+      if (!r || !r.ok) return false;
+      await cache.put(u, r.clone());
+      return true;
+    } catch (e) { return false; }
   }));
+  return results.every(Boolean);
 }
 
 // Background shell refresh — fired by the page-script when a Monitor
@@ -77,15 +81,23 @@ async function refreshAllShells() {
   await Promise.all(SHELL_PATHS.map(async p => {
     try {
       const r = await fetch(p, { credentials: "same-origin", redirect: "manual", cache: "no-store" });
-      if (r && r.ok && r.type !== "opaqueredirect") {
-        const clone = r.clone();
-        await cache.put(p, r.clone());
-        const html = await clone.text();
-        await warmShellAssets(cache, html, new URL(p, location.origin).toString());
-        await broadcastToClients({ kind: "shell_synced", path: p });
-      } else {
+      if (!r || !r.ok || r.type === "opaqueredirect") {
         await broadcastToClients({ kind: "shell_sync_failed", path: p });
+        return;
       }
+      const clone = r.clone();
+      const html = await clone.text();
+      // Warm assets FIRST. Only if every referenced asset is now in
+      // cache do we replace the shell entry. A failed asset fetch
+      // means the previous (working) shell + assets stay live —
+      // never serve a shell whose JS/CSS won't load.
+      const assetsOk = await warmShellAssets(cache, html, new URL(p, location.origin).toString());
+      if (!assetsOk) {
+        await broadcastToClients({ kind: "shell_sync_failed", path: p });
+        return;
+      }
+      await cache.put(p, r.clone());
+      await broadcastToClients({ kind: "shell_synced", path: p });
     } catch (e) {
       await broadcastToClients({ kind: "shell_sync_failed", path: p });
     }
@@ -232,13 +244,18 @@ self.addEventListener("fetch", evt => {
       const revalidate = (async () => {
         try {
           const fresh = await fetch(req, { cache: "no-store" });
-          if (fresh && fresh.ok && fresh.type !== "opaqueredirect") {
-            const clone = fresh.clone();
-            await cache.put(url.pathname, fresh.clone());
-            const html = await clone.text();
-            await warmShellAssets(cache, html, url.toString());
-            await broadcastToClients({ kind: "shell_synced", path: url.pathname });
+          if (!fresh || !fresh.ok || fresh.type === "opaqueredirect") return;
+          const clone = fresh.clone();
+          const html = await clone.text();
+          // Same atomic rule as install/refresh: only replace the
+          // cached shell after every referenced asset is cached.
+          const assetsOk = await warmShellAssets(cache, html, url.toString());
+          if (!assetsOk) {
+            await broadcastToClients({ kind: "shell_sync_failed", path: url.pathname });
+            return;
           }
+          await cache.put(url.pathname, fresh.clone());
+          await broadcastToClients({ kind: "shell_synced", path: url.pathname });
         } catch (e) {
           await broadcastToClients({ kind: "shell_sync_failed", path: url.pathname });
         }

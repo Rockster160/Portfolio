@@ -3006,17 +3006,7 @@
   let reloadPending = false;
   let verificationInFlight = false;
   let verificationRetryArmed = false;
-  let reloadIdleTimer = null;
-  const RELOAD_IDLE_MS = 30000;
-  function performReload() {
-    if (reloadIdleTimer) { clearTimeout(reloadIdleTimer); reloadIdleTimer = null; }
-    location.reload();
-  }
-  function bumpReloadIdle() {
-    if (!reloadPending) return;
-    if (reloadIdleTimer) clearTimeout(reloadIdleTimer);
-    reloadIdleTimer = setTimeout(performReload, RELOAD_IDLE_MS);
-  }
+  function performReload() { location.reload(); }
   function requestReloadVerification() {
     if (reloadPending || verificationInFlight) return;
     const ctrl = navigator.serviceWorker?.controller;
@@ -3065,10 +3055,6 @@
     // during the wait. Pending writes survive in localStorage and flush
     // on the next boot under the new SW.
     if (queueRetryTimer) { clearTimeout(queueRetryTimer); queueRetryTimer = null; }
-    bumpReloadIdle();
-    ["pointerdown", "keydown", "touchstart"].forEach(evt => {
-      document.addEventListener(evt, bumpReloadIdle, { passive: true });
-    });
   }
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker
