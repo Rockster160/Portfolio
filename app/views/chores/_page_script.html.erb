@@ -813,6 +813,11 @@
       if (!c) return;
       Views.upsertOne(c);
     }
+    // Re-apply the active search after any store change: newly-rendered
+    // cells need their display: filter, and the extras list needs to
+    // re-pick from the updated active-for-grid set.
+    const q = currentSearchQuery();
+    if (q) applySearch(q);
   });
 
   // ============================================================
@@ -957,6 +962,7 @@
       document.querySelector("[data-chores-grid]"),
       document.querySelector("[data-chores-dailies]"),
       document.querySelector("[data-chores-overdue]"),
+      document.querySelector("[data-chores-search-extra]"),
       document.querySelector("[data-chores-hot-strip]"),
     ].filter(Boolean).forEach(bindOne);
   }
@@ -1589,10 +1595,19 @@
     }
     return i === needle.length;
   }
+  const SEARCH_EXTRA_LIMIT = 10;
+  function currentSearchQuery() {
+    return document.querySelector("[data-chores-search]")?.value?.trim() || "";
+  }
   function applySearch(q) {
+    // Filter the always-visible sections — Grid view's grid AND the
+    // Today view's Dailies + Scheduled — by hiding cells that don't
+    // match. data-chores-circles is legacy; the live containers are
+    // now per-section (dailies / overdue).
     [
       document.querySelector("[data-chores-grid]"),
-      document.querySelector("[data-chores-circles]"),
+      document.querySelector("[data-chores-dailies]"),
+      document.querySelector("[data-chores-overdue]"),
     ].filter(Boolean).forEach(container => {
       const cards = Array.from(container.children);
       if (!q) { cards.forEach(c => c.style.display = ""); return; }
@@ -1603,6 +1618,63 @@
         card.style.display = s > 0 ? "" : "none";
       });
     });
+    renderSearchExtra(q);
+  }
+  // While searching on the Today view, surface up to N matches from
+  // the full Grid set that AREN'T already on screen (i.e. not in
+  // Dailies and not in Scheduled). Hidden entirely when the query is
+  // empty so it never adds noise to the resting Today layout.
+  function renderSearchExtra(q) {
+    const section = document.querySelector("[data-chores-search-extra-section]");
+    const container = document.querySelector("[data-chores-search-extra]");
+    if (!section || !container) return;
+    if (!q) {
+      section.hidden = true;
+      if (container.firstChild) container.replaceChildren();
+      return;
+    }
+    const exclude = new Set([
+      ...ChoreStore.dailiesList().map(c => c.id),
+      ...ChoreStore.overdueList().map(c => c.id),
+    ]);
+    const scored = [];
+    for (const c of ChoreStore.activeForGrid()) {
+      if (exclude.has(c.id)) continue;
+      const s = score(q, c.short_name || c.name, c.aliases || []);
+      if (s > 0) scored.push({ c, s });
+    }
+    scored.sort((a, b) => b.s - a.s);
+    const picks = scored.slice(0, SEARCH_EXTRA_LIMIT).map(x => x.c);
+    section.hidden = picks.length === 0;
+    reconcileExtras(container, picks);
+  }
+  // Local diff for the extras container — uses grid-style cards (not
+  // circles) so the user can tell at a glance these aren't part of
+  // today's lineup, just hits from the broader Grid set. Same
+  // patch-don't-clear pattern as Views.reconcileSection.
+  function reconcileExtras(container, items) {
+    const desired = new Map(items.map(c => [c.id, c]));
+    Array.from(container.children).forEach(child => {
+      const id = parseInt(child.dataset.choreId, 10);
+      if (!desired.has(id)) child.remove();
+    });
+    const existing = new Map();
+    Array.from(container.children).forEach(child => {
+      existing.set(parseInt(child.dataset.choreId, 10), child);
+    });
+    let cursor = container.firstElementChild;
+    for (const c of items) {
+      const have = existing.get(c.id);
+      if (cursor && cursor === have) {
+        patchGridCard(cursor, c);
+        cursor = cursor.nextElementSibling;
+      } else if (have) {
+        container.insertBefore(have, cursor);
+        patchGridCard(have, c);
+      } else {
+        container.insertBefore(renderGridCard(c), cursor);
+      }
+    }
   }
   document.querySelector('[data-chores-search]')?.addEventListener("input",
     e => applySearch(e.target.value.trim()));
@@ -3077,6 +3149,48 @@
       if (evt.data?.kind === "shell_synced") setSyncBadge(false);
       if (evt.data?.kind === "shell_sync_failed") setSyncBadge(false, true);
     });
+    // Subtle "vNN" badge of the active SW's cache name. ALWAYS
+    // displays the last-known version, even when the worker is
+    // momentarily unreachable or the page is uncontrolled — that's the
+    // whole signal: "this tab is still running on vNN; if the worker
+    // has moved on, the badge will go .stale and you know the page
+    // itself is behind." Re-queried on controllerchange to stay live.
+    const SW_VERSION_KEY = "chores:sw_version:v1";
+    function paintSwVersion(v, stale) {
+      const el = document.querySelector("[data-sw-version]");
+      if (!el) return;
+      el.textContent = v || "—";
+      el.classList.toggle("stale", !!stale && !!v);
+    }
+    paintSwVersion(localStorage.getItem(SW_VERSION_KEY), true);
+    function refreshSwVersion() {
+      const ctrl = navigator.serviceWorker.controller;
+      if (!ctrl) { paintSwVersion(localStorage.getItem(SW_VERSION_KEY), true); return; }
+      const channel = new MessageChannel();
+      let settled = false;
+      const finish = (ok) => {
+        if (settled) return;
+        settled = true;
+        try { channel.port1.close(); } catch (e) {}
+        if (!ok) paintSwVersion(localStorage.getItem(SW_VERSION_KEY), true);
+      };
+      channel.port1.onmessage = (evt) => {
+        const cache = evt.data?.cache;
+        if (cache) {
+          const v = cache.replace(/^chores-/, "");
+          localStorage.setItem(SW_VERSION_KEY, v);
+          paintSwVersion(v, false);
+          finish(true);
+        } else {
+          finish(false);
+        }
+      };
+      setTimeout(() => finish(false), 5000);
+      try { ctrl.postMessage({ action: "get_version" }, [channel.port2]); }
+      catch (e) { finish(false); }
+    }
+    refreshSwVersion();
+    navigator.serviceWorker.addEventListener("controllerchange", refreshSwVersion);
   }
   setSyncBadge(true);
   function setSyncBadge(syncing, failed = false) {

@@ -15,7 +15,7 @@
 // clients re-pull the HTML next time they're online.
 
 // Bump CACHE on shipping shell changes so old clients re-pull HTML.
-const CACHE = "chores-v70";
+const CACHE = "chores-v74";
 // Every chore view is a cached shell. Each shell is body-empty for
 // page-specific content — entries on History, recent rows on Balance —
 // because that data is hydrated client-side from JSON (and from a
@@ -133,6 +133,10 @@ async function verifyShellReady() {
 self.addEventListener("message", evt => {
   if (evt.data?.action === "refresh_shells") {
     evt.waitUntil(refreshAllShells());
+  }
+  if (evt.data?.action === "get_version") {
+    const port = evt.ports?.[0];
+    port?.postMessage({ cache: CACHE });
   }
   if (evt.data?.action === "verify_ready") {
     const port = evt.ports?.[0];

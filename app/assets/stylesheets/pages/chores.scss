@@ -1066,6 +1066,19 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     background: #FBBF24;
     animation: chore-pulse 1s infinite;
   }
+  .sw-version {
+    font-size: 10px;
+    opacity: 0.55;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  // Dimmer when the value is the last-known cache (no live SW
+  // response) so it's visually clear the displayed version may be
+  // stale vs the worker that's actually controlling the page.
+  .sw-version.stale {
+    opacity: 0.3;
+    text-decoration: line-through;
+  }
   .pending-badge {
     background: #FBBF24;
     color: #00102B;
