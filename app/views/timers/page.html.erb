@@ -1,0 +1,283 @@
+<% content_for :title, "Timers" %>
+<% content_for :favicon do %>
+  <%= render "timers/favicon" %>
+<% end %>
+<% content_for :viewport_tag do %>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<% end %>
+
+<div class="timers-app"
+     data-timers-root
+     data-active-view="<%= @active_view %>"
+     data-active-page-slug="<%= @active_page&.slug %>"
+     data-viewer-id="<%= current_user.id %>">
+
+  <header class="timers-app-header">
+    <h1 class="timers-app-title">
+      <% if @active_page %>
+        <%= @active_page.name.presence || @active_page.slug %>
+      <% else %>
+        Timers
+      <% end %>
+    </h1>
+    <div class="timers-app-actions">
+      <button type="button" class="timers-icon-btn timers-icon-btn-primary" data-timers-new aria-label="New timer" title="New timer">
+        <%= fa(:plus) %>
+      </button>
+      <button type="button" class="timers-icon-btn" data-timers-pages aria-label="Pages" title="Pages">
+        <%= fa(:folder_o) %>
+      </button>
+      <button type="button" class="timers-icon-btn" data-timers-library aria-label="Saved timers" title="Saved timers">
+        <%= fa(:bookmark) %>
+      </button>
+      <button type="button" class="timers-icon-btn" data-timers-edit-toggle aria-label="Edit layout" title="Edit layout">
+        <%= fa(:pencil) %>
+      </button>
+      <button type="button" class="timers-icon-btn" data-timers-mute aria-label="Toggle sound">
+        <span class="when-unmuted"><%= fa("volume-up") %></span>
+        <span class="when-muted hidden"><%= fa("volume-off") %></span>
+      </button>
+      <button type="button" class="timers-icon-btn hidden" data-timers-notify aria-label="Enable notifications">
+        <span class="when-subscribed hidden"><%= fa(:bell) %></span>
+        <span class="when-unsubscribed"><%= fa("bell-slash") %></span>
+      </button>
+      <button type="button" class="timers-icon-btn" data-timers-settings aria-label="Settings">
+        <%= fa(:cog) %>
+      </button>
+    </div>
+  </header>
+
+
+  <%# Server-rendered quick pills. The JS handler intercepts the submit
+    and posts via the api layer so the new timer hydrates without a
+    full reload. Each pill carries its quick-button id so the JS can
+    look up the template. %>
+  <% pinned_quicks = @quick_buttons.select(&:pinned) %>
+  <% if pinned_quicks.any? %>
+    <section class="timers-quick-row" data-timers-quick-row>
+      <% pinned_quicks.each do |qb| %>
+        <% template = qb.template.presence || {} %>
+        <%= button_to(
+          timer_routes_items_path(format: :html),
+          method:  :post,
+          form:    {
+            class: "basic timers-quick-form",
+            data:  { timers_quick_form: true, quick_id: qb.id },
+          },
+          class:   "timers-quick-pill",
+          params:  {
+            start_immediately: "1",
+            timer_page_id:     @active_page&.id,
+            timer: {
+              kind:           template["kind"].presence || "countdown",
+              duration_ms:    (template["duration_ms"].presence || (qb.duration_seconds * 1000)),
+              name:           template["name"].presence || qb.label.to_s,
+              color:          template["color"].presence || qb.color,
+              timer_page_id:  @active_page&.id,
+              callbacks:      template["callbacks"].presence || [
+                { id: "cb-#{qb.id}-p", event: "complete", type: "push" },
+              ],
+            },
+          },
+        ) {
+          qb.label.presence || (qb.duration_seconds < 60 ? "#{qb.duration_seconds}s" : "#{qb.duration_seconds / 60}m")
+        } %>
+      <% end %>
+    </section>
+  <% end %>
+
+  <main class="timers-board" data-timers-board>
+    <% if @timers.empty? %>
+      <p class="timers-empty">No timers yet. Tap a quick-add above or “New timer” to create one.</p>
+    <% end %>
+  </main>
+
+  <%# ================= Edit / Create modal ================= %>
+  <dialog class="timers-modal" data-timers-edit-modal>
+    <form method="dialog" class="basic timers-form" data-timers-edit-form>
+      <header class="timers-modal-header">
+        <h3 data-timers-edit-title>New timer</h3>
+        <button type="button" class="timers-icon-btn" data-timers-modal-close aria-label="Close">&times;</button>
+      </header>
+      <div class="timers-form-body">
+        <fieldset>
+          <div class="field-row">
+            <div class="field">
+              <span class="field-label">Type</span>
+              <select data-timers-field="kind">
+                <option value="countdown">Countdown</option>
+                <option value="counter">Counter</option>
+                <option value="dial">Dial</option>
+              </select>
+            </div>
+            <div class="field field-color">
+              <span class="field-label">Color</span>
+              <input type="color" data-timers-field="color" value="#388bfd">
+            </div>
+          </div>
+        </fieldset>
+        <fieldset data-when-kind="countdown">
+          <div class="field">
+            <span class="field-label">Duration</span>
+            <input type="text" data-timers-field="duration_text" placeholder="e.g. 5m, 4:30, 1h30m, 90s">
+            <span class="field-preview" data-timers-duration-preview></span>
+          </div>
+          <label class="checkbox-row">
+            <input type="checkbox" data-timers-field="repeat">
+            <span>Repeat — auto-restart after each fire</span>
+          </label>
+        </fieldset>
+        <fieldset data-when-kind="counter" hidden>
+          <div class="field-row">
+            <div class="field"><span class="field-label">Initial value</span><input type="number" data-timers-field="value" value="0"></div>
+            <div class="field"><span class="field-label">Step</span><input type="number" data-timers-field="step" value="1" min="1"></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><span class="field-label">Min (display only)</span><input type="number" data-timers-field="min_value" value="0" placeholder="unbounded"></div>
+            <div class="field"><span class="field-label">Max (display only)</span><input type="number" data-timers-field="max_value" value="10" placeholder="unbounded"></div>
+          </div>
+          <p class="field-hint">Min &amp; max only bound the progress ring. The counter value is uncapped — increment past them or below them freely.</p>
+        </fieldset>
+        <fieldset data-when-kind="dial" hidden>
+          <div class="field">
+            <span class="field-label">Sections</span>
+            <span class="field-hint">
+              One section per line. Use <code>:</code> for subs, <code>*N</code> for weight (default 1), and <code>#hex</code> for color.
+              <br>Examples: <code>Actions: Move, Attack, Loot</code> &nbsp; <code>Setup *2</code> &nbsp; <code>Combat *3 #f85149: Attack #ff0, Defend #0f0</code>
+            </span>
+            <textarea data-timers-field="dial_text" rows="5" placeholder="Setup *2&#10;Actions *2: Move, Attack, Loot, End&#10;Enemy&#10;Cleanup"></textarea>
+          </div>
+          <div class="field">
+            <span class="field-label">Start offset (%)</span>
+            <input type="number" data-timers-field="dial_start_offset" value="0" min="-100" max="100" step="1">
+            <span class="field-hint">
+              Rotates the wedges. Positive = clockwise, negative = counter-clockwise. e.g. <code>-10</code> nudges the first section's center toward the top.
+            </span>
+          </div>
+        </fieldset>
+        <fieldset>
+          <div class="field" data-when-mode="timer">
+            <span class="field-label">Name</span>
+            <input type="text" data-timers-field="name" placeholder="Optional — e.g. Tea, Push-ups">
+          </div>
+          <div class="field hidden" data-when-mode="quick" hidden>
+            <span class="field-label">Quick Label</span>
+            <input type="text" data-timers-field="quick_label" placeholder="Optional — defaults to duration">
+          </div>
+          <div class="field" data-when-mode="timer">
+            <span class="field-label">Page</span>
+            <select data-timers-field="timer_page_id"><option value="">Home</option></select>
+          </div>
+        </fieldset>
+        <fieldset class="timers-callbacks-fieldset">
+          <legend>Callbacks</legend>
+          <p class="field-hint">What happens when this timer fires. Tap a card to silence its sound.</p>
+          <div data-timers-callbacks-list></div>
+          <div class="timers-callbacks-add">
+            <button type="button" data-timers-cb-add="sound">+ Sound</button>
+            <button type="button" data-timers-cb-add="push">+ Push notification</button>
+            <button type="button" data-timers-cb-add="jil">+ Jil trigger</button>
+            <button type="button" data-timers-cb-add="chain">+ Chain timer</button>
+          </div>
+        </fieldset>
+      </div>
+      <footer class="timers-modal-footer">
+        <button type="button" class="timers-danger-btn" data-timers-delete hidden>Delete</button>
+        <button type="button" class="timers-secondary-btn" data-timers-save-as-template hidden>Save as template</button>
+        <span class="spacer"></span>
+        <button type="button" class="timers-secondary-btn" data-timers-modal-close>Cancel</button>
+        <button type="submit" class="timers-primary-btn">Save</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <%# ================= Settings modal ================= %>
+  <dialog class="timers-modal" data-timers-settings-modal>
+    <form method="dialog" class="basic timers-form">
+      <header class="timers-modal-header">
+        <h3>Settings</h3>
+        <button type="button" class="timers-icon-btn" data-timers-modal-close aria-label="Close">&times;</button>
+      </header>
+      <div class="timers-tabs">
+        <button type="button" class="timers-tab active" data-timers-tab="quick">Quick buttons</button>
+        <button type="button" class="timers-tab" data-timers-tab="saved">Saved timers</button>
+        <button type="button" class="timers-tab" data-timers-tab="pages">Pages</button>
+        <button type="button" class="timers-tab" data-timers-tab="share">Share</button>
+      </div>
+      <section data-timers-tab-panel="quick">
+        <p class="settings-blurb">Pinned templates that show as pills at the top of every page. Drag to reorder.</p>
+        <div data-timers-quick-list></div>
+        <div class="timers-settings-footer">
+          <button type="button" class="timers-primary-btn" data-timers-add-quick>+ New quick button</button>
+        </div>
+      </section>
+      <section data-timers-tab-panel="saved" hidden>
+        <p class="settings-blurb">Templates saved for quick re-use. Open the bookmark menu from the header to pick one. Pin a saved template to also show it as a quick-add pill.</p>
+        <div data-timers-saved-list></div>
+        <div class="timers-settings-footer">
+          <button type="button" class="timers-primary-btn" data-timers-add-saved>+ New saved timer</button>
+        </div>
+      </section>
+      <section data-timers-tab-panel="pages" hidden>
+        <div data-timers-pages-list></div>
+        <div class="timers-quick-add-form">
+          <input type="text" placeholder="New page name" data-timers-new-page-name>
+          <button type="button" class="timers-primary-btn" data-timers-add-page>Add</button>
+        </div>
+      </section>
+      <section data-timers-tab-panel="share" hidden data-timers-share-section>
+        <div class="timers-settings-empty" data-timers-share-empty>
+          Open a page to share it. Pages let you group timers and share the whole set.
+        </div>
+        <div data-timers-share-controls hidden>
+          <p class="field-hint">Sharing <strong data-timers-share-page-name></strong></p>
+          <div data-timers-share-list></div>
+          <div class="timers-share-create">
+            <select data-timers-share-mode>
+              <option value="view_only">View only</option>
+              <option value="interactive">Interactive — recipients can start/stop</option>
+            </select>
+            <button type="button" class="timers-primary-btn" data-timers-share-create>Create share link</button>
+          </div>
+        </div>
+      </section>
+    </form>
+  </dialog>
+
+  <%# ================= Pages modal ================= %>
+  <dialog class="timers-modal timers-pages-modal" data-timers-pages-modal>
+    <form method="dialog" class="basic timers-form">
+      <header class="timers-modal-header">
+        <h3>Pages</h3>
+        <button type="button" class="timers-icon-btn" data-timers-modal-close aria-label="Close">&times;</button>
+      </header>
+      <div class="timers-pages-list" data-timers-pages-modal-list></div>
+      <footer class="timers-pages-add">
+        <input type="text" placeholder="New page name" data-timers-pages-modal-name>
+        <button type="button" class="timers-primary-btn" data-timers-pages-modal-add>+ Add</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <%# ================= Saved-timers library modal ================= %>
+  <dialog class="timers-modal timers-library-modal" data-timers-library-modal>
+    <form method="dialog" class="basic timers-form">
+      <header class="timers-modal-header">
+        <h3>Saved timers</h3>
+        <button type="button" class="timers-icon-btn" data-timers-modal-close aria-label="Close">&times;</button>
+      </header>
+      <div class="timers-library-search">
+        <input type="search" placeholder="Search…" data-timers-library-search>
+      </div>
+      <div class="timers-library-list" data-timers-library-list></div>
+      <footer class="timers-modal-footer">
+        <span class="spacer"></span>
+        <button type="button" class="timers-secondary-btn" data-timers-modal-close>Close</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <script type="application/json" id="timers-bootstrap">
+    <%== @bootstrap.to_json %>
+  </script>
+</div>

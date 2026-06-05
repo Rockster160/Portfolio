@@ -1,0 +1,31 @@
+<% content_for :title, "Shared Timer" %>
+<% content_for :favicon do %>
+  <%= render "timers/favicon" %>
+<% end %>
+<% content_for :viewport_tag do %>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<% end %>
+
+<div class="timers-page timers-share-page"
+     data-timers-share-root
+     data-share-mode="<%= @share.access_mode %>"
+     data-share-token="<%= @share.token %>">
+  <header class="timers-header">
+    <div class="timers-title">
+      <% if @bootstrap[:page] %>
+        <%= @bootstrap[:page][:name].presence || "Shared Page" %>
+      <% else %>
+        Shared Timer
+      <% end %>
+    </div>
+    <div class="timers-share-badge">
+      <%= @share.view_only? ? "View only" : "Interactive" %>
+    </div>
+  </header>
+
+  <main class="timers-board" data-timers-board></main>
+
+  <script type="application/json" id="timers-share-bootstrap">
+    <%== @bootstrap.to_json %>
+  </script>
+</div>

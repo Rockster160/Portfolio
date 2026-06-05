@@ -1,0 +1,23 @@
+{
+  "short_name": "Timers",
+  "name": "Timers",
+  "icons": [
+    {
+      "src": "/assets/favicon/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/favicon/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "id": "timers",
+  "start_url": "/timers?source=pwa",
+  "background_color": "#0d1117",
+  "display": "standalone",
+  "scope": "/timers",
+  "theme_color": "#0d1117",
+  "description": "Countdowns, counters, and dials"
+}

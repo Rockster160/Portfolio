@@ -1,0 +1,1195 @@
+// Timers PWA — dark theme with a modern, breathable layout. Scoped to
+// .timers-app so global form/button cascades stay loud only where they
+// help. Where the project's global button styling forces our hand, we
+// use !important with a clear inner-scope (header, pill, modal) so the
+// override is intentional, not a smell.
+
+$t-bg:        #0d1117;
+$t-card:      #161b22;
+$t-card-hi:   #1f2630;
+$t-border:    #30363d;
+$t-border-hi: #484f58;
+$t-text:      #e6edf3;
+$t-muted:     #8b949e;
+$t-primary:   #388bfd;
+$t-primary-hi:#58a6ff;
+$t-success:   #3fb950;
+$t-danger:    #f85149;
+
+.timers-app {
+  background: $t-bg;
+  color: $t-text;
+  min-height: 100vh;
+  padding: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  box-sizing: border-box;
+
+  *, *::before, *::after { box-sizing: border-box; }
+  .hidden { display: none !important; }
+
+  // The global forms.scss button cascade applies gradient backgrounds,
+  // text-shadow, and box-shadow to every <button>. Reset every one of
+  // those here so individual button classes only have to layer color +
+  // padding on top — no whack-a-mole !important fights per component.
+  button, .button-like {
+    background-image: none !important;
+    text-shadow: none !important;
+    box-shadow: none !important;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  // Same for the dialogs we own.
+  dialog button { background-image: none !important; text-shadow: none !important; box-shadow: none !important; }
+}
+
+// ---------- header ----------
+
+.timers-app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+
+  .timers-app-title {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+}
+
+.timers-app-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.timers-app .timers-icon-btn {
+  background: $t-card !important;
+  border: 1px solid $t-border !important;
+  color: $t-text !important;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px !important;
+  padding: 0 !important;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  cursor: pointer;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+
+  &:hover {
+    background: $t-card-hi !important;
+    border-color: $t-border-hi !important;
+  }
+
+  .fa { color: inherit; line-height: 1; }
+
+  &.is-muted  { color: $t-danger !important;  border-color: rgba(248,81,73,0.4) !important; }
+  &.is-active { color: $t-success !important; border-color: rgba(63,185,80,0.4) !important; }
+
+  &.timers-icon-btn-primary {
+    background: $t-primary !important;
+    border-color: $t-primary !important;
+    color: #fff !important;
+    font-size: 18px !important;
+
+    &:hover {
+      background: $t-primary-hi !important;
+      border-color: $t-primary-hi !important;
+    }
+  }
+}
+
+// Pages live in a modal accessed from the header (folder icon).
+.timers-pages-modal { max-width: 460px; }
+
+.timers-pages-list {
+  padding: 8px 0;
+  max-height: 360px;
+  overflow-y: auto;
+
+  .timers-page-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 18px;
+    text-decoration: none;
+    color: $t-text;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+
+    .row-body { flex: 1 1 auto; min-width: 0; }
+    .label { font-weight: 600; }
+    .row-tag { color: $t-muted; font-size: 12px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+    .row-flag {
+      color: $t-primary-hi;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    &:hover { background: $t-card-hi; }
+    &.active { background: rgba(56, 139, 253, 0.08); }
+  }
+}
+
+.timers-pages-add {
+  display: flex;
+  gap: 8px;
+  padding: 14px 18px;
+  border-top: 1px solid $t-border;
+  background: $t-card-hi;
+
+  input {
+    flex: 1;
+    background: $t-bg !important;
+    border: 1px solid $t-border !important;
+    color: $t-text !important;
+    padding: 8px 12px !important;
+    border-radius: 6px !important;
+    font-size: 14px !important;
+    min-height: 38px;
+  }
+}
+
+// ---------- quick pills ----------
+
+.timers-quick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+
+  .timers-quick-form {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    display: inline-block;
+  }
+
+  .timers-quick-pill {
+    background: $t-card !important;
+    border: 1px solid $t-border !important;
+    color: $t-text !important;
+    border-radius: 999px !important;
+    padding: 7px 18px !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    text-shadow: none !important;
+    background-image: none !important;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, transform 0.05s;
+
+    &:hover { background: $t-card-hi !important; border-color: $t-border-hi !important; }
+    &:active { transform: scale(0.97); }
+  }
+}
+
+// ---------- toolbar ----------
+
+.timers-app .timers-primary-btn {
+  background: $t-primary !important;
+  border: 1px solid $t-primary !important;
+  color: #fff !important;
+  padding: 8px 16px !important;
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  font-size: 13px !important;
+  cursor: pointer;
+  text-shadow: none !important;
+  background-image: none !important;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+
+  &:hover { background: $t-primary-hi !important; border-color: $t-primary-hi !important; }
+  .fa { color: inherit; }
+}
+
+.timers-app .timers-secondary-btn {
+  background: $t-card !important;
+  border: 1px solid $t-border !important;
+  color: $t-text !important;
+  padding: 8px 16px !important;
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  font-size: 13px !important;
+  cursor: pointer;
+  text-shadow: none !important;
+  background-image: none !important;
+
+  &:hover { background: $t-card-hi !important; border-color: $t-border-hi !important; }
+}
+
+.timers-app .timers-danger-btn {
+  background: transparent !important;
+  border: 1px solid $t-danger !important;
+  color: $t-danger !important;
+  padding: 8px 16px !important;
+  border-radius: 8px !important;
+  font-weight: 500 !important;
+  font-size: 13px !important;
+  cursor: pointer;
+  text-shadow: none !important;
+  background-image: none !important;
+
+  &:hover { background: rgba(248,81,73,0.1) !important; }
+}
+
+// ---------- board ----------
+
+.timers-empty {
+  color: $t-muted;
+  text-align: center;
+  padding: 40px 20px;
+  border: 1px dashed $t-border;
+  border-radius: 12px;
+  margin: 0;
+}
+
+.timers-board {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-content: flex-start;
+}
+
+// ---------- timer card ----------
+
+.timer-card {
+  background: $t-card;
+  border: 1px solid $t-border;
+  border-radius: 12px;
+  padding: 16px 12px 14px;
+  width: clamp(180px, 100%, 240px);
+  flex: 0 1 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+  user-select: none;
+  transition: border-color 0.15s, background 0.3s;
+  overflow: visible;
+
+  &:hover { border-color: $t-border-hi; }
+
+  &.is-done {
+    border-color: $t-danger;
+    background: rgba(248, 81, 73, 0.10);
+    animation: timer-pulse 1.6s ease-in-out infinite;
+  }
+
+  // Home page only: surface the X-to-delete when the timer is fired.
+  // Custom pages keep their layout intact.
+  &.on-home.is-done .timer-card-close { display: inline-flex; }
+
+  &.is-paused { opacity: 0.7; }
+
+  &.timer-card-counter { width: clamp(170px, 100%, 200px); flex: 0 1 200px; }
+  &.timer-card-dial    { width: clamp(220px, 100%, 320px); flex: 0 1 320px; }
+
+  .timer-card-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: $t-text;
+    text-align: center;
+    word-break: break-word;
+    min-height: 1.2em;
+  }
+
+  .timer-card-menu {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: transparent !important;
+    border: 0 !important;
+    color: $t-muted !important;
+    cursor: pointer;
+    padding: 4px 8px !important;
+    border-radius: 4px !important;
+    font-size: 16px !important;
+    line-height: 1;
+    text-shadow: none !important;
+    background-image: none !important;
+    font-weight: 700 !important;
+
+    &:hover { background: $t-card-hi !important; color: $t-text !important; }
+  }
+
+  // X-to-delete on fired home-page cards. Hidden by default; revealed
+  // by the combined `.on-home.is-done` qualifier below the card block.
+  .timer-card-close {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    display: none;
+    background: rgba(248, 81, 73, 0.16) !important;
+    border: 1px solid rgba(248, 81, 73, 0.35) !important;
+    color: $t-danger !important;
+    cursor: pointer;
+    padding: 0 !important;
+    width: 26px;
+    height: 26px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50% !important;
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    line-height: 1;
+    z-index: 2;
+
+    &:hover {
+      background: rgba(248, 81, 73, 0.28) !important;
+      border-color: $t-danger !important;
+    }
+  }
+}
+
+@keyframes timer-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248, 81, 73, 0.45); }
+  50%      { box-shadow: 0 0 0 8px rgba(248, 81, 73, 0); }
+}
+
+// One-shot flash for repeating timers: a quick green ring on each
+// auto-restart. Driven by the renderer adding `.is-flash` for ~700ms
+// when repeat_count increments.
+.timer-card.is-flash {
+  animation: timer-flash 0.6s ease-out;
+}
+
+@keyframes timer-flash {
+  0%   { box-shadow: 0 0 0 0   rgba(63, 185, 80, 0.7); border-color: #3fb950; }
+  60%  { box-shadow: 0 0 0 14px rgba(63, 185, 80, 0);   border-color: #3fb950; }
+  100% { box-shadow: 0 0 0 0   rgba(63, 185, 80, 0); }
+}
+
+// ---------- countdown ring ----------
+
+.timer-ring {
+  width: 170px;
+  height: 170px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+
+  svg { width: 100%; height: 100%; }
+
+  .ring-bg {
+    fill: none;
+    stroke: rgba(255,255,255,0.06);
+    stroke-width: 6;
+  }
+
+  .ring-progress {
+    fill: none;
+    stroke: var(--ring-color, #{$t-primary});
+    stroke-width: 6;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.4s linear, stroke 0.2s;
+  }
+
+  .ring-label {
+    position: absolute;
+    font-size: 26px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: $t-text;
+  }
+
+  .ring-sublabel {
+    position: absolute;
+    bottom: 38px;
+    font-size: 10px;
+    color: $t-muted;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+}
+
+.timer-card.is-paused {
+  opacity: 1;
+
+  .timer-ring {
+    .ring-progress { stroke: $t-muted; }
+    .ring-sublabel {
+      color: $t-primary-hi;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+  }
+}
+
+.timer-card.is-done {
+  .timer-ring .ring-progress { stroke: $t-danger !important; }
+  .timer-ring .ring-label    { color: $t-danger; }
+  .timer-ring .ring-sublabel { color: $t-danger; }
+}
+
+// ---------- counter ----------
+
+.timer-counter {
+  // Vertical: value-ring on top, ± buttons centered below, bounds last.
+  // Avoids horizontal overflow on narrow viewports — the card width is
+  // driven by the ring only, not by `[−] value [+]` in one row.
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 0 4px;
+
+  .timer-counter-display {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    display: grid;
+    place-items: center;
+  }
+
+  .counter-ring {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transition: opacity 0.2s;
+
+    .ring-bg       { fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 6; }
+    .ring-progress {
+      fill: none;
+      stroke: var(--ring-color, #{$t-primary});
+      stroke-width: 6;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.3s ease;
+    }
+  }
+
+  .timer-counter-value {
+    position: relative;
+    font-size: 34px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    color: var(--ring-color, #{$t-text});
+  }
+
+  .timer-counter-controls {
+    display: flex;
+    gap: 18px;
+
+    .timer-counter-btn {
+      background: $t-card-hi !important;
+      border: 1px solid $t-border !important;
+      color: $t-text !important;
+      width: 52px;
+      height: 52px;
+      border-radius: 50% !important;
+      padding: 0 !important;
+      font-size: 24px !important;
+      font-weight: 600 !important;
+      cursor: pointer;
+      display: inline-flex !important;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+
+      &:hover { background: $t-border !important; }
+      &:active { transform: scale(0.94); }
+    }
+  }
+
+  .timer-counter-bounds {
+    font-size: 11px;
+    color: $t-muted;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    min-height: 1em;
+  }
+}
+
+// ---------- dial ----------
+
+.timer-dial {
+  width: 100%;
+  max-width: 280px;
+  aspect-ratio: 1;
+  cursor: pointer;
+
+  svg { width: 100%; height: 100%; overflow: visible; display: block; }
+
+  // Font sizes set inline on each <text> via the renderer (viewBox units)
+  // so they scale with section count. These rules only own color + weight.
+  .dial-section          { fill: #1f2630; transition: fill 0.15s; }
+  .dial-section.current  { fill: $t-primary; }
+  .dial-sub              { fill: #161b22; transition: fill 0.15s; }
+  .dial-sub.current      { fill: $t-primary-hi; }
+  .dial-ring             { fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 2; }
+
+  // Labels live on top of every fill, with a dark halo via paint-order
+  // so they read clearly on both highlighted-blue wedges and the muted
+  // dark wedges. paint-order: stroke means the stroke paints FIRST and
+  // is then covered by the fill — net effect is a clean text-shadow.
+  .dial-label,
+  .dial-sublabel {
+    pointer-events: none;
+    paint-order: stroke;
+    stroke: rgba(0, 0, 0, 0.85);
+    stroke-width: 5px;
+    stroke-linejoin: round;
+  }
+
+  .dial-label    { fill: #fff; font-weight: 700; }
+  .dial-sublabel { fill: rgba(255,255,255,0.92); font-weight: 600; }
+  .dial-sublabel[data-sec-index] { /* keeps selector specificity flat */ }
+}
+
+// ---------- card-menu popup ----------
+
+.timers-card-menu-popup {
+  position: absolute;
+  z-index: 50;
+  background: $t-card;
+  border: 1px solid $t-border;
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+
+  button {
+    background: transparent !important;
+    border: 0 !important;
+    color: $t-text !important;
+    text-align: left !important;
+    padding: 8px 12px !important;
+    border-radius: 4px !important;
+    font-size: 13px !important;
+    cursor: pointer;
+    text-shadow: none !important;
+    background-image: none !important;
+
+    &:hover { background: $t-card-hi !important; }
+    &.danger { color: $t-danger !important; }
+    &.danger:hover { background: rgba(248,81,73,0.1) !important; }
+  }
+}
+
+// ---------- modals ----------
+
+.timers-modal {
+  background: $t-card;
+  color: $t-text;
+  border: 1px solid $t-border;
+  border-radius: 12px;
+  padding: 0;
+  max-width: 520px;
+  width: 92vw;
+  max-height: 88vh;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+
+  &::backdrop { background: rgba(0,0,0,0.65); }
+}
+
+.timers-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid $t-border;
+  background: $t-card-hi;
+
+  h3 { margin: 0; font-size: 16px; font-weight: 600; }
+
+  .timers-icon-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 20px !important;
+  }
+}
+
+.timers-app .timers-form {
+  display: flex;
+  flex-direction: column;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  max-height: 88vh;
+
+  .timers-form-body {
+    overflow-y: auto;
+    flex: 1 1 auto;
+  }
+
+  fieldset {
+    border: 0;
+    padding: 14px 18px;
+    margin: 0;
+    border-bottom: 1px solid $t-border;
+
+    legend {
+      font-weight: 600;
+      padding: 0;
+      margin-bottom: 6px;
+      font-size: 14px;
+      color: $t-text;
+    }
+
+    &:last-child { border-bottom: 0; }
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex: 1 1 auto;
+
+    &:last-child { margin-bottom: 0; }
+  }
+
+  .field-label {
+    font-size: 13px;
+    color: $t-text;
+    font-weight: 500;
+  }
+
+  .field-hint {
+    font-size: 12px;
+    color: $t-muted;
+    margin: -2px 0 6px;
+
+    code {
+      background: $t-bg;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      color: $t-primary-hi;
+    }
+  }
+
+  .field-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+
+    .field { margin-bottom: 12px; }
+    .field-color { flex: 0 0 80px; }
+  }
+
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    color: $t-text;
+    font-size: 13px;
+    cursor: pointer;
+
+    input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: $t-primary;
+      margin: 0;
+
+      &:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+      }
+    }
+  }
+
+  .checkbox-hint {
+    display: block;
+    font-size: 11px;
+    color: $t-primary-hi;
+    margin: -6px 0 12px 24px;
+    font-style: italic;
+  }
+
+  input[type="text"],
+  input[type="number"],
+  select,
+  textarea {
+    background: $t-bg !important;
+    border: 1px solid $t-border !important;
+    color: $t-text !important;
+    padding: 9px 11px !important;
+    border-radius: 6px !important;
+    font-size: 14px !important;
+    font-family: inherit !important;
+    line-height: 1.3 !important;
+    min-height: 38px;
+    width: 100%;
+
+    &:focus { outline: none; border-color: $t-primary !important; }
+  }
+
+  select {
+    appearance: none;
+    background: $t-bg url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3e%3cpath fill='%238b949e' d='M1 1l5 5 5-5'/%3e%3c/svg%3e") no-repeat right 12px center !important;
+    background-size: 12px 8px !important;
+    padding-right: 32px !important;
+  }
+
+  input[type="color"] {
+    width: 100%;
+    height: 40px;
+    padding: 2px !important;
+    background: $t-bg !important;
+    border: 1px solid $t-border !important;
+    border-radius: 6px !important;
+    min-height: 40px;
+    cursor: pointer;
+  }
+
+  textarea {
+    resize: vertical;
+    min-height: 96px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace !important;
+    font-size: 13px !important;
+  }
+
+  .timers-modal-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 18px;
+    background: $t-card-hi;
+    border-top: 1px solid $t-border;
+    flex: 0 0 auto;
+
+    .spacer { flex: 1; }
+  }
+}
+
+.timers-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 18px;
+  border-bottom: 1px solid $t-border;
+
+  .timers-tab {
+    background: transparent !important;
+    border: 0 !important;
+    border-bottom: 2px solid transparent !important;
+    color: $t-muted !important;
+    padding: 10px 14px !important;
+    margin-bottom: -1px;
+    font-weight: 500 !important;
+    font-size: 13px !important;
+    cursor: pointer;
+    text-shadow: none !important;
+    background-image: none !important;
+    border-radius: 0 !important;
+
+    &:hover { color: $t-text !important; }
+    &.active { color: $t-text !important; border-bottom-color: $t-primary !important; }
+  }
+}
+
+.timers-callbacks-fieldset {
+  // Each callback is a stacked card: When block on top, Then block
+  // below, separated by a soft divider. Each block owns its own
+  // dropdown + args row so wide inputs (chain target + op + extra)
+  // wrap naturally instead of being clamped into thirds.
+  .timers-callback-row {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    background: $t-bg;
+    border: 1px solid $t-border;
+    border-radius: 8px;
+    margin-bottom: 10px;
+
+    select, input {
+      background: $t-card !important;
+      border: 1px solid $t-border !important;
+      color: $t-text !important;
+      padding: 6px 9px !important;
+      border-radius: 4px !important;
+      font-size: 13px !important;
+      min-height: 34px;
+      width: 100%;
+      min-width: 0;        // lets flex children shrink without overflow
+    }
+
+    .cb-half {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    // "↓ Then" separator hint: the Then block is divided from the When
+    // block by a subtle top border so the eye reads them as two stages
+    // of the same trigger without needing a literal arrow glyph.
+    .cb-then {
+      border-top: 1px dashed $t-border;
+      padding-top: 10px;
+      margin-top: 2px;
+    }
+
+    .cb-label {
+      font-size: 11px;
+      color: $t-muted;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 600;
+    }
+
+    // Args wrap row — multiple inputs side-by-side, wrapping cleanly
+    // when the modal is narrow. Single-input args (jil trigger, push
+    // title, countdown_at remaining_text) still get the full width.
+    .cb-args {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+
+      > input, > select { flex: 1 1 140px; }
+      > .timers-sound-chime { flex: 2 1 220px; }
+      > .timers-callback-chain { flex: 1 1 100%; }
+    }
+
+    .timers-callback-chain {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+
+      > select { flex: 1 1 160px; }
+      > input  { flex: 1 1 160px; }
+    }
+
+    .timers-callback-remove {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      background: transparent !important;
+      border: 0 !important;
+      color: $t-muted !important;
+      cursor: pointer;
+      font-size: 20px !important;
+      padding: 2px 8px !important;
+      text-shadow: none !important;
+      background-image: none !important;
+      font-weight: 700 !important;
+      min-height: 0 !important;
+      width: auto !important;
+      line-height: 1;
+
+      &:hover { color: $t-danger !important; }
+    }
+  }
+
+  .timers-callbacks-add {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+
+    button {
+      background: $t-bg !important;
+      border: 1px solid $t-border !important;
+      color: $t-text !important;
+      padding: 6px 12px !important;
+      border-radius: 6px !important;
+      font-size: 12px !important;
+      cursor: pointer;
+      text-shadow: none !important;
+      background-image: none !important;
+      font-weight: 500 !important;
+
+      &:hover { background: $t-card-hi !important; }
+    }
+  }
+}
+
+.timers-quick-add-form {
+  display: flex;
+  gap: 8px;
+  padding: 14px 18px;
+  border-top: 1px solid $t-border;
+  background: $t-card-hi;
+
+  input {
+    flex: 1;
+    background: $t-bg !important;
+    border: 1px solid $t-border !important;
+    color: $t-text !important;
+    padding: 8px 10px !important;
+    border-radius: 6px !important;
+    font-size: 13px !important;
+  }
+}
+
+.timers-settings-empty {
+  color: $t-muted;
+  text-align: center;
+  padding: 24px 0;
+  font-size: 13px;
+}
+
+[data-timers-quick-list],
+[data-timers-saved-list],
+[data-timers-pages-list],
+[data-timers-share-list] {
+  padding: 4px 18px;
+  max-height: 360px;
+  overflow-y: auto;
+
+  .tmpl-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+
+    &.sortable { cursor: default; }
+    &:last-child { border-bottom: 0; }
+
+    .row-handle {
+      color: $t-muted;
+      font-size: 18px;
+      cursor: grab;
+      padding: 0 4px;
+      user-select: none;
+      flex: 0 0 auto;
+
+      &:active { cursor: grabbing; }
+    }
+
+    .row-body {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .label { font-weight: 500; }
+    .row-tag {
+      color: $t-muted;
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+
+      code {
+        background: $t-bg;
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+        color: $t-primary-hi;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      }
+    }
+
+    .row-actions {
+      display: flex;
+      gap: 6px;
+      flex: 0 0 auto;
+      flex-wrap: nowrap;
+    }
+
+    button {
+      background: transparent !important;
+      border: 1px solid $t-border !important;
+      color: $t-text !important;
+      padding: 5px 12px !important;
+      border-radius: 6px !important;
+      font-size: 12px !important;
+      cursor: pointer;
+      font-weight: 500 !important;
+      white-space: nowrap;
+
+      &:hover { background: $t-card-hi !important; }
+      &.danger { color: $t-danger !important; border-color: rgba(248,81,73,0.3) !important; }
+      &.danger:hover { background: rgba(248,81,73,0.1) !important; }
+    }
+  }
+
+  .row-ghost {
+    opacity: 0.4;
+    background: $t-card-hi;
+    border-radius: 6px;
+  }
+}
+
+.timers-settings-footer {
+  padding: 12px 18px;
+  border-top: 1px solid $t-border;
+  background: $t-card-hi;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.timers-share-create {
+  display: flex;
+  gap: 8px;
+  padding: 14px 18px;
+  border-top: 1px solid $t-border;
+  background: $t-card-hi;
+
+  select {
+    flex: 1;
+    background: $t-bg !important;
+    border: 1px solid $t-border !important;
+    color: $t-text !important;
+    padding: 8px 32px 8px 10px !important;
+    border-radius: 6px !important;
+    font-size: 13px !important;
+    min-height: 38px;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3e%3cpath fill='%238b949e' d='M1 1l5 5 5-5'/%3e%3c/svg%3e") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 12px center !important;
+    background-size: 12px 8px !important;
+  }
+}
+
+[data-timers-share-section] .field-hint {
+  padding: 14px 18px 4px;
+}
+
+// Drag-and-drop visual states for the timer board (edit mode only).
+.timer-card-ghost {
+  opacity: 0.4;
+  background: $t-card-hi !important;
+  border-style: dashed !important;
+}
+.timer-card-chosen { cursor: grabbing; }
+.timer-card-dragging { box-shadow: 0 12px 32px rgba(0,0,0,0.5) !important; }
+
+// Edit mode: card gets a draggable feel; menu button stays accessible.
+.timers-app.edit-mode {
+  .timer-card {
+    cursor: grab;
+    border-style: dashed;
+    border-color: $t-primary;
+
+    &:active { cursor: grabbing; }
+  }
+  .timer-ring,
+  .timer-dial,
+  .timer-counter,
+  .timer-counter-btn { pointer-events: none; }
+}
+
+.timers-app .timers-icon-btn.is-active {
+  background: $t-primary !important;
+  border-color: $t-primary !important;
+  color: #fff !important;
+}
+
+// Library modal — searchable list of saved templates.
+.timers-library-modal {
+  max-width: 480px;
+}
+.timers-library-search {
+  padding: 12px 18px;
+  border-bottom: 1px solid $t-border;
+
+  input {
+    width: 100%;
+    background: $t-bg !important;
+    border: 1px solid $t-border !important;
+    color: $t-text !important;
+    padding: 9px 12px !important;
+    border-radius: 6px !important;
+    font-size: 14px !important;
+    min-height: 38px;
+  }
+}
+.timers-library-list {
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 4px 0;
+
+  .timers-library-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 18px;
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+    color: $t-text !important;
+    cursor: pointer;
+    text-align: left;
+    font-size: 14px !important;
+
+    .label { font-weight: 600; }
+    .row-tag { color: $t-muted; font-size: 12px; }
+    .row-action { color: $t-primary-hi; font-size: 13px; font-weight: 500; }
+
+    &:hover { background: $t-card-hi !important; }
+  }
+}
+
+.timers-app .timers-share-create {
+  flex-direction: column;
+  align-items: stretch;
+
+  select { width: 100%; }
+  .timers-primary-btn { align-self: flex-start; }
+}
+
+.timers-app .settings-blurb {
+  padding: 12px 18px 0;
+  margin: 0;
+  font-size: 12px;
+  color: $t-muted;
+}
+
+// Live duration preview (sits under the duration input).
+.timers-app .field-preview {
+  font-size: 12px;
+  color: $t-primary-hi;
+  margin-top: -2px;
+  min-height: 1.2em;
+
+  &.is-invalid { color: $t-danger; }
+  &:empty { min-height: 0; }
+}
+
+// Chime select + preview button — sound `then`-action args.
+.timers-sound-chime {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+
+  select { flex: 1; min-width: 0; }
+  .timers-sound-preview {
+    flex: 0 0 38px;
+    min-height: 34px;
+    background: $t-primary !important;
+    border: 1px solid $t-primary !important;
+    color: #fff !important;
+    border-radius: 4px !important;
+    font-size: 12px !important;
+    padding: 0 !important;
+    cursor: pointer;
+    width: 38px !important;
+
+    &:hover { background: $t-primary-hi !important; border-color: $t-primary-hi !important; }
+  }
+}

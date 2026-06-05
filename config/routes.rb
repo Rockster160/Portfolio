@@ -126,6 +126,44 @@ Rails.application.routes.draw do
     resources :transfers,     controller: :chore_transfers,      only: [:create, :update, :destroy], as: :transfers
   end
 
+  # ============================================================
+  # TIMERS PWA
+  # /timers — inbox + per-page surfaces; offline-first via SW.
+  # Server-authoritative end_at + Sidekiq TimerFireWorker ensures
+  # timers fire whether or not the app is open or the device is on.
+  # /t/:token — public, token-scoped share view (no auth).
+  # ============================================================
+  get  "/timers"            => "timers#index",  as: :timers
+  get  "/timers/page/:slug" => "timers#page",   as: :timer_page
+  get  "/timers/sync"       => "timers#sync",   as: :timers_sync
+  get  "/timers/csrf"       => "timers#csrf",   as: :timers_csrf
+
+  scope path: "timers", as: :timer_routes do
+    post   "/items"              => "timers#create",    as: :items
+    patch  "/items/:id"          => "timers#update",    as: :item
+    put    "/items/:id"          => "timers#update"
+    delete "/items/:id"          => "timers#destroy"
+    post   "/items/:id/start"    => "timers#start",     as: :start_item
+    post   "/items/:id/pause"    => "timers#pause",     as: :pause_item
+    post   "/items/:id/resume"   => "timers#resume",    as: :resume_item
+    post   "/items/:id/reset"    => "timers#reset",     as: :reset_item
+    post   "/items/:id/confirm"  => "timers#confirm",   as: :confirm_item
+    post   "/items/:id/increment" => "timers#increment", as: :increment_item
+    post   "/items/:id/advance"  => "timers#advance",   as: :advance_item
+    patch  "/items/:id/layout"   => "timers#layout",    as: :layout_item
+    patch  "/order"              => "timers#reorder",   as: :reorder
+
+    resources :pages,         controller: :timer_pages,         only: [:create, :update, :destroy]
+    patch "/quick_buttons/order" => "timer_quick_buttons#reorder", as: :reorder_quick_buttons
+    resources :quick_buttons, controller: :timer_quick_buttons, only: [:index, :create, :update, :destroy]
+    resources :shares,        controller: :timer_shares,        only: [:create, :update, :destroy]
+  end
+
+  get  "/t/:token"      => "timer_shares#show", as: :timer_share
+  get  "/t/:token/sync" => "timer_shares#sync"
+  post "/t/:token/:action_kind" => "timer_shares#act",
+    constraints: { action_kind: /start|pause|resume|reset|confirm|increment|advance/ }
+
   post "webhooks/tesla_telemetry" => "webhooks#tesla_telemetry"
   post "webhooks/tesla_local" => "webhooks#tesla_local"
   post "jil/trigger/:trigger" => "webhooks#jil"

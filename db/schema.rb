@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_03_130000) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_04_110000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1114,6 +1114,93 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_03_130000) do
     t.index ["user_id"], name: "index_tasks_on_user_id"
   end
 
+  create_table "timer_pages", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.text "name", default: "", null: false
+    t.text "slug", null: false
+    t.integer "sort_order", default: 0, null: false
+    t.integer "layout_mode", default: 0, null: false
+    t.jsonb "sections", default: [], null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "slug"], name: "index_timer_pages_on_user_id_and_slug", unique: true
+    t.index ["user_id"], name: "index_timer_pages_on_user_id"
+  end
+
+  create_table "timer_quick_buttons", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.text "label"
+    t.integer "duration_seconds", null: false
+    t.integer "sort_order", default: 0, null: false
+    t.text "color"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.jsonb "template", default: {}, null: false
+    t.boolean "pinned", default: true, null: false
+    t.index ["user_id", "pinned", "sort_order"], name: "index_timer_quick_buttons_on_user_id_and_pinned_and_sort_order"
+    t.index ["user_id", "sort_order"], name: "index_timer_quick_buttons_on_user_id_and_sort_order"
+    t.index ["user_id"], name: "index_timer_quick_buttons_on_user_id"
+  end
+
+  create_table "timer_share_tokens", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "timer_id"
+    t.bigint "timer_page_id"
+    t.string "token", null: false
+    t.integer "access_mode", default: 0, null: false
+    t.datetime "revoked_at"
+    t.datetime "expires_at"
+    t.integer "hit_count", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["timer_id"], name: "index_timer_share_tokens_on_timer_id"
+    t.index ["timer_page_id"], name: "index_timer_share_tokens_on_timer_page_id"
+    t.index ["token"], name: "index_timer_share_tokens_on_token", unique: true
+    t.index ["user_id"], name: "index_timer_share_tokens_on_user_id"
+    t.check_constraint "((timer_id IS NOT NULL)::integer + (timer_page_id IS NOT NULL)::integer) = 1", name: "timer_share_tokens_target_xor"
+  end
+
+  create_table "timers", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "timer_page_id"
+    t.text "name", default: "", null: false
+    t.integer "kind", default: 0, null: false
+    t.text "color"
+    t.integer "section_id"
+    t.integer "pos_x", default: 0, null: false
+    t.integer "pos_y", default: 0, null: false
+    t.integer "width", default: 0, null: false
+    t.integer "height", default: 0, null: false
+    t.bigint "duration_ms"
+    t.datetime "started_at"
+    t.datetime "paused_at"
+    t.bigint "paused_remaining_ms"
+    t.datetime "end_at"
+    t.boolean "repeat", default: false, null: false
+    t.integer "repeat_count", default: 0, null: false
+    t.boolean "require_confirm_tap", default: false, null: false
+    t.integer "value", default: 0, null: false
+    t.integer "step", default: 1, null: false
+    t.integer "min_value"
+    t.integer "max_value"
+    t.integer "reset_value", default: 0, null: false
+    t.jsonb "dial_config", default: {}, null: false
+    t.integer "dial_step_index", default: 0, null: false
+    t.jsonb "callbacks", default: [], null: false
+    t.string "fire_jid"
+    t.datetime "fire_scheduled_for"
+    t.datetime "fired_at"
+    t.datetime "confirmed_at"
+    t.datetime "archived_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["end_at"], name: "index_timers_pending_fire", where: "((end_at IS NOT NULL) AND (fired_at IS NULL))"
+    t.index ["fire_jid"], name: "index_timers_on_fire_jid", unique: true, where: "(fire_jid IS NOT NULL)"
+    t.index ["timer_page_id"], name: "index_timers_on_timer_page_id"
+    t.index ["user_id", "kind", "archived_at"], name: "index_timers_on_user_id_and_kind_and_archived_at"
+    t.index ["user_id"], name: "index_timers_on_user_id"
+  end
+
   create_table "user_caches", force: :cascade do |t|
     t.bigint "user_id"
     t.jsonb "data"
@@ -1247,5 +1334,12 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_03_130000) do
   add_foreign_key "task_folders", "task_folders", column: "parent_id"
   add_foreign_key "task_folders", "users"
   add_foreign_key "tasks", "task_folders"
+  add_foreign_key "timer_pages", "users"
+  add_foreign_key "timer_quick_buttons", "users"
+  add_foreign_key "timer_share_tokens", "timer_pages"
+  add_foreign_key "timer_share_tokens", "timers"
+  add_foreign_key "timer_share_tokens", "users"
+  add_foreign_key "timers", "timer_pages"
+  add_foreign_key "timers", "users"
   add_foreign_key "users", "chore_households"
 end

@@ -1,0 +1,13 @@
+<%# Use the default app favicon set until Timers-specific art exists.
+  The manifest is still timers-specific (id, scope, start_url) so the
+  installed PWA behaves correctly; only the icon visuals are shared. %>
+<link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path 'favicon/apple-touch-icon.png' %>">
+<link rel="icon" type="image/png" sizes="32x32" href="<%= asset_path 'favicon/favicon-32x32.png' %>">
+<link rel="icon" type="image/png" sizes="16x16" href="<%= asset_path 'favicon/favicon-16x16.png' %>">
+<link rel="shortcut icon" href="<%= asset_path 'favicon/favicon.ico' %>">
+<link rel="manifest" href="/timers.webmanifest">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-title" content="Timers">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
