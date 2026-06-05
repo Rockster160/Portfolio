@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_04_110000) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_05_140000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -373,6 +373,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_04_110000) do
     t.datetime "updated_at", null: false
     t.text "note"
     t.float "streak_multiplier", default: 1.0, null: false
+    t.boolean "anonymous", default: false, null: false
     t.index ["chore_id", "user_id", "day_key"], name: "index_chore_completions_on_chore_id_and_user_id_and_day_key"
     t.index ["chore_id"], name: "index_chore_completions_on_chore_id"
     t.index ["user_id", "completed_at"], name: "index_chore_completions_on_user_id_and_completed_at"
@@ -516,6 +517,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_04_110000) do
     t.bigint "assigned_to_user_id"
     t.text "notes_template"
     t.bigint "chore_household_id", null: false
+    t.integer "hot_eligibility", default: 0, null: false
     t.index ["archived_at"], name: "index_chores_on_archived_at"
     t.index ["assigned_to_user_id"], name: "index_chores_on_assigned_to_user_id"
     t.index ["chore_household_id", "archived_at"], name: "index_chores_on_chore_household_id_and_archived_at"
@@ -1275,6 +1277,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_04_110000) do
     t.boolean "dark_mode"
     t.string "email"
     t.bigint "chore_household_id"
+    t.jsonb "chore_notify_prefs", default: {}, null: false
     t.index ["chore_household_id"], name: "index_users_on_chore_household_id"
   end
 

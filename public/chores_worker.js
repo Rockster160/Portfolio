@@ -15,7 +15,7 @@
 // clients re-pull the HTML next time they're online.
 
 // Bump CACHE on shipping shell changes so old clients re-pull HTML.
-const CACHE = "chores-v78";
+const CACHE = "chores-v80";
 // Every chore view is a cached shell. Each shell is body-empty for
 // page-specific content — entries on History, recent rows on Balance —
 // because that data is hydrated client-side from JSON (and from a
@@ -129,6 +129,46 @@ async function verifyShellReady() {
   }
   return { ok: true };
 }
+
+// Web Push handler. Mirrors agenda_worker.js — payload is the JSON the
+// server sends to WebPush.payload_send (title/body/icon/tag/data).
+// `dismiss: true` with a tag short-circuits to closing any active
+// notification with that tag (e.g. when work is undone elsewhere).
+self.addEventListener("push", evt => {
+  let data = {};
+  try { data = evt.data ? evt.data.json() : {}; } catch (_e) { return; }
+
+  if (data.dismiss && data.tag) {
+    evt.waitUntil(
+      self.registration.getNotifications({ tag: data.tag })
+        .then(list => list.forEach(n => n.close()))
+    );
+    return;
+  }
+
+  data.icon = data.icon || "/favicon/android-chrome-192x192.png";
+  if (data.title || data.body) {
+    evt.waitUntil(self.registration.showNotification(data.title || "Chores", data));
+  }
+});
+
+self.addEventListener("notificationclick", evt => {
+  evt.notification.close();
+  const targetUrl = evt.notification.data?.url || "/chores";
+  evt.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of all) {
+      const url = new URL(c.url);
+      if (url.pathname.startsWith("/chores") && "focus" in c) {
+        if (c.url !== targetUrl && "navigate" in c) {
+          await c.navigate(targetUrl);
+        }
+        return c.focus();
+      }
+    }
+    if (self.clients.openWindow) await self.clients.openWindow(targetUrl);
+  })());
+});
 
 self.addEventListener("message", evt => {
   if (evt.data?.action === "refresh_shells") {

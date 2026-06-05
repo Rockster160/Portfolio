@@ -113,12 +113,16 @@ Rails.application.routes.draw do
     delete "/items/:id"  => "chores#destroy"
     post   "/items/:chore_id/completion" => "chore_completions#create", as: :complete_item
     delete "/items/:chore_id/completion" => "chore_completions#destroy"
+    post   "/items/:chore_id/anonymous_completion" => "chore_completions#anonymous_completion", as: :anonymous_complete_item
     get    "/items/:id/state"            => "chores#state",              as: :item_state
     get    "/items/:id/history"          => "chores#chore_history",      as: :item_history
     patch  "/order"                      => "chores#reorder",            as: :reorder
     post   "/items/:id/dailies"          => "chores#pin_daily",          as: :pin_daily
     delete "/items/:id/dailies"          => "chores#unpin_daily",        as: :unpin_daily
     patch  "/dailies/order"              => "chores#reorder_dailies",    as: :reorder_dailies
+    post   "/hot_picks/:chore_id/rotate" => "chores#rotate_hot_pick",    as: :rotate_hot_pick
+    get    "/notification_preferences"   => "chores#notification_preferences",        as: :notification_preferences
+    patch  "/notification_preferences"   => "chores#update_notification_preferences", as: :update_notification_preferences
     resources :completions, controller: :chore_completions, only: [:update, :destroy]
     resources :goals,         controller: :chore_goals,          only: [:create, :update, :destroy], as: :goals
     resources :streak_bonuses, controller: :chore_streak_bonuses, only: [:create, :update, :destroy], as: :streak_bonuses

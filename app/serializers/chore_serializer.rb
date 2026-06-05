@@ -24,35 +24,37 @@ class ChoreSerializer
 
   def as_json(*)
     {
-      id:                  chore.id,
-      name:                chore.name,
-      short_name:          chore.short_name.presence || chore.name,
-      icon:                chore.icon,
-      icon_kind:           icon_kind, # "emoji" | "image" | "svg" | "ti_icon" | "empty"
-      aliases:             chore.aliases_array,
-      notes_template:      chore.notes_template.to_s,
-      reward_pebbles:      chore.reward_pebbles,
-      reward_label:        chore.reward_label,
-      threshold_seconds:   chore.threshold_seconds,
-      cooldown_kind:       cooldown_kind, # "none" | "fixed" | "day_reset"
-      one_off:             chore.one_off,
-      sharing_mode:        chore.sharing_mode,
-      assigned_to_user_id: chore.assigned_to_user_id,
-      show_on_daily_view:  chore.show_on_daily_view,
-      starts_on:           chore.starts_on&.iso8601,
-      recurrence:          chore.recurrence || {},
-      sort_order:          chore.sort_order,
-      archived:            chore.archived?,
-      updated_at:          chore.updated_at.iso8601(3),
+      id:                   chore.id,
+      name:                 chore.name,
+      short_name:           chore.short_name.presence || chore.name,
+      icon:                 chore.icon,
+      icon_kind:            icon_kind, # "emoji" | "image" | "svg" | "ti_icon" | "empty"
+      aliases:              chore.aliases_array,
+      notes_template:       chore.notes_template.to_s,
+      reward_pebbles:       chore.reward_pebbles,
+      reward_label:         chore.reward_label,
+      threshold_seconds:    chore.threshold_seconds,
+      cooldown_kind:        cooldown_kind, # "none" | "fixed" | "day_reset"
+      one_off:              chore.one_off,
+      sharing_mode:         chore.sharing_mode,
+      assigned_to_user_id:  chore.assigned_to_user_id,
+      show_on_daily_view:   chore.show_on_daily_view,
+      hot_eligibility:      chore.hot_eligibility,
+      starts_on:            chore.starts_on&.iso8601,
+      recurrence:           chore.recurrence || {},
+      sort_order:           chore.sort_order,
+      archived:             chore.archived?,
+      updated_at:           chore.updated_at.iso8601(3),
       # Per-viewer derived fields
-      done_count_today:    done_count_today,
-      last_completed_at:   last_completion&.completed_at&.iso8601(3),
-      actor_username:      actor_username,
-      last_actor_username: last_actor_username,
-      hot_multiplier:      hot_multiplier,
-      streak_multiplier:   streak_multiplier,
-      today_visible:       today_visible?,
-      on_dailies:          on_dailies?,
+      done_count_today:     done_count_today,
+      last_completed_at:    last_completion&.completed_at&.iso8601(3),
+      actor_username:       actor_username,
+      last_actor_username:  last_actor_username,
+      last_actor_anonymous: last_actor_anonymous?,
+      hot_multiplier:       hot_multiplier,
+      streak_multiplier:    streak_multiplier,
+      today_visible:        today_visible?,
+      on_dailies:           on_dailies?,
     }
   end
 
@@ -98,6 +100,10 @@ class ChoreSerializer
   def done_count_today
     return ctx.completions_today.fetch(chore.id, 0) if ctx
 
+    # All completions count — including ones recorded as "done by
+    # someone outside the household" — so the card visually reads as
+    # done. The ring color (set via last_actor_anonymous? below) is
+    # what distinguishes who, if anyone, gets credit.
     @done_count_today ||= ChoreCompletion
       .where(chore_id: chore.id, user_id: cooldown_scope_user_ids, day_key: day)
       .count
@@ -129,31 +135,50 @@ class ChoreSerializer
 
   def actor_username
     return nil unless chore.share_household?
+    return nil if last_actor_anonymous?
 
     actor = ctx&.completion_actor_by_chore&.[](chore.id)
     return actor.username if actor && actor.id != viewer.id
     return nil if actor
 
-    # Fallback when no preloaded context — single lookup.
-    last = last_completion
+    # Fallback when no preloaded context — single lookup. Anonymous
+    # completions never get an actor, so the credited filter is fine
+    # here too.
+    last = ChoreCompletion.credited
+      .where(chore_id: chore.id, user_id: cooldown_scope_user_ids)
+      .order(completed_at: :desc).first
     return nil if last.nil? || last.user_id == viewer.id
 
     User.where(id: last.user_id).pick(:username)
   end
 
-  # Username of whoever most recently completed the chore — regardless
-  # of sharing mode. Drives the per-user accent color on Today / Grid
-  # cards so a Rocco-checked chore reads visually different from a
-  # Chelsea-checked one. Returns nil when nobody's completed it yet.
+  # Drives the per-actor accent color on Today / Grid cards. Returns
+  # nil for anonymous-most-recent (grey ring via last_actor_anonymous?)
+  # or when nothing's been completed yet.
   def last_actor_username
+    return nil if last_actor_anonymous?
+
     actor = ctx&.completion_actor_by_chore&.[](chore.id)
     return actor.username if actor
 
-    last = last_completion
+    last = ChoreCompletion.credited
+      .where(chore_id: chore.id, user_id: cooldown_scope_user_ids)
+      .order(completed_at: :desc).first
     return nil if last.nil?
     return viewer.username if last.user_id == viewer.id
 
     User.where(id: last.user_id).pick(:username)
+  end
+
+  # True when the most recent completion of this chore — across the
+  # cooldown scope — was anonymous. Drives the grey-ring treatment
+  # so the card visually reads as done, but with no per-user color
+  # attribution.
+  def last_actor_anonymous?
+    return @last_actor_anonymous_cached if defined?(@last_actor_anonymous_cached)
+
+    last = last_completion
+    @last_actor_anonymous_cached = last.present? && last.anonymous == true
   end
 
   def hot_multiplier

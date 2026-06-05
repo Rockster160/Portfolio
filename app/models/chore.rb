@@ -5,6 +5,7 @@
 #  id                  :bigint           not null, primary key
 #  aliases             :jsonb            not null
 #  archived_at         :datetime
+#  hot_eligibility     :integer          default("when_available"), not null
 #  icon                :text
 #  name                :text             not null
 #  notes_template      :text
@@ -39,6 +40,7 @@ class Chore < ApplicationRecord
   after_create_commit  :fire_jil_create_trigger
   after_update_commit  :fire_jil_update_trigger
   after_destroy_commit :fire_jil_destroy_trigger
+  before_validation :default_chore_household_from_creator, on: :create
   # Every persisted change fans out a Monitor broadcast so every open
   # client refreshes — Jil-created chores, console scripts, and the
   # controller path all reach the same fanout without each call site
@@ -81,6 +83,18 @@ class Chore < ApplicationRecord
     household: 1,
   }, default: :personal, prefix: :share
 
+  # Whether this chore can become a Hot Pick:
+  #   :when_available — eligible whenever the worker's normal rules permit
+  #                     (current behaviour: unscheduled, due-today, or overdue)
+  #   :when_scheduled — only eligible on a day it's actually scheduled / overdue
+  #                     (i.e. unscheduled chores never become Hot Picks)
+  #   :never          — never eligible, no matter what
+  enum :hot_eligibility, {
+    when_available: 0,
+    when_scheduled: 1,
+    never:          2,
+  }, default: :when_available, prefix: :hot
+
   belongs_to :chore_household
   belongs_to :created_by_user, class_name: "User"
   belongs_to :assigned_to_user, class_name: "User", optional: true
@@ -88,8 +102,6 @@ class Chore < ApplicationRecord
   has_many :chore_hot_picks, dependent: :destroy
   has_many :chore_streaks, dependent: :destroy
   has_many :chore_dailies, dependent: :destroy
-
-  before_validation :default_chore_household_from_creator, on: :create
 
   validates :name, presence: true
   validates :reward_pebbles, numericality: { greater_than_or_equal_to: 0 }

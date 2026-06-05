@@ -25,11 +25,26 @@ class ChoreBroadcaster
     end
   end
 
+  # Hot Picks are a household-wide concept (today's pick set is shared
+  # across every member). After a rotation or the daily refresh, every
+  # connected client needs to re-sync so their hot-strip + the bonus
+  # multipliers on their cards land in step.
+  def self.broadcast_hot_picks_refreshed!
+    User.where(id: Chore.distinct.pluck(:created_by_user_id)).find_each do |u|
+      MonitorChannel.broadcast_to(u, {
+        id:        :chores,
+        channel:   :chores,
+        timestamp: Time.current.to_i,
+        data:      { reason: :hot_picks_refreshed, server_ts: Time.current.iso8601(3) },
+      })
+    end
+  end
+
   # Personal-cooldown + assigned narrows visibility to the assignee
   # alone, so the fan-out skips everyone else. Every other shape stays
   # grid-visible to the household.
   def self.recipients_for(user, chore)
-    if chore && chore.assigned? && chore.share_personal?
+    if chore&.assigned? && chore.share_personal?
       return [chore.assigned_to_user_id].compact
     end
 

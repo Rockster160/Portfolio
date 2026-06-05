@@ -22,15 +22,16 @@ class ChoreTransfer < ApplicationRecord
   after_create_commit  :fire_jil_create_trigger
   after_update_commit  :fire_jil_update_trigger
   after_destroy_commit :fire_jil_destroy_trigger
+  after_create_commit  :notify_recipient
 
   # History search via the app-wide `.query(q)` scope.
   #   notes:test / note:test → note ILIKE %test%
   #   time>2026-05-01        → created_at > date
   #   bare keyword           → matches across note
   search_terms :id, :note, :amount_pebbles,
-    notes: :note,
+    notes:  :note,
     amount: :amount_pebbles,
-    time: :created_at
+    time:   :created_at
 
   validates :amount_pebbles, numericality: { greater_than: 0, only_integer: true }
   validate :recipient_is_not_self
@@ -41,15 +42,15 @@ class ChoreTransfer < ApplicationRecord
     direction = viewer&.id == from_user_id ? :outgoing : :incoming
     counterparty = direction == :outgoing ? to_user : from_user
     {
-      id: id,
-      action: action,
-      direction: direction,
-      amount_pebbles: amount_pebbles,
+      id:                    id,
+      action:                action,
+      direction:             direction,
+      amount_pebbles:        amount_pebbles,
       counterparty_username: counterparty&.username,
-      from_user_id: from_user_id,
-      to_user_id: to_user_id,
-      note: note.to_s,
-      created_at: created_at&.iso8601(3),
+      from_user_id:          from_user_id,
+      to_user_id:            to_user_id,
+      note:                  note.to_s,
+      created_at:            created_at&.iso8601(3),
     }
   end
 
@@ -73,6 +74,10 @@ class ChoreTransfer < ApplicationRecord
     end
   end
 
+  def notify_recipient
+    ChoreNotifier.transfer_received!(self)
+  end
+
   def recipient_is_not_self
     return unless from_user_id == to_user_id
 
@@ -82,7 +87,7 @@ class ChoreTransfer < ApplicationRecord
   def recipient_is_in_household
     return if from_user.blank? || to_user.blank?
     return if from_user.chore_household_id.present? &&
-              from_user.chore_household_id == to_user.chore_household_id
+      from_user.chore_household_id == to_user.chore_household_id
 
     errors.add(:to_user_id, "must be in your chore household")
   end
