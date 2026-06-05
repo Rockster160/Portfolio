@@ -162,6 +162,34 @@ $t-danger:    #f85149;
 
 // ---------- quick pills ----------
 
+// Page-level action buttons — sit above the quick-add row, one per
+// TimerPageButton on the active page. Generic outbound links, but
+// styled as call-to-action pills.
+.timers-page-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+
+  .timers-page-button {
+    background: var(--button-color, #{$t-primary}) !important;
+    border: 1px solid var(--button-color, #{$t-primary}) !important;
+    color: #fff !important;
+    border-radius: 8px !important;
+    padding: 8px 16px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    text-decoration: none !important;
+    text-shadow: none !important;
+    background-image: none !important;
+    cursor: pointer;
+    transition: filter 0.15s, transform 0.05s;
+
+    &:hover  { filter: brightness(1.1); }
+    &:active { transform: scale(0.97); }
+  }
+}
+
 .timers-quick-row {
   display: flex;
   flex-wrap: wrap;
@@ -296,6 +324,18 @@ $t-danger:    #f85149;
   &.on-home.is-done .timer-card-close { display: inline-flex; }
 
   &.is-paused { opacity: 0.7; }
+
+  // Disabled timers are a UI-only block. Server-side mutations (chain
+  // ops, Jil) still hit the row so callbacks can flip a target back
+  // ON; the renderer just refuses to fire click handlers and the
+  // visual greys out so the user knows it's parked.
+  &.is-disabled {
+    opacity: 0.35;
+    filter: grayscale(50%);
+    cursor: not-allowed;
+
+    .timer-card-name { color: $t-muted; }
+  }
 
   &.timer-card-counter { width: clamp(170px, 100%, 200px); flex: 0 1 200px; }
   &.timer-card-dial    { width: clamp(220px, 100%, 320px); flex: 0 1 320px; }
@@ -532,10 +572,15 @@ $t-danger:    #f85149;
 
   // Font sizes set inline on each <text> via the renderer (viewBox units)
   // so they scale with section count. These rules only own color + weight.
+  // Only the CURRENT step shows its `--section-color` (set inline
+  // per-path); every other section stays muted grey. The legibility
+  // wins from a uniform background outweigh the visual richness of
+  // coloring all sections. If `--section-color` isn't set, fall back
+  // to the t-primary/primary-hi highlight for a sensible default.
   .dial-section          { fill: #1f2630; transition: fill 0.15s; }
-  .dial-section.current  { fill: $t-primary; }
+  .dial-section.current  { fill: var(--section-color, $t-primary); }
   .dial-sub              { fill: #161b22; transition: fill 0.15s; }
-  .dial-sub.current      { fill: $t-primary-hi; }
+  .dial-sub.current      { fill: var(--section-color, $t-primary-hi); }
   .dial-ring             { fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 2; }
 
   // Labels live on top of every fill, with a dark halo via paint-order

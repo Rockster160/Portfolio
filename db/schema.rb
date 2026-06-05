@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_05_140000) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_05_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1116,6 +1116,18 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_05_140000) do
     t.index ["user_id"], name: "index_tasks_on_user_id"
   end
 
+  create_table "timer_page_buttons", force: :cascade do |t|
+    t.bigint "timer_page_id", null: false
+    t.text "label", default: "", null: false
+    t.text "color"
+    t.text "target_url", null: false
+    t.integer "sort_order", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["timer_page_id", "sort_order"], name: "index_timer_page_buttons_on_timer_page_id_and_sort_order"
+    t.index ["timer_page_id"], name: "index_timer_page_buttons_on_timer_page_id"
+  end
+
   create_table "timer_pages", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.text "name", default: "", null: false
@@ -1125,6 +1137,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_05_140000) do
     t.jsonb "sections", default: [], null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "meta", default: {}, null: false
     t.index ["user_id", "slug"], name: "index_timer_pages_on_user_id_and_slug", unique: true
     t.index ["user_id"], name: "index_timer_pages_on_user_id"
   end
@@ -1196,6 +1209,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_05_140000) do
     t.datetime "archived_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "disabled", default: false, null: false
     t.index ["end_at"], name: "index_timers_pending_fire", where: "((end_at IS NOT NULL) AND (fired_at IS NULL))"
     t.index ["fire_jid"], name: "index_timers_on_fire_jid", unique: true, where: "(fire_jid IS NOT NULL)"
     t.index ["timer_page_id"], name: "index_timers_on_timer_page_id"
@@ -1337,6 +1351,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_05_140000) do
   add_foreign_key "task_folders", "task_folders", column: "parent_id"
   add_foreign_key "task_folders", "users"
   add_foreign_key "tasks", "task_folders"
+  add_foreign_key "timer_page_buttons", "timer_pages", on_delete: :cascade
   add_foreign_key "timer_pages", "users"
   add_foreign_key "timer_quick_buttons", "users"
   add_foreign_key "timer_share_tokens", "timer_pages"

@@ -311,6 +311,20 @@
   #increment(Timer Numeric?:By)::Timer
   #advance(Timer Numeric?:By)::Timer
   #goto(Timer String:Section)::Timer
+  #disable(Timer)::Timer
+  #enable(Timer)::Timer
+  #toggle_disabled(Timer)::Timer
+  .id::Numeric
+  .name::String
+  .kind::String
+  .color::String
+  .disabled::Boolean
+  .value::Numeric
+  .duration_ms::Numeric
+  .dial_config::Hash
+  .dial_step_index::Numeric
+  .repeat::Boolean
+  .timer_page_id::Numeric
 *[TimerData]
   #name(String)
   #kind(["countdown" "counter" "dial"])
@@ -319,6 +333,7 @@
   #duration(Numeric:Seconds)
   #duration_ms(Numeric)
   #repeat(Boolean)
+  #disabled(Boolean)
   #value(Numeric)
   #step(Numeric)
   #min_value(Numeric)
@@ -328,6 +343,21 @@
   #dial_config(Hash)
   #start_offset(Numeric)
   #callbacks(Array)
+[TimerPage]
+  #find(String|Numeric)::TimerPage
+  #list::Array
+  #update(TimerPage content(Hash))::TimerPage
+  #get_meta(TimerPage String?:Key)
+  #set_meta(TimerPage Hash)::TimerPage
+  #replace_meta(TimerPage Hash)::TimerPage
+  #add_button(TimerPage content(TimerPageButtonData))::TimerPageButton
+  #set_buttons(TimerPage Array)::TimerPage
+  #remove_button(TimerPageButton|Numeric)::Boolean
+*[TimerPageButtonData]
+  #label(String)
+  #color(String:"#hex")
+  #target_url(String)
+  #sort_order(Numeric)
 *[ActionEventData]
   #name(String)
   #notes(String)

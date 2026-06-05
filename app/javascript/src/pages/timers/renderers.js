@@ -57,6 +57,7 @@ function applyState(card, timer, { clientFired } = {}) {
   // entire visual feedback for a repeat fire.
   card.classList.toggle("is-done", fired && !timer.repeat);
   card.classList.toggle("is-paused", paused);
+  card.classList.toggle("is-disabled", !!timer.disabled);
 }
 
 // Local time math — uses server-authoritative start/end stamps. No
@@ -174,6 +175,7 @@ export function renderCountdownCard(timer, actions) {
     if (e.target.closest("[data-timer-menu]")) return;
     if (e.target.closest(".timers-card-menu-popup")) return;
     if (card.closest(".timers-app")?.classList.contains("edit-mode")) return;
+    if (timer.disabled) return;
     stopTimerSound(timer.id); // only this card's sound
 
     const remaining = computeRemaining(timer);
@@ -331,6 +333,7 @@ export function renderCounterCard(timer, actions) {
   const progress = body.querySelector(".counter-ring .ring-progress");
 
   function bump(by) {
+    if (timer.disabled) return;
     stopTimerSound(timer.id);
     actions.increment(timer.id, by);
   }
@@ -491,16 +494,19 @@ export function renderDialCard(timer, actions) {
     const GAP = 0.012;
 
     // ----- 2. Section wedge fills -----
-    // sec.color (a #hex) is applied as an inline `fill` attribute. CSS
-    // for `.dial-section.current` has class-level specificity and wins
-    // over the inline presentation attribute, so highlighting still
-    // overrides the user's color when this section is the active step.
+    // sec.color (a #hex) feeds the `--section-color` CSS custom
+    // property on the path. CSS resolves `.dial-section { fill: var(...) }`
+    // to that color. The `.dial-section.current` rule still wins via
+    // higher class-specificity to draw the highlight when this is the
+    // active step. SVG presentation attributes (`fill="..."`) lose to
+    // any CSS selector with non-zero specificity, which is why we use
+    // the custom property here rather than the bare attribute.
     sectionRanges.forEach(({ a0, a1 }, i) => {
       const sec = sections[i];
       const p = document.createElementNS(SVG_NS, "path");
       p.setAttribute("class", "dial-section");
       p.setAttribute("d", slicePath(0, 0, R_MID, R_OUT, a0 + GAP, a1 - GAP));
-      if (sec.color) p.setAttribute("fill", sec.color);
+      if (sec.color) p.style.setProperty("--section-color", sec.color);
       p.dataset.kind = "sec";
       p.dataset.secIndex = String(i);
       svg.appendChild(p);
@@ -519,7 +525,7 @@ export function renderDialCard(timer, actions) {
         sp.setAttribute("class", "dial-sub");
         sp.setAttribute("d", slicePath(0, 0, R_IN, R_MID, sa0 + GAP, sa1 - GAP));
         const color = subColor(sub);
-        if (color) sp.setAttribute("fill", color);
+        if (color) sp.style.setProperty("--section-color", color);
         sp.dataset.kind = "sub";
         sp.dataset.secIndex = String(i);
         sp.dataset.subIndex = String(j);
@@ -577,6 +583,7 @@ export function renderDialCard(timer, actions) {
   svg.addEventListener("pointerdown", (e) => {
     if (e.target.closest("[data-timer-menu]")) return;
     if (card.closest(".timers-app")?.classList.contains("edit-mode")) return;
+    if (timer.disabled) return;
     firedLongPress = false;
     clearTimeout(longTimer);
     longTimer = setTimeout(() => {
@@ -589,6 +596,7 @@ export function renderDialCard(timer, actions) {
     clearTimeout(longTimer);
     if (e.target.closest("[data-timer-menu]")) return;
     if (card.closest(".timers-app")?.classList.contains("edit-mode")) return;
+    if (timer.disabled) return;
     if (firedLongPress) { firedLongPress = false; return; }
     stopTimerSound(timer.id);
     actions.advance(timer.id, 1);

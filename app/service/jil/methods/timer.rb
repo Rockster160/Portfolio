@@ -10,6 +10,7 @@ class Jil::Methods::Timer < Jil::Methods::Base
     :duration_ms,
     :duration,
     :repeat,
+    :disabled,
     :value,
     :step,
     :min_value,
@@ -39,8 +40,19 @@ class Jil::Methods::Timer < Jil::Methods::Base
   # default Ruby-method dispatch (Timer.find, .start, etc.).
   def execute(line)
     method_sym = line.methodname.to_s.underscore.gsub(/[^\w]/, "").to_sym
-    if token_class(line.objname) == :TimerData && PERMIT_ADD_ATTRS.include?(method_sym)
+    obj_class = token_class(line.objname)
+
+    # Inside a TimerData content block, dispatch builder methods.
+    if obj_class == :TimerData && PERMIT_ADD_ATTRS.include?(method_sym)
       return send(method_sym, *evalargs(line.args))
+    end
+
+    # When the receiver is a Timer instance variable, NEVER route through
+    # the builder methods on this class — they share names with AR
+    # attributes (`value`, `kind`, etc.) and would shadow them. Go
+    # straight to the AR record.
+    if obj_class == :Timer && line.objname.to_s.match?(/\A[a-z]/)
+      return token_val(line.objname).send(line.methodname, *evalargs(line.args))
     end
 
     fallback(line)
@@ -95,7 +107,14 @@ class Jil::Methods::Timer < Jil::Methods::Base
     return nil if timer.nil?
 
     attrs = build_attrs(details)
-    timer.update!(attrs) if attrs.present?
+    if attrs.present?
+      timer.update!(attrs)
+      # Without this, a Jil task that updates a timer's inner content
+      # (e.g. Settle rebuilding the Swarm dial_text) writes to the DB
+      # but the page never repaints — broadcasts are what drive the
+      # store/renderer refresh.
+      timer.broadcast(reason: :updated)
+    end
     timer
   end
 
@@ -185,6 +204,21 @@ class Jil::Methods::Timer < Jil::Methods::Base
     timer
   end
 
+  def disable(timer_value)
+    set_disabled(timer_value, true)
+  end
+
+  def enable(timer_value)
+    set_disabled(timer_value, false)
+  end
+
+  def toggle_disabled(timer_value)
+    timer = cast(timer_value)
+    return nil if timer.nil?
+
+    set_disabled(timer, !timer.disabled)
+  end
+
   # ---- [TimerData] hash builders ----
 
   def name(text)              ; { name: text.to_s }; end
@@ -193,6 +227,7 @@ class Jil::Methods::Timer < Jil::Methods::Base
   def duration(seconds)       ; { duration_ms: (seconds.to_f * 1000).to_i }; end
   def duration_ms(ms)         ; { duration_ms: ms.to_i }; end
   def repeat(bool)            ; { repeat: @jil.cast(bool, :Boolean) }; end
+  def disabled(bool)          ; { disabled: @jil.cast(bool, :Boolean) }; end
   def value(n)                ; { value: n.to_i }; end
   def step(n)                 ; { step: n.to_i }; end
   def min_value(n)            ; { min_value: n.to_i }; end
@@ -223,6 +258,15 @@ class Jil::Methods::Timer < Jil::Methods::Base
   end
 
   private
+
+  def set_disabled(timer_value, value)
+    timer = cast(timer_value)
+    return nil if timer.nil?
+
+    timer.update!(disabled: value ? true : false)
+    timer.broadcast(reason: :updated)
+    timer
+  end
 
   def build_attrs(details)
     raw = @jil.cast(details, :Hash)

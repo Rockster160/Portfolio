@@ -29,7 +29,16 @@ class TimerPagesController < ApplicationController
   end
 
   def page_params
-    params.require(:timer_page).permit(:name, :slug, :sort_order, :layout_mode, sections: [[:id, :title, :h, :scroll_x]])
+    permitted = params.require(:timer_page).permit(
+      :name, :slug, :sort_order, :layout_mode,
+      sections: [[:id, :title, :h, :scroll_x]],
+    )
+    raw_meta = params.dig(:timer_page, :meta)
+    case raw_meta
+    when ActionController::Parameters then permitted[:meta] = raw_meta.to_unsafe_h
+    when Hash                         then permitted[:meta] = raw_meta
+    end
+    permitted
   end
 
   def serialize(page)
@@ -40,6 +49,10 @@ class TimerPagesController < ApplicationController
       layout_mode: page.layout_mode,
       sections:    page.sections,
       sort_order:  page.sort_order,
+      meta:        page.meta || {},
+      buttons:     page.page_buttons.ordered.map { |b|
+        { id: b.id, label: b.label, color: b.color, target_url: b.target_url, sort_order: b.sort_order, updated_at: b.updated_at.iso8601(3) }
+      },
       updated_at:  page.updated_at.iso8601(3),
     }
   end

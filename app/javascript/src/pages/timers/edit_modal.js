@@ -109,6 +109,7 @@ export function setupEditModal({ root, store, actions, activePageId }) {
       ? defaultLabelForSeconds(Math.round(t.duration_ms / 1000))
       : "5m";
     field("repeat").checked = !!t.repeat;
+    field("disabled").checked = !!t.disabled;
 
     field("value").value = t.value ?? 0;
     field("step").value = t.step ?? 1;
@@ -211,6 +212,7 @@ export function setupEditModal({ root, store, actions, activePageId }) {
     if (mode === "timer") {
       const pageVal = pageSelect.value;
       payload.timer_page_id = pageVal === "" ? null : parseInt(pageVal, 10);
+      payload.disabled = field("disabled").checked;
     }
     if (kind === "countdown") {
       const seconds = parseDuration(field("duration_text").value);

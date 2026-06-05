@@ -17,6 +17,7 @@ class TimerSerializer
       pos_y:         @t.pos_y,
       width:         @t.width,
       height:        @t.height,
+      disabled:      @t.disabled,
       updated_at:    @t.updated_at.iso8601(3),
     }
 

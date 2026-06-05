@@ -9,6 +9,7 @@
 #  confirmed_at        :datetime
 #  dial_config         :jsonb            not null
 #  dial_step_index     :integer          default(0), not null
+#  disabled            :boolean          default(FALSE), not null
 #  duration_ms         :bigint
 #  end_at              :datetime
 #  fire_jid            :string
@@ -496,7 +497,18 @@ class Timer < ApplicationRecord
 
       ::Jil.trigger(user, scope.to_sym, { timer_id: id, name: name }, auth: :trigger)
     when "chain"
-      target = user.timers.find_by(id: t[:target_timer_id])
+      # Chains accept either `target_timer_id` (most precise) OR
+      # `target_timer_name` (case-insensitive name match). The name
+      # variant lets task authors write callbacks before the target
+      # exists — e.g. a setup script that creates "Swarm" later — and
+      # also survives recreate cycles where the row id changes but
+      # the name stays put. Id wins when both are present.
+      target =
+        if t[:target_timer_id].present?
+          user.timers.find_by(id: t[:target_timer_id])
+        elsif t[:target_timer_name].present?
+          user.timers.where("timers.name ILIKE ?", t[:target_timer_name].to_s).first
+        end
       return unless target
 
       case t[:op].to_s
@@ -510,6 +522,9 @@ class Timer < ApplicationRecord
         end
       when "goto"
         target.goto_dial_section!(t[:section]) if target.dial?
+      when "disable"         then target.update!(disabled: true)
+      when "enable"          then target.update!(disabled: false)
+      when "toggle_disabled" then target.update!(disabled: !target.disabled)
       end
       target.broadcast(reason: :chained)
     end

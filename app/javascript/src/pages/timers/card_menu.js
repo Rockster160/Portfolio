@@ -18,6 +18,7 @@ export function setupCardMenu({ root, store, actions, openEdit }) {
 
   function rebuild(timer) {
     const isCounter = timer.kind === "counter";
+    const disableLabel = timer.disabled ? "Enable" : "Disable";
     menu.innerHTML = `
       <button type="button" data-action="edit">Edit</button>
       <button type="button" data-action="duplicate">Duplicate</button>
@@ -25,6 +26,7 @@ export function setupCardMenu({ root, store, actions, openEdit }) {
       ${isCounter ? '<button type="button" data-action="reset">Reset to start</button>' : ""}
       ${timer.kind === "countdown" ? '<button type="button" data-action="reset">Reset timer</button>' : ""}
       ${timer.kind === "dial"      ? '<button type="button" data-action="reset">Reset to start</button>' : ""}
+      <button type="button" data-action="toggle-disabled">${disableLabel}</button>
       <button type="button" data-action="delete" class="danger">Delete</button>
     `;
   }
@@ -79,6 +81,10 @@ export function setupCardMenu({ root, store, actions, openEdit }) {
     }
     if (action === "reset") {
       await actions.reset(timer.id);
+      return;
+    }
+    if (action === "toggle-disabled") {
+      await actions.update(timer.id, { disabled: !timer.disabled });
       return;
     }
     if (action === "delete") {

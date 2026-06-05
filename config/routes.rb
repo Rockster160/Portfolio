@@ -157,7 +157,9 @@ Rails.application.routes.draw do
     patch  "/items/:id/layout"   => "timers#layout",    as: :layout_item
     patch  "/order"              => "timers#reorder",   as: :reorder
 
-    resources :pages,         controller: :timer_pages,         only: [:create, :update, :destroy]
+    resources :pages,         controller: :timer_pages,         only: [:create, :update, :destroy] do
+      resources :buttons, controller: :timer_page_buttons, only: [:create, :update, :destroy]
+    end
     patch "/quick_buttons/order" => "timer_quick_buttons#reorder", as: :reorder_quick_buttons
     resources :quick_buttons, controller: :timer_quick_buttons, only: [:index, :create, :update, :destroy]
     resources :shares,        controller: :timer_shares,        only: [:create, :update, :destroy]

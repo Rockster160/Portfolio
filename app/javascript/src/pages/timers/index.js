@@ -54,17 +54,39 @@ function bootOwner(root) {
     });
   }
   if (bootstrap && cached) {
-    (cached.timers || []).forEach((t) => store.upsertTimer(t, { silent: true }));
-    (cached.pages || []).forEach((p) => store.upsertPage(p));
-    (cached.quick_buttons || []).forEach((q) => store.upsertQuick(q));
+    // The cache overlay refreshes ROWS THE BOOTSTRAP ALSO HAS — never
+    // re-adds rows the bootstrap omitted. Bootstrap is a snapshot at
+    // server_ts; anything missing from it has been deleted server-side.
+    // Skipping the existence check would let stale-but-deleted timers
+    // resurrect themselves on every page load.
+    const strictlyNewer = (c, e) => {
+      const ct = Date.parse(c?.updated_at || 0);
+      const et = Date.parse(e?.updated_at || 0);
+      return Number.isFinite(ct) && Number.isFinite(et) && ct > et;
+    };
+    (cached.timers || []).forEach((t) => {
+      const existing = store.timers.get(t.id);
+      if (existing && strictlyNewer(t, existing)) store.upsertTimer(t, { silent: true });
+    });
+    (cached.pages || []).forEach((p) => {
+      const existing = store.pages.get(p.id);
+      if (existing && strictlyNewer(p, existing)) store.upsertPage(p);
+    });
+    (cached.quick_buttons || []).forEach((q) => {
+      const existing = store.quickButtons.get(q.id);
+      if (existing && strictlyNewer(q, existing)) store.upsertQuick(q);
+    });
   }
 
   const activeSlug = root.dataset.activePageSlug || null;
-  let activePage = activeSlug
+  // Always pull from the store rather than capturing once at boot — the
+  // page record can be updated via broadcast (e.g. a Jil task adding
+  // page buttons), and downstream consumers like the buttons row need
+  // to see those updates.
+  const getActivePage = () => activeSlug
     ? Array.from(store.pages.values()).find((p) => p.slug === activeSlug)
     : null;
-  const activePageId = () => activePage?.id ?? null;
-  const getActivePage = () => activePage;
+  const activePageId = () => getActivePage()?.id ?? null;
 
   const boardEl = root.querySelector("[data-timers-board]");
   const editModal = setupEditModal({ root, store, actions, activePageId });
@@ -100,6 +122,7 @@ function bootOwner(root) {
   wireEditToggle(root, board);
   wireQuickRow(root, store, actions, activePageId);
   wireQuickRowLive(root, store, actions, activePageId);
+  wirePageButtons(root, store, getActivePage);
 
   try {
     // Sound is fully client-side; monitor only applies state diffs.
@@ -218,6 +241,49 @@ function wireQuickRowLive(root, store, actions, activePageId) {
   // Initial bind to any pre-rendered server pills — replace them with
   // JS-managed versions so subsequent clicks use the in-page template
   // and bypass the redirect.
+  repaint();
+}
+
+// Page-level action buttons: a row of links rendered above the quick
+// pills, one per TimerPageButton on the active page. Each button is a
+// generic outbound link — typically pointing at a Jil page/form task
+// (`/jil/p/:id` / `/jil/f/:id`) but the model has no opinion, so
+// users can wire any URL they want.
+function wirePageButtons(root, store, getActivePage) {
+  function repaint() {
+    const page = getActivePage();
+    const buttons = (page?.buttons || [])
+      .slice()
+      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+    let row = root.querySelector("[data-timers-page-buttons]");
+    if (buttons.length === 0) { row?.remove(); return; }
+
+    if (!row) {
+      row = document.createElement("section");
+      row.className = "timers-page-buttons";
+      row.dataset.timersPageButtons = "";
+      // Sits BELOW the quick-add row, ABOVE the timer board. Quick row
+      // is only rendered when there are pinned quicks, so fall back to
+      // the header when it's absent.
+      const anchor = root.querySelector("[data-timers-quick-row]")
+        || root.querySelector(".timers-app-header");
+      anchor?.insertAdjacentElement("afterend", row);
+    }
+    row.innerHTML = "";
+    buttons.forEach((b) => {
+      const a = document.createElement("a");
+      a.className = "timers-page-button";
+      a.href = b.target_url || "#";
+      if (b.color) a.style.setProperty("--button-color", b.color);
+      a.textContent = b.label || b.target_url || "Button";
+      row.appendChild(a);
+    });
+  }
+
+  store.subscribe((kind) => {
+    if (kind === "bootstrap" || kind === "sync" || kind === "page" || kind === "page_removed") repaint();
+  });
   repaint();
 }
 

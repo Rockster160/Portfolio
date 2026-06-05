@@ -11,7 +11,7 @@
 // network, and a synthetic 503 is returned on failure so the queue can
 // detect it.
 
-const CACHE = "timers-v32";
+const CACHE = "timers-v38";
 const SHELL_PREFIX = "/timers";
 
 function isShellRequest(url) {

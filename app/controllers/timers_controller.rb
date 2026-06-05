@@ -206,7 +206,20 @@ class TimersController < ApplicationController
       layout_mode: page.layout_mode,
       sections:    page.sections,
       sort_order:  page.sort_order,
+      meta:        page.meta || {},
+      buttons:     page.page_buttons.ordered.map { |b| serialize_page_button(b) },
       updated_at:  page.updated_at.iso8601(3),
+    }
+  end
+
+  def serialize_page_button(btn)
+    {
+      id:         btn.id,
+      label:      btn.label,
+      color:      btn.color,
+      target_url: btn.target_url,
+      sort_order: btn.sort_order,
+      updated_at: btn.updated_at.iso8601(3),
     }
   end
 
@@ -274,7 +287,7 @@ class TimersController < ApplicationController
   def timer_params
     permitted = params.require(:timer).permit(
       :name, :kind, :color, :timer_page_id, :section_id,
-      :pos_x, :pos_y, :width, :height,
+      :pos_x, :pos_y, :width, :height, :disabled,
       :duration_ms, :repeat,
       :value, :step, :min_value, :max_value, :reset_value,
       # callbacks have a free-form `when` and `then` hash each — the
