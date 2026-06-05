@@ -5,6 +5,19 @@
         <i class="fa fa-thumb-tack" aria-hidden="true"></i>
       </button>
       <h3 data-modal-title>Add Chore</h3>
+      <%# "Someone else did it" — marks the chore as done for the day
+        without giving anyone in the household credit or pebbles. %>
+      <button type="button" class="modal-head-action" data-edit-anonymous-complete
+              aria-label="Mark done by someone else"
+              title="Mark done by someone outside the household" hidden>
+        <i class="fa fa-user-secret" aria-hidden="true"></i>
+      </button>
+      <%# Swap this Hot Pick out for a different one (same reward tier). %>
+      <button type="button" class="modal-head-action" data-edit-hot-rotate
+              aria-label="Swap this Hot Pick for a different one"
+              title="Swap this Hot Pick for a different one" hidden>
+        <i class="fa fa-refresh" aria-hidden="true"></i>
+      </button>
       <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
     </div>
 
@@ -45,78 +58,34 @@
         </div>
       </div>
 
-      <div class="form-section">
-        <label class="field-label">Aliases</label>
-        <input type="text" data-field="aliases_csv" placeholder="floss, toothpaste"
-               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-               data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
-      </div>
+      <%# (Aliases + Completion Notes — moved into the Advanced section below.) %>
 
-      <%# Completion-time notes. Plain text is stored verbatim on the
-        ChoreCompletion. `{Label}` / `{Label:Numeric}` /
-        `{Label:Select [a, b, "c, d"]}` placeholders trigger a prompt
-        modal on click — fields render in order, values interpolate
-        into the saved note, and raw inputs are persisted in
-        completion.metadata["note_values"]. %>
-      <div class="form-section">
-        <label class="field-label">Completion Notes</label>
-        <textarea data-field="notes_template" rows="2"
-                  placeholder='e.g. Fed Whisper {Food Type:Select [Beef, Chicken, "Turkey, Shredded"]} with {Kibble Ounces:Numeric}oz kibble'
-                  autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                  data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other"></textarea>
-        <span class="field-hint">Use <code>{Label}</code>, <code>{Label:Numeric}</code>, or <code>{Label:Select [a, b, "c, d"]}</code> to prompt for input on completion.</span>
-      </div>
-
-      <%# ----- Pebbles ----- %>
+      <%# ----- Pebbles -----
+        Each tier has a description (rendered below the pills as the user
+        selects). Keep this hash in lockstep with the pills list — JS
+        looks up the description by the data-reward value. %>
+      <% pebble_tiers = {
+        1  => "Can be done easily and effortlessly, even in the midst of other chores.",
+        2  => "Minimal time/effort, but does require attention.",
+        3  => "Easy, but takes a couple of minutes.",
+        5  => "Base: \"did a real household chore\" (vacuum, laundry, water plants, etc).",
+        10 => "Deep clean, takes a chunk of time, needs time set aside to accomplish.",
+        15 => "Multi-step project or errand, requires coordination and planning.",
+        20 => "Significant effort. Requires planning and preparation as well as clean up afterward.",
+      } %>
       <div class="form-section">
         <label class="field-label">Pebbles</label>
         <div class="pill-group reward-quicks" data-reward-quicks>
-          <% [1, 2, 3, 5, 10, 15].each_with_index do |amount, i| %>
-            <button type="button" class="pill <%= "active" if i == 0 %>" data-reward="<%= amount %>"><%= amount %>p</button>
+          <% pebble_tiers.each_with_index do |(amount, hint), i| %>
+            <button type="button" class="pill <%= "active" if i == 0 %>"
+              data-reward="<%= amount %>" data-reward-hint="<%= hint %>"><%= amount %>p</button>
           <% end %>
           <button type="button" class="pill" data-reward="custom">?</button>
         </div>
+        <div class="field-hint reward-hint" data-reward-hint><%= pebble_tiers[1] %></div>
         <input type="number" data-field="reward_pebbles" min="0" value="1" class="hidden reward-custom"
                autocomplete="off" placeholder="Custom amount"
                data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
-      </div>
-
-      <%# ----- Sharing (default Household) ----- %>
-      <div class="form-section">
-        <label class="field-label">Sharing</label>
-        <div class="pill-group" data-pill-group="sharing_mode">
-          <button type="button" class="pill" data-value="personal">Personal</button>
-          <button type="button" class="pill active" data-value="household">Household</button>
-        </div>
-        <input type="hidden" data-field="sharing_mode" value="household">
-      </div>
-
-      <%# ----- Assignee (independent of sharing mode) ----- %>
-      <div class="form-section">
-        <label class="field-label">Assigned to</label>
-        <div class="assignee-row">
-          <select data-field="assigned_to_user_id" data-1p-ignore="true" data-lpignore="true">
-            <option value="">Anyone</option>
-            <% (defined?(assignable_users) ? assignable_users : [current_user]).each do |u| %>
-              <option value="<%= u.id %>">
-                <%= u.username %><%= " (me)" if u.id == current_user.id %>
-              </option>
-            <% end %>
-          </select>
-        </div>
-      </div>
-
-      <%# ----- Show on Today View (button order per spec) ----- %>
-      <div class="form-section">
-        <label class="field-label">Show on Today View</label>
-        <div class="pill-group" data-pill-group="show_on_daily_view">
-          <button type="button" class="pill" data-value="always">Always</button>
-          <button type="button" class="pill" data-value="when_scheduled_and_available">Scheduled or Available</button>
-          <button type="button" class="pill active" data-value="when_scheduled">When Scheduled</button>
-          <button type="button" class="pill" data-value="when_available">When Available</button>
-          <button type="button" class="pill" data-value="never">Hidden</button>
-        </div>
-        <input type="hidden" data-field="show_on_daily_view" value="when_scheduled">
       </div>
 
       <%# ----- Single Task toggle (default off). When ON the schedule
@@ -139,36 +108,116 @@
                autocomplete="off" data-1p-ignore="true" data-lpignore="true">
       </div>
 
-      <%# ----- Cooldown ----- %>
-      <div class="form-section" data-recurring-only>
-        <label class="field-label">Cooldown</label>
-        <div class="pill-group" data-pill-group="threshold_preset">
-          <button type="button" class="pill active" data-value="">None</button>
-          <button type="button" class="pill" data-value="3600">1h</button>
-          <button type="button" class="pill" data-value="10800">3h</button>
-          <button type="button" class="pill" data-value="21600">6h</button>
-          <button type="button" class="pill" data-value="43200">12h</button>
-          <button type="button" class="pill" data-value="86400">1d</button>
-          <button type="button" class="pill" data-value="172800">2d</button>
-          <button type="button" class="pill" data-value="604800">1w</button>
-          <button type="button" class="pill" data-value="day-end">End of day</button>
-          <button type="button" class="pill" data-value="custom">Custom…</button>
+      <%# ----- Advanced (collapsed by default) -----
+        Everything that's rarely changed lives behind this expandable
+        section so the new-chore form stays a one-glance affair.
+        Fields kept here mirror what was previously inline. %>
+      <details class="form-advanced" data-advanced-section>
+        <summary class="form-advanced-summary">Advanced options</summary>
+
+        <div class="form-section">
+          <label class="field-label">Aliases</label>
+          <input type="text" data-field="aliases_csv" placeholder="floss, toothpaste"
+                 autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                 data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
         </div>
-        <input type="hidden" data-field="threshold_preset" value="">
-        <div data-cooldown-custom-row class="cooldown-custom-row hidden">
-          <span class="field-hint">Every</span>
-          <input type="number" min="1" value="1" data-cooldown-amount class="cooldown-amount"
-                 autocomplete="off" data-1p-ignore="true" data-lpignore="true">
-          <select data-cooldown-unit class="cooldown-unit">
-            <option value="second">seconds</option>
-            <option value="minute">minutes</option>
-            <option value="hour">hours</option>
-            <option value="day" selected>days</option>
-            <option value="week">weeks</option>
-          </select>
+
+        <%# Completion-time notes. Plain text is stored verbatim on the
+          ChoreCompletion. `{Label}` / `{Label:Numeric}` /
+          `{Label:Select [a, b, "c, d"]}` placeholders trigger a prompt
+          modal on click — fields render in order, values interpolate
+          into the saved note, and raw inputs are persisted in
+          completion.metadata["note_values"]. %>
+        <div class="form-section">
+          <label class="field-label">Completion Notes</label>
+          <textarea data-field="notes_template" rows="2"
+                    placeholder='e.g. Fed Whisper {Food Type:Select [Beef, Chicken, "Turkey, Shredded"]} with {Kibble Ounces:Numeric}oz kibble'
+                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                    data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other"></textarea>
+          <span class="field-hint">Use <code>{Label}</code>, <code>{Label:Numeric}</code>, or <code>{Label:Select [a, b, "c, d"]}</code> to prompt for input on completion.</span>
         </div>
-        <input type="hidden" data-field="threshold_seconds" value="">
-      </div>
+
+        <%# ----- Sharing (default Household) ----- %>
+        <div class="form-section">
+          <label class="field-label">Sharing</label>
+          <div class="pill-group" data-pill-group="sharing_mode">
+            <button type="button" class="pill" data-value="personal">Personal</button>
+            <button type="button" class="pill active" data-value="household">Household</button>
+          </div>
+          <input type="hidden" data-field="sharing_mode" value="household">
+        </div>
+
+        <%# ----- Assignee (independent of sharing mode) ----- %>
+        <div class="form-section">
+          <label class="field-label">Assigned to</label>
+          <div class="assignee-row">
+            <select data-field="assigned_to_user_id" data-1p-ignore="true" data-lpignore="true">
+              <option value="">Anyone</option>
+              <% (defined?(assignable_users) ? assignable_users : [current_user]).each do |u| %>
+                <option value="<%= u.id %>">
+                  <%= u.username %><%= " (me)" if u.id == current_user.id %>
+                </option>
+              <% end %>
+            </select>
+          </div>
+        </div>
+
+        <%# ----- Show on Today View (button order per spec) ----- %>
+        <div class="form-section">
+          <label class="field-label">Show on Today View</label>
+          <div class="pill-group" data-pill-group="show_on_daily_view">
+            <button type="button" class="pill" data-value="always">Always</button>
+            <button type="button" class="pill" data-value="when_scheduled_and_available">Scheduled or Available</button>
+            <button type="button" class="pill active" data-value="when_scheduled">When Scheduled</button>
+            <button type="button" class="pill" data-value="when_available">When Available</button>
+            <button type="button" class="pill" data-value="never">Hidden</button>
+          </div>
+          <input type="hidden" data-field="show_on_daily_view" value="when_scheduled">
+        </div>
+
+        <%# ----- Hot-pick eligibility — overrides the default rule for
+          when this chore can be selected as a daily Hot Pick. ----- %>
+        <div class="form-section">
+          <label class="field-label">Hot Pick Eligibility</label>
+          <div class="pill-group" data-pill-group="hot_eligibility">
+            <button type="button" class="pill active" data-value="when_available">When Available</button>
+            <button type="button" class="pill" data-value="when_scheduled">When Scheduled</button>
+            <button type="button" class="pill" data-value="never">Never</button>
+          </div>
+          <input type="hidden" data-field="hot_eligibility" value="when_available">
+        </div>
+
+        <%# ----- Cooldown ----- %>
+        <div class="form-section" data-recurring-only>
+          <label class="field-label">Cooldown</label>
+          <div class="pill-group" data-pill-group="threshold_preset">
+            <button type="button" class="pill active" data-value="">None</button>
+            <button type="button" class="pill" data-value="3600">1h</button>
+            <button type="button" class="pill" data-value="10800">3h</button>
+            <button type="button" class="pill" data-value="21600">6h</button>
+            <button type="button" class="pill" data-value="43200">12h</button>
+            <button type="button" class="pill" data-value="86400">1d</button>
+            <button type="button" class="pill" data-value="172800">2d</button>
+            <button type="button" class="pill" data-value="604800">1w</button>
+            <button type="button" class="pill" data-value="day-end">End of day</button>
+            <button type="button" class="pill" data-value="custom">Custom…</button>
+          </div>
+          <input type="hidden" data-field="threshold_preset" value="">
+          <div data-cooldown-custom-row class="cooldown-custom-row hidden">
+            <span class="field-hint">Every</span>
+            <input type="number" min="1" value="1" data-cooldown-amount class="cooldown-amount"
+                   autocomplete="off" data-1p-ignore="true" data-lpignore="true">
+            <select data-cooldown-unit class="cooldown-unit">
+              <option value="second">seconds</option>
+              <option value="minute">minutes</option>
+              <option value="hour">hours</option>
+              <option value="day" selected>days</option>
+              <option value="week">weeks</option>
+            </select>
+          </div>
+          <input type="hidden" data-field="threshold_seconds" value="">
+        </div>
+      </details>
 
       <%# ----- Repeats ----- %>
       <div class="form-section" data-recurring-only>
@@ -256,6 +305,67 @@
         <button type="button" class="danger hidden" data-action="archive">Archive</button>
         <button type="button" class="ghost" data-action="cancel">Cancel</button>
         <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<%# Notification settings — opens from the bell button on the Balance
+  page header. The Subscribe button registers the chores push channel
+  with the SW; the toggles are per-event opt-outs. Empty prefs = "all
+  on" (see User#wants_chore_notification?). %>
+<div id="chore-notifications-modal" class="chores-modal-backdrop hidden" data-notifications-modal>
+  <div class="chores-modal">
+    <div class="modal-head">
+      <h3>Notifications</h3>
+      <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+    </div>
+    <form class="chore-form basic" data-notifications-form autocomplete="off">
+      <div class="form-section">
+        <div data-notifications-status class="field-hint">Checking subscription…</div>
+        <div class="form-actions" style="justify-content:flex-start;margin-top:8px;">
+          <button type="button" class="primary" data-notifications-subscribe hidden>Turn on notifications</button>
+          <button type="button" class="ghost"   data-notifications-unsubscribe hidden>Turn off</button>
+        </div>
+      </div>
+      <div class="form-section">
+        <label class="field-label">Send me a notification when:</label>
+        <label class="toggle"><input type="checkbox" data-notify-kind="transfer_received"><span class="toggle-slider"></span><span>Someone transfers pebbles to me</span></label>
+        <label class="toggle"><input type="checkbox" data-notify-kind="own_goal_achieved"><span class="toggle-slider"></span><span>I complete a goal</span></label>
+        <label class="toggle"><input type="checkbox" data-notify-kind="other_goal_achieved"><span class="toggle-slider"></span><span>Someone in my household completes a goal</span></label>
+        <label class="toggle"><input type="checkbox" data-notify-kind="chore_assigned"><span class="toggle-slider"></span><span>Someone assigns me a chore</span></label>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="ghost"   data-action="cancel">Close</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<%# Opened by the secret-agent button on the Edit Chore modal head.
+  Marks the chore as done for the day so it doesn't show up as
+  overdue, but nobody in the household gets credit or pebbles. The
+  done ring on the card paints grey to make it obvious. %>
+<div id="chore-anonymous-modal" class="chores-modal-backdrop hidden" data-anonymous-modal>
+  <div class="chores-modal">
+    <div class="modal-head">
+      <h3 data-anonymous-title>Done by someone else</h3>
+      <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+    </div>
+    <form class="chore-form basic" data-anonymous-form autocomplete="off" novalidate>
+      <p class="field-hint">Marks this as done so it doesn't keep coming up. Nobody in the household gets the pebbles.</p>
+      <div class="form-section">
+        <label class="field-label">When was it done?</label>
+        <input type="datetime-local" data-anonymous-completed-at required>
+      </div>
+      <div class="form-section">
+        <label class="field-label">Note (optional)</label>
+        <input type="text" data-anonymous-note placeholder="e.g. neighbor brought the cans up">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="ghost" data-action="cancel">Cancel</button>
+        <button type="submit" class="primary">Mark done</button>
       </div>
     </form>
   </div>

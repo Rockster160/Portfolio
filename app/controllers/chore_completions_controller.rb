@@ -2,6 +2,28 @@ class ChoreCompletionsController < ApplicationController
   before_action :authorize_user_or_guest
   before_action :require_chore_manager!, only: [:update]
 
+  # POST /chores/items/:chore_id/anonymous_completion
+  # Records a completion for scheduling/cooldown purposes that credits
+  # no household member. user_id captures the recorder; everything
+  # display-side ignores anonymous rows (see ChoreCompletion#credited).
+  def anonymous_completion
+    chore = current_user.accessible_chores.find(params[:chore_id])
+    completed_at = parse_client_time(params[:client_completed_at]) || Time.current
+
+    completion = ChoreCompletion.create!(
+      chore:          chore,
+      user:           current_user,
+      completed_at:   completed_at,
+      day_key:        ChoreDay.current(current_user, at: completed_at),
+      payout_skipped: true,
+      skipped_reason: "Marked done by someone outside the household",
+      anonymous:      true,
+      note:           params[:note].to_s,
+    )
+    ChoreBroadcaster.broadcast_changes!(current_user, chore, actor_tab_id: params[:tab_id])
+    render json: response_payload(chore, completion).merge(anonymous: true), status: :created
+  end
+
   def create
     chore = current_user.accessible_chores.find(params[:chore_id])
     completed_at = parse_client_time(params[:client_completed_at]) || Time.current
@@ -16,24 +38,10 @@ class ChoreCompletionsController < ApplicationController
     apply_create_overrides!(result.completion) if result.completion
 
     render json: response_payload(chore, result.completion).merge(
-      skipped: result.skipped?,
+      skipped:        result.skipped?,
       skipped_reason: result.skipped_reason,
       achieved_goals: result.achieved_goals.map { |g| { name: g.name, pebbles: g.awarded_pebbles.to_i } },
     ), status: :created
-  end
-
-  # Two destroy paths share this action: the per-chore undo (last
-  # completion today, via /chores/items/:chore_id/completion) and the
-  # history-page row delete (via /chores/completions/:id). The latter
-  # is manager-only — members can't rewrite history.
-  def destroy
-    if params[:chore_id]
-      destroy_last_today
-    else
-      return render(json: { error: "Only household managers can edit history." }, status: :forbidden) unless current_user.can_manage_chores?
-
-      destroy_by_id
-    end
   end
 
   def update
@@ -66,6 +74,20 @@ class ChoreCompletionsController < ApplicationController
     end
   end
 
+  # Two destroy paths share this action: the per-chore undo (last
+  # completion today, via /chores/items/:chore_id/completion) and the
+  # history-page row delete (via /chores/completions/:id). The latter
+  # is manager-only — members can't rewrite history.
+  def destroy
+    if params[:chore_id]
+      destroy_last_today
+    else
+      return render(json: { error: "Only household managers can edit history." }, status: :forbidden) unless current_user.can_manage_chores?
+
+      destroy_by_id
+    end
+  end
+
   private
 
   def require_chore_manager!
@@ -80,8 +102,11 @@ class ChoreCompletionsController < ApplicationController
 
     # Per the sharing spec: household + personal/assigned each undo only
     # the CURRENT user's record. Household never removes another user's
-    # completion (their record is theirs to undo).
+    # completion (their record is theirs to undo). Anonymous
+    # completions are administrative audits — the tap-undo gesture
+    # never targets them; they're only edited via the History page.
     completion = current_user.chore_completions
+      .credited
       .where(chore_id: chore.id, day_key: day)
       .order(completed_at: :desc).first
 
@@ -109,7 +134,7 @@ class ChoreCompletionsController < ApplicationController
     today = ChoreDay.current(current_user)
     today_earnings = current_user.chore_completions.where(day_key: today).sum(:paid_pebbles)
     render json: {
-      balance: current_user.chore_balance,
+      balance:        current_user.chore_balance,
       today_earnings: today_earnings,
     }
   end
@@ -154,7 +179,7 @@ class ChoreCompletionsController < ApplicationController
   def completion_params
     perms = params.require(:chore_completion).permit(
       :paid_pebbles, :completed_at, :payout_skipped, :note,
-      :hot_multiplier, :streak_multiplier, :total_multiplier,
+      :hot_multiplier, :streak_multiplier, :total_multiplier
     )
     # Legacy `total_multiplier` is the same signal as streak_multiplier
     # after the rename; route it through so older queued requests keep
@@ -184,7 +209,7 @@ class ChoreCompletionsController < ApplicationController
     return nil if raw.blank?
 
     t = Time.iso8601(raw.to_s)
-    return nil if t > Time.current + 5.minutes
+    return nil if t > 5.minutes.from_now
 
     t
   rescue ArgumentError
@@ -199,7 +224,7 @@ class ChoreCompletionsController < ApplicationController
     return if streak.blank?
 
     last_paid = current_user.chore_completions
-      .where(chore_id: chore.id, payout_skipped: false)
+      .where(chore_id: chore.id, payout_skipped: false, anonymous: false)
       .order(completed_at: :desc).first
 
     if last_paid.nil?
@@ -208,13 +233,12 @@ class ChoreCompletionsController < ApplicationController
     end
 
     # Walk backward day-by-day from the last paid completion; count
-    # consecutive days with at least one paid completion.
+    # consecutive days with at least one paid (non-anonymous) completion.
     cursor = last_paid.day_key
     count = 0
     loop do
       had = current_user.chore_completions
-        .where(chore_id: chore.id, day_key: cursor, payout_skipped: false)
-        .exists?
+        .exists?(chore_id: chore.id, day_key: cursor, payout_skipped: false, anonymous: false)
       break unless had
 
       count += 1
@@ -222,9 +246,9 @@ class ChoreCompletionsController < ApplicationController
     end
 
     streak.update!(
-      current_streak: count,
+      current_streak:     count,
       last_completed_day: last_paid.day_key,
-      longest_streak: [streak.longest_streak, count].max,
+      longest_streak:     [streak.longest_streak, count].max,
     )
   end
 
@@ -237,11 +261,11 @@ class ChoreCompletionsController < ApplicationController
     today_earnings = current_user.chore_completions.where(day_key: day).sum(:paid_pebbles)
 
     {
-      chore: ChoreSerializer.new(chore, viewer: current_user, day: day).as_json,
-      balance: current_user.chore_balance,
+      chore:          ChoreSerializer.new(chore, viewer: current_user, day: day).as_json,
+      balance:        current_user.chore_balance,
       today_earnings: today_earnings,
-      paid: completion&.paid_pebbles,
-      server_ts: Time.current.iso8601(3),
+      paid:           completion&.paid_pebbles,
+      server_ts:      Time.current.iso8601(3),
     }
   end
 end

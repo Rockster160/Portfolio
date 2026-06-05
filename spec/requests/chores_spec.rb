@@ -2,6 +2,7 @@ require "rails_helper"
 
 RSpec.describe "Chores", type: :request do
   let(:user) { create(:user) }
+
   before { post login_path, params: { user: { username: user.username, password: "password123" } } }
 
   it "GET /chores renders the grid" do
@@ -29,7 +30,7 @@ RSpec.describe "Chores", type: :request do
 
     it "POST creates a streak bonus with normalized integer levels and returns html" do
       post "/chores/streak_bonuses",
-        params: {
+        params:  {
           chore_streak_bonus: {
             name:     "Streak Master",
             chore_id: chore.id,
@@ -47,7 +48,7 @@ RSpec.describe "Chores", type: :request do
         }.to_json,
         headers: { "CONTENT_TYPE" => "application/json", "ACCEPT" => "application/json" }
       expect(response).to have_http_status(:created)
-      body = JSON.parse(response.body)
+      body = response.parsed_body
       expect(body["html"]).to include("Streak Master")
       bonus = ChoreStreakBonus.find(body["id"])
       expect(bonus.config["levels"]).to eq([
@@ -58,7 +59,7 @@ RSpec.describe "Chores", type: :request do
 
     it "POST drops chore_id when kind is a pebble-threshold (chore-agnostic)" do
       post "/chores/streak_bonuses",
-        params: {
+        params:  {
           chore_streak_bonus: {
             name:     "Daily 50",
             chore_id: chore.id, # client may post it; controller should ignore
@@ -68,7 +69,7 @@ RSpec.describe "Chores", type: :request do
         }.to_json,
         headers: { "CONTENT_TYPE" => "application/json", "ACCEPT" => "application/json" }
       expect(response).to have_http_status(:created)
-      bonus = ChoreStreakBonus.find(JSON.parse(response.body)["id"])
+      bonus = ChoreStreakBonus.find(response.parsed_body["id"])
       expect(bonus.chore_id).to be_nil
     end
 
@@ -85,12 +86,12 @@ RSpec.describe "Chores", type: :request do
 
     it "POST creates a pebbles goal that defaults to relative-earned" do
       post "/chores/goals",
-        params: {
+        params:  {
           chore_goal: { name: "Lego Set", kind: "pebbles", target_value: 500 },
         }.to_json,
         headers: { "CONTENT_TYPE" => "application/json", "ACCEPT" => "application/json" }
       expect(response).to have_http_status(:created)
-      goal = ChoreGoal.find(JSON.parse(response.body)["id"])
+      goal = ChoreGoal.find(response.parsed_body["id"])
       expect(goal.scope_mode).to eq("relative")
       expect(goal.tracking_mode).to eq("earned")
       expect(goal.target_value).to eq(500)
@@ -98,7 +99,7 @@ RSpec.describe "Chores", type: :request do
 
     it "POST creates a chore-streak goal with chore_id on the FK column" do
       post "/chores/goals",
-        params: {
+        params:  {
           chore_goal: {
             name:         "7-day Water",
             kind:         "chore_streak",
@@ -108,14 +109,14 @@ RSpec.describe "Chores", type: :request do
         }.to_json,
         headers: { "CONTENT_TYPE" => "application/json", "ACCEPT" => "application/json" }
       expect(response).to have_http_status(:created)
-      goal = ChoreGoal.find(JSON.parse(response.body)["id"])
+      goal = ChoreGoal.find(response.parsed_body["id"])
       expect(goal.kind).to eq("chore_streak")
       expect(goal.chore_id).to eq(chore.id)
     end
 
     it "POST nulls chore_id when kind doesn't use it (stale form value defense)" do
       post "/chores/goals",
-        params: {
+        params:  {
           chore_goal: {
             name:         "Test",
             kind:         "total_completions",
@@ -125,7 +126,7 @@ RSpec.describe "Chores", type: :request do
         }.to_json,
         headers: { "CONTENT_TYPE" => "application/json", "ACCEPT" => "application/json" }
       expect(response).to have_http_status(:created)
-      goal = ChoreGoal.find(JSON.parse(response.body)["id"])
+      goal = ChoreGoal.find(response.parsed_body["id"])
       expect(goal.chore_id).to be_nil
     end
 
@@ -133,7 +134,7 @@ RSpec.describe "Chores", type: :request do
       create(:chore_completion, user: user, chore: chore)
       create(:chore_completion, user: user, chore: chore)
       post "/chores/goals",
-        params: {
+        params:  {
           chore_goal: {
             name:         "100 waters",
             kind:         "chore_completions",
@@ -144,7 +145,7 @@ RSpec.describe "Chores", type: :request do
         }.to_json,
         headers: { "CONTENT_TYPE" => "application/json", "ACCEPT" => "application/json" }
       expect(response).to have_http_status(:created)
-      goal = ChoreGoal.find(JSON.parse(response.body)["id"])
+      goal = ChoreGoal.find(response.parsed_body["id"])
       expect(goal.baseline_value).to eq(2)
       expect(goal.current_value).to eq(0)
     end
@@ -160,7 +161,7 @@ RSpec.describe "Chores", type: :request do
   it "POST /chores/items creates a chore" do
     expect {
       post "/chores/items",
-        params: { chore: { name: "Vacuum", reward_pebbles: 5, icon: "🧹" } }.to_json,
+        params:  { chore: { name: "Vacuum", reward_pebbles: 5, icon: "🧹" } }.to_json,
         headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
     }.to change(Chore, :count).by(1)
     expect(response).to have_http_status(:created)
@@ -169,10 +170,10 @@ RSpec.describe "Chores", type: :request do
   it "POST /chores/items persists notes_template and serializes it back" do
     template = 'Fed Whisper {Food Type:Select [Beef, Chicken, "Turkey, Shredded"]} with {Kibble Ounces:Numeric}oz kibble'
     post "/chores/items",
-      params: { chore: { name: "Feed Whisper", reward_pebbles: 1, notes_template: template } }.to_json,
+      params:  { chore: { name: "Feed Whisper", reward_pebbles: 1, notes_template: template } }.to_json,
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
     expect(response).to have_http_status(:created)
-    body = JSON.parse(response.body)
+    body = response.parsed_body
     expect(body["chore"]["notes_template"]).to eq(template)
     expect(Chore.last.notes_template).to eq(template)
   end
@@ -183,20 +184,123 @@ RSpec.describe "Chores", type: :request do
       post "/chores/items/#{chore.id}/completion",
         headers: { "Accept" => "application/json" }
     }.to change(ChoreCompletion, :count).by(1)
-    body = JSON.parse(response.body)
+    body = response.parsed_body
     expect(body["balance"]).to eq(5)
     # Canonical chore JSON in response — ChoreStore upserts directly from this.
     expect(body["chore"]["done_count_today"]).to eq(1)
     expect(body["chore"]["last_completed_at"]).to be_present
   end
 
+  it "POST /chores/items/:id/anonymous_completion records a no-credit completion" do
+    chore = create(:chore, created_by_user: user, name: "Cans", reward_pebbles: 5)
+    expect {
+      post "/chores/items/#{chore.id}/anonymous_completion",
+        params:  { note: "neighbor brought them up" }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+    }.to change(ChoreCompletion, :count).by(1)
+    expect(response).to have_http_status(:created)
+    body = response.parsed_body
+    expect(body["balance"]).to eq(0)
+    expect(body["anonymous"]).to be(true)
+    # The card paints as done (ring shows) so the user can see the work
+    # was logged — just in grey (last_actor_anonymous=true) so it's
+    # clear nobody got credit.
+    expect(body["chore"]["done_count_today"]).to eq(1)
+    expect(body["chore"]["last_actor_anonymous"]).to be(true)
+    expect(body["chore"]["last_actor_username"]).to be_nil
+
+    completion = ChoreCompletion.last
+    expect(completion.anonymous).to be(true)
+    expect(completion.payout_skipped).to be(true)
+    expect(completion.paid_pebbles).to eq(0)
+    expect(completion.note).to eq("neighbor brought them up")
+    # No streak row created — anonymous doesn't advance the streak.
+    expect(ChoreStreak.find_by(user: user, chore: chore)).to be_nil
+  end
+
+  describe "notification preferences" do
+    it "GET returns all kinds defaulted ON (empty prefs hash)" do
+      get "/chores/notification_preferences", headers: { "Accept" => "application/json" }
+      prefs = response.parsed_body["prefs"]
+      User::CHORE_NOTIFY_KINDS.each { |k| expect(prefs[k.to_s]).to be(true) }
+    end
+
+    it "PATCH persists per-kind toggles" do
+      patch "/chores/notification_preferences",
+        params:  { chore_notify_prefs: { transfer_received: false, own_goal_achieved: false } }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+      expect(response).to have_http_status(:ok)
+      prefs = response.parsed_body["prefs"]
+      expect(prefs["transfer_received"]).to be(false)
+      expect(prefs["own_goal_achieved"]).to be(false)
+      expect(prefs["chore_assigned"]).to be(true)
+      expect(user.reload.wants_chore_notification?(:transfer_received)).to be(false)
+    end
+  end
+
+  it "GET /chores/items/:id/history hides the recorder for anonymous completions and returns the note" do
+    chore = create(:chore, created_by_user: user, name: "Cans", reward_pebbles: 5)
+    create(:chore_completion, chore: chore, user: user, paid_pebbles: 0,
+                              completed_at: 1.hour.ago, day_key: ChoreDay.current,
+                              payout_skipped: true, anonymous: true,
+                              note: "neighbor brought them up")
+    get "/chores/items/#{chore.id}/history", headers: { "Accept" => "application/json" }
+    entry = response.parsed_body["entries"].first
+    expect(entry["anonymous"]).to be(true)
+    # User shouldn't show up as the actor — they only recorded it.
+    expect(entry["actor_username"]).to be_nil
+    # Note survives end-to-end so the modal can render it.
+    expect(entry["note"]).to eq("neighbor brought them up")
+  end
+
+  it "GET /chores/history flags anonymous entries distinctly from skipped ones" do
+    chore = create(:chore, created_by_user: user, name: "Cans", reward_pebbles: 5)
+    create(:chore_completion, chore: chore, user: user, paid_pebbles: 0,
+                              completed_at: 1.hour.ago, day_key: ChoreDay.current,
+                              payout_skipped: true, anonymous: true)
+    get "/chores/history", headers: { "Accept" => "application/json" }
+    entry = response.parsed_body["entries"].find { |e| e["kind"] == "completion" }
+    expect(entry["anonymous"]).to be(true)
+  end
+
+  it "POST anonymous_completion accepts a custom client_completed_at" do
+    chore = create(:chore, created_by_user: user, name: "Cans", reward_pebbles: 5)
+    past = 3.hours.ago.iso8601(3)
+    post "/chores/items/#{chore.id}/anonymous_completion",
+      params:  { client_completed_at: past, note: "earlier" }.to_json,
+      headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+    expect(response).to have_http_status(:created)
+    completion = ChoreCompletion.last
+    expect(completion.completed_at).to be_within(1.second).of(Time.iso8601(past))
+  end
+
+  it "POST /chores/hot_picks/:chore_id/rotate swaps out one pick for a replacement" do
+    # 1 reward-band-1 chore that's already a hot pick; multiple
+    # candidates available so a replacement can be found.
+    picked = create(:chore, created_by_user: user, name: "Mop", reward_pebbles: 2)
+    create(:chore_hot_pick, chore: picked, multiplier: 2.0, day_key: ChoreDay.current(user))
+    # candidates for the replacement (same low band)
+    3.times { create(:chore, created_by_user: user, reward_pebbles: 2) }
+    expect {
+      post "/chores/hot_picks/#{picked.id}/rotate",
+        headers: { "Accept" => "application/json" }
+    }.not_to(change { ChoreHotPick.where(day_key: ChoreDay.current(user)).count })
+    body = response.parsed_body
+    expect(body["removed_chore_id"]).to eq(picked.id)
+    expect(body["replacement_chore_id"]).not_to eq(picked.id)
+    expect(ChoreHotPick.exists?(day_key: ChoreDay.current(user), chore_id: picked.id)).to be(false)
+    expect(ChoreHotPick.exists?(day_key: ChoreDay.current(user), chore_id: body["replacement_chore_id"])).to be(true)
+  end
+
   it "POST /chores/items/:id/completion stores note + note_values from the body" do
-    chore = create(:chore, created_by_user: user, name: "Feed Whisper", reward_pebbles: 1,
-                   notes_template: 'Fed Whisper {Food Type} with {Kibble Ounces}oz kibble')
+    chore = create(
+      :chore, created_by_user: user, name: "Feed Whisper", reward_pebbles: 1,
+      notes_template: "Fed Whisper {Food Type} with {Kibble Ounces}oz kibble"
+    )
     post "/chores/items/#{chore.id}/completion",
-      params: {
+      params:  {
         chore_completion: {
-          note: "Fed Whisper Beef with 6oz kibble",
+          note:        "Fed Whisper Beef with 6oz kibble",
           note_values: { "Food Type" => "Beef", "Kibble Ounces" => 6 },
         },
       }.to_json,
@@ -205,7 +309,7 @@ RSpec.describe "Chores", type: :request do
     completion = ChoreCompletion.last
     expect(completion.note).to eq("Fed Whisper Beef with 6oz kibble")
     expect(completion.metadata["note_values"]).to eq({
-      "Food Type" => "Beef",
+      "Food Type"     => "Beef",
       "Kibble Ounces" => 6,
     })
   end
@@ -239,7 +343,7 @@ RSpec.describe "Chores", type: :request do
     create(:chore_completion, chore: chore, user: user, paid_pebbles: 5)
     get "/chores/history.json", headers: { "Accept" => "application/json" }
     expect(response).to have_http_status(:ok)
-    body = JSON.parse(response.body)
+    body = response.parsed_body
     expect(body["entries"].size).to eq(1)
     entry = body["entries"].first
     expect(entry["kind"]).to eq("completion")
@@ -256,19 +360,21 @@ RSpec.describe "Chores", type: :request do
     chore = create(:chore, created_by_user: user, reward_pebbles: 5)
     completion = create(:chore_completion, chore: chore, user: user, paid_pebbles: 5)
     patch "/chores/completions/#{completion.id}",
-      params: { chore_completion: { paid_pebbles: 8 } }.to_json,
+      params:  { chore_completion: { paid_pebbles: 8 } }.to_json,
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
     expect(response).to have_http_status(:ok)
-    expect(JSON.parse(response.body)["balance"]).to eq(8)
+    expect(response.parsed_body["balance"]).to eq(8)
     expect(completion.reload.paid_pebbles).to eq(8)
   end
 
   it "PATCH /chores/completions/:id stores hot_multiplier, streak_multiplier, and hot_pick flag verbatim" do
     chore = create(:chore, created_by_user: user, reward_pebbles: 5)
-    completion = create(:chore_completion, chore: chore, user: user,
-      paid_pebbles: 5, hot_multiplier: 1.0, streak_multiplier: 1.0, metadata: {})
+    completion = create(
+      :chore_completion, chore: chore, user: user,
+      paid_pebbles: 5, hot_multiplier: 1.0, streak_multiplier: 1.0, metadata: {}
+    )
     patch "/chores/completions/#{completion.id}",
-      params: { chore_completion: { hot_multiplier: 2.0, streak_multiplier: 2.5, hot_pick: true } }.to_json,
+      params:  { chore_completion: { hot_multiplier: 2.0, streak_multiplier: 2.5, hot_pick: true } }.to_json,
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
     expect(response).to have_http_status(:ok)
     completion.reload
@@ -282,10 +388,12 @@ RSpec.describe "Chores", type: :request do
 
   it "PATCH preserves existing metadata keys when toggling hot_pick" do
     chore = create(:chore, created_by_user: user)
-    completion = create(:chore_completion, chore: chore, user: user,
-      metadata: { "imported_from" => "csv" })
+    completion = create(
+      :chore_completion, chore: chore, user: user,
+      metadata: { "imported_from" => "csv" }
+    )
     patch "/chores/completions/#{completion.id}",
-      params: { chore_completion: { hot_pick: true } }.to_json,
+      params:  { chore_completion: { hot_pick: true } }.to_json,
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
     completion.reload
     expect(completion.metadata["hot_pick"]).to be(true)
@@ -297,7 +405,7 @@ RSpec.describe "Chores", type: :request do
     completion = create(:chore_completion, chore: chore, user: user, paid_pebbles: 5)
     new_time = Time.zone.local(2026, 4, 15, 14, 30, 0)
     patch "/chores/completions/#{completion.id}",
-      params: { chore_completion: { completed_at: new_time.iso8601, note: "moved" } }.to_json,
+      params:  { chore_completion: { completed_at: new_time.iso8601, note: "moved" } }.to_json,
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
     expect(response).to have_http_status(:ok)
     completion.reload
@@ -315,7 +423,7 @@ RSpec.describe "Chores", type: :request do
     create(:chore_withdrawal, user: user, amount_pebbles: 9, note: "big w")
 
     get "/chores/history.json", params: { q: "amount>5" }, headers: { "Accept" => "application/json" }
-    body = JSON.parse(response.body)
+    body = response.parsed_body
     amounts = body["entries"].map { |e| e["amount_pebbles"] || e["paid_pebbles"] }.compact.uniq.sort
     expect(amounts).to eq([9, 10])
   end
@@ -323,18 +431,22 @@ RSpec.describe "Chores", type: :request do
   it "GET /chores/history.json filters with .query (note + chore name + time)" do
     cat = create(:chore, created_by_user: user, name: "Brush kitty")
     dog = create(:chore, created_by_user: user, name: "Feed dog")
-    create(:chore_completion, chore: cat, user: user, note: "morning",
-      completed_at: 2.days.ago, day_key: 2.days.ago.to_date)
-    create(:chore_completion, chore: dog, user: user, note: "evening",
-      completed_at: 1.day.ago, day_key: 1.day.ago.to_date)
+    create(
+      :chore_completion, chore: cat, user: user, note: "morning",
+      completed_at: 2.days.ago, day_key: 2.days.ago.to_date
+    )
+    create(
+      :chore_completion, chore: dog, user: user, note: "evening",
+      completed_at: 1.day.ago, day_key: 1.day.ago.to_date
+    )
 
     get "/chores/history.json", params: { q: "kitty" }, headers: { "Accept" => "application/json" }
-    names = JSON.parse(response.body)["entries"].map { |e| e.dig("chore", "name") }
+    names = response.parsed_body["entries"].map { |e| e.dig("chore", "name") }
     expect(names).to include("Brush kitty")
     expect(names).not_to include("Feed dog")
 
     get "/chores/history.json", params: { q: "notes:evening" }, headers: { "Accept" => "application/json" }
-    names = JSON.parse(response.body)["entries"].map { |e| e.dig("chore", "name") }
+    names = response.parsed_body["entries"].map { |e| e.dig("chore", "name") }
     expect(names).to include("Feed dog")
     expect(names).not_to include("Brush kitty")
   end
@@ -342,11 +454,13 @@ RSpec.describe "Chores", type: :request do
   it "GET /chores/history.json reports per-page counts, page, window, total" do
     chore = create(:chore, created_by_user: user, name: "Walk")
     60.times { |i|
-      create(:chore_completion, chore: chore, user: user,
-        completed_at: i.hours.ago, day_key: ChoreDay.current(user))
+      create(
+        :chore_completion, chore: chore, user: user,
+        completed_at: i.hours.ago, day_key: ChoreDay.current(user)
+      )
     }
     get "/chores/history.json", headers: { "Accept" => "application/json" }
-    body = JSON.parse(response.body)
+    body = response.parsed_body
     expect(body["page"]).to eq(1)
     expect(body["total_pages"]).to eq(2)
     expect(body["page_completions"]).to eq(50)
@@ -358,24 +472,28 @@ RSpec.describe "Chores", type: :request do
 
   it "GET /chores/history.json mixes completions + withdrawals newest first" do
     chore = create(:chore, created_by_user: user, name: "Mix")
-    create(:chore_completion, chore: chore, user: user, paid_pebbles: 3,
-      completed_at: 2.hours.ago)
+    create(
+      :chore_completion, chore: chore, user: user, paid_pebbles: 3,
+      completed_at: 2.hours.ago
+    )
     create(:chore_withdrawal, user: user, amount_pebbles: 2, note: "candy")
     get "/chores/history.json", headers: { "Accept" => "application/json" }
-    kinds = JSON.parse(response.body)["entries"].map { |e| e["kind"] }
+    kinds = response.parsed_body["entries"].pluck("kind")
     expect(kinds).to eq(["withdrawal", "completion"])
   end
 
   it "GET /chores/recent_history returns the latest 10 mixed entries" do
     chore = create(:chore, created_by_user: user, name: "Walk")
     12.times { |i|
-      create(:chore_completion, chore: chore, user: user, paid_pebbles: 1,
-        completed_at: (i + 1).hours.ago, day_key: ChoreDay.current(user))
+      create(
+        :chore_completion, chore: chore, user: user, paid_pebbles: 1,
+        completed_at: (i + 1).hours.ago, day_key: ChoreDay.current(user)
+      )
     }
     create(:chore_withdrawal, user: user, amount_pebbles: 3, note: "snack")
     get "/chores/recent_history", headers: { "Accept" => "application/json" }
     expect(response).to have_http_status(:ok)
-    body = JSON.parse(response.body)
+    body = response.parsed_body
     expect(body["entries"].size).to eq(10)
     # Newest = the just-created withdrawal.
     expect(body["entries"].first["kind"]).to eq("withdrawal")
@@ -395,6 +513,7 @@ RSpec.describe "Chores", type: :request do
 
   describe "today_earnings is always returned" do
     let(:chore) { create(:chore, created_by_user: user, reward_pebbles: 7) }
+
     before do
       # Two paid completions today + one paid yesterday — today_earnings
       # should be 14 regardless of lifetime balance.
@@ -406,7 +525,7 @@ RSpec.describe "Chores", type: :request do
     it "POST /chores/items/:id/completion" do
       post "/chores/items/#{chore.id}/completion",
         headers: { "Accept" => "application/json" }
-      body = JSON.parse(response.body)
+      body = response.parsed_body
       expect(body).to have_key("today_earnings")
       expect(body["today_earnings"]).to eq(user.reload.chore_completions.where(day_key: ChoreDay.current(user)).sum(:paid_pebbles))
       expect(body["today_earnings"]).not_to eq(body["balance"])
@@ -415,9 +534,9 @@ RSpec.describe "Chores", type: :request do
     it "PATCH /chores/completions/:id" do
       completion = user.chore_completions.first
       patch "/chores/completions/#{completion.id}",
-        params: { chore_completion: { note: "edit" } }.to_json,
+        params:  { chore_completion: { note: "edit" } }.to_json,
         headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
-      body = JSON.parse(response.body)
+      body = response.parsed_body
       expect(body).to have_key("today_earnings")
     end
 
@@ -425,7 +544,7 @@ RSpec.describe "Chores", type: :request do
       completion = user.chore_completions.where(day_key: ChoreDay.current(user)).first
       pre = user.chore_completions.where(day_key: ChoreDay.current(user)).sum(:paid_pebbles)
       delete "/chores/completions/#{completion.id}", headers: { "Accept" => "application/json" }
-      body = JSON.parse(response.body)
+      body = response.parsed_body
       expect(body).to have_key("today_earnings")
       # Today's pill drops by exactly the paid amount of the deleted row.
       expect(body["today_earnings"]).to eq(pre - completion.paid_pebbles)
@@ -434,9 +553,9 @@ RSpec.describe "Chores", type: :request do
     it "POST /chores/withdrawals (lifetime moves, today_earnings does not)" do
       pre_today = user.chore_completions.where(day_key: ChoreDay.current(user)).sum(:paid_pebbles)
       post "/chores/withdrawals",
-        params: { chore_withdrawal: { amount_pebbles: 1, note: "snack" } }.to_json,
+        params:  { chore_withdrawal: { amount_pebbles: 1, note: "snack" } }.to_json,
         headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
-      body = JSON.parse(response.body)
+      body = response.parsed_body
       expect(body).to have_key("today_earnings")
       expect(body["today_earnings"]).to eq(pre_today)
     end
@@ -445,20 +564,20 @@ RSpec.describe "Chores", type: :request do
       withdrawal = create(:chore_withdrawal, user: user, amount_pebbles: 5, note: "n")
       pre_today = user.chore_completions.where(day_key: ChoreDay.current(user)).sum(:paid_pebbles)
       delete "/chores/withdrawals/#{withdrawal.id}", headers: { "Accept" => "application/json" }
-      body = JSON.parse(response.body)
+      body = response.parsed_body
       expect(body).to have_key("today_earnings")
       expect(body["today_earnings"]).to eq(pre_today)
     end
 
     it "GET /chores/history.json" do
       get "/chores/history.json", headers: { "Accept" => "application/json" }
-      body = JSON.parse(response.body)
+      body = response.parsed_body
       expect(body).to have_key("today_earnings")
     end
 
     it "GET /chores/recent_history" do
       get "/chores/recent_history", headers: { "Accept" => "application/json" }
-      body = JSON.parse(response.body)
+      body = response.parsed_body
       expect(body).to have_key("today_earnings")
     end
   end
@@ -480,7 +599,7 @@ RSpec.describe "Chores", type: :request do
     # "tomorrow."
     create(:chore, created_by_user: user, one_off: true, name: "today only")
     get "/chores/sync", headers: { "Accept" => "application/json" }
-    body = JSON.parse(response.body)
+    body = response.parsed_body
     today = ChoreDay.current(user)
     expected_keys = ((today + 1)..(today + 7)).map(&:iso8601)
     expect(body["lookahead"].keys.sort).to eq(expected_keys.sort)
@@ -489,19 +608,22 @@ RSpec.describe "Chores", type: :request do
 
   describe "pebble transfers" do
     let(:recipient) { create(:user) }
+
     before do
       share_chore_household!(user, recipient)
       chore = create(:chore, created_by_user: user, reward_pebbles: 40)
-      create(:chore_completion, chore: chore, user: user, paid_pebbles: 40, base_pebbles: 40,
-             payout_skipped: false, day_key: ChoreDay.current(user) - 1)
+      create(
+        :chore_completion, chore: chore, user: user, paid_pebbles: 40, base_pebbles: 40,
+        payout_skipped: false, day_key: ChoreDay.current(user) - 1
+      )
     end
 
     it "POST /chores/transfers creates a transfer and moves balance both sides" do
       post "/chores/transfers",
-        params: { chore_transfer: { to_user_id: recipient.id, amount_pebbles: 15, note: "lunch" } }.to_json,
+        params:  { chore_transfer: { to_user_id: recipient.id, amount_pebbles: 15, note: "lunch" } }.to_json,
         headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
       expect(response).to have_http_status(:created)
-      body = JSON.parse(response.body)
+      body = response.parsed_body
       expect(body["amount_pebbles"]).to eq(15)
       expect(body["balance"]).to eq(25)
       expect(body).to have_key("today_earnings")
@@ -511,16 +633,16 @@ RSpec.describe "Chores", type: :request do
 
     it "rejects a transfer exceeding sender balance" do
       post "/chores/transfers",
-        params: { chore_transfer: { to_user_id: recipient.id, amount_pebbles: 999 } }.to_json,
+        params:  { chore_transfer: { to_user_id: recipient.id, amount_pebbles: 999 } }.to_json,
         headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
       expect(response).to have_http_status(:unprocessable_entity)
-      expect(JSON.parse(response.body)["errors"]).to include(/exceeds your available balance/)
+      expect(response.parsed_body["errors"]).to include(/exceeds your available balance/)
     end
 
     it "rejects a transfer to a non-household user" do
       stranger = create(:user)
       post "/chores/transfers",
-        params: { chore_transfer: { to_user_id: stranger.id, amount_pebbles: 5 } }.to_json,
+        params:  { chore_transfer: { to_user_id: stranger.id, amount_pebbles: 5 } }.to_json,
         headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
       expect(response).to have_http_status(:unprocessable_entity)
     end
@@ -529,9 +651,9 @@ RSpec.describe "Chores", type: :request do
       create(:chore_transfer, from_user: user, to_user: recipient, amount_pebbles: 7, note: "n")
       create(:chore_transfer, from_user: recipient, to_user: user, amount_pebbles: 3, note: nil)
       get "/chores/history.json", headers: { "Accept" => "application/json" }
-      body = JSON.parse(response.body)
+      body = response.parsed_body
       transfers = body["entries"].select { |e| e["kind"] == "transfer" }
-      expect(transfers.map { |t| t["direction"] }.sort).to eq(%w[incoming outgoing])
+      expect(transfers.pluck("direction").sort).to eq(%w[incoming outgoing])
       outgoing = transfers.find { |t| t["direction"] == "outgoing" }
       expect(outgoing["counterparty_username"]).to eq(recipient.username)
       expect(outgoing["amount_pebbles"]).to eq(7)
@@ -542,15 +664,15 @@ RSpec.describe "Chores", type: :request do
     it "surfaces transfers in /chores/recent_history" do
       create(:chore_transfer, from_user: user, to_user: recipient, amount_pebbles: 4, note: "tip")
       get "/chores/recent_history", headers: { "Accept" => "application/json" }
-      body = JSON.parse(response.body)
-      kinds = body["entries"].map { |e| e["kind"] }
+      body = response.parsed_body
+      kinds = body["entries"].pluck("kind")
       expect(kinds).to include("transfer")
     end
 
     it "PATCH /chores/transfers/:id updates amount + note (sender only)" do
       transfer = create(:chore_transfer, from_user: user, to_user: recipient, amount_pebbles: 5, note: "old")
       patch "/chores/transfers/#{transfer.id}",
-        params: { chore_transfer: { amount_pebbles: 8, note: "new" } }.to_json,
+        params:  { chore_transfer: { amount_pebbles: 8, note: "new" } }.to_json,
         headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
       expect(response).to have_http_status(:ok)
       transfer.reload
@@ -571,11 +693,13 @@ RSpec.describe "Chores", type: :request do
     it "PATCH/DELETE /chores/transfers/:id is forbidden for non-sender" do
       # Fund the recipient so they can BE a sender on a transfer back.
       ch = create(:chore, created_by_user: recipient, reward_pebbles: 10)
-      create(:chore_completion, chore: ch, user: recipient, paid_pebbles: 10, base_pebbles: 10,
-             payout_skipped: false, day_key: ChoreDay.current(recipient) - 1)
+      create(
+        :chore_completion, chore: ch, user: recipient, paid_pebbles: 10, base_pebbles: 10,
+        payout_skipped: false, day_key: ChoreDay.current(recipient) - 1
+      )
       transfer = create(:chore_transfer, from_user: recipient, to_user: user, amount_pebbles: 3)
       patch "/chores/transfers/#{transfer.id}",
-        params: { chore_transfer: { amount_pebbles: 99 } }.to_json,
+        params:  { chore_transfer: { amount_pebbles: 99 } }.to_json,
         headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
       expect(response).to have_http_status(:not_found)
       delete "/chores/transfers/#{transfer.id}", headers: { "Accept" => "application/json" }
@@ -586,7 +710,7 @@ RSpec.describe "Chores", type: :request do
   it "PATCH /chores/withdrawals/:id updates amount + note" do
     withdrawal = create(:chore_withdrawal, user: user, amount_pebbles: 5, note: "x")
     patch "/chores/withdrawals/#{withdrawal.id}",
-      params: { chore_withdrawal: { amount_pebbles: 7, note: "y" } }.to_json,
+      params:  { chore_withdrawal: { amount_pebbles: 7, note: "y" } }.to_json,
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
     expect(response).to have_http_status(:ok)
     withdrawal.reload
@@ -598,13 +722,13 @@ RSpec.describe "Chores", type: :request do
     chore = create(:chore, created_by_user: user, reward_pebbles: 5)
     when_at = Time.current.change(usec: 0) - 30.minutes
     post "/chores/items/#{chore.id}/completion",
-      params: {
+      params:  {
         client_completed_at: when_at.iso8601,
-        chore_completion: {
-          note: "from queue",
-          hot_multiplier: 2.0,
+        chore_completion:    {
+          note:              "from queue",
+          hot_multiplier:    2.0,
           streak_multiplier: 2.5,
-          hot_pick: true,
+          hot_pick:          true,
         },
       }.to_json,
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
@@ -631,7 +755,7 @@ RSpec.describe "Chores", type: :request do
     chore = create(:chore, created_by_user: user, reward_pebbles: 5)
     when_at = Time.current.change(usec: 0) - 30.minutes
     post "/chores/items/#{chore.id}/completion",
-      params: { client_completed_at: when_at.iso8601 }.to_json,
+      params:  { client_completed_at: when_at.iso8601 }.to_json,
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
     expect(response).to have_http_status(:created)
     expect(user.chore_completions.last.completed_at.to_i).to eq(when_at.to_i)
@@ -641,7 +765,7 @@ RSpec.describe "Chores", type: :request do
     chore = create(:chore, created_by_user: user, reward_pebbles: 5)
     long_ago = 90.days.ago.change(usec: 0)
     post "/chores/items/#{chore.id}/completion",
-      params: { client_completed_at: long_ago.iso8601 }.to_json,
+      params:  { client_completed_at: long_ago.iso8601 }.to_json,
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
     expect(response).to have_http_status(:created)
     expect(user.chore_completions.last.completed_at.to_i).to eq(long_ago.to_i)
@@ -651,7 +775,7 @@ RSpec.describe "Chores", type: :request do
     create(:chore_completion, user: user, paid_pebbles: 7)
     get "/chores/csrf", headers: { "Accept" => "application/json" }
     expect(response).to have_http_status(:ok)
-    body = JSON.parse(response.body)
+    body = response.parsed_body
     expect(body["token"]).to be_present
     expect(body["balance"]).to eq(7)
   end
@@ -661,7 +785,7 @@ RSpec.describe "Chores", type: :request do
     create(:chore_completion, chore: chore, user: user, paid_pebbles: 4)
     get "/chores/items/#{chore.id}/state", headers: { "Accept" => "application/json" }
     expect(response).to have_http_status(:ok)
-    body = JSON.parse(response.body)
+    body = response.parsed_body
     expect(body["chore"]["id"]).to eq(chore.id)
     expect(body["chore"]["done_count_today"]).to eq(1)
     expect(body["chore"]["last_completed_at"]).to be_present
@@ -670,10 +794,12 @@ RSpec.describe "Chores", type: :request do
   end
 
   it "editing a completion today → yesterday recomputes cooldown, today_visible, streak, sync visibility" do
-    chore = create(:chore, created_by_user: user, name: "Spray", reward_pebbles: 3,
-                           threshold_seconds: 6 * 3600,
-                           show_on_daily_view: :when_available,
-                           recurrence: { freq: :never })
+    chore = create(
+      :chore, created_by_user: user, name: "Spray", reward_pebbles: 3,
+      threshold_seconds: 6 * 3600,
+      show_on_daily_view: :when_available,
+      recurrence: { freq: :never }
+    )
     travel_to Time.zone.local(2026, 4, 15, 14, 0, 0) do
       result = ChoreCompleter.new(chore, user).call
       completion = result.completion
@@ -685,15 +811,15 @@ RSpec.describe "Chores", type: :request do
 
       since_ts = Time.current
       travel 30.minutes
-      yesterday = Time.current - 1.day
+      yesterday = 1.day.ago
 
       patch "/chores/completions/#{completion.id}",
-        params: { chore_completion: { completed_at: yesterday.iso8601 } }.to_json,
+        params:  { chore_completion: { completed_at: yesterday.iso8601 } }.to_json,
         headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
       expect(response).to have_http_status(:ok)
 
       # Response payload's canonical chore JSON reflects the edit.
-      body = JSON.parse(response.body)
+      body = response.parsed_body
       expect(body["chore"]["done_count_today"]).to eq(0)
       # Cooldown elapsed (yesterday 2pm + 6h was long ago) — for
       # `when_available` the card stays today_visible: true.
@@ -707,8 +833,8 @@ RSpec.describe "Chores", type: :request do
       # via updated_at, not just completed_at.
       get "/chores/sync?since=#{since_ts.iso8601}",
         headers: { "Accept" => "application/json" }
-      sync = JSON.parse(response.body)
-      expect(sync["chores"].map { |c| c["id"] }).to include(chore.id)
+      sync = response.parsed_body
+      expect(sync["chores"].pluck("id")).to include(chore.id)
     end
   end
 
@@ -719,10 +845,10 @@ RSpec.describe "Chores", type: :request do
     untouched_yesterday = create(:chore, created_by_user: user, name: "Untouched")
 
     travel_to Time.zone.local(2026, 4, 15, 12, 0, 0) do
-      get "/chores/sync?since=#{(Time.current - 1.day).iso8601}",
-          headers: { "Accept" => "application/json" }
-      body = JSON.parse(response.body)
-      ids = body["chores"].map { |c| c["id"] }
+      get "/chores/sync?since=#{(1.day.ago).iso8601}",
+        headers: { "Accept" => "application/json" }
+      body = response.parsed_body
+      ids = body["chores"].pluck("id")
       # Without the cross-day fix, the untouched chore would be
       # filtered out (no updated_at change, no completions in window).
       expect(ids).to include(untouched_yesterday.id)
@@ -736,10 +862,10 @@ RSpec.describe "Chores", type: :request do
 
     get "/chores/sync", headers: { "Accept" => "application/json" }
     expect(response).to have_http_status(:ok)
-    body = JSON.parse(response.body)
+    body = response.parsed_body
     expect(body["server_ts"]).to be_present
     expect(body["balance"]).to be_a(Integer)
-    ids = body["chores"].map { |c| c["id"] }
+    ids = body["chores"].pluck("id")
     expect(ids).to include(keeper.id)
     expect(body["archived_chore_ids"]).to include(archived.id)
     keeper_payload = body["chores"].find { |c| c["id"] == keeper.id }
@@ -749,7 +875,7 @@ RSpec.describe "Chores", type: :request do
 
   it "POST /chores/items accepts day-reset cooldown sentinel (-1)" do
     post "/chores/items",
-      params: { chore: { name: "Brush", reward_pebbles: 1, threshold_seconds: -1 } }.to_json,
+      params:  { chore: { name: "Brush", reward_pebbles: 1, threshold_seconds: -1 } }.to_json,
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
     expect(response).to have_http_status(:created)
     chore = Chore.order(:id).last
@@ -762,13 +888,15 @@ RSpec.describe "Chores", type: :request do
     # split the test's "same chore-day" assumption.
     travel_to Time.zone.local(2026, 4, 15, 10, 0, 0) do
       chore = create(:chore, created_by_user: user, reward_pebbles: 5, threshold_seconds: -1)
-      first  = ChoreCompleter.new(chore, user, at: Time.current).call
+      first = ChoreCompleter.new(chore, user, at: Time.current).call
       expect(first.completion.payout_skipped).to be(false)
-      second = ChoreCompleter.new(chore, user, at: Time.current + 5.hours).call
+      second = ChoreCompleter.new(chore, user, at: 5.hours.from_now).call
       expect(second.completion.payout_skipped).to be(true)
       # Different chore-day → cooldown elapsed.
-      expect(chore.cooldown_elapsed?(user, last_completion: second.completion,
-                                     now: Time.current + 26.hours)).to be(true)
+      expect(chore.cooldown_elapsed?(
+               user, last_completion: second.completion,
+        now: 26.hours.from_now
+      )).to be(true)
     end
   end
 
@@ -789,12 +917,12 @@ RSpec.describe "Chores", type: :request do
     c = create(:chore, created_by_user: user, name: "Charlie")
 
     patch "/chores/order",
-      params: { ids: [c.id, a.id, b.id] }.to_json,
+      params:  { ids: [c.id, a.id, b.id] }.to_json,
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
     expect(response).to have_http_status(:ok)
 
     get chores_path
-    names = bootstrap_json["chores"].map { |c| c["name"] }
+    names = bootstrap_json["chores"].pluck("name")
     expect(names.index("Charlie")).to be < names.index("Alpha")
     expect(names.index("Alpha")).to be < names.index("Bravo")
   end
@@ -803,11 +931,11 @@ RSpec.describe "Chores", type: :request do
     a = create(:chore, created_by_user: user, name: "Alpha")
     b = create(:chore, created_by_user: user, name: "Bravo")
     patch "/chores/order",
-      params: { ids: [b.id, a.id] }.to_json,
+      params:  { ids: [b.id, a.id] }.to_json,
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
     create(:chore, created_by_user: user, name: "Zulu")
     get chores_path
-    names = bootstrap_json["chores"].map { |c| c["name"] }
+    names = bootstrap_json["chores"].pluck("name")
     expect(names.index("Bravo")).to be < names.index("Alpha")
     expect(names.index("Alpha")).to be < names.index("Zulu")
   end
@@ -817,10 +945,12 @@ RSpec.describe "Chores", type: :request do
     # but the frozen-layout rule wins: any chore with completions today
     # stays on the list. Verified through the bootstrap JSON's
     # `today_visible` flag.
-    chore = create(:chore, created_by_user: user,
+    chore = create(
+      :chore, created_by_user: user,
       reward_pebbles: 3, threshold_seconds: 6 * 3600,
       show_on_daily_view: :when_available,
-      recurrence: { freq: :never })
+      recurrence: { freq: :never }
+    )
     ChoreCompleter.new(chore, user).call
     get chores_today_path
     expect(response).to have_http_status(:ok)

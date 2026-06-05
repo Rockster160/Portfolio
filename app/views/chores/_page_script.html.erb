@@ -350,7 +350,12 @@
       `<span class="count-badge" data-count-badge>×${c.done_count_today}</span>` : "";
     const cd = hasCooldown(c) ?
       `<span class="circle-countdown" data-circle-countdown data-cooldown-end="${c.cooldown_kind === "day_reset" ? "day-end" : ""}"></span>` : "";
-    const actorAttr = c.last_actor_username ? ` data-actor="${esc(c.last_actor_username)}"` : "";
+    // The most-recent completion drives the ring color. An anonymous
+    // completion paints the ring grey (work was done, but no household
+    // member gets credit).
+    const actorAttr = c.last_actor_anonymous
+      ? ` data-actor-anonymous="true"`
+      : (c.last_actor_username ? ` data-actor="${esc(c.last_actor_username)}"` : "");
     return `
       <div class="chore-card${doneClass}${hotClass}" data-chore-id="${c.id}"${actorAttr}>
         ${hot}
@@ -385,7 +390,12 @@
     ` : "";
     const cd = hasCooldown(c) ?
       `<span class="circle-countdown" data-circle-countdown data-cooldown-end="${c.cooldown_kind === "day_reset" ? "day-end" : ""}"></span>` : "";
-    const actorAttr = c.last_actor_username ? ` data-actor="${esc(c.last_actor_username)}"` : "";
+    // The most-recent completion drives the ring color. An anonymous
+    // completion paints the ring grey (work was done, but no household
+    // member gets credit).
+    const actorAttr = c.last_actor_anonymous
+      ? ` data-actor-anonymous="true"`
+      : (c.last_actor_username ? ` data-actor="${esc(c.last_actor_username)}"` : "");
     return `
       <div class="chore-circle${doneClass}${hotClass}" data-chore-id="${c.id}"${actorAttr}>
         ${hot}
@@ -436,8 +446,14 @@
     el.dataset.choreStartsOn = c.starts_on || "";
     el.dataset.choreRecurrence = JSON.stringify(c.recurrence || {});
     el.dataset.choreAliases = (c.aliases || []).join("|");
-    if (c.last_actor_username) el.dataset.actor = c.last_actor_username;
-    else delete el.dataset.actor;
+    if (c.last_actor_anonymous) {
+      el.dataset.actorAnonymous = "true";
+      delete el.dataset.actor;
+    } else {
+      delete el.dataset.actorAnonymous;
+      if (c.last_actor_username) el.dataset.actor = c.last_actor_username;
+      else delete el.dataset.actor;
+    }
   }
 
   // Done-ring animation bookkeeping. The keyframe runs on every fresh
@@ -1059,6 +1075,266 @@
     });
   }
 
+  // Anonymous completion button (modal head). Opens the sub-modal
+  // for timestamp + note. Visibility is wired in refreshEditModalHeadActions.
+  function bindEditModalAnonymousComplete() {
+    const btn = document.querySelector("[data-edit-anonymous-complete]");
+    if (!btn) return;
+    btn.addEventListener("click", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = parseInt(currentChoreId, 10);
+      if (!id) return;
+      openAnonymousModal(id);
+    });
+  }
+
+  const anonymousModal = document.querySelector('[data-anonymous-modal]');
+  const anonymousForm  = anonymousModal?.querySelector('[data-anonymous-form]');
+  const anonymousTitle = anonymousModal?.querySelector('[data-anonymous-title]');
+  let anonymousTargetChoreId = null;
+
+  function openAnonymousModal(choreId) {
+    if (!anonymousModal) return;
+    anonymousTargetChoreId = choreId;
+    const c = ChoreStore.get(choreId);
+    if (anonymousTitle && c) anonymousTitle.textContent = `${c.short_name || c.name} — done by someone else`;
+    // Default the "completed at" field to NOW in local time (the input
+    // expects a YYYY-MM-DDTHH:mm string without timezone).
+    const tsField = anonymousModal.querySelector('[data-anonymous-completed-at]');
+    if (tsField) {
+      const d = new Date();
+      const pad = n => String(n).padStart(2, "0");
+      tsField.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    const noteField = anonymousModal.querySelector('[data-anonymous-note]');
+    if (noteField) noteField.value = "";
+    anonymousModal.classList.remove("hidden");
+  }
+  function closeAnonymousModal() {
+    anonymousModal?.classList.add("hidden");
+    anonymousTargetChoreId = null;
+  }
+  wireModalDismiss(anonymousModal, { onCancel: closeAnonymousModal, onBackdrop: closeAnonymousModal });
+
+  function bindAnonymousCompletionForm() {
+    if (!anonymousForm) return;
+    anonymousForm.addEventListener("submit", async e => {
+      e.preventDefault();
+      const submit = anonymousForm.querySelector('button[type="submit"]');
+      if (submit?.dataset.busy === "1") return;
+      const id = anonymousTargetChoreId;
+      if (!id) { closeAnonymousModal(); return; }
+      const tsStr = anonymousModal.querySelector('[data-anonymous-completed-at]')?.value || "";
+      const note = anonymousModal.querySelector('[data-anonymous-note]')?.value || "";
+      // Parse the local datetime-local string as a local-clock instant
+      // (no implicit UTC interpretation) and serialize to ISO 8601.
+      const dt = tsStr ? new Date(tsStr) : new Date();
+      const iso = dt.toISOString();
+      if (submit) { submit.dataset.busy = "1"; submit.disabled = true; }
+      try {
+        await api(`/chores/items/${id}/anonymous_completion`, "POST", {
+          client_completed_at: iso, note, tab_id: TAB_ID,
+        });
+        flash("Marked done");
+        closeAnonymousModal();
+        dismissEditModalExplicit();
+      } catch (err) {
+        flash("Couldn't save: " + err.message, "error");
+      } finally {
+        if (submit) { delete submit.dataset.busy; submit.disabled = false; }
+      }
+    });
+  }
+
+  // ============================================================
+  // Notification settings (Balance page)
+  // ============================================================
+  // Subscribe / unsubscribe to the chores push channel + per-event
+  // opt-out toggles. The SW is /chores_worker.js (already registered
+  // for the offline shell); push events are handled there.
+  const CHORES_VAPID_PUBLIC_KEY =
+    "BO7gUf6gNtfyxWRaYVjmL38uqi8TGKZZ9Fw7tEKzxCosTAtTERuv2ohHEiNB21CBs7ue5eOWMe2p4jtZjZTTAFU=";
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const raw = window.atob(base64);
+    const out = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  async function getChoresPushSubscription() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return null;
+    const reg = await navigator.serviceWorker.getRegistration("/chores_worker.js")
+      || await navigator.serviceWorker.getRegistration("/chores");
+    if (!reg) return null;
+    return reg.pushManager.getSubscription();
+  }
+
+  async function subscribeChoresPush() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      throw new Error("Push isn't supported in this browser.");
+    }
+    if (Notification.permission === "denied") {
+      throw new Error("Notifications are blocked — enable them in your browser settings.");
+    }
+    const reg = await navigator.serviceWorker.getRegistration("/chores_worker.js")
+      || await navigator.serviceWorker.getRegistration("/chores");
+    if (!reg) throw new Error("Service worker not registered yet — reload and try again.");
+
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") throw new Error("Permission not granted.");
+
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(CHORES_VAPID_PUBLIC_KEY),
+    });
+    const body = sub.toJSON();
+    body.channel = "chores";
+    const res = await fetch("/push_notification_subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", JarvisPushVersion: "2" },
+      body: JSON.stringify(body),
+      credentials: "same-origin",
+    });
+    if (!res.ok) {
+      await sub.unsubscribe();
+      throw new Error("Server refused the subscription.");
+    }
+    return sub;
+  }
+
+  async function unsubscribeChoresPush() {
+    const sub = await getChoresPushSubscription();
+    if (!sub) return;
+    const body = sub.toJSON();
+    body.channel = "chores";
+    await fetch("/push_notification_unsubscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      credentials: "same-origin",
+    }).catch(() => {});
+    await sub.unsubscribe();
+  }
+
+  function bindNotificationSettings() {
+    const modal = document.querySelector("[data-notifications-modal]");
+    const openBtn = document.querySelector("[data-open-notifications]");
+    if (!modal || !openBtn) return;
+    const form = modal.querySelector("[data-notifications-form]");
+    const statusEl = modal.querySelector("[data-notifications-status]");
+    const subscribeBtn = modal.querySelector("[data-notifications-subscribe]");
+    const unsubscribeBtn = modal.querySelector("[data-notifications-unsubscribe]");
+    const kindInputs = Array.from(modal.querySelectorAll("[data-notify-kind]"));
+
+    async function refreshStatus() {
+      if (!("Notification" in window)) {
+        statusEl.textContent = "Push isn't supported in this browser.";
+        subscribeBtn.hidden = true;
+        unsubscribeBtn.hidden = true;
+        return;
+      }
+      const sub = await getChoresPushSubscription();
+      if (sub) {
+        statusEl.textContent = "Notifications are on for this device.";
+        subscribeBtn.hidden = true;
+        unsubscribeBtn.hidden = false;
+      } else if (Notification.permission === "denied") {
+        statusEl.textContent = "Notifications are blocked — enable them in browser settings.";
+        subscribeBtn.hidden = true;
+        unsubscribeBtn.hidden = true;
+      } else {
+        statusEl.textContent = "Notifications are off for this device.";
+        subscribeBtn.hidden = false;
+        unsubscribeBtn.hidden = true;
+      }
+    }
+
+    async function loadPrefs() {
+      try {
+        const res = await api("/chores/notification_preferences", "GET");
+        const prefs = res?.prefs || {};
+        kindInputs.forEach(input => {
+          input.checked = prefs[input.dataset.notifyKind] !== false;
+        });
+      } catch (_err) {
+        // First-load failure (offline, etc.) — fall back to "all on".
+        kindInputs.forEach(input => { input.checked = true; });
+      }
+    }
+
+    openBtn.addEventListener("click", async () => {
+      openModal(modal);
+      await Promise.all([refreshStatus(), loadPrefs()]);
+    });
+
+    subscribeBtn.addEventListener("click", async () => {
+      subscribeBtn.disabled = true;
+      try {
+        await subscribeChoresPush();
+        await refreshStatus();
+        flash("Notifications on");
+      } catch (err) {
+        flash(err.message || "Couldn't enable notifications", "error");
+      } finally {
+        subscribeBtn.disabled = false;
+      }
+    });
+
+    unsubscribeBtn.addEventListener("click", async () => {
+      unsubscribeBtn.disabled = true;
+      try {
+        await unsubscribeChoresPush();
+        await refreshStatus();
+        flash("Notifications off");
+      } catch (err) {
+        flash("Couldn't disable: " + err.message, "error");
+      } finally {
+        unsubscribeBtn.disabled = false;
+      }
+    });
+
+    form.addEventListener("submit", async e => {
+      e.preventDefault();
+      const prefs = {};
+      kindInputs.forEach(input => { prefs[input.dataset.notifyKind] = input.checked; });
+      try {
+        await api("/chores/notification_preferences", "PATCH", { chore_notify_prefs: prefs });
+        closeModal(modal);
+        flash("Saved");
+      } catch (err) {
+        flash("Couldn't save: " + err.message, "error");
+      }
+    });
+
+    wireModalDismiss(modal);
+  }
+
+  // Rotate-hot-pick button (modal head). Only shown when the chore is
+  // a current Hot Pick — refreshEditModalHeadActions handles visibility.
+  function bindEditModalHotRotate() {
+    const btn = document.querySelector("[data-edit-hot-rotate]");
+    if (!btn) return;
+    btn.addEventListener("click", async e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = parseInt(currentChoreId, 10);
+      if (!id || btn.dataset.busy === "1") return;
+      btn.dataset.busy = "1";
+      try {
+        await rotateHotPick(id);
+        // The chore is no longer a hot pick — dismiss the modal so the
+        // user sees the strip update.
+        dismissEditModalExplicit();
+      } finally {
+        delete btn.dataset.busy;
+      }
+    });
+  }
+
   // Sync the modal pin button to the chore the modal is currently
   // editing. Called from openEditModal and from the `dailies` store
   // notify path so a broadcast that lands while the modal is open
@@ -1174,8 +1450,18 @@
       return;
     }
     const rows = entries.map(e => {
-      const actor = e.actor_username ? `<span class="chore-history-actor">${esc(e.actor_username)}</span>` : "";
-      const skipped = e.payout_skipped ? ' <span class="history-tag skipped">skipped</span>' : "";
+      // Anonymous entries paint the grey "Anonymous" pill instead of
+      // the recorder's username — the recorder is just who saved the
+      // row, not who did the work.
+      const actor = e.anonymous
+        ? `<span class="chore-history-actor anonymous">Anonymous</span>`
+        : (e.actor_username ? `<span class="chore-history-actor">${esc(e.actor_username)}</span>` : "");
+      // Inline tag is for the cooldown-blocked "skipped" case only.
+      // Anonymous completions communicate the same intent via the
+      // right-side "Anonymous" actor pill — no second badge needed.
+      const tag = (e.payout_skipped && !e.anonymous)
+        ? ' <span class="history-tag skipped">skipped</span>'
+        : "";
       const mults = [];
       if (e.hot_multiplier != null && e.hot_multiplier > 1) {
         mults.push(`<span class="history-mult hot">Hot ${esc(formatMultiplier(e.hot_multiplier))}×</span>`);
@@ -1185,9 +1471,14 @@
       }
       const multBlock = mults.length ? `<div class="chore-history-mults">${mults.join("")}</div>` : "";
       const note = e.note ? `<div class="chore-history-note">${esc(e.note)}</div>` : "";
+      // Row-level data-actor drives the per-entry ring color. For
+      // anonymous, switch to the same grey treatment cards use.
+      const rowAttr = e.anonymous
+        ? 'data-actor-anonymous="true"'
+        : `data-actor="${esc(e.actor_username || '')}"`;
       return `
-        <div class="chore-history-row" data-actor="${esc(e.actor_username || '')}">
-          <div class="chore-history-when">${esc(e.when_label)}${skipped}</div>
+        <div class="chore-history-row" ${rowAttr}>
+          <div class="chore-history-when">${esc(e.when_label)}${tag}</div>
           <div class="chore-history-paid">${esc(formatCount(e.paid_pebbles))}p</div>
           ${actor}
           ${multBlock}
@@ -1437,6 +1728,31 @@
         scheduleQueueRetry();
       }
     }, queueRetryDelay);
+  }
+
+  // Triggered by the rotate button on the Edit Chore modal head. The
+  // button is only visible when the chore is a current Hot Pick.
+  // Optimistic local removal so the cell disappears immediately; the
+  // Monitor "hot_picks_refreshed" broadcast triggers cold-boot sync
+  // that pulls in the replacement's multiplier.
+  async function rotateHotPick(id) {
+    const cid = parseInt(id, 10);
+    const c = ChoreStore.get(cid);
+    if (!c) return;
+    const prev = c.hot_multiplier;
+    ChoreStore.patch(cid, { hot_multiplier: null });
+    try {
+      await api(`/chores/hot_picks/${cid}/rotate`, "POST", { tab_id: TAB_ID });
+      flash("Swapped");
+    } catch (err) {
+      // On any failure path, restore the optimistic removal so the
+      // user doesn't see the cell vanish in error.
+      ChoreStore.patch(cid, { hot_multiplier: prev });
+      if (err.status === 403) flash("Only household managers can change Hot Picks.", "error");
+      else if (err.status === 404) flash("Already swapped — nothing to do.", "warn");
+      else if (isTransientError(err)) flash("Couldn't swap — try again", "warn");
+      else flash("Couldn't swap: " + err.message, "error");
+    }
   }
 
   async function undoLastCompletion(id) {
@@ -1802,6 +2118,7 @@
       const custom = editForm.querySelector('.reward-custom');
       if (v === "custom") { custom?.classList.remove("hidden"); custom?.focus(); }
       else { custom?.classList.add("hidden"); if (custom) custom.value = v; }
+      updateRewardHint();
     });
     editForm.querySelector('[data-weekday-chips]')?.addEventListener("click", e => {
       const btn = e.target.closest('[data-day]');
@@ -1961,6 +2278,26 @@
       editForm.querySelector('[data-reward-quicks] [data-reward="custom"]')?.classList.add("active");
       const custom = editForm.querySelector('.reward-custom');
       if (custom) { custom.classList.remove("hidden"); custom.value = amount; }
+    }
+    updateRewardHint();
+  }
+
+  // Sync the helper text under the pebble pill row to the active tier.
+  // Reads the description directly off the pill (data-reward-hint), so
+  // there's no JS-side copy of the tier descriptions to drift. For
+  // "?" (custom) the hint is BLANK — the tier descriptions only apply
+  // to the canonical 1/2/3/5/10/15/20 amounts, and a custom value
+  // shouldn't claim any particular meaning. Picking a numeric pill
+  // restores the hint.
+  function updateRewardHint() {
+    const hint = editForm.querySelector('.reward-hint[data-reward-hint]');
+    if (!hint) return;
+    const active = editForm.querySelector('[data-reward-quicks] .pill.active');
+    const v = active?.dataset.reward;
+    if (v === "custom") {
+      hint.textContent = "";
+    } else {
+      hint.textContent = active?.dataset.rewardHint || "";
     }
   }
   function todayIso() {
@@ -2916,6 +3253,16 @@
     });
   })();
 
+  // Show/hide the per-chore action buttons in the modal head (rotate
+  // hot pick + anonymous completion). Both are inapplicable for a
+  // brand-new chore — they only make sense once the chore exists.
+  function refreshEditModalHeadActions(c) {
+    const rotate = editModal?.querySelector('[data-edit-hot-rotate]');
+    const anon = editModal?.querySelector('[data-edit-anonymous-complete]');
+    if (rotate) rotate.hidden = !c || c.hot_multiplier == null;
+    if (anon) anon.hidden = !c;
+  }
+
   function openCreateModal(opts = {}) {
     if (!editModal) return;
     if (modalLockedFor !== "__create__") {
@@ -2933,6 +3280,7 @@
       setCooldownSeconds(0);
       setPillValue("freq", "never");
       setPillValue("show_on_daily_view", "when_scheduled");
+      setPillValue("hot_eligibility", "when_available");
       setPillValue("sharing_mode", "household");
       const oneOffCb = editForm.querySelector('[data-field="one_off"]');
       if (oneOffCb) oneOffCb.checked = !!opts.oneOff;
@@ -2948,6 +3296,7 @@
     // No chore exists yet — nothing to pin to Dailies.
     const createPin = editModal.querySelector('[data-edit-pin-toggle]');
     if (createPin) createPin.hidden = true;
+    refreshEditModalHeadActions(null);
     editForm.querySelector('[data-action="archive"]')?.classList.add("hidden");
     editModal.classList.remove("hidden");
     scrollModalToTop(editModal);
@@ -2969,6 +3318,7 @@
     modalLockedFor = id;
     editModal.querySelector('[data-modal-title]').textContent = "Edit Chore";
     refreshEditModalPin();
+    refreshEditModalHeadActions(c);
     editForm.reset();
     setField("name", c.name);
     setField("short_name", c.short_name === c.name ? "" : c.short_name);
@@ -2983,6 +3333,7 @@
     setPillValue("sharing_mode", c.sharing_mode || "household");
     setField("assigned_to_user_id", c.assigned_to_user_id || "");
     setPillValue("show_on_daily_view", c.show_on_daily_view || "when_scheduled");
+    setPillValue("hot_eligibility", c.hot_eligibility || "when_available");
     setCooldownSeconds(c.threshold_seconds || 0);
     setField("starts_on", c.starts_on || "");
     const rec = c.recurrence || {};
@@ -3150,6 +3501,7 @@
         one_off: oneOff,
         starts_on: getField("starts_on") || null,
         show_on_daily_view: getField("show_on_daily_view") || "when_scheduled",
+        hot_eligibility: getField("hot_eligibility") || "when_available",
         sharing_mode: sharingMode,
         assigned_to_user_id: getField("assigned_to_user_id") || null,
         aliases: (getField("aliases_csv") || "").split(",").map(s => s.trim()).filter(Boolean),
@@ -4079,6 +4431,10 @@
   }
   bindCardClicks();
   bindEditModalPin();
+  bindEditModalHotRotate();
+  bindEditModalAnonymousComplete();
+  bindAnonymousCompletionForm();
+  bindNotificationSettings();
   bindDailiesSortable();
   startTicker();
   // Day rollover watcher: a tab left open across 4am needs a fresh

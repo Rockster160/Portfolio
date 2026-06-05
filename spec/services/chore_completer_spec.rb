@@ -12,12 +12,13 @@ RSpec.describe ChoreCompleter do
 
   describe "format_seconds (no decimals, two-unit)" do
     let(:completer) { described_class.new(create(:chore, created_by_user: user), user) }
+
     it "formats common durations without decimals" do
       expect(completer.send(:format_seconds, 30)).to eq("<1m")
       expect(completer.send(:format_seconds, 125)).to eq("2m")
       expect(completer.send(:format_seconds, 5421)).to eq("1h 30m")
       expect(completer.send(:format_seconds, 3 * 86_400)).to eq("3d")
-      expect(completer.send(:format_seconds, 3 * 86_400 + 3700)).to eq("3d 1h")
+      expect(completer.send(:format_seconds, (3 * 86_400) + 3700)).to eq("3d 1h")
       expect(completer.send(:format_seconds, 72 * 3600)).to eq("3d")
     end
   end
@@ -78,11 +79,13 @@ RSpec.describe ChoreCompleter do
 
   it "applies daily_pebbles streak bonus once threshold passed" do
     chore = create(:chore, created_by_user: user, reward_pebbles: 10)
-    create(:chore_streak_bonus,
+    create(
+      :chore_streak_bonus,
       user:   user,
       chore:  nil,
       kind:   :daily_pebbles,
-      config: { "levels" => [{ "threshold" => 5, "multiplier" => 2 }] })
+      config: { "levels" => [{ "threshold" => 5, "multiplier" => 2 }] },
+    )
     # First call earns 10 — the threshold for the bonus reads "pebbles
     # earned today BEFORE this completion", so the first call pays
     # straight 10. Second call: today's total now 10 ≥ 5, so 2× → 20.
@@ -95,8 +98,10 @@ RSpec.describe ChoreCompleter do
   describe "per-chore streak bonus scoping" do
     let(:acnh)  { create(:chore, created_by_user: user, name: "ACNH Chores", reward_pebbles: 1) }
     let(:other) { create(:chore, created_by_user: user, name: "Vitamins",    reward_pebbles: 1) }
+
     before do
-      create(:chore_streak_bonus,
+      create(
+        :chore_streak_bonus,
         user:   user,
         chore:  acnh,
         kind:   :chore_streak,
@@ -106,7 +111,8 @@ RSpec.describe ChoreCompleter do
           { "threshold" => 3, "multiplier" => 3 },
           { "threshold" => 4, "multiplier" => 4 },
           { "threshold" => 5, "multiplier" => 5 },
-        ] })
+        ] },
+      )
     end
 
     it "applies the bonus when completing its chore" do
@@ -140,11 +146,13 @@ RSpec.describe ChoreCompleter do
       water  = create(:chore, created_by_user: user, name: "Water",  reward_pebbles: 10)
       dishes = create(:chore, created_by_user: user, name: "Dishes", reward_pebbles: 10)
       # Bonus has no chore_id — pebble-threshold kinds apply on any completion.
-      create(:chore_streak_bonus,
+      create(
+        :chore_streak_bonus,
         user:   user,
         chore:  nil,
         kind:   :daily_pebbles,
-        config: { "levels" => [{ "threshold" => 5, "multiplier" => 2 }] })
+        config: { "levels" => [{ "threshold" => 5, "multiplier" => 2 }] },
+      )
       described_class.new(water, user).call # raises today total to 10
       after = described_class.new(dishes, user).call
       expect(after.completion.paid_pebbles).to eq(20)
@@ -154,9 +162,11 @@ RSpec.describe ChoreCompleter do
   describe "additive streak bonus_pebbles" do
     it "adds the level's bonus_pebbles on top of the multiplied base" do
       chore = create(:chore, created_by_user: user, reward_pebbles: 10)
-      create(:chore_streak_bonus,
+      create(
+        :chore_streak_bonus,
         user: user, chore: chore, kind: :chore_streak,
-        config: { "levels" => [{ "threshold" => 1, "multiplier" => 2, "bonus_pebbles" => 3 }] })
+        config: { "levels" => [{ "threshold" => 1, "multiplier" => 2, "bonus_pebbles" => 3 }] }
+      )
 
       result = described_class.new(chore, user).call
       expect(result.completion.paid_pebbles).to eq(23) # 10 * 2 + 3
@@ -167,12 +177,16 @@ RSpec.describe ChoreCompleter do
 
     it "treats bonuses additively across multiple active streak bonuses" do
       chore = create(:chore, created_by_user: user, reward_pebbles: 4)
-      create(:chore_streak_bonus,
+      create(
+        :chore_streak_bonus,
         user: user, chore: chore, kind: :chore_streak,
-        config: { "levels" => [{ "threshold" => 1, "multiplier" => 1, "bonus_pebbles" => 2 }] })
-      create(:chore_streak_bonus,
+        config: { "levels" => [{ "threshold" => 1, "multiplier" => 1, "bonus_pebbles" => 2 }] }
+      )
+      create(
+        :chore_streak_bonus,
         user: user, chore: nil, kind: :daily_pebbles,
-        config: { "levels" => [{ "threshold" => 0, "multiplier" => 1, "bonus_pebbles" => 5 }] })
+        config: { "levels" => [{ "threshold" => 0, "multiplier" => 1, "bonus_pebbles" => 5 }] }
+      )
 
       result = described_class.new(chore, user).call
       expect(result.completion.paid_pebbles).to eq(11) # 4 + 2 + 5
@@ -185,11 +199,13 @@ RSpec.describe ChoreCompleter do
 
     it "applies a streak bonus configured at the household level" do
       shared_chore = create(:chore, created_by_user: user, chore_household: household, reward_pebbles: 10)
-      create(:chore_streak_bonus,
+      create(
+        :chore_streak_bonus,
         chore_household: household,
         chore:           nil,
         kind:            :daily_pebbles,
-        config:          { "levels" => [{ "threshold" => 0, "multiplier" => 2 }] })
+        config:          { "levels" => [{ "threshold" => 0, "multiplier" => 2 }] },
+      )
 
       result = described_class.new(shared_chore, user).call
       expect(result.completion.paid_pebbles).to eq(20)
@@ -198,11 +214,11 @@ RSpec.describe ChoreCompleter do
     it "achieves a total_completions goal the moment the completion crosses the target" do
       chore = create(:chore, created_by_user: user, reward_pebbles: 1)
       goal = ChoreGoal.create!(
-        user:         user,
-        name:         "First completion",
-        kind:         :total_completions,
-        scope_mode:   :cumulative,
-        target_value: 1,
+        user:            user,
+        name:            "First completion",
+        kind:            :total_completions,
+        scope_mode:      :cumulative,
+        target_value:    1,
         awarded_pebbles: 7,
       )
       result = described_class.new(chore, user).call

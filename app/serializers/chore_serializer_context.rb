@@ -53,6 +53,11 @@ class ChoreSerializerContext
 
     @completion_actor_by_chore = bulk_last_actor(@household_chore_ids, household_user_ids)
 
+    # done_count_today is the visible "x of n done" stat — ALL
+    # completions, including ones recorded as "done by someone
+    # outside the household", count here so the card reads as done.
+    # The grey-ring treatment (last_actor_anonymous) is what tells
+    # the user nobody in the household got credit.
     @completions_today = ChoreCompletion
       .where(day_key: day, chore_id: @personal_chore_ids, user_id: viewer.id)
       .group(:chore_id).count
@@ -61,12 +66,13 @@ class ChoreSerializerContext
           .where(day_key: day, chore_id: @household_chore_ids, user_id: household_user_ids)
           .group(:chore_id).count,
       )
-
-    @completion_days_by_chore = ChoreCompletion
-      .where(user_id: viewer.id, chore_id: @chore_ids, day_key: (day - 14)..day)
-      .distinct.pluck(:chore_id, :day_key)
-      .group_by(&:first)
-      .transform_values { |entries| entries.to_set(&:last) }
+    # Carryover input for today_visible?: was the chore completed
+    # since its last scheduled day? Household chores answer
+    # household-wide; personal chores stay scoped to the viewer.
+    # Anonymous completions count — the work was done.
+    personal_days = bulk_completion_days(@personal_chore_ids, [viewer.id])
+    household_days = bulk_completion_days(@household_chore_ids, household_user_ids)
+    @completion_days_by_chore = personal_days.merge(household_days)
 
     # Same shape, but excluding today — used by the carryover branch
     # of today_visible? so a completion today can't flip the chore
@@ -80,7 +86,7 @@ class ChoreSerializerContext
 
     ChoreCompletion
       .where(user_id: user_ids, chore_id: chore_ids)
-      .select("DISTINCT ON (chore_id) chore_id, user_id, completed_at, payout_skipped, day_key")
+      .select("DISTINCT ON (chore_id) chore_id, user_id, completed_at, payout_skipped, day_key, anonymous")
       .order(:chore_id, completed_at: :desc)
       .index_by(&:chore_id)
   end
@@ -91,7 +97,7 @@ class ChoreSerializerContext
     ChoreCompletion
       .where(user_id: user_ids, chore_id: chore_ids)
       .where(day_key: ...day)
-      .select("DISTINCT ON (chore_id) chore_id, user_id, completed_at, payout_skipped, day_key")
+      .select("DISTINCT ON (chore_id) chore_id, user_id, completed_at, payout_skipped, day_key, anonymous")
       .order(:chore_id, completed_at: :desc)
       .index_by(&:chore_id)
   end
@@ -99,12 +105,25 @@ class ChoreSerializerContext
   def bulk_last_actor(chore_ids, user_ids)
     return {} if chore_ids.empty? || user_ids.empty?
 
-    rows = ChoreCompletion
+    # Anonymous completions intentionally have no actor — exclude them
+    # so the ring color / "completed by" label only reflects the most
+    # recent *credited* completion.
+    rows = ChoreCompletion.credited
       .where(user_id: user_ids, chore_id: chore_ids)
       .select("DISTINCT ON (chore_id) chore_id, user_id")
       .order(:chore_id, completed_at: :desc)
     actor_user_ids = rows.map(&:user_id).uniq
     actors = User.where(id: actor_user_ids).index_by(&:id)
     rows.each_with_object({}) { |r, h| h[r.chore_id] = actors[r.user_id] }
+  end
+
+  def bulk_completion_days(chore_ids, user_ids)
+    return {} if chore_ids.empty? || user_ids.empty?
+
+    ChoreCompletion
+      .where(user_id: user_ids, chore_id: chore_ids, day_key: (day - 14)..day)
+      .distinct.pluck(:chore_id, :day_key)
+      .group_by(&:first)
+      .transform_values { |entries| entries.to_set(&:last) }
   end
 end

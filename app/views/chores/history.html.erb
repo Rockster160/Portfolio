@@ -313,9 +313,14 @@
         ? `<span class="history-mult hot">Hot ${esc(formatMult(entry.hot_multiplier))}×</span>` : "";
       const streakPill = (entry.streak_multiplier > 1)
         ? `<span class="history-mult streak">Streak ${esc(formatMult(entry.streak_multiplier))}×</span>` : "";
-      const amt = entry.payout_skipped
-        ? `<span class="history-amount" style="color:#9CA3AF;">(skipped)</span>`
-        : `<span class="history-amount" style="color:#34D399;">+${formatCount(entry.paid_pebbles)}p</span>`;
+      // "skipped" (cooldown) and "anonymous" (done by someone outside
+      // the household) are distinct states — render them differently
+      // so the user can scan History without having to open each row.
+      const amt = entry.anonymous
+        ? `<span class="history-amount" style="color:#94A3B8;">(anonymous)</span>`
+        : (entry.payout_skipped
+            ? `<span class="history-amount" style="color:#9CA3AF;">(skipped)</span>`
+            : `<span class="history-amount" style="color:#34D399;">+${formatCount(entry.paid_pebbles)}p</span>`);
       return `
         <div class="history-row"
              data-kind="completion"

@@ -57,6 +57,13 @@
   [data-actor="Alchemibluum"] {
     --actor-color: #A082D9;
   }
+  // Anonymous completion: work was done but nobody in the household
+  // gets credit. Ring renders as "done" but in a neutral grey so the
+  // user sees at a glance that the bump in done-state isn't theirs
+  // (or anyone they live with).
+  [data-actor-anonymous="true"] {
+    --actor-color: #94A3B8;
+  }
 
   // Unified page: BOTH `.view-grid` and `.view-today` render together;
   // CSS hides the inactive one. Eliminates the entire class of "make a
@@ -1033,6 +1040,36 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     background: var(--chores-accent, #2563EB) !important;
     color: #FFF !important;
   }
+  // Per-chore head actions (rotate hot pick, anonymous completion).
+  // Same circle treatment as the pin button so the head reads as a
+  // single cluster of round icons. Sit just to the LEFT of the close
+  // button (pushed right by margin-left:auto on the first one).
+  .modal-head .modal-head-action {
+    margin: 0 0 0 6px !important;
+    padding: 0 !important;
+    width: 28px;
+    height: 28px;
+    border: 0 !important;
+    border-radius: 999px !important;
+    background: #11264F !important;
+    color: var(--chores-muted) !important;
+    font-size: 13px !important;
+    line-height: 1 !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 4px #0006;
+    transition:
+      color 0.15s ease,
+      background 0.15s ease,
+      transform 0.1s ease;
+    flex-shrink: 0;
+  }
+  .modal-head .modal-head-action:hover { color: #FFF !important; }
+  .modal-head .modal-head-action:active { transform: scale(0.92); }
+  .modal-head [data-edit-hot-rotate] { color: #F59E0B !important; }
+  .modal-head [data-edit-anonymous-complete] { color: #94A3B8 !important; }
 
   // Dailies container — the whole card is a drag handle (no per-card
   // pin button to filter around any more).
@@ -1396,6 +1433,14 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   .history-tag.skipped {
     background: #1F2A44;
     color: #9CA3AF;
+  }
+  .history-tag.anonymous {
+    background: #334155;
+    color: #CBD5E1;
+  }
+  .chore-history-actor.anonymous {
+    background: #94A3B8;
+    font-style: italic;
   }
   .history-tag.pending {
     background: #F59E0B;
@@ -1953,6 +1998,45 @@ body:has(.env-banner) .chores-page .chores-toolbar {
 
   .chore-form .reward-custom {
     margin-top: 8px;
+  }
+  .chore-form .reward-hint {
+    margin-top: 6px;
+    line-height: 1.4;
+  }
+
+  // Collapsible "Advanced options" group. Default-collapsed; the user
+  // expands it only when they need to tweak the less-common fields,
+  // which keeps the new-chore form at a glance.
+  .chore-form .form-advanced {
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 6px 10px;
+    background: #142239;
+  }
+  .chore-form .form-advanced[open] {
+    padding-bottom: 12px;
+  }
+  .chore-form .form-advanced-summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--chores-text);
+    padding: 6px 0;
+    user-select: none;
+    list-style: none;
+  }
+  .chore-form .form-advanced-summary::-webkit-details-marker { display: none; }
+  .chore-form .form-advanced-summary::before {
+    content: "▸";
+    display: inline-block;
+    margin-right: 8px;
+    transition: transform 0.15s;
+    color: var(--chores-muted);
+  }
+  .chore-form .form-advanced[open] .form-advanced-summary::before {
+    transform: rotate(90deg);
+  }
+  .chore-form .form-advanced .form-section {
+    margin-top: 12px;
   }
 
   // Conditional rows under Repeats / Sharing / Cooldown.

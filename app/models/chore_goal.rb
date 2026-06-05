@@ -31,6 +31,8 @@ class ChoreGoal < ApplicationRecord
   belongs_to :user
   belongs_to :chore, optional: true
 
+  after_update_commit :notify_if_newly_achieved
+
   KINDS = {
     pebbles:           0,
     total_completions: 1,
@@ -75,16 +77,24 @@ class ChoreGoal < ApplicationRecord
   end
 
   def current_value
+    # Once achieved, the goal is "locked" at its target. Withdrawals,
+    # streak resets, or undone completions don't claw progress back —
+    # the goal stays earned.
+    return target_value.to_i if achieved_at.present?
+
     compute_current_value
   end
 
   def progress_percent
+    return 100 if achieved_at.present?
     return 100 if target_value.to_i.zero?
 
     ((current_value.to_i * 100.0) / target_value).floor.clamp(0, 100)
   end
 
   def reached?
+    return true if achieved_at.present?
+
     current_value.to_i >= target_value.to_i
   end
 
@@ -128,9 +138,9 @@ class ChoreGoal < ApplicationRecord
     when :total_completions
       "Total completions"
     when :chore_completions
-      "#{chore&.name || 'Chore'} completions"
+      "#{chore&.name || "Chore"} completions"
     when :chore_streak
-      "#{chore&.name || 'Chore'} streak (days)"
+      "#{chore&.name || "Chore"} streak (days)"
     end
   end
 
@@ -195,5 +205,11 @@ class ChoreGoal < ApplicationRecord
     return if chore_id.present?
 
     errors.add(:base, "Chore is required for #{kind.to_s.humanize} goals")
+  end
+
+  def notify_if_newly_achieved
+    return unless saved_change_to_achieved_at? && achieved_at.present?
+
+    ChoreNotifier.goal_achieved!(self)
   end
 end

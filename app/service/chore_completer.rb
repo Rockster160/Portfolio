@@ -24,7 +24,7 @@ class ChoreCompleter
       apply_threshold!(record)
       apply_payout!(record) unless record.payout_skipped
       record.save!
-      sync_streak!(record) unless record.payout_skipped
+      sync_streak!(record) unless record.payout_skipped || record.anonymous
       record
     end
 
@@ -103,10 +103,10 @@ class ChoreCompleter
     record.streak_multiplier = streak_multiplier.round(3)
     record.paid_pebbles = paid
     record.metadata = record.metadata.merge(
-      multipliers:         breakdown,
-      streak_count_after:  streak_count,
+      multipliers:          breakdown,
+      streak_count_after:   streak_count,
       streak_bonus_pebbles: bonus_pebbles,
-      hot_pick:            hot.present?,
+      hot_pick:             hot.present?,
     )
   end
 
@@ -147,7 +147,7 @@ class ChoreCompleter
     0
   end
 
-  def sync_streak!(record)
+  def sync_streak!(_record)
     streak = ChoreStreak.find_or_initialize_by(user_id: user.id, chore_id: chore.id)
     last = streak.last_completed_day
     if last.nil? || last < day - 1

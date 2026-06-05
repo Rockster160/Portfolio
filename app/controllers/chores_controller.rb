@@ -82,6 +82,52 @@ class ChoresController < ApplicationController
     render json: dailies_payload
   end
 
+  # POST /chores/hot_picks/:chore_id/rotate — remove a single Hot Pick
+  # and roll a replacement. Manager-only; the replacement's rules and
+  # weighting live in ChoreDailyResetWorker so they stay in lockstep
+  # with the morning batch.
+  def rotate_hot_pick
+    return render(json: { error: "forbidden" }, status: :forbidden) unless current_user.can_manage_chores?
+
+    day = ChoreDay.current(current_user)
+    removed = ChoreHotPick.find_by(day_key: day, chore_id: params[:chore_id])
+    return render(json: { error: "not_found" }, status: :not_found) unless removed
+
+    replacement = nil
+    ChoreHotPick.transaction do
+      multiplier = removed.multiplier
+      removed_id = removed.chore_id
+      removed.destroy!
+      replacement = ChoreDailyResetWorker.new.rotate!(
+        day:               day,
+        excluded_chore_id: removed_id,
+        multiplier:        multiplier,
+      )
+    end
+
+    ChoreBroadcaster.broadcast_hot_picks_refreshed!
+    render json: {
+      removed_chore_id:     params[:chore_id].to_i,
+      replacement_chore_id: replacement&.chore_id,
+      server_ts:            Time.current.iso8601(3),
+    }
+  end
+
+  # GET/PATCH /chores/notification_preferences — read or update the
+  # viewer's per-event opt-out toggles. Empty hash = subscribed to
+  # everything (User#wants_chore_notification?). Body shape is
+  # { chore_notify_prefs: { transfer_received: bool, ... } }.
+  def notification_preferences
+    render json: { prefs: current_prefs }
+  end
+
+  def update_notification_preferences
+    incoming = params.fetch(:chore_notify_prefs, {}).permit(*User::CHORE_NOTIFY_KINDS).to_h
+    bools = incoming.transform_values { |v| ActiveModel::Type::Boolean.new.cast(v) }
+    current_user.update!(chore_notify_prefs: current_prefs.merge(bools))
+    render json: { prefs: current_prefs }
+  end
+
   # PATCH /chores/dailies/order — body { ids: [3, 7, 1, ...] }
   # Bulk reorder the viewer's Dailies. Ids not owned by the viewer are
   # ignored; ids absent from the payload keep their existing position.
@@ -260,10 +306,14 @@ class ChoresController < ApplicationController
     render json: {
       chore:   history_chore_json(chore),
       entries: completions.map { |c|
+        # Anonymous completions never attribute to the recording user.
+        # Send actor_username: nil so the JS renders the "Anonymous"
+        # pill instead of the recorder's name.
         {
           id:                c.id,
           user_id:           c.user_id,
-          actor_username:    c.user&.username,
+          actor_username:    c.anonymous ? nil : c.user&.username,
+          anonymous:         c.anonymous,
           paid_pebbles:      c.paid_pebbles,
           base_pebbles:      c.base_pebbles,
           hot_multiplier:    c.hot_multiplier.to_f,
@@ -291,6 +341,7 @@ class ChoresController < ApplicationController
       chore_params.merge(created_by_user: current_user),
     )
     if @chore.save
+      ChoreNotifier.chore_assigned!(@chore, actor: current_user)
       respond_to do |format|
         format.html { redirect_to action: (@chore.one_off ? :today : :index) }
         format.json { render json: chore_response_payload(@chore), status: :created }
@@ -304,7 +355,11 @@ class ChoresController < ApplicationController
   end
 
   def update
+    previous_assignee_id = @chore.assigned_to_user_id
     if @chore.update(chore_params)
+      if @chore.assigned_to_user_id != previous_assignee_id
+        ChoreNotifier.chore_assigned!(@chore, actor: current_user)
+      end
       respond_to do |format|
         format.html { redirect_to chores_path }
         format.json { render json: chore_response_payload(@chore) }
@@ -544,6 +599,7 @@ class ChoresController < ApplicationController
         when_label:        entry.completed_at.strftime("%b %-d, %l:%M%P").squeeze(" "),
         payout_skipped:    entry.payout_skipped,
         skipped_reason:    entry.skipped_reason,
+        anonymous:         entry.anonymous,
       }
     when ChoreWithdrawal
       {
@@ -608,10 +664,14 @@ class ChoresController < ApplicationController
     @chore = current_user.accessible_chores.unscope(where: :archived_at).find(params[:id])
   end
 
+  def current_prefs
+    User::CHORE_NOTIFY_KINDS.index_with { |kind| current_user.wants_chore_notification?(kind) }
+  end
+
   def chore_params
     permitted = params.require(:chore).permit(
       :name, :short_name, :icon, :reward_pebbles, :threshold_seconds,
-      :one_off, :starts_on, :show_on_daily_view,
+      :one_off, :starts_on, :show_on_daily_view, :hot_eligibility,
       :sharing_mode, :assigned_to_user_id, :notes_template,
       aliases:    [],
       recurrence: {}

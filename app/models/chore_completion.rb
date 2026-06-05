@@ -4,6 +4,7 @@
 #
 #  id                        :bigint           not null, primary key
 #  achievement_bonus_pebbles :integer          default(0), not null
+#  anonymous                 :boolean          default(FALSE), not null
 #  base_pebbles              :integer          default(0), not null
 #  completed_at              :datetime         not null
 #  day_key                   :date             not null
@@ -46,6 +47,11 @@ class ChoreCompletion < ApplicationRecord
 
   scope :for_day, ->(day) { where(day_key: day) }
   scope :paid, -> { where(payout_skipped: false) }
+  # "Credited" = counts as someone's done-by-me action. Anonymous
+  # completions still satisfy the schedule + cooldown (the work got
+  # done) but are NOT attributed to any household member, so they're
+  # excluded from done_count_today, actor display, and streak math.
+  scope :credited, -> { where(anonymous: false) }
 
   # Snapshot of the fields a Jil task is most likely to want to read
   # off `chore_completion.*` — the chore name + paid amount + day key
@@ -76,6 +82,8 @@ class ChoreCompletion < ApplicationRecord
   private
 
   def fire_jil_create_trigger
+    return if anonymous
+
     ::Jil.trigger(user, :chore_completion, with_jil_attrs(jil_attrs(action: :completed)))
   end
 
@@ -84,11 +92,14 @@ class ChoreCompletion < ApplicationRecord
     # on touch-only saves). The trigger payload exposes saved_changes so
     # listeners can compare old vs new and short-circuit idempotently.
     return if saved_changes.blank?
+    return if anonymous
 
     ::Jil.trigger(user, :chore_completion, with_jil_attrs(jil_attrs(action: :edited, changes: saved_changes)))
   end
 
   def fire_jil_destroy_trigger
+    return if anonymous
+
     ::Jil.trigger(user, :chore_completion, with_jil_attrs(jil_attrs(action: :uncompleted)))
   end
 end

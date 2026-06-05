@@ -3,6 +3,7 @@
 # Table name: users
 #
 #  id                 :integer          not null, primary key
+#  chore_notify_prefs :jsonb            not null
 #  dark_mode          :boolean
 #  email              :string
 #  invitation_token   :string
@@ -146,7 +147,7 @@ class User < ApplicationRecord
   # withdrawn fetched in sum-queries against indexed (user_id, *)
   # columns, then assembled. Also returns today's earnings cheaply so
   # the Today header doesn't need an extra round-trip.
-  def chore_balance_breakdown(day = nil)
+  def chore_balance_breakdown(day=nil)
     day ||= ChoreDay.current(self)
     today_sum_sql = ActiveRecord::Base.sanitize_sql_array([
       "COALESCE(SUM(CASE WHEN day_key = ? THEN paid_pebbles ELSE 0 END), 0)",
@@ -161,7 +162,7 @@ class User < ApplicationRecord
     sent      = chore_transfers_sent.sum(:amount_pebbles)
     received  = chore_transfers_received.sum(:amount_pebbles)
     {
-      balance: earned.to_i + bonuses.to_i + received.to_i - withdrawn.to_i - sent.to_i,
+      balance:        earned.to_i + bonuses.to_i + received.to_i - withdrawn.to_i - sent.to_i,
       today_earnings: today_earnings.to_i,
     }
   end
@@ -195,8 +196,8 @@ class User < ApplicationRecord
     Agenda.items_for_range_in(
       agendas.map(&:id),
       from, to,
-      reference_user: self,
-      preloaded_agendas: agendas,
+      reference_user:    self,
+      preloaded_agendas: agendas
     )
   end
 
@@ -364,6 +365,15 @@ class User < ApplicationRecord
 
   def all_push_subs_for_channel(channel)
     push_subs.for_channel(channel).where.not(registered_at: nil)
+  end
+
+  CHORE_NOTIFY_KINDS = %i[transfer_received own_goal_achieved other_goal_achieved chore_assigned].freeze
+
+  def wants_chore_notification?(kind)
+    return false unless CHORE_NOTIFY_KINDS.include?(kind.to_sym)
+
+    # Empty hash = subscribed to everything. Users opt OUT individually.
+    chore_notify_prefs.fetch(kind.to_s, true) != false
   end
 
   def ordered_lists
