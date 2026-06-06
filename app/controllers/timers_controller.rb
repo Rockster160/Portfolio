@@ -174,7 +174,12 @@ class TimersController < ApplicationController
   def load_page_data
     @timers = current_user.timers.ordered.to_a
     @pages  = current_user.timer_pages.ordered.to_a
-    @quick_buttons = ensure_default_quick_buttons
+    # Always seed user defaults so Home has something to show; then
+    # ensure the current page (if any) has its own copy. Quick buttons
+    # are sent in full to the FE; the renderer filters by active page.
+    ensure_default_quick_buttons!
+    ensure_page_quick_buttons!(@active_page) if @active_page
+    @quick_buttons = current_user.timer_quick_buttons.ordered.to_a
 
     @bootstrap = {
       server_ts:           Time.current.iso8601(3),
@@ -188,14 +193,46 @@ class TimersController < ApplicationController
     }
   end
 
-  def ensure_default_quick_buttons
-    existing = current_user.timer_quick_buttons.ordered.to_a
-    return existing if existing.any?
+  def ensure_default_quick_buttons!
+    return if current_user.timer_quick_buttons.user_defaults.exists?
 
     DEFAULT_QUICK_DURATIONS.each_with_index do |secs, idx|
       current_user.timer_quick_buttons.create!(duration_seconds: secs, sort_order: idx)
     end
-    current_user.timer_quick_buttons.ordered.to_a
+  end
+
+  # Duplicates the user's PINNED defaults onto a TimerPage the first
+  # time it's viewed. Saved templates (pinned=false) stay global and are
+  # never copied — they live as user defaults and are visible from any
+  # page's Saved tab.
+  #
+  # Concurrency: a freshly-created page can be hit by several requests
+  # back-to-back (browser nav + SW shell warm + monitor reconnect),
+  # which is how I'd see 4× seeding before. `with_lock` serializes them
+  # on the row, the inner `reload` picks up any commit the winner
+  # already made, and `meta["quicks_seeded"]` is the durable marker so
+  # subsequent requests skip without even taking the lock.
+  def ensure_page_quick_buttons!(page)
+    return if page.meta.is_a?(Hash) && page.meta["quicks_seeded"]
+
+    page.with_lock do
+      page.reload
+      return if page.meta.is_a?(Hash) && page.meta["quicks_seeded"]
+      return if page.quick_buttons.exists?
+
+      current_user.timer_quick_buttons.user_defaults.where(pinned: true).ordered.each do |src|
+        page.quick_buttons.create!(
+          user:             current_user,
+          label:            src.label,
+          duration_seconds: src.duration_seconds,
+          sort_order:       src.sort_order,
+          color:            src.color,
+          pinned:           true,
+          template:         src.template || {},
+        )
+      end
+      page.merge_meta!(quicks_seeded: true)
+    end
   end
 
   def serialize_page(page)
@@ -232,6 +269,8 @@ class TimersController < ApplicationController
       color:            qb.color,
       pinned:           qb.pinned,
       template:         qb.template,
+      timer_page_id:    qb.timer_page_id,
+      updated_at:       qb.updated_at.iso8601(3),
     }
   end
 

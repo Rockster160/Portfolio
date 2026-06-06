@@ -21,6 +21,7 @@ class TimerPage < ApplicationRecord
   has_many :timers, dependent: :nullify
   has_many :share_tokens, class_name: "TimerShareToken", dependent: :destroy
   has_many :page_buttons, -> { order(:sort_order, :id) }, class_name: "TimerPageButton", dependent: :destroy
+  has_many :quick_buttons, class_name: "TimerQuickButton", dependent: :destroy
 
   validates :slug, presence: true, uniqueness: { scope: :user_id }
 

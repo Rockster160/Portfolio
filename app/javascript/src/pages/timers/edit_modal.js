@@ -112,9 +112,6 @@ export function setupEditModal({ root, store, actions, activePageId }) {
     field("disabled").checked = !!t.disabled;
 
     field("value").value = t.value ?? 0;
-    field("step").value = t.step ?? 1;
-    field("min_value").value = t.min_value ?? 0;
-    field("max_value").value = t.max_value ?? 10;
 
     field("dial_text").value = dialConfigToText(t.dial_config);
     field("dial_start_offset").value = Number(t.dial_config?.start_offset) || 0;
@@ -220,9 +217,6 @@ export function setupEditModal({ root, store, actions, activePageId }) {
       payload.repeat = field("repeat").checked;
     } else if (kind === "counter") {
       payload.value = parseInt(field("value").value, 10) || 0;
-      payload.step = Math.max(1, parseInt(field("step").value, 10) || 1);
-      payload.min_value = parseIntOrNull(field("min_value").value);
-      payload.max_value = parseIntOrNull(field("max_value").value);
       payload.reset_value = payload.value;
     } else if (kind === "dial") {
       payload.dial_config = textToDialConfig(field("dial_text").value);
@@ -233,12 +227,6 @@ export function setupEditModal({ root, store, actions, activePageId }) {
     return payload;
   }
 
-  function parseIntOrNull(v) {
-    const s = String(v ?? "").trim();
-    if (s === "") return null;
-    const n = parseInt(s, 10);
-    return Number.isNaN(n) ? null : n;
-  }
 
   // =========================
   // Callback editor — each row is one (when, then) pair.
@@ -283,12 +271,14 @@ export function setupEditModal({ root, store, actions, activePageId }) {
   ];
 
   const CHAIN_OPS = [
-    { value: "start", label: "Start" },
-    { value: "pause", label: "Pause" },
-    { value: "resume", label: "Resume" },
-    { value: "reset", label: "Reset" },
+    { value: "start",     label: "Start" },
+    { value: "pause",     label: "Pause" },
+    { value: "resume",    label: "Resume" },
+    { value: "reset",     label: "Reset" },
     { value: "increment", label: "Increment (counter/dial)" },
-    { value: "goto", label: "Go to section (dial)" },
+    { value: "goto",      label: "Go to section (dial)" },
+    { value: "disable",   label: "Disable" },
+    { value: "enable",    label: "Enable" },
   ];
 
   function appendCallbackRow(cb) {
@@ -306,6 +296,13 @@ export function setupEditModal({ root, store, actions, activePageId }) {
     const row = document.createElement("div");
     row.className = "timers-callback-row";
     row.dataset.cbId = id;
+    // Stash the chain's target_timer_name on the row so readThen can
+    // preserve it if the dropdown can't resolve to a local id at save
+    // time (see chainTimerSelect comment). Lives on the row, not the
+    // inputs, because the inputs get reset on each `paint()` repaint.
+    if (initial.then?.target_timer_name) {
+      row.dataset.targetTimerName = initial.then.target_timer_name;
+    }
 
     function paint(snapshot) {
       row.innerHTML = renderCallbackRow(snapshot);
@@ -385,11 +382,19 @@ export function setupEditModal({ root, store, actions, activePageId }) {
         t.trigger = row.querySelector('[data-cb-then="trigger"]')?.value || "";
         break;
       case "chain": {
-        t.target_timer_id =
-          parseInt(
-            row.querySelector('[data-cb-then="target_timer_id"]')?.value,
-            10,
-          ) || null;
+        const selectedId = parseInt(
+          row.querySelector('[data-cb-then="target_timer_id"]')?.value,
+          10,
+        ) || null;
+        t.target_timer_id = selectedId;
+        // Preserve the name only when the select has nothing chosen —
+        // this protects Jil-authored chains pointed at timers that
+        // aren't in the local store (e.g. cross-page references that
+        // haven't been hydrated yet) from being wiped on re-save.
+        const dataset = row.dataset || {};
+        if (!selectedId && dataset.targetTimerName) {
+          t.target_timer_name = dataset.targetTimerName;
+        }
         t.op = row.querySelector('[data-cb-then="op"]')?.value || "start";
         const byEl = row.querySelector('[data-cb-then="by"]');
         if (byEl) t.by = parseInt(byEl.value, 10) || 1;
@@ -512,7 +517,7 @@ export function setupEditModal({ root, store, actions, activePageId }) {
               : "";
         return `
           <div class="timers-callback-chain">
-            ${chainTimerSelect(t.target_timer_id)}
+            ${chainTimerSelect(t.target_timer_id, t.target_timer_name)}
             <select data-cb-then="op">
               ${CHAIN_OPS.map(
                 (o) =>
@@ -527,7 +532,19 @@ export function setupEditModal({ root, store, actions, activePageId }) {
     return "";
   }
 
-  function chainTimerSelect(currentId) {
+  function chainTimerSelect(currentId, currentName) {
+    // Jil-authored callbacks target by name (`target_timer_name`) — the
+    // server falls back to a name match at fire time, so the on-disk
+    // record is correct, but the FE select needs to know about both
+    // shapes to pre-select. If id is missing, resolve the name to an id
+    // via the store; that way opening + re-saving in the editor keeps
+    // the chain pointed at the right timer instead of nulling it out.
+    let resolvedId = currentId ? Number(currentId) : null;
+    if (!resolvedId && currentName) {
+      const match = Array.from(store.timers.values())
+        .find((t) => String(t.name || "").toLowerCase() === String(currentName).toLowerCase());
+      if (match) resolvedId = match.id;
+    }
     const opts = Array.from(store.timers.values())
       .filter((t) => t.id !== editingId)
       .sort(
@@ -535,7 +552,7 @@ export function setupEditModal({ root, store, actions, activePageId }) {
       )
       .map((t) => {
         const label = (t.name || timerPlaceholderName(t)) + ` (${t.kind})`;
-        const sel = currentId && Number(currentId) === t.id ? "selected" : "";
+        const sel = resolvedId === t.id ? "selected" : "";
         return `<option value="${t.id}" ${sel}>${esc(label)}</option>`;
       })
       .join("");
@@ -712,7 +729,7 @@ export function setupEditModal({ root, store, actions, activePageId }) {
       (m, q) => Math.max(m, q.sort_order || 0),
       -1,
     );
-    await actions.createQuick({
+    const res = await actions.createQuick({
       label: label.trim() || null,
       duration_seconds: seconds,
       color: payload.color,
@@ -720,6 +737,7 @@ export function setupEditModal({ root, store, actions, activePageId }) {
       pinned: false,
       template: payload,
     });
+    if (res?.__error) alert(`Couldn't save template: ${res.__error}`);
   });
 
   function open({ timer, quick } = {}) {

@@ -289,7 +289,29 @@ $t-danger:    #f85149;
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
+  justify-content: center;
   align-content: flex-start;
+}
+
+// Phone-width sizing: two countdowns/counters per row, dials full-width.
+// The desktop rules above use clamp() + flex-basis to soft-wrap; on a
+// narrow viewport that lets a counter and a dial sit side-by-side and
+// produces awkward leftover space. Lock both shapes explicitly here.
+@media (max-width: 600px) {
+  .timers-board { gap: 10px; }
+
+  .timer-card.timer-card-countdown,
+  .timer-card.timer-card-counter {
+    width: calc(50% - 5px);
+    max-width: calc(50% - 5px);
+    flex: 0 0 calc(50% - 5px);
+  }
+
+  .timer-card.timer-card-dial {
+    width: 100%;
+    max-width: 100%;
+    flex: 0 0 100%;
+  }
 }
 
 // ---------- timer card ----------
@@ -322,6 +344,11 @@ $t-danger:    #f85149;
   // Home page only: surface the X-to-delete when the timer is fired.
   // Custom pages keep their layout intact.
   &.on-home.is-done .timer-card-close { display: inline-flex; }
+
+  // Edit mode shows the X on every card (Home + custom pages) so the
+  // user can quickly purge timers from the board. The click handler
+  // skips confirm when the card is in edit-mode (see renderers.js).
+  .timers-app.edit-mode & .timer-card-close { display: inline-flex; }
 
   &.is-paused { opacity: 0.7; }
 
@@ -995,7 +1022,9 @@ $t-danger:    #f85149;
 [data-timers-quick-list],
 [data-timers-saved-list],
 [data-timers-pages-list],
-[data-timers-share-list] {
+[data-timers-share-list],
+[data-timers-library-templates-list],
+[data-timers-library-quick-list] {
   padding: 4px 18px;
   max-height: 360px;
   overflow-y: auto;

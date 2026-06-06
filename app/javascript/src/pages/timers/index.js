@@ -95,7 +95,12 @@ function bootOwner(root) {
     getActivePage,
     openEdit: (ctx) => editModal.open(ctx),
   });
-  const libraryModal = setupLibraryModal({ root, store, actions, activePageId });
+  const libraryModal = setupLibraryModal({
+    root, store, actions,
+    activePageId,
+    getActivePage,
+    openEdit: (ctx) => editModal.open(ctx),
+  });
   const pagesModal = setupPagesModal({ root, store, actions, activePageSlug: activeSlug });
   const cardMenu = setupCardMenu({
     root, store, actions,
@@ -203,8 +208,10 @@ function wireEditToggle(root, board) {
 function wireQuickRowLive(root, store, actions, activePageId) {
   function repaint() {
     let row = root.querySelector("[data-timers-quick-row]");
+    const pageId = activePageId();
     const items = Array.from(store.quickButtons.values())
       .filter((qb) => qb.pinned !== false)
+      .filter((qb) => pageId ? qb.timer_page_id === pageId : !qb.timer_page_id)
       .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
     if (items.length === 0) {
@@ -296,7 +303,17 @@ async function addTimerFromQuick(qb, store, actions, activePageId) {
         name: qb.label || "",
         callbacks: [{ id: `cb-${Date.now()}`, event: "complete", type: "push" }],
       };
-  const payload = { ...template, timer_page_id: activePageId() || null };
+  // Prefer the quick button's own page id (so per-page Quicks drop their
+  // timer onto the page they belong to) but fall back to whatever page
+  // the user is currently viewing for legacy/user-default rows.
+  const targetPage = qb.timer_page_id ?? activePageId() ?? null;
+  const payload = { ...template, timer_page_id: targetPage };
+  // If the user pinned a color on the quick button itself, every timer
+  // spawned from it MUST be that color. Otherwise we leave `color`
+  // unset and let the renderer's deterministic palette pick a slot by
+  // timer id — that's what produces the mixed pink/purple/blue you see
+  // when you tap an uncolored quick three times.
+  if (!payload.color && qb.color) payload.color = qb.color;
   const res = await actions.create(payload);
   if (res?.timer && res.timer.kind === "countdown") {
     await actions.start(res.timer.id);

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_05_150000) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_05_170000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1145,13 +1145,15 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_05_150000) do
   create_table "timer_quick_buttons", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.text "label"
-    t.integer "duration_seconds", null: false
+    t.integer "duration_seconds"
     t.integer "sort_order", default: 0, null: false
     t.text "color"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.jsonb "template", default: {}, null: false
     t.boolean "pinned", default: true, null: false
+    t.bigint "timer_page_id"
+    t.index ["timer_page_id"], name: "index_timer_quick_buttons_on_timer_page_id"
     t.index ["user_id", "pinned", "sort_order"], name: "index_timer_quick_buttons_on_user_id_and_pinned_and_sort_order"
     t.index ["user_id", "sort_order"], name: "index_timer_quick_buttons_on_user_id_and_sort_order"
     t.index ["user_id"], name: "index_timer_quick_buttons_on_user_id"
@@ -1353,6 +1355,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_05_150000) do
   add_foreign_key "tasks", "task_folders"
   add_foreign_key "timer_page_buttons", "timer_pages", on_delete: :cascade
   add_foreign_key "timer_pages", "users"
+  add_foreign_key "timer_quick_buttons", "timer_pages"
   add_foreign_key "timer_quick_buttons", "users"
   add_foreign_key "timer_share_tokens", "timer_pages"
   add_foreign_key "timer_share_tokens", "timers"

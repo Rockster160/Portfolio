@@ -24,9 +24,6 @@
       <button type="button" class="timers-icon-btn timers-icon-btn-primary" data-timers-new aria-label="New timer" title="New timer">
         <%= fa(:plus) %>
       </button>
-      <button type="button" class="timers-icon-btn" data-timers-pages aria-label="Pages" title="Pages">
-        <%= fa(:folder_o) %>
-      </button>
       <button type="button" class="timers-icon-btn" data-timers-library aria-label="Saved timers" title="Saved timers">
         <%= fa(:bookmark) %>
       </button>
@@ -40,6 +37,9 @@
       <button type="button" class="timers-icon-btn hidden" data-timers-notify aria-label="Enable notifications">
         <span class="when-subscribed hidden"><%= fa(:bell) %></span>
         <span class="when-unsubscribed"><%= fa("bell-slash") %></span>
+      </button>
+      <button type="button" class="timers-icon-btn" data-timers-pages aria-label="Pages" title="Pages">
+        <%= fa(:folder_o) %>
       </button>
       <button type="button" class="timers-icon-btn" data-timers-settings aria-label="Settings">
         <%= fa(:cog) %>
@@ -112,7 +112,7 @@
             </div>
             <div class="field field-color">
               <span class="field-label">Color</span>
-              <input type="color" data-timers-field="color" value="#388bfd">
+              <input type="color" data-timers-field="color" value="#388BFD">
             </div>
           </div>
         </fieldset>
@@ -128,22 +128,14 @@
           </label>
         </fieldset>
         <fieldset data-when-kind="counter" hidden>
-          <div class="field-row">
-            <div class="field"><span class="field-label">Initial value</span><input type="number" data-timers-field="value" value="0"></div>
-            <div class="field"><span class="field-label">Step</span><input type="number" data-timers-field="step" value="1" min="1"></div>
-          </div>
-          <div class="field-row">
-            <div class="field"><span class="field-label">Min (display only)</span><input type="number" data-timers-field="min_value" value="0" placeholder="unbounded"></div>
-            <div class="field"><span class="field-label">Max (display only)</span><input type="number" data-timers-field="max_value" value="10" placeholder="unbounded"></div>
-          </div>
-          <p class="field-hint">Min &amp; max only bound the progress ring. The counter value is uncapped — increment past them or below them freely.</p>
+          <div class="field"><span class="field-label">Initial value</span><input type="number" data-timers-field="value" value="0"></div>
         </fieldset>
         <fieldset data-when-kind="dial" hidden>
           <div class="field">
             <span class="field-label">Sections</span>
             <span class="field-hint">
               One section per line. Use <code>:</code> for subs, <code>*N</code> for weight (default 1), and <code>#hex</code> for color.
-              <br>Examples: <code>Actions: Move, Attack, Loot</code> &nbsp; <code>Setup *2</code> &nbsp; <code>Combat *3 #f85149: Attack #ff0, Defend #0f0</code>
+              <br>Examples: <code>Actions: Move, Attack, Loot</code> &nbsp; <code>Setup *2</code> &nbsp; <code>Combat *3 #F85149: Attack #FF0, Defend #0F0</code>
             </span>
             <textarea data-timers-field="dial_text" rows="5" placeholder="Setup *2&#10;Actions *2: Move, Attack, Loot, End&#10;Enemy&#10;Cleanup"></textarea>
           </div>
@@ -204,22 +196,14 @@
       </header>
       <div class="timers-tabs">
         <button type="button" class="timers-tab active" data-timers-tab="quick">Quick buttons</button>
-        <button type="button" class="timers-tab" data-timers-tab="saved">Saved timers</button>
         <button type="button" class="timers-tab" data-timers-tab="pages">Pages</button>
         <button type="button" class="timers-tab" data-timers-tab="share">Share</button>
       </div>
       <section data-timers-tab-panel="quick">
-        <p class="settings-blurb">Pinned templates that show as pills at the top of every page. Drag to reorder.</p>
+        <p class="settings-blurb">Default quick-add pills shown on Home and copied onto new pages. Drag to reorder. Per-page quick buttons live in the bookmark menu.</p>
         <div data-timers-quick-list></div>
         <div class="timers-settings-footer">
           <button type="button" class="timers-primary-btn" data-timers-add-quick>+ New quick button</button>
-        </div>
-      </section>
-      <section data-timers-tab-panel="saved" hidden>
-        <p class="settings-blurb">Templates saved for quick re-use. Open the bookmark menu from the header to pick one. Pin a saved template to also show it as a quick-add pill.</p>
-        <div data-timers-saved-list></div>
-        <div class="timers-settings-footer">
-          <button type="button" class="timers-primary-btn" data-timers-add-saved>+ New saved timer</button>
         </div>
       </section>
       <section data-timers-tab-panel="pages" hidden>
@@ -270,14 +254,27 @@
         <h3>Saved timers</h3>
         <button type="button" class="timers-icon-btn" data-timers-modal-close aria-label="Close">&times;</button>
       </header>
+      <div class="timers-tabs">
+        <button type="button" class="timers-tab active" data-timers-library-tab="templates">Templates</button>
+        <button type="button" class="timers-tab" data-timers-library-tab="quick">Quick buttons</button>
+      </div>
       <div class="timers-library-search">
         <input type="search" placeholder="Search…" data-timers-library-search>
       </div>
-      <div class="timers-library-list" data-timers-library-list></div>
-      <footer class="timers-modal-footer">
-        <span class="spacer"></span>
-        <button type="button" class="timers-secondary-btn" data-timers-modal-close>Close</button>
-      </footer>
+      <section data-timers-library-panel="templates">
+        <p class="settings-blurb">Global templates — drop onto any page, edit anywhere.</p>
+        <div data-timers-library-templates-list></div>
+        <div class="timers-settings-footer">
+          <button type="button" class="timers-primary-btn" data-timers-library-add-template>+ New template</button>
+        </div>
+      </section>
+      <section data-timers-library-panel="quick" hidden>
+        <p class="settings-blurb" data-timers-library-quick-blurb>Quick buttons on this page. Drag to reorder.</p>
+        <div data-timers-library-quick-list></div>
+        <div class="timers-settings-footer">
+          <button type="button" class="timers-primary-btn" data-timers-library-add-quick>+ New quick button</button>
+        </div>
+      </section>
     </form>
   </dialog>
 

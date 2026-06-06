@@ -13,7 +13,6 @@ export function setupSettingsModal({ root, store, actions, getActivePage, openEd
   const tabs = dialog.querySelectorAll("[data-timers-tab]");
   const panels = dialog.querySelectorAll("[data-timers-tab-panel]");
   const quickList = dialog.querySelector("[data-timers-quick-list]");
-  const savedList = dialog.querySelector("[data-timers-saved-list]");
   const pagesList = dialog.querySelector("[data-timers-pages-list]");
   const shareEmpty = dialog.querySelector("[data-timers-share-empty]");
   const shareControls = dialog.querySelector("[data-timers-share-controls]");
@@ -32,7 +31,13 @@ export function setupSettingsModal({ root, store, actions, getActivePage, openEd
     panels.forEach((p) => p.hidden = p.dataset.timersTabPanel !== name);
   }
 
-  // -------- Quick / Saved (TimerQuickButton rows) ---------
+  // -------- Quick buttons (global user defaults) ---------
+  //
+  // This tab manages the user's GLOBAL quick buttons — the defaults
+  // that show on Home and seed every new page. Per-page quick buttons
+  // are managed from the bookmark/library modal's Quick tab instead;
+  // this list is intentionally scoped to `!timer_page_id` regardless
+  // of which page the modal was opened on.
 
   let quickSortable = null;
 
@@ -72,12 +77,10 @@ export function setupSettingsModal({ root, store, actions, getActivePage, openEd
       if (!confirm(`Delete "${quickLabel(qb)}"?`)) return;
       await actions.destroyQuick(qb.id);
       renderQuickList();
-      renderSavedList();
     });
     row.querySelector('[data-action="pin-toggle"]')?.addEventListener("click", async () => {
       await actions.updateQuick(qb.id, { pinned: !qb.pinned });
       renderQuickList();
-      renderSavedList();
     });
     return row;
   }
@@ -85,7 +88,7 @@ export function setupSettingsModal({ root, store, actions, getActivePage, openEd
   function renderQuickList() {
     quickList.innerHTML = "";
     const items = Array.from(store.quickButtons.values())
-      .filter((qb) => qb.pinned !== false)
+      .filter((qb) => qb.pinned === true && !qb.timer_page_id)
       .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
     if (items.length === 0) {
@@ -119,22 +122,6 @@ export function setupSettingsModal({ root, store, actions, getActivePage, openEd
     });
   }
 
-  function renderSavedList() {
-    savedList.innerHTML = "";
-    const items = Array.from(store.quickButtons.values())
-      .filter((qb) => qb.pinned === false)
-      .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-
-    if (items.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "timers-settings-empty";
-      empty.textContent = "No saved timers yet. Save any timer as a template from its Edit modal.";
-      savedList.appendChild(empty);
-      return;
-    }
-    items.forEach((qb) => savedList.appendChild(quickRow(qb, { showHandle: false, pinToggleLabel: "Pin to row" })));
-  }
-
   function editQuick(qb) {
     openEdit({
       quick: {
@@ -144,30 +131,37 @@ export function setupSettingsModal({ root, store, actions, getActivePage, openEd
         duration_seconds: qb.duration_seconds,
         template: qb.template || {},
         onSave: async (payload) => {
-          await actions.updateQuick(qb.id, payload);
+          const res = await actions.updateQuick(qb.id, payload);
+          if (res?.__error) { alert(`Couldn't save: ${res.__error}`); return; }
           renderQuickList();
-          renderSavedList();
         },
       },
     });
   }
 
-  dialog.querySelector("[data-timers-add-quick]")?.addEventListener("click", () => openAdd({ pinned: true }));
-  dialog.querySelector("[data-timers-add-saved]")?.addEventListener("click", () => openAdd({ pinned: false }));
+  dialog.querySelector("[data-timers-add-quick]")?.addEventListener("click", openAddQuick);
 
-  function openAdd({ pinned }) {
+  function openAddQuick() {
     openEdit({
       quick: {
         id: null,
         label: null,
-        pinned: pinned,
+        pinned: true,
         duration_seconds: 300,
         template: {},
         onSave: async (payload) => {
           const sort = (Array.from(store.quickButtons.values()).reduce((m, q) => Math.max(m, q.sort_order || 0), -1)) + 1;
-          await actions.createQuick({ ...payload, sort_order: sort, pinned });
+          // Settings cog → global user defaults. Always pinned:true,
+          // never tied to a page. (Per-page quick buttons live in the
+          // library/bookmark modal's Quick tab.)
+          const res = await actions.createQuick({
+            ...payload,
+            sort_order:    sort,
+            pinned:        true,
+            timer_page_id: null,
+          });
+          if (res?.__error) { alert(`Couldn't save: ${res.__error}`); return; }
           renderQuickList();
-          renderSavedList();
         },
       },
     });
@@ -301,7 +295,6 @@ export function setupSettingsModal({ root, store, actions, getActivePage, openEd
   return {
     open(tab) {
       renderQuickList();
-      renderSavedList();
       renderPagesList();
       renderShareSection();
       activate(tab || "quick");

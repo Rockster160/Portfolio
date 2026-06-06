@@ -32,7 +32,8 @@ function makeCardFrame(timer, actions) {
   close.addEventListener("click", (e) => {
     e.stopPropagation();
     if (!actions?.destroy) return;
-    if (!window.confirm("Delete this timer?")) return;
+    const inEditMode = card.closest(".timers-app")?.classList.contains("edit-mode");
+    if (!inEditMode && !window.confirm("Delete this timer?")) return;
     actions.destroy(timer.id);
   });
   card.appendChild(close);
@@ -58,6 +59,12 @@ function applyState(card, timer, { clientFired } = {}) {
   card.classList.toggle("is-done", fired && !timer.repeat);
   card.classList.toggle("is-paused", paused);
   card.classList.toggle("is-disabled", !!timer.disabled);
+  // Color edits ride the same broadcast/upsert path as every other
+  // attribute change. `--ring-color` was originally set once in
+  // makeCardFrame, so the ring stayed on the old color until the
+  // page was reloaded — re-applying here keeps it in sync on every
+  // store-driven repaint (edits, broadcasts, sync).
+  card.style.setProperty("--ring-color", autoColor(timer));
 }
 
 // Local time math — uses server-authoritative start/end stamps. No
@@ -555,7 +562,10 @@ export function renderDialCard(timer, actions) {
       const arcAtSubLabel = subAngle * (R_MID + R_IN) / 2;
       const longestSubName = subs.reduce((m, s) => Math.max(m, subName(s).length), 3);
       const subWidthPerChar = arcAtSubLabel / Math.max(longestSubName, 1) / 0.6;
-      const subLabelSize = clamp(Math.min(subWidthPerChar, 90 / Math.sqrt(subs.length)), 10, 22);
+      // Floor bumped from 10 → 14: at 10 the sub names were unreadable
+      // on a phone-width dial. Ceiling raised too so the simpler dials
+      // (few subs, lots of room) get the benefit.
+      const subLabelSize = clamp(Math.min(subWidthPerChar, 100 / Math.sqrt(subs.length)), 14, 26);
 
       subs.forEach((sub, j) => {
         const sa0 = a0 + j * subAngle;

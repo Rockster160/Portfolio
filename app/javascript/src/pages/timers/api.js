@@ -43,16 +43,42 @@ function fetchWith(url, method, payload, token) {
   });
 }
 
+async function safeJson(res) {
+  try { return await res.json(); } catch (e) { return null; }
+}
+
 async function request(url, { method = "POST", body = null, queueOnFail = true } = {}) {
   const payload = body ? { ...body, tab_id: getTabId() } : { tab_id: getTabId() };
   try {
     let token = cachedToken || csrfMetaToken();
     let res = await fetchWith(url, method, payload, token);
+
+    // 401/422 is ambiguous: either a stale CSRF token (no JSON body) or
+    // an actual validation failure (controller renders `{ errors: [...] }`).
+    // Peek at the body — if it carries an `errors` array, surface it to
+    // the caller WITHOUT a CSRF retry; the retry won't fix a validation
+    // failure and just delays the error feedback.
     if (res.status === 401 || res.status === 422) {
+      const body1 = await safeJson(res);
+      if (body1 && Array.isArray(body1.errors) && body1.errors.length) {
+        return { __error: body1.errors.join(", ") };
+      }
       const fresh = await refreshCsrf();
-      if (fresh) res = await fetchWith(url, method, payload, fresh);
+      if (fresh) {
+        res = await fetchWith(url, method, payload, fresh);
+        if (res.ok) return res.status === 204 ? {} : await safeJson(res);
+        if (res.status === 401 || res.status === 422) {
+          const body2 = await safeJson(res);
+          if (body2 && Array.isArray(body2.errors) && body2.errors.length) {
+            return { __error: body2.errors.join(", ") };
+          }
+        }
+        if (res.status >= 500 && queueOnFail) enqueue({ url, method, body: payload });
+        return null;
+      }
     }
-    if (res.ok) return res.status === 204 ? {} : await res.json();
+
+    if (res.ok) return res.status === 204 ? {} : await safeJson(res);
     if (res.status >= 500 && queueOnFail) enqueue({ url, method, body: payload });
     return null;
   } catch (e) {

@@ -7,13 +7,20 @@ class TimerQuickButtonsController < ApplicationController
   end
 
   def create
-    qb = current_user.timer_quick_buttons.create!(quick_params)
-    render json: serialize(qb), status: :created
+    qb = current_user.timer_quick_buttons.new(quick_params)
+    if qb.save
+      render json: serialize(qb), status: :created
+    else
+      render json: { errors: qb.errors.full_messages }, status: :unprocessable_entity
+    end
   end
 
   def update
-    @qb.update!(quick_params)
-    render json: serialize(@qb)
+    if @qb.update(quick_params)
+      render json: serialize(@qb)
+    else
+      render json: { errors: @qb.errors.full_messages }, status: :unprocessable_entity
+    end
   end
 
   def destroy
@@ -45,7 +52,7 @@ class TimerQuickButtonsController < ApplicationController
 
   def quick_params
     params.require(:timer_quick_button).permit(
-      :label, :duration_seconds, :sort_order, :color, :pinned,
+      :label, :duration_seconds, :sort_order, :color, :pinned, :timer_page_id,
       template: {},
     )
   end
@@ -59,6 +66,8 @@ class TimerQuickButtonsController < ApplicationController
       color:            qb.color,
       pinned:           qb.pinned,
       template:         qb.template,
+      timer_page_id:    qb.timer_page_id,
+      updated_at:       qb.updated_at.iso8601(3),
     }
   end
 end
