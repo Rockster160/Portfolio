@@ -136,6 +136,7 @@ export class Board {
 
   onChange(kind, payload) {
     if (kind === "bootstrap" || kind === "sync" || kind === "page" || kind === "page_removed") {
+      console.log("[timers] board.onChange", kind, "→ renderAll");
       this.renderAll();
       return;
     }
@@ -143,6 +144,7 @@ export class Board {
       const t = payload.timer;
       const pageId = this.getActivePageId();
       const belongs = (pageId == null ? t.timer_page_id == null : t.timer_page_id === pageId);
+      console.log("[timers] board.onChange", kind, "src=" + payload.source, "id=" + t.id, "name=" + t.name, "disabled=" + t.disabled, "step=" + t.dial_step_index, "belongs=" + belongs);
 
       // Broadcasts ALWAYS trigger a full board re-render of visible
       // timers from current store state. Nothing in-place, nothing

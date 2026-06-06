@@ -10,7 +10,12 @@ export function makeActions({ api, store }) {
     // own mutation response (vs a cross-tab broadcast). The board can
     // update in place — no need to force a full re-mount for our own
     // taps.
-    if (res?.timer) store.upsertTimer(res.timer, { source: "action" });
+    //
+    // `force: true` because the response carries the server's
+    // post-save state of the timer; no FE timestamp arithmetic should
+    // ever override that. (Same reasoning as applySync / inline
+    // broadcast.)
+    if (res?.timer) store.upsertTimer(res.timer, { source: "action", force: true });
     return res;
   }
 

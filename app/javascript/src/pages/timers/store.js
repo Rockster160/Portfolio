@@ -79,8 +79,8 @@ export class TimerStore {
 
   upsertPage(p) {
     if (!p || p.id == null) return;
-    const existing = this.pages.get(p.id);
-    if (existing && !isNewerOrEqual(existing, p)) return;
+    // Server-authoritative — see applySync comment for why we don't
+    // gate on a timestamp comparison here.
     this.pages.set(p.id, p);
     this.notify("page", { id: p.id });
   }
@@ -92,8 +92,7 @@ export class TimerStore {
 
   upsertQuick(q) {
     if (!q || q.id == null) return;
-    const existing = this.quickButtons.get(q.id);
-    if (existing && !isNewerOrEqual(existing, q)) return;
+    // Server-authoritative — see applySync comment.
     this.quickButtons.set(q.id, q);
     this.notify("quick", { id: q.id });
   }
@@ -104,17 +103,17 @@ export class TimerStore {
   }
 
   applySync(diff) {
-    (diff.timers || []).forEach((t) => this.upsertTimer(t, { silent: true, source: "sync" }));
-    (diff.pages || []).forEach((p) => {
-      const existing = this.pages.get(p.id);
-      if (existing && !isNewerOrEqual(existing, p)) return;
-      this.pages.set(p.id, p);
-    });
-    (diff.quick_buttons || []).forEach((q) => {
-      const existing = this.quickButtons.get(q.id);
-      if (existing && !isNewerOrEqual(existing, q)) return;
-      this.quickButtons.set(q.id, q);
-    });
+    // Sync results are SERVER-AUTHORITATIVE — they reflect exactly what
+    // the DB had at the snapshot moment. We MUST NOT re-arbitrate based
+    // on the FE's parsed `updated_at` here: any millisecond-precision
+    // truncation, clock skew, or local optimistic update can leave the
+    // FE thinking its own copy is "newer" and silently discard the
+    // server's view. That was the cross-device bug — broadcasts arrived
+    // but the FE rejected them as "out of date." Force-apply every row
+    // in the diff.
+    (diff.timers || []).forEach((t) => this.upsertTimer(t, { silent: true, source: "sync", force: true }));
+    (diff.pages || []).forEach((p) => this.pages.set(p.id, p));
+    (diff.quick_buttons || []).forEach((q) => this.quickButtons.set(q.id, q));
     (diff.archived_ids || []).forEach((id) => this.timers.delete(id));
     // Server timestamp passed through verbatim. NEVER modified here —
     // sync queries since this exact server moment.

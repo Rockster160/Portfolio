@@ -313,6 +313,11 @@ class Timer < ApplicationRecord
       fire_scheduled_for: nil,
     )
     fire_callbacks!(event: :complete)
+    # Pick up anything a chain mutated on this same row via a separate
+    # AR instance (e.g. a `then: { chain, op: enable }` pointing at the
+    # firing timer itself). Without the reload the trailing broadcast
+    # would ship pre-chain state.
+    reload
 
     # The CLIENT drives the restart of repeating timers — it detects the
     # fire (either locally when remaining hits zero, or via this :fired
@@ -510,6 +515,17 @@ class Timer < ApplicationRecord
           user.timers.where("timers.name ILIKE ?", t[:target_timer_name].to_s).first
         end
       return unless target
+
+      # When the chain points at THIS row, route through `self`. Without
+      # this, the chain mutates a separate AR instance and `self`'s
+      # in-memory copy stays stale — the controller's subsequent
+      # `broadcast_timer` / response then carries the pre-chain state,
+      # and the FE (which applies broadcasts in order, last-write-wins
+      # via force:true) ends up showing the stale view. Specifically:
+      # Phase's `phase-disable-swarm` chain targets Phase itself, and
+      # Swarm's `swarm-disable` chain targets Swarm itself — both routes
+      # were silently producing the wrong UI until the user reloaded.
+      target = self if target.id == id
 
       case t[:op].to_s
       when "start"     then target.start!

@@ -25,17 +25,22 @@ export function subscribeTimersChannel({ store, api, onBeep, onSound, onReconnec
   function handle(envelope) {
     const data = envelope?.data;
     if (!data) return;
-    if (data.actor_tab_id && data.actor_tab_id === tabId) return;
+    if (data.actor_tab_id && data.actor_tab_id === tabId) {
+      console.log("[timers] DROP own-tab broadcast", data.reason, data.timer_id);
+      return;
+    }
 
     if (data.reason === "beep") { onBeep?.(data.pattern); return; }
     if (data.reason === "sound") { onSound?.(); return; }
 
     if (data.deleted && data.timer_id != null) {
+      console.log("[timers] DELETE", data.timer_id);
       store.removeTimer(data.timer_id);
       return;
     }
 
     if (data.timer && data.timer.id != null) {
+      console.log("[timers] BROADCAST", data.reason, "id=" + data.timer.id, "name=" + data.timer.name, "disabled=" + data.timer.disabled, "step=" + data.timer.dial_step_index);
       // force:true — the broadcast carries server-authoritative state.
       // Without this, a fresh-but-locally-stale Date.parse on existing
       // updated_at could reject the new payload, leaving the card
@@ -45,7 +50,15 @@ export function subscribeTimersChannel({ store, api, onBeep, onSound, onReconnec
       return;
     }
 
-    if (data.timer_id == null) return;
+    console.log("[timers] BROADCAST no-inline-timer", data.reason, "id=" + data.timer_id, "→ triggering sync");
+
+    // Any other broadcast — reorder, page touch, etc. — signals that
+    // SOMETHING on the server changed. Trigger a delta sync to pull
+    // whatever it was instead of silently dropping the envelope on the
+    // floor when `timer_id` happens to be absent. (Previously the
+    // `if (data.timer_id == null) return;` guard would drop reorder
+    // broadcasts, leaving the other device with stale positions until
+    // the next visibilitychange.)
     api.sync(store.lastSyncTs).then((diff) => {
       if (diff) store.applySync(diff);
     });

@@ -129,18 +129,28 @@ class TimersController < ApplicationController
 
   def confirm
     @timer.confirm!
+    @timer.reload
     broadcast_timer(:confirmed)
     render json: timer_payload(@timer)
   end
 
   def increment
     @timer.apply_increment!(by: params[:by].to_i.nonzero? || 1)
+    @timer.reload
     broadcast_timer(:incremented)
     render json: timer_payload(@timer)
   end
 
+  # `reload` after the dial advance — nested chains can mutate the
+  # row we're holding via separate AR instances (e.g. Swarm wraps,
+  # fires sCb3 which advances Phase, which lands on Swarm step, which
+  # fires pCb2 enabling Swarm — all on copies of self). Without the
+  # reload, the controller's broadcast + JSON response carry self's
+  # pre-chain in-memory state and the FE applies that stale view on
+  # top of the (correct) chain broadcast.
   def advance
     @timer.advance_dial!(by: params[:by].to_i.nonzero? || 1)
+    @timer.reload
     broadcast_timer(:advanced)
     render json: timer_payload(@timer)
   end
