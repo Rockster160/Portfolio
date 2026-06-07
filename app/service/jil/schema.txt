@@ -276,6 +276,7 @@
   #scheduled_today::Array
   #accessible::Array
   #add(content(ChoreData))::Chore
+  #update(String:Name content(ChoreData))::Chore
   #complete(String:Name Date?:Timestamp)::ChoreCompletion
   #complete_for(String:Name String:"Username" Date?:Timestamp)::ChoreCompletion
   #uncomplete(String:Name)::Boolean

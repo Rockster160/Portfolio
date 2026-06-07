@@ -325,8 +325,11 @@
     if (!root) return; // calendar view has no day sections
     const currentDate = root.dataset.currentDate;
     if (!currentDate) return;
-    const itemDate = (data.start_at || "").split("T")[0];
-    if (!itemDate) return;
+    const startTs = Number(data.start_at) * 1000;
+    if (!Number.isFinite(startTs)) return;
+    const startDate = new Date(startTs);
+    const pad = (n) => String(n).padStart(2, "0");
+    const itemDate = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}-${pad(startDate.getDate())}`;
     const offset = Math.round(
       (new Date(itemDate + "T12:00:00") - new Date(currentDate + "T12:00:00")) / 86400000,
     );
@@ -349,7 +352,6 @@
       </div>
     `);
 
-    const startTs = Number(data.start_at) * 1000;
     const existing = Array.from(section.querySelectorAll(".agenda-item"));
     const next = existing.find((node) => {
       const t = Number(node.dataset.startAt) * 1000;
@@ -764,6 +766,7 @@
       const currentId = agendaPicker?.value();
       if (currentId) agendaPicker.setValue(currentId);
       colorTouched = false;
+      endTouched = false;
       syncKind();
       sched.syncFreq();
     }
@@ -772,6 +775,17 @@
       btn.addEventListener("click", () => { activeKind = btn.dataset.kind; syncKind(); });
     });
     alldayInput?.addEventListener("change", syncAllDay);
+
+    // End time auto-tracks start (+1h) until the user edits end themselves.
+    let endTouched = false;
+    endInput?.addEventListener("input", () => { endTouched = true; });
+    startInput?.addEventListener("input", () => {
+      if (endTouched || !startInput.value || !endInput) return;
+      const [h, m] = startInput.value.split(":").map(Number);
+      if (!Number.isFinite(h) || !Number.isFinite(m)) return;
+      const pad = (n) => String(n).padStart(2, "0");
+      endInput.value = `${pad((h + 1) % 24)}:${pad(m)}`;
+    });
 
     if (colorInput) {
       colorInput.addEventListener("input", () => {
@@ -1065,7 +1079,7 @@
       if (alldayInput) alldayInput.checked = isAllDay;
       syncKind();
 
-      // Item's start_at is a UTC ISO; split into local date + time-of-day.
+      // Item's start_at is integer epoch seconds; split into local date + time-of-day.
       const [startDate, startTime] = splitEpochToDateAndTime(d.startAt);
       const [, endTime] = splitEpochToDateAndTime(d.endAt);
       $(".add-date", form).value = startDate;
@@ -1493,7 +1507,7 @@
   // by the user's completed-kind filter. Add them to the grace set and
   // (re)arm the shared timer.
   function graceNewlyCompleted(prevSnap, root) {
-    const completedHidden = getCompletedHidden();
+    const completedHidden = currentPrefs.hide_completed;
     if (!completedHidden.task && !completedHidden.event && !completedHidden.trigger) return;
     let added = false;
     const sel = ".agenda-item[data-item-id], .cal-item[data-item-id]";
@@ -1760,7 +1774,7 @@
         swap(".cal-grid");
 
         graceNewlyCompleted(prevSnap, root);
-        applyAgendaVisibility(); // re-apply the localStorage filter
+        applyAgendaVisibility();
       })
       .catch((err) => console.error("calendar refresh failed", err));
   }

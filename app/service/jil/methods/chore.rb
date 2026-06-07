@@ -76,6 +76,45 @@ class Jil::Methods::Chore < Jil::Methods::Base
     chore.persisted? ? chore : nil
   end
 
+  # Chore.update(name_or_chore, content(ChoreData)) → mutate an existing
+  # chore the running user can access. Same ChoreData builders as #add
+  # (`#name`, `#show_on_daily_view`, `#starts_on`, etc). Unknown / blank
+  # keys are dropped; an empty block is a no-op. Returns the reloaded
+  # Chore, or nil if no chore matched.
+  def update(name_or_chore, details)
+    chore = load_chore(name_or_chore)
+    return nil if chore.nil?
+
+    attrs = @jil.cast(details, :Hash).slice(*PERMIT_ADD_ATTRS)
+    return chore if attrs.empty?
+
+    if attrs.key?(:assigned_to)
+      attrs[:assigned_to_user_id] = load_user(attrs.delete(:assigned_to))&.id
+    end
+    if attrs.key?(:sharing_mode)
+      key = attrs[:sharing_mode].to_s.downcase.presence
+      if ::Chore.sharing_modes.key?(key)
+        attrs[:sharing_mode] = key.to_sym
+      else
+        attrs.delete(:sharing_mode)
+      end
+    end
+    if attrs.key?(:show_on_daily_view)
+      key = attrs[:show_on_daily_view].to_s.downcase.presence
+      if ::Chore.show_on_daily_views.key?(key)
+        attrs[:show_on_daily_view] = key.to_sym
+      else
+        attrs.delete(:show_on_daily_view)
+      end
+    end
+    attrs[:starts_on] = parse_date(attrs[:starts_on]) if attrs.key?(:starts_on)
+    attrs[:one_off] = @jil.cast(attrs[:one_off], :Boolean) if attrs.key?(:one_off)
+    attrs[:reward_pebbles] = @jil.cast(attrs[:reward_pebbles], :Numeric).to_i if attrs.key?(:reward_pebbles)
+
+    chore.update(attrs)
+    chore.reload
+  end
+
   def ensure_household
     existing = ::ChoreHouseholdMembership.where(user_id: @jil.user.id).first
     if existing
@@ -632,6 +671,7 @@ end
 #   #scheduled_today::Array
 #   #accessible::Array
 #   #add(content(ChoreData))::Chore
+#   #update(String:Name content(ChoreData))::Chore
 #   #complete(String:Name Date?:Timestamp)::ChoreCompletion
 #   #complete_for(String:Name String:"Username" Date?:Timestamp)::ChoreCompletion
 #   #uncomplete(String)::Boolean

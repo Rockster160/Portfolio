@@ -212,4 +212,50 @@ RSpec.describe Jil::Methods::Chore, type: :service do
       expect(record.starts_on).to eq(Date.new(2026, 7, 4))
     end
   end
+
+  describe "#update" do
+    before do
+      allow(jil_stub).to receive(:cast) { |val, type|
+        case type
+        when :Hash    then val.is_a?(Hash) ? val : {}
+        when :Boolean then ::ActiveModel::Type::Boolean.new.cast(val)
+        when :Numeric then val.to_i
+        else val
+        end
+      }
+    end
+
+    it "updates show_on_daily_view from a ChoreData hash" do
+      record = methods.update("Vitamins", { show_on_daily_view: "always" })
+      expect(record.id).to eq(vitamins.id)
+      expect(record.show_on_daily_view).to eq("always")
+    end
+
+    it "round-trips :always → :never" do
+      methods.update("Vitamins", { show_on_daily_view: "always" })
+      methods.update("Vitamins", { show_on_daily_view: "never" })
+      expect(vitamins.reload.show_on_daily_view).to eq("never")
+    end
+
+    it "drops an unknown show_on_daily_view value rather than raising" do
+      record = methods.update("Vitamins", { show_on_daily_view: "bogus" })
+      expect(record.show_on_daily_view).to eq(vitamins.show_on_daily_view)
+    end
+
+    it "updates name + starts_on together" do
+      record = methods.update("Vitamins", { name: "Multivitamins", starts_on: "2026-07-04" })
+      expect(record.name).to eq("Multivitamins")
+      expect(record.starts_on).to eq(Date.new(2026, 7, 4))
+    end
+
+    it "returns the chore unchanged for an empty attrs hash" do
+      record = methods.update("Vitamins", {})
+      expect(record.id).to eq(vitamins.id)
+      expect(vitamins.reload.name).to eq("Vitamins")
+    end
+
+    it "returns nil for an unknown chore" do
+      expect(methods.update("nope-no-chore", { show_on_daily_view: "always" })).to be_nil
+    end
+  end
 end
