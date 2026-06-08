@@ -61,13 +61,16 @@ import { dash_colors } from "../vars";
           };
         });
         cell.data.uptime_data = next;
+        cell.data.uptime_poll_failed = false;
         renderCell();
         if (flash) {
           cell.flash();
         }
       },
     ).fail(function (data) {
-      cell.lines(["Failed to retrieve UptimeRobot:", JSON.stringify(data)]);
+      console.warn("Failed to retrieve UptimeRobot:", data);
+      cell.data.uptime_poll_failed = true;
+      renderCell();
     });
   };
 
@@ -102,7 +105,8 @@ import { dash_colors } from "../vars";
           ? dash_colors.green
           : dash_colors.grey
         : dash_colors.red;
-      let label = "• " + name;
+      let bullet = cell.data.uptime_poll_failed ? "!" : "•";
+      let label = bullet + " " + name;
       let name_cell = Text.color(dot_color, padName(label));
 
       let mem_pct =
