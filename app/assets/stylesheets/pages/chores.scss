@@ -1046,6 +1046,11 @@ body:has(.env-banner) .chores-page .chores-toolbar {
       transform 0.1s ease;
     flex-shrink: 0;
   }
+  // `display: inline-flex` above out-prioritizes the bare `hidden`
+  // attribute, so the JS `btn.hidden = true` wouldn't actually hide
+  // these buttons in Add Chore (where there's no chore to pin). Reassert
+  // here so the attribute works.
+  .modal-head [data-edit-pin-toggle][hidden] { display: none !important; }
   .modal-head [data-edit-pin-toggle]:hover {
     color: #FFF !important;
   }
@@ -1086,6 +1091,10 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   .modal-head .modal-head-action:active { transform: scale(0.92); }
   .modal-head [data-edit-hot-rotate] { color: #F59E0B !important; }
   .modal-head [data-edit-anonymous-complete] { color: #94A3B8 !important; }
+  // Same display-overrides-hidden pitfall as the pin-toggle above —
+  // reassert so JS-set `hidden = true` actually hides these in the
+  // Add Chore flow.
+  .modal-head .modal-head-action[hidden] { display: none !important; }
 
   // Dailies container — the whole card is a drag handle (no per-card
   // pin button to filter around any more).
@@ -1918,6 +1927,10 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     font-size: 18px !important;
     line-height: 1;
     padding: 0 !important;
+    // Extra gap from the preceding head-action cluster (rotate /
+    // anonymous), so the close button reads as a separate control
+    // rather than part of the cluster.
+    margin-left: 14px !important;
   }
   .modal-close:hover {
     background: #334155 !important;

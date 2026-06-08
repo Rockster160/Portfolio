@@ -1181,7 +1181,6 @@
     anonymousForm.addEventListener("submit", async e => {
       e.preventDefault();
       const submit = anonymousForm.querySelector('button[type="submit"]');
-      if (submit?.dataset.busy === "1") return;
       const id = anonymousTargetChoreId;
       if (!id) { closeAnonymousModal(); return; }
       const tsStr = anonymousModal.querySelector('[data-anonymous-completed-at]')?.value || "";
@@ -1190,19 +1189,18 @@
       // (no implicit UTC interpretation) and serialize to ISO 8601.
       const dt = tsStr ? new Date(tsStr) : new Date();
       const iso = dt.toISOString();
-      if (submit) { submit.dataset.busy = "1"; submit.disabled = true; }
-      try {
-        await api(`/chores/items/${id}/anonymous_completion`, "POST", {
-          client_completed_at: iso, note, tab_id: TAB_ID,
-        });
-        flash("Marked done");
-        closeAnonymousModal();
-        dismissEditModalExplicit();
-      } catch (err) {
-        flash("Couldn't save: " + err.message, "error");
-      } finally {
-        if (submit) { delete submit.dataset.busy; submit.disabled = false; }
-      }
+      await withSavingState(submit, async () => {
+        try {
+          await api(`/chores/items/${id}/anonymous_completion`, "POST", {
+            client_completed_at: iso, note, tab_id: TAB_ID,
+          });
+          flash("Marked done");
+          closeAnonymousModal();
+          dismissEditModalExplicit();
+        } catch (err) {
+          flash("Couldn't save: " + err.message, "error");
+        }
+      });
     });
   }
 
@@ -1358,15 +1356,18 @@
 
     form.addEventListener("submit", async e => {
       e.preventDefault();
+      const submitBtn = form.querySelector('button[type="submit"]');
       const prefs = {};
       kindInputs.forEach(input => { prefs[input.dataset.notifyKind] = input.checked; });
-      try {
-        await api("/chores/notification_preferences", "PATCH", { chore_notify_prefs: prefs });
-        closeModal(modal);
-        flash("Saved");
-      } catch (err) {
-        flash("Couldn't save: " + err.message, "error");
-      }
+      await withSavingState(submitBtn, async () => {
+        try {
+          await api("/chores/notification_preferences", "PATCH", { chore_notify_prefs: prefs });
+          closeModal(modal);
+          flash("Saved");
+        } catch (err) {
+          flash("Couldn't save: " + err.message, "error");
+        }
+      });
     });
 
     wireModalDismiss(modal);
@@ -3140,15 +3141,45 @@
       const tctx = target.getContext("2d");
       const img = tctx.getImageData(0, 0, w, h);
       const data = img.data;
-      // Sample bg colour as the average of the four corners.
-      const corners = [0, (w - 1) * 4, (h - 1) * w * 4, ((h - 1) * w + (w - 1)) * 4];
+      // When the user zooms out, the cropped canvas extends past the
+      // source image and the outer ring becomes transparent padding.
+      // Sampling colour OR seeding the flood fill from those transparent
+      // pixels would either pick a (0,0,0) "bg colour" or eat through
+      // the padding-to-image transition. Walk each border pixel inward
+      // along its ray until we find a pixel actually drawn from the
+      // source image (alpha > 0) and treat THAT as the real edge.
+      function walkInward(x, y, dx, dy) {
+        while (x >= 0 && y >= 0 && x < w && y < h) {
+          if (data[(y * w + x) * 4 + 3] > 0) return [x, y];
+          x += dx; y += dy;
+        }
+        return null;
+      }
+      const cornerSamples = [
+        walkInward(0, 0, 1, 1),
+        walkInward(w - 1, 0, -1, 1),
+        walkInward(0, h - 1, 1, -1),
+        walkInward(w - 1, h - 1, -1, -1),
+      ].filter(Boolean);
+      if (cornerSamples.length === 0) {
+        // Whole crop is transparent — nothing to do.
+        tctx.putImageData(img, 0, 0);
+        return;
+      }
       let br = 0, bg = 0, bb = 0;
-      corners.forEach(i => { br += data[i]; bg += data[i + 1]; bb += data[i + 2]; });
-      br /= 4; bg /= 4; bb /= 4;
+      cornerSamples.forEach(([x, y]) => {
+        const i = (y * w + x) * 4;
+        br += data[i]; bg += data[i + 1]; bb += data[i + 2];
+      });
+      br /= cornerSamples.length; bg /= cornerSamples.length; bb /= cornerSamples.length;
       // Threshold 0-100 → sum-of-squared-deltas budget across r,g,b.
       const t = (threshold / 100) * 255;
       const budget = t * t * 3;
       function matches(i) {
+        // Already-transparent padding never matches: it has no colour
+        // to compare against, and treating it as a match would let the
+        // flood fill burn through the padding-to-image transition.
+        if (data[i + 3] === 0) return false;
         const dr = data[i] - br;
         const dg = data[i + 1] - bg;
         const db = data[i + 2] - bb;
@@ -3170,8 +3201,20 @@
           data[i + 3] = 0;
           queue[tail++] = pi;
         }
-        for (let x = 0; x < w; x++) { tryPush(x, 0); tryPush(x, h - 1); }
-        for (let y = 0; y < h; y++) { tryPush(0, y); tryPush(w - 1, y); }
+        // Seed at the FIRST opaque pixel along each inward ray — the
+        // real image edge, which is past any transparent zoom-out ring.
+        function seedRay(x0, y0, dx, dy) {
+          const start = walkInward(x0, y0, dx, dy);
+          if (start) tryPush(start[0], start[1]);
+        }
+        for (let x = 0; x < w; x++) {
+          seedRay(x, 0, 0, 1);
+          seedRay(x, h - 1, 0, -1);
+        }
+        for (let y = 0; y < h; y++) {
+          seedRay(0, y, 1, 0);
+          seedRay(w - 1, y, -1, 0);
+        }
         while (head < tail) {
           const pi = queue[head++];
           const x = pi % w, y = (pi / w) | 0;
@@ -3205,48 +3248,47 @@
     saveBtn.addEventListener("click", async e => {
       e.preventDefault();
       if (saveBtn.disabled) return;
-      saveBtn.disabled = true;
-      showError(stageError, "");
-      const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
-      const dataUrl = renderOutput();
-      try {
-        const res = await fetch("/chores/household_icons", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: {
-            "Content-Type": "application/json",
-            "Accept":       "application/json",
-            "X-CSRF-Token": csrf,
-          },
-          body: JSON.stringify({ household_icon: {
-            name:       nameInput.value.trim(),
-            keywords:   keysInput.value.trim(),
-            image_data: dataUrl,
-          } }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          showError(stageError, (body.errors || ["Save failed"]).join(", "));
-          saveBtn.disabled = false;
-          return;
+      await withSavingState(saveBtn, async () => {
+        showError(stageError, "");
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
+        const dataUrl = renderOutput();
+        try {
+          const res = await fetch("/chores/household_icons", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+              "Content-Type": "application/json",
+              "Accept":       "application/json",
+              "X-CSRF-Token": csrf,
+            },
+            body: JSON.stringify({ household_icon: {
+              name:       nameInput.value.trim(),
+              keywords:   keysInput.value.trim(),
+              image_data: dataUrl,
+            } }),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            showError(stageError, (body.errors || ["Save failed"]).join(", "));
+            return;
+          }
+          const saved = await res.json();
+          await IconPool.refreshCustom();
+          // If the cropper was opened from a chore-form picker, drop the
+          // freshly-saved icon straight into the form so the user lands
+          // back on a populated state.
+          if (activeStack?.__setIconValue) {
+            activeStack.__setIconValue(saved.c, { source: "user" });
+            activeStack.dispatchEvent(new CustomEvent("chore-icon-picked", {
+              bubbles: true, detail: { value: saved.c },
+            }));
+          }
+          modal.classList.add("hidden");
+          resetState();
+        } catch (err) {
+          showError(stageError, err.message || "Save failed");
         }
-        const saved = await res.json();
-        await IconPool.refreshCustom();
-        // If the cropper was opened from a chore-form picker, drop the
-        // freshly-saved icon straight into the form so the user lands
-        // back on a populated state.
-        if (activeStack?.__setIconValue) {
-          activeStack.__setIconValue(saved.c, { source: "user" });
-          activeStack.dispatchEvent(new CustomEvent("chore-icon-picked", {
-            bubbles: true, detail: { value: saved.c },
-          }));
-        }
-        modal.classList.add("hidden");
-        resetState();
-      } catch (err) {
-        showError(stageError, err.message || "Save failed");
-        saveBtn.disabled = false;
-      }
+      });
     });
 
     document.addEventListener("chore-icon-cropper-open", e => {

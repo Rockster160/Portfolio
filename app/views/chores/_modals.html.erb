@@ -5,18 +5,23 @@
         <i class="fa fa-thumb-tack" aria-hidden="true"></i>
       </button>
       <h3 data-modal-title>Add Chore</h3>
+      <%# Order: rotate (sometimes shown) → anonymous (always shown on
+        edit) → close. Anonymous sits immediately left of the close so
+        its position stays fixed across edit views; rotate slots in on
+        the outer side when applicable and its appearance/absence only
+        ripples leftward, never shifting the anonymous + close pair. %>
+      <%# Swap this Hot Pick out for a different one (same reward tier). %>
+      <button type="button" class="modal-head-action" data-edit-hot-rotate
+              aria-label="Swap this Hot Pick for a different one"
+              title="Swap this Hot Pick for a different one" hidden>
+        <i class="fa fa-refresh" aria-hidden="true"></i>
+      </button>
       <%# "Someone else did it" — marks the chore as done for the day
         without giving anyone in the household credit or pebbles. %>
       <button type="button" class="modal-head-action" data-edit-anonymous-complete
               aria-label="Mark done by someone else"
               title="Mark done by someone outside the household" hidden>
         <i class="fa fa-user-secret" aria-hidden="true"></i>
-      </button>
-      <%# Swap this Hot Pick out for a different one (same reward tier). %>
-      <button type="button" class="modal-head-action" data-edit-hot-rotate
-              aria-label="Swap this Hot Pick for a different one"
-              title="Swap this Hot Pick for a different one" hidden>
-        <i class="fa fa-refresh" aria-hidden="true"></i>
       </button>
       <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
     </div>
@@ -58,7 +63,14 @@
         </div>
       </div>
 
-      <%# (Aliases + Completion Notes — moved into the Advanced section below.) %>
+      <%# (Completion Notes — moved into the Advanced section below.) %>
+
+      <div class="form-section">
+        <label class="field-label">Aliases</label>
+        <input type="text" data-field="aliases_csv" placeholder="floss, toothpaste"
+               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+               data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+      </div>
 
       <%# ----- Pebbles -----
         Each tier has a description (rendered below the pills as the user
@@ -114,13 +126,6 @@
         Fields kept here mirror what was previously inline. %>
       <details class="form-advanced" data-advanced-section>
         <summary class="form-advanced-summary">Advanced options</summary>
-
-        <div class="form-section">
-          <label class="field-label">Aliases</label>
-          <input type="text" data-field="aliases_csv" placeholder="floss, toothpaste"
-                 autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                 data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
-        </div>
 
         <%# Completion-time notes. Plain text is stored verbatim on the
           ChoreCompletion. `{Label}` / `{Label:Numeric}` /
