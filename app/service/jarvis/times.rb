@@ -4,30 +4,38 @@
 module Jarvis::Times
   module_function
 
+  STRONG_DAY_WORDS = (Date::DAYNAMES + Date::ABBR_DAYNAMES + [:today, :tomorrow, :yesterday, :tonight])
+                       .map { |w| w.to_s.downcase }.freeze
+  WEAK_DAY_WORDS = %w[morning afternoon evening night].freeze
+  MONTH_WORDS = (Date::MONTHNAMES + Date::ABBR_MONTHNAMES).compact.freeze
+
   def extract_time(words, chronic_opts={})
     rx = Jarvis::Regex
     drx = /\d+(?:\.\d+)?/
     # Strip quoted sections so time-like text inside quotes isn't matched
     words = words.gsub(/(?<!\S)["\u201C\u201D].*["\u201C\u201D]/m, " ").squish
     words = words.gsub(rx.words(:later), "today")
-    month_words = (Date::MONTHNAMES + Date::ABBR_MONTHNAMES).compact
-    month_words_regex = /(?<![\w-])(?:#{month_words.join("|")})(?![\w-])/i
-    day_words = (Date::DAYNAMES + Date::ABBR_DAYNAMES + [:today, :tomorrow, :yesterday, :morning, :night, :afternoon, :evening, :tonight]).map { |w| w.to_s.downcase.to_sym }
-    day_words_regex = /(?<![\w-])(?:#{day_words.join("|")})(?![\w-])/i
+    month_words_regex = /(?<![\w-])(?:#{MONTH_WORDS.join("|")})(?![\w-])/i
+    strong_day_regex = /(?<![\w-])(?:#{STRONG_DAY_WORDS.join("|")})(?![\w-])/i
+    weak_day_regex = /(?<![\w-])(?:#{WEAK_DAY_WORDS.join("|")})(?![\w-])/i
+    day_words_regex = /(?<![\w-])(?:#{(STRONG_DAY_WORDS + WEAK_DAY_WORDS).join("|")})(?![\w-])/i
+    noon_midnight_regex = /(?<![\w-])(?:noon|midnight)(?![\w-])/i
     time_words = [:second, :minute, :hour, :day, :week, :month, :year]
     rel_words_regex = rx.words(time_words, suffix: "s?")
     iso8601_regex = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}-\d{2}:\d{2}/
     and_some = /(?: (?:and )?(?:an? )?(#{drx})?(?: ?\bhalf\b ?)?(?: (#{rel_words_regex}))?)?/
     time_words_regex = /(#{rel_words_regex})#{and_some}/
+    clock_time = /(?:#{noon_midnight_regex}|\d+:?\d*(?: ?(?:am|pm))?)/
     time_str = words[/\bin (#{drx}|an?) #{time_words_regex}(?: ?(#{drx}))?/]
     time_str ||= words[/\bin (#{drx}|an?)#{and_some}(#{rel_words_regex})/]
-    time_str ||= words[/(\b(?:on|next|last) )?(#{month_words_regex} \d{1,2}(\w{2})?(,? '?\d{2,4})? )?((in the )?(#{day_words_regex} ?)+ )?\b(at) \d+:?\d*( ?(am|pm))?( (#{day_words_regex} ?)+)?/]
+    time_str ||= words[/(\b(?:on|next|last) )?(#{month_words_regex} \d{1,2}(\w{2})?(,? '?\d{2,4})? )?((in the )?(#{day_words_regex} ?)+ )?\b(at) #{clock_time}( (#{day_words_regex} ?)+)?/]
     time_str ||= words[/(\b(?:on|next|last) )?#{month_words_regex} \d{1,2}(\w{2})?(,? '?\d{2,4})?/]
     time_str ||= words[/(\b(?:on|next|last))(?:^| )?\d{1,2}\/\d{1,2}(\/(\d{2}|\d{4})\b)?/]
-    time_str ||= words[/(\b(?:on|next|last))(?:^| )#{day_words_regex}/]
-    time_str ||= words[/in the #{day_words_regex}/]
+    time_str ||= words[/(\b(?:on|next|last))(?:^| )#{strong_day_regex}/]
+    time_str ||= words[/(?<![\w-])(?:this|tomorrow|tonight) #{weak_day_regex}/i]
+    time_str ||= words[/in the #{weak_day_regex}/]
     time_str ||= words[/(#{drx}|an?) #{time_words_regex} \b(from now|ago)\b/]
-    time_str ||= words[/((next|last) )?(#{day_words_regex} ?)+/]
+    time_str ||= words[/((next|last) )?#{strong_day_regex}(?: #{weak_day_regex})?/]
     time_str ||= words[/(\bat )(#{iso8601_regex} ?)/]
 
     pre_sub = time_str
