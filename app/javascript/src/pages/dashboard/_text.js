@@ -301,14 +301,18 @@ Text.markup = function (text) {
   text = Text.escapeEmoji(text);
   text = Text.escapeSpecial(text);
   text = text.replaceAll(/\[hr]/gi, "-".repeat(single_width));
-  text = text.replaceAll(
-    /\[bg (.*?)\](.*?)\[\/bg\]/gi,
-    '<span style="background-color: $1;">$2</span>',
-  );
-  text = text.replaceAll(
-    /\[color (.*?)\](.*?)\[\/color\]/gi,
-    '<span style="color: $1;">$2</span>',
-  );
+  let prev;
+  do {
+    prev = text;
+    text = text.replaceAll(
+      /\[bg ([^\]]*?)\]((?:(?!\[bg |\[\/bg\]).)*?)\[\/bg\]/gi,
+      '<span style="background-color: $1;">$2</span>',
+    );
+    text = text.replaceAll(
+      /\[color ([^\]]*?)\]((?:(?!\[color |\[\/color\]).)*?)\[\/color\]/gi,
+      '<span style="color: $1;">$2</span>',
+    );
+  } while (text !== prev);
   text = text.replaceAll(/\[e\](.*?)\[\/e\]/gi, "<e>$1</e>");
   text = text.replaceAll(/\[bold\](.*?)\[\/bold\]/gi, "<b>$1</b>");
   text = text.replaceAll(
