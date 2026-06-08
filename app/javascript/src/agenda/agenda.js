@@ -20,6 +20,21 @@
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
   }
 
+  // Implicit submit-on-Enter is inconsistent across browsers (Chrome's native
+  // time/date/color pickers swallow Enter; some select dropdowns do the same).
+  // Make Enter always submit, unless the user is in a textarea (newline) or
+  // focused on a button (let the button's own activation handle it).
+  function bindEnterSubmit(form) {
+    form.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target;
+      if (t instanceof HTMLTextAreaElement) return;
+      if (t instanceof HTMLButtonElement) return;
+      e.preventDefault();
+      form.requestSubmit();
+    });
+  }
+
   // All time values cross the wire as integer epoch seconds (UTC). The
   // browser is the only consumer that decides the display timezone, so
   // round-trip is exact: an event entered as "4pm" in the browser's local
@@ -781,6 +796,7 @@
     }
 
     form.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
+    bindEnterSubmit(form);
 
     if (window.jQuery) {
       window.jQuery(modal).on("modal.shown", () => {
@@ -1266,6 +1282,7 @@
           toast("Saved offline — will sync when reconnected");
         });
     });
+    bindEnterSubmit(form);
 
     restoreBtn?.addEventListener("click", async () => {
       const ok = await agendaConfirm({

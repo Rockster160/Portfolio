@@ -2093,10 +2093,19 @@
           if (pill.dataset.value === "weekdays") {
             setPillValue("freq", "weekly");
             syncWeekdayChips(["mon", "tue", "wed", "thu", "fri"]);
+            // User-initiated freq pick auto-fills starts_on with today
+            // (only when blank — never overwrites). MUST stay in this
+            // click handler and NOT in syncFreqRow: programmatic
+            // populate (e.g. openEditModal restoring a saved chore)
+            // also runs syncFreqRow, and silently mutating
+            // `starts_on` there would change the chore's due date on
+            // save even though the user never touched it.
+            ensureStartsOnSet();
             syncFreqRow();
             return;
           }
           setPillValue("freq", pill.dataset.value);
+          if (pill.dataset.value !== "never") ensureStartsOnSet();
           syncFreqRow();
           return;
         }
@@ -2145,14 +2154,22 @@
     });
     editForm.querySelector('[data-cooldown-amount]')?.addEventListener("input", syncCustomCooldown);
     editForm.querySelector('[data-cooldown-unit]')?.addEventListener("change", syncCustomCooldown);
-    editForm.querySelector('[data-field="one_off"]')?.addEventListener("change", syncSingleTask);
+    editForm.querySelector('[data-field="one_off"]')?.addEventListener("change", () => {
+      syncSingleTask();
+      // Only the user-initiated toggle auto-fills the date — see the
+      // comment on syncSingleTask for why this can't live there.
+      if (isSingleTask()) ensureStartsOnSet();
+    });
     editForm.querySelector('[data-field="starts_on"]')?.addEventListener("change", syncStartsOnDependents);
   }
   function isSingleTask() { return editForm.querySelector('[data-field="one_off"]')?.checked === true; }
   function syncSingleTask() {
-    const on = isSingleTask();
-    editForm.querySelectorAll('[data-recurring-only]').forEach(el => el.classList.toggle("hidden", on));
-    if (on) ensureStartsOnSet();
+    // PURE UI sync — only toggles row visibility. Auto-filling
+    // starts_on lives in the user-change handler instead, so opening
+    // an existing single-task chore with no starts_on doesn't silently
+    // stamp today's date into the form and save it back as a date the
+    // chore never had.
+    editForm.querySelectorAll('[data-recurring-only]').forEach(el => el.classList.toggle("hidden", isSingleTask()));
   }
   // Fill starts_on with today's date IFF it's currently blank. Called
   // whenever the user opts into something date-bearing — a recurrence
@@ -2202,9 +2219,6 @@
   }
   function syncFreqRow() {
     const freq = getField("freq") || "never";
-    // Picking ANY recurrence auto-fills starts_on with today (only
-    // when blank — never overwrites a user-chosen date).
-    if (freq !== "never") ensureStartsOnSet();
     editForm.querySelector('[data-weekly-wrap]')?.classList.toggle("hidden", freq !== "weekly");
     editForm.querySelector('[data-monthly-wrap]')?.classList.toggle("hidden", freq !== "monthly");
     editForm.querySelector('[data-yearly-wrap]')?.classList.toggle("hidden", freq !== "yearly");
@@ -3263,33 +3277,76 @@
     if (anon) anon.hidden = !c;
   }
 
+  // Single source of truth for "the chore edit form is at clean
+  // defaults." Used both when opening Add Chore on a previously-edited
+  // modal AND at the START of every fresh openEditModal call, so no
+  // value, pill `.active`, chip selection, dynamic widget, or hidden
+  // helper input can leak from the previously-open chore. Adding a new
+  // form field? Reset it here.
+  function resetEditFormToDefaults() {
+    if (!editForm) return;
+    editForm.reset();
+    setIconField("");
+    setField("name", "");
+    setField("short_name", "");
+    setField("aliases_csv", "");
+    setField("notes_template", "");
+    setField("assigned_to_user_id", "");
+    setField("starts_on", "");
+    selectRewardPill(1);
+    setField("reward_pebbles", 1);
+    setCooldownSeconds(0);
+    setPillValue("freq", "never");
+    setPillValue("show_on_daily_view", "when_scheduled");
+    setPillValue("hot_eligibility", "when_available");
+    setPillValue("sharing_mode", "household");
+    setPillValue("after_chore_when", "today");
+    const oneOffCb = editForm.querySelector('[data-field="one_off"]');
+    if (oneOffCb) oneOffCb.checked = false;
+    // Anchor picker: clear the hidden id and re-render the trigger so
+    // its icon + label go back to the empty "Pick a chore…" state.
+    const anchorEl = editForm.querySelector('[data-anchor-chore-id]');
+    if (anchorEl) anchorEl.value = "";
+    syncAnchorPickerButton();
+    // After-chore "Later…" custom row inputs — form.reset already
+    // restores HTML defaults, but defensive in case future markup
+    // changes drop the value attributes.
+    const afterInt = editForm.querySelector('[data-after-chore-interval]');
+    if (afterInt) afterInt.value = "2";
+    const afterUnit = editForm.querySelector('[data-after-chore-unit]');
+    if (afterUnit) afterUnit.value = "day";
+    // Custom/relative recurrence row.
+    const interval = editForm.querySelector('[data-interval]');
+    if (interval) interval.value = "1";
+    const unit = editForm.querySelector('[data-unit]');
+    if (unit) unit.value = "day";
+    // Chip-based selections — pills handled via setPillValue above,
+    // chips are independent DOM state.
+    syncWeekdayChips([]);
+    editForm.querySelectorAll('[data-month-day-pane] .md-chip.active').forEach(c => c.classList.remove("active"));
+    editForm.querySelector('[data-month-mode-tabs] [data-month-mode="day-of-month"]')?.click();
+    editForm.querySelectorAll('[data-month-set-pos], [data-month-wday]').forEach(el => {
+      delete el.dataset.userTouched;
+    });
+    syncSingleTask();
+    syncFreqRow();
+    syncWeekdaysHelperHighlight();
+  }
+
   function openCreateModal(opts = {}) {
     if (!editModal) return;
     if (modalLockedFor !== "__create__") {
       currentChoreId = null;
-      editForm.reset();
-      setIconField("");
+      resetEditFormToDefaults();
       if (opts.prefillName) setField("name", opts.prefillName);
-      selectRewardPill(1);
-      setField("reward_pebbles", 1);
-      // Intentionally leave starts_on blank — it auto-fills with today
-      // when the user picks a recurrence freq OR toggles Single Task on
-      // (see ensureStartsOnSet). New chores with no schedule get no
-      // implicit date attached.
-      setField("starts_on", "");
-      setCooldownSeconds(0);
-      setPillValue("freq", "never");
-      setPillValue("show_on_daily_view", "when_scheduled");
-      setPillValue("hot_eligibility", "when_available");
-      setPillValue("sharing_mode", "household");
       const oneOffCb = editForm.querySelector('[data-field="one_off"]');
       if (oneOffCb) oneOffCb.checked = !!opts.oneOff;
       syncSingleTask();
-      editForm.querySelectorAll('[data-month-day-pane] .md-chip').forEach(c => c.classList.remove("active"));
-      editForm.querySelector('[data-month-mode-tabs] [data-month-mode="day-of-month"]')?.click();
-      syncFreqRow();
-      syncWeekdayChips([]);
-      syncWeekdaysHelperHighlight();
+      // Brand-new single-task chores get today's date stamped so the
+      // user lands on a sensible default. (Edit-populate intentionally
+      // does NOT — opening an existing one-off with no date should
+      // leave it blank, not silently rewrite it.)
+      if (opts.oneOff) ensureStartsOnSet();
       modalLockedFor = "__create__";
     }
     editModal.querySelector('[data-modal-title]').textContent = "Add Chore";
@@ -3319,7 +3376,10 @@
     editModal.querySelector('[data-modal-title]').textContent = "Edit Chore";
     refreshEditModalPin();
     refreshEditModalHeadActions(c);
-    editForm.reset();
+    // FULL reset before populating. Prevents any UI state from the
+    // previously-opened chore (anchor selection, pill `.active`,
+    // chip selections, after_chore_when, etc.) from leaking through.
+    resetEditFormToDefaults();
     setField("name", c.name);
     setField("short_name", c.short_name === c.name ? "" : c.short_name);
     setIconField(c.icon || "");
