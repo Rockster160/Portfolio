@@ -166,7 +166,7 @@ class Jarvis
     timestamp = (scheduled_time || Time.current).in_time_zone(@user.timezone).iso8601
     tasks = ::Jil.trigger(
       @user, :tell,
-      { words: remaining_words, timestamp: timestamp, full: @words },
+      { words: remaining_words, timestamp: timestamp, full: @words, has_time: scheduled_time.present? },
       auth: :words,
     )
     return tasks.last.last_message if tasks.any?(&:stop_propagation?)

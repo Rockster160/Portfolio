@@ -1114,6 +1114,19 @@
       }
     });
 
+    // Edit button inside the details modal — closes details, opens the
+    // edit modal for the same item. Only visible when row is editable
+    // (openDetailsModal flips the hidden class based on data-readonly).
+    const detailsModalEl = document.getElementById("agenda-item-details");
+    detailsModalEl?.querySelector("[data-edit-from-details]")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const target = detailsModalItem;
+      if (!target) return;
+      if (window.hideModal) window.hideModal("#agenda-item-details");
+      openModal(target);
+    });
+
     function openModal(item) {
       const d = item.dataset;
       $(".add-item-id", form).value = d.itemId;
@@ -1636,10 +1649,19 @@
     });
   }
 
-  // Read-only details modal for viewer-permission rows.
+  // Details modal — read-only view shown on body click. When the user has
+  // edit permission on the row, surfaces an Edit button that swaps to the
+  // edit modal for the same item.
+  let detailsModalItem = null;
   function openDetailsModal(dataEl) {
     const modal = document.getElementById("agenda-item-details");
     if (!modal) return;
+    detailsModalItem = dataEl;
+    const editBtn = modal.querySelector("[data-edit-from-details]");
+    if (editBtn) {
+      const canEdit = !dataEl.hasAttribute("data-readonly") && !dataEl.classList.contains("preview");
+      editBtn.classList.toggle("hidden", !canEdit);
+    }
     const d = dataEl.dataset;
     const set = (sel, val) => {
       const node = modal.querySelector(sel);
@@ -1982,5 +2004,14 @@
 
     subscribeMonitor();
     processQueue();
+
+    // Deep link: ?item=<display_id> auto-opens the details modal for that
+    // row once the page has rendered. Used by the Jarvis "schedule" reply
+    // link so the user lands directly on the new event.
+    const itemParam = new URLSearchParams(window.location.search).get("item");
+    if (itemParam) {
+      const row = root.querySelector(`[data-item-id="${CSS.escape(itemParam)}"]`);
+      if (row) openDetailsModal(row);
+    }
   });
 })();

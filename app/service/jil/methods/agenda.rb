@@ -37,7 +37,7 @@ class Jil::Methods::Agenda < Jil::Methods::Base
     agenda.agenda_items.create(
       kind:     :task,
       name:     item_name,
-      start_at: parse_time(start_at),
+      start_at: parse_time(start_at) || next_top_of_hour,
     ).tap { agenda.broadcast! }
   end
 
@@ -313,8 +313,13 @@ class Jil::Methods::Agenda < Jil::Methods::Base
 
   def parse_time(val)
     return val if val.is_a?(::Time) || val.is_a?(::DateTime)
+    return nil if val.to_s.strip.empty?
 
     @jil.user.parse_time(val.to_s)
+  end
+
+  def next_top_of_hour
+    @jil.user.timezone { Time.current.change(min: 0, sec: 0) + 1.hour }
   end
 
   def load_agenda(value)

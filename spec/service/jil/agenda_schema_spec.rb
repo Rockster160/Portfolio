@@ -109,6 +109,42 @@ RSpec.describe "Jil Agenda schema entries" do
     end
   end
 
+  describe "add_task defaults" do
+    let(:user) { create(:user) }
+    let!(:agenda) { create(:agenda, user: user, name: "Inbox") }
+
+    it "defaults to the next top of the hour when start_at is blank" do
+      Time.use_zone("America/Denver") {
+        travel_to(Time.zone.local(2026, 6, 8, 15, 4, 17)) do
+          code = <<~'JIL'
+            new_task = Agenda.add_task("Inbox" "Take out trash" "")::AgendaItem
+          JIL
+          Jil::Executor.call(user, code)
+
+          item = agenda.agenda_items.find_by!(name: "Take out trash")
+          expect(item.kind).to eq("task")
+          expect(item.end_at).to be_nil
+          expect(item.start_at).to eq(Time.zone.local(2026, 6, 8, 16, 0, 0))
+        end
+      }
+    end
+
+    it "honors an explicit start_at timestamp" do
+      Time.use_zone("America/Denver") {
+        travel_to(Time.zone.local(2026, 6, 8, 15, 4, 17)) do
+          code = <<~'JIL'
+            new_task = Agenda.add_task("Inbox" "Call mom" "2026-06-09T10:30")::AgendaItem
+          JIL
+          Jil::Executor.call(user, code)
+
+          item = agenda.agenda_items.find_by!(name: "Call mom")
+          expect(item.end_at).to be_nil
+          expect(item.start_at).to eq(Time.zone.local(2026, 6, 9, 10, 30, 0))
+        end
+      }
+    end
+  end
+
   it "validates Agenda getters and update! with named-arg content block" do
     code = <<~'JIL'
       my_agenda = Agenda.find("Work")::Agenda

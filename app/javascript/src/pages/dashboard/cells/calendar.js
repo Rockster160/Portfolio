@@ -68,18 +68,23 @@ import { dash_colors } from "../vars";
         start_time,
         end_time,
         all_day,
+        kind,
       } = event;
       const isAllDay = all_day === "true" || all_day === true;
+      const isTask = kind === "task";
       // start_time / end_time arrive as integer epoch seconds (UTC).
       // Display is always browser-local — the server never picks a zone.
       const time = isAllDay
         ? new Date((event.start_date || start_time) * 1000)
         : new Date(start_time * 1000);
 
-      // Skip past events (re-evaluated each minute by ticker)
-      const endRef = end_time ? new Date(end_time * 1000) : time;
-      if (!isAllDay && endRef < now) {
-        return;
+      // Skip past events (re-evaluated each minute by ticker).
+      // Tasks stay visible until completed — no end time to compare.
+      if (!isAllDay && !isTask) {
+        const endRef = end_time ? new Date(end_time * 1000) : time;
+        if (endRef < now) {
+          return;
+        }
       }
       const eventDateLine = dateLine(time);
 
@@ -103,7 +108,7 @@ import { dash_colors } from "../vars";
         );
       } else {
         let timeStr = timeFromDate(time);
-        if (end_time) {
+        if (end_time && !isTask) {
           const endTime = new Date(end_time * 1000);
           timeStr = `${timeStr}-${timeFromDate(endTime)}`;
         }
