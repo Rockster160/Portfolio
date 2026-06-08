@@ -1,26 +1,29 @@
-# email = @email = Email.find(27212)
-# @doc = Nokogiri::HTML(@email.to_html); nil
-# def order_id; @order_id ||= @email.to_html[/\b\d{3}-\d{7}-\d{7}\b/]; end
-# def month_regex; @month_regex ||= /\b(?:January|Jan|February|Feb|March|Mar|April|Apr|May|May|June|Jun|July|Jul|August|Aug|September|Sep|October|Oct|November|Nov|December|Dec)\b/; end
-# def wday_regex; @wday_regex ||= /\b(?:Sunday|Sun|Monday|Mon|Tuesday|Tue|Wednesday|Wed|Thursday|Thu|Friday|Fri|Saturday|Sat)\b/; end
-
-# Rack::Utils.parse_nested_query(URI.parse(url).query)
-
-# Collect URLS from a bunch of ids, return all of the urls, pull out the good ones.
-# Check if `www.amazon.com%2Fdp%2FB09VNT8WN2` only happens and happens for ALL goods
-# AmazonEmailParser.parse(Email.find(27212))
+# AmazonEmailParser.parse(Email.find(<id>))
+#
+# Parses the modern Amazon shipment email format (rio-card / rexMultiOrderCard).
+# Each shipment email - ordered, shipped, delayed, out for delivery, or delivered -
+# finds-or-creates an AmazonOrder per item (ASIN) on the order, updates the expected
+# delivery date, and flips `delivered` true when the email reports the package as delivered.
 class AmazonEmailParserError < StandardError; end
 
 class AmazonEmailParser
   include ::Memoizable
+
+  ASIN_REGEX = /(?:%2Fdp%2F|\/dp\/)([A-Z0-9]{10,})/i
+  ORDER_ID_REGEX = /\b\d{3}-\d{7}-\d{7}\b/
+  ORDER_HEADER_REGEX = /Order\s*#?\s*\d{3}-\d{7}-\d{7}/i
+  DELIVERED_REGEXES = [
+    /Your package was delivered/i,
+    /Your package has been delivered/i,
+    /Delivered\s+(today|yesterday)/i,
+    /Arrived\b/i,
+  ].freeze
 
   def self.parse(email)
     Time.use_zone(User.timezone) {
       new(email).parse
     }
   end
-
-  💾(:order_id) { @email.to_html[/\b\d{3}-\d{7}-\d{7}\b/] }
 
   def initialize(email)
     @email = email
@@ -31,11 +34,19 @@ class AmazonEmailParser
     @doc = Nokogiri::HTML(@email.to_html)
     return Jarvis.cmd("Add Amazon Email no order id: #{@email.id}") if order_id.blank?
 
-    if @email.to_html.include?("Your package has been delivered!")
-      doall(:order) { |item| item.delivered = true }
-    else
-      parse_email
-    end
+    delivered = delivered_email?
+    doall { |item|
+      arrival_date(item).tap { |date|
+        if date.present?
+          item.delivery_date = date.iso8601.encode("UTF-8")
+        elsif !delivered
+          item.error!("Unable to parse date")
+        end
+      }
+      item.time_range = arrival_time(item)
+      item.name ||= shortened_name(item)
+      item.delivered = true if delivered
+    }
 
     AmazonOrder.save
     AmazonOrder.broadcast
@@ -48,130 +59,126 @@ class AmazonEmailParser
     false
   end
 
+  💾(:order_id) { @email.to_html[ORDER_ID_REGEX] }
+
+  # The order details card - the .rio-card containing "Order # XXX-XXXXXXX-XXXXXXX"
+  # along with the item images, names, and arrival info. Other rio-cards in the
+  # email (step tracker, marketing slot, dividers) are skipped.
+  💾(:order_card) {
+    @doc.css(".rio-card").find { |card|
+      card.text.include?(order_id) && card.css("a[href*='%2Fdp%2F'], a[href*='/dp/']").any?
+    }
+  }
+
+  💾(:order_card_html) { order_card&.to_html.to_s }
+
+  💾(:order_card_text) {
+    order_card&.text.to_s.then { |t| t.gsub(/\s+/, " ").strip }
+  }
+
+  💾(:item_asins) {
+    next [order_id] if order_card.nil?
+
+    asins = order_card.css("a").flat_map { |a| a["href"].to_s.scan(ASIN_REGEX).flatten }.compact.uniq
+    asins.presence || [order_id]
+  }
+
+  💾(:delivered_email?) {
+    text = order_card_text.presence || @email.to_html
+    DELIVERED_REGEXES.any? { |re| text.match?(re) }
+  }
+
   def order_items
-    @order_items ||= (
-      AmazonOrder.by_order(order_id).tap { |items|
-        items.each do |item|
-          @changed = true
-          item.errors = [] # Clear errors since a new email came in
-          item.email_ids << @email.id unless item.email_ids.include?(@email.id)
-        end
-      }
-    )
-  end
-
-  def email_items
-    @email_items ||= (
-      # urls = @doc.to_s.scan(/\"https:\/\/www\.amazon\.com\/gp\/.*?\"/)
-      urls = @doc.to_s.split(/keep shopping for/i, 2).first.scan(/"(https:\/\/www\.amazon\.com\/gp\/.*?)"/).flatten
-
-      item_ids = urls.filter_map { |url|
-        next if url.include?("orderId%3D")
-        next unless url.include?("U=%2Fdp")
-
-        full_url = url[1..-2]
-        full_url[/%2Fdp%2F([a-z0-9]+)/i, 1].presence # && full_url
-      }.uniq.presence
-      item_ids ||= [order_id]
-
-      item_ids.map { |item_id|
-        AmazonOrder.find_or_create(order_id, item_id).tap { |item|
-          @changed = true
-          item.errors = [] # Clear errors since a new email came in
-          item.email_ids << @email.id unless item.email_ids.include?(@email.id)
-        }
-      }
-    )
-  end
-
-  def doall(scope, &block)
-    items = scope == :email ? email_items : order_items
-    items.each { |item| block.call(item) }
-  end
-
-  def parse_email
-    doall(:email) { |item|
-      arrival_date(item).tap { |date|
-        if date.nil?
-          item.error!("Unable to parse date")
-        else
-          item.delivery_date = date.iso8601.encode("UTF-8")
-        end
-      }
-      item.time_range = arrival_time(item) # might be `nil`
-      item.name ||= shortened_name(item)
+    @order_items ||= AmazonOrder.by_order(order_id).tap { |items|
+      items.each do |item|
+        @changed = true
+        item.errors = []
+        item.email_ids << @email.id unless item.email_ids.include?(@email.id)
+      end
     }
   end
 
-  def regex_words(*words)
-    Regexp.new("\\b(?:#{words.join("|")})\\b")
+  def email_items
+    @email_items ||= item_asins.map { |asin|
+      AmazonOrder.find_or_create(order_id, asin).tap { |item|
+        @changed = true
+        item.errors = []
+        item.email_ids << @email.id unless item.email_ids.include?(@email.id)
+      }
+    }
+  end
+
+  def doall(&block)
+    items = email_items
+    seen_ids = items.map(&:item_id).to_set
+    items.each { |item| block.call(item) }
+    order_items.each { |item| block.call(item) unless seen_ids.include?(item.item_id) }
   end
 
   💾(:month_regex) {
     month_names = Date::MONTHNAMES.compact
-    with_shorts = month_names.map { |day| [day, day.first(3)] }.flatten
-    regex_words(with_shorts)
+    Regexp.new("\\b(?:#{month_names.flat_map { |m| [m, m.first(3)] }.join('|')})\\b")
   }
 
   💾(:wday_regex) {
-    month_names = Date::DAYNAMES.compact
-    with_shorts = month_names.map { |day| [day, day.first(3)] }.flatten
-    regex_words(with_shorts)
+    day_names = Date::DAYNAMES.compact
+    Regexp.new("\\b(?:#{day_names.flat_map { |d| [d, d.first(3)] }.join('|')})\\b")
   }
 
   def future(date)
     loop { date.past? ? date += 1.week : (break date) }
   end
 
-  def element(item) # the `tr` wrapping the image and name
-    @elements ||= {}
-    @elements[item.item_id] ||= (
-      found = @doc.xpath("//a[contains(@href, '#{item.item_id}')]")
-      found.filter_map { |ele| ele.ancestors("tr").first }.first
-    )
-  end
+  def arrival_date(_item)
+    text = order_card_text
+    return nil if text.blank?
 
-  def section(item) # the `table` wrapping the whole section (not just the items)
-    @sections ||= {}
-    @sections[item.item_id] ||= (
-      element(item)&.ancestors("table")&.each_cons(2) { |table_a, table_b|
-        break table_a if table_b && table_b["class"] == "rio_body"
-      }
-    )
-  end
+    # "Delivered today" / "Delivered yesterday" / "Your package was delivered"
+    return Time.zone.today if text.match?(/Delivered\s+today|Your package was delivered|Your package has been delivered/i)
+    return Time.zone.today - 1.day if text.match?(/Delivered\s+yesterday/i)
 
-  def arrival_date(item)
-    table_html = section(item)&.inner_html
-    return item.error!("No info card") if table_html.blank?
+    # "Arriving overnight ..." - overnight means by the next morning
+    return Time.zone.today + 1.day if text.match?(/Arriving\s+overnight/i)
 
-    months = month_regex
-    wdays = wday_regex
-    date_regexp = /(#{months}) \d{1,2}/
-    date_str = table_html[date_regexp]
-    return Time.zone.today if date_str.nil? && table_html[/\btoday\b/i].present?
-    return Date.tomorrow if date_str.nil? && table_html[/\btomorrow\b/i].present?
-    return Date.tomorrow if date_str.nil? && table_html[/\bovernight\b/i].present?
+    # "Arriving today" / "Arriving tomorrow"
+    return Time.zone.today if text.match?(/Arriving\s+today/i)
+    return Time.zone.today + 1.day if text.match?(/Arriving\s+tomorrow/i)
 
-    date_str ||= table_html[/Arriving (#{wdays})/, 1]
-    return Date.parse(date_str).then { |date| future(date) } if date_str.present?
+    # "Arriving <Weekday>" - parse to next occurrence
+    if (match = text.match(/Arriving\s+(#{wday_regex})/))
+      return future(Date.parse(match[1]))
+    end
 
-    arrival_ele = @doc.at_xpath("//*[contains(text(), 'Your package will arrive by')]")
-    arrival_text = arrival_ele&.ancestors("tr")&.first&.at_css(".rio_15_heavy_black")&.text
-    return Date.parse(arrival_text).then { |date| future(date) } if arrival_text.present?
+    # "Arriving <Month> <day>" - explicit date
+    if (match = text.match(/Arriving\s+(?:by\s+)?(#{month_regex}\s+\d{1,2})/))
+      return future(Date.parse(match[1]))
+    end
+
+    # "Arriving between <Month> <day>" - take the lower bound
+    if (match = text.match(/Arriving\s+between\s+(#{month_regex}\s+\d{1,2})/))
+      return future(Date.parse(match[1]))
+    end
+
+    # Fallback - bare "Month Day" anywhere in the card
+    if (date_str = text[/(#{month_regex})\s+\d{1,2}/])
+      return future(Date.parse(date_str))
+    end
+
+    nil
   rescue StandardError
     nil
   end
 
-  def arrival_time(item)
-    table_html = section(item)&.inner_html
-    return item.error!("No info card") if table_html.blank?
+  def arrival_time(_item)
+    text = order_card_text
+    return if text.blank?
 
-    match = table_html.match(/(\d{1,2} ?[ap]\.?m\.?)\W*(\d{1,2} ?[ap]\.?m\.?)?/i)
+    match = text.match(/(\d{1,2} ?[ap]\.?m\.?)\W{1,5}(\d{1,2} ?[ap]\.?m\.?)/i)
     return if match.blank?
 
-    _, start_range, end_range = match&.to_a
+    _, start_range, end_range = match.to_a
     meridian = (end_range || start_range).gsub(/[^a-z]/i, "")
-    [start_range, end_range].compact.map { |time| time.gsub(/[^\d]/, "") }.join("-") + meridian
+    [start_range, end_range].compact.map { |t| t.gsub(/\D/, "") }.join("-") + meridian
   end
 
   def shortened_name(item)
@@ -180,11 +187,11 @@ class AmazonEmailParser
 
   def full_name(item)
     item.full_name ||= (
-      item.listed_name ||= @email.subject[/^[^"]*"(.*?)"[^"]*$/, 1]
-      item.listed_name ||= element(item).at_css(".rio_black_href")&.text&.squish.to_s
-      count = @email.subject[/(\d+ ?x) ?"/, 1]
+      item.listed_name ||= @email.subject.to_s[/^[^"]*"(.*?)"[^"]*$/, 1]
+      item.listed_name ||= name_from_card(item)
+      count = @email.subject.to_s[/(\d+ ?x) ?"/, 1]
 
-      if item.listed_name.include?("...")
+      if item.listed_name.to_s.include?("...")
         [
           count,
           retrieve_full_name(item).presence || item.listed_name,
@@ -193,6 +200,11 @@ class AmazonEmailParser
         [count, item.listed_name].filter_map(&:presence).join(" ")
       end
     )
+  end
+
+  def name_from_card(item)
+    link = order_card&.css("a")&.find { |a| a["href"].to_s.include?(item.item_id) }
+    link&.text&.squish.presence
   end
 
   def retrieve_full_name(item)
@@ -205,10 +217,8 @@ class AmazonEmailParser
     error("Unable to parse title: [#{item.item_id}]:#{item_doc.title}") if name.blank?
 
     name.to_s
-  rescue StandardError => e
-    # Amazon occasionally does Captcha checks, which ends with this being a 500.
-    # Don't report these, just return nothing and move on.
-    # SlackNotifier.err(e, "Error pulling Amazon page:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", username: 'Mail-Bot', icon_emoji: ':mailbox:')
+  rescue StandardError
+    # Amazon occasionally serves a captcha; swallow and move on.
   end
 
   def error(msg="Failed to parse")
