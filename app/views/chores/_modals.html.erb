@@ -474,22 +474,23 @@
         <label class="field-label" data-goal-target-label>Target</label>
         <input type="number" name="target_value" min="1" value="100" required autocomplete="off">
       </div>
-      <div class="form-row">
-        <div class="form-section">
-          <label class="field-label">Scope</label>
-          <select name="scope_mode">
-            <option value="cumulative" selected>Lifetime</option>
-            <option value="relative">Since goal created</option>
-          </select>
-          <div class="field-hint" data-goal-scope-hint></div>
+      <div class="form-section">
+        <label class="field-label">Scope</label>
+        <div class="pill-group" data-pill-group="scope_mode">
+          <button type="button" class="pill active" data-value="cumulative">Lifetime</button>
+          <button type="button" class="pill" data-value="relative">Since this goal was created</button>
         </div>
-        <div class="form-section" data-goal-field="tracking_mode" hidden>
-          <label class="field-label">Counts</label>
-          <select name="tracking_mode">
-            <option value="saved" selected>Saved — withdrawals subtract</option>
-            <option value="earned">Earned — withdrawals are ignored</option>
-          </select>
+        <input type="hidden" name="scope_mode" value="cumulative">
+        <div class="field-hint" data-goal-scope-hint></div>
+      </div>
+      <div class="form-section" data-goal-field="tracking_mode" hidden>
+        <label class="field-label">Counts</label>
+        <div class="pill-group" data-pill-group="tracking_mode">
+          <button type="button" class="pill active" data-value="saved">Saved</button>
+          <button type="button" class="pill" data-value="earned">Earned</button>
         </div>
+        <input type="hidden" name="tracking_mode" value="saved">
+        <div class="field-hint" data-goal-tracking-hint></div>
       </div>
       <div class="form-section">
         <label class="field-label">Reward URL (optional)</label>

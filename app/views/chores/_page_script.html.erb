@@ -3863,6 +3863,17 @@
   const goalsEmpty    = document.querySelector('[data-goals-empty]');
   bindIconUploader(goalForm); // shared widget — emoji / paste / SVG / file / URL
 
+  // Replace each goal card from a `goals: [{id, html}, ...]` payload.
+  // Used by the withdraw / transfer flows so the saved-pebbles goals
+  // stay in sync with the balance header after a balance change.
+  function reconcileGoalsFromPayload(data) {
+    if (!goalsCards || !Array.isArray(data?.goals)) return;
+    data.goals.forEach(g => {
+      const existing = goalsCards.querySelector(`[data-goal-id="${g.id}"]`);
+      if (existing && g.html) existing.outerHTML = g.html;
+    });
+  }
+
   // Per-kind config inputs that should be visible in the form. The
   // tracking_mode selector is only meaningful for the pebbles kind.
   const goalKindFields = {
@@ -3884,8 +3895,12 @@
     chore_streak:      "Target streak (days)",
   };
   const goalScopeHints = {
-    relative:   "Starts at 0. Counts progress made after this goal is created.",
-    cumulative: "Counts lifetime progress, including before this goal was created.",
+    relative:   "Starts at 0. Only counts progress made after this goal was created.",
+    cumulative: "Includes everything you've ever earned, even before this goal existed.",
+  };
+  const goalTrackingHints = {
+    saved:   "Reflects the pebbles you actually have. Spending pebbles (withdrawals) lowers progress.",
+    earned:  "Counts pebbles as they're earned. Spending pebbles never decreases progress.",
   };
   function updateGoalKindUI() {
     if (!goalForm) return;
@@ -3901,21 +3916,57 @@
   }
   function updateGoalScopeHint() {
     if (!goalForm) return;
-    const v = goalForm.elements["scope_mode"].value;
+    const v = goalForm.elements["scope_mode"]?.value;
     const hint = goalForm.querySelector("[data-goal-scope-hint]");
     if (hint) hint.textContent = goalScopeHints[v] || "";
   }
+  function updateGoalTrackingHint() {
+    if (!goalForm) return;
+    const v = goalForm.elements["tracking_mode"]?.value;
+    const hint = goalForm.querySelector("[data-goal-tracking-hint]");
+    if (hint) hint.textContent = goalTrackingHints[v] || "";
+  }
+  // The scope/tracking pill groups carry their value in a hidden input
+  // (set by the shared pill-group click handler in `bindPillGroups`,
+  // but that handler is scoped to the chore-edit form). Wire a small
+  // delegated click here so taps on the goal-form pills toggle the
+  // active class, write the hidden value, and refresh the helper text.
+  function setGoalPillValue(group, value) {
+    group.querySelectorAll(".pill").forEach(p => {
+      p.classList.toggle("active", String(p.dataset.value) === String(value));
+    });
+    const key = group.dataset.pillGroup;
+    const input = goalForm.querySelector(`input[name="${key}"]`);
+    if (input) input.value = value;
+  }
+  goalForm?.querySelectorAll('.pill-group[data-pill-group]').forEach(group => {
+    group.addEventListener("click", e => {
+      const pill = e.target.closest(".pill");
+      if (!pill) return;
+      e.preventDefault();
+      setGoalPillValue(group, pill.dataset.value);
+      if (group.dataset.pillGroup === "scope_mode") updateGoalScopeHint();
+      if (group.dataset.pillGroup === "tracking_mode") updateGoalTrackingHint();
+    });
+  });
   goalForm?.elements["kind"]?.addEventListener("change", updateGoalKindUI);
-  goalForm?.elements["scope_mode"]?.addEventListener("change", updateGoalScopeHint);
 
+  function applyGoalPills(scope, tracking) {
+    const scopeGroup = goalForm.querySelector('[data-pill-group="scope_mode"]');
+    const trackingGroup = goalForm.querySelector('[data-pill-group="tracking_mode"]');
+    if (scopeGroup) setGoalPillValue(scopeGroup, scope || "cumulative");
+    if (trackingGroup) setGoalPillValue(trackingGroup, tracking || "saved");
+  }
   function resetGoalForm() {
     if (!goalForm) return;
     goalForm.reset();
     goalForm.elements["goal_id"].value = "";
     goalForm.elements["target_value"].value = 100;
     goalForm.elements["awarded_pebbles"].value = 0;
+    applyGoalPills("cumulative", "saved");
     updateGoalKindUI();
     updateGoalScopeHint();
+    updateGoalTrackingHint();
   }
   function fillGoalForm(p) {
     if (!goalForm) return;
@@ -3923,8 +3974,7 @@
     goalForm.elements["name"].value            = p.name || "";
     goalForm.elements["description"].value     = p.description || "";
     goalForm.elements["kind"].value            = p.kind;
-    goalForm.elements["scope_mode"].value      = p.scope_mode;
-    goalForm.elements["tracking_mode"].value   = p.tracking_mode;
+    applyGoalPills(p.scope_mode, p.tracking_mode);
     goalForm.elements["target_value"].value    = p.target_value ?? 100;
     goalForm.elements["awarded_pebbles"].value = p.awarded_pebbles ?? 0;
     goalForm.elements["link_url"].value        = p.link_url || "";
@@ -3937,6 +3987,7 @@
     if (choreSelect && p.chore_id) choreSelect.value = p.chore_id;
     updateGoalKindUI();
     updateGoalScopeHint();
+    updateGoalTrackingHint();
   }
 
   document.querySelector('[data-add-goal]')?.addEventListener("click", () => {
@@ -4280,6 +4331,7 @@
         // reload button that's allowed to refetch the history.
         if (data.balance != null) setLifetimeBalance(data.balance);
         if (data.today_earnings != null) setTodayEarnings(data.today_earnings);
+        reconcileGoalsFromPayload(data);
         form.reset();
         hydrateRecentHistory();
       } catch (err) { flash("Withdraw failed: " + err.message, "error"); }
@@ -4302,6 +4354,7 @@
         flash(`Transferred ${formatCount(data.amount_pebbles)}p to ${recipientLabel}`);
         if (data.balance != null) setLifetimeBalance(data.balance);
         if (data.today_earnings != null) setTodayEarnings(data.today_earnings);
+        reconcileGoalsFromPayload(data);
         // Reset amount + note but leave the recipient pinned — the
         // common pattern is multiple transfers to the same person.
         form.querySelector('[name="amount_pebbles"]').value = "";

@@ -12,12 +12,13 @@ class ChoreWithdrawalsController < ApplicationController
     ChoreGoal.refresh_all_for(current_user)
     ChoreBroadcaster.broadcast_changes!(current_user)
     render json: {
-      id: withdrawal.id,
+      id:             withdrawal.id,
       amount_pebbles: withdrawal.amount_pebbles,
-      note: withdrawal.note,
-      created_at: withdrawal.created_at.iso8601,
-      balance: current_user.chore_balance,
+      note:           withdrawal.note,
+      created_at:     withdrawal.created_at.iso8601,
+      balance:        current_user.chore_balance,
       today_earnings: today_earnings,
+      goals:          serialized_goals,
     }, status: :created
   end
 
@@ -25,14 +26,15 @@ class ChoreWithdrawalsController < ApplicationController
     withdrawal = current_user.chore_withdrawals.find(params[:id])
     if withdrawal.update(withdrawal_update_params)
       ChoreGoal.refresh_all_for(current_user)
-    ChoreBroadcaster.broadcast_changes!(current_user)
+      ChoreBroadcaster.broadcast_changes!(current_user)
       render json: {
-        id: withdrawal.id,
+        id:             withdrawal.id,
         amount_pebbles: withdrawal.amount_pebbles,
-        note: withdrawal.note,
-        created_at: withdrawal.created_at.iso8601,
-        balance: current_user.chore_balance,
+        note:           withdrawal.note,
+        created_at:     withdrawal.created_at.iso8601,
+        balance:        current_user.chore_balance,
         today_earnings: today_earnings,
+        goals:          serialized_goals,
       }
     else
       render json: { errors: withdrawal.errors.full_messages }, status: :unprocessable_entity
@@ -50,8 +52,9 @@ class ChoreWithdrawalsController < ApplicationController
     # having to special-case which endpoints touch it. The pill is
     # always today_earnings, everywhere.
     render json: {
-      balance: current_user.chore_balance,
+      balance:        current_user.chore_balance,
       today_earnings: today_earnings,
+      goals:          serialized_goals,
     }
   end
 
@@ -64,5 +67,20 @@ class ChoreWithdrawalsController < ApplicationController
   def today_earnings
     today = ChoreDay.current(current_user)
     current_user.chore_completions.where(day_key: today).sum(:paid_pebbles)
+  end
+
+  # Re-render the user's outstanding goal cards so the Balance page can
+  # reconcile them after a balance change. The Balance page renders
+  # goal cards server-side (in `_goal_row.html.erb`) and the cards never
+  # auto-refresh — without this payload a withdrawal/transfer would
+  # leave the pebbles-saved goal cards stale relative to the header
+  # balance pill, which IS refreshed via `setLifetimeBalance`.
+  def serialized_goals
+    current_user.chore_goals.active.ordered.map { |goal|
+      {
+        id:   goal.id,
+        html: render_to_string(partial: "chores/goal_row", formats: [:html], locals: { goal: goal }),
+      }
+    }
   end
 end

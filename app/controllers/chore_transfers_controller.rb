@@ -40,10 +40,11 @@ class ChoreTransfersController < ApplicationController
     ChoreBroadcaster.broadcast_changes!(current_user)
     ChoreBroadcaster.broadcast_changes!(recipient) if recipient
     render json: {
-      balance: current_user.chore_balance,
+      balance:        current_user.chore_balance,
       today_earnings: ChoreCompletion
         .where(user_id: current_user.id, day_key: ChoreDay.current(current_user))
         .sum(:paid_pebbles),
+      goals:          serialized_goals,
     }
   end
 
@@ -74,14 +75,29 @@ class ChoreTransfersController < ApplicationController
     today = ChoreDay.current(current_user)
     today_earnings = current_user.chore_completions.where(day_key: today).sum(:paid_pebbles)
     {
-      id: transfer.id,
-      from_user_id: transfer.from_user_id,
-      to_user_id:   transfer.to_user_id,
+      id:             transfer.id,
+      from_user_id:   transfer.from_user_id,
+      to_user_id:     transfer.to_user_id,
       amount_pebbles: transfer.amount_pebbles,
-      note: transfer.note,
-      created_at: transfer.created_at.iso8601,
-      balance: current_user.chore_balance,
+      note:           transfer.note,
+      created_at:     transfer.created_at.iso8601,
+      balance:        current_user.chore_balance,
       today_earnings: today_earnings,
+      goals:          serialized_goals,
+    }
+  end
+
+  # Mirrors `ChoreWithdrawalsController#serialized_goals`: the Balance
+  # page renders goal cards server-side and they never auto-refresh on
+  # their own. Without this, a transfer that moves the user past or
+  # below a saved-pebbles goal threshold leaves the card showing the
+  # pre-transfer value while the header pill is correct.
+  def serialized_goals
+    current_user.chore_goals.active.ordered.map { |goal|
+      {
+        id:   goal.id,
+        html: render_to_string(partial: "chores/goal_row", formats: [:html], locals: { goal: goal }),
+      }
     }
   end
 end
