@@ -80,6 +80,26 @@ RSpec.describe AmazonEmailParser do
     end
   end
 
+  describe "AI naming resilience" do
+    let(:c) { CASES.find { |row| row[:id] == 50_695 } }
+
+    it "still creates AmazonOrders when ChatGPT raises (quota exceeded)" do
+      allow(ChatGPT).to receive(:short_name_from_order).and_raise(StandardError, "insufficient_quota")
+      parse(c[:id], c[:subject])
+      orders = AmazonOrder.by_order(c[:order])
+      expect(orders.map(&:item_id)).to match_array(c[:asins])
+      expect(orders.first.delivery_date).to be_present
+    end
+
+    it "skips the ChatGPT call entirely when skip_ai_naming: true" do
+      expect(ChatGPT).not_to receive(:short_name_from_order)
+      email = double("Email", id: c[:id], to_html: html_fixture("email_body_#{c[:id]}", raw: true), subject: c[:subject])
+      AmazonEmailParser.parse(email, skip_ai_naming: true)
+      orders = AmazonOrder.by_order(c[:order])
+      expect(orders.map(&:item_id)).to match_array(c[:asins])
+    end
+  end
+
   describe "idempotency and state transitions" do
     it "does not duplicate orders when same email is parsed twice" do
       c = CASES.find { |row| row[:id] == 50_684 }

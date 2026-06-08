@@ -19,14 +19,15 @@ class AmazonEmailParser
     /Arrived\b/i,
   ].freeze
 
-  def self.parse(email)
+  def self.parse(email, skip_ai_naming: false)
     Time.use_zone(User.timezone) {
-      new(email).parse
+      new(email, skip_ai_naming: skip_ai_naming).parse
     }
   end
 
-  def initialize(email)
+  def initialize(email, skip_ai_naming: false)
     @email = email
+    @skip_ai_naming = skip_ai_naming
   end
 
   def parse
@@ -44,7 +45,7 @@ class AmazonEmailParser
         end
       }
       item.time_range = arrival_time(item)
-      item.name ||= shortened_name(item)
+      item.name ||= safe_name(item)
       item.delivered = true if delivered
     }
 
@@ -110,19 +111,19 @@ class AmazonEmailParser
 
   def doall(&block)
     items = email_items
-    seen_ids = items.map(&:item_id).to_set
+    seen_ids = items.to_set(&:item_id)
     items.each { |item| block.call(item) }
     order_items.each { |item| block.call(item) unless seen_ids.include?(item.item_id) }
   end
 
   💾(:month_regex) {
     month_names = Date::MONTHNAMES.compact
-    Regexp.new("\\b(?:#{month_names.flat_map { |m| [m, m.first(3)] }.join('|')})\\b")
+    Regexp.new("\\b(?:#{month_names.flat_map { |m| [m, m.first(3)] }.join("|")})\\b")
   }
 
   💾(:wday_regex) {
     day_names = Date::DAYNAMES.compact
-    Regexp.new("\\b(?:#{day_names.flat_map { |d| [d, d.first(3)] }.join('|')})\\b")
+    Regexp.new("\\b(?:#{day_names.flat_map { |d| [d, d.first(3)] }.join("|")})\\b")
   }
 
   def future(date)
@@ -179,6 +180,18 @@ class AmazonEmailParser
     _, start_range, end_range = match.to_a
     meridian = (end_range || start_range).gsub(/[^a-z]/i, "")
     [start_range, end_range].compact.map { |t| t.gsub(/\D/, "") }.join("-") + meridian
+  end
+
+  # Falls back to the email's listed_name if AI naming is disabled OR the AI call fails
+  # (e.g. OpenAI quota exceeded). The parsed shipment data must always persist regardless
+  # of name-cleanup status.
+  def safe_name(item)
+    return item.listed_name.to_s.presence || full_name(item).to_s.presence if @skip_ai_naming
+
+    shortened_name(item).presence || item.listed_name.to_s.presence || full_name(item).to_s.presence
+  rescue StandardError => e
+    SlackNotifier.err(e, "Amazon name lookup failed for email ##{@email.id}, falling back to listed_name")
+    item.listed_name.to_s.presence || full_name(item).to_s.presence
   end
 
   def shortened_name(item)
