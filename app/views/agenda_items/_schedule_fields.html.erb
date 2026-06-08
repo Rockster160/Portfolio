@@ -25,12 +25,43 @@
 </div>
 
 <div class="ff add-monthly hidden">
-  <label>Days of month</label>
-  <div class="md-chips">
-    <% (1..31).each do |day| %>
-      <button type="button" class="md-chip" data-day="<%= day %>"><%= day %></button>
-    <% end %>
-    <button type="button" class="md-chip md-chip-last" data-day="-1">Last</button>
+  <label>On</label>
+  <div class="monthly-mode-options">
+    <label class="monthly-mode-option">
+      <input type="radio" name="<%= local_assigns[:scope_name] || 'add-monthly-mode' %>-m" class="add-monthly-mode-radio" value="day-of-month" checked>
+      <span>Day(s) of month</span>
+    </label>
+    <label class="monthly-mode-option">
+      <input type="radio" name="<%= local_assigns[:scope_name] || 'add-monthly-mode' %>-m" class="add-monthly-mode-radio" value="nth-weekday">
+      <span>Nth weekday</span>
+    </label>
+  </div>
+  <div class="monthly-days-wrap">
+    <div class="md-chips">
+      <% (1..31).each do |day| %>
+        <button type="button" class="md-chip" data-day="<%= day %>"><%= day %></button>
+      <% end %>
+      <button type="button" class="md-chip md-chip-last" data-day="-1">Last</button>
+    </div>
+  </div>
+  <div class="monthly-nth-wrap hidden">
+    <span>The</span>
+    <select class="add-monthly-set-pos">
+      <option value="1">first</option>
+      <option value="2">second</option>
+      <option value="3">third</option>
+      <option value="4">fourth</option>
+      <option value="-1">last</option>
+    </select>
+    <select class="add-monthly-set-wday">
+      <option value="mon">Monday</option>
+      <option value="tue">Tuesday</option>
+      <option value="wed">Wednesday</option>
+      <option value="thu">Thursday</option>
+      <option value="fri">Friday</option>
+      <option value="sat">Saturday</option>
+      <option value="sun">Sunday</option>
+    </select>
   </div>
 </div>
 

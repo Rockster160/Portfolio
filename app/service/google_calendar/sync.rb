@@ -400,6 +400,17 @@ class GoogleCalendar::Sync
     attrs[:locally_modified_at] = nil if item.persisted? && item.locally_modified_at.present?
     item.assign_attributes(attrs)
     item.save!
+
+    # The override item is `detached` so it intentionally does NOT suppress
+    # the master's phantom on its current date (see Agenda#items_for_range).
+    # Without explicitly excluding the ORIGINAL date on the master, both the
+    # phantom (at original_start) AND the override (at start_at) render,
+    # showing the event twice. Add the original date to excluded_dates so
+    # only the override remains visible.
+    if original_start
+      original_date = original_start.in_time_zone(user_timezone).to_date
+      master.add_excluded_date!(original_date)
+    end
   end
 
   # Skip the row entirely when either:

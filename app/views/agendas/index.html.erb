@@ -87,15 +87,18 @@
                   <span class="agenda-card-meta-cell agenda-card-sync-state agenda-card-sync-state-warn"
                         title="Real-time push channel failed to register — falling back to periodic polling.">
                     Push channel unavailable
-                    <%# Bypasses the 1-day cooldown so the user doesn't have to
-                        wait if Google's transient failure has cleared. %>
-                    <button type="button"
-                            class="agenda-card-retry"
-                            data-resync-url="<%= resync_agenda_path(agenda) %>">
-                      Retry now
-                    </button>
                   </span>
                 <% end %>
+                <%# Always-available manual resync — bypasses both the 15-min
+                    poll cadence and the 1-day watch-failure cooldown. Useful
+                    when a Google-side edit is slow to propagate. %>
+                <span class="agenda-card-meta-cell">
+                  <button type="button"
+                          class="agenda-card-retry"
+                          data-resync-url="<%= resync_agenda_path(agenda) %>">
+                    Resync now
+                  </button>
+                </span>
               <% end %>
             </span>
           </span>

@@ -682,7 +682,6 @@ body.ctr-agendas {
       border-radius: 0 !important;
     }
     &.preview .agenda-item-body {
-      cursor: default;
       padding: 5px 0 !important;
     }
 
@@ -733,8 +732,33 @@ body.ctr-agendas {
     .agenda-item-badge {
       font-size: 10px;
       opacity: 0.4;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    // Fixed-width icon strip: each slot reserves space regardless of
+    // whether its content renders, so the same icon always sits in the
+    // same column across rows.
+    .agenda-item-icons {
+      display: flex;
+      align-items: stretch;
       flex-shrink: 0;
-      margin-top: 4px;
+      align-self: stretch;
+    }
+    .agenda-item-icon-slot {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-sizing: border-box;
+    }
+    .agenda-item-recurring-slot {
+      width: 22px;
+    }
+    .agenda-item-edit-slot {
+      width: 44px;
+      margin-right: -10px; // bleed into row's right padding so pencil reaches the edge
     }
 
     // ≥40×row-height touch target; overrides the global gradient button.
@@ -743,10 +767,10 @@ body.ctr-agendas {
       display: flex;
       align-items: center;
       justify-content: center;
-      min-width: 44px; // mobile-friendly touch target
+      width: 100%;
       box-sizing: border-box;
       padding: 0 14px !important;
-      margin: 0 -10px 0 4px !important; // bleed into row's horizontal padding
+      margin: 0 !important;
       background: transparent !important;
       background-image: none !important;
       color: inherit !important;

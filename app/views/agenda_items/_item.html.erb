@@ -106,12 +106,21 @@
         <span class="agenda-item-loc"><i class="fa fa-map-marker"></i> <%= item.location %></span>
       <% end %>
     </span>
-    <% if item.recurring? %>
-      <span class="agenda-item-badge" title="Recurring"><i class="fa fa-refresh"></i></span>
-    <% end %>
   </button>
 
-  <% if editable %>
-    <button type="button" class="agenda-item-edit" data-edit-item aria-label="Edit" title="<%= id_title %>"><i class="fa fa-pencil"></i></button>
-  <% end %>
+  <%# Fixed-width icon strip on the right — each slot is always present so
+      icons line up vertically across rows regardless of which ones the
+      item happens to expose. Empty slots reserve space silently. %>
+  <span class="agenda-item-icons">
+    <span class="agenda-item-icon-slot agenda-item-recurring-slot">
+      <% if item.recurring? %>
+        <span class="agenda-item-badge" title="Recurring"><i class="fa fa-refresh"></i></span>
+      <% end %>
+    </span>
+    <span class="agenda-item-icon-slot agenda-item-edit-slot">
+      <% if editable %>
+        <button type="button" class="agenda-item-edit" data-edit-item aria-label="Edit" title="<%= id_title %>"><i class="fa fa-pencil"></i></button>
+      <% end %>
+    </span>
+  </span>
 </div>

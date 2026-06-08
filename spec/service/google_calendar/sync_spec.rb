@@ -116,6 +116,37 @@ RSpec.describe GoogleCalendar::Sync do
       expect(item.name).to eq("Standup (rescheduled)")
     end
 
+    it "excludes the original date on the master so the phantom + override don't both render" do
+      master = agenda.agenda_schedules.create!(
+        name: "Standup", kind: :event, start_time: "09:00",
+        duration_minutes: 30, starts_on: Date.new(2026, 5, 1),
+        recurrence: { "freq" => "daily" },
+        external_uid: "evt-master-2"
+      )
+      override_event = {
+        id:                "evt-master-2_20260525T130000Z",
+        status:            "confirmed",
+        summary:           "Standup (moved)",
+        recurringEventId:  "evt-master-2",
+        originalStartTime: { dateTime: "2026-05-25T09:00:00-04:00" },
+        start:             { dateTime: "2026-05-25T13:00:00-04:00" },
+        end:               { dateTime: "2026-05-25T13:30:00-04:00" },
+        etag:              %("etag-3a"),
+        updated:           "2026-05-22T08:00:00Z",
+      }
+      allow(api).to receive(:list_events).and_return(page([override_event]))
+
+      described_class.new(agenda).run!
+      master.reload
+      original_date = Time.zone.parse("2026-05-25T09:00:00-04:00").in_time_zone(user.timezone).to_date
+      expect(master.excluded_dates).to include(original_date)
+      # And the items rendered for that day should only be the override, not
+      # also the phantom that the schedule would otherwise emit.
+      items = agenda.items_for(original_date)
+      expect(items.size).to eq(1)
+      expect(items.first.external_uid).to eq("evt-master-2_20260525T130000Z")
+    end
+
     it "ignores an override whose master hasn't synced yet (handled on next pass)" do
       override_event = {
         id:               "evt-master-x_20260525T130000Z",

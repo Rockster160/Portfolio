@@ -327,6 +327,13 @@ class AgendaSchedule < ApplicationRecord
   end
 
   def matches_month_day?(date)
+    # Monthly + Nth weekday — e.g. "third Tuesday of every month". When
+    # the recurrence carries both `by_set_pos` and `by_day` we ignore
+    # `by_month_day` entirely and dispatch to the nth-weekday matcher.
+    if recurrence_data[:by_set_pos].present? && recurrence_data[:by_day].present?
+      return matches_nth_weekday_of_month?(date)
+    end
+
     month_days.include?(date.day) || (month_days.include?(-1) && date.day == date.end_of_month.day)
   end
 

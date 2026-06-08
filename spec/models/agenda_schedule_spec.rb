@@ -59,6 +59,17 @@ RSpec.describe AgendaSchedule do
       expect(sched.matches?(Date.new(2026, 5, 20))).to be false
     end
 
+    it "monthly with by_set_pos+by_day — every third Tuesday" do
+      sched = build_schedule(
+        recurrence: { "freq" => "monthly", "by_set_pos" => 3, "by_day" => ["tue"] },
+        starts_on:  Date.new(2026, 5, 19), # 3rd Tue of May 2026
+      )
+      expect(sched.matches?(Date.new(2026, 5, 19))).to be true   # 3rd Tue May
+      expect(sched.matches?(Date.new(2026, 6, 16))).to be true   # 3rd Tue June
+      expect(sched.matches?(Date.new(2026, 5, 12))).to be false  # 2nd Tue
+      expect(sched.matches?(Date.new(2026, 5, 20))).to be false  # 3rd Wed
+    end
+
     it "custom monthly on Nth weekday — every second Thursday" do
       sched = build_schedule(
         recurrence: { "freq" => "custom", "interval" => 1, "unit" => "month",

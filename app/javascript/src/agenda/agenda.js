@@ -492,6 +492,10 @@
     const setPosSelect  = $(".add-set-pos", form);
     const setWdaySelect = $(".add-set-wday", form);
     const monthDayLabel = $(".month-day-label", form);
+    const monthlyDaysWrap = $(".monthly-days-wrap", form);
+    const monthlyNthWrap  = $(".monthly-nth-wrap", form);
+    const monthlyPosSelect  = $(".add-monthly-set-pos", form);
+    const monthlyWdaySelect = $(".add-monthly-set-wday", form);
     const endsField     = $(".add-ends-field", form);
     const endModeSelect = $(".add-end-mode", form);
     const untilInput    = $(".add-until", form);
@@ -506,6 +510,7 @@
       endsField?.classList.toggle("hidden", freq === "never");
       syncEndMode();
       syncMonthMode();
+      syncMonthlyMode();
 
       if (freq === "weekly" && weekdaySet.size === 0 && dateInput) {
         const key = WDAY_KEYS[localDateFromInput(dateInput.value).getDay()];
@@ -531,6 +536,22 @@
       if (monthDayLabel)  monthDayLabel.textContent = ref.getDate();
       if (setPosSelect)   setPosSelect.value = ordinalPositionForDate(ref);
       if (setWdaySelect)  setWdaySelect.value = WDAY_KEYS[ref.getDay()];
+    }
+
+    // Inside the Monthly frequency: switch between specific days-of-month
+    // (chips) and the Nth weekday picker. Default the nth-pickers from the
+    // current date so the user sees a sensible starting selection.
+    function syncMonthlyMode() {
+      if (!freqSelect) return;
+      const mode = form.querySelector("input.add-monthly-mode-radio:checked")?.value || "day-of-month";
+      const showNth = freqSelect.value === "monthly" && mode === "nth-weekday";
+      monthlyDaysWrap?.classList.toggle("hidden", showNth);
+      monthlyNthWrap?.classList.toggle("hidden", !showNth);
+      if (!showNth || !dateInput) return;
+
+      const ref = localDateFromInput(dateInput.value);
+      if (monthlyPosSelect && !monthlyPosSelect.dataset.userSet)  monthlyPosSelect.value = ordinalPositionForDate(ref);
+      if (monthlyWdaySelect && !monthlyWdaySelect.dataset.userSet) monthlyWdaySelect.value = WDAY_KEYS[ref.getDay()];
     }
 
     function syncEndMode() {
@@ -569,10 +590,23 @@
       if (data.interval && intervalInput) intervalInput.value = data.interval;
       if (data.unit && unitSelect) unitSelect.value = data.unit;
       if (data.by_set_pos != null) {
-        if (setPosSelect) setPosSelect.value = String(data.by_set_pos);
-        const radio = form.querySelector("input[type='radio'][value='nth-weekday']");
-        if (radio) radio.checked = true;
-        if (data.by_day?.[0] && setWdaySelect) setWdaySelect.value = data.by_day[0];
+        // Either custom+month or monthly+nth — same payload shape.
+        const isMonthly = data.freq === "monthly";
+        if (isMonthly) {
+          if (monthlyPosSelect) {
+            monthlyPosSelect.value = String(data.by_set_pos);
+            monthlyPosSelect.dataset.userSet = "1";
+          }
+          if (data.by_day?.[0] && monthlyWdaySelect) {
+            monthlyWdaySelect.value = data.by_day[0];
+            monthlyWdaySelect.dataset.userSet = "1";
+          }
+          form.querySelector("input.add-monthly-mode-radio[value='nth-weekday']")?.click();
+        } else {
+          if (setPosSelect) setPosSelect.value = String(data.by_set_pos);
+          form.querySelector("input.add-month-mode-radio[value='nth-weekday']")?.click();
+          if (data.by_day?.[0] && setWdaySelect) setWdaySelect.value = data.by_day[0];
+        }
       }
       if (data.occurrence_count) {
         if (endModeSelect) endModeSelect.value = "count";
@@ -598,8 +632,14 @@
 
       if (freq === "weekly") recurrence.by_day = Array.from(weekdaySet);
       if (freq === "monthly") {
-        const days = Array.from(monthDaySet).map((s) => parseInt(s, 10)).filter((n) => !Number.isNaN(n));
-        if (days.length) recurrence.by_month_day = days;
+        const monthlyMode = form.querySelector("input.add-monthly-mode-radio:checked")?.value || "day-of-month";
+        if (monthlyMode === "nth-weekday") {
+          recurrence.by_set_pos = parseInt(monthlyPosSelect?.value, 10);
+          recurrence.by_day = [monthlyWdaySelect?.value];
+        } else {
+          const days = Array.from(monthDaySet).map((s) => parseInt(s, 10)).filter((n) => !Number.isNaN(n));
+          if (days.length) recurrence.by_month_day = days;
+        }
       }
       if (freq === "custom") {
         recurrence.interval = parseInt(intervalInput?.value, 10) || 1;
@@ -644,8 +684,11 @@
     // Bind handlers.
     freqSelect?.addEventListener("change", syncFreq);
     unitSelect?.addEventListener("change", syncMonthMode);
-    dateInput?.addEventListener("change", syncMonthMode);
+    dateInput?.addEventListener("change", () => { syncMonthMode(); syncMonthlyMode(); });
     endModeSelect?.addEventListener("change", syncEndMode);
+    $$("input.add-monthly-mode-radio", form).forEach((r) => r.addEventListener("change", syncMonthlyMode));
+    monthlyPosSelect?.addEventListener("change", () => { monthlyPosSelect.dataset.userSet = "1"; });
+    monthlyWdaySelect?.addEventListener("change", () => { monthlyWdaySelect.dataset.userSet = "1"; });
 
     $$(".wd-chip", form).forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -1047,12 +1090,18 @@
     //     <label for> toggles the checkbox; we don't intercept.
     //   [data-open-details] (the body button)         → details modal
     //   [data-edit-item]   (the pencil)               → edit modal
-    //   .preview rows are non-interactive (next-day stub).
+    //   .preview rows open the details modal (read-only view) but never
+    //     the edit modal — edits land on the wrong day if applied to a
+    //     tomorrow stub. Checkbox stays disabled on previews via the
+    //     server-rendered `disabled` attr.
     root.addEventListener("click", (e) => {
       const dataEl = e.target.closest("[data-item-id]");
-      if (!dataEl || dataEl.classList.contains("preview")) return;
+      if (!dataEl) return;
+
+      const isPreview = dataEl.classList.contains("preview");
 
       if (e.target.closest("[data-edit-item]")) {
+        if (isPreview) return;
         e.preventDefault();
         e.stopPropagation();
         openModal(dataEl);
