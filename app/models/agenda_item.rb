@@ -76,10 +76,24 @@ class AgendaItem < ApplicationRecord
   scope :pending,       -> { incomplete } # back-compat alias
   scope :not_cancelled, -> { where.not(status: :cancelled) }
   # Events auto-disappear once end_at passes — overdue applies to tasks
-  # and triggers only.
+  # and triggers only. `upcoming`/`past` are kind-aware so events stay
+  # "upcoming" while in progress (end_at >= now); tasks/triggers flip to
+  # past at start_at because they have no duration.
   scope :overdue,    -> { where.not(kind: :event).incomplete.where(start_at: ...Time.current) }
-  scope :upcoming,   -> { where(start_at: Time.current..) }
-  scope :past,       -> { where(start_at: ...Time.current) }
+  scope :upcoming,   -> {
+    where(
+      "(kind = :event AND COALESCE(end_at, start_at) >= :now) OR (kind <> :event AND start_at >= :now)",
+      event: kinds[:event],
+      now:   Time.current,
+    )
+  }
+  scope :past, -> {
+    where(
+      "(kind = :event AND COALESCE(end_at, start_at) < :now) OR (kind <> :event AND start_at < :now)",
+      event: kinds[:event],
+      now:   Time.current,
+    )
+  }
   scope :today,      -> { where(start_at: Time.current.all_day) }
   scope :recurring,  -> { where.not(agenda_schedule_id: nil) }
   scope :detached,   -> { where.not(detached_at: nil) }

@@ -48,8 +48,17 @@ RSpec.describe "AgendaItem.query — is:<state> markers" do
     expect(AgendaItem.query("is:overdue").pluck(:kind)).not_to include("event")
   end
 
-  it "is:upcoming narrows to future-starting items" do
-    expect(AgendaItem.query("is:upcoming")).to contain_exactly(upcoming_event)
+  it "is:upcoming keeps events visible until end_at; non-events disappear at start_at" do
+    expect(AgendaItem.query("is:upcoming")).to contain_exactly(upcoming_event, current_event)
+  end
+
+  it "is:past flips events at end_at and non-events at start_at" do
+    past_event = create(:agenda_item, agenda: agenda, kind: "event",
+      start_at: 3.hours.ago, end_at: 1.hour.ago, name: "Done Meeting")
+
+    results = AgendaItem.query("is:past")
+    expect(results).to include(past_event, overdue_task, completed_task)
+    expect(results).not_to include(current_event, upcoming_event)
   end
 
   it "name:Overdue does a name ILIKE search" do

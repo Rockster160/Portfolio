@@ -14,6 +14,8 @@ class ChoreDailyResetWorker
   LOW_RARE_CHANCE = 0.10
   LOW_RARE_MULT = 5.0
   STANDARD_MULT = 2.0
+  TODAY_DUE_WEIGHT = 1.5
+  BASELINE_WEIGHT  = 1.0
 
   def perform(day_iso=nil)
     day = day_iso.present? ? Date.parse(day_iso) : ChoreDay.current
@@ -96,8 +98,6 @@ class ChoreDailyResetWorker
   # so a 1.5x weight stays 1.5x even on the third pick. New weight
   # modifiers (priority, age, streak proximity, ...) plug in by
   # editing `weight_for` only; the sampler stays untouched.
-  TODAY_DUE_WEIGHT = 1.5
-  BASELINE_WEIGHT  = 1.0
   def pick_for(scope, count, due_today_ids=Set.new, &)
     chores = scope.select(&)
     return [] if chores.empty?
