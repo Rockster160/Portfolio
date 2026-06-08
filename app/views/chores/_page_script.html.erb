@@ -4737,16 +4737,16 @@
     // Net effect: a stale-empty shell can never blank the UI; the
     // worst-case is "we already had these chores and we still do."
     ChoreStore.hydrateFromLocal();
-    // The bootstrap chore list IS the canonical active set for this
-    // viewer — anything in the local cache that isn't in it has been
-    // archived (or otherwise made inaccessible) on the server. Prune
-    // before merge so we never have to query/ship the archive list,
-    // which grows unboundedly with one-off completions.
-    if (Array.isArray(bootstrap.chores)) {
-      const activeIds = new Set(bootstrap.chores.map(c => c.id));
-      ChoreStore.all().forEach(c => {
-        if (!activeIds.has(c.id)) ChoreStore.remove(c.id);
-      });
+    // RULE: the local cache is sticky. We never infer "this chore must
+    // be gone" from its absence in a payload — a stale cached shell, a
+    // parse failure, or an offline boot can all produce an empty
+    // bootstrap, and pruning against that would nuke the entire store
+    // and leave the user with a blank Today/Grid. Removals are ONLY
+    // applied when the server explicitly names ids in `archived_chore_ids`
+    // (bounded to a recent window in the page bootstrap; full delta in
+    // /sync responses).
+    if (Array.isArray(bootstrap.archived_chore_ids)) {
+      bootstrap.archived_chore_ids.forEach(id => ChoreStore.remove(parseInt(id, 10)));
     }
     ChoreStore.bootstrap(bootstrap.chores, bootstrap.lookahead, bootstrap.daily_ids);
     if (bootstrap.day_key) localStorage.setItem(SYNC_DAY_KEY, bootstrap.day_key);

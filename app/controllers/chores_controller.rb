@@ -6,6 +6,13 @@ class ChoresController < ApplicationController
   before_action :assignable_users, only: [:index, :today, :balance, :history, :new]
   helper_method :assignable_users
 
+  # The page bootstrap ships a bounded slice of recently-archived chore
+  # ids so the client can drop locally-cached one-offs that hit the 4am
+  # auto-archive. Older deltas roll in through /sync's incremental
+  # `archived_chore_ids`. Long enough to absorb a couple of weeks
+  # offline; short enough to keep payload tiny.
+  BOOTSTRAP_ARCHIVED_WINDOW = 30.days
+
   # ============================================================
   # Unified Grid/Today page — renders the SAME template at both
   # /chores and /chores/today, differing only in `data-active-view`.
@@ -392,6 +399,16 @@ class ChoresController < ApplicationController
       .to_a
     @ctx = ChoreSerializerContext.for_user(current_user, day: @day)
     @chores_json = @ctx.serialize_all(@chores)
+    # Recently-archived ids — bounded so the payload stays small even as
+    # one-offs accumulate forever. Covers the common case (the daily
+    # 4am reset auto-archives yesterday's completed one-offs) without
+    # streaming every long-dead chore on every page load. Older archive
+    # deltas come through /sync's incremental `archived_chore_ids`
+    # once the client has a since_ts.
+    @archived_chore_ids = current_user.accessible_chores
+      .unscope(where: :archived_at)
+      .where(archived_at: BOOTSTRAP_ARCHIVED_WINDOW.ago..)
+      .pluck(:id)
     @daily_ids = ChoreDaily.for_user(current_user).pluck(:chore_id)
     @lookahead_json = build_lookahead_json
     @cutoff_hour = ChoreDay::CUTOFF_HOURS
