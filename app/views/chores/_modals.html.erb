@@ -162,9 +162,9 @@
           </div>
         </div>
 
-        <%# ----- Show on Today View (button order per spec) ----- %>
+        <%# ----- Show on Scheduled View (button order per spec) ----- %>
         <div class="form-section">
-          <label class="field-label">Show on Today View</label>
+          <label class="field-label">Show on Scheduled View</label>
           <div class="pill-group" data-pill-group="show_on_daily_view">
             <button type="button" class="pill" data-value="always">Always</button>
             <button type="button" class="pill" data-value="when_scheduled_and_available">Scheduled or Available</button>
@@ -434,16 +434,16 @@
         <div class="form-section">
           <label class="field-label">Scope</label>
           <select name="scope_mode">
+            <option value="cumulative" selected>Lifetime</option>
             <option value="relative">Since goal created</option>
-            <option value="cumulative">Lifetime</option>
           </select>
           <div class="field-hint" data-goal-scope-hint></div>
         </div>
         <div class="form-section" data-goal-field="tracking_mode" hidden>
           <label class="field-label">Counts</label>
           <select name="tracking_mode">
+            <option value="saved" selected>Saved — withdrawals subtract</option>
             <option value="earned">Earned — withdrawals are ignored</option>
-            <option value="saved">Saved — withdrawals subtract</option>
           </select>
         </div>
       </div>

@@ -969,6 +969,22 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     right: -6px;
     background: var(--actor-color);
   }
+  // Schedule-state icon — bottom-RIGHT of the disc on Today + Scheduled
+  // circles. Sun = recurring daily, Clock = due today, Hourglass =
+  // overdue carryover. See the slot map at the top of this file.
+  .chore-circle .circle-state-icon {
+    position: absolute;
+    right: 6%;
+    bottom: 8%;
+    font-size: 11px;
+    line-height: 1;
+    pointer-events: none;
+    opacity: 0.85;
+    z-index: 3;
+  }
+  .chore-circle .circle-state-icon.fa-sun-o         { color: #F2C744; }
+  .chore-circle .circle-state-icon.fa-clock-o       { color: #6FB1FF; }
+  .chore-circle .circle-state-icon.fa-hourglass-half { color: #FF9472; }
 
   // ============================================================
   // Today: section headings + pin-toggle

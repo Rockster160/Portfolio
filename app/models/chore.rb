@@ -218,6 +218,24 @@ class Chore < ApplicationRecord
     (from..(from + days)).select { |d| matches_day?(d, user) }
   end
 
+  # The exact date a relative-scheduled chore becomes due for `user`,
+  # anchored to their last completion (or starts_on/created_at when they
+  # haven't done it yet). Returns nil for non-relative chores. Lets
+  # callers distinguish "strictly due today" from "overdue since some
+  # earlier day" — `matches_day?` conflates the two by returning true
+  # for any date >= due_on.
+  def relative_due_on(user=nil, last_completed_day: :unset)
+    return nil unless relative?
+
+    last = effective_last_completed_day(user, last_completed_day)
+    if last
+      interval, unit = relative_interval_unit
+      advance(last, interval, unit)
+    else
+      starts_on || created_at&.to_date
+    end
+  end
+
   def excluded_dates
     Array(recurrence_data[:excluded_dates]).filter_map { |d| safe_date(d) }.to_set
   end

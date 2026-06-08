@@ -292,12 +292,17 @@
         });
         return out;
       },
+      // Items whose schedule actually fires today (or one-offs currently
+      // on Today), minus dailies. Sits between Dailies and Scheduled and
+      // is hidden when empty.
+      todayList() {
+        return this.all().filter(c => c.due_today && c.today_visible && !c.archived && !dailyIdSet.has(c.id));
+      },
       // Items that today_visible filtering would have put on the old
-      // Today screen, minus anything the user has already pinned to
-      // Dailies. Same semantics as the previous Today view, sourced
-      // from the same `today_visible` server field.
+      // Today screen, minus dailies AND minus the new "due today"
+      // section. What's left is overdue carryovers and always-on items.
       overdueList() {
-        return this.all().filter(c => c.today_visible && !c.archived && !dailyIdSet.has(c.id));
+        return this.all().filter(c => c.today_visible && !c.archived && !dailyIdSet.has(c.id) && !c.due_today);
       },
       activeForGrid() { return this.all().filter(c => !c.archived); },
       hotPicks() {
@@ -338,6 +343,23 @@
   }
 
   function hasCooldown(c) { return c.cooldown_kind === "fixed" || c.cooldown_kind === "day_reset"; }
+
+  // State-icon classification for Today + Scheduled circles. Mirrors the
+  // server's `due_today` derivation: recurring-daily chores get a Sun,
+  // anything else due today (one-offs, weekly/monthly matches) gets a
+  // Clock, and carryover/overdue items get an Hourglass.
+  function stateIconClass(c) {
+    if (!c.today_visible || c.archived) return null;
+    const freq = (c.recurrence && c.recurrence.freq) || "never";
+    if (freq === "daily") return "fa-sun-o";
+    if (c.due_today)      return "fa-clock-o";
+    return "fa-hourglass-half";
+  }
+  function stateIconHTML(c) {
+    const cls = stateIconClass(c);
+    if (!cls) return "";
+    return `<i class="fa ${cls} circle-state-icon" aria-hidden="true" data-state-icon></i>`;
+  }
 
   function gridCardHTML(c) {
     const doneClass = (c.done_count_today > 0) ? " done-today" : "";
@@ -408,6 +430,7 @@
           <span class="circle-reward">${esc(c.reward_label)}</span>
           <div class="icon" data-icon>${iconHTML(c)}</div>
           ${cd}
+          ${stateIconHTML(c)}
           <div class="count-slot" data-count-slot>${countBadge}</div>
         </div>
         <div class="title">${esc(c.short_name)}</div>
@@ -587,8 +610,26 @@
     patchStreakBadge(el, c);
     patchText(el.querySelector(".circle-reward"), c.reward_label);
     patchCountSlot(el.querySelector("[data-count-slot]"), c);
+    patchStateIcon(el.querySelector(".circle-inner"), c);
     patchText(el.querySelector(":scope > .title"), c.short_name);
     hydrateDataAttrs(el, c);
+  }
+  function patchStateIcon(host, c) {
+    if (!host) return;
+    const existing = host.querySelector(":scope > [data-state-icon]");
+    const cls = stateIconClass(c);
+    if (!cls) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (existing) {
+      // Reset to the desired Font Awesome class without disturbing the
+      // shared `fa circle-state-icon` baseline classes.
+      existing.classList.remove("fa-sun-o", "fa-clock-o", "fa-hourglass-half");
+      existing.classList.add(cls);
+    } else {
+      host.insertAdjacentHTML("beforeend", `<i class="fa ${cls} circle-state-icon" aria-hidden="true" data-state-icon></i>`);
+    }
   }
   function patchGridCard(el, c) {
     if (structuralChange(el, c)) {
@@ -615,6 +656,8 @@
   const Views = (() => {
     const grid       = () => document.querySelector("[data-chores-grid]");
     const dailies    = () => document.querySelector("[data-chores-dailies]");
+    const today      = () => document.querySelector("[data-chores-today]");
+    const todaySect  = () => document.querySelector("[data-chores-today-section]");
     const overdue    = () => document.querySelector("[data-chores-overdue]");
     const hot        = () => document.querySelector("[data-chores-hot-strip]");
     const emptyDay   = () => document.querySelector("[data-empty-dailies]");
@@ -690,6 +733,14 @@
       });
       if (emptyDay()) emptyDay().hidden = (c?.children.length || 0) > 0;
     }
+    function renderToday() {
+      const c = today();
+      reconcileSection(c, ChoreStore.todayList(), {
+        keyFor: cardKey, renderer: renderCircleCard, patcher: patchCircleCard,
+      });
+      const section = todaySect();
+      if (section) section.hidden = (c?.children.length || 0) === 0;
+    }
     function renderOverdue() {
       const c = overdue();
       reconcileSection(c, ChoreStore.overdueList(), {
@@ -756,14 +807,17 @@
       if (g) patchGridCard(g, c);
       else appendTo(grid(), renderGridCard(c));
 
-      // The chore belongs to exactly ONE of the two Today sections:
-      //   * Dailies if the viewer has pinned it (regardless of today_visible)
-      //   * Overdue if it's today_visible AND not pinned
-      // Anything else gets removed from both sections so a flipped
-      // today_visible doesn't leave a stale card behind.
+      // The chore belongs to exactly ONE of the three Today-tab sections:
+      //   * Dailies  if the viewer has pinned it (regardless of today_visible)
+      //   * Today    if it's due_today + today_visible AND not pinned
+      //   * Overdue  if it's today_visible AND not pinned AND not due_today
+      // Anything else gets removed from all three so a flipped
+      // today_visible/due_today doesn't leave a stale card behind.
       const isDaily = ChoreStore.isDaily(c.id) && !c.archived;
-      const isOverdue = c.today_visible && !c.archived && !isDaily;
+      const isToday = !!c.due_today && c.today_visible && !c.archived && !isDaily;
+      const isOverdue = c.today_visible && !c.archived && !isDaily && !isToday;
       placeInSection(c, dailies(), isDaily);
+      placeInSection(c, today(), isToday);
       placeInSection(c, overdue(), isOverdue);
       refreshTodayEmptyStates();
 
@@ -799,16 +853,19 @@
     function refreshTodayEmptyStates() {
       if (emptyDay())  emptyDay().hidden  = (dailies()?.children.length || 0) > 0;
       if (emptyOver()) emptyOver().hidden = (overdue()?.children.length || 0) > 0;
+      const section = todaySect();
+      if (section) section.hidden = (today()?.children.length || 0) === 0;
     }
     function renderAll() {
       renderGrid();
       renderDailies();
+      renderToday();
       renderOverdue();
       renderHot();
       renderLookahead();
     }
     return {
-      renderAll, renderGrid, renderDailies, renderOverdue, renderHot, renderLookahead,
+      renderAll, renderGrid, renderDailies, renderToday, renderOverdue, renderHot, renderLookahead,
       upsertOne, removeOne, refreshTodayEmptyStates,
     };
   })();
@@ -823,6 +880,7 @@
     else if (kind === "lookahead") Views.renderLookahead();
     else if (kind === "dailies") {
       Views.renderDailies();
+      Views.renderToday();
       Views.renderOverdue();
       refreshEditModalPin();
     }
@@ -980,6 +1038,7 @@
     [
       document.querySelector("[data-chores-grid]"),
       document.querySelector("[data-chores-dailies]"),
+      document.querySelector("[data-chores-today]"),
       document.querySelector("[data-chores-overdue]"),
       document.querySelector("[data-chores-search-extra]"),
       document.querySelector("[data-chores-hot-strip]"),
@@ -999,7 +1058,7 @@
       if (!card) return;
       const inEditMode = editModeActive;
       if (!inEditMode) {
-        const usesCircleHitbox = container.matches("[data-chores-dailies], [data-chores-overdue], [data-chores-hot-strip]");
+        const usesCircleHitbox = container.matches("[data-chores-dailies], [data-chores-today], [data-chores-overdue], [data-chores-hot-strip]");
         if (usesCircleHitbox && !e.target.closest(".circle-inner")) return;
       }
 
@@ -1926,6 +1985,7 @@
     [
       document.querySelector("[data-chores-grid]"),
       document.querySelector("[data-chores-dailies]"),
+      document.querySelector("[data-chores-today]"),
       document.querySelector("[data-chores-overdue]"),
     ].filter(Boolean).forEach(container => {
       const cards = Array.from(container.children);
@@ -1954,6 +2014,7 @@
     }
     const exclude = new Set([
       ...ChoreStore.dailiesList().map(c => c.id),
+      ...ChoreStore.todayList().map(c => c.id),
       ...ChoreStore.overdueList().map(c => c.id),
     ]);
     const scored = [];
@@ -3407,8 +3468,10 @@
     const ids = Array.from(document.querySelectorAll("[data-chores-grid] [data-chore-id]"))
       .map(c => parseInt(c.dataset.choreId, 10)).filter(Boolean);
     ChoreStore.reorder(ids);
-    // Today's Overdue mirrors the global chore sort; Dailies has its
-    // own user-curated order and isn't touched by a grid reorder.
+    // Today's Today + Overdue sections mirror the global chore sort;
+    // Dailies has its own user-curated order and isn't touched by a grid
+    // reorder.
+    reorderContainer("[data-chores-today]", ids);
     reorderContainer("[data-chores-overdue]", ids);
     try { await api("/chores/order", "PATCH", { ids, tab_id: TAB_ID }); }
     catch (e) { flash("Couldn't save order: " + e.message, "error"); }
@@ -3430,6 +3493,7 @@
   function applyOrderToDom(ids) {
     ChoreStore.reorder(ids);
     reorderContainer("[data-chores-grid]", ids);
+    reorderContainer("[data-chores-today]", ids);
     reorderContainer("[data-chores-overdue]", ids);
   }
   editModeBtn?.addEventListener("click", () => { if (editModeActive) exitEditMode(); else enterEditMode(); });

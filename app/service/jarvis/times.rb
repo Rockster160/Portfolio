@@ -10,10 +10,10 @@ module Jarvis::Times
     # Strip quoted sections so time-like text inside quotes isn't matched
     words = words.gsub(/(?<!\S)["\u201C\u201D].*["\u201C\u201D]/m, " ").squish
     words = words.gsub(rx.words(:later), "today")
-    month_words = Date::MONTHNAMES + Date::ABBR_MONTHNAMES
-    month_words_regex = rx.words(month_words)
+    month_words = (Date::MONTHNAMES + Date::ABBR_MONTHNAMES).compact
+    month_words_regex = /(?<![\w-])(?:#{month_words.join("|")})(?![\w-])/i
     day_words = (Date::DAYNAMES + Date::ABBR_DAYNAMES + [:today, :tomorrow, :yesterday, :morning, :night, :afternoon, :evening, :tonight]).map { |w| w.to_s.downcase.to_sym }
-    day_words_regex = rx.words(day_words)
+    day_words_regex = /(?<![\w-])(?:#{day_words.join("|")})(?![\w-])/i
     time_words = [:second, :minute, :hour, :day, :week, :month, :year]
     rel_words_regex = rx.words(time_words, suffix: "s?")
     iso8601_regex = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}-\d{2}:\d{2}/

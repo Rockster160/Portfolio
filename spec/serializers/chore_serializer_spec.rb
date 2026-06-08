@@ -243,6 +243,89 @@ RSpec.describe ChoreSerializer, type: :serializer do
       expect(json[:last_actor_username]).to eq(user.username)
     end
 
+    it "due_today: daily-recurring chore is due today" do
+      ch = create(
+        :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+        recurrence: { freq: :daily }
+      )
+      expect(render(ch)[:due_today]).to be(true)
+    end
+
+    it "due_today: weekly chore matching today's weekday is due today" do
+      key = AgendaSchedule::WEEKDAY_KEYS[today.wday]
+      ch = create(
+        :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+        recurrence: { freq: :weekly, by_day: [key] }
+      )
+      expect(render(ch)[:due_today]).to be(true)
+    end
+
+    it "due_today: weekly chore NOT matching today is overdue, not due today" do
+      # Use yesterday's weekday so today is "carryover" via scheduled_or_carried.
+      key = AgendaSchedule::WEEKDAY_KEYS[(today - 1).wday]
+      ch = create(
+        :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+        recurrence: { freq: :weekly, by_day: [key] }
+      )
+      expect(render(ch)[:today_visible]).to be(true)
+      expect(render(ch)[:due_today]).to be(false)
+    end
+
+    it "due_today: one-off with starts_on == today is due today" do
+      ch = create(
+        :chore, created_by_user: user, one_off: true,
+        show_on_daily_view: :when_scheduled, recurrence: { freq: :never },
+        starts_on: today
+      )
+      expect(render(ch)[:today_visible]).to be(true)
+      expect(render(ch)[:due_today]).to be(true)
+    end
+
+    it "due_today: one-off with starts_on in the past is overdue, not due today" do
+      ch = create(
+        :chore, created_by_user: user, one_off: true,
+        show_on_daily_view: :when_scheduled, recurrence: { freq: :never },
+        starts_on: today - 5
+      )
+      expect(render(ch)[:today_visible]).to be(true)
+      expect(render(ch)[:due_today]).to be(false)
+    end
+
+    it "due_today: one-off without starts_on is not flagged due today" do
+      ch = create(
+        :chore, created_by_user: user, one_off: true,
+        show_on_daily_view: :when_scheduled, recurrence: { freq: :never },
+        starts_on: nil
+      )
+      expect(render(ch)[:today_visible]).to be(true)
+      expect(render(ch)[:due_today]).to be(false)
+    end
+
+    it "due_today: relative chore is due today on its due_on date, overdue after" do
+      # Last completed exactly `interval` days ago → due_on == today
+      on_due_day = create(
+        :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+        recurrence: { freq: :relative, interval: 3, unit: :day }
+      )
+      create(
+        :chore_completion, chore: on_due_day, user: user, paid_pebbles: 1,
+        completed_at: 3.days.ago, day_key: today - 3
+      )
+      expect(render(on_due_day)[:due_today]).to be(true)
+
+      # Last completed earlier → due_on was in the past → overdue today
+      overdue_rel = create(
+        :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+        recurrence: { freq: :relative, interval: 3, unit: :day }
+      )
+      create(
+        :chore_completion, chore: overdue_rel, user: user, paid_pebbles: 1,
+        completed_at: 5.days.ago, day_key: today - 5
+      )
+      expect(render(overdue_rel)[:today_visible]).to be(true)
+      expect(render(overdue_rel)[:due_today]).to be(false)
+    end
+
     it ":when_scheduled — carryover survives a completion made today" do
       # Scheduled every 3 days, last appeared 2 days ago, never
       # completed. It's "carried over" to today. A completion made

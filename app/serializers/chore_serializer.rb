@@ -54,6 +54,7 @@ class ChoreSerializer
       hot_multiplier:       hot_multiplier,
       streak_multiplier:    streak_multiplier,
       today_visible:        today_visible?,
+      due_today:            due_today?,
       on_dailies:           on_dailies?,
     }
   end
@@ -242,6 +243,32 @@ class ChoreSerializer
     when :when_scheduled_and_available then scheduled || available
     else false
     end
+  end
+
+  # Narrower than `today_visible?` — true only when the chore's schedule
+  # actually fires on `day` (or it's a one-off that's currently on Today).
+  # Carryover/overdue items are intentionally excluded so the client can
+  # split the Today tab into "due today" vs "scheduled (overdue carryover)".
+  def due_today?
+    return false if chore.archived?
+    return false if chore.assigned? && chore.assigned_to_user_id != viewer.id
+    return false unless today_visible?
+    # One-offs are "due today" only on their starts_on date. Without a
+    # starts_on (or past it), they fall through to Scheduled (Hourglass)
+    # rather than implying today is the intended day.
+    return chore.starts_on.present? && chore.starts_on == day if chore.one_off
+    return false unless chore.scheduled?
+
+    last_before = last_completion_before_today&.day_key
+    if chore.relative?
+      # `matches_day?` returns true for any date >= due_on for relative
+      # schedules, which conflates due-today with overdue. Tighten to
+      # strict equality so overdue relative chores land in Scheduled.
+      due_on = chore.relative_due_on(viewer, last_completed_day: last_before)
+      return due_on.present? && due_on == day
+    end
+
+    chore.matches_day?(day, viewer, last_completed_day: last_before)
   end
 
   def scheduled_or_carried?(last_completed_day)
