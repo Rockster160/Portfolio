@@ -306,17 +306,42 @@
           <span class="field-hint">Mon–Fri only.</span>
         </div>
 
-        <%# Follows another chore — surfaces in Scheduled <offset> after
-          the anchor is completed. Offset can be 0 (same chore-day) so
-          "Fold Laundry" surfaces the moment "Laundry" is tapped. Reuses
-          the interval/unit widgets above; the picker hides the chore
-          itself + any chore that would create an anchor cycle. %>
+        <%# Follows another chore — surfaces in Scheduled after the
+          anchor is completed. Offset can be 0 (same chore-day) so
+          "Fold Laundry" surfaces the moment "Laundry" is tapped. The
+          picker hides self + any chore that would create an anchor
+          cycle. The "When" pills below are friendlier wrappers around
+          the interval/unit pair; "Today" = 0 days, "Tomorrow" = 1 day,
+          "Later…" reveals a numeric input. %>
         <div data-after-chore-wrap class="repeat-detail hidden">
-          <span class="field-hint">Follows:</span>
-          <select data-anchor-chore-id class="anchor-select">
-            <option value="">—</option>
-          </select>
-          <span class="field-hint">Surfaces in Scheduled once the anchor is completed (use <em>Every</em> above for an offset, e.g. 1 day for "Bring in Cans").</span>
+          <div class="after-chore-row">
+            <label class="field-label">Follows</label>
+            <button type="button" class="anchor-picker-btn" data-anchor-picker-open>
+              <span class="anchor-picker-icon" data-anchor-picker-icon></span>
+              <span class="anchor-picker-label" data-anchor-picker-label>Pick a chore…</span>
+            </button>
+            <input type="hidden" data-anchor-chore-id value="">
+          </div>
+          <div class="after-chore-row">
+            <label class="field-label">When</label>
+            <div class="pill-group" data-pill-group="after_chore_when">
+              <button type="button" class="pill active" data-value="today">Today</button>
+              <button type="button" class="pill" data-value="tomorrow">Tomorrow</button>
+              <button type="button" class="pill" data-value="later">Later…</button>
+            </div>
+            <input type="hidden" data-field="after_chore_when" value="today">
+          </div>
+          <div data-after-chore-later-wrap class="repeat-detail hidden">
+            <span class="field-hint">In</span>
+            <input type="number" min="2" value="2" data-after-chore-interval class="interval-input"
+                   autocomplete="off" data-1p-ignore="true" data-lpignore="true">
+            <select data-after-chore-unit class="unit-select">
+              <option value="day">days</option>
+              <option value="week">weeks</option>
+              <option value="month">months</option>
+            </select>
+          </div>
+          <span class="field-hint">Surfaces in Scheduled when the anchor is completed and stays there until you complete it. (It can always be completed from Grid view too.)</span>
         </div>
       </div>
 
@@ -589,6 +614,7 @@
 
 <%= render "icon_picker" %>
 <%= render "icon_cropper" %>
+<%= render "chore_picker" %>
 
 <template data-level-row-template>
   <div class="multiplier-level-row">

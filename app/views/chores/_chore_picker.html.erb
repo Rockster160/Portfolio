@@ -1,0 +1,25 @@
+<%# Anchor-chore search modal. Same look as the icon picker so the
+  UI feels consistent: a search box, a grid of circle-style entries
+  (icon + name), and an empty state. Opened by buttons that carry
+  `[data-chore-picker-open]` and the optional `data-chore-picker-self`
+  attribute (the id of the chore being edited, so we can exclude it
+  + any chore whose anchor chain would create a cycle). Emits a
+  `chore-anchor-picked` CustomEvent with detail.id when a chore is
+  chosen, leaves the modal otherwise. %>
+<div id="chore-anchor-picker" class="chores-modal-backdrop hidden" data-chore-picker-modal>
+  <div class="chores-modal chore-picker-modal">
+    <div class="modal-head">
+      <h3>Pick a chore</h3>
+      <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+    </div>
+    <div class="chore-picker-body">
+      <div class="chore-picker-toolbar">
+        <input type="search" class="chore-picker-search" data-chore-picker-search
+               placeholder="Search chores…" autocomplete="off"
+               data-1p-ignore="true" data-lpignore="true">
+      </div>
+      <div class="chore-picker-grid" data-chore-picker-grid></div>
+      <div class="chore-picker-empty hidden" data-chore-picker-empty>No matches.</div>
+    </div>
+  </div>
+</div>

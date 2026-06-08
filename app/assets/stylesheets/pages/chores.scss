@@ -2477,6 +2477,151 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     pointer-events: none;
   }
 
+  // ---- Chore (anchor) picker modal ----
+  // Same modal flavor as the icon picker; cells are circle-icon + name
+  // pairs so the user can scan for the chore the same way they read
+  // the Today section. Reuses the `score()` ranker from the chores
+  // grid search for filtering parity.
+  .chore-picker-modal {
+    max-width: 520px;
+    width: 92vw;
+  }
+  .chore-picker-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 4px;
+  }
+  .chore-picker-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .chore-picker-search {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #0F1B33;
+    border: 1px solid #334155;
+    color: var(--chores-text);
+    font-size: 14px;
+  }
+  .chore-picker-search:focus {
+    outline: none;
+    border-color: var(--chores-accent);
+  }
+  .chore-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    max-height: 50vh;
+    overflow-y: auto;
+    padding: 6px;
+    border-radius: 8px;
+    background: rgba(15, 27, 51, 0.4);
+  }
+  .chore-picker-cell {
+    padding: 8px 4px !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    border-radius: 8px;
+    color: var(--chores-text) !important;
+    font-weight: 500 !important;
+    line-height: 1.15;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+  .chore-picker-cell:hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-color: var(--chores-accent) !important;
+  }
+  .chore-picker-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #0F1B33;
+    display: grid;
+    place-items: center;
+    font-size: 22px;
+    line-height: 1;
+    overflow: hidden;
+  }
+  .chore-picker-icon .icon-img,
+  .chore-picker-icon > svg,
+  .chore-picker-icon .icon-ti {
+    width: 70%;
+    height: 70%;
+    object-fit: contain;
+  }
+  .chore-picker-label {
+    font-size: 11px;
+    text-align: center;
+    word-break: break-word;
+    color: var(--chores-text);
+  }
+  .chore-picker-empty {
+    color: var(--chores-muted);
+    text-align: center;
+    padding: 18px 0;
+  }
+
+  // ---- "Follows another chore" form rows ----
+  // Stacks the anchor picker over the "When" pills so the user reads
+  // them in order: pick a chore, then say when it should appear.
+  .after-chore-row {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    margin: 6px 0;
+  }
+  .anchor-picker-btn {
+    padding: 8px 12px !important;
+    border-radius: 8px;
+    background: #0F1B33 !important;
+    border: 1px solid #334155 !important;
+    color: var(--chores-text) !important;
+    font-weight: 500 !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    min-width: 220px;
+    text-align: left;
+  }
+  .anchor-picker-btn:hover {
+    border-color: var(--chores-accent) !important;
+  }
+  .anchor-picker-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #1F2A44;
+    font-size: 16px;
+    line-height: 1;
+    overflow: hidden;
+  }
+  .anchor-picker-icon:empty::before {
+    content: "🔗";
+    opacity: 0.45;
+  }
+  .anchor-picker-icon .icon-img,
+  .anchor-picker-icon > svg,
+  .anchor-picker-icon .icon-ti {
+    width: 70%;
+    height: 70%;
+    object-fit: contain;
+  }
+  .anchor-picker-label {
+    color: var(--chores-text);
+    font-size: 13px;
+  }
+
   // ---- Icon cropper modal ----
   .icon-cropper-modal {
     max-width: 460px;

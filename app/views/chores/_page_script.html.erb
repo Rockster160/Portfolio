@@ -2167,6 +2167,11 @@
           syncCooldownRow();
           return;
         }
+        if (key === "after_chore_when") {
+          setPillValue("after_chore_when", pill.dataset.value);
+          syncAfterChoreLaterRow();
+          return;
+        }
         setPillValue(key, pill.dataset.value);
       });
     });
@@ -2262,26 +2267,24 @@
     if (seconds % 60 === 0)     return { amount: seconds / 60,     unit: "minute" };
     return { amount: seconds, unit: "second" };
   }
-  // Rebuild the anchor-chore <select> from the store. Excludes the
-  // chore being edited (self) plus any chore whose anchor chain
-  // already passes through self — picking it would create a cycle
-  // the server-side validator rejects. `selfId` is the currently-
-  // edited chore (or undefined when adding).
-  function populateAnchorChorePicker(selfId) {
-    const sel = editForm.querySelector('[data-anchor-chore-id]');
-    if (!sel) return;
-    selfId = selfId ?? parseInt(currentChoreId, 10) ?? null;
-    const previous = sel.value;
-    const items = ChoreStore.activeForGrid()
-      .filter(c => c.id !== selfId && !anchorChainContains(c, selfId))
-      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-    const opts = ['<option value="">—</option>'];
-    items.forEach(c => {
-      opts.push(`<option value="${c.id}">${esc(c.short_name || c.name)}</option>`);
-    });
-    sel.innerHTML = opts.join("");
-    if (previous && sel.querySelector(`option[value="${previous}"]`)) sel.value = previous;
+  // Render the currently-selected anchor into the trigger button.
+  // Falls back to a placeholder when nothing is picked.
+  function syncAnchorPickerButton() {
+    const idEl = editForm.querySelector('[data-anchor-chore-id]');
+    const iconEl = editForm.querySelector('[data-anchor-picker-icon]');
+    const labelEl = editForm.querySelector('[data-anchor-picker-label]');
+    if (!idEl || !iconEl || !labelEl) return;
+    const id = parseInt(idEl.value, 10);
+    const chore = Number.isFinite(id) ? ChoreStore.get(id) : null;
+    if (!chore) {
+      iconEl.innerHTML = "";
+      labelEl.textContent = "Pick a chore…";
+      return;
+    }
+    iconEl.innerHTML = iconHTML(chore);
+    labelEl.textContent = chore.short_name || chore.name || "—";
   }
+
   // Walks `c`'s anchor chain looking for `targetId`. Depth-bounded to
   // mirror the server validator. Returns true if cycle would result.
   function anchorChainContains(c, targetId) {
@@ -2300,6 +2303,14 @@
     return false;
   }
 
+  // Reveal the dedicated "In X day/week/month" inputs only when the
+  // user picks "Later…". Pill clicks elsewhere (Today / Tomorrow)
+  // collapse it.
+  function syncAfterChoreLaterRow() {
+    const when = getField("after_chore_when") || "today";
+    editForm.querySelector('[data-after-chore-later-wrap]')?.classList.toggle("hidden", when !== "later");
+  }
+
   function syncFreqRow() {
     const freq = getField("freq") || "never";
     // Picking ANY recurrence auto-fills starts_on with today (only
@@ -2309,21 +2320,11 @@
     editForm.querySelector('[data-monthly-wrap]')?.classList.toggle("hidden", freq !== "monthly");
     editForm.querySelector('[data-yearly-wrap]')?.classList.toggle("hidden", freq !== "yearly");
     editForm.querySelector('[data-interval-wrap]')?.classList.toggle("hidden",
-      freq !== "custom" && freq !== "relative" && freq !== "after_chore");
+      freq !== "custom" && freq !== "relative");
     editForm.querySelector('[data-after-chore-wrap]')?.classList.toggle("hidden",
       freq !== "after_chore");
-    if (freq === "after_chore") {
-      populateAnchorChorePicker();
-      // Offset 0 is a meaningful default for the "Fold Laundry now"
-      // case — relax the interval input's min so 0 is allowed only on
-      // the after_chore freq.
-      const interval = editForm.querySelector('[data-interval]');
-      if (interval) interval.setAttribute("min", "0");
-    } else {
-      const interval = editForm.querySelector('[data-interval]');
-      if (interval) interval.setAttribute("min", "1");
-    }
     editForm.querySelector('[data-weekdays-wrap]')?.classList.add("hidden");
+    syncAfterChoreLaterRow();
     if (freq === "weekly") {
       const chips = Array.from(editForm.querySelectorAll('[data-weekday-chips] .chip-day.active'));
       if (chips.length === 0) {
@@ -2926,6 +2927,77 @@
   })();
 
   // ============================================================
+  // Anchor-chore picker — same modal flavor as the icon picker, but
+  // populated from ChoreStore. Reuses the `score()` ranker so search
+  // semantics match the chores-grid search. Opened from buttons
+  // carrying [data-anchor-picker-open]; writes the picked chore id
+  // back into the form's [data-anchor-chore-id] hidden input.
+  // ============================================================
+  (function setupChorePicker() {
+    const modal = document.querySelector("[data-chore-picker-modal]");
+    if (!modal) return;
+    const searchEl = modal.querySelector("[data-chore-picker-search]");
+    const gridEl   = modal.querySelector("[data-chore-picker-grid]");
+    const emptyEl  = modal.querySelector("[data-chore-picker-empty]");
+
+    function render() {
+      const q = (searchEl.value || "").trim();
+      const selfId = parseInt(modal.dataset.selfId || "", 10) || null;
+      const candidates = ChoreStore.activeForGrid()
+        .filter(c => c.id !== selfId && !anchorChainContains(c, selfId));
+      const scored = candidates
+        .map(c => ({ c, s: score(q, c.short_name || c.name, c.aliases || []) }))
+        .filter(x => x.s > 0)
+        .sort((a, b) => b.s - a.s || (a.c.name || "").localeCompare(b.c.name || ""));
+      const items = scored.map(x => x.c);
+      gridEl.innerHTML = items
+        .map(c => `
+          <button type="button" class="chore-picker-cell" data-chore-pick-id="${c.id}">
+            <span class="chore-picker-icon">${iconHTML(c)}</span>
+            <span class="chore-picker-label">${esc(c.short_name || c.name)}</span>
+          </button>
+        `)
+        .join("");
+      emptyEl.classList.toggle("hidden", items.length > 0);
+    }
+
+    let inputTimer = null;
+    searchEl?.addEventListener("input", () => {
+      clearTimeout(inputTimer);
+      inputTimer = setTimeout(render, 60);
+    });
+
+    gridEl?.addEventListener("click", e => {
+      const btn = e.target.closest("[data-chore-pick-id]");
+      if (!btn) return;
+      const id = parseInt(btn.dataset.chorePickId, 10);
+      const hidden = editForm.querySelector('[data-anchor-chore-id]');
+      if (hidden) hidden.value = id ? String(id) : "";
+      syncAnchorPickerButton();
+      modal.classList.add("hidden");
+    });
+
+    wireModalDismiss(modal, {
+      onCancel:   () => modal.classList.add("hidden"),
+      onBackdrop: () => modal.classList.add("hidden"),
+    });
+
+    document.addEventListener("click", e => {
+      const trigger = e.target.closest("[data-anchor-picker-open]");
+      if (!trigger) return;
+      e.preventDefault();
+      modal.dataset.selfId = String(parseInt(currentChoreId, 10) || "");
+      searchEl.value = "";
+      modal.classList.remove("hidden");
+      render();
+      setTimeout(() => {
+        searchEl?.focus();
+        searchEl?.select();
+      }, 0);
+    });
+  })();
+
+  // ============================================================
   // Custom-icon cropper — file/paste/drop/URL source, canvas crop
   // with square overlay + zoom/pan, name + keywords, POSTs a 128px
   // WebP data URL to /chores/household_icons. On success notifies
@@ -3510,17 +3582,26 @@
         });
       }
     }
-    // `:after_chore` allows interval=0 (same chore-day surface).
-    // Setting the input to "0" requires bypassing the truthy check
-    // below since 0 is falsy in JS — set explicitly for after_chore.
     if (rec.freq === "after_chore") {
-      const intervalEl = editForm.querySelector('[data-interval]');
-      if (intervalEl) intervalEl.value = String(rec.interval ?? 0);
-      const unitEl = editForm.querySelector('[data-unit]');
-      if (unitEl) unitEl.value = rec.unit || "day";
-      populateAnchorChorePicker(c.id);
       const anchorEl = editForm.querySelector('[data-anchor-chore-id]');
-      if (anchorEl && rec.anchor_chore_id) anchorEl.value = String(rec.anchor_chore_id);
+      if (anchorEl) anchorEl.value = rec.anchor_chore_id ? String(rec.anchor_chore_id) : "";
+      // Map (interval, unit) back to the When pills. Anything that
+      // isn't exactly Today (0 days) or Tomorrow (1 day) folds into
+      // "Later…" and the dedicated numeric/unit inputs.
+      const intv = rec.interval ?? 0;
+      const unit = rec.unit || "day";
+      let when = "later";
+      if (intv === 0 && unit === "day") when = "today";
+      else if (intv === 1 && unit === "day") when = "tomorrow";
+      setPillValue("after_chore_when", when);
+      if (when === "later") {
+        const intervalEl = editForm.querySelector('[data-after-chore-interval]');
+        if (intervalEl) intervalEl.value = String(intv);
+        const unitEl = editForm.querySelector('[data-after-chore-unit]');
+        if (unitEl) unitEl.value = unit;
+      }
+      syncAnchorPickerButton();
+      syncAfterChoreLaterRow();
     } else {
       if (rec.interval) editForm.querySelector('[data-interval]').value = rec.interval;
       if (rec.unit) editForm.querySelector('[data-unit]').value = rec.unit;
@@ -3660,12 +3741,19 @@
           recurrence.unit = editForm.querySelector('[data-unit]')?.value || "day";
         }
         if (freq === "after_chore") {
-          const rawInterval = editForm.querySelector('[data-interval]')?.value;
-          const parsed = parseInt(rawInterval, 10);
-          // Offset 0 means "same chore-day". Default to 0 only when the
-          // field is genuinely blank — Number.isNaN catches "" too.
-          recurrence.interval = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
-          recurrence.unit = editForm.querySelector('[data-unit]')?.value || "day";
+          const when = getField("after_chore_when") || "today";
+          if (when === "today") {
+            recurrence.interval = 0;
+            recurrence.unit = "day";
+          } else if (when === "tomorrow") {
+            recurrence.interval = 1;
+            recurrence.unit = "day";
+          } else {
+            const rawInterval = editForm.querySelector('[data-after-chore-interval]')?.value;
+            const parsed = parseInt(rawInterval, 10);
+            recurrence.interval = Number.isFinite(parsed) ? Math.max(2, parsed) : 2;
+            recurrence.unit = editForm.querySelector('[data-after-chore-unit]')?.value || "day";
+          }
           const anchorId = parseInt(editForm.querySelector('[data-anchor-chore-id]')?.value, 10);
           if (Number.isFinite(anchorId) && anchorId > 0) recurrence.anchor_chore_id = anchorId;
         }
@@ -4596,6 +4684,17 @@
     // Net effect: a stale-empty shell can never blank the UI; the
     // worst-case is "we already had these chores and we still do."
     ChoreStore.hydrateFromLocal();
+    // The bootstrap chore list IS the canonical active set for this
+    // viewer — anything in the local cache that isn't in it has been
+    // archived (or otherwise made inaccessible) on the server. Prune
+    // before merge so we never have to query/ship the archive list,
+    // which grows unboundedly with one-off completions.
+    if (Array.isArray(bootstrap.chores)) {
+      const activeIds = new Set(bootstrap.chores.map(c => c.id));
+      ChoreStore.all().forEach(c => {
+        if (!activeIds.has(c.id)) ChoreStore.remove(c.id);
+      });
+    }
     ChoreStore.bootstrap(bootstrap.chores, bootstrap.lookahead, bootstrap.daily_ids);
     if (bootstrap.day_key) localStorage.setItem(SYNC_DAY_KEY, bootstrap.day_key);
     // Persist server_ts only when the cached HTML is from today;
