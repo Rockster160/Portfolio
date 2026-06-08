@@ -194,6 +194,61 @@ RSpec.describe ChoreDailyResetWorker do
     end
   end
 
+  describe "weight_for / schedule_weight_sets" do
+    let(:worker) { described_class.new }
+    let(:day)    { Date.new(2026, 6, 8) } # Monday
+
+    def make(opts = {})
+      defaults = {
+        created_by_user: user,
+        reward_pebbles: 2,
+        hot_eligibility: :when_available,
+        show_on_daily_view: :when_scheduled,
+      }
+      create(:chore, defaults.merge(opts))
+    end
+
+    it "recurring-daily chores stay at baseline (not boosted as 'today')" do
+      daily = make(recurrence: { freq: "daily" }, starts_on: day - 30)
+      today_ids, overdue_ids = worker.send(:schedule_weight_sets, [daily], day)
+      expect(today_ids).not_to include(daily.id)
+      expect(overdue_ids).not_to include(daily.id)
+      expect(worker.send(:weight_for, daily, today_ids, overdue_ids)).to eq(described_class::BASELINE_WEIGHT)
+    end
+
+    it "non-daily chores matching today get TODAY_DUE_WEIGHT" do
+      weekly_mon = make(recurrence: { freq: "weekly", by_day: ["mon"] }, starts_on: day - 30)
+      today_ids, overdue_ids = worker.send(:schedule_weight_sets, [weekly_mon], day)
+      expect(today_ids).to include(weekly_mon.id)
+      expect(worker.send(:weight_for, weekly_mon, today_ids, overdue_ids)).to eq(described_class::TODAY_DUE_WEIGHT)
+    end
+
+    it "chores whose last scheduled day is in the past with no completion since get OVERDUE_WEIGHT" do
+      # Weekly Sunday — day is Monday, so the last scheduled day was
+      # yesterday (Sunday) and (no completions) → overdue.
+      weekly_sun = make(recurrence: { freq: "weekly", by_day: ["sun"] }, starts_on: day - 30)
+      today_ids, overdue_ids = worker.send(:schedule_weight_sets, [weekly_sun], day)
+      expect(today_ids).not_to include(weekly_sun.id)
+      expect(overdue_ids).to include(weekly_sun.id)
+      expect(worker.send(:weight_for, weekly_sun, today_ids, overdue_ids)).to eq(described_class::OVERDUE_WEIGHT)
+    end
+
+    it "an overdue-by-pattern chore completed since its last scheduled day is NOT overdue" do
+      weekly_sun = make(recurrence: { freq: "weekly", by_day: ["sun"] }, starts_on: day - 30)
+      create(:chore_completion, chore: weekly_sun, user: user, paid_pebbles: 1,
+        completed_at: (day - 1).to_time, day_key: day - 1)
+      _, overdue_ids = worker.send(:schedule_weight_sets, [weekly_sun], day)
+      expect(overdue_ids).not_to include(weekly_sun.id)
+    end
+
+    it "recurring-daily chores are excluded from overdue regardless of completion gaps" do
+      daily = make(recurrence: { freq: "daily" }, starts_on: day - 30)
+      today_ids, overdue_ids = worker.send(:schedule_weight_sets, [daily], day)
+      expect(today_ids).not_to include(daily.id)
+      expect(overdue_ids).not_to include(daily.id)
+    end
+  end
+
   describe "hot_eligibility" do
     it ":never chores are excluded from hot-pick selection" do
       Chore.delete_all # reset baseline so this spec doesn't fight the outer 31-chore fixture
