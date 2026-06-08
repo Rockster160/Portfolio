@@ -268,13 +268,32 @@ class ChoreSerializer
       return due_on.present? && due_on == day
     end
 
+    if chore.after_chore?
+      # Strict "due today" = anchor's last credited completion + offset
+      # equals today. Anchor done earlier with offset 0 (or any prior
+      # date) is the carryover case → Scheduled section.
+      a_last = anchor_last_day
+      return false if a_last.nil?
+
+      due_on = chore.after_chore_due_on_for(a_last)
+      return due_on == day
+    end
+
     chore.matches_day?(day, viewer, last_completed_day: last_before)
+  end
+
+  def anchor_last_day
+    return nil unless chore.after_chore? && chore.anchor_chore_id.present?
+
+    return ctx.anchor_last_day_by_chore[chore.id] if ctx.respond_to?(:anchor_last_day_by_chore)
+
+    chore.lookup_anchor_last_day(viewer)
   end
 
   def scheduled_or_carried?(last_completed_day)
     return false unless chore.scheduled?
-    return true  if chore.matches_day?(day, viewer, last_completed_day: last_completed_day)
-    return false if chore.relative?
+    return true  if chore.matches_day?(day, viewer, last_completed_day: last_completed_day, anchor_last_day: anchor_last_day)
+    return false if chore.relative? || chore.after_chore?
 
     last_scheduled_day = ((day - 14)..(day - 1)).reverse_each.find { |d|
       chore.matches_day?(d, viewer, last_completed_day: last_completed_day)

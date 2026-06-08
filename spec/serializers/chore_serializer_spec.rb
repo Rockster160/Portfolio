@@ -326,6 +326,117 @@ RSpec.describe ChoreSerializer, type: :serializer do
       expect(render(overdue_rel)[:due_today]).to be(false)
     end
 
+    describe ":after_chore (cross-chore relative recurrence)" do
+      let(:anchor) {
+        create(:chore, created_by_user: user, name: "Laundry",
+          show_on_daily_view: :when_scheduled, recurrence: { freq: :never })
+      }
+      let(:follower_recurrence) {
+        { freq: :after_chore, anchor_chore_id: anchor.id, interval: 0, unit: :day }
+      }
+
+      def follower(opts = {})
+        create(:chore, {
+          created_by_user: user, name: "Fold Laundry",
+          show_on_daily_view: :when_scheduled,
+          recurrence: follower_recurrence,
+        }.merge(opts))
+      end
+
+      it "anchor never completed → follower not visible" do
+        f = follower
+        expect(render(f)[:today_visible]).to be(false)
+        expect(render(f)[:due_today]).to be(false)
+      end
+
+      it "anchor completed today + no follower completion → due today (Today section)" do
+        f = follower
+        create(:chore_completion, chore: anchor, user: user, paid_pebbles: 1,
+          completed_at: 2.hours.ago, day_key: today)
+        expect(render(f)[:today_visible]).to be(true)
+        expect(render(f)[:due_today]).to be(true)
+      end
+
+      it "anchor completed yesterday + no follower completion → Scheduled carryover, not due today" do
+        f = follower
+        create(:chore_completion, chore: anchor, user: user, paid_pebbles: 1,
+          completed_at: 1.day.ago, day_key: today - 1)
+        expect(render(f)[:today_visible]).to be(true)
+        expect(render(f)[:due_today]).to be(false)
+      end
+
+      it "offset 1 day: anchor done today → follower NOT visible today (surfaces tomorrow)" do
+        f = follower(recurrence: follower_recurrence.merge(interval: 1))
+        create(:chore_completion, chore: anchor, user: user, paid_pebbles: 1,
+          completed_at: 2.hours.ago, day_key: today)
+        expect(render(f)[:today_visible]).to be(false)
+      end
+
+      it "offset 1 day: anchor done yesterday → follower visible today" do
+        f = follower(recurrence: follower_recurrence.merge(interval: 1))
+        create(:chore_completion, chore: anchor, user: user, paid_pebbles: 1,
+          completed_at: 1.day.ago, day_key: today - 1)
+        expect(render(f)[:today_visible]).to be(true)
+        expect(render(f)[:due_today]).to be(true)
+      end
+
+      it "anonymous anchor completion does not surface follower" do
+        f = follower
+        create(:chore_completion, chore: anchor, user: user,
+          completed_at: 2.hours.ago, day_key: today, anonymous: true,
+          payout_skipped: true, paid_pebbles: 0, skipped_reason: :anonymous_credit)
+        expect(render(f)[:today_visible]).to be(false)
+      end
+
+      it "follower completed today after anchor → stays visible today (B's mid-day completion never removes)" do
+        f = follower
+        create(:chore_completion, chore: anchor, user: user, paid_pebbles: 1,
+          completed_at: 2.hours.ago, day_key: today)
+        ChoreCompleter.new(f, user).call
+        expect(render(f)[:today_visible]).to be(true)
+      end
+
+      it "follower completed yesterday + anchor older → not visible today" do
+        f = follower
+        create(:chore_completion, chore: anchor, user: user, paid_pebbles: 1,
+          completed_at: 3.days.ago, day_key: today - 3)
+        create(:chore_completion, chore: f, user: user, paid_pebbles: 1,
+          completed_at: 1.day.ago, day_key: today - 1)
+        expect(render(f)[:today_visible]).to be(false)
+      end
+
+      it "save with self-anchor is rejected" do
+        # Build a chore and try to point its anchor at itself.
+        c = create(:chore, created_by_user: user, name: "X",
+          recurrence: { freq: :never })
+        c.recurrence = { freq: :after_chore, anchor_chore_id: c.id, interval: 0, unit: :day }
+        expect(c).not_to be_valid
+        expect(c.errors[:recurrence].join).to include("itself")
+      end
+
+      it "save with cross-household anchor is rejected" do
+        other_user = create(:user)
+        other_household = create(:chore_household)
+        ChoreHouseholdMembership.create!(user: other_user, chore_household: other_household)
+        other_user.update_columns(chore_household_id: other_household.id)
+        external = create(:chore, created_by_user: other_user,
+          chore_household: other_household, recurrence: { freq: :never })
+        c = build(:chore, created_by_user: user, name: "Cross",
+          recurrence: { freq: :after_chore, anchor_chore_id: external.id, interval: 0, unit: :day })
+        expect(c).not_to be_valid
+        expect(c.errors[:recurrence].join).to include("household")
+      end
+
+      it "save creating a cycle (A→B→A) is rejected" do
+        a = create(:chore, created_by_user: user, name: "A", recurrence: { freq: :never })
+        b = create(:chore, created_by_user: user, name: "B",
+          recurrence: { freq: :after_chore, anchor_chore_id: a.id, interval: 0, unit: :day })
+        a.recurrence = { freq: :after_chore, anchor_chore_id: b.id, interval: 0, unit: :day }
+        expect(a).not_to be_valid
+        expect(a.errors[:recurrence].join).to include("cycle")
+      end
+    end
+
     it ":when_scheduled — carryover survives a completion made today" do
       # Scheduled every 3 days, last appeared 2 days ago, never
       # completed. It's "carried over" to today. A completion made

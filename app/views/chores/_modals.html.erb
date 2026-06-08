@@ -236,6 +236,7 @@
           <button type="button" class="pill" data-value="yearly">Yearly</button>
           <button type="button" class="pill" data-value="custom">Every X (from start date)</button>
           <button type="button" class="pill" data-value="relative">Every X (from last done)</button>
+          <button type="button" class="pill" data-value="after_chore">Follows another chore</button>
         </div>
         <input type="hidden" data-field="freq" value="never">
 
@@ -303,6 +304,19 @@
         <%# Daily / Weekdays — no extra fields beyond the helper note %>
         <div data-weekdays-wrap class="repeat-detail hidden">
           <span class="field-hint">Mon–Fri only.</span>
+        </div>
+
+        <%# Follows another chore — surfaces in Scheduled <offset> after
+          the anchor is completed. Offset can be 0 (same chore-day) so
+          "Fold Laundry" surfaces the moment "Laundry" is tapped. Reuses
+          the interval/unit widgets above; the picker hides the chore
+          itself + any chore that would create an anchor cycle. %>
+        <div data-after-chore-wrap class="repeat-detail hidden">
+          <span class="field-hint">Follows:</span>
+          <select data-anchor-chore-id class="anchor-select">
+            <option value="">—</option>
+          </select>
+          <span class="field-hint">Surfaces in Scheduled once the anchor is completed (use <em>Every</em> above for an offset, e.g. 1 day for "Bring in Cans").</span>
         </div>
       </div>
 

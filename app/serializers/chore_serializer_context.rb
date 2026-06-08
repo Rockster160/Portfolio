@@ -10,6 +10,7 @@ class ChoreSerializerContext
     :last_completion_before_today_by_chore,
     :completion_actor_by_chore, :completion_days_by_chore,
     :completion_days_before_today_by_chore,
+    :anchor_last_day_by_chore,
     :household_user_ids, :daily_chore_ids
 
   def self.for_user(viewer, day: nil)
@@ -21,6 +22,7 @@ class ChoreSerializerContext
     @day = day
     @household_user_ids = viewer.chore_household_user_ids
     chores = viewer.accessible_chores.to_a
+    @chores_by_id = chores.index_by(&:id)
     @chore_ids = chores.map(&:id)
     @household_chore_ids = chores.select(&:share_household?).map(&:id)
     @personal_chore_ids  = @chore_ids - @household_chore_ids
@@ -79,6 +81,14 @@ class ChoreSerializerContext
     # off Today by being newer than the last-scheduled-day.
     @completion_days_before_today_by_chore = @completion_days_by_chore
       .transform_values { |days| days.reject { |d| d >= day }.to_set }
+
+    # :after_chore chores anchor on another chore's most recent
+    # credited completion (anonymous excluded — see locked rules in
+    # the plan). For every chore B in the household that follows some
+    # A, we want the max(day_key) of A's credited completions under
+    # B's cooldown user scope, in one IN(...) GROUP BY. Keyed by B's
+    # id so the serializer can look it up O(1).
+    @anchor_last_day_by_chore = bulk_anchor_last_days
   end
 
   def bulk_last_completion(chore_ids, user_ids)
@@ -125,5 +135,35 @@ class ChoreSerializerContext
       .distinct.pluck(:chore_id, :day_key)
       .group_by(&:first)
       .transform_values { |entries| entries.to_set(&:last) }
+  end
+
+  # Build the {B.id => A's max credited day_key} hash.
+  #
+  # The personal-vs-household split mirrors the rest of preload!: a
+  # household-shared B looks at every household member's A
+  # completions; a personal B only looks at the viewer's. We can't do
+  # one global query because A's user-scope filter depends on B's
+  # sharing mode.
+  def bulk_anchor_last_days
+    followers = @chores_by_id.values.select { |c| c.after_chore? && c.anchor_chore_id.present? }
+    return {} if followers.empty?
+
+    by_user_scope = followers.group_by { |c| c.share_household? ? :household : :personal }
+    out = {}
+
+    [:household, :personal].each { |scope|
+      group = by_user_scope[scope] || []
+      next if group.empty?
+
+      anchor_ids = group.map(&:anchor_chore_id).uniq
+      user_ids = scope == :household ? household_user_ids : [viewer.id]
+      last_days = ChoreCompletion.credited
+        .where(chore_id: anchor_ids, user_id: user_ids)
+        .group(:chore_id).maximum(:day_key)
+
+      group.each { |c| out[c.id] = last_days[c.anchor_chore_id] }
+    }
+
+    out
   end
 end

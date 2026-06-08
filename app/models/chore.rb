@@ -48,9 +48,14 @@ class Chore < ApplicationRecord
   after_commit :broadcast_chore_change, on: [:create, :update, :destroy]
 
   WEEKDAY_KEYS = AgendaSchedule::WEEKDAY_KEYS
-  FREQUENCIES = [:never, :daily, :weekdays, :weekly, :monthly, :yearly, :custom, :relative].freeze
+  FREQUENCIES = [:never, :daily, :weekdays, :weekly, :monthly, :yearly, :custom, :relative, :after_chore].freeze
+  ANCHOR_CHAIN_MAX_DEPTH = 32
   CUSTOM_UNITS = [:day, :week, :month].freeze
   RELATIVE_UNITS = CUSTOM_UNITS
+  # `:after_chore` reuses :day/:week/:month and additionally allows
+  # interval 0 (same chore-day) — "Fold Laundry surfaces the moment
+  # Laundry is done".
+  AFTER_CHORE_UNITS = CUSTOM_UNITS
 
   # Sentinel values for `threshold_seconds`:
   #   nil / 0           — no cooldown
@@ -107,6 +112,7 @@ class Chore < ApplicationRecord
   validates :reward_pebbles, numericality: { greater_than_or_equal_to: 0 }
   validates :threshold_seconds, numericality: { only_integer: true }, allow_nil: true
   validate :threshold_seconds_is_valid_sentinel_or_positive
+  validate :anchor_chore_is_valid
 
   def assigned? = assigned_to_user_id.present?
 
@@ -176,6 +182,24 @@ class Chore < ApplicationRecord
     freq == :relative
   end
 
+  def after_chore?
+    freq == :after_chore
+  end
+
+  # The id of the chore this one follows (via :after_chore freq).
+  # Stored in the recurrence JSON to avoid a dedicated column for a
+  # field that's only meaningful for one freq type.
+  def anchor_chore_id
+    raw = recurrence_data[:anchor_chore_id]
+    Integer(raw, exception: false) if raw.present?
+  end
+
+  # Lazy lookup. Use ChoreSerializerContext for bulk paths — this is
+  # the fallback for single-record calls (specs, ad-hoc usage).
+  def anchor_chore
+    @anchor_chore ||= Chore.find_by(id: anchor_chore_id) if anchor_chore_id.present?
+  end
+
   def last_completion_for(user)
     chore_completions.where(user_id: user.id).order(completed_at: :desc).first
   end
@@ -185,9 +209,18 @@ class Chore < ApplicationRecord
   # user — they fire on their pattern. Relative schedules anchor to
   # `last_completed_day` for that user, falling back to starts_on /
   # created_at so the first appearance still happens.
-  def matches_day?(date, user=nil, last_completed_day: :unset)
+  def matches_day?(date, user=nil, last_completed_day: :unset, anchor_last_day: :unset)
     return false unless scheduled?
     return false if excluded_dates.include?(date)
+
+    if after_chore?
+      return anchor_matches_day?(
+        date,
+        user,
+        b_last_before_today: (last_completed_day == :unset ? nil : last_completed_day),
+        anchor_last_day:     anchor_last_day,
+      )
+    end
 
     if relative?
       last = effective_last_completed_day(user, last_completed_day)
@@ -238,6 +271,30 @@ class Chore < ApplicationRecord
 
   def excluded_dates
     Array(recurrence_data[:excluded_dates]).filter_map { |d| safe_date(d) }.to_set
+  end
+
+  # Date when an :after_chore follower becomes due, given a particular
+  # anchor `last_day` (or nil for "never"). Used by the serializer's
+  # `due_today?` to distinguish "newly due today" from "carryover from
+  # a prior anchor completion."
+  def after_chore_due_on_for(anchor_last_day)
+    return nil if anchor_last_day.nil?
+
+    interval, unit = after_chore_offset
+    advance(anchor_last_day, interval, unit)
+  end
+
+  # Returns the anchor chore's most recent credited completion `day_key`
+  # under `user`'s cooldown scope (or nil). Bulk callers should use
+  # `ChoreSerializerContext#anchor_last_day_by_chore` instead — this is
+  # the per-record fallback.
+  def lookup_anchor_last_day(user)
+    return nil if anchor_chore_id.blank?
+    return nil if user.nil?
+
+    ChoreCompletion.credited
+      .where(chore_id: anchor_chore_id, user_id: cooldown_scope_user_ids(user))
+      .maximum(:day_key)
   end
 
   def cooldown_until_day_reset?
@@ -324,6 +381,50 @@ class Chore < ApplicationRecord
     errors.add(:threshold_seconds, "must be positive or the day-reset sentinel (-1)")
   end
 
+  # Validates an `:after_chore` chore's anchor: must be set, must point
+  # at a different chore in the same household, and walking the anchor
+  # chain must not cycle back to self.
+  def anchor_chore_is_valid
+    return unless after_chore?
+
+    aid = anchor_chore_id
+    if aid.blank?
+      errors.add(:recurrence, "after_chore requires an anchor_chore_id")
+      return
+    end
+    if aid == id
+      errors.add(:recurrence, "anchor_chore_id cannot point at the chore itself")
+      return
+    end
+
+    anchor = Chore.find_by(id: aid)
+    if anchor.nil?
+      errors.add(:recurrence, "anchor_chore_id does not exist")
+      return
+    end
+    if anchor.chore_household_id != chore_household_id
+      errors.add(:recurrence, "anchor_chore must belong to the same household")
+      return
+    end
+
+    cursor = anchor
+    seen = Set.new([id].compact)
+    ANCHOR_CHAIN_MAX_DEPTH.times do
+      break if cursor.nil?
+
+      if seen.include?(cursor.id)
+        errors.add(:recurrence, "anchor_chore_id forms a cycle")
+        return
+      end
+
+      seen << cursor.id
+      next_id = cursor.anchor_chore_id
+      break if next_id.blank?
+
+      cursor = Chore.find_by(id: next_id)
+    end
+  end
+
   def effective_last_completed_day(user, last_completed_day)
     return last_completed_day unless last_completed_day == :unset
     return nil if user.nil?
@@ -336,6 +437,36 @@ class Chore < ApplicationRecord
     unit = (recurrence_data[:unit].to_s.presence || :day).to_sym
     unit = :day unless RELATIVE_UNITS.include?(unit)
     [interval, unit]
+  end
+
+  # Like `relative_interval_unit`, but allows interval=0 so a chore
+  # can surface the moment its anchor is completed (no waiting).
+  def after_chore_offset
+    interval = [recurrence_data[:interval].to_i, 0].max
+    unit = (recurrence_data[:unit].to_s.presence || :day).to_sym
+    unit = :day unless AFTER_CHORE_UNITS.include?(unit)
+    [interval, unit]
+  end
+
+  # The :after_chore predicate. `b_last_before_today` is B's last
+  # completed day strictly before `date` (passed in from the serializer
+  # so B's own mid-day completion can't drop B from today's Scheduled).
+  # `anchor_last_day` is the anchor chore's most-recent credited
+  # `day_key` under B's cooldown user scope; the serializer context
+  # bulk-loads it. When omitted (:unset) we fall back to a lazy query.
+  def anchor_matches_day?(date, user, b_last_before_today:, anchor_last_day: :unset)
+    return false if anchor_chore_id.blank?
+
+    a_last_day = anchor_last_day == :unset ? lookup_anchor_last_day(user) : anchor_last_day
+    return false if a_last_day.nil?
+
+    interval, unit = after_chore_offset
+    due_on = advance(a_last_day, interval, unit)
+    return false if date < due_on
+
+    return true if b_last_before_today.nil?
+
+    a_last_day > b_last_before_today
   end
 
   def advance(date, interval, unit)

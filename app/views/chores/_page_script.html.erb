@@ -2262,6 +2262,44 @@
     if (seconds % 60 === 0)     return { amount: seconds / 60,     unit: "minute" };
     return { amount: seconds, unit: "second" };
   }
+  // Rebuild the anchor-chore <select> from the store. Excludes the
+  // chore being edited (self) plus any chore whose anchor chain
+  // already passes through self — picking it would create a cycle
+  // the server-side validator rejects. `selfId` is the currently-
+  // edited chore (or undefined when adding).
+  function populateAnchorChorePicker(selfId) {
+    const sel = editForm.querySelector('[data-anchor-chore-id]');
+    if (!sel) return;
+    selfId = selfId ?? parseInt(currentChoreId, 10) ?? null;
+    const previous = sel.value;
+    const items = ChoreStore.activeForGrid()
+      .filter(c => c.id !== selfId && !anchorChainContains(c, selfId))
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    const opts = ['<option value="">—</option>'];
+    items.forEach(c => {
+      opts.push(`<option value="${c.id}">${esc(c.short_name || c.name)}</option>`);
+    });
+    sel.innerHTML = opts.join("");
+    if (previous && sel.querySelector(`option[value="${previous}"]`)) sel.value = previous;
+  }
+  // Walks `c`'s anchor chain looking for `targetId`. Depth-bounded to
+  // mirror the server validator. Returns true if cycle would result.
+  function anchorChainContains(c, targetId) {
+    if (!targetId) return false;
+    let cursor = c;
+    const seen = new Set();
+    for (let i = 0; i < 32; i++) {
+      if (!cursor) return false;
+      if (seen.has(cursor.id)) return false;
+      seen.add(cursor.id);
+      const nextId = cursor.recurrence?.anchor_chore_id;
+      if (!nextId) return false;
+      if (nextId === targetId) return true;
+      cursor = ChoreStore.get(parseInt(nextId, 10));
+    }
+    return false;
+  }
+
   function syncFreqRow() {
     const freq = getField("freq") || "never";
     // Picking ANY recurrence auto-fills starts_on with today (only
@@ -2271,7 +2309,20 @@
     editForm.querySelector('[data-monthly-wrap]')?.classList.toggle("hidden", freq !== "monthly");
     editForm.querySelector('[data-yearly-wrap]')?.classList.toggle("hidden", freq !== "yearly");
     editForm.querySelector('[data-interval-wrap]')?.classList.toggle("hidden",
-      freq !== "custom" && freq !== "relative");
+      freq !== "custom" && freq !== "relative" && freq !== "after_chore");
+    editForm.querySelector('[data-after-chore-wrap]')?.classList.toggle("hidden",
+      freq !== "after_chore");
+    if (freq === "after_chore") {
+      populateAnchorChorePicker();
+      // Offset 0 is a meaningful default for the "Fold Laundry now"
+      // case — relax the interval input's min so 0 is allowed only on
+      // the after_chore freq.
+      const interval = editForm.querySelector('[data-interval]');
+      if (interval) interval.setAttribute("min", "0");
+    } else {
+      const interval = editForm.querySelector('[data-interval]');
+      if (interval) interval.setAttribute("min", "1");
+    }
     editForm.querySelector('[data-weekdays-wrap]')?.classList.add("hidden");
     if (freq === "weekly") {
       const chips = Array.from(editForm.querySelectorAll('[data-weekday-chips] .chip-day.active'));
@@ -3459,8 +3510,21 @@
         });
       }
     }
-    if (rec.interval) editForm.querySelector('[data-interval]').value = rec.interval;
-    if (rec.unit) editForm.querySelector('[data-unit]').value = rec.unit;
+    // `:after_chore` allows interval=0 (same chore-day surface).
+    // Setting the input to "0" requires bypassing the truthy check
+    // below since 0 is falsy in JS — set explicitly for after_chore.
+    if (rec.freq === "after_chore") {
+      const intervalEl = editForm.querySelector('[data-interval]');
+      if (intervalEl) intervalEl.value = String(rec.interval ?? 0);
+      const unitEl = editForm.querySelector('[data-unit]');
+      if (unitEl) unitEl.value = rec.unit || "day";
+      populateAnchorChorePicker(c.id);
+      const anchorEl = editForm.querySelector('[data-anchor-chore-id]');
+      if (anchorEl && rec.anchor_chore_id) anchorEl.value = String(rec.anchor_chore_id);
+    } else {
+      if (rec.interval) editForm.querySelector('[data-interval]').value = rec.interval;
+      if (rec.unit) editForm.querySelector('[data-unit]').value = rec.unit;
+    }
     syncStartsOnDependents();
     editForm.querySelector('[data-action="archive"]')?.classList.remove("hidden");
     editModal.classList.remove("hidden");
@@ -3595,7 +3659,17 @@
           recurrence.interval = parseInt(editForm.querySelector('[data-interval]')?.value, 10) || 1;
           recurrence.unit = editForm.querySelector('[data-unit]')?.value || "day";
         }
-      }
+        if (freq === "after_chore") {
+          const rawInterval = editForm.querySelector('[data-interval]')?.value;
+          const parsed = parseInt(rawInterval, 10);
+          // Offset 0 means "same chore-day". Default to 0 only when the
+          // field is genuinely blank — Number.isNaN catches "" too.
+          recurrence.interval = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+          recurrence.unit = editForm.querySelector('[data-unit]')?.value || "day";
+          const anchorId = parseInt(editForm.querySelector('[data-anchor-chore-id]')?.value, 10);
+          if (Number.isFinite(anchorId) && anchorId > 0) recurrence.anchor_chore_id = anchorId;
+        }
+}
     }
     const payload = {
       chore: {
