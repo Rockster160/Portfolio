@@ -368,9 +368,6 @@ class GoogleCalendar::Sync
     master = @agenda.agenda_schedules.find_by(external_uid: event[:recurringEventId])
     return unless master # master not synced yet — next pass will pick it up
 
-    item = @agenda.agenda_items.find_or_initialize_by(external_uid: event[:id])
-    return if fast_skip?(item, event)
-
     start_at = parse_event_start(event)
     end_at = coerce_end_at(start_at, parse_event_end(event), all_day: all_day_event?(event))
     all_day = all_day_event?(event)
@@ -381,6 +378,25 @@ class GoogleCalendar::Sync
         parse_time(event.dig(:originalStartTime, :dateTime))
       end
     )
+
+    # 1. Match by Google's stable override id when we've seen it before.
+    # 2. Else claim a locally-materialized phantom row sitting on the same
+    #    occurrence date — the notification + Jil overdue-search workers
+    #    materialize a master's phantom into a real row at occurrence time
+    #    so they can stamp `notified_at` / `ended_fired_at` / show up in
+    #    queries, and that row carries no `external_uid`. Claiming it
+    #    prevents a duplicate when the override syncs later.
+    # 3. Otherwise build fresh.
+    item = @agenda.agenda_items.find_by(external_uid: event[:id])
+    if item.nil? && original_start
+      item = master.agenda_items
+        .where(external_uid: nil)
+        .where(start_at: @agenda.send(:day_range, original_start.in_time_zone(user_timezone).to_date))
+        .first
+      item&.external_uid = event[:id]
+    end
+    item ||= @agenda.agenda_items.build(external_uid: event[:id])
+    return if fast_skip?(item, event)
 
     attrs = {
       agenda_schedule:     master,

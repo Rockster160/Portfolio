@@ -42,14 +42,13 @@ RSpec.describe AgendaSchedule, type: :model do
     end
   end
 
-  # Regression: a schedule whose `start_time` column has drifted from the
-  # actual wall-clock of materialized occurrences (which happens for
-  # Google-synced events when the master DTSTART crosses a DST boundary or
-  # was authored in a different timezone than the per-occurrence instances)
-  # used to produce phantoms at the stale `start_time` — duplicating with
-  # the real materialized rows on a different wall-clock. Phantoms now
-  # derive their wall-clock from the most recent real occurrence.
-  describe "phantom wall-clock derives from real materialized occurrences" do
+  # start_time is the single source of truth for every kind. Every write
+  # path keeps it aligned with the canonical value (user series-edit stamps
+  # it directly; Google sync rewrites it from the master DTSTART on every
+  # pull), so phantoms render at start_time everywhere. Materialized rows
+  # carry their own per-instance start_at; they're not affected by phantom
+  # render.
+  describe "phantom wall-clock is always derived from start_time" do
     let(:agenda) { create(:agenda) }
     let(:schedule) {
       agenda.agenda_schedules.create!(
@@ -60,10 +59,7 @@ RSpec.describe AgendaSchedule, type: :model do
     }
     let(:user_zone) { ActiveSupport::TimeZone[agenda.user.timezone] }
 
-    it "uses the latest occurrence's wall-clock instead of the schedule's stale start_time" do
-      # Materialize a real occurrence at 9:30 user-zone (= 15:30 UTC in MDT)
-      # — exactly what Google sync would have stored. start_time on the
-      # schedule says "10:30" and is the stale value we want to ignore.
+    it "ignores past materialized occurrences sitting at a different wall-clock" do
       schedule.agenda_items.create!(
         agenda:   agenda, kind: :event, name: "Tech Stand-Up",
         start_at: user_zone.local(2026, 6, 1, 9, 30),
@@ -71,23 +67,30 @@ RSpec.describe AgendaSchedule, type: :model do
       )
 
       phantom = schedule.occurrence_start_at(Date.new(2026, 6, 2))
-      expect(phantom.in_time_zone(agenda.user.timezone).strftime("%H:%M")).to eq("09:30")
+      expect(phantom.in_time_zone(agenda.user.timezone).strftime("%H:%M")).to eq("10:30")
     end
 
-    it "falls back to start_time when no occurrence has been materialized yet" do
-      # Brand-new schedule, never materialized — start_time is the only
-      # source of truth available.
+    it "honours a freshly-edited start_time on the next phantom even after past occurrences exist" do
+      schedule.agenda_items.create!(
+        agenda:   agenda, kind: :event, name: "Tech Stand-Up",
+        start_at: user_zone.local(2026, 6, 1, 10, 30),
+        end_at:   user_zone.local(2026, 6, 1, 11, 0),
+      )
+      schedule.update!(start_time: "14:00")
+      phantom = schedule.occurrence_start_at(Date.new(2026, 6, 2))
+      expect(phantom.in_time_zone(agenda.user.timezone).strftime("%H:%M")).to eq("14:00")
+    end
+
+    it "uses start_time on a brand-new schedule with no materialized rows" do
       phantom = schedule.occurrence_start_at(Date.new(2026, 3, 10))
       expect(phantom.in_time_zone(agenda.user.timezone).strftime("%H:%M")).to eq("10:30")
     end
 
-    it "task / trigger schedules always use start_time (user-managed)" do
+    it "task / trigger schedules also use start_time (unchanged behavior)" do
       task_sched = agenda.agenda_schedules.create!(
         kind: :task, name: "Brush teeth", start_time: "07:00",
         starts_on: Date.new(2026, 3, 9), recurrence: { "freq" => "daily" }
       )
-      # Even if a materialized task row sits at 09:00, the wall-clock
-      # for future phantoms should still come from `start_time`.
       task_sched.agenda_items.create!(
         agenda: agenda, kind: :task, name: "Brush teeth",
         start_at: user_zone.local(2026, 5, 28, 9, 0),

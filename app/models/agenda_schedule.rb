@@ -224,29 +224,13 @@ class AgendaSchedule < ApplicationRecord
   end
 
   # The wall-clock time-of-day a given occurrence lands on, materialized in
-  # the user's timezone. For tasks / triggers this is the user-managed
-  # `start_time` column. For events synced from Google, that column was
-  # stamped from the master event and can drift from the per-occurrence
-  # truth (Google's master DTSTART vs expanded instances aren't always at
-  # the same wall-clock — DST boundary moves, master in a different zone
-  # than instances, etc). Trust the most recent real occurrence's
-  # wall-clock instead so phantoms always render at the same time the user
-  # actually sees on already-materialized rows.
+  # the user's timezone. `start_time` is the single source of truth across
+  # every write path (user edits via the series modal stamp it directly,
+  # Google sync rewrites it from the master DTSTART on every pull), so
+  # phantoms always render at the column's value. Materialized rows carry
+  # their own per-instance `start_at` and are not affected.
   def occurrence_start_at(date)
-    hh, mm = canonical_local_time_of_day
-    user_zone.local(date.year, date.month, date.day, hh, mm)
-  end
-
-  def canonical_local_time_of_day
-    return [start_time.hour, start_time.min] unless event?
-
-    latest = @canonical_latest_occurrence ||=
-      agenda_items.where.not(start_at: nil).order(start_at: :desc).first
-
-    return [start_time.hour, start_time.min] unless latest
-
-    local = latest.start_at.in_time_zone(user.timezone)
-    [local.hour, local.min]
+    user_zone.local(date.year, date.month, date.day, start_time.hour, start_time.min)
   end
 
   def occurrence_end_at(date)

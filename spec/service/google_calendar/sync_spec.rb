@@ -147,6 +147,46 @@ RSpec.describe GoogleCalendar::Sync do
       expect(items.first.external_uid).to eq("evt-master-2_20260525T130000Z")
     end
 
+    it "claims a locally-materialized phantom row instead of creating a duplicate override" do
+      master = agenda.agenda_schedules.create!(
+        name: "Standup", kind: :event, start_time: "09:00",
+        duration_minutes: 30, starts_on: Date.new(2026, 5, 1),
+        recurrence: { "freq" => "daily" },
+        external_uid: "evt-master-3"
+      )
+      occurrence_date = Time.zone.parse("2026-05-25T09:00:00-04:00").in_time_zone(user.timezone).to_date
+      occ_start = ActiveSupport::TimeZone[user.timezone].local(
+        occurrence_date.year, occurrence_date.month, occurrence_date.day, 9, 0
+      )
+      pre_materialized = master.agenda_items.create!(
+        agenda:      agenda,
+        kind:        :event,
+        name:        "Standup",
+        start_at:    occ_start,
+        end_at:      occ_start + 30.minutes,
+        notified_at: 10.minutes.ago,
+      )
+      override_event = {
+        id:                "evt-master-3_20260525T130000Z",
+        status:            "confirmed",
+        summary:           "Standup (rescheduled)",
+        recurringEventId:  "evt-master-3",
+        originalStartTime: { dateTime: "2026-05-25T09:00:00-04:00" },
+        start:             { dateTime: "2026-05-25T13:00:00-04:00" },
+        end:               { dateTime: "2026-05-25T13:30:00-04:00" },
+        etag:              %("etag-3b"),
+        updated:           "2026-05-22T08:00:00Z",
+      }
+      allow(api).to receive(:list_events).and_return(page([override_event]))
+
+      expect { described_class.new(agenda).run! }.not_to change(AgendaItem, :count)
+      pre_materialized.reload
+      expect(pre_materialized.external_uid).to eq("evt-master-3_20260525T130000Z")
+      expect(pre_materialized.detached_at).to be_present
+      expect(pre_materialized.notified_at).to be_present
+      expect(pre_materialized.name).to eq("Standup (rescheduled)")
+    end
+
     it "ignores an override whose master hasn't synced yet (handled on next pass)" do
       override_event = {
         id:               "evt-master-x_20260525T130000Z",

@@ -178,6 +178,49 @@ RSpec.describe AgendaSchedule do
     end
   end
 
+  describe "#occurrence_start_at" do
+    it "uses the schedule's start_time as the wall-clock for phantoms even when a past materialized item carries a different time" do
+      sched = build_schedule(
+        kind:             "event",
+        start_time:       "10:30",
+        duration_minutes: 30,
+        recurrence:       { "freq" => "weekdays" },
+        starts_on:        Date.new(2026, 6, 1),
+      )
+      sched.agenda_items.create!(
+        agenda:   agenda,
+        kind:     "event",
+        name:     "Past anchor at the OLD time",
+        start_at: ActiveSupport::TimeZone[user.timezone].local(2026, 6, 8, 9, 30),
+        end_at:   ActiveSupport::TimeZone[user.timezone].local(2026, 6, 8, 10, 0),
+      )
+      occ = sched.occurrence_start_at(Date.new(2026, 6, 9))
+      local = occ.in_time_zone(user.timezone)
+      expect([local.hour, local.min]).to eq([10, 30])
+    end
+
+    it "renders phantoms at the freshly-edited start_time after a series edit, ignoring past materialized rows" do
+      sched = build_schedule(
+        kind:             "event",
+        start_time:       "10:30",
+        duration_minutes: 30,
+        recurrence:       { "freq" => "daily" },
+        starts_on:        Date.new(2026, 6, 1),
+      )
+      sched.agenda_items.create!(
+        agenda:   agenda,
+        kind:     "event",
+        name:     "Yesterday at the old time",
+        start_at: ActiveSupport::TimeZone[user.timezone].local(2026, 6, 8, 10, 30),
+        end_at:   ActiveSupport::TimeZone[user.timezone].local(2026, 6, 8, 11, 0),
+      )
+      sched.update!(start_time: "15:00")
+      occ = sched.occurrence_start_at(Date.new(2026, 6, 9))
+      local = occ.in_time_zone(user.timezone)
+      expect([local.hour, local.min]).to eq([15, 0])
+    end
+  end
+
   describe "#regenerate_future!" do
     it "destroys non-detached future materialized items" do
       sched = build_schedule(recurrence: { "freq" => "daily" }, starts_on: Date.current - 1)

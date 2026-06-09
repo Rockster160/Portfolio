@@ -130,6 +130,10 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
     field("disabled").checked = !!t.disabled;
 
     field("value").value = t.value ?? 0;
+    // Empty string for nil so the placeholder ("unbounded") shows through
+    // instead of stamping a 0 the user didn't pick.
+    field("min_value").value = t.min_value ?? "";
+    field("max_value").value = t.max_value ?? "";
 
     field("dial_text").value = dialConfigToText(t.dial_config);
     field("dial_start_offset").value = Number(t.dial_config?.start_offset) || 0;
@@ -240,6 +244,10 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
     } else if (kind === "counter") {
       payload.value = parseInt(field("value").value, 10) || 0;
       payload.reset_value = payload.value;
+      // Blank means unbounded — explicitly send null so the server
+      // clears any previously-set bound instead of preserving it.
+      payload.min_value = parseOptionalInt(field("min_value").value);
+      payload.max_value = parseOptionalInt(field("max_value").value);
     } else if (kind === "dial") {
       payload.dial_config = textToDialConfig(field("dial_text").value);
       const rawOff = parseFloat(field("dial_start_offset").value);
@@ -797,6 +805,13 @@ export function setupEditModal({ root, store, actions, activePageId, openSaveTo 
   }
 
   return { open };
+}
+
+function parseOptionalInt(raw) {
+  const trimmed = String(raw ?? "").trim();
+  if (trimmed === "") return null;
+  const n = parseInt(trimmed, 10);
+  return Number.isFinite(n) ? n : null;
 }
 
 function defaultCallbacks() {
