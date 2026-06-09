@@ -1,6 +1,7 @@
 import { fa, faStack } from "./icon.js";
 import { element, unwrap, field, genLetter, genHex } from "./form_helpers.js";
 import Statement from "./statement.js";
+import InlineComment from "./inline_comment.js";
 import Arg from "./arg.js";
 import Dropdown from "./dropdown.js";
 import sortable from "./sortable.js";
@@ -24,7 +25,10 @@ const activeInput = (node) => {
   }
 
   node = node || document.activeElement;
-  return ["INPUT", "TEXTAREA", "SELECT"].includes(node.tagName);
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(node.tagName)) {
+    return true;
+  }
+  return !!node?.isContentEditable;
 };
 const laterMoveAfter = (other) => {
   window.moveStatement = (statement) => statement.moveAfter(other);
@@ -154,12 +158,44 @@ Keyboard.on("Escape", (evt) => {
     document.activeElement.blur();
   }
 });
-// Mark selected statement as commented
+function hasCommentedAncestor(statement) {
+  let node = statement.node?.parentElement;
+  while (node) {
+    const wrapper = node.closest?.(".statement-wrapper");
+    if (!wrapper) { return false; }
+    const st = Statement.from(wrapper);
+    if (st?.commented) { return true; }
+    node = wrapper.parentElement;
+  }
+  return false;
+}
+
+// Toggle commented on selected. Adds a layer (self) only if no ancestor is
+// already contributing one; removing own layer always works. Pressing `/` on
+// a line that's only commented because of an ancestor is a no-op — uncomment
+// the outer first.
 Keyboard.on("/", (evt) => {
-  if (!activeInput() && window.selected) {
-    window.selected.commented = !window.selected.commented;
+  if (activeInput() || !window.selected) { return; }
+  const sel = window.selected;
+  if (sel.commented) {
+    sel.commented = false;
+    History.record();
+  } else if (!hasCommentedAncestor(sel)) {
+    sel.commented = true;
     History.record();
   }
+});
+// Insert an inline comment above the selected statement
+Keyboard.on("Meta+/", (evt) => {
+  if (activeInput() || !window.selected) {
+    return;
+  }
+  evt.preventDefault();
+  const comment = new InlineComment({ text: "" });
+  comment.moveBefore(window.selected);
+  comment.select();
+  comment.focus();
+  History.record();
 });
 // Focus selected statement fields
 Keyboard.on(["→", "Meta+e"], (evt) => {
@@ -688,7 +724,8 @@ document.addEventListener("input", (evt) => {
     target.tagName === "TEXTAREA" ||
     (target.tagName === "INPUT" &&
       target.type !== "checkbox" &&
-      target.type !== "radio")
+      target.type !== "radio") ||
+    target.isContentEditable
   ) {
     target.addEventListener("blur", handleInputBlur, { once: true });
   } else {

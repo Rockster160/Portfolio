@@ -156,7 +156,7 @@ class Jil::Executor
     Array.wrap(lines).each do |line|
       break unless @ctx[:state] == :running
       next if current_ctx[:break] || current_ctx[:next]
-      next if line.commented?
+      next if line.commented? || line.inline_comment?
 
       execute_line(line, current_ctx).tap { |line_val|
         # TODO: We don't need to break these down into hash - just keep the object references in the hash instead

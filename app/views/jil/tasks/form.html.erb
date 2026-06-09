@@ -123,6 +123,17 @@
   <div class="content-dropdown"><div class="reference"></div></div>
 </template>
 
+<template id="inline-comment-statement">
+  <div id="new-statement" class="statement-wrapper inline-comment-wrapper">
+    <div class="inline-comment">
+      <div class="handle"><i class="fa fa-ellipsis-v"></i></div>
+      <span class="comment-hash">#</span>
+      <span class="comment-text" contenteditable="true" spellcheck="false"></span>
+      <i class="obj-delete fa fa-trash" title="Click to remove"></i>
+    </div>
+  </div>
+</template>
+
 <script type="text/javascript">
   window.load_code = <%= raw @task.id.present? ? "String.raw`#{@task.code&.gsub(/\`/, "\\\\`")}`" : "undefined" %>;
   window.load_schema = `<%= Task.schema(current_user) %>`

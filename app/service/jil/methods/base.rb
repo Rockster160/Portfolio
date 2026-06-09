@@ -35,7 +35,7 @@ class Jil::Methods::Base
 
   def evalargs(args)
     Array.wrap(args)
-      .reject { |arg| arg.is_a?(::Jil::Parser) && arg.commented? }
+      .reject { |arg| arg.is_a?(::Jil::Parser) && (arg.commented? || arg.inline_comment?) }
       .map { |arg|
         if arg.is_a?(::Array)
           evalargs(arg)

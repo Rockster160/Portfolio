@@ -204,7 +204,7 @@ class Jil::Validator
   end
 
   def validate_line(line, line_idx, parent_class: nil, parent_method: nil)
-    return if line.commented?
+    return if line.commented? || line.inline_comment?
 
     varname = line.varname
     objname = line.objname.to_sym

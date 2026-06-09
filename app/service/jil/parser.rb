@@ -1,17 +1,21 @@
 class Jil::Parser
-  attr_accessor :whitespace, :comment, :show, :varname, :objname, :methodname, :args, :cast
+  attr_accessor :whitespace, :comment, :show, :varname, :objname, :methodname, :args, :cast, :inline_comment, :commented_depth
 
   TOKEN_REGEX = /__TOKEN\d+__/
   ESCAPED_REGEX = /
     (\r*\n\r*)*
     (?<whitespace>\s*)
-    (?<comment>\#\s*)?
-    (?<show>\*)?
-    (?:(?<varname>[_a-z][_0-9A-Za-z]*)\s*=\s*)?\s*
-    (?<objname>[_a-zA-Z][_0-9A-Za-z]*)
-    \.(?<methodname>[_0-9A-Za-z]+[!?]?)
-    (?<args>#{TOKEN_REGEX})
-    ::(?<cast>[A-Z][_0-9A-Za-z]*)
+    (?:
+      (?<comment>(?:\#[\ \t]*)+)?
+      (?<show>\*)?
+      (?:(?<varname>[_a-z][_0-9A-Za-z]*)\s*=\s*)?\s*
+      (?<objname>[_a-zA-Z][_0-9A-Za-z]*)
+      \.(?<methodname>[_0-9A-Za-z]+[!?]?)
+      (?<args>#{TOKEN_REGEX})
+      ::(?<cast>[A-Z][_0-9A-Za-z]*)
+      |
+      \#\#\ ?(?<inline_comment>[^\n]*?)[\ \t]*(?=\r?\n|\z)
+    )
   /xm
   COLORS = {
     syntax:     37,
@@ -38,34 +42,53 @@ class Jil::Parser
     tk ||= Tokenizer.new(code)
     escaped ||= tk.tokenized_text
 
-    escaped.scan(ESCAPED_REGEX)&.map&.with_index { |(whitespace, comment, show, varname, objname, methodname, arg_code, cast), _idx|
-      args = tk.untokenize(arg_code, 1, unwrap: true).split(/,? +\r?\n?/).map { |nested|
-        piece = tk.untokenize(nested)
+    results = []
+    escaped.scan(ESCAPED_REGEX) do
+      m = Regexp.last_match
+      whitespace = m[:whitespace]
 
-        if piece.starts_with?("{") && piece.ends_with?("}")
-          # Iterate through the nested functions as well.
-          next breakdown(tk.untokenize(nested, 1), tk, &perline)
-        end
+      line = if m[:inline_comment]
+        ::Jil::Parser.new_comment(whitespace, m[:inline_comment])
+      else
+        comment = m[:comment]
+        show = m[:show]
+        varname = m[:varname]
+        objname = m[:objname]
+        methodname = m[:methodname]
+        arg_code = m[:args]
+        cast = m[:cast]
 
-        next piece if piece.match?(/\A".*?"\z/) # Do not parse strings in order to retain quotes.
+        args = tk.untokenize(arg_code, 1, unwrap: true).split(/,? +\r?\n?/).map { |nested|
+          piece = tk.untokenize(nested)
 
-        ::JSON.parse(piece) rescue piece # Parse object literal to extra raw nums, bools, etc.
-      }
+          if piece.starts_with?("{") && piece.ends_with?("}")
+            # Iterate through the nested functions as well.
+            next breakdown(tk.untokenize(nested, 1), tk, &perline)
+          end
 
-      line = ::Jil::Parser.new(whitespace, comment, show, varname, objname, methodname, args, cast)
+          next piece if piece.match?(/\A".*?"\z/) # Do not parse strings in order to retain quotes.
 
-      perline ? perline.call(line) : line
-    }
+          ::JSON.parse(piece) rescue piece # Parse object literal to extra raw nums, bools, etc.
+        }
+
+        ::Jil::Parser.new(whitespace, comment, show, varname, objname, methodname, args, cast)
+      end
+
+      results << (perline ? perline.call(line) : line)
+    end
+    results
   end
 
   def self.syntax_highlighting(code, _tk=nil)
     col = ->(color, text) { "\e[#{COLORS[color]}m#{text}\e[0m\e[#{COLORS[:syntax]}m" }
 
     breakdown(code) { |line|
+      next col[:comment, "#{line.whitespace}## #{line.inline_comment}"] if line.inline_comment?
+
       [
         "\e[#{COLORS[:syntax]}m",
         line.whitespace,
-        line.comment,
+        line.comment_prefix.presence,
         line.show,
         col[:varname, line.varname],
         " = ",
@@ -80,7 +103,7 @@ class Jil::Parser
             [
               "{",
               *arg,
-              "#{line.comment}#{line.whitespace}}",
+              "#{line.whitespace}#{line.comment_prefix}}",
             ].join("\n")
           else
             case arg.to_s
@@ -114,6 +137,7 @@ class Jil::Parser
   def initialize(whitespace, comment, show, varname, objname, methodname, args, cast)
     @whitespace = whitespace == "" ? nil : whitespace
     @comment = comment.presence
+    @commented_depth = (comment || "").count("#")
     @show = show.presence
     @varname = varname.to_sym
     @objname = objname.to_sym
@@ -122,12 +146,33 @@ class Jil::Parser
     @cast = cast.to_sym
   end
 
+  def self.new_comment(whitespace, text)
+    instance = allocate
+    instance.send(:init_comment, whitespace, text)
+    instance
+  end
+
+  def init_comment(whitespace, text)
+    @whitespace = whitespace == "" ? nil : whitespace
+    @inline_comment = text.to_s
+    @args = []
+    @commented_depth = 0
+  end
+
   def shown?
     @show.present?
   end
 
   def commented?
-    @comment.present?
+    @commented_depth.to_i > 0
+  end
+
+  def inline_comment?
+    !@inline_comment.nil?
+  end
+
+  def comment_prefix
+    "# " * @commented_depth.to_i
   end
 
   def arg
@@ -135,9 +180,12 @@ class Jil::Parser
   end
 
   def to_s
+    return "#{@whitespace}## #{@inline_comment}" if inline_comment?
+
+    prefix = comment_prefix
     [
       @whitespace,
-      @comment,
+      prefix.presence,
       @show,
       @varname,
       " = ",
@@ -153,11 +201,12 @@ class Jil::Parser
   end
 
   def args_to_s
+    prefix = comment_prefix
     @args.map { |arg|
       next arg unless arg.is_a?(::Array)
       next "{}" if arg.empty?
 
-      ["{", *arg, "#{@comment}#{@whitespace}}"].join("\n")
+      ["{", *arg, "#{@whitespace}#{prefix}}"].join("\n")
     }.join(", ")
   end
 end

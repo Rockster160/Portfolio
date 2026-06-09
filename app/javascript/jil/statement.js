@@ -11,6 +11,10 @@ import {
 import Arg from "./arg.js";
 import Dropdown from "./dropdown.js";
 import Tokenizer from "./tokenizer.js";
+import InlineComment from "./inline_comment.js";
+
+export { InlineComment };
+export const INLINE_COMMENT_LINE_REGEX = /^[ \t]*\#\#[ ]?(?<comment_text>[^\n]*)$/gm;
 
 export default class Statement {
   static all = [];
@@ -79,7 +83,7 @@ export default class Statement {
     //   ha34e = String.new("Hello, world")::String
     //   m7923 = Numeric.new("75")::Numeric
     // })::Array
-    let captComment = /(?<commented>\#)? */;
+    let captComment = /(?<commented>(?:\#[ \t]*)+)? */;
     let captVisibility = /(?<inspect>\*)? */;
     let captVarName = /(?:(?<varname>[_a-z][_0-9A-Za-z]*) *= *)? */;
     let captObjName = /(?<objname>[_a-zA-Z][_0-9A-Za-z]*)/;
@@ -111,7 +115,7 @@ export default class Statement {
     this.fromText(text);
     Statement.first()?.select();
   }
-  static fromText(text) {
+  static fromText(text, parentDepth = 0) {
     if (!text) {
       return;
     }
@@ -127,19 +131,40 @@ export default class Statement {
     let adds = [];
     let tokenizer = new Tokenizer(text);
     let escaped = tokenizer.tokenizedText;
-    let matches = [...escaped.matchAll(Statement.regex(true))];
+    const stmtRegex = Statement.regex(true);
+    // Statement form is tried first so multi-# prefixes (e.g. `## foo = ...::T`)
+    // are parsed as a depth-2 commented statement. Inline comments are the
+    // fallback when the line does not form a valid statement.
+    const combined = new RegExp(
+      `(?:${stmtRegex.source})|(?<comment_line>^[ \\t]*\\#\\#[ ]?(?<comment_text>[^\\n]*)$)`,
+      stmtRegex.flags,
+    );
+    let matches = [...escaped.matchAll(combined)];
     matches.forEach((match) => {
+      if (match.groups?.comment_line != null) {
+        adds.push(
+          new InlineComment({
+            text: InlineComment.decodeText(match.groups.comment_text || ""),
+          }),
+        );
+        return;
+      }
       const { commented, inspect, varname, objname, methodname, args, cast } =
         match.groups;
+      const depth = (commented || "").match(/#/g)?.length || 0;
+      const selfCommented = depth > parentDepth;
 
       let statement = new Statement({
         id: varname,
         name: varname,
         returntype: cast,
       });
-      if (commented) {
+      if (selfCommented) {
         statement.commented = true;
       }
+      // Threaded into argString so nested fromText knows this line's full depth
+      // and can compute selfCommented = (childDepth > depth) correctly.
+      statement._parseDepth = depth;
       if (inspect) {
         statement.inspect = true;
       }
@@ -697,7 +722,10 @@ export default class Statement {
           .slice(1, -1); // Remove wrapping brackets
 
         args.forEach((arg) => {
-          let statement = Statement.fromText(tz.untokenize(arg))[0];
+          let statement = Statement.fromText(
+            tz.untokenize(arg),
+            this._parseDepth || 0,
+          )[0];
           if (statement) {
             statement.moveInside(wrapper);
           }
@@ -777,8 +805,8 @@ export default class Statement {
       }
     });
   }
-  argValue(arg, nest, pretty, passComment) {
-    const color = pretty && !passComment;
+  argValue(arg, nest, pretty, depth = 0) {
+    const color = pretty && depth === 0;
     nest = nest || 0;
     let tag = arg.querySelector(":scope > .selected-tag")?.innerText;
     tag =
@@ -801,13 +829,17 @@ export default class Statement {
       }
       const indent = prettify(color, "spaces", "  ".repeat(nest));
       const extraIndent = prettify(color, "spaces", "  ".repeat(nest + 1));
+      // Closing `}` line carries the OUTER statement's full `# ` × depth so
+      // that uncommenting an outer block (depth -= 1) strips exactly one layer
+      // from every line in its scope, including this brace.
+      const closingPrefix = "# ".repeat(depth);
       let str = "{\n" + extraIndent;
       str += statements
         .map((wrapper) =>
-          Statement.from(wrapper).toString(nest + 1, pretty, passComment),
+          Statement.from(wrapper).toString(nest + 1, pretty, depth),
         )
         .join("\n" + extraIndent);
-      str += `\n${indent}}`;
+      str += `\n${indent}${closingPrefix}}`;
       return str;
     }
 
@@ -845,12 +877,14 @@ export default class Statement {
     }
   }
 
-  toString(nest, pretty = false, passComment = false) {
+  toString(nest, pretty = false, parentDepth = 0) {
     try {
+      const myDepth = parentDepth + (this.commented ? 1 : 0);
+      const commented = myDepth > 0;
       let str = "";
       const space = prettify(pretty, "spaces", " ");
       const add = (type, text) => {
-        if (this.commented || passComment) {
+        if (commented) {
           str += text;
         } else {
           str += prettify(pretty, type, text);
@@ -873,24 +907,19 @@ export default class Statement {
       add("methodname", this.method);
       str += "(";
       str += this.args
-        .map((arg) =>
-          this.argValue(arg, nest, pretty, this.commented || passComment),
-        )
+        .map((arg) => this.argValue(arg, nest, pretty, myDepth))
         .filter(Boolean)
         .join("," + space);
       // iterate through obj-args, pull the value from inputs- when a content block, wrap inside {}
       str += ")";
       add("op-cast", "::");
       add("cast", this.returntype);
-      if (this.commented && !passComment) {
-        str = str
-          .split("\n")
-          .map((line) => `# ${line}`)
-          .join("\n");
+      if (commented) {
+        str = `${"# ".repeat(myDepth)}${str}`;
       }
       if (pretty) {
         str = str.replace("\n", "<br>");
-        if (this.commented) {
+        if (commented) {
           str = `<span class="syntax--statement syntax--commented">${str}</span>`;
         } else {
           str = `<span class="syntax--statement">${str}</span>`;

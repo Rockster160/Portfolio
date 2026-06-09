@@ -775,6 +775,78 @@ input[type="submit"] {
         color: darkgrey;
       }
     }
+
+    &.inline-comment-wrapper {
+      .inline-comment {
+        position: relative;
+        margin: 4px 0;
+        padding: 2px 28px 2px 28px;
+        font-family: "Menlo";
+        font-size: 12px;
+        color: rgba(lightgrey, 0.55);
+        font-style: italic;
+        line-height: 1.4;
+        min-height: 18px;
+        display: flex;
+        align-items: baseline;
+
+        .handle {
+          position: absolute;
+          left: 5px;
+          top: 50%;
+          margin-top: -10px;
+          width: 15px;
+          height: 20px;
+          line-height: 20px;
+          text-align: center;
+          cursor: move;
+          color: rgba(lightgrey, 0.4);
+        }
+
+        .comment-hash {
+          color: rgba(lightgrey, 0.4);
+          margin-right: 6px;
+          user-select: none;
+        }
+
+        .comment-text {
+          flex: 1;
+          outline: none;
+          min-width: 20px;
+          white-space: pre-wrap;
+          word-break: break-word;
+
+          &:empty:before {
+            content: "comment...";
+            color: rgba(lightgrey, 0.3);
+          }
+          &:focus {
+            color: rgba(white, 0.9);
+            font-style: normal;
+          }
+        }
+
+        .obj-delete {
+          position: absolute;
+          right: 5px;
+          top: 50%;
+          margin-top: -8px;
+          color: var(--style-danger);
+          opacity: 0;
+          cursor: pointer;
+          font-size: 11px;
+          transition: opacity 0.15s ease;
+        }
+      }
+
+      &:hover .inline-comment .obj-delete,
+      &.selected .inline-comment .obj-delete {
+        opacity: 0.8;
+      }
+      &.selected .inline-comment {
+        color: rgba(white, 0.8);
+      }
+    }
   }
 }
 
