@@ -2470,6 +2470,21 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     color: var(--chores-text) !important;
     border-color: var(--chores-accent) !important;
   }
+  .icon-picker-manage {
+    flex: 0 0 auto;
+    width: 38px;
+    border-radius: 8px;
+    background: rgba(15, 27, 51, 0.7);
+    border: 1px solid #334155;
+    color: var(--chores-muted);
+    display: grid;
+    place-items: center;
+    text-decoration: none;
+  }
+  .icon-picker-manage:hover {
+    color: var(--chores-text);
+    border-color: var(--chores-accent);
+  }
   .icon-picker-grid button img.icon-img {
     width: 80%;
     height: 80%;
@@ -2726,6 +2741,15 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     margin: 4px 0 0;
     text-align: center;
   }
+  // Hint sits to the LEFT of Cancel/Save in `.form-actions` (a
+  // flex-end row) so users can see *why* Save is disabled without
+  // disturbing the button cluster.
+  .cropper-save-hint {
+    margin-right: auto;
+    align-self: center;
+    color: var(--chores-muted);
+    font-size: 12px;
+  }
   .cropper-bg {
     display: flex;
     flex-direction: column;
@@ -2835,6 +2859,103 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     }
     .chore-circle .icon {
       font-size: 22px;
+    }
+  }
+
+  // Custom-icons manage page
+  &.custom-icons-page {
+    .custom-icons-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 16px 0 4px;
+      h2 { margin: 0; font-size: 20px; }
+      .custom-icons-count {
+        color: var(--chores-muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .btn { margin-left: auto; }
+    }
+    .custom-icons-hint {
+      color: var(--chores-muted);
+      font-size: 13px;
+      margin: 0 0 16px;
+    }
+    .custom-icons-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .custom-icon-tile {
+      background: rgba(15, 27, 51, 0.7);
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .custom-icon-image {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      display: grid;
+      place-items: center;
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 8px;
+      overflow: hidden;
+      img { width: 80%; height: 80%; object-fit: contain; }
+    }
+    .custom-icon-name,
+    .custom-icon-keywords {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid #334155;
+      background: #00102B;
+      color: var(--chores-text);
+      font: inherit;
+    }
+    .custom-icon-name { font-weight: 600; }
+    .custom-icon-keywords { font-size: 12px; color: var(--chores-muted); }
+    .custom-icon-name:focus,
+    .custom-icon-keywords:focus {
+      outline: none;
+      border-color: var(--chores-accent);
+    }
+    .custom-icon-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--chores-muted);
+    }
+    .custom-icon-owner { flex: 1; }
+    .custom-icon-delete {
+      flex: 0 0 auto;
+      width: 28px;
+      height: 28px;
+      padding: 0 !important;
+      border-radius: 6px;
+      background: transparent !important;
+      border: 1px solid #334155 !important;
+      color: var(--chores-muted) !important;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+    .custom-icon-delete:hover {
+      color: #F87171 !important;
+      border-color: #F87171 !important;
+    }
+    .custom-icon-error {
+      color: #F87171;
+      font-size: 11px;
+    }
+    .custom-icons-empty {
+      color: var(--chores-muted);
+      text-align: center;
+      padding: 32px 12px;
     }
   }
 }

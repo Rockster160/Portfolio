@@ -3,7 +3,7 @@ class HouseholdIconsController < ApplicationController
   before_action :ensure_household!
   before_action :set_icon, only: [:update, :destroy]
 
-  # GET /chores/household_icons.json
+  # GET /chores/icons.json
   # Inlined into the chore page bootstrap AND fetched directly by the
   # picker's IconPool. Scoped to whatever household the current user is
   # a member of; returns [] when the user has no household yet.
@@ -12,7 +12,16 @@ class HouseholdIconsController < ApplicationController
     render json: icons.map(&:as_pool_row)
   end
 
-  # POST /chores/household_icons
+  # GET /chores/icons
+  # HTML page to browse / rename / delete custom icons for the household.
+  # Bulk uploads (script-driven) and the in-modal cropper all funnel into
+  # the same list; this is the only place to manage them.
+  def manage
+    @icons = @household.icons.ordered.includes(:uploaded_by_user).to_a
+    @can_manage_any = current_user.can_manage_chores? || @household.manager?(current_user)
+  end
+
+  # POST /chores/icons
   # Body: { name:, keywords:, image_data: }. The client renders the
   # final cropped 128px WebP, encodes to data URL, and POSTs. We just
   # validate + persist + broadcast.
@@ -26,7 +35,7 @@ class HouseholdIconsController < ApplicationController
     end
   end
 
-  # PATCH /chores/household_icons/:id
+  # PATCH /chores/icons/:id
   # Name + keywords only. The image itself is immutable — re-upload to
   # change it (avoids storing intermediate edit states).
   def update
@@ -38,7 +47,7 @@ class HouseholdIconsController < ApplicationController
     end
   end
 
-  # DELETE /chores/household_icons/:id
+  # DELETE /chores/icons/:id
   # Chores referencing this icon (icon: <data URL>) keep their data
   # URL intact — the value was already copied at chore-create time, so
   # nothing breaks downstream.
@@ -55,7 +64,10 @@ class HouseholdIconsController < ApplicationController
     @household = current_user.chore_household
     return if @household
 
-    render(json: { error: "no_household" }, status: :forbidden) if request.format.json?
+    respond_to do |format|
+      format.html { redirect_to chores_path, alert: "Join a chore household to manage custom icons." }
+      format.json { render json: { error: "no_household" }, status: :forbidden }
+    end
   end
 
   def set_icon
@@ -79,7 +91,7 @@ class HouseholdIconsController < ApplicationController
         channel:   :chores,
         timestamp: Time.current.to_i,
         data:      {
-          reason:        :household_icons_changed,
+          reason:        :icons_changed,
           change_reason: reason,
           icon_id:       icon_id,
           actor_user_id: current_user.id,

@@ -1,0 +1,230 @@
+<% content_for :title, "Chores · Custom Icons" %>
+
+<%# `data-chores-root` is what _page_script (rendered at the bottom)
+   keys on for its SW + modal + cropper bootstrap. No `data-active-view`
+   means the chore-store / grid code skips itself, like Balance/History. %>
+<div class="chores-page custom-icons-page" data-chores-root data-mode="custom-icons">
+  <%= render "chores/header", balance: current_user.chore_balance, scope: :total %>
+
+  <div class="custom-icons-toolbar">
+    <h2>Custom Icons</h2>
+    <span class="custom-icons-count" data-icons-count><%= @icons.size %></span>
+    <button type="button" class="btn" data-add-icon>
+      <i class="fa fa-plus" aria-hidden="true"></i> Add
+    </button>
+  </div>
+
+  <p class="custom-icons-hint">
+    Rename or update keywords inline (saves on blur). To replace an
+    image, delete and re-upload.
+  </p>
+
+  <div class="custom-icons-grid" data-icons-grid>
+    <% @icons.each do |icon| %>
+      <% editable = @can_manage_any || current_user.id == icon.uploaded_by_user_id %>
+      <div class="custom-icon-tile" data-icon-id="<%= icon.id %>" data-editable="<%= editable %>">
+        <div class="custom-icon-image">
+          <img src="<%= icon.image_data %>" alt="<%= icon.name %>" loading="lazy">
+        </div>
+        <input type="text" class="custom-icon-name" data-icon-field="name"
+               value="<%= icon.name %>" maxlength="60"
+               <%= "disabled" unless editable %>>
+        <input type="text" class="custom-icon-keywords" data-icon-field="keywords"
+               value="<%= icon.keywords %>" placeholder="comma, separated, keywords"
+               <%= "disabled" unless editable %>>
+        <div class="custom-icon-meta">
+          <span class="custom-icon-owner">by <%= icon.uploaded_by_user&.username || "unknown" %></span>
+          <% if editable %>
+            <button type="button" class="custom-icon-delete" data-icon-delete title="Delete">
+              <i class="fa fa-trash" aria-hidden="true"></i>
+            </button>
+          <% end %>
+        </div>
+        <div class="custom-icon-error hidden" data-icon-error></div>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="custom-icons-empty <%= "hidden" if @icons.any? %>" data-icons-empty>
+    No custom icons yet. Use the <i class="fa fa-plus"></i> button or drag an image onto a chore's icon box.
+  </div>
+
+  <%# Cropper modal lives INSIDE .chores-page so it inherits the
+      cropper/modal styles nested under .chores-page in chores.scss. %>
+  <%= render "chores/icon_cropper" %>
+</div>
+
+<% content_for :after_body do %>
+  <%= render "chores/page_script", mode: "custom-icons" %>
+<% end %>
+
+<script type="module">
+  const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || "";
+  const grid = document.querySelector("[data-icons-grid]");
+  const empty = document.querySelector("[data-icons-empty]");
+  const countEl = document.querySelector("[data-icons-count]");
+  const addBtn = document.querySelector("[data-add-icon]");
+
+  function refreshCounts() {
+    const tiles = grid.querySelectorAll(".custom-icon-tile");
+    countEl.textContent = String(tiles.length);
+    empty.classList.toggle("hidden", tiles.length > 0);
+  }
+
+  function showError(tile, msg) {
+    const el = tile.querySelector("[data-icon-error]");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.classList.toggle("hidden", !msg);
+  }
+
+  async function patchIcon(tile, field, value) {
+    const id = tile.dataset.iconId;
+    const res = await fetch(`/chores/icons/${id}`, {
+      method: "PATCH",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-CSRF-Token": CSRF,
+      },
+      body: JSON.stringify({ household_icon: { [field]: value } }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body.errors || ["Save failed"]).join(", "));
+    }
+  }
+
+  function bindTile(tile) {
+    if (tile.dataset.editable !== "true") return;
+    tile.querySelectorAll('[data-icon-field]').forEach(input => {
+      let original = input.value;
+      input.addEventListener("focus", () => { original = input.value; });
+      input.addEventListener("keydown", e => {
+        if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+        if (e.key === "Escape") { input.value = original; input.blur(); }
+      });
+      input.addEventListener("blur", async () => {
+        const v = input.value.trim();
+        if (v === original.trim()) return;
+        showError(tile, "");
+        try {
+          await patchIcon(tile, input.dataset.iconField, v);
+          original = v;
+          input.value = v;
+        } catch (err) {
+          input.value = original;
+          showError(tile, err.message);
+        }
+      });
+    });
+    tile.querySelector("[data-icon-delete]")?.addEventListener("click", async () => {
+      const name = tile.querySelector('[data-icon-field="name"]').value || "this icon";
+      if (!confirm(`Delete "${name}"? Chores already using it keep their copy.`)) return;
+      showError(tile, "");
+      try {
+        const res = await fetch(`/chores/icons/${tile.dataset.iconId}`, {
+          method: "DELETE",
+          credentials: "same-origin",
+          headers: { "Accept": "application/json", "X-CSRF-Token": CSRF },
+        });
+        if (!res.ok) throw new Error("Delete failed");
+        tile.remove();
+        refreshCounts();
+      } catch (err) {
+        showError(tile, err.message);
+      }
+    });
+  }
+
+  grid.querySelectorAll(".custom-icon-tile").forEach(bindTile);
+
+  // Reuse the singleton cropper. After save, it posts to
+  // /chores/icons — we listen for the broadcast (via
+  // Monitor) OR fall back to a manual fetch when the page is the
+  // browser tab that issued the upload.
+  addBtn?.addEventListener("click", () => {
+    document.dispatchEvent(new CustomEvent("chore-icon-cropper-open", {
+      detail: { stack: null },
+    }));
+  });
+
+  // Monitor channel — `window.Monitor` is bootstrapped from
+  // dashboard/cells/monitor.js (globbed into every page). Re-fetch
+  // the icon list whenever the household_icons set changes (created
+  // here, on another device, or via the bulk script).
+  function subscribeMonitor() {
+    if (typeof window.Monitor === "undefined") { setTimeout(subscribeMonitor, 200); return; }
+    window.Monitor.subscribe("chores", {
+      received(msg) {
+        if (msg?.data?.reason !== "household_icons_changed") return;
+        reloadIcons();
+      },
+    });
+  }
+
+  async function reloadIcons() {
+    try {
+      const res = await fetch("/chores/icons.json", {
+        credentials: "same-origin",
+        headers: { "Accept": "application/json" },
+      });
+      if (!res.ok) return;
+      const rows = await res.json();
+      renderIcons(rows);
+    } catch (_e) {}
+  }
+
+  function renderIcons(rows) {
+    const existing = new Map();
+    grid.querySelectorAll(".custom-icon-tile").forEach(t => existing.set(t.dataset.iconId, t));
+    const seen = new Set();
+    rows.forEach(row => {
+      seen.add(String(row.id));
+      const tile = existing.get(String(row.id));
+      if (tile) {
+        // Don't clobber focused inputs (user might be typing).
+        const nameInput = tile.querySelector('[data-icon-field="name"]');
+        const kwInput = tile.querySelector('[data-icon-field="keywords"]');
+        if (document.activeElement !== nameInput) nameInput.value = row.n || "";
+        if (document.activeElement !== kwInput) kwInput.value = (row.k || []).join(", ");
+        tile.querySelector("img").src = row.c;
+      } else {
+        grid.appendChild(buildTile(row));
+      }
+    });
+    existing.forEach((tile, id) => {
+      if (!seen.has(id)) tile.remove();
+    });
+    refreshCounts();
+  }
+
+  function buildTile(row) {
+    // Server-rendered tiles include owner attribution + edit
+    // permission, which the JSON pool row doesn't carry. New tiles
+    // assume the current user uploaded them (true for the local-add
+    // case) and reload on next nav for cross-device cases.
+    const tile = document.createElement("div");
+    tile.className = "custom-icon-tile";
+    tile.dataset.iconId = String(row.id);
+    tile.dataset.editable = "true";
+    tile.innerHTML = `
+      <div class="custom-icon-image"><img alt="" loading="lazy"></div>
+      <input type="text" class="custom-icon-name" data-icon-field="name" maxlength="60">
+      <input type="text" class="custom-icon-keywords" data-icon-field="keywords" placeholder="comma, separated, keywords">
+      <div class="custom-icon-meta">
+        <span class="custom-icon-owner">by you</span>
+        <button type="button" class="custom-icon-delete" data-icon-delete title="Delete"><i class="fa fa-trash" aria-hidden="true"></i></button>
+      </div>
+      <div class="custom-icon-error hidden" data-icon-error></div>
+    `;
+    tile.querySelector("img").src = row.c;
+    tile.querySelector('[data-icon-field="name"]').value = row.n || "";
+    tile.querySelector('[data-icon-field="keywords"]').value = (row.k || []).join(", ");
+    bindTile(tile);
+    return tile;
+  }
+
+  subscribeMonitor();
+</script>

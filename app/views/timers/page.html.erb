@@ -140,6 +140,11 @@
         </fieldset>
         <fieldset data-when-kind="counter" hidden>
           <div class="field"><span class="field-label">Initial value</span><input type="number" data-timers-field="value" value="0"></div>
+          <div class="field-row">
+            <div class="field"><span class="field-label">Min</span><input type="number" data-timers-field="min_value" placeholder="unbounded"></div>
+            <div class="field"><span class="field-label">Max</span><input type="number" data-timers-field="max_value" placeholder="unbounded"></div>
+          </div>
+          <p class="field-hint">Optional. Min &amp; max bound the progress ring and fire the <em>complete</em> callback when the counter hits either bound. Leave blank for an uncapped counter.</p>
         </fieldset>
         <fieldset data-when-kind="dial" hidden>
           <div class="field">

@@ -670,7 +670,7 @@ class ChoresController < ApplicationController
     permitted = params.require(:chore).permit(
       :name, :short_name, :icon, :reward_pebbles, :threshold_seconds,
       :one_off, :starts_on, :show_on_daily_view, :hot_eligibility,
-      :sharing_mode, :assigned_to_user_id, :notes_template,
+      :sharing_mode, :assigned_to_user_id, :notes_template, :notes,
       aliases:    [],
       recurrence: {}
     )

@@ -19,6 +19,9 @@
         <button type="button" class="icon-picker-upload" data-icon-picker-upload title="Upload a custom icon">
           <i class="fa fa-plus" aria-hidden="true"></i>
         </button>
+        <%= link_to chores_icons_manage_path, class: "icon-picker-manage", title: "Manage custom icons" do %>
+          <i class="fa fa-cog" aria-hidden="true"></i>
+        <% end %>
       </div>
       <div class="icon-picker-grid" data-icon-picker-grid></div>
       <div class="icon-picker-empty hidden" data-icon-picker-empty>No matches.</div>

@@ -8,6 +8,7 @@
 #  hot_eligibility     :integer          default("when_available"), not null
 #  icon                :text
 #  name                :text             not null
+#  notes               :text
 #  notes_template      :text
 #  one_off             :boolean          default(FALSE), not null
 #  recurrence          :jsonb

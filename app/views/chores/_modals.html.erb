@@ -120,6 +120,18 @@
                autocomplete="off" data-1p-ignore="true" data-lpignore="true">
       </div>
 
+      <%# ----- Notes (free-form scratchpad) -----
+        Open text area for whatever the user wants to jot down about
+        the chore — instructions, supplies, context, links. Nothing
+        else in the app reads this field. %>
+      <div class="form-section">
+        <label class="field-label">Notes</label>
+        <textarea data-field="notes" rows="3"
+                  placeholder="Anything you want to remember about this chore — supplies, steps, links…"
+                  autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="true"
+                  data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other"></textarea>
+      </div>
+
       <%# ----- Advanced (collapsed by default) -----
         Everything that's rarely changed lives behind this expandable
         section so the new-chore form stays a one-glance affair.

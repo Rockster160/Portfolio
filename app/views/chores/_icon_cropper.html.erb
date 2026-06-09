@@ -2,7 +2,7 @@
   a source (file / paste / drag-drop / URL), positions a square crop
   inside the source via zoom + pan, names the result, and saves. The
   cropper renders to a 128×128 off-screen canvas, encodes to WebP
-  (PNG fallback), and POSTs to /chores/household_icons. %>
+  (PNG fallback), and POSTs to /chores/icons. %>
 <div id="chore-icon-cropper" class="chores-modal-backdrop hidden" data-icon-cropper-modal>
   <div class="chores-modal icon-cropper-modal">
     <div class="modal-head">
@@ -87,6 +87,9 @@
     </div>
 
     <div class="form-actions">
+      <%# Hint surfaces *why* the save button is disabled — without it
+        users hit a dead button with no explanation. %>
+      <span class="cropper-save-hint" data-cropper-save-hint>Pick an image to continue</span>
       <button type="button" class="ghost" data-action="cancel">Cancel</button>
       <button type="button" class="primary" data-cropper-save disabled>Save icon</button>
     </div>

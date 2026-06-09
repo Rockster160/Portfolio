@@ -2553,11 +2553,17 @@
         setIconValue(text);
       }
     });
-    ["dragover", "drop"].forEach(evt => preview?.addEventListener(evt, async e => {
+    // Image drops route through the cropper so the user lands on the
+    // crop/name/bg-removal flow with the file pre-loaded — rather than
+    // committing a raw data URL straight to the chore field.
+    ["dragover", "drop"].forEach(evt => stack.addEventListener(evt, e => {
       e.preventDefault();
       if (evt !== "drop") return;
       const file = Array.from(e.dataTransfer?.files || []).find(f => f.type.startsWith("image/"));
-      if (file) { const v = await readFileAsValue(file); if (v) setIconValue(v); }
+      if (!file) return;
+      document.dispatchEvent(new CustomEvent("chore-icon-cropper-open", {
+        detail: { stack, file },
+      }));
     }));
     uploadBtn?.addEventListener("click", e => { e.preventDefault(); fileInput?.click(); });
     fileInput?.addEventListener("change", async () => {
@@ -2637,7 +2643,7 @@
           const [emoji, icons, custom] = await Promise.all([
             fetchJson("/emoji_index.json"),
             fetchJson("/icons_index.json"),
-            fetchJson("/chores/household_icons.json"),
+            fetchJson("/chores/icons.json"),
           ]);
           CUSTOM_POOL = tag(custom, "custom");
           // Emoji-first concat so default-order tiebreak prefers emoji.
@@ -2658,7 +2664,7 @@
     // Re-fetch just the custom pool. Notifies listeners (the open
     // picker re-renders).
     async function refreshCustom() {
-      const fresh = await fetchJson("/chores/household_icons.json");
+      const fresh = await fetchJson("/chores/icons.json");
       CUSTOM_POOL = tag(fresh, "custom");
       // Invalidate per-row score caches on touched rows next render.
       customListeners.forEach(fn => { try { fn(); } catch (_e) {} });
@@ -2933,7 +2939,7 @@
       const label = btn.title || "this icon";
       if (!window.confirm(`Delete "${label}" from your household icons?`)) return;
       const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
-      const res = await fetch(`/chores/household_icons/${id}`, {
+      const res = await fetch(`/chores/icons/${id}`, {
         method: "DELETE",
         credentials: "same-origin",
         headers: { "Accept": "application/json", "X-CSRF-Token": csrf },
@@ -3029,7 +3035,7 @@
   // ============================================================
   // Custom-icon cropper — file/paste/drop/URL source, canvas crop
   // with square overlay + zoom/pan, name + keywords, POSTs a 128px
-  // WebP data URL to /chores/household_icons. On success notifies
+  // WebP data URL to /chores/icons. On success notifies
   // IconPool so the picker re-renders and (optionally) writes the
   // new icon straight into the stack that triggered upload.
   // ============================================================
@@ -3051,6 +3057,7 @@
     const nameInput   = modal.querySelector("[data-cropper-name]");
     const keysInput   = modal.querySelector("[data-cropper-keywords]");
     const saveBtn     = modal.querySelector("[data-cropper-save]");
+    const saveHint    = modal.querySelector("[data-cropper-save-hint]");
     const bgEnable    = modal.querySelector("[data-cropper-bg-enable]");
     const bgControls  = modal.querySelector("[data-cropper-bg-controls]");
     const bgThreshold = modal.querySelector("[data-cropper-bg-threshold]");
@@ -3074,8 +3081,17 @@
     }
 
     function setSaveEnabled() {
-      const ready = !!sourceImage && (nameInput.value || "").trim().length > 0;
-      saveBtn.disabled = !ready;
+      const hasImage = !!sourceImage;
+      const hasName  = (nameInput.value || "").trim().length > 0;
+      saveBtn.disabled = !(hasImage && hasName);
+      if (!saveHint) return;
+      // Surface *why* the button is disabled so users don't stare at a
+      // dead "Save icon" with no explanation.
+      let msg = "";
+      if (!hasImage)       msg = "Pick an image to continue";
+      else if (!hasName)   msg = "Add a name to save";
+      saveHint.textContent = msg;
+      saveHint.classList.toggle("hidden", !msg);
     }
 
     function resetState() {
@@ -3190,7 +3206,10 @@
     urlInput.addEventListener("blur", () => {
       if (urlInput.value.trim()) loadFromUrl(urlInput.value);
     });
-    ["dragover", "drop"].forEach(evt => sourcePane.addEventListener(evt, async e => {
+    // Bound on the whole modal so a NEW drop replaces the already-loaded
+    // image (the source pane is hidden once the stage opens). loadFile →
+    // loadDataUrl resets crop/zoom/pan; name/keywords/bg settings persist.
+    ["dragover", "drop"].forEach(evt => modal.addEventListener(evt, async e => {
       e.preventDefault();
       if (evt !== "drop") return;
       const f = Array.from(e.dataTransfer?.files || []).find(x => x.type.startsWith("image/"));
@@ -3405,7 +3424,7 @@
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
         const dataUrl = renderOutput();
         try {
-          const res = await fetch("/chores/household_icons", {
+          const res = await fetch("/chores/icons", {
             method: "POST",
             credentials: "same-origin",
             headers: {
@@ -3447,6 +3466,7 @@
       activeStack = e.detail?.stack || null;
       resetState();
       modal.classList.remove("hidden");
+      if (e.detail?.file) loadFile(e.detail.file);
     });
 
     modal.querySelectorAll('[data-action="cancel"]').forEach(b =>
@@ -3532,6 +3552,7 @@
     setField("short_name", "");
     setField("aliases_csv", "");
     setField("notes_template", "");
+    setField("notes", "");
     setField("assigned_to_user_id", "");
     setField("starts_on", "");
     selectRewardPill(1);
@@ -3626,6 +3647,7 @@
     setIconField(c.icon || "");
     setField("aliases_csv", (c.aliases || []).join(", "));
     setField("notes_template", c.notes_template || "");
+    setField("notes", c.notes || "");
     const reward = c.reward_pebbles || 0;
     selectRewardPill(reward);
     setField("reward_pebbles", reward);
@@ -3849,6 +3871,7 @@
         assigned_to_user_id: getField("assigned_to_user_id") || null,
         aliases: (getField("aliases_csv") || "").split(",").map(s => s.trim()).filter(Boolean),
         notes_template: getField("notes_template") || "",
+        notes: getField("notes") || "",
         recurrence: recurrence,
       },
     };
@@ -3926,6 +3949,24 @@
     if (SPECIALIZED_MODAL_SELECTORS.some(sel => m.matches(sel))) return;
 
     wireModalDismiss(m);
+  });
+
+  // Escape → close the top-most open modal. We route through the
+  // modal's own cancel button so any per-modal teardown (form reset,
+  // cropper state, etc.) runs the same way it does on click.
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    const open = Array.from(document.querySelectorAll('.chores-modal-backdrop:not(.hidden)'));
+    if (!open.length) return;
+    // Top-most = highest z-index; ties resolved by DOM order (last wins).
+    const top = open.reduce((a, b) => {
+      const az = parseInt(getComputedStyle(a).zIndex, 10) || 0;
+      const bz = parseInt(getComputedStyle(b).zIndex, 10) || 0;
+      return bz >= az ? b : a;
+    });
+    e.preventDefault();
+    const cancel = top.querySelector('[data-action="cancel"]');
+    if (cancel) cancel.click(); else top.classList.add("hidden");
   });
 
   // ============================================================
