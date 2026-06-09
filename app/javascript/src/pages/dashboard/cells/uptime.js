@@ -74,12 +74,6 @@ import { dash_colors } from "../vars";
     });
   };
 
-  let padName = function (label) {
-    let visible = label.length;
-    let padding = Math.max(0, name_width - visible);
-    return label + " ".repeat(padding);
-  };
-
   var uptimeLines = function () {
     let lines = [];
     let now = new Date().getTime() / 1000;
@@ -105,9 +99,12 @@ import { dash_colors } from "../vars";
           ? dash_colors.green
           : dash_colors.grey
         : dash_colors.red;
-      let bullet = cell.data.uptime_poll_failed ? "!" : "•";
-      let label = bullet + " " + name;
-      let name_cell = Text.color(dot_color, padName(label));
+      let failed = cell.data.uptime_poll_failed;
+      let bullet = failed ? "!" : "•";
+      let bullet_color = failed ? dash_colors.red : dot_color;
+      let padded_name = (" " + name).padEnd(name_width - 1);
+      let name_cell =
+        Text.color(bullet_color, bullet) + Text.color(dot_color, padded_name);
 
       let mem_pct =
         fresh && stats_data.memory_total_mb

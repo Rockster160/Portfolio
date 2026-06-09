@@ -142,10 +142,15 @@ export default class Statement {
     let matches = [...escaped.matchAll(combined)];
     matches.forEach((match) => {
       if (match.groups?.comment_line != null) {
+        // The regex ran against tokenized text — `__TOKEN<N>__` placeholders
+        // stand in for parens, brackets, and string literals inside the
+        // comment. Expand them before storing so the comment text round-trips
+        // intact instead of saving placeholder names back to the DB.
+        const rawText = tokenizer.untokenize(
+          match.groups.comment_text || "",
+        );
         adds.push(
-          new InlineComment({
-            text: InlineComment.decodeText(match.groups.comment_text || ""),
-          }),
+          new InlineComment({ text: InlineComment.decodeText(rawText) }),
         );
         return;
       }

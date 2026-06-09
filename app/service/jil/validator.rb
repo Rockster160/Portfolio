@@ -320,9 +320,43 @@ class Jil::Validator
     line.args.each_with_index do |arg, idx|
       expected = arg_types[idx]
       next if expected.nil?
-      next unless expected == :Text
 
-      next if arg.is_a?(::String) && arg.match?(/\A".*"\z/m)
+      validate_arg_against_type(line, objname, methodname, idx, arg, expected)
+    end
+  end
+
+  # Reject content-vs-scalar mismatches. Without this, the in-browser editor
+  # silently drops the offending arg on save (variables can't fit a content
+  # block widget, and content blocks can't fit a scalar input) — the task
+  # then runs against `Timer.add({})` and breaks at runtime. Slime-colony
+  # Setup (task 304) was the trigger.
+  def validate_arg_against_type(line, objname, methodname, idx, arg, expected)
+    expected_str = expected.to_s
+    expects_content = expected_str.start_with?("content") || expected == :enum_content
+
+    if expects_content
+      return if arg.is_a?(::Array)
+
+      add_error(line, line.varname,
+        "Arg #{idx + 1} of `#{objname}.#{methodname}` expects a content block `{...}`, " \
+        "got `#{arg}`. The Jil editor silently drops a non-content arg here on save " \
+        "(call becomes `#{objname}.#{methodname}(... {} ...)`). Inline the values as " \
+        "a content block, or pre-build them and pass via a content block: " \
+        "`{ #{arg.is_a?(::String) ? arg : "..."} }`.")
+      return
+    end
+
+    if arg.is_a?(::Array) && !expected_str.include?("Any")
+      add_error(line, line.varname,
+        "Arg #{idx + 1} of `#{objname}.#{methodname}` expects `#{expected}`, got a " \
+        "content block `{...}`. The Jil editor silently drops the block on save (call " \
+        "becomes `#{objname}.#{methodname}(..., \"\")` or similar). Build a `#{expected}` " \
+        "variable first and pass that.")
+      return
+    end
+
+    if expected == :Text
+      return if arg.is_a?(::String) && arg.match?(/\A".*"\z/m)
 
       add_error(line, line.varname,
         "Arg #{idx + 1} of `#{objname}.#{methodname}` is `Text` — must be a literal string `\"...\"`, " \
@@ -350,7 +384,6 @@ class Jil::Validator
     args = line.args
 
     validate_no_raw_keyval_blocks(line, objname, methodname, args)
-    validate_content_not_bare_variable(line, objname, methodname, args)
     validate_keyword_usage(line, objname, methodname, parent_class, parent_method)
   end
 
@@ -364,25 +397,14 @@ class Jil::Validator
 
     args.each_with_index do |arg, idx|
       next unless arg.is_a?(::Array) && arg.length > 1
-      next unless arg.all? { |a| a.is_a?(::Jil::Parser) && a.objname.to_sym == :Keyval }
+
+      meaningful = arg.reject { |a| a.is_a?(::Jil::Parser) && (a.commented? || a.inline_comment?) }
+      next if meaningful.empty?
+      next unless meaningful.all? { |a| a.is_a?(::Jil::Parser) && a.objname.to_sym == :Keyval }
 
       add_error(line, line.varname,
         "Arg #{idx + 1}: Raw Keyval content block passed as positional argument. " \
         "Use Hash.new({...}) to create a Hash variable first, then pass the variable.")
-    end
-  end
-
-  def validate_content_not_bare_variable(line, objname, methodname, args)
-    # Only warn for data classes whose data() method uses content() in schema
-    return unless methodname == :data
-    return unless self.class.data_methods_expecting_content.include?(objname)
-    return if args.empty?
-
-    first_arg = args.first
-    if first_arg.is_a?(::String) && !first_arg.match?(/\A".*?"\z/)
-      add_warning(line, line.varname,
-        "#{objname}.data() expects a content block {}, not a bare variable. " \
-        "Use #{objname}.data({ Global.ref(#{first_arg})::Hash }) instead.")
     end
   end
 

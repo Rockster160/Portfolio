@@ -24,11 +24,8 @@ export default class InlineComment {
         // Stop before blur(): the global Enter handler checks document.activeElement
         // via activeInput(), and blur() would leave it on <body> before that check runs.
         evt.stopPropagation();
-        if (!evt.shiftKey) {
-          evt.preventDefault();
-          textEl.blur();
-        }
-        // Shift+Enter falls through to the browser's native newline insertion.
+        evt.preventDefault();
+        textEl.blur();
       }
     });
     textEl.addEventListener("focus", () => {
@@ -169,11 +166,19 @@ export default class InlineComment {
     Statement.all = Statement.all.filter((item) => item.id != this.id);
   }
 
-  toString(nest = 0, pretty = false, _parentDepth = 0) {
-    const indent = "  ".repeat(nest);
-    const encoded = (this.text || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n");
-    const hash = prettify(pretty, "comment", `${indent}## `);
-    const body = prettify(pretty, "comment", encoded);
+  toString(_nest = 0, pretty = false, _parentDepth = 0) {
+    // Caller's join (Statement.toCode for top-level, argValue for nested
+    // content blocks) already prepends the right indent. Emitting our own
+    // here doubles it inside `}, {` branches.
+    //
+    // Real newlines collapse to spaces — the parser regex is single-line
+    // `[^\n]*?`, and ANY round-trip escape scheme for backticks/backslashes
+    // collides with `form.html.erb:138`'s `code.gsub(/\``/, "\\\\\``")`,
+    // which adds a backslash before every backtick on every load and would
+    // accumulate per save cycle.
+    const text = (this.text || "").replace(/\r?\n+/g, " ");
+    const hash = prettify(pretty, "comment", "## ");
+    const body = prettify(pretty, "comment", text);
     let str = hash + body;
     if (pretty) {
       str = `<span class="syntax--statement syntax--commented">${str}</span>`;
@@ -182,16 +187,11 @@ export default class InlineComment {
   }
 
   static decodeText(encoded) {
-    let out = "";
-    for (let i = 0; i < encoded.length; i++) {
-      const ch = encoded[i];
-      if (ch === "\\" && i + 1 < encoded.length) {
-        const next = encoded[i + 1];
-        if (next === "n") { out += "\n"; i++; continue; }
-        if (next === "\\") { out += "\\"; i++; continue; }
-      }
-      out += ch;
-    }
-    return out;
+    // Undo `form.html.erb:138`'s `code.gsub(/\``/, "\\\\\``")` plus any
+    // accumulation from older buggy saves. We strip every backslash run
+    // immediately before a backtick — comments don't legitimately contain
+    // `\\\`` literals, and accepting the constraint lets damaged tasks
+    // self-heal on next save.
+    return encoded.replace(/\\+`/g, "`");
   }
 }

@@ -216,9 +216,13 @@ RSpec.describe Jil::Validator do
     end
   end
 
-  describe "ActionEventData.data bare variable warning" do
-    it "warns when passing bare variable instead of content block" do
-      expect_warning(<<~'JIL'.strip, /ActionEventData\.data\(\) expects a content block/)
+  describe "ActionEventData.data bare variable" do
+    # Passing a non-content arg where the schema declares `content(...)` is now
+    # an error: the in-browser editor silently drops the arg on save (the call
+    # becomes `.data({})`) and the task breaks at runtime. The fix is to wrap
+    # the value in a content block, as the second spec below shows.
+    it "errors when passing bare variable instead of content block" do
+      expect_error(<<~'JIL'.strip, /expects a content block/)
         h = Hash.keyval("key", "val")::Hash
         evt = ActionEvent.create({
           a1 = ActionEventData.data(h)::ActionEventData
@@ -237,6 +241,50 @@ RSpec.describe Jil::Validator do
       JIL
       matching = result.warnings.select { |w| w.message.match?(/ActionEventData/) }
       expect(matching).to be_empty
+    end
+  end
+
+  describe "content-vs-scalar arg-type mismatch" do
+    # Regression: task 304 (Slime Colony — Setup) opened in the Jil editor,
+    # saved without edits, and started returning errors because
+    # `Timer.add(turnAttrs)` (Hash variable into a content arg) became
+    # `Timer.add({})` and `set_meta(page, {evIdKv = ...})` (content block into
+    # a Hash arg) became `set_meta(page, "")`. The editor widget for the
+    # declared type can't carry the user's value, so it drops it on save.
+    it "errors when a variable is passed where the schema requires a content block" do
+      expect_error(<<~'JIL'.strip, /expects a content block/)
+        turnAttrs = Hash.new({
+          tn = Keyval.new("name", "Turn")::Keyval
+        })::Hash
+        turnMade = Timer.add(turnAttrs)::Timer
+      JIL
+    end
+
+    it "accepts the inlined-content fix for the Timer.add case" do
+      expect_valid(<<~'JIL'.strip)
+        turnMade = Timer.add({
+          tn = Keyval.new("name", "Turn")::Keyval
+        })::Timer
+      JIL
+    end
+
+    it "errors when a content block is passed where the schema requires a scalar (Hash)" do
+      expect_error(<<~'JIL'.strip, /expects `Hash`/)
+        page = TimerPage.find("slime-colony")::TimerPage
+        evMeta = TimerPage.set_meta(page, {
+          evIdKv = Keyval.new("action_event_id", 1)::Keyval
+        })::TimerPage
+      JIL
+    end
+
+    it "accepts the pre-built Hash variable fix for the set_meta case" do
+      expect_valid(<<~'JIL'.strip)
+        page = TimerPage.find("slime-colony")::TimerPage
+        patch = Hash.new({
+          evIdKv = Keyval.new("action_event_id", 1)::Keyval
+        })::Hash
+        evMeta = TimerPage.set_meta(page, patch)::TimerPage
+      JIL
     end
   end
 
@@ -359,12 +407,10 @@ RSpec.describe Jil::Validator do
     end
 
     it "does not raise on warnings-only" do
+      # Keyword.Item outside a splat/functionParams context is a no-op (warning).
       expect {
         Jil::Validator.validate!(<<~'JIL'.strip)
-          h = Hash.keyval("key", "val")::Hash
-          evt = ActionEvent.create({
-            a1 = ActionEventData.data(h)::ActionEventData
-          })::ActionEvent
+          stray = Keyword.Item()::Any
         JIL
       }.not_to raise_error
     end
