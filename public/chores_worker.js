@@ -15,14 +15,19 @@
 // clients re-pull the HTML next time they're online.
 
 // Bump CACHE on shipping shell changes so old clients re-pull HTML.
-const CACHE = "chores-v83";
+const CACHE = "chores-v84";
 // Every chore view is a cached shell. Each shell is body-empty for
 // page-specific content — entries on History, recent rows on Balance —
 // because that data is hydrated client-side from JSON (and from a
 // localStorage cache for instant repeat visits). The shell load itself
 // is offline-tolerant; the JSON fetches degrade gracefully when there
 // is no connection.
-const SHELL_PATHS = ["/chores", "/chores/today", "/chores/balance", "/chores/history"];
+const SHELL_PATHS = [
+  "/chores",
+  "/chores/today",
+  "/chores/balance",
+  "/chores/history",
+];
 
 // Match /assets/, /whisper_favicon/, .webmanifest, and the two
 // non-pipelined chores_*.js files. Anything else (cross-origin, API
@@ -50,19 +55,30 @@ async function warmShellAssets(cache, shellHtml, baseUrl) {
   let m;
   while ((m = re.exec(shellHtml)) !== null) {
     let u;
-    try { u = new URL(m[1], baseUrl); } catch (e) { continue; }
+    try {
+      u = new URL(m[1], baseUrl);
+    } catch (e) {
+      continue;
+    }
     if (isPrecachableAssetURL(u)) urls.add(u.toString());
   }
-  const results = await Promise.all(Array.from(urls).map(async u => {
-    try {
-      const existing = await cache.match(u);
-      if (existing) return true;
-      const r = await fetch(u, { credentials: "same-origin", cache: "no-store" });
-      if (!r || !r.ok) return false;
-      await cache.put(u, r.clone());
-      return true;
-    } catch (e) { return false; }
-  }));
+  const results = await Promise.all(
+    Array.from(urls).map(async (u) => {
+      try {
+        const existing = await cache.match(u);
+        if (existing) return true;
+        const r = await fetch(u, {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        if (!r || !r.ok) return false;
+        await cache.put(u, r.clone());
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }),
+  );
   return results.every(Boolean);
 }
 
@@ -78,30 +94,40 @@ async function refreshAllShells() {
   // already broadcasts `shell_synced` per path; the explicit-message
   // path used to swallow the signal, which left the badge stuck
   // forever after a local save.
-  await Promise.all(SHELL_PATHS.map(async p => {
-    try {
-      const r = await fetch(p, { credentials: "same-origin", redirect: "manual", cache: "no-store" });
-      if (!r || !r.ok || r.type === "opaqueredirect") {
+  await Promise.all(
+    SHELL_PATHS.map(async (p) => {
+      try {
+        const r = await fetch(p, {
+          credentials: "same-origin",
+          redirect: "manual",
+          cache: "no-store",
+        });
+        if (!r || !r.ok || r.type === "opaqueredirect") {
+          await broadcastToClients({ kind: "shell_sync_failed", path: p });
+          return;
+        }
+        const clone = r.clone();
+        const html = await clone.text();
+        // Warm assets FIRST. Only if every referenced asset is now in
+        // cache do we replace the shell entry. A failed asset fetch
+        // means the previous (working) shell + assets stay live —
+        // never serve a shell whose JS/CSS won't load.
+        const assetsOk = await warmShellAssets(
+          cache,
+          html,
+          new URL(p, location.origin).toString(),
+        );
+        if (!assetsOk) {
+          await broadcastToClients({ kind: "shell_sync_failed", path: p });
+          return;
+        }
+        await cache.put(p, r.clone());
+        await broadcastToClients({ kind: "shell_synced", path: p });
+      } catch (e) {
         await broadcastToClients({ kind: "shell_sync_failed", path: p });
-        return;
       }
-      const clone = r.clone();
-      const html = await clone.text();
-      // Warm assets FIRST. Only if every referenced asset is now in
-      // cache do we replace the shell entry. A failed asset fetch
-      // means the previous (working) shell + assets stay live —
-      // never serve a shell whose JS/CSS won't load.
-      const assetsOk = await warmShellAssets(cache, html, new URL(p, location.origin).toString());
-      if (!assetsOk) {
-        await broadcastToClients({ kind: "shell_sync_failed", path: p });
-        return;
-      }
-      await cache.put(p, r.clone());
-      await broadcastToClients({ kind: "shell_synced", path: p });
-    } catch (e) {
-      await broadcastToClients({ kind: "shell_sync_failed", path: p });
-    }
-  }));
+    }),
+  );
 }
 
 // Hard verification that EVERY shell path + every asset URL referenced
@@ -121,7 +147,11 @@ async function verifyShellReady() {
     let m;
     while ((m = re.exec(html)) !== null) {
       let u;
-      try { u = new URL(m[1], new URL(p, location.origin)); } catch (e) { continue; }
+      try {
+        u = new URL(m[1], new URL(p, location.origin));
+      } catch (e) {
+        continue;
+      }
       if (!isPrecachableAssetURL(u)) continue;
       const hit = await cache.match(u.toString());
       if (!hit) return { ok: false, reason: `missing asset ${u.pathname}` };
@@ -134,43 +164,55 @@ async function verifyShellReady() {
 // server sends to WebPush.payload_send (title/body/icon/tag/data).
 // `dismiss: true` with a tag short-circuits to closing any active
 // notification with that tag (e.g. when work is undone elsewhere).
-self.addEventListener("push", evt => {
+self.addEventListener("push", (evt) => {
   let data = {};
-  try { data = evt.data ? evt.data.json() : {}; } catch (_e) { return; }
+  try {
+    data = evt.data ? evt.data.json() : {};
+  } catch (_e) {
+    return;
+  }
 
   if (data.dismiss && data.tag) {
     evt.waitUntil(
-      self.registration.getNotifications({ tag: data.tag })
-        .then(list => list.forEach(n => n.close()))
+      self.registration
+        .getNotifications({ tag: data.tag })
+        .then((list) => list.forEach((n) => n.close())),
     );
     return;
   }
 
   data.icon = data.icon || "/favicon/android-chrome-192x192.png";
   if (data.title || data.body) {
-    evt.waitUntil(self.registration.showNotification(data.title || "Chores", data));
+    evt.waitUntil(
+      self.registration.showNotification(data.title || "Chores", data),
+    );
   }
 });
 
-self.addEventListener("notificationclick", evt => {
+self.addEventListener("notificationclick", (evt) => {
   evt.notification.close();
   const targetUrl = evt.notification.data?.url || "/chores";
-  evt.waitUntil((async () => {
-    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    for (const c of all) {
-      const url = new URL(c.url);
-      if (url.pathname.startsWith("/chores") && "focus" in c) {
-        if (c.url !== targetUrl && "navigate" in c) {
-          await c.navigate(targetUrl);
+  evt.waitUntil(
+    (async () => {
+      const all = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      for (const c of all) {
+        const url = new URL(c.url);
+        if (url.pathname.startsWith("/chores") && "focus" in c) {
+          if (c.url !== targetUrl && "navigate" in c) {
+            await c.navigate(targetUrl);
+          }
+          return c.focus();
         }
-        return c.focus();
       }
-    }
-    if (self.clients.openWindow) await self.clients.openWindow(targetUrl);
-  })());
+      if (self.clients.openWindow) await self.clients.openWindow(targetUrl);
+    })(),
+  );
 });
 
-self.addEventListener("message", evt => {
+self.addEventListener("message", (evt) => {
   if (evt.data?.action === "refresh_shells") {
     evt.waitUntil(refreshAllShells());
   }
@@ -183,28 +225,30 @@ self.addEventListener("message", evt => {
   }
   if (evt.data?.action === "verify_ready") {
     const port = evt.ports?.[0];
-    evt.waitUntil((async () => {
-      let result;
-      try {
-        result = await verifyShellReady();
-        if (!result.ok) {
-          // One retry: maybe the install raced and missed something.
-          // Force a clean refresh, then re-verify. If still not ok,
-          // the page-script will retry on the next visibility change.
-          await refreshAllShells();
+    evt.waitUntil(
+      (async () => {
+        let result;
+        try {
           result = await verifyShellReady();
+          if (!result.ok) {
+            // One retry: maybe the install raced and missed something.
+            // Force a clean refresh, then re-verify. If still not ok,
+            // the page-script will retry on the next visibility change.
+            await refreshAllShells();
+            result = await verifyShellReady();
+          }
+        } catch (e) {
+          result = { ok: false, reason: `verify threw: ${e?.message || e}` };
         }
-      } catch (e) {
-        result = { ok: false, reason: `verify threw: ${e?.message || e}` };
-      }
-      port?.postMessage(result);
-    })());
+        port?.postMessage(result);
+      })(),
+    );
   }
 });
 
 async function broadcastToClients(payload) {
   const clients = await self.clients.matchAll({ includeUncontrolled: true });
-  clients.forEach(c => c.postMessage(payload));
+  clients.forEach((c) => c.postMessage(payload));
 }
 
 // Look in every other chores-* cache for a request/path. Used as a
@@ -221,29 +265,38 @@ async function matchFromOldCaches(reqOrPath) {
   return null;
 }
 
-self.addEventListener("install", evt => {
+self.addEventListener("install", (evt) => {
   evt.waitUntil(refreshAllShells());
   self.skipWaiting();
 });
 
-self.addEventListener("activate", evt => {
-  evt.waitUntil((async () => {
-    const newCache = await caches.open(CACHE);
-    // Only purge old chores-* caches when the new cache actually has at
-    // least one shell populated. An offline/flaky install would leave
-    // the new cache empty; if we deleted the previous cache eagerly the
-    // next visit would have NOTHING to serve and the page would render
-    // as a black/blank screen.
-    let hasShell = false;
-    for (const p of SHELL_PATHS) {
-      if (await newCache.match(p)) { hasShell = true; break; }
-    }
-    if (hasShell) {
-      const keys = await caches.keys();
-      await Promise.all(keys.filter(k => k.startsWith("chores-") && k !== CACHE).map(k => caches.delete(k)));
-    }
-    await self.clients.claim();
-  })());
+self.addEventListener("activate", (evt) => {
+  evt.waitUntil(
+    (async () => {
+      const newCache = await caches.open(CACHE);
+      // Only purge old chores-* caches when the new cache actually has at
+      // least one shell populated. An offline/flaky install would leave
+      // the new cache empty; if we deleted the previous cache eagerly the
+      // next visit would have NOTHING to serve and the page would render
+      // as a black/blank screen.
+      let hasShell = false;
+      for (const p of SHELL_PATHS) {
+        if (await newCache.match(p)) {
+          hasShell = true;
+          break;
+        }
+      }
+      if (hasShell) {
+        const keys = await caches.keys();
+        await Promise.all(
+          keys
+            .filter((k) => k.startsWith("chores-") && k !== CACHE)
+            .map((k) => caches.delete(k)),
+        );
+      }
+      await self.clients.claim();
+    })(),
+  );
 });
 
 function isShellRequest(url) {
@@ -256,12 +309,14 @@ function isShellRequest(url) {
 }
 
 function isStaticAsset(url) {
-  return url.pathname.startsWith("/assets/") ||
+  return (
+    url.pathname.startsWith("/assets/") ||
     url.pathname.startsWith("/whisper_favicon/") ||
-    url.pathname.endsWith(".webmanifest");
+    url.pathname.endsWith(".webmanifest")
+  );
 }
 
-self.addEventListener("fetch", evt => {
+self.addEventListener("fetch", (evt) => {
   const req = evt.request;
   if (req.method !== "GET") {
     // Mutations are never served from the SW. Let the page-script's
@@ -279,74 +334,98 @@ self.addEventListener("fetch", evt => {
     // "shell_synced" message. Asset URLs in the shell are
     // content-hashed, so any new CSS/JS the fresh HTML references will
     // also get fetched + cached on demand below.
-    evt.respondWith((async () => {
-      const cache = await caches.open(CACHE);
-      let cached = await cache.match(url.pathname);
-      // Defense in depth: an install that finished offline can leave
-      // the current cache empty even after activate has run. Fall back
-      // to any older chores-* cache so the user still sees the last
-      // shell they had instead of a 503/blank page.
-      if (!cached) cached = await matchFromOldCaches(url.pathname);
+    evt.respondWith(
+      (async () => {
+        const cache = await caches.open(CACHE);
+        let cached = await cache.match(url.pathname);
+        // Defense in depth: an install that finished offline can leave
+        // the current cache empty even after activate has run. Fall back
+        // to any older chores-* cache so the user still sees the last
+        // shell they had instead of a 503/blank page.
+        if (!cached) cached = await matchFromOldCaches(url.pathname);
 
-      const revalidate = (async () => {
-        try {
-          const fresh = await fetch(req, { cache: "no-store" });
-          if (!fresh || !fresh.ok || fresh.type === "opaqueredirect") return;
-          const clone = fresh.clone();
-          const html = await clone.text();
-          // Same atomic rule as install/refresh: only replace the
-          // cached shell after every referenced asset is cached.
-          const assetsOk = await warmShellAssets(cache, html, url.toString());
-          if (!assetsOk) {
-            await broadcastToClients({ kind: "shell_sync_failed", path: url.pathname });
-            return;
+        const revalidate = (async () => {
+          try {
+            const fresh = await fetch(req, { cache: "no-store" });
+            if (!fresh || !fresh.ok || fresh.type === "opaqueredirect") return;
+            const clone = fresh.clone();
+            const html = await clone.text();
+            // Same atomic rule as install/refresh: only replace the
+            // cached shell after every referenced asset is cached.
+            const assetsOk = await warmShellAssets(cache, html, url.toString());
+            if (!assetsOk) {
+              await broadcastToClients({
+                kind: "shell_sync_failed",
+                path: url.pathname,
+              });
+              return;
+            }
+            await cache.put(url.pathname, fresh.clone());
+            await broadcastToClients({
+              kind: "shell_synced",
+              path: url.pathname,
+            });
+          } catch (e) {
+            await broadcastToClients({
+              kind: "shell_sync_failed",
+              path: url.pathname,
+            });
           }
-          await cache.put(url.pathname, fresh.clone());
-          await broadcastToClients({ kind: "shell_synced", path: url.pathname });
-        } catch (e) {
-          await broadcastToClients({ kind: "shell_sync_failed", path: url.pathname });
-        }
-      })();
-      evt.waitUntil(revalidate);
+        })();
+        evt.waitUntil(revalidate);
 
-      if (cached) return cached;
-      // First visit ever (no cache yet) — fall through to network so we
-      // have something to render.
-      return (await revalidate, fetch(req).catch(() =>
-        new Response("offline — shell not yet cached", { status: 503 })));
-    })());
+        if (cached) return cached;
+        // First visit ever (no cache yet) — fall through to network so we
+        // have something to render.
+        return (
+          await revalidate,
+          fetch(req).catch(
+            () =>
+              new Response("offline — shell not yet cached", { status: 503 }),
+          )
+        );
+      })(),
+    );
     return;
   }
 
   if (isStaticAsset(url)) {
-    evt.respondWith((async () => {
-      const cache = await caches.open(CACHE);
-      const hit = await cache.match(req);
-      if (hit) return hit;
-      // Older content-hashed asset might still live in a prior cache —
-      // use it offline so a page served from an old shell still has
-      // its CSS/JS instead of dropping to an unstyled black render.
-      const fallback = await matchFromOldCaches(req);
-      const fresh = await fetch(req).catch(() => null);
-      if (fresh && fresh.ok) cache.put(req, fresh.clone());
-      return fresh || fallback || new Response("offline", { status: 503 });
-    })());
+    evt.respondWith(
+      (async () => {
+        const cache = await caches.open(CACHE);
+        const hit = await cache.match(req);
+        if (hit) return hit;
+        // Older content-hashed asset might still live in a prior cache —
+        // use it offline so a page served from an old shell still has
+        // its CSS/JS instead of dropping to an unstyled black render.
+        const fallback = await matchFromOldCaches(req);
+        const fresh = await fetch(req).catch(() => null);
+        if (fresh && fresh.ok) cache.put(req, fresh.clone());
+        return fresh || fallback || new Response("offline", { status: 503 });
+      })(),
+    );
     return;
   }
 
   // JSON / GET fallthrough: network-first, cache fallback.
-  evt.respondWith((async () => {
-    try {
-      const res = await fetch(req);
-      if (res && res.ok && req.headers.get("Accept")?.includes("application/json")) {
+  evt.respondWith(
+    (async () => {
+      try {
+        const res = await fetch(req);
+        if (
+          res &&
+          res.ok &&
+          req.headers.get("Accept")?.includes("application/json")
+        ) {
+          const cache = await caches.open(CACHE);
+          cache.put(req, res.clone());
+        }
+        return res;
+      } catch (e) {
         const cache = await caches.open(CACHE);
-        cache.put(req, res.clone());
+        const hit = await cache.match(req);
+        return hit || new Response("offline", { status: 503 });
       }
-      return res;
-    } catch (e) {
-      const cache = await caches.open(CACHE);
-      const hit = await cache.match(req);
-      return hit || new Response("offline", { status: 503 });
-    }
-  })());
+    })(),
+  );
 });

@@ -297,6 +297,68 @@
   #starts_on(Date)
   #reward_pebbles(Numeric)
   #show_on_daily_view(["always" "when_scheduled" "when_available" "when_scheduled_and_available" "never"])
+[Timer]
+  #find(String|Numeric)::Timer
+  #list::Array
+  #on_page(String|Numeric)::Array
+  #add(content(TimerData))::Timer
+  #update(Timer content(TimerData))::Timer
+  #destroy(Timer)::Boolean
+  #start(Timer)::Timer
+  #pause(Timer)::Timer
+  #resume(Timer)::Timer
+  #reset(Timer)::Timer
+  #confirm(Timer)::Timer
+  #increment(Timer Numeric?:By)::Timer
+  #advance(Timer Numeric?:By)::Timer
+  #goto(Timer String:Section)::Timer
+  #disable(Timer)::Timer
+  #enable(Timer)::Timer
+  #toggle_disabled(Timer)::Timer
+  .id::Numeric
+  .name::String
+  .kind::String
+  .color::String
+  .disabled::Boolean
+  .value::Numeric
+  .duration_ms::Numeric
+  .dial_config::Hash
+  .dial_step_index::Numeric
+  .repeat::Boolean
+  .timer_page_id::Numeric
+*[TimerData]
+  #name(String)
+  #kind(["countdown" "counter" "dial"])
+  #color(String:"#hex")
+  #timer_page(String|Numeric)
+  #duration(Numeric:Seconds)
+  #duration_ms(Numeric)
+  #repeat(Boolean)
+  #disabled(Boolean)
+  #value(Numeric)
+  #step(Numeric)
+  #min_value(Numeric)
+  #max_value(Numeric)
+  #reset_value(Numeric)
+  #dial_text(String)
+  #dial_config(Hash)
+  #start_offset(Numeric)
+  #callbacks(Array)
+[TimerPage]
+  #find(String|Numeric)::TimerPage
+  #list::Array
+  #update(TimerPage content(Hash))::TimerPage
+  #get_meta(TimerPage String?:Key)
+  #set_meta(TimerPage Hash)::TimerPage
+  #replace_meta(TimerPage Hash)::TimerPage
+  #add_button(TimerPage content(TimerPageButtonData))::TimerPageButton
+  #set_buttons(TimerPage Array)::TimerPage
+  #remove_button(TimerPageButton|Numeric)::Boolean
+*[TimerPageButtonData]
+  #label(String)
+  #color(String:"#hex")
+  #target_url(String)
+  #sort_order(Numeric)
 *[ActionEventData]
   #name(String)
   #notes(String)
