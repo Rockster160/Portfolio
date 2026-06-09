@@ -276,6 +276,25 @@ class Jil::Validator
     else
       var_class = @vars.dig(objname.to_sym, :cast)
       return unless var_class
+
+      # The in-browser Jil editor can't validate instance method calls on
+      # `::Any` variables (Any has no schema to dispatch against) — on save
+      # it silently strips the call's args AND discards every line that
+      # follows. We hit this on slime-colony Setup (task 372 in prod): a
+      # `Global.if(...)::Any` result fed into `ap.op("+", 1)` chopped
+      # ~4500 chars off the task. Reject these here so the issue surfaces
+      # before deploy. Cast the source line to a concrete type instead —
+      # e.g. `var = Global.if(...)::Numeric`.
+      if var_class == :Any
+        add_error(line, line.varname,
+          "Cannot call instance method `#{methodname}` on `::Any` variable `#{objname}`. " \
+          "The in-browser Jil editor silently strips args from `::Any` method calls and " \
+          "discards everything that follows on save. Cast the source line to a concrete " \
+          "type — e.g. `#{objname} = SomeFn(...)::<Type>` — so the editor can validate " \
+          "the call.")
+        return
+      end
+
       return if WILDCARD_CLASSES.include?(var_class)
       return unless self.class.schema_methods.key?(var_class)
 

@@ -116,6 +116,32 @@ RSpec.describe Jil::Validator do
     end
   end
 
+  describe "instance method on ::Any variable" do
+    # The in-browser Jil editor silently strips args from `someAnyVar.method(...)`
+    # calls AND drops every line after on save. The validator must reject these
+    # so the issue surfaces before deploy.
+    it "rejects calling an instance method on an Any-typed variable" do
+      expect_error(<<~'JIL'.strip, /Cannot call instance method `op` on `::Any` variable `x`/)
+        x = Global.if({c = Boolean.compare(1, ">", 0)::Boolean}, {a = Numeric.new(1)::Numeric}, {b = Numeric.new(2)::Numeric})::Any
+        y = x.op("+", 1)::Numeric
+      JIL
+    end
+
+    it "accepts when the source line casts the result to a concrete type" do
+      expect_valid(<<~'JIL'.strip)
+        x = Global.if({c = Boolean.compare(1, ">", 0)::Boolean}, {a = Numeric.new(1)::Numeric}, {b = Numeric.new(2)::Numeric})::Numeric
+        y = x.op("+", 1)::Numeric
+      JIL
+    end
+
+    it "accepts universal methods (presence/new/inspect) on Any vars" do
+      expect_valid(<<~'JIL'.strip)
+        x = Global.set_cache("a", "b", "c")::Any
+        y = x.presence()::Any
+      JIL
+    end
+  end
+
   describe "variable reuse" do
     it "rejects duplicate variable names" do
       expect_error(<<~'JIL'.strip, /Variable 'x' already defined/)
