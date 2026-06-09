@@ -118,7 +118,8 @@
   // Persistence contract:
   //   * The store NEVER drops chores on its own. The only paths that
   //     remove a chore from the store are explicit `remove(id)` calls
-  //     and `archived_chore_ids` deltas from the server.
+  //     and the `active_chore_ids` reconcile from /sync (anything
+  //     locally cached but not in that authoritative id list).
   //   * `bootstrap` is ADDITIVE — it merges fresh data into the existing
   //     store, never clears it. A stale/empty cached shell can never
   //     wipe a populated UI; the worst case is "we already had these
@@ -161,9 +162,9 @@
     return {
       // Additive merge — NEVER clears the map. Bootstrap is just "here
       // is the latest known data," and removals are handled separately
-      // (`remove` / `archived_chore_ids`). Emits a single "reconcile"
-      // notify so subscribers can diff the DOM against the current store
-      // without ever clearing containers in between.
+      // (`remove` / `active_chore_ids` reconcile). Emits a single
+      // "reconcile" notify so subscribers can diff the DOM against the
+      // current store without ever clearing containers in between.
       bootstrap(items, look, dailies) {
         (items || []).forEach(c => {
           if (!c || !c.id) return;
@@ -351,6 +352,10 @@
   function stateIconClass(c) {
     if (!c.today_visible || c.archived) return null;
     const freq = (c.recurrence && c.recurrence.freq) || "never";
+    // No schedule = no schedule state to communicate. Pinned Dailies
+    // (typically freq:never), Always-shown one-offs, and Available-on-
+    // cooldown items all fall through here and stay icon-less.
+    if (freq === "never") return null;
     if (freq === "daily") return "fa-sun-o";
     if (c.due_today)      return "fa-clock-o";
     return "fa-hourglass-half";
@@ -1849,7 +1854,7 @@
 
   // Apply a server payload to the store. Two shapes:
   //   * { chore: {...}, ... } — full chore JSON (mutation responses).
-  //   * { chores: [...], archived_chore_ids: [...], lookahead: {...} } — sync.
+  //   * { chores: [...], active_chore_ids: [...], lookahead: {...} } — sync.
   function reconcile(data) {
     if (!data) return;
     if (data.chore) {

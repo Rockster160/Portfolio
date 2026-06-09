@@ -867,7 +867,13 @@ RSpec.describe "Chores", type: :request do
     expect(body["balance"]).to be_a(Integer)
     ids = body["chores"].pluck("id")
     expect(ids).to include(keeper.id)
-    expect(body["archived_chore_ids"]).to include(archived.id)
+    # `active_chore_ids` is the canonical accessible-id list — the
+    # client prunes anything in its cache that isn't in it. Replaces
+    # the older `archived_chore_ids` removal-list contract: instead of
+    # enumerating what to drop, we enumerate what exists, and absence
+    # is the removal signal.
+    expect(body["active_chore_ids"]).to include(keeper.id)
+    expect(body["active_chore_ids"]).not_to include(archived.id)
     keeper_payload = body["chores"].find { |c| c["id"] == keeper.id }
     expect(keeper_payload["name"]).to eq("Vacuum")
     expect(keeper_payload["icon_kind"]).to be_present
