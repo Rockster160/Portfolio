@@ -11,7 +11,7 @@
 // network, and a synthetic 503 is returned on failure so the queue can
 // detect it.
 
-const CACHE = "timers-v41";
+const CACHE = "timers-v42";
 const SHELL_PREFIX = "/timers";
 
 function isShellRequest(url) {
@@ -22,6 +22,13 @@ function isShellRequest(url) {
 
 function isPrecachableAsset(url) {
   if (url.origin !== location.origin) return false;
+  // Production asset URLs are fingerprinted (`/assets/application-abc.js`)
+  // so the URL itself changes on deploy and the old cache entry is just
+  // dead weight. Dev's sprockets-rails debug pipeline serves the SAME
+  // URL with a `?body=1` query every reload — caching that traps the
+  // user on the first build forever. Mirror isShellRequest's
+  // `if (url.search) return false` so dev passes through to the network.
+  if (url.search) return false;
   if (url.pathname.startsWith("/assets/")) return true;
   if (url.pathname.startsWith("/assets/favicon/")) return true;
   if (url.pathname.endsWith(".webmanifest")) return true;

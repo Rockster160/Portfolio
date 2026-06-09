@@ -8,15 +8,24 @@ import {
 } from "./duration";
 import { CHIME_NAMES, CADENCE_OPTIONS, previewChime } from "./audio";
 
-export function setupEditModal({ root, store, actions, activePageId }) {
+export function setupEditModal({ root, store, actions, activePageId, openSaveTo }) {
   const dialog = root.querySelector("[data-timers-edit-modal]");
   if (!dialog) return { open: () => {} };
 
   const form = dialog.querySelector("[data-timers-edit-form]");
   const titleEl = dialog.querySelector("[data-timers-edit-title]");
   const deleteBtn = dialog.querySelector("[data-timers-delete]");
-  const templateBtn = dialog.querySelector("[data-timers-save-as-template]");
+  const saveToBtn = dialog.querySelector("[data-timers-save-to]");
   const callbacksList = dialog.querySelector("[data-timers-callbacks-list]");
+  // Belt-and-suspenders: if any of the modal's structural elements are
+  // missing (stale rendered HTML cached from before a markup rename, a
+  // partial render path we missed, etc.) bail with a no-op opener so
+  // boot() doesn't blow up the rest of the JS. Without this guard, a
+  // single missing button takes the whole timers app down.
+  if (!form || !deleteBtn || !saveToBtn || !callbacksList) {
+    console.warn("[timers] edit modal markup incomplete — skipping setup");
+    return { open: () => {} };
+  }
   const kindFieldsets = dialog.querySelectorAll("[data-when-kind]");
   const timerOnly = dialog.querySelectorAll('[data-when-mode="timer"]');
   const quickOnly = dialog.querySelectorAll('[data-when-mode="quick"]');
@@ -104,6 +113,15 @@ export function setupEditModal({ root, store, actions, activePageId }) {
     // without being forced to set a name.
     if (t.id) field("name").placeholder = timerPlaceholderName(t);
     field("color").value = t.color || "#388BFD";
+    // Quick-mode templates can intentionally have no color (so each
+    // spawned timer gets a fresh random one). The Random toggle is the
+    // explicit signal — on load, it reflects whether the template
+    // currently has a color or not.
+    const randomCb = field("color_random");
+    if (randomCb) {
+      randomCb.checked = !t.color;
+      field("color").disabled = randomCb.checked;
+    }
 
     field("duration_text").value = t.duration_ms
       ? defaultLabelForSeconds(Math.round(t.duration_ms / 1000))
@@ -200,10 +218,14 @@ export function setupEditModal({ root, store, actions, activePageId }) {
 
   function readForm() {
     const kind = field("kind").value;
+    // Quick-mode "Random color" checkbox forces null; otherwise persist
+    // whatever the picker shows. Timer mode always uses the picker (the
+    // checkbox isn't rendered there).
+    const randomColor = mode === "quick" && field("color_random")?.checked;
     const payload = {
       kind,
       name: field("name").value.trim(),
-      color: field("color").value || null,
+      color: randomColor ? null : (field("color").value || null),
       callbacks: readCallbacks(),
     };
     if (mode === "timer") {
@@ -664,6 +686,15 @@ export function setupEditModal({ root, store, actions, activePageId }) {
     });
   });
 
+  field("color_random")?.addEventListener("change", (e) => {
+    field("color").disabled = e.target.checked;
+  });
+  // Picking a color = explicit choice — turn Random off.
+  field("color").addEventListener("input", () => {
+    const cb = field("color_random");
+    if (cb?.checked) cb.checked = false;
+  });
+
   field("kind").addEventListener("change", (e) => {
     setKindVisibility(e.target.value);
     // The When-options dropdown is filtered by kind, so we re-paint
@@ -712,32 +743,12 @@ export function setupEditModal({ root, store, actions, activePageId }) {
     dialog.close();
   });
 
-  // Save the current timer-edit form as a Saved Template (unpinned).
-  templateBtn.addEventListener("click", async () => {
+  // Hand the current form snapshot to the Save-to picker. The picker
+  // lets the user choose between overwriting an existing row (in any of
+  // the three categories) and creating a new one.
+  saveToBtn.addEventListener("click", () => {
     if (mode !== "timer") return;
-    const payload = readForm();
-    const seconds =
-      payload.kind === "countdown"
-        ? Math.round(payload.duration_ms / 1000)
-        : null;
-    const labelDefault =
-      payload.name ||
-      (seconds ? defaultLabelForSeconds(seconds) : "Saved timer");
-    const label = window.prompt("Save as template — label?", labelDefault);
-    if (label === null) return;
-    const sortMax = Array.from(store.quickButtons.values()).reduce(
-      (m, q) => Math.max(m, q.sort_order || 0),
-      -1,
-    );
-    const res = await actions.createQuick({
-      label: label.trim() || null,
-      duration_seconds: seconds,
-      color: payload.color,
-      sort_order: sortMax + 1,
-      pinned: false,
-      template: payload,
-    });
-    if (res?.__error) alert(`Couldn't save template: ${res.__error}`);
+    openSaveTo?.(readForm());
   });
 
   function open({ timer, quick } = {}) {
@@ -762,7 +773,7 @@ export function setupEditModal({ root, store, actions, activePageId }) {
           ? "New saved timer"
           : "New quick button";
       deleteBtn.hidden = true;
-      templateBtn.hidden = true;
+      saveToBtn.hidden = true;
       setModeVisibility();
       labelInput.value = quick.label || "";
       setFields(tmpl);
@@ -772,7 +783,7 @@ export function setupEditModal({ root, store, actions, activePageId }) {
       onSaveQuick = null;
       titleEl.textContent = timer ? "Edit timer" : "New timer";
       deleteBtn.hidden = !timer;
-      templateBtn.hidden = false;
+      saveToBtn.hidden = false;
       setModeVisibility();
       setFields(
         timer || {
@@ -793,10 +804,8 @@ function defaultCallbacks() {
   return [
     {
       id: "cb-init-sound",
-      event: "complete",
-      type: "sound",
-      chime: "soft",
-      cadence: "once",
+      when: { type: "complete" },
+      then: { type: "sound", chime: "soft", cadence: "once" },
     },
   ];
 }

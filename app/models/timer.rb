@@ -42,16 +42,33 @@ class Timer < ApplicationRecord
   KINDS = { countdown: 0, counter: 1, dial: 2 }.freeze
   enum :kind, KINDS
 
+  # Same palette the FE renderer uses. Mirrored here so spawns that come
+  # in via the server-rendered Quick form (no client JS in the loop)
+  # still get a stable persisted color instead of a null that the FE
+  # would re-derive per render.
+  AUTOGEN_COLORS = %w[
+    #388bfd #a371f7 #db61a2 #f0883e
+    #e3b341 #3fb950 #34d0e0 #ff7b72
+  ].freeze
+
   belongs_to :user
   belongs_to :timer_page, optional: true
   has_many :share_tokens, class_name: "TimerShareToken", dependent: :destroy
 
   scope :live,    -> { where(archived_at: nil) }
   scope :running, -> { live.where.not(started_at: nil).where(paused_at: nil) }
-  scope :ordered, -> { order(:pos_y, :pos_x, :id) }
+  # Board order: pos_y DESC means HIGHER values display first. New
+  # timers are stamped with max+1 on create, so they naturally land at
+  # the top of the board with zero writes to existing rows. id DESC is
+  # the tiebreaker so two timers with the same pos_y still order newest-
+  # first (e.g. before any drag has assigned non-zero positions).
+  scope :ordered, -> { order(pos_y: :desc, pos_x: :asc, id: :desc) }
 
   validates :duration_ms, presence: true, numericality: { greater_than: 0 }, if: :countdown?
   validate  :min_le_max_when_set, if: :counter?
+
+  before_validation :assign_random_color,    on: :create
+  before_validation :assign_next_board_slot, on: :create
 
   # =========================
   # Countdown lifecycle
@@ -596,5 +613,27 @@ class Timer < ApplicationRecord
     return if min_value.nil? || max_value.nil?
 
     errors.add(:max_value, "must be greater than or equal to min_value") if max_value < min_value
+  end
+
+  # Pick from the palette and persist on create. Done at the model layer
+  # so EVERY creation path (server form, JSON API, JS spawn, Jil) ends up
+  # with a stable color — no path can produce a row that lacks one.
+  def assign_random_color
+    return if color.present?
+
+    self.color = AUTOGEN_COLORS.sample
+  end
+
+  # Send new timers to the FRONT of their page's board. With the
+  # `ordered` scope sorting pos_y DESC, max+1 puts the new row above
+  # everything else without touching existing rows — no cascading
+  # writes. pos_y=0 (DB default) is the sentinel for "unassigned";
+  # drag-reorder writes positive ranks, so 0 always means new.
+  def assign_next_board_slot
+    return unless pos_y.to_i.zero?
+    return unless user_id
+
+    siblings = self.class.live.where(user_id: user_id, timer_page_id: timer_page_id)
+    self.pos_y = siblings.maximum(:pos_y).to_i + 1
   end
 end

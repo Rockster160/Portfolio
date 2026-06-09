@@ -37,12 +37,83 @@ let ctx = null;
 const live = new Map();    // timerId → { interval, oscillators, gains }
 const pending = new Map(); // timerId → { chime, cadence }
 
+// State subscribers — fire whenever the audio engine's runnable state
+// changes so the header's mute button can repaint between the
+// "inactive / on / muted" trio.
+const stateSubs = new Set();
+function notifyState() {
+  const snap = audioState();
+  stateSubs.forEach((cb) => { try { cb(snap); } catch (e) { /* ignore */ } });
+}
+
+export function subscribeAudioState(cb) {
+  stateSubs.add(cb);
+  cb(audioState());
+  return () => stateSubs.delete(cb);
+}
+
+// "inactive" — engine never started OR currently suspended/closed.
+//   The header should render a faded icon and a tap should try to
+//   resume/recreate the context.
+// "running" — engine ready to play.
+export function audioState() {
+  if (!hasAudioContextSupport()) return "unsupported";
+  if (!ctx)                       return "inactive";
+  return ctx.state === "running" ? "running" : "inactive";
+}
+
+function hasAudioContextSupport() {
+  return !!(window.AudioContext || window.webkitAudioContext);
+}
+
 function getCtx() {
   if (ctx) return ctx;
+  if (!hasAudioContextSupport()) return null;
   const AudioContext = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContext) return null;
   ctx = new AudioContext();
+  ctx.addEventListener("statechange", notifyState);
+  notifyState();
   return ctx;
+}
+
+// iOS Safari pitfall: an AudioContext created OUTSIDE a user gesture
+// (e.g. on a backgrounded timer fire) can get stuck — `resume()` resolves
+// but `state` never transitions to "running". Once stuck, every preview
+// silently no-ops because `state !== "running"`. Closing the bad context
+// and creating a new one inside the current user gesture clears it.
+export async function ensureRunningCtx() {
+  if (live.size === 0 && ctx && ctx.state !== "running") {
+    try { await ctx.close(); } catch (e) { /* ignore */ }
+    ctx = null;
+  }
+  const c = getCtx();
+  if (!c) return null;
+  if (c.state === "suspended") {
+    try { await c.resume(); } catch (e) { /* ignore */ }
+  }
+  notifyState();
+  return c.state === "running" ? c : null;
+}
+
+// Called once on page boot. Defers AudioContext creation to the FIRST
+// user gesture so the context is always born inside one — the lifecycle
+// state iOS Safari treats as healthy.
+let warmupArmed = false;
+export function armAudioWarmup() {
+  if (warmupArmed || ctx) return;
+  warmupArmed = true;
+  const handler = async () => {
+    document.removeEventListener("pointerdown", handler);
+    document.removeEventListener("keydown", handler);
+    warmupArmed = false;
+    const c = getCtx();
+    if (c && c.state === "suspended") {
+      try { await c.resume(); } catch (e) { /* ignore */ }
+    }
+    notifyState();
+  };
+  document.addEventListener("pointerdown", handler, { once: true });
+  document.addEventListener("keydown", handler, { once: true });
 }
 
 const CHIMES = {
@@ -144,12 +215,8 @@ function armInteractionListener() {
     listenerArmed = false;
     listenerHandler = null;
 
-    const c = getCtx();
+    const c = await ensureRunningCtx();
     if (!c) return;
-    if (c.state === "suspended") {
-      try { await c.resume(); } catch (e) { return; }
-    }
-    if (c.state !== "running") return;
     if (isMuted()) { pending.clear(); return; }
 
     // Drain pending. Note: card click handlers run BEFORE this (bubble
@@ -206,14 +273,12 @@ export function setMuted(value) {
 
 // Preview is triggered inside a click handler in the modal so the
 // context is allowed to resume immediately. Still gated on mute.
+// Uses ensureRunningCtx so a stuck context (iOS Safari) is closed and
+// recreated inside this user gesture instead of silently no-opping.
 export async function previewChime(chime) {
   if (isMuted()) return;
-  const c = getCtx();
+  const c = await ensureRunningCtx();
   if (!c) return;
-  if (c.state === "suspended") {
-    try { await c.resume(); } catch (e) { return; }
-  }
-  if (c.state !== "running") return;
   const slot = { oscillators: new Set(), gains: new Set(), interval: null };
   const tones = CHIMES[chime] || CHIMES.soft;
   const baseTime = c.currentTime + 0.01;

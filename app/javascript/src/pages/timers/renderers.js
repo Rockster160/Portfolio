@@ -52,12 +52,20 @@ function makeCardFrame(timer, actions) {
 function applyState(card, timer, { clientFired } = {}) {
   const fired = !!(clientFired || (timer.fired_at && !timer.confirmed_at));
   const paused = !!timer.paused_at;
+  // Inactive = countdown that's never been started (no started_at, no
+  // paused_at, no fire). Counter / dial don't really have a "not
+  // running" state at this granularity, so they never get is-inactive.
+  const inactive = timer.kind === "countdown"
+    && !timer.started_at
+    && !timer.paused_at
+    && !fired;
   // Repeating timers auto-restart server-side; we never want the
   // persistent red "needs confirm" pulse for them. The .is-flash one-
   // shot animation (driven by repeat_count change in update()) is the
   // entire visual feedback for a repeat fire.
   card.classList.toggle("is-done", fired && !timer.repeat);
   card.classList.toggle("is-paused", paused);
+  card.classList.toggle("is-inactive", inactive);
   card.classList.toggle("is-disabled", !!timer.disabled);
   // Color edits ride the same broadcast/upsert path as every other
   // attribute change. `--ring-color` was originally set once in
@@ -230,7 +238,10 @@ export function renderCountdownCard(timer, actions) {
       subEl.textContent = "↻ repeating";
     } else if (t.paused_at) {
       labelEl.textContent = formatRingTime(t.paused_remaining_ms || 0);
-      subEl.textContent = "▶ tap to resume";
+      // U+23F8 (⏸) — explicit "paused" affordance. Replaces the prior
+      // play-triangle + "tap to resume" text so paused state reads at
+      // a glance, matching the dimming treatment on the card.
+      subEl.textContent = "⏸";
     } else if (t.started_at) {
       labelEl.textContent = formatRingTime(remaining);
       subEl.textContent = "tap to pause";

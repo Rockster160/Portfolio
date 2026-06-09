@@ -33,6 +33,7 @@
       <button type="button" class="timers-icon-btn" data-timers-mute aria-label="Toggle sound">
         <span class="when-unmuted"><%= fa("volume-up") %></span>
         <span class="when-muted hidden"><%= fa("volume-off") %></span>
+        <span class="when-audio-inactive hidden"><%= fa("volume-down") %></span>
       </button>
       <button type="button" class="timers-icon-btn hidden" data-timers-notify aria-label="Enable notifications">
         <span class="when-subscribed hidden"><%= fa(:bell) %></span>
@@ -57,6 +58,8 @@
     <section class="timers-quick-row" data-timers-quick-row>
       <% pinned_quicks.each do |qb| %>
         <% template = qb.template.presence || {} %>
+        <% qb_seconds = qb.duration_seconds || (template["duration_ms"].to_i / 1000 if template["duration_ms"]) %>
+        <% qb_seconds = 60 if qb_seconds.to_i.zero? # safety default for non-countdown templates (counter/dial) %>
         <%= button_to(
           timer_routes_items_path(format: :html),
           method:  :post,
@@ -70,17 +73,21 @@
             timer_page_id:     @active_page&.id,
             timer: {
               kind:           template["kind"].presence || "countdown",
-              duration_ms:    (template["duration_ms"].presence || (qb.duration_seconds * 1000)),
+              duration_ms:    (template["duration_ms"].presence || (qb_seconds * 1000)),
               name:           template["name"].presence || qb.label.to_s,
               color:          template["color"].presence || qb.color,
               timer_page_id:  @active_page&.id,
               callbacks:      template["callbacks"].presence || [
-                { id: "cb-#{qb.id}-p", event: "complete", type: "push" },
+                {
+                  id:   "cb-#{qb.id}-s",
+                  when: { type: :complete },
+                  then: { type: :sound, chime: :soft, cadence: :once },
+                },
               ],
             },
           },
         ) {
-          qb.label.presence || (qb.duration_seconds < 60 ? "#{qb.duration_seconds}s" : "#{qb.duration_seconds / 60}m")
+          qb.label.presence || (qb_seconds < 60 ? "#{qb_seconds}s" : "#{qb_seconds / 60}m")
         } %>
       <% end %>
     </section>
@@ -114,6 +121,10 @@
               <span class="field-label">Color</span>
               <input type="color" data-timers-field="color" value="#388BFD">
             </div>
+            <label class="field field-color-random hidden" data-when-mode="quick" hidden>
+              <input type="checkbox" data-timers-field="color_random">
+              <span>Random</span>
+            </label>
           </div>
         </fieldset>
         <fieldset data-when-kind="countdown">
@@ -166,7 +177,7 @@
           </label>
         </fieldset>
         <fieldset class="timers-callbacks-fieldset">
-          <legend>Callbacks</legend>
+          <h4 class="timers-fieldset-title">Callbacks</h4>
           <p class="field-hint">What happens when this timer fires. Tap a card to silence its sound.</p>
           <div data-timers-callbacks-list></div>
           <div class="timers-callbacks-add">
@@ -179,12 +190,36 @@
       </div>
       <footer class="timers-modal-footer">
         <button type="button" class="timers-danger-btn" data-timers-delete hidden>Delete</button>
-        <button type="button" class="timers-secondary-btn" data-timers-save-as-template hidden>Save as template</button>
+        <button type="button" class="timers-secondary-btn" data-timers-save-to hidden>Save to…</button>
         <span class="spacer"></span>
         <button type="button" class="timers-secondary-btn" data-timers-modal-close>Cancel</button>
         <button type="submit" class="timers-primary-btn">Save</button>
       </footer>
     </form>
+  </dialog>
+
+  <%# ================= Save to… modal ================= %>
+  <dialog class="timers-modal timers-saveto-modal" data-timers-saveto-modal>
+    <header class="timers-modal-header">
+      <h3>Save to…</h3>
+      <button type="button" class="timers-icon-btn" data-timers-modal-close aria-label="Close">&times;</button>
+    </header>
+    <div class="timers-tabs">
+      <button type="button" class="timers-tab active" data-timers-saveto-tab="templates">Templates</button>
+      <button type="button" class="timers-tab"        data-timers-saveto-tab="page">Page Quick Buttons</button>
+      <button type="button" class="timers-tab"        data-timers-saveto-tab="defaults">Default Quick Buttons</button>
+    </div>
+    <p class="settings-blurb timers-saveto-instructions">Tap an existing entry to replace it with the current settings, or fill in a label below to save a new one.</p>
+    <p class="settings-blurb timers-saveto-section-blurb" data-timers-saveto-blurb></p>
+    <div data-timers-saveto-list></div>
+    <div class="timers-quick-add-form">
+      <input type="text" data-timers-saveto-new-label placeholder="Label (optional — defaults to duration)">
+      <button type="button" class="timers-primary-btn" data-timers-saveto-create>Save as new</button>
+    </div>
+    <footer class="timers-modal-footer">
+      <span class="spacer"></span>
+      <button type="button" class="timers-secondary-btn" data-timers-modal-close>Cancel</button>
+    </footer>
   </dialog>
 
   <%# ================= Settings modal ================= %>

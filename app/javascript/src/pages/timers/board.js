@@ -54,9 +54,12 @@ export class Board {
 
   visibleTimers() {
     const pageId = this.getActivePageId();
+    // Mirror the server scope (pos_y DESC, id DESC) so newest lands at
+    // the top without bumping anyone else's pos_y. id DESC is the
+    // tiebreaker when multiple rows share pos_y (e.g. legacy 0s).
     return Array.from(this.store.timers.values())
       .filter((t) => (pageId == null ? t.timer_page_id == null : t.timer_page_id === pageId))
-      .sort((a, b) => ((a.pos_y || 0) - (b.pos_y || 0)) || ((a.id || 0) - (b.id || 0)));
+      .sort((a, b) => ((b.pos_y || 0) - (a.pos_y || 0)) || ((b.id || 0) - (a.id || 0)));
   }
 
   mount(timer) {
@@ -125,9 +128,12 @@ export class Board {
           .map((el) => parseInt(el.dataset.timerId, 10))
           .filter(Boolean);
         if (ids.length === 0) return;
+        // Top of the post-drag DOM order = highest pos_y, to match the
+        // DESC scope. Optimistic store update; controller does the same
+        // math server-side.
         ids.forEach((id, i) => {
           const t = this.store.timers.get(id);
-          if (t) this.store.upsertTimer({ ...t, pos_y: i + 1 }, { silent: true });
+          if (t) this.store.upsertTimer({ ...t, pos_y: ids.length - i }, { silent: true });
         });
         this.actions.reorder(ids);
       },

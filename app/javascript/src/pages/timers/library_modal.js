@@ -10,6 +10,7 @@
 
 import Sortable from "../../../jil/Sortable.min.js";
 import { defaultLabelForSeconds } from "./duration";
+import { ALL_COLORS } from "./colors";
 
 export function setupLibraryModal({ root, store, actions, activePageId, getActivePage, openEdit }) {
   const dialog = root.querySelector("[data-timers-library-modal]");
@@ -244,10 +245,18 @@ export function setupLibraryModal({ root, store, actions, activePageId, getActiv
       : {
           kind: "countdown",
           duration_ms: (qb.duration_seconds || 300) * 1000,
-          callbacks: [{ id: `cb-${Date.now()}`, event: "complete", type: "push" }],
+          callbacks: [{
+            id: `cb-${Date.now()}`,
+            when: { type: "complete" },
+            then: { type: "sound", chime: "soft", cadence: "once" },
+          }],
         };
     const payload = { ...template, timer_page_id: activePageId() || null };
-    if (!payload.color && qb.color) payload.color = qb.color;
+    // Generate-and-persist a color when neither template nor qb pin one,
+    // so the spawned timer's color is stable across reloads.
+    if (!payload.color) {
+      payload.color = qb.color || ALL_COLORS[Math.floor(Math.random() * ALL_COLORS.length)];
+    }
     const res = await actions.create(payload);
     if (res?.timer && res.timer.kind === "countdown") {
       await actions.start(res.timer.id);

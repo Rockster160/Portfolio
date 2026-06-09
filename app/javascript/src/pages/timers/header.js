@@ -4,7 +4,7 @@
 // so the icon never lies. Toggle works as on/off, not just on/grant-prompt.
 
 import { ensureTimersServiceWorker, requestTimersNotificationPermission, unsubscribeTimers } from "./push";
-import { setMuted } from "./audio";
+import { setMuted, subscribeAudioState, ensureRunningCtx, previewChime } from "./audio";
 
 const MUTE_KEY = "timers:muted";
 
@@ -21,27 +21,56 @@ export function wireHeader({ root, openSettings }) {
 function wireMute(root) {
   const btn = root.querySelector("[data-timers-mute]");
   if (!btn) return;
-  paintMute(btn);
   // Reflect initial mute state into the audio layer so deferred
   // pending sounds queued before this fires are cancelled too.
   setMuted(isMuted());
-  btn.addEventListener("click", () => {
-    const next = !isMuted();
-    localStorage.setItem(MUTE_KEY, next ? "true" : "false");
-    // setMuted(true) calls stopAllSounds() — every live cadence and
-    // every deferred intent dies the instant the user mutes.
-    setMuted(next);
-    paintMute(btn);
+  // Repaint whenever the engine transitions (suspended → running, etc).
+  // Initial paint comes via the immediate cb in subscribeAudioState.
+  subscribeAudioState((engineState) => paintMute(btn, engineState));
+
+  btn.addEventListener("click", async () => {
+    // Three-state cycle wired against engine + mute:
+    //   inactive  → try to activate. Success → unmute + soft chime.
+    //   running   → mute.
+    //   muted     → unmute (activate first if engine is now stuck).
+    const muted = isMuted();
+    if (!muted) {
+      const engine = (await ensureRunningCtx()) ? "running" : "inactive";
+      if (engine === "inactive") {
+        // Activation failed — leave unmuted so retry is one tap, but
+        // surface the inactive icon so the user knows nothing will sound.
+        paintMute(btn, "inactive");
+        return;
+      }
+      // Activation worked AND we were unmuted → user wants OFF now.
+      localStorage.setItem(MUTE_KEY, "true");
+      setMuted(true);
+      paintMute(btn, "running");
+    } else {
+      localStorage.setItem(MUTE_KEY, "false");
+      const c = await ensureRunningCtx();
+      setMuted(false);
+      // Confirmation chime — proves to the user that audio is back.
+      if (c) previewChime("ding");
+      paintMute(btn, c ? "running" : "inactive");
+    }
   });
 }
 
-function paintMute(btn) {
+function paintMute(btn, engineState) {
   const muted = isMuted();
+  const inactive = !muted && engineState === "inactive";
+
   btn.classList.toggle("is-muted", muted);
-  btn.querySelector(".when-unmuted")?.classList.toggle("hidden", muted);
+  btn.classList.toggle("is-inactive", inactive);
+
+  btn.querySelector(".when-unmuted")?.classList.toggle("hidden", muted || inactive);
   btn.querySelector(".when-muted")?.classList.toggle("hidden", !muted);
-  btn.setAttribute("aria-label", muted ? "Unmute" : "Mute");
-  btn.setAttribute("title", muted ? "Sound muted" : "Sound on");
+  btn.querySelector(".when-audio-inactive")?.classList.toggle("hidden", !inactive);
+
+  const label = muted ? "Unmute" : inactive ? "Tap to enable sound" : "Mute";
+  btn.setAttribute("aria-label", label);
+  btn.setAttribute("title", label);
 }
 
 async function isReallySubscribed() {

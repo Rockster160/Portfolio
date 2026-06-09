@@ -9,6 +9,7 @@ import { Board } from "./board";
 import { IntervalTicker } from "./interval_ticker";
 import { wireHeader, isMuted } from "./header";
 import { setupEditModal } from "./edit_modal";
+import { setupSaveToModal } from "./save_to_modal";
 import { setupSettingsModal } from "./settings_modal";
 import { setupLibraryModal } from "./library_modal";
 import { setupPagesModal } from "./pages_modal";
@@ -16,7 +17,8 @@ import { setupCardMenu } from "./card_menu";
 import { subscribeTimersChannel } from "./monitor";
 import { flushQueue, saveStoreSnapshot, loadStoreSnapshot, lastSyncTs } from "./offline_queue";
 import { defaultLabelForSeconds } from "./duration";
-import { stopAllSounds } from "./audio";
+import { stopAllSounds, armAudioWarmup } from "./audio";
+import { ALL_COLORS } from "./colors";
 
 function csrfToken() {
   return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
@@ -27,6 +29,7 @@ function boot() {
   if (ownerRoot) bootOwner(ownerRoot);
   const shareRoot = document.querySelector("[data-timers-share-root]");
   if (shareRoot) bootShare(shareRoot);
+  if (ownerRoot || shareRoot) armAudioWarmup();
 }
 
 function bootOwner(root) {
@@ -89,7 +92,11 @@ function bootOwner(root) {
   const activePageId = () => getActivePage()?.id ?? null;
 
   const boardEl = root.querySelector("[data-timers-board]");
-  const editModal = setupEditModal({ root, store, actions, activePageId });
+  const saveToModal = setupSaveToModal({ root, store, actions, activePageId });
+  const editModal = setupEditModal({
+    root, store, actions, activePageId,
+    openSaveTo: (payload) => saveToModal.open(payload),
+  });
   const settingsModal = setupSettingsModal({
     root, store, actions,
     getActivePage,
@@ -301,23 +308,31 @@ async function addTimerFromQuick(qb, store, actions, activePageId) {
         kind: "countdown",
         duration_ms: (qb.duration_seconds || 60) * 1000,
         name: qb.label || "",
-        callbacks: [{ id: `cb-${Date.now()}`, event: "complete", type: "push" }],
+        callbacks: [{
+          id: `cb-${Date.now()}`,
+          when: { type: "complete" },
+          then: { type: "sound", chime: "soft", cadence: "once" },
+        }],
       };
   // Prefer the quick button's own page id (so per-page Quicks drop their
   // timer onto the page they belong to) but fall back to whatever page
   // the user is currently viewing for legacy/user-default rows.
   const targetPage = qb.timer_page_id ?? activePageId() ?? null;
   const payload = { ...template, timer_page_id: targetPage };
-  // If the user pinned a color on the quick button itself, every timer
-  // spawned from it MUST be that color. Otherwise we leave `color`
-  // unset and let the renderer's deterministic palette pick a slot by
-  // timer id — that's what produces the mixed pink/purple/blue you see
-  // when you tap an uncolored quick three times.
-  if (!payload.color && qb.color) payload.color = qb.color;
+  // Color priority: template > quick button > randomly pick one now and
+  // persist it. Picking-and-persisting (rather than letting the renderer
+  // derive a color from the timer id at paint time) means the timer
+  // keeps the SAME color across reloads even if the user later edits
+  // other fields — no inconsistency.
+  if (!payload.color) payload.color = qb.color || pickRandomColor();
   const res = await actions.create(payload);
   if (res?.timer && res.timer.kind === "countdown") {
     await actions.start(res.timer.id);
   }
+}
+
+function pickRandomColor() {
+  return ALL_COLORS[Math.floor(Math.random() * ALL_COLORS.length)];
 }
 
 function wireQuickRow(root, store, actions, activePageId) {

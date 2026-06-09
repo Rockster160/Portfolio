@@ -162,6 +162,9 @@ class TimersController < ApplicationController
   end
 
   # PATCH /timers/order — body { ids: [...] }
+  # `ids` arrives in top-to-bottom display order. Board sort is pos_y
+  # DESC, so we hand out HIGHER pos_y to the top: ids.size for index 0,
+  # ids.size - i for the rest.
   def reorder
     ids = Array(params[:ids]).map(&:to_i).reject(&:zero?)
     return render(json: { ok: true }) if ids.empty?
@@ -169,7 +172,7 @@ class TimersController < ApplicationController
     accessible_ids = current_user.timers.where(id: ids).pluck(:id)
     return render(json: { ok: true }) if accessible_ids.empty?
 
-    positions = ids.each_with_index.to_h
+    positions = ids.each_with_index.to_h { |id, i| [id, ids.size - i] }
     case_sql = accessible_ids.map { |tid| "WHEN #{tid.to_i} THEN #{positions[tid].to_i}" }.join(" ")
     Timer.where(id: accessible_ids).update_all(
       "pos_y = CASE id #{case_sql} END, updated_at = NOW()",
@@ -207,8 +210,27 @@ class TimersController < ApplicationController
     return if current_user.timer_quick_buttons.user_defaults.exists?
 
     DEFAULT_QUICK_DURATIONS.each_with_index do |secs, idx|
-      current_user.timer_quick_buttons.create!(duration_seconds: secs, sort_order: idx)
+      current_user.timer_quick_buttons.create!(
+        duration_seconds: secs,
+        sort_order:       idx,
+        template:         default_quick_template(secs),
+      )
     end
+  end
+
+  # Default template for seeded Quick buttons: a countdown that plays a
+  # soft chime once on complete. Color is intentionally omitted so the
+  # renderer's deterministic palette picks a slot per-timer.
+  def default_quick_template(secs)
+    {
+      kind:        :countdown,
+      duration_ms: secs * 1000,
+      callbacks:   [{
+        id:   "cb-default-sound",
+        when: { type: :complete },
+        then: { type: :sound, chime: :soft, cadence: :once },
+      }],
+    }
   end
 
   # Duplicates the user's PINNED defaults onto a TimerPage the first

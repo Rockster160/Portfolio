@@ -91,8 +91,9 @@ $t-danger:    #f85149;
 
   .fa { color: inherit; line-height: 1; }
 
-  &.is-muted  { color: $t-danger !important;  border-color: rgba(248,81,73,0.4) !important; }
-  &.is-active { color: $t-success !important; border-color: rgba(63,185,80,0.4) !important; }
+  &.is-muted    { color: $t-danger !important;  border-color: rgba(248,81,73,0.4) !important; }
+  &.is-active   { color: $t-success !important; border-color: rgba(63,185,80,0.4) !important; }
+  &.is-inactive { opacity: 0.45; }
 
   &.timers-icon-btn-primary {
     background: $t-primary !important;
@@ -350,7 +351,16 @@ $t-danger:    #f85149;
   // skips confirm when the card is in edit-mode (see renderers.js).
   .timers-app.edit-mode & .timer-card-close { display: inline-flex; }
 
-  &.is-paused { opacity: 0.7; }
+  // Card-level dimming for non-active states.
+  //   inactive — countdown that's never been started. Slightly faded so
+  //              active timers stand out.
+  //   paused   — significantly dimmed, drained of saturation so it
+  //              reads as "parked" without going full grey.
+  &.is-inactive { opacity: 0.75; }
+  &.is-paused {
+    opacity: 0.45;
+    filter: grayscale(70%);
+  }
 
   // Disabled timers are a UI-only block. Server-side mutations (chain
   // ops, Jil) still hit the row so callbacks can flip a target back
@@ -487,14 +497,14 @@ $t-danger:    #f85149;
 }
 
 .timer-card.is-paused {
-  opacity: 1;
-
   .timer-ring {
     .ring-progress { stroke: $t-muted; }
     .ring-sublabel {
       color: $t-primary-hi;
-      font-weight: 600;
-      letter-spacing: 0.04em;
+      font-weight: 700;
+      font-size: 22px;       // ⏸ glyph — larger than the time-text sub label.
+      letter-spacing: 0;
+      line-height: 1;
     }
   }
 }
@@ -604,10 +614,15 @@ $t-danger:    #f85149;
   // wins from a uniform background outweigh the visual richness of
   // coloring all sections. If `--section-color` isn't set, fall back
   // to the t-primary/primary-hi highlight for a sensible default.
+  // Section fill priority: per-section --section-color (set inline when
+  // sec.color is present) → timer's --ring-color → default $t-primary.
+  // That makes the timer's color the implicit "theme" for any section
+  // the user didn't explicitly color, instead of always landing on
+  // primary blue.
   .dial-section          { fill: #1f2630; transition: fill 0.15s; }
-  .dial-section.current  { fill: var(--section-color, $t-primary); }
+  .dial-section.current  { fill: var(--section-color, var(--ring-color, #{$t-primary})); }
   .dial-sub              { fill: #161b22; transition: fill 0.15s; }
-  .dial-sub.current      { fill: var(--section-color, $t-primary-hi); }
+  .dial-sub.current      { fill: var(--section-color, var(--ring-color, #{$t-primary-hi})); }
   .dial-ring             { fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 2; }
 
   // Labels live on top of every fill, with a dark halo via paint-order
@@ -719,12 +734,37 @@ $t-danger:    #f85149;
     legend {
       font-weight: 600;
       padding: 0;
-      margin-bottom: 6px;
+      margin: 0 0 6px;
       font-size: 14px;
       color: $t-text;
     }
 
+    // Browser-default <legend> overlays the fieldset's border line which
+    // makes it hug the divider above. We use a plain <h4> in callbacks
+    // so spacing is predictable — works like any other block element.
+    .timers-fieldset-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: $t-text;
+      margin: 0 0 10px;
+      padding: 0;
+    }
+
     &:last-child { border-bottom: 0; }
+  }
+
+  // ---------- Save to… picker ----------
+  // Reuses .tmpl-row (see the [data-timers-saveto-list] entry in the
+  // shared row-list selector group below) so the rows match the
+  // settings/library modals exactly. Only the saveto-specific bits
+  // live here: the intro blurb spacing and the row's chevron affordance.
+  .timers-saveto-instructions {
+    margin-bottom: 4px;
+  }
+  .timers-saveto-section-blurb {
+    color: $t-muted;
+    font-size: 12px;
+    margin-top: 0;
   }
 
   .field {
@@ -764,6 +804,29 @@ $t-danger:    #f85149;
 
     .field { margin-bottom: 12px; }
     .field-color { flex: 0 0 80px; }
+    .field-color-random {
+      flex: 0 0 auto;
+      flex-direction: row;
+      align-items: center;
+      gap: 6px;
+      color: $t-text;
+      font-size: 13px;
+      cursor: pointer;
+      margin-bottom: 12px;
+
+      input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: $t-primary;
+        margin: 0;
+      }
+      span { user-select: none; }
+    }
+  }
+
+  .field-color input[type="color"]:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 
   .checkbox-row {
@@ -1024,7 +1087,8 @@ $t-danger:    #f85149;
 [data-timers-pages-list],
 [data-timers-share-list],
 [data-timers-library-templates-list],
-[data-timers-library-quick-list] {
+[data-timers-library-quick-list],
+[data-timers-saveto-list] {
   padding: 4px 18px;
   max-height: 360px;
   overflow-y: auto;
@@ -1095,6 +1159,27 @@ $t-danger:    #f85149;
       &:hover { background: $t-card-hi !important; }
       &.danger { color: $t-danger !important; border-color: rgba(248,81,73,0.3) !important; }
       &.danger:hover { background: rgba(248,81,73,0.1) !important; }
+    }
+
+    // Whole-row click target (Save to… picker). No per-row action
+    // buttons — tapping the row replaces it, and the bottom add-form
+    // is the path to a new row.
+    &.is-selectable {
+      cursor: pointer;
+      padding-left: 8px;
+      padding-right: 8px;
+      border-radius: 6px;
+      transition: background 0.12s;
+
+      &:hover { background: $t-card-hi; border-bottom-color: $t-border; }
+
+      .tmpl-row-chevron {
+        color: $t-muted;
+        font-size: 20px;
+        line-height: 1;
+        flex: 0 0 auto;
+        padding-left: 6px;
+      }
     }
   }
 
