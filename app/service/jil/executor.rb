@@ -59,10 +59,23 @@ class Jil::Executor
       end
       ran&.tap { stopped = true if ran.stop_propagation? }
     }.tap { |_tasks|
-      if !stopped && trigger.to_sym == :command
+      next if stopped
+
+      case trigger.to_sym
+      when :command
         trigger_data.deep_symbolize_keys!
         words = trigger_data[:words] || trigger_data.dig(:command, :words)
         ::Jarvis.command(user, words)
+      when :broadcast
+        data = trigger_data.respond_to?(:deep_symbolize_keys) ? trigger_data.deep_symbolize_keys : {}
+        text = data[:text] || data.dig(:broadcast, :text)
+        channel = (data[:channel] || data.dig(:broadcast, :channel))&.to_sym
+        if text.present? && channel.present?
+          ::Jarvis.broadcast(user, text, channel)
+          if data[:add_to_list] || data.dig(:broadcast, :add_to_list)
+            user.default_list&.add_items(name: text)
+          end
+        end
       end
     }
   end

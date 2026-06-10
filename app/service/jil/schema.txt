@@ -35,6 +35,10 @@
   #print(Text)::String
   #comment(Text)::None
   #command(String)::String
+  #ping(String Date?:"At")::String
+  #say(String Date?:"At")::String
+  #textMe(String Date?:"At")::String
+  #remind(String Date?:"At")::String
   #commandAt(Date Text)::Schedule
   #request("Method" String BR "URL" String BR "Params" Hash BR "Headers" Hash)::Hash
   #requestBody("URL" String BR "Params" Hash BR "Headers" Hash)::Hash

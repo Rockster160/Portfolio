@@ -173,6 +173,36 @@ class Jil::Methods::Global < Jil::Methods::Base
     ::Jarvis.command(@jil.user, text)
   end
 
+  def ping(text, at=nil)
+    broadcast_or_schedule(text, :ping, at: at)
+  end
+
+  def say(text, at=nil)
+    broadcast_or_schedule(text, :ws, at: at)
+  end
+
+  def textMe(text, at=nil)
+    broadcast_or_schedule(text, :sms, at: at)
+  end
+
+  def remind(text, at=nil)
+    broadcast_or_schedule(text, :ping, at: at, add_to_list: true)
+  end
+
+  private def broadcast_or_schedule(text, channel, at: nil, add_to_list: false)
+    if at.present?
+      ::Jil::Schedule.add_schedule(
+        @jil.user, at, :broadcast,
+        { text: text, channel: channel, add_to_list: add_to_list }.compact,
+        auth: :trigger, auth_id: @jil.task&.id,
+      )
+    else
+      ::Jarvis.broadcast(@jil.user, text, channel)
+      @jil.user.default_list&.add_items(name: text) if add_to_list
+    end
+    text
+  end
+
   def commandAt(date, text)
     ::Jil::Schedule.add_schedule(
       @jil.user, date, :command, { words: text },

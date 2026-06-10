@@ -326,4 +326,82 @@ RSpec.describe Jil::Methods::Global do
       expect(::Execution.count).to eq(2)
     end
   end
+
+  describe "#ping, #say, #textMe, #remind" do
+    # All four bypass Jarvis.command (and thus the :tell listener bus) and route
+    # directly to the appropriate channel via Jarvis.broadcast.
+    it "ping routes to WebPushNotifications without firing :tell" do
+      expect(::Jarvis).to receive(:broadcast).with(user, "hello there", :ping)
+      expect(::Jil).not_to receive(:trigger).with(anything, :tell, anything, anything)
+      ::Jil::Executor.call(user, <<~'JIL')
+        r = Global.ping("hello there")::String
+      JIL
+    end
+
+    it "say routes to JarvisChannel websocket" do
+      expect(::Jarvis).to receive(:broadcast).with(user, "spoken text", :ws)
+      ::Jil::Executor.call(user, <<~'JIL')
+        r = Global.say("spoken text")::String
+      JIL
+    end
+
+    it "textMe routes to SmsWorker" do
+      expect(::Jarvis).to receive(:broadcast).with(user, "sms text", :sms)
+      ::Jil::Executor.call(user, <<~'JIL')
+        r = Global.textMe("sms text")::String
+      JIL
+    end
+
+    it "remind pings AND adds to default list" do
+      list = user.default_list || user.lists.create!(name: "TODO")
+      allow(user).to receive(:default_list).and_return(list)
+      expect(::Jarvis).to receive(:broadcast).with(user, "buy milk", :ping)
+      expect(list).to receive(:add_items).with(name: "buy milk")
+      ::Jil::Executor.call(user, <<~'JIL')
+        r = Global.remind("buy milk")::String
+      JIL
+    end
+
+    it "ping with a future date schedules instead of broadcasting" do
+      expect(::Jarvis).not_to receive(:broadcast)
+      expect(::Jil::Schedule).to receive(:add_schedule).with(
+        user, kind_of(::Time), :broadcast,
+        a_hash_including(text: "later text", channel: :ping),
+        hash_including(auth: :trigger),
+      )
+      ::Jil::Executor.call(user, <<~'JIL')
+        at = Date.from_now(2, "minutes")::Date
+        r = Global.ping("later text", at)::String
+      JIL
+    end
+
+    it "remind with a future date schedules with add_to_list=true" do
+      expect(::Jarvis).not_to receive(:broadcast)
+      expect(::Jil::Schedule).to receive(:add_schedule).with(
+        user, kind_of(::Time), :broadcast,
+        a_hash_including(text: "later remind", channel: :ping, add_to_list: true),
+        hash_including(auth: :trigger),
+      )
+      ::Jil::Executor.call(user, <<~'JIL')
+        at = Date.from_now(5, "minutes")::Date
+        r = Global.remind("later remind", at)::String
+      JIL
+    end
+
+    it ":broadcast scheduled trigger invokes Jarvis.broadcast" do
+      expect(::Jarvis).to receive(:broadcast).with(user, "scheduled hi", :ping)
+      ::Jil::Executor.trigger(user, :broadcast, { text: "scheduled hi", channel: :ping })
+    end
+
+    it ":broadcast with add_to_list also adds to default list" do
+      list = user.default_list || user.lists.create!(name: "TODO")
+      allow(user).to receive(:default_list).and_return(list)
+      expect(::Jarvis).to receive(:broadcast).with(user, "scheduled remind", :ping)
+      expect(list).to receive(:add_items).with(name: "scheduled remind")
+      ::Jil::Executor.trigger(
+        user, :broadcast,
+        { text: "scheduled remind", channel: :ping, add_to_list: true },
+      )
+    end
+  end
 end

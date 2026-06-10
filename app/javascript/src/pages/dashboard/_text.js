@@ -305,12 +305,26 @@ Text.markup = function (text) {
   do {
     prev = text;
     text = text.replaceAll(
-      /\[bg ([^\]]*?)\]((?:(?!\[bg |\[\/bg\]).)*?)\[\/bg\]/gi,
-      '<span style="background-color: $1;">$2</span>',
+      /\[bg ([^\]]*?)\]((?:(?!\[bg |\[\/bg\])[\s\S])*?)\[\/bg\]/gi,
+      function (_match, color, body) {
+        return body
+          .split("\n")
+          .map(function (line) {
+            return '<span style="background-color: ' + color + ';">' + line + "</span>";
+          })
+          .join("\n");
+      },
     );
     text = text.replaceAll(
-      /\[color ([^\]]*?)\]((?:(?!\[color |\[\/color\]).)*?)\[\/color\]/gi,
-      '<span style="color: $1;">$2</span>',
+      /\[color ([^\]]*?)\]((?:(?!\[color |\[\/color\])[\s\S])*?)\[\/color\]/gi,
+      function (_match, color, body) {
+        return body
+          .split("\n")
+          .map(function (line) {
+            return '<span style="color: ' + color + ';">' + line + "</span>";
+          })
+          .join("\n");
+      },
     );
   } while (text !== prev);
   text = text.replaceAll(/\[e\](.*?)\[\/e\]/gi, "<e>$1</e>");
