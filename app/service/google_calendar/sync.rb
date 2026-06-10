@@ -302,6 +302,14 @@ class GoogleCalendar::Sync
     # NoMethodError's and the entire sync page fails silently.
     return report_malformed_event!(event, "missing start_at") if start_at_local.nil?
 
+    # `start_at_local` is in the EVENT's source timezone (Google's `timeZone`
+    # field) — which is frequently not the user's. The schedule's `start_time`
+    # column is a wall-clock time-of-day interpreted in the USER's zone by
+    # every reader (phantom builder, controller push-to-Google, FE), so
+    # convert before pulling HH:MM / to_date. All-day events are already
+    # built in user_timezone by parse_event_start, so this is a no-op there.
+    start_at_user = start_at_local.in_time_zone(user_timezone)
+
     all_day = all_day_event?(event)
     # Merge any locally-recorded excluded_dates back into the new recurrence
     # so a Google-edit to the master rule doesn't wipe out per-occurrence
@@ -318,9 +326,9 @@ class GoogleCalendar::Sync
       color:               event_color(event),
       location:            event_location(event),
       notes:               ::GoogleCalendar::HtmlText.to_plain(event[:description]),
-      start_time:          all_day ? "00:00" : start_at_local.strftime("%H:%M"),
+      start_time:          all_day ? "00:00" : start_at_user.strftime("%H:%M"),
       duration_minutes:    event_duration_minutes(event, all_day: all_day),
-      starts_on:           start_at_local.to_date,
+      starts_on:           start_at_user.to_date,
       until_on:            parsed[:until_on],
       occurrence_count:    parsed[:occurrence_count],
       recurrence:          merged_recurrence,

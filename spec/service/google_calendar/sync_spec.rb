@@ -342,6 +342,76 @@ RSpec.describe GoogleCalendar::Sync do
     end
   end
 
+  # Regression: upsert_schedule writes `start_time` as a wall-clock HH:MM
+  # for the phantom builder, which interprets it in the USER's zone. Pre-fix
+  # we wrote it in the EVENT's source zone (Google's `timeZone` field), so
+  # phantoms for any master authored in a non-user zone projected an hour
+  # (or more) off — visible on the agenda as the wrong time-of-day.
+  describe "schedule start_time is stored in the user's timezone" do
+    it "writes start_time in user-local even when the event's timeZone is different" do
+      master = {
+        id:         "evt-master-tz",
+        status:     "confirmed",
+        summary:    "Tech Roundtable",
+        # 11:00 Central time = 10:00 Mountain time. Pre-fix stored "11:00".
+        start:      { dateTime: "2026-04-29T11:00:00", timeZone: "America/Chicago" },
+        end:        { dateTime: "2026-04-29T11:30:00", timeZone: "America/Chicago" },
+        recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=WE;INTERVAL=2"],
+        etag:       %("etag-tz"),
+        updated:    "2026-04-29T08:00:00Z",
+      }
+      allow(api).to receive(:list_events).and_return(page([master]))
+
+      described_class.new(agenda).run!
+      sched = agenda.agenda_schedules.find_by(external_uid: "evt-master-tz")
+      expect(sched).to be_present
+      expect(sched.start_time.strftime("%H:%M")).to eq("10:00")
+      expect(sched.starts_on).to eq(Date.new(2026, 4, 29))
+
+      # And the phantom rendered for a future occurrence projects at the
+      # user-local time, not the source zone's time.
+      phantom_at = sched.occurrence_start_at(Date.new(2026, 5, 13))
+      expect(phantom_at.in_time_zone(agenda.user.timezone).strftime("%H:%M")).to eq("10:00")
+    end
+
+    it "leaves start_time as 00:00 for all-day events (no TZ ambiguity)" do
+      allday = {
+        id:         "evt-allday-tz",
+        status:     "confirmed",
+        summary:    "Birthday",
+        start:      { date: "2026-07-10" },
+        end:        { date: "2026-07-11" },
+        recurrence: ["RRULE:FREQ=YEARLY"],
+        etag:       %("etag-allday"),
+        updated:    "2026-04-29T08:00:00Z",
+      }
+      allow(api).to receive(:list_events).and_return(page([allday]))
+
+      described_class.new(agenda).run!
+      sched = agenda.agenda_schedules.find_by(external_uid: "evt-allday-tz")
+      expect(sched.start_time.strftime("%H:%M")).to eq("00:00")
+      expect(sched.starts_on).to eq(Date.new(2026, 7, 10))
+    end
+
+    it "is a no-op when the event's timeZone already matches the user's zone" do
+      master = {
+        id:         "evt-master-tz-match",
+        status:     "confirmed",
+        summary:    "Standup",
+        start:      { dateTime: "2026-04-29T10:30:00", timeZone: "America/Denver" },
+        end:        { dateTime: "2026-04-29T11:00:00", timeZone: "America/Denver" },
+        recurrence: ["RRULE:FREQ=DAILY"],
+        etag:       %("etag-tz-match"),
+        updated:    "2026-04-29T08:00:00Z",
+      }
+      allow(api).to receive(:list_events).and_return(page([master]))
+
+      described_class.new(agenda).run!
+      sched = agenda.agenda_schedules.find_by(external_uid: "evt-master-tz-match")
+      expect(sched.start_time.strftime("%H:%M")).to eq("10:30")
+    end
+  end
+
   describe "two-pass page ordering" do
     it "applies recurring masters before overrides within the same page" do
       master = {
