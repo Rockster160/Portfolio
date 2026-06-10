@@ -47,9 +47,11 @@
            tabindex="0">
         <a class="cal-day-num" href="<%= day_path(date: day.iso8601) %>"><%= day.day %></a>
         <% items.first(4).each do |item| %>
+          <% cal_editable = item.agenda.editable_by?(current_user) %>
           <button type="button"
                   class="cal-item"
-                  data-edit-item
+                  data-open-details
+                  <%= "data-readonly".html_safe unless cal_editable %>
                   data-item-id="<%= item.display_id %>"
                   data-item-url="<%= agenda_item_path(item.display_id) %>"
                   data-phantom="<%= item.phantom? %>"

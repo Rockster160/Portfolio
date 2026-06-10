@@ -898,7 +898,10 @@
 
       const endAt = (() => {
         if (activeKind !== "event") return null;
-        if (!isAllDay) return localInputToEpoch(`${date}T${endTime}`);
+        if (!isAllDay) {
+          const e = localInputToEpoch(`${date}T${endTime}`);
+          return e <= startAt ? e + 24 * 60 * 60 : e;
+        }
         const next = new Date(`${allDayEnd}T00:00`);
         next.setDate(next.getDate() + 1);
         const pad = (n) => String(n).padStart(2, "0");
@@ -1294,7 +1297,10 @@
       // one day to the picked end-date.
       const endAt = (() => {
         if (activeKind !== "event") return null;
-        if (!isAllDay) return localInputToEpoch(`${date}T${endTime}`);
+        if (!isAllDay) {
+          const e = localInputToEpoch(`${date}T${endTime}`);
+          return e <= startAt ? e + 24 * 60 * 60 : e;
+        }
         const next = new Date(`${allDayEnd}T00:00`);
         next.setDate(next.getDate() + 1);
         const pad = (n) => String(n).padStart(2, "0");
@@ -1676,7 +1682,7 @@
     detailsModalItem = dataEl;
     const editBtn = modal.querySelector("[data-edit-from-details]");
     if (editBtn) {
-      const canEdit = !dataEl.hasAttribute("data-readonly") && !dataEl.classList.contains("preview");
+      const canEdit = !dataEl.hasAttribute("data-readonly");
       editBtn.classList.toggle("hidden", !canEdit);
     }
     const d = dataEl.dataset;
@@ -1686,6 +1692,10 @@
     };
     const dot = modal.querySelector("[data-agenda-color-target]");
     if (dot) dot.style.background = d.agendaColor || "";
+    // Scope --agenda-color on the modal so the Edit button picks up the
+    // event's color via the SCSS rule on .agenda-details-foot .af-btn-primary.
+    if (d.agendaColor) modal.style.setProperty("--agenda-color", d.agendaColor);
+    else modal.style.removeProperty("--agenda-color");
     set("[data-agenda-name-target]", d.agendaName);
     set("[data-name-target]", d.name);
 
