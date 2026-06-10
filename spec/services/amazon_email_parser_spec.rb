@@ -100,6 +100,70 @@ RSpec.describe AmazonEmailParser do
     end
   end
 
+  describe "per-item names" do
+    before { allow(ChatGPT).to receive(:short_name_from_order) { |full, _| full } }
+
+    it "names each item from its own card link, not the email's subject quote" do
+      c = CASES.find { |row| row[:id] == 50_684 }
+      parse(c[:id], c[:subject])
+      orders = AmazonOrder.by_order(c[:order]).index_by(&:item_id)
+      expect(orders["B000P6G12U"].listed_name).to match(/Red Raspberries/i)
+      expect(orders["B000P717MI"].listed_name).to match(/Blackberries/i)
+      expect(orders["B000P6G12U"].listed_name).not_to eq(orders["B000P717MI"].listed_name)
+    end
+
+    it "falls back to the subject-quoted name when ChatGPT raises and only one ASIN ships" do
+      allow(ChatGPT).to receive(:short_name_from_order).and_raise(StandardError, "insufficient_quota")
+      c = CASES.find { |row| row[:id] == 50_695 }
+      parse(c[:id], c[:subject])
+      item = AmazonOrder.by_order(c[:order]).first
+      expect(item.listed_name).to be_present
+    end
+  end
+
+  describe "staggered delivery" do
+    def synthetic_delivery_email(email_id, order_id, asins, link_texts)
+      links = asins.zip(link_texts).map { |asin, text|
+        %(<a href="https://www.amazon.com/dp/#{asin}">#{text}</a>)
+      }.join
+      html = <<~HTML
+        <html><body>
+          <div class="rio-card">
+            Order # #{order_id}. Your package was delivered today.
+            #{links}
+          </div>
+        </body></html>
+      HTML
+      double("Email", id: email_id, to_html: html, subject: %(Delivered: "#{link_texts.first}"))
+    end
+
+    it "marks only the items present in the delivery email, not the whole order" do
+      shipped = CASES.find { |row| row[:id] == 50_684 }
+      parse(shipped[:id], shipped[:subject])
+      expect(AmazonOrder.by_order(shipped[:order]).map(&:delivered)).to all(be_falsey)
+
+      partial = synthetic_delivery_email(99_001, shipped[:order], [shipped[:asins].first], ["Red Raspberries, 6 oz"])
+      AmazonEmailParser.parse(partial)
+
+      orders = AmazonOrder.by_order(shipped[:order]).index_by(&:item_id)
+      expect(orders[shipped[:asins].first].delivered).to eq(true)
+      expect(orders[shipped[:asins].last].delivered).to be_falsey
+      expect(orders[shipped[:asins].last].email_ids).not_to include(99_001)
+    end
+
+    it "does not update delivery_date for items absent from the email" do
+      shipped = CASES.find { |row| row[:id] == 50_684 }
+      parse(shipped[:id], shipped[:subject])
+      original_dates = AmazonOrder.by_order(shipped[:order]).index_by(&:item_id).transform_values(&:delivery_date)
+
+      partial = synthetic_delivery_email(99_002, shipped[:order], [shipped[:asins].first], ["Red Raspberries, 6 oz"])
+      AmazonEmailParser.parse(partial)
+
+      orders = AmazonOrder.by_order(shipped[:order]).index_by(&:item_id)
+      expect(orders[shipped[:asins].last].delivery_date).to eq(original_dates[shipped[:asins].last])
+    end
+  end
+
   describe "idempotency and state transitions" do
     it "does not duplicate orders when same email is parsed twice" do
       c = CASES.find { |row| row[:id] == 50_684 }

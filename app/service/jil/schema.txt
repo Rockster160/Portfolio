@@ -278,7 +278,7 @@
   #accessible::Array
   #add(content(ChoreData))::Chore
   #update(String:Name content(ChoreData))::Chore
-  #complete(String:Name Date?:Timestamp)::ChoreCompletion
+  #complete(String:Name content(ChoreCompletionData))::ChoreCompletion
   #complete_for(String:Name String:"Username" Date?:Timestamp)::ChoreCompletion
   #uncomplete(String:Name)::Boolean
   #mark_due(String:Name)::Chore
@@ -301,6 +301,9 @@
   #marked_due_at(Date)
   #reward_pebbles(Numeric)
   #show_on_daily_view(["always" "when_scheduled" "when_available" "when_scheduled_and_available" "never"])
+*[ChoreCompletionData]
+  #timestamp(Date)
+  #note(String)
 [Timer]
   #find(String|Numeric)::Timer
   #list::Array

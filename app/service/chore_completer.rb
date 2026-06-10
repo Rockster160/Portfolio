@@ -11,10 +11,11 @@ class ChoreCompleter
     def skipped? = !!skipped_reason
   }
 
-  def initialize(chore, user, at: Time.current)
+  def initialize(chore, user, at: Time.current, note: nil)
     @chore = chore
     @user = user
     @at = at
+    @note = note
     @day = ChoreDay.current(user, at: at)
   end
 
@@ -39,7 +40,7 @@ class ChoreCompleter
 
   private
 
-  attr_reader :chore, :user, :at, :day
+  attr_reader :chore, :user, :at, :note, :day
 
   def build_completion
     ChoreCompletion.new(
@@ -51,6 +52,7 @@ class ChoreCompleter
       hot_multiplier:    1.0,
       streak_multiplier: 1.0,
       paid_pebbles:      0,
+      note:              note.presence,
     )
   end
 

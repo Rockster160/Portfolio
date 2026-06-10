@@ -36,7 +36,9 @@ class AmazonEmailParser
     return Jarvis.cmd("Add Amazon Email no order id: #{@email.id}") if order_id.blank?
 
     delivered = delivered_email?
-    doall { |item|
+    # Only update state for items actually referenced by this email's order card.
+    # Other items on the same order_id (shipped/delivered separately) keep their own state.
+    email_items.each { |item|
       arrival_date(item).tap { |date|
         if date.present?
           item.delivery_date = date.iso8601.encode("UTF-8")
@@ -89,16 +91,6 @@ class AmazonEmailParser
     DELIVERED_REGEXES.any? { |re| text.match?(re) }
   }
 
-  def order_items
-    @order_items ||= AmazonOrder.by_order(order_id).tap { |items|
-      items.each do |item|
-        @changed = true
-        item.errors = []
-        item.email_ids << @email.id unless item.email_ids.include?(@email.id)
-      end
-    }
-  end
-
   def email_items
     @email_items ||= item_asins.map { |asin|
       AmazonOrder.find_or_create(order_id, asin).tap { |item|
@@ -107,13 +99,6 @@ class AmazonEmailParser
         item.email_ids << @email.id unless item.email_ids.include?(@email.id)
       }
     }
-  end
-
-  def doall(&block)
-    items = email_items
-    seen_ids = items.to_set(&:item_id)
-    items.each { |item| block.call(item) }
-    order_items.each { |item| block.call(item) unless seen_ids.include?(item.item_id) }
   end
 
   💾(:month_regex) {
@@ -200,8 +185,10 @@ class AmazonEmailParser
 
   def full_name(item)
     item.full_name ||= (
-      item.listed_name ||= @email.subject.to_s[/^[^"]*"(.*?)"[^"]*$/, 1]
+      # name_from_card is per-ASIN. Subject quote only matches the first item, so when
+      # multiple items ship on one order it would assign the same name to every item.
       item.listed_name ||= name_from_card(item)
+      item.listed_name ||= @email.subject.to_s[/^[^"]*"(.*?)"[^"]*$/, 1]
       count = @email.subject.to_s[/(\d+ ?x) ?"/, 1]
 
       if item.listed_name.to_s.include?("...")
@@ -216,8 +203,13 @@ class AmazonEmailParser
   end
 
   def name_from_card(item)
-    link = order_card&.css("a")&.find { |a| a["href"].to_s.include?(item.item_id) }
-    link&.text&.squish.presence
+    # Each item has multiple anchors (image wrapper + text), so pick the first one
+    # that has visible text — the image link's text is blank.
+    order_card&.css("a")&.filter_map { |a|
+      next unless a["href"].to_s.include?(item.item_id)
+
+      a.text.squish.presence
+    }&.first
   end
 
   def retrieve_full_name(item)

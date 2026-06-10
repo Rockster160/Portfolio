@@ -33,6 +33,9 @@ class Jil::Methods::Chore < Jil::Methods::Base
     if token_class(line.objname) == :ChoreData && PERMIT_ADD_ATTRS.include?(method_sym)
       return send(method_sym, *evalargs(line.args))
     end
+    if token_class(line.objname) == :ChoreCompletionData && PERMIT_COMPLETION_ATTRS.include?(method_sym)
+      return send(method_sym, *evalargs(line.args))
+    end
 
     fallback(line)
   end
@@ -181,6 +184,19 @@ class Jil::Methods::Chore < Jil::Methods::Base
     { show_on_daily_view: value }
   end
 
+  # ---- [ChoreCompletionData] builders (used inside content(ChoreCompletionData)
+  # blocks for Chore.complete). Mirrors ActionEventData shape.
+
+  def timestamp(value)
+    return if value.respond_to?(:year) && value.year < 1900
+
+    { timestamp: value }
+  end
+
+  def note(text)
+    { note: text }
+  end
+
   # Chore.scheduled_today → array of Chore records visible on Today.
   def scheduled_today
     ctx = ChoreSerializerContext.for_user(@jil.user)
@@ -200,12 +216,16 @@ class Jil::Methods::Chore < Jil::Methods::Base
   # nil if no matching chore was found. Honors the chore's threshold +
   # household cooldown + multipliers + achievements (same path as a
   # user tap or an auto-mapper event).
-  def complete(name_or_chore, timestamp=nil)
+  def complete(name_or_chore, details=nil)
     chore = load_chore(name_or_chore)
     return nil if chore.nil?
 
-    at = parse_time(timestamp) || Time.current
-    result = ::ChoreCompleter.new(chore, @jil.user, at: at).call
+    attrs = @jil.cast(details || {}, :Hash).slice(*PERMIT_COMPLETION_ATTRS).symbolize_keys
+    result = ::ChoreCompleter.new(
+      chore, @jil.user,
+      at:   sanitize_time(attrs[:timestamp]) || Time.current,
+      note: attrs[:note],
+    ).call
     result.completion
   end
 
@@ -220,7 +240,7 @@ class Jil::Methods::Chore < Jil::Methods::Base
     user = load_user(as_user)
     return nil if user.nil?
 
-    at = parse_time(timestamp) || Time.current
+    at = sanitize_time(timestamp) || Time.current
     ::ChoreCompleter.new(chore, user, at: at).call.completion
   end
 
@@ -511,6 +531,18 @@ class Jil::Methods::Chore < Jil::Methods::Base
   rescue ArgumentError, TypeError
     nil
   end
+
+  # Same as parse_time but treats `Date.cast(nil)` epochs (year < 1900) as
+  # "no timestamp" so callers can fall back to Time.current. Mirrors the
+  # ActionEventData.timestamp negative-year filter.
+  def sanitize_time(value)
+    t = parse_time(value)
+    return nil if t.nil? || t.year < 1900
+
+    t
+  end
+
+  PERMIT_COMPLETION_ATTRS = [:timestamp, :note].freeze
 
   def parse_date(value)
     return nil if value.blank?

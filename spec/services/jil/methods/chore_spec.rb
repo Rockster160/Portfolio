@@ -417,4 +417,65 @@ RSpec.describe Jil::Methods::Chore do
       expect { Jil::Executor.call(user, code) }.not_to raise_error
     end
   end
+
+  describe "#complete" do
+    it "name-only form completes at Time.current with no note" do
+      code = <<~'JIL'
+        c = Chore.complete("Wordle")::Any
+      JIL
+      expect { Jil::Executor.call(user, code) }
+        .to change { user.chore_completions.count }.by(1)
+      expect(user.chore_completions.order(:id).last.note).to be_blank
+    end
+
+    it "empty-block form (migration target) is equivalent to name-only" do
+      code = <<~'JIL'
+        c = Chore.complete("Wordle", {})::Any
+      JIL
+      expect { Jil::Executor.call(user, code) }
+        .to change { user.chore_completions.count }.by(1)
+    end
+
+    it "persists the note set via ChoreCompletionData content block" do
+      code = <<~'JIL'
+        c = Chore.complete("Wordle", {
+          n = ChoreCompletionData.note("from spec")::Hash
+        })::Any
+      JIL
+      expect { Jil::Executor.call(user, code) }
+        .to change { user.chore_completions.count }.by(1)
+      expect(user.chore_completions.order(:id).last.note).to eq("from spec")
+    end
+
+    it "uses ChoreCompletionData.timestamp inside the content block" do
+      ts = Time.zone.local(2026, 6, 9, 12, 30, 0)
+      code = <<~'JIL'
+        *input = Global.input_data()::Hash
+        ts = input.get("ts")::Date
+        c = Chore.complete("Wordle", {
+          t = ChoreCompletionData.timestamp(ts)::Hash
+        })::Any
+      JIL
+      Jil::Executor.call(user, code, { "ts" => ts })
+      completion = user.chore_completions.order(:id).last
+      expect(completion.completed_at).to be_within(1.second).of(ts)
+    end
+
+    it "drops the Date.cast(nil) epoch in ChoreCompletionData.timestamp" do
+      now = Time.zone.local(2026, 6, 10, 9, 0, 0)
+      code = <<~'JIL'
+        *input = Global.input_data()::Hash
+        ts = input.get("timestamp")::Date
+        c = Chore.complete("Wordle", {
+          t = ChoreCompletionData.timestamp(ts)::Hash
+        })::Any
+      JIL
+      Timecop.freeze(now) {
+        Jil::Executor.call(user, code, {})
+      }
+      completion = user.chore_completions.order(:id).last
+      expect(completion.completed_at).to be_within(1.second).of(now)
+      expect(completion.completed_at.year).to eq(2026)
+    end
+  end
 end
