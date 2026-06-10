@@ -120,6 +120,8 @@ Rails.application.routes.draw do
     patch  "/order"                      => "chores#reorder",            as: :reorder
     post   "/items/:id/dailies"          => "chores#pin_daily",          as: :pin_daily
     delete "/items/:id/dailies"          => "chores#unpin_daily",        as: :unpin_daily
+    post   "/items/:id/mark_due"         => "chores#mark_due",            as: :mark_due
+    delete "/items/:id/mark_due"         => "chores#unmark_due",          as: :unmark_due
     patch  "/dailies/order"              => "chores#reorder_dailies",    as: :reorder_dailies
     post   "/hot_picks/:chore_id/rotate" => "chores#rotate_hot_pick",    as: :rotate_hot_pick
     get    "/notification_preferences"   => "chores#notification_preferences",        as: :notification_preferences

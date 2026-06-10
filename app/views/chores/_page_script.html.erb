@@ -894,6 +894,10 @@
       const c = ChoreStore.get(id);
       if (!c) return;
       Views.upsertOne(c);
+      // Keep the open edit modal's mark-due button in sync when the
+      // chore the user is editing gets stamped/cleared from another tab
+      // or by a household member.
+      if (parseInt(currentChoreId, 10) === id) refreshEditModalMarkDue();
     }
     // Re-apply the active search after any store change: newly-rendered
     // cells need their display: filter, and the extras list needs to
@@ -1136,6 +1140,21 @@
       const id = parseInt(currentChoreId, 10);
       if (!id || btn.dataset.busy === "1") return;
       togglePinDaily(id, btn);
+    });
+  }
+
+  // Mark-due button — sibling of pin. Stamps the chore as "needs to get
+  // done" so it surfaces on Today (or Scheduled/overdue across days)
+  // until any ChoreCompletion clears it.
+  function bindEditModalMarkDue() {
+    const btn = document.querySelector("[data-edit-mark-due-toggle]");
+    if (!btn) return;
+    btn.addEventListener("click", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = parseInt(currentChoreId, 10);
+      if (!id || btn.dataset.busy === "1") return;
+      toggleMarkDue(id, btn);
     });
   }
 
@@ -1415,6 +1434,69 @@
     const label = pinned ? "Remove from Dailies" : "Pin to Dailies";
     btn.setAttribute("aria-label", label);
     btn.setAttribute("title", label);
+  }
+
+  function refreshEditModalMarkDue() {
+    const btn = document.querySelector("[data-edit-mark-due-toggle]");
+    if (!btn) return;
+    const id = parseInt(currentChoreId, 10);
+    if (!id) { btn.hidden = true; return; }
+    const c = ChoreStore.get(id);
+    if (!c) { btn.hidden = true; return; }
+    btn.hidden = false;
+    const marked = !!c.marked_due_at;
+    btn.classList.toggle("marked", marked);
+    const label = marked ? "Clear needs-to-get-done" : "Mark needs to get done";
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("title", label);
+  }
+
+  // Optimistic: stamp marked_due_at + force visibility flags so the card
+  // jumps into Today immediately. Unmark waits for server payload — the
+  // post-unmark visibility depends on the chore's normal schedule, which
+  // we don't recompute client-side.
+  //
+  // Form sync: the modal also exposes Due Date as a date input bound to
+  // marked_due_at. Without mirroring the change into that field, a
+  // subsequent form save would overwrite the stamp we just wrote with
+  // the form's stale value (or vice versa for unmark).
+  async function toggleMarkDue(id, btn) {
+    const c = ChoreStore.get(id);
+    const wasMarked = !!c?.marked_due_at;
+    btn.dataset.busy = "1";
+    const formField = editForm?.querySelector('[data-field="marked_due_at"]');
+    if (!wasMarked) {
+      ChoreStore.patch(id, {
+        marked_due_at:  new Date().toISOString(),
+        marked_due_on:  todayIso(),
+        today_visible:  true,
+        due_today:      true,
+      });
+      if (formField && String(currentChoreId) === String(id)) formField.value = todayIso();
+      refreshEditModalMarkDue();
+    } else if (formField && String(currentChoreId) === String(id)) {
+      formField.value = "";
+    }
+    const url = `/chores/items/${id}/mark_due`;
+    const method = wasMarked ? "DELETE" : "POST";
+    try {
+      const data = await api(url, method, { tab_id: TAB_ID });
+      if (data && data.chore) ChoreStore.upsert(data.chore);
+      refreshEditModalMarkDue();
+    } catch (err) {
+      if (isTransientError(err)) {
+        flash("Saved locally — will sync", "warn");
+      } else {
+        if (!wasMarked) {
+          ChoreStore.patch(id, { marked_due_at: null, marked_due_on: null });
+          if (formField && String(currentChoreId) === String(id)) formField.value = "";
+          refreshEditModalMarkDue();
+        }
+        flash("Couldn't update: " + err.message, "error");
+      }
+    } finally {
+      delete btn.dataset.busy;
+    }
   }
 
   async function togglePinDaily(id, btn) {
@@ -2238,9 +2320,14 @@
     editForm.querySelector('[data-cooldown-unit]')?.addEventListener("change", syncCustomCooldown);
     editForm.querySelector('[data-field="one_off"]')?.addEventListener("change", () => {
       syncSingleTask();
-      // Only the user-initiated toggle auto-fills the date — see the
-      // comment on syncSingleTask for why this can't live there.
-      if (isSingleTask()) ensureStartsOnSet();
+      // User-initiated single-task toggle auto-fills Due Date with
+      // today (only when blank — never overwrites). Mirrors the
+      // pre-marked_due_at behavior of stamping starts_on, just on
+      // the new field. Edit-populate is intentionally NOT routed
+      // through here: opening an existing one-off with no due date
+      // should leave it blank rather than silently rewriting state
+      // the chore never had.
+      if (isSingleTask()) ensureMarkedDueSet();
     });
     editForm.querySelector('[data-field="starts_on"]')?.addEventListener("change", syncStartsOnDependents);
   }
@@ -2254,11 +2341,19 @@
     editForm.querySelectorAll('[data-recurring-only]').forEach(el => el.classList.toggle("hidden", isSingleTask()));
   }
   // Fill starts_on with today's date IFF it's currently blank. Called
-  // whenever the user opts into something date-bearing — a recurrence
-  // freq or Single Task — so the field isn't silently empty.
+  // when the user picks a recurrence freq so the schedule anchor isn't
+  // silently empty.
   function ensureStartsOnSet() {
     const startsField = editForm.querySelector('[data-field="starts_on"]');
     if (startsField && !startsField.value) startsField.value = todayIso();
+  }
+  // Fill marked_due_at (the Due Date input) with today IFF blank.
+  // Called when the user toggles Single Task — gives one-offs the
+  // sensible default of "needs to get done today" without overriding
+  // a date the user already picked.
+  function ensureMarkedDueSet() {
+    const dueField = editForm.querySelector('[data-field="marked_due_at"]');
+    if (dueField && !dueField.value) dueField.value = todayIso();
   }
   function syncCooldownRow() {
     const preset = editForm.querySelector('[data-field="threshold_preset"]')?.value || "";
@@ -3555,6 +3650,7 @@
     setField("notes", "");
     setField("assigned_to_user_id", "");
     setField("starts_on", "");
+    setField("marked_due_at", "");
     selectRewardPill(1);
     setField("reward_pebbles", 1);
     setCooldownSeconds(0);
@@ -3604,17 +3700,21 @@
       const oneOffCb = editForm.querySelector('[data-field="one_off"]');
       if (oneOffCb) oneOffCb.checked = !!opts.oneOff;
       syncSingleTask();
-      // Brand-new single-task chores get today's date stamped so the
-      // user lands on a sensible default. (Edit-populate intentionally
-      // does NOT — opening an existing one-off with no date should
-      // leave it blank, not silently rewrite it.)
-      if (opts.oneOff) ensureStartsOnSet();
+      // Brand-new single-task chores default Due Date to today —
+      // the dominant "I need to do this" case. The user can still
+      // edit the field to a future date or clear it. Mirrors the
+      // edit-mode toggle behavior above. Edit-populate intentionally
+      // does NOT auto-fill — opening an existing one-off with no
+      // due date should leave it blank.
+      if (opts.oneOff) ensureMarkedDueSet();
       modalLockedFor = "__create__";
     }
     editModal.querySelector('[data-modal-title]').textContent = "Add Chore";
-    // No chore exists yet — nothing to pin to Dailies.
+    // No chore exists yet — nothing to pin to Dailies or mark due.
     const createPin = editModal.querySelector('[data-edit-pin-toggle]');
     if (createPin) createPin.hidden = true;
+    const createMarkDue = editModal.querySelector('[data-edit-mark-due-toggle]');
+    if (createMarkDue) createMarkDue.hidden = true;
     refreshEditModalHeadActions(null);
     editForm.querySelector('[data-action="archive"]')?.classList.add("hidden");
     editModal.classList.remove("hidden");
@@ -3637,6 +3737,7 @@
     modalLockedFor = id;
     editModal.querySelector('[data-modal-title]').textContent = "Edit Chore";
     refreshEditModalPin();
+    refreshEditModalMarkDue();
     refreshEditModalHeadActions(c);
     // FULL reset before populating. Prevents any UI state from the
     // previously-opened chore (anchor selection, pill `.active`,
@@ -3659,6 +3760,7 @@
     setPillValue("hot_eligibility", c.hot_eligibility || "when_available");
     setCooldownSeconds(c.threshold_seconds || 0);
     setField("starts_on", c.starts_on || "");
+    setField("marked_due_at", c.marked_due_on || "");
     const rec = c.recurrence || {};
     setPillValue("freq", rec.freq || "never");
     syncSingleTask();
@@ -3865,6 +3967,7 @@
         threshold_seconds: thresholdSeconds,
         one_off: oneOff,
         starts_on: getField("starts_on") || null,
+        marked_due_at: getField("marked_due_at") || null,
         show_on_daily_view: getField("show_on_daily_view") || "when_scheduled",
         hot_eligibility: getField("hot_eligibility") || "when_available",
         sharing_mode: sharingMode,
@@ -4884,6 +4987,7 @@
   }
   bindCardClicks();
   bindEditModalPin();
+  bindEditModalMarkDue();
   bindEditModalHotRotate();
   bindEditModalAnonymousComplete();
   bindAnonymousCompletionForm();

@@ -18,6 +18,34 @@ RSpec.describe "Chore + ChoreCompletion Jil triggers", type: :model do
     chore.update!(name: "Vacuum")
   end
 
+  it "stamping marked_due_at fires action: :marked_due (not :updated)" do
+    chore = create(:chore, created_by_user: user, name: "V")
+    expect(::Jil).to receive(:trigger).with(
+      user, :chore, satisfy { |attrs| attrs[:action] == :marked_due && attrs[:name] == "V" }
+    )
+    chore.update!(marked_due_at: Time.current)
+  end
+
+  it "clearing marked_due_at via user update fires action: :unmarked_due" do
+    chore = create(:chore, created_by_user: user, name: "V", marked_due_at: 1.hour.ago)
+    expect(::Jil).to receive(:trigger).with(
+      user, :chore, satisfy { |attrs| attrs[:action] == :unmarked_due }
+    )
+    chore.update!(marked_due_at: nil)
+  end
+
+  it "completion-driven mark clear does NOT fire :unmarked_due (callback bypass)" do
+    chore = create(:chore, created_by_user: user, name: "V", marked_due_at: 1.hour.ago)
+    # The completion fires its own :chore_completion :completed trigger
+    # but must not also fire :unmarked_due — the clear is a side effect,
+    # not a user-driven mark-clear.
+    allow(::Jil).to receive(:trigger)
+    expect(::Jil).not_to receive(:trigger).with(
+      user, :chore, satisfy { |attrs| attrs[:action] == :unmarked_due }
+    )
+    create(:chore_completion, chore: chore, user: user)
+  end
+
   it "archiving a chore (archived_at flip) fires action: :archived" do
     chore = create(:chore, created_by_user: user, name: "V")
     expect(::Jil).to receive(:trigger).with(
@@ -78,8 +106,10 @@ RSpec.describe "Chore + ChoreCompletion Jil triggers", type: :model do
     recipient = create(:user)
     share_chore_household!(sender, recipient)
     chore = create(:chore, created_by_user: sender, reward_pebbles: 50)
-    create(:chore_completion, chore: chore, user: sender, paid_pebbles: 50, base_pebbles: 50,
-           payout_skipped: false, day_key: ChoreDay.current(sender) - 1)
+    create(
+      :chore_completion, chore: chore, user: sender, paid_pebbles: 50, base_pebbles: 50,
+      payout_skipped: false, day_key: ChoreDay.current(sender) - 1
+    )
     expect(::Jil).to receive(:trigger).with(
       sender, :chore_transfer,
       satisfy { |a| a[:action] == :created && a[:direction] == :outgoing && a[:counterparty_username] == recipient.username }

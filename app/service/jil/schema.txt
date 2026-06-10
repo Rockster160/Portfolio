@@ -280,6 +280,8 @@
   #complete(String:Name Date?:Timestamp)::ChoreCompletion
   #complete_for(String:Name String:"Username" Date?:Timestamp)::ChoreCompletion
   #uncomplete(String:Name)::Boolean
+  #mark_due(String:Name)::Chore
+  #unmark_due(String:Name)::Chore
   #sync_event(String:"Chore Name" ActionEvent Hash?:"Event Attrs")::Boolean
   #sync_completion(String:"Chore Name" Hash:"Completion" Hash:"Event Attrs")::Boolean
   #balance::Numeric
@@ -295,6 +297,7 @@
   #sharing_mode(["personal" "household"])
   #one_off(Boolean)
   #starts_on(Date)
+  #marked_due_at(Date)
   #reward_pebbles(Numeric)
   #show_on_daily_view(["always" "when_scheduled" "when_available" "when_scheduled_and_available" "never"])
 [Timer]

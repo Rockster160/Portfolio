@@ -45,6 +45,8 @@ class ChoreSerializer
       recurrence:           chore.recurrence || {},
       sort_order:           chore.sort_order,
       archived:             chore.archived?,
+      marked_due_at:        chore.marked_due_at&.iso8601(3),
+      marked_due_on:        marked_due_on,
       updated_at:           chore.updated_at.iso8601(3),
       # Per-viewer derived fields
       done_count_today:     done_count_today,
@@ -67,6 +69,16 @@ class ChoreSerializer
     return ctx.daily_chore_ids.include?(chore.id) if ctx
 
     ChoreDaily.exists?(user_id: viewer.id, chore_id: chore.id)
+  end
+
+  # Date (YYYY-MM-DD) the mark resolves to in the viewer's chore-day
+  # frame — what the Due Date form input should display. Lets the
+  # client round-trip a stored datetime back to the same `<input type
+  # ="date">` value the user originally picked.
+  def marked_due_on
+    return nil if chore.marked_due_at.nil?
+
+    ChoreDay.current(viewer, at: chore.marked_due_at).iso8601
   end
 
   private
@@ -229,6 +241,12 @@ class ChoreSerializer
     # already hidden upstream via `visible_to_user`, but household+assigned
     # is still grid-visible to the household, so the Today gate lives here.
     return false if chore.assigned? && chore.assigned_to_user_id != viewer.id
+    # User-stamped "needs to get done" overrides the schedule gate —
+    # but only once the marked date has arrived. A future-dated mark
+    # stays hidden until its chore-day, so users can pick a date in
+    # advance without polluting Today.
+    # Cleared by any ChoreCompletion (see ChoreCompletion#clear_chore_marked_due).
+    return true if chore.marked_due? && chore.marked_due_at < ChoreDay.ends_at(day, viewer)
     return true  if chore.one_off
     return true  if chore.daily_always?
     return false if chore.show_on_daily_view.to_sym == :never
@@ -254,6 +272,15 @@ class ChoreSerializer
     return false if chore.archived?
     return false if chore.assigned? && chore.assigned_to_user_id != viewer.id
     return false unless today_visible?
+
+    # Marked-due lands in Today when the stamp falls within this
+    # chore-day. Earlier marks fall through so the card surfaces as
+    # overdue in the Scheduled section; future marks are already
+    # filtered out by today_visible? above and never reach here.
+    if chore.marked_due?
+      return chore.marked_due_at >= ChoreDay.starts_at(day, viewer) &&
+          chore.marked_due_at < ChoreDay.ends_at(day, viewer)
+    end
     # One-offs are "due today" only on their starts_on date. Without a
     # starts_on (or past it), they fall through to Scheduled (Hourglass)
     # rather than implying today is the intended day.

@@ -355,4 +355,66 @@ RSpec.describe Jil::Methods::Chore do
       expect(ctx.dig(:vars, :result, :value)).to be(true)
     end
   end
+
+  describe "Chore.add with ChoreData.marked_due_at" do
+    it "stamps marked_due_at at the chore-day start for a Date arg" do
+      target_ts = (ChoreDay.starts_at(ChoreDay.current(user), user) + 2.days) + 8.hours
+      code = <<~'JIL'
+        ts = Global.input_data()::Date
+        created = Chore.add({
+          c0 = ChoreData.name("Single Vacuum")::Hash
+          c1 = ChoreData.one_off(true)::Hash
+          c2 = ChoreData.marked_due_at(ts)::Hash
+        })::Chore
+      JIL
+      Jil::Executor.call(user, code, target_ts)
+      added = user.accessible_chores.find_by(name: "Single Vacuum")
+      expect(added).to be_present
+      expect(added.marked_due_at).to eq(ChoreDay.starts_at(target_ts.to_date, user))
+    end
+
+    it "anchors a trigger-timestamp datetime to that day's chore-day start" do
+      now = Time.zone.local(2026, 6, 9, 14, 30, 0)
+      travel_to(now) do
+        code = <<~'JIL'
+          ts = Global.input_data()::Date
+          created = Chore.add({
+            c0 = ChoreData.name("Timestamp Chore")::Hash
+            c1 = ChoreData.one_off(true)::Hash
+            c2 = ChoreData.marked_due_at(ts)::Hash
+          })::Chore
+        JIL
+        Jil::Executor.call(user, code, now)
+        added = user.accessible_chores.find_by(name: "Timestamp Chore")
+        expect(added.marked_due_at).to eq(ChoreDay.starts_at(ChoreDay.current(user, at: now), user))
+      end
+    end
+  end
+
+  describe "#mark_due / #unmark_due" do
+    it "Chore.mark_due stamps marked_due_at on the matched chore" do
+      code = <<~'JIL'
+        result = Chore.mark_due("Wordle")::Chore
+      JIL
+      expect { Jil::Executor.call(user, code) }
+        .to change { chore.reload.marked_due_at }.from(nil)
+      expect(chore.marked_due_at).to be_within(2.seconds).of(Time.current)
+    end
+
+    it "Chore.unmark_due clears the stamp" do
+      chore.update!(marked_due_at: 1.hour.ago)
+      code = <<~'JIL'
+        result = Chore.unmark_due("Wordle")::Chore
+      JIL
+      expect { Jil::Executor.call(user, code) }
+        .to change { chore.reload.marked_due_at }.to(nil)
+    end
+
+    it "Chore.mark_due no-matches returns nil without raising" do
+      code = <<~'JIL'
+        result = Chore.mark_due("Nonexistent")::Chore
+      JIL
+      expect { Jil::Executor.call(user, code) }.not_to raise_error
+    end
+  end
 end

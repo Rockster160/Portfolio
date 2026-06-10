@@ -9,6 +9,7 @@ class Jil::Methods::Chore < Jil::Methods::Base
     :sharing_mode,
     :one_off,
     :starts_on,
+    :marked_due_at,
     :reward_pebbles,
     :assigned_to,
     :show_on_daily_view,
@@ -21,7 +22,6 @@ class Jil::Methods::Chore < Jil::Methods::Base
     when ::ActiveRecord::Relation     then cast(value.one? ? value.first : value.to_a)
     when ::Hash                       then find_by_attrs(value)
     when ::String                     then find_by_name(value)
-    else nil
     end
   end
 
@@ -63,6 +63,7 @@ class Jil::Methods::Chore < Jil::Methods::Base
     daily_key = attrs.delete(:show_on_daily_view).to_s.downcase.presence
     daily = ::Chore.show_on_daily_views.key?(daily_key) ? daily_key.to_sym : nil
     starts_on = parse_date(attrs.delete(:starts_on))
+    marked_due_at = parse_marked_due(attrs.delete(:marked_due_at))
 
     chore = household.chores.create(
       attrs.merge(
@@ -70,6 +71,7 @@ class Jil::Methods::Chore < Jil::Methods::Base
         sharing_mode:        sharing,
         assigned_to_user_id: assigned&.id,
         starts_on:           starts_on,
+        marked_due_at:       marked_due_at,
         show_on_daily_view:  daily,
       ).compact,
     )
@@ -108,6 +110,7 @@ class Jil::Methods::Chore < Jil::Methods::Base
       end
     end
     attrs[:starts_on] = parse_date(attrs[:starts_on]) if attrs.key?(:starts_on)
+    attrs[:marked_due_at] = parse_marked_due(attrs[:marked_due_at]) if attrs.key?(:marked_due_at)
     attrs[:one_off] = @jil.cast(attrs[:one_off], :Boolean) if attrs.key?(:one_off)
     attrs[:reward_pebbles] = @jil.cast(attrs[:reward_pebbles], :Numeric).to_i if attrs.key?(:reward_pebbles)
 
@@ -124,7 +127,7 @@ class Jil::Methods::Chore < Jil::Methods::Base
 
     household = ::ChoreHousehold.create!(
       owner_user: @jil.user,
-      name: "#{@jil.user.display_name}'s Household",
+      name:       "#{@jil.user.display_name}'s Household",
     )
     @jil.user.reload
     household
@@ -158,6 +161,16 @@ class Jil::Methods::Chore < Jil::Methods::Base
 
   def starts_on(value)
     { starts_on: value }
+  end
+
+  # ChoreData.marked_due_at(value) → stamps the user-facing Due Date
+  # field. Date values anchor to the chore-day start in the running
+  # user's zone; datetime values pass through. Used by one-off-add
+  # tasks (single tasks use this as their canonical due date instead
+  # of starts_on) and by any task that wants to surface a chore on a
+  # specific day outside its regular schedule.
+  def marked_due_at(value)
+    { marked_due_at: value }
   end
 
   def reward_pebbles(value)
@@ -209,6 +222,29 @@ class Jil::Methods::Chore < Jil::Methods::Base
 
     at = parse_time(timestamp) || Time.current
     ::ChoreCompleter.new(chore, user, at: at).call.completion
+  end
+
+  # Chore.mark_due("Vitamins") → stamp the chore as "needs to get
+  # done" so it surfaces on Today (or in Scheduled/overdue across
+  # days) until any ChoreCompletion clears it. Idempotent re-mark
+  # refreshes the timestamp. Returns the Chore (or nil if no match).
+  def mark_due(name_or_chore)
+    chore = load_chore(name_or_chore)
+    return nil if chore.nil?
+
+    chore.update!(marked_due_at: Time.current)
+    chore
+  end
+
+  # Chore.unmark_due("Vitamins") → clear the "needs to get done"
+  # stamp without completing the chore. No-op when not stamped.
+  # Returns the Chore (or nil if no match).
+  def unmark_due(name_or_chore)
+    chore = load_chore(name_or_chore)
+    return nil if chore.nil?
+
+    chore.update!(marked_due_at: nil) if chore.marked_due?
+    chore
   end
 
   # Chore.uncomplete("Vitamins") → destroy the most recent completion
@@ -482,6 +518,20 @@ class Jil::Methods::Chore < Jil::Methods::Base
     return value.to_date if value.is_a?(Time) || value.is_a?(DateTime)
 
     parse_time(value)&.to_date
+  end
+
+  # Anchors marked_due_at input to the chore-day start in the running
+  # user's zone, matching the form path in the controller. Any value
+  # the helper can coerce to a Date — Date, Time, DateTime, ISO string,
+  # trigger timestamp — collapses to that day's 4am start. nil/blank
+  # clears the stamp.
+  def parse_marked_due(value)
+    return nil if value.blank?
+
+    date = parse_date(value)
+    return nil if date.nil?
+
+    ChoreDay.starts_at(date, @jil.user)
   end
 
   def load_action_event(value)

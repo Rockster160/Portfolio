@@ -59,6 +59,24 @@ class ChoresController < ApplicationController
     render json: { ok: true, count: accessible_ids.size }
   end
 
+  # POST /chores/items/:id/mark_due — stamp the chore as "needs to get
+  # done." Household-wide (the column lives on Chore), cleared by any
+  # ChoreCompletion. Idempotent re-stamp refreshes the timestamp so a
+  # second mark on a later day resets the overdue-vs-due-today gate.
+  def mark_due
+    chore = current_user.accessible_chores.find(params[:id])
+    chore.update!(marked_due_at: Time.current)
+    render json: chore_response_payload(chore)
+  end
+
+  # DELETE /chores/items/:id/mark_due — clear the stamp without
+  # completing the chore.
+  def unmark_due
+    chore = current_user.accessible_chores.find(params[:id])
+    chore.update!(marked_due_at: nil) if chore.marked_due?
+    render json: chore_response_payload(chore)
+  end
+
   # POST /chores/items/:id/dailies — pin a chore to the viewer's
   # personal Dailies section on Today. Idempotent; if already pinned,
   # the existing row is returned. New pins land at the end.
@@ -671,6 +689,7 @@ class ChoresController < ApplicationController
       :name, :short_name, :icon, :reward_pebbles, :threshold_seconds,
       :one_off, :starts_on, :show_on_daily_view, :hot_eligibility,
       :sharing_mode, :assigned_to_user_id, :notes_template, :notes,
+      :marked_due_at,
       aliases:    [],
       recurrence: {}
     )
@@ -681,6 +700,20 @@ class ChoresController < ApplicationController
 
     if (hours = params.dig(:chore, :threshold_hours)).present?
       permitted[:threshold_seconds] = hours.to_i * 3600
+    end
+
+    # `marked_due_at` arrives from the form as a YYYY-MM-DD date string.
+    # Anchor to the 4am chore-day start in the viewer's zone so the
+    # serializer's day-range comparisons line up with the rest of the
+    # chore system. Blank clears the stamp.
+    if permitted.key?(:marked_due_at)
+      raw = permitted[:marked_due_at].to_s.strip
+      permitted[:marked_due_at] = if raw.blank?
+        nil
+      else
+        date = (Date.parse(raw) rescue nil)
+        date ? ChoreDay.starts_at(date, current_user) : nil
+      end
     end
 
     permitted

@@ -32,6 +32,11 @@ class ChoreCompletion < ApplicationRecord
   after_create_commit  :fire_jil_create_trigger
   after_update_commit  :fire_jil_update_trigger
   after_destroy_commit :fire_jil_destroy_trigger
+  # Clear the chore's user-stamped "needs to get done" flag on any
+  # completion — paid, skipped, or anonymous. The mark is a one-shot
+  # promotion onto Today/Scheduled; once the work is recorded the
+  # promotion has served its purpose.
+  after_create_commit :clear_chore_marked_due
 
   # History search via the app-wide `.query(q)` scope.
   #   notes:test            → notes ILIKE %test%
@@ -101,5 +106,14 @@ class ChoreCompletion < ApplicationRecord
     return if anonymous
 
     ::Jil.trigger(user, :chore_completion, with_jil_attrs(jil_attrs(action: :uncompleted)))
+  end
+
+  # Clears via update_columns to avoid firing Chore's :updated Jil
+  # trigger (this is a side effect of the completion, not a chore edit).
+  # updated_at is bumped explicitly so /chores/sync picks up the change.
+  def clear_chore_marked_due
+    return if chore.marked_due_at.nil?
+
+    chore.update_columns(marked_due_at: nil, updated_at: Time.current)
   end
 end

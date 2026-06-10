@@ -1061,6 +1061,38 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     background: var(--chores-accent, #2563EB) !important;
     color: #FFF !important;
   }
+  // "Needs to get done" stamp button — same circle treatment as the
+  // pin button so the head-left cluster reads as a single row of round
+  // controls. Sits between pin-toggle and the title.
+  .modal-head [data-edit-mark-due-toggle] {
+    margin: 0 8px 0 0 !important;
+    padding: 0 !important;
+    width: 28px;
+    height: 28px;
+    border: 0 !important;
+    border-radius: 999px !important;
+    background: #11264F !important;
+    color: var(--chores-muted) !important;
+    font-size: 13px !important;
+    line-height: 1 !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 4px #0006;
+    transition:
+      color 0.15s ease,
+      background 0.15s ease,
+      transform 0.1s ease;
+    flex-shrink: 0;
+  }
+  .modal-head [data-edit-mark-due-toggle][hidden] { display: none !important; }
+  .modal-head [data-edit-mark-due-toggle]:hover { color: #FFF !important; }
+  .modal-head [data-edit-mark-due-toggle]:active { transform: scale(0.92); }
+  .modal-head [data-edit-mark-due-toggle].marked {
+    background: #DC2626 !important;
+    color: #FFF !important;
+  }
   // Per-chore head actions (rotate hot pick, anonymous completion).
   // Same circle treatment as the pin button so the head reads as a
   // single cluster of round icons. Sit just to the LEFT of the close

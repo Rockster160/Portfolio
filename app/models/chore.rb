@@ -7,6 +7,7 @@
 #  archived_at         :datetime
 #  hot_eligibility     :integer          default("when_available"), not null
 #  icon                :text
+#  marked_due_at       :datetime
 #  name                :text             not null
 #  notes               :text
 #  notes_template      :text
@@ -154,6 +155,13 @@ class Chore < ApplicationRecord
   }
 
   def archived? = archived_at.present?
+
+  # User-stamped "this needs to get done" flag. While set, the chore
+  # appears on Today (if stamped during the current chore-day) or in
+  # the Scheduled/overdue section (if stamped on a prior chore-day).
+  # Any ChoreCompletion clears the stamp — see ChoreCompletion's
+  # after-create callback.
+  def marked_due? = marked_due_at.present?
 
   def aliases_array
     Array(aliases).map(&:to_s)
@@ -337,6 +345,7 @@ class Chore < ApplicationRecord
       sharing_mode:        sharing_mode,
       one_off:             one_off,
       archived:            archived?,
+      marked_due_at:       marked_due_at&.iso8601(3),
       created_by_user_id:  created_by_user_id,
       assigned_to_user_id: assigned_to_user_id,
     }
@@ -360,10 +369,22 @@ class Chore < ApplicationRecord
   end
 
   def fire_jil_update_trigger
-    # Archive (soft delete) is signalled by `archived_at` flipping from
-    # nil → set. Surface it as a distinct action so listeners can react
-    # to archive separately from any other update.
-    action = saved_change_to_archived_at? && archived_at.present? ? :archived : :updated
+    # Surface the most-specific lifecycle event so listeners can match
+    # the exact thing they care about (archive, mark-due, etc.) without
+    # filtering every `:updated` event for the column they want.
+    # Completion-driven clears use update_columns and skip callbacks,
+    # so an `:unmarked_due` event here only fires for explicit user
+    # clears (UI button or Jil Chore.unmark_due) — not for a clear that
+    # happened because the chore was completed.
+    action = (
+      if saved_change_to_archived_at? && archived_at.present?
+        :archived
+      elsif saved_change_to_marked_due_at?
+        marked_due_at.present? ? :marked_due : :unmarked_due
+      else
+        :updated
+      end
+    )
     ::Jil.trigger(created_by_user, :chore, with_jil_attrs(jil_attrs(action: action)))
   end
 

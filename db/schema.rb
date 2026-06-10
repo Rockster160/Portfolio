@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_09_000000) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_09_010000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -519,6 +519,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_09_000000) do
     t.bigint "chore_household_id", null: false
     t.integer "hot_eligibility", default: 0, null: false
     t.text "notes"
+    t.datetime "marked_due_at"
     t.index ["archived_at"], name: "index_chores_on_archived_at"
     t.index ["assigned_to_user_id"], name: "index_chores_on_assigned_to_user_id"
     t.index ["chore_household_id", "archived_at"], name: "index_chores_on_chore_household_id_and_archived_at"
