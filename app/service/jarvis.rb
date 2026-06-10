@@ -131,6 +131,16 @@ class Jarvis
     @@reserved_words ||= actions.flat_map(&:reserved_words)
   end
 
+  # Quoted spans in command input are payload, not listener-matchable tokens.
+  # Strip "..." (and smart-quote variants) before firing :tell so Jarvis-authored
+  # payloads (e.g. Global.command("Ping me \"...\"")) don't get re-interpreted.
+  QUOTED_SPAN_RX = /["“”][^"“”]*["“”]/
+  def self.strip_quoted_spans(text)
+    return text if text.blank?
+
+    text.to_s.gsub(QUOTED_SPAN_RX, " ").squish
+  end
+
   delegate :actions, to: :class
   def self.actions
     # Order sensitive classes to iterate through and attempt commands
@@ -164,9 +174,11 @@ class Jarvis
     remaining_words = @words
     remaining_words = @words.sub(Regexp.new("(?:\b(?:at|on)\b )?#{time_str}", :i), "").squish if scheduled_time
     timestamp = (scheduled_time || Time.current).in_time_zone(@user.timezone).iso8601
+    tell_words = Jarvis.strip_quoted_spans(remaining_words)
+    tell_full = Jarvis.strip_quoted_spans(@words)
     tasks = ::Jil.trigger(
       @user, :tell,
-      { words: remaining_words, timestamp: timestamp, full: @words, has_time: scheduled_time.present? },
+      { words: tell_words, timestamp: timestamp, full: tell_full, has_time: scheduled_time.present? },
       auth: :words,
     )
     return tasks.last.last_message if tasks.any?(&:stop_propagation?)

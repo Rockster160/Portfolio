@@ -55,6 +55,50 @@ RSpec.describe Jarvis do
     end
   end
 
+  context "with quoted payload spans" do
+    # Jarvis-authored payloads like Global.command("Ping me \"agenda add ...\"")
+    # must NOT have their quoted contents re-interpreted as :tell commands.
+    describe ".strip_quoted_spans" do
+      it "removes double-quoted spans" do
+        expect(Jarvis.strip_quoted_spans('Ping me "agenda add foo"')).to eq("Ping me")
+      end
+
+      it "removes smart-quoted spans" do
+        expect(Jarvis.strip_quoted_spans("Ping me “agenda add foo”")).to eq("Ping me")
+      end
+
+      it "preserves single quotes / apostrophes" do
+        expect(Jarvis.strip_quoted_spans("what's on John's list")).to eq("what's on John's list")
+      end
+
+      it "returns blank/nil untouched" do
+        expect(Jarvis.strip_quoted_spans(nil)).to be_nil
+        expect(Jarvis.strip_quoted_spans("")).to eq("")
+      end
+    end
+
+    it "does not fire :tell listeners against content inside quoted spans" do
+      agenda_task = Task.create!(
+        user:     @admin,
+        name:     "Test Agenda Add",
+        listener: 'tell:/^agenda add (?<name>.+)$/',
+        code:     "x = String.new(\"matched\")::String\n",
+      )
+
+      fired = []
+      allow_any_instance_of(Task).to receive(:execute).and_wrap_original { |orig, *args|
+        fired << orig.receiver.id
+        orig.call(*args)
+      }
+
+      Jarvis.command(@admin, 'Ping me "Agenda add should always be future"')
+
+      expect(fired).not_to include(agenda_task.id)
+    ensure
+      agenda_task&.destroy
+    end
+  end
+
   context "with lists" do
     it "can add items to a list with elaborate text" do
       expect(jarvis("add miter saw to my home depot list")).to eq("Home Depot:\n - miter saw")
