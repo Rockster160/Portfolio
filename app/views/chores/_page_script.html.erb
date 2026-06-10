@@ -2330,6 +2330,48 @@
       if (isSingleTask()) ensureMarkedDueSet();
     });
     editForm.querySelector('[data-field="starts_on"]')?.addEventListener("change", syncStartsOnDependents);
+    // Parent Chore picker: turns this chore into a sub-chore. Sub-chores
+    // MUST be single tasks (the server enforces it; mirror in the UI by
+    // forcing the toggle on and disabling it so the user can't fight
+    // a coercion they didn't initiate).
+    editForm.querySelector('[data-field="parent_chore_id"]')?.addEventListener("change", syncParentChoreLock);
+  }
+
+  // Mirrors syncAnchorPickerButton — render the currently-selected
+  // parent chore into the trigger button. Falls back to the "None"
+  // placeholder when the hidden input is empty. Also toggles the
+  // Clear chip's visibility so it only shows when a parent is set.
+  function syncParentPickerButton() {
+    const idEl = editForm?.querySelector('[data-field="parent_chore_id"]');
+    const iconEl = editForm?.querySelector('[data-parent-picker-icon]');
+    const labelEl = editForm?.querySelector('[data-parent-picker-label]');
+    const clearBtn = editForm?.querySelector('[data-parent-picker-clear]');
+    if (!idEl || !iconEl || !labelEl) return;
+    const id = parseInt(idEl.value, 10);
+    const chore = Number.isFinite(id) ? ChoreStore.get(id) : null;
+    if (!chore) {
+      iconEl.innerHTML = "";
+      labelEl.textContent = "None";
+      if (clearBtn) clearBtn.hidden = true;
+      return;
+    }
+    iconEl.innerHTML = iconHTML(chore);
+    labelEl.textContent = chore.short_name || chore.name || "—";
+    if (clearBtn) clearBtn.hidden = false;
+  }
+
+  function syncParentChoreLock() {
+    const idEl = editForm?.querySelector('[data-field="parent_chore_id"]');
+    const oneOffCb = editForm?.querySelector('[data-field="one_off"]');
+    if (!idEl || !oneOffCb) return;
+    const hasParent = !!idEl.value;
+    if (hasParent) {
+      oneOffCb.checked = true;
+      oneOffCb.disabled = true;
+      syncSingleTask();
+    } else {
+      oneOffCb.disabled = false;
+    }
   }
   function isSingleTask() { return editForm.querySelector('[data-field="one_off"]')?.checked === true; }
   function syncSingleTask() {
@@ -3057,11 +3099,17 @@
   })();
 
   // ============================================================
-  // Anchor-chore picker — same modal flavor as the icon picker, but
-  // populated from ChoreStore. Reuses the `score()` ranker so search
-  // semantics match the chores-grid search. Opened from buttons
-  // carrying [data-anchor-picker-open]; writes the picked chore id
-  // back into the form's [data-anchor-chore-id] hidden input.
+  // Chore picker — same modal flavor as the icon picker, but populated
+  // from ChoreStore. Reuses the `score()` ranker so search semantics
+  // match the chores-grid search. Two opener modes share the modal:
+  //   * [data-anchor-picker-open] — Follows-another-chore (recurrence
+  //     anchor). Excludes self + any chore that would form a cycle.
+  //     Writes to [data-anchor-chore-id].
+  //   * [data-parent-picker-open] — Parent Chore (sub-chore opt-in).
+  //     Excludes self, one-offs, and existing sub-chores (single-level
+  //     only). Writes to [data-field="parent_chore_id"].
+  // The mode is stashed on `modal.dataset.pickerMode` by the opener so
+  // the render filter + grid-click writeback both know which is which.
   // ============================================================
   (function setupChorePicker() {
     const modal = document.querySelector("[data-chore-picker-modal]");
@@ -3070,11 +3118,20 @@
     const gridEl   = modal.querySelector("[data-chore-picker-grid]");
     const emptyEl  = modal.querySelector("[data-chore-picker-empty]");
 
+    function mode() { return modal.dataset.pickerMode || "anchor"; }
+
+    function passesFilter(c, selfId) {
+      if (c.id === selfId) return false;
+      if (mode() === "parent") {
+        return !c.one_off && !c.parent_chore_id;
+      }
+      return !anchorChainContains(c, selfId);
+    }
+
     function render() {
       const q = (searchEl.value || "").trim();
       const selfId = parseInt(modal.dataset.selfId || "", 10) || null;
-      const candidates = ChoreStore.activeForGrid()
-        .filter(c => c.id !== selfId && !anchorChainContains(c, selfId));
+      const candidates = ChoreStore.activeForGrid().filter(c => passesFilter(c, selfId));
       const scored = candidates
         .map(c => ({ c, s: score(q, c.short_name || c.name, c.aliases || []) }))
         .filter(x => x.s > 0)
@@ -3101,9 +3158,16 @@
       const btn = e.target.closest("[data-chore-pick-id]");
       if (!btn) return;
       const id = parseInt(btn.dataset.chorePickId, 10);
-      const hidden = editForm.querySelector('[data-anchor-chore-id]');
-      if (hidden) hidden.value = id ? String(id) : "";
-      syncAnchorPickerButton();
+      if (mode() === "parent") {
+        const hidden = editForm.querySelector('[data-field="parent_chore_id"]');
+        if (hidden) hidden.value = id ? String(id) : "";
+        syncParentPickerButton();
+        syncParentChoreLock();
+      } else {
+        const hidden = editForm.querySelector('[data-anchor-chore-id]');
+        if (hidden) hidden.value = id ? String(id) : "";
+        syncAnchorPickerButton();
+      }
       modal.classList.add("hidden");
     });
 
@@ -3113,9 +3177,12 @@
     });
 
     document.addEventListener("click", e => {
-      const trigger = e.target.closest("[data-anchor-picker-open]");
+      const anchorTrigger = e.target.closest("[data-anchor-picker-open]");
+      const parentTrigger = e.target.closest("[data-parent-picker-open]");
+      const trigger = anchorTrigger || parentTrigger;
       if (!trigger) return;
       e.preventDefault();
+      modal.dataset.pickerMode = parentTrigger ? "parent" : "anchor";
       modal.dataset.selfId = String(parseInt(currentChoreId, 10) || "");
       searchEl.value = "";
       modal.classList.remove("hidden");
@@ -3124,6 +3191,18 @@
         searchEl?.focus();
         searchEl?.select();
       }, 0);
+    });
+
+    // Clear chip on the Parent Chore row — empties the hidden input
+    // and re-syncs the trigger label + the one_off lock.
+    document.addEventListener("click", e => {
+      const clearBtn = e.target.closest("[data-parent-picker-clear]");
+      if (!clearBtn) return;
+      e.preventDefault();
+      const hidden = editForm.querySelector('[data-field="parent_chore_id"]');
+      if (hidden) hidden.value = "";
+      syncParentPickerButton();
+      syncParentChoreLock();
     });
   })();
 
@@ -3651,6 +3730,9 @@
     setField("assigned_to_user_id", "");
     setField("starts_on", "");
     setField("marked_due_at", "");
+    setField("parent_chore_id", "");
+    syncParentPickerButton();
+    syncParentChoreLock();
     selectRewardPill(1);
     setField("reward_pebbles", 1);
     setCooldownSeconds(0);
@@ -3761,6 +3843,9 @@
     setCooldownSeconds(c.threshold_seconds || 0);
     setField("starts_on", c.starts_on || "");
     setField("marked_due_at", c.marked_due_on || "");
+    setField("parent_chore_id", c.parent_chore_id ? String(c.parent_chore_id) : "");
+    syncParentPickerButton();
+    syncParentChoreLock();
     const rec = c.recurrence || {};
     setPillValue("freq", rec.freq || "never");
     syncSingleTask();
@@ -3972,6 +4057,7 @@
         hot_eligibility: getField("hot_eligibility") || "when_available",
         sharing_mode: sharingMode,
         assigned_to_user_id: getField("assigned_to_user_id") || null,
+        parent_chore_id: getField("parent_chore_id") || null,
         aliases: (getField("aliases_csv") || "").split(",").map(s => s.trim()).filter(Boolean),
         notes_template: getField("notes_template") || "",
         notes: getField("notes") || "",

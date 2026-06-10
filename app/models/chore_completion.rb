@@ -18,6 +18,7 @@
 #  created_at                :datetime         not null
 #  updated_at                :datetime         not null
 #  chore_id                  :bigint           not null
+#  sub_chore_id              :bigint
 #  user_id                   :bigint           not null
 #
 class ChoreCompletion < ApplicationRecord
@@ -25,6 +26,11 @@ class ChoreCompletion < ApplicationRecord
 
   belongs_to :chore
   belongs_to :user
+  # When the user tapped a SubChore, `chore` is the parent (credited)
+  # and `sub_chore` records which sub-chore was actually tapped — so
+  # the sub-chore's card can show its own ring and the history view can
+  # render "Parent — SubChore" without losing the parent's payout.
+  belongs_to :sub_chore, class_name: "Chore", optional: true
 
   # Fan out lifecycle as Jil triggers so users can wire automations
   # against chore completion + undo (e.g. log an ActionEvent, post to
@@ -73,6 +79,8 @@ class ChoreCompletion < ApplicationRecord
       action:         action,
       chore_id:       chore_id,
       chore_name:     chore&.name,
+      sub_chore_id:   sub_chore_id,
+      sub_chore_name: sub_chore&.name,
       paid_pebbles:   paid_pebbles,
       payout_skipped: payout_skipped,
       skipped_reason: skipped_reason,
@@ -111,9 +119,11 @@ class ChoreCompletion < ApplicationRecord
   # Clears via update_columns to avoid firing Chore's :updated Jil
   # trigger (this is a side effect of the completion, not a chore edit).
   # updated_at is bumped explicitly so /chores/sync picks up the change.
+  # For sub-chore completions, clear BOTH the parent (chore) and the
+  # sub-chore (sub_chore) stamps — completing the sub satisfies any
+  # standing "needs to get done" on either side.
   def clear_chore_marked_due
-    return if chore.marked_due_at.nil?
-
-    chore.update_columns(marked_due_at: nil, updated_at: Time.current)
+    chore.update_columns(marked_due_at: nil, updated_at: Time.current) if chore.marked_due_at.present?
+    sub_chore.update_columns(marked_due_at: nil, updated_at: Time.current) if sub_chore&.marked_due_at.present?
   end
 end

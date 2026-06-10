@@ -437,10 +437,29 @@ class ChoresController < ApplicationController
     today_ids = @chores_json.select { |c| c[:today_visible] }.to_set { |c| c[:id] }
     seen = Set.new
     upcoming = {}
+    ((@day + 1)..(@day + 7)).each { |d| upcoming[d.iso8601] = [] }
+
+    # First pass: any chore (one-off, sub-chore, OR recurring) with a
+    # future `marked_due_at` falls into the lookahead on its marked
+    # day — mirrors today_visible's gating, which honours marked_due
+    # over the recurrence schedule. Without this, a sub-chore created
+    # with a future due date never surfaces anywhere.
+    @chores.each do |c|
+      next if c.archived? || today_ids.include?(c.id) || seen.include?(c.id)
+      next if c.marked_due_at.nil?
+
+      due_day = ChoreDay.current(current_user, at: c.marked_due_at)
+      next unless upcoming.key?(due_day.iso8601)
+
+      upcoming[due_day.iso8601] << c.id
+      seen << c.id
+    end
+
+    # Second pass: recurring chores follow their schedule. One-offs
+    # without a marked due date have no future surfacing rule —
+    # they're either visible on Today already or sitting in Grid.
     candidates = @chores.reject { |c| c.one_off || c.show_on_daily_view.to_sym == :never }
     ((@day + 1)..(@day + 7)).each do |d|
-      key = d.iso8601
-      upcoming[key] = [] # ensure the day appears even if it stays empty
       candidates.each do |c|
         next unless c.scheduled?
         next if today_ids.include?(c.id) || seen.include?(c.id)
@@ -448,7 +467,7 @@ class ChoresController < ApplicationController
         last_day = @ctx.last_completion_by_chore[c.id]&.day_key
         next unless c.matches_day?(d, current_user, last_completed_day: last_day)
 
-        upcoming[key] << c.id
+        upcoming[d.iso8601] << c.id
         seen << c.id
       end
     end
@@ -456,11 +475,18 @@ class ChoresController < ApplicationController
   end
 
   def chore_response_payload(chore)
+    # Mutations can shift a chore in/out of the Upcoming window — most
+    # commonly a marked_due_at change (sub-chore due date, snooze, etc).
+    # Rebuilding here mirrors what /chores/sync emits so the client's
+    # reconcile() path picks up the new lookahead the same way without
+    # needing a follow-up sync round-trip.
+    load_chore_page_data
     {
-      chore:          ChoreSerializer.new(chore, viewer: current_user).as_json,
+      chore:          ChoreSerializer.new(chore, viewer: current_user, ctx: @ctx).as_json,
+      lookahead:      @lookahead_json,
       server_ts:      Time.current.iso8601(3),
-      balance:        current_user.chore_balance,
-      today_earnings: current_user.chore_balance_breakdown(ChoreDay.current(current_user))[:today_earnings],
+      balance:        @balance_total,
+      today_earnings: @balance_today,
     }
   end
 
@@ -689,13 +715,23 @@ class ChoresController < ApplicationController
       :name, :short_name, :icon, :reward_pebbles, :threshold_seconds,
       :one_off, :starts_on, :show_on_daily_view, :hot_eligibility,
       :sharing_mode, :assigned_to_user_id, :notes_template, :notes,
-      :marked_due_at,
+      :marked_due_at, :parent_chore_id,
       aliases:    [],
       recurrence: {}
     )
 
     if (csv = params.dig(:chore, :aliases_csv))
       permitted[:aliases] = csv.to_s.split(",").map(&:strip).compact_blank
+    end
+
+    # Sub-chores must be one-offs (the model enforces it). When the user
+    # picks a Parent Chore in the Advanced section without flipping the
+    # One-off select, coerce here so the save succeeds. Empty/blank
+    # parent_chore_id means "not a sub-chore" — leave one_off alone.
+    if permitted.key?(:parent_chore_id)
+      raw_parent = permitted[:parent_chore_id].to_s.strip
+      permitted[:parent_chore_id] = raw_parent.presence
+      permitted[:one_off] = true if permitted[:parent_chore_id].present?
     end
 
     if (hours = params.dig(:chore, :threshold_hours)).present?

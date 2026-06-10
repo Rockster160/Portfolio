@@ -606,6 +606,34 @@ RSpec.describe "Chores", type: :request do
     expect(body["lookahead"].values).to all(eq([]))
   end
 
+  it "GET /chores/sync lookahead surfaces sub-chores with future marked_due_at on their marked day" do
+    parent = create(:chore, created_by_user: user, name: "Projects", one_off: false)
+    tomorrow = ChoreDay.current(user) + 1
+    sub = create(
+      :chore,
+      created_by_user: user,
+      parent_chore:    parent,
+      one_off:         true,
+      name:            "Install fan",
+      marked_due_at:   ChoreDay.starts_at(tomorrow, user),
+    )
+    get "/chores/sync", headers: { "Accept" => "application/json" }
+    body = response.parsed_body
+    expect(body["lookahead"][tomorrow.iso8601]).to include(sub.id)
+  end
+
+  it "PATCH /chores/items/:id returns a fresh lookahead so an edited due date appears in Upcoming immediately" do
+    parent = create(:chore, created_by_user: user, name: "Projects", one_off: false)
+    sub = create(:chore, created_by_user: user, parent_chore: parent, one_off: true, name: "Install fan")
+    new_day = ChoreDay.current(user) + 3
+    patch "/chores/items/#{sub.id}",
+      params:  { chore: { marked_due_at: new_day.iso8601 } }.to_json,
+      headers: { "Content-Type" => "application/json", "Accept" => "application/json" }
+    body = response.parsed_body
+    expect(body["lookahead"]).to be_a(Hash)
+    expect(body["lookahead"][new_day.iso8601]).to include(sub.id)
+  end
+
   describe "pebble transfers" do
     let(:recipient) { create(:user) }
 

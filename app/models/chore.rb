@@ -25,6 +25,7 @@
 #  assigned_to_user_id :bigint
 #  chore_household_id  :bigint           not null
 #  created_by_user_id  :bigint           not null
+#  parent_chore_id     :bigint
 #
 class Chore < ApplicationRecord
   include Jilable, Orderable
@@ -105,7 +106,25 @@ class Chore < ApplicationRecord
   belongs_to :chore_household
   belongs_to :created_by_user, class_name: "User"
   belongs_to :assigned_to_user, class_name: "User", optional: true
+  # Sub-chores: a SubChore is a Chore with `parent_chore_id` set —
+  # everything else inherits Chore's behaviour, but its completions
+  # credit the parent (see ChoreCompleter). Single level only:
+  # validation below forbids a sub-chore from itself being a parent.
+  belongs_to :parent_chore, class_name: "Chore", optional: true
+  has_many :sub_chores,
+    -> { where(archived_at: nil) },
+    class_name: "Chore",
+    foreign_key: :parent_chore_id,
+    inverse_of: :parent_chore,
+    dependent: :destroy
   has_many :chore_completions, dependent: :destroy
+  # Completions tapped against this chore acting as a sub-chore — their
+  # `chore_id` points at the parent, `sub_chore_id` at this row.
+  has_many :sub_chore_completions,
+    class_name: "ChoreCompletion",
+    foreign_key: :sub_chore_id,
+    inverse_of: :sub_chore,
+    dependent: :nullify
   has_many :chore_hot_picks, dependent: :destroy
   has_many :chore_streaks, dependent: :destroy
   has_many :chore_dailies, dependent: :destroy
@@ -115,6 +134,14 @@ class Chore < ApplicationRecord
   validates :threshold_seconds, numericality: { only_integer: true }, allow_nil: true
   validate :threshold_seconds_is_valid_sentinel_or_positive
   validate :anchor_chore_is_valid
+  validate :sub_chore_constraints
+
+  # Cascade archive: archiving a parent archives every live sub-chore in
+  # one shot so the user doesn't see orphan sub-chores after archive.
+  # `update_columns` skips callbacks — sub-chores shouldn't fan out
+  # their own :archived Jil triggers as a side effect of the parent's
+  # archive — but DOES bump updated_at so /chores/sync picks them up.
+  after_update_commit :cascade_archive_to_sub_chores, if: :saved_change_to_archived_at?
 
   def assigned? = assigned_to_user_id.present?
 
@@ -144,6 +171,8 @@ class Chore < ApplicationRecord
   scope :recurring, -> { where("recurrence IS NOT NULL AND recurrence != '{}'::jsonb") }
   scope :one_offs, -> { where(one_off: true) }
   scope :persistent, -> { where(one_off: false) }
+  scope :sub_chores, -> { where.not(parent_chore_id: nil) }
+  scope :top_level, -> { where(parent_chore_id: nil) }
   # Assignment narrows visibility only when the chore's cooldown is
   # personal. household-cooldown chores stay grid-visible to every
   # household member; the Today gate runs in the serializer.
@@ -155,6 +184,10 @@ class Chore < ApplicationRecord
   }
 
   def archived? = archived_at.present?
+
+  # Convenience predicate — keep callers from sprinkling
+  # `parent_chore_id.present?` everywhere.
+  def sub_chore? = parent_chore_id.present?
 
   # User-stamped "this needs to get done" flag. While set, the chore
   # appears on Today (if stamped during the current chore-day) or in
@@ -348,6 +381,7 @@ class Chore < ApplicationRecord
       marked_due_at:       marked_due_at&.iso8601(3),
       created_by_user_id:  created_by_user_id,
       assigned_to_user_id: assigned_to_user_id,
+      parent_chore_id:     parent_chore_id,
     }
   end
 
@@ -394,6 +428,41 @@ class Chore < ApplicationRecord
 
   def broadcast_chore_change
     ChoreBroadcaster.broadcast_changes!(created_by_user, self)
+  end
+
+  # Sub-chore rules:
+  #   * must be a one-off (sub-chores are always single-shot)
+  #   * parent cannot itself be a sub-chore (single-level only — chains
+  #     would make the credit redirect ambiguous)
+  #   * parent must live in the same household (cross-household credit
+  #     would silently move pebbles between households)
+  #   * cannot point at self
+  def sub_chore_constraints
+    return if parent_chore_id.blank?
+
+    if parent_chore_id == id
+      errors.add(:parent_chore_id, "cannot point at the chore itself")
+      return
+    end
+
+    errors.add(:one_off, "sub-chores must be one-offs") unless one_off
+
+    parent = parent_chore || Chore.find_by(id: parent_chore_id)
+    if parent.nil?
+      errors.add(:parent_chore_id, "does not exist")
+      return
+    end
+    errors.add(:parent_chore_id, "cannot itself be a sub-chore")  if parent.parent_chore_id.present?
+    errors.add(:parent_chore_id, "cannot be a one-off")            if parent.one_off
+    errors.add(:parent_chore_id, "must be in the same household") if parent.chore_household_id != chore_household_id
+  end
+
+  def cascade_archive_to_sub_chores
+    return unless archived?
+    return if parent_chore_id.present? # sub-chores don't have sub-chores
+
+    Chore.where(parent_chore_id: id, archived_at: nil)
+      .update_all(archived_at: Time.current, updated_at: Time.current)
   end
 
   def threshold_seconds_is_valid_sentinel_or_positive

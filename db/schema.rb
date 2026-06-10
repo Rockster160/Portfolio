@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_09_010000) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_10_121307) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -374,8 +374,10 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_09_010000) do
     t.text "note"
     t.float "streak_multiplier", default: 1.0, null: false
     t.boolean "anonymous", default: false, null: false
+    t.bigint "sub_chore_id"
     t.index ["chore_id", "user_id", "day_key"], name: "index_chore_completions_on_chore_id_and_user_id_and_day_key"
     t.index ["chore_id"], name: "index_chore_completions_on_chore_id"
+    t.index ["sub_chore_id"], name: "index_chore_completions_on_sub_chore_id"
     t.index ["user_id", "completed_at"], name: "index_chore_completions_on_user_id_and_completed_at"
     t.index ["user_id", "day_key"], name: "index_chore_completions_on_user_id_and_day_key"
     t.index ["user_id"], name: "index_chore_completions_on_user_id"
@@ -520,12 +522,14 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_09_010000) do
     t.integer "hot_eligibility", default: 0, null: false
     t.text "notes"
     t.datetime "marked_due_at"
+    t.bigint "parent_chore_id"
     t.index ["archived_at"], name: "index_chores_on_archived_at"
     t.index ["assigned_to_user_id"], name: "index_chores_on_assigned_to_user_id"
     t.index ["chore_household_id", "archived_at"], name: "index_chores_on_chore_household_id_and_archived_at"
     t.index ["chore_household_id", "sort_order"], name: "index_chores_active_by_household_sort", where: "(archived_at IS NULL)"
     t.index ["chore_household_id", "sort_order"], name: "index_chores_on_chore_household_id_and_sort_order"
     t.index ["one_off"], name: "index_chores_on_one_off"
+    t.index ["parent_chore_id"], name: "index_chores_on_parent_chore_id"
     t.index ["reward_pebbles"], name: "index_chores_on_reward_pebbles"
     t.index ["show_on_daily_view"], name: "index_chores_on_show_on_daily_view"
   end
@@ -1314,6 +1318,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_09_010000) do
   add_foreign_key "agendas", "users"
   add_foreign_key "boxes", "users"
   add_foreign_key "chore_completions", "chores"
+  add_foreign_key "chore_completions", "chores", column: "sub_chore_id"
   add_foreign_key "chore_completions", "users"
   add_foreign_key "chore_dailies", "chores", on_delete: :cascade
   add_foreign_key "chore_dailies", "users", on_delete: :cascade
@@ -1331,6 +1336,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_09_010000) do
   add_foreign_key "chore_transfers", "users", column: "to_user_id"
   add_foreign_key "chore_withdrawals", "users"
   add_foreign_key "chores", "chore_households"
+  add_foreign_key "chores", "chores", column: "parent_chore_id"
   add_foreign_key "chores", "users", column: "assigned_to_user_id"
   add_foreign_key "chores", "users", column: "created_by_user_id"
   add_foreign_key "emails", "users"

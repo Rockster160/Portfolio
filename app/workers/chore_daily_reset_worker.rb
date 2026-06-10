@@ -32,7 +32,9 @@ class ChoreDailyResetWorker
   def generate_hot_picks!(day)
     return if ChoreHotPick.exists?(day_key: day)
 
-    available = Chore.active.where(one_off: false).to_a
+    # One-offs are intentionally eligible — including sub-chores, which
+    # ARE one-offs. Archived chores are already filtered by `.active`.
+    available = Chore.active.to_a
     # Per-chore override: :never excludes entirely; the rest fall through
     # to reject_not_hot_eligible which still applies the unscheduled /
     # due-today / overdue gating.
@@ -76,8 +78,13 @@ class ChoreDailyResetWorker
 
   # One-off chores stay visible the day they're completed; the next-day
   # reset archives anything that was completed at least once (by anyone).
+  # COALESCE so sub-chore completions (chore_id = parent, sub_chore_id =
+  # sub) archive the SUB, not the parent — and the `one_off: true`
+  # filter naturally excludes the persistent parent if it appears in
+  # the same completion's chore_id.
   def archive_completed_one_offs!(day)
-    completed_ids = ChoreCompletion.where(day_key: day - 1).select(:chore_id)
+    completed_ids = ChoreCompletion.where(day_key: day - 1)
+      .pluck(Arel.sql("DISTINCT COALESCE(sub_chore_id, chore_id)"))
     Chore.active.where(one_off: true).where(id: completed_ids).update_all(archived_at: Time.current)
   end
 
@@ -151,7 +158,7 @@ class ChoreDailyResetWorker
   end
 
   def candidate_pool(day, excluded_id:)
-    pool = Chore.active.where(one_off: false).to_a
+    pool = Chore.active.to_a
     pool = pool.reject(&:hot_never?)
     pool = pool.reject { |c| c.id == excluded_id } if excluded_id
     taken = ChoreHotPick.for_day(day).pluck(:chore_id).to_set
@@ -260,16 +267,25 @@ class ChoreDailyResetWorker
   # paid completion anywhere in the chore's user scope disqualifies it
   # — being a Hot Pick on a chore nobody can earn on right now defeats
   # the point. One bulk SQL pass instead of per-chore checks.
+  #
+  # Sub-chore subtlety: a sub-chore's payout is gated by the PARENT's
+  # cooldown (sub-chore completions credit the parent). So both the
+  # threshold value AND the completion-history lookup walk through
+  # `parent_chore_id || id`. Without this, hot-picking a sub-chore
+  # whose parent just got tapped would surface a card that immediately
+  # `payout_skipped`s on tap — being hot but earning nothing.
   def reject_on_cooldown(chores, day, now: Time.current)
-    threshold_chores = chores.reject { |c| c.threshold_seconds.to_i.zero? }
+    parents = bulk_parent_lookup(chores)
+    threshold_chores = chores.reject { |c| effective_threshold(c, parents).to_i.zero? }
     return chores if threshold_chores.empty?
 
-    fixed_thresholds = threshold_chores.reject(&:cooldown_until_day_reset?)
-      .map { |c| c.threshold_seconds.to_i }
+    fixed_thresholds = threshold_chores.reject { |c| effective_day_reset?(c, parents) }
+      .map { |c| effective_threshold(c, parents).to_i }
     fixed_window = fixed_thresholds.max || 0
 
+    lookup_ids = threshold_chores.map { |c| effective_cooldown_id(c) }.uniq
     rows = ChoreCompletion
-      .where(chore_id: threshold_chores.map(&:id), payout_skipped: false)
+      .where(chore_id: lookup_ids, payout_skipped: false)
       .where("completed_at >= :ts OR day_key = :day", ts: now - fixed_window.seconds, day: day)
       .order(completed_at: :desc)
       .pluck(:chore_id, :completed_at, :day_key)
@@ -278,17 +294,46 @@ class ChoreDailyResetWorker
     rows.each { |chore_id, ts, dk| last_by_chore[chore_id] ||= [ts, dk] }
 
     chores.reject { |chore|
-      next false if chore.threshold_seconds.to_i.zero?
+      threshold = effective_threshold(chore, parents).to_i
+      next false if threshold.zero?
 
-      last = last_by_chore[chore.id]
+      last = last_by_chore[effective_cooldown_id(chore)]
       next false if last.nil?
 
       ts, dk = last
-      if chore.cooldown_until_day_reset?
+      if effective_day_reset?(chore, parents)
         dk == day
       else
-        (ts + chore.threshold_seconds.seconds) > now
+        (ts + threshold.seconds) > now
       end
     }
+  end
+
+  # Single IN-query lookup of every parent chore referenced by `chores`.
+  # Returns { parent_id => parent_chore }. Used by the effective_*
+  # helpers below so sub-chores can read cooldown config off their
+  # parent without N+1 reloads.
+  def bulk_parent_lookup(chores)
+    parent_ids = chores.filter_map(&:parent_chore_id).uniq
+    return {} if parent_ids.empty?
+
+    Chore.where(id: parent_ids).index_by(&:id)
+  end
+
+  def effective_chore(chore, parents)
+    parent = chore.parent_chore_id && parents[chore.parent_chore_id]
+    parent || chore
+  end
+
+  def effective_threshold(chore, parents)
+    effective_chore(chore, parents).threshold_seconds
+  end
+
+  def effective_day_reset?(chore, parents)
+    effective_chore(chore, parents).cooldown_until_day_reset?
+  end
+
+  def effective_cooldown_id(chore)
+    chore.parent_chore_id || chore.id
   end
 end

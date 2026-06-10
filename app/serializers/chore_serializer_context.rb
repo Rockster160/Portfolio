@@ -11,7 +11,15 @@ class ChoreSerializerContext
     :completion_actor_by_chore, :completion_days_by_chore,
     :completion_days_before_today_by_chore,
     :anchor_last_day_by_chore,
-    :household_user_ids, :daily_chore_ids
+    :household_user_ids, :daily_chore_ids,
+    # Sub-chore parallels: keyed by sub_chore_id rather than chore_id.
+    # Sub-chore cards must look at completions WHERE sub_chore_id =
+    # sub.id (the parent's chore_id rollup would include every other
+    # sibling's work).
+    :last_completion_by_sub_chore,
+    :last_completion_before_today_by_sub_chore,
+    :completion_actor_by_sub_chore,
+    :completions_today_by_sub_chore
 
   def self.for_user(viewer, day: nil)
     new(viewer: viewer, day: day || ChoreDay.current(viewer))
@@ -21,11 +29,14 @@ class ChoreSerializerContext
     @viewer = viewer
     @day = day
     @household_user_ids = viewer.chore_household_user_ids
-    chores = viewer.accessible_chores.to_a
+    # Preload parent_chore so sub-chores can read inherited config
+    # (threshold, sharing_mode, cooldown_kind) without N+1 reloads.
+    chores = viewer.accessible_chores.includes(:parent_chore).to_a
     @chores_by_id = chores.index_by(&:id)
     @chore_ids = chores.map(&:id)
     @household_chore_ids = chores.select(&:share_household?).map(&:id)
     @personal_chore_ids  = @chore_ids - @household_chore_ids
+    @sub_chore_ids = chores.select(&:sub_chore?).map(&:id)
     preload!
   end
 
@@ -89,6 +100,45 @@ class ChoreSerializerContext
     # B's cooldown user scope, in one IN(...) GROUP BY. Keyed by B's
     # id so the serializer can look it up O(1).
     @anchor_last_day_by_chore = bulk_anchor_last_days
+
+    # Sub-chore preloads — same shape as the chore_id versions, but
+    # keyed by sub_chore_id. Cooldown user scope follows the PARENT's
+    # sharing mode (sub-chores credit the parent), so we look up the
+    # parent's scope, not the sub-chore's own column.
+    preload_sub_chore_lookups!
+  end
+
+  def preload_sub_chore_lookups!
+    if @sub_chore_ids.empty?
+      @last_completion_by_sub_chore = {}
+      @last_completion_before_today_by_sub_chore = {}
+      @completion_actor_by_sub_chore = {}
+      @completions_today_by_sub_chore = {}
+      return
+    end
+
+    sub_personal, sub_household = @sub_chore_ids.partition { |id|
+      parent = @chores_by_id[id]&.parent_chore
+      parent && parent.share_personal?
+    }
+
+    @last_completion_by_sub_chore =
+      bulk_last_completion_for_sub(sub_personal, [viewer.id])
+        .merge(bulk_last_completion_for_sub(sub_household, household_user_ids))
+
+    @last_completion_before_today_by_sub_chore =
+      bulk_last_completion_before_day_for_sub(sub_personal, [viewer.id])
+        .merge(bulk_last_completion_before_day_for_sub(sub_household, household_user_ids))
+
+    @completion_actor_by_sub_chore = bulk_last_actor_for_sub(sub_household, household_user_ids)
+
+    personal_today = ChoreCompletion
+      .where(day_key: day, sub_chore_id: sub_personal, user_id: viewer.id)
+      .group(:sub_chore_id).count
+    household_today = ChoreCompletion
+      .where(day_key: day, sub_chore_id: sub_household, user_id: household_user_ids)
+      .group(:sub_chore_id).count
+    @completions_today_by_sub_chore = personal_today.merge(household_today)
   end
 
   def bulk_last_completion(chore_ids, user_ids)
@@ -125,6 +175,39 @@ class ChoreSerializerContext
     actor_user_ids = rows.map(&:user_id).uniq
     actors = User.where(id: actor_user_ids).index_by(&:id)
     rows.each_with_object({}) { |r, h| h[r.chore_id] = actors[r.user_id] }
+  end
+
+  def bulk_last_completion_for_sub(sub_ids, user_ids)
+    return {} if sub_ids.empty? || user_ids.empty?
+
+    ChoreCompletion
+      .where(user_id: user_ids, sub_chore_id: sub_ids)
+      .select("DISTINCT ON (sub_chore_id) sub_chore_id, chore_id, user_id, completed_at, payout_skipped, day_key, anonymous")
+      .order(:sub_chore_id, completed_at: :desc)
+      .index_by(&:sub_chore_id)
+  end
+
+  def bulk_last_completion_before_day_for_sub(sub_ids, user_ids)
+    return {} if sub_ids.empty? || user_ids.empty?
+
+    ChoreCompletion
+      .where(user_id: user_ids, sub_chore_id: sub_ids)
+      .where(day_key: ...day)
+      .select("DISTINCT ON (sub_chore_id) sub_chore_id, chore_id, user_id, completed_at, payout_skipped, day_key, anonymous")
+      .order(:sub_chore_id, completed_at: :desc)
+      .index_by(&:sub_chore_id)
+  end
+
+  def bulk_last_actor_for_sub(sub_ids, user_ids)
+    return {} if sub_ids.empty? || user_ids.empty?
+
+    rows = ChoreCompletion.credited
+      .where(user_id: user_ids, sub_chore_id: sub_ids)
+      .select("DISTINCT ON (sub_chore_id) sub_chore_id, user_id")
+      .order(:sub_chore_id, completed_at: :desc)
+    actor_user_ids = rows.map(&:user_id).uniq
+    actors = User.where(id: actor_user_ids).index_by(&:id)
+    rows.each_with_object({}) { |r, h| h[r.sub_chore_id] = actors[r.user_id] }
   end
 
   def bulk_completion_days(chore_ids, user_ids)

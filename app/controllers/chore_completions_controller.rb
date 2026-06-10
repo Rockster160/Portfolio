@@ -7,11 +7,17 @@ class ChoreCompletionsController < ApplicationController
   # no household member. user_id captures the recorder; everything
   # display-side ignores anonymous rows (see ChoreCompletion#credited).
   def anonymous_completion
-    chore = current_user.accessible_chores.find(params[:chore_id])
+    tapped = current_user.accessible_chores.find(params[:chore_id])
+    # Sub-chore taps credit the parent the same way ChoreCompleter does
+    # — anonymous or not, the chore_id column always points at the
+    # creditable row. Without this, the parent's schedule + cooldown
+    # would silently ignore an anonymous tap of a sub-chore.
+    credit = tapped.parent_chore || tapped
     completed_at = parse_client_time(params[:client_completed_at]) || Time.current
 
     completion = ChoreCompletion.create!(
-      chore:          chore,
+      chore:          credit,
+      sub_chore_id:   (tapped.id if tapped.id != credit.id),
       user:           current_user,
       completed_at:   completed_at,
       day_key:        ChoreDay.current(current_user, at: completed_at),
@@ -20,8 +26,9 @@ class ChoreCompletionsController < ApplicationController
       anonymous:      true,
       note:           params[:note].to_s,
     )
-    ChoreBroadcaster.broadcast_changes!(current_user, chore, actor_tab_id: params[:tab_id])
-    render json: response_payload(chore, completion).merge(anonymous: true), status: :created
+    ChoreBroadcaster.broadcast_changes!(current_user, credit, actor_tab_id: params[:tab_id])
+    ChoreBroadcaster.broadcast_changes!(current_user, tapped, actor_tab_id: params[:tab_id]) if tapped.id != credit.id
+    render json: response_payload(tapped, completion).merge(anonymous: true), status: :created
   end
 
   def create
@@ -97,7 +104,7 @@ class ChoreCompletionsController < ApplicationController
   end
 
   def destroy_last_today
-    chore = current_user.accessible_chores.unscope(where: :archived_at).find(params[:chore_id])
+    tapped = current_user.accessible_chores.unscope(where: :archived_at).find(params[:chore_id])
     day = ChoreDay.current(current_user)
 
     # Per the sharing spec: household + personal/assigned each undo only
@@ -105,16 +112,21 @@ class ChoreCompletionsController < ApplicationController
     # completion (their record is theirs to undo). Anonymous
     # completions are administrative audits — the tap-undo gesture
     # never targets them; they're only edited via the History page.
+    # Sub-chore card undo: find by sub_chore_id (not chore_id — that
+    # would catch any sibling sub-chore's parent-credited row).
+    column, value = tapped.sub_chore? ? [:sub_chore_id, tapped.id] : [:chore_id, tapped.id]
     completion = current_user.chore_completions
       .credited
-      .where(chore_id: chore.id, day_key: day)
+      .where(column => value, day_key: day)
       .order(completed_at: :desc).first
 
     if completion
+      credit_chore = completion.chore
       completion.destroy!
-      rebuild_streak(chore, day)
-      ChoreBroadcaster.broadcast_changes!(current_user, chore, actor_tab_id: params[:tab_id])
-      render json: response_payload(chore, nil)
+      rebuild_streak(credit_chore, day)
+      ChoreBroadcaster.broadcast_changes!(current_user, credit_chore, actor_tab_id: params[:tab_id])
+      ChoreBroadcaster.broadcast_changes!(current_user, tapped, actor_tab_id: params[:tab_id]) if tapped.id != credit_chore.id
+      render json: response_payload(tapped, nil)
     else
       render json: { error: "no completion to undo" }, status: :not_found
     end

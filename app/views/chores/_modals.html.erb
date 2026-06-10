@@ -348,6 +348,26 @@
           <input type="hidden" data-field="hot_eligibility" value="when_available">
         </div>
 
+        <%# ----- Parent Chore (sub-chore opt-in) -----
+          Same chore-picker affordance as the Follows-another-chore
+          row above so the UX is consistent: a button trigger that
+          opens the shared search modal, plus a Clear chip when
+          something is picked. Hidden input carries the actual value.
+          The picker's mode (anchor vs parent) is set on the modal
+          dataset by whichever trigger opened it. %>
+        <div class="form-section">
+          <label class="field-label">Parent Chore</label>
+          <div class="after-chore-row">
+            <button type="button" class="anchor-picker-btn" data-parent-picker-open>
+              <span class="anchor-picker-icon" data-parent-picker-icon></span>
+              <span class="anchor-picker-label" data-parent-picker-label>None</span>
+            </button>
+            <button type="button" class="pill" data-parent-picker-clear hidden>Clear</button>
+          </div>
+          <input type="hidden" data-field="parent_chore_id" value="">
+          <span class="field-hint">When set, this becomes a sub-chore of the selected chore — it'll always be a single task, and completing it credits the parent.</span>
+        </div>
+
         <%# ----- Cooldown ----- %>
         <div class="form-section" data-recurring-only>
           <label class="field-label">Cooldown</label>

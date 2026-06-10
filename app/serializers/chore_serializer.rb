@@ -34,10 +34,14 @@ class ChoreSerializer
       notes:                chore.notes.to_s,
       reward_pebbles:       chore.reward_pebbles,
       reward_label:         chore.reward_label,
-      threshold_seconds:    chore.threshold_seconds,
+      # Cooldown / sharing-mode / hot-eligibility belong to the parent
+      # for sub-chores — sub-chore taps credit the parent, so the
+      # client must show parent's cooldown semantics to stay coherent.
+      threshold_seconds:    effective_chore.threshold_seconds,
       cooldown_kind:        cooldown_kind, # "none" | "fixed" | "day_reset"
       one_off:              chore.one_off,
-      sharing_mode:         chore.sharing_mode,
+      sharing_mode:         effective_chore.sharing_mode,
+      parent_chore_id:      chore.parent_chore_id,
       assigned_to_user_id:  chore.assigned_to_user_id,
       show_on_daily_view:   chore.show_on_daily_view,
       hot_eligibility:      chore.hot_eligibility,
@@ -83,6 +87,14 @@ class ChoreSerializer
 
   private
 
+  # For sub-chores, inherited config (cooldown, sharing mode, household
+  # scope) lives on the parent. `effective_chore` returns the parent
+  # when this chore is a sub-chore, else the chore itself. Preloaded
+  # via context's `includes(:parent_chore)`.
+  def effective_chore
+    @effective_chore ||= chore.parent_chore || chore
+  end
+
   def icon_kind
     return :empty if chore.icon.blank?
 
@@ -95,14 +107,14 @@ class ChoreSerializer
   end
 
   def cooldown_kind
-    return :day_reset if chore.threshold_seconds == Chore::THRESHOLD_DAY_RESET
-    return :fixed     if chore.threshold_seconds.to_i.positive?
+    return :day_reset if effective_chore.threshold_seconds == Chore::THRESHOLD_DAY_RESET
+    return :fixed     if effective_chore.threshold_seconds.to_i.positive?
 
     :none
   end
 
   def cooldown_scope_user_ids
-    chore.share_household? ? household_user_ids : [viewer.id]
+    effective_chore.share_household? ? household_user_ids : [viewer.id]
   end
 
   def household_user_ids
@@ -112,22 +124,33 @@ class ChoreSerializer
   end
 
   def done_count_today
-    return ctx.completions_today.fetch(chore.id, 0) if ctx
+    if ctx
+      return ctx.completions_today_by_sub_chore.fetch(chore.id, 0) if chore.sub_chore?
+
+      return ctx.completions_today.fetch(chore.id, 0)
+    end
 
     # All completions count — including ones recorded as "done by
     # someone outside the household" — so the card visually reads as
     # done. The ring color (set via last_actor_anonymous? below) is
-    # what distinguishes who, if anyone, gets credit.
+    # what distinguishes who, if anyone, gets credit. Sub-chores look
+    # up by sub_chore_id so each sibling's card tracks its own taps.
+    column, value = chore.sub_chore? ? [:sub_chore_id, chore.id] : [:chore_id, chore.id]
     @done_count_today ||= ChoreCompletion
-      .where(chore_id: chore.id, user_id: cooldown_scope_user_ids, day_key: day)
+      .where(column => value, user_id: cooldown_scope_user_ids, day_key: day)
       .count
   end
 
   def last_completion
-    return ctx.last_completion_by_chore[chore.id] if ctx
+    if ctx
+      return ctx.last_completion_by_sub_chore[chore.id] if chore.sub_chore?
 
+      return ctx.last_completion_by_chore[chore.id]
+    end
+
+    column, value = chore.sub_chore? ? [:sub_chore_id, chore.id] : [:chore_id, chore.id]
     @last_completion ||= ChoreCompletion
-      .where(chore_id: chore.id, user_id: cooldown_scope_user_ids)
+      .where(column => value, user_id: cooldown_scope_user_ids)
       .order(completed_at: :desc).first
   end
 
@@ -139,27 +162,33 @@ class ChoreSerializer
   # visibility input — a skipped completion and a paid completion
   # both represent the user acting on the chore.
   def last_completion_before_today
-    return ctx.last_completion_before_today_by_chore[chore.id] if ctx
+    if ctx
+      return ctx.last_completion_before_today_by_sub_chore[chore.id] if chore.sub_chore?
 
+      return ctx.last_completion_before_today_by_chore[chore.id]
+    end
+
+    column, value = chore.sub_chore? ? [:sub_chore_id, chore.id] : [:chore_id, chore.id]
     @last_completion_before_today ||= ChoreCompletion
-      .where(chore_id: chore.id, user_id: cooldown_scope_user_ids)
+      .where(column => value, user_id: cooldown_scope_user_ids)
       .where(day_key: ...day)
       .order(completed_at: :desc).first
   end
 
   def actor_username
-    return nil unless chore.share_household?
+    return nil unless effective_chore.share_household?
     return nil if last_actor_anonymous?
 
-    actor = ctx&.completion_actor_by_chore&.[](chore.id)
+    actor = actor_from_ctx
     return actor.username if actor && actor.id != viewer.id
     return nil if actor
 
     # Fallback when no preloaded context — single lookup. Anonymous
     # completions never get an actor, so the credited filter is fine
     # here too.
+    column, value = chore.sub_chore? ? [:sub_chore_id, chore.id] : [:chore_id, chore.id]
     last = ChoreCompletion.credited
-      .where(chore_id: chore.id, user_id: cooldown_scope_user_ids)
+      .where(column => value, user_id: cooldown_scope_user_ids)
       .order(completed_at: :desc).first
     return nil if last.nil? || last.user_id == viewer.id
 
@@ -172,16 +201,23 @@ class ChoreSerializer
   def last_actor_username
     return nil if last_actor_anonymous?
 
-    actor = ctx&.completion_actor_by_chore&.[](chore.id)
+    actor = actor_from_ctx
     return actor.username if actor
 
+    column, value = chore.sub_chore? ? [:sub_chore_id, chore.id] : [:chore_id, chore.id]
     last = ChoreCompletion.credited
-      .where(chore_id: chore.id, user_id: cooldown_scope_user_ids)
+      .where(column => value, user_id: cooldown_scope_user_ids)
       .order(completed_at: :desc).first
     return nil if last.nil?
     return viewer.username if last.user_id == viewer.id
 
     User.where(id: last.user_id).pick(:username)
+  end
+
+  def actor_from_ctx
+    return nil unless ctx
+
+    chore.sub_chore? ? ctx.completion_actor_by_sub_chore[chore.id] : ctx.completion_actor_by_chore[chore.id]
   end
 
   # True when the most recent completion of this chore — across the
@@ -212,10 +248,14 @@ class ChoreSerializer
     household_id = viewer.chore_household_id
     return @streak_multiplier = 1 if household_id.nil?
 
-    bonuses = ChoreStreakBonus.active.where(chore_household_id: household_id).applicable_to(chore.id)
+    # Streaks live on the parent — a sub-chore tap advances the parent's
+    # streak — so a sub-chore card's forecast must read the parent's
+    # streak row and parent-applicable bonuses, not the sub-chore's own.
+    streak_chore_id = chore.parent_chore_id || chore.id
+    bonuses = ChoreStreakBonus.active.where(chore_household_id: household_id).applicable_to(streak_chore_id)
     return @streak_multiplier = 1 if bonuses.empty?
 
-    streak = ChoreStreak.find_by(user_id: viewer.id, chore_id: chore.id)
+    streak = ChoreStreak.find_by(user_id: viewer.id, chore_id: streak_chore_id)
     current = if streak&.last_completed_day.present? && streak.last_completed_day >= day - 1
       streak.current_streak.to_i
     else
@@ -241,12 +281,15 @@ class ChoreSerializer
     # already hidden upstream via `visible_to_user`, but household+assigned
     # is still grid-visible to the household, so the Today gate lives here.
     return false if chore.assigned? && chore.assigned_to_user_id != viewer.id
-    # User-stamped "needs to get done" overrides the schedule gate —
-    # but only once the marked date has arrived. A future-dated mark
-    # stays hidden until its chore-day, so users can pick a date in
-    # advance without polluting Today.
+    # marked_due is the "appears on Today" stamp — past or today shows,
+    # future hides (lets the user pre-schedule a one-off or sub-chore
+    # for a specific day without it cluttering Today now). The gate
+    # is unconditional: a future-marked recurring chore stays off
+    # Today even if its schedule would otherwise fire today.
     # Cleared by any ChoreCompletion (see ChoreCompletion#clear_chore_marked_due).
-    return true if chore.marked_due? && chore.marked_due_at < ChoreDay.ends_at(day, viewer)
+    if chore.marked_due?
+      return chore.marked_due_at < ChoreDay.ends_at(day, viewer)
+    end
     return true  if chore.one_off
     return true  if chore.daily_always?
     return false if chore.show_on_daily_view.to_sym == :never

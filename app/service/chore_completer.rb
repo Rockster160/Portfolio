@@ -12,7 +12,12 @@ class ChoreCompleter
   }
 
   def initialize(chore, user, at: Time.current, note: nil)
-    @chore = chore
+    # `tapped` is the chore the user actually tapped. For a sub-chore,
+    # the completion record credits the parent (`credit`), but the
+    # reward amount comes off the tapped sub-chore — sub-chores carry
+    # their own `reward_pebbles` (copied from parent at create, editable).
+    @tapped = chore
+    @chore = chore.parent_chore || chore
     @user = user
     @at = at
     @note = note
@@ -40,15 +45,20 @@ class ChoreCompleter
 
   private
 
-  attr_reader :chore, :user, :at, :note, :day
+  attr_reader :chore, :tapped, :user, :at, :note, :day
+
+  def sub_chore_id
+    tapped.id == chore.id ? nil : tapped.id
+  end
 
   def build_completion
     ChoreCompletion.new(
       chore:             chore,
+      sub_chore_id:      sub_chore_id,
       user:              user,
       completed_at:      at,
       day_key:           day,
-      base_pebbles:      chore.reward_pebbles,
+      base_pebbles:      tapped.reward_pebbles,
       hot_multiplier:    1.0,
       streak_multiplier: 1.0,
       paid_pebbles:      0,
@@ -93,12 +103,18 @@ class ChoreCompleter
   end
 
   def apply_payout!(record)
-    hot = ChoreHotPick.find_by(day_key: day, chore_id: chore.id)
+    # Hot-pick lookup: prefer the tapped sub-chore's own hot row (the
+    # sub-chore can be hot-picked independently), fall back to the
+    # parent's. This is how completing "Refactor X" satisfies the
+    # Projects hot pick — and how a sub-chore's own hot multiplier
+    # "bubbles up" into the parent-credited completion record.
+    hot = ChoreHotPick.find_by(day_key: day, chore_id: tapped.id)
+    hot ||= ChoreHotPick.find_by(day_key: day, chore_id: chore.id) if tapped.id != chore.id
     hot_multiplier = hot&.multiplier || 1.0
 
     streak_count = current_streak_count + 1 # this completion advances it
     streak_multiplier, bonus_pebbles, breakdown = combined_streak_payout(streak_count)
-    base = chore.reward_pebbles
+    base = tapped.reward_pebbles
     paid = (base * hot_multiplier * streak_multiplier).round + bonus_pebbles
 
     record.hot_multiplier = hot_multiplier
@@ -164,6 +180,10 @@ class ChoreCompleter
 
   def broadcast!
     ChoreBroadcaster.broadcast_changes!(user, chore)
+    # Sub-chore taps need their own broadcast too — the sub-chore's card
+    # state is keyed off `sub_chore_id` lookups in the serializer, and
+    # the parent broadcast won't carry the sub-chore's id for refresh.
+    ChoreBroadcaster.broadcast_changes!(user, tapped) if tapped.id != chore.id
   end
 
   # Two-unit, integer-only duration formatter. NEVER produces decimals.
