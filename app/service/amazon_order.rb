@@ -8,6 +8,7 @@ class AmazonOrder
     :delivery_date,
     :time_range,
     :delivered,
+    :status,
     :email_ids,
     :errors,
     :just_added,
@@ -66,7 +67,7 @@ class AmazonOrder
   end
 
   def self.create(order_hash={})
-    new(order_hash.merge(just_added: true)).tap { |item| @@all << item }
+    new(order_hash.merge(just_added: true)).tap { |item| all << item }
   end
 
   # NOTE: Do not use `new` directly, use `create` instead
@@ -115,7 +116,11 @@ class AmazonOrder
   end
 
   def destroy
-    @@all = AmazonOrder.all.reject { |order| order.item_id == item_id }
+    # Same ASIN can legitimately appear under multiple order_ids (subscribe & save,
+    # re-orders, split shipments). Only drop the specific (order_id, item_id) pair.
+    @@all = AmazonOrder.all.reject { |order|
+      order.order_id == order_id && order.item_id == item_id
+    }
     self
   end
 
@@ -134,6 +139,7 @@ class AmazonOrder
       delivery_date: delivery_date,
       time_range:    time_range,
       delivered:     delivered,
+      status:        status,
       email_ids:     email_ids,
       errors:        errors,
     }

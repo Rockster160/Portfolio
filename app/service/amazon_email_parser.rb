@@ -36,19 +36,30 @@ class AmazonEmailParser
     return Jarvis.cmd("Add Amazon Email no order id: #{@email.id}") if order_id.blank?
 
     delivered = delivered_email?
+
+    if order_card.nil?
+      # No item card → we can't tell which items shipped. Flag for manual review
+      # rather than guessing (a bare "Delivered: Order # …" notice doesn't promise
+      # the WHOLE order delivered — siblings may still be in transit).
+      tag = delivered ? "delivered, no order card" : "no order card"
+      return Jarvis.cmd("Add Amazon Email #{tag}: #{@email.id}")
+    end
+
     # Only update state for items actually referenced by this email's order card.
     # Other items on the same order_id (shipped/delivered separately) keep their own state.
+    new_status = status_from_subject
     email_items.each { |item|
       arrival_date(item).tap { |date|
         if date.present?
           item.delivery_date = date.iso8601.encode("UTF-8")
-        elsif !delivered
+        elsif !delivered && new_status.nil?
           item.error!("Unable to parse date")
         end
       }
       item.time_range = arrival_time(item)
       item.name ||= safe_name(item)
       item.delivered = true if delivered
+      apply_status(item, new_status)
     }
 
     AmazonOrder.save
@@ -62,16 +73,24 @@ class AmazonEmailParser
     false
   end
 
-  💾(:order_id) { @email.to_html[ORDER_ID_REGEX] }
-
   # The order details card - the .rio-card containing "Order # XXX-XXXXXXX-XXXXXXX"
   # along with the item images, names, and arrival info. Other rio-cards in the
   # email (step tracker, marketing slot, dividers) are skipped.
+  # Pick the rio-card with item links. Prefer one whose text also prints the
+  # "Order # XXX..." header (most reliable order_id), but fall back to any card
+  # with /dp/ links - delivery-update / late notices sometimes omit the header
+  # inside the item card and put it elsewhere in the email.
   💾(:order_card) {
-    @doc.css(".rio-card").find { |card|
-      card.text.include?(order_id) && card.css("a[href*='%2Fdp%2F'], a[href*='/dp/']").any?
+    candidates = @doc.css(".rio-card").select { |card|
+      card.css("a[href*='%2Fdp%2F'], a[href*='/dp/']").any?
     }
+    candidates.find { |c| c.text.match?(ORDER_ID_REGEX) } || candidates.first
   }
+
+  # Trust the order id printed on the order card over the first regex match in
+  # the html. Footers/banners can mention unrelated orders ("track another order")
+  # and we don't want to attribute the email to the wrong one.
+  💾(:order_id) { order_card&.text&.[](ORDER_ID_REGEX) || @email.to_html[ORDER_ID_REGEX] }
 
   💾(:order_card_html) { order_card&.to_html.to_s }
 
@@ -80,16 +99,33 @@ class AmazonEmailParser
   }
 
   💾(:item_asins) {
-    next [order_id] if order_card.nil?
+    next [] if order_card.nil?
 
-    asins = order_card.css("a").flat_map { |a| a["href"].to_s.scan(ASIN_REGEX).flatten }.compact.uniq
-    asins.presence || [order_id]
+    order_card.css("a").flat_map { |a| a["href"].to_s.scan(ASIN_REGEX).flatten }.compact.uniq
   }
 
   💾(:delivered_email?) {
     text = order_card_text.presence || @email.to_html
     DELIVERED_REGEXES.any? { |re| text.match?(re) }
   }
+
+  # nil for normal emails; :cancelled for "Item cancelled" notifications;
+  # :declined for "Payment declined" / order-on-hold notifications.
+  💾(:status_from_subject) {
+    subj = @email.subject.to_s
+    next :cancelled if subj.match?(/\b(?:items?\s+)?cancell?ed\b|\bcancellation\b/i)
+    next :declined  if subj.match?(/payment\s+(?:was\s+)?declined|payment\s+revision\s+needed/i)
+
+    nil
+  }
+
+  # Cancelled is sticky (Amazon doesn't un-cancel an order). Declined is transient -
+  # a subsequent "Shipped"/"Delivered" email clears it back to active (nil).
+  def apply_status(item, new_status)
+    return if item.status == :cancelled
+
+    item.status = new_status
+  end
 
   def email_items
     @email_items ||= item_asins.map { |asin|
@@ -135,8 +171,8 @@ class AmazonEmailParser
       return future(Date.parse(match[1]))
     end
 
-    # "Arriving <Month> <day>" - explicit date
-    if (match = text.match(/Arriving\s+(?:by\s+)?(#{month_regex}\s+\d{1,2})/))
+    # "Arriving <Month> <day>" / "Estimated to arrive by <Month> <day>" - explicit date
+    if (match = text.match(/(?:Arriving|Estimated\s+to\s+arrive)\s+(?:by\s+)?(#{month_regex}\s+\d{1,2})/i))
       return future(Date.parse(match[1]))
     end
 

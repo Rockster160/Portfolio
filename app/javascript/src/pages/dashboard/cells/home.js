@@ -61,6 +61,13 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
       this._update("delivered", val);
     }
 
+    get status() {
+      return this._data.status;
+    }
+    set status(val) {
+      this._update("status", val);
+    }
+
     get date() {
       return this._data.date;
     }
@@ -124,6 +131,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
       if ("errors" in newData) this._update("errors", newData.errors, true);
       if ("delivered" in newData)
         this._update("delivered", newData.delivered, true);
+      if ("status" in newData) this._update("status", newData.status, true);
       if ("date" in newData) this._update("date", newData.date, true);
       if ("time_range" in newData)
         this._update("time_range", newData.time_range, true);
@@ -315,7 +323,11 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
         name = Text.red(name);
       }
 
-      if (order.delivered) {
+      if (order.status === "cancelled") {
+        delivery = Text.red("CANC");
+      } else if (order.status === "declined") {
+        delivery = Text.red("DECL");
+      } else if (order.delivered) {
         // Detect if previously NOT delivered, and if so- beep
         delivery = Text.green("✓");
       } else if (order.date) {
