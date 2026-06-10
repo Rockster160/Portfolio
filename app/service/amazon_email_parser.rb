@@ -180,7 +180,8 @@ class AmazonEmailParser
   end
 
   def shortened_name(item)
-    ChatGPT.short_name_from_order(full_name(item), item).to_s
+    # Disabled for now. Need to update keys.
+    # ChatGPT.short_name_from_order(full_name(item), item).to_s
   end
 
   def full_name(item)
