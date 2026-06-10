@@ -18,10 +18,27 @@ module Tokenizing::TriggerData
 
     return { data: input } unless input.is_a?(::String)
 
+    pieces = top_level_pieces(input)
+    if pieces.size > 1 && pieces.all? { |p| p.include?(":") }
+      return pieces.each_with_object({}) { |piece, hash|
+        sub = parse(piece, as: as)
+        hash.deep_merge!(sub) if sub.is_a?(::Hash)
+      }
+    end
+
     segments = colon_segments(input)
     return { data: input } if segments.size < 2
 
     parse(segments.reverse.reduce { |value, key| { key.to_sym => value } }, as: as)
+  end
+
+  # Splits the input on top-level whitespace, keeping quoted substrings
+  # (single or double) intact so `name:"Refill Item"` stays one piece.
+  def top_level_pieces(input)
+    tokenizer = ::Tokenizer.new(input)
+    tokenizer.tokenized_text.split(/\s+/).filter_map { |seg|
+      tokenizer.untokenize(seg).strip.presence
+    }
   end
 
   # Splits a colon-delimited string into segments, tokenizing first so quoted

@@ -592,6 +592,29 @@ RSpec.describe "Jil Edge Cases" do
 
   # ── Presence ─────────────────────────────────────────────────────
 
+  describe "String cast quote-stripping" do
+    # Regression: an earlier `gsub(/^"|"$/, "")` stripped a lone trailing `"`
+    # even when there was no opening quote, mangling strings like
+    # `name:"X" notes:"Y"` into `name:"X" notes:"Y` before downstream parsing.
+    it "only strips quotes when both ends are wrapped" do
+      exe = ::Jil::Executor.new(user, <<~'JIL', { payload: 'name:"X" notes:"Y"' })
+        d = Global.input_data()::Hash
+        s = d.get("payload")::String
+      JIL
+      exe.execute_all
+      expect(exe.ctx.dig(:vars, :s, :value)).to eq('name:"X" notes:"Y"')
+    end
+
+    it "still unwraps fully-wrapped quoted strings" do
+      exe = ::Jil::Executor.new(user, <<~'JIL', { payload: '"wrapped"' })
+        d = Global.input_data()::Hash
+        s = d.get("payload")::String
+      JIL
+      exe.execute_all
+      expect(exe.ctx.dig(:vars, :s, :value)).to eq("wrapped")
+    end
+  end
+
   describe "presence" do
     it "returns value when present" do
       exe = jil(<<-'JIL')

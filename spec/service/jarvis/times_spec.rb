@@ -112,6 +112,32 @@ RSpec.describe Jarvis::Times do
       end
     end
 
+    describe "future context" do
+      around { |ex| Time.use_zone("Mountain Time (US & Canada)") { ex.run } }
+
+      it "rolls 'at 8:30am' into tomorrow when context is :future and now is past 8:30am" do
+        Timecop.freeze(Time.zone.local(2026, 6, 9, 23, 57)) do
+          pre_text, parsed = described_class.extract_time(
+            "agenda add berry breakfast at 8:30am",
+            context: :future,
+          )
+          expect(pre_text).to include("at 8:30am")
+          expect(parsed).to be > Time.current
+          expect(parsed.hour).to eq(8)
+          expect(parsed.min).to eq(30)
+          expect(parsed.to_date).to eq(Date.new(2026, 6, 10))
+        end
+      end
+
+      it "leaves 'at 2pm' in the past when no context is forced (default Jarvis behavior)" do
+        Timecop.freeze(Time.zone.local(2026, 6, 9, 23, 57)) do
+          _pre_text, parsed = described_class.extract_time("log something at 2pm")
+          expect(parsed.to_date).to eq(Date.new(2026, 6, 9))
+          expect(parsed.hour).to eq(14)
+        end
+      end
+    end
+
     describe "relative offsets" do
       it "matches 'in 3 hours'" do
         pre_text, parsed = described_class.extract_time("remind me in 3 hours")

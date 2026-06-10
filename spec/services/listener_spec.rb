@@ -316,6 +316,29 @@ RSpec.describe Task do
       result = Tokenizing::TriggerData.parse('person:chelsea:"-15.20"')
       expect(result).to eq({ person: { chelsea: "-15.20" } })
     end
+
+    it "parses space-separated key:\"value\" pairs as a flat hash" do
+      result = Tokenizing::TriggerData.parse('name:"Refill Item" notes:"Ice Water"')
+      expect(result).to eq({ name: "Refill Item", notes: "Ice Water" })
+    end
+
+    it "parses unquoted space-separated key:value pairs" do
+      result = Tokenizing::TriggerData.parse("a:b c:d")
+      expect(result).to eq({ a: "b", c: "d" })
+    end
+
+    it "leaves single-chain colon syntax intact when there are no top-level spaces" do
+      expect(Tokenizing::TriggerData.parse("a:b:c")).to eq({ a: { b: "c" } })
+    end
+
+    it "does NOT split words that aren't key:value pairs" do
+      expect(Tokenizing::TriggerData.parse("chelsea withdraw 180")).to eq({ data: "chelsea withdraw 180" })
+      expect(Tokenizing::TriggerData.parse('command:Remind me to "x"')).to eq({ command: 'Remind me to "x"' })
+    end
+
+    it "passes through hashes untouched" do
+      expect(Tokenizing::TriggerData.parse({ name: "x", notes: "y" })).to eq({ name: "x", notes: "y" })
+    end
   end
 
   context "with hyphenated trigger keys" do

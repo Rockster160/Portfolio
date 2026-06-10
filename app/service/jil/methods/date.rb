@@ -42,6 +42,19 @@ class Jil::Methods::Date < Jil::Methods::Base
     @jil.cast(num, :Numeric).send(interval).from_now
   end
 
+  # Extracts a date/time from a natural-language phrase. `context` biases the
+  # resolution of ambiguous times (e.g. "8:30am" said at 11pm).
+  #   "future" — roll past matches forward (use for scheduling commands)
+  #   "past"   — roll future matches backward (use for logging commands)
+  #   "any"    — let Chronic decide based on its own heuristics
+  def parse(text, context=nil)
+    ctx = { future: :future, past: :past }[context.to_s.downcase.to_sym]
+    opts = ctx ? { context: ctx } : {}
+    @jil.user.timezone {
+      ::Jarvis::Times.extract_time(text.to_s, opts).last || Time.current
+    }
+  end
+
   def adjust(date, direction, duration)
     return unless direction.in?(["+", "-"])
 
@@ -95,6 +108,7 @@ end
 #   #now
 #   #ago(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"])
 #   #from_now(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"])
+#   #parse(String ["any" "future" "past"])
 #   .piece(["second" "minute" "hour" "day" "week" "month" "year"])::Numeric
 #   .adjust(["+", "-"], Duration|Numeric)
 #   .round("TO" ["beginning" "end" "nearest"] "OF" ["minute" "hour" "day" "week" "month" "year"])
