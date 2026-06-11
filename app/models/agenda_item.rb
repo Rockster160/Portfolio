@@ -47,6 +47,15 @@ class AgendaItem < ApplicationRecord
 
   belongs_to :agenda
   belongs_to :agenda_schedule, optional: true
+  # Derived ScheduledTriggers — automations whose execute_at is computed
+  # from this item's start_at. The FK has `ON DELETE CASCADE` so source
+  # destroys clean up automatically at the DB layer; the Rails-level
+  # `dependent: :destroy` is here as a safety net for code paths that
+  # bypass the cascade (e.g. dependent destroys from above).
+  has_many :derived_triggers, class_name: "ScheduledTrigger",
+                              foreign_key: :source_item_id,
+                              dependent: :destroy,
+                              inverse_of: :source_item
 
   validates :name, presence: true
   validates :start_at, presence: true
@@ -55,6 +64,7 @@ class AgendaItem < ApplicationRecord
 
   before_save :clear_notified_at_on_future_reschedule
   after_update :broadcast_agenda_change!, if: :saved_change_to_agenda_id?
+  after_update_commit :propagate_start_at_to_derived_triggers, if: :saved_change_to_start_at?
   after_commit :fire_jil_trigger, on: [:create, :update]
   after_commit :fire_jil_destroy_trigger, on: :destroy
 
@@ -433,6 +443,21 @@ class AgendaItem < ApplicationRecord
     return if Thread.current[::GoogleCalendar::Sync::SUPPRESS_KEY]
 
     ::Jil.trigger(user, :agenda_item, with_jil_attrs(action: :destroyed))
+  end
+
+  # When this item's start_at moves, every derived ScheduledTrigger's
+  # execute_at moves with it (source.start_at + offset_seconds). Already-
+  # started rows are skipped — their automation has already begun. Only
+  # the not-yet-started rows get rescheduled in Sidekiq via
+  # Jil::Schedule.update, which cancels the old job and enqueues the new.
+  def propagate_start_at_to_derived_triggers
+    return if start_at.blank?
+
+    derived_triggers.not_started.find_each do |sched|
+      new_execute_at = start_at + sched.offset_seconds.to_i
+      sched.update_columns(execute_at: new_execute_at)
+      ::Jil::Schedule.update(sched)
+    end
   end
 
   # Fan out a combined broadcast for both the old and new agendas — each

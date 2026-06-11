@@ -44,6 +44,8 @@
   #requestBody("URL" String BR "Params" Hash BR "Headers" Hash)::Hash
   #broadcast_websocket("Channel" TAB String BR "Data" TAB Hash)::Numeric
   #trigger(String TAB Date content(Keyval|Hash [Keyval.new]))::Schedule
+  #trigger_for(Any:Source String:Name Numeric:Offset ["seconds" "minutes" "hours" "days"] BR "Trigger" TAB String:Scope BR "Data" TAB Hash)::Schedule
+  #remove_trigger_for(Any:Source String:Name)::Boolean
   #triggerWith(String TAB Date BR "" TAB Hash)::Schedule
   #triggerNow(String TAB Hash)::Array
   !#triggerRaw(Hash)::Array # Should this just be a trigger class?

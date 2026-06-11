@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_10_121307) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_11_171503) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -991,6 +991,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_10_121307) do
     t.datetime "completed_at"
     t.integer "auth_type"
     t.integer "auth_type_id"
+    t.bigint "source_item_id"
+    t.integer "offset_seconds"
+    t.index ["source_item_id"], name: "index_scheduled_triggers_on_source_item_id"
     t.index ["user_id"], name: "index_scheduled_triggers_on_user_id"
   end
 
@@ -1354,6 +1357,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_10_121307) do
   add_foreign_key "page_tags", "pages"
   add_foreign_key "page_tags", "tags"
   add_foreign_key "pages", "users"
+  add_foreign_key "scheduled_triggers", "agenda_items", column: "source_item_id", on_delete: :cascade
   add_foreign_key "sections", "lists"
   add_foreign_key "shared_pages", "pages"
   add_foreign_key "shared_pages", "users"

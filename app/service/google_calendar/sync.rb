@@ -60,6 +60,13 @@ class GoogleCalendar::Sync
     @deferred_overrides = []      # buffered across pages — see flush_deferred
     @deferred_cancellations = []  # ditto for cancellation handle_cancellation
     @applied_count = 0            # counted across apply_event for the tail trigger
+    # Bootstrap = no prior sync_token. Initial connects (or rebootstraps
+    # after a Gone) page through potentially hundreds of events, so
+    # per-row Jil triggers stay suppressed there. Steady-state
+    # incremental syncs touch a handful of rows per webhook/poll, so we
+    # let :agenda_item fire normally — derived-trigger Jil tasks then
+    # treat Google-imported items the same as manual creates.
+    @bootstrap = @agenda.sync_token.blank?
     # Timezone is per-user, never per-agenda. Storage is UTC truth; display
     # is always in the viewing user's timezone, so the calendar's own
     # timezone is not needed and was a footgun (Google returns the
@@ -70,8 +77,10 @@ class GoogleCalendar::Sync
 
     # Suppress per-row Jil triggers + per-row Agenda broadcasts for the
     # duration of the sync. We fan out ONE broadcast + ONE :agenda_sync
-    # trigger at the tail.
-    with_suppression {
+    # trigger at the tail. Only applies during bootstrap (no prior
+    # sync_token) — incremental syncs let the per-row triggers fire so
+    # Jil rules treat Google rows the same as manual creates.
+    with_suppression(active: @bootstrap) {
       loop do
         response = fetch_page(page_token: page_token)
         return :reauth_required if response.nil?
@@ -120,11 +129,13 @@ class GoogleCalendar::Sync
     :reauth_required
   end
 
-  def with_suppression
+  def with_suppression(active: true)
+    return yield unless active
+
     Thread.current[SUPPRESS_KEY] = true
     yield
   ensure
-    Thread.current[SUPPRESS_KEY] = nil
+    Thread.current[SUPPRESS_KEY] = nil if active
   end
 
   def fetch_page(page_token:)

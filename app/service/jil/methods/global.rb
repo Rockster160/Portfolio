@@ -264,6 +264,32 @@ class Jil::Methods::Global < Jil::Methods::Base
     ::Jil.trigger(@jil.user, scope, data, auth: :trigger, auth_id: @jil.task&.id).map(&:serialize_with_execution)
   end
 
+  # Resolves a Jil-side value into an AgendaItem record scoped to the
+  # current user. Accepts the record itself, a serialized hash (the shape
+  # the agenda_item Jil trigger fires with), or anything castable to
+  # Hash with an :id key. Returns nil if the row can't be reached.
+  private def resolve_source_item(value)
+    return value if value.is_a?(::AgendaItem)
+
+    hash = @jil.cast(value, :Hash)
+    id = hash[:id] || hash["id"]
+    return nil if id.blank?
+
+    ::AgendaItem.locate_for_user(id, @jil.user)
+  end
+
+  OFFSET_UNIT_SECONDS = {
+    "second" => 1, "seconds" => 1,
+    "minute" => 60, "minutes" => 60,
+    "hour"   => 3_600, "hours" => 3_600,
+    "day"    => 86_400, "days" => 86_400,
+  }.freeze
+
+  private def compute_offset_seconds(offset, unit)
+    multiplier = OFFSET_UNIT_SECONDS[unit.to_s.downcase] || 60
+    @jil.cast(offset, :Numeric).to_i * multiplier
+  end
+
   def triggerWith(scope, date, data)
     ::Jil::Schedule.add_schedule(
       @jil.user, date, scope, @jil.cast(data, :Hash),
@@ -276,6 +302,59 @@ class Jil::Methods::Global < Jil::Methods::Base
       @jil.user, date, scope, @jil.cast(data, :Hash),
       auth: :trigger, auth_id: @jil.task&.id
     )
+  end
+
+  # Upserts a "derived" ScheduledTrigger keyed by (source_item, name). The
+  # execute_at is computed from source.start_at + (offset * unit-seconds);
+  # negative offsets schedule before the source, positive ones after. When
+  # the source AgendaItem's start_at later moves, the AgendaItem callback
+  # propagates the new execute_at automatically; when the source is
+  # destroyed, the FK cascade removes this trigger.
+  #
+  # `name` is the rule label — pick something stable like
+  # "suite-reminder" or "warm-up-car" so subsequent runs of the same Jil
+  # task update the same row instead of creating duplicates.
+  def trigger_for(source, name, offset, unit, scope, data)
+    source_item = resolve_source_item(source)
+    return nil unless source_item
+    return nil if scope.blank?
+
+    offset_secs = compute_offset_seconds(offset, unit)
+    execute_at = source_item.start_at + offset_secs.seconds
+    rec = @jil.user.scheduled_triggers.where(
+      source_item_id: source_item.id, name: name.to_s
+    ).first_or_initialize
+    was_new = rec.new_record?
+
+    rec.update!(
+      trigger:        scope.to_s,
+      execute_at:     execute_at,
+      offset_seconds: offset_secs,
+      data:           @jil.cast(data, :Hash),
+      auth_type:      :trigger,
+      auth_type_id:   @jil.task&.id,
+    )
+
+    ::Jil::Schedule.update(rec)
+    ::Jil::Schedule.broadcast(rec, was_new ? :created : :updated)
+    rec
+  end
+
+  # Tear-down counterpart to `trigger_for` — destroys the derived
+  # ScheduledTrigger keyed by (source, name) if it exists. No-op when the
+  # row was never created. Used by rules whose match condition no longer
+  # holds (e.g. user edited the location and the suite text is gone).
+  def remove_trigger_for(source, name)
+    source_item = resolve_source_item(source)
+    return false unless source_item
+
+    rec = @jil.user.scheduled_triggers.find_by(
+      source_item_id: source_item.id, name: name.to_s
+    )
+    return false unless rec
+
+    ::Jil::Schedule.cancel(rec)
+    rec.destroy.destroyed?
   end
 
   # times(Numeric content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
