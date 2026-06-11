@@ -37,7 +37,7 @@ class Markdown
       /\[btn (.*?)\]\((.*?)\)/                                        => wrap('\2', :a, href: '\1', class: "btn"),
       /\[(.*?)\]\((.*?)\)/                                            => wrap('\1', :a, href: '\2', target: :_blank),
       /\[(\w\s)*\]/                                                   => internal_link_wrapper,
-      /^(?: *\d+[.)-:]? +.*?(?:\n|\z)(?:[ \t]*[*-] .*?(?:\n|\z))*)+/m => ol_wrapper,
+      /^(?: *\d+[.)-:]? +.*?(?:\n|\z)(?:[ \t]*[*-] .*?(?:\n|\z))*){2,}/m => ol_wrapper,
       /^( *[*-] (?:.*?(?:\n|\z)))+/m                                  => ul_wrapper,
       /^ *(\|([^\n]+?\|)+ *(\n|\z))+/m                                => table_wrapper,
       /\n{3,}/m                                                       => ->(match) {

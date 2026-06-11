@@ -95,7 +95,9 @@ class Jarvis
     return if msg.blank?
 
     case channel
-    when :ping then ::WebPushNotifications.send_to(user, { title: msg })
+    when :ping
+      title, body = msg.to_s.split("\n", 2)
+      ::WebPushNotifications.send_to(user, { title: title.presence || msg.to_s, body: body.presence }.compact)
     when :sms then SmsWorker.perform_async(user.phone, msg)
     when :ws then JarvisChannel.broadcast_to(user, { say: msg })
     else
