@@ -46,6 +46,7 @@ RSpec.describe AmazonEmailParser do
     allow(RestClient).to receive(:get).and_return(nil)
     allow(Jarvis).to receive(:cmd).and_return(nil)
     allow(ChatGPT).to receive(:short_name_from_order).and_return("ShortName")
+    allow(ChatGPT).to receive(:short_names_from_orders) { |titles| Array.new(titles.size) { "ShortName" } }
     allow(SlackNotifier).to receive(:err).and_return(nil)
     allow(SlackNotifier).to receive(:notify).and_return(nil)
     allow_any_instance_of(AmazonEmailParser).to receive(:retrieve_full_name).and_return(nil)
@@ -94,7 +95,7 @@ RSpec.describe AmazonEmailParser do
     let(:c) { CASES.find { |row| row[:id] == 50_695 } }
 
     it "still creates AmazonOrders when ChatGPT raises (quota exceeded)" do
-      allow(ChatGPT).to receive(:short_name_from_order).and_raise(StandardError, "insufficient_quota")
+      allow(ChatGPT).to receive(:short_names_from_orders).and_raise(StandardError, "insufficient_quota")
       parse(c[:id], c[:subject])
       orders = AmazonOrder.by_order(c[:order])
       expect(orders.map(&:item_id)).to match_array(c[:asins])
@@ -102,11 +103,19 @@ RSpec.describe AmazonEmailParser do
     end
 
     it "skips the ChatGPT call entirely when skip_ai_naming: true" do
-      expect(ChatGPT).not_to receive(:short_name_from_order)
+      expect(ChatGPT).not_to receive(:short_names_from_orders)
       email = double("Email", id: c[:id], to_html: html_fixture("email_body_#{c[:id]}", raw: true), subject: c[:subject])
       AmazonEmailParser.parse(email, skip_ai_naming: true)
       orders = AmazonOrder.by_order(c[:order])
       expect(orders.map(&:item_id)).to match_array(c[:asins])
+    end
+
+    it "asks ChatGPT for ALL items in one batched call (not one per ASIN)" do
+      c = CASES.find { |row| row[:id] == 50_684 } # 2 ASINs in one email
+      expect(ChatGPT).to receive(:short_names_from_orders).once.with(
+        an_instance_of(Array).and(satisfy { |titles| titles.size == 2 }),
+      ).and_return(["Raspberries", "Blackberries"])
+      parse(c[:id], c[:subject])
     end
   end
 
@@ -123,7 +132,7 @@ RSpec.describe AmazonEmailParser do
     end
 
     it "falls back to the subject-quoted name when ChatGPT raises and only one ASIN ships" do
-      allow(ChatGPT).to receive(:short_name_from_order).and_raise(StandardError, "insufficient_quota")
+      allow(ChatGPT).to receive(:short_names_from_orders).and_raise(StandardError, "insufficient_quota")
       c = CASES.find { |row| row[:id] == 50_695 }
       parse(c[:id], c[:subject])
       item = AmazonOrder.by_order(c[:order]).first
@@ -219,6 +228,55 @@ RSpec.describe AmazonEmailParser do
       AmazonEmailParser.parse(email)
       expect(AmazonOrder.by_order(shipped[:order])).not_to be_empty
       expect(AmazonOrder.by_order(stray_oid)).to be_empty
+    end
+  end
+
+  describe "AmazonItemCatalog reuse across orders" do
+    before do
+      allow(AmazonItemCatalog).to receive(:all).and_return({})
+      allow(AmazonItemCatalog).to receive(:set).and_return(nil)
+    end
+
+    it "writes the GPT-cleaned name into the catalog when an ASIN is parsed for the first time" do
+      allow(ChatGPT).to receive(:short_names_from_orders).and_return(["Strawberries"])
+      c = CASES.find { |row| row[:id] == 50_714 }
+      expect(AmazonItemCatalog).to receive(:set).with(
+        "B000P6J0SM",
+        hash_including(name: "Strawberries"),
+      )
+      parse(c[:id], c[:subject])
+    end
+
+    it "reuses a previously-cached name (e.g. a manual rename) instead of the card text" do
+      allow(AmazonItemCatalog).to receive(:get).with("B000P6J0SM").and_return(
+        { name: "Strawbz", listed_name: "Strawberries, 1 Lb" },
+      )
+      c = CASES.find { |row| row[:id] == 50_714 }
+      parse(c[:id], c[:subject])
+      expect(AmazonOrder.by_order(c[:order]).first.name).to eq("Strawbz")
+    end
+
+    it "seeds the catalog with listed_name/full_name even when skip_ai_naming is true" do
+      email = double(
+        "Email",
+        id:      50_714,
+        to_html: html_fixture("email_body_50714", raw: true),
+        subject: 'Shipped: "Strawberries, 1 Lb"',
+      )
+      expect(AmazonItemCatalog).to receive(:set).with(
+        "B000P6J0SM",
+        hash_including(:listed_name),
+      )
+      AmazonEmailParser.parse(email, skip_ai_naming: true)
+    end
+
+    it "skips the ChatGPT batch call when every ASIN in the email is already cached" do
+      allow(AmazonItemCatalog).to receive(:get).with("B000P6J0SM").and_return(
+        { name: "Strawbz" },
+      )
+      expect(ChatGPT).not_to receive(:short_names_from_orders)
+      c = CASES.find { |row| row[:id] == 50_714 }
+      parse(c[:id], c[:subject])
     end
   end
 

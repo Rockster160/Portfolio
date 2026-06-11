@@ -48,6 +48,7 @@ class AmazonEmailParser
     # Only update state for items actually referenced by this email's order card.
     # Other items on the same order_id (shipped/delivered separately) keep their own state.
     new_status = status_from_subject
+    prefetch_names!(email_items)
     email_items.each { |item|
       arrival_date(item).tap { |date|
         if date.present?
@@ -203,21 +204,57 @@ class AmazonEmailParser
     [start_range, end_range].compact.map { |t| t.gsub(/\D/, "") }.join("-") + meridian
   end
 
-  # Falls back to the email's listed_name if AI naming is disabled OR the AI call fails
-  # (e.g. OpenAI quota exceeded). The parsed shipment data must always persist regardless
-  # of name-cleanup status.
+  # Resolves a display name for `item`. The expensive GPT call has already been
+  # done in bulk by `prefetch_names!`; this is just the catalog lookup with a
+  # listed_name/full_name fallback. As a side effect we also push the resolved
+  # listed_name/full_name into the catalog so subsequent emails (and the next
+  # ASIN that ships under this ID) see them even when GPT is disabled. The
+  # catalog's `name:` field is left alone here - prefetch_names! and manual
+  # renames are the only writers for that.
   def safe_name(item)
-    return item.listed_name.to_s.presence || full_name(item).to_s.presence if @skip_ai_naming
+    cached = AmazonItemCatalog.get(item.item_id)
+    if cached
+      item.listed_name ||= cached[:listed_name]
+      item.full_name   ||= cached[:full_name]
+      return cached[:name] if cached[:name].present?
+    end
 
-    shortened_name(item).presence || item.listed_name.to_s.presence || full_name(item).to_s.presence
-  rescue StandardError => e
-    SlackNotifier.err(e, "Amazon name lookup failed for email ##{@email.id}, falling back to listed_name")
-    item.listed_name.to_s.presence || full_name(item).to_s.presence
+    resolved = item.listed_name.to_s.presence || full_name(item).to_s.presence
+
+    if item.listed_name.present? || item.full_name.present?
+      AmazonItemCatalog.set(item.item_id,
+        listed_name: item.listed_name,
+        full_name:   item.full_name,
+      )
+    end
+
+    resolved
   end
 
-  def shortened_name(item)
-    # Disabled for now. Need to update keys.
-    # ChatGPT.short_name_from_order(full_name(item), item).to_s
+  # ONE GPT call per email instead of one per ASIN. Resolves clean short names
+  # for every email_item whose ASIN isn't already cached, and writes them to
+  # the catalog so a subsequent re-order of the same SKU is free.
+  def prefetch_names!(items)
+    return if @skip_ai_naming
+    return if items.empty?
+
+    needs_lookup = items.reject { |i| AmazonItemCatalog.get(i.item_id)&.dig(:name).to_s.presence }
+    titles = needs_lookup.map { |i| full_name(i).to_s }
+    pairs = needs_lookup.zip(titles).reject { |_, t| t.blank? }
+    return if pairs.empty?
+
+    cleaned = ChatGPT.short_names_from_orders(pairs.map(&:last))
+    pairs.zip(cleaned).each { |(item, _title), name|
+      next if name.blank?
+
+      AmazonItemCatalog.set(item.item_id,
+        name:        name,
+        listed_name: item.listed_name,
+        full_name:   item.full_name,
+      )
+    }
+  rescue StandardError => e
+    SlackNotifier.err(e, "Amazon batch name lookup failed for email ##{@email.id} - falling back to listed_name")
   end
 
   def full_name(item)

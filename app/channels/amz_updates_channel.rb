@@ -22,6 +22,10 @@ class AmzUpdatesChannel < ApplicationCable::Channel
 
       order.name ||= "[NONAME]"
       order.delivery_date ||= Date.current
+
+      # Persist the (possibly user-edited) name to the per-ASIN catalog so the
+      # next order of the same SKU reuses it without another GPT call.
+      AmazonItemCatalog.set(order.item_id, name: order.name) if order.name.present?
     end
 
     AmazonOrder.save

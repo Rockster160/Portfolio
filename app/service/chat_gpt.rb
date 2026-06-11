@@ -39,22 +39,34 @@ module ChatGPT
     end
   end
 
-  def short_name_from_order(order_title, _item=nil) # item for stubbing in specs
-    prompt = "I've ordered an item online. The title is much longer than I'd like it. " \
-             "I know the item I ordered, but sometimes I order multiple items so I need some way to " \
-             "identify this specific item and list it. Please remove all product and brand information, " \
-             "sizing data, colors, and any other modifiers that describe the item but not the name itself. " \
-             "Assume I already know the item so I don't need a lot of info, just the most basic item name." \
-             "Return only the item name in as few letters and characters as possible. " \
-             "The title will be displayed in a list that only allows 20 characters:"
+  def short_name_from_order(order_title, _item=nil) # kept for callers; prefer the batch variant
+    short_names_from_orders([order_title]).first
+  end
 
-    ask("#{prompt} #{order_title}")&.then { |title|
-      # Maybe remove numbers and their attached words?
-      # 4-Way, 1.75mm, etc...
-      # Nah, because we still want things like x4
-      title.gsub!(/\bfilament\b/i, "Ink")
-      title.squish
+  # Batch-cleans an array of product titles in a single GPT call. Returns an
+  # array of the same length as `titles`; entries are nil where the model
+  # didn't produce a usable line (caller should fall back per-index).
+  def short_names_from_orders(titles)
+    titles = Array(titles).map(&:to_s)
+    return [] if titles.empty?
+
+    numbered = titles.each_with_index.map { |t, i| "#{i + 1}. #{t}" }.join("\n")
+    prompt = (
+      "I've placed an online order with multiple items. For each title below, " \
+      "return a short item name (max 20 characters). Remove all brand information, " \
+      "sizing data, pack counts, colors, and any other modifiers - keep just the " \
+      "essential item name, since I already know what I ordered. " \
+      "Return ONE NAME PER LINE in the same order as the inputs below, with no " \
+      "numbering, no quotes, and no commentary.\n\n#{numbered}"
+    )
+
+    response = ask(prompt).to_s
+    cleaned = response.split("\n").filter_map { |line|
+      stripped = line.sub(/\A\s*\d+[\.\)]\s*/, "").strip
+      stripped.empty? ? nil : stripped.gsub(/\bfilament\b/i, "Ink").squish
     }
+
+    Array.new(titles.size) { |i| cleaned[i] }
   end
 
   def order_with_timestamp(email_text)
