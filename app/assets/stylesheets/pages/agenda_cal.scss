@@ -768,20 +768,12 @@ $cal-week-px-per-hour: 20px;
   box-sizing: border-box;
   min-height: 12px;
 
+  // The card itself is just a solid container — no flex magic, no mask.
+  // The inner `.cal-week-event-content` (added by JS) carries the
+  // mask + the text layout, so the card's background, border, and
+  // rounded corners render unmasked.
   display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: stretch;
-  gap: 1px;
   overflow: hidden;
-  // Soft right-edge fade on the TILE itself (not on the title) — so a
-  // title sitting comfortably in the middle of the tile keeps full
-  // opacity right to its last character. Only content actually reaching
-  // the tile's right edge fades. For single-line layouts that means the
-  // time (rightmost) is what visually fades first when space is tight,
-  // never the title.
-  mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
 
   // Default = draggable affordance ("open hand"). Readonly events
   // (events on agendas the user can view but not edit) override to
@@ -809,6 +801,25 @@ $cal-week-px-per-hour: 20px;
 
   &:hover {
     background: color-mix(in srgb, var(--agenda-color, #888) 40%, transparent) !important;
+  }
+
+  // Inner content wrapper — fills the card and owns the flex layout
+  // for title + time. The right-edge mask lives here, NOT on the card,
+  // so the card's bg + border stay solid (no fading rounded corners
+  // or fading accent strip) while the text content still fades on
+  // overflow.
+  .cal-week-event-content {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    gap: 1px;
+    overflow: hidden;
+    mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
   }
 
   // Source event during drag — stays in its original slot at low alpha
@@ -864,18 +875,17 @@ $cal-week-px-per-hour: 20px;
   // no per-element mask needed.
   &.is-tiny,
   &.is-point {
-    flex-direction: row;
-    // `center` (not `baseline`) so the title sits in the vertical
-    // middle of the tile. `baseline` was leaving the text glued to the
-    // top of the tile, which also made the left padding look bigger
-    // (asymmetric whitespace — none at top, full at bottom).
-    align-items: center;
-    gap: 5px;
-    // Tiny rows have less vertical room to work with; a hair less side
-    // padding lets the title start a touch closer to the accent bar so
-    // the relative whitespace doesn't feel inflated next to the wider
-    // default tiles.
     padding: 0 4px 0 6px !important;
+
+    .cal-week-event-content {
+      flex-direction: row;
+      // `center` (not `baseline`) so the title sits in the vertical
+      // middle of the tile. `baseline` was leaving the text glued to
+      // the top of the tile, which also made the left padding look
+      // bigger (asymmetric whitespace — none at top, full at bottom).
+      align-items: center;
+      gap: 5px;
+    }
 
     .cal-week-event-name {
       flex: none;

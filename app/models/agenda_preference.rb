@@ -57,6 +57,24 @@ class AgendaPreference < ApplicationRecord
     super(cleaned)
   end
 
+  # True when the given AgendaItem matches ANY of the user's hide lists:
+  # its agenda, its schedule, its own id, or any of the name regex
+  # patterns. Used by Jil's Agenda.search to stamp a `hidden` field on
+  # every result and to filter when an explicit `hidden:` arg is passed.
+  def item_hidden?(item)
+    return false if item.nil?
+    return true if hidden_agenda_ids.include?(item.agenda_id)
+    return true if item.agenda_schedule_id && hidden_schedule_ids.include?(item.agenda_schedule_id)
+    return true if item.id && hidden_item_ids.include?(item.id)
+    name = item.name.to_s
+    matched = hidden_name_patterns.any? do |src|
+      Regexp.new(src.to_s, Regexp::IGNORECASE).match?(name)
+    rescue RegexpError
+      false
+    end
+    matched
+  end
+
   def serialize_for_client
     {
       hidden_agenda_ids:     hidden_agenda_ids.map(&:to_i),

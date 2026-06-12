@@ -122,6 +122,54 @@ RSpec.describe Jil::Methods::Agenda, "#search" do
     expect(main[:type_casted_binds].last).to eq(5), "expected SQL LIMIT bound to 5"
   end
 
+  describe "hidden stamp + filter" do
+    let(:hidden_schedule) do
+      create(
+        :agenda_schedule, agenda: agenda, kind: :task,
+        name: "Stand Up", start_time: "09:00",
+        recurrence: { "freq" => "daily" }, starts_on: Date.current
+      )
+    end
+
+    before do
+      create(
+        :agenda_item, agenda: agenda, kind: :task, name: "Visible",
+        start_at: 1.hour.ago, completed_at: nil
+      )
+      create(
+        :agenda_item, agenda: agenda, kind: :task, name: "ByPattern",
+        start_at: 1.hour.ago, completed_at: nil
+      )
+      hidden_schedule
+      AgendaPreference.create!(
+        user:                 user,
+        hidden_schedule_ids:  [hidden_schedule.id],
+        hidden_name_patterns: ["bypattern"],
+      )
+    end
+
+    it "stamps each result with a hidden boolean by default" do
+      results = methods.search("kind:task is:incomplete", 50, "ASC")
+      names_and_hidden = results.map { |h| [h[:name], h[:hidden]] }.to_h
+      expect(names_and_hidden["Visible"]).to eq(false)
+      expect(names_and_hidden["ByPattern"]).to eq(true)
+    end
+
+    it "filters to non-hidden when hidden=false" do
+      results = methods.search("kind:task is:incomplete", 50, "ASC", "false")
+      names = results.map { |h| h[:name] }
+      expect(names).to include("Visible")
+      expect(names).not_to include("ByPattern")
+    end
+
+    it "filters to only hidden when hidden=true" do
+      results = methods.search("kind:task is:incomplete", 50, "ASC", "true")
+      names = results.map { |h| h[:name] }
+      expect(names).not_to include("Visible")
+      expect(names).to include("ByPattern")
+    end
+  end
+
   it "does NOT include phantoms when the query has no future-leaning is: token" do
     Timecop.freeze(Time.utc(2026, 5, 14, 13, 0)) {
       create(

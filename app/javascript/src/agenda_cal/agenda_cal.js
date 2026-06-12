@@ -899,11 +899,19 @@
     if (continuedTop) node.classList.add("is-continued-top");
     if (continuedBottom) node.classList.add("is-continued-bottom");
 
+    // Content wrapper: this is what gets the right-edge mask in SCSS.
+    // Putting the mask on a wrapper that lives INSIDE the card lets the
+    // card's background, border, and rounded corners render unmasked
+    // (so the tile reads as a solid block) while still fading the text
+    // content at the tile's right edge.
+    const content = document.createElement("div");
+    content.className = "cal-week-event-content";
+
     // Title first, time second — Mac Calendar order.
     const nameSpan = document.createElement("span");
     nameSpan.className = "cal-week-event-name";
     nameSpan.textContent = d.name || "";
-    node.appendChild(nameSpan);
+    content.appendChild(nameSpan);
 
     // Time label uses the dayStart passed from buildWeekBlocks (not a
     // DOM lookup against an un-attached node).
@@ -917,7 +925,9 @@
       : hasRange
         ? `${formatLabelTime(startClock)} – ${formatLabelTime(endClock)}`
         : formatLabelTime(startClock);
-    node.appendChild(timeSpan);
+    content.appendChild(timeSpan);
+
+    node.appendChild(content);
 
     // For overlap-layout: point events occupy a 15-min slot, not whatever
     // their underlying end_at says — so they don't block other events

@@ -28,6 +28,44 @@ RSpec.describe AgendaPreference, type: :model do
     end
   end
 
+  describe "#item_hidden?" do
+    let(:agenda)   { create(:agenda, user: user) }
+    let(:schedule) { create(:agenda_schedule, agenda: agenda) }
+    let(:item)     { create(:agenda_item, agenda: agenda, name: "Daily Standup") }
+
+    it "returns false when no list matches" do
+      pref = AgendaPreference.new(user: user)
+      expect(pref.item_hidden?(item)).to eq(false)
+    end
+
+    it "matches hidden_agenda_ids" do
+      pref = AgendaPreference.new(user: user, hidden_agenda_ids: [agenda.id])
+      expect(pref.item_hidden?(item)).to eq(true)
+    end
+
+    it "matches hidden_schedule_ids when item belongs to that schedule" do
+      item.update!(agenda_schedule: schedule)
+      pref = AgendaPreference.new(user: user, hidden_schedule_ids: [schedule.id])
+      expect(pref.item_hidden?(item)).to eq(true)
+    end
+
+    it "matches hidden_item_ids" do
+      pref = AgendaPreference.new(user: user, hidden_item_ids: [item.id])
+      expect(pref.item_hidden?(item)).to eq(true)
+    end
+
+    it "matches hidden_name_patterns case-insensitively" do
+      pref = AgendaPreference.new(user: user, hidden_name_patterns: ["daily.*standup"])
+      expect(pref.item_hidden?(item)).to eq(true)
+    end
+
+    it "ignores invalid regex patterns silently" do
+      pref = AgendaPreference.new(user: user, hidden_name_patterns: ["[invalid"])
+      pref.save(validate: false)
+      expect(pref.item_hidden?(item)).to eq(false)
+    end
+  end
+
   describe "#serialize_for_client" do
     it "includes the new filter fields with names map for hidden schedules" do
       agenda   = create(:agenda, user: user)

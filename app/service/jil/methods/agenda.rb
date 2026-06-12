@@ -87,7 +87,7 @@ class Jil::Methods::Agenda < Jil::Methods::Base
   #   * DESC limit N: SQL gives us the N latest real items, including any
   #     that are scheduled past PHANTOM_WINDOW_DAYS. Phantoms within the
   #     window slot in at the correct positions.
-  def search(query, limit=nil, order=nil)
+  def search(query, limit=nil, order=nil, hidden=nil)
     materialize_overdue_phantoms_for_today!
 
     capped = (limit.presence || 50).to_i.clamp(1..200)
@@ -100,23 +100,22 @@ class Jil::Methods::Agenda < Jil::Methods::Base
     real_items = scope.order(start_at: order_sym).limit(capped).to_a
 
     phantoms = phantom_results(query, capped: capped)
-    return real_items.map(&:serialize) if phantoms.empty?
+    combined = (real_items + phantoms).sort_by(&:start_at)
+    combined = combined.reverse if order_sym == :desc
+    items = combined.first(capped)
 
-    combined = real_items + phantoms
-    sorted = combined.sort_by(&:start_at)
-    sorted = sorted.reverse if order_sym == :desc
-
-    sorted.first(capped).map(&:serialize)
+    apply_hidden_stamp_and_filter(items, hidden)
   end
 
   # Same as search but scoped to a single agenda.
-  def find_items(agenda, query, limit=nil, order=nil)
+  def find_items(agenda, query, limit=nil, order=nil, hidden=nil)
     a = load_agenda(agenda)
     return [] if a.blank?
 
     materialize_overdue_phantoms_for_today!(agendas: [a])
     scope = ::AgendaItem.query(query).where(agenda_id: a.id)
-    apply_search_args(scope, limit, order).map(&:serialize)
+    items = apply_search_args(scope, limit, order)
+    apply_hidden_stamp_and_filter(items, hidden)
   end
 
   # ---- getters / setters ----
@@ -176,7 +175,28 @@ class Jil::Methods::Agenda < Jil::Methods::Base
   def apply_search_args(scope, limit, order)
     capped = (limit.presence || 50).to_i.clamp(1..200)
     order_sym = [:asc, :desc].include?(order.to_s.downcase.to_sym) ? order.to_s.downcase.to_sym : :asc
-    scope.order(start_at: order_sym).limit(capped)
+    scope.order(start_at: order_sym).limit(capped).to_a
+  end
+
+  # Each serialized item gets a `hidden` boolean computed against the
+  # current user's AgendaPreference. When `hidden` is true / false (or
+  # the string "true" / "false"), the result is also filtered to that
+  # subset. Pass nil (the default) to include everything.
+  def apply_hidden_stamp_and_filter(items, hidden)
+    pref = ::AgendaPreference.for(@jil.user)
+    stamped = items.map { |it| it.serialize.merge(hidden: pref.item_hidden?(it)) }
+    case normalize_hidden_arg(hidden)
+    when true  then stamped.select { |h| h[:hidden] }
+    when false then stamped.reject { |h| h[:hidden] }
+    else stamped
+    end
+  end
+
+  def normalize_hidden_arg(value)
+    return nil if value.nil? || value == "" || value.to_s.downcase == "nil"
+    return true  if value == true  || %w[true 1 yes only].include?(value.to_s.downcase)
+    return false if value == false || %w[false 0 no exclude].include?(value.to_s.downcase)
+    nil
   end
 
   # Gathers phantom occurrences in the next PHANTOM_WINDOW_DAYS days and
