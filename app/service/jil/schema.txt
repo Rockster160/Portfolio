@@ -217,13 +217,13 @@
   #find(String:Name)
   #add_task(String:Agenda String:Name String:When)
   #add_event(String:Agenda String:Name String:Start String:End)
-  #search(Text:Query "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array # All agenda items across the user's agendas. Query supports the standard `kind:` / `is:` tokens, plus `is:hidden` / `is:visible` to filter against the user's Agenda hide prefs.
+  #search(Text:Query "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array # All agenda items across the user's agendas. Supports is:hidden / is:visible / is:not-hidden tokens to filter against the user's Agenda hide prefs.
   .id::Numeric
   .name::String
   .color::String
   .items(String?:Date)::Array
   .schedules::Array
-  .find_items(String:Query "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array # Items scoped to this agenda. Supports `is:hidden` / `is:visible` tokens like Agenda.search.
+  .find_items(String:Query "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array # Items scoped to this agenda. Supports is:hidden / is:visible tokens like Agenda.search.
   .update!(content(AgendaData))::Hash
   .destroy::Boolean
 *[AgendaData]
