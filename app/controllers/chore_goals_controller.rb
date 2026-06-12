@@ -1,6 +1,6 @@
 class ChoreGoalsController < ApplicationController
   before_action :authorize_user_or_guest
-  before_action :set_goal, only: [:update, :destroy]
+  before_action :set_goal, only: [:update, :destroy, :reopen]
 
   def create
     goal = current_user.chore_goals.create!(goal_params)
@@ -19,6 +19,17 @@ class ChoreGoalsController < ApplicationController
   def destroy
     @goal.update!(archived_at: Time.current)
     head :no_content
+  end
+
+  # Manual override for the "lock" — clears achieved_at and re-checks.
+  # If the goal's conditions are still genuinely met (e.g. balance still
+  # over target) refresh! immediately re-locks it; otherwise it drops
+  # back to outstanding with live-computed progress. Lets a user fix a
+  # goal that locked from completions they've since undone.
+  def reopen
+    @goal.update!(achieved_at: nil)
+    @goal.refresh!
+    render json: serialize(@goal)
   end
 
   private

@@ -40,6 +40,11 @@
           <span class="earned-pill"><i class="fa fa-check"></i> Completed</span>
         <% end %>
         <div class="goal-actions">
+          <% if achieved %>
+            <button type="button" class="btn ghost icon" data-reopen-goal="<%= goal.id %>" aria-label="Reopen" title="Reopen — recalculates progress against current state">
+              <i class="fa fa-undo"></i>
+            </button>
+          <% end %>
           <button type="button" class="btn ghost icon" data-edit-goal="<%= goal.id %>" aria-label="Edit">
             <i class="fa fa-pencil"></i>
           </button>

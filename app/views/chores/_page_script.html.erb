@@ -4302,8 +4302,9 @@
   });
 
   document.querySelector('[data-goals-list]')?.addEventListener("click", async e => {
-    const editBtn = e.target.closest('[data-edit-goal]');
-    const delBtn = e.target.closest('[data-delete-goal]');
+    const editBtn   = e.target.closest('[data-edit-goal]');
+    const delBtn    = e.target.closest('[data-delete-goal]');
+    const reopenBtn = e.target.closest('[data-reopen-goal]');
     if (editBtn) {
       const card = editBtn.closest('[data-goal-id]');
       const payload = JSON.parse(card.dataset.goalPayload || "{}");
@@ -4318,6 +4319,16 @@
         delBtn.closest('[data-goal-id]')?.remove();
         if (!goalsCards.children.length && goalsEmpty) goalsEmpty.style.display = "";
       } catch (err) { flash("Couldn't delete: " + err.message, "error"); }
+    }
+    if (reopenBtn) {
+      try {
+        const res = await api(`/chores/goals/${reopenBtn.dataset.reopenGoal}/reopen`, "POST");
+        if (res?.html) {
+          const existing = goalsCards?.querySelector(`[data-goal-id="${res.id}"]`);
+          if (existing) existing.outerHTML = res.html;
+        }
+        flash(res?.achieved_at ? "Goal still met — re-locked" : "Goal reopened");
+      } catch (err) { flash("Couldn't reopen: " + err.message, "error"); }
     }
   });
 

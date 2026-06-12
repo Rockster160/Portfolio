@@ -755,4 +755,31 @@ RSpec.describe Jarvis do
       end
     end
   end
+
+  describe ".broadcast :ping" do
+    # Sidestep Ruby 3.2 kwargs conversion of `{ title: }` hash literals through
+    # RSpec stubs (see the `with pings` context above for the same workaround).
+    before do
+      $ping_calls = []
+      WebPushNotifications.define_singleton_method(:send_to) { |user, payload={}, channel: :jarvis|
+        $ping_calls << [user, payload]
+      }
+    end
+
+    after do
+      $ping_calls = nil
+      WebPushNotifications.singleton_class.remove_method(:send_to)
+      WebPushNotifications.send(:module_function, :send_to)
+    end
+
+    it "passes a single-line message as title only" do
+      Jarvis.broadcast(@admin, "hello", :ping)
+      expect($ping_calls.map(&:last)).to eq([{ title: "hello" }])
+    end
+
+    it "splits a multi-line message into title (first line) and body (rest)" do
+      Jarvis.broadcast(@admin, "Not done:\nmilk\nbread\neggs", :ping)
+      expect($ping_calls.map(&:last)).to eq([{ title: "Not done:", body: "milk\nbread\neggs" }])
+    end
+  end
 end
