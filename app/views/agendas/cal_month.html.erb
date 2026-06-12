@@ -14,18 +14,19 @@
   <% prev_month = (@month - 1.month).strftime("%Y-%m") %>
   <% next_month = (@month + 1.month).strftime("%Y-%m") %>
   <header class="cal-toolbar">
-    <h1 class="cal-toolbar-title"><%= @focus_date.strftime("%B %Y") %></h1>
+    <div class="cal-toolbar-left">
+      <h1 class="cal-toolbar-title"><%= @focus_date.strftime("%B %Y") %></h1>
+      <div class="cal-toolbar-toggle cal-view-toggle cal-pwa-toggle">
+        <a href="<%= cal_month_path %>" class="cal-toggle-btn active">Month</a>
+        <a href="<%= cal_week_path %>" class="cal-toggle-btn">Week</a>
+      </div>
+    </div>
 
     <nav class="cal-toolbar-nav" aria-label="Month navigation">
       <a class="date-nav prev" href="<%= cal_month_path(month: prev_month) %>" aria-label="Previous month"><i class="fa fa-chevron-left"></i></a>
       <a class="cal-today-btn" href="<%= cal_month_path %>">Today</a>
       <a class="date-nav next" href="<%= cal_month_path(month: next_month) %>" aria-label="Next month"><i class="fa fa-chevron-right"></i></a>
     </nav>
-
-    <div class="cal-toolbar-toggle cal-view-toggle cal-pwa-toggle">
-      <a href="<%= cal_month_path %>" class="cal-toggle-btn active">Month</a>
-      <a href="<%= cal_week_path %>" class="cal-toggle-btn">Week</a>
-    </div>
 
     <div class="cal-toolbar-actions">
       <span class="agenda-pending-badge hidden" aria-live="polite" title="Pending sync"><i class="fa fa-refresh"></i><span class="agenda-pending-badge-count"></span></span>

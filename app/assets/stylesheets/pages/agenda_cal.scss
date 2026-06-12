@@ -45,15 +45,17 @@
 }
 
 // =================== Condensed sticky toolbar ===================
-// One row: title | nav (prev/today/next) | view toggle | actions.
-// Stuck to the top of the viewport so it stays visible even when the
-// outer page scrolls (small windows / accessibility zoom).
+// 3-column grid: [title + view-toggle] [< Today >] [filter / add / cog].
+// `1fr auto 1fr` keeps the nav perfectly centered regardless of how
+// wide the left or right groups grow (flex with `margin: auto` couldn't
+// guarantee that — uneven side-content would drag the centre off-axis).
 .cal-toolbar {
   position: sticky;
   top: 0;
   z-index: 30;
   flex: 0 0 auto;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 12px;
   padding: 8px 16px;
@@ -63,50 +65,57 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
+// Left cluster — title and the view toggle sit together.
+.cal-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-self: start;
+  min-width: 0; // allow the title to ellipsize on narrow viewports
+}
+
 .cal-toolbar-title {
   margin: 0;
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  flex: 0 0 auto;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-width: 120px;
+  min-width: 0;
 }
 
 .cal-toolbar-nav {
   display: flex;
   align-items: center;
   gap: 4px;
-  flex: 0 0 auto;
+  justify-self: center;
 }
 
 .cal-toolbar-toggle {
   margin: 0;
   flex: 0 0 auto;
-  align-self: center;
 }
 
 .cal-toolbar-actions {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-left: auto;
-  flex: 0 0 auto;
+  justify-self: end;
 
   // Filter button stays compact in the toolbar.
   .agenda-filter-btn { margin: 0; }
 }
 
-// Toolbar collapses gracefully on narrow viewports — title gets cut to
-// fit, nav stays inline, actions hug the right.
+// Narrow viewports — tighter gap + padding; title still ellipsizes if
+// the left cluster's intrinsic width exceeds its 1fr slot.
 @media (max-width: 720px) {
   .cal-toolbar {
     gap: 8px;
     padding: 6px 8px;
   }
-  .cal-toolbar-title { font-size: 16px; min-width: 0; flex: 1 1 auto; }
+  .cal-toolbar-title { font-size: 16px; }
+  .cal-toolbar-left  { gap: 8px; }
 }
 
 // Date-nav buttons (prev / today / next) — used inside the condensed
@@ -149,9 +158,9 @@
 
 // Override the global `.cal-view-toggle` margins from agenda.scss
 // (which centers the pill and adds a bottom-margin) so it sits inline
-// in the new single-row toolbar.
+// next to the title in the new toolbar's left cluster.
 .cal-toolbar .cal-toolbar-toggle {
-  margin: 0 8px;
+  margin: 0;
   align-self: center;
 }
 
