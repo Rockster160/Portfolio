@@ -397,6 +397,9 @@ Rails.application.routes.draw do
 
   resources :contacts, except: :show do
     resources :addresses, except: :show
+    collection do
+      get :lookup
+    end
   end
   resources :folders
   resources :pages, except: :index do

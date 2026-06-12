@@ -1683,6 +1683,74 @@
     });
   }
 
+  // Location classification + clickable rendering for the details modal.
+  // URL → opens in a new tab. Address → opens in maps (Apple Maps URL is
+  // a universal redirector — Apple devices launch the native app; others
+  // fall through to maps.apple.com on the web). Name → text + async
+  // contact lookup that appends a clickable address line when matched.
+  function locationLooksLikeUrl(text) {
+    return /^https?:\/\//i.test(text.trim());
+  }
+  function locationLooksLikeAddress(text) {
+    const t = text.trim();
+    if (!t) return false;
+    // Starts with a street number (most US/CA addresses) OR contains a
+    // digit followed by a comma somewhere (city, state, zip pattern).
+    if (/^\d/.test(t)) return true;
+    if (/\d.*,/.test(t)) return true;
+    return false;
+  }
+  function mapsHref(text) {
+    return `https://maps.apple.com/?q=${encodeURIComponent(text)}`;
+  }
+  function renderClickableLocation(target, raw) {
+    target.textContent = "";
+    const text = (raw || "").trim();
+    if (!text) return;
+    if (locationLooksLikeUrl(text)) {
+      const a = document.createElement("a");
+      a.href = text;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = text;
+      target.appendChild(a);
+      return;
+    }
+    if (locationLooksLikeAddress(text)) {
+      const a = document.createElement("a");
+      a.href = mapsHref(text);
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = text;
+      target.appendChild(a);
+      return;
+    }
+    // Name path — show the raw text, then asynchronously try to resolve
+    // it against the user's contacts. A late-arriving response is fine
+    // because the target stays in the DOM as long as the modal is open.
+    target.appendChild(document.createTextNode(text));
+    fetch(`/contacts/lookup?name=${encodeURIComponent(text)}`, {
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data || !data.address) return;
+        // Guard against a stale response landing after the modal moved on.
+        if (!target.isConnected) return;
+        const resolved = document.createElement("span");
+        resolved.className = "agenda-details-loc-resolved";
+        const a = document.createElement("a");
+        a.href = mapsHref(data.address);
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = data.address;
+        resolved.appendChild(a);
+        target.appendChild(resolved);
+      })
+      .catch(() => {});
+  }
+
   // Details modal — read-only view shown on body click. When the user has
   // edit permission on the row, surfaces an Edit button that swaps to the
   // edit modal for the same item.
@@ -1721,7 +1789,8 @@
     if (locRow) {
       const hasLoc = !!(d.location && d.location.length);
       locRow.classList.toggle("hidden", !hasLoc);
-      set("[data-loc-target]", d.location);
+      const locTarget = locRow.querySelector("[data-loc-target]");
+      if (locTarget) renderClickableLocation(locTarget, d.location || "");
     }
 
     const recurringRow = modal.querySelector("[data-recurring-row]");

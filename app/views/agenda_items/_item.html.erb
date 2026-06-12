@@ -102,8 +102,8 @@
          wrong-zone string flashing in for a frame). %></span>
     <span class="agenda-item-text">
       <span class="agenda-item-name"><%= item.name %></span>
-      <% if item.location.present? %>
-        <span class="agenda-item-loc"><i class="fa fa-map-marker"></i> <%= item.location %></span>
+      <% if item.location.present? && !location_is_url?(item.location) %>
+        <span class="agenda-item-loc"><i class="fa fa-map-marker"></i><span class="agenda-item-loc-text"><%= item.location %></span></span>
       <% end %>
     </span>
   </button>

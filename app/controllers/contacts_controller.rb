@@ -6,6 +6,17 @@ class ContactsController < ApplicationController
     @contacts = current_user.contacts.order(:created_at)
   end
 
+  # JSON lookup used by the agenda details modal to resolve a contact-name
+  # location into a street address. Returns `{}` when no contact matches or
+  # the contact has no address on file.
+  def lookup
+    name = params[:name].to_s
+    contact = current_user.contacts.name_find(name) if name.present?
+    address = contact&.primary_address&.street
+    payload = address.present? ? { name: contact.name, address: address } : {}
+    render json: payload
+  end
+
   def show
   end
 
