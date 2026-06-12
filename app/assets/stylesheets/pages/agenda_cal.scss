@@ -429,7 +429,10 @@
 }
 
 $cal-week-gutter: 60px;
-$cal-week-px-per-hour: 56px;
+// Tighter row scale — about 1/3 of the original 56px so a full day fits
+// in much less vertical space. Each 15-min slot = 5px, half-hour = 10px,
+// hour = 20px. Text sizes inside event blocks are scaled down to match.
+$cal-week-px-per-hour: 20px;
 
 .cal-week-header {
   display: grid;
@@ -594,7 +597,7 @@ $cal-week-px-per-hour: 56px;
 
 .cal-week-hour {
   height: $cal-week-px-per-hour;
-  // border-box so the 1px top border sits INSIDE the 56px height —
+  // border-box so the 1px top border sits INSIDE the row height —
   // otherwise borders accumulate across 24 rows and the gutter ends up
   // ~24px taller than the column content next to it.
   box-sizing: border-box;
@@ -606,12 +609,13 @@ $cal-week-px-per-hour: 56px;
   .cal-week-hour-label {
     position: absolute;
     right: 6px;
-    top: -7px;
-    font-size: 10px;
+    top: -6px;
+    font-size: 9px;
     font-weight: 500;
-    opacity: 0.65;
+    opacity: 0.6;
     background: transparent;
     white-space: nowrap;
+    line-height: 1;
   }
 }
 
@@ -625,6 +629,51 @@ $cal-week-px-per-hour: 56px;
 
   &.is-today {
     background: rgba(1, 96, 255, 0.08);
+  }
+
+  // Permanent left-edge reservation, mirroring the right-edge
+  // drag-create strip. Always 8px wide so layoutLanes (which now insets
+  // the leftmost lane by LEFT_GUTTER_PX) never overlaps the hidden marks.
+  // Subtle background hint matches the right gutter so the column reads
+  // as visually balanced even when no events are hidden.
+  &::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    background: linear-gradient(to left,
+      transparent 0%,
+      rgba(255, 255, 255, 0.02) 60%,
+      rgba(255, 255, 255, 0.04) 100%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .cal-week-hidden-gutter {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .cal-week-hidden-mark {
+    position: absolute;
+    left: 2px;
+    width: 4px;
+    border-radius: 2px;
+    background: var(--mark-color, #888);
+    opacity: 0.55;
+    pointer-events: auto;
+    cursor: pointer;
+    transition: opacity 0.12s ease, left 0.12s ease, width 0.12s ease;
+    &:hover {
+      opacity: 1;
+      left: 1px;
+      width: 6px;
+    }
   }
 
   // Right-edge drag-create zone. Always reachable for click-and-drag
@@ -695,7 +744,11 @@ $cal-week-px-per-hour: 56px;
   // Looks exactly like the event "disappears on click".
   position: absolute !important;
   margin: 0 !important;
-  padding: 3px 6px 3px 8px !important;
+  // Same 6px / 4px horizontal padding as the single-line `.is-tiny`
+  // variant below so a narrow column event (lots of left padding as a
+  // % of width) and a wide column event (same padding) at least look
+  // visually consistent on the same row.
+  padding: 3px 4px 3px 6px !important;
   border: 0 !important;
   border-left: 3px solid var(--agenda-color, #888) !important;
   border-radius: 4px !important;
@@ -705,15 +758,15 @@ $cal-week-px-per-hour: 56px;
   color: color-mix(in oklab, var(--agenda-color, #888) 30%, white) !important;
 
   font-family: inherit !important;
-  font-size: 11px !important;
+  font-size: 10px !important;
   font-weight: 500;
-  line-height: 1.25;
+  line-height: 1.2;
   letter-spacing: 0.01em;
   text-align: left;
   text-shadow: none !important;
   box-shadow: none !important;
   box-sizing: border-box;
-  min-height: 14px;
+  min-height: 12px;
 
   display: flex;
   flex-direction: column;
@@ -721,6 +774,15 @@ $cal-week-px-per-hour: 56px;
   align-items: stretch;
   gap: 1px;
   overflow: hidden;
+  // Soft right-edge fade on the TILE itself (not on the title) — so a
+  // title sitting comfortably in the middle of the tile keeps full
+  // opacity right to its last character. Only content actually reaching
+  // the tile's right edge fades. For single-line layouts that means the
+  // time (rightmost) is what visually fades first when space is tight,
+  // never the title.
+  mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
+
   // Default = draggable affordance ("open hand"). Readonly events
   // (events on agendas the user can view but not edit) override to
   // plain pointer below so the cursor accurately advertises whether
@@ -759,90 +821,76 @@ $cal-week-px-per-hour: 56px;
     transition: opacity 0.1s linear;
   }
 
-  // Title — top-aligned, bold, brightened color. The two-direction mask
-  // (right + bottom) fades whichever edge text overflows. Wrap only at
-  // word boundaries — never break mid-word.
+  // Title — sits at the top, bold, brightened color. Wrap only at word
+  // boundaries (never mid-word). No per-element mask — the tile-wide
+  // fade above handles overflow.
   .cal-week-event-name {
     font-weight: 700;
-    font-size: 12px;
-    line-height: 1.2;
+    font-size: 11px;
+    line-height: 1.15;
     overflow: hidden;
     white-space: normal;
     word-break: normal;
     overflow-wrap: normal;
     hyphens: none;
-    mask-image:
-      linear-gradient(to right,  #000 calc(100% - 12px), transparent),
-      linear-gradient(to bottom, #000 calc(100% - 6px),  transparent);
-    -webkit-mask-image:
-      linear-gradient(to right,  #000 calc(100% - 12px), transparent),
-      linear-gradient(to bottom, #000 calc(100% - 6px),  transparent);
-    mask-composite: intersect;
-    -webkit-mask-composite: source-in;
   }
 
-  // Time — muted, smaller, nowrap. Times never wrap (a "9:30am – 10:45am"
-  // line break is meaningless); they fade right if forced.
+  // Time — sits directly below the title at its natural height. No
+  // flex magic: both children stack from the top via the parent's
+  // `justify-content: flex-start`, and if the title + time exceed the
+  // container, the time gets clipped by `overflow: hidden` — exactly
+  // the behavior we want without any height-priority manipulation.
   .cal-week-event-time {
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 500;
     opacity: 0.7;
     line-height: 1.1;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
     overflow: hidden;
-    mask-image: linear-gradient(to right, #000 calc(100% - 10px), transparent);
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 10px), transparent);
+    text-overflow: ellipsis;
   }
+
 
   // Tiny variant: single-line layout — title ONLY, time hidden. The
   // gutter labels already show the time; the event itself just needs
   // its name. (User explicitly called this out: "time should NEVER take
   // precedence over the title of the event".)
-  &.is-tiny {
-    flex-direction: row;
-    align-items: center;
-    padding: 0 6px 0 8px !important;
-    line-height: 14px;
-
-    .cal-week-event-name {
-      flex: 1;
-      min-width: 0;
-      white-space: nowrap;
-      font-size: 11px;
-      font-weight: 600;
-      // Single-line so a bottom mask does nothing — only the right-edge
-      // fade matters.
-      mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
-      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
-      mask-composite: add;
-      -webkit-mask-composite: source-over;
-    }
-    .cal-week-event-time { display: none; }
-  }
-
-  // Point variant: tasks and triggers fire at a moment — render the
-  // marker as a 15-min thin bar (matches the `<hr>` feel the user asked
-  // for). Title only, no time.
+  // Single-line variants (`.is-tiny` for <1.5h timed events,
+  // `.is-point` for task/trigger markers). Title and time sit side-by-
+  // side: title takes its natural width and never shrinks, time fills
+  // whatever's left over and clips/ellipsizes if the column can't fit
+  // it. The tile-wide fade on the parent handles the visual soften —
+  // no per-element mask needed.
+  &.is-tiny,
   &.is-point {
-    padding: 0 6px 0 8px !important;
-    line-height: 12px;
     flex-direction: row;
+    // `center` (not `baseline`) so the title sits in the vertical
+    // middle of the tile. `baseline` was leaving the text glued to the
+    // top of the tile, which also made the left padding look bigger
+    // (asymmetric whitespace — none at top, full at bottom).
     align-items: center;
+    gap: 5px;
+    // Tiny rows have less vertical room to work with; a hair less side
+    // padding lets the title start a touch closer to the accent bar so
+    // the relative whitespace doesn't feel inflated next to the wider
+    // default tiles.
+    padding: 0 4px 0 6px !important;
 
     .cal-week-event-name {
-      flex: 1;
-      min-width: 0;
+      flex: none;
       white-space: nowrap;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 600;
-      mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
-      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
-      mask-composite: add;
-      -webkit-mask-composite: source-over;
     }
-    .cal-week-event-time { display: none; }
+    .cal-week-event-time {
+      flex: 0 1 auto;
+      min-width: 0;
+    }
   }
+
+  &.is-tiny { line-height: 12px; }
+  &.is-point { line-height: 10px; }
 
   &.is-continued-top {
     border-top-left-radius: 0 !important;
@@ -929,7 +977,7 @@ body.cal-event-drag-blocked * {
   font-weight: 600;
 }
 
-// Red current-time line — positioned absolutely inside .cal-week-columns
+// Red current-time line, positioned absolutely inside the body grid
 // by JS. Only visible when today is in the visible week.
 .cal-week-now-line {
   position: absolute;
@@ -942,17 +990,42 @@ body.cal-event-drag-blocked * {
 
   .cal-week-now-dot {
     position: absolute;
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     background: #FF3B30;
-    top: -6px;
-    margin-left: -5px;
+    top: -5px;
+    margin-left: -4px;
   }
 
-  .cal-week-now-bar {
-    display: none;
-  }
+  .cal-week-now-bar { display: none; }
+}
+
+// Gutter chip — a small red pill in the hour-gutter strip showing the
+// current wall-clock time. JS keeps `top` in sync with the now-line so
+// the user reads the exact time off the left edge ("4:38 PM") next to
+// the ladder of hour labels.
+.cal-week-now-chip {
+  position: absolute;
+  left: 0;
+  width: $cal-week-gutter;
+  height: 14px;
+  margin-top: -7px; // center vertically on the now Y
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 5px 0 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #FFF;
+  background: #FF3B30;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  z-index: 7;
+  border-radius: 0 7px 7px 0;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(255, 59, 48, 0.35);
 }
 
 // Seeds are server-rendered data-only nodes; never visible.

@@ -1,0 +1,13 @@
+<%# Lists hidden events overlapping a clicked gutter slot. Hydrated by
+    agenda_cal.js; rendered empty (no SSR list — list is purely a runtime
+    projection of the user's filter prefs against the current week). %>
+<%= render_modal("agenda-hidden-list", "Hidden events", "modal-flat") do %>
+  <div class="agenda-hidden-list">
+    <ul class="agenda-hidden-list-items" data-hidden-list>
+      <%# JS appends <li class="agenda-hidden-list-item"> rows here. %>
+    </ul>
+    <div class="agenda-hidden-list-foot">
+      <button type="button" class="af-btn af-btn-secondary" data-dismiss="#agenda-hidden-list">Close</button>
+    </div>
+  </div>
+<% end %>

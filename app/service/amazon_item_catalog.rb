@@ -11,7 +11,11 @@ class AmazonItemCatalog
   CACHE_KEY = :amazon_item_catalog
 
   def self.all
-    MeCache.get(CACHE_KEY) || {}
+    # MeCache backs to a JSONB column via SafeJsonSerializer, which symbolizes
+    # every parsed key. The catalog's outer keys are ASINs (e.g. "B0FDLFSZ1S")
+    # which come back as symbols after a round-trip - normalize to strings so
+    # get/set lookups by ASIN work consistently before and after persistence.
+    (MeCache.get(CACHE_KEY) || {}).transform_keys(&:to_s)
   end
 
   def self.get(asin)

@@ -1,6 +1,5 @@
-<%# Per-device visibility filter. Agenda visibility persisted under
-    "agendaHidden:v1"; the per-kind completed toggles under
-    "agendaCompletedHidden:v1". %>
+<%# Per-user visibility filter, server-persisted via AgendaPreference and
+    broadcast to all the user's connected clients on change. %>
 <button type="button" class="agenda-filter-btn" aria-label="Filter agendas" aria-haspopup="true" aria-expanded="false">
   <i class="fa fa-filter"></i>
 </button>
@@ -32,6 +31,29 @@
       </li>
     <% end %>
   </ul>
+
+  <div class="agenda-filter-divider" aria-hidden="true"></div>
+
+  <h4>Hidden events</h4>
+  <%# Hydrated by JS from currentPrefs.hidden_schedule_ids /
+      hidden_item_ids (+ their *_names maps). Entries get added via the
+      details-modal Hide toggle — no picker here. %>
+  <ul class="agenda-filter-list agenda-hidden-schedules-list" data-hidden-schedules-list>
+    <li class="agenda-filter-empty" data-hidden-schedules-empty>None — open an event's details to hide it.</li>
+  </ul>
+
+  <div class="agenda-filter-divider" aria-hidden="true"></div>
+
+  <h4>Name patterns (regex)</h4>
+  <ul class="agenda-filter-list agenda-pattern-list" data-pattern-list>
+    <li class="agenda-filter-empty" data-pattern-empty>No patterns.</li>
+  </ul>
+  <form class="basic agenda-pattern-form" data-pattern-form>
+    <input type="text" class="agenda-pattern-input" data-pattern-input
+           placeholder="e.g. ^Focus$ or daily standup" autocomplete="off" spellcheck="false">
+    <button type="submit" class="agenda-pattern-add">Add</button>
+    <div class="agenda-pattern-error hidden" data-pattern-error></div>
+  </form>
 
   <div class="agenda-filter-divider" aria-hidden="true"></div>
 

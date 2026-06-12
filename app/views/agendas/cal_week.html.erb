@@ -46,7 +46,7 @@
   <div class="cal-week-grid"
        data-week-start="<%= @week_start.iso8601 %>"
        data-week-end="<%= @week_end.iso8601 %>"
-       data-px-per-hour="56"
+       data-px-per-hour="20"
        data-snap-min="15"
        data-day-start-hour="3">
 
@@ -113,6 +113,10 @@
           <% end %>
           <%# Drag-selection element, shown while user is creating. %>
           <div class="cal-week-drag-sel hidden" aria-hidden="true"></div>
+          <%# Thin left-edge gutter where agenda_cal.js paints a colored
+              line per hidden event so the user knows something is there.
+              Empty until paintHiddenGutters runs. %>
+          <div class="cal-week-hidden-gutter" data-hidden-gutter aria-hidden="true"></div>
         </div>
       <% end %>
       <%# Current-time line, positioned absolutely inside the body grid
@@ -120,6 +124,12 @@
       <div class="cal-week-now-line hidden" aria-hidden="true">
         <span class="cal-week-now-dot"></span>
         <span class="cal-week-now-bar"></span>
+      </div>
+      <%# Gutter chip showing the current wall-clock time, positioned at
+          the same Y as the now-line so the user has a precise readout
+          on the left next to the hour ladder. %>
+      <div class="cal-week-now-chip hidden" aria-hidden="true">
+        <span class="cal-week-now-time"></span>
       </div>
     </div>
 
@@ -139,6 +149,7 @@
                data-item-url="<%= agenda_item_path(item.display_id) %>"
                data-phantom="<%= item.phantom? %>"
                data-recurring="<%= item.recurring? %>"
+               data-agenda-schedule-id="<%= item.agenda_schedule_id %>"
                data-kind="<%= item.kind %>"
                data-color="<%= item.display_color %>"
                data-agenda-id="<%= item.agenda_id %>"
@@ -163,5 +174,6 @@
   <%= render "agenda_items/add_modal", agendas: @agendas, date: @date %>
   <%= render "agenda_items/edit_modal", agendas: @agendas %>
   <%= render "agenda_items/details_modal" %>
+  <%= render "agenda_items/hidden_list_modal" %>
   <%= render "agenda_items/confirm_modal" %>
 </div>

@@ -1146,6 +1146,36 @@
       openModal(target);
     });
 
+    // Hide / unhide. Recurring rows toggle their schedule_id (the whole
+    // series); one-off rows toggle their item_id (just this row).
+    detailsModalEl?.querySelector("[data-toggle-hide-recurring]")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const target = detailsModalItem;
+      const t = detailsHideTarget(target);
+      if (!t) return;
+      const listKey = t.kind === "schedule" ? "hidden_schedule_ids" : "hidden_item_ids";
+      const namesKey = t.kind === "schedule" ? "hidden_schedule_names" : "hidden_item_names";
+      const set = new Set((currentPrefs[listKey] || []).map(String));
+      if (set.has(t.key)) {
+        set.delete(t.key);
+      } else {
+        set.add(t.key);
+        // Remember the display name so the filter panel can list this
+        // entry even after the row is hidden from the current view.
+        currentPrefs[namesKey] = Object.assign(
+          {},
+          currentPrefs[namesKey] || {},
+          { [t.key]: target.dataset.name || "" },
+        );
+      }
+      currentPrefs[listKey] = Array.from(set);
+      syncDetailsHideRecurring(target);
+      syncFilterPanelToPrefs();
+      applyAgendaVisibility();
+      pushPrefsToServer();
+    });
+
     function openModal(item) {
       const d = item.dataset;
       $(".add-item-id", form).value = d.itemId;
@@ -1480,7 +1510,16 @@
   const COMPLETED_GRACE_MS = 5000;
 
   function defaultPrefs() {
-    return { hidden_agenda_ids: [], hide_completed: { task: false, event: false, trigger: false }, hide_tentative: false };
+    return {
+      hidden_agenda_ids:     [],
+      hidden_schedule_ids:   [],
+      hidden_schedule_names: {},
+      hidden_item_ids:       [],
+      hidden_item_names:     {},
+      hidden_name_patterns:  [],
+      hide_completed:        { task: false, event: false, trigger: false },
+      hide_tentative:        false,
+    };
   }
   let currentPrefs = (() => {
     try {
@@ -1495,21 +1534,30 @@
   function applyPreferenceSnapshot(prefs) {
     if (!prefs || typeof prefs !== "object") return;
     currentPrefs = {
-      hidden_agenda_ids: Array.isArray(prefs.hidden_agenda_ids) ? prefs.hidden_agenda_ids.map(String) : [],
-      hide_completed:    Object.assign({ task: false, event: false, trigger: false }, prefs.hide_completed || {}),
-      hide_tentative:    !!prefs.hide_tentative,
+      hidden_agenda_ids:     Array.isArray(prefs.hidden_agenda_ids) ? prefs.hidden_agenda_ids.map(String) : [],
+      hidden_schedule_ids:   Array.isArray(prefs.hidden_schedule_ids) ? prefs.hidden_schedule_ids.map(String) : [],
+      hidden_schedule_names: Object.assign({}, prefs.hidden_schedule_names || {}),
+      hidden_item_ids:       Array.isArray(prefs.hidden_item_ids) ? prefs.hidden_item_ids.map(String) : [],
+      hidden_item_names:     Object.assign({}, prefs.hidden_item_names || {}),
+      hidden_name_patterns:  Array.isArray(prefs.hidden_name_patterns) ? prefs.hidden_name_patterns.slice() : [],
+      hide_completed:        Object.assign({ task: false, event: false, trigger: false }, prefs.hide_completed || {}),
+      hide_tentative:        !!prefs.hide_tentative,
     };
     persistPrefsCache();
     syncFilterPanelToPrefs();
     applyAgendaVisibility();
+    syncDetailsHideRecurring(detailsModalItem);
   }
   function pushPrefsToServer() {
     persistPrefsCache();
     return ajax("PATCH", "/agenda_preference", {
       agenda_preference: {
-        hidden_agenda_ids: currentPrefs.hidden_agenda_ids,
-        hide_completed:    currentPrefs.hide_completed,
-        hide_tentative:    currentPrefs.hide_tentative,
+        hidden_agenda_ids:    currentPrefs.hidden_agenda_ids,
+        hidden_schedule_ids:  currentPrefs.hidden_schedule_ids || [],
+        hidden_item_ids:      currentPrefs.hidden_item_ids || [],
+        hidden_name_patterns: currentPrefs.hidden_name_patterns || [],
+        hide_completed:       currentPrefs.hide_completed,
+        hide_tentative:       currentPrefs.hide_tentative,
       },
     }).catch(() => {
       // Network drop — keep the local cache; reconnect will fetch authoritative.
@@ -1541,8 +1589,17 @@
 
   function applyAgendaVisibility() {
     const hidden = new Set(currentPrefs.hidden_agenda_ids.map(String));
+    const hiddenSchedules = new Set((currentPrefs.hidden_schedule_ids || []).map(String));
+    const hiddenItems = new Set((currentPrefs.hidden_item_ids || []).map(String));
     const completedHidden = currentPrefs.hide_completed;
     const tentativeHidden = currentPrefs.hide_tentative;
+    // Compile patterns once per pass. Each pattern always runs case-insensitive
+    // ("i" flag); invalid regexes are skipped silently so a bad client-cached
+    // entry doesn't break visibility for every row.
+    const patterns = (currentPrefs.hidden_name_patterns || []).reduce((acc, src) => {
+      try { acc.push(new RegExp(src, "i")); } catch (_) { /* skip */ }
+      return acc;
+    }, []);
     document.querySelectorAll("[data-agenda-id]").forEach((el) => {
       // The cal-month / cal-week PWA uses its own item classes; keep them
       // in lock-step with the day/week-list classes so the same prefs
@@ -1557,15 +1614,63 @@
       );
       if (!filterable) return;
       const hideByAgenda = hidden.has(el.dataset.agendaId);
+      const scheduleId = el.dataset.agendaScheduleId;
+      const hideBySchedule = !!scheduleId && hiddenSchedules.has(String(scheduleId));
+      // One-off hide keys on the item's own id. Phantom recurring rows
+      // expose a synthetic `p-<schedule>-<date>` id and never match here,
+      // so the recurring-vs-one-off paths stay cleanly separated.
+      const rawItemId = el.dataset.itemId || "";
+      const hideByItem = !!rawItemId && /^\d+$/.test(rawItemId) && hiddenItems.has(rawItemId);
+      const name = el.dataset.name || "";
+      const hideByPattern = patterns.length > 0 && patterns.some((re) => re.test(name));
       const kind = el.dataset.kind;
       const isCrossedOut = el.classList.contains("crossed-out");
       const itemId = el.dataset.itemId;
       const inGrace = itemId && gracedItemIds.has(itemId);
       const hideByCompleted = isCrossedOut && !!completedHidden[kind] && !inGrace;
       const hideByTentative = tentativeHidden && el.classList.contains("tentative");
-      el.classList.toggle("hidden-by-filter", hideByAgenda || hideByCompleted || hideByTentative);
+      el.classList.toggle("hidden-by-filter", hideByAgenda || hideBySchedule || hideByItem || hideByPattern || hideByCompleted || hideByTentative);
     });
+    // Trigger the cal-page layout reflow so lanes reclaim the freed
+    // horizontal space LIVE — without this, lanes only widen after the
+    // post-modal HTML refresh tick. No-op off cal pages; re-entry guard
+    // in agenda_cal.js handles the buildWeekBlocks → applyAgendaVisibility
+    // → rebuild cycle.
+    window.__rebuildAgendaCalLocal?.();
   }
+  // Surfaced so the cal_week / cal_month rebuild path (agenda_cal.js) can
+  // reapply filter classes after it tears blocks down and rebuilds from
+  // seeds — without that, the local refresh that fires on modal-close
+  // erases every `.hidden-by-filter` mark.
+  window.__applyAgendaVisibility = applyAgendaVisibility;
+  // Same idea for the hidden-events list modal in cal_week — it needs to
+  // open the details modal for a hidden row so the user can Unhide. Pass
+  // any element whose dataset carries the standard item-* attrs.
+  window.__openAgendaDetails = (el) => openDetailsModal(el);
+  // Pre-render predicate: would this seed be hidden by the current filter
+  // prefs? Used by buildWeekBlocks to drop hidden events BEFORE lane
+  // layout so visible blocks reclaim the freed horizontal space. Only
+  // covers the prefs that can be determined from seed data alone
+  // (agenda, schedule, item, name pattern) — completed/tentative still
+  // ride the post-hoc `.hidden-by-filter` path.
+  window.__agendaSeedIsHidden = (seed) => {
+    if (!seed) return false;
+    const hiddenAgendas = new Set((currentPrefs.hidden_agenda_ids || []).map(String));
+    if (hiddenAgendas.has(String(seed.dataset.agendaId))) return true;
+    const hiddenSchedules = new Set((currentPrefs.hidden_schedule_ids || []).map(String));
+    const sId = seed.dataset.agendaScheduleId;
+    if (sId && hiddenSchedules.has(String(sId))) return true;
+    const hiddenItems = new Set((currentPrefs.hidden_item_ids || []).map(String));
+    const rawItemId = seed.dataset.itemId || "";
+    if (/^\d+$/.test(rawItemId) && hiddenItems.has(rawItemId)) return true;
+    const name = seed.dataset.name || "";
+    const patterns = currentPrefs.hidden_name_patterns || [];
+    for (const src of patterns) {
+      try { if (new RegExp(src, "i").test(name)) return true; }
+      catch (_) { /* skip */ }
+    }
+    return false;
+  };
 
   // Reflects the current prefs snapshot into the filter panel checkboxes.
   // Used both on initial hydrate and after a Monitor broadcast updates
@@ -1582,6 +1687,72 @@
     });
     const tentCb = panel.querySelector("input[type=checkbox][data-hide-tentative]");
     if (tentCb) tentCb.checked = currentPrefs.hide_tentative;
+    renderHiddenScheduleList(panel);
+    renderPatternList(panel);
+  }
+
+  function renderHiddenScheduleList(panel) {
+    const list = panel.querySelector("[data-hidden-schedules-list]");
+    if (!list) return;
+    list.querySelectorAll(".agenda-filter-removable").forEach((n) => n.remove());
+
+    const scheduleIds = (currentPrefs.hidden_schedule_ids || []).map(String);
+    const scheduleNames = currentPrefs.hidden_schedule_names || {};
+    const itemIds = (currentPrefs.hidden_item_ids || []).map(String);
+    const itemNames = currentPrefs.hidden_item_names || {};
+
+    const empty = list.querySelector("[data-hidden-schedules-empty]");
+    if (empty) empty.classList.toggle("hidden", scheduleIds.length + itemIds.length > 0);
+
+    const addRow = (label, kind, key) => {
+      const li = document.createElement("li");
+      li.className = "agenda-filter-removable";
+      const span = document.createElement("span");
+      span.className = "agenda-filter-removable-label";
+      span.textContent = label;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "agenda-filter-remove";
+      btn.setAttribute("aria-label", "Unhide");
+      if (kind === "schedule") btn.dataset.unhideScheduleId = key;
+      else btn.dataset.unhideItemId = key;
+      btn.textContent = "×";
+      li.appendChild(span);
+      li.appendChild(btn);
+      list.appendChild(li);
+    };
+
+    scheduleIds.forEach((id) => addRow(
+      (scheduleNames[id] ? `${scheduleNames[id]} (recurring)` : `Schedule #${id}`),
+      "schedule",
+      id,
+    ));
+    itemIds.forEach((id) => addRow(itemNames[id] || `Item #${id}`, "item", id));
+  }
+
+  function renderPatternList(panel) {
+    const list = panel.querySelector("[data-pattern-list]");
+    if (!list) return;
+    const patterns = currentPrefs.hidden_name_patterns || [];
+    list.querySelectorAll(".agenda-filter-removable").forEach((n) => n.remove());
+    const empty = list.querySelector("[data-pattern-empty]");
+    if (empty) empty.classList.toggle("hidden", patterns.length > 0);
+    patterns.forEach((src) => {
+      const li = document.createElement("li");
+      li.className = "agenda-filter-removable";
+      const label = document.createElement("span");
+      label.className = "agenda-filter-removable-label agenda-filter-pattern-code";
+      label.textContent = src;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "agenda-filter-remove";
+      btn.setAttribute("aria-label", "Remove");
+      btn.dataset.removePattern = src;
+      btn.textContent = "×";
+      li.appendChild(label);
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
   }
 
   // Pre-swap snapshot of crossed-out state by item id. Used after a DOM
@@ -1681,6 +1852,74 @@
         pushPrefsToServer();
       }
     });
+
+    // Unhide buttons inside the hidden-recurring + pattern lists, plus the
+    // pattern add form. Listed at the panel scope (click + submit) so the
+    // dynamically-rendered rows don't need their own handlers.
+    panel.addEventListener("click", (e) => {
+      const unhideSchedBtn = e.target.closest("[data-unhide-schedule-id]");
+      if (unhideSchedBtn) {
+        e.preventDefault();
+        const id = String(unhideSchedBtn.dataset.unhideScheduleId);
+        const ids = new Set((currentPrefs.hidden_schedule_ids || []).map(String));
+        ids.delete(id);
+        currentPrefs.hidden_schedule_ids = Array.from(ids);
+        if (currentPrefs.hidden_schedule_names) delete currentPrefs.hidden_schedule_names[id];
+        syncFilterPanelToPrefs();
+        applyAgendaVisibility();
+        syncDetailsHideRecurring(detailsModalItem);
+        pushPrefsToServer();
+        return;
+      }
+      const unhideItemBtn = e.target.closest("[data-unhide-item-id]");
+      if (unhideItemBtn) {
+        e.preventDefault();
+        const id = String(unhideItemBtn.dataset.unhideItemId);
+        const ids = new Set((currentPrefs.hidden_item_ids || []).map(String));
+        ids.delete(id);
+        currentPrefs.hidden_item_ids = Array.from(ids);
+        if (currentPrefs.hidden_item_names) delete currentPrefs.hidden_item_names[id];
+        syncFilterPanelToPrefs();
+        applyAgendaVisibility();
+        syncDetailsHideRecurring(detailsModalItem);
+        pushPrefsToServer();
+        return;
+      }
+      const removePatternBtn = e.target.closest("[data-remove-pattern]");
+      if (removePatternBtn) {
+        e.preventDefault();
+        const src = removePatternBtn.dataset.removePattern;
+        currentPrefs.hidden_name_patterns = (currentPrefs.hidden_name_patterns || []).filter((p) => p !== src);
+        syncFilterPanelToPrefs();
+        applyAgendaVisibility();
+        pushPrefsToServer();
+      }
+    });
+
+    const patternForm = panel.querySelector("[data-pattern-form]");
+    patternForm?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const input = patternForm.querySelector("[data-pattern-input]");
+      const err = patternForm.querySelector("[data-pattern-error]");
+      const src = (input?.value || "").trim();
+      if (err) { err.classList.add("hidden"); err.textContent = ""; }
+      if (!src) return;
+      try { new RegExp(src, "i"); }
+      catch (rex) {
+        if (err) { err.textContent = `Invalid regex: ${rex.message}`; err.classList.remove("hidden"); }
+        return;
+      }
+      const existing = currentPrefs.hidden_name_patterns || [];
+      if (existing.includes(src)) {
+        if (input) input.value = "";
+        return;
+      }
+      currentPrefs.hidden_name_patterns = existing.concat(src);
+      if (input) input.value = "";
+      syncFilterPanelToPrefs();
+      applyAgendaVisibility();
+      pushPrefsToServer();
+    });
   }
 
   // Location classification + clickable rendering for the details modal.
@@ -1751,6 +1990,54 @@
       .catch(() => {});
   }
 
+  // Returns { kind, key, isHidden } describing what the details-modal Hide
+  // affordance would target for this item. kind: "schedule" for recurring
+  // rows, "item" for one-offs. Null when the item can't be hidden (e.g.
+  // phantom row missing both schedule id AND a numeric item id).
+  function detailsHideTarget(dataEl) {
+    if (!dataEl) return null;
+    const scheduleId = dataEl.dataset.agendaScheduleId;
+    if (dataEl.dataset.recurring === "true" && scheduleId) {
+      const hidden = new Set((currentPrefs.hidden_schedule_ids || []).map(String));
+      return { kind: "schedule", key: String(scheduleId), isHidden: hidden.has(String(scheduleId)) };
+    }
+    const itemId = dataEl.dataset.itemId || "";
+    if (/^\d+$/.test(itemId)) {
+      const hidden = new Set((currentPrefs.hidden_item_ids || []).map(String));
+      return { kind: "item", key: itemId, isHidden: hidden.has(itemId) };
+    }
+    return null;
+  }
+
+  // Flips the small "Hide / Unhide" affordance in the details modal to
+  // match the current target's filter state. Recurring → hide the whole
+  // series; one-off → hide just this row. Hidden entirely for rows that
+  // have neither (e.g. unsaved phantoms).
+  function syncDetailsHideRecurring(dataEl) {
+    const modal = document.getElementById("agenda-item-details");
+    const btn = modal?.querySelector("[data-toggle-hide-recurring]");
+    if (!btn) return;
+    const target = detailsHideTarget(dataEl);
+    btn.classList.toggle("hidden", !target);
+    if (!target) return;
+    const isHidden = target.isHidden;
+    const isSeries = target.kind === "schedule";
+    const label = btn.querySelector("[data-toggle-hide-recurring-label]");
+    if (label) label.textContent = isHidden ? "Unhide" : "Hide";
+    const aria = (
+      isSeries
+        ? (isHidden ? "Unhide this recurring event" : "Hide this recurring event")
+        : (isHidden ? "Unhide this event" : "Hide this event")
+    );
+    btn.setAttribute("aria-label", aria);
+    btn.title = aria;
+    const icon = btn.querySelector("[data-toggle-hide-recurring-icon]");
+    if (icon) {
+      icon.classList.toggle("fa-eye-slash", !isHidden);
+      icon.classList.toggle("fa-eye", isHidden);
+    }
+  }
+
   // Details modal — read-only view shown on body click. When the user has
   // edit permission on the row, surfaces an Edit button that swaps to the
   // edit modal for the same item.
@@ -1799,6 +2086,7 @@
       recurringRow.classList.toggle("hidden", !isRecurring);
       set("[data-recurring-target]", isRecurring ? "Recurring" : "");
     }
+    syncDetailsHideRecurring(dataEl);
 
     const notesRow = modal.querySelector("[data-notes-row]");
     if (notesRow) {
@@ -1849,9 +2137,14 @@
         }, DISCONNECT_GRACE_MS);
       },
       received: function (data) {
-        // Filter prefs broadcast — apply locally without a server refetch.
-        if (data && data.preferences) {
-          applyPreferenceSnapshot(data.preferences);
+        // Monitor's dispatcher (dashboard/cells/monitor.js) passes the
+        // whole broadcast payload — so the prefs ride at `data.data.preferences`,
+        // not `data.preferences`. Reading the wrong key here silently
+        // dropped every cross-session pref broadcast and fell through
+        // to refreshView, which doesn't re-fetch prefs.
+        const prefs = data?.data?.preferences;
+        if (prefs) {
+          applyPreferenceSnapshot(prefs);
           return;
         }
         // Broadcasts go out for every agenda the user has access to. The

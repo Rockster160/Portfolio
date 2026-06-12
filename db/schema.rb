@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_11_171503) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_12_135720) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -133,6 +133,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_11_171503) do
     t.boolean "hide_tentative", default: false, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "hidden_schedule_ids", default: [], null: false
+    t.jsonb "hidden_name_patterns", default: [], null: false
+    t.jsonb "hidden_item_ids", default: [], null: false
     t.index ["user_id"], name: "index_agenda_preferences_on_user_id", unique: true
   end
 

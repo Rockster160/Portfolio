@@ -1,5 +1,5 @@
 <%# Read-only details modal for viewer-permission rows. %>
-<%= render_modal("agenda-item-details", "Details") do %>
+<%= render_modal("agenda-item-details", "Details", "modal-flat") do %>
   <div class="agenda-details">
     <div class="agenda-details-agenda">
       <span class="agenda-details-dot" data-agenda-color-target aria-hidden="true"></span>
@@ -13,6 +13,11 @@
     </div>
     <div class="agenda-details-row hidden" data-recurring-row>
       <i class="fa fa-refresh"></i> <span data-recurring-target></span>
+      <button type="button" class="agenda-details-hide-recurring hidden" data-toggle-hide-recurring
+              aria-label="Hide this recurring event">
+        <i class="fa fa-eye-slash" data-toggle-hide-recurring-icon></i>
+        <span class="agenda-details-hide-recurring-text" data-toggle-hide-recurring-label>Hide</span>
+      </button>
     </div>
     <div class="agenda-details-notes hidden" data-notes-row>
       <h4>Notes</h4>

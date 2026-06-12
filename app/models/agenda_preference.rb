@@ -2,13 +2,16 @@
 #
 # Table name: agenda_preferences
 #
-#  id                :bigint           not null, primary key
-#  hidden_agenda_ids :jsonb            not null
-#  hide_completed    :jsonb            not null
-#  hide_tentative    :boolean          default(FALSE), not null
-#  created_at        :datetime         not null
-#  updated_at        :datetime         not null
-#  user_id           :bigint           not null
+#  id                   :bigint           not null, primary key
+#  hidden_agenda_ids    :jsonb            not null
+#  hidden_item_ids      :jsonb            not null
+#  hidden_name_patterns :jsonb            not null
+#  hidden_schedule_ids  :jsonb            not null
+#  hide_completed       :jsonb            not null
+#  hide_tentative       :boolean          default(FALSE), not null
+#  created_at           :datetime         not null
+#  updated_at           :datetime         not null
+#  user_id              :bigint           not null
 #
 class AgendaPreference < ApplicationRecord
   KIND_KEYS = %w[task event trigger].freeze
@@ -16,16 +19,33 @@ class AgendaPreference < ApplicationRecord
   belongs_to :user
 
   validates :user_id, uniqueness: true
+  validate :validate_pattern_compiles
 
   def self.for(user)
     find_or_initialize_by(user: user).tap { |pref|
-      pref.hide_completed ||= {}
-      pref.hidden_agenda_ids ||= []
+      pref.hide_completed       ||= {}
+      pref.hidden_agenda_ids    ||= []
+      pref.hidden_schedule_ids  ||= []
+      pref.hidden_item_ids      ||= []
+      pref.hidden_name_patterns ||= []
     }
   end
 
   def hidden_agenda_ids=(value)
     super(Array(value).map(&:to_i).uniq)
+  end
+
+  def hidden_schedule_ids=(value)
+    super(Array(value).map(&:to_i).uniq)
+  end
+
+  def hidden_item_ids=(value)
+    super(Array(value).map(&:to_i).reject(&:zero?).uniq)
+  end
+
+  def hidden_name_patterns=(value)
+    cleaned = Array(value).map { |s| s.to_s.strip }.reject(&:empty?).uniq
+    super(cleaned)
   end
 
   def hide_completed_for?(kind)
@@ -39,9 +59,14 @@ class AgendaPreference < ApplicationRecord
 
   def serialize_for_client
     {
-      hidden_agenda_ids: hidden_agenda_ids.map(&:to_i),
-      hide_completed:    KIND_KEYS.index_with { |k| hide_completed_for?(k) },
-      hide_tentative:    !!hide_tentative,
+      hidden_agenda_ids:     hidden_agenda_ids.map(&:to_i),
+      hidden_schedule_ids:   hidden_schedule_ids.map(&:to_i),
+      hidden_schedule_names: hidden_schedule_name_map,
+      hidden_item_ids:       hidden_item_ids.map(&:to_i),
+      hidden_item_names:     hidden_item_name_map,
+      hidden_name_patterns:  hidden_name_patterns,
+      hide_completed:        KIND_KEYS.index_with { |k| hide_completed_for?(k) },
+      hide_tentative:        !!hide_tentative,
     }
   end
 
@@ -56,5 +81,27 @@ class AgendaPreference < ApplicationRecord
       timestamp: Time.current.to_i,
       data:      { preferences: serialize_for_client },
     })
+  end
+
+  private
+
+  # Names keyed by id so the filter panel can render an "unhide" list even
+  # for schedules whose only items have already been filtered out of view.
+  def hidden_schedule_name_map
+    return {} if hidden_schedule_ids.blank?
+    AgendaSchedule.where(id: hidden_schedule_ids).pluck(:id, :name).to_h
+  end
+
+  def hidden_item_name_map
+    return {} if hidden_item_ids.blank?
+    AgendaItem.where(id: hidden_item_ids).pluck(:id, :name).to_h
+  end
+
+  def validate_pattern_compiles
+    Array(hidden_name_patterns).each do |src|
+      Regexp.new(src.to_s)
+    rescue RegexpError => e
+      errors.add(:hidden_name_patterns, "invalid regex #{src.inspect}: #{e.message}")
+    end
   end
 end

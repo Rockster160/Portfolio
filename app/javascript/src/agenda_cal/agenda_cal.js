@@ -493,6 +493,101 @@
     }
   }
 
+  // Paint a thin colored breadcrumb in each day column's left gutter for
+  // every seed the filter hid. Sized by the seed's per-segment time
+  // range so the mark sits where the event would have rendered.
+  function paintHiddenGutters(root, hiddenTimedSegs, pxPerMin) {
+    if (!root) return;
+    root.querySelectorAll(".cal-week-hidden-mark").forEach((n) => n.remove());
+    (hiddenTimedSegs || []).forEach(({ seed, seg, col }) => {
+      const gutter = col?.querySelector("[data-hidden-gutter]");
+      if (!gutter) return;
+      const kind = seed.dataset.kind || "event";
+      const isPoint = kind === "task" || kind === "trigger";
+      const durationMin = isPoint ? 15 : Math.max(15, seg.endMin - seg.startMin);
+      const top = seg.startMin * pxPerMin;
+      const height = Math.max(8, durationMin * pxPerMin - 2);
+      const mark = document.createElement("div");
+      mark.className = "cal-week-hidden-mark";
+      mark.style.top = `${top}px`;
+      mark.style.height = `${height}px`;
+      const color = seed.dataset.agendaColor || seed.dataset.color || "#888";
+      mark.style.setProperty("--mark-color", color);
+      // Copy every data-* attr off the seed so the click handler can
+      // rebuild the details modal verbatim.
+      for (const attr of seed.attributes) {
+        if (attr.name.startsWith("data-")) mark.setAttribute(attr.name, attr.value);
+      }
+      gutter.appendChild(mark);
+    });
+  }
+
+  function openHiddenListAt(mark, e) {
+    const gutter = mark.parentElement;
+    if (!gutter) return;
+    const gutterRect = gutter.getBoundingClientRect();
+    const clickY = e.clientY - gutterRect.top;
+    const all = Array.from(gutter.querySelectorAll(".cal-week-hidden-mark"));
+    // Marks whose y-range covers the click point (inclusive). Single-mark
+    // clicks degenerate to a one-item list.
+    const overlapping = all.filter((m) => {
+      const t = parseFloat(m.style.top) || 0;
+      const h = parseFloat(m.style.height) || 0;
+      return clickY >= t && clickY <= t + h;
+    });
+    const items = (overlapping.length > 0 ? overlapping : [mark]);
+    populateHiddenListModal(items);
+    if (window.showModal) window.showModal("#agenda-hidden-list");
+  }
+
+  function populateHiddenListModal(marks) {
+    const list = document.querySelector("#agenda-hidden-list [data-hidden-list]");
+    if (!list) return;
+    list.innerHTML = "";
+    marks.forEach((mark) => {
+      const li = document.createElement("li");
+      li.className = "agenda-hidden-list-item";
+      const dot = document.createElement("span");
+      dot.className = "agenda-hidden-list-dot";
+      dot.style.background = mark.dataset.agendaColor || mark.dataset.color || "#888";
+      const body = document.createElement("span");
+      body.className = "agenda-hidden-list-body";
+      const name = document.createElement("span");
+      name.className = "agenda-hidden-list-name";
+      name.textContent = mark.dataset.name || "(untitled)";
+      const meta = document.createElement("span");
+      meta.className = "agenda-hidden-list-meta";
+      meta.textContent = formatHiddenMeta(mark);
+      body.appendChild(name);
+      body.appendChild(meta);
+      li.appendChild(dot);
+      li.appendChild(body);
+      li.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (window.hideModal) window.hideModal("#agenda-hidden-list");
+        // The details modal handler reads from the clicked element's
+        // dataset. The mark carries the full data payload already, so
+        // pass it directly — no need to find the original block.
+        window.__openAgendaDetails?.(mark);
+      });
+      list.appendChild(li);
+    });
+  }
+
+  function formatHiddenMeta(mark) {
+    const start = Number(mark.dataset.startAt);
+    if (!start) return mark.dataset.agendaName || "";
+    const startMs = start * 1000;
+    const d = new Date(startMs);
+    const timeOpts = { hour: "numeric", minute: "2-digit" };
+    const dayOpts = { weekday: "short", month: "short", day: "numeric" };
+    const time = d.toLocaleTimeString(undefined, timeOpts);
+    const day = d.toLocaleDateString(undefined, dayOpts);
+    const agendaPart = mark.dataset.agendaName ? ` · ${mark.dataset.agendaName}` : "";
+    return `${day} ${time}${agendaPart}`;
+  }
+
   // ============================================================
   // WEEK VIEW
   // ============================================================
@@ -524,6 +619,10 @@
   // user always start a new event on a given day without hunting for
   // empty vertical space.
   const RIGHT_GUTTER_PX = 12;
+  // Symmetric reserved strip on the left edge of every day column. The
+  // hidden-events gutter (and its colored marks) sit here so events never
+  // overlap them, matching the right-edge drag-create reservation.
+  const LEFT_GUTTER_PX = 8;
   // Drag thresholds. Raised from 6 → 8 for event-drag because trackpad
   // input has noticeable cursor jitter during a press-release; below
   // ~8px the user is almost certainly trying to click, not drag.
@@ -545,6 +644,17 @@
   }
 
   function bindWeekHandlers(root) {
+    // Clicks on the left-edge gutter marks → open a modal listing every
+    // hidden event whose y-range overlaps the click point. Delegated so
+    // it survives the rebuild that wipes the marks each pass.
+    root.addEventListener("click", (e) => {
+      const mark = e.target.closest(".cal-week-hidden-mark");
+      if (!mark) return;
+      e.preventDefault();
+      e.stopPropagation();
+      openHiddenListAt(mark, e);
+    });
+
     // Drag-to-create and dbl-click on time grid — delegated to root.
     root.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
@@ -661,13 +771,18 @@
     });
     const timedByDate = {};
     const alldaySpecs = [];
+    // Seeds the filter would have hidden — collected here so we can paint
+    // gutter breadcrumbs WITHOUT participating in lane layout. That's the
+    // whole point of hiding: free up horizontal room for the rest.
+    const hiddenTimedSegs = [];
 
     seeds.forEach((seed) => {
       const d = seed.dataset;
       const startEpoch = Number(d.startAt);
       if (!startEpoch) return;
+      const hiddenByFilter = !!window.__agendaSeedIsHidden?.(seed);
       if (d.allDay === "true") {
-        alldaySpecs.push(specForAllDay(seed));
+        if (!hiddenByFilter) alldaySpecs.push(specForAllDay(seed));
         return;
       }
       const endEpoch = Number(d.endAt) || (startEpoch + 3600);
@@ -677,6 +792,10 @@
         if (compareISO(seg.dateISO, weekEnd) > 0) return;
         const col = columns[seg.dateISO];
         if (!col) return;
+        if (hiddenByFilter) {
+          hiddenTimedSegs.push({ seed, seg, col });
+          return;
+        }
         // Pass `dayStart` explicitly — earlier versions tried to read
         // it via `node.closest(".cal-week-grid")` inside
         // `buildTimedEventNode`, but the node hasn't been appended to
@@ -695,6 +814,14 @@
     Object.keys(timedByDate).forEach((date) => layoutLanes(timedByDate[date]));
     layoutAllDayChips(alldaySpecs, alldayCells, alldayWrap);
     updateNowLine(root);
+    // Filter-hidden seeds left lane layout untouched (they never went
+    // in), so visible blocks already claim the freed lanes. Now drop a
+    // breadcrumb in the left gutter for each one.
+    paintHiddenGutters(root, hiddenTimedSegs, pxPerMin);
+    // Reapply the post-hoc filter pass owned by agenda.js — covers
+    // the completed/tentative criteria that depend on classes the seeds
+    // don't carry. Runs after gutter paint so the marks aren't touched.
+    window.__applyAgendaVisibility?.();
   }
 
   // Returns one segment per logical day the event covers. Each segment is
@@ -753,6 +880,11 @@
     node.style.height = `${height}px`;
     node.style.left = "2px";
     node.style.right = "2px";
+    // Very small events: switch to a single-line row layout so a 1h
+    // event reads cleanly as `Title` instead of trying to stack a title
+    // and a time line into 18px of vertical space. Anything taller uses
+    // the default top-to-bottom stack (title, then time directly below),
+    // and overflow naturally clips the time when the container is small.
     if (isPoint || height < 30) node.classList.add("is-tiny");
 
     // Continuation hints — multi-day timed events split into one segment
@@ -855,14 +987,18 @@
       });
       const total = Math.max(1, lanes.length);
       cluster.forEach((ev) => {
+        const isLeftmost = ev.lane === 0;
         const isRightmost = ev.lane === total - 1;
-        // Rightmost-lane events leave the right gutter clear; everyone
-        // else uses a 2px lane gap.
+        // Rightmost-lane events leave the right gutter clear; leftmost
+        // events leave the new left-edge hidden-gutter clear. Everyone
+        // else uses a 2px lane gap. `leftPadExtra` is just the extra px
+        // beyond the always-applied 1px lane gap.
         const rightInset = isRightmost ? RIGHT_GUTTER_PX + 2 : 2;
+        const leftPadExtra = isLeftmost ? LEFT_GUTTER_PX : 0;
         const widthPct = 100 / total;
         const leftPct = ev.lane * widthPct;
-        ev.node.style.left = `calc(${leftPct}% + 1px)`;
-        ev.node.style.width = `calc(${widthPct}% - ${rightInset}px)`;
+        ev.node.style.left = `calc(${leftPct}% + ${1 + leftPadExtra}px)`;
+        ev.node.style.width = `calc(${widthPct}% - ${rightInset + leftPadExtra}px)`;
         ev.node.style.right = "auto";
       });
     });
@@ -913,18 +1049,20 @@
     alldayWrap.parentElement.style.minHeight = `${4 + rows.length * (rowHeight + rowGap)}px`;
   }
 
-  // ---- current-time line ----
+  // ---- current-time line + gutter chip ----
   function updateNowLine(root) {
     const grid = $(".cal-week-grid", root);
     if (!grid) return;
     const dayStart = Number(grid.dataset.dayStartHour) || 0;
     const pxPerMin = weekPxPerMin(grid);
     const nowLine = $(".cal-week-now-line", grid);
+    const nowChip = $(".cal-week-now-chip", grid);
     if (!nowLine) return;
     const todayISO = logicalDateISO(new Date(), dayStart);
     const todayCol = $(`.cal-week-column[data-date="${todayISO}"]`, grid);
     if (!todayCol) {
       nowLine.classList.add("hidden");
+      nowChip?.classList.add("hidden");
       return;
     }
     const now = new Date();
@@ -938,6 +1076,20 @@
     nowLine.style.left = `${colRect.left - parentRect.left}px`;
     nowLine.style.width = `${colRect.width}px`;
     nowLine.classList.remove("hidden");
+
+    // Gutter chip — same Y as the now-line; shows wall-clock time.
+    if (nowChip) {
+      nowChip.style.top = `${top}px`;
+      const timeEl = nowChip.querySelector(".cal-week-now-time");
+      if (timeEl) {
+        let h = now.getHours();
+        const m = now.getMinutes();
+        const ampm = h >= 12 ? "PM" : "AM";
+        h = h % 12 || 12;
+        timeEl.textContent = `${h}:${String(m).padStart(2, "0")} ${ampm}`;
+      }
+      nowChip.classList.remove("hidden");
+    }
   }
 
   // Display-only minute tick. Distinct from any data-sync — that flows
@@ -1314,6 +1466,31 @@
     runRefresh();
   };
 
+  // Local-only rebuild — no fetch. Called from agenda.js whenever a
+  // filter pref changes, so the timed-grid lanes reflow LIVE (while the
+  // details modal is still open) instead of waiting for the post-modal
+  // refresh tick. Safe to call any time; no-ops off the cal pages. The
+  // re-entry guard breaks the loop with applyAgendaVisibility — which
+  // itself chains back to here so non-cal pages still pick up the
+  // visibility classes.
+  let calRebuildInFlight = false;
+  window.__rebuildAgendaCalLocal = function () {
+    if (calRebuildInFlight) return;
+    const root = $(".agenda-cal-page");
+    if (!root) return;
+    calRebuildInFlight = true;
+    try {
+      if (root.classList.contains("agenda-cal-week-page")) {
+        buildWeekBlocks(root);
+      } else if (root.classList.contains("agenda-cal-month-page")) {
+        layoutMonthBanners(root);
+        recountMonthOverflow(root);
+      }
+    } finally {
+      calRebuildInFlight = false;
+    }
+  };
+
   function runRefresh() {
     // Stale-inflight guard: clear the flight token if it's been hanging
     // longer than the stale window so a one-off failed fetch can't
@@ -1362,6 +1539,10 @@
       if (oldGrid && newGrid) {
         oldGrid.replaceWith(newGrid);
         // Listeners are delegated on `root`, so they keep working.
+        // Reapply visibility BEFORE banner layout / overflow counts so
+        // `.hidden-by-filter` rows don't claim layout space or "+N more"
+        // budget.
+        window.__applyAgendaVisibility?.();
         layoutMonthBanners(root);
         recountMonthOverflow(root);
       }

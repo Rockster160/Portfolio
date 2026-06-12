@@ -50,6 +50,9 @@ RSpec.describe AmazonEmailParser do
     allow(SlackNotifier).to receive(:err).and_return(nil)
     allow(SlackNotifier).to receive(:notify).and_return(nil)
     allow_any_instance_of(AmazonEmailParser).to receive(:retrieve_full_name).and_return(nil)
+    # Catalog uses MeCache which persists across tests (real user backing). Isolate.
+    allow(AmazonItemCatalog).to receive(:all).and_return({})
+    allow(AmazonItemCatalog).to receive(:set).and_return(nil)
   end
 
   around do |example|
@@ -111,6 +114,7 @@ RSpec.describe AmazonEmailParser do
     end
 
     it "asks ChatGPT for ALL items in one batched call (not one per ASIN)" do
+      skip "GPT call is currently disabled inside prefetch_names! (Disabling GPT for now - need to update API Tokens)"
       c = CASES.find { |row| row[:id] == 50_684 } # 2 ASINs in one email
       expect(ChatGPT).to receive(:short_names_from_orders).once.with(
         an_instance_of(Array).and(satisfy { |titles| titles.size == 2 }),
@@ -238,6 +242,7 @@ RSpec.describe AmazonEmailParser do
     end
 
     it "writes the GPT-cleaned name into the catalog when an ASIN is parsed for the first time" do
+      skip "GPT call is currently disabled inside prefetch_names! (Disabling GPT for now - need to update API Tokens)"
       allow(ChatGPT).to receive(:short_names_from_orders).and_return(["Strawberries"])
       c = CASES.find { |row| row[:id] == 50_714 }
       expect(AmazonItemCatalog).to receive(:set).with(
@@ -277,6 +282,52 @@ RSpec.describe AmazonEmailParser do
       expect(ChatGPT).not_to receive(:short_names_from_orders)
       c = CASES.find { |row| row[:id] == 50_714 }
       parse(c[:id], c[:subject])
+    end
+  end
+
+  describe "multi-order emails (one rio-card listing items from two distinct order_ids)" do
+    # 50734 is an "Ordered" email whose rio-card glues together two orders:
+    #   Order 111-4536894-1373807 -> Pet Botanics (B0144BMLFM) + Ceramic Bowls (B0GFLZQHVM)  arriving today 5-10 PM
+    #   Order 111-0441897-6436244 -> Litter Genie  (B0FDLFSZ1S)                              arriving Tuesday
+    # The card is what Amazon emails as "Litter Genie + 2 more items" - subject is misleading.
+    it "attributes each ASIN to the order_id printed in its own sub-block" do
+      email = double(
+        "Email",
+        id:      50_734,
+        to_html: html_fixture("email_body_50734", raw: true),
+        subject: 'Ordered: "Litter Genie Easy Roll..." and 2 more items',
+      )
+      AmazonEmailParser.parse(email)
+
+      pet_botanics  = AmazonOrder.find("111-4536894-1373807", "B0144BMLFM")
+      bowls         = AmazonOrder.find("111-4536894-1373807", "B0GFLZQHVM")
+      litter_genie  = AmazonOrder.find("111-0441897-6436244", "B0FDLFSZ1S")
+
+      expect(pet_botanics).to be_present, "Pet Botanics should land under its own order id"
+      expect(bowls).to        be_present, "Ceramic Bowls should land under the same order as Pet Botanics"
+      expect(litter_genie).to be_present, "Litter Genie should land under its OWN distinct order id, not the Pet Botanics one"
+
+      # The bug we just fixed: the litter genie used to be stamped with 111-4536894 and then
+      # the openAmz link opened the wrong order in the dashboard.
+      expect(AmazonOrder.find("111-4536894-1373807", "B0FDLFSZ1S")).to be_nil
+    end
+
+    it "uses each sub-block's own date/time so siblings on different schedules aren't confused" do
+      email = double(
+        "Email",
+        id:      50_734,
+        to_html: html_fixture("email_body_50734", raw: true),
+        subject: 'Ordered: "Litter Genie Easy Roll..." and 2 more items',
+      )
+      AmazonEmailParser.parse(email)
+
+      pet_botanics = AmazonOrder.find("111-4536894-1373807", "B0144BMLFM")
+      litter_genie = AmazonOrder.find("111-0441897-6436244", "B0FDLFSZ1S")
+
+      expect(pet_botanics.delivery_date).to eq(Date.current.iso8601)        # "Arriving today"
+      expect(pet_botanics.time_range).to eq("5-10PM")
+      expect(litter_genie.delivery_date).not_to eq(pet_botanics.delivery_date)
+      expect(litter_genie.time_range).to be_nil # "Arriving Tuesday" - no time range
     end
   end
 

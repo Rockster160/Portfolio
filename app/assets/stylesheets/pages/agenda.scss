@@ -814,15 +814,16 @@ body.ctr-agendas {
 
 #agenda-add-modal,
 #agenda-item-edit,
-#agenda-item-details {
+// Reusable flat-dark modal variant. Opt in via render_modal's
+// additional_classes — e.g. `render_modal("foo", "Foo", "modal-flat")`.
+// Replaces the global blue-form card cascade with a flat dark surface,
+// chrome-less title, and tight inner padding so the modal's own content
+// (whatever the partial provides) is the only thing styling the body.
+.modal-flat {
   .modal-content {
     width: 460px;
-    // Cap at the viewport (minus the wrapper's 10px) so 460px never
-    // overflows on mobile.
     max-width: calc(100vw - 20px);
   }
-
-  // Replace the gradient blue card with a flat dark surface.
   .app-card-container {
     background: #141A26 !important;
     background-image: none !important;
@@ -833,7 +834,6 @@ body.ctr-agendas {
     margin-top: 0 !important;
     overflow: hidden;
   }
-
   .app-card-title {
     background: rgba(255, 255, 255, 0.03) !important;
     color: inherit !important;
@@ -850,24 +850,12 @@ body.ctr-agendas {
       opacity: 0.4;
       float: none;
       line-height: 1;
-      &:hover {
-        opacity: 1;
-      }
-
-      .fa-2x {
-        font-size: 16px !important;
-      }
+      &:hover { opacity: 1; }
+      .fa-2x { font-size: 16px !important; }
     }
   }
-
-  .app-card-body {
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-  .app-card-inner {
-    margin: 0 !important;
-    padding: 0 !important;
-  }
+  .app-card-body  { margin: 0 !important; padding: 0 !important; }
+  .app-card-inner { margin: 0 !important; padding: 0 !important; }
 }
 
 .agenda-details {
@@ -908,6 +896,37 @@ body.ctr-agendas {
       text-align: center;
       opacity: 0.6;
       margin-right: 4px;
+    }
+  }
+  // Subtle inline affordance on the "Recurring" row — edge-case toggle,
+  // intentionally low-key so it doesn't compete with Close / Edit.
+  .agenda-details-hide-recurring {
+    margin-left: 10px !important;
+    padding: 1px 6px !important;
+    font-size: 11px !important;
+    font-weight: 400 !important;
+    line-height: 1.5 !important;
+    background: transparent !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    border-radius: 999px !important;
+    color: inherit !important;
+    opacity: 0.55;
+    cursor: pointer;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    transition: opacity 0.12s ease, background 0.12s ease;
+    i {
+      width: auto;
+      margin: 0 4px 0 0;
+      opacity: 0.7;
+      font-size: 10px;
+    }
+    &:hover {
+      opacity: 1;
+      background: rgba(255, 255, 255, 0.06) !important;
+    }
+    &.hidden {
+      display: none;
     }
   }
   .agenda-details-loc {
@@ -1085,6 +1104,185 @@ body.ctr-agendas {
     margin: 10px 4px 6px;
     background: rgba(255, 255, 255, 0.08);
   }
+
+  .agenda-filter-empty {
+    padding: 6px 6px 8px;
+    font-size: 12px;
+    opacity: 0.5;
+    font-style: italic;
+  }
+
+  // Removable rows used for hidden recurring schedules + name patterns.
+  // Same look as filter rows but with a trailing × button instead of a
+  // checkbox-driven label.
+  .agenda-filter-removable {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px;
+    border-radius: 4px;
+    font-size: 13px;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .agenda-filter-removable-label {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .agenda-filter-pattern-code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+    }
+
+    .agenda-filter-remove {
+      background: transparent;
+      border: 0;
+      color: inherit;
+      opacity: 0.55;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 14px;
+
+      &:hover {
+        opacity: 1;
+        background: rgba(255, 255, 255, 0.08);
+      }
+    }
+  }
+
+  .agenda-pattern-form {
+    display: flex;
+    gap: 6px;
+    margin: 6px 4px 0;
+    flex-wrap: wrap;
+    // Local reset: the form is `basic`, but the global button cascade in
+    // forms.scss:180 still hits every <button> with gradient/padding/bold.
+    // Keep our Add button matching the panel aesthetic instead.
+    .agenda-pattern-add {
+      padding: 6px 12px !important;
+      border-radius: 4px !important;
+      font-size: 13px !important;
+      font-weight: 500 !important;
+      background: rgba(255, 255, 255, 0.08) !important;
+      border: 1px solid rgba(255, 255, 255, 0.14) !important;
+      color: #FFF !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
+      cursor: pointer;
+      &:hover {
+        background: rgba(255, 255, 255, 0.14) !important;
+      }
+    }
+
+    .agenda-pattern-input {
+      flex: 1 1 120px;
+      min-width: 0;
+      padding: 6px 8px;
+      font-size: 13px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 4px;
+      color: inherit;
+
+      &:focus {
+        outline: none;
+        border-color: rgba(255, 255, 255, 0.3);
+      }
+    }
+
+    .agenda-pattern-error {
+      flex: 1 0 100%;
+      font-size: 12px;
+      color: #ff8080;
+      padding: 2px 2px 0;
+
+      &.hidden {
+        display: none;
+      }
+    }
+  }
+
+  // Local reset for the × remove buttons — the global button cascade adds
+  // padding/gradient that turns the tiny × into a giant blue pill.
+  .agenda-filter-remove {
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+    font-size: 14px !important;
+    font-weight: 400 !important;
+    background: transparent !important;
+    border: 0 !important;
+    color: inherit !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+}
+
+.agenda-hidden-list {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-family: inherit;
+  color: inherit;
+}
+.agenda-hidden-list-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.agenda-hidden-list-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 13px;
+  cursor: pointer;
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+  }
+  .agenda-hidden-list-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  }
+  .agenda-hidden-list-body {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .agenda-hidden-list-name {
+    display: block;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    font-weight: 500;
+  }
+  .agenda-hidden-list-meta {
+    display: block;
+    font-size: 12px;
+    opacity: 0.6;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+}
+.agenda-hidden-list-foot {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .agenda-form {

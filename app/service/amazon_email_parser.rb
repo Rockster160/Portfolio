@@ -47,19 +47,23 @@ class AmazonEmailParser
 
     # Only update state for items actually referenced by this email's order card.
     # Other items on the same order_id (shipped/delivered separately) keep their own state.
+    # Multi-order emails (one rio-card listing items from two distinct order_ids)
+    # are handled per-asin via asin_card_text / asin_order_id.
     new_status = status_from_subject
     prefetch_names!(email_items)
     email_items.each { |item|
-      arrival_date(item).tap { |date|
+      text = asin_card_text(item.item_id)
+      item_delivered = delivered_text?(text)
+      arrival_date_from(text).tap { |date|
         if date.present?
           item.delivery_date = date.iso8601.encode("UTF-8")
-        elsif !delivered && new_status.nil?
+        elsif !item_delivered && new_status.nil?
           item.error!("Unable to parse date")
         end
       }
-      item.time_range = arrival_time(item)
+      item.time_range = arrival_time_from(text)
       item.name ||= safe_name(item)
-      item.delivered = true if delivered
+      item.delivered = true if item_delivered
       apply_status(item, new_status)
     }
 
@@ -106,9 +110,14 @@ class AmazonEmailParser
   }
 
   💾(:delivered_email?) {
-    text = order_card_text.presence || @email.to_html
-    DELIVERED_REGEXES.any? { |re| text.match?(re) }
+    delivered_text?(order_card_text.presence || @email.to_html)
   }
+
+  def delivered_text?(text)
+    return false if text.blank?
+
+    DELIVERED_REGEXES.any? { |re| text.match?(re) }
+  end
 
   # nil for normal emails; :cancelled for "Item cancelled" notifications;
   # :declined for "Payment declined" / order-on-hold notifications.
@@ -130,12 +139,50 @@ class AmazonEmailParser
 
   def email_items
     @email_items ||= item_asins.map { |asin|
-      AmazonOrder.find_or_create(order_id, asin).tap { |item|
+      AmazonOrder.find_or_create(asin_order_id(asin), asin).tap { |item|
         @changed = true
         item.errors = []
         item.email_ids << @email.id unless item.email_ids.include?(@email.id)
       }
     }
+  end
+
+  # Walks up the DOM from each ASIN's /dp/ link to find the smallest ancestor
+  # within the order_card that names exactly one order_id. That sub-block is
+  # what we attribute the ASIN's order_id / arrival date / delivered state / etc
+  # to. Falls back to the order_card itself when the ASIN's sub-block can't be
+  # isolated (single-order emails always fall back, which preserves prior behavior).
+  def asin_subcard(asin)
+    return nil if order_card.nil? || asin.blank?
+
+    @asin_subcards ||= {}
+    return @asin_subcards[asin] if @asin_subcards.key?(asin)
+
+    link = order_card.css("a[href*='%2Fdp%2F'], a[href*='/dp/']").find { |a|
+      a["href"].to_s[ASIN_REGEX, 1] == asin
+    }
+    return @asin_subcards[asin] = nil if link.nil?
+
+    node = link.parent
+    stop_at = order_card.parent
+    while node && node != stop_at
+      ids = node.text.scan(ORDER_ID_REGEX).uniq
+      break if ids.size > 1 # ambiguous - walked into multi-order container
+      if ids.size == 1
+        @asin_subcards[asin] = node
+        return node
+      end
+      node = node.parent
+    end
+    @asin_subcards[asin] = nil
+  end
+
+  def asin_order_id(asin)
+    asin_subcard(asin)&.text&.[](ORDER_ID_REGEX) || order_id
+  end
+
+  def asin_card_text(asin)
+    (asin_subcard(asin) || order_card)&.text.to_s.then { |t| t.gsub(/\s+/, " ").strip }
   end
 
   💾(:month_regex) {
@@ -152,8 +199,7 @@ class AmazonEmailParser
     loop { date.past? ? date += 1.week : (break date) }
   end
 
-  def arrival_date(_item)
-    text = order_card_text
+  def arrival_date_from(text)
     return nil if text.blank?
 
     # "Delivered today" / "Delivered yesterday" / "Your package was delivered"
@@ -182,7 +228,7 @@ class AmazonEmailParser
       return future(Date.parse(match[1]))
     end
 
-    # Fallback - bare "Month Day" anywhere in the card
+    # Fallback - bare "Month Day" anywhere in the text
     if (date_str = text[/(#{month_regex})\s+\d{1,2}/])
       return future(Date.parse(date_str))
     end
@@ -192,8 +238,7 @@ class AmazonEmailParser
     nil
   end
 
-  def arrival_time(_item)
-    text = order_card_text
+  def arrival_time_from(text)
     return if text.blank?
 
     match = text.match(/(\d{1,2} ?[ap]\.?m\.?)\W{1,5}(\d{1,2} ?[ap]\.?m\.?)/i)
