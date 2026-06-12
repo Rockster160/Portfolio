@@ -243,16 +243,17 @@ class AmazonEmailParser
     pairs = needs_lookup.zip(titles).reject { |_, t| t.blank? }
     return if pairs.empty?
 
-    cleaned = ChatGPT.short_names_from_orders(pairs.map(&:last))
-    pairs.zip(cleaned).each { |(item, _title), name|
-      next if name.blank?
+    return # Disabling GPT for now - need to update API Tokens
+    # cleaned = ChatGPT.short_names_from_orders(pairs.map(&:last))
+    # pairs.zip(cleaned).each { |(item, _title), name|
+    #   next if name.blank?
 
-      AmazonItemCatalog.set(item.item_id,
-        name:        name,
-        listed_name: item.listed_name,
-        full_name:   item.full_name,
-      )
-    }
+    #   AmazonItemCatalog.set(item.item_id,
+    #     name:        name,
+    #     listed_name: item.listed_name,
+    #     full_name:   item.full_name,
+    #   )
+    # }
   rescue StandardError => e
     SlackNotifier.err(e, "Amazon batch name lookup failed for email ##{@email.id} - falling back to listed_name")
   end
