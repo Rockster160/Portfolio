@@ -45,11 +45,10 @@ class Jil::Methods::Schedule < Jil::Methods::Base
 
   def search(q, limit, order)
     limit = (limit.presence || 50).to_i.clamp(1..100)
-    scoped = schedules.break_searcher(q).page(1).per(limit)
-    scoped = scoped.where(user: @jil.user)
-
     order = [:asc, :desc].include?(order.to_s.downcase.to_sym) ? order.to_s.downcase.to_sym : :desc
-    scoped.order(execute_at: order)
+    results = schedules.break_searcher(q).sort_by(&:execute_at)
+    results.reverse! if order == :desc
+    results.first(limit)
   end
 
   def create(details)
