@@ -275,6 +275,46 @@ RSpec.describe AmazonEmailParser do
       AmazonEmailParser.parse(email, skip_ai_naming: true)
     end
 
+    it "applies the cached rename to a brand-new AmazonOrder created under a different order_id" do
+      # Simulate "you renamed B000P6J0SM to 'Strawbz' last year, then ordered the same SKU again under a fresh order".
+      allow(AmazonItemCatalog).to receive(:get).with("B000P6J0SM").and_return({ name: "Strawbz" })
+      synthetic_html = <<~HTML
+        <html><body>
+          <div class="rio-card">
+            Order # 222-1111111-2222222
+            Arriving overnight 4 AM – 8 AM
+            <a href="https://www.amazon.com/dp/B000P6J0SM">Strawberries, 1 Lb</a>
+          </div>
+        </body></html>
+      HTML
+      AmazonEmailParser.parse(double(
+        "Email",
+        id:      99_500,
+        to_html: synthetic_html,
+        subject: 'Shipped: "Strawberries, 1 Lb"',
+      ))
+
+      item = AmazonOrder.find("222-1111111-2222222", "B000P6J0SM")
+      expect(item).to be_present
+      expect(item.name).to eq("Strawbz")
+    end
+
+    it "does NOT write `name:` into the catalog from safe_name - only the rename channel and GPT prefetch should" do
+      sets_with_name = []
+      allow(AmazonItemCatalog).to receive(:set) { |_, **kwargs|
+        sets_with_name << kwargs if kwargs.key?(:name)
+      }
+      c = CASES.find { |row| row[:id] == 50_714 }
+      AmazonEmailParser.parse(double(
+        "Email",
+        id:      c[:id],
+        to_html: html_fixture("email_body_#{c[:id]}", raw: true),
+        subject: c[:subject],
+      ), skip_ai_naming: true)
+      expect(sets_with_name).to be_empty,
+        "safe_name must never write `name:` to the catalog (would clobber a rename)"
+    end
+
     it "skips the ChatGPT batch call when every ASIN in the email is already cached" do
       allow(AmazonItemCatalog).to receive(:get).with("B000P6J0SM").and_return(
         { name: "Strawbz" },
