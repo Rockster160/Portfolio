@@ -1,5 +1,8 @@
 class WhisperController < ApplicationController
+  CHELSEA_ID = 58128
+
   before_action :authorize_user
+  before_action :authorize_whisper_user, only: :log_vomit
 
   def show
     @list = current_user.ordered_lists.find(360)
@@ -24,7 +27,7 @@ class WhisperController < ApplicationController
   def log_vomit
     timestamp = params[:timestamp].presence&.then { |t| ::Time.zone.parse(t) } || ::Time.current
 
-    current_user.action_events.create!(
+    User.me.action_events.create!(
       name: "Whisper",
       notes: "Vomit",
       data: { notes: params[:notes].to_s },
@@ -32,5 +35,12 @@ class WhisperController < ApplicationController
     )
 
     head :ok
+  end
+
+  private
+
+  def authorize_whisper_user
+    allowed_ids = [User.me.id, CHELSEA_ID]
+    head :forbidden unless allowed_ids.include?(current_user&.id)
   end
 end

@@ -206,10 +206,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       e.preventDefault();
       submitBtn.disabled = true;
       try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || "";
         const res = await fetch("/whisper/log_vomit", {
           method: "POST",
           credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": csrfToken,
+          },
           body: JSON.stringify({ notes: notesEl.value, timestamp: tsEl.value }),
         });
         if (!res.ok) throw new Error(`Log vomit failed: ${res.status}`);
