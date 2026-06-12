@@ -84,10 +84,17 @@ class GoogleCalendar::RRule
     by_md = parts["BYMONTHDAY"].to_s.split(",").map(&:to_i).reject(&:zero?)
     by_month = parts["BYMONTH"].to_s.split(",").map(&:to_i).reject(&:zero?)
     by_setpos = parts["BYSETPOS"].to_i
+    positioned_byday = by_day.filter_map { |token| split_positioned_byday(token) }
 
-    recurrence = build_recurrence(freq, interval, by_day, by_md, by_setpos)
+    recurrence = build_recurrence(freq, interval, by_day, by_md, by_setpos, positioned_byday)
 
     partial = (by_month.size > 1) || UNREPRESENTABLE_PARTS.any? { |k| parts.key?(k) }
+    # Multiple positioned BYDAY entries (e.g. BYDAY=1MO,3MO) collapse to the
+    # first — surface that as best-effort to the caller.
+    partial ||= positioned_byday.size > 1
+    # Inline-positioned BYDAY AND a separate BYSETPOS that disagrees — RFC
+    # ambiguity; we prefer the inline prefix but warn.
+    partial ||= positioned_byday.any? && by_setpos.nonzero? && positioned_byday.first.first != by_setpos
 
     {
       recurrence:       recurrence,
@@ -98,7 +105,7 @@ class GoogleCalendar::RRule
     }
   end
 
-  def self.build_recurrence(freq, interval, by_day, by_md, by_setpos)
+  def self.build_recurrence(freq, interval, by_day, by_md, by_setpos, positioned_byday=[])
     case freq
     when "DAILY"
       interval == 1 ? { freq: :daily } : { freq: :custom, unit: :day, interval: interval }
@@ -112,18 +119,57 @@ class GoogleCalendar::RRule
         { freq: :custom, unit: :week, interval: interval, by_day: days }
       end
     when "MONTHLY"
-      if by_setpos.nonzero? && by_day.any?
-        { freq: :monthly, by_set_pos: by_setpos, by_day: [WEEKDAY_MAP[by_day.first[-2..]].to_s] }
-      elsif by_md.any?
-        { freq: :monthly, by_month_day: by_md }
-      else
-        { freq: :monthly }
-      end
+      build_monthly_recurrence(interval, by_day, by_md, by_setpos, positioned_byday)
     when "YEARLY"
       { freq: :yearly }
     else
       { freq: :custom, unit: :day, interval: interval }
     end
+  end
+
+  # MONTHLY accepts the Nth-weekday position in two RFC-5545 forms:
+  #   1. Inline prefix on each BYDAY token (`BYDAY=3TU` → 3rd Tuesday).
+  #      This is what Google emits.
+  #   2. Separate `BYSETPOS=N` paired with day-only BYDAY (`BYSETPOS=3;BYDAY=TU`).
+  # When INTERVAL>1, AgendaSchedule's :monthly freq has no interval slot — we
+  # must route to :custom, unit: :month, which AgendaSchedule#matches_custom_month?
+  # already understands.
+  def self.build_monthly_recurrence(interval, by_day, by_md, by_setpos, positioned_byday)
+    set_pos, set_code = (
+      if positioned_byday.any?
+        positioned_byday.first
+      elsif by_setpos.nonzero? && by_day.any?
+        [by_setpos, by_day.first[-2..]]
+      end
+    )
+    set_day = WEEKDAY_MAP[set_code]&.to_s
+
+    if interval > 1
+      base = { freq: :custom, unit: :month, interval: interval }
+      if set_pos && set_day
+        base.merge(by_set_pos: set_pos, by_day: [set_day])
+      elsif by_md.any?
+        base.merge(by_month_day: by_md)
+      else
+        base
+      end
+    elsif set_pos && set_day
+      { freq: :monthly, by_set_pos: set_pos, by_day: [set_day] }
+    elsif by_md.any?
+      { freq: :monthly, by_month_day: by_md }
+    else
+      { freq: :monthly }
+    end
+  end
+
+  # Returns [position, weekday_code] when token has an inline ordinal prefix
+  # (e.g. "3TU" → [3, "TU"], "-1FR" → [-1, "FR"]), nil otherwise. Bare codes
+  # like "MO" return nil — caller routes those to the un-positioned path.
+  def self.split_positioned_byday(token)
+    m = token.to_s.upcase.match(/\A([+-]?\d+)(SU|MO|TU|WE|TH|FR|SA)\z/)
+    return nil unless m
+
+    [m[1].to_i, m[2]]
   end
 
   # Build an array of RRULE/EXDATE lines for an AgendaSchedule — the inverse
@@ -165,6 +211,18 @@ class GoogleCalendar::RRule
       rrule_parts << "FREQ=#{unit_to_freq(unit)}"
       interval = rec[:interval].to_i
       rrule_parts << "INTERVAL=#{interval}" if interval > 1
+      if unit == "MONTH"
+        if rec[:by_set_pos].present? && Array(rec[:by_day]).any?
+          rrule_parts << "BYSETPOS=#{rec[:by_set_pos]}"
+          day = WEEKDAY_MAP.invert[rec[:by_day].first.to_sym]
+          rrule_parts << "BYDAY=#{day}" if day
+        elsif Array(rec[:by_month_day]).any?
+          rrule_parts << "BYMONTHDAY=#{rec[:by_month_day].join(",")}"
+        end
+      elsif unit == "WEEK" && Array(rec[:by_day]).any?
+        days = Array(rec[:by_day]).map { |d| WEEKDAY_MAP.invert[d.to_sym] }.compact
+        rrule_parts << "BYDAY=#{days.join(",")}" if days.any?
+      end
     else
       return []
     end

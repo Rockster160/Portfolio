@@ -338,6 +338,8 @@ class AgendaSchedule < ApplicationRecord
 
     if recurrence_data[:by_set_pos].present? && recurrence_data[:by_day].present?
       matches_nth_weekday_of_month?(date)
+    elsif Array(recurrence_data[:by_month_day]).any?
+      matches_month_day?(date)
     else
       date.day == starts_on.day
     end

@@ -52,6 +52,70 @@ RSpec.describe GoogleCalendar::RRule do
       )
     end
 
+    it "maps MONTHLY inline-positioned BYDAY (BYDAY=3TU) onto monthly Nth weekday" do
+      # Google's actual emission for "monthly on the third Tuesday" — pos is
+      # prefixed inside BYDAY rather than via a separate BYSETPOS.
+      result = described_class.translate(["RRULE:FREQ=MONTHLY;BYDAY=3TU"])
+      expect(result[:recurrence]).to eq(
+        freq:       :monthly,
+        by_set_pos: 3,
+        by_day:     ["tue"],
+      )
+    end
+
+    it "maps MONTHLY BYDAY=-1FR (last Friday) with no separate BYSETPOS" do
+      result = described_class.translate(["RRULE:FREQ=MONTHLY;BYDAY=-1FR"])
+      expect(result[:recurrence]).to eq(
+        freq:       :monthly,
+        by_set_pos: -1,
+        by_day:     ["fri"],
+      )
+    end
+
+    it "maps MONTHLY INTERVAL=3 (no BYDAY/BYMONTHDAY) onto custom-month with interval" do
+      result = described_class.translate(["RRULE:FREQ=MONTHLY;INTERVAL=3"])
+      expect(result[:recurrence]).to eq(
+        freq:     :custom,
+        unit:     :month,
+        interval: 3,
+      )
+    end
+
+    it "maps FREQ=MONTHLY;INTERVAL=3;BYDAY=3TU (All Hands rule) onto custom-month nth-weekday" do
+      result = described_class.translate(["RRULE:FREQ=MONTHLY;INTERVAL=3;BYDAY=3TU"])
+      expect(result[:recurrence]).to eq(
+        freq:       :custom,
+        unit:       :month,
+        interval:   3,
+        by_set_pos: 3,
+        by_day:     ["tue"],
+      )
+      expect(result[:partial]).to be(false)
+    end
+
+    it "maps MONTHLY INTERVAL>1 + BYMONTHDAY onto custom-month with by_month_day" do
+      result = described_class.translate(["RRULE:FREQ=MONTHLY;INTERVAL=2;BYMONTHDAY=15"])
+      expect(result[:recurrence]).to eq(
+        freq:         :custom,
+        unit:         :month,
+        interval:     2,
+        by_month_day: [15],
+      )
+    end
+
+    it "flags multiple positioned BYDAY entries as partial (collapses to first)" do
+      result = described_class.translate(["RRULE:FREQ=MONTHLY;BYDAY=1MO,3MO"])
+      expect(result[:recurrence]).to include(by_set_pos: 1, by_day: ["mon"])
+      expect(result[:partial]).to be(true)
+    end
+
+    it "flags inline-BYDAY vs separate BYSETPOS disagreement as partial" do
+      result = described_class.translate(["RRULE:FREQ=MONTHLY;BYDAY=3TU;BYSETPOS=2"])
+      # Inline prefix wins, but caller sees partial:true.
+      expect(result[:recurrence]).to include(by_set_pos: 3, by_day: ["tue"])
+      expect(result[:partial]).to be(true)
+    end
+
     it "captures UNTIL onto until_on" do
       result = described_class.translate(["RRULE:FREQ=DAILY;UNTIL=20271231T235959Z"])
       expect(result[:until_on]).to eq(Date.new(2027, 12, 31))

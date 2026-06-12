@@ -323,6 +323,52 @@ RSpec.describe GoogleCalendar::RRule do
       expect(lines).to eq(["RRULE:FREQ=MONTHLY;INTERVAL=6"])
     end
 
+    it "custom with unit=month + interval + by_set_pos + by_day → preserves nth-weekday on write-back" do
+      lines = described_class.serialize(
+        sched(recurrence: {
+          freq:       "custom",
+          unit:       "month",
+          interval:   3,
+          by_set_pos: 3,
+          by_day:     ["tue"],
+        }),
+      )
+      expect(lines).to eq(["RRULE:FREQ=MONTHLY;INTERVAL=3;BYSETPOS=3;BYDAY=TU"])
+    end
+
+    it "custom with unit=month + interval + by_month_day → preserves BYMONTHDAY on write-back" do
+      lines = described_class.serialize(
+        sched(recurrence: {
+          freq:         "custom",
+          unit:         "month",
+          interval:     2,
+          by_month_day: [15],
+        }),
+      )
+      expect(lines).to eq(["RRULE:FREQ=MONTHLY;INTERVAL=2;BYMONTHDAY=15"])
+    end
+
+    it "custom with unit=week + interval + by_day → preserves BYDAY on write-back" do
+      lines = described_class.serialize(
+        sched(recurrence: {
+          freq:     "custom",
+          unit:     "week",
+          interval: 2,
+          by_day:   ["mon", "wed", "fri"],
+        }),
+      )
+      expect(lines).to eq(["RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR"])
+    end
+
+    it "round-trips the All Hands rule (FREQ=MONTHLY;INTERVAL=3;BYDAY=3TU)" do
+      original = "RRULE:FREQ=MONTHLY;INTERVAL=3;BYDAY=3TU"
+      recurrence = described_class.translate([original])[:recurrence]
+      lines = described_class.serialize(sched(recurrence: recurrence.stringify_keys))
+      # Inline-prefix form normalizes to the separate-BYSETPOS form — both are
+      # RFC 5545 valid and Google accepts either.
+      expect(lines).to eq(["RRULE:FREQ=MONTHLY;INTERVAL=3;BYSETPOS=3;BYDAY=TU"])
+    end
+
     it "custom with interval=1 omits the INTERVAL part" do
       lines = described_class.serialize(
         sched(recurrence: { freq: "custom", unit: "day", interval: 1 }),
@@ -485,15 +531,13 @@ RSpec.describe GoogleCalendar::RRule do
       expect(out).to eq(["RRULE:FREQ=YEARLY"])
     end
 
-    # ----- known-lossy round trips: document the loss explicitly -----
-
-    it "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO survives FREQ+INTERVAL but DROPS by_day on the way back out (custom serializer doesn't emit BYDAY)" do
+    it "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO round-trips losslessly through custom-week" do
       parsed = described_class.translate(["RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO"])
       out = described_class.serialize(sched(recurrence: parsed[:recurrence]))
-      expect(out).to eq(["RRULE:FREQ=WEEKLY;INTERVAL=2"])
-      # If you ever fix custom-with-by_day serialization, update this spec
-      # to expect the full BYDAY=MO clause and remove this comment.
+      expect(out).to eq(["RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO"])
     end
+
+    # ----- known-lossy round trips: document the loss explicitly -----
 
     it "WKST does NOT round-trip (we don't model it on either side)" do
       parsed = described_class.translate(["RRULE:FREQ=WEEKLY;BYDAY=MO;WKST=SU"])

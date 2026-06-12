@@ -94,6 +94,32 @@ RSpec.describe AgendaSchedule do
       expect(sched.matches?(Date.new(2026, 5, 22))).to be false  # 2nd-to-last Fri
     end
 
+    it "custom every 3 months on Nth weekday — third Tuesday quarterly (the All Hands rule)" do
+      sched = build_schedule(
+        recurrence: { "freq" => "custom", "interval" => 3, "unit" => "month",
+                      "by_set_pos" => 3, "by_day" => ["tue"] },
+        starts_on:  Date.new(2026, 1, 20), # 3rd Tue Jan 2026
+      )
+      expect(sched.matches?(Date.new(2026, 1, 20))).to be true   # 3rd Tue Jan
+      expect(sched.matches?(Date.new(2026, 4, 21))).to be true   # 3rd Tue Apr (3 months later)
+      expect(sched.matches?(Date.new(2026, 7, 21))).to be true   # 3rd Tue Jul
+      expect(sched.matches?(Date.new(2026, 2, 17))).to be false  # 3rd Tue Feb — wrong month interval
+      expect(sched.matches?(Date.new(2026, 6, 20))).to be false  # Saturday in skipped month
+      expect(sched.matches?(Date.new(2026, 4, 14))).to be false  # 2nd Tue Apr (wrong week)
+    end
+
+    it "custom every 2 months on by_month_day — 15th every other month" do
+      sched = build_schedule(
+        recurrence: { "freq" => "custom", "interval" => 2, "unit" => "month",
+                      "by_month_day" => [15] },
+        starts_on:  Date.new(2026, 1, 15),
+      )
+      expect(sched.matches?(Date.new(2026, 1, 15))).to be true
+      expect(sched.matches?(Date.new(2026, 3, 15))).to be true   # 2 months later
+      expect(sched.matches?(Date.new(2026, 2, 15))).to be false  # wrong month interval
+      expect(sched.matches?(Date.new(2026, 3, 14))).to be false  # wrong day
+    end
+
     it "custom every 3 days" do
       sched = build_schedule(
         recurrence: { "freq" => "custom", "interval" => 3, "unit" => "day" },
