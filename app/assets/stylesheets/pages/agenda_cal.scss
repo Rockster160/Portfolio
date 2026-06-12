@@ -1,0 +1,997 @@
+// =================== Agenda Calendar PWA ===================
+//
+// Mac-Calendar-style month + week views, installed as a separate PWA
+// (scope `/agenda/cal`, see public/agenda_calendar.webmanifest).
+//
+// Visual goals:
+//   - Month view ~= macOS Calendar's month grid (compact day cells,
+//     timed events show a dot, all-day events show a colored bar).
+//   - Week view ~= macOS Calendar's week grid (24-hour vertical column
+//     per day, all-day band on top, red current-time line on today).
+//
+// Styling strategy:
+//   - All rules scope under `.agenda-cal-page` so the existing
+//     `.agenda-page` styles (max-width 640px, list-style layout) don't
+//     interfere. The global button/form cascades from components/forms.scss
+//     are aggressively reset locally — adding `!important` on the
+//     button overrides because the global selector specificity is
+//     equivalent.
+//   - Modals/filter panel are reused from agenda.scss as-is. Only the
+//     calendar containers and their cells are new.
+
+// Inherit the design tokens from agenda.scss namespace; they're defined
+// in config/_variables and we just reference them.
+
+.agenda-cal-page {
+  // Cal PWA: maximize viewport. The default `.agenda-page` caps at 640px.
+  // `height: 100vh` (not `min-height`) is CRITICAL: with `min-height`
+  // the page grows past the viewport when content (1344px of body) is
+  // taller, the body scrolls the whole document, and the inner grid
+  // never needs `overflow-y: auto` to engage. Result: weekday header
+  // gets `position: sticky` set in CSS but has no scrolling ancestor
+  // to actually stick relative to. Capping `height` at viewport forces
+  // the grid to be the scroll container, which is what gives sticky
+  // its anchor.
+  max-width: none !important;
+  width: 100%;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  height: 100vh;
+  height: 100dvh; // dynamic viewport — accounts for mobile address bar
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+// =================== Condensed sticky toolbar ===================
+// One row: title | nav (prev/today/next) | view toggle | actions.
+// Stuck to the top of the viewport so it stays visible even when the
+// outer page scrolls (small windows / accessibility zoom).
+.cal-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: rgba(8, 16, 32, 0.96);
+  backdrop-filter: saturate(160%) blur(8px);
+  -webkit-backdrop-filter: saturate(160%) blur(8px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.cal-toolbar-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 120px;
+}
+
+.cal-toolbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.cal-toolbar-toggle {
+  margin: 0;
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.cal-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex: 0 0 auto;
+
+  // Filter button stays compact in the toolbar.
+  .agenda-filter-btn { margin: 0; }
+}
+
+// Toolbar collapses gracefully on narrow viewports — title gets cut to
+// fit, nav stays inline, actions hug the right.
+@media (max-width: 720px) {
+  .cal-toolbar {
+    gap: 8px;
+    padding: 6px 8px;
+  }
+  .cal-toolbar-title { font-size: 16px; min-width: 0; flex: 1 1 auto; }
+}
+
+// Date-nav buttons (prev / today / next) — used inside the condensed
+// toolbar. Scope to the toolbar nav so the styles only apply in the cal
+// PWA context (not other agenda pages).
+.cal-toolbar-nav {
+  .date-nav {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    color: inherit;
+    text-decoration: none;
+    opacity: 0.7;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.06);
+      opacity: 1;
+    }
+  }
+
+  .cal-today-btn {
+    padding: 4px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.03);
+    color: inherit;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+  }
+}
+
+// Override the global `.cal-view-toggle` margins from agenda.scss
+// (which centers the pill and adds a bottom-margin) so it sits inline
+// in the new single-row toolbar.
+.cal-toolbar .cal-toolbar-toggle {
+  margin: 0 8px;
+  align-self: center;
+}
+
+// =================== Month view ===================
+
+.cal-month-grid {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.cal-month-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cal-month-weekday-head {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.55;
+  padding: 6px 0;
+  text-align: center;
+}
+
+.cal-month-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  flex: 1 1 0;
+  min-height: 110px;
+  position: relative;
+
+  & + .cal-month-row {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+}
+
+// Overlay layer that holds the multi-day all-day banners for one
+// week-row. Spans the full grid width; banners are absolutely positioned
+// inside it (left/width derived from cell rects). `pointer-events: none`
+// so empty regions of the layer pass through to the cells beneath.
+.cal-month-row-banners {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.cal-month-banner {
+  position: absolute;
+  height: 17px;
+  background: var(--agenda-color, #888) !important;
+  background-image: none !important;
+  color: #FFF !important;
+  border: 0 !important;
+  border-radius: 3px !important;
+  padding: 0 6px !important;
+  margin: 0 !important;
+  font-family: inherit !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  line-height: 17px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  pointer-events: auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  letter-spacing: 0.01em;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  text-align: left;
+
+  // Subtle nudges on the continuation edges so a banner crossing a
+  // week boundary reads as "→" / "←" segment instead of a complete bar.
+  &.is-continued-right {
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+  }
+  &.is-continued-left {
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+  }
+
+  &:hover {
+    filter: brightness(1.08);
+  }
+}
+
+// Hide the SSR seed nodes — they're data carriers for JS, never visible.
+.cal-month-allday-seeds {
+  display: none !important;
+}
+
+.cal-month-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 4px 6px;
+  color: inherit;
+  cursor: pointer;
+  background: transparent;
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  user-select: none;
+  -webkit-user-select: none;
+
+  & + .cal-month-cell {
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  &.other-month {
+    opacity: 0.42;
+  }
+
+  &.cal-drag-target {
+    background: rgba(1, 96, 255, 0.18);
+  }
+
+  &.is-today .cal-month-day-num {
+    background: $base-blue;
+    color: #FFF;
+  }
+
+  &:focus-visible {
+    outline: 2px solid $base-blue;
+    outline-offset: -2px;
+  }
+}
+
+.cal-month-cell-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 2px;
+}
+
+.cal-month-day-num {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+
+  &.first-of-month {
+    padding: 1px 8px;
+  }
+}
+
+.cal-month-cell-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  // `--cal-banner-rows` is set on the parent row by JS (0..N). Push the
+  // timed-item stack down by however many banner rows the week-row has
+  // so banners and items don't collide.
+  margin-top: calc(var(--cal-banner-rows, 0) * 19px);
+}
+
+// .cal-month-item is a <button> — fully reset the global cascade from
+// components/forms.scss so it reads as a calendar pill, not a button.
+.cal-month-item {
+  padding: 1px 5px !important;
+  margin: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: inherit !important;
+  border: 0 !important;
+  border-radius: 3px !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  font-family: inherit !important;
+  font-weight: 500 !important;
+  font-size: 11px !important;
+  line-height: 1.3;
+  text-align: left;
+  letter-spacing: 0.01em;
+
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07) !important;
+  }
+
+  &.is-all-day {
+    background: var(--agenda-color) !important;
+    color: #FFF !important;
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+    font-weight: 600 !important;
+  }
+
+  .cal-month-item-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--agenda-color);
+    flex-shrink: 0;
+  }
+
+  .cal-month-item-time {
+    font-variant-numeric: tabular-nums;
+    opacity: 0.7;
+    flex-shrink: 0;
+  }
+
+  .cal-month-item-name {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.cal-month-overflow {
+  font-size: 10px;
+  opacity: 0.6;
+  padding: 0 4px;
+  text-align: left;
+  font-weight: 500;
+
+  &::before {
+    content: "+";
+  }
+}
+
+// =================== Week view ===================
+
+.cal-week-grid {
+  // The grid IS the scroll container now. That lets the header (day
+  // labels) and the all-day band be `position: sticky` to the top of
+  // the grid while the time-body content scrolls underneath. Previous
+  // layout had `overflow-y: auto` on the body and a static header —
+  // sticky on the header had nothing to anchor to.
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.15);
+  position: relative;
+  margin: 0;
+}
+
+$cal-week-gutter: 60px;
+$cal-week-px-per-hour: 56px;
+
+.cal-week-header {
+  display: grid;
+  grid-template-columns: $cal-week-gutter 1fr;
+  background: rgba(8, 16, 32, 0.96);
+  backdrop-filter: saturate(160%) blur(8px);
+  -webkit-backdrop-filter: saturate(160%) blur(8px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex: 0 0 auto;
+  position: sticky;
+  top: 0;
+  z-index: 15;
+}
+
+.cal-week-header-gutter {
+  width: 100%;
+}
+
+.cal-week-header-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  width: 100%;
+  min-width: 0;
+}
+
+.cal-week-header-day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 4px;
+  font-size: 12px;
+  text-align: center;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+
+  &:first-child { border-left: 0; }
+
+  .cal-week-header-dow {
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.65;
+    font-size: 11px;
+  }
+
+  .cal-week-header-day-num {
+    font-weight: 600;
+    font-size: 16px;
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  &.is-today {
+    .cal-week-header-dow {
+      color: $base-blue;
+      opacity: 1;
+    }
+    .cal-week-header-day-num {
+      background: $base-blue;
+      color: #FFF;
+    }
+  }
+}
+
+.cal-week-allday {
+  display: grid;
+  grid-template-columns: $cal-week-gutter 1fr;
+  background: rgba(8, 16, 32, 0.94);
+  backdrop-filter: saturate(160%) blur(8px);
+  -webkit-backdrop-filter: saturate(160%) blur(8px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex: 0 0 auto;
+  max-height: 90px;
+  overflow-y: auto;
+  // Sticks directly below the day-of-week header. The exact offset is
+  // computed by JS (`updateStickyOffsets`) since the header height
+  // varies with font/zoom.
+  position: sticky;
+  top: var(--cal-week-header-offset, 56px);
+  z-index: 14;
+}
+
+.cal-week-allday-gutter {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 4px 6px 0 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.5;
+}
+
+.cal-week-allday-cells {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  width: 100%;
+  min-width: 0;
+  position: relative;
+}
+
+.cal-week-allday-cell {
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  min-height: 26px;
+  padding: 2px 2px 4px;
+  position: relative;
+
+  &:first-child { border-left: 0; }
+
+  &.is-today {
+    background: rgba(1, 96, 255, 0.1);
+  }
+}
+
+// All-day chip — absolutely positioned by JS to span its day range.
+.cal-week-allday-chip {
+  position: absolute;
+  top: 2px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #FFF;
+  border-radius: 3px;
+  background: var(--agenda-color, #888);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  border: 0;
+  text-align: left;
+  box-shadow: none !important;
+  text-shadow: none !important;
+
+  &:hover {
+    filter: brightness(1.1);
+  }
+}
+
+.cal-week-body {
+  // 8-column grid: gutter + 7 days as direct children. No overflow —
+  // scrolling is owned by `.cal-week-grid`, which lets header + allday
+  // be `position: sticky` to the grid's top.
+  display: grid;
+  grid-template-columns: $cal-week-gutter repeat(7, minmax(0, 1fr));
+  flex: 0 0 auto;
+  position: relative;
+}
+
+.cal-week-hours {
+  // Lives in grid column 1 (gutter slot). `display: block` so children
+  // stack at their natural 56px height instead of flex-shrinking.
+  display: block;
+}
+
+.cal-week-hour {
+  height: $cal-week-px-per-hour;
+  // border-box so the 1px top border sits INSIDE the 56px height —
+  // otherwise borders accumulate across 24 rows and the gutter ends up
+  // ~24px taller than the column content next to it.
+  box-sizing: border-box;
+  position: relative;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+
+  &[data-hour="0"] { border-top: 0; }
+
+  .cal-week-hour-label {
+    position: absolute;
+    right: 6px;
+    top: -7px;
+    font-size: 10px;
+    font-weight: 500;
+    opacity: 0.65;
+    background: transparent;
+    white-space: nowrap;
+  }
+}
+
+.cal-week-column {
+  position: relative;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  user-select: none;
+  -webkit-user-select: none;
+
+  &:first-child { border-left: 0; }
+
+  &.is-today {
+    background: rgba(1, 96, 255, 0.08);
+  }
+
+  // Right-edge drag-create zone. Always reachable for click-and-drag
+  // even when an event sits on top of that slot, so you can always
+  // add a new event on a day without having to find empty space.
+  // Subtle hover hint so it's discoverable; functional anytime.
+  &::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 12px;
+    background: linear-gradient(to right,
+      transparent 0%,
+      rgba(255, 255, 255, 0.02) 60%,
+      rgba(255, 255, 255, 0.04) 100%);
+    pointer-events: none;
+    z-index: 0;
+  }
+}
+
+.cal-week-hour-bg {
+  height: $cal-week-px-per-hour;
+  box-sizing: border-box;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  position: relative;
+
+  &[data-hour="0"] { border-top: 0; }
+
+  // Half-hour faint guide. Positioned relative to the hour-bg (now made
+  // `position: relative` above) so it sits at exactly 28px from the row
+  // top instead of falling out to the column ancestor.
+  &::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(#{$cal-week-px-per-hour} / 2);
+    height: 1px;
+    background: rgba(255, 255, 255, 0.035);
+  }
+}
+
+// Timed event block — absolutely positioned by JS via top/height/left/width.
+//
+// Design:
+//   * Background = ~28% of the agenda color so the hour gridlines bleed
+//     through.
+//   * Border-left = saturated agenda color (Mac Cal accent strip).
+//   * Text color = brightened agenda color so it reads against the dark
+//     page bg while still pointing back to the event's hue family.
+//   * Layout = title top-left, time muted below (in the column variant);
+//     OR title-only when the event is tiny (single-line). Time is NEVER
+//     shown ahead of the title — the gutter already labels the row.
+//   * Overflow = soft mask-fade INSTEAD of ellipsis (saves real estate);
+//     fade on the right edge for words that overflow horizontally, fade
+//     on the bottom edge for lines that overflow vertically.
+//   * Word-wrap = wrap at SPACES only. Never mid-word. Long single words
+//     just overflow horizontally and fade out — better than reading
+//     "Wo / rk / out / ing" stacked vertically.
+.cal-week-event {
+  // CRITICAL: `!important` required to defeat the global `button:active
+  // { position: relative; top: 1px }` rule in components/forms.scss:201.
+  // Without this, every mousedown on an event flips the button from
+  // absolute to relative positioning — which removes it from its
+  // computed slot and visually drops it to the bottom of its column.
+  // Looks exactly like the event "disappears on click".
+  position: absolute !important;
+  margin: 0 !important;
+  padding: 3px 6px 3px 8px !important;
+  border: 0 !important;
+  border-left: 3px solid var(--agenda-color, #888) !important;
+  border-radius: 4px !important;
+
+  background: color-mix(in srgb, var(--agenda-color, #888) 28%, transparent) !important;
+  background-image: none !important;
+  color: color-mix(in oklab, var(--agenda-color, #888) 30%, white) !important;
+
+  font-family: inherit !important;
+  font-size: 11px !important;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  text-align: left;
+  text-shadow: none !important;
+  box-shadow: none !important;
+  box-sizing: border-box;
+  min-height: 14px;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 1px;
+  overflow: hidden;
+  // Default = draggable affordance ("open hand"). Readonly events
+  // (events on agendas the user can view but not edit) override to
+  // plain pointer below so the cursor accurately advertises whether
+  // a drag will actually do anything.
+  cursor: -webkit-grab;
+  cursor: grab;
+  user-select: none;
+
+  // Read-only events — view + click-for-details still work, but the
+  // mousedown handler bails out of drag setup. Reflect that in the
+  // cursor.
+  &[data-readonly] {
+    cursor: pointer;
+  }
+
+  // Remove the browser-default `<button>` focus ring + active dim that
+  // were making the event look like it "disappears" momentarily during
+  // a click.
+  &:focus { outline: none; }
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--agenda-color, #888) 80%, white);
+    outline-offset: -2px;
+  }
+
+  &:hover {
+    background: color-mix(in srgb, var(--agenda-color, #888) 40%, transparent) !important;
+  }
+
+  // Source event during drag — stays in its original slot at low alpha
+  // so the user can see where the event is moving FROM. `pointer-events:
+  // none` makes the cursor on the source moot; the ghost handles the
+  // "I'm dragging" cursor below.
+  &.is-dragging-source {
+    opacity: 0.32;
+    pointer-events: none;
+    transition: opacity 0.1s linear;
+  }
+
+  // Title — top-aligned, bold, brightened color. The two-direction mask
+  // (right + bottom) fades whichever edge text overflows. Wrap only at
+  // word boundaries — never break mid-word.
+  .cal-week-event-name {
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 1.2;
+    overflow: hidden;
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: normal;
+    hyphens: none;
+    mask-image:
+      linear-gradient(to right,  #000 calc(100% - 12px), transparent),
+      linear-gradient(to bottom, #000 calc(100% - 6px),  transparent);
+    -webkit-mask-image:
+      linear-gradient(to right,  #000 calc(100% - 12px), transparent),
+      linear-gradient(to bottom, #000 calc(100% - 6px),  transparent);
+    mask-composite: intersect;
+    -webkit-mask-composite: source-in;
+  }
+
+  // Time — muted, smaller, nowrap. Times never wrap (a "9:30am – 10:45am"
+  // line break is meaningless); they fade right if forced.
+  .cal-week-event-time {
+    font-size: 10px;
+    font-weight: 500;
+    opacity: 0.7;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    mask-image: linear-gradient(to right, #000 calc(100% - 10px), transparent);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 10px), transparent);
+  }
+
+  // Tiny variant: single-line layout — title ONLY, time hidden. The
+  // gutter labels already show the time; the event itself just needs
+  // its name. (User explicitly called this out: "time should NEVER take
+  // precedence over the title of the event".)
+  &.is-tiny {
+    flex-direction: row;
+    align-items: center;
+    padding: 0 6px 0 8px !important;
+    line-height: 14px;
+
+    .cal-week-event-name {
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      font-size: 11px;
+      font-weight: 600;
+      // Single-line so a bottom mask does nothing — only the right-edge
+      // fade matters.
+      mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
+      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
+      mask-composite: add;
+      -webkit-mask-composite: source-over;
+    }
+    .cal-week-event-time { display: none; }
+  }
+
+  // Point variant: tasks and triggers fire at a moment — render the
+  // marker as a 15-min thin bar (matches the `<hr>` feel the user asked
+  // for). Title only, no time.
+  &.is-point {
+    padding: 0 6px 0 8px !important;
+    line-height: 12px;
+    flex-direction: row;
+    align-items: center;
+
+    .cal-week-event-name {
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      font-size: 11px;
+      font-weight: 600;
+      mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
+      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
+      mask-composite: add;
+      -webkit-mask-composite: source-over;
+    }
+    .cal-week-event-time { display: none; }
+  }
+
+  &.is-continued-top {
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+  }
+  &.is-continued-bottom {
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+  }
+}
+
+// Browsers with CSS Color Level 5 (relative color syntax) get the
+// dynamic lightness adjustment; older browsers fall back to the
+// `color-mix` rule above.
+@supports (color: oklch(from black 0.5 0 0)) {
+  .cal-week-event {
+    color: oklch(from var(--agenda-color, #888) 0.88 c h) !important;
+  }
+}
+
+// Drag ghost — clone of the event that follows the cursor (position:
+// fixed, set inline in JS). Slight tilt + heavier shadow so it reads
+// as "lifted off the grid". `pointer-events: none` so it never
+// intercepts the cursor's hit-test on the drop column, but `cursor:
+// grabbing` propagates anyway because the cursor was set at mousedown.
+.cal-week-drag-ghost {
+  position: fixed !important;
+  pointer-events: none !important;
+  transform: rotate(-1.5deg);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45) !important;
+  opacity: 0.95;
+  z-index: 9999 !important;
+  cursor: -webkit-grabbing;
+  cursor: grabbing;
+}
+
+// While a drag is active we put `.cal-event-dragging` on body so the
+// entire viewport reports the grabbing cursor — even over the gutter,
+// the toolbar, anywhere — instead of the cursor flipping back to text
+// or default when it passes over a non-event region.
+body.cal-event-dragging,
+body.cal-event-dragging * {
+  cursor: -webkit-grabbing !important;
+  cursor: grabbing !important;
+}
+
+// User tried to drag a read-only event (one on an agenda they can view
+// but not edit). The drag setup bails, so nothing actually moves —
+// but we flip the cursor to `not-allowed` so the rejection is felt,
+// not silent. Cleared on mouseup or Escape.
+body.cal-event-drag-blocked,
+body.cal-event-drag-blocked * {
+  cursor: not-allowed !important;
+}
+
+// Drop placeholder — inserted into the column under the cursor,
+// snapped to the slot the event would land at. Dashed outline in the
+// agenda color, lightly tinted fill.
+.cal-week-drop-placeholder {
+  position: absolute;
+  left: 2px;
+  right: calc(2px + 12px); // match the right-edge gutter on events
+  border: 2px dashed var(--agenda-color, #888);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--agenda-color, #888) 14%, transparent);
+  pointer-events: none;
+  z-index: 8;
+}
+
+// Draft block while user is dragging to create.
+.cal-week-drag-sel {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  background: rgba(1, 96, 255, 0.22);
+  border: 1px solid rgba(1, 96, 255, 0.55);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 4;
+  font-size: 10px;
+  color: #FFF;
+  padding: 2px 4px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+// Red current-time line — positioned absolutely inside .cal-week-columns
+// by JS. Only visible when today is in the visible week.
+.cal-week-now-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 2px solid #FF3B30;
+  pointer-events: none;
+  z-index: 6;
+
+  .cal-week-now-dot {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #FF3B30;
+    top: -6px;
+    margin-left: -5px;
+  }
+
+  .cal-week-now-bar {
+    display: none;
+  }
+}
+
+// Seeds are server-rendered data-only nodes; never visible.
+.cal-week-seeds {
+  display: none !important;
+}
+
+// =================== Dark-mode tweak ===================
+// The dark-mode wrapper applies app-wide; we already use rgba(...) tokens
+// so it picks up automatically. Light-mode users get the same chrome with
+// inherited text color.
+
+@media (max-width: 720px) {
+  .agenda-cal-page {
+    padding: 0 8px 16px;
+  }
+  // Narrower gutter on phones — both grid templates and the gutter
+  // children's intrinsic widths.
+  .cal-week-header,
+  .cal-week-allday {
+    grid-template-columns: 44px 1fr;
+  }
+  .cal-week-body {
+    grid-template-columns: 44px repeat(7, minmax(0, 1fr));
+  }
+  .cal-month-row {
+    min-height: 80px;
+  }
+  .cal-month-item .cal-month-item-time {
+    display: none;
+  }
+}
+
+// =================== Hide-by-filter parity ===================
+// The shared agenda visibility filter in agenda.js targets `.cal-item`
+// and `.agenda-item` rows by class. Mirror those onto the cal PWA's
+// item classes so the existing filter applies without changes.
+.cal-month-item.hidden-by-filter,
+.cal-week-event.hidden-by-filter,
+.cal-week-allday-chip.hidden-by-filter {
+  display: none !important;
+}

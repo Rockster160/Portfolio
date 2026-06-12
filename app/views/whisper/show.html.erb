@@ -37,7 +37,31 @@
           <%= fa(:music) %><span>Play Puppy Music</span>
         </button>
       </li>
+      <li>
+        <button type="button" class="whisper-menu-item" data-action="log-vomit">
+          <%= fa(:medkit) %><span>Log Vomit</span>
+        </button>
+      </li>
     </ul>
+  </div>
+
+  <div class="whisper-modal hidden" data-whisper-vomit-modal>
+    <div class="whisper-modal-backdrop" data-vomit-dismiss></div>
+    <form class="whisper-modal-content basic" data-vomit-form>
+      <h3>Log Vomit</h3>
+      <label>
+        <span>Description</span>
+        <textarea name="notes" rows="3" data-vomit-notes></textarea>
+      </label>
+      <label>
+        <span>Time</span>
+        <input type="datetime-local" name="timestamp" data-vomit-timestamp required>
+      </label>
+      <div class="whisper-modal-actions">
+        <button type="button" class="whisper-modal-cancel" data-vomit-dismiss>Cancel</button>
+        <button type="submit" class="whisper-modal-submit">Save</button>
+      </div>
+    </form>
   </div>
   <div class="whisper-header">
     <span class="whisper-name">Whisper</span>

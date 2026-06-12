@@ -1,0 +1,167 @@
+<%= meta_title @week_start.strftime("Week of %b %-d"), include_name: false %>
+<% content_for(:favicon) { render "agendas/cal_favicon" } %>
+
+<%# `agenda-page` triggers shared init in agenda.js (filter, modals,
+    monitor, item-edit). The time-grid, drag-to-create, and current-time
+    line are wired up in src/agenda_cal/agenda_cal.js, keyed on
+    `agenda-cal-week-page`. %>
+<div class="agenda-page agenda-cal-page agenda-cal-week-page"
+     data-current-date="<%= @date.iso8601 %>"
+     data-today="<%= Date.current.iso8601 %>"
+     data-week-start="<%= @week_start.iso8601 %>"
+     data-week-end="<%= @week_end.iso8601 %>">
+
+  <%# Condensed single-row toolbar — sticks to the top of the viewport
+      so the title, navigation, view toggle, and per-page actions stay
+      visible while the user scrolls through the time grid below. %>
+  <% prev_week = (@week_start - 7.days).iso8601 %>
+  <% next_week = (@week_start + 7.days).iso8601 %>
+  <header class="cal-toolbar">
+    <h1 class="cal-toolbar-title"><%= @focus_date.strftime("%B %Y") %></h1>
+
+    <nav class="cal-toolbar-nav" aria-label="Week navigation">
+      <a class="date-nav prev" href="<%= cal_week_path(date: prev_week) %>" aria-label="Previous week"><i class="fa fa-chevron-left"></i></a>
+      <a class="cal-today-btn" href="<%= cal_week_path %>">Today</a>
+      <a class="date-nav next" href="<%= cal_week_path(date: next_week) %>" aria-label="Next week"><i class="fa fa-chevron-right"></i></a>
+    </nav>
+
+    <div class="cal-toolbar-toggle cal-view-toggle cal-pwa-toggle">
+      <a href="<%= cal_month_path %>" class="cal-toggle-btn">Month</a>
+      <a href="<%= cal_week_path %>" class="cal-toggle-btn active">Week</a>
+    </div>
+
+    <div class="cal-toolbar-actions">
+      <span class="agenda-pending-badge hidden" aria-live="polite" title="Pending sync"><i class="fa fa-refresh"></i><span class="agenda-pending-badge-count"></span></span>
+      <%= render "agendas/filter", agendas: @agendas %>
+      <button type="button" class="agenda-add-btn" data-modal="#agenda-add-modal" aria-label="Add event"><i class="fa fa-plus"></i></button>
+      <a href="<%= manage_agenda_path %>" class="agenda-page-cog" aria-label="Manage agendas"><i class="fa fa-cog"></i></a>
+    </div>
+  </header>
+
+  <div class="agenda-error hidden">Disconnected — changes will sync when reconnected.</div>
+
+  <%# `data-day-start-hour` mirrors `User#perceived_today`'s rollover so a
+      2am event renders on the *previous* logical day (matching the user's
+      mental model of "still last night"). %>
+  <div class="cal-week-grid"
+       data-week-start="<%= @week_start.iso8601 %>"
+       data-week-end="<%= @week_end.iso8601 %>"
+       data-px-per-hour="56"
+       data-snap-min="15"
+       data-day-start-hour="3">
+
+    <div class="cal-week-header">
+      <div class="cal-week-header-gutter"></div>
+      <div class="cal-week-header-days">
+        <% (0..6).each do |offset| %>
+          <% day = @week_start + offset.days %>
+          <% is_today = (day == Date.current) %>
+          <div class="cal-week-header-day <%= 'is-today' if is_today %>" data-date="<%= day.iso8601 %>">
+            <span class="cal-week-header-dow"><%= day.strftime("%a") %></span>
+            <span class="cal-week-header-day-num"><%= day.day %></span>
+          </div>
+        <% end %>
+      </div>
+    </div>
+
+    <div class="cal-week-allday">
+      <div class="cal-week-allday-gutter" title="all-day">all-day</div>
+      <div class="cal-week-allday-cells" data-allday-cells>
+        <% (0..6).each do |offset| %>
+          <% day = @week_start + offset.days %>
+          <div class="cal-week-allday-cell <%= 'is-today' if day == Date.current %>"
+               data-date="<%= day.iso8601 %>"
+               data-weekday="<%= offset %>"></div>
+        <% end %>
+      </div>
+    </div>
+
+    <%# Single 8-col grid: hour gutter + 7 day columns as direct children.
+        The earlier wrapper (.cal-week-columns) was disappearing or
+        sizing to 0 in some browsers — sidestepping it entirely by
+        promoting the day columns one level up so the body's own grid
+        template owns the horizontal layout. %>
+    <div class="cal-week-body" data-week-body>
+      <div class="cal-week-hours">
+        <%# 24 rows starting at the logical day-start (3am). The first
+            row's label is omitted (would clip against the grid top) —
+            handled with an `unless` guard rather than `next` so the
+            enclosing div/span both get closed properly. ERB's `next`
+            inside an open tag silently drops the closing tags, which
+            cascaded the rest of the body into the unclosed gutter row. %>
+        <% day_start = 3 %>
+        <% (0..23).each do |i| %>
+          <% h = (day_start + i) % 24 %>
+          <div class="cal-week-hour" data-hour="<%= h %>">
+            <% unless i == 0 %>
+              <% display_h = h % 12 %>
+              <% display_h = 12 if display_h == 0 %>
+              <span class="cal-week-hour-label"><%= "#{display_h} #{h < 12 ? 'AM' : 'PM'}" %></span>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+      <% (0..6).each do |offset| %>
+        <% day = @week_start + offset.days %>
+        <div class="cal-week-column <%= 'is-today' if day == Date.current %>"
+             data-date="<%= day.iso8601 %>"
+             data-weekday="<%= offset %>">
+          <%# 24 hour-row backgrounds for visual grid lines. Sized purely
+              by CSS — JS doesn't touch these. %>
+          <% (0..23).each do |h| %>
+            <div class="cal-week-hour-bg" data-hour="<%= h %>"></div>
+          <% end %>
+          <%# Drag-selection element, shown while user is creating. %>
+          <div class="cal-week-drag-sel hidden" aria-hidden="true"></div>
+        </div>
+      <% end %>
+      <%# Current-time line, positioned absolutely inside the body grid
+          by JS. Only visible when today is in the visible week. %>
+      <div class="cal-week-now-line hidden" aria-hidden="true">
+        <span class="cal-week-now-dot"></span>
+        <span class="cal-week-now-bar"></span>
+      </div>
+    </div>
+
+    <%# Seed nodes for JS — one for every item, even all-day. Hidden;
+        agenda_cal.js reads them, builds the visible blocks, and inserts
+        into the appropriate column or allday cell. Done this way so all
+        data-* hydration (color, name, etc.) goes through the same
+        server-rendered pipeline as month view. %>
+    <div class="cal-week-seeds hidden" data-week-seeds>
+      <% @items_by_date.each_value do |items| %>
+        <% items.each do |item| %>
+          <% cal_editable = item.agenda.editable_by?(current_user) %>
+          <div class="cal-week-seed agenda-item-data"
+               data-open-details
+               <%= "data-readonly".html_safe unless cal_editable %>
+               data-item-id="<%= item.display_id %>"
+               data-item-url="<%= agenda_item_path(item.display_id) %>"
+               data-phantom="<%= item.phantom? %>"
+               data-recurring="<%= item.recurring? %>"
+               data-kind="<%= item.kind %>"
+               data-color="<%= item.display_color %>"
+               data-agenda-id="<%= item.agenda_id %>"
+               data-agenda-name="<%= item.agenda.name %>"
+               data-agenda-color="<%= item.agenda.color %>"
+               data-agenda-source="<%= item.agenda.source %>"
+               data-all-day="<%= item.all_day? %>"
+               data-end-date="<%= item.end_date&.to_time&.to_i %>"
+               data-start-at="<%= item.start_at.to_i %>"
+               data-end-at="<%= item.end_at&.to_i %>"
+               data-name="<%= item.name %>"
+               data-notes="<%= item.notes %>"
+               data-location="<%= item.location %>"
+               data-trigger-expression="<%= item.trigger_expression %>"
+               data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>">
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+
+  <%= render "agenda_items/add_modal", agendas: @agendas, date: @date %>
+  <%= render "agenda_items/edit_modal", agendas: @agendas %>
+  <%= render "agenda_items/details_modal" %>
+  <%= render "agenda_items/confirm_modal" %>
+</div>

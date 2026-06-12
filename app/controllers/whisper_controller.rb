@@ -20,4 +20,17 @@ class WhisperController < ApplicationController
     # task_ids.each { SharedTask.find_or_create_by(user: chels, task_id: _1) }
     @tasks = current_user.accessible_tasks.where(id: task_ids).sort_by { |t| task_ids.index(t.id) }
   end
+
+  def log_vomit
+    timestamp = params[:timestamp].presence&.then { |t| ::Time.zone.parse(t) } || ::Time.current
+
+    current_user.action_events.create!(
+      name: "Whisper",
+      notes: "Vomit",
+      data: { notes: params[:notes].to_s },
+      timestamp: timestamp,
+    )
+
+    head :ok
+  end
 end

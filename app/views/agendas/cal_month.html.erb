@@ -1,0 +1,160 @@
+<%= meta_title @month.strftime("%B %Y"), include_name: false %>
+<% content_for(:favicon) { render "agendas/cal_favicon" } %>
+
+<%# `agenda-page` triggers shared init in agenda.js (filter, modals,
+    monitor, item-edit). NOT adding `agenda-calendar-page` — its single-click
+    handler is the wrong semantics for this view (Mac Calendar uses
+    double-click + drag, not single-click).
+    `agenda-cal-page` is the styling/scope root for the new PWA.
+    `agenda-cal-month-page` is the per-view hook for agenda_cal.js. %>
+<div class="agenda-page agenda-cal-page agenda-cal-month-page"
+     data-current-date="<%= @month.iso8601 %>"
+     data-today="<%= Date.current.iso8601 %>">
+
+  <% prev_month = (@month - 1.month).strftime("%Y-%m") %>
+  <% next_month = (@month + 1.month).strftime("%Y-%m") %>
+  <header class="cal-toolbar">
+    <h1 class="cal-toolbar-title"><%= @focus_date.strftime("%B %Y") %></h1>
+
+    <nav class="cal-toolbar-nav" aria-label="Month navigation">
+      <a class="date-nav prev" href="<%= cal_month_path(month: prev_month) %>" aria-label="Previous month"><i class="fa fa-chevron-left"></i></a>
+      <a class="cal-today-btn" href="<%= cal_month_path %>">Today</a>
+      <a class="date-nav next" href="<%= cal_month_path(month: next_month) %>" aria-label="Next month"><i class="fa fa-chevron-right"></i></a>
+    </nav>
+
+    <div class="cal-toolbar-toggle cal-view-toggle cal-pwa-toggle">
+      <a href="<%= cal_month_path %>" class="cal-toggle-btn active">Month</a>
+      <a href="<%= cal_week_path %>" class="cal-toggle-btn">Week</a>
+    </div>
+
+    <div class="cal-toolbar-actions">
+      <span class="agenda-pending-badge hidden" aria-live="polite" title="Pending sync"><i class="fa fa-refresh"></i><span class="agenda-pending-badge-count"></span></span>
+      <%= render "agendas/filter", agendas: @agendas %>
+      <button type="button" class="agenda-add-btn" data-modal="#agenda-add-modal" aria-label="Add event"><i class="fa fa-plus"></i></button>
+      <a href="<%= manage_agenda_path %>" class="agenda-page-cog" aria-label="Manage agendas"><i class="fa fa-cog"></i></a>
+    </div>
+  </header>
+
+  <div class="agenda-error hidden">Disconnected — changes will sync when reconnected.</div>
+
+  <div class="cal-month-grid" data-month-start="<%= @first_visible.iso8601 %>" data-month-end="<%= @last_visible.iso8601 %>">
+    <div class="cal-month-weekdays">
+      <%# Weekday headers track the controller's first-day-of-week so a
+          future per-user preference flows through here too. %>
+      <% (0..6).each do |offset| %>
+        <div class="cal-month-weekday-head"><%= (@first_visible + offset.days).strftime("%a") %></div>
+      <% end %>
+    </div>
+
+    <%# Mac Calendar groups the visible weeks into rows so the cells can
+        stretch to fill the viewport vertically. Each row is a flex row of
+        7 cells with the same height. %>
+    <% (@first_visible..@last_visible).each_slice(7) do |week| %>
+      <%# A week-row stacks the 7 day cells + (above them, positioned
+          absolutely by JS) a banner layer for all-day events that span
+          one-or-more days WITHIN this row. Multi-day events crossing the
+          Sat→Sun boundary are split into one banner per row. %>
+      <div class="cal-month-row"
+           data-row-start="<%= week.first.iso8601 %>"
+           data-row-end="<%= week.last.iso8601 %>">
+        <div class="cal-month-row-banners" data-row-banners aria-hidden="true"></div>
+        <% week.each do |day| %>
+          <%# Drop all-day items from cell rendering — they appear as
+              banners in the row layer (built by agenda_cal.js from the
+              seed nodes at the bottom of the grid). %>
+          <% items = (@items_by_date[day] || []).reject(&:all_day?).sort_by(&:start_at) %>
+          <% in_month = (day.month == @month.month) %>
+          <% is_today = (day == Date.current) %>
+          <div class="cal-month-cell <%= 'is-today' if is_today %> <%= 'other-month' unless in_month %>"
+               data-date="<%= day.iso8601 %>"
+               data-weekday="<%= day.wday %>"
+               role="button"
+               tabindex="0">
+            <div class="cal-month-cell-head">
+              <span class="cal-month-day-num <%= 'first-of-month' if day.day == 1 %>">
+                <%= day.day == 1 ? day.strftime("%b %-d") : day.day.to_s %>
+              </span>
+            </div>
+            <div class="cal-month-cell-items" data-items-container>
+              <% items.each do |item| %>
+                <% cal_editable = item.agenda.editable_by?(current_user) %>
+                <button type="button"
+                        class="cal-month-item agenda-item-data"
+                        data-open-details
+                        <%= "data-readonly".html_safe unless cal_editable %>
+                        data-item-id="<%= item.display_id %>"
+                        data-item-url="<%= agenda_item_path(item.display_id) %>"
+                        data-phantom="<%= item.phantom? %>"
+                        data-recurring="<%= item.recurring? %>"
+                        data-kind="<%= item.kind %>"
+                        data-color="<%= item.display_color %>"
+                        data-agenda-id="<%= item.agenda_id %>"
+                        data-agenda-name="<%= item.agenda.name %>"
+                        data-agenda-color="<%= item.agenda.color %>"
+                        data-agenda-source="<%= item.agenda.source %>"
+                        data-all-day="false"
+                        data-end-date="<%= item.end_date&.to_time&.to_i %>"
+                        data-start-at="<%= item.start_at.to_i %>"
+                        data-end-at="<%= item.end_at&.to_i %>"
+                        data-name="<%= item.name %>"
+                        data-notes="<%= item.notes %>"
+                        data-location="<%= item.location %>"
+                        data-trigger-expression="<%= item.trigger_expression %>"
+                        data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>"
+                        style="--item-color: <%= item.display_color %>; --agenda-color: <%= item.agenda.color %>;">
+                  <span class="cal-month-item-dot" aria-hidden="true"></span>
+                  <span class="cal-month-item-time"
+                        data-time-hydrate
+                        data-start-epoch="<%= item.start_at.to_i %>"
+                        data-format="cal"
+                  ></span>
+                  <span class="cal-month-item-name"><%= item.name %></span>
+                </button>
+              <% end %>
+            </div>
+            <span class="cal-month-overflow hidden" aria-hidden="true"></span>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+
+    <%# All-day seed nodes for JS row-banner layout. Same data-* payload
+        as the timed items, just rendered as plain divs in a hidden
+        container; the banner overlay is built per-row from these. %>
+    <div class="cal-month-allday-seeds hidden" data-month-allday-seeds>
+      <% @items_by_date.each_value do |items| %>
+        <% items.each do |item| %>
+          <% next unless item.all_day? %>
+          <% cal_editable = item.agenda.editable_by?(current_user) %>
+          <div class="cal-month-allday-seed agenda-item-data"
+               <%= "data-readonly".html_safe unless cal_editable %>
+               data-item-id="<%= item.display_id %>"
+               data-item-url="<%= agenda_item_path(item.display_id) %>"
+               data-phantom="<%= item.phantom? %>"
+               data-recurring="<%= item.recurring? %>"
+               data-kind="<%= item.kind %>"
+               data-color="<%= item.display_color %>"
+               data-agenda-id="<%= item.agenda_id %>"
+               data-agenda-name="<%= item.agenda.name %>"
+               data-agenda-color="<%= item.agenda.color %>"
+               data-agenda-source="<%= item.agenda.source %>"
+               data-all-day="true"
+               data-end-date="<%= item.end_date&.to_time&.to_i %>"
+               data-start-at="<%= item.start_at.to_i %>"
+               data-end-at="<%= item.end_at&.to_i %>"
+               data-name="<%= item.name %>"
+               data-notes="<%= item.notes %>"
+               data-location="<%= item.location %>"
+               data-trigger-expression="<%= item.trigger_expression %>"
+               data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>">
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+
+  <%= render "agenda_items/add_modal", agendas: @agendas, date: Date.current %>
+  <%= render "agenda_items/edit_modal", agendas: @agendas %>
+  <%= render "agenda_items/details_modal" %>
+  <%= render "agenda_items/confirm_modal" %>
+</div>

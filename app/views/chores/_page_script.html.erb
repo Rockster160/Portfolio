@@ -160,17 +160,30 @@
       } catch (e) { return null; }
     }
     return {
-      // Additive merge — NEVER clears the map. Bootstrap is just "here
-      // is the latest known data," and removals are handled separately
-      // (`remove` / `active_chore_ids` reconcile). Emits a single
-      // "reconcile" notify so subscribers can diff the DOM against the
-      // current store without ever clearing containers in between.
+      // Server's `items` arrive in sort_order — that ordering IS
+      // authoritative and must replace whatever insertion order
+      // localStorage seeded via hydrateFromLocal. Map.set on an
+      // existing key keeps the key's original slot, so a naive merge
+      // would freeze the order at whatever localStorage had. Rebuild
+      // the map: server-named ids first (in server order, merging old
+      // fields with new), then any leftover cached entries appended
+      // at the tail so a partial bootstrap can never drop a chore.
+      // Removals are still handled separately by the prune step the
+      // caller runs before bootstrap. Emits a single "reconcile"
+      // notify so subscribers diff the DOM against the new order.
       bootstrap(items, look, dailies) {
-        (items || []).forEach(c => {
-          if (!c || !c.id) return;
-          const existing = map.get(c.id);
-          map.set(c.id, { ...existing, ...c });
-        });
+        const arr = items || [];
+        if (arr.length > 0) {
+          const next = new Map();
+          arr.forEach(c => {
+            if (!c || !c.id) return;
+            const existing = map.get(c.id);
+            next.set(c.id, { ...existing, ...c });
+          });
+          map.forEach((v, k) => { if (!next.has(k)) next.set(k, v); });
+          map.clear();
+          next.forEach((v, k) => map.set(k, v));
+        }
         if (look && Object.keys(look).length > 0) lookahead = look;
         if (Array.isArray(dailies)) {
           // Daily pins come from the server when present. An empty
@@ -279,6 +292,7 @@
         map.forEach((v, k) => next.set(k, v));
         map.clear();
         next.forEach((v, k) => map.set(k, v));
+        persist();
       },
       get(id) { return map.get(id); },
       all() { return Array.from(map.values()); },

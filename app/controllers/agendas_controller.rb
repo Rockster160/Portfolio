@@ -12,7 +12,7 @@ class AgendasController < ApplicationController
   # owner — only destroy is gated (you disconnect via /agenda_connection
   # which also stops the watch + cleans up).
   before_action -> { refuse_external_write!(@agenda) }, only: [:destroy]
-  before_action :ensure_default_agenda!, only: [:day, :week, :calendar]
+  before_action :ensure_default_agenda!, only: [:day, :week, :calendar, :cal_month, :cal_week]
 
   # JSON accepts `?days=N` (default 1, max 30) to extend the lookahead;
   # week.json uses the same payload shape with days=7.
@@ -68,6 +68,39 @@ class AgendasController < ApplicationController
 
     items = @agendas.flat_map { |a| a.items_for_range(@first_visible, @last_visible) }
     @items_by_date = items.group_by { |item| item.start_at.in_time_zone(scope_user.timezone).to_date }
+  end
+
+  # Mac-style Calendar PWA — month view. Same range math as #calendar
+  # (full visible weeks) so the grid renders the visible-month block, but
+  # no per-day truncation: the JS lays out as many event blocks as fit.
+  def cal_month
+    @month = parse_month(params[:month]) || current_user.perceived_today.beginning_of_month
+    @first_visible = @month.beginning_of_week(cal_week_start_day)
+    @last_visible = @month.end_of_month.end_of_week(cal_week_start_day)
+
+    @agendas = current_user.accessible_agendas.order(:sort_order, :id)
+    items = @agendas.flat_map { |a| a.items_for_range(@first_visible, @last_visible) }
+    @items_by_date = items.group_by { |item| item.start_at.in_time_zone(current_user.timezone).to_date }
+    # Title shows whichever month the visible block belongs to (always
+    # the requested month for cal_month).
+    @focus_date = @month
+  end
+
+  # Mac-style Calendar PWA — week time-grid. `?date=YYYY-MM-DD` picks any
+  # day in the visible week; the column it lands in is "today" visually
+  # only when the user's perceived_today is in the range.
+  def cal_week
+    @date = parse_date(params[:date]) || current_user.perceived_today
+    @week_start = @date.beginning_of_week(cal_week_start_day)
+    @week_end = @week_start + 6.days
+
+    @agendas = current_user.accessible_agendas.order(:sort_order, :id)
+    items = current_user.agenda_items_for_range(@week_start, @week_end + 1.day)
+    @items_by_date = items.group_by { |i| i.start_at.in_time_zone(current_user.timezone).to_date }
+    # Title shows the month of the user's perceived "today" if it's in
+    # the visible week, otherwise the month of the week's first day.
+    today = current_user.perceived_today
+    @focus_date = today.between?(@week_start, @week_end) ? today : @week_start
   end
 
   def create
@@ -148,6 +181,13 @@ class AgendasController < ApplicationController
 
   def ensure_default_agenda!
     current_user&.ensure_default_agenda
+  end
+
+  # First day of the week for the cal PWA. Defaults to :monday to match
+  # the Mac Calendar default; future User-level preference goes here so
+  # the templates don't need to learn about per-user config.
+  def cal_week_start_day
+    :monday
   end
 
   def require_ownership!

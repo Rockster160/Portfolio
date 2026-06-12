@@ -118,6 +118,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  let openVomitModal = () => {};
+
   // Action menu (top-right dropdown)
   const menu = container.querySelector("[data-whisper-menu]");
   if (menu) {
@@ -150,6 +152,74 @@ document.addEventListener("DOMContentLoaded", async () => {
           menuItems.classList.add("hidden");
         }
       });
+    });
+
+    const vomitBtn = menu.querySelector('[data-action="log-vomit"]');
+    if (vomitBtn) {
+      vomitBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        menuItems.classList.add("hidden");
+        openVomitModal();
+      });
+    }
+  }
+
+  const vomitModal = container.querySelector("[data-whisper-vomit-modal]");
+  if (vomitModal) {
+    const form = vomitModal.querySelector("[data-vomit-form]");
+    const notesEl = vomitModal.querySelector("[data-vomit-notes]");
+    const tsEl = vomitModal.querySelector("[data-vomit-timestamp]");
+    const submitBtn = form.querySelector(".whisper-modal-submit");
+
+    function localNowString() {
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    openVomitModal = function() {
+      notesEl.value = "";
+      tsEl.value = localNowString();
+      vomitModal.classList.remove("hidden");
+      setTimeout(() => notesEl.focus(), 50);
+    };
+
+    function closeVomitModal() {
+      vomitModal.classList.add("hidden");
+    }
+
+    vomitModal.querySelectorAll("[data-vomit-dismiss]").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeVomitModal();
+      });
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !vomitModal.classList.contains("hidden")) {
+        closeVomitModal();
+      }
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      submitBtn.disabled = true;
+      try {
+        const res = await fetch("/whisper/log_vomit", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ notes: notesEl.value, timestamp: tsEl.value }),
+        });
+        if (!res.ok) throw new Error(`Log vomit failed: ${res.status}`);
+        closeVomitModal();
+      } catch (err) {
+        console.error(err);
+        alert("Failed to log. Try again.");
+      } finally {
+        submitBtn.disabled = false;
+      }
     });
   }
 

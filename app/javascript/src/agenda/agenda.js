@@ -1544,7 +1544,18 @@
     const completedHidden = currentPrefs.hide_completed;
     const tentativeHidden = currentPrefs.hide_tentative;
     document.querySelectorAll("[data-agenda-id]").forEach((el) => {
-      if (!el.classList.contains("agenda-item") && !el.classList.contains("cal-item")) return;
+      // The cal-month / cal-week PWA uses its own item classes; keep them
+      // in lock-step with the day/week-list classes so the same prefs
+      // panel filters every view.
+      const filterable = (
+        el.classList.contains("agenda-item")
+        || el.classList.contains("cal-item")
+        || el.classList.contains("cal-month-item")
+        || el.classList.contains("cal-month-banner")
+        || el.classList.contains("cal-week-event")
+        || el.classList.contains("cal-week-allday-chip")
+      );
+      if (!filterable) return;
       const hideByAgenda = hidden.has(el.dataset.agendaId);
       const kind = el.dataset.kind;
       const isCrossedOut = el.classList.contains("crossed-out");
@@ -1792,6 +1803,14 @@
     const date = root.dataset.currentDate;
     if (root.classList.contains("agenda-calendar-page")) {
       refreshCalendarGrid(root);
+      return;
+    }
+    // Cal PWA pages (.agenda-cal-month-page / .agenda-cal-week-page) own
+    // their own refresh via window.__refreshAgendaCal(); this short-circuit
+    // keeps refreshView from fetching the wrong endpoint and trying to
+    // swap sections that don't exist in those layouts.
+    if (root.classList.contains("agenda-cal-page")) {
+      if (typeof window.__refreshAgendaCal === "function") window.__refreshAgendaCal();
       return;
     }
     if (!date) return;

@@ -127,6 +127,98 @@ html.html-ctr-whisper {
   }
 }
 
+.whisper-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+
+  &.hidden { display: none; }
+
+  .whisper-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+  }
+
+  .whisper-modal-content {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    background: #16213E;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    color: #EEE;
+
+    h3 {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #EEE;
+      text-align: center;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    textarea,
+    input[type="datetime-local"] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #EEE;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      font: inherit;
+      font-size: 0.95rem;
+
+      &:focus {
+        outline: none;
+        border-color: rgba(100, 150, 255, 0.6);
+      }
+    }
+
+    textarea { resize: vertical; min-height: 60px; }
+  }
+
+  .whisper-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+
+    button {
+      padding: 8px 16px !important;
+      border-radius: 6px !important;
+      background: rgba(255, 255, 255, 0.08) !important;
+      color: #EEE !important;
+      border: 1px solid rgba(255, 255, 255, 0.15) !important;
+      font-weight: 500 !important;
+      cursor: pointer;
+
+      &.whisper-modal-submit {
+        background: linear-gradient(135deg, #0F3460, #16213E) !important;
+        border-color: rgba(100, 150, 255, 0.4) !important;
+      }
+
+      &:disabled { opacity: 0.5; cursor: wait; }
+    }
+  }
+}
+
 .whisper-mute-toggle {
   left: 20px;
 

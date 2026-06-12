@@ -29,7 +29,9 @@ Rails.application.routes.draw do
   get "playground" => "index#playground"
   resource :ping, only: :create
 
-  resource :whisper, only: [:show], controller: :whisper
+  resource :whisper, only: [:show], controller: :whisper do
+    post :log_vomit
+  end
 
   namespace :internal do
     get "auth", to: "auth#check"
@@ -127,7 +129,9 @@ Rails.application.routes.draw do
     get    "/notification_preferences"   => "chores#notification_preferences",        as: :notification_preferences
     patch  "/notification_preferences"   => "chores#update_notification_preferences", as: :update_notification_preferences
     resources :completions, controller: :chore_completions, only: [:update, :destroy]
-    resources :goals,         controller: :chore_goals,          only: [:create, :update, :destroy], as: :goals
+    resources :goals,         controller: :chore_goals,          only: [:create, :update, :destroy], as: :goals do
+      post :reopen, on: :member
+    end
     resources :streak_bonuses, controller: :chore_streak_bonuses, only: [:create, :update, :destroy], as: :streak_bonuses
     resources :withdrawals,   controller: :chore_withdrawals,    only: [:create, :update, :destroy], as: :withdrawals
     resources :transfers,     controller: :chore_transfers,      only: [:create, :update, :destroy], as: :transfers
@@ -269,6 +273,13 @@ Rails.application.routes.draw do
   get "/agenda/week"     => "agendas#week",     as: :week
   get "/agenda/calendar" => "agendas#calendar", as: :calendar
   get "/agenda/manage"   => "agendas#index",    as: :manage_agenda
+
+  # Mac-style Calendar PWA — installs as a separate app (own webmanifest,
+  # scope `/agenda/cal`). Month is the landing page; Week is the time-grid
+  # view with drag-to-create + current-time line.
+  get "/agenda/cal"       => "agendas#cal_week",  as: :cal
+  get "/agenda/cal/month" => "agendas#cal_month", as: :cal_month
+  get "/agenda/cal/week"  => "agendas#cal_week",  as: :cal_week
   post "/agenda/test_push" => "agendas#test_push", as: :test_push_agenda
   post "/agenda/:id/resync" => "agendas#resync", as: :resync_agenda
 
