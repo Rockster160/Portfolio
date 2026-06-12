@@ -122,7 +122,7 @@ RSpec.describe Jil::Methods::Agenda, "#search" do
     expect(main[:type_casted_binds].last).to eq(5), "expected SQL LIMIT bound to 5"
   end
 
-  describe "hidden stamp + filter" do
+  describe "is:hidden / is:visible query tokens" do
     let(:hidden_schedule) do
       create(
         :agenda_schedule, agenda: agenda, kind: :task,
@@ -148,25 +148,48 @@ RSpec.describe Jil::Methods::Agenda, "#search" do
       )
     end
 
-    it "stamps each result with a hidden boolean by default" do
+    it "by default returns everything regardless of hide prefs" do
       results = methods.search("kind:task is:incomplete", 50, "ASC")
-      names_and_hidden = results.map { |h| [h[:name], h[:hidden]] }.to_h
-      expect(names_and_hidden["Visible"]).to eq(false)
-      expect(names_and_hidden["ByPattern"]).to eq(true)
+      names = results.map { |h| h[:name] }
+      expect(names).to include("Visible", "ByPattern")
     end
 
-    it "filters to non-hidden when hidden=false" do
-      results = methods.search("kind:task is:incomplete", 50, "ASC", "false")
+    it "is:visible drops items the user has hidden" do
+      results = methods.search("kind:task is:incomplete is:visible", 50, "ASC")
       names = results.map { |h| h[:name] }
       expect(names).to include("Visible")
       expect(names).not_to include("ByPattern")
     end
 
-    it "filters to only hidden when hidden=true" do
-      results = methods.search("kind:task is:incomplete", 50, "ASC", "true")
+    it "is:not-hidden is an alias for is:visible" do
+      results = methods.search("kind:task is:incomplete is:not-hidden", 50, "ASC")
+      names = results.map { |h| h[:name] }
+      expect(names).to include("Visible")
+      expect(names).not_to include("ByPattern")
+    end
+
+    it "is:hidden returns ONLY items the user has hidden" do
+      results = methods.search("kind:task is:incomplete is:hidden", 50, "ASC")
       names = results.map { |h| h[:name] }
       expect(names).not_to include("Visible")
       expect(names).to include("ByPattern")
+    end
+
+    it "filtering happens in SQL so LIMIT stays accurate" do
+      # 1 limit, 1 hidden row in front — pure Ruby post-filter would
+      # return zero. SQL pre-filter returns the next visible row.
+      results = methods.search("kind:task is:incomplete is:visible", 1, "ASC")
+      expect(results.size).to eq(1)
+      expect(results.first[:name]).to eq("Visible")
+    end
+
+    it "is:visible is a no-op when the user has no hide prefs at all" do
+      AgendaPreference.find_by(user: user).update!(
+        hidden_schedule_ids: [], hidden_name_patterns: [], hidden_item_ids: [], hidden_agenda_ids: [],
+      )
+      results = methods.search("kind:task is:incomplete is:visible", 50, "ASC")
+      names = results.map { |h| h[:name] }
+      expect(names).to include("Visible", "ByPattern")
     end
   end
 

@@ -812,13 +812,12 @@ body.ctr-agendas {
 
 // =================== Agenda modals — full override of app card chrome ===================
 
-#agenda-add-modal,
-#agenda-item-edit,
 // Reusable flat-dark modal variant. Opt in via render_modal's
-// additional_classes — e.g. `render_modal("foo", "Foo", "modal-flat")`.
+// `additional_classes` arg — e.g. `render_modal("foo", "Foo", "modal-flat")`.
 // Replaces the global blue-form card cascade with a flat dark surface,
 // chrome-less title, and tight inner padding so the modal's own content
 // (whatever the partial provides) is the only thing styling the body.
+// Every modal used inside the agenda + calendar surfaces should opt in.
 .modal-flat {
   .modal-content {
     width: 460px;
@@ -856,6 +855,41 @@ body.ctr-agendas {
   }
   .app-card-body  { margin: 0 !important; padding: 0 !important; }
   .app-card-inner { margin: 0 !important; padding: 0 !important; }
+}
+
+// Agenda confirm modal — inherits the flat-dark chrome above; this
+// block just lays out the body + action row inside the now-zeroed
+// `.app-card-inner`. Buttons use the existing `.af-btn` family which is
+// already styled for the dark surface.
+#agenda-confirm-modal {
+  .agenda-confirm-body {
+    padding: 18px 18px 4px;
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.45;
+    color: inherit;
+    opacity: 0.85;
+
+    &:empty { display: none; }
+  }
+
+  .agenda-confirm-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 16px 16px;
+  }
+
+  // The title span sits inside the flat-modal title bar; inherit those
+  // chrome styles and just keep the text on one line so a longer prompt
+  // ellipsizes instead of pushing the close-X off.
+  .agenda-confirm-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
 }
 
 .agenda-details {

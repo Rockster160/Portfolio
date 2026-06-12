@@ -87,35 +87,44 @@ class Jil::Methods::Agenda < Jil::Methods::Base
   #   * DESC limit N: SQL gives us the N latest real items, including any
   #     that are scheduled past PHANTOM_WINDOW_DAYS. Phantoms within the
   #     window slot in at the correct positions.
-  def search(query, limit=nil, order=nil, hidden=nil)
+  def search(query, limit=nil, order=nil)
     materialize_overdue_phantoms_for_today!
 
     capped = (limit.presence || 50).to_i.clamp(1..200)
     order_sym = [:asc, :desc].include?(order.to_s.downcase.to_sym) ? order.to_s.downcase.to_sym : :asc
 
+    # `is:hidden` / `is:visible` / `is:not-hidden` tokens are pulled out
+    # and pushed down to SQL via AgendaPreference's hide scopes — keeps
+    # LIMIT accurate and avoids loading then-rejecting rows in Ruby. The
+    # rest of the query goes through the normal `is_search` dispatch.
+    query_for_db, hidden_filter = split_hidden_state(query)
+
     # `relation.query(...)` uses `search_scope.where(...)` internally and
     # therefore drops any pre-applied scoping (see ApplicationRecord#query).
     # Apply user scoping AFTER the query — mirrors the Email Jil method.
-    scope = ::AgendaItem.query(query).where(agenda_id: user_agenda_ids)
+    scope = ::AgendaItem.query(query_for_db).where(agenda_id: user_agenda_ids)
+    scope = apply_hidden_scope_sql(scope, hidden_filter)
     real_items = scope.order(start_at: order_sym).limit(capped).to_a
 
-    phantoms = phantom_results(query, capped: capped)
+    phantoms = phantom_results(query_for_db, capped: capped)
+    phantoms = apply_hidden_state_ruby(phantoms, hidden_filter) if hidden_filter
+
     combined = (real_items + phantoms).sort_by(&:start_at)
     combined = combined.reverse if order_sym == :desc
-    items = combined.first(capped)
 
-    apply_hidden_stamp_and_filter(items, hidden)
+    combined.first(capped).map(&:serialize)
   end
 
   # Same as search but scoped to a single agenda.
-  def find_items(agenda, query, limit=nil, order=nil, hidden=nil)
+  def find_items(agenda, query, limit=nil, order=nil)
     a = load_agenda(agenda)
     return [] if a.blank?
 
     materialize_overdue_phantoms_for_today!(agendas: [a])
-    scope = ::AgendaItem.query(query).where(agenda_id: a.id)
-    items = apply_search_args(scope, limit, order)
-    apply_hidden_stamp_and_filter(items, hidden)
+    query_for_db, hidden_filter = split_hidden_state(query)
+    scope = ::AgendaItem.query(query_for_db).where(agenda_id: a.id)
+    scope = apply_hidden_scope_sql(scope, hidden_filter)
+    apply_search_args(scope, limit, order).map(&:serialize)
   end
 
   # ---- getters / setters ----
@@ -178,25 +187,46 @@ class Jil::Methods::Agenda < Jil::Methods::Base
     scope.order(start_at: order_sym).limit(capped).to_a
   end
 
-  # Each serialized item gets a `hidden` boolean computed against the
-  # current user's AgendaPreference. When `hidden` is true / false (or
-  # the string "true" / "false"), the result is also filtered to that
-  # subset. Pass nil (the default) to include everything.
-  def apply_hidden_stamp_and_filter(items, hidden)
+  HIDDEN_TOKENS  = %w[is:hidden].freeze
+  VISIBLE_TOKENS = %w[is:visible is:not-hidden].freeze
+
+  # Returns [cleaned_query, :only_hidden | :only_visible | nil]. Strips
+  # any hidden-state tokens out of the query so the rest of the search
+  # dispatch (kind, upcoming, etc.) runs unchanged on SQL.
+  def split_hidden_state(query)
+    str = query.to_s
+    tokens = str.split(/\s+/)
+    state = nil
+    state = :only_hidden if tokens.any? { |t| HIDDEN_TOKENS.include?(t.downcase) }
+    state = :only_visible if tokens.any? { |t| VISIBLE_TOKENS.include?(t.downcase) }
+    cleaned = tokens.reject { |t|
+      d = t.downcase
+      HIDDEN_TOKENS.include?(d) || VISIBLE_TOKENS.include?(d)
+    }.join(" ")
+    [cleaned, state]
+  end
+
+  # SQL filter for the real (persisted) rows. Returns the scope unchanged
+  # when no hidden-state token was supplied.
+  def apply_hidden_scope_sql(scope, state)
+    return scope if state.nil?
     pref = ::AgendaPreference.for(@jil.user)
-    stamped = items.map { |it| it.serialize.merge(hidden: pref.item_hidden?(it)) }
-    case normalize_hidden_arg(hidden)
-    when true  then stamped.select { |h| h[:hidden] }
-    when false then stamped.reject { |h| h[:hidden] }
-    else stamped
+    case state
+    when :only_visible then pref.apply_visible_scope(scope)
+    when :only_hidden  then pref.apply_hidden_scope(scope)
+    else scope
     end
   end
 
-  def normalize_hidden_arg(value)
-    return nil if value.nil? || value == "" || value.to_s.downcase == "nil"
-    return true  if value == true  || %w[true 1 yes only].include?(value.to_s.downcase)
-    return false if value == false || %w[false 0 no exclude].include?(value.to_s.downcase)
-    nil
+  # Ruby filter for the phantom (in-memory) rows that never hit SQL.
+  def apply_hidden_state_ruby(items, state)
+    return items if state.nil?
+    pref = ::AgendaPreference.for(@jil.user)
+    case state
+    when :only_hidden  then items.select { |it| pref.item_hidden?(it) }
+    when :only_visible then items.reject { |it| pref.item_hidden?(it) }
+    else items
+    end
   end
 
   # Gathers phantom occurrences in the next PHANTOM_WINDOW_DAYS days and
