@@ -188,10 +188,20 @@ class Agenda < ApplicationRecord
     materialized_keys = real_items.each_with_object(Set.new) { |item, set|
       next if item.agenda_schedule_id.blank?
       # Detached rows kept their schedule_id for history, but they're
-      # standalone — they must NOT suppress the parent schedule's phantom
-      # on whatever date they currently sit on (e.g. an item moved onto a
-      # day that already has a recurring occurrence).
-      next if item.detached_at.present?
+      # standalone on the date they currently sit on (e.g. an item moved
+      # onto a day that already has a recurring occurrence — both should
+      # render). HOWEVER, the override IS the canonical replacement for
+      # its `original_start_at` occurrence, so we still must suppress the
+      # phantom on the ORIGINAL date — otherwise a Google-synced override
+      # leaves the rule's untouched occurrence ghosting at the source date
+      # alongside the relocated override.
+      if item.detached_at.present?
+        if item.original_start_at.present?
+          original_date = item.original_start_at.in_time_zone(reference_user.timezone).to_date
+          set << [item.agenda_schedule_id, original_date]
+        end
+        next
+      end
 
       set << [item.agenda_schedule_id, item.occurrence_date]
     }

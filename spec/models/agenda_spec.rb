@@ -66,6 +66,30 @@ RSpec.describe Agenda do
       expect(items.first.name).to eq("Customized")
       expect(items.first).not_to be_phantom
     end
+
+    it "suppresses the phantom on a detached override's original_start_at date even when the override now lives on a different day" do
+      Timecop.freeze(Time.zone.local(2026, 6, 1, 10, 0)) do
+        sched = create(:agenda_schedule, agenda: agenda, kind: "event",
+          name: "Sync", start_time: "10:00", duration_minutes: 30,
+          recurrence: { "freq" => "monthly", "by_set_pos" => 3, "by_day" => ["tue"] },
+          starts_on: Date.new(2026, 3, 17))
+
+        # User moved the Jun 16 (3rd Tue) occurrence to Jun 15 (Mon).
+        moved_to = Time.zone.local(2026, 6, 15, 9, 0)
+        original = Time.zone.local(2026, 6, 16, 10, 0)
+        override = create(:agenda_item, agenda: agenda, kind: "event",
+          agenda_schedule: sched, detached_at: Time.current,
+          original_start_at: original,
+          start_at: moved_to, end_at: moved_to + 30.minutes,
+          name: "Sync")
+
+        june_items = agenda.items_for_range(Date.new(2026, 6, 14), Date.new(2026, 6, 17))
+        # Should see exactly ONE Sync: the override on Mon Jun 15. No phantom on Jun 16.
+        sync_items = june_items.select { |i| i.name == "Sync" }
+        expect(sync_items.map(&:id)).to eq([override.id])
+        expect(sync_items.none?(&:phantom?)).to be true
+      end
+    end
   end
 
   describe "#carry_over_items" do
