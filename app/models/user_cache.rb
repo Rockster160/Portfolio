@@ -22,9 +22,9 @@ class UserCache < ApplicationRecord
 
   def self.by(key)
     if key.to_s.match?(/^\d+$/)
-      find_by(key: key) || find_by(id: key) || find_or_create_by(key: key)
+      find_by(key: key) || find_by(id: key) || create_or_find_by(key: key)
     else
-      find_or_create_by(key: key)
+      create_or_find_by(key: key)
     end
   end
 

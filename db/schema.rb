@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_12_135720) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_14_095221) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -526,6 +526,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_12_135720) do
     t.text "notes"
     t.datetime "marked_due_at"
     t.bigint "parent_chore_id"
+    t.integer "target_count", default: 1, null: false
     t.index ["archived_at"], name: "index_chores_on_archived_at"
     t.index ["assigned_to_user_id"], name: "index_chores_on_assigned_to_user_id"
     t.index ["chore_household_id", "archived_at"], name: "index_chores_on_chore_household_id_and_archived_at"
@@ -1238,6 +1239,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_12_135720) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "key"
+    t.index ["user_id", "key"], name: "index_user_caches_on_user_id_and_key", unique: true
     t.index ["user_id"], name: "index_user_caches_on_user_id"
   end
 

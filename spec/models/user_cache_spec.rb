@@ -33,4 +33,20 @@ RSpec.describe UserCache, type: :model do
       # expect(caches.dig(:somelist, 1, :sup)).to eq("not the first")
     end
   end
+
+  describe "(user_id, key) uniqueness" do
+    it "rejects a second row with the same (user_id, key) at the DB level" do
+      caches.create!(key: "DupeKey", data: { a: 1 })
+      expect {
+        caches.create!(key: "DupeKey", data: { a: 2 })
+      }.to raise_error(ActiveRecord::RecordNotUnique)
+    end
+
+    it "by(key) does not race-create a duplicate" do
+      caches.by(:WinAtRace)
+      expect {
+        caches.by(:WinAtRace)
+      }.not_to change { caches.where(key: "WinAtRace").count }.from(1)
+    end
+  end
 end
