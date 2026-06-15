@@ -885,6 +885,40 @@ RSpec.describe "Chores", type: :request do
     end
   end
 
+  it "GET /chores/sync delta includes household chores completed by another member" do
+    # Household-shared chores affect every member's done_count_today /
+    # last_actor / today_visible, but ChoreCompletion create doesn't
+    # bump chore.updated_at — so the delta has to widen the touched_ids
+    # filter to the whole household, not just current_user, or a
+    # reconnecting tab silently misses partner completions.
+    household = create(:chore_household, owner_user: user)
+    partner = create(:user)
+    create(:chore_household_membership, chore_household: household, user: partner, role: :member)
+    user.reload
+    partner.reload
+
+    chore = create(
+      :chore, created_by_user: user, name: "Puppy Down",
+      chore_household: household, sharing_mode: :household,
+      recurrence: { freq: :never }
+    )
+
+    travel_to Time.zone.local(2026, 4, 15, 12, 0, 0) do
+      since_ts = Time.current
+      travel 1.minute
+      ChoreCompleter.new(chore, partner).call
+
+      get "/chores/sync?since=#{since_ts.iso8601}",
+        headers: { "Accept" => "application/json" }
+      expect(response).to have_http_status(:ok)
+      body = response.parsed_body
+      expect(body["chores"].pluck("id")).to include(chore.id)
+      delta = body["chores"].find { |c| c["id"] == chore.id }
+      expect(delta["done_count_today"]).to eq(1)
+      expect(delta["last_actor_username"]).to eq(partner.username)
+    end
+  end
+
   it "GET /chores/sync ignores a `since` from a prior chore-day and returns the full set" do
     # Cross-day rollover: hot picks rotate, today_visible flips,
     # done_count_today resets. A naïve `since`-filtered diff would

@@ -213,8 +213,14 @@ class ChoresController < ApplicationController
       # History) leave completed_at < since_ts but bump
       # updated_at — without the OR they'd be invisible to
       # an offline tab catching up later.
+      # Scoped to the whole household, not just current_user: a
+      # household-shared chore completed by another member changes
+      # this viewer's done_count_today / last_actor / today_visible,
+      # but chore.updated_at isn't bumped on completion create — so
+      # without the household scope the delta misses it and the page
+      # stays stale until a full sync (refresh or 4am rollover).
       touched_ids = ChoreCompletion
-        .where(user_id: current_user.id)
+        .where(user_id: current_user.chore_household_user_ids)
         .where("completed_at >= :ts OR updated_at >= :ts", ts: since_ts)
         .distinct.pluck(:chore_id).to_set
       # Hot-pick rotation and streak resets don't touch
