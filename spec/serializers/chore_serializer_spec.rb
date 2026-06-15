@@ -437,6 +437,54 @@ RSpec.describe ChoreSerializer, type: :serializer do
       end
     end
 
+    describe "scheduled_due_on (sort key for the Scheduled section)" do
+      it "uses marked_due_at when set, resolved into the viewer's chore-day" do
+        ch = create(
+          :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+          recurrence: { freq: :never }, marked_due_at: (today - 2).beginning_of_day + 12.hours
+        )
+        expect(render(ch)[:scheduled_due_on]).to eq((today - 2).iso8601)
+      end
+
+      it "uses starts_on for one-offs" do
+        ch = create(
+          :chore, created_by_user: user, one_off: true,
+          show_on_daily_view: :when_scheduled, recurrence: { freq: :never },
+          starts_on: today - 4
+        )
+        expect(render(ch)[:scheduled_due_on]).to eq((today - 4).iso8601)
+      end
+
+      it "uses the most recent past matching day for fixed-pattern schedules" do
+        key = AgendaSchedule::WEEKDAY_KEYS[(today - 2).wday]
+        ch = create(
+          :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+          recurrence: { freq: :weekly, by_day: [key] }
+        )
+        expect(render(ch)[:scheduled_due_on]).to eq((today - 2).iso8601)
+      end
+
+      it "uses relative_due_on for relative recurrence" do
+        ch = create(
+          :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+          recurrence: { freq: :relative, interval: 3, unit: :day }
+        )
+        create(
+          :chore_completion, chore: ch, user: user, paid_pebbles: 1,
+          completed_at: 5.days.ago, day_key: today - 5
+        )
+        expect(render(ch)[:scheduled_due_on]).to eq((today - 2).iso8601)
+      end
+
+      it "is nil for unscheduled chores with no marked_due / starts_on" do
+        ch = create(
+          :chore, created_by_user: user, show_on_daily_view: :always,
+          recurrence: { freq: :never }
+        )
+        expect(render(ch)[:scheduled_due_on]).to be_nil
+      end
+    end
+
     it ":when_scheduled — carryover survives a completion made today" do
       # Scheduled every 3 days, last appeared 2 days ago, never
       # completed. It's "carried over" to today. A completion made

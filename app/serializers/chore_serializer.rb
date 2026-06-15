@@ -69,7 +69,26 @@ class ChoreSerializer
       today_visible:        today_visible?,
       due_today:            due_today?,
       on_dailies:           on_dailies?,
+      scheduled_due_on:     scheduled_due_on&.iso8601,
     }
+  end
+
+  # Effective "due date" for sorting in Today's Scheduled section.
+  # Resolution order: explicit marked_due → one-off starts_on → relative
+  # / after_chore derived due day → most recent past matching day for
+  # fixed-pattern schedules (capped at a 14-day lookback to mirror
+  # `scheduled_or_carried?`). Nil for chores with no schedule frame
+  # (e.g. daily_always with no marked override) so they sort to the bottom.
+  def scheduled_due_on
+    return ChoreDay.current(viewer, at: chore.marked_due_at) if chore.marked_due?
+    return chore.starts_on if chore.one_off
+    return nil unless chore.scheduled?
+
+    last_before = last_completion_before_today&.day_key
+    return chore.relative_due_on(viewer, last_completed_day: last_before) if chore.relative?
+    return chore.after_chore_due_on_for(anchor_last_day) if chore.after_chore?
+
+    most_recent_scheduled_day
   end
 
   # Whether the viewer has pinned this chore to their personal Dailies
@@ -367,14 +386,25 @@ class ChoreSerializer
     chore.lookup_anchor_last_day(viewer)
   end
 
+  # Most recent day on or before `day` that this chore's fixed-pattern
+  # schedule fires for the viewer. Bounded by a 14-day lookback so a
+  # never-matching pattern doesn't scan forever. Memoized — `today_visible?`
+  # (via `scheduled_or_carried?`) and `scheduled_due_on` both consult it.
+  def most_recent_scheduled_day
+    return @most_recent_scheduled_day if defined?(@most_recent_scheduled_day)
+
+    last_before = last_completion_before_today&.day_key
+    @most_recent_scheduled_day = ((day - 14)..day).reverse_each.find { |d|
+      chore.matches_day?(d, viewer, last_completed_day: last_before)
+    }
+  end
+
   def scheduled_or_carried?(last_completed_day)
     return false unless chore.scheduled?
     return true  if chore.matches_day?(day, viewer, last_completed_day: last_completed_day, anchor_last_day: anchor_last_day)
     return false if chore.relative? || chore.after_chore?
 
-    last_scheduled_day = ((day - 14)..(day - 1)).reverse_each.find { |d|
-      chore.matches_day?(d, viewer, last_completed_day: last_completed_day)
-    }
+    last_scheduled_day = most_recent_scheduled_day
     return false if last_scheduled_day.blank?
 
     # Carryover means "scheduled in the past and not completed since"

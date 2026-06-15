@@ -316,8 +316,19 @@
       // Items that today_visible filtering would have put on the old
       // Today screen, minus dailies AND minus the new "due today"
       // section. What's left is overdue carryovers and always-on items.
+      // Sorted by scheduled_due_on descending (most recent due date on
+      // top); items without a derived due date sink to the bottom in
+      // their existing order.
       overdueList() {
-        return this.all().filter(c => c.today_visible && !c.archived && !dailyIdSet.has(c.id) && !c.due_today);
+        const items = this.all().filter(c => c.today_visible && !c.archived && !dailyIdSet.has(c.id) && !c.due_today);
+        return items.sort((a, b) => {
+          const da = a.scheduled_due_on || "";
+          const db = b.scheduled_due_on || "";
+          if (da === db) return 0;
+          if (!da) return 1;
+          if (!db) return -1;
+          return db.localeCompare(da);
+        });
       },
       activeForGrid() { return this.all().filter(c => !c.archived); },
       hotPicks() {
@@ -4060,11 +4071,11 @@
     const ids = Array.from(document.querySelectorAll("[data-chores-grid] [data-chore-id]"))
       .map(c => parseInt(c.dataset.choreId, 10)).filter(Boolean);
     ChoreStore.reorder(ids);
-    // Today's Today + Overdue sections mirror the global chore sort;
-    // Dailies has its own user-curated order and isn't touched by a grid
-    // reorder.
+    // Today's Today section mirrors the global chore sort; Dailies has
+    // its own user-curated order and isn't touched by a grid reorder.
+    // Scheduled is sorted by due date, so a grid reorder doesn't change
+    // its order — skip the manual DOM sync there.
     reorderContainer("[data-chores-today]", ids);
-    reorderContainer("[data-chores-overdue]", ids);
     try { await api("/chores/order", "PATCH", { ids, tab_id: TAB_ID }); }
     catch (e) { flash("Couldn't save order: " + e.message, "error"); }
   }
@@ -4086,7 +4097,6 @@
     ChoreStore.reorder(ids);
     reorderContainer("[data-chores-grid]", ids);
     reorderContainer("[data-chores-today]", ids);
-    reorderContainer("[data-chores-overdue]", ids);
   }
   editModeBtn?.addEventListener("click", () => { if (editModeActive) exitEditMode(); else enterEditMode(); });
 
