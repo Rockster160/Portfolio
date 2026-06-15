@@ -117,6 +117,30 @@ RSpec.describe "Derived ScheduledTrigger (source_item_id + offset)" do
       }.not_to change { ScheduledTrigger.derived.count }
     end
 
+    it "refuses to create a derived trigger whose execute_at is already past" do
+      past_event = create(:agenda_item, agenda: agenda, kind: :event,
+        name: "Old", location: "STE 100",
+        start_at: 2.minutes.ago, end_at: 30.minutes.from_now)
+      expect {
+        Jil::Executor.call(user, code, past_event.serialize.merge(id: past_event.id))
+      }.not_to change { ScheduledTrigger.derived.count }
+    end
+
+    it "removes any existing derived trigger when a re-run lands in the past window" do
+      # First run while in window — creates the row
+      Jil::Executor.call(user, code, event.serialize.merge(id: event.id))
+      expect(ScheduledTrigger.derived.count).to eq(1)
+      # Move the source's start_at into the past — the next listener run
+      # would otherwise re-upsert a row that fires immediately. Use
+      # update_columns so we don't trip the propagate-on-change callback,
+      # which would also be a valid path to test, but isn't what we're
+      # checking here.
+      event.update_columns(start_at: 2.minutes.ago, end_at: 28.minutes.from_now)
+      expect {
+        Jil::Executor.call(user, code, event.reload.serialize.merge(id: event.id))
+      }.to change { ScheduledTrigger.derived.count }.by(-1)
+    end
+
     it "Global.remove_trigger_for destroys the row" do
       Jil::Executor.call(user, code, event.serialize.merge(id: event.id))
       removal_code = <<~'JIL'

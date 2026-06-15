@@ -27,11 +27,12 @@ class FireDueAgendaTriggersWorker
       end
   end
 
-  # Recurring trigger schedules only materialize a 7-day-ahead rolling
-  # window on save (see AgendaSchedule#materialize_upcoming_triggers!). If
-  # a schedule hasn't been saved within that window, today's occurrence
-  # never gets a real AgendaItem row → the perform query above never sees
-  # it → the trigger silently never fires. Bridge that gap here.
+  # Defensive backstop for the case where forward materialization (in
+  # JilScheduleWorker via AgendaSchedule#materialize_upcoming!) hasn't
+  # caught a due trigger occurrence yet — e.g. boot-time or a schedule
+  # added between cron ticks. Materializes today's/yesterday's matching
+  # phantoms within the catchup window so the firing loop below can pick
+  # them up.
   def materialize_due_trigger_phantoms!(now:, cutoff:)
     AgendaSchedule.trigger.find_each do |schedule|
       agenda = schedule.agenda

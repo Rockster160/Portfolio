@@ -321,6 +321,17 @@ class Jil::Methods::Global < Jil::Methods::Base
 
     offset_secs = compute_offset_seconds(offset, unit)
     execute_at = source_item.start_at + offset_secs.seconds
+
+    # Pre-event window already passed — refuse to create (or clean up an
+    # existing) trigger that would fire immediately. Otherwise a "5 min
+    # before" reminder produced by a late-materialized phantom or a
+    # backfill-touched historical event fires the moment it's created,
+    # surfacing as "fired at event start" or "blast of old reminders".
+    if execute_at <= ::Time.current
+      remove_trigger_for(source, name)
+      return nil
+    end
+
     rec = @jil.user.scheduled_triggers.where(
       source_item_id: source_item.id, name: name.to_s
     ).first_or_initialize

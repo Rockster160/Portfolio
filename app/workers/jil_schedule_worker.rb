@@ -4,6 +4,14 @@ class JilScheduleWorker
   sidekiq_options retry: false
 
   def perform
+    # Roll the AgendaSchedule materialization window forward so upcoming
+    # occurrences (task/event/trigger) become real AgendaItem rows before
+    # their start_at. Without this, recurring events stay phantom until
+    # the past-window worker materializes them at start time, which is
+    # too late for derived ScheduledTriggers (pre-event reminders) to
+    # ever fire ahead of time.
+    ::AgendaSchedule.find_each(&:materialize_upcoming!)
+
     ::ScheduledTrigger.not_scheduled.upcoming_soon.find_each do |schedule|
       ::Jil::Schedule.add_job(schedule)
     end

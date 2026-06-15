@@ -39,7 +39,7 @@ RSpec.describe FireDueAgendaTriggersWorker do
 
     it "materializes today's row when the schedule's save-time window has elapsed, then fires it" do
       schedule = nil
-      # Save the schedule on May 11 9am — TRIGGER_MATERIALIZE_WINDOW (10 hours)
+      # Save the schedule on May 11 9am — MATERIALIZE_WINDOW (30 hours)
       # has long expired by May 19, so the May 19 occurrence has no row from
       # the after_save hook and would never fire without the worker's backfill.
       Timecop.freeze(user_zone.local(2026, 5, 11, 9, 0, 0)) do

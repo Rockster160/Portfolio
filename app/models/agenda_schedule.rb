@@ -38,12 +38,19 @@ class AgendaSchedule < ApplicationRecord
   FREQUENCIES = [:daily, :weekdays, :weekly, :monthly, :yearly, :custom].freeze
   WEEKDAY_KEYS = [:sun, :mon, :tue, :wed, :thu, :fri, :sat].freeze
   CUSTOM_UNITS = [:day, :week, :month].freeze
-  # Forward-looking window for materializing upcoming triggers into real
-  # rows. Anything further out stays a phantom — the firing worker will
-  # materialize on demand as occurrences come into the window.
-  # Past occurrences keep their materialized row (they're history) — we
-  # never destroy them after the fact.
-  TRIGGER_MATERIALIZE_WINDOW = 10.hours
+  # Forward-looking window for materializing upcoming occurrences into
+  # real rows. Anything further out stays a phantom — the periodic worker
+  # rolls the window forward each tick. Past occurrences keep their
+  # materialized row (they're history) — we never destroy them after the
+  # fact.
+  #
+  # The window has to be wide enough that derived ScheduledTriggers (e.g.
+  # "fire 5 minutes before this event") get created with a future
+  # execute_at: AgendaItem creation fires :agenda_item, which runs the
+  # listener task, which calls Global.trigger_for to compute
+  # execute_at = start_at + offset. If the item materializes too close to
+  # start_at, the derived trigger fires immediately at event-start.
+  MATERIALIZE_WINDOW = 30.hours
 
   enum :kind, { task: 0, event: 1, trigger: 2 }
 
@@ -52,7 +59,7 @@ class AgendaSchedule < ApplicationRecord
   OCCURRENCE_SCAN_CAP = 50.years
 
   before_save :sync_until_on_from_occurrence_count, if: -> { occurrence_count.present? }
-  after_save :materialize_upcoming_triggers!, if: :saved_change_to_anything_affecting_triggers?
+  after_save :materialize_upcoming!, if: :saved_change_affecting_materialization?
 
   belongs_to :agenda
   has_many :agenda_items, dependent: :destroy
@@ -240,14 +247,14 @@ class AgendaSchedule < ApplicationRecord
     occurrence_start_at(date) + duration_minutes.minutes
   end
 
-  # Materialize trigger occurrences whose start_at falls inside the next
-  # TRIGGER_MATERIALIZE_WINDOW. Past occurrences are kept as history;
-  # anything further out stays phantom until it comes into the window.
-  # Callers: (1) the after_save hook below, when a schedule's rule/start
-  # changes, (2) the firing worker on its periodic tick.
-  def materialize_upcoming_triggers!(through: TRIGGER_MATERIALIZE_WINDOW.from_now)
-    return unless trigger?
-
+  # Materialize occurrences (all kinds — task, event, trigger) whose
+  # start_at falls inside the next MATERIALIZE_WINDOW. Past occurrences
+  # are kept as history; anything further out stays phantom until it
+  # rolls into the window. Callers: (1) the after_save hook below, when a
+  # schedule's rule/start changes, (2) JilScheduleWorker on its periodic
+  # tick. Events get end_at + all_day from the schedule; tasks/triggers
+  # leave end_at nil.
+  def materialize_upcoming!(through: MATERIALIZE_WINDOW.from_now)
     now = Time.current
     from_date = now.in_time_zone(user.timezone).to_date
     to_date = through.in_time_zone(user.timezone).to_date
@@ -261,15 +268,16 @@ class AgendaSchedule < ApplicationRecord
       next unless matches?(date)
 
       occurrence_start = occurrence_start_at(date)
-      # Only materialize occurrences inside the forward window.
       next if occurrence_start < now || occurrence_start > through
       next if existing_starts.include?(occurrence_start)
 
       agenda_items.create!(
         agenda:             agenda,
-        kind:               :trigger,
+        kind:               kind,
         name:               name,
         start_at:           occurrence_start,
+        end_at:             occurrence_end_at(date),
+        all_day:            all_day,
         color:              color,
         notes:              notes,
         location:           location,
@@ -280,14 +288,13 @@ class AgendaSchedule < ApplicationRecord
 
   private
 
-  def saved_change_to_anything_affecting_triggers?
-    trigger? && (
-      saved_change_to_starts_on? || saved_change_to_until_on? ||
+  def saved_change_affecting_materialization?
+    saved_change_to_starts_on? || saved_change_to_until_on? ||
       saved_change_to_recurrence? || saved_change_to_start_time? ||
       saved_change_to_kind? || saved_change_to_name? ||
       saved_change_to_trigger_expression? ||
+      saved_change_to_duration_minutes? || saved_change_to_all_day? ||
       previously_new_record?
-    )
   end
 
   def safe_parse_date(value)

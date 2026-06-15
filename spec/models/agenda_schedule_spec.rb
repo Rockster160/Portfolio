@@ -194,7 +194,10 @@ RSpec.describe AgendaSchedule do
     end
 
     it "produces phantoms 100 years out without any persistence" do
-      sched = build_schedule(recurrence: { "freq" => "daily" }, starts_on: Date.current)
+      # starts_on is pushed past the materialize window so the after_save
+      # hook doesn't persist any near-future occurrence — this test is
+      # only asserting that phantom_for itself doesn't persist.
+      sched = build_schedule(recurrence: { "freq" => "daily" }, starts_on: Date.current + 7)
       far_future = Date.current + 100.years
       item = sched.phantom_for(far_future)
       expect(item).to be_an(AgendaItem)

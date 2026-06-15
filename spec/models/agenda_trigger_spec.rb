@@ -71,8 +71,8 @@ RSpec.describe "AgendaItem trigger kind" do
     end
   end
 
-  describe "AgendaSchedule#materialize_upcoming_triggers!" do
-    it "materializes only the occurrences that fall inside the 10-hour forward window" do
+  describe "AgendaSchedule#materialize_upcoming!" do
+    it "materializes occurrences that fall inside the forward window" do
       sched = nil
       start_time = 1.hour.from_now.strftime("%H:%M")
       expect {
@@ -80,25 +80,50 @@ RSpec.describe "AgendaItem trigger kind" do
           name: "Morning ping", trigger_expression: "morning_ping",
           start_time: start_time,
           recurrence: { "freq" => "daily" }, starts_on: Date.current)
-      }.to change { AgendaItem.where(kind: :trigger).count }.by(1)
-      expect(sched.agenda_items.where(kind: :trigger).count).to eq(1)
+      }.to change { AgendaItem.where(kind: :trigger).count }.by_at_least(1)
       expect(sched.agenda_items.pluck(:trigger_expression).uniq).to eq(["morning_ping"])
     end
 
-    it "does NOT pre-materialize occurrences beyond the 10-hour window" do
-      far_off = (Time.current + 12.hours).strftime("%H:%M")
+    it "does NOT pre-materialize occurrences whose first match is beyond the window" do
+      # Push starts_on past the window so no matching date lands inside it.
       expect {
         create(:agenda_schedule, agenda: agenda, kind: "trigger",
           name: "Late ping", trigger_expression: "late_ping",
-          start_time: far_off,
-          recurrence: { "freq" => "daily" }, starts_on: Date.current)
+          start_time: "08:00",
+          recurrence: { "freq" => "daily" }, starts_on: Date.current + 7)
       }.not_to change { AgendaItem.where(kind: :trigger).count }
     end
 
-    it "non-trigger schedules do NOT auto-materialize" do
+    it "materializes event schedules forward with end_at derived from duration" do
+      start_time = 1.hour.from_now.strftime("%H:%M")
+      sched = nil
       expect {
-        create(:agenda_schedule, agenda: agenda, kind: "task",
+        sched = create(:agenda_schedule, agenda: agenda, kind: "event",
+          name: "Tech Stand-Up", duration_minutes: 30,
+          start_time: start_time,
           recurrence: { "freq" => "daily" }, starts_on: Date.current)
+      }.to change { AgendaItem.where(kind: :event).count }.by(1)
+      item = sched.agenda_items.where(kind: :event).first
+      expect(item.end_at).to be_within(1.second).of(item.start_at + 30.minutes)
+    end
+
+    it "materializes task schedules forward with nil end_at" do
+      start_time = 1.hour.from_now.strftime("%H:%M")
+      sched = nil
+      expect {
+        sched = create(:agenda_schedule, agenda: agenda, kind: "task",
+          name: "Stretch", start_time: start_time,
+          recurrence: { "freq" => "daily" }, starts_on: Date.current)
+      }.to change { AgendaItem.where(kind: :task).count }.by(1)
+      expect(sched.agenda_items.where(kind: :task).first.end_at).to be_nil
+    end
+
+    it "leaves out-of-window event/task occurrences as phantoms" do
+      expect {
+        create(:agenda_schedule, agenda: agenda, kind: "event",
+          name: "Far event", duration_minutes: 30,
+          start_time: "08:00",
+          recurrence: { "freq" => "daily" }, starts_on: Date.current + 7)
       }.not_to change(AgendaItem, :count)
     end
   end
