@@ -833,6 +833,12 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     opacity: 1;
     stroke-dashoffset: 0;
   }
+  // Partial progress: same ring as the completion celebration, just not
+  // all the way around. The dashoffset is stamped inline by
+  // applyProgressRing so the ring grows tap-by-tap toward the target.
+  .chore-circle.partial .done-ring circle {
+    opacity: 1;
+  }
   .chore-circle.done:not(.no-animate) .done-ring circle {
     animation: chore-ring-draw 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
   }
@@ -858,31 +864,43 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     opacity: 0.55;
   }
 
-  // Progress ring + tiny countdown — copied pattern from Whisper PWA
-  // but the countdown is a subtle pill at the top of the ring instead
-  // of front and center.
-  .chore-circle .circle-ring {
+  // Smooth tap-to-tap growth of the done-ring. Applies in both partial
+  // and `.done.no-animate` (multi-tap chore reaching target) states so
+  // the final tap continues the fill from its current position instead
+  // of snapping. The keyframe-driven binary completion (target=1) wins
+  // over the transition while it's running, so it's unaffected.
+  .chore-circle.partial .done-ring circle,
+  .chore-circle.done.no-animate .done-ring circle {
+    transition: stroke-dashoffset 0.25s linear, opacity 0.2s linear;
+  }
+
+  // Thin secondary overlay — cooldown progress. Sits INSIDE the done
+  // ring (r=40 vs r=48) so users see both at once: outer ring grows
+  // with taps toward the daily target, inner ring drains as the
+  // cooldown timer runs.
+  .chore-circle .circle-cooldown-ring {
     position: absolute;
     inset: -2px;
     width: calc(100% + 4px);
     height: calc(100% + 4px);
     transform: rotate(-90deg);
     pointer-events: none;
+    z-index: 2;
   }
-  .chore-circle .ring-bg {
+  .chore-circle .cooldown-ring-bg {
     fill: none;
-    stroke: #1F2A44;
-    stroke-width: 2;
+    stroke: transparent;
   }
-  .chore-circle .ring-progress {
+  .chore-circle .cooldown-ring-progress {
     fill: none;
     stroke: var(--chores-cooldown);
-    stroke-width: 2;
+    stroke-width: 1.5;
     stroke-linecap: round;
     transition: stroke-dashoffset 0.25s linear;
+    opacity: 0.85;
   }
-  .chore-circle .ring-progress.elapsed {
-    stroke: #1F2A44; // when cooldown done, ring fades into bg
+  .chore-circle .cooldown-ring-progress.elapsed {
+    stroke: transparent;
   }
   // Cooldown countdown — GREY pill at the bottom of the disc
   // (was orange + top). Bottom puts it under the icon, leaving the
@@ -2121,7 +2139,8 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   // these inputs need !important — or a higher-specificity rule. Going
   // !important here keeps the CSS short.
   .chore-form .interval-input,
-  .chore-form .cooldown-amount {
+  .chore-form .cooldown-amount,
+  .chore-form .target-count-input {
     width: 80px !important;
     text-align: center;
     padding: 8px 10px !important;

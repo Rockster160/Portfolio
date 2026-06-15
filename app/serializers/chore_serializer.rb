@@ -34,6 +34,12 @@ class ChoreSerializer
       notes:                chore.notes.to_s,
       reward_pebbles:       chore.reward_pebbles,
       reward_label:         chore.reward_label,
+      # Daily target — when > 1, the card's progress ring fills as
+      # `done_count_today / target_count` instead of flipping fully on
+      # the first tap. `done` state stays binary (any tap counts) so
+      # streaks, Today carryover, and Jil :completed are unchanged.
+      target_count:         chore.target_count,
+      progress_count:       done_count_today,
       # Cooldown / sharing-mode / hot-eligibility belong to the parent
       # for sub-chores — sub-chore taps credit the parent, so the
       # client must show parent's cooldown semantics to stay coherent.

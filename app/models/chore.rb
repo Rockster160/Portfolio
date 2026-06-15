@@ -19,6 +19,7 @@
 #  show_on_daily_view  :integer          default("when_scheduled"), not null
 #  sort_order          :integer
 #  starts_on           :date
+#  target_count        :integer          default(1), not null
 #  threshold_seconds   :integer
 #  created_at          :datetime         not null
 #  updated_at          :datetime         not null
@@ -131,6 +132,7 @@ class Chore < ApplicationRecord
 
   validates :name, presence: true
   validates :reward_pebbles, numericality: { greater_than_or_equal_to: 0 }
+  validates :target_count, numericality: { only_integer: true, greater_than_or_equal_to: 1, less_than_or_equal_to: 99 }
   validates :threshold_seconds, numericality: { only_integer: true }, allow_nil: true
   validate :threshold_seconds_is_valid_sentinel_or_positive
   validate :anchor_chore_is_valid
@@ -374,6 +376,7 @@ class Chore < ApplicationRecord
       short_name:          display_short_name,
       icon:                icon,
       reward_pebbles:      reward_pebbles,
+      target_count:        target_count,
       threshold_seconds:   threshold_seconds,
       sharing_mode:        sharing_mode,
       one_off:             one_off,

@@ -298,6 +298,21 @@
           <span class="field-hint">Use <code>{Label}</code>, <code>{Label:Numeric}</code>, or <code>{Label:Select [a, b, "c, d"]}</code> to prompt for input on completion.</span>
         </div>
 
+        <%# ----- Daily target -----
+          How many taps fully fill the progress ring. Default 1 = single
+          tap fills it; higher values turn the ring into a "N of M done
+          today" gauge. The chore still counts as done on the first tap
+          for streak / Today carryover / Jil — target only drives the
+          visual fill. Rarely changed, so lives in Advanced. %>
+        <div class="form-section target-count-row">
+          <label class="field-label" for="chore-target-count">Daily target</label>
+          <input type="number" id="chore-target-count" data-field="target_count"
+                 min="1" max="99" value="1" class="target-count-input"
+                 autocomplete="off"
+                 data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
+          <div class="field-hint">Taps needed to fill the ring. Leave at 1 for a single tap.</div>
+        </div>
+
         <%# ----- Sharing (default Household) ----- %>
         <div class="form-section">
           <label class="field-label">Sharing</label>

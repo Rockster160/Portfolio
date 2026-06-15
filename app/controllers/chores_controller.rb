@@ -712,7 +712,7 @@ class ChoresController < ApplicationController
 
   def chore_params
     permitted = params.require(:chore).permit(
-      :name, :short_name, :icon, :reward_pebbles, :threshold_seconds,
+      :name, :short_name, :icon, :reward_pebbles, :target_count, :threshold_seconds,
       :one_off, :starts_on, :show_on_daily_view, :hot_eligibility,
       :sharing_mode, :assigned_to_user_id, :notes_template, :notes,
       :marked_due_at, :parent_chore_id,

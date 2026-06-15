@@ -380,6 +380,41 @@
     return `<i class="fa ${cls} circle-state-icon" aria-hidden="true" data-state-icon></i>`;
   }
 
+  // Progress-toward-target helpers. `progress_count` is server-emitted
+  // and tracks taps within the chore's current occurrence (= today for
+  // daily chores). Falls back to done_count_today so older payloads
+  // and optimistic patches still work.
+  function progressOf(c) {
+    return Math.max(0, c.progress_count != null ? c.progress_count : (c.done_count_today || 0));
+  }
+  function targetOf(c) {
+    return Math.max(1, c.target_count || 1);
+  }
+  function progressRatio(c) {
+    return Math.min(1, progressOf(c) / targetOf(c));
+  }
+  // Visual "fully done" — the celebratory done-ring animation only
+  // fires when the chore has hit its daily target. For target_count=1
+  // this matches the old `done_count_today > 0` behavior; for target>1
+  // it waits for the final tap so the progress ring can grow visibly
+  // through 1/N, 2/N, ... N/N.
+  function isFullyDone(c) {
+    const target = targetOf(c);
+    const progress = progressOf(c);
+    return progress > 0 && progress >= target;
+  }
+  function countBadgeHTML(c) {
+    const target = targetOf(c);
+    const progress = progressOf(c);
+    if (target > 1) {
+      return `<span class="count-badge" data-count-badge>${progress}/${target}</span>`;
+    }
+    if (progress > 1) {
+      return `<span class="count-badge" data-count-badge>×${progress}</span>`;
+    }
+    return "";
+  }
+
   function gridCardHTML(c) {
     const doneClass = (c.done_count_today > 0) ? " done-today" : "";
     const hotClass  = (c.hot_multiplier != null) ? " hot" : "";
@@ -387,8 +422,7 @@
       `<div class="hot-badge">${esc(formatMultiplier(c.hot_multiplier))}×</div>` : "";
     const streak = (c.streak_multiplier != null && c.streak_multiplier > 1) ?
       `<div class="streak-badge">${esc(formatMultiplier(c.streak_multiplier))}×</div>` : "";
-    const countBadge = (c.done_count_today > 1) ?
-      `<span class="count-badge" data-count-badge>×${c.done_count_today}</span>` : "";
+    const countBadge = countBadgeHTML(c);
     const cd = hasCooldown(c) ?
       `<span class="circle-countdown" data-circle-countdown data-cooldown-end="${c.cooldown_kind === "day_reset" ? "day-end" : ""}"></span>` : "";
     // The most-recent completion drives the ring color. An anonymous
@@ -414,19 +448,28 @@
   }
 
   function circleCardHTML(c, { animate = true } = {}) {
-    const isDone = (c.done_count_today || 0) > 0;
-    const doneClass = isDone ? (animate ? " done" : " done no-animate") : "";
+    const isDone = isFullyDone(c);
+    // Multi-tap chores always skip the keyframe — the inline progress
+    // ring continues growing smoothly into the fully-filled state.
+    const skipKeyframe = targetOf(c) > 1;
+    const doneClass = isDone ? ((animate && !skipKeyframe) ? " done" : " done no-animate") : "";
     const hotClass  = (c.hot_multiplier != null) ? " hot" : "";
     const hot = (c.hot_multiplier != null) ?
       `<div class="hot-badge">${esc(formatMultiplier(c.hot_multiplier))}×</div>` : "";
     const streak = (c.streak_multiplier != null && c.streak_multiplier > 1) ?
       `<div class="streak-badge">${esc(formatMultiplier(c.streak_multiplier))}×</div>` : "";
-    const countBadge = (c.done_count_today > 1) ?
-      `<span class="count-badge" data-count-badge>×${c.done_count_today}</span>` : "";
-    const ring = (c.cooldown_kind === "fixed") ? `
-      <svg class="circle-ring" viewBox="0 0 100 100" aria-hidden="true">
-        <circle class="ring-bg" cx="50" cy="50" r="46" />
-        <circle class="ring-progress" cx="50" cy="50" r="46" data-ring-progress />
+    const countBadge = countBadgeHTML(c);
+    // The done-ring SVG handles BOTH partial progress and the full-
+    // completion celebration animation. Partial fill is set on the same
+    // circle via stroke-dashoffset (applyProgressRing), so the visual
+    // weight, color, and glow match a completed chore at every step.
+    // Thin secondary overlay — cooldown only. Sits inside the done
+    // ring so users can see both at the same time. Hidden when no
+    // cooldown is set.
+    const cooldownRing = hasCooldown(c) ? `
+      <svg class="circle-cooldown-ring" viewBox="0 0 100 100" aria-hidden="true">
+        <circle class="cooldown-ring-bg" cx="50" cy="50" r="40" />
+        <circle class="cooldown-ring-progress" cx="50" cy="50" r="40" data-cooldown-progress />
       </svg>
     ` : "";
     const cd = hasCooldown(c) ?
@@ -437,14 +480,19 @@
     const actorAttr = c.last_actor_anonymous
       ? ` data-actor-anonymous="true"`
       : (c.last_actor_username ? ` data-actor="${esc(c.last_actor_username)}"` : "");
+    // For multi-tap chores, keep `.partial` on across the entire non-done
+    // range (including progress=0) so the dashoffset transition runs in
+    // both directions — undoing the last tap retracts the arc smoothly
+    // instead of snapping invisible.
+    const partialClass = (!isDone && skipKeyframe) ? " partial" : "";
     return `
-      <div class="chore-circle${doneClass}${hotClass}" data-chore-id="${c.id}"${actorAttr}>
+      <div class="chore-circle${doneClass}${partialClass}${hotClass}" data-chore-id="${c.id}"${actorAttr}>
         ${hot}
         ${streak}
         <div class="circle-inner">
-          ${ring}
+          ${cooldownRing}
           <svg class="done-ring" viewBox="0 0 100 100" aria-hidden="true">
-            <circle cx="50" cy="50" r="48" pathLength="100" />
+            <circle cx="50" cy="50" r="48" pathLength="100" data-ring-progress />
           </svg>
           <span class="circle-reward">${esc(c.reward_label)}</span>
           <div class="icon" data-icon>${iconHTML(c)}</div>
@@ -513,7 +561,7 @@
 
   function shouldAnimateDone(c) {
     const sid = String(c.id);
-    if ((c.done_count_today || 0) === 0) {
+    if (!isFullyDone(c)) {
       seenDone.delete(sid);
       return false;
     }
@@ -535,11 +583,52 @@
     }, RING_ANIM_MS);
   }
 
-  function renderGridCard(c)   { const el = nodeFrom(gridCardHTML(c));   hydrateDataAttrs(el, c); return el; }
+  // Paint partial progress directly on the done-ring's circle so the
+  // partial state visually matches the completion celebration (same
+  // radius, stroke-width, glow). The circle uses pathLength=100, so
+  // dashoffset == (1 - ratio) * 100. When fully done, the `.done`
+  // class lets the keyframe take over and run the draw animation.
+  function applyProgressRing(el, c) {
+    if (!el) return;
+    const ring = el.querySelector('[data-ring-progress]');
+    if (!ring) return;
+    if (isFullyDone(c)) {
+      if (targetOf(c) > 1) {
+        // Multi-tap chore hit its target: continue the partial fill
+        // smoothly to full instead of triggering the 100→0 keyframe
+        // (which would visibly snap back to empty before redrawing).
+        // patchCircleCard / circleCardHTML add `.no-animate` for the
+        // same reason, so the keyframe is suppressed.
+        ring.style.strokeDasharray = "100";
+        ring.style.strokeDashoffset = "0";
+        ring.style.opacity = "1";
+      } else {
+        // target == 1: original binary done. Let the `.done` CSS rule
+        // + keyframe own the celebratory draw.
+        ring.style.strokeDasharray = "";
+        ring.style.strokeDashoffset = "";
+        ring.style.opacity = "";
+      }
+      return;
+    }
+    // Inline style beats both the base `.done-ring circle` CSS (which
+    // hides the ring at dashoffset:100) AND the SVG presentation attrs,
+    // so a 2/5 chore shows exactly 40% of the same thick ring you see
+    // on a completed chore.
+    const ratio = progressRatio(c);
+    ring.style.strokeDasharray = "100";
+    ring.style.strokeDashoffset = String(100 * (1 - ratio));
+    // At ratio=0, stroke-linecap:round leaves a tiny dot at the start
+    // of the path. Fade the whole ring out instead.
+    ring.style.opacity = ratio > 0 ? "1" : "0";
+  }
+
+  function renderGridCard(c)   { const el = nodeFrom(gridCardHTML(c));   hydrateDataAttrs(el, c); applyProgressRing(el, c); return el; }
   function renderCircleCard(c) {
     const animate = shouldAnimateDone(c);
     const el = nodeFrom(circleCardHTML(c, { animate }));
     hydrateDataAttrs(el, c);
+    applyProgressRing(el, c);
     if (animate) noteRingAnimation(c.id);
     return el;
   }
@@ -547,7 +636,7 @@
     const animate = shouldAnimateDone(c);
     const wrap = nodeFrom(hotCellHTML(c, { animate }));
     const card = wrap.querySelector("[data-chore-id]");
-    if (card) hydrateDataAttrs(card, c);
+    if (card) { hydrateDataAttrs(card, c); applyProgressRing(card, c); }
     if (animate) noteRingAnimation(c.id);
     return wrap;
   }
@@ -590,12 +679,8 @@
   function patchStreakBadge(el, c) { patchCornerBadge(el, c, { className: "streak-badge", value: c.streak_multiplier }); }
   function patchCountSlot(el, c) {
     if (!el) return;
-    if ((c.done_count_today || 0) > 1) {
-      const want = `<span class="count-badge" data-count-badge>×${c.done_count_today}</span>`;
-      if (el.innerHTML !== want) el.innerHTML = want;
-    } else if (el.innerHTML !== "") {
-      el.innerHTML = "";
-    }
+    const want = countBadgeHTML(c);
+    if (el.innerHTML !== want) el.innerHTML = want;
   }
   function patchText(el, text) {
     if (!el) return;
@@ -610,10 +695,14 @@
       return;
     }
     const wasDone = el.classList.contains("done");
-    const isDone = (c.done_count_today || 0) > 0;
+    const isDone = isFullyDone(c);
+    const skipKeyframe = targetOf(c) > 1;
     if (isDone) {
       el.classList.add("done");
-      if (wasDone) {
+      el.classList.remove("partial");
+      if (wasDone || skipKeyframe) {
+        // skipKeyframe: multi-tap chore continues the partial fill smoothly
+        // into full via inline dashoffset instead of the 100→0 keyframe.
         el.classList.add("no-animate");
       } else {
         const animate = shouldAnimateDone(c);
@@ -622,6 +711,9 @@
       }
     } else {
       el.classList.remove("done", "no-animate");
+      // See circleCardHTML: `.partial` stays on at progress=0 for multi-
+      // tap chores so the dashoffset transition can animate closed.
+      el.classList.toggle("partial", skipKeyframe);
       shouldAnimateDone(c);
     }
     el.classList.toggle("hot", c.hot_multiplier != null);
@@ -631,6 +723,7 @@
     patchCountSlot(el.querySelector("[data-count-slot]"), c);
     patchStateIcon(el.querySelector(".circle-inner"), c);
     patchText(el.querySelector(":scope > .title"), c.short_name);
+    applyProgressRing(el, c);
     hydrateDataAttrs(el, c);
   }
   function patchStateIcon(host, c) {
@@ -662,6 +755,7 @@
     patchText(el.querySelector(".card-reward"), c.reward_label);
     patchCountSlot(el.querySelector("[data-count-slot]"), c);
     patchText(el.querySelector(":scope > .title"), c.name);
+    applyProgressRing(el, c);
     hydrateDataAttrs(el, c);
   }
   function patchHotCell(cell, c) {
@@ -924,6 +1018,9 @@
   // ticker — countdown + ago row driven by data attributes
   // ============================================================
   const RING_CIRC = 2 * Math.PI * 46;
+  // Inset cooldown overlay (r=40) — different circumference so the
+  // stroke-dash math has to use its own constant.
+  const COOLDOWN_RING_CIRC = 2 * Math.PI * 40;
 
   function secondsUntilNextChoreDay(now) {
     const d = new Date(now);
@@ -988,10 +1085,13 @@
       const cooldown = parseInt(card.dataset.choreCooldown, 10);
       if (!cooldown) return;
       const last = card.dataset.lastCompletedAt;
-      const ring = card.querySelector('[data-ring-progress]');
+      // [data-cooldown-progress] is the thin secondary overlay (only on
+      // chores with a cooldown). [data-ring-progress] is now the primary
+      // progress-toward-target ring and is set at render time, not here.
+      const ring = card.querySelector('[data-cooldown-progress]');
       const label = card.querySelector('[data-circle-countdown]');
       if (!label && !ring) return;
-      if (ring) ring.setAttribute("stroke-dasharray", RING_CIRC);
+      if (ring) ring.setAttribute("stroke-dasharray", COOLDOWN_RING_CIRC);
 
       if (cooldown === -1) {
         if (!label) return;
@@ -1017,7 +1117,7 @@
       }
 
       if (!last) {
-        if (ring) { ring.setAttribute("stroke-dashoffset", RING_CIRC); ring.classList.add("elapsed"); }
+        if (ring) { ring.setAttribute("stroke-dashoffset", COOLDOWN_RING_CIRC); ring.classList.add("elapsed"); }
         if (label) { label.classList.add("elapsed"); label.textContent = ""; }
         return;
       }
@@ -1025,7 +1125,7 @@
       const remainSec = Math.max(0, Math.ceil((lastMs + cooldown * 1000 - now) / 1000));
       if (ring) {
         const progress = remainSec === 0 ? 0 : remainSec / cooldown;
-        ring.setAttribute("stroke-dashoffset", RING_CIRC * (1 - progress));
+        ring.setAttribute("stroke-dashoffset", COOLDOWN_RING_CIRC * (1 - progress));
         ring.classList.toggle("elapsed", remainSec === 0);
       }
       if (label) {
@@ -1829,6 +1929,7 @@
 
     ChoreStore.patch(c.id, {
       done_count_today: (c.done_count_today || 0) + 1,
+      progress_count: (c.progress_count != null ? c.progress_count : (c.done_count_today || 0)) + 1,
       last_completed_at: clickAt,
       last_actor_username: VIEWER_USERNAME || c.last_actor_username,
     });
@@ -1921,8 +2022,10 @@
     if (!c) return;
     const sid = String(id);
     const priorDoneCount = c.done_count_today || 0;
+    const priorProgress = c.progress_count != null ? c.progress_count : priorDoneCount;
     ChoreStore.patch(c.id, {
       done_count_today: Math.max(0, priorDoneCount - 1),
+      progress_count: Math.max(0, priorProgress - 1),
     });
     localClickTs.set(sid, Date.now());
     if (!navigator.onLine || reloadPending) {
@@ -1942,7 +2045,7 @@
         setConnDot("syncing");
         scheduleQueueRetry();
       } else {
-        ChoreStore.patch(c.id, { done_count_today: priorDoneCount });
+        ChoreStore.patch(c.id, { done_count_today: priorDoneCount, progress_count: priorProgress });
         flash("Nothing to undo", "warn");
       }
     } finally { inFlight.delete(sid); }
@@ -3749,6 +3852,7 @@
     syncParentChoreLock();
     selectRewardPill(1);
     setField("reward_pebbles", 1);
+    setField("target_count", 1);
     setCooldownSeconds(0);
     setPillValue("freq", "never");
     setPillValue("show_on_daily_view", "when_scheduled");
@@ -3855,6 +3959,7 @@
     setPillValue("show_on_daily_view", c.show_on_daily_view || "when_scheduled");
     setPillValue("hot_eligibility", c.hot_eligibility || "when_available");
     setCooldownSeconds(c.threshold_seconds || 0);
+    setField("target_count", c.target_count || 1);
     setField("starts_on", c.starts_on || "");
     setField("marked_due_at", c.marked_due_on || "");
     setField("parent_chore_id", c.parent_chore_id ? String(c.parent_chore_id) : "");
@@ -3942,12 +4047,14 @@
       delay: 150, delayOnTouchOnly: true, touchStartThreshold: 4,
       onEnd: persistOrder,
     });
+    bindDailiesSortable();
   }
   function exitEditMode() {
     editModeActive = false;
     editModeBtn.classList.remove("active");
     root?.classList.remove("edit-mode");
     if (sortableInstance) { sortableInstance.destroy(); sortableInstance = null; }
+    if (dailiesSortable) { dailiesSortable.destroy(); dailiesSortable = null; }
   }
   async function persistOrder() {
     const ids = Array.from(document.querySelectorAll("[data-chores-grid] [data-chore-id]"))
@@ -4012,6 +4119,8 @@
     const reward = (rewardVal && rewardVal !== "custom")
       ? parseInt(rewardVal, 10)
       : (parseInt(customInput?.value, 10) || 0);
+    const rawTarget = parseInt(editForm.querySelector('[data-field="target_count"]')?.value, 10);
+    const targetCount = Number.isFinite(rawTarget) ? Math.min(99, Math.max(1, rawTarget)) : 1;
 
     let recurrence = {};
     let thresholdSeconds = null;
@@ -4063,6 +4172,7 @@
         short_name: getField("short_name"),
         icon: getField("icon"),
         reward_pebbles: reward,
+        target_count: targetCount,
         threshold_seconds: thresholdSeconds,
         one_off: oneOff,
         starts_on: getField("starts_on") || null,
@@ -5103,7 +5213,6 @@
   bindEditModalAnonymousComplete();
   bindAnonymousCompletionForm();
   bindNotificationSettings();
-  bindDailiesSortable();
   startTicker();
   // Day rollover watcher: a tab left open across 4am needs a fresh
   // sync regardless of which chore view is mounted. The store updates

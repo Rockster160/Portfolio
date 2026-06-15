@@ -167,6 +167,25 @@ RSpec.describe "Chores", type: :request do
     expect(response).to have_http_status(:created)
   end
 
+  it "POST /chores/items persists target_count" do
+    post "/chores/items",
+      params:  { chore: { name: "Drink Water", reward_pebbles: 1, target_count: 5 } }.to_json,
+      headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+    expect(response).to have_http_status(:created)
+    body = response.parsed_body
+    expect(body["chore"]["target_count"]).to eq(5)
+    expect(Chore.last.target_count).to eq(5)
+  end
+
+  it "PATCH /chores/items updates target_count" do
+    chore = create(:chore, created_by_user: user, target_count: 1)
+    patch "/chores/items/#{chore.id}",
+      params:  { chore: { target_count: 3 } }.to_json,
+      headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+    expect(response).to have_http_status(:ok)
+    expect(chore.reload.target_count).to eq(3)
+  end
+
   it "POST /chores/items persists notes_template and serializes it back" do
     template = 'Fed Whisper {Food Type:Select [Beef, Chicken, "Turkey, Shredded"]} with {Kibble Ounces:Numeric}oz kibble'
     post "/chores/items",
