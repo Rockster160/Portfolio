@@ -236,6 +236,12 @@ class ChoresController < ApplicationController
       # changed. Pull their ids in explicitly.
       touched_ids.merge(ChoreHotPick.where(day_key: @day).where(created_at: since_ts..).pluck(:chore_id))
       touched_ids.merge(ChoreStreak.where(user_id: current_user.id).where(updated_at: since_ts..).pluck(:chore_id))
+      # :after_chore followers don't get their own completions or an
+      # updated_at bump when the anchor is completed — but the anchor's
+      # completion flips the follower's today_visible / due_today /
+      # scheduled_due_on. Pull them in so a same-day "Laundry → Fold
+      # Laundry" surfaces without a reload.
+      touched_ids.merge(after_chore_follower_ids(touched_ids))
       @chores.select { |c| c.updated_at > since_ts || touched_ids.include?(c.id) }
     else
       @chores
@@ -255,6 +261,16 @@ class ChoresController < ApplicationController
       lookahead:        @lookahead_json,
       daily_ids:        @daily_ids,
     }
+  end
+
+  # Followers whose `recurrence.anchor_chore_id` points at any chore in
+  # `anchor_ids`. Walks the viewer's accessible set so household members'
+  # followers of chores this viewer can't see never leak into the delta.
+  def after_chore_follower_ids(anchor_ids)
+    return [] if anchor_ids.empty?
+
+    anchor_ints = anchor_ids.map(&:to_i).to_set
+    @chores.filter_map { |c| c.id if c.after_chore? && anchor_ints.include?(c.anchor_chore_id) }
   end
 
   # GET /chores/balance — server-rendered shell. The Recent History

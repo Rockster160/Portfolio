@@ -49,3 +49,113 @@
     <circle class="cooldown-ring-progress" cx="50" cy="50" r="40" data-cooldown-progress></circle>
   </svg>
 </template>
+
+<%# Small fragment templates. Each is cloned by a DOM-builder function
+   in _page_script.html.erb (buildIconNode / buildCountBadgeNode /
+   buildStateIconNode / etc.) and populated via plain DOM API —
+   never `innerHTML = ...`. Adding a new template variant means
+   editing this partial and the corresponding builder; the patchers
+   that consume the built nodes don't need to change. %>
+
+<template data-template="icon-placeholder">
+  <span class="icon-placeholder"></span>
+</template>
+<template data-template="icon-img">
+  <img class="icon-img" alt="" loading="lazy" draggable="false">
+</template>
+<template data-template="icon-ti">
+  <i class="ti icon-ti" aria-hidden="true"></i>
+</template>
+<template data-template="icon-glyph">
+  <span class="icon-glyph"></span>
+</template>
+
+<template data-template="count-badge">
+  <span class="count-badge" data-count-badge></span>
+</template>
+
+<template data-template="state-icon">
+  <i class="fa circle-state-icon" aria-hidden="true" data-state-icon></i>
+</template>
+
+<template data-template="corner-badge">
+  <div></div>
+</template>
+
+<template data-template="lookahead-heading">
+  <h3 class="lookahead-heading">Upcoming</h3>
+</template>
+<template data-template="lookahead-day">
+  <div class="lookahead-day">
+    <div class="day-label"></div>
+    <div class="day-items"></div>
+  </div>
+</template>
+<template data-template="lookahead-day-chip">
+  <span class="day-chip">
+    <span data-chip-icon></span>
+    <span data-chip-name></span>
+    <strong data-chip-reward></strong>
+  </span>
+</template>
+<template data-template="lookahead-day-empty">
+  <span class="day-chip day-chip-empty">Nothing scheduled</span>
+</template>
+
+<template data-template="chore-picker-cell">
+  <button type="button" class="chore-picker-cell">
+    <span class="chore-picker-icon" data-picker-icon></span>
+    <span class="chore-picker-label" data-picker-label></span>
+  </button>
+</template>
+
+<%# Recent History (Balance page) row variants. Each row has the same
+   .history-row shell; the inner structure differs per kind. Slots
+   are marked data-history-* for the builder to fill in. %>
+<template data-template="history-row-completion">
+  <div class="history-row">
+    <span>
+      <span data-history-when></span> ·
+      <span class="history-icon" data-history-icon></span>
+      <strong data-history-name></strong>
+      <span class="history-mult hot" data-history-hot hidden></span>
+      <span class="history-mult streak" data-history-streak hidden></span>
+      <span class="history-note" data-history-note hidden></span>
+    </span>
+    <span data-history-amount></span>
+  </div>
+</template>
+<template data-template="history-row-transfer">
+  <div class="history-row">
+    <span>
+      <span data-history-when></span> ·
+      🤝 <strong data-history-verb></strong>
+      <span class="history-note" data-history-note hidden></span>
+    </span>
+    <span data-history-amount></span>
+  </div>
+</template>
+<template data-template="history-row-withdraw">
+  <div class="history-row">
+    <span>
+      <span data-history-when></span> ·
+      🪙 <strong>Withdraw</strong>
+      <span class="history-note" data-history-note hidden></span>
+    </span>
+    <span data-history-amount></span>
+  </div>
+</template>
+<template data-template="history-row-empty">
+  <div class="history-row"><span class="dim">No recent activity.</span></div>
+</template>
+<template data-template="history-row-loading">
+  <div class="history-row history-loading">
+    <i class="fa fa-spinner fa-pulse"></i>
+    <span class="dim">Loading recent history…</span>
+  </div>
+</template>
+<template data-template="history-row-offline">
+  <div class="history-row history-loading">
+    <span class="dim">Offline — recent history will load when you're back.</span>
+  </div>
+</template>

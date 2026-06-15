@@ -5,17 +5,30 @@ RSpec.describe "Chores", type: :request do
 
   before { post login_path, params: { user: { username: user.username, password: "password123" } } }
 
-  it "GET /chores renders the grid" do
+  it "GET /chores renders the data-free shell + serves chores via /chores/sync" do
     create(:chore, created_by_user: user, name: "Brush Teeth", reward_pebbles: 1)
+    # The shell itself is intentionally data-free — no inline chores JSON,
+    # no per-request balance/lookahead/daily_ids. The client hydrates
+    # from localStorage and /chores/sync. So assert the shell rendered
+    # AND that the sync endpoint carries the chore.
     get chores_path
     expect(response).to have_http_status(:ok)
-    expect(response.body).to include("Brush Teeth")
-    expect(response.body).to include("1p")
+    expect(response.body).to include('data-active-view="grid"')
+    expect(response.body).to include('<meta name="chores-shell" content="ok">')
+    expect(response.body).not_to include("chores-bootstrap") # no inline data
+
+    get "/chores/sync", headers: { "Accept" => "application/json" }
+    body = JSON.parse(response.body)
+    payload = body["chores"].find { |c| c["name"] == "Brush Teeth" }
+    expect(payload).to be_present
+    expect(payload["reward_pebbles"]).to eq(1)
   end
 
-  it "GET /chores/today renders today's view" do
+  it "GET /chores/today renders the data-free shell with active_view=today" do
     get chores_today_path
     expect(response).to have_http_status(:ok)
+    expect(response.body).to include('data-active-view="today"')
+    expect(response.body).to include('<meta name="chores-shell" content="ok">')
   end
 
   it "GET /chores/balance renders balance + goals" do
@@ -885,6 +898,39 @@ RSpec.describe "Chores", type: :request do
     end
   end
 
+  it "GET /chores/sync delta includes after_chore followers whose anchor was just completed" do
+    # Sub-chore-style "Fold Laundry" follows "Laundry" via :after_chore.
+    # When the anchor (Laundry) gets completed mid-day, the follower's
+    # today_visible / due_today / scheduled_due_on all flip — but the
+    # follower itself wasn't completed and its updated_at didn't bump.
+    # Without explicitly pulling followers into the delta, the page
+    # would only surface Fold Laundry after a reload.
+    travel_to Time.zone.local(2026, 4, 15, 12, 0, 0) do
+      anchor = create(
+        :chore, created_by_user: user, name: "Laundry",
+        show_on_today_view: :when_scheduled, recurrence: { freq: :never }
+      )
+      follower = create(
+        :chore, created_by_user: user, name: "Fold Laundry",
+        show_on_today_view: :when_scheduled,
+        recurrence: { freq: :after_chore, anchor_chore_id: anchor.id, interval: 0, unit: :day }
+      )
+      since_ts = Time.current
+      travel 1.minute
+      ChoreCompleter.new(anchor, user).call
+
+      get "/chores/sync?since=#{since_ts.iso8601}",
+        headers: { "Accept" => "application/json" }
+      expect(response).to have_http_status(:ok)
+      body = response.parsed_body
+      delta_ids = body["chores"].pluck("id")
+      expect(delta_ids).to include(anchor.id, follower.id)
+      follower_json = body["chores"].find { |c| c["id"] == follower.id }
+      expect(follower_json["today_visible"]).to be(true)
+      expect(follower_json["due_today"]).to be(true)
+    end
+  end
+
   it "GET /chores/sync delta includes household chores completed by another member" do
     # Household-shared chores affect every member's done_count_today /
     # last_actor / today_visible, but ChoreCompletion create doesn't
@@ -987,18 +1033,19 @@ RSpec.describe "Chores", type: :request do
     end
   end
 
-  # The unified page is now JSON-bootstrap-driven (no server-rendered
-  # cards). Ordering / visibility are asserted against the bootstrap
-  # JSON inlined in the page, which is the same payload the client
-  # `ChoreStore` reads on load.
-  def bootstrap_json
-    md = response.body.match(%r{<script type="application/json" id="chores-bootstrap">\s*(.+?)\s*</script>}m)
-    raise "no bootstrap script in response" unless md
+  # The unified page is now a DATA-FREE shell — no inline chores JSON,
+  # no @chores_json ivars. The client hydrates everything from
+  # localStorage + /chores/sync. Ordering / visibility / today_visible
+  # are asserted against the same /chores/sync payload the client
+  # consumes at runtime.
+  def sync_json
+    get "/chores/sync", headers: { "Accept" => "application/json" }
+    raise "/chores/sync did not return JSON" unless response.media_type == "application/json"
 
-    JSON.parse(md[1])
+    JSON.parse(response.body)
   end
 
-  it "PATCH /chores/order saves per-user ordering and bootstrap JSON honors it" do
+  it "PATCH /chores/order saves per-user ordering and /chores/sync honors it" do
     a = create(:chore, created_by_user: user, name: "Alpha")
     b = create(:chore, created_by_user: user, name: "Bravo")
     c = create(:chore, created_by_user: user, name: "Charlie")
@@ -1008,8 +1055,7 @@ RSpec.describe "Chores", type: :request do
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
     expect(response).to have_http_status(:ok)
 
-    get chores_path
-    names = bootstrap_json["chores"].pluck("name")
+    names = sync_json["chores"].pluck("name")
     expect(names.index("Charlie")).to be < names.index("Alpha")
     expect(names.index("Alpha")).to be < names.index("Bravo")
   end
@@ -1021,8 +1067,7 @@ RSpec.describe "Chores", type: :request do
       params:  { ids: [b.id, a.id] }.to_json,
       headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
     create(:chore, created_by_user: user, name: "Zulu")
-    get chores_path
-    names = bootstrap_json["chores"].pluck("name")
+    names = sync_json["chores"].pluck("name")
     expect(names.index("Bravo")).to be < names.index("Alpha")
     expect(names.index("Alpha")).to be < names.index("Zulu")
   end
@@ -1030,8 +1075,8 @@ RSpec.describe "Chores", type: :request do
   it "Today view keeps an item visible after completion even when the enum would hide it" do
     # `:when_available` would hide after a payout (cooldown not elapsed),
     # but the frozen-layout rule wins: any chore with completions today
-    # stays on the list. Verified through the bootstrap JSON's
-    # `today_visible` flag.
+    # stays on the list. Verified through the /chores/sync payload's
+    # `today_visible` flag — the same field the client ChoreStore reads.
     chore = create(
       :chore, created_by_user: user,
       reward_pebbles: 3, threshold_seconds: 6 * 3600,
@@ -1039,9 +1084,7 @@ RSpec.describe "Chores", type: :request do
       recurrence: { freq: :never }
     )
     ChoreCompleter.new(chore, user).call
-    get chores_today_path
-    expect(response).to have_http_status(:ok)
-    payload = bootstrap_json["chores"].find { |c| c["id"] == chore.id }
+    payload = sync_json["chores"].find { |c| c["id"] == chore.id }
     expect(payload).to be_present
     expect(payload["today_visible"]).to be(true)
   end

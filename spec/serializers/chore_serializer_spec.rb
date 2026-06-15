@@ -483,6 +483,28 @@ RSpec.describe ChoreSerializer, type: :serializer do
         )
         expect(render(ch)[:scheduled_due_on]).to be_nil
       end
+
+      it "is stable across a same-day completion (marked_due not auto-cleared)" do
+        ch = create(
+          :chore, created_by_user: user, show_on_today_view: :when_scheduled,
+          recurrence: { freq: :never },
+          marked_due_at: (today - 2).beginning_of_day + 12.hours
+        )
+        before_completion = render(ch)[:scheduled_due_on]
+        ChoreCompleter.new(ch, user).call
+        expect(render(ch)[:scheduled_due_on]).to eq(before_completion)
+      end
+
+      it "today_visible stays true across a same-day completion of a marked_due chore" do
+        ch = create(
+          :chore, created_by_user: user, show_on_today_view: :never,
+          recurrence: { freq: :never },
+          marked_due_at: (today - 1).beginning_of_day + 12.hours
+        )
+        expect(render(ch)[:today_visible]).to be(true)
+        ChoreCompleter.new(ch, user).call
+        expect(render(ch)[:today_visible]).to be(true)
+      end
     end
 
     it ":when_scheduled — carryover survives a completion made today" do

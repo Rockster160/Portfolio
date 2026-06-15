@@ -346,29 +346,89 @@
   })();
 
   // ============================================================
-  // Templates — pure HTML strings (sensitive fields escaped via esc()).
+  // DOM builders — clone shell templates, fill with data, return
+  // detached nodes. No HTML strings, no innerHTML on the consumer
+  // side. Adding a new variant means editing _templates.html.erb
+  // and the matching builder; consumers don't need to change.
   // ============================================================
 
-  // Determine which way the icon should render. Mirrors the server's
-  // `icon_kind` so future divergence stays minimal.
-  function iconHTML(c, { large = false } = {}) {
-    const placeholderFallback = c.one_off ? "📝" : "🧹";
+  // Build a chore-icon node. Mirrors the server's `icon_kind` switch.
+  // Returns a detached DOM element ready to insertBefore/appendChild.
+  // Branches:
+  //   * no icon         → icon-placeholder (📝 for one-offs, 🧹 otherwise)
+  //   * data:/http(s):/ → icon-img
+  //   * inline <svg>    → parsed SVG root (only path that still parses
+  //                       HTML — required for user-pasted SVGs)
+  //   * ti-*            → ti font-icon
+  //   * fallthrough     → icon-glyph (single emoji / character)
+  function buildIconNode(c) {
     const v = (c.icon || "").trim();
     if (!v) {
-      return `<span class="icon-placeholder">${esc(placeholderFallback)}</span>`;
+      const el = cloneTemplate("icon-placeholder");
+      if (el) el.textContent = c.one_off ? "📝" : "🧹";
+      return el;
     }
     if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://")) {
-      return `<img class="icon-img" src="${esc(v)}" alt="" loading="lazy" draggable="false">`;
+      const el = cloneTemplate("icon-img");
+      if (el) el.src = v;
+      return el;
     }
     if (v.startsWith("<svg")) {
-      // Safe-ish: we only allow inline SVG that the user explicitly
-      // pasted as their own icon. Browser will sanitize at parse.
-      return v;
+      // User-pasted SVGs: parse via a throwaway template so the browser
+      // sanitizes during parse. This is the only place we still touch
+      // an HTML string, and it's user-supplied data, not a literal.
+      const wrap = document.createElement("template");
+      wrap.innerHTML = v;
+      return wrap.content.firstElementChild;
     }
     if (v.startsWith("ti-")) {
-      return `<i class="ti ${esc(v)} icon-ti" aria-hidden="true"></i>`;
+      const el = cloneTemplate("icon-ti");
+      if (el) el.classList.add(v);
+      return el;
     }
-    return `<span class="icon-glyph">${esc(v)}</span>`;
+    const el = cloneTemplate("icon-glyph");
+    if (el) el.textContent = v;
+    return el;
+  }
+  // Same as buildIconNode, but reads the server-emitted `icon_kind`
+  // marker instead of inferring from the icon string. Used by the
+  // Recent History list where every entry already carries `icon_kind`
+  // alongside `icon`.
+  function buildIconNodeFromKind(chore) {
+    const v = (chore.icon || "").trim();
+    const kind = chore.icon_kind;
+    if (!v || kind === "empty") {
+      const el = cloneTemplate("icon-placeholder");
+      if (el) el.textContent = "🧹";
+      return el;
+    }
+    if (kind === "image") {
+      const el = cloneTemplate("icon-img");
+      if (el) el.src = v;
+      return el;
+    }
+    if (kind === "svg") {
+      const wrap = document.createElement("template");
+      wrap.innerHTML = v;
+      return wrap.content.firstElementChild;
+    }
+    if (kind === "ti_icon") {
+      const el = cloneTemplate("icon-ti");
+      if (el) el.classList.add(v);
+      return el;
+    }
+    const el = cloneTemplate("icon-glyph");
+    if (el) el.textContent = v;
+    return el;
+  }
+  // Replace the icon child(ren) inside a host element with a freshly
+  // built node. Used by anchor/parent pickers + chore picker cells +
+  // anywhere else a chore icon container needs to be repopulated.
+  function setIconInside(hostEl, c) {
+    if (!hostEl) return;
+    while (hostEl.firstChild) hostEl.removeChild(hostEl.firstChild);
+    const node = buildIconNode(c);
+    if (node) hostEl.appendChild(node);
   }
 
   function hasCooldown(c) { return c.cooldown_kind === "fixed" || c.cooldown_kind === "day_reset"; }
@@ -388,10 +448,16 @@
     if (c.due_today)      return "fa-clock-o";
     return "fa-hourglass-half";
   }
-  function stateIconHTML(c) {
+  // DOM builder for the state icon (Sun / Clock / Hourglass). Returns
+  // a detached <i> ready to append, or null when the chore has no
+  // state to communicate. The class is added separately so we never
+  // template-literal a class string.
+  function buildStateIconNode(c) {
     const cls = stateIconClass(c);
-    if (!cls) return "";
-    return `<i class="fa ${cls} circle-state-icon" aria-hidden="true" data-state-icon></i>`;
+    if (!cls) return null;
+    const el = cloneTemplate("state-icon");
+    if (el) el.classList.add(cls);
+    return el;
   }
 
   // Progress-toward-target helpers. `progress_count` is server-emitted
@@ -417,17 +483,20 @@
     const progress = progressOf(c);
     return progress > 0 && progress >= target;
   }
-  function countBadgeHTML(c) {
+  // DOM builder for the count badge. Returns null when there's no
+  // badge to show (target=1 + progress<=1 → empty slot). Otherwise
+  // returns a populated <span class="count-badge"> element cloned
+  // from the shared template.
+  function buildCountBadgeNode(c) {
     const target = targetOf(c);
     const progress = progressOf(c);
-    if (target > 1) {
-      return `<span class="count-badge" data-count-badge>${progress}/${target}</span>`;
-    }
-    if (progress > 1) {
-      return `<span class="count-badge" data-count-badge>×${progress}</span>`;
-    }
-    return "";
+    if (target <= 1 && progress <= 1) return null;
+    const el = cloneTemplate("count-badge");
+    if (!el) return null;
+    el.textContent = target > 1 ? `${progress}/${target}` : `×${progress}`;
+    return el;
   }
+
 
   // The three card structures used to live as JS template literals
   // (gridCardHTML / circleCardHTML / hotCellHTML). They now live as
@@ -472,39 +541,11 @@
         child.remove();
       }
     });
-    const v = (c.icon || "").trim();
-    let iconEl = null;
-    if (!v) {
-      iconEl = document.createElement("span");
-      iconEl.className = "icon-placeholder";
-      iconEl.textContent = c.one_off ? "📝" : "🧹";
-    } else if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://")) {
-      iconEl = document.createElement("img");
-      iconEl.className = "icon-img";
-      iconEl.src = v;
-      iconEl.alt = "";
-      iconEl.loading = "lazy";
-      iconEl.draggable = false;
-    } else if (v.startsWith("<svg")) {
-      // Inline SVG: parse via a throwaway template, take the root SVG.
-      // Browser sanitization handles the inline parse the same way the
-      // legacy HTML-string path did.
-      const wrap = document.createElement("template");
-      wrap.innerHTML = v;
-      iconEl = wrap.content.firstElementChild;
-    } else if (v.startsWith("ti-")) {
-      iconEl = document.createElement("i");
-      iconEl.className = `ti ${v} icon-ti`;
-      iconEl.setAttribute("aria-hidden", "true");
-    } else {
-      iconEl = document.createElement("span");
-      iconEl.className = "icon-glyph";
-      iconEl.textContent = v;
-    }
+    const iconEl = buildIconNode(c);
     if (iconEl) {
       // Insert AFTER any .card-reward / .circle-reward (the reward
-      // span is first in both templates so the icon sits after it,
-      // matching the legacy HTML order).
+      // span is first in both card templates so the icon sits after
+      // it, matching the legacy layout order).
       const reward = slot.querySelector(":scope > .card-reward, :scope > .circle-reward");
       if (reward && reward.nextSibling) slot.insertBefore(iconEl, reward.nextSibling);
       else slot.appendChild(iconEl);
@@ -743,7 +784,15 @@
       if (badge) {
         if (badge.textContent !== text) badge.textContent = text;
       } else {
-        el.insertAdjacentHTML("afterbegin", `<div class="${className}">${esc(text)}</div>`);
+        // Clone the generic corner-badge template, set the class +
+        // text via DOM API, insert at the start. Replaces the
+        // legacy insertAdjacentHTML string interpolation.
+        const node = cloneTemplate("corner-badge");
+        if (node) {
+          node.className = className;
+          node.textContent = text;
+          el.insertBefore(node, el.firstChild);
+        }
       }
     } else if (badge) {
       badge.remove();
@@ -753,8 +802,23 @@
   function patchStreakBadge(el, c) { patchCornerBadge(el, c, { className: "streak-badge", value: c.streak_multiplier }); }
   function patchCountSlot(el, c) {
     if (!el) return;
-    const want = countBadgeHTML(c);
-    if (el.innerHTML !== want) el.innerHTML = want;
+    const existing = el.querySelector(":scope > [data-count-badge]");
+    const next = buildCountBadgeNode(c);
+    if (!next) {
+      // No badge wanted — strip any existing one without touching the
+      // slot itself (preserves siblings / animation context).
+      if (existing) existing.remove();
+      return;
+    }
+    if (existing) {
+      // Patch the existing badge in place to keep DOM identity (no
+      // remove+insert flicker, no CSS transition reset).
+      if (existing.textContent !== next.textContent) {
+        existing.textContent = next.textContent;
+      }
+      return;
+    }
+    el.appendChild(next);
   }
   function patchText(el, text) {
     if (!el) return;
@@ -814,7 +878,8 @@
       existing.classList.remove("fa-sun-o", "fa-clock-o", "fa-hourglass-half");
       existing.classList.add(cls);
     } else {
-      host.insertAdjacentHTML("beforeend", `<i class="fa ${cls} circle-state-icon" aria-hidden="true" data-state-icon></i>`);
+      const node = buildStateIconNode(c);
+      if (node) host.appendChild(node);
     }
   }
   function patchGridCard(el, c) {
@@ -956,28 +1021,50 @@
       const keys = Object.keys(data).sort();
       if (!keys.length) { c.hidden = true; return; }
       c.hidden = false;
-      const parts = [`<h3 class="lookahead-heading">Upcoming</h3>`];
+      // Build the new section via cloned templates + DOM API —
+      // no HTML strings, no innerHTML interpolation. Whole-section
+      // rebuild is intentional: the lookahead set arrives as one
+      // payload from /chores/sync, so per-day diffing isn't worth
+      // the complexity vs replaceChildren of a fresh fragment.
+      const frag = document.createDocumentFragment();
+      const heading = cloneTemplate("lookahead-heading");
+      if (heading) frag.appendChild(heading);
       keys.forEach(day => {
         const ids = data[day] || [];
         const dayObj = new Date(day + "T00:00:00");
         const dayLabel = dayObj.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-        // Empty days are rendered with a muted placeholder so the
-        // user can't mistake the next non-empty day for "tomorrow".
-        const body = ids.length
-          ? ids.map(id => {
-              const c = ChoreStore.get(id);
-              if (!c) return "";
-              return `<span class="day-chip">${iconHTML(c)} ${esc(c.short_name)} <strong>${esc(c.reward_label)}</strong></span>`;
-            }).join("")
-          : `<span class="day-chip day-chip-empty">Nothing scheduled</span>`;
-        const emptyClass = ids.length ? "" : " lookahead-day-empty";
-        parts.push(`<div class="lookahead-day${emptyClass}"><div class="day-label">${esc(dayLabel)}</div><div class="day-items">${body}</div></div>`);
+        const dayEl = cloneTemplate("lookahead-day");
+        if (!dayEl) return;
+        if (!ids.length) dayEl.classList.add("lookahead-day-empty");
+        const label = dayEl.querySelector(".day-label");
+        if (label) label.textContent = dayLabel;
+        const items = dayEl.querySelector(".day-items");
+        if (items) {
+          if (!ids.length) {
+            const empty = cloneTemplate("lookahead-day-empty");
+            if (empty) items.appendChild(empty);
+          } else {
+            ids.forEach(id => {
+              const chore = ChoreStore.get(id);
+              if (!chore) return;
+              const chip = cloneTemplate("lookahead-day-chip");
+              if (!chip) return;
+              const iconSlot = chip.querySelector("[data-chip-icon]");
+              if (iconSlot) {
+                const icon = buildIconNode(chore);
+                if (icon) iconSlot.appendChild(icon);
+              }
+              const nameEl = chip.querySelector("[data-chip-name]");
+              if (nameEl) nameEl.textContent = chore.short_name || "";
+              const rewardEl = chip.querySelector("[data-chip-reward]");
+              if (rewardEl) rewardEl.textContent = chore.reward_label || "";
+              items.appendChild(chip);
+            });
+          }
+        }
+        frag.appendChild(dayEl);
       });
-      // Only write the DOM when the markup actually changed — the
-      // section never flickers when the lookahead arg comes back
-      // identical to what we already rendered.
-      const want = parts.join("");
-      if (c.innerHTML !== want) c.innerHTML = want;
+      c.replaceChildren(frag);
     }
 
     function upsertOne(c) {
@@ -1403,9 +1490,10 @@
       const iso = dt.toISOString();
       await withSavingState(submit, async () => {
         try {
-          await api(`/chores/items/${id}/anonymous_completion`, "POST", {
+          const data = await api(`/chores/items/${id}/anonymous_completion`, "POST", {
             client_completed_at: iso, note, tab_id: TAB_ID,
           });
+          reconcile(data);
           flash("Marked done");
           closeAnonymousModal();
           dismissEditModalExplicit();
@@ -2625,12 +2713,12 @@
     const id = parseInt(idEl.value, 10);
     const chore = Number.isFinite(id) ? ChoreStore.get(id) : null;
     if (!chore) {
-      iconEl.innerHTML = "";
+      while (iconEl.firstChild) iconEl.removeChild(iconEl.firstChild);
       labelEl.textContent = "None";
       if (clearBtn) clearBtn.hidden = true;
       return;
     }
-    iconEl.innerHTML = iconHTML(chore);
+    setIconInside(iconEl, chore);
     labelEl.textContent = chore.short_name || chore.name || "—";
     if (clearBtn) clearBtn.hidden = false;
   }
@@ -2721,11 +2809,11 @@
     const id = parseInt(idEl.value, 10);
     const chore = Number.isFinite(id) ? ChoreStore.get(id) : null;
     if (!chore) {
-      iconEl.innerHTML = "";
+      while (iconEl.firstChild) iconEl.removeChild(iconEl.firstChild);
       labelEl.textContent = "Pick a chore…";
       return;
     }
-    iconEl.innerHTML = iconHTML(chore);
+    setIconInside(iconEl, chore);
     labelEl.textContent = chore.short_name || chore.name || "—";
   }
 
@@ -3412,14 +3500,25 @@
         .filter(x => x.s > 0)
         .sort((a, b) => b.s - a.s || (a.c.name || "").localeCompare(b.c.name || ""));
       const items = scored.map(x => x.c);
-      gridEl.innerHTML = items
-        .map(c => `
-          <button type="button" class="chore-picker-cell" data-chore-pick-id="${c.id}">
-            <span class="chore-picker-icon">${iconHTML(c)}</span>
-            <span class="chore-picker-label">${esc(c.short_name || c.name)}</span>
-          </button>
-        `)
-        .join("");
+      // Whole-list rebuild via cloned templates + replaceChildren.
+      // The picker is a modal-scoped, short-lived UI; per-cell diffing
+      // would add complexity without a real flicker win since the
+      // result set changes on every keystroke.
+      const frag = document.createDocumentFragment();
+      items.forEach(c => {
+        const cell = cloneTemplate("chore-picker-cell");
+        if (!cell) return;
+        cell.dataset.chorePickId = c.id;
+        const iconSlot = cell.querySelector("[data-picker-icon]");
+        // The picker-icon slot in the template has the class set, so
+        // we just stuff the built icon node inside it. setIconInside
+        // clears any prior children to handle re-render correctly.
+        if (iconSlot) setIconInside(iconSlot, c);
+        const labelEl = cell.querySelector("[data-picker-label]");
+        if (labelEl) labelEl.textContent = c.short_name || c.name || "";
+        frag.appendChild(cell);
+      });
+      gridEl.replaceChildren(frag);
       emptyEl.classList.toggle("hidden", items.length > 0);
     }
 
@@ -4808,20 +4907,31 @@
     const cta = document.querySelector("[data-recent-history-cta]");
     const entries = Array.isArray(data?.entries) ? data.entries : [];
     if (entries.length === 0) {
-      container.innerHTML = `<div class="history-row"><span class="dim">No recent activity.</span></div>`;
+      replaceWithTemplate(container, "history-row-empty");
       if (cta) cta.setAttribute("hidden", "");
       return;
     }
-    container.innerHTML = entries.map(recentHistoryRowHTML).join("");
+    const frag = document.createDocumentFragment();
+    entries.forEach(entry => {
+      const row = buildHistoryRow(entry);
+      if (row) frag.appendChild(row);
+    });
+    container.replaceChildren(frag);
     if (cta) cta.removeAttribute("hidden");
     // Header pill is ALWAYS today_earnings — never balance.
     if (data.today_earnings != null) setTodayEarnings(data.today_earnings);
     if (data.balance != null) setLifetimeBalance(data.balance);
   }
+  // Helper: drop the container's children and append one cloned
+  // template. Used for the empty/loading/offline states which are
+  // single-node placeholders.
+  function replaceWithTemplate(container, name) {
+    const node = cloneTemplate(name);
+    if (node) container.replaceChildren(node);
+  }
   function showRecentHistorySpinner() {
     const container = document.querySelector("[data-recent-history]");
-    if (!container) return;
-    container.innerHTML = `<div class="history-row history-loading"><i class="fa fa-spinner fa-pulse"></i> <span class="dim">Loading recent history…</span></div>`;
+    if (container) replaceWithTemplate(container, "history-row-loading");
   }
   async function hydrateRecentHistory() {
     const container = document.querySelector("[data-recent-history]");
@@ -4831,75 +4941,97 @@
       const data = await api("/chores/recent_history", "GET");
       renderRecentHistory(data);
     } catch (e) {
-      container.innerHTML = `<div class="history-row history-loading"><span class="dim">Offline — recent history will load when you're back.</span></div>`;
+      replaceWithTemplate(container, "history-row-offline");
     }
   }
-  function recentHistoryRowHTML(entry) {
-    if (entry.kind === "completion") {
-      const amt = entry.payout_skipped
-        ? `<span style="color:#9CA3AF;">(skipped)</span>`
-        : `<span style="color:#34D399;">+${formatCount(entry.paid_pebbles)}p</span>`;
-      const note = entry.note ?
-        `<span class="history-note">— ${esc(truncate(entry.note, 120))}</span>` : "";
-      const hotPill = (entry.hot_multiplier > 1) ?
-        `<span class="history-mult hot">Hot ${esc(formatMultiplier(entry.hot_multiplier))}×</span>` : "";
-      const streakPill = (entry.streak_multiplier > 1) ?
-        `<span class="history-mult streak">Streak ${esc(formatMultiplier(entry.streak_multiplier))}×</span>` : "";
-      return `
-        <div class="history-row">
-          <span>
-            ${esc(entry.when_label)} ·
-            <span class="history-icon">${recentIconHTML(entry.chore)}</span>
-            <strong>${esc(entry.chore.short_name || entry.chore.name)}</strong>
-            ${hotPill}
-            ${streakPill}
-            ${note}
-          </span>
-          ${amt}
-        </div>`;
-    }
-    if (entry.kind === "transfer") {
-      // Outgoing reads "Sent to <name>" with a red minus; incoming
-      // reads "From <name>" with a green plus. Same icon + colour
-      // palette as withdrawals on the loss side so the at-a-glance
-      // scan stays consistent.
-      const outgoing = entry.direction === "outgoing";
-      const peer = entry.counterparty_username || "someone";
-      const verb = outgoing ? `Sent to ${peer}` : `From ${peer}`;
-      const sign = outgoing ? "−" : "+";
-      const colour = outgoing ? "#FCA5A5" : "#34D399";
-      const note = entry.note ?
-        `<span class="history-note">— ${esc(truncate(entry.note, 120))}</span>` : "";
-      return `
-        <div class="history-row">
-          <span>
-            ${esc(entry.when_label)} ·
-            🤝 <strong>${esc(verb)}</strong>
-            ${note}
-          </span>
-          <span style="color:${colour};">${sign}${formatCount(entry.amount_pebbles)}p</span>
-        </div>`;
-    }
-    const note = entry.note ?
-      `<span class="history-note">— ${esc(truncate(entry.note, 120))}</span>` : "";
-    return `
-      <div class="history-row">
-        <span>
-          ${esc(entry.when_label)} ·
-          🪙 <strong>Withdraw</strong>
-          ${note}
-        </span>
-        <span style="color:#FCA5A5;">−${formatCount(entry.amount_pebbles)}p</span>
-      </div>`;
+  // DOM builder for a single Recent History row. Picks the right
+  // template variant for the entry's kind, fills the data-history-*
+  // slots via DOM API, and returns a detached row ready to append.
+  function buildHistoryRow(entry) {
+    if (entry.kind === "completion") return buildHistoryCompletionRow(entry);
+    if (entry.kind === "transfer")   return buildHistoryTransferRow(entry);
+    return buildHistoryWithdrawRow(entry);
   }
-  function recentIconHTML(chore) {
-    const v = (chore.icon || "").trim();
-    const kind = chore.icon_kind;
-    if (!v || kind === "empty") return `<span class="icon-placeholder">🧹</span>`;
-    if (kind === "image")   return `<img class="icon-img" src="${esc(v)}" alt="" loading="lazy">`;
-    if (kind === "svg")     return v;
-    if (kind === "ti_icon") return `<i class="ti ${esc(v)} icon-ti" aria-hidden="true"></i>`;
-    return `<span class="icon-glyph">${esc(v)}</span>`;
+  function setNoteSlot(row, noteText) {
+    const slot = row.querySelector("[data-history-note]");
+    if (!slot) return;
+    if (noteText) {
+      slot.textContent = `— ${truncate(noteText, 120)}`;
+      slot.hidden = false;
+    } else {
+      slot.hidden = true;
+    }
+  }
+  function buildHistoryCompletionRow(entry) {
+    const row = cloneTemplate("history-row-completion");
+    if (!row) return null;
+    const whenEl = row.querySelector("[data-history-when]");
+    if (whenEl) whenEl.textContent = entry.when_label || "";
+    const iconSlot = row.querySelector("[data-history-icon]");
+    if (iconSlot && entry.chore) {
+      const node = buildIconNodeFromKind(entry.chore);
+      if (node) iconSlot.appendChild(node);
+    }
+    const nameEl = row.querySelector("[data-history-name]");
+    if (nameEl && entry.chore) {
+      nameEl.textContent = entry.chore.short_name || entry.chore.name || "";
+    }
+    const hotEl = row.querySelector("[data-history-hot]");
+    if (hotEl) {
+      if (entry.hot_multiplier > 1) {
+        hotEl.textContent = `Hot ${formatMultiplier(entry.hot_multiplier)}×`;
+        hotEl.hidden = false;
+      }
+    }
+    const streakEl = row.querySelector("[data-history-streak]");
+    if (streakEl) {
+      if (entry.streak_multiplier > 1) {
+        streakEl.textContent = `Streak ${formatMultiplier(entry.streak_multiplier)}×`;
+        streakEl.hidden = false;
+      }
+    }
+    setNoteSlot(row, entry.note);
+    const amountEl = row.querySelector("[data-history-amount]");
+    if (amountEl) {
+      if (entry.payout_skipped) {
+        amountEl.style.color = "#9CA3AF";
+        amountEl.textContent = "(skipped)";
+      } else {
+        amountEl.style.color = "#34D399";
+        amountEl.textContent = `+${formatCount(entry.paid_pebbles)}p`;
+      }
+    }
+    return row;
+  }
+  function buildHistoryTransferRow(entry) {
+    const row = cloneTemplate("history-row-transfer");
+    if (!row) return null;
+    const outgoing = entry.direction === "outgoing";
+    const peer = entry.counterparty_username || "someone";
+    const whenEl = row.querySelector("[data-history-when]");
+    if (whenEl) whenEl.textContent = entry.when_label || "";
+    const verbEl = row.querySelector("[data-history-verb]");
+    if (verbEl) verbEl.textContent = outgoing ? `Sent to ${peer}` : `From ${peer}`;
+    setNoteSlot(row, entry.note);
+    const amountEl = row.querySelector("[data-history-amount]");
+    if (amountEl) {
+      amountEl.style.color = outgoing ? "#FCA5A5" : "#34D399";
+      amountEl.textContent = `${outgoing ? "−" : "+"}${formatCount(entry.amount_pebbles)}p`;
+    }
+    return row;
+  }
+  function buildHistoryWithdrawRow(entry) {
+    const row = cloneTemplate("history-row-withdraw");
+    if (!row) return null;
+    const whenEl = row.querySelector("[data-history-when]");
+    if (whenEl) whenEl.textContent = entry.when_label || "";
+    setNoteSlot(row, entry.note);
+    const amountEl = row.querySelector("[data-history-amount]");
+    if (amountEl) {
+      amountEl.style.color = "#FCA5A5";
+      amountEl.textContent = `−${formatCount(entry.amount_pebbles)}p`;
+    }
+    return row;
   }
   function truncate(s, n) { return s.length > n ? s.slice(0, n - 3) + "..." : s; }
   if (root?.dataset.mode === "balance") {

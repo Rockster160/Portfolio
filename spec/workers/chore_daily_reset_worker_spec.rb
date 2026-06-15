@@ -41,6 +41,64 @@ RSpec.describe ChoreDailyResetWorker do
     expect(untouched_oneoff.reload.archived?).to be(false)
   end
 
+  describe "#clear_completed_marked_due!" do
+    it "clears marked_due_at on chores whose most recent completion postdates the mark" do
+      marked_at = 6.hours.ago
+      chore = create(:chore, created_by_user: user, marked_due_at: marked_at)
+      create(:chore_completion, user: user, chore: chore, completed_at: 1.hour.ago)
+
+      described_class.new.perform
+
+      expect(chore.reload.marked_due_at).to be_nil
+    end
+
+    it "preserves marked_due_at when no completion postdates the mark" do
+      marked_at = 1.hour.ago
+      chore = create(:chore, created_by_user: user, marked_due_at: marked_at)
+      create(:chore_completion, user: user, chore: chore, completed_at: 6.hours.ago)
+
+      described_class.new.perform
+
+      expect(chore.reload.marked_due_at).to be_within(1.second).of(marked_at)
+    end
+
+    it "preserves marked_due_at on an un-completed chore" do
+      marked_at = 6.hours.ago
+      chore = create(:chore, created_by_user: user, marked_due_at: marked_at)
+
+      described_class.new.perform
+
+      expect(chore.reload.marked_due_at).to be_within(1.second).of(marked_at)
+    end
+
+    it "clears the parent's mark when a sub-chore completion postdates the parent mark" do
+      parent = create(:chore, created_by_user: user, marked_due_at: 6.hours.ago, recurrence: { freq: :never })
+      sub = create(:chore, created_by_user: user, parent_chore: parent, one_off: true)
+      create(
+        :chore_completion, user: user, chore: parent, sub_chore: sub,
+        completed_at: 1.hour.ago
+      )
+
+      described_class.new.perform
+
+      expect(parent.reload.marked_due_at).to be_nil
+    end
+
+    it "clears the sub-chore's mark when its own completion postdates the sub mark" do
+      parent = create(:chore, created_by_user: user, recurrence: { freq: :never })
+      sub = create(:chore, created_by_user: user, parent_chore: parent, one_off: true,
+        marked_due_at: 6.hours.ago)
+      create(
+        :chore_completion, user: user, chore: parent, sub_chore: sub,
+        completed_at: 1.hour.ago
+      )
+
+      described_class.new.perform
+
+      expect(sub.reload.marked_due_at).to be_nil
+    end
+  end
+
   describe "hot eligibility — (overdue OR unscheduled) AND not on cooldown" do
     it "excludes a scheduled chore that is not yet due (future-only)" do
       Chore.delete_all

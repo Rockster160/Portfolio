@@ -78,18 +78,19 @@ RSpec.describe "Chore Dailies", type: :request do
     end
   end
 
-  describe "bootstrap" do
-    it "GET /chores/today includes daily_ids in the bootstrap JSON" do
+  describe "hydration via /chores/sync" do
+    # The unified Grid/Today shell is data-free now — daily_ids
+    # arrive client-side from the /chores/sync envelope, never inline
+    # in the HTML. Assert against /chores/sync directly.
+    it "GET /chores/sync returns daily_ids in the viewer's pin order" do
       ChoreDaily.create!(user: user, chore: chore_b, sort_order: 0)
       ChoreDaily.create!(user: user, chore: chore_a, sort_order: 1)
-      get chores_today_path
+      get chores_sync_path
       expect(response).to have_http_status(:ok)
-      payload = response.body[/id="chores-bootstrap">\s*(.*?)\s*<\/script>/m, 1]
-      data = JSON.parse(payload)
-      expect(data["daily_ids"]).to eq([chore_b.id, chore_a.id])
+      expect(response.parsed_body["daily_ids"]).to eq([chore_b.id, chore_a.id])
     end
 
-    it "GET /chores/sync echoes the daily_ids" do
+    it "GET /chores/sync echoes a single daily pin" do
       ChoreDaily.create!(user: user, chore: chore_a, sort_order: 0)
       get chores_sync_path
       expect(response).to have_http_status(:ok)

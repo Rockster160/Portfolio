@@ -1,0 +1,17 @@
+<%# Shared head content for every chores PWA shell — Grid, Today,
+   Balance, History. Each of those views is registered with the
+   service worker as a cacheable shell, and the SW refuses to cache
+   any response missing the `chores-shell` meta marker. Keeping all
+   shell heads in one partial guarantees the marker (and manifest /
+   theme-color setup) stays in lockstep across them. %>
+<% content_for :head do %>
+  <link rel="manifest" href="/chores.webmanifest">
+  <meta name="theme-color" content="#00102B">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <%# Shell-validity marker. The service worker refuses to cache.put
+     any response missing this exact meta tag — guards the cache
+     against being poisoned by a 200 OK error page, a wrong-controller
+     render, or any non-shell HTML that happens to land at this URL. %>
+  <meta name="chores-shell" content="ok">
+<% end %>

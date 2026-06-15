@@ -15,39 +15,26 @@ RSpec.describe Chore, "marked_due" do
     end
   end
 
-  describe "ChoreCompletion clears the stamp" do
+  describe "ChoreCompletion does NOT clear the stamp synchronously" do
+    # The mark stays until ChoreDailyResetWorker runs at the next
+    # chore-day rollover. Holding the clear keeps today_visible? /
+    # scheduled_due_on stable across same-day completions — completing
+    # a chore must not change its slot in the Today tab.
     before { chore.update!(marked_due_at: 2.hours.ago) }
 
-    it "clears on a credited completion" do
+    it "keeps marked_due_at intact after a credited completion" do
       create(:chore_completion, chore: chore, user: user)
-      expect(chore.reload.marked_due_at).to be_nil
+      expect(chore.reload.marked_due_at).to be_present
     end
 
-    it "clears on a skipped completion" do
+    it "keeps marked_due_at intact after a skipped completion" do
       create(:chore_completion, chore: chore, user: user, payout_skipped: true)
-      expect(chore.reload.marked_due_at).to be_nil
+      expect(chore.reload.marked_due_at).to be_present
     end
 
-    it "clears on an anonymous completion (household member can clear without credit)" do
+    it "keeps marked_due_at intact after an anonymous completion" do
       create(:chore_completion, chore: chore, user: user, anonymous: true)
-      expect(chore.reload.marked_due_at).to be_nil
-    end
-
-    it "bumps updated_at so /chores/sync picks up the change" do
-      original_updated = chore.updated_at
-      travel_to(1.minute.from_now) do
-        create(:chore_completion, chore: chore, user: user)
-      end
-      expect(chore.reload.updated_at).to be > original_updated
-    end
-
-    it "no-ops when nothing was stamped (avoids needless write)" do
-      chore.update!(marked_due_at: nil)
-      original_updated = chore.updated_at
-      travel_to(1.minute.from_now) do
-        create(:chore_completion, chore: chore, user: user)
-      end
-      expect(chore.reload.updated_at).to eq(original_updated)
+      expect(chore.reload.marked_due_at).to be_present
     end
   end
 end

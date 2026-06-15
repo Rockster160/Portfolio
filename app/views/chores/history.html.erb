@@ -1,4 +1,5 @@
 <% content_for :title, "Chores · History" %>
+<%= render "shell_head" %>
 
 <div class="chores-page" data-chores-root data-mode="history">
   <%= render "header", balance: @balance, scope: :total %>
@@ -117,6 +118,7 @@
       </div>
     </div>
   </div>
+  <%= render "templates" %>
 </div>
 
 <% content_for :after_body do %>

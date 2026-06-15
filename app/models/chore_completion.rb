@@ -38,11 +38,11 @@ class ChoreCompletion < ApplicationRecord
   after_create_commit  :fire_jil_create_trigger
   after_update_commit  :fire_jil_update_trigger
   after_destroy_commit :fire_jil_destroy_trigger
-  # Clear the chore's user-stamped "needs to get done" flag on any
-  # completion — paid, skipped, or anonymous. The mark is a one-shot
-  # promotion onto Today/Scheduled; once the work is recorded the
-  # promotion has served its purpose.
-  after_create_commit :clear_chore_marked_due
+  # Note: marked_due_at is NOT cleared here on completion. Same-day
+  # mutations would shift the chore's slot in the Today tab, violating
+  # the "locked at 4am" contract. ChoreDailyResetWorker clears it at
+  # the next chore-day rollover for any chore with a completion that
+  # postdates the mark.
 
   # History search via the app-wide `.query(q)` scope.
   #   notes:test            → notes ILIKE %test%
@@ -116,14 +116,4 @@ class ChoreCompletion < ApplicationRecord
     ::Jil.trigger(user, :chore_completion, with_jil_attrs(jil_attrs(action: :uncompleted)))
   end
 
-  # Clears via update_columns to avoid firing Chore's :updated Jil
-  # trigger (this is a side effect of the completion, not a chore edit).
-  # updated_at is bumped explicitly so /chores/sync picks up the change.
-  # For sub-chore completions, clear BOTH the parent (chore) and the
-  # sub-chore (sub_chore) stamps — completing the sub satisfies any
-  # standing "needs to get done" on either side.
-  def clear_chore_marked_due
-    chore.update_columns(marked_due_at: nil, updated_at: Time.current) if chore.marked_due_at.present?
-    sub_chore.update_columns(marked_due_at: nil, updated_at: Time.current) if sub_chore&.marked_due_at.present?
-  end
 end

@@ -34,11 +34,12 @@ RSpec.describe "Chore + ChoreCompletion Jil triggers", type: :model do
     chore.update!(marked_due_at: nil)
   end
 
-  it "completion-driven mark clear does NOT fire :unmarked_due (callback bypass)" do
+  it "completion does NOT fire :unmarked_due (mark is held until daily reset)" do
     chore = create(:chore, created_by_user: user, name: "V", marked_due_at: 1.hour.ago)
-    # The completion fires its own :chore_completion :completed trigger
-    # but must not also fire :unmarked_due — the clear is a side effect,
-    # not a user-driven mark-clear.
+    # The completion fires its own :chore_completion :completed trigger.
+    # The mark is held until the next-day rollover (ChoreDailyResetWorker),
+    # which clears it without firing a Jil trigger — a system cleanup
+    # is not the same as a user-driven unmark.
     allow(::Jil).to receive(:trigger)
     expect(::Jil).not_to receive(:trigger).with(
       user, :chore, satisfy { |attrs| attrs[:action] == :unmarked_due }

@@ -27,6 +27,7 @@ class ChoreDailyResetWorker
     generate_hot_picks!(day)
     reset_stale_streaks!(day)
     archive_completed_one_offs!(day)
+    clear_completed_marked_due!
   end
 
   def generate_hot_picks!(day)
@@ -86,6 +87,28 @@ class ChoreDailyResetWorker
     completed_ids = ChoreCompletion.where(day_key: day - 1)
       .pluck(Arel.sql("DISTINCT COALESCE(sub_chore_id, chore_id)"))
     Chore.active.where(one_off: true).where(id: completed_ids).update_all(archived_at: Time.current)
+  end
+
+  # Clear marked_due_at on any chore whose most recent completion
+  # postdates the mark. Held until rollover (instead of clearing in a
+  # ChoreCompletion callback) so today_visible? and scheduled_due_on
+  # stay stable across same-day completions — the Today tab's contents
+  # only change at the chore-day boundary.
+  def clear_completed_marked_due!
+    parent_ids = ChoreCompletion
+      .joins("INNER JOIN chores ON chores.id = chore_completions.chore_id")
+      .where.not(chores: { marked_due_at: nil })
+      .where("chore_completions.completed_at > chores.marked_due_at")
+      .distinct.pluck("chores.id")
+    sub_ids = ChoreCompletion
+      .joins("INNER JOIN chores ON chores.id = chore_completions.sub_chore_id")
+      .where.not(chores: { marked_due_at: nil })
+      .where("chore_completions.completed_at > chores.marked_due_at")
+      .distinct.pluck("chores.id")
+    ids = (parent_ids + sub_ids).uniq
+    return if ids.empty?
+
+    Chore.where(id: ids).update_all(marked_due_at: nil, updated_at: Time.current)
   end
 
   # Pick + persist a replacement Hot Pick after one is rotated out.

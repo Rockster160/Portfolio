@@ -89,12 +89,14 @@ RSpec.describe "SubChore behavior" do
       expect(ChoreStreak.find_by(user: user, chore: sub)).to be_nil
     end
 
-    it "clears marked_due on both the parent and the sub-chore on completion" do
+    it "keeps marked_due intact on completion (cleared at next-day rollover instead)" do
       parent.update!(marked_due_at: 1.day.ago)
       sub.update!(marked_due_at: 1.day.ago)
       described_class.new(sub, user).call
-      expect(parent.reload.marked_due_at).to be_nil
-      expect(sub.reload.marked_due_at).to be_nil
+      # Sync clear would break the lock-at-4am contract on Today; the
+      # ChoreDailyResetWorker handles cleanup.
+      expect(parent.reload.marked_due_at).to be_present
+      expect(sub.reload.marked_due_at).to be_present
     end
   end
 
