@@ -1185,6 +1185,26 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     background: #FBBF24;
     animation: chore-pulse 1s infinite;
   }
+}
+
+// Offline state mirrored from navigator.onLine: turn server-dependent
+// action buttons red so it's immediately clear they aren't actionable
+// right now. The red color is the entire signal — no label/suffix.
+[data-chores-root][data-online="false"] {
+  .chore-form button[type="submit"],
+  .chore-form [data-action="archive"],
+  [data-withdraw-form] button[type="submit"],
+  [data-transfer-form] button[type="submit"] {
+    background: #DC2626 !important;
+    border-color: #B71C1C !important;
+    color: #FFF8F8 !important;
+    cursor: not-allowed;
+    opacity: 0.92;
+    box-shadow: none;
+  }
+}
+
+.chores-page {
   .sw-version {
     font-size: 10px;
     opacity: 0.55;

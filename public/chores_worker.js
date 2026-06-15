@@ -15,7 +15,27 @@
 // clients re-pull the HTML next time they're online.
 
 // Bump CACHE on shipping shell changes so old clients re-pull HTML.
-const CACHE = "chores-v85";
+const CACHE = "chores-v86";
+
+// Last-resort: any real cached shell is better than no page at all.
+// If the user requested e.g. /chores (Grid) but only /chores/today
+// is in cache, serving today's shell still gives them the real chores
+// UI which hydrates from localStorage and lets them keep using the
+// app. The viewer's `setActiveView` resolves the active view from
+// the current URL on boot, so the rendered tab will reflect what the
+// user actually asked for once JS runs.
+async function anyCachedShell() {
+  const cache = await caches.open(CACHE);
+  for (const p of SHELL_PATHS) {
+    const hit = await cache.match(p);
+    if (hit) return hit;
+  }
+  for (const p of SHELL_PATHS) {
+    const old = await matchFromOldCaches(p);
+    if (old) return old;
+  }
+  return null;
+}
 // Every chore view is a cached shell. Each shell is body-empty for
 // page-specific content — entries on History, recent rows on Balance —
 // because that data is hydrated client-side from JSON (and from a
@@ -299,13 +319,28 @@ self.addEventListener("activate", (evt) => {
   );
 });
 
+// Query params that are launch/analytics only and do not change which
+// shell to serve. The PWA manifest's `start_url` carries `?source=pwa`,
+// so without this allow-list the very first request a PWA makes on
+// every launch would bypass the cache entirely (and offline would fall
+// through to a 503 plain-text "offline" response — the exact grey/text
+// screen we are here to prevent).
+const SHELL_PASSTHROUGH_PARAMS = new Set([
+  "source",
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+]);
 function isShellRequest(url) {
   // History is excluded above from SHELL_PATHS entirely. The remaining
-  // shells (Grid / Today / Balance) are not paginated, so an exact
-  // pathname match is enough — any query string falls through to the
-  // network.
-  if (url.search) return false;
-  return SHELL_PATHS.includes(url.pathname);
+  // shells (Grid / Today / Balance) are not paginated. Allow only
+  // launch/analytics params through; any other query string is treated
+  // as a non-shell GET and falls through to the network.
+  if (!SHELL_PATHS.includes(url.pathname)) return false;
+  for (const k of url.searchParams.keys()) {
+    if (!SHELL_PASSTHROUGH_PARAMS.has(k)) return false;
+  }
+  return true;
 }
 
 function isStaticAsset(url) {
@@ -375,15 +410,24 @@ self.addEventListener("fetch", (evt) => {
         evt.waitUntil(revalidate);
 
         if (cached) return cached;
-        // First visit ever (no cache yet) — fall through to network so we
-        // have something to render.
-        return (
-          await revalidate,
-          fetch(req).catch(
-            () =>
-              new Response("offline — shell not yet cached", { status: 503 }),
-          )
-        );
+        // No shell cached at this exact path — fall through to network
+        // so we have something to render. If the network also fails,
+        // serve ANY other cached shell rather than a 503/blank page.
+        // The page-script's view router resolves the active tab from
+        // location.pathname once JS runs, so the user lands on the
+        // right tab even when we hand them a sibling shell's HTML.
+        await revalidate;
+        try {
+          const net = await fetch(req);
+          if (net && (net.ok || net.type === "opaque")) return net;
+        } catch (e) {}
+        const anyShell = await anyCachedShell();
+        if (anyShell) return anyShell;
+        // Truly nothing cached anywhere (first-ever install with no
+        // network). Re-throw by re-attempting the fetch so the browser
+        // shows its native "no internet" page rather than a synthetic
+        // placeholder we'd have to invent.
+        return fetch(req);
       })(),
     );
     return;
@@ -424,7 +468,15 @@ self.addEventListener("fetch", (evt) => {
       } catch (e) {
         const cache = await caches.open(CACHE);
         const hit = await cache.match(req);
-        return hit || new Response("offline", { status: 503 });
+        if (hit) return hit;
+        // Page navigations that aren't shell paths (e.g. a deep link
+        // under /chores that fell through) should still land on the
+        // real chores UI, not a bare 503. Serve any cached shell.
+        if (req.mode === "navigate") {
+          const anyShell = await anyCachedShell();
+          if (anyShell) return anyShell;
+        }
+        return new Response("offline", { status: 503 });
       }
     })(),
   );

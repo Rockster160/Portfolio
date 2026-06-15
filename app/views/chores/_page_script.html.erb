@@ -4112,6 +4112,7 @@
 
   editForm?.addEventListener("submit", async e => {
     e.preventDefault();
+    if (!window.requireOnlineForChores()) return;
     // Guard against double-tap on Save: while the request is in
     // flight, disable the button and swap its label for a spinner.
     const submitBtn = editForm.querySelector('button[type="submit"]');
@@ -4223,6 +4224,7 @@
 
   editForm?.querySelector('[data-action="archive"]')?.addEventListener("click", async () => {
     if (!currentChoreId || !confirm("Archive this chore?")) return;
+    if (!window.requireOnlineForChores()) return;
     const id = currentChoreId;
     try {
       const data = await api(`/chores/items/${id}`, "DELETE");
@@ -4468,6 +4470,7 @@
 
   goalForm?.addEventListener("submit", async e => {
     e.preventDefault();
+    if (!window.requireOnlineForChores()) return;
     const submitBtn = goalForm.querySelector('button[type="submit"]');
     const id = goalForm.elements["goal_id"].value;
     const fd = new FormData(goalForm);
@@ -4626,6 +4629,7 @@
 
   streakBonusForm?.addEventListener("submit", async e => {
     e.preventDefault();
+    if (!window.requireOnlineForChores()) return;
     const submitBtn = streakBonusForm.querySelector('button[type="submit"]');
     const id = streakBonusForm.elements["streak_bonus_id"].value;
     const payload = readStreakBonusPayload();
@@ -4764,6 +4768,7 @@
 
   document.querySelector("[data-withdraw-form]")?.addEventListener("submit", async e => {
     e.preventDefault();
+    if (!window.requireOnlineForChores()) return;
     const form = e.target;
     const submitBtn = form.querySelector('button[type="submit"]');
     const fd = new FormData(form);
@@ -4790,6 +4795,7 @@
 
   document.querySelector("[data-transfer-form]")?.addEventListener("submit", async e => {
     e.preventDefault();
+    if (!window.requireOnlineForChores()) return;
     const form = e.target;
     const submitBtn = form.querySelector('button[type="submit"]');
     const fd = new FormData(form);
@@ -4945,8 +4951,28 @@
     // needs a moment.
     if (remaining.length > 0 && !queueBlockedReason) scheduleQueueRetry();
   }
-  window.addEventListener("online", () => { setConnDot("syncing"); flushQueue(); });
-  window.addEventListener("offline", () => setConnDot("offline"));
+  // Mirror navigator.onLine onto `root` so styles can red-out
+  // server-dependent buttons (chore save, archive, goal, withdraw,
+  // transfer, streak bonus). The CSS rule lives in chores.scss and
+  // keys off `[data-chores-root][data-online="false"]`.
+  function syncOnlineAttr() {
+    if (root) root.dataset.online = navigator.onLine ? "true" : "false";
+  }
+  syncOnlineAttr();
+  window.addEventListener("online", () => { syncOnlineAttr(); setConnDot("syncing"); flushQueue(); });
+  window.addEventListener("offline", () => { syncOnlineAttr(); setConnDot("offline"); });
+  // Helper: every server-call submit handler funnels through here.
+  // Returns true when the action may proceed. When offline, flashes
+  // an escalation toast — the red button alone is the AMBIENT signal,
+  // but if the user tapped it anyway they may not have noticed the
+  // color, so we escalate ONCE per interaction. The flash is a
+  // RESPONSE to a user action, not a persistent DOM label, so it does
+  // not violate the no-redundant-state-labels rule.
+  window.requireOnlineForChores = function() {
+    if (navigator.onLine) return true;
+    flash("You're offline — that'll work again once you're connected.", "warn");
+    return false;
+  };
   updatePendingBadge(loadQueue().length);
   if (!navigator.onLine) setConnDot("offline");
 
