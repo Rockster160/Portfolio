@@ -25,14 +25,11 @@
   let MODE = root?.dataset.activeView || "grid";
   const unifiedPage = !!(root && root.dataset.activeView);
 
-  // Bootstrap JSON inline-shipped by the page — instant first paint
-  // without a network round-trip.
-  let bootstrap = { chores: [], lookahead: {}, daily_ids: [], server_ts: null };
-  const bootstrapEl = document.getElementById("chores-bootstrap");
-  if (bootstrapEl) {
-    try { bootstrap = JSON.parse(bootstrapEl.textContent || "{}"); }
-    catch (e) { console.warn("Chores bootstrap JSON parse failed:", e); }
-  }
+  // Per-user balance cache for the header pill. Survives reloads so
+  // the pill paints from localStorage instantly instead of flashing
+  // a "—" placeholder while waiting for /chores/sync. Cleared only
+  // by setTodayEarnings/setLifetimeBalance themselves.
+  const BALANCE_LS_KEY = "chores:balance:v1";
 
   // localClickTs: per-chore most-recent local click epoch ms. Used to
   // discard server payloads captured before that click — protects
@@ -134,7 +131,7 @@
     let lookahead = {};
     // Ordered list of chore ids the viewer has pinned to their Dailies
     // section on Today. Independent of `today_visible` — items here are
-    // purely user-curated, not derived from show_on_daily_view.
+    // purely user-curated, not derived from show_on_today_view.
     let dailyIds = [];
     let dailyIdSet = new Set();
     const subs = new Set();
@@ -208,6 +205,12 @@
           dailyIds = p.dailyIds.map(n => parseInt(n, 10)).filter(Boolean);
           rebuildDailySet();
         }
+        // Emit a "reconcile" notify so subscribers (Views.renderAll)
+        // paint the loaded state. Without this the map gets populated
+        // silently and views stay empty until the first /chores/sync
+        // returns — the page looks blank on hard reload + slow/no
+        // network even when localStorage holds the entire chore set.
+        notify("reconcile");
         return true;
       },
       setDailyIds(ids) {
@@ -426,104 +429,128 @@
     return "";
   }
 
-  function gridCardHTML(c) {
-    const doneClass = (c.done_count_today > 0) ? " done-today" : "";
-    const hotClass  = (c.hot_multiplier != null) ? " hot" : "";
-    const hot = (c.hot_multiplier != null) ?
-      `<div class="hot-badge">${esc(formatMultiplier(c.hot_multiplier))}×</div>` : "";
-    const streak = (c.streak_multiplier != null && c.streak_multiplier > 1) ?
-      `<div class="streak-badge">${esc(formatMultiplier(c.streak_multiplier))}×</div>` : "";
-    const countBadge = countBadgeHTML(c);
-    const cd = hasCooldown(c) ?
-      `<span class="circle-countdown" data-circle-countdown data-cooldown-end="${c.cooldown_kind === "day_reset" ? "day-end" : ""}"></span>` : "";
-    // The most-recent completion drives the ring color. An anonymous
-    // completion paints the ring grey (work was done, but no household
-    // member gets credit).
-    const actorAttr = c.last_actor_anonymous
-      ? ` data-actor-anonymous="true"`
-      : (c.last_actor_username ? ` data-actor="${esc(c.last_actor_username)}"` : "");
-    return `
-      <div class="chore-card${doneClass}${hotClass}" data-chore-id="${c.id}"${actorAttr}>
-        ${hot}
-        ${streak}
-        <div class="icon" data-icon>
-          <span class="card-reward">${esc(c.reward_label)}</span>
-          ${iconHTML(c)}
-          ${cd}
-        </div>
-        <span class="card-count-slot" data-count-slot>${countBadge}</span>
-        <div class="title">${esc(c.name)}</div>
-        <div class="ago-row" data-ago-row></div>
-      </div>
-    `;
-  }
-
-  function circleCardHTML(c, { animate = true } = {}) {
-    const isDone = isFullyDone(c);
-    // Multi-tap chores always skip the keyframe — the inline progress
-    // ring continues growing smoothly into the fully-filled state.
-    const skipKeyframe = targetOf(c) > 1;
-    const doneClass = isDone ? ((animate && !skipKeyframe) ? " done" : " done no-animate") : "";
-    const hotClass  = (c.hot_multiplier != null) ? " hot" : "";
-    const hot = (c.hot_multiplier != null) ?
-      `<div class="hot-badge">${esc(formatMultiplier(c.hot_multiplier))}×</div>` : "";
-    const streak = (c.streak_multiplier != null && c.streak_multiplier > 1) ?
-      `<div class="streak-badge">${esc(formatMultiplier(c.streak_multiplier))}×</div>` : "";
-    const countBadge = countBadgeHTML(c);
-    // The done-ring SVG handles BOTH partial progress and the full-
-    // completion celebration animation. Partial fill is set on the same
-    // circle via stroke-dashoffset (applyProgressRing), so the visual
-    // weight, color, and glow match a completed chore at every step.
-    // Thin secondary overlay — cooldown only. Sits inside the done
-    // ring so users can see both at the same time. Hidden when no
-    // cooldown is set.
-    const cooldownRing = hasCooldown(c) ? `
-      <svg class="circle-cooldown-ring" viewBox="0 0 100 100" aria-hidden="true">
-        <circle class="cooldown-ring-bg" cx="50" cy="50" r="40" />
-        <circle class="cooldown-ring-progress" cx="50" cy="50" r="40" data-cooldown-progress />
-      </svg>
-    ` : "";
-    const cd = hasCooldown(c) ?
-      `<span class="circle-countdown" data-circle-countdown data-cooldown-end="${c.cooldown_kind === "day_reset" ? "day-end" : ""}"></span>` : "";
-    // The most-recent completion drives the ring color. An anonymous
-    // completion paints the ring grey (work was done, but no household
-    // member gets credit).
-    const actorAttr = c.last_actor_anonymous
-      ? ` data-actor-anonymous="true"`
-      : (c.last_actor_username ? ` data-actor="${esc(c.last_actor_username)}"` : "");
-    // For multi-tap chores, keep `.partial` on across the entire non-done
-    // range (including progress=0) so the dashoffset transition runs in
-    // both directions — undoing the last tap retracts the arc smoothly
-    // instead of snapping invisible.
-    const partialClass = (!isDone && skipKeyframe) ? " partial" : "";
-    return `
-      <div class="chore-circle${doneClass}${partialClass}${hotClass}" data-chore-id="${c.id}"${actorAttr}>
-        ${hot}
-        ${streak}
-        <div class="circle-inner">
-          ${cooldownRing}
-          <svg class="done-ring" viewBox="0 0 100 100" aria-hidden="true">
-            <circle cx="50" cy="50" r="48" pathLength="100" data-ring-progress />
-          </svg>
-          <span class="circle-reward">${esc(c.reward_label)}</span>
-          <div class="icon" data-icon>${iconHTML(c)}</div>
-          ${cd}
-          ${stateIconHTML(c)}
-          <div class="count-slot" data-count-slot>${countBadge}</div>
-        </div>
-        <div class="title">${esc(c.short_name)}</div>
-      </div>
-    `;
-  }
-
-  function hotCellHTML(c, { animate = true } = {}) {
-    return `<div class="hot-strip-cell">${circleCardHTML(c, { animate })}</div>`;
-  }
+  // The three card structures used to live as JS template literals
+  // (gridCardHTML / circleCardHTML / hotCellHTML). They now live as
+  // server-rendered <template> elements in _templates.html.erb — see
+  // cloneTemplate(name). The renderers below clone the empty template
+  // and then run patchGridCard / patchCircleCard, which is the SAME
+  // function that handles incremental updates. One code path, one
+  // source of truth for chore-card HTML.
 
   function nodeFrom(html) {
     const t = document.createElement("template");
     t.innerHTML = (html || "").trim();
     return t.content.firstElementChild;
+  }
+  // Clone a server-rendered <template data-template="name"> from the
+  // shell. THIS is the only place chore-card structural HTML enters
+  // the DOM — there are no JS template literals for cards. Means a
+  // markup change in _templates.html.erb takes effect for BOTH
+  // initial render (clone + patcher) AND incremental update (patcher)
+  // since the patcher is the only thing that touches data after clone.
+  // Returns null if the template is missing so callers can no-op
+  // gracefully on pages that don't render the templates partial
+  // (e.g. balance/history aren't unified shells).
+  function cloneTemplate(name) {
+    const t = document.querySelector(`template[data-template="${name}"]`);
+    if (!t || !t.content) return null;
+    const root = t.content.firstElementChild;
+    return root ? root.cloneNode(true) : null;
+  }
+  // Populate a chore card's icon slot. The template ships the .icon
+  // container empty; this puts the appropriate child element inside
+  // it. Centralizes the 5-way icon kind switch so each render path
+  // doesn't need to know about icon variants. Pure DOM construction
+  // — no innerHTML, no string parsing.
+  function setCardIcon(cardEl, c) {
+    const slot = cardEl.querySelector("[data-icon]");
+    if (!slot) return;
+    // Remove any previous icon element (preserve sibling .card-reward
+    // and any countdown span the patcher may have inserted).
+    Array.from(slot.children).forEach(child => {
+      if (child.matches(".icon-placeholder, .icon-img, .icon-glyph, .icon-ti, svg")) {
+        child.remove();
+      }
+    });
+    const v = (c.icon || "").trim();
+    let iconEl = null;
+    if (!v) {
+      iconEl = document.createElement("span");
+      iconEl.className = "icon-placeholder";
+      iconEl.textContent = c.one_off ? "📝" : "🧹";
+    } else if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://")) {
+      iconEl = document.createElement("img");
+      iconEl.className = "icon-img";
+      iconEl.src = v;
+      iconEl.alt = "";
+      iconEl.loading = "lazy";
+      iconEl.draggable = false;
+    } else if (v.startsWith("<svg")) {
+      // Inline SVG: parse via a throwaway template, take the root SVG.
+      // Browser sanitization handles the inline parse the same way the
+      // legacy HTML-string path did.
+      const wrap = document.createElement("template");
+      wrap.innerHTML = v;
+      iconEl = wrap.content.firstElementChild;
+    } else if (v.startsWith("ti-")) {
+      iconEl = document.createElement("i");
+      iconEl.className = `ti ${v} icon-ti`;
+      iconEl.setAttribute("aria-hidden", "true");
+    } else {
+      iconEl = document.createElement("span");
+      iconEl.className = "icon-glyph";
+      iconEl.textContent = v;
+    }
+    if (iconEl) {
+      // Insert AFTER any .card-reward / .circle-reward (the reward
+      // span is first in both templates so the icon sits after it,
+      // matching the legacy HTML order).
+      const reward = slot.querySelector(":scope > .card-reward, :scope > .circle-reward");
+      if (reward && reward.nextSibling) slot.insertBefore(iconEl, reward.nextSibling);
+      else slot.appendChild(iconEl);
+    }
+  }
+  // Place the cooldown countdown span inside an icon slot when the
+  // chore has a cooldown. Mirrors what the legacy HTML strings did
+  // inline. The patchers update its text via the existing ticker;
+  // this only ensures the element exists (and is removed when it
+  // shouldn't).
+  function setCardCountdown(cardEl, c) {
+    const slot = cardEl.querySelector("[data-icon]");
+    if (!slot) return;
+    const existing = slot.querySelector(":scope > [data-circle-countdown]");
+    if (!hasCooldown(c)) {
+      existing?.remove();
+      return;
+    }
+    if (existing) {
+      existing.dataset.cooldownEnd = c.cooldown_kind === "day_reset" ? "day-end" : "";
+      return;
+    }
+    const span = document.createElement("span");
+    span.className = "circle-countdown";
+    span.dataset.circleCountdown = "";
+    span.dataset.cooldownEnd = c.cooldown_kind === "day_reset" ? "day-end" : "";
+    slot.appendChild(span);
+  }
+  // Place the cooldown SVG ring inside the circle-inner of a circle
+  // card. Cloned from <template data-template="circle-cooldown-ring">
+  // so the SVG markup lives in the shell, not in JS.
+  function setCircleCooldownRing(cardEl, c) {
+    const inner = cardEl.querySelector(".circle-inner");
+    if (!inner) return;
+    const existing = inner.querySelector(":scope > .circle-cooldown-ring");
+    if (!hasCooldown(c)) {
+      existing?.remove();
+      return;
+    }
+    if (existing) return;
+    const ring = cloneTemplate("circle-cooldown-ring");
+    if (!ring) return;
+    // Goes BEFORE the done-ring so the cooldown overlay sits underneath.
+    const doneRing = inner.querySelector(":scope > .done-ring");
+    if (doneRing) inner.insertBefore(ring, doneRing);
+    else inner.insertBefore(ring, inner.firstChild);
   }
 
   // ============================================================
@@ -541,7 +568,7 @@
     el.dataset.choreShort = c.short_name || "";
     el.dataset.choreIcon = c.icon || "";
     el.dataset.choreReward = c.reward_pebbles || 0;
-    el.dataset.choreShowOnDailyView = c.show_on_daily_view || "when_scheduled";
+    el.dataset.choreShowOnTodayView = c.show_on_today_view || "when_scheduled";
     el.dataset.choreSharingMode = c.sharing_mode || "personal";
     el.dataset.choreAssignedToUserId = c.assigned_to_user_id || "";
     el.dataset.choreStartsOn = c.starts_on || "";
@@ -608,7 +635,7 @@
         // Multi-tap chore hit its target: continue the partial fill
         // smoothly to full instead of triggering the 100→0 keyframe
         // (which would visibly snap back to empty before redrawing).
-        // patchCircleCard / circleCardHTML add `.no-animate` for the
+        // patchCircleCard / initCircleCard add `.no-animate` for the
         // same reason, so the keyframe is suppressed.
         ring.style.strokeDasharray = "100";
         ring.style.strokeDashoffset = "0";
@@ -634,21 +661,57 @@
     ring.style.opacity = ratio > 0 ? "1" : "0";
   }
 
-  function renderGridCard(c)   { const el = nodeFrom(gridCardHTML(c));   hydrateDataAttrs(el, c); applyProgressRing(el, c); return el; }
-  function renderCircleCard(c) {
-    const animate = shouldAnimateDone(c);
-    const el = nodeFrom(circleCardHTML(c, { animate }));
+  // Apply the bits that the patchers don't touch (icon contents,
+  // cooldown ring/countdown, chore-id, animation state) on top of a
+  // freshly cloned blank template. After this returns, the element
+  // is fully initialized and any future updates flow through the
+  // patcher — same code path as a live update on an existing card.
+  function initGridCard(el, c) {
+    el.dataset.choreId = c.id;
+    // Seed the data attrs the patcher's structural-change detector
+    // reads (choreIcon, choreCooldown). Without this seed the first
+    // patch() call sees "blank dataset != current chore" and triggers
+    // a recursive re-render. Order: data attrs → icon DOM → patcher.
     hydrateDataAttrs(el, c);
-    applyProgressRing(el, c);
+    setCardIcon(el, c);
+    setCardCountdown(el, c);
+    patchGridCard(el, c);
+  }
+  function initCircleCard(el, c, { animate } = {}) {
+    el.dataset.choreId = c.id;
+    hydrateDataAttrs(el, c);
+    setCircleCooldownRing(el, c);
+    setCardIcon(el, c);
+    setCardCountdown(el, c);
+    // The keyframe-fired done state is set BEFORE patcher fills the
+    // rest so the celebratory animation can attach on first paint.
+    if (isFullyDone(c)) {
+      el.classList.add("done");
+      const skipKeyframe = targetOf(c) > 1;
+      if (!animate || skipKeyframe) el.classList.add("no-animate");
+    } else if (targetOf(c) > 1) {
+      el.classList.add("partial");
+    }
+    patchCircleCard(el, c);
+  }
+  function renderGridCard(c) {
+    const el = cloneTemplate("grid-card");
+    if (!el) return null;
+    initGridCard(el, c);
+    return el;
+  }
+  function renderCircleCard(c) {
+    const el = cloneTemplate("circle-card");
+    if (!el) return null;
+    const animate = shouldAnimateDone(c);
+    initCircleCard(el, c, { animate });
     if (animate) noteRingAnimation(c.id);
     return el;
   }
-  function renderHotCell(c)    {
-    const animate = shouldAnimateDone(c);
-    const wrap = nodeFrom(hotCellHTML(c, { animate }));
-    const card = wrap.querySelector("[data-chore-id]");
-    if (card) { hydrateDataAttrs(card, c); applyProgressRing(card, c); }
-    if (animate) noteRingAnimation(c.id);
+  function renderHotCell(c) {
+    const wrap = cloneTemplate("hot-cell");
+    const inner = renderCircleCard(c);
+    if (wrap && inner) wrap.appendChild(inner);
     return wrap;
   }
 
@@ -722,7 +785,7 @@
       }
     } else {
       el.classList.remove("done", "no-animate");
-      // See circleCardHTML: `.partial` stays on at progress=0 for multi-
+      // See initCircleCard: `.partial` stays on at progress=0 for multi-
       // tap chores so the dashoffset transition can animate closed.
       el.classList.toggle("partial", skipKeyframe);
       shouldAnimateDone(c);
@@ -878,7 +941,7 @@
       const picks = ChoreStore.hotPicks();
       reconcileSection(c, picks, {
         keyFor: hotKey,
-        renderer: item => nodeFrom(hotCellHTML(item)),
+        renderer: renderHotCell,
         patcher: patchHot,
       });
       // Section visibility — hide when no picks, show otherwise. Note
@@ -2065,6 +2128,49 @@
   // Apply a server payload to the store. Two shapes:
   //   * { chore: {...}, ... } — full chore JSON (mutation responses).
   //   * { chores: [...], active_chore_ids: [...], lookahead: {...} } — sync.
+  // Cold-start loading state. Shown ONLY when localStorage has no
+  // chores AND no /chores/sync has ever validated successfully. This
+  // distinguishes "first ever load, please wait" from "user truly has
+  // zero chores" — the latter is a legitimate state and gets no
+  // indicator. The placeholder is a sibling element; we only toggle a
+  // class on it, never replace or rerender the chores containers.
+  function shouldShowColdStartLoader() {
+    if (!unifiedPage) return false;
+    if (localStorage.getItem(SYNC_TS_KEY)) return false;
+    return ChoreStore.all().length === 0;
+  }
+  function showColdStartLoaderIfEmpty() {
+    const el = document.querySelector("[data-cold-start]");
+    if (!el) return;
+    el.classList.toggle("hidden", !shouldShowColdStartLoader());
+  }
+  function hideColdStartLoader() {
+    document.querySelector("[data-cold-start]")?.classList.add("hidden");
+  }
+
+  // Strict structural validation for /chores/sync responses. We only
+  // trust an envelope that proves it came from the real endpoint:
+  //   * `server_ts` — required ISO timestamp. Without it we can't
+  //     order writes against local clicks.
+  //   * `day_key` — required ISO date. Without it we can't tell if
+  //     the next incremental sync should reset for a day rollover.
+  //   * `active_chore_ids` — required array. This IS the canonical
+  //     accessible set. Empty is VALID (real user with no chores);
+  //     non-array means "this isn't a real sync response, ignore."
+  // Returns true only when every required key is present and well-
+  // typed. Anything else — a 200 OK error page, a partial response,
+  // a wrong-controller render — fails closed and leaves localStorage
+  // untouched. Empty content from a validated envelope is still
+  // honored downstream (no chores, no dailies — all legitimate).
+  function validateSyncPayload(data) {
+    if (!data || typeof data !== "object") return false;
+    if (typeof data.server_ts !== "string" || !data.server_ts) return false;
+    if (Number.isNaN(new Date(data.server_ts).getTime())) return false;
+    if (typeof data.day_key !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data.day_key)) return false;
+    if (!Array.isArray(data.active_chore_ids)) return false;
+    return true;
+  }
+
   function reconcile(data) {
     if (!data) return;
     if (data.chore) {
@@ -2081,14 +2187,15 @@
         if (!localMs || serverMs >= localMs) ChoreStore.upsert(c);
       });
     }
-    // Same invariant as the bootstrap path: `active_chore_ids` is the
-    // canonical accessible set. Anything cached locally that isn't in
-    // it (archived, reassigned, household-changed) is dropped. Empty
-    // payloads are NEVER valid here either — a real user always has
-    // *some* chores, and `chores` is incremental so empty `chores`
-    // does NOT imply empty active set; the active_chore_ids array is
-    // what the server is asserting authoritatively.
-    if (Array.isArray(data.active_chore_ids) && data.active_chore_ids.length > 0) {
+    // `active_chore_ids` is the canonical accessible set asserted by
+    // the server. Empty IS authoritative now (user really has zero
+    // accessible chores — archived, removed from household, fresh
+    // account). The fullSync caller gates this with
+    // validateSyncPayload(), so we only reach reconcile with an empty
+    // array when the server genuinely said so. POST/PATCH handlers
+    // (complete/edit/archive) don't ship `active_chore_ids` at all,
+    // so they skip this prune naturally via Array.isArray(undefined).
+    if (Array.isArray(data.active_chore_ids)) {
       const activeIds = new Set(data.active_chore_ids);
       ChoreStore.all().forEach(c => {
         if (!activeIds.has(c.id)) ChoreStore.remove(c.id);
@@ -2108,23 +2215,53 @@
     const v = root?.dataset.balanceToday;
     if (v != null) el.textContent = formatCount(v);
   }
+  function readBalanceCache() {
+    try { return JSON.parse(localStorage.getItem(BALANCE_LS_KEY) || "{}"); }
+    catch (e) { return {}; }
+  }
+  function writeBalanceCache(patch) {
+    try {
+      const next = { ...readBalanceCache(), ...patch };
+      localStorage.setItem(BALANCE_LS_KEY, JSON.stringify(next));
+    } catch (e) { /* storage full / unavailable — non-fatal */ }
+  }
   // Single, intentional writer for the header pill. EVERY page shows
   // today_earnings here — never lifetime. Any handler that wants to
   // update the pill must funnel through this so the next refactor
-  // can't accidentally pass lifetime back in.
+  // can't accidentally pass lifetime back in. Persists to localStorage
+  // so the pill paints instantly on next load instead of flashing the
+  // dash placeholder.
   function setTodayEarnings(value) {
     if (value == null) return;
     if (root) root.dataset.balanceToday = value;
     const el = document.querySelector("[data-balance]");
     if (el) el.textContent = formatCount(value);
+    writeBalanceCache({ today_earnings: value });
   }
   // Separate writer for the Balance page's lifetime card. NEVER
-  // touches `[data-balance]`.
+  // touches `[data-balance]`. Same localStorage persistence pattern.
   function setLifetimeBalance(value) {
     if (value == null) return;
     if (root) root.dataset.balanceTotal = value;
     const el = document.querySelector("[data-lifetime-balance]");
     if (el) el.textContent = formatCount(value);
+    writeBalanceCache({ balance: value });
+  }
+  // Hydrate the pill + lifetime card from localStorage on boot. Runs
+  // before fullSync so the first paint shows real numbers (or `—` if
+  // we've never synced), never a flashing intermediate state.
+  function hydrateBalanceFromLocal() {
+    const cache = readBalanceCache();
+    if (cache.today_earnings != null) {
+      if (root) root.dataset.balanceToday = cache.today_earnings;
+      const el = document.querySelector("[data-balance]");
+      if (el) el.textContent = formatCount(cache.today_earnings);
+    }
+    if (cache.balance != null) {
+      if (root) root.dataset.balanceTotal = cache.balance;
+      const el = document.querySelector("[data-lifetime-balance]");
+      if (el) el.textContent = formatCount(cache.balance);
+    }
   }
 
   // ============================================================
@@ -2149,10 +2286,20 @@
       const useSince = since && lastDay === localDay;
       const url = useSince ? `/chores/sync?since=${encodeURIComponent(since)}` : "/chores/sync";
       const data = await api(url, "GET");
+      // Hard validation gate: only a structurally-real /chores/sync
+      // envelope is allowed to update local truth. A 200 OK error
+      // page, a wrong-controller render, or a partial response
+      // returns here without touching ChoreStore, localStorage, or
+      // the sync-timestamp markers. The next fullSync tries again.
+      if (!validateSyncPayload(data)) {
+        setSyncBadge(false, true);
+        return;
+      }
       reconcile(data);
-      if (data.server_ts) localStorage.setItem(SYNC_TS_KEY, data.server_ts);
-      if (data.day_key) localStorage.setItem(SYNC_DAY_KEY, data.day_key);
+      localStorage.setItem(SYNC_TS_KEY, data.server_ts);
+      localStorage.setItem(SYNC_DAY_KEY, data.day_key);
       setSyncBadge(false);
+      showColdStartLoaderIfEmpty();
       // Pair every successful sync with a shell refresh: the server
       // may have changed the underlying HTML (a new chore in the
       // bootstrap JSON, an asset URL bump, a layout tweak) and we
@@ -3866,7 +4013,7 @@
     setField("target_count", 1);
     setCooldownSeconds(0);
     setPillValue("freq", "never");
-    setPillValue("show_on_daily_view", "when_scheduled");
+    setPillValue("show_on_today_view", "when_scheduled");
     setPillValue("hot_eligibility", "when_available");
     setPillValue("sharing_mode", "household");
     setPillValue("after_chore_when", "today");
@@ -3967,7 +4114,7 @@
     if (oneOffCb) oneOffCb.checked = !!c.one_off;
     setPillValue("sharing_mode", c.sharing_mode || "household");
     setField("assigned_to_user_id", c.assigned_to_user_id || "");
-    setPillValue("show_on_daily_view", c.show_on_daily_view || "when_scheduled");
+    setPillValue("show_on_today_view", c.show_on_today_view || "when_scheduled");
     setPillValue("hot_eligibility", c.hot_eligibility || "when_available");
     setCooldownSeconds(c.threshold_seconds || 0);
     setField("target_count", c.target_count || 1);
@@ -4188,7 +4335,7 @@
         one_off: oneOff,
         starts_on: getField("starts_on") || null,
         marked_due_at: getField("marked_due_at") || null,
-        show_on_daily_view: getField("show_on_daily_view") || "when_scheduled",
+        show_on_today_view: getField("show_on_today_view") || "when_scheduled",
         hot_eligibility: getField("hot_eligibility") || "when_available",
         sharing_mode: sharingMode,
         assigned_to_user_id: getField("assigned_to_user_id") || null,
@@ -5204,43 +5351,23 @@
   // boot
   // ============================================================
   if (unifiedPage) {
-    // Order matters: hydrate from localStorage FIRST so we have a
-    // baseline even when the inline bootstrap JSON is empty (cached
-    // shell that was rendered during an error, fresh-installed PWA
-    // with no network, etc). Then merge the inline shell — which
-    // wins on any chore it contains because bootstrap is additive
-    // and per-chore updated_at gates overwrites in `upsert`.
-    // Net effect: a stale-empty shell can never blank the UI; the
-    // worst-case is "we already had these chores and we still do."
+    // The shell is data-free. Hydrate from localStorage and that's it
+    // for the synchronous boot — no merge from inline JSON, no prune
+    // against shell-shipped data. ChoreStore is updated ONLY by
+    // validated /chores/sync responses inside reconcile(). This means:
+    //   * A stale or empty shell can never modify localStorage.
+    //   * A controller render that ships empty/partial data has no
+    //     channel to wipe pins or chores — there's no inline data to
+    //     read.
+    //   * Empty results from a validated API response ARE authoritative
+    //     ("you genuinely have no scheduled chores today") — but that
+    //     judgement lives in reconcile/validateSyncPayload, not here.
+    // hydrateFromLocal is also safe-by-design: it only fills entries
+    // that aren't already in the map, so it can never overwrite a
+    // newer in-memory state with stale localStorage.
     ChoreStore.hydrateFromLocal();
-    // INVARIANT: the bootstrap chore list IS the canonical accessible
-    // set for this viewer. Anything in our local cache that isn't in
-    // it has either been archived or become inaccessible (assignment
-    // change, household change), and should be dropped — server-side
-    // queries like the reorder controller's `accessible_chores` will
-    // silently ignore them too. ONE caveat: an empty list is NEVER
-    // valid. A real existing user always has *something* (otherwise
-    // they wouldn't be looking at this page), so empty payloads can
-    // only come from a stale cached shell, a render error, or a parse
-    // failure. Treat empty as untrusted and skip the prune.
-    if (Array.isArray(bootstrap.chores) && bootstrap.chores.length > 0) {
-      const activeIds = new Set(bootstrap.chores.map(c => c.id));
-      ChoreStore.all().forEach(c => {
-        if (!activeIds.has(c.id)) ChoreStore.remove(c.id);
-      });
-    }
-    ChoreStore.bootstrap(bootstrap.chores, bootstrap.lookahead, bootstrap.daily_ids);
-    if (bootstrap.day_key) localStorage.setItem(SYNC_DAY_KEY, bootstrap.day_key);
-    // Persist server_ts only when the cached HTML is from today;
-    // otherwise the next sync's incremental `since=` would skip the
-    // full reset the day rollover needs.
-    const cachedDay = bootstrap.day_key;
-    const localDay  = currentChoreDayIso();
-    if (bootstrap.server_ts && cachedDay && cachedDay === localDay) {
-      localStorage.setItem(SYNC_TS_KEY, bootstrap.server_ts);
-    } else {
-      localStorage.removeItem(SYNC_TS_KEY);
-    }
+    hydrateBalanceFromLocal();
+    showColdStartLoaderIfEmpty();
   }
   bindCardClicks();
   bindEditModalPin();

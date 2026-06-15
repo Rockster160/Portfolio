@@ -14,8 +14,11 @@
     </button>
   </div>
   <div class="chores-header-center">
+    <%# Pill renders a dash placeholder until hydrated from localStorage
+       (instant) or /chores/sync (eventual). No per-request data ever
+       lands in the shell, so the cached HTML is balance-agnostic. %>
     <div class="balance-pill" title="Earned today">
-      <span data-balance data-balance-scope="today"><%= today_earnings_for_header %></span>p
+      <span data-balance data-balance-scope="today">—</span>p
     </div>
   </div>
   <%= render "chores/nav" %>

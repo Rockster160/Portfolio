@@ -49,7 +49,7 @@ class ChoreSerializer
       sharing_mode:         effective_chore.sharing_mode,
       parent_chore_id:      chore.parent_chore_id,
       assigned_to_user_id:  chore.assigned_to_user_id,
-      show_on_daily_view:   chore.show_on_daily_view,
+      show_on_today_view:   chore.show_on_today_view,
       hot_eligibility:      chore.hot_eligibility,
       starts_on:            chore.starts_on&.iso8601,
       recurrence:           chore.recurrence || {},
@@ -78,7 +78,7 @@ class ChoreSerializer
   # / after_chore derived due day → most recent past matching day for
   # fixed-pattern schedules (capped at a 14-day lookback to mirror
   # `scheduled_or_carried?`). Nil for chores with no schedule frame
-  # (e.g. daily_always with no marked override) so they sort to the bottom.
+  # (e.g. today_always with no marked override) so they sort to the bottom.
   def scheduled_due_on
     return ChoreDay.current(viewer, at: chore.marked_due_at) if chore.marked_due?
     return chore.starts_on if chore.one_off
@@ -93,7 +93,7 @@ class ChoreSerializer
 
   # Whether the viewer has pinned this chore to their personal Dailies
   # section on Today. Independent of `today_visible?` — a chore stays
-  # in the user's Dailies regardless of show_on_daily_view / schedule.
+  # in the user's Dailies regardless of show_on_today_view / schedule.
   def on_dailies?
     return ctx.daily_chore_ids.include?(chore.id) if ctx
 
@@ -316,14 +316,14 @@ class ChoreSerializer
       return chore.marked_due_at < ChoreDay.ends_at(day, viewer)
     end
     return true  if chore.one_off
-    return true  if chore.daily_always?
-    return false if chore.show_on_daily_view.to_sym == :never
+    return true  if chore.today_always?
+    return false if chore.show_on_today_view.to_sym == :never
 
     last_before = last_completion_before_today
     scheduled = scheduled_or_carried?(last_before&.day_key)
     available = chore.cooldown_elapsed?(viewer, last_completion: last_before)
 
-    case chore.show_on_daily_view.to_sym
+    case chore.show_on_today_view.to_sym
     when :always                       then true
     when :when_scheduled               then scheduled
     when :when_available               then available

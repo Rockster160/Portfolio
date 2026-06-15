@@ -203,7 +203,7 @@ RSpec.describe ChoreDailyResetWorker do
         created_by_user: user,
         reward_pebbles: 2,
         hot_eligibility: :when_available,
-        show_on_daily_view: :when_scheduled,
+        show_on_today_view: :when_scheduled,
       }
       create(:chore, defaults.merge(opts))
     end

@@ -306,6 +306,7 @@
   #starts_on(Date)
   #marked_due_at(Date)
   #reward_pebbles(Numeric)
+  #show_on_today_view(["always" "when_scheduled" "when_available" "when_scheduled_and_available" "never"])
   #show_on_daily_view(["always" "when_scheduled" "when_available" "when_scheduled_and_available" "never"])
 *[ChoreCompletionData]
   #timestamp(Date)

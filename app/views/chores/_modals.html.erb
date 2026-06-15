@@ -338,17 +338,17 @@
           </div>
         </div>
 
-        <%# ----- Show on Scheduled View (button order per spec) ----- %>
+        <%# ----- Show on Today View (button order per spec) ----- %>
         <div class="form-section">
-          <label class="field-label">Show on Scheduled View</label>
-          <div class="pill-group" data-pill-group="show_on_daily_view">
+          <label class="field-label">Show on Today View</label>
+          <div class="pill-group" data-pill-group="show_on_today_view">
             <button type="button" class="pill" data-value="always">Always</button>
             <button type="button" class="pill" data-value="when_scheduled_and_available">Scheduled or Available</button>
             <button type="button" class="pill active" data-value="when_scheduled">When Scheduled</button>
             <button type="button" class="pill" data-value="when_available">When Available</button>
             <button type="button" class="pill" data-value="never">Hidden</button>
           </div>
-          <input type="hidden" data-field="show_on_daily_view" value="when_scheduled">
+          <input type="hidden" data-field="show_on_today_view" value="when_scheduled">
         </div>
 
         <%# ----- Hot-pick eligibility — overrides the default rule for

@@ -66,17 +66,17 @@ RSpec.describe "Chore household visibility + cooldown" do
       chore = create(:chore,
         created_by_user: alice, chore_household: household,
         sharing_mode: :household,
-        assigned_to_user: bob, show_on_daily_view: :always)
+        assigned_to_user: bob, show_on_today_view: :always)
       alice_view = ChoreSerializer.new(chore, viewer: alice).as_json
       bob_view   = ChoreSerializer.new(chore, viewer: bob).as_json
       expect(alice_view[:today_visible]).to be(false)
       expect(bob_view[:today_visible]).to be(true)
     end
 
-    it "with no assignee, Today follows normal show_on_daily_view rules for everyone" do
+    it "with no assignee, Today follows normal show_on_today_view rules for everyone" do
       chore = create(:chore,
         created_by_user: alice, chore_household: household,
-        sharing_mode: :household, show_on_daily_view: :always)
+        sharing_mode: :household, show_on_today_view: :always)
       expect(ChoreSerializer.new(chore, viewer: alice).as_json[:today_visible]).to be(true)
       expect(ChoreSerializer.new(chore, viewer: bob).as_json[:today_visible]).to be(true)
     end

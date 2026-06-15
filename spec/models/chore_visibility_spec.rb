@@ -4,16 +4,16 @@ RSpec.describe Chore, "visibility + relative scheduling" do
   let(:user) { create(:user) }
   let(:today) { ChoreDay.current(user) }
 
-  describe "show_on_daily_view enum" do
+  describe "show_on_today_view enum" do
     it "defaults to when_scheduled" do
       chore = create(:chore, created_by_user: user)
-      expect(chore.daily_when_scheduled?).to eq(true)
+      expect(chore.today_when_scheduled?).to eq(true)
     end
 
     it "supports always / when_available / when_scheduled_and_available / never" do
       %i[always when_available when_scheduled_and_available never].each do |v|
-        chore = create(:chore, created_by_user: user, show_on_daily_view: v)
-        expect(chore.show_on_daily_view).to eq(v.to_s)
+        chore = create(:chore, created_by_user: user, show_on_today_view: v)
+        expect(chore.show_on_today_view).to eq(v.to_s)
       end
     end
   end
@@ -116,10 +116,10 @@ RSpec.describe Chore, "visibility + relative scheduling" do
     end
   end
 
-  describe "show_on_daily_view :when_scheduled_and_available semantic = OR" do
+  describe "show_on_today_view :when_scheduled_and_available semantic = OR" do
     let(:chore) {
       create(:chore, created_by_user: user,
-        show_on_daily_view: :when_scheduled_and_available,
+        show_on_today_view: :when_scheduled_and_available,
         threshold_seconds: 6 * 3600,
         recurrence: { freq: :daily })
     }

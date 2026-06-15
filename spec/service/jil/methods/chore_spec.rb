@@ -225,21 +225,28 @@ RSpec.describe Jil::Methods::Chore, type: :service do
       }
     end
 
-    it "updates show_on_daily_view from a ChoreData hash" do
-      record = methods.update("Vitamins", { show_on_daily_view: "always" })
+    it "updates show_on_today_view from a ChoreData hash" do
+      record = methods.update("Vitamins", { show_on_today_view: "always" })
       expect(record.id).to eq(vitamins.id)
-      expect(record.show_on_daily_view).to eq("always")
+      expect(record.show_on_today_view).to eq("always")
     end
 
     it "round-trips :always → :never" do
-      methods.update("Vitamins", { show_on_daily_view: "always" })
-      methods.update("Vitamins", { show_on_daily_view: "never" })
-      expect(vitamins.reload.show_on_daily_view).to eq("never")
+      methods.update("Vitamins", { show_on_today_view: "always" })
+      methods.update("Vitamins", { show_on_today_view: "never" })
+      expect(vitamins.reload.show_on_today_view).to eq("never")
     end
 
-    it "drops an unknown show_on_daily_view value rather than raising" do
-      record = methods.update("Vitamins", { show_on_daily_view: "bogus" })
-      expect(record.show_on_daily_view).to eq(vitamins.show_on_daily_view)
+    it "drops an unknown show_on_today_view value rather than raising" do
+      record = methods.update("Vitamins", { show_on_today_view: "bogus" })
+      expect(record.show_on_today_view).to eq(vitamins.show_on_today_view)
+    end
+
+    it "legacy ChoreData.show_on_daily_view emits the new attribute key" do
+      # Backward-compat for prod Jil tasks pre-rename. `ChoreData.show_on_daily_view(...)`
+      # in Jil code dispatches to the alias and must return a hash keyed by the new
+      # `show_on_today_view` attr so the chore update path picks it up.
+      expect(methods.show_on_daily_view("always")).to eq({ show_on_today_view: "always" })
     end
 
     it "updates name + starts_on together" do
@@ -255,7 +262,7 @@ RSpec.describe Jil::Methods::Chore, type: :service do
     end
 
     it "returns nil for an unknown chore" do
-      expect(methods.update("nope-no-chore", { show_on_daily_view: "always" })).to be_nil
+      expect(methods.update("nope-no-chore", { show_on_today_view: "always" })).to be_nil
     end
   end
 end

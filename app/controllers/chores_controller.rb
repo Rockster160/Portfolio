@@ -13,15 +13,22 @@ class ChoresController < ApplicationController
   # card rendering. No server-side HTML partials for chores anywhere.
   # ============================================================
 
+  # Shell-only: the rendered page is data-free. Cards, balance, lookahead,
+  # and daily pins all hydrate client-side from localStorage + /chores/sync.
+  # We deliberately do NOT call load_chore_page_data here — those DB
+  # queries (chores, lookahead, balance) are only needed for the sync
+  # endpoint, not the shell. Skipping them keeps the shell render cheap
+  # and identity-free so the SW can cache it across users without
+  # cross-contamination.
   def index
     @active_view = :grid
-    load_chore_page_data
+    @cutoff_hour = ChoreDay::CUTOFF_HOURS
     render :page
   end
 
   def today
     @active_view = :today
-    load_chore_page_data
+    @cutoff_hour = ChoreDay::CUTOFF_HOURS
     render :page
   end
 
@@ -464,7 +471,7 @@ class ChoresController < ApplicationController
     # Second pass: recurring chores follow their schedule. One-offs
     # without a marked due date have no future surfacing rule —
     # they're either visible on Today already or sitting in Grid.
-    candidates = @chores.reject { |c| c.one_off || c.show_on_daily_view.to_sym == :never }
+    candidates = @chores.reject { |c| c.one_off || c.show_on_today_view.to_sym == :never }
     ((@day + 1)..(@day + 7)).each do |d|
       candidates.each do |c|
         next unless c.scheduled?
@@ -719,7 +726,7 @@ class ChoresController < ApplicationController
   def chore_params
     permitted = params.require(:chore).permit(
       :name, :short_name, :icon, :reward_pebbles, :target_count, :threshold_seconds,
-      :one_off, :starts_on, :show_on_daily_view, :hot_eligibility,
+      :one_off, :starts_on, :show_on_today_view, :hot_eligibility,
       :sharing_mode, :assigned_to_user_id, :notes_template, :notes,
       :marked_due_at, :parent_chore_id,
       aliases:    [],

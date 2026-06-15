@@ -16,7 +16,7 @@
 #  reward_pebbles      :integer          default(0), not null
 #  sharing_mode        :integer          default("personal"), not null
 #  short_name          :text
-#  show_on_daily_view  :integer          default("when_scheduled"), not null
+#  show_on_today_view  :integer          default("when_scheduled"), not null
 #  sort_order          :integer
 #  starts_on           :date
 #  target_count        :integer          default(1), not null
@@ -70,19 +70,22 @@ class Chore < ApplicationRecord
   #                              cooldowns are needed (week-reset, month-reset).
   THRESHOLD_DAY_RESET = -1
 
-  # show_on_daily_view enum — controls when an item appears on Today.
+  # show_on_today_view enum — controls when an item appears on the Today
+  # tab (Today section if due_today, Scheduled section otherwise). The
+  # Dailies section is gated separately by the user's ChoreDaily pin and
+  # is unaffected by this field.
   #   :always                       — always shown (even without a schedule)
   #   :when_scheduled (default)     — only on scheduled days (carryover allowed)
   #   :when_available               — whenever cooldown has elapsed
   #   :when_scheduled_and_available — both scheduled AND cooldown elapsed
   #   :never                        — never (Grid view only)
-  enum :show_on_daily_view, {
+  enum :show_on_today_view, {
     always:                       0,
     when_scheduled:               1,
     when_available:               2,
     when_scheduled_and_available: 3,
     never:                        4,
-  }, default: :when_scheduled, prefix: :daily
+  }, default: :when_scheduled, prefix: :today
 
   # Cooldown scope:
   #   :personal   — every user's cooldown is their own

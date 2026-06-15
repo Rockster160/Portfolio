@@ -86,7 +86,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
 
     it ":when_scheduled — Grid-only (not scheduled today) stays off after completion" do
       grid_only = create(
-        :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+        :chore, created_by_user: user, show_on_today_view: :when_scheduled,
         recurrence: { freq: :never }
       )
       expect(render(grid_only)[:today_visible]).to be(false)
@@ -96,7 +96,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
 
     it ":when_scheduled — scheduled today stays on after completion" do
       scheduled = create(
-        :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+        :chore, created_by_user: user, show_on_today_view: :when_scheduled,
         recurrence: { freq: :daily }
       )
       expect(render(scheduled)[:today_visible]).to be(true)
@@ -110,7 +110,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
       # Tapping it from Grid (skipped payout, but still a completion)
       # must not move it onto Today.
       ch = create(
-        :chore, created_by_user: user, show_on_daily_view: :when_available,
+        :chore, created_by_user: user, show_on_today_view: :when_available,
         threshold_seconds: 8.hours.to_i, recurrence: { freq: :never }
       )
       create(
@@ -127,7 +127,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
       # on Today at 4am. Completing it (which re-engages cooldown)
       # must not flip it off — the membership decision is locked.
       ch = create(
-        :chore, created_by_user: user, show_on_daily_view: :when_available,
+        :chore, created_by_user: user, show_on_today_view: :when_available,
         threshold_seconds: 4.hours.to_i, recurrence: { freq: :never }
       )
       create(
@@ -145,11 +145,11 @@ RSpec.describe ChoreSerializer, type: :serializer do
          # one with a SKIPPED completion yesterday. today_visible? must
          # agree — payment is a payout concern, not a visibility one.
          paid_ch = create(
-           :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+           :chore, created_by_user: user, show_on_today_view: :when_scheduled,
            recurrence: { freq: :daily }
          )
          skipped_ch = create(
-           :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+           :chore, created_by_user: user, show_on_today_view: :when_scheduled,
            recurrence: { freq: :daily }
          )
          create(
@@ -173,7 +173,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
       wed = tue + 1
       ch = create(
         :chore, created_by_user: user, sharing_mode: :household,
-        show_on_daily_view: :when_scheduled,
+        show_on_today_view: :when_scheduled,
         recurrence: { freq: :weekly, by_day: [:tue] }, starts_on: tue - 7
       )
       # Rocco completed it on Tuesday
@@ -197,7 +197,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
       wed = tue + 1
       ch = create(
         :chore, created_by_user: user, sharing_mode: :household,
-        show_on_daily_view: :when_scheduled,
+        show_on_today_view: :when_scheduled,
         recurrence: { freq: :weekly, by_day: [:tue] }, starts_on: tue - 7
       )
       create(
@@ -245,7 +245,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
 
     it "due_today: daily-recurring chore is due today" do
       ch = create(
-        :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+        :chore, created_by_user: user, show_on_today_view: :when_scheduled,
         recurrence: { freq: :daily }
       )
       expect(render(ch)[:due_today]).to be(true)
@@ -254,7 +254,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
     it "due_today: weekly chore matching today's weekday is due today" do
       key = AgendaSchedule::WEEKDAY_KEYS[today.wday]
       ch = create(
-        :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+        :chore, created_by_user: user, show_on_today_view: :when_scheduled,
         recurrence: { freq: :weekly, by_day: [key] }
       )
       expect(render(ch)[:due_today]).to be(true)
@@ -264,7 +264,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
       # Use yesterday's weekday so today is "carryover" via scheduled_or_carried.
       key = AgendaSchedule::WEEKDAY_KEYS[(today - 1).wday]
       ch = create(
-        :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+        :chore, created_by_user: user, show_on_today_view: :when_scheduled,
         recurrence: { freq: :weekly, by_day: [key] }
       )
       expect(render(ch)[:today_visible]).to be(true)
@@ -274,7 +274,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
     it "due_today: one-off with starts_on == today is due today" do
       ch = create(
         :chore, created_by_user: user, one_off: true,
-        show_on_daily_view: :when_scheduled, recurrence: { freq: :never },
+        show_on_today_view: :when_scheduled, recurrence: { freq: :never },
         starts_on: today
       )
       expect(render(ch)[:today_visible]).to be(true)
@@ -284,7 +284,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
     it "due_today: one-off with starts_on in the past is overdue, not due today" do
       ch = create(
         :chore, created_by_user: user, one_off: true,
-        show_on_daily_view: :when_scheduled, recurrence: { freq: :never },
+        show_on_today_view: :when_scheduled, recurrence: { freq: :never },
         starts_on: today - 5
       )
       expect(render(ch)[:today_visible]).to be(true)
@@ -294,7 +294,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
     it "due_today: one-off without starts_on is not flagged due today" do
       ch = create(
         :chore, created_by_user: user, one_off: true,
-        show_on_daily_view: :when_scheduled, recurrence: { freq: :never },
+        show_on_today_view: :when_scheduled, recurrence: { freq: :never },
         starts_on: nil
       )
       expect(render(ch)[:today_visible]).to be(true)
@@ -304,7 +304,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
     it "due_today: relative chore is due today on its due_on date, overdue after" do
       # Last completed exactly `interval` days ago → due_on == today
       on_due_day = create(
-        :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+        :chore, created_by_user: user, show_on_today_view: :when_scheduled,
         recurrence: { freq: :relative, interval: 3, unit: :day }
       )
       create(
@@ -315,7 +315,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
 
       # Last completed earlier → due_on was in the past → overdue today
       overdue_rel = create(
-        :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+        :chore, created_by_user: user, show_on_today_view: :when_scheduled,
         recurrence: { freq: :relative, interval: 3, unit: :day }
       )
       create(
@@ -329,7 +329,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
     describe ":after_chore (cross-chore relative recurrence)" do
       let(:anchor) {
         create(:chore, created_by_user: user, name: "Laundry",
-          show_on_daily_view: :when_scheduled, recurrence: { freq: :never })
+          show_on_today_view: :when_scheduled, recurrence: { freq: :never })
       }
       let(:follower_recurrence) {
         { freq: :after_chore, anchor_chore_id: anchor.id, interval: 0, unit: :day }
@@ -338,7 +338,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
       def follower(opts = {})
         create(:chore, {
           created_by_user: user, name: "Fold Laundry",
-          show_on_daily_view: :when_scheduled,
+          show_on_today_view: :when_scheduled,
           recurrence: follower_recurrence,
         }.merge(opts))
       end
@@ -440,7 +440,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
     describe "scheduled_due_on (sort key for the Scheduled section)" do
       it "uses marked_due_at when set, resolved into the viewer's chore-day" do
         ch = create(
-          :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+          :chore, created_by_user: user, show_on_today_view: :when_scheduled,
           recurrence: { freq: :never }, marked_due_at: (today - 2).beginning_of_day + 12.hours
         )
         expect(render(ch)[:scheduled_due_on]).to eq((today - 2).iso8601)
@@ -449,7 +449,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
       it "uses starts_on for one-offs" do
         ch = create(
           :chore, created_by_user: user, one_off: true,
-          show_on_daily_view: :when_scheduled, recurrence: { freq: :never },
+          show_on_today_view: :when_scheduled, recurrence: { freq: :never },
           starts_on: today - 4
         )
         expect(render(ch)[:scheduled_due_on]).to eq((today - 4).iso8601)
@@ -458,7 +458,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
       it "uses the most recent past matching day for fixed-pattern schedules" do
         key = AgendaSchedule::WEEKDAY_KEYS[(today - 2).wday]
         ch = create(
-          :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+          :chore, created_by_user: user, show_on_today_view: :when_scheduled,
           recurrence: { freq: :weekly, by_day: [key] }
         )
         expect(render(ch)[:scheduled_due_on]).to eq((today - 2).iso8601)
@@ -466,7 +466,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
 
       it "uses relative_due_on for relative recurrence" do
         ch = create(
-          :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+          :chore, created_by_user: user, show_on_today_view: :when_scheduled,
           recurrence: { freq: :relative, interval: 3, unit: :day }
         )
         create(
@@ -478,7 +478,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
 
       it "is nil for unscheduled chores with no marked_due / starts_on" do
         ch = create(
-          :chore, created_by_user: user, show_on_daily_view: :always,
+          :chore, created_by_user: user, show_on_today_view: :always,
           recurrence: { freq: :never }
         )
         expect(render(ch)[:scheduled_due_on]).to be_nil
@@ -492,7 +492,7 @@ RSpec.describe ChoreSerializer, type: :serializer do
       # flip — Today is locked once we're inside it.
       starts_on = today - 2
       ch = create(
-        :chore, created_by_user: user, show_on_daily_view: :when_scheduled,
+        :chore, created_by_user: user, show_on_today_view: :when_scheduled,
         recurrence: { freq: :custom, every: 3, unit: :day }, starts_on: starts_on
       )
       expect(render(ch)[:today_visible]).to be(true)

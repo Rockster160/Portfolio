@@ -844,7 +844,7 @@ RSpec.describe "Chores", type: :request do
     chore = create(
       :chore, created_by_user: user, name: "Spray", reward_pebbles: 3,
       threshold_seconds: 6 * 3600,
-      show_on_daily_view: :when_available,
+      show_on_today_view: :when_available,
       recurrence: { freq: :never }
     )
     travel_to Time.zone.local(2026, 4, 15, 14, 0, 0) do
@@ -1035,7 +1035,7 @@ RSpec.describe "Chores", type: :request do
     chore = create(
       :chore, created_by_user: user,
       reward_pebbles: 3, threshold_seconds: 6 * 3600,
-      show_on_daily_view: :when_available,
+      show_on_today_view: :when_available,
       recurrence: { freq: :never }
     )
     ChoreCompleter.new(chore, user).call

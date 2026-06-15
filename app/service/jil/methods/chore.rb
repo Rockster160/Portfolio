@@ -12,7 +12,7 @@ class Jil::Methods::Chore < Jil::Methods::Base
     :marked_due_at,
     :reward_pebbles,
     :assigned_to,
-    :show_on_daily_view,
+    :show_on_today_view,
   ].freeze
 
   def cast(value)
@@ -63,8 +63,8 @@ class Jil::Methods::Chore < Jil::Methods::Base
     assigned = load_user(attrs.delete(:assigned_to))
     sharing_key = attrs.delete(:sharing_mode).to_s.downcase.presence
     sharing = ::Chore.sharing_modes.key?(sharing_key) ? sharing_key.to_sym : :personal
-    daily_key = attrs.delete(:show_on_daily_view).to_s.downcase.presence
-    daily = ::Chore.show_on_daily_views.key?(daily_key) ? daily_key.to_sym : nil
+    today_key = attrs.delete(:show_on_today_view).to_s.downcase.presence
+    today = ::Chore.show_on_today_views.key?(today_key) ? today_key.to_sym : nil
     starts_on = parse_date(attrs.delete(:starts_on))
     marked_due_at = parse_marked_due(attrs.delete(:marked_due_at))
 
@@ -75,7 +75,7 @@ class Jil::Methods::Chore < Jil::Methods::Base
         assigned_to_user_id: assigned&.id,
         starts_on:           starts_on,
         marked_due_at:       marked_due_at,
-        show_on_daily_view:  daily,
+        show_on_today_view:  today,
       ).compact,
     )
     chore.persisted? ? chore : nil
@@ -83,7 +83,7 @@ class Jil::Methods::Chore < Jil::Methods::Base
 
   # Chore.update(name_or_chore, content(ChoreData)) → mutate an existing
   # chore the running user can access. Same ChoreData builders as #add
-  # (`#name`, `#show_on_daily_view`, `#starts_on`, etc). Unknown / blank
+  # (`#name`, `#show_on_today_view`, `#starts_on`, etc). Unknown / blank
   # keys are dropped; an empty block is a no-op. Returns the reloaded
   # Chore, or nil if no chore matched.
   def update(name_or_chore, details)
@@ -104,12 +104,12 @@ class Jil::Methods::Chore < Jil::Methods::Base
         attrs.delete(:sharing_mode)
       end
     end
-    if attrs.key?(:show_on_daily_view)
-      key = attrs[:show_on_daily_view].to_s.downcase.presence
-      if ::Chore.show_on_daily_views.key?(key)
-        attrs[:show_on_daily_view] = key.to_sym
+    if attrs.key?(:show_on_today_view)
+      key = attrs[:show_on_today_view].to_s.downcase.presence
+      if ::Chore.show_on_today_views.key?(key)
+        attrs[:show_on_today_view] = key.to_sym
       else
-        attrs.delete(:show_on_daily_view)
+        attrs.delete(:show_on_today_view)
       end
     end
     attrs[:starts_on] = parse_date(attrs[:starts_on]) if attrs.key?(:starts_on)
@@ -180,9 +180,13 @@ class Jil::Methods::Chore < Jil::Methods::Base
     { reward_pebbles: @jil.cast(value, :Numeric).to_i }
   end
 
-  def show_on_daily_view(value)
-    { show_on_daily_view: value }
+  def show_on_today_view(value)
+    { show_on_today_view: value }
   end
+  # Backward-compat alias for prod Jil tasks that pre-date the
+  # show_on_daily_view → show_on_today_view rename. New tasks should
+  # use the canonical name.
+  alias_method :show_on_daily_view, :show_on_today_view
 
   # ---- [ChoreCompletionData] builders (used inside content(ChoreCompletionData)
   # blocks for Chore.complete). Mirrors ActionEventData shape.
@@ -797,4 +801,4 @@ end
 #   #one_off(Boolean)
 #   #starts_on(Date)
 #   #reward_pebbles(Numeric)
-#   #show_on_daily_view(["always" "when_scheduled" "when_available" "when_scheduled_and_available" "never"])
+#   #show_on_today_view(["always" "when_scheduled" "when_available" "when_scheduled_and_available" "never"])

@@ -3,13 +3,13 @@ require "rails_helper"
 RSpec.describe ChoreSerializer, "marked_due_at" do
   let(:user) { create(:user) }
   let(:day) { ChoreDay.current(user) }
-  # show_on_daily_view: :never so we know any Today appearance is
+  # show_on_today_view: :never so we know any Today appearance is
   # solely from the mark — schedule contribution is ruled out.
   let(:chore) {
     create(
       :chore,
       created_by_user:    user,
-      show_on_daily_view: :never,
+      show_on_today_view: :never,
       recurrence:         { freq: :never },
     )
   }

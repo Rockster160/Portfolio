@@ -6,32 +6,31 @@ class SimpleWS {
     this.auth_socket = auth_socket;
     let sock = this.auth_socket;
     this.init_data = init_data;
-    this.last_ping = 0;
 
     sock.open = false;
-    // sock.reload = false
     sock.presend = init_data.presend;
 
     if (!init_data.url) {
       return;
     }
     sws.setupSocket(init_data.url);
-    setInterval(function () {
-      if (new Date().getTime() - sws.last_ping > 5_000) {
-        console.log(
-          "No ping found! Attempting to close to trigger reconnect...",
-        );
-        sws.socket?.close();
-        sws.open = false;
-        sws.setupSocket(sws.init_data.url);
-      }
-    }, 5_000);
   }
 
   setupSocket(url) {
     let sws = this;
     let init_data = sws.init_data;
     let sock = sws.auth_socket;
+
+    // Detach handlers from any prior socket so its late close/message events
+    // can't flip sock.open back to false after the new socket has connected.
+    if (sws.socket) {
+      let noop = function () {};
+      sws.socket.onopen = noop;
+      sws.socket.onclose = noop;
+      sws.socket.onerror = noop;
+      sws.socket.onmessage = noop;
+    }
+
     sws.socket = new ReconnectingWebSocket(url);
 
     sws.socket.onopen = function () {
@@ -87,7 +86,6 @@ class SimpleWS {
     };
 
     sws.socket.onmessage = function (msg) {
-      sws.last_ping = new Date().getTime();
       if (init_data.receive && typeof init_data.receive === "function") {
         // if (sock.should_flash) { sock.cell.flash() }
         init_data.receive.call(sws, msg);

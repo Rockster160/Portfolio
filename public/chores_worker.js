@@ -15,7 +15,7 @@
 // clients re-pull the HTML next time they're online.
 
 // Bump CACHE on shipping shell changes so old clients re-pull HTML.
-const CACHE = "chores-v86";
+const CACHE = "chores-v87";
 
 // Last-resort: any real cached shell is better than no page at all.
 // If the user requested e.g. /chores (Grid) but only /chores/today
@@ -59,6 +59,19 @@ function isPrecachableAssetURL(url) {
   if (url.pathname.endsWith(".webmanifest")) return true;
   if (url.pathname === "/chores_sortable.js") return true;
   return false;
+}
+
+// Cheap structural validation: the real chores shell always carries
+// `<meta name="chores-shell" content="ok">` (added in page.html.erb's
+// head content_for block). A 200 OK that isn't actually our shell —
+// a wrong-controller render, an error page, an auth interstitial that
+// didn't redirect — won't have it. We refuse to write the response
+// into the cache when the marker is missing, preserving the previous
+// (working) shell. The check is HTML-substring, not DOM-parsed, so
+// it runs fast inside the SW without spinning up a parser.
+const SHELL_MARKER = '<meta name="chores-shell" content="ok">';
+function isValidShellBody(html) {
+  return typeof html === "string" && html.indexOf(SHELL_MARKER) !== -1;
 }
 
 // Parse a shell HTML body for asset URLs the page needs to render and
@@ -128,7 +141,15 @@ async function refreshAllShells() {
         }
         const clone = r.clone();
         const html = await clone.text();
-        // Warm assets FIRST. Only if every referenced asset is now in
+        // Validate FIRST. A 200 OK that doesn't carry the
+        // chores-shell meta marker is not our shell (error page,
+        // wrong controller, auth interstitial). Reject before any
+        // cache write — the previous good shell stays live.
+        if (!isValidShellBody(html)) {
+          await broadcastToClients({ kind: "shell_sync_failed", path: p });
+          return;
+        }
+        // Warm assets next. Only if every referenced asset is now in
         // cache do we replace the shell entry. A failed asset fetch
         // means the previous (working) shell + assets stay live —
         // never serve a shell whose JS/CSS won't load.
@@ -385,6 +406,16 @@ self.addEventListener("fetch", (evt) => {
             if (!fresh || !fresh.ok || fresh.type === "opaqueredirect") return;
             const clone = fresh.clone();
             const html = await clone.text();
+            // Validate the response carries the chores-shell marker
+            // before doing anything cache-side. Stops a 200 OK that
+            // isn't actually our shell from ever reaching cache.put.
+            if (!isValidShellBody(html)) {
+              await broadcastToClients({
+                kind: "shell_sync_failed",
+                path: url.pathname,
+              });
+              return;
+            }
             // Same atomic rule as install/refresh: only replace the
             // cached shell after every referenced asset is cached.
             const assetsOk = await warmShellAssets(cache, html, url.toString());

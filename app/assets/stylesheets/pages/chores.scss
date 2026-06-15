@@ -1187,6 +1187,35 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   }
 }
 
+// Cold-start loader: subtle inline placeholder shown while we're
+// awaiting the very first /chores/sync return AND have nothing in
+// localStorage to render. Sibling element, toggled via .hidden — never
+// replaces or rerenders the chores containers. Empty state for a real
+// user with zero chores is intentionally NOT shown here (that's a
+// valid steady state, not a loading state).
+.chores-cold-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--chores-muted, #6F7E97);
+  opacity: 0.85;
+}
+.chores-cold-start-spinner {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  animation: chores-cold-spin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes chores-cold-spin {
+  to { transform: rotate(360deg); }
+}
+
 // Offline state mirrored from navigator.onLine: turn server-dependent
 // action buttons red so it's immediately clear they aren't actionable
 // right now. The red color is the entire signal — no label/suffix.

@@ -4,6 +4,11 @@
   <meta name="theme-color" content="#00102B">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <%# Shell-validity marker. The service worker refuses to cache.put
+     any response missing this exact meta tag — guards the cache
+     against being poisoned by a 200 OK error page, a wrong-controller
+     render, or any non-shell HTML that happens to land at this URL. %>
+  <meta name="chores-shell" content="ok">
   <script src="/chores_sortable.js" defer></script>
 <% end %>
 <% content_for :viewport_tag do %>
@@ -16,16 +21,27 @@
   template literals — there is no server-side card HTML anywhere.
   This is the single source of truth that fixed the cache/sync drift
   that the previous HTML-shipping architecture kept introducing. %>
+<%# Shell root carries CONFIG + identity only — never per-request data.
+   cutoff-hour and viewer-username are stable per session; active-view
+   is the page-template selector. Balance, day-key, chore lists, etc.
+   are hydrated client-side from localStorage + /chores/sync ONLY, so
+   the cached shell stays valid across day rollovers and balance
+   changes without ever poisoning local truth. %>
 <div class="chores-page" data-chores-root
      data-active-view="<%= @active_view %>"
-     data-day-key="<%= @day.iso8601 %>"
      data-cutoff-hour="<%= @cutoff_hour %>"
-     data-balance-total="<%= @balance_total %>"
-     data-balance-today="<%= @balance_today %>"
      data-viewer-username="<%= current_user.username %>">
   <%= render "header", balance: @balance, scope: :today %>
   <div class="hot-strip" data-chores-hot-strip hidden></div>
   <%= render "toolbar" %>
+  <%# Cold-start placeholder: visible only when localStorage has nothing
+      AND no successful /chores/sync has ever landed. The page-script
+      toggles `.hidden` on/off — never replaces or rerenders the
+      sibling chores containers, so per-element diffs stay intact. %>
+  <div class="chores-cold-start hidden" data-cold-start aria-live="polite">
+    <span class="chores-cold-start-spinner" aria-hidden="true"></span>
+    <span class="chores-cold-start-text">Loading chores…</span>
+  </div>
 
   <div class="chores-view view-grid" data-view="grid">
     <div class="chores-grid" data-chores-grid></div>
@@ -61,18 +77,7 @@
   </div>
 
   <%= render "modals" %>
-
-  <script type="application/json" id="chores-bootstrap">
-    <%== {
-      chores: @chores_json,
-      lookahead: @lookahead_json,
-      daily_ids: @daily_ids,
-      server_ts: Time.current.iso8601(3),
-      day_key: @day.iso8601,
-      balance: @balance_total,
-      today_earnings: @balance_today,
-    }.to_json %>
-  </script>
+  <%= render "templates" %>
 </div>
 
 <% content_for :after_body do %>

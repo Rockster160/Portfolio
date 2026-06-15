@@ -1,0 +1,51 @@
+<%# Card templates — the SOLE source of truth for chore-card HTML.
+   Cloned by the page-script's renderGridCard / renderCircleCard /
+   renderHotCell paths and then populated by the existing patcher
+   functions (patchGridCard / patchCircleCard). Updates funnel through
+   the same patchers, so first-render and incremental update use the
+   identical code path. If the markup changes here, both flows reflect
+   it on the next reload — no JS template literal to keep in sync.
+
+   Conditional/variable elements (hot badge, streak badge, count badge,
+   countdown span, state icon, icon contents) are NOT pre-rendered in
+   these templates. They are added or removed by the patchers using
+   the same insertAdjacentHTML / patchCornerBadge / patchStateIcon
+   logic that handles live updates — keeping one code path for both
+   sides of the lifecycle. The icon container ships empty; the
+   renderer applies the icon contents once after cloning. %>
+
+<template data-template="grid-card">
+  <div class="chore-card" data-template-card>
+    <div class="icon" data-icon>
+      <span class="card-reward"></span>
+    </div>
+    <span class="card-count-slot" data-count-slot></span>
+    <div class="title"></div>
+    <div class="ago-row" data-ago-row></div>
+  </div>
+</template>
+
+<template data-template="circle-card">
+  <div class="chore-circle" data-template-card>
+    <div class="circle-inner">
+      <svg class="done-ring" viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r="48" pathLength="100" data-ring-progress></circle>
+      </svg>
+      <span class="circle-reward"></span>
+      <div class="icon" data-icon></div>
+      <div class="count-slot" data-count-slot></div>
+    </div>
+    <div class="title"></div>
+  </div>
+</template>
+
+<template data-template="hot-cell">
+  <div class="hot-strip-cell"></div>
+</template>
+
+<template data-template="circle-cooldown-ring">
+  <svg class="circle-cooldown-ring" viewBox="0 0 100 100" aria-hidden="true">
+    <circle class="cooldown-ring-bg" cx="50" cy="50" r="40"></circle>
+    <circle class="cooldown-ring-progress" cx="50" cy="50" r="40" data-cooldown-progress></circle>
+  </svg>
+</template>
