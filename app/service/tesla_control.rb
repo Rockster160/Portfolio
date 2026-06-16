@@ -47,14 +47,14 @@ class TeslaControl
 
   def windows(direction=:toggle)
     direction = parse_to(direction, :vent, :close)
-    return proxy_command(:window_control, proxy_command: :vent) if direction == :open
+    return proxy_command(:window_control, command: :vent) if direction == :open
 
     data = vehicle_data
     windows = [:fd, :fp, :rd, :rp]
     is_open = windows.any? { |window| data.dig(:vehicle_state, :"#{window}_window").to_i.positive? }
     state = direction == :toggle && !is_open ? :vent : :close
 
-    proxy_command(:window_control, proxy_command: state, lat: loc[0], lon: loc[1])
+    proxy_command(:window_control, command: state, lat: loc[0], lon: loc[1])
   end
 
   def doors(direction=:toggle)
