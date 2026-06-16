@@ -5,9 +5,9 @@ Requires=fleet-telemetry.service
 
 [Service]
 Type=simple
-User=rocco
-Group=rocco
-WorkingDirectory=/home/rocco/apps/portfolio/current
+User=deploy
+Group=deploy
+WorkingDirectory=/home/deploy/apps/portfolio/current
 
 ExecStart=/usr/bin/ruby bin/tesla_telemetry_bridge.rb
 
@@ -21,7 +21,9 @@ StandardError=journal
 
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=true
+# Bridge reads the deployed script from /home/deploy/... so it needs
+# /home visible. read-only is enough (we don't write there).
+ProtectHome=read-only
 PrivateTmp=true
 
 [Install]

@@ -5,19 +5,21 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=rocco
-Group=rocco
+User=deploy
+Group=deploy
 
-# Build with: go build -o /opt/fleet-telemetry/fleet-telemetry ./cmd/fleet-telemetry
-ExecStart=/opt/fleet-telemetry/fleet-telemetry -config /etc/tesla/fleet-telemetry.yaml
+# Build with: go build -o /opt/fleet-telemetry/fleet-telemetry ./cmd
+# Shell wrapper appends stdout (the record stream) to feed.jsonl. We can't
+# use `StandardOutput=append:` because that needs systemd v240+ and Ubuntu
+# 16.04 ships v229. `exec` replaces the shell so SIGTERM from systemd
+# reaches fleet-telemetry directly.
+ExecStart=/bin/sh -c 'exec /opt/fleet-telemetry/fleet-telemetry -config /etc/tesla/fleet-telemetry.yaml >> /var/log/tesla-telemetry/feed.jsonl'
 
 WorkingDirectory=/opt/fleet-telemetry
 Restart=on-failure
 RestartSec=5
 
-# Telemetry records → feed file (tesla-telemetry-bridge.service tails this)
-# Startup / runtime logs → journal
-StandardOutput=append:/var/log/tesla-telemetry/feed.jsonl
+# stderr → journal so startup/runtime errors land in journalctl
 StandardError=journal
 
 # Hardening

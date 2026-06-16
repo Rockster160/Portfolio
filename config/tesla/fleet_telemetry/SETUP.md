@@ -51,7 +51,7 @@ Clone source into `/opt/fleet-telemetry/src/` (persistent — survives reboots, 
 
 ```bash
 sudo mkdir -p /opt/fleet-telemetry
-sudo chown rocco:rocco /opt/fleet-telemetry
+sudo chown deploy:deploy /opt/fleet-telemetry
 git clone https://github.com/teslamotors/fleet-telemetry /opt/fleet-telemetry/src
 cd /opt/fleet-telemetry/src
 go build -o /opt/fleet-telemetry/fleet-telemetry ./cmd
@@ -61,18 +61,18 @@ go build -o /opt/fleet-telemetry/fleet-telemetry ./cmd
 
 ```bash
 sudo mkdir -p /etc/tesla /var/log/tesla-telemetry
-sudo cp /home/rocco/apps/portfolio/current/config/tesla/fleet_telemetry/config.yaml \
+sudo cp /home/deploy/apps/portfolio/current/config/tesla/fleet_telemetry/config.yaml \
        /etc/tesla/fleet-telemetry.yaml
-sudo chown rocco:rocco /var/log/tesla-telemetry
+sudo chown deploy:deploy /var/log/tesla-telemetry
 ```
 
 ### 4. LE cert access
 
-The fleet-telemetry process runs as `rocco` and needs to read the LE private key. Grant via the `ssl-cert` group:
+The fleet-telemetry process runs as `deploy` and needs to read the LE private key. Grant via the `ssl-cert` group:
 
 ```bash
 sudo groupadd -f ssl-cert
-sudo usermod -aG ssl-cert rocco
+sudo usermod -aG ssl-cert deploy
 sudo chgrp -R ssl-cert /etc/letsencrypt/live /etc/letsencrypt/archive
 sudo chmod -R g+rX     /etc/letsencrypt/live /etc/letsencrypt/archive
 ```
@@ -89,7 +89,7 @@ cat /etc/letsencrypt/live/ardesian.com/privkey.pem >/dev/null && echo OK
 ### 5. Install the systemd units
 
 ```bash
-cd /home/rocco/apps/portfolio/current
+cd /home/deploy/apps/portfolio/current
 sudo cp config/tesla/fleet_telemetry/systemd/fleet-telemetry.service        /etc/systemd/system/
 sudo cp config/tesla/fleet_telemetry/systemd/tesla-telemetry-bridge.service /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -173,11 +173,13 @@ sudo systemctl restart fleet-telemetry
 
 The minimum reproducible setup is steps 1–7 above plus:
 - Same domain on the new server with its own LE cert
-- Same Rails deploy at `/home/rocco/apps/portfolio/current`
+- Same Rails deploy at `/home/deploy/apps/portfolio/current`
 - Re-run `Oauth::TeslaApi.me.request_telemetry` to point Tesla at the new server
 
 ## Troubleshooting
 
+- **`systemctl status fleet-telemetry` shows `status=2/INVALIDARGUMENT`** — most likely systemd < v240 doesn't recognize `StandardOutput=append:`. The unit shipped here uses a `/bin/sh -c '… >> file'` wrapper to work on Ubuntu 16.04's systemd v229. On systemd v240+ you can simplify ExecStart back to a direct invocation plus `StandardOutput=append:/var/log/tesla-telemetry/feed.jsonl`.
+- **Bridge fails with `status=200/CHDIR`** — `ProtectHome=true` blocks `/home`. Use `ProtectHome=read-only` (works on systemd v229+) so the bridge can still read the deployed script.
 - **`systemctl status fleet-telemetry` shows permission errors on the cert** — group membership didn't take effect; log out and back in, or `newgrp ssl-cert`.
 - **`feed.jsonl` is empty after car drives** — confirm `request_telemetry` ran successfully and Tesla returned `{success: true}`. Try `Oauth::TeslaApi.me.check_telemetry` to see Tesla's stored config.
 - **Bridge logs "POST failed: ECONNREFUSED"** — Rails isn't running on 3141 yet.
