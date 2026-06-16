@@ -1,0 +1,31 @@
+[Unit]
+Description=Tesla Fleet Telemetry receiver (TLS on :4443)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rocco
+Group=rocco
+
+# Build with: go build -o /opt/fleet-telemetry/fleet-telemetry ./cmd/fleet-telemetry
+ExecStart=/opt/fleet-telemetry/fleet-telemetry -config /etc/tesla/fleet-telemetry.yaml
+
+WorkingDirectory=/opt/fleet-telemetry
+Restart=on-failure
+RestartSec=5
+
+# Telemetry records → feed file (tesla-telemetry-bridge.service tails this)
+# Startup / runtime logs → journal
+StandardOutput=append:/var/log/tesla-telemetry/feed.jsonl
+StandardError=journal
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/log/tesla-telemetry
+
+[Install]
+WantedBy=multi-user.target

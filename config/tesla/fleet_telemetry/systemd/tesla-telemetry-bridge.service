@@ -1,0 +1,28 @@
+[Unit]
+Description=Tesla Telemetry Bridge (tail feed → POST to Rails webhook)
+After=fleet-telemetry.service
+Requires=fleet-telemetry.service
+
+[Service]
+Type=simple
+User=rocco
+Group=rocco
+WorkingDirectory=/var/www/portfolio/current
+
+ExecStart=/usr/bin/ruby bin/tesla_telemetry_bridge.rb
+
+Environment=TELEMETRY_FEED=/var/log/tesla-telemetry/feed.jsonl
+Environment=TELEMETRY_WEBHOOK=http://localhost:3141/webhooks/tesla_telemetry
+
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

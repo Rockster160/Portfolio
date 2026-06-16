@@ -223,7 +223,8 @@ class TeslaControl
         info("Trying again after wakeup!")
         retry
       else
-        err("RestClient Wakeup Error", e)
+        # Don't notify here — the outer caller (proxy_command / command / get)
+        # has its own rescue+err and would double-post to Slack. Just propagate.
         raise
       end
     rescue StandardError => e

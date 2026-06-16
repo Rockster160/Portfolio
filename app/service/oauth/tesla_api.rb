@@ -60,11 +60,22 @@ class Oauth::TeslaApi < Oauth::Base
       config: {
         alert_types: ["service"],
         fields:      TeslaService.fields(30.minutes),
-        ca:          File.read("_scripts/tesla_keys/cert.pem"),
+        ca:          telemetry_ca,
         hostname:    "ardesian.com",
         port:        4443,
       },
     })
+  end
+
+  # CA bundle that Tesla will use to validate ardesian.com:4443's TLS cert.
+  # Prod serves an LE cert via the fleet-telemetry server, so we hand Tesla
+  # the LE chain. On dev (no real fleet-telemetry server), fall back to the
+  # legacy self-signed cert so the registration call still parses.
+  def telemetry_ca
+    le_chain = "/etc/letsencrypt/live/ardesian.com/chain.pem"
+    return File.read(le_chain) if File.exist?(le_chain)
+
+    File.read("_scripts/tesla_keys/cert.pem")
   end
 
   def check_telemetry
