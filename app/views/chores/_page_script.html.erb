@@ -252,10 +252,21 @@
       },
       isDaily(id) { return dailyIdSet.has(parseInt(id, 10)); },
       dailyIds() { return dailyIds.slice(); },
-      upsert(c, { optimistic = false } = {}) {
+      upsert(c, { optimistic = false, authoritative = false } = {}) {
         if (!c || !c.id) return false;
         const existing = map.get(c.id);
-        if (!optimistic && existing?.updated_at && c.updated_at && existing.updated_at > c.updated_at) {
+        // Skip the updated_at guard when the caller declares the
+        // payload authoritative (cold-boot full /chores/sync). Stuck
+        // local state from prior sessions — partial flushes, optimistic
+        // updates that never reconciled, divergence across devices —
+        // can leave existing.updated_at higher than truth; the guard
+        // would then make incremental syncs unable to repair it. The
+        // boot full sync is the safe place to overwrite because it
+        // runs AFTER hydrateFromLocal and BEFORE any user click, so
+        // there's no in-flight optimistic write to clobber.
+        if (!optimistic && !authoritative &&
+            existing?.updated_at && c.updated_at &&
+            existing.updated_at > c.updated_at) {
           // Newer local copy wins; don't overwrite.
           return false;
         }
@@ -2259,16 +2270,30 @@
     return true;
   }
 
-  function reconcile(data) {
+  function reconcile(data, { authoritative = false } = {}) {
     if (!data) return;
+    // `authoritative` = "this is the truth, replace local." Used by
+    // the cold-boot full /chores/sync so stuck localStorage from a
+    // previous session can't survive a page load. Skip both the
+    // local-click-ts race protection AND ChoreStore.upsert's
+    // updated_at guard. POST/PATCH handlers and incremental syncs
+    // keep both protections — they may overlap with in-flight taps.
     if (data.chore) {
       const id = data.chore.id;
-      const localMs = localClickTs.get(String(id)) || 0;
-      const serverMs = data.server_ts ? new Date(data.server_ts).getTime() : Date.now();
-      if (!localMs || serverMs >= localMs) ChoreStore.upsert(data.chore);
+      if (authoritative) {
+        ChoreStore.upsert(data.chore, { authoritative: true });
+      } else {
+        const localMs = localClickTs.get(String(id)) || 0;
+        const serverMs = data.server_ts ? new Date(data.server_ts).getTime() : Date.now();
+        if (!localMs || serverMs >= localMs) ChoreStore.upsert(data.chore);
+      }
     }
     if (Array.isArray(data.chores)) {
       data.chores.forEach(c => {
+        if (authoritative) {
+          ChoreStore.upsert(c, { authoritative: true });
+          return;
+        }
         const localMs = localClickTs.get(String(c.id)) || 0;
         const serverMs = data.server_ts ? new Date(data.server_ts).getTime() :
                          c.updated_at ? new Date(c.updated_at).getTime() : Date.now();
@@ -2383,7 +2408,11 @@
         setSyncBadge(false, true);
         return;
       }
-      reconcile(data);
+      // A full pull (no `since`) is the canonical reset point —
+      // apply authoritatively so stuck localStorage from prior
+      // sessions can't survive. Incremental deltas (useSince=true)
+      // keep the optimistic/race protections in reconcile.
+      reconcile(data, { authoritative: !useSince });
       localStorage.setItem(SYNC_TS_KEY, data.server_ts);
       localStorage.setItem(SYNC_DAY_KEY, data.day_key);
       setSyncBadge(false);
@@ -5529,7 +5558,16 @@
   // never display, making navigation to them noticeably faster.
   // Grid/Today still resync on their own boot, so navigating in from
   // those pages sees fresh data.
-  if (unifiedPage) fullSync();
+  //
+  // `force: true` is critical here: this is the page-load reset
+  // point. It pulls the FULL chore set (no `since=`) and reconcile
+  // applies it AUTHORITATIVELY — bypassing the updated_at guard so
+  // any stuck localStorage from a prior session is overwritten with
+  // server truth. Mirrors what the legacy inline-bootstrap merge
+  // used to do (server always wins on page load). Without this two
+  // devices diverge: each accumulates local edits that incremental
+  // sync deltas can't repair.
+  if (unifiedPage) fullSync({ force: true });
   pingSwRefresh();
   // Reconnect after offline: re-sync the chores store, re-ping the
   // shell cache. Monitor's `connected` callback also fires fullSync
