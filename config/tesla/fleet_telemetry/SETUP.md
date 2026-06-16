@@ -20,13 +20,11 @@ Two systemd services, one Tesla Go binary, one Ruby tail bridge. LE cert is reus
 
 ### 1. Install Go (1.21+)
 
-Ubuntu 20.04's apt `golang-go` is too old (1.13–1.18) for current fleet-telemetry.
+The apt-packaged Go on older Ubuntu (16.04, 18.04, 20.04) is too old for
+current fleet-telemetry. Use the upstream tarball — works on any Ubuntu
+version regardless of EOL state:
 
 ```bash
-# Preferred: snap
-sudo snap install go --classic
-
-# OR upstream tarball if snap is unavailable
 cd /tmp
 curl -LO https://go.dev/dl/go1.22.5.linux-amd64.tar.gz
 sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.22.5.linux-amd64.tar.gz
@@ -35,6 +33,9 @@ source /etc/profile.d/go.sh
 
 go version   # confirm 1.21+
 ```
+
+(snap is an alternative on currently-supported Ubuntu versions:
+`sudo snap install go --classic`. Avoid on EOL releases.)
 
 ### 2. Build the fleet-telemetry binary
 
@@ -60,7 +61,7 @@ go build -o /opt/fleet-telemetry/fleet-telemetry ./cmd
 
 ```bash
 sudo mkdir -p /etc/tesla /var/log/tesla-telemetry
-sudo cp /var/www/portfolio/current/config/tesla/fleet_telemetry/config.yaml \
+sudo cp /home/rocco/apps/portfolio/current/config/tesla/fleet_telemetry/config.yaml \
        /etc/tesla/fleet-telemetry.yaml
 sudo chown rocco:rocco /var/log/tesla-telemetry
 ```
@@ -76,12 +77,19 @@ sudo chgrp -R ssl-cert /etc/letsencrypt/live /etc/letsencrypt/archive
 sudo chmod -R g+rX     /etc/letsencrypt/live /etc/letsencrypt/archive
 ```
 
-Log out + back in so the group membership takes effect.
+Two ways to pick up the new group:
+- Log out + back in (covers all future shells)
+- `newgrp ssl-cert` in the current shell (covers only this shell)
+
+Verify: `groups` should now list `ssl-cert`. Confirm read access:
+```bash
+cat /etc/letsencrypt/live/ardesian.com/privkey.pem >/dev/null && echo OK
+```
 
 ### 5. Install the systemd units
 
 ```bash
-cd /var/www/portfolio/current
+cd /home/rocco/apps/portfolio/current
 sudo cp config/tesla/fleet_telemetry/systemd/fleet-telemetry.service        /etc/systemd/system/
 sudo cp config/tesla/fleet_telemetry/systemd/tesla-telemetry-bridge.service /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -165,7 +173,7 @@ sudo systemctl restart fleet-telemetry
 
 The minimum reproducible setup is steps 1–7 above plus:
 - Same domain on the new server with its own LE cert
-- Same Rails deploy at `/var/www/portfolio/current`
+- Same Rails deploy at `/home/rocco/apps/portfolio/current`
 - Re-run `Oauth::TeslaApi.me.request_telemetry` to point Tesla at the new server
 
 ## Troubleshooting
