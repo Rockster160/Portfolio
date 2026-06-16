@@ -1,0 +1,17 @@
+{
+  "host": "0.0.0.0",
+  "port": 4443,
+  "log_level": "info",
+  "json_log_enable": true,
+  "namespace": "tesla_telemetry",
+  "tls": {
+    "server_cert": "/etc/letsencrypt/live/ardesian.com/fullchain.pem",
+    "server_key":  "/etc/letsencrypt/live/ardesian.com/privkey.pem"
+  },
+  "records": {
+    "alerts":       ["logger"],
+    "errors":       ["logger"],
+    "V":            ["logger"],
+    "connectivity": ["logger"]
+  }
+}

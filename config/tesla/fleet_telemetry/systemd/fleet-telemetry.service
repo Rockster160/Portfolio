@@ -13,7 +13,7 @@ Group=deploy
 # use `StandardOutput=append:` because that needs systemd v240+ and Ubuntu
 # 16.04 ships v229. `exec` replaces the shell so SIGTERM from systemd
 # reaches fleet-telemetry directly.
-ExecStart=/bin/sh -c 'exec /opt/fleet-telemetry/fleet-telemetry -config /etc/tesla/fleet-telemetry.yaml >> /var/log/tesla-telemetry/feed.jsonl'
+ExecStart=/bin/sh -c 'exec /opt/fleet-telemetry/fleet-telemetry -config /etc/tesla/fleet-telemetry.json >> /var/log/tesla-telemetry/feed.jsonl'
 
 WorkingDirectory=/opt/fleet-telemetry
 Restart=on-failure
@@ -24,10 +24,13 @@ StandardError=journal
 
 # Hardening
 NoNewPrivileges=true
-ProtectSystem=strict
+# `full` works on systemd v214+ (Ubuntu 16.04 has v229). `strict` and
+# the ReadWritePaths= directive both need v231+, so we keep this looser
+# scheme on older boxes. `full` makes /usr, /boot, /etc read-only and
+# leaves /var writable, which is all we need.
+ProtectSystem=full
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/var/log/tesla-telemetry
 
 [Install]
 WantedBy=multi-user.target

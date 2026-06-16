@@ -61,8 +61,8 @@ go build -o /opt/fleet-telemetry/fleet-telemetry ./cmd
 
 ```bash
 sudo mkdir -p /etc/tesla /var/log/tesla-telemetry
-sudo cp /home/deploy/apps/portfolio/current/config/tesla/fleet_telemetry/config.yaml \
-       /etc/tesla/fleet-telemetry.yaml
+sudo cp /home/deploy/apps/portfolio/current/config/tesla/fleet_telemetry/config.json \
+       /etc/tesla/fleet-telemetry.json
 sudo chown deploy:deploy /var/log/tesla-telemetry
 ```
 
@@ -78,10 +78,12 @@ sudo chmod -R g+rX     /etc/letsencrypt/live /etc/letsencrypt/archive
 ```
 
 Two ways to pick up the new group:
+
 - Log out + back in (covers all future shells)
 - `newgrp ssl-cert` in the current shell (covers only this shell)
 
 Verify: `groups` should now list `ssl-cert`. Confirm read access:
+
 ```bash
 cat /etc/letsencrypt/live/ardesian.com/privkey.pem >/dev/null && echo OK
 ```
@@ -94,6 +96,7 @@ sudo cp config/tesla/fleet_telemetry/systemd/fleet-telemetry.service        /etc
 sudo cp config/tesla/fleet_telemetry/systemd/tesla-telemetry-bridge.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now fleet-telemetry tesla-telemetry-bridge
+sudo systemctl status fleet-telemetry tesla-telemetry-bridge
 ```
 
 ### 6. LE renewal hook (so cert refreshes pick up automatically)
@@ -172,6 +175,7 @@ sudo systemctl restart fleet-telemetry
 ## Moving to a new server
 
 The minimum reproducible setup is steps 1–7 above plus:
+
 - Same domain on the new server with its own LE cert
 - Same Rails deploy at `/home/deploy/apps/portfolio/current`
 - Re-run `Oauth::TeslaApi.me.request_telemetry` to point Tesla at the new server

@@ -103,7 +103,7 @@ class TeslaControl
     proxy_command(:set_temps, driver_temp: temp_C, passenger_temp: temp_C)
     # For some reason sometimes when setting temp while car is sleeping, it instead sets to TEMP_MIN
     # To counter that, wait 5 seconds after proxy_command is performed and attempt to set the temp again
-    # TeslaVerifyTempWorker.perform_in(5.seconds, temp_F) if Rails.env.production?
+    TeslaVerifyTempWorker.perform_in(5.seconds, temp_F) if Rails.env.production?
   end
 
   def heat_driver
