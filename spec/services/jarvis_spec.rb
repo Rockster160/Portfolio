@@ -135,7 +135,7 @@ RSpec.describe Jarvis do
     end
   end
 
-  context "with car", skip: "TeslaCommand.command is currently disabled" do
+  context "with car" do
     # turn the ac|heater on in my car|at home
     let(:tesla_control) { double("TeslaControl", vin: 1, vehicle_data: {}, cached_vehicle_data: {}) }
 

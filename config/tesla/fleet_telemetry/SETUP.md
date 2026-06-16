@@ -155,20 +155,19 @@ sudo systemctl restart fleet-telemetry tesla-telemetry-bridge
 
 ## Log rotation
 
-`/var/log/tesla-telemetry/feed.jsonl` grows over time. Add `/etc/logrotate.d/tesla-telemetry`:
+`/var/log/tesla-telemetry/feed.jsonl` grows over time. The config ships
+in the repo at `config/tesla/fleet_telemetry/logrotate`. Install it once:
 
-```
-/var/log/tesla-telemetry/feed.jsonl {
-    daily
-    rotate 7
-    compress
-    missingok
-    notifempty
-    copytruncate
-}
+```bash
+sudo cp /home/deploy/apps/portfolio/current/config/tesla/fleet_telemetry/logrotate \
+       /etc/logrotate.d/tesla-telemetry
+sudo logrotate -d /etc/logrotate.d/tesla-telemetry   # dry-run to verify
 ```
 
-`copytruncate` is important — without it, fleet-telemetry's open file handle keeps writing to the rotated file, and the bridge keeps reading from it. With `copytruncate`, the file is truncated in place; both processes keep their handles valid.
+`copytruncate` is required — without it, fleet-telemetry's open file
+handle keeps writing to the rotated file and the bridge keeps reading
+from it. With `copytruncate`, the file is truncated in place and both
+processes keep their handles valid.
 
 ## Updating the fleet-telemetry binary
 

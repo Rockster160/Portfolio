@@ -1,0 +1,12 @@
+/var/log/tesla-telemetry/feed.jsonl {
+    daily
+    rotate 7
+    compress
+    missingok
+    notifempty
+    # `copytruncate` is required — without it, fleet-telemetry's open file
+    # handle keeps writing to the rotated file and the bridge keeps reading
+    # from it. With copytruncate, the file is truncated in place and both
+    # processes keep their handles valid.
+    copytruncate
+}

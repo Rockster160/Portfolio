@@ -474,6 +474,29 @@
   #dismiss(String:"Tag")
 [Sms]
   #deliver(Text)::Boolean
+[Tesla]
+  #start(content(TeslaStartOptions))::Boolean
+  #stop::Boolean
+  #honk::Boolean
+  #flashLights::Boolean
+  #setTemp(Numeric)::Boolean
+  #navigate(Text)::Boolean
+  #lockDoors::Boolean
+  #unlockDoors::Boolean
+  #closeWindows::Boolean
+  #ventWindows::Boolean
+  #popFrunk::Boolean
+  #popTrunk::Boolean
+  #defrost::Boolean
+  #heatDriver::Boolean
+  #heatPassenger::Boolean
+*[TeslaStartOptions]
+  #temp(Numeric)
+  #navigate(Text)
+  #heatDriver(Boolean)
+  #heatPassenger(Boolean)
+  #vent(Boolean)
+  #defrost(Boolean)
 [Schedule]
   #find(Numeric)
   #search(Text("*") "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array # Using listener syntax trigger:word::data

@@ -1,4 +1,5 @@
 class TeslaError < StandardError; end
+class TeslaNotAuthorized < StandardError; end
 
 class TeslaControl
   attr_accessor :api
@@ -14,11 +15,21 @@ class TeslaControl
     new(User.me)
   end
 
+  # Single source of truth: the Tesla integration is bound to User.me only.
+  # Every command path (channels, Jarvis, Jil methods, workers) ends up
+  # constructing a TeslaControl, so guarding here blocks all of them at once.
+  def self.guard!(user)
+    raise TeslaNotAuthorized, "Tesla integration is restricted to User.me" unless user&.me?
+
+    user
+  end
+
   def perform_requests?
     ::Rails.env.production? || self.class.force_live_dev
   end
 
   def initialize(user)
+    self.class.guard!(user)
     @api = ::Oauth::TeslaApi.new(user)
   end
 
@@ -82,10 +93,11 @@ class TeslaControl
     proxy_command(:honk_horn)
   end
 
-  def navigate(address)
+  def navigate(input)
     # navigation_request is REST-only on the Fleet API — sending it through
     # the signed Go-proxy path returns "command requires using the REST API".
     # All other vehicle commands go via proxy_command; this is the exception.
+    address = self.class.resolve_destination(input)
     address_params = {
       type:         :share_ext_content_raw,
       locale:       :"en-US",
@@ -96,14 +108,57 @@ class TeslaControl
     command(:navigation_request, address_params)
   end
 
-  def set_temp(temp_F)
+  # Resolution order, matching how Jarvis voice and TeslaCommand already
+  # handle locations:
+  #   1. Contact name match (highest priority — e.g. "Sarah" → her address).
+  #      Possessives and common location-suffixes are normalized first so
+  #      "Sarah", "Sarah's", "Sarahs", "Sarah's house", "Sarah's place",
+  #      etc. all resolve to the same contact lookup.
+  #   2. Bare "lat,lng" pair (e.g. "40.4804,-111.998")
+  #   3. Anything else passed through as a free-form address string
+  # Tesla's share endpoint parses both addresses and lat,lng so we just
+  # hand the text along once we've picked the right form.
+  def self.resolve_destination(input)
+    text = input.to_s.strip
+    return text if text.empty?
+
+    book = User.me.address_book
+    contact_address = contact_candidates(text)
+      .lazy
+      .map { |c| book.contact_by_name(c)&.primary_address&.street }
+      .find(&:present?)
+    return contact_address if contact_address.present?
+
+    return text.gsub(/\s/, "") if text.match?(/\A-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\z/)
+
+    text
+  end
+
+  # Normalize natural-language variants down to plausible contact lookup
+  # keys. Tries each in priority order; the first one that matches a
+  # contact wins. Examples:
+  #   "Sarah"              → ["Sarah"]
+  #   "Sarah's"            → ["Sarah's", "Sarah"]
+  #   "Sarah's house"      → ["Sarah's house", "Sarah"]
+  #   "Sarahs"             → ["Sarahs", "Sarah"]
+  def self.contact_candidates(text)
+    variants = [text]
+    variants << text.sub(/['’]s\s+(house|home|place)s?\b/i, "").strip
+    variants << text.sub(/['’]s\b/i, "").strip
+    variants << text.sub(/(\b[A-Z][a-z]+)s\b/, '\1') if text.exclude?("'") && text.exclude?("’")
+    variants.uniq.compact_blank
+  end
+
+  def set_temp(temp_F, skip_verify: false)
     temp_F = temp_F.to_f.clamp(59..82)
     # Tesla expects temp in Celsius
     temp_C = ((temp_F - 32) * (5 / 9.to_f)).round(1)
     proxy_command(:set_temps, driver_temp: temp_C, passenger_temp: temp_C)
     # For some reason sometimes when setting temp while car is sleeping, it instead sets to TEMP_MIN
-    # To counter that, wait 5 seconds after proxy_command is performed and attempt to set the temp again
-    TeslaVerifyTempWorker.perform_in(5.seconds, temp_F) if Rails.env.production?
+    # To counter that, wait 5 seconds after proxy_command is performed and attempt to set the temp again.
+    # `skip_verify` is set by TeslaVerifyTempWorker so its own retries don't
+    # spawn fresh verify chains and defeat the attempt counter.
+    TeslaVerifyTempWorker.perform_in(5.seconds, temp_F) if Rails.env.production? && !skip_verify
   end
 
   def heat_driver
@@ -138,23 +193,34 @@ class TeslaControl
       User.me.caches.set(:car_data, car_data)
       break car_data if car_data[:state] == "asleep"
 
+      # Tire pressure: ONLY add a Chores/TODO item when Tesla reports a
+      # warning AND the latest pressure reading is actually below threshold.
+      # This avoids re-adding items every poll when Tesla's soft-warning
+      # value is cached/stale and the real pressure is fine. Both checks
+      # must independently agree before we treat it as an alert.
       if car_data[:vehicle_state]&.key?(:tpms_soft_warning_fl)
-        list = User.me.list_by_name(:Chores)
+        chores = User.me.list_by_name(:Chores)
+        todo   = User.me.list_by_name(:TODO)
         [:fl, :fr, :rl, :rr].each do |tire|
           tirename = tire.to_s.chars.then { |dir, side|
             [dir == "f" ? "Front" : "Back", side == "l" ? "Left" : "Right"]
           }.join(" ")
+          label = "#{tirename} tire pressure low"
+          psi   = car_data.dig(:vehicle_state, :"tpms_pressure_#{tire}").to_f
+          truly_low = psi.positive? && psi < ::TeslaTelemetry::TIRE_PRESSURE_LOW
 
-          if car_data.dig(:vehicle_state, :"tpms_soft_warning_#{tire}")
-            list.add("#{tirename} tire pressure low")
+          soft = car_data.dig(:vehicle_state, :"tpms_soft_warning_#{tire}") == true
+          if soft && truly_low
+            chores.add(label)
           else
-            list.remove("#{tirename} tire pressure low")
+            chores.remove(label)
           end
 
-          if car_data.dig(:vehicle_state, :"tpms_hard_warning_#{tire}")
-            User.me.list_by_name(:TODO).add("#{tirename} tire pressure low")
+          hard = car_data.dig(:vehicle_state, :"tpms_hard_warning_#{tire}") == true
+          if hard && truly_low
+            todo.add(label)
           else
-            User.me.list_by_name(:TODO).remove("#{tirename} tire pressure low")
+            todo.remove(label)
           end
         end
       end
