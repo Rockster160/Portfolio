@@ -307,8 +307,23 @@ class TeslaControl
     ::PrettyLogger.info("\b\e[94m[TESLA]\n#{title}#{detail}\e[0m")
   end
 
+  # Multi-line context that gets prepended to every Tesla error post in Slack.
+  # The point is that future-you sees the error months from now after Tesla
+  # changes something and doesn't have to remember how any of this works —
+  # the message itself points at the wizard, the runbooks, and the re-auth
+  # one-liner.
+  SLACK_ERROR_HINTS = <<~MSG.freeze
+    *Tesla error.* If this is unfamiliar, start here:
+    • Smoke-test commands locally: `TeslaSetup.run` → option 7 → `a` (flash_lights)
+    • Re-auth (if 401 / refresh failed): `Oauth::TeslaApi.me.auth_url` from prod console, open in browser, approve
+    • Re-register telemetry: `Oauth::TeslaApi.me.request_telemetry`
+    • Architecture + cheat sheet: `_scripts/tesla/README.md`
+    • Prod telemetry runbook (systemd, certs, logs): `config/tesla/fleet_telemetry/SETUP.md`
+    • Home Mac proxies (Go + Ruby relay): `_scripts/tesla/launchd/SETUP.md`
+  MSG
+
   def err(title=nil, exception)
-    ::SlackNotifier.err(exception)
+    ::SlackNotifier.err(exception, "#{SLACK_ERROR_HINTS}\n*Where:* #{title}\n")
     ::PrettyLogger.error(
       "\b\e[94m[TESLA]\e[31m[ERROR]\n",
       title,

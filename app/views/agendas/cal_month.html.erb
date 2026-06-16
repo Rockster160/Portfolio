@@ -16,6 +16,7 @@
   <% next_month = (@month + 1.month).strftime("%Y-%m") %>
   <header class="cal-toolbar">
     <div class="cal-toolbar-left">
+      <span class="agenda-error cal-error-dot hidden" role="status" aria-live="polite" title="Disconnected — changes will sync when reconnected."></span>
       <h1 class="cal-toolbar-title"><%= @focus_date.strftime("%B %Y") %></h1>
       <div class="cal-toolbar-toggle cal-view-toggle cal-pwa-toggle">
         <a href="<%= cal_month_path %>" class="cal-toggle-btn active">Month</a>
@@ -36,8 +37,6 @@
       <a href="<%= manage_agenda_path %>" class="agenda-page-cog" aria-label="Manage agendas"><i class="fa fa-cog"></i></a>
     </div>
   </header>
-
-  <div class="agenda-error hidden">Disconnected — changes will sync when reconnected.</div>
 
   <div class="cal-month-grid" data-month-start="<%= @first_visible.iso8601 %>" data-month-end="<%= @last_visible.iso8601 %>">
     <div class="cal-month-weekdays">

@@ -167,7 +167,11 @@ module TeslaCommand
     backtrace = e.backtrace.map { |l|
       l.include?("/app/") ? l.gsub("`", "'").gsub(/^.*\/app\//, "") : nil
     }.compact.join("\n").truncate(2000)
-    SlackNotifier.notify("Failed to command: #{e.inspect}\n```\n#{backtrace}\n```")
+    SlackNotifier.notify(
+      "*Failed to command:* #{e.inspect}\n" \
+      "#{TeslaControl::SLACK_ERROR_HINTS}\n" \
+      "```\n#{backtrace}\n```",
+    )
     raise e # Re-raise to stop worker from sleeping and attempting to re-get
     "Failed to request from Tesla"
   end

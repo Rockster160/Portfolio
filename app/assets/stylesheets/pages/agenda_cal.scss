@@ -81,11 +81,32 @@ body.agenda-cal-body {
 
 // Left cluster — title and the view toggle sit together.
 .cal-toolbar-left {
+  position: relative; // anchors .cal-error-dot
   display: flex;
   align-items: center;
   gap: 12px;
   justify-self: start;
   min-width: 0; // allow the title to ellipsize on narrow viewports
+}
+
+// Floating disconnect indicator — overrides the full-width `.agenda-error`
+// banner style so the sync-status doesn't push the calendar grid down.
+// Toggled by agenda.js via the shared `.agenda-error` class.
+.cal-toolbar-left .cal-error-dot {
+  position: absolute;
+  top: -2px;
+  left: -10px;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  margin: 0;
+  border-radius: 50%;
+  background: #FF5A5A;
+  box-shadow: 0 0 0 2px rgba(255, 90, 90, 0.25);
+  font-size: 0;
+  color: transparent;
+  overflow: hidden;
+  pointer-events: auto; // keep the title-attribute tooltip
 }
 
 .cal-toolbar-title {

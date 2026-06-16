@@ -19,6 +19,7 @@
   <% next_week = (@week_start + 7.days).iso8601 %>
   <header class="cal-toolbar">
     <div class="cal-toolbar-left">
+      <span class="agenda-error cal-error-dot hidden" role="status" aria-live="polite" title="Disconnected — changes will sync when reconnected."></span>
       <h1 class="cal-toolbar-title"><%= @focus_date.strftime("%B %Y") %></h1>
       <div class="cal-toolbar-toggle cal-view-toggle cal-pwa-toggle">
         <a href="<%= cal_month_path %>" class="cal-toggle-btn">Month</a>
@@ -39,8 +40,6 @@
       <a href="<%= manage_agenda_path %>" class="agenda-page-cog" aria-label="Manage agendas"><i class="fa fa-cog"></i></a>
     </div>
   </header>
-
-  <div class="agenda-error hidden">Disconnected — changes will sync when reconnected.</div>
 
   <%# `data-day-start-hour` mirrors `User#perceived_today`'s rollover so a
       2am event renders on the *previous* logical day (matching the user's
