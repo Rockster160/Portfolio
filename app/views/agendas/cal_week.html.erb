@@ -1,5 +1,6 @@
 <%= meta_title @week_start.strftime("Week of %b %-d"), include_name: false %>
 <% content_for(:favicon) { render "agendas/cal_favicon" } %>
+<% content_for(:body_classes) { "agenda-cal-body" } %>
 
 <%# `agenda-page` triggers shared init in agenda.js (filter, modals,
     monitor, item-edit). The time-grid, drag-to-create, and current-time

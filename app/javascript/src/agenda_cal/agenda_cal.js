@@ -301,6 +301,7 @@
       bindCommonHandlers();
       scheduleDayRollover(root);
       installRefreshTriggers(root);
+      installNavInterception(root);
     }
 
     // -- everything else runs every time, since the grid contents change.
@@ -601,6 +602,7 @@
       bindCommonHandlers();
       scheduleDayRollover(root);
       installRefreshTriggers(root);
+      installNavInterception(root);
       startNowTick(root);
     }
 
@@ -1169,6 +1171,113 @@
     const top = shown[shown.length - 1];
     if (top.id && window.hideModal) window.hideModal(`#${top.id}`);
   });
+
+  // ============================================================
+  // CLIENT-SIDE NAVIGATION
+  // ============================================================
+  // Prev/Today/Next + Month↔Week + Today-pill clicks fetch the new
+  // page's HTML and swap just the toolbar + grid in place instead of
+  // doing a full browser navigation. The page wrapper, listeners, and
+  // CSS/JS bundles all stay alive. Falls back to a hard navigate if
+  // the fetch fails so the link still works offline / on error.
+  let navInFlight = null;
+  async function navigateToUrl(url) {
+    const root = $(".agenda-cal-page");
+    if (!root) { window.location.assign(url); return; }
+    // Best-effort cancel of any prior in-flight nav.
+    if (navInFlight && navInFlight.controller) navInFlight.controller.abort();
+    const controller = new AbortController();
+    navInFlight = { controller };
+
+    // Snap the URL immediately so a refresh / bookmark / share reflects
+    // the date the user is currently on. We don't wire popstate — this
+    // is a PWA with no browser back/forward chrome, and the on-page
+    // prev/next/Today pills are the only intended navigation surface.
+    history.pushState(null, "", url);
+
+    try {
+      const res = await fetch(url, {
+        credentials: "same-origin",
+        headers: { "Accept": "text/html", "X-Requested-With": "XMLHttpRequest" },
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`fetch ${res.status}`);
+      const html = await res.text();
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const incoming = doc.querySelector(".agenda-cal-page");
+      if (!incoming) throw new Error("no .agenda-cal-page in response");
+
+      // Promote any view-class swaps (month ↔ week share the same root
+      // class `.agenda-cal-page`, but differ on `.agenda-cal-week-page`
+      // vs `.agenda-cal-month-page`). Carry all classes + data-* fresh.
+      root.className = incoming.className;
+      // Strip stale data-* (server may have removed some attrs).
+      Array.from(root.attributes).forEach((a) => {
+        if (a.name.startsWith("data-") && a.name !== "data-cal-bound") root.removeAttribute(a.name);
+      });
+      Array.from(incoming.attributes).forEach((a) => {
+        if (a.name.startsWith("data-")) root.setAttribute(a.name, a.value);
+      });
+
+      // Body class (`agenda-cal-body`) is set by `content_for` on the
+      // server — re-apply it if the incoming body had it set, in case
+      // the user navigated from a non-cal page.
+      const incomingBodyClass = doc.body && doc.body.className;
+      if (incomingBodyClass && /\bagenda-cal-body\b/.test(incomingBodyClass)) {
+        document.body.classList.add("agenda-cal-body");
+      }
+
+      // Swap the inner DOM. All delegated listeners are on `root`
+      // itself, so they stay alive. Anything else that depended on
+      // specific child nodes gets re-initialized below.
+      root.innerHTML = incoming.innerHTML;
+
+      // Reset per-render flags so the view-specific init re-runs.
+      // (The bind-once handlers on document / root persist; only the
+      // per-render setup re-fires.)
+      if (root.classList.contains("agenda-cal-week-page")) {
+        buildWeekBlocks(root);
+        requestAnimationFrame(() => {
+          updateStickyOffsets(root);
+          scrollWeekToNowish(root);
+        });
+      } else if (root.classList.contains("agenda-cal-month-page")) {
+        layoutMonthBanners(root);
+        recountMonthOverflow(root);
+      }
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+      console.warn("[agenda-cal] client nav failed, falling back", err);
+      window.location.assign(url);
+    } finally {
+      if (navInFlight && navInFlight.controller === controller) navInFlight = null;
+    }
+  }
+
+  function installNavInterception(root) {
+    // Delegated on root — works across innerHTML swaps.
+    root.addEventListener("click", (e) => {
+      if (e.defaultPrevented) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      if (e.button !== undefined && e.button !== 0) return;
+      const link = e.target.closest(
+        ".cal-toolbar-nav a, .cal-toolbar-toggle a, .cal-today-btn"
+      );
+      if (!link) return;
+      // External / new-tab / hash links: let the browser handle.
+      if (link.target === "_blank" || !link.href) return;
+      const url = new URL(link.href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+      if (url.pathname === window.location.pathname && url.search === window.location.search) {
+        // Same URL — still useful (e.g. "Today" when already on this
+        // week). Treat as a no-op rather than a reload.
+        e.preventDefault();
+        return;
+      }
+      e.preventDefault();
+      navigateToUrl(url.href);
+    });
+  }
 
   // ============================================================
   // COMMON: drag mousemove/mouseup, refresh, day-roll

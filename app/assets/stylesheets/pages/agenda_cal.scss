@@ -22,6 +22,20 @@
 // Inherit the design tokens from agenda.scss namespace; they're defined
 // in config/_variables and we just reference them.
 
+// Body lock for the cal PWA. The `.agenda-cal-page` wrapper is already
+// `height: 100vh; overflow: hidden`, but `<body>` has a 10px top margin
+// in dev (the env-banner spacer in components/env_banner.scss) which
+// pushes the page wrapper past the viewport bottom and lets the outer
+// document scroll those few pixels. Pinning the body to viewport height
+// + overflow-hidden stops that — the page wrapper is the only scroll
+// container that matters now, and inside it `.cal-week-grid` is the
+// only thing that actually scrolls.
+body.agenda-cal-body {
+  overflow: hidden;
+  height: 100vh;
+  height: 100dvh;
+}
+
 .agenda-cal-page {
   // Cal PWA: maximize viewport. The default `.agenda-page` caps at 640px.
   // `height: 100vh` (not `min-height`) is CRITICAL: with `min-height`

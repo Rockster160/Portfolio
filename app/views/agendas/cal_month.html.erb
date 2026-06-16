@@ -1,5 +1,6 @@
 <%= meta_title @month.strftime("%B %Y"), include_name: false %>
 <% content_for(:favicon) { render "agendas/cal_favicon" } %>
+<% content_for(:body_classes) { "agenda-cal-body" } %>
 
 <%# `agenda-page` triggers shared init in agenda.js (filter, modals,
     monitor, item-edit). NOT adding `agenda-calendar-page` — its single-click
