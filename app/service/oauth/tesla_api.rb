@@ -27,6 +27,12 @@
 class Oauth::TeslaApi < Oauth::Base
   # Use `true` except when bypassing and hitting the Go server directly while local
   USE_LOCAL_RAILS_PROXY = true
+
+  # Opt-in flag for hitting the real Tesla API from dev/test consoles. Default
+  # `false` raises on any outbound call so a stray Sidekiq job or careless
+  # console line can't fire a real command/refresh. The TeslaSetup wizard
+  # flips this on for the duration of its operations; nothing else should.
+  cattr_accessor :force_live_dev, default: false
   constants(
     api_url:         "https://fleet-api.prd.na.vn.cloud.tesla.com/api/1/",
     oauth_url:       "https://auth.tesla.com/oauth2/v3/authorize",
@@ -91,6 +97,7 @@ class Oauth::TeslaApi < Oauth::Base
   end
 
   def proxy_post(path, params={}, headers={})
+    must_be_live!
     if USE_LOCAL_RAILS_PROXY
       Api.request(
         method:  :post,
@@ -112,6 +119,27 @@ class Oauth::TeslaApi < Oauth::Base
   def proxy_refresh
     refresh(exchange_url: "#{DataStorage[:local_ip]}:3142/tesla_refresh") if USE_LOCAL_RAILS_PROXY
   end
+
+  # All Oauth::Base#get/#post/#put/#delete go through #request. Gate them at
+  # this single entry point so any outbound traffic in non-prod requires
+  # explicit opt-in via `Oauth::TeslaApi.force_live_dev = true`.
+  def request(path, method, params={}, headers={}, opts={})
+    must_be_live!
+    super
+  end
+
+  private
+
+  def must_be_live!
+    return if ::Rails.env.production?
+    return if self.class.force_live_dev
+
+    raise "Tesla external request blocked in #{::Rails.env}. " \
+          "Set `Oauth::TeslaApi.force_live_dev = true` to opt in, " \
+          "or run via the TeslaSetup wizard which manages the flag for you."
+  end
+
+  public
 
   # Override Oauth::Base#refresh so the automatic 401-retry path inside
   # Oauth::Base#request also goes through the home relay in prod. Without

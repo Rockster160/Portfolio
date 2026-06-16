@@ -72,7 +72,9 @@ class TeslaSetup
             say red("  ✗ unknown option: #{choice} — #{cyan('m')} for menu, #{cyan('q')} to quit")
             next
           end
-          send(step[:run])
+          # Each step is an explicit user action — flip the dev-guard for
+          # its duration so Tesla calls go through, then back off.
+          with_live_requests { send(step[:run]) }
           after_step(step)
         end
       end
@@ -430,26 +432,30 @@ class TeslaSetup
       confirm = ask("Send? [y/N]").to_s.strip.downcase
       return say(yellow("  Cancelled.")) unless confirm == "y"
 
-      res = with_live_requests do
-        if test[:fn].is_a?(Proc)
-          test[:fn].call
-        else
-          ::TeslaControl.me.public_send(test[:fn], value)
-        end
-      end
+      # The outer dispatch already wraps in with_live_requests, so we can call
+      # TeslaControl directly here.
+      res = if test[:fn].is_a?(Proc)
+              test[:fn].call
+            else
+              ::TeslaControl.me.public_send(test[:fn], value)
+            end
       say "  result: #{res.inspect}"
     rescue StandardError => e
       say red("  ✗ #{e.class}: #{e.message}")
     end
 
-    # Flips TeslaControl out of dev-no-op mode for the duration of the block.
-    # Without this, every TeslaControl call from a dev console hits the
-    # perform_requests? early-return and never reaches the proxy chain.
+    # Flips both Tesla-side guards out of dev-no-op mode for the duration of
+    # the block. TeslaControl.force_live_dev unlocks command execution;
+    # Oauth::TeslaApi.force_live_dev unlocks raw API calls. Both default to
+    # false so a stray Sidekiq job or careless console line can't fire a
+    # real request from dev/test.
     def with_live_requests
       ::TeslaControl.force_live_dev = true
+      ::Oauth::TeslaApi.force_live_dev = true
       yield
     ensure
       ::TeslaControl.force_live_dev = false
+      ::Oauth::TeslaApi.force_live_dev = false
     end
 
     # TCP check — no auth/TLS dance, just confirms the proxy is accepting connections.

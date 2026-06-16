@@ -9,18 +9,19 @@ User=deploy
 Group=deploy
 
 # Build with: go build -o /opt/fleet-telemetry/fleet-telemetry ./cmd
-# Shell wrapper appends stdout (the record stream) to feed.jsonl. We can't
-# use `StandardOutput=append:` because that needs systemd v240+ and Ubuntu
-# 16.04 ships v229. `exec` replaces the shell so SIGTERM from systemd
-# reaches fleet-telemetry directly.
-ExecStart=/bin/sh -c 'exec /opt/fleet-telemetry/fleet-telemetry -config /etc/tesla/fleet-telemetry.json >> /var/log/tesla-telemetry/feed.jsonl'
+# Shell wrapper appends both stdout AND stderr to feed.jsonl. fleet-telemetry
+# uses zap which writes records to stderr by default, so without 2>&1 the
+# feed file stays empty while records pile up in the journal. The bridge
+# skips non-JSON lines so startup messages mixed in are harmless.
+#
+# We can't use `StandardOutput=append:` because that needs systemd v240+
+# and Ubuntu 16.04 ships v229. `exec` replaces the shell so SIGTERM from
+# systemd reaches fleet-telemetry directly.
+ExecStart=/bin/sh -c 'exec /opt/fleet-telemetry/fleet-telemetry -config /etc/tesla/fleet-telemetry.json >> /var/log/tesla-telemetry/feed.jsonl 2>&1'
 
 WorkingDirectory=/opt/fleet-telemetry
 Restart=on-failure
 RestartSec=5
-
-# stderr → journal so startup/runtime errors land in journalctl
-StandardError=journal
 
 # Hardening
 NoNewPrivileges=true

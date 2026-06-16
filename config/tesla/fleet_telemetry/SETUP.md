@@ -66,6 +66,13 @@ sudo cp /home/deploy/apps/portfolio/current/config/tesla/fleet_telemetry/config.
 sudo chown deploy:deploy /var/log/tesla-telemetry
 ```
 
+The config references Tesla's production vehicle CA at
+`/opt/fleet-telemetry/src/config/files/prod_ca.crt` (shipped with the cloned
+source — no manual fetch). Vehicles authenticate to fleet-telemetry via mTLS
+and this is the root they're verified against. If Tesla ever moves the file
+in their repo, find the new path with `find /opt/fleet-telemetry/src -name "prod_ca.crt"`
+and update `tls.ca_file` in `/etc/tesla/fleet-telemetry.json`.
+
 ### 4. LE cert access
 
 The fleet-telemetry process runs as `deploy` and needs to read the LE private key. Grant via the `ssl-cert` group:

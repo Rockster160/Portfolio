@@ -8,7 +8,9 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
   let renderLines = function() {
     let lines = [], data = cell.data.car
     let topchar = cell.data.loading ? "[ico ti ti-fa-spinner ti-spin]" : "  "
-    let topline = topchar + " ".repeat(single_width - 2)
+    let plugged = data.charging?.state && data.charging.state != "Disconnected"
+    let topright = plugged ? Text.yellow("[ico ti ti-fa-bolt]") : "  "
+    let topline = topchar + " ".repeat(single_width - 4) + topright
     if (data.charging?.state == "Disconnected") {
       topline = Text.center(Text.red("[NOT CHARGING]"))
       topline = topline.replace(/^../, topchar)

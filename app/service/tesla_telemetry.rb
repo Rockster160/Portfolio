@@ -31,7 +31,13 @@ class TeslaTelemetry
   end
 
   def initialize(data)
-    @data = data.to_h.symbolize_keys
+    raw = data.to_h.symbolize_keys
+    # Fleet Telemetry wraps every record as { data: {...}, metadata: {...},
+    # msg: "record_payload", ... }. Unwrap to the inner :data hash if that's
+    # what we got; if a caller hands us a flat hash directly (older API or
+    # tests), use as-is.
+    @data = raw[:data].is_a?(Hash) ? raw[:data].symbolize_keys : raw
+    @metadata = raw[:metadata].is_a?(Hash) ? raw[:metadata].symbolize_keys : {}
     @user = User.me
     @car_data = @user.caches.get(:car_data) || {}
     @prev_speed = @car_data.dig(:drive_state, :speed).to_i
@@ -59,43 +65,53 @@ class TeslaTelemetry
 
   private
 
+  # Never overwrite a cached value with a missing/empty telemetry reading.
+  # Tesla often pushes records with only the changed field present; absent
+  # fields don't mean "value is now nil" — they mean "no update". Coercing
+  # absence to nil/0 was triggering false alarms (e.g. all-tires-low).
   def map_fields
     FIELD_MAP.each do |telemetry_key, (section, field)|
       next unless @data.key?(telemetry_key)
 
       value = extract_value(@data[telemetry_key])
+      next if value.nil? || (value.respond_to?(:empty?) && value.empty?)
+
       @car_data[section] ||= {}
       @car_data[section][field] = value
     end
   end
 
   def handle_location
-    if @data.key?(:Location)
-      loc = @data[:Location]
-      @car_data[:drive_state] ||= {}
-      if loc.is_a?(Hash)
-        @car_data[:drive_state][:latitude] = loc[:latitude] || loc[:lat]
-        @car_data[:drive_state][:longitude] = loc[:longitude] || loc[:lng] || loc[:lon]
-      end
-    end
+    return unless @data.key?(:Location)
+
+    loc = @data[:Location]
+    return unless loc.is_a?(Hash)
+
+    lat = loc[:latitude] || loc[:lat]
+    lng = loc[:longitude] || loc[:lng] || loc[:lon]
+    # Only update if both coords are real — a partial reading (one nil) is
+    # worse than keeping the previous known location.
+    return if lat.nil? || lng.nil?
+
+    @car_data[:drive_state] ||= {}
+    @car_data[:drive_state][:latitude]  = lat
+    @car_data[:drive_state][:longitude] = lng
   end
 
   def handle_charge_state
-    if @data.key?(:ChargeState)
-      value = extract_value(@data[:ChargeState])
-      @car_data[:charge_state] ||= {}
-      @car_data[:charge_state][:charging_state] = value
-    end
+    set_charge(:charging_state, :ChargeState)
+    set_charge(:battery_level,  :BatteryLevel)
+    set_charge(:battery_range,  :EstBatteryRange)
+  end
 
-    if @data.key?(:BatteryLevel)
-      @car_data[:charge_state] ||= {}
-      @car_data[:charge_state][:battery_level] = extract_value(@data[:BatteryLevel])
-    end
+  def set_charge(cache_field, telemetry_key)
+    return unless @data.key?(telemetry_key)
 
-    if @data.key?(:EstBatteryRange)
-      @car_data[:charge_state] ||= {}
-      @car_data[:charge_state][:battery_range] = extract_value(@data[:EstBatteryRange])
-    end
+    value = extract_value(@data[telemetry_key])
+    return if value.nil? || (value.respond_to?(:empty?) && value.empty?)
+
+    @car_data[:charge_state] ||= {}
+    @car_data[:charge_state][cache_field] = value
   end
 
   def handle_door_state
@@ -142,6 +158,8 @@ class TeslaTelemetry
     })
   end
 
+  # A real TPMS reading is always > 0 (anything <= 0 means sensor offline /
+  # not reporting). Treat 0 as "no reading" so we don't fire false alarms.
   def check_tire_pressure
     pressures = {
       fl: @car_data.dig(:vehicle_state, :tpms_pressure_fl),
@@ -150,17 +168,18 @@ class TeslaTelemetry
       rr: @car_data.dig(:vehicle_state, :tpms_pressure_rr),
     }
 
-    return unless pressures.values.any?
+    real = pressures.transform_values { |v| v.to_f.positive? ? v.to_f : nil }
+    return if real.values.all?(&:nil?)
 
     chores = @user.list_by_name(:Chores)
-    pressures.each do |tire, psi|
-      next unless psi
+    real.each do |tire, psi|
+      next if psi.nil?
 
       tirename = tire.to_s.chars.then { |dir, side|
         [dir == "f" ? "Front" : "Back", side == "l" ? "Left" : "Right"]
       }.join(" ")
 
-      if psi.to_f < TIRE_PRESSURE_LOW
+      if psi < TIRE_PRESSURE_LOW
         chores.add("#{tirename} tire pressure low")
       else
         chores.remove("#{tirename} tire pressure low")
@@ -172,10 +191,13 @@ class TeslaTelemetry
     ::Jil.trigger(@user, :tesla, @data)
   end
 
+  # Unwrap Tesla's typed value containers. Returns nil if the input is an
+  # empty wrapper (no recognized type field) so callers can skip absent
+  # readings instead of caching the raw hash.
   def extract_value(val)
+    return nil if val.nil?
     return val unless val.is_a?(Hash)
 
-    # Fleet Telemetry wraps values in various typed containers
-    val[:value] || val[:stringValue] || val[:intValue] || val[:floatValue] || val[:boolValue] || val
+    val[:value] || val[:stringValue] || val[:intValue] || val[:floatValue] || val[:boolValue]
   end
 end
