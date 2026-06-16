@@ -54,6 +54,10 @@ class Oauth::TeslaApi < Oauth::Base
   # 406 Not Acceptable (RestClient::NotAcceptable)
 
   # Oauth::TeslaApi.me.request_telemetry
+  # fleet_telemetry_config MUST go through the Vehicle Command HTTP Proxy
+  # (the Go signing proxy at localhost:8752). Tesla returns
+  #   "This endpoint must be called through the Vehicle Command HTTP Proxy"
+  # otherwise. So we keep this on proxy_post, same as actual vehicle commands.
   def request_telemetry
     proxy_post("vehicles/fleet_telemetry_config", {
       vins:   [Tesla.vin],
