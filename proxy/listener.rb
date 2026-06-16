@@ -8,6 +8,10 @@ require "rest-client"
 require "json"
 require "coderay"
 
+# Api uses Rails' `delegate`. The listener boots without full Rails so we
+# pull the one ActiveSupport extension that provides it.
+require "active_support/core_ext/module/delegation"
+
 require_relative "../app/service/api"
 
 require "pry-rails"
@@ -115,7 +119,11 @@ class ProxyServer < Sinatra::Base
         url:                  "#{TARGET_BASE_URL}#{request.path_info}",
         payload:              data,
         headers:              proxy_headers,
-        ssl_ca_file:          "/Users/zoro/code/Portfolio/_scripts/tesla_keys/cert.pem",
+        # cert.pem is CN=localhost with no SAN; modern OpenSSL rejects that
+        # during hostname verification (silent EOF on the proxy side). The
+        # connection is loopback-only — TLS verification adds no security
+        # over the implicit "same host" trust boundary.
+        verify_ssl:           false,
         return_full_response: true,
       )
       puts "\e[90m[LOGIT:#{File.basename(__FILE__)}:#{__LINE__}]\e[32m Success\e[0m"

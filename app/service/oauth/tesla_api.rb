@@ -97,4 +97,14 @@ class Oauth::TeslaApi < Oauth::Base
   def proxy_refresh
     refresh(exchange_url: "#{DataStorage[:local_ip]}:3142/tesla_refresh") if USE_LOCAL_RAILS_PROXY
   end
+
+  # Override Oauth::Base#code= so prod can do the auth-code exchange via the
+  # home Ruby relay instead of directly hitting auth.tesla.com (whose IP
+  # filter blocks DigitalOcean addresses). Local dev still goes direct.
+  def code=(code)
+    args = { code: code, grant_type: :authorization_code }.merge(self.class.preset_constants[:exchange_params])
+    args[:exchange_url] = "#{DataStorage[:local_ip]}:3142/tesla_refresh" if ::Rails.env.production?
+    auth(args).compact_blank
+    self
+  end
 end

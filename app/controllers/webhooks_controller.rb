@@ -23,6 +23,23 @@ class WebhooksController < ApplicationController
     # end
 
     case params[:service].to_s.to_sym
+    when :tesla_api
+      # OAuth redirect for Tesla. Decode state JWT to find the bound user
+      # (will only succeed for state values that were signed by THIS env's
+      # secret — dev-signed states fall through and the wizard handles them
+      # by code paste). Exchange routes through the home relay via the
+      # overridden code= in Oauth::TeslaApi, then clears the disabled flag.
+      api = ::Oauth::TeslaApi.from_jwt(params[:state])
+      if api && params[:code].present?
+        api.code = params[:code]
+        if api.access_token.present?
+          ::DataStorage[:tesla_forbidden] = false
+          flash[:notice] = "Tesla connected — access_token cached."
+        else
+          flash[:alert] = "Tesla rejected the auth code."
+        end
+        return redirect_to(root_path)
+      end
     when :spotify_api
       ::Oauth::SpotifyApi.from_jwt(params[:state])&.code = params[:code] if params[:code].present?
     when :google_api

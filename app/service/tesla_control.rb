@@ -3,12 +3,19 @@ class TeslaError < StandardError; end
 class TeslaControl
   attr_accessor :api
 
+  # Opt-in flag for local Tesla testing. When true, dev consoles will
+  # actually send signed commands through the local Ruby relay + Go proxy
+  # instead of short-circuiting via dev_output. Set/cleared by the
+  # TeslaSetup wizard around individual test commands; never persisted.
+  # Prod always performs requests regardless.
+  cattr_accessor :force_live_dev, default: false
+
   def self.me
     new(User.me)
   end
 
   def perform_requests?
-    ::Rails.env.production?
+    ::Rails.env.production? || self.class.force_live_dev
   end
 
   def initialize(user)
@@ -76,8 +83,9 @@ class TeslaControl
   end
 
   def navigate(address)
-    # For whatever reason, the below does nothing.
-    # command(:navigation_gps_request, { lat: loc[0], lon: loc[1], order: 1 })
+    # navigation_request is REST-only on the Fleet API — sending it through
+    # the signed Go-proxy path returns "command requires using the REST API".
+    # All other vehicle commands go via proxy_command; this is the exception.
     address_params = {
       type:         :share_ext_content_raw,
       locale:       :"en-US",

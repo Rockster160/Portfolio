@@ -6,3 +6,12 @@ go run ./cmd/tesla-http-proxy/main.go -tls-key /home/rocco/tesla_keys/tls.pem -c
 Do both within systemD eventually
 
 Also have instructions for restarting/shutdown
+
+
+----------------------------------------------------------------------------------------------------
+
+go run ./cmd/tesla-http-proxy/main.go \
+    -tls-key  ~/code/Portfolio/_scripts/tesla_keys/tls.pem \
+    -cert     ~/code/Portfolio/_scripts/tesla_keys/cert.pem \
+    -key-file ~/code/Portfolio/_scripts/tesla_keys/private_key.pem \
+    -port 8752 -verbose
