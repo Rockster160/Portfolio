@@ -612,7 +612,7 @@
     // lands at the wrong spot.
     requestAnimationFrame(() => {
       updateStickyOffsets(root);
-      scrollWeekToNowish(root);
+      scrollWeekToEarliestEvent(root);
     });
   }
 
@@ -1116,28 +1116,43 @@
     }, 60_000);
   }
 
-  function scrollWeekToNowish(root) {
+  // Scrolls so the row one hour before the visible week's earliest timed
+  // event sits at the top of the body, clamped to the bottom of the
+  // grid. Prioritizes showing the later part of the day, which matches
+  // how the user mentally weights the schedule. Falls back to bottom
+  // when there are no timed events.
+  function scrollWeekToEarliestEvent(root) {
     const grid = $(".cal-week-grid", root);
     const body = $(".cal-week-body", root);
     if (!grid || !body) return;
     const dayStart = Number(grid.dataset.dayStartHour) || 0;
     const pxPerHour = weekPxPerHour(grid);
-    const todayISO = logicalDateISO(new Date(), dayStart);
-    const todayCol = $(`.cal-week-column[data-date="${todayISO}"]`, grid);
     // Header + all-day are sticky inside the grid; the body content
     // starts past them. Use the body's own offsetTop (within the grid)
     // as the base so scrolling lands at the right hour regardless of
     // sticky-header height variations.
     const bodyOffsetTop = body.offsetTop;
-    if (todayCol) {
-      const now = new Date();
-      const offsetMin = (now - logicalDayStart(now, dayStart)) / 60000;
-      const targetWithinBody = (offsetMin / 60) * pxPerHour;
-      grid.scrollTop = Math.max(0, bodyOffsetTop + targetWithinBody - pxPerHour);
-    } else {
-      const offsetH = (7 - dayStart + 24) % 24;
-      grid.scrollTop = bodyOffsetTop + offsetH * pxPerHour;
-    }
+    const maxScroll = Math.max(0, grid.scrollHeight - grid.clientHeight);
+
+    // All-day items live in the sticky band above the body so they're
+    // excluded from "earliest" — they have no Y position in the grid.
+    const seeds = grid.querySelectorAll(".cal-week-seed");
+    let earliestOffsetMin = Infinity;
+    seeds.forEach((seed) => {
+      if (seed.dataset.allDay === "true") return;
+      const startAt = Number(seed.dataset.startAt);
+      if (!startAt) return;
+      const start = new Date(startAt * 1000);
+      const offsetMin = (start - logicalDayStart(start, dayStart)) / 60000;
+      if (offsetMin < earliestOffsetMin) earliestOffsetMin = offsetMin;
+    });
+
+    const desired = (
+      earliestOffsetMin === Infinity
+        ? maxScroll
+        : bodyOffsetTop + (earliestOffsetMin / 60 - 1) * pxPerHour
+    );
+    grid.scrollTop = Math.max(0, Math.min(desired, maxScroll));
   }
 
   // Sets a CSS variable so the all-day band's `position: sticky; top: …`
@@ -1239,7 +1254,7 @@
         buildWeekBlocks(root);
         requestAnimationFrame(() => {
           updateStickyOffsets(root);
-          scrollWeekToNowish(root);
+          scrollWeekToEarliestEvent(root);
         });
       } else if (root.classList.contains("agenda-cal-month-page")) {
         layoutMonthBanners(root);
