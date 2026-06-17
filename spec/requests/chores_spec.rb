@@ -592,6 +592,16 @@ RSpec.describe "Chores", type: :request do
       expect(body["today_earnings"]).to eq(pre_today)
     end
 
+    it "POST /chores/withdrawals honors a client-supplied created_at" do
+      at = 3.hours.ago.change(usec: 0)
+      post "/chores/withdrawals",
+        params:  { chore_withdrawal: { amount_pebbles: 1, note: "snack", created_at: at.iso8601 } }.to_json,
+        headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+      expect(response).to have_http_status(:created)
+      withdrawal = user.chore_withdrawals.order(:created_at).last
+      expect(withdrawal.created_at.to_i).to eq(at.to_i)
+    end
+
     it "DELETE /chores/withdrawals/:id (lifetime moves, today_earnings does not)" do
       withdrawal = create(:chore_withdrawal, user: user, amount_pebbles: 5, note: "n")
       pre_today = user.chore_completions.where(day_key: ChoreDay.current(user)).sum(:paid_pebbles)

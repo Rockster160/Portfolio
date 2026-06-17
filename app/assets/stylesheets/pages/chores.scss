@@ -1683,6 +1683,75 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     margin: 0;
   }
 
+  // Shared row layout for the Withdraw + Transfer forms. A
+  // sub-group (Time+Submit on Withdraw, Note+Submit on Transfer)
+  // collapses to its own row at narrow widths so the Submit button
+  // never gets squeezed inline.
+  .balance-form-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    border: 0;
+    padding: 0;
+    margin: 0;
+  }
+  .balance-form-row input,
+  .balance-form-row select {
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #334155;
+    background: #00102B;
+    color: #ECF0F1;
+    font: inherit;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  // Selects need a fixed height because the native control doesn't
+  // pick up the inputs' padding/line-height consistently. Override
+  // background-color only so the cascade's dropdown chevron survives.
+  .balance-form-row select {
+    height: 38px;
+    padding: 0 10px;
+    background-color: #00102B;
+  }
+
+  // Withdraw row: [Amount(100)] [Note(stretch)] [Time(250)] [Submit].
+  // Basis 0 on Note (not 300) so Note stays next to Amount on row 1
+  // at any width — a 300 basis pushed Note to its own row when narrow.
+  .balance-form-row .withdraw-amount { flex: 0 0 100px; }
+  .balance-form-row .withdraw-note   { flex: 1 1 0; }
+  .balance-form-row .withdraw-time-submit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+  .balance-form-row .withdraw-time { flex: 0 0 250px; }
+
+  // Transfer row: [Recipient(stretch)] [Amount(100)] [Note(stretch)] [Submit].
+  .balance-form-row .transfer-recipient { flex: 1 1 0; }
+  .balance-form-row .transfer-amount    { flex: 0 0 100px; }
+  .balance-form-row .transfer-note-submit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 0;
+  }
+  .balance-form-row .transfer-note { flex: 1 1 0; }
+
+  @media (max-width: 800px) {
+    // Withdraw collapse: row1=[Amount,Note], row2=[Time, spacer, Submit].
+    .balance-form-row .withdraw-time-submit {
+      flex: 1 1 100%;
+      justify-content: space-between;
+    }
+    // Transfer collapse: row1=[Recipient,Amount], row2=[Note(stretch),Submit].
+    .balance-form-row .transfer-note-submit {
+      flex: 1 1 100%;
+    }
+  }
+
   .multiplier-card-head {
     margin-bottom: 6px;
     display: flex;

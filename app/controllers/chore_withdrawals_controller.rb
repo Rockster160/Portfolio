@@ -4,11 +4,14 @@ class ChoreWithdrawalsController < ApplicationController
   def create
     amount = params.dig(:chore_withdrawal, :amount_pebbles).to_i
     note = params.dig(:chore_withdrawal, :note)
+    created_at = params.dig(:chore_withdrawal, :created_at).presence
     if amount <= 0 || amount > current_user.chore_balance
       return render json: { error: "Invalid amount" }, status: :unprocessable_entity
     end
 
-    withdrawal = current_user.chore_withdrawals.create!(amount_pebbles: amount, note: note)
+    attrs = { amount_pebbles: amount, note: note }
+    attrs[:created_at] = created_at if created_at
+    withdrawal = current_user.chore_withdrawals.create!(attrs)
     ChoreGoal.refresh_all_for(current_user)
     ChoreBroadcaster.broadcast_changes!(current_user)
     render json: {

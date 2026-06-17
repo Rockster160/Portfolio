@@ -5074,6 +5074,28 @@
       ?.addEventListener("click", () => hydrateRecentHistory());
   }
 
+  const withdrawWhenEl = document.querySelector("[data-withdraw-when]");
+  if (withdrawWhenEl) {
+    // The When field auto-tracks "now" until the user touches it.
+    // Once they edit, we leave it alone so their intended timestamp
+    // survives. A successful submit resets dirty so the next entry
+    // starts tracking now again.
+    const pad = n => String(n).padStart(2, "0");
+    const nowLocal = () => {
+      const d = new Date();
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+    let withdrawWhenDirty = false;
+    const tickWithdrawWhen = () => { if (!withdrawWhenDirty) withdrawWhenEl.value = nowLocal(); };
+    tickWithdrawWhen();
+    setInterval(tickWithdrawWhen, 30 * 1000);
+    withdrawWhenEl.addEventListener("input", () => { withdrawWhenDirty = true; });
+    withdrawWhenEl.form?.addEventListener("reset", () => {
+      withdrawWhenDirty = false;
+      requestAnimationFrame(tickWithdrawWhen);
+    });
+  }
+
   document.querySelector("[data-withdraw-form]")?.addEventListener("submit", async e => {
     e.preventDefault();
     if (!window.requireOnlineForChores()) return;
@@ -5083,6 +5105,8 @@
     const entries = Object.fromEntries(fd.entries());
     const amount = parseInt(entries.amount_pebbles, 10);
     if (Number.isNaN(amount) || amount <= 0) { flash("Enter a positive amount", "warn"); return; }
+    if (entries.created_at) entries.created_at = new Date(entries.created_at).toISOString();
+    else delete entries.created_at;
     await withSavingState(submitBtn, async () => {
       try {
         const data = await api("/chores/withdrawals", "POST", { chore_withdrawal: entries });

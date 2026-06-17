@@ -48,10 +48,13 @@
 
   <h3 style="margin-top:24px;">Withdraw</h3>
   <form class="basic" data-withdraw-form>
-    <fieldset data-withdraw-fieldset style="border:0;padding:0;margin:0;display:flex;gap:8px;align-items:center;" <%= "disabled" if @balance.to_i <= 0 %>>
-      <input type="number" name="amount_pebbles" placeholder="Amount" min="1" max="<%= [@balance.to_i, 1].max %>" autocomplete="off" style="flex:1;padding:8px 10px;border-radius:6px;border:1px solid #334155;background:#00102B;color:#ECF0F1;">
-      <input type="text" name="note" placeholder="Note (optional)" autocomplete="off" style="flex:2;padding:8px 10px;border-radius:6px;border:1px solid #334155;background:#00102B;color:#ECF0F1;">
-      <button class="btn" type="submit">Withdraw</button>
+    <fieldset class="balance-form-row" data-withdraw-fieldset <%= "disabled" if @balance.to_i <= 0 %>>
+      <input class="basic withdraw-amount" type="number" name="amount_pebbles" placeholder="Amount" min="1" max="<%= [@balance.to_i, 1].max %>" autocomplete="off">
+      <input class="basic withdraw-note" type="text" name="note" placeholder="Note (optional)" autocomplete="off">
+      <div class="withdraw-time-submit">
+        <input class="basic withdraw-time" type="datetime-local" name="created_at" data-withdraw-when autocomplete="off">
+        <button class="btn" type="submit">Withdraw</button>
+      </div>
     </fieldset>
   </form>
 
@@ -62,15 +65,17 @@
     </p>
   <% else %>
     <form class="basic" data-transfer-form>
-      <fieldset data-transfer-fieldset style="border:0;padding:0;margin:0;display:flex;gap:8px;align-items:center;" <%= "disabled" if @balance.to_i <= 0 %>>
-        <select name="to_user_id" required style="flex:1;height:38px;box-sizing:border-box;padding:0 10px;border-radius:6px;border:1px solid #334155;background:#00102B;color:#ECF0F1;font:inherit;">
+      <fieldset class="balance-form-row" data-transfer-fieldset <%= "disabled" if @balance.to_i <= 0 %>>
+        <select class="basic transfer-recipient" name="to_user_id" required>
           <% @transfer_recipients.each do |u| %>
             <option value="<%= u.id %>"><%= u.username %></option>
           <% end %>
         </select>
-        <input type="number" name="amount_pebbles" placeholder="Amount" min="1" max="<%= [@balance.to_i, 1].max %>" autocomplete="off" style="flex:1;padding:8px 10px;border-radius:6px;border:1px solid #334155;background:#00102B;color:#ECF0F1;">
-        <input type="text" name="note" placeholder="Note (optional)" autocomplete="off" style="flex:2;padding:8px 10px;border-radius:6px;border:1px solid #334155;background:#00102B;color:#ECF0F1;">
-        <button class="btn" type="submit">Transfer</button>
+        <input class="basic transfer-amount" type="number" name="amount_pebbles" placeholder="Amount" min="1" max="<%= [@balance.to_i, 1].max %>" autocomplete="off">
+        <div class="transfer-note-submit">
+          <input class="basic transfer-note" type="text" name="note" placeholder="Note (optional)" autocomplete="off">
+          <button class="btn" type="submit">Transfer</button>
+        </div>
       </fieldset>
     </form>
   <% end %>
