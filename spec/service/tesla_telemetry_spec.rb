@@ -14,6 +14,8 @@ RSpec.describe TeslaTelemetry do
   before do
     cache.data = {}
     cache.save!
+    user.caches.find_or_create_by!(key: :tesla_endpoint).update!(data: {})
+    user.caches.find_or_create_by!(key: :tesla_telemetry).update!(data: {})
     allow(::TeslaCommand).to receive(:broadcast)
     # The Jil triggers fire on real state changes and aren't what these specs
     # are exercising. Stubbing the methods that call ::Jil.trigger avoids
@@ -21,6 +23,12 @@ RSpec.describe TeslaTelemetry do
     allow_any_instance_of(described_class).to receive(:detect_drive_changes)
     allow_any_instance_of(described_class).to receive(:detect_charge_changes)
     allow_any_instance_of(described_class).to receive(:fire_general_trigger)
+  end
+
+  # Seeds the endpoint cache's `current` with a prior good poll result.
+  # Mirrors how vehicle_data polling gets its data into TeslaCacheStore.
+  def seed_endpoint(snapshot)
+    user.caches.set(:tesla_endpoint, { current: snapshot, history: [] })
   end
 
   def process(payload)
@@ -46,25 +54,60 @@ RSpec.describe TeslaTelemetry do
   end
 
   describe "absent values" do
-    it "does not overwrite cached values with nil / empty wrappers" do
-      cache.data = { "charge_state" => { "charging_state" => "Charging" } }
-      cache.save!
+    it "does not overwrite a known-good charging state with an empty wrapper" do
+      seed_endpoint(charge_state: { charging_state: "Charging" })
 
-      process({ data: { ChargeState: {} } })
+      result = process({ data: { ChargeState: {} } })
 
-      result = user.caches.find_by(key: :car_data).data.with_indifferent_access
       expect(result.dig("charge_state", "charging_state")).to eq("Charging")
     end
 
-    it "ignores a partial Location reading (lat only, no lng)" do
-      cache.data = { "drive_state" => { "latitude" => 40.0, "longitude" => -111.0 } }
-      cache.save!
+    it "applies a partial Location (lat only) without clobbering the existing lng" do
+      seed_endpoint(drive_state: { latitude: 40.0, longitude: -111.0 })
 
-      process({ data: { Location: { latitude: 40.5 } } })
+      result = process({ data: { Location: { latitude: 40.5 } } })
 
-      result = user.caches.find_by(key: :car_data).data.with_indifferent_access
-      expect(result.dig("drive_state", "latitude")).to eq(40.0)
+      # Trust telemetry: lat updated, lng untouched from the endpoint baseline.
+      expect(result.dig("drive_state", "latitude")).to eq(40.5)
       expect(result.dig("drive_state", "longitude")).to eq(-111.0)
+    end
+
+    it "drops Tesla's '<invalid>' sentinel rather than corrupting current" do
+      seed_endpoint(drive_state: { speed: 35 })
+
+      result = process({ data: { VehicleSpeed: "<invalid>" } })
+
+      expect(result.dig("drive_state", "speed")).to eq(35)
+    end
+  end
+
+  describe ".pressure_psi" do
+    it "converts BAR readings (Tesla's native unit) to PSI" do
+      expect(described_class.pressure_psi(3.0)).to eq(43.5)
+    end
+
+    it "passes PSI readings through (in case ingest ever stores PSI directly)" do
+      expect(described_class.pressure_psi(43.5)).to eq(43.5)
+    end
+
+    it "returns nil for missing / zero / negative readings" do
+      [nil, 0, -1, 0.0].each { |v| expect(described_class.pressure_psi(v)).to be_nil }
+    end
+  end
+
+  describe "#check_tire_pressure with realistic BAR readings" do
+    let(:chores) { instance_double("List", add: nil, remove: nil) }
+    before { allow(user).to receive(:list_by_name).with(:Chores).and_return(chores) }
+
+    it "does NOT add chore items when all tires are healthy 3.0 BAR (43.5 PSI)" do
+      seed_endpoint(vehicle_state: {
+        tpms_pressure_fl: 3.0, tpms_pressure_fr: 3.1,
+        tpms_pressure_rl: 2.95, tpms_pressure_rr: 2.975,
+      })
+
+      process({ data: { ChargeState: "Idle" } })
+
+      expect(chores).not_to have_received(:add)
     end
   end
 
@@ -74,13 +117,10 @@ RSpec.describe TeslaTelemetry do
     before { allow(user).to receive(:list_by_name).with(:Chores).and_return(chores) }
 
     it "does not flag tires when all readings are 0 (sensor offline)" do
-      cache.data = {
-        "vehicle_state" => {
-          "tpms_pressure_fl" => 0, "tpms_pressure_fr" => 0,
-          "tpms_pressure_rl" => 0, "tpms_pressure_rr" => 0,
-        },
-      }
-      cache.save!
+      seed_endpoint(vehicle_state: {
+        tpms_pressure_fl: 0, tpms_pressure_fr: 0,
+        tpms_pressure_rl: 0, tpms_pressure_rr: 0,
+      })
 
       process({ data: { ChargeState: "Idle" } })
 
@@ -88,13 +128,10 @@ RSpec.describe TeslaTelemetry do
     end
 
     it "flags only the genuinely low tire when others read valid pressures" do
-      cache.data = {
-        "vehicle_state" => {
-          "tpms_pressure_fl" => 41.0, "tpms_pressure_fr" => 41.5,
-          "tpms_pressure_rl" => 35.0, "tpms_pressure_rr" => 42.0,
-        },
-      }
-      cache.save!
+      seed_endpoint(vehicle_state: {
+        tpms_pressure_fl: 41.0, tpms_pressure_fr: 41.5,
+        tpms_pressure_rl: 35.0, tpms_pressure_rr: 42.0,
+      })
 
       process({ data: { ChargeState: "Idle" } })
 

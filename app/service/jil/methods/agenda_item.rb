@@ -79,7 +79,10 @@ class Jil::Methods::AgendaItem < Jil::Methods::Base
   end
 
   # Returns a minimal hash describing the parent agenda so Jil tasks can drill
-  # in (`item.agenda.name`, `.color`, etc.).
+  # in (`item.agenda.name`, `.color`, etc.). `owned` is true iff the agenda
+  # belongs to the executing user (i.e. it's "my" calendar, not one I'm
+  # accessing via AgendaShare). Lets travel-time tasks treat shared
+  # calendars differently — silent prepare, skip notifications, etc.
   def agenda(item)
     i = cast(item)
     return nil unless i
@@ -90,6 +93,7 @@ class Jil::Methods::AgendaItem < Jil::Methods::Base
       name:  a.name,
       color: a.color,
       slug:  a.parameterized_name,
+      owned: a.user_id == @jil.user.id,
     }
   end
 

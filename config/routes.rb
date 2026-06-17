@@ -319,7 +319,10 @@ Rails.application.routes.draw do
   # Fetch-only endpoints — never navigated to, so they can sit outside the
   # PWA scope without breaking the installed-app experience.
   resources :agenda_items, only: [:create, :update, :destroy] do
-    member { post :restore }
+    member do
+      post :restore
+      post :respond
+    end
   end
   resources :agenda_schedules, only: [:create, :update, :destroy]
 

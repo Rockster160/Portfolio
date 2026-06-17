@@ -23,8 +23,24 @@ class TeslaTelemetry
     OutsideTemp:    [:climate_state, :outside_temp],
   }.freeze
 
-  # Tire pressure threshold in PSI -  below this triggers soft warning
+  # Tire pressure threshold in PSI — below this triggers soft warning.
+  # Tesla reports `tpms_pressure_*` in BAR (both via vehicle_data and the
+  # fleet-telemetry `TpmsPressure*` fields) — `pressure_psi` below converts
+  # so this threshold stays in the unit a US driver actually reads.
   TIRE_PRESSURE_LOW = 39.0
+  BAR_TO_PSI = 14.504
+
+  # Tesla returns tire pressure in BAR (~2.5–3.1 for a healthy tire).
+  # If we see a value above 10, assume it's already PSI (defensive — would
+  # only happen if a future ingest path stored PSI directly). Magnitudes
+  # below 10 are BAR and need converting.
+  def self.pressure_psi(raw)
+    raw_f = raw.to_f
+    return nil unless raw_f.positive?
+    return raw_f if raw_f > 10
+
+    (raw_f * BAR_TO_PSI).round(1)
+  end
 
   def self.process(data)
     new(data).process
@@ -39,21 +55,16 @@ class TeslaTelemetry
     @data = raw[:data].is_a?(Hash) ? raw[:data].symbolize_keys : raw
     @metadata = raw[:metadata].is_a?(Hash) ? raw[:metadata].symbolize_keys : {}
     @user = User.me
-    @car_data = @user.caches.get(:car_data) || {}
-    @prev_speed = @car_data.dig(:drive_state, :speed).to_i
-    @prev_charge_state = @car_data.dig(:charge_state, :charging_state)
+    prev_car_data = @user.caches.get(:car_data) || {}
+    @prev_speed = prev_car_data.dig(:drive_state, :speed).to_i
+    @prev_charge_state = prev_car_data.dig(:charge_state, :charging_state)
   end
 
   def process
-    map_fields
-    handle_location
-    handle_charge_state
-    handle_door_state
-
-    @car_data[:state] = :online
-    @car_data[:timestamp] = (Time.current.to_f * 1000).round
-
-    @user.caches.set(:car_data, @car_data)
+    # TeslaCacheStore handles all the raw recording, merging, and mapping
+    # into the legacy car_data shape. We read back the composed result to
+    # run the side-effect checks that TeslaTelemetry owns.
+    @car_data = ::TeslaCacheStore.record_telemetry(@data)
 
     detect_drive_changes
     detect_charge_changes
@@ -65,77 +76,12 @@ class TeslaTelemetry
 
   private
 
-  # Never overwrite a cached value with a missing/empty telemetry reading.
-  # Tesla often pushes records with only the changed field present; absent
-  # fields don't mean "value is now nil" — they mean "no update". Coercing
-  # absence to nil/0 was triggering false alarms (e.g. all-tires-low).
-  def map_fields
-    FIELD_MAP.each do |telemetry_key, (section, field)|
-      next unless @data.key?(telemetry_key)
-
-      value = extract_value(@data[telemetry_key])
-      next if value.nil? || (value.respond_to?(:empty?) && value.empty?)
-
-      @car_data[section] ||= {}
-      @car_data[section][field] = value
-    end
-  end
-
-  def handle_location
-    return unless @data.key?(:Location)
-
-    loc = @data[:Location]
-    return unless loc.is_a?(Hash)
-
-    lat = loc[:latitude] || loc[:lat]
-    lng = loc[:longitude] || loc[:lng] || loc[:lon]
-    # Only update if both coords are real — a partial reading (one nil) is
-    # worse than keeping the previous known location.
-    return if lat.nil? || lng.nil?
-
-    @car_data[:drive_state] ||= {}
-    @car_data[:drive_state][:latitude]  = lat
-    @car_data[:drive_state][:longitude] = lng
-  end
-
-  def handle_charge_state
-    set_charge(:charging_state, :ChargeState)
-    set_charge(:battery_level,  :BatteryLevel)
-    set_charge(:battery_range,  :EstBatteryRange)
-  end
-
-  def set_charge(cache_field, telemetry_key)
-    return unless @data.key?(telemetry_key)
-
-    value = extract_value(@data[telemetry_key])
-    return if value.nil? || (value.respond_to?(:empty?) && value.empty?)
-
-    @car_data[:charge_state] ||= {}
-    @car_data[:charge_state][cache_field] = value
-  end
-
-  def handle_door_state
-    return unless @data.key?(:DoorState)
-
-    # DoorState is a bitmask or structured value -  map to individual door fields
-    value = @data[:DoorState]
-    return unless value.is_a?(Hash)
-
-    @car_data[:vehicle_state] ||= {}
-    {
-      df: :DriverFront,
-      pf: :PassengerFront,
-      dr: :DriverRear,
-      pr: :PassengerRear,
-      ft: :FrontTrunk,
-      rt: :RearTrunk,
-    }.each do |cache_key, door_key|
-      @car_data[:vehicle_state][cache_key] = value[door_key] if value.key?(door_key)
-    end
-  end
-
   def detect_drive_changes
     return unless @data.key?(:VehicleSpeed)
+    # Tesla sends the literal string "<invalid>" when the speed sensor is
+    # offline (stopped, key out, etc.). That's NOT "speed is 0" — coercing
+    # it to 0 was misfiring :tesla_drive_stop every time the car parked.
+    return if @data[:VehicleSpeed] == "<invalid>"
 
     new_speed = @car_data.dig(:drive_state, :speed).to_i
 
@@ -153,6 +99,10 @@ class TeslaTelemetry
 
   def detect_charge_changes
     return unless @data.key?(:ChargeState)
+    # "ClearFaults" is a transient pulse Tesla emits on state-machine
+    # housekeeping, not a real charging state. TeslaCacheStore filters it
+    # from car_data already; skip the detection too.
+    return if @data[:ChargeState] == "ClearFaults"
 
     new_charge_state = @car_data.dig(:charge_state, :charging_state)
     return if new_charge_state == @prev_charge_state
@@ -165,15 +115,16 @@ class TeslaTelemetry
 
   # A real TPMS reading is always > 0 (anything <= 0 means sensor offline /
   # not reporting). Treat 0 as "no reading" so we don't fire false alarms.
+  # Pressures are normalized to PSI via `pressure_psi` because Tesla
+  # delivers BAR (~3.0 for a healthy tire); comparing 3.0 < 39 would
+  # otherwise mark every tire as low.
   def check_tire_pressure
-    pressures = {
-      fl: @car_data.dig(:vehicle_state, :tpms_pressure_fl),
-      fr: @car_data.dig(:vehicle_state, :tpms_pressure_fr),
-      rl: @car_data.dig(:vehicle_state, :tpms_pressure_rl),
-      rr: @car_data.dig(:vehicle_state, :tpms_pressure_rr),
+    real = {
+      fl: self.class.pressure_psi(@car_data.dig(:vehicle_state, :tpms_pressure_fl)),
+      fr: self.class.pressure_psi(@car_data.dig(:vehicle_state, :tpms_pressure_fr)),
+      rl: self.class.pressure_psi(@car_data.dig(:vehicle_state, :tpms_pressure_rl)),
+      rr: self.class.pressure_psi(@car_data.dig(:vehicle_state, :tpms_pressure_rr)),
     }
-
-    real = pressures.transform_values { |v| v.to_f.positive? ? v.to_f : nil }
     return if real.values.all?(&:nil?)
 
     chores = @user.list_by_name(:Chores)
@@ -194,15 +145,5 @@ class TeslaTelemetry
 
   def fire_general_trigger
     ::Jil.trigger(@user, :tesla, @data)
-  end
-
-  # Unwrap Tesla's typed value containers. Returns nil if the input is an
-  # empty wrapper (no recognized type field) so callers can skip absent
-  # readings instead of caching the raw hash.
-  def extract_value(val)
-    return nil if val.nil?
-    return val unless val.is_a?(Hash)
-
-    val[:value] || val[:stringValue] || val[:intValue] || val[:floatValue] || val[:boolValue]
   end
 end

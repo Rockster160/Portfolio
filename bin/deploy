@@ -1,0 +1,24 @@
+#!/usr/bin/env zsh
+
+## check syntax error with `sc`
+# bundle exec cap production deploy "$@"
+
+set -e
+
+branch=$(git rev-parse --abbrev-ref HEAD)
+if [[ "$branch" != "master" ]]; then
+  echo "deploy: refusing to run on branch '$branch' (must be master)"
+  exit 1
+fi
+
+source ~/.zshrc
+
+if (( $# == 0 )); then
+  gpo
+else
+  gpo
+  countdown 3:00
+  for script in "$@"; do
+    prodExec "$script"
+  done
+fi

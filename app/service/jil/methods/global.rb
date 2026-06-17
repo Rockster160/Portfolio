@@ -189,20 +189,6 @@ class Jil::Methods::Global < Jil::Methods::Base
     broadcast_or_schedule(text, :ping, at: at, add_to_list: true)
   end
 
-  private def broadcast_or_schedule(text, channel, at: nil, add_to_list: false)
-    if at.present?
-      ::Jil::Schedule.add_schedule(
-        @jil.user, at, :broadcast,
-        { text: text, channel: channel, add_to_list: add_to_list }.compact,
-        auth: :trigger, auth_id: @jil.task&.id,
-      )
-    else
-      ::Jarvis.broadcast(@jil.user, text, channel)
-      @jil.user.default_list&.add_items(name: text) if add_to_list
-    end
-    text
-  end
-
   def commandAt(date, text)
     ::Jil::Schedule.add_schedule(
       @jil.user, date, :command, { words: text },
@@ -264,31 +250,16 @@ class Jil::Methods::Global < Jil::Methods::Base
     ::Jil.trigger(@jil.user, scope, data, auth: :trigger, auth_id: @jil.task&.id).map(&:serialize_with_execution)
   end
 
-  # Resolves a Jil-side value into an AgendaItem record scoped to the
-  # current user. Accepts the record itself, a serialized hash (the shape
-  # the agenda_item Jil trigger fires with), or anything castable to
-  # Hash with an :id key. Returns nil if the row can't be reached.
-  private def resolve_source_item(value)
-    return value if value.is_a?(::AgendaItem)
-
-    hash = @jil.cast(value, :Hash)
-    id = hash[:id] || hash["id"]
-    return nil if id.blank?
-
-    ::AgendaItem.locate_for_user(id, @jil.user)
-  end
-
   OFFSET_UNIT_SECONDS = {
-    "second" => 1, "seconds" => 1,
-    "minute" => 60, "minutes" => 60,
-    "hour"   => 3_600, "hours" => 3_600,
-    "day"    => 86_400, "days" => 86_400,
+    "second"  => 1,
+    "seconds" => 1,
+    "minute"  => 60,
+    "minutes" => 60,
+    "hour"    => 3_600,
+    "hours"   => 3_600,
+    "day"     => 86_400,
+    "days"    => 86_400,
   }.freeze
-
-  private def compute_offset_seconds(offset, unit)
-    multiplier = OFFSET_UNIT_SECONDS[unit.to_s.downcase] || 60
-    @jil.cast(offset, :Numeric).to_i * multiplier
-  end
 
   def triggerWith(scope, date, data)
     ::Jil::Schedule.add_schedule(
@@ -333,7 +304,45 @@ class Jil::Methods::Global < Jil::Methods::Base
     end
 
     rec = @jil.user.scheduled_triggers.where(
-      source_item_id: source_item.id, name: name.to_s
+      source_item_id: source_item.id, name: name.to_s,
+    ).first_or_initialize
+    was_new = rec.new_record?
+
+    rec.update!(
+      trigger:        scope.to_s,
+      execute_at:     execute_at,
+      offset_seconds: offset_secs,
+      data:           @jil.cast(data, :Hash),
+      auth_type:      :trigger,
+      auth_type_id:   @jil.task&.id,
+    )
+
+    ::Jil::Schedule.update(rec)
+    ::Jil::Schedule.broadcast(rec, was_new ? :created : :updated)
+    rec
+  end
+
+  # Variant of `trigger_for` that anchors the offset to the source's
+  # `end_at` instead of `start_at`. Useful for post-event reminders
+  # (e.g. "navigate home 10 minutes before the event ends"). No-op
+  # when the source has no end_at (tasks/triggers, all-day with no
+  # explicit end).
+  def trigger_for_end(source, name, offset, unit, scope, data)
+    source_item = resolve_source_item(source)
+    return nil unless source_item
+    return nil if scope.blank?
+    return nil if source_item.end_at.blank?
+
+    offset_secs = compute_offset_seconds(offset, unit)
+    execute_at = source_item.end_at + offset_secs.seconds
+
+    if execute_at <= ::Time.current
+      remove_trigger_for(source, name)
+      return nil
+    end
+
+    rec = @jil.user.scheduled_triggers.where(
+      source_item_id: source_item.id, name: name.to_s,
     ).first_or_initialize
     was_new = rec.new_record?
 
@@ -360,7 +369,7 @@ class Jil::Methods::Global < Jil::Methods::Base
     return false unless source_item
 
     rec = @jil.user.scheduled_triggers.find_by(
-      source_item_id: source_item.id, name: name.to_s
+      source_item_id: source_item.id, name: name.to_s,
     )
     return false unless rec
 
@@ -369,4 +378,38 @@ class Jil::Methods::Global < Jil::Methods::Base
   end
 
   # times(Numeric content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
+  private
+
+  def broadcast_or_schedule(text, channel, at: nil, add_to_list: false)
+    if at.present?
+      ::Jil::Schedule.add_schedule(
+        @jil.user, at, :broadcast,
+        { text: text, channel: channel, add_to_list: add_to_list }.compact,
+        auth: :trigger, auth_id: @jil.task&.id
+      )
+    else
+      ::Jarvis.broadcast(@jil.user, text, channel)
+      @jil.user.default_list&.add_items(name: text) if add_to_list
+    end
+    text
+  end
+
+  # Resolves a Jil-side value into an AgendaItem record scoped to the
+  # current user. Accepts the record itself, a serialized hash (the shape
+  # the agenda_item Jil trigger fires with), or anything castable to
+  # Hash with an :id key. Returns nil if the row can't be reached.
+  def resolve_source_item(value)
+    return value if value.is_a?(::AgendaItem)
+
+    hash = @jil.cast(value, :Hash)
+    id = hash[:id] || hash["id"]
+    return nil if id.blank?
+
+    ::AgendaItem.locate_for_user(id, @jil.user)
+  end
+
+  def compute_offset_seconds(offset, unit)
+    multiplier = OFFSET_UNIT_SECONDS[unit.to_s.downcase] || 60
+    @jil.cast(offset, :Numeric).to_i * multiplier
+  end
 end

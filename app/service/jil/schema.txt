@@ -45,6 +45,7 @@
   #broadcast_websocket("Channel" TAB String BR "Data" TAB Hash)::Numeric
   #trigger(String TAB Date content(Keyval|Hash [Keyval.new]))::Schedule
   #trigger_for(Any:Source String:Name Numeric:Offset ["seconds" "minutes" "hours" "days"] BR "Trigger" TAB String:Scope BR "Data" TAB Hash)::Schedule
+  #trigger_for_end(Any:Source String:Name Numeric:Offset ["seconds" "minutes" "hours" "days"] BR "Trigger" TAB String:Scope BR "Data" TAB Hash)::Schedule
   #remove_trigger_for(Any:Source String:Name)::Boolean
   #triggerWith(String TAB Date BR "" TAB Hash)::Schedule
   #triggerNow(String TAB Hash)::Array
@@ -269,6 +270,7 @@
   .until_on::Date
   .metadata::Hash
   .agenda::Hash
+  .next_occurrence_at::Date
   .future_agenda_items::Array
   .update!(content(AgendaScheduleData))::Hash
 *[AgendaScheduleData]

@@ -163,14 +163,16 @@ class TeslaControl
 
     @vehicle_data ||= cached_vehicle_data
     get("vehicles/#{vin}/vehicle_data?endpoints=drive_state%3Bvehicle_state%3Blocation_data%3Bcharge_state%3Bclimate_state", wake: wake)&.tap { |json|
-      car_data = json.is_a?(::Hash) && json[:response]
+      response = json.is_a?(::Hash) && json[:response]
       cached_data = cached_vehicle_data
-      break cached_data if car_data.blank?
+      break cached_data if response.blank?
 
-      car_data[:timestamp] = car_data.dig(:vehicle_state, :timestamp) # Bubble up to higher key
+      response[:timestamp] = response.dig(:vehicle_state, :timestamp) # Bubble up to higher key
 
-      User.me.caches.set(:car_data, car_data)
-      break car_data if car_data[:state] == "asleep"
+      # Raw response → :tesla_endpoint history+current; car_data gets
+      # recomposed from endpoint+telemetry currents.
+      car_data = ::TeslaCacheStore.record_endpoint(response)
+      break car_data if response[:state] == "asleep"
 
       # Tire pressure: ONLY add a Chores/TODO item when Tesla reports a
       # warning AND the latest pressure reading is actually below threshold.
@@ -185,8 +187,10 @@ class TeslaControl
             [dir == "f" ? "Front" : "Back", side == "l" ? "Left" : "Right"]
           }.join(" ")
           label = "#{tirename} tire pressure low"
-          psi   = car_data.dig(:vehicle_state, :"tpms_pressure_#{tire}").to_f
-          truly_low = psi.positive? && psi < ::TeslaTelemetry::TIRE_PRESSURE_LOW
+          # Tesla returns pressure in BAR (~3.0 healthy). pressure_psi
+          # normalizes to PSI so the threshold (39) is meaningful.
+          psi   = ::TeslaTelemetry.pressure_psi(car_data.dig(:vehicle_state, :"tpms_pressure_#{tire}"))
+          truly_low = !psi.nil? && psi < ::TeslaTelemetry::TIRE_PRESSURE_LOW
 
           soft = car_data.dig(:vehicle_state, :"tpms_soft_warning_#{tire}") == true
           if soft && truly_low
