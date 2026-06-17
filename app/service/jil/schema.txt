@@ -240,6 +240,7 @@
   .completed_at::Date
   .notes::String
   .location::String
+  .arrive_early_minutes::Numeric
   .trigger_expression::String
   .metadata::Hash
   .agenda_schedule_id::Numeric
@@ -255,6 +256,7 @@
   #name(String)
   #notes(String)
   #location(String)
+  #arrive_early_minutes(Numeric)
   #start_at(Date)
   #end_at(Date)
   #color(String)
@@ -265,6 +267,7 @@
   .kind::String
   .color::String
   .location::String
+  .arrive_early_minutes::Numeric
   .notes::String
   .starts_on::Date
   .until_on::Date
@@ -277,6 +280,7 @@
   #name(String)
   #notes(String)
   #location(String)
+  #arrive_early_minutes(Numeric)
   #color(String)
   #metadata(Hash)
 [Section]

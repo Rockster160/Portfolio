@@ -455,6 +455,12 @@ body.agenda-cal-body {
     i {
       font-size: 8px;
     }
+
+    .cal-month-item-travel-plus {
+      margin: 0 2px;
+      font-style: normal;
+      opacity: 0.85;
+    }
   }
 }
 
@@ -935,6 +941,22 @@ $cal-week-px-per-hour: 20px;
       font-size: 7px;
       line-height: 1;
       letter-spacing: 0;
+    }
+
+    // Condensed `[clock] Nm + [car] Mm` form — keeps the two pairs read as
+    // discrete units inside the narrow band.
+    display: inline-flex;
+    align-items: baseline;
+    gap: 2px;
+    i {
+      font-size: 7px;
+      margin-right: 1px;
+      font-style: normal;
+    }
+    .cal-week-event-travel-plus {
+      margin: 0 3px;
+      opacity: 0.75;
+      font-style: normal;
     }
   }
 

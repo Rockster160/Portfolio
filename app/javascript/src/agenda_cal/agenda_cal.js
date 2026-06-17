@@ -881,9 +881,12 @@
     // and continued-top segments (the event already started yesterday).
     // Clamped so the band can't push the tile above the column origin.
     const travelMinRaw = parseInt(d.travelMinutes, 10) || 0;
+    const arriveEarlyMinRaw = parseInt(d.arriveEarlyMinutes, 10) || 0;
+    // arrive_early gets baked INTO the travel band — visually one expanded
+    // band above the tile, since both push the user's departure earlier.
     const travelMin = (isPoint || continuedTopMaybe)
       ? 0
-      : Math.min(travelMinRaw, seg.startMin);
+      : Math.min(travelMinRaw + arriveEarlyMinRaw, seg.startMin);
     const top = (seg.startMin - travelMin) * pxPerMin;
     const eventHeight = isPoint
       ? Math.max(12, 15 * pxPerMin - 2)
@@ -920,20 +923,26 @@
       const travelBand = document.createElement("div");
       travelBand.className = "cal-week-event-travel";
       travelBand.style.flex = `0 0 ${bandPx}px`;
-      // Three tiers of label visibility based on the band's pixel height:
-      //   * >=11px → full "X min drive" at 8px font
-      //   * 6-10px → compact "Xm" at 7px font (tight bands)
-      //   * <6px  → stripes only, no text
-      if (bandPx >= 11) {
-        const travelLabel = document.createElement("span");
-        travelLabel.className = "cal-week-event-travel-label";
-        travelLabel.textContent = `${travelMin} min drive`;
-        travelBand.appendChild(travelLabel);
-      } else if (bandPx >= 6) {
-        const travelLabel = document.createElement("span");
-        travelLabel.className = "cal-week-event-travel-label is-compact";
-        travelLabel.textContent = `${travelMin}m`;
-        travelBand.appendChild(travelLabel);
+      // Always the condensed `[clock] Nm + [car] Mm` form. Hide the label
+      // entirely on tiny bands (<6px) — stripes only, no text.
+      if (bandPx >= 6) {
+        const drivePart = travelMinRaw > 0 ? travelMinRaw : 0;
+        const earlyPart = arriveEarlyMinRaw > 0 ? arriveEarlyMinRaw : 0;
+        const label = document.createElement("span");
+        label.className = "cal-week-event-travel-label is-compact";
+        if (earlyPart > 0) {
+          label.appendChild(Object.assign(document.createElement("i"), { className: "fa fa-clock-o" }));
+          label.appendChild(document.createTextNode(`${earlyPart}m`));
+        }
+        if (earlyPart > 0 && drivePart > 0) {
+          label.appendChild(Object.assign(document.createElement("span"),
+            { className: "cal-week-event-travel-plus", textContent: "+" }));
+        }
+        if (drivePart > 0) {
+          label.appendChild(Object.assign(document.createElement("i"), { className: "fa fa-car" }));
+          label.appendChild(document.createTextNode(`${drivePart}m`));
+        }
+        travelBand.appendChild(label);
       }
       node.appendChild(travelBand);
     }

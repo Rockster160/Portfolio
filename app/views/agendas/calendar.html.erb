@@ -70,6 +70,7 @@
                   data-name="<%= item.name %>"
                   data-notes="<%= item.notes %>"
                   data-location="<%= item.location %>"
+                  data-arrive-early-minutes="<%= item.arrive_early_minutes.to_i %>"
                   data-travel-minutes="<%= item.metadata["travel_minutes"].to_i %>"
                   data-trigger-expression="<%= item.trigger_expression %>"
                   data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>"
@@ -94,6 +95,7 @@
 
   <%= render "agenda_items/add_modal", agendas: @agendas, date: Date.current %>
   <%= render "agenda_items/edit_modal", agendas: @agendas %>
+  <%= render "agenda_items/follow_up_modal" %>
   <%= render "agenda_items/details_modal" %>
   <%= render "agenda_items/confirm_modal" %>
 </div>

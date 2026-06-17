@@ -2,34 +2,35 @@
 #
 # Table name: agenda_items
 #
-#  id                  :bigint           not null, primary key
-#  all_day             :boolean          default(FALSE), not null
-#  cancelled_at        :datetime
-#  color               :string
-#  completed_at        :datetime
-#  detached_at         :datetime
-#  end_at              :datetime
-#  ended_fired_at      :datetime
-#  external_etag       :text
-#  external_uid        :text
-#  external_updated_at :datetime
-#  fired_at            :datetime
-#  kind                :integer          not null
-#  local_color         :string
-#  locally_modified_at :datetime
-#  location            :string
-#  metadata            :jsonb            not null
-#  name                :string           not null
-#  notes               :text
-#  notified_at         :datetime
-#  original_start_at   :datetime
-#  start_at            :datetime         not null
-#  status              :integer          default("confirmed"), not null
-#  trigger_expression  :text
-#  created_at          :datetime         not null
-#  updated_at          :datetime         not null
-#  agenda_id           :bigint           not null
-#  agenda_schedule_id  :bigint
+#  id                   :bigint           not null, primary key
+#  all_day              :boolean          default(FALSE), not null
+#  arrive_early_minutes :integer          default(0), not null
+#  cancelled_at         :datetime
+#  color                :string
+#  completed_at         :datetime
+#  detached_at          :datetime
+#  end_at               :datetime
+#  ended_fired_at       :datetime
+#  external_etag        :text
+#  external_uid         :text
+#  external_updated_at  :datetime
+#  fired_at             :datetime
+#  kind                 :integer          not null
+#  local_color          :string
+#  locally_modified_at  :datetime
+#  location             :string
+#  metadata             :jsonb            not null
+#  name                 :string           not null
+#  notes                :text
+#  notified_at          :datetime
+#  original_start_at    :datetime
+#  start_at             :datetime         not null
+#  status               :integer          default("confirmed"), not null
+#  trigger_expression   :text
+#  created_at           :datetime         not null
+#  updated_at           :datetime         not null
+#  agenda_id            :bigint           not null
+#  agenda_schedule_id   :bigint
 #
 class AgendaItem < ApplicationRecord
   include Jilable
@@ -421,6 +422,7 @@ class AgendaItem < ApplicationRecord
         :name,
         :notes,
         :location,
+        :arrive_early_minutes,
         :all_day,
         :metadata,
       ],

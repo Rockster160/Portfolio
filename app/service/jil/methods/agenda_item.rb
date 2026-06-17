@@ -1,5 +1,5 @@
 class Jil::Methods::AgendaItem < Jil::Methods::Base
-  PERMIT_ATTRS = [:name, :notes, :location, :start_at, :end_at, :color, :metadata].freeze
+  PERMIT_ATTRS = [:name, :notes, :location, :arrive_early_minutes, :start_at, :end_at, :color, :metadata].freeze
   GETTER_ATTRS = [
     :id, :kind, :completed_at, :trigger_expression, :agenda_schedule_id, *PERMIT_ATTRS
   ].freeze
@@ -142,6 +142,10 @@ class Jil::Methods::AgendaItem < Jil::Methods::Base
     { location: text }
   end
 
+  def arrive_early_minutes(val)
+    { arrive_early_minutes: val.to_i }
+  end
+
   def start_at(val)
     { start_at: parse_time(val) }
   end
@@ -191,6 +195,7 @@ end
 #   .completed_at::Date
 #   .notes::String
 #   .location::String
+#   .arrive_early_minutes::Numeric
 #   .trigger_expression::String
 #   .metadata::Hash
 #   .agenda::Hash
@@ -204,6 +209,7 @@ end
 #   #name(String)
 #   #notes(String)
 #   #location(String)
+#   #arrive_early_minutes(Numeric)
 #   #start_at(Date)
 #   #end_at(Date)
 #   #color(String)

@@ -1,0 +1,30 @@
+<%= render_modal("agenda-follow-up-modal", "Follow up", "modal-flat") do %>
+  <div class="follow-up-modal">
+    <div class="follow-up-source" data-follow-up-source>
+      <div class="follow-up-source-line">
+        Pick a day for a follow-up to
+        <span class="follow-up-source-name" data-follow-up-source-name></span>.
+      </div>
+      <div class="follow-up-source-meta" data-follow-up-source-meta></div>
+    </div>
+
+    <nav class="agenda-date-bar follow-up-month-nav">
+      <button type="button" class="date-nav prev" data-follow-up-prev aria-label="Previous month"><i class="fa fa-chevron-left"></i></button>
+      <span class="date-label" data-follow-up-month-label></span>
+      <button type="button" class="date-nav next" data-follow-up-next aria-label="Next month"><i class="fa fa-chevron-right"></i></button>
+    </nav>
+
+    <div class="follow-up-cal" data-follow-up-cal>
+      <div class="follow-up-cal-loading">Loading…</div>
+    </div>
+
+    <div class="follow-up-day-detail" data-follow-up-detail>
+      <div class="follow-up-day-empty">Pick a day above to see what's already scheduled.</div>
+    </div>
+
+    <div class="agenda-form-actions follow-up-actions">
+      <button type="button" class="af-btn af-btn-secondary" data-dismiss="#agenda-follow-up-modal">Cancel</button>
+      <button type="button" class="af-btn af-btn-primary" data-follow-up-confirm disabled>Use this date</button>
+    </div>
+  </div>
+<% end %>

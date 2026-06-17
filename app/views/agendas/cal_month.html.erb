@@ -101,6 +101,7 @@
                         data-name="<%= item.name %>"
                         data-notes="<%= item.notes %>"
                         data-location="<%= item.location %>"
+                        data-arrive-early-minutes="<%= item.arrive_early_minutes.to_i %>"
                         data-travel-minutes="<%= item.metadata["travel_minutes"].to_i %>"
                         data-trigger-expression="<%= item.trigger_expression %>"
                         data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>"
@@ -116,8 +117,13 @@
                   ></span>
                   <span class="cal-month-item-name"><%= item.name %></span>
                   <% cal_travel_min = item.metadata["travel_minutes"].to_i %>
-                  <% if cal_travel_min > 0 %>
-                    <span class="cal-month-item-travel" title="<%= cal_travel_min %> min drive from Home"><i class="fa fa-car"></i><%= cal_travel_min %>m</span>
+                  <% cal_arrive_early_min = item.arrive_early_minutes.to_i %>
+                  <% if cal_travel_min > 0 || cal_arrive_early_min > 0 %>
+                    <span class="cal-month-item-travel">
+                      <% if cal_arrive_early_min > 0 %><i class="fa fa-clock-o"></i><%= cal_arrive_early_min %>m<% end %>
+                      <% if cal_arrive_early_min > 0 && cal_travel_min > 0 %><span class="cal-month-item-travel-plus">+</span><% end %>
+                      <% if cal_travel_min > 0 %><i class="fa fa-car"></i><%= cal_travel_min %>m<% end %>
+                    </span>
                   <% end %>
                 </button>
               <% end %>
@@ -156,6 +162,7 @@
                data-name="<%= item.name %>"
                data-notes="<%= item.notes %>"
                data-location="<%= item.location %>"
+               data-arrive-early-minutes="<%= item.arrive_early_minutes.to_i %>"
                data-travel-minutes="<%= item.metadata["travel_minutes"].to_i %>"
                data-trigger-expression="<%= item.trigger_expression %>"
                data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>"
@@ -170,6 +177,7 @@
 
   <%= render "agenda_items/add_modal", agendas: @agendas, date: Date.current %>
   <%= render "agenda_items/edit_modal", agendas: @agendas %>
+  <%= render "agenda_items/follow_up_modal" %>
   <%= render "agenda_items/details_modal" %>
   <%= render "agenda_items/confirm_modal" %>
 </div>

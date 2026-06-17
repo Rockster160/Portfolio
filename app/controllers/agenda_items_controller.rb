@@ -772,7 +772,7 @@ class AgendaItemsController < ApplicationController
   def item_params
     raw = params.require(:agenda_item).permit(
       :agenda_id, :name, :kind, :color, :local_color, :start_at, :end_at, :all_day,
-      :notes, :location, :completed_at, :trigger_expression
+      :notes, :location, :arrive_early_minutes, :completed_at, :trigger_expression
     )
 
     # Time fields cross the wire as integer epoch seconds (UTC) so the FE
@@ -806,6 +806,7 @@ class AgendaItemsController < ApplicationController
       :occurrence_count,
       :notes,
       :location,
+      :arrive_early_minutes,
       :trigger_expression,
       recurrence: [:freq, :interval, :unit, :by_set_pos, { by_day: [], by_month_day: [], excluded_dates: [] }],
     )
@@ -837,6 +838,7 @@ class AgendaItemsController < ApplicationController
     attrs[:name] = item_params[:name] if item_params[:name].present?
     attrs[:notes] = item_params[:notes] if item_params.key?(:notes)
     attrs[:location] = item_params[:location] if item_params.key?(:location)
+    attrs[:arrive_early_minutes] = item_params[:arrive_early_minutes] if item_params.key?(:arrive_early_minutes)
     attrs[:color] = item_params[:color] if item_params[:color].present?
     attrs[:trigger_expression] = item_params[:trigger_expression] if item_params.key?(:trigger_expression)
     # item_params has already coerced start_at / end_at to Time. The

@@ -131,6 +131,32 @@ RSpec.describe AgendaItem do
       item.update!(metadata: { travel_minutes: 12 }, name: "Renamed")
       expect(triggered).to eq([[:agenda_item, :updated]])
     end
+
+    it "DOES refire when arrive_early_minutes changes (real column, not metadata)" do
+      item = create(:agenda_item, agenda: agenda, kind: "task", start_at: 1.hour.from_now)
+      triggered = trigger_capture
+      item.update!(arrive_early_minutes: 10)
+      expect(triggered).to eq([[:agenda_item, :updated]])
+    end
+  end
+
+  describe "arrive_early_minutes column" do
+    it "defaults to 0" do
+      item = create(:agenda_item, agenda: agenda, kind: "task", start_at: 1.hour.from_now)
+      expect(item.reload.arrive_early_minutes).to eq(0)
+    end
+
+    it "round-trips an integer" do
+      item = create(:agenda_item, agenda: agenda, kind: "task",
+        start_at: 1.hour.from_now, arrive_early_minutes: 15)
+      expect(item.reload.arrive_early_minutes).to eq(15)
+    end
+
+    it "is included in serialize" do
+      item = create(:agenda_item, agenda: agenda, kind: "task",
+        start_at: 1.hour.from_now, arrive_early_minutes: 10)
+      expect(item.serialize).to include("arrive_early_minutes" => 10)
+    end
   end
 
   describe "metadata column" do

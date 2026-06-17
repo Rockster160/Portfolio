@@ -1,6 +1,13 @@
 (function () {
   const QUEUE_KEY = "agendaPendingOps:v3";
 
+  // Cross-modal handoff: initAddModal exposes a prefill+show entry point so
+  // the follow-up flow can fill the add modal with a source event's
+  // attributes + a new date. initFollowUpModal exposes `.open(source)` so
+  // the edit modal's "Follow up" button can launch the day picker.
+  let addModalPrefillAndShow = null;
+  let followUpAPI = null;
+
   // ---------- helpers ----------
   function $(sel, root = document) { return root.querySelector(sel); }
   function $$(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
@@ -777,7 +784,7 @@
     // also locks the kind to "event" — Google calendars only contain
     // events, not tasks/triggers.
     let colorTouched = false;
-    const agendaPicker = bindAgendaPicker(form, (id, color, _name, source) => {
+    function applyAgendaChange(id, color, _name, source) {
       if (!colorTouched && colorInput && color) {
         colorInput.value = color;
         paintColor(color);
@@ -792,7 +799,8 @@
         b.classList.toggle("locked", lock);
         b.title = lock ? "Only events can be added to a Google calendar" : "";
       });
-    });
+    }
+    const agendaPicker = bindAgendaPicker(form, applyAgendaChange);
 
     const alldayField    = $(".add-allday-field", form);
     const alldayInput    = $(".add-allday-input", form);
@@ -855,9 +863,14 @@
     form.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
     bindEnterSubmit(form);
 
+    // Suppresses the default start-time reset when the modal is being
+    // opened with a prefill (follow-up flow). Consumed once per open.
+    let suppressDefaultTime = false;
+
     if (window.jQuery) {
       window.jQuery(modal).on("modal.shown", () => {
-        applyDefaultStartTime();
+        if (!suppressDefaultTime) applyDefaultStartTime();
+        suppressDefaultTime = false;
         nameInput.focus();
       });
     }
@@ -919,6 +932,7 @@
       };
 
       const location = $(".add-location", form)?.value || null;
+      const arriveEarlyMinutes = parseInt($(".add-arrive-early", form)?.value, 10) || 0;
       const notes = $(".add-notes", form)?.value || null;
 
       const agendaId = agendaPicker?.value() ? parseInt(agendaPicker.value(), 10) : null;
@@ -943,6 +957,7 @@
             all_day:            isAllDay,
             color:              color,
             location,
+            arrive_early_minutes: arriveEarlyMinutes,
             notes,
             trigger_expression: triggerExpression,
           },
@@ -987,6 +1002,7 @@
       });
       schedulePayload.agenda_id = agendaId;
       schedulePayload.location = location;
+      schedulePayload.arrive_early_minutes = arriveEarlyMinutes;
       schedulePayload.notes = notes;
       const scheduleBody = { agenda_schedule: schedulePayload };
       closeModal();
@@ -1002,6 +1018,52 @@
           toast("Saved offline — will sync when reconnected");
         });
     }
+
+    // Prefill+open path used by the follow-up flow. Source data carries the
+    // original event's copyable attributes plus the user-picked target date;
+    // we drop into the same form the user would have filled in by hand.
+    function prefillAndShow(d) {
+      // Color first so colorTouched=true; that way setValue's agenda swap
+      // can't repaint over the source event's color.
+      if (colorInput && d.color) {
+        colorInput.value = d.color;
+        paintColor(d.color);
+        colorTouched = true;
+      }
+      if (d.agendaId) {
+        agendaPicker?.setValue(d.agendaId);
+        const li = form.querySelector(`.agenda-pick-menu li[data-id="${CSS.escape(String(d.agendaId))}"]`);
+        if (li) applyAgendaChange(li.dataset.id, li.dataset.color, li.dataset.name, li.dataset.source);
+      }
+      if (nameInput) nameInput.value = d.name || "";
+      activeKind = d.kind || "event";
+      const isAllDay = !!d.allDay;
+      if (alldayInput) alldayInput.checked = isAllDay;
+      syncKind();
+
+      if (dateInput && d.date) dateInput.value = d.date;
+      const alldayEnd = $(".add-allday-end", form);
+      if (alldayEnd) alldayEnd.value = d.alldayEnd || d.date || dateInput?.value || "";
+      if (startInput) startInput.value = d.startTime || "09:00";
+      if (endInput) endInput.value = d.endTime || "10:00";
+      // Mark end as user-touched so input on start doesn't auto-bump it.
+      endTouched = true;
+
+      $(".add-location", form).value = d.location || "";
+      $(".add-notes", form).value = d.notes || "";
+      const triggerExprInput = $(".add-trigger-expression", form);
+      if (triggerExprInput) triggerExprInput.value = d.triggerExpression || "";
+
+      // Follow-ups are always one-off. Reset the recurrence UI.
+      const freqSelect = $(".add-freq", form);
+      if (freqSelect) freqSelect.value = "never";
+      sched.resetChips();
+      sched.syncFreq();
+
+      suppressDefaultTime = true;
+      if (window.showModal) window.showModal("#agenda-add-modal");
+    }
+    addModalPrefillAndShow = prefillAndShow;
 
     syncKind();
   }
@@ -1204,6 +1266,7 @@
       }
 
       $(".add-location", form).value = d.location || "";
+      $(".add-arrive-early", form).value = parseInt(d.arriveEarlyMinutes, 10) || 0;
       $(".add-notes", form).value = d.notes || "";
       $(".add-trigger-expression", form).value = d.triggerExpression || "";
 
@@ -1313,6 +1376,32 @@
       });
     }
 
+    // Follow up: snapshot the form's current values (so unsaved edits in
+    // the edit modal carry through), hand them to the follow-up day picker.
+    $(".add-followup", form)?.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (!followUpAPI) return;
+      const dateVal = $(".add-date", form).value;
+      const isAllDay = !!alldayInput?.checked;
+      const src = {
+        agendaId:          editAgendaPicker?.value(),
+        name:              $(".add-name", form).value,
+        kind:              activeKind,
+        color:             $(".add-color", form).value,
+        allDay:            isAllDay,
+        date:              dateVal,
+        alldayEnd:         isAllDay ? (alldayEndInput?.value || dateVal) : null,
+        startTime:         $(".add-start", form).value,
+        endTime:           $(".add-end", form).value,
+        location:          $(".add-location", form).value,
+        notes:             $(".add-notes", form).value,
+        triggerExpression: $(".add-trigger-expression", form)?.value || "",
+        month:             (dateVal || "").slice(0, 7),
+      };
+      if (window.hideModal) window.hideModal("#agenda-item-edit");
+      followUpAPI.open(src);
+    });
+
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const scope = currentScope();
@@ -1355,6 +1444,7 @@
           end_at:             endAt,
           all_day:            isAllDay,
           location:           $(".add-location", form).value,
+          arrive_early_minutes: parseInt($(".add-arrive-early", form)?.value, 10) || 0,
           notes:              $(".add-notes", form).value,
           trigger_expression: triggerExpression,
         },
@@ -1372,6 +1462,7 @@
           startsOn: currentScheduleData?.starts_on,
         });
         payload.agenda_schedule.location = payload.agenda_item.location;
+        payload.agenda_schedule.arrive_early_minutes = payload.agenda_item.arrive_early_minutes;
         payload.agenda_schedule.notes = payload.agenda_item.notes;
       }
 
@@ -2101,8 +2192,20 @@
     const travelRow = modal.querySelector("[data-travel-row]");
     if (travelRow) {
       const travelMin = parseInt(d.travelMinutes, 10) || 0;
-      travelRow.classList.toggle("hidden", travelMin <= 0);
-      set("[data-travel-target]", travelMin > 0 ? `${travelMin} min from Home` : "");
+      const arriveEarlyMin = parseInt(d.arriveEarlyMinutes, 10) || 0;
+      const visible = travelMin > 0 || arriveEarlyMin > 0;
+      travelRow.classList.toggle("hidden", !visible);
+      // Same condensed `[clock] Nm + [car] Mm` shape the agenda row uses —
+      // each half hides independently so the row collapses to whichever
+      // value is set (or both with a `+` between).
+      const arriveIcon = travelRow.querySelector("[data-arrive-early-icon]");
+      const travelIcon = travelRow.querySelector("[data-travel-icon]");
+      const plus       = travelRow.querySelector("[data-travel-plus]");
+      arriveIcon?.toggleAttribute("hidden", arriveEarlyMin <= 0);
+      travelIcon?.toggleAttribute("hidden", travelMin <= 0);
+      plus?.toggleAttribute("hidden", !(arriveEarlyMin > 0 && travelMin > 0));
+      set("[data-arrive-early-target]", arriveEarlyMin > 0 ? `${arriveEarlyMin}m` : "");
+      set("[data-travel-target]",       travelMin > 0      ? `${travelMin}m`      : "");
     }
 
     const recurringRow = modal.querySelector("[data-recurring-row]");
@@ -2271,6 +2374,315 @@
     const dateInput = modal.querySelector(".add-date");
     if (dateInput && dateStr) dateInput.value = dateStr;
     if (window.showModal) window.showModal("#agenda-add-modal");
+  }
+
+  // ---------- follow-up modal ----------
+  // Mini month picker shown when the user clicks "Follow up" from the edit
+  // modal. Pulls `/agenda/calendar?month=YYYY-MM` HTML, extracts each
+  // `.cal-day` cell, and renders a compact grid with per-day event counts.
+  // Selecting a day enables Confirm; Confirm hands the source event +
+  // chosen date to the add modal's prefill entry point.
+  function initFollowUpModal() {
+    const modal = document.getElementById("agenda-follow-up-modal");
+    if (!modal) return null;
+    const monthLabel = modal.querySelector("[data-follow-up-month-label]");
+    const prevBtn    = modal.querySelector("[data-follow-up-prev]");
+    const nextBtn    = modal.querySelector("[data-follow-up-next]");
+    const calMount   = modal.querySelector("[data-follow-up-cal]");
+    const detail     = modal.querySelector("[data-follow-up-detail]");
+    const confirmBtn = modal.querySelector("[data-follow-up-confirm]");
+    const sourceName = modal.querySelector("[data-follow-up-source-name]");
+    const sourceMeta = modal.querySelector("[data-follow-up-source-meta]");
+
+    let currentMonth = null;
+    let selectedDate = null;
+    let itemsByDate = new Map();      // from month grid (capped at 4 + count)
+    let fullDayCache = new Map();     // full day items keyed by isoDate
+    let fetchSeq = 0;
+    let daySeq = 0;
+    let source = null;
+
+    function pad(n) { return String(n).padStart(2, "0"); }
+    function isoMonth(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; }
+    function monthLabelText(monthIso) {
+      const [y, m] = monthIso.split("-").map(Number);
+      const d = new Date(y, m - 1, 1);
+      return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    }
+    function offsetMonth(monthIso, delta) {
+      const [y, m] = monthIso.split("-").map(Number);
+      const d = new Date(y, m - 1 + delta, 1);
+      return isoMonth(d);
+    }
+
+    function setMonth(monthIso) {
+      currentMonth = monthIso;
+      if (monthLabel) monthLabel.textContent = monthLabelText(monthIso);
+      fetchAndRender(monthIso);
+    }
+
+    function fetchAndRender(monthIso) {
+      const reqId = ++fetchSeq;
+      calMount.innerHTML = `<div class="follow-up-cal-loading">Loading…</div>`;
+      fetch(`/agenda/calendar?month=${encodeURIComponent(monthIso)}`, {
+        credentials: "same-origin",
+        headers:     { "Accept": "text/html", "X-Requested-With": "XMLHttpRequest" },
+      })
+        .then((res) => (res.ok ? res.text() : null))
+        .then((html) => {
+          if (reqId !== fetchSeq) return; // a newer fetch superseded this
+          if (!html) {
+            calMount.innerHTML = `<div class="follow-up-cal-error">Couldn't load month.</div>`;
+            return;
+          }
+          renderMonth(html);
+        })
+        .catch((err) => {
+          console.error("[follow-up] month fetch failed", err);
+          if (reqId === fetchSeq) {
+            calMount.innerHTML = `<div class="follow-up-cal-error">Couldn't load month.</div>`;
+          }
+        });
+    }
+
+    function renderMonth(html) {
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const cells = doc.querySelectorAll(".cal-day");
+      itemsByDate = new Map();
+
+      const grid = document.createElement("div");
+      grid.className = "follow-up-cal-grid";
+
+      ["S", "M", "T", "W", "T", "F", "S"].forEach((wd) => {
+        const head = document.createElement("div");
+        head.className = "follow-up-cal-weekday";
+        head.textContent = wd;
+        grid.appendChild(head);
+      });
+
+      cells.forEach((cell) => {
+        const date = cell.dataset.date;
+        if (!date) return;
+        const isOther = cell.classList.contains("other-month");
+        const isToday = cell.classList.contains("is-today");
+        const items = Array.from(cell.querySelectorAll(".cal-item")).map((b) => ({
+          name:        b.dataset.name,
+          startAt:     Number(b.dataset.startAt),
+          color:       b.dataset.color,
+          agendaColor: b.dataset.agendaColor,
+          allDay:      b.dataset.allDay === "true",
+        }));
+        const moreEl = cell.querySelector(".cal-more");
+        const more = moreEl ? parseInt(moreEl.textContent.match(/\d+/)?.[0] || "0", 10) : 0;
+        const total = items.length + more;
+        itemsByDate.set(date, { items, more, total });
+
+        const dayBtn = document.createElement("button");
+        dayBtn.type = "button";
+        dayBtn.className = "follow-up-cal-day";
+        if (isOther) dayBtn.classList.add("other-month");
+        if (isToday) dayBtn.classList.add("is-today");
+        if (date === selectedDate) dayBtn.classList.add("selected");
+        dayBtn.dataset.date = date;
+
+        const num = document.createElement("span");
+        num.className = "follow-up-cal-day-num";
+        num.textContent = String(Number(date.split("-")[2]));
+        dayBtn.appendChild(num);
+
+        if (total > 0) {
+          const badge = document.createElement("span");
+          badge.className = "follow-up-cal-day-count";
+          badge.textContent = String(total);
+          dayBtn.appendChild(badge);
+        }
+
+        dayBtn.addEventListener("click", () => selectDay(date));
+        grid.appendChild(dayBtn);
+      });
+
+      calMount.innerHTML = "";
+      calMount.appendChild(grid);
+      if (selectedDate && itemsByDate.has(selectedDate)) renderDetail(selectedDate);
+    }
+
+    function selectDay(date) {
+      selectedDate = date;
+      calMount.querySelectorAll(".follow-up-cal-day").forEach((b) => {
+        b.classList.toggle("selected", b.dataset.date === date);
+      });
+      renderDetail(date);
+      if (confirmBtn) confirmBtn.disabled = false;
+      // Month grid caps cells at 4 items + "+N more" text — not enough to
+      // judge availability. Fetch the day view's full item list, cache,
+      // and re-render the detail panel once it arrives.
+      if (!fullDayCache.has(date)) {
+        const reqId = ++daySeq;
+        fetch(`/agenda?date=${encodeURIComponent(date)}`, {
+          credentials: "same-origin",
+          headers:     { "Accept": "text/html", "X-Requested-With": "XMLHttpRequest" },
+        })
+          .then((res) => (res.ok ? res.text() : null))
+          .then((html) => {
+            if (!html) return;
+            const doc = new DOMParser().parseFromString(html, "text/html");
+            const section = doc.querySelector('.agenda-section[data-section-day="0"]');
+            const rows = section ? section.querySelectorAll(".agenda-item") : [];
+            const items = Array.from(rows).map((row) => ({
+              name:        row.dataset.name,
+              startAt:     Number(row.dataset.startAt),
+              color:       row.dataset.color,
+              agendaColor: row.dataset.agendaColor,
+              allDay:      row.dataset.allDay === "true",
+            }));
+            fullDayCache.set(date, items);
+            if (reqId === daySeq && selectedDate === date) renderDetail(date);
+          })
+          .catch((err) => console.warn("[follow-up] day fetch failed", err));
+      }
+    }
+
+    function renderDetail(date) {
+      const fromMonth = itemsByDate.get(date);
+      const full = fullDayCache.get(date);
+      // Prefer the full day fetch when we have it; otherwise the month-grid
+      // sample (capped at 4). The header's total comes from the month grid
+      // until the day fetch arrives, then from the full set.
+      const items = full || fromMonth?.items || [];
+      const total = full ? full.length : (fromMonth?.total ?? 0);
+      const truncated = !full && fromMonth ? fromMonth.more : 0;
+
+      const d = new Date(date + "T12:00:00");
+      const dateLabel = d.toLocaleDateString(undefined, {
+        weekday: "short", month: "short", day: "numeric", year: "numeric",
+      });
+
+      detail.innerHTML = "";
+      const header = document.createElement("div");
+      header.className = "follow-up-day-header";
+      header.textContent = `${dateLabel} — ${total} event${total === 1 ? "" : "s"}`;
+      detail.appendChild(header);
+
+      if (total === 0) {
+        const empty = document.createElement("div");
+        empty.className = "follow-up-day-empty";
+        empty.textContent = "Nothing scheduled.";
+        detail.appendChild(empty);
+        return;
+      }
+
+      const list = document.createElement("ul");
+      list.className = "follow-up-day-list";
+      const sorted = items.slice().sort((a, b) => a.startAt - b.startAt);
+      sorted.forEach((it) => {
+        const li = document.createElement("li");
+        li.style.setProperty("--item-color", it.agendaColor || it.color || "#666");
+        const time = document.createElement("span");
+        time.className = "follow-up-day-time";
+        time.textContent = it.allDay ? "All day" : fmtTime(it.startAt);
+        const name = document.createElement("span");
+        name.className = "follow-up-day-name";
+        name.textContent = it.name || "(no name)";
+        li.appendChild(time);
+        li.appendChild(name);
+        list.appendChild(li);
+      });
+      detail.appendChild(list);
+
+      if (truncated > 0) {
+        const note = document.createElement("div");
+        note.className = "follow-up-day-more";
+        note.textContent = `Loading ${truncated} more…`;
+        detail.appendChild(note);
+      }
+    }
+
+    prevBtn?.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (currentMonth) setMonth(offsetMonth(currentMonth, -1));
+    });
+    nextBtn?.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (currentMonth) setMonth(offsetMonth(currentMonth, +1));
+    });
+
+    confirmBtn?.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (!selectedDate || !source) return;
+      if (window.hideModal) window.hideModal("#agenda-follow-up-modal");
+      advanceToAddModal(source, selectedDate);
+    });
+
+    function open(src) {
+      source = src;
+      selectedDate = null;
+      fullDayCache = new Map(); // fresh cache per open — source event's day items may have changed
+      if (confirmBtn) confirmBtn.disabled = true;
+      if (sourceName) sourceName.textContent = src.name || "this event";
+      if (sourceMeta) sourceMeta.textContent = formatSourceMeta(src);
+      detail.innerHTML = `<div class="follow-up-day-empty">Pick a day above to see what's already scheduled.</div>`;
+      const startMonth = src.month && /^\d{4}-\d{2}$/.test(src.month)
+        ? src.month
+        : isoMonth(new Date());
+      setMonth(startMonth);
+      if (window.showModal) window.showModal("#agenda-follow-up-modal");
+    }
+
+    function formatSourceMeta(src) {
+      if (!src.date) return "";
+      const d = new Date(src.date + "T12:00:00");
+      const dateLabel = d.toLocaleDateString(undefined, {
+        weekday: "short", month: "short", day: "numeric", year: "numeric",
+      });
+      if (src.allDay) return `Originally ${dateLabel} · all day`;
+      const start = formatTimeStr(src.startTime);
+      const end   = formatTimeStr(src.endTime);
+      if (start && end && start !== end) return `Originally ${dateLabel} · ${start}–${end}`;
+      if (start)                          return `Originally ${dateLabel} · ${start}`;
+      return `Originally ${dateLabel}`;
+    }
+
+    // "HH:MM" 24h string → "9:00am" / "1:00pm" to match fmtTime's render.
+    function formatTimeStr(hhmm) {
+      if (!hhmm || !/^\d{1,2}:\d{2}$/.test(hhmm)) return "";
+      const [h, m] = hhmm.split(":").map(Number);
+      const ampm = h >= 12 ? "pm" : "am";
+      const h12 = ((h % 12) || 12);
+      return `${h12}:${String(m).padStart(2, "0")}${ampm}`;
+    }
+
+    return { open };
+  }
+
+  function advanceToAddModal(source, newDate) {
+    if (typeof addModalPrefillAndShow !== "function") return;
+    addModalPrefillAndShow({
+      agendaId:          source.agendaId,
+      name:              source.name,
+      kind:              source.kind,
+      color:             source.color,
+      allDay:            source.allDay,
+      date:              newDate,
+      alldayEnd:         source.allDay ? shiftAllDayEnd(source.date, source.alldayEnd, newDate) : null,
+      startTime:         source.startTime,
+      endTime:           source.endTime,
+      location:          source.location,
+      notes:             source.notes,
+      triggerExpression: source.triggerExpression,
+    });
+  }
+
+  // For multi-day all-day follow-ups: preserve the source span (delta in
+  // days between start and end) when shifting to the chosen day.
+  function shiftAllDayEnd(origStart, origEnd, newStart) {
+    if (!origStart || !origEnd) return newStart;
+    const s = new Date(origStart + "T12:00:00");
+    const e = new Date(origEnd + "T12:00:00");
+    const days = Math.round((e - s) / 86400000);
+    const ns = new Date(newStart + "T12:00:00");
+    ns.setDate(ns.getDate() + days);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${ns.getFullYear()}-${pad(ns.getMonth() + 1)}-${pad(ns.getDate())}`;
   }
 
   // ---------- monitor subscription ----------
@@ -2552,6 +2964,7 @@
     if (!root) return;
     const addModal = $("#agenda-add-modal");
     if (addModal) initAddModal(addModal);
+    followUpAPI = initFollowUpModal();
     initEdit(root);
     initAgendaFilter();
     if (root.classList.contains("agenda-calendar-page")) {

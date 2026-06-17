@@ -327,5 +327,31 @@ RSpec.describe AgendaSchedule do
       expect(phantom).to be_phantom
       expect(phantom.metadata).to eq("travel_minutes" => 33, "travel_location" => "123 Main St")
     end
+
+    it "carries arrive_early_minutes onto the phantom" do
+      sched = build_schedule(
+        recurrence: { "freq" => "daily" },
+        starts_on: Date.current,
+        arrive_early_minutes: 12,
+      )
+      phantom = sched.build_phantom(Date.current + 1)
+      expect(phantom.arrive_early_minutes).to eq(12)
+    end
+  end
+
+  describe "arrive_early_minutes column" do
+    it "defaults to 0" do
+      sched = build_schedule(recurrence: { "freq" => "daily" }, starts_on: Date.current)
+      expect(sched.reload.arrive_early_minutes).to eq(0)
+    end
+
+    it "is included in serialize_for_edit" do
+      sched = build_schedule(
+        recurrence: { "freq" => "daily" },
+        starts_on: Date.current,
+        arrive_early_minutes: 8,
+      )
+      expect(sched.serialize_for_edit[:arrive_early_minutes]).to eq(8)
+    end
   end
 end

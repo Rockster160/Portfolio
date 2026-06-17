@@ -2,27 +2,28 @@
 #
 # Table name: agenda_schedules
 #
-#  id                  :bigint           not null, primary key
-#  all_day             :boolean          default(FALSE), not null
-#  color               :string
-#  duration_minutes    :integer
-#  external_etag       :text
-#  external_uid        :text
-#  external_updated_at :datetime
-#  kind                :integer          not null
-#  location            :string
-#  metadata            :jsonb            not null
-#  name                :string           not null
-#  notes               :text
-#  occurrence_count    :integer
-#  recurrence          :jsonb            not null
-#  start_time          :time             not null
-#  starts_on           :date             not null
-#  trigger_expression  :text
-#  until_on            :date
-#  created_at          :datetime         not null
-#  updated_at          :datetime         not null
-#  agenda_id           :bigint           not null
+#  id                   :bigint           not null, primary key
+#  all_day              :boolean          default(FALSE), not null
+#  arrive_early_minutes :integer          default(0), not null
+#  color                :string
+#  duration_minutes     :integer
+#  external_etag        :text
+#  external_uid         :text
+#  external_updated_at  :datetime
+#  kind                 :integer          not null
+#  location             :string
+#  metadata             :jsonb            not null
+#  name                 :string           not null
+#  notes                :text
+#  occurrence_count     :integer
+#  recurrence           :jsonb            not null
+#  start_time           :time             not null
+#  starts_on            :date             not null
+#  trigger_expression   :text
+#  until_on             :date
+#  created_at           :datetime         not null
+#  updated_at           :datetime         not null
+#  agenda_id            :bigint           not null
 #
 class AgendaSchedule < ApplicationRecord
   include Jilable
@@ -89,26 +90,27 @@ class AgendaSchedule < ApplicationRecord
   # accepts, so the edit-modal payload round-trips cleanly.
   def serialize_for_edit
     {
-      id:                 id,
-      kind:               kind,
-      name:               name,
-      freq:               freq,
-      by_day:             Array(recurrence_data[:by_day]),
-      by_month_day:       Array(recurrence_data[:by_month_day]).map(&:to_i),
-      interval:           recurrence_data[:interval]&.to_i,
-      unit:               recurrence_data[:unit],
-      by_set_pos:         recurrence_data[:by_set_pos]&.to_i,
-      starts_on:          starts_on&.iso8601,
-      until_on:           until_on&.iso8601,
-      occurrence_count:   occurrence_count,
-      start_time:         start_time&.strftime("%H:%M"),
-      duration_minutes:   duration_minutes,
-      all_day:            all_day,
-      color:              color,
-      location:           location,
-      notes:              notes,
-      trigger_expression: trigger_expression,
-      metadata:           metadata,
+      id:                   id,
+      kind:                 kind,
+      name:                 name,
+      freq:                 freq,
+      by_day:               Array(recurrence_data[:by_day]),
+      by_month_day:         Array(recurrence_data[:by_month_day]).map(&:to_i),
+      interval:             recurrence_data[:interval]&.to_i,
+      unit:                 recurrence_data[:unit],
+      by_set_pos:           recurrence_data[:by_set_pos]&.to_i,
+      starts_on:            starts_on&.iso8601,
+      until_on:             until_on&.iso8601,
+      occurrence_count:     occurrence_count,
+      start_time:           start_time&.strftime("%H:%M"),
+      duration_minutes:     duration_minutes,
+      all_day:              all_day,
+      color:                color,
+      location:             location,
+      arrive_early_minutes: arrive_early_minutes,
+      notes:                notes,
+      trigger_expression:   trigger_expression,
+      metadata:             metadata,
     }.compact
   end
 
@@ -166,18 +168,19 @@ class AgendaSchedule < ApplicationRecord
   # materialized all-day row.
   def build_phantom(date)
     AgendaItem.new(
-      agenda:             agenda,
-      agenda_schedule:    self,
-      kind:               kind,
-      start_at:           occurrence_start_at(date),
-      end_at:             occurrence_end_at(date),
-      all_day:            all_day,
-      name:               name,
-      notes:              notes,
-      location:           location,
-      color:              color,
-      trigger_expression: trigger_expression,
-      metadata:           metadata,
+      agenda:               agenda,
+      agenda_schedule:      self,
+      kind:                 kind,
+      start_at:             occurrence_start_at(date),
+      end_at:               occurrence_end_at(date),
+      all_day:              all_day,
+      name:                 name,
+      notes:                notes,
+      location:             location,
+      arrive_early_minutes: arrive_early_minutes,
+      color:                color,
+      trigger_expression:   trigger_expression,
+      metadata:             metadata,
     ).tap { |item| item.phantom = true }
   end
 
@@ -276,16 +279,17 @@ class AgendaSchedule < ApplicationRecord
       next if existing_starts.include?(occurrence_start)
 
       agenda_items.create!(
-        agenda:             agenda,
-        kind:               kind,
-        name:               name,
-        start_at:           occurrence_start,
-        end_at:             occurrence_end_at(date),
-        all_day:            all_day,
-        color:              color,
-        notes:              notes,
-        location:           location,
-        trigger_expression: trigger_expression,
+        agenda:               agenda,
+        kind:                 kind,
+        name:                 name,
+        start_at:             occurrence_start,
+        end_at:               occurrence_end_at(date),
+        all_day:              all_day,
+        color:                color,
+        notes:                notes,
+        location:             location,
+        arrive_early_minutes: arrive_early_minutes,
+        trigger_expression:   trigger_expression,
       )
     end
   end
