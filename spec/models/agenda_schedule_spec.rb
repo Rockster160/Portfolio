@@ -314,4 +314,18 @@ RSpec.describe AgendaSchedule do
       expect(triggered).to be_empty
     end
   end
+
+  describe "#build_phantom (metadata inheritance)" do
+    it "copies the schedule's metadata onto every phantom so views see travel-time without DB rows" do
+      sched = build_schedule(
+        recurrence: { "freq" => "daily" },
+        starts_on: Date.current,
+        location: "123 Main St",
+        metadata: { travel_minutes: 33, travel_location: "123 Main St" },
+      )
+      phantom = sched.build_phantom(Date.current + 1)
+      expect(phantom).to be_phantom
+      expect(phantom.metadata).to eq("travel_minutes" => 33, "travel_location" => "123 Main St")
+    end
+  end
 end

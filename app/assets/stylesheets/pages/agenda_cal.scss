@@ -438,6 +438,24 @@ body.agenda-cal-body {
     flex: 1;
     min-width: 0;
   }
+
+  // Travel-time badge sits AFTER the name in the cell's flex row.
+  // flex-shrink: 0 keeps it from collapsing under name pressure; instead
+  // the name ellipsises first.
+  .cal-month-item-travel {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 9px;
+    opacity: 0.65;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+    font-style: italic;
+
+    i {
+      font-size: 8px;
+    }
+  }
 }
 
 .cal-month-overflow {
@@ -910,6 +928,14 @@ $cal-week-px-per-hour: 20px;
     overflow: hidden;
     text-overflow: ellipsis;
     font-variant-numeric: tabular-nums;
+
+    // Compact "Xm" tier — used when the band is too short for the full
+    // label but still has enough room for a number-plus-unit glyph.
+    &.is-compact {
+      font-size: 7px;
+      line-height: 1;
+      letter-spacing: 0;
+    }
   }
 
   // Source event during drag — stays in its original slot at low alpha

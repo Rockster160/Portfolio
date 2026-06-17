@@ -112,6 +112,10 @@
                         data-format="cal"
                   ></span>
                   <span class="cal-month-item-name"><%= item.name %></span>
+                  <% cal_travel_min = item.metadata["travel_minutes"].to_i %>
+                  <% if cal_travel_min > 0 %>
+                    <span class="cal-month-item-travel" title="<%= cal_travel_min %> min drive from Home"><i class="fa fa-car"></i><%= cal_travel_min %>m</span>
+                  <% end %>
                 </button>
               <% end %>
             </div>

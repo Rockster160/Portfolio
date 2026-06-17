@@ -920,13 +920,19 @@
       const travelBand = document.createElement("div");
       travelBand.className = "cal-week-event-travel";
       travelBand.style.flex = `0 0 ${bandPx}px`;
-      // Label fits comfortably with an 8px font + 1.2 line-height at ~11px.
-      // Below that, the stripe pattern alone communicates "travel time"
-      // without crowding what little room there is.
+      // Three tiers of label visibility based on the band's pixel height:
+      //   * >=11px → full "X min drive" at 8px font
+      //   * 6-10px → compact "Xm" at 7px font (tight bands)
+      //   * <6px  → stripes only, no text
       if (bandPx >= 11) {
         const travelLabel = document.createElement("span");
         travelLabel.className = "cal-week-event-travel-label";
         travelLabel.textContent = `${travelMin} min drive`;
+        travelBand.appendChild(travelLabel);
+      } else if (bandPx >= 6) {
+        const travelLabel = document.createElement("span");
+        travelLabel.className = "cal-week-event-travel-label is-compact";
+        travelLabel.textContent = `${travelMin}m`;
         travelBand.appendChild(travelLabel);
       }
       node.appendChild(travelBand);

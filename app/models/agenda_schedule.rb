@@ -177,6 +177,7 @@ class AgendaSchedule < ApplicationRecord
       location:           location,
       color:              color,
       trigger_expression: trigger_expression,
+      metadata:           metadata,
     ).tap { |item| item.phantom = true }
   end
 
