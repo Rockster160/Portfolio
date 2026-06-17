@@ -266,6 +266,35 @@ class AgendaItem < ApplicationRecord
     fired_at.present?
   end
 
+  # Google attendee metadata, hydrated from sync.rb into the JSONB
+  # `metadata` column. `attendees` is an array of hashes with stringified
+  # keys (default for JSONB reads); `self_response` is the connected
+  # user's responseStatus on the event (accepted/tentative/declined/
+  # needsAction, or nil when not an invite).
+  def attendees
+    Array(metadata["attendees"])
+  end
+
+  def organizer
+    metadata["organizer"].presence
+  end
+
+  def self_response
+    metadata["self_response"].presence
+  end
+
+  def invite?
+    attendees.any?
+  end
+
+  def needs_response?
+    self_response == "needsAction"
+  end
+
+  def declined?
+    self_response == "declined"
+  end
+
   def complete!(at: Time.current)
     update!(completed_at: at)
   end
@@ -411,6 +440,11 @@ class AgendaItem < ApplicationRecord
       completed_at:       completed_at&.to_i,
       detached_at:        detached_at&.to_i,
       schedule:           agenda_schedule&.serialize_for_edit,
+      attendees:          attendees,
+      organizer:          organizer,
+      self_response:      self_response,
+      needs_response:     needs_response?,
+      declined:           declined?,
     )
   end
 

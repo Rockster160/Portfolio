@@ -219,7 +219,6 @@ class GoogleCalendar::Sync
       @applied_count += 1
       return
     end
-    return if declined_by_owner?(event)
 
     # upsert_* return truthy when they actually persisted a change and
     # falsy when fast_skip short-circuited. Only the truthy case counts
@@ -244,26 +243,50 @@ class GoogleCalendar::Sync
     report_malformed_event!(event, "#{e.class}: #{e.message}")
   end
 
-  # Google sets `self: true` on the attendee whose calendar this is. If
-  # they've declined, we skip the import so the event doesn't clutter the
-  # agenda.
-  def declined_by_owner?(event)
-    Array(event[:attendees]).any? { |a| a[:self] == true && a[:responseStatus] == "declined" }
-  end
-
   # Maps a Google event to its AgendaItem status enum.
   #   * Google flags it `tentative` directly → :tentative.
-  #   * Connected user hasn't fully accepted (needsAction/tentative) → :tentative.
-  #   * Otherwise → :confirmed.
+  #   * Connected user's response is `tentative` → :tentative.
+  #   * Otherwise → :confirmed (declines + needsAction are surfaced through
+  #     metadata.self_response, not the status enum — the UI distinguishes
+  #     them with their own treatments).
   # `cancelled` is handled separately by handle_cancellation — by the time
   # we reach this writer the event is confirmed-or-tentative.
   def event_status(event)
     return :tentative if event[:status] == "tentative"
+    return :tentative if self_response(event) == "tentative"
 
-    self_attendee = Array(event[:attendees]).find { |a| a[:self] == true }
-    return :confirmed if self_attendee.nil?
+    :confirmed
+  end
 
-    %w[needsAction tentative].include?(self_attendee[:responseStatus]) ? :tentative : :confirmed
+  def self_response(event)
+    Array(event[:attendees]).find { |a| a[:self] == true }&.[](:responseStatus)
+  end
+
+  # Compact snapshot of who's on the invite, used by the details modal and
+  # for badge classes. Stored under the JSONB `metadata` column so we don't
+  # need a schema change. Empty hash when the event has no attendees so
+  # repeat syncs don't carry stale data forward.
+  def attendee_metadata(event)
+    attendees = Array(event[:attendees])
+    return { attendees: [], organizer: nil, self_response: nil } if attendees.empty?
+
+    org = event[:organizer] || {}
+    {
+      attendees:     attendees.map { |a| attendee_payload(a) },
+      organizer:     org[:email].present? ? { email: org[:email], display_name: org[:displayName], self: !!org[:self] } : nil,
+      self_response: self_response(event),
+    }
+  end
+
+  def attendee_payload(attendee)
+    {
+      email:           attendee[:email],
+      display_name:    attendee[:displayName],
+      response_status: attendee[:responseStatus],
+      self:            !!attendee[:self],
+      organizer:       !!attendee[:organizer],
+      optional:        !!attendee[:optional],
+    }
   end
 
   # `status: cancelled` arrives in three shapes:
@@ -346,6 +369,7 @@ class GoogleCalendar::Sync
       all_day:             all_day,
       external_etag:       event[:etag],
       external_updated_at: parse_time(event[:updated]),
+      metadata:            sched.metadata.to_h.merge(attendee_metadata(event).stringify_keys),
     )
     sched.save!
   end
@@ -369,6 +393,7 @@ class GoogleCalendar::Sync
       status:              event_status(event),
       external_etag:       event[:etag],
       external_updated_at: parse_time(event[:updated]),
+      metadata:            item.metadata.to_h.merge(attendee_metadata(event).stringify_keys),
     }
     # Google's update is newer than our local edit — accept the inbound
     # change AND clear the local-edit flag so future Google pulls aren't
@@ -427,10 +452,12 @@ class GoogleCalendar::Sync
       location:            event_location(event) || master.location,
       notes:               ::GoogleCalendar::HtmlText.to_plain(event[:description]) || master.notes,
       all_day:             all_day,
+      status:              event_status(event),
       detached_at:         ::Time.current,
       original_start_at:   original_start,
       external_etag:       event[:etag],
       external_updated_at: parse_time(event[:updated]),
+      metadata:            item.metadata.to_h.merge(attendee_metadata(event).stringify_keys),
     }
     attrs[:locally_modified_at] = nil if item.persisted? && item.locally_modified_at.present?
     item.assign_attributes(attrs)

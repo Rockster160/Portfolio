@@ -1629,7 +1629,22 @@
       const inGrace = itemId && gracedItemIds.has(itemId);
       const hideByCompleted = isCrossedOut && !!completedHidden[kind] && !inGrace;
       const hideByTentative = tentativeHidden && el.classList.contains("tentative");
-      el.classList.toggle("hidden-by-filter", hideByAgenda || hideBySchedule || hideByItem || hideByPattern || hideByCompleted || hideByTentative);
+      // Declined invites: on the calendar grid we treat them like a
+      // user-hidden item — the seed gets pushed into the left gutter as a
+      // colored breadcrumb, still clickable for un-decline. Agenda list
+      // pages do NOT hide-by-filter; they show the declined event greyed
+      // + crossed-out via the `.declined` class on the row (CSS-only).
+      const isCalSeed = (
+        el.classList.contains("cal-item")
+        || el.classList.contains("cal-month-item")
+        || el.classList.contains("cal-month-banner")
+        || el.classList.contains("cal-week-event")
+        || el.classList.contains("cal-week-allday-chip")
+        || el.classList.contains("cal-week-seed")
+        || el.classList.contains("cal-month-allday-seed")
+      );
+      const hideByDeclined = isCalSeed && el.classList.contains("declined");
+      el.classList.toggle("hidden-by-filter", hideByAgenda || hideBySchedule || hideByItem || hideByPattern || hideByCompleted || hideByTentative || hideByDeclined);
     });
     // Trigger the cal-page layout reflow so lanes reclaim the freed
     // horizontal space LIVE — without this, lanes only widen after the
@@ -1669,6 +1684,9 @@
       try { if (new RegExp(src, "i").test(name)) return true; }
       catch (_) { /* skip */ }
     }
+    // Declined invites read as hidden on cal pages so lane layout reclaims
+    // their slot and the gutter painter draws a clickable breadcrumb.
+    if (seed.dataset.selfResponse === "declined") return true;
     return false;
   };
 
@@ -2102,7 +2120,149 @@
       set("[data-notes-target]", d.notes);
     }
 
+    hydrateRsvp(modal, dataEl);
+
     if (window.showModal) window.showModal("#agenda-item-details");
+  }
+
+  // Pulls the attendees + self_response payload off the clicked seed and
+  // populates the attendee list + RSVP buttons. No-op on non-invite events
+  // (zero attendees) and on non-Google agendas (RSVP requires upstream
+  // patch). Optimistic UI: the clicked button enters a pending state until
+  // the server returns the new metadata; on failure we revert.
+  function hydrateRsvp(modal, dataEl) {
+    const d = dataEl.dataset;
+    const attendees = safeJsonParse(d.attendees, []);
+    const organizer = safeJsonParse(d.organizer, null);
+    const isGoogle = d.agendaSource === "google";
+    const isEvent = d.kind === "event";
+    const itemUrl = d.itemUrl || "";
+    const selfResp = d.selfResponse || "";
+
+    const attRow = modal.querySelector("[data-attendees-row]");
+    const attList = modal.querySelector("[data-attendees-list]");
+    const attHead = modal.querySelector("[data-attendees-heading]");
+    if (attRow && attList) {
+      const hasAnyone = attendees.length > 0 || !!organizer;
+      attRow.classList.toggle("hidden", !hasAnyone);
+      attList.innerHTML = "";
+      if (hasAnyone && attHead) attHead.textContent = `Guests (${attendees.length})`;
+      const seen = new Set();
+      const pushRow = (a, organizerFlag) => {
+        const email = (a.email || "").toLowerCase();
+        if (email && seen.has(email)) return;
+        if (email) seen.add(email);
+        const li = document.createElement("li");
+        li.className = "agenda-details-attendee";
+        const status = a.response_status || (organizerFlag ? "accepted" : "needsAction");
+        li.classList.add(`rsvp-${status}`);
+        if (a.self) li.classList.add("is-self");
+        if (organizerFlag) li.classList.add("is-organizer");
+        const icon = document.createElement("i");
+        icon.className = `fa ${rsvpIconClass(status)}`;
+        icon.setAttribute("aria-hidden", "true");
+        const label = document.createElement("span");
+        label.className = "agenda-details-attendee-label";
+        label.textContent = a.display_name || a.email || "(no name)";
+        const meta = document.createElement("span");
+        meta.className = "agenda-details-attendee-meta";
+        const metaBits = [];
+        if (organizerFlag) metaBits.push("organizer");
+        if (a.optional) metaBits.push("optional");
+        if (a.self) metaBits.push("you");
+        meta.textContent = metaBits.join(" · ");
+        li.appendChild(icon);
+        li.appendChild(label);
+        if (metaBits.length) li.appendChild(meta);
+        attList.appendChild(li);
+      };
+      if (organizer) pushRow({ ...organizer, response_status: "accepted" }, true);
+      attendees.forEach((a) => pushRow(a, false));
+    }
+
+    const rsvpRow = modal.querySelector("[data-rsvp-row]");
+    if (!rsvpRow) return;
+    const showRsvp = isGoogle && isEvent && (attendees.length > 0);
+    rsvpRow.classList.toggle("hidden", !showRsvp);
+    rsvpRow.querySelectorAll("[data-rsvp-action]").forEach((btn) => {
+      btn.classList.toggle("is-current", btn.dataset.rsvpAction === selfResp);
+      btn.disabled = false;
+      btn.classList.remove("is-pending");
+    });
+    const feedback = rsvpRow.querySelector("[data-rsvp-feedback]");
+    if (feedback) {
+      feedback.textContent = "";
+      feedback.classList.add("hidden");
+    }
+    if (!showRsvp) return;
+
+    rsvpRow.querySelectorAll("[data-rsvp-action]").forEach((btn) => {
+      btn.onclick = (e) => {
+        e.preventDefault();
+        const next = btn.dataset.rsvpAction;
+        submitRsvp(itemUrl, next, btn, dataEl, modal);
+      };
+    });
+  }
+
+  function safeJsonParse(str, fallback) {
+    if (!str) return fallback;
+    try { return JSON.parse(str); }
+    catch (_) { return fallback; }
+  }
+
+  function rsvpIconClass(status) {
+    switch (status) {
+      case "accepted":  return "fa-check-circle";
+      case "tentative": return "fa-question-circle";
+      case "declined":  return "fa-times-circle";
+      default:          return "fa-circle-o";
+    }
+  }
+
+  function submitRsvp(itemUrl, response, btn, dataEl, modal) {
+    if (!itemUrl || !response) return;
+    const url = `${itemUrl}/respond`;
+    const rsvpRow = modal.querySelector("[data-rsvp-row]");
+    const feedback = rsvpRow?.querySelector("[data-rsvp-feedback]");
+    rsvpRow?.querySelectorAll("[data-rsvp-action]").forEach((b) => { b.disabled = true; });
+    btn.classList.add("is-pending");
+    if (feedback) {
+      feedback.textContent = "Sending response…";
+      feedback.classList.remove("hidden");
+    }
+    ajax("POST", url, { response: response })
+      .then((res) => res.json())
+      .then((payload) => {
+        // Persist truth onto the clicked seed so subsequent opens of the
+        // details modal reflect the new state without a server round-trip.
+        dataEl.dataset.selfResponse = payload.self_response || "";
+        dataEl.dataset.attendees = JSON.stringify(payload.attendees || []);
+        // Sync the row's class markers so the gutter-hide path + agenda
+        // list styling match the response immediately.
+        dataEl.classList.toggle("declined", payload.declined === true);
+        dataEl.classList.toggle("needs-response", payload.needs_response === true);
+        if (feedback) {
+          feedback.textContent = "";
+          feedback.classList.add("hidden");
+        }
+        btn.classList.remove("is-pending");
+        rsvpRow?.querySelectorAll("[data-rsvp-action]").forEach((b) => {
+          b.disabled = false;
+          b.classList.toggle("is-current", b.dataset.rsvpAction === payload.self_response);
+        });
+        window.__rebuildAgendaCalLocal?.();
+        window.__applyAgendaVisibility?.();
+      })
+      .catch((err) => {
+        btn.classList.remove("is-pending");
+        rsvpRow?.querySelectorAll("[data-rsvp-action]").forEach((b) => { b.disabled = false; });
+        if (feedback) {
+          feedback.textContent = "Couldn't save your response — please try again.";
+          feedback.classList.remove("hidden");
+        }
+        console.warn("[agenda] rsvp failed", err);
+      });
   }
 
   function openAddModalForDate(dateStr) {

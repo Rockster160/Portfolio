@@ -30,6 +30,9 @@
 <% classes << "phantom"     if item.phantom? %>
 <% classes << "preview"     if preview %>
 <% classes << "readonly"    if readonly %>
+<% classes << "invite"          if item.invite? %>
+<% classes << "needs-response"  if item.needs_response? %>
+<% classes << "declined"        if item.declined? %>
 <% id_title = item.phantom? ? "Agenda ##{item.agenda_id}" : "Item ##{item.id}" %>
 
 <%# Completion model:
@@ -75,7 +78,10 @@
      data-location="<%= item.location %>"
      data-travel-minutes="<%= item.metadata["travel_minutes"].to_i %>"
      data-trigger-expression="<%= item.trigger_expression %>"
-     data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>">
+     data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>"
+     data-attendees="<%= item.attendees.to_json %>"
+     data-organizer="<%= item.organizer.to_json %>"
+     data-self-response="<%= item.self_response %>">
 
   <%# Full-strip checkbox click zone — always rendered so every item has
       a consistent visual + the right-of-it body always aligns. Disabled
@@ -118,6 +124,13 @@
       icons line up vertically across rows regardless of which ones the
       item happens to expose. Empty slots reserve space silently. %>
   <span class="agenda-item-icons">
+    <span class="agenda-item-icon-slot agenda-item-rsvp-slot">
+      <% if item.needs_response? %>
+        <span class="agenda-item-badge rsvp-badge needs-response" title="Awaiting your response"><i class="fa fa-question-circle"></i></span>
+      <% elsif item.declined? %>
+        <span class="agenda-item-badge rsvp-badge declined" title="You declined"><i class="fa fa-times-circle"></i></span>
+      <% end %>
+    </span>
     <span class="agenda-item-icon-slot agenda-item-recurring-slot">
       <% if item.recurring? %>
         <span class="agenda-item-badge" title="Recurring"><i class="fa fa-refresh"></i></span>

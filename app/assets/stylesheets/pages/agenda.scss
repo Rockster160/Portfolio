@@ -582,6 +582,27 @@ body.ctr-agendas {
       }
     }
 
+    // Declined invites: stay visible in agenda lists (no filter-hide), but
+    // greyed + struck through so they read clearly as "I said no, leaving
+    // for context." The cal pages use a separate gutter-hide path.
+    &.declined {
+      opacity: 0.45;
+      .agenda-item-name,
+      .agenda-item-time,
+      .agenda-item-loc-text {
+        text-decoration: line-through;
+      }
+    }
+
+    .rsvp-badge {
+      &.needs-response {
+        color: #ffb74d;
+      }
+      &.declined {
+        color: #e57373;
+      }
+    }
+
     // Custom checkbox: the fill color matches the item, so a glance tells
     // you which agenda each completed row belongs to. While the change is
     // in-flight (`.is-pending` on the row), the box renders greyscale so
@@ -1029,6 +1050,93 @@ body.ctr-agendas {
     // by openDetailsModal) so the action button matches the event chip.
     .af-btn-primary {
       background: var(--agenda-color, #{$base-blue}) !important;
+    }
+  }
+
+  .agenda-details-rsvp {
+    margin-top: 10px;
+    h4 {
+      font-size: 11px;
+      text-transform: uppercase;
+      opacity: 0.5;
+      margin: 0 0 6px;
+    }
+    .agenda-details-rsvp-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .rsvp-btn {
+      flex: 1 0 30%;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.06);
+      color: inherit;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      i { margin-right: 6px; }
+      &.is-current {
+        background: rgba(255, 255, 255, 0.18);
+        border-color: rgba(255, 255, 255, 0.4);
+      }
+      &.is-pending {
+        opacity: 0.5;
+        cursor: progress;
+      }
+      &.rsvp-accepted.is-current  { border-color: #4caf50; }
+      &.rsvp-tentative.is-current { border-color: #ffb74d; }
+      &.rsvp-declined.is-current  { border-color: #e57373; }
+      &[disabled] { cursor: not-allowed; }
+    }
+    .agenda-details-rsvp-feedback {
+      margin: 6px 0 0;
+      font-size: 12px;
+      opacity: 0.7;
+    }
+  }
+
+  .agenda-details-attendees {
+    margin-top: 10px;
+    h4 {
+      font-size: 11px;
+      text-transform: uppercase;
+      opacity: 0.5;
+      margin: 0 0 4px;
+    }
+    .agenda-details-attendee-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .agenda-details-attendee {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      font-size: 13px;
+      i {
+        width: 14px;
+        text-align: center;
+        flex: 0 0 auto;
+      }
+      .agenda-details-attendee-label {
+        flex: 1 1 auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .agenda-details-attendee-meta {
+        font-size: 11px;
+        opacity: 0.5;
+      }
+      &.rsvp-accepted i  { color: #4caf50; }
+      &.rsvp-tentative i { color: #ffb74d; }
+      &.rsvp-declined i  { color: #e57373; opacity: 0.7; }
+      &.rsvp-declined .agenda-details-attendee-label { text-decoration: line-through; opacity: 0.6; }
+      &.rsvp-needsAction i { color: rgba(255, 255, 255, 0.4); }
+      &.is-organizer .agenda-details-attendee-label { font-weight: 600; }
     }
   }
 }

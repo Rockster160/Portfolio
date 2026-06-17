@@ -23,6 +23,19 @@
         <span class="agenda-details-hide-recurring-text" data-toggle-hide-recurring-label>Hide</span>
       </button>
     </div>
+    <div class="agenda-details-rsvp hidden" data-rsvp-row>
+      <h4>Your response</h4>
+      <div class="agenda-details-rsvp-buttons">
+        <button type="button" class="af-btn rsvp-btn rsvp-accepted"  data-rsvp-action="accepted"><i class="fa fa-check"></i> Yes</button>
+        <button type="button" class="af-btn rsvp-btn rsvp-tentative" data-rsvp-action="tentative"><i class="fa fa-question"></i> Maybe</button>
+        <button type="button" class="af-btn rsvp-btn rsvp-declined"  data-rsvp-action="declined"><i class="fa fa-times"></i> No</button>
+      </div>
+      <p class="agenda-details-rsvp-feedback hidden" data-rsvp-feedback></p>
+    </div>
+    <div class="agenda-details-attendees hidden" data-attendees-row>
+      <h4 data-attendees-heading>Guests</h4>
+      <ul class="agenda-details-attendee-list" data-attendees-list></ul>
+    </div>
     <div class="agenda-details-notes hidden" data-notes-row>
       <h4>Notes</h4>
       <p data-notes-target></p>

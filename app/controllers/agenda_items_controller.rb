@@ -116,6 +116,32 @@ class AgendaItemsController < ApplicationController
   # For a Google-synced detached row this also deletes the Google override
   # so the upstream view restores the standard occurrence instead of
   # keeping the modified one.
+  # RSVP to a Google-synced event. Patches the connected account's
+  # responseStatus upstream first (no email blast — `sendUpdates=none`),
+  # then mirrors locally into AgendaItem.metadata.self_response. Phantoms
+  # are materialized + detached so the response applies to THIS occurrence
+  # only — matches the per-occurrence editing model the rest of the
+  # controller uses.
+  RESPONSE_STATUSES = %w[accepted tentative declined needsAction].freeze
+
+  def respond
+    @item = AgendaItem.locate_for_user(params[:id], current_user, editable: true)
+    return head :not_found unless @item
+    return render json: { errors: ["Not a Google-synced event."] }, status: :unprocessable_entity unless @item.agenda.managed_externally?
+
+    response_status = params[:response].to_s
+    return render json: { errors: ["Unknown response."] }, status: :unprocessable_entity if RESPONSE_STATUSES.exclude?(response_status)
+
+    with_agenda_write_lock(@item.agenda) {
+      new_attendees = updated_attendees_for_self(response_status)
+      instance_id = mirror_rsvp_to_google!(@item, new_attendees)
+      apply_rsvp_locally!(@item, instance_id, new_attendees, response_status)
+
+      @item.agenda.broadcast!
+      render json: @item.serialize
+    }
+  end
+
   def restore
     @item = AgendaItem.locate_for_user(params[:id], current_user, editable: true)
     return head :not_found unless @item
@@ -531,6 +557,100 @@ class AgendaItemsController < ApplicationController
 
   def render_google_sync_failed(exception)
     render json: { errors: [exception.message] }, status: :bad_gateway
+  end
+
+  # Builds the attendees array to send back to Google: existing attendees
+  # with self's responseStatus replaced. If the connected account isn't
+  # already in the list (e.g. invite landed before we synced) we insert it
+  # so the response actually lands.
+  def updated_attendees_for_self(response_status)
+    account_email = @item.agenda.google_account.email.to_s.downcase
+    existing = @item.attendees.map(&:to_h)
+    found = false
+    updated = existing.map { |a|
+      if a["self"] == true || a["email"].to_s.downcase == account_email
+        found = true
+        a.merge("response_status" => response_status, "self" => true)
+      else
+        a
+      end
+    }
+    updated << { "email" => account_email, "self" => true, "response_status" => response_status } unless found
+    updated
+  end
+
+  # PATCHes Google with the new attendees list. For phantoms we resolve
+  # the Google instance id first (matches the cancel-occurrence pattern).
+  # Returns the Google event id we actually wrote against (caller stores
+  # it on a newly-materialized row so future patches don't re-resolve).
+  def mirror_rsvp_to_google!(item, attendees)
+    instance_id = item.external_uid.presence
+    if instance_id.blank?
+      instance_id = resolve_google_instance_id(item, item.agenda_schedule) if item.agenda_schedule&.external_uid.present?
+      raise GoogleSyncFailed, "Couldn't find the matching event on Google Calendar." if instance_id.blank?
+    end
+
+    body = { attendees: attendees.map { |a| google_attendee_payload(a) } }
+    item.agenda.google_account.api.patch_event(
+      item.agenda.external_id,
+      instance_id,
+      body,
+    )
+    instance_id
+  rescue ::RestClient::Exception => e
+    ::Rails.logger.warn("[GoogleCalendar] rsvp failed agenda=#{item.agenda.id} uid=#{instance_id} #{e.class}: #{e.message}")
+    raise GoogleSyncFailed, google_error_message(e, "send your response")
+  end
+
+  def google_attendee_payload(attendee)
+    {
+      email:          attendee["email"],
+      displayName:    attendee["display_name"],
+      responseStatus: attendee["response_status"],
+      organizer:      attendee["organizer"],
+      optional:       attendee["optional"],
+      self:           attendee["self"],
+    }.compact
+  end
+
+  # Persists the new self_response. Phantoms materialize as detached so the
+  # response applies to this occurrence only — Google PATCHed the instance,
+  # not the master, so the rest of the series stays untouched. Status
+  # mirrors `event_status` for the new response: `tentative` flips status;
+  # anything else (accepted/declined/needsAction) stays :confirmed and the
+  # UI uses metadata.self_response for the badge / decline treatment.
+  def apply_rsvp_locally!(item, instance_id, attendees, response_status)
+    new_metadata = item.metadata.to_h.merge(
+      "attendees"     => attendees,
+      "self_response" => response_status,
+    )
+    new_status = response_status == "tentative" ? :tentative : :confirmed
+
+    attrs = {
+      metadata:            new_metadata,
+      status:              new_status,
+      locally_modified_at: Time.current,
+    }
+    # Phantom branch: detach into a materialized row so the per-occurrence
+    # RSVP doesn't leak back into the schedule's metadata for every future
+    # phantom on the same series.
+    if item.phantom?
+      attrs[:detached_at]       = Time.current
+      attrs[:original_start_at] = item.start_at
+      attrs[:external_uid]      = instance_id
+      original_date = item.occurrence_date
+      original_schedule = item.agenda_schedule
+      item.materialize!(attrs)
+      original_schedule.add_excluded_date!(original_date)
+    elsif item.recurring? && !item.detached? && item.external_uid.blank?
+      attrs[:detached_at]       = Time.current
+      attrs[:original_start_at] = item.start_at
+      attrs[:external_uid]      = instance_id
+      item.update!(attrs)
+    else
+      attrs[:external_uid] = instance_id if item.external_uid.blank?
+      item.update!(attrs)
+    end
   end
 
   def mirror_occurrence_cancel_to_google!(item)

@@ -151,4 +151,49 @@ RSpec.describe AgendaItem do
       expect(item.serialize["metadata"]).to eq("travel_minutes" => 7)
     end
   end
+
+  describe "attendee helpers" do
+    let(:base) {
+      {
+        "attendees"     => [
+          { "email" => "me@example.com", "self" => true, "response_status" => "needsAction" },
+          { "email" => "boss@example.com", "response_status" => "accepted" },
+        ],
+        "organizer"     => { "email" => "boss@example.com" },
+        "self_response" => "needsAction",
+      }
+    }
+
+    it "exposes attendees / organizer / self_response off metadata" do
+      item = create(:agenda_item, agenda: agenda, kind: "event",
+        start_at: 1.hour.from_now, end_at: 2.hours.from_now, metadata: base)
+      expect(item.attendees.size).to eq(2)
+      expect(item.organizer["email"]).to eq("boss@example.com")
+      expect(item.self_response).to eq("needsAction")
+      expect(item.invite?).to be true
+      expect(item.needs_response?).to be true
+      expect(item.declined?).to be false
+    end
+
+    it "returns sensible defaults when metadata has no attendee block" do
+      item = create(:agenda_item, agenda: agenda, kind: "task", start_at: 1.hour.from_now)
+      expect(item.attendees).to eq([])
+      expect(item.organizer).to be_nil
+      expect(item.self_response).to be_nil
+      expect(item.invite?).to be false
+      expect(item.needs_response?).to be false
+      expect(item.declined?).to be false
+    end
+
+    it "serializes attendee fields for the FE" do
+      item = create(:agenda_item, agenda: agenda, kind: "event",
+        start_at: 1.hour.from_now, end_at: 2.hours.from_now,
+        metadata: base.merge("self_response" => "declined"))
+      payload = item.serialize
+      expect(payload[:self_response]).to eq("declined")
+      expect(payload[:declined]).to be true
+      expect(payload[:needs_response]).to be false
+      expect(payload[:attendees].size).to eq(2)
+    end
+  end
 end

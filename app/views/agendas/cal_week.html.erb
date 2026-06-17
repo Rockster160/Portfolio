@@ -166,7 +166,10 @@
                data-location="<%= item.location %>"
                data-travel-minutes="<%= item.metadata["travel_minutes"].to_i %>"
                data-trigger-expression="<%= item.trigger_expression %>"
-               data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>">
+               data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>"
+               data-attendees="<%= item.attendees.to_json %>"
+               data-organizer="<%= item.organizer.to_json %>"
+               data-self-response="<%= item.self_response %>">
           </div>
         <% end %>
       <% end %>

@@ -447,8 +447,8 @@ RSpec.describe GoogleCalendar::Sync do
     end
   end
 
-  describe "declined invites" do
-    it "skips events the connected user has declined" do
+  describe "attendees + response state" do
+    it "persists declined invites with self_response in metadata" do
       declined = {
         id:        "evt-decline-1",
         status:    "confirmed",
@@ -464,7 +464,56 @@ RSpec.describe GoogleCalendar::Sync do
       }
       allow(api).to receive(:list_events).and_return(page([declined]))
 
-      expect { described_class.new(agenda).run! }.not_to change(AgendaItem, :count)
+      expect { described_class.new(agenda).run! }.to change(AgendaItem, :count).by(1)
+      item = agenda.agenda_items.find_by(external_uid: "evt-decline-1")
+      expect(item.self_response).to eq("declined")
+      expect(item.declined?).to be true
+      expect(item.attendees.size).to eq(2)
+      expect(item.status).to eq("confirmed")
+    end
+
+    it "marks needsAction invites with the badge metadata" do
+      pending_event = {
+        id:        "evt-pending-1",
+        status:    "confirmed",
+        summary:   "Pending invite",
+        start:     { dateTime: "2026-05-23T14:00:00-04:00" },
+        end:       { dateTime: "2026-05-23T15:00:00-04:00" },
+        attendees: [
+          { email: "me@example.com", self: true, responseStatus: "needsAction" },
+        ],
+        organizer: { email: "boss@example.com", displayName: "Boss" },
+        etag:      %("e3a"),
+        updated:   "2026-05-22T08:00:00Z",
+      }
+      allow(api).to receive(:list_events).and_return(page([pending_event]))
+
+      described_class.new(agenda).run!
+      item = agenda.agenda_items.find_by(external_uid: "evt-pending-1")
+      expect(item.needs_response?).to be true
+      expect(item.self_response).to eq("needsAction")
+      expect(item.organizer["email"]).to eq("boss@example.com")
+    end
+
+    it "keeps :tentative status for tentative responses" do
+      tentative = {
+        id:        "evt-tent-1",
+        status:    "confirmed",
+        summary:   "Maybe meeting",
+        start:     { dateTime: "2026-05-23T14:00:00-04:00" },
+        end:       { dateTime: "2026-05-23T15:00:00-04:00" },
+        attendees: [
+          { email: "me@example.com", self: true, responseStatus: "tentative" },
+        ],
+        etag:      %("e3b"),
+        updated:   "2026-05-22T08:00:00Z",
+      }
+      allow(api).to receive(:list_events).and_return(page([tentative]))
+
+      described_class.new(agenda).run!
+      item = agenda.agenda_items.find_by(external_uid: "evt-tent-1")
+      expect(item.status).to eq("tentative")
+      expect(item.self_response).to eq("tentative")
     end
   end
 

@@ -1194,3 +1194,33 @@ body.cal-event-drag-blocked * {
 .cal-week-allday-chip.hidden-by-filter {
   display: none !important;
 }
+
+// =================== Needs-response badge ===================
+// Small dot in the top-right of any calendar block whose self
+// responseStatus is `needsAction`. Subtle so it doesn't dominate the
+// title — just an orange pip that catches the eye when scanning the
+// week. CSS-only; reads off the data-self-response attr copied from the
+// seed onto each rendered block.
+.cal-week-event[data-self-response="needsAction"],
+.cal-month-item[data-self-response="needsAction"],
+.cal-item[data-self-response="needsAction"],
+.cal-week-allday-chip[data-self-response="needsAction"],
+.cal-month-banner[data-self-response="needsAction"] {
+  position: relative;
+}
+.cal-week-event[data-self-response="needsAction"]::after,
+.cal-month-item[data-self-response="needsAction"]::after,
+.cal-item[data-self-response="needsAction"]::after,
+.cal-week-allday-chip[data-self-response="needsAction"]::after,
+.cal-month-banner[data-self-response="needsAction"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffb74d;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}

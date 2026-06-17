@@ -73,6 +73,9 @@
                   data-travel-minutes="<%= item.metadata["travel_minutes"].to_i %>"
                   data-trigger-expression="<%= item.trigger_expression %>"
                   data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>"
+                  data-attendees="<%= item.attendees.to_json %>"
+                  data-organizer="<%= item.organizer.to_json %>"
+                  data-self-response="<%= item.self_response %>"
                   style="--item-color: <%= item.display_color %>; --agenda-color: <%= item.agenda.color %>;">
             <span class="cal-item-time"
                   data-time-hydrate

@@ -47,6 +47,21 @@ class Jil::Methods::AgendaSchedule < Jil::Methods::Base
     { id: s.agenda.id, name: s.agenda.name, color: s.agenda.color }
   end
 
+  # Start_at of the next future materialized occurrence under this
+  # schedule, or nil if there are none. Used by the Schedule Travel
+  # Compute task to pass a real arrival_time hint to Google Distance
+  # Matrix so the cached travel_minutes reflects predicted traffic at
+  # the actual arrival window, not the schedule's create time.
+  def next_occurrence_at(schedule_value)
+    schedule = cast(schedule_value)
+    return nil unless schedule
+
+    schedule.agenda_items
+      .where("start_at > ?", ::Time.current)
+      .order(:start_at)
+      .pick(:start_at)
+  end
+
   # Future (start_at > now) materialized items under this schedule.
   # Phantoms aren't covered here — they materialize lazily on view and
   # the :agenda_item :created trigger fires through the item-level
@@ -109,6 +124,7 @@ end
 #   .until_on::Date
 #   .metadata::Hash
 #   .agenda::Hash
+#   .next_occurrence_at::Date
 #   .future_agenda_items::Array
 #   .update!(content(AgendaScheduleData))::Hash
 # *[AgendaScheduleData]
