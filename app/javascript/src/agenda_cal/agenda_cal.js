@@ -998,6 +998,10 @@
       travelBand.style.flex = `0 0 ${bandPx}px`;
       // Always the condensed `[clock] Nm + [car] Mm` form. Hide the label
       // entirely on tiny bands (<6px) — stripes only, no text.
+      // A second, summed `[clock] (N+M)m` label rides along — hidden by
+      // default, swapped in via CSS when the event tile is narrow (lane
+      // layout adds .is-narrow). Keeps the label legible when the column
+      // shrinks under overlap.
       if (bandPx >= 6) {
         const drivePart = travelMinRaw > 0 ? travelMinRaw : 0;
         const earlyPart = arriveEarlyMinRaw > 0 ? arriveEarlyMinRaw : 0;
@@ -1016,6 +1020,15 @@
           label.appendChild(document.createTextNode(`${drivePart}m`));
         }
         travelBand.appendChild(label);
+
+        const sumPart = earlyPart + drivePart;
+        if (sumPart > 0) {
+          const narrowLabel = document.createElement("span");
+          narrowLabel.className = "cal-week-event-travel-label is-narrow-fallback";
+          narrowLabel.appendChild(document.createTextNode(`${sumPart}m`));
+          narrowLabel.appendChild(Object.assign(document.createElement("i"), { className: "fa fa-clock-o" }));
+          travelBand.appendChild(narrowLabel);
+        }
       }
       node.appendChild(travelBand);
     }
@@ -1142,6 +1155,7 @@
         ev.node.style.left = `calc(${leftPct}% + ${1 + leftPadExtra}px)`;
         ev.node.style.width = `calc(${widthPct}% - ${rightInset + leftPadExtra}px)`;
         ev.node.style.right = "auto";
+        ev.node.classList.toggle("is-narrow", total > 1);
       });
     });
   }

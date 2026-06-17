@@ -268,11 +268,13 @@ class AgendaSchedule < ApplicationRecord
     self.until_on = last_match
   end
 
+  # Back-compat alias. Older callsites (controller + specs) expected a
+  # destroy-and-recreate; we now upsert in materialize_upcoming! so the
+  # same materialized rows survive a schedule edit, keeping their IDs +
+  # any per-item state (scheduled_triggers FKs, item-only metadata keys
+  # the user diverged from the schedule on).
   def regenerate_future!
-    agenda_items
-      .where(start_at: Time.current.beginning_of_day..)
-      .where(detached_at: nil)
-      .destroy_all
+    materialize_upcoming!
   end
 
   # The wall-clock time-of-day a given occurrence lands on, materialized in
@@ -304,31 +306,49 @@ class AgendaSchedule < ApplicationRecord
     from_date = now.in_time_zone(user.timezone).to_date
     to_date = through.in_time_zone(user.timezone).to_date
 
-    existing_starts = agenda_items
-      .where(start_at: now..through)
-      .pluck(:start_at)
-      .to_set
+    # Key existing non-detached future items by logical date. start_time
+    # may have just changed, so don't match on start_at directly — match
+    # on the date the occurrence belongs to. Unbounded forward: items
+    # already materialized stay updated regardless of window.
+    existing_by_date = agenda_items
+      .where(start_at: now..)
+      .where(detached_at: nil)
+      .order(:start_at)
+      .each_with_object({}) { |item, h|
+        d = item.start_at.in_time_zone(user.timezone).to_date
+        h[d] ||= item
+      }
 
+    # Propagate metadata per-key only where the item still matches the
+    # OLD schedule value (i.e. user hadn't locally diverged). Worker
+    # ticks (no saved_change) leave existing item metadata alone.
+    old_meta, new_meta = saved_change_to_metadata || [nil, nil]
+
+    # Update-or-destroy existing materialized rows. Stale dates (no
+    # longer matching the rule) get dropped; matching dates get every
+    # field synced from the schedule.
+    existing_by_date.each do |date, item|
+      if matches?(date)
+        attrs = base_item_attrs(date)
+        attrs[:metadata] = merged_metadata_for(item.metadata, old_meta, new_meta)
+        item.update!(attrs)
+      else
+        item.destroy!
+      end
+    end
+
+    # Create occurrences rolling into the window that don't have a
+    # materialized row yet. Skip dates already handled above.
     (from_date..to_date).each do |date|
       next unless matches?(date)
+      next if existing_by_date.key?(date)
 
       occurrence_start = occurrence_start_at(date)
       next if occurrence_start < now || occurrence_start > through
-      next if existing_starts.include?(occurrence_start)
 
-      agenda_items.create!(
-        agenda:               agenda,
-        kind:                 kind,
-        name:                 name,
-        start_at:             occurrence_start,
-        end_at:               occurrence_end_at(date),
-        all_day:              all_day,
-        color:                color,
-        notes:                notes,
-        location:             location,
-        arrive_early_minutes: arrive_early_minutes,
-        trigger_expression:   trigger_expression,
-      )
+      attrs = base_item_attrs(date)
+      attrs[:metadata] = metadata
+      agenda_items.create!(attrs)
     end
   end
 
@@ -360,7 +380,48 @@ class AgendaSchedule < ApplicationRecord
       saved_change_to_kind? || saved_change_to_name? ||
       saved_change_to_trigger_expression? ||
       saved_change_to_duration_minutes? || saved_change_to_all_day? ||
+      saved_change_to_location? || saved_change_to_color? ||
+      saved_change_to_notes? || saved_change_to_arrive_early_minutes? ||
+      saved_change_to_metadata? ||
       previously_new_record?
+  end
+
+  def base_item_attrs(date)
+    {
+      agenda:               agenda,
+      kind:                 kind,
+      name:                 name,
+      start_at:             occurrence_start_at(date),
+      end_at:               occurrence_end_at(date),
+      all_day:              all_day,
+      color:                color,
+      notes:                notes,
+      location:             location,
+      arrive_early_minutes: arrive_early_minutes,
+      trigger_expression:   trigger_expression,
+    }
+  end
+
+  # Per-key metadata propagation: schedule wins only where the item still
+  # matches the OLD schedule value. Lets a Jil hook that locally cached a
+  # different value on the item survive schedule edits to other keys.
+  # No saved_change_to_metadata → no metadata changes to propagate.
+  def merged_metadata_for(item_meta, old_meta, new_meta)
+    return item_meta if old_meta.nil? && new_meta.nil?
+
+    merged = item_meta.dup
+    old_meta ||= {}
+    new_meta ||= {}
+    (old_meta.keys | new_meta.keys).each do |key|
+      next unless merged[key] == old_meta[key]
+
+      if new_meta.key?(key)
+        merged[key] = new_meta[key]
+      else
+        merged.delete(key)
+      end
+    end
+    merged
   end
 
   def safe_parse_date(value)

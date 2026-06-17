@@ -992,6 +992,24 @@ $cal-week-px-per-hour: 20px;
       opacity: 0.75;
       font-style: normal;
     }
+
+    // Single-number `[Nm clock]` fallback for narrow tiles (multi-lane
+    // overlap). Default-hidden; .is-narrow on the parent event swaps it
+    // in for the verbose form, since the verbose form gets clipped at
+    // overlap widths.
+    &.is-narrow-fallback {
+      display: none;
+      i { margin-left: 2px; margin-right: 0; }
+    }
+  }
+
+  // Multi-lane overlap: tile is narrower than a full column, so the
+  // verbose travel label gets clipped. Swap in the sum-only fallback
+  // and tighten band padding so the digits actually fit.
+  &.is-narrow {
+    .cal-week-event-travel { padding: 0 2px; }
+    .cal-week-event-travel-label.is-compact { display: none; }
+    .cal-week-event-travel-label.is-narrow-fallback { display: inline-flex; }
   }
 
   // Source event during drag — stays in its original slot at low alpha

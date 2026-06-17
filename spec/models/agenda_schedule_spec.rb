@@ -251,23 +251,101 @@ RSpec.describe AgendaSchedule do
   end
 
   describe "#regenerate_future!" do
-    it "destroys non-detached future materialized items" do
+    it "updates non-detached future materialized items in place, preserving id" do
+      Timecop.freeze(Time.zone.local(2026, 5, 13, 8, 0)) do
+        sched = build_schedule(
+          kind:             "event",
+          name:             "Old",
+          start_time:       "10:00",
+          duration_minutes: 30,
+          recurrence:       { "freq" => "daily" },
+          starts_on:        Date.current - 1,
+        )
+        tomorrow = Date.current + 1
+        existing = sched.agenda_items.create!(
+          agenda:   agenda, kind: "event",
+          name:     "Old",
+          start_at: ActiveSupport::TimeZone[user.timezone].local(tomorrow.year, tomorrow.month, tomorrow.day, 10, 0),
+          end_at:   ActiveSupport::TimeZone[user.timezone].local(tomorrow.year, tomorrow.month, tomorrow.day, 10, 30),
+        )
+        sched.update!(name: "New", start_time: "15:00")
+        existing.reload
+        expect(existing.name).to eq("New")
+        expect(existing.start_at.in_time_zone(user.timezone).hour).to eq(15)
+      end
+    end
+
+    it "preserves detached items untouched" do
       sched = build_schedule(recurrence: { "freq" => "daily" }, starts_on: Date.current - 1)
       Timecop.freeze(Time.zone.local(2026, 5, 13, 8, 0)) do
-        sched.agenda_items.create!(
-          agenda:   agenda, kind: "task",
-          name:     "Mat",
-          start_at: Date.current + 2,
-        )
         detached = sched.agenda_items.create!(
           agenda:      agenda, kind: "task",
           name:        "Kept",
           start_at:    Date.current + 3,
           detached_at: Time.current,
         )
-        sched.regenerate_future!
-        expect(sched.agenda_items.find_by(id: detached.id)).to be_present
-        expect(sched.agenda_items.count).to eq(1)
+        sched.update!(name: "Renamed")
+        expect(detached.reload.name).to eq("Kept")
+      end
+    end
+
+    it "destroys non-detached items whose date no longer matches the recurrence" do
+      Timecop.freeze(Time.zone.local(2026, 5, 13, 8, 0)) do
+        # Saturday is 2026-05-16.
+        sched = build_schedule(recurrence: { "freq" => "daily" }, starts_on: Date.current - 1)
+        saturday = sched.agenda_items.create!(
+          agenda:   agenda, kind: "task",
+          name:     "Sat",
+          start_at: ActiveSupport::TimeZone[user.timezone].local(2026, 5, 16, 8, 0),
+        )
+        sched.update!(recurrence: { "freq" => "weekdays" })
+        expect(sched.agenda_items.find_by(id: saturday.id)).to be_nil
+      end
+    end
+
+    it "propagates metadata per-key when item still matches old schedule value" do
+      Timecop.freeze(Time.zone.local(2026, 5, 13, 8, 0)) do
+        sched = build_schedule(
+          kind:             "event",
+          start_time:       "10:00",
+          duration_minutes: 30,
+          recurrence:       { "freq" => "daily" },
+          starts_on:        Date.current - 1,
+          metadata:         { "travel_minutes" => 10, "travel_location" => "A" },
+        )
+        tomorrow = Date.current + 1
+        item = sched.agenda_items.create!(
+          agenda:   agenda, kind: "event",
+          name:     sched.name,
+          start_at: ActiveSupport::TimeZone[user.timezone].local(tomorrow.year, tomorrow.month, tomorrow.day, 10, 0),
+          end_at:   ActiveSupport::TimeZone[user.timezone].local(tomorrow.year, tomorrow.month, tomorrow.day, 10, 30),
+          metadata: { "travel_minutes" => 10, "travel_location" => "A" },
+        )
+        sched.update!(metadata: { "travel_minutes" => 25, "travel_location" => "B" })
+        expect(item.reload.metadata).to eq("travel_minutes" => 25, "travel_location" => "B")
+      end
+    end
+
+    it "preserves item-only metadata keys (e.g. Jil-cached) when schedule metadata changes" do
+      Timecop.freeze(Time.zone.local(2026, 5, 13, 8, 0)) do
+        sched = build_schedule(
+          kind:             "event",
+          start_time:       "10:00",
+          duration_minutes: 30,
+          recurrence:       { "freq" => "daily" },
+          starts_on:        Date.current - 1,
+          metadata:         { "travel_minutes" => 10 },
+        )
+        tomorrow = Date.current + 1
+        item = sched.agenda_items.create!(
+          agenda:   agenda, kind: "event",
+          name:     sched.name,
+          start_at: ActiveSupport::TimeZone[user.timezone].local(tomorrow.year, tomorrow.month, tomorrow.day, 10, 0),
+          end_at:   ActiveSupport::TimeZone[user.timezone].local(tomorrow.year, tomorrow.month, tomorrow.day, 10, 30),
+          metadata: { "travel_minutes" => 99, "attendees" => ["x"] }, # diverged + item-only
+        )
+        sched.update!(metadata: { "travel_minutes" => 25 })
+        expect(item.reload.metadata).to eq("travel_minutes" => 99, "attendees" => ["x"])
       end
     end
   end
