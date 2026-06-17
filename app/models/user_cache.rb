@@ -16,6 +16,8 @@ class UserCache < ApplicationRecord
 
   belongs_to :user
 
+  after_commit :broadcast_battery_change, on: [:create, :update], if: -> { key.to_s == "battery" }
+
   def to_param
     key || id
   end
@@ -92,5 +94,11 @@ class UserCache < ApplicationRecord
       end
     }
     @skip_save_set ? val : save
+  end
+
+  private
+
+  def broadcast_battery_change
+    ::DeviceBatteryChannel.broadcast_to(user, data || {})
   end
 end

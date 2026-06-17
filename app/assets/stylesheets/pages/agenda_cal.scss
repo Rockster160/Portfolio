@@ -815,8 +815,12 @@ $cal-week-px-per-hour: 20px;
   // The card itself is just a solid container — no flex magic, no mask.
   // The inner `.cal-week-event-content` (added by JS) carries the
   // mask + the text layout, so the card's background, border, and
-  // rounded corners render unmasked.
+  // rounded corners render unmasked. `flex-direction: column` matters
+  // when the optional `.cal-week-event-travel` band is prepended so
+  // the band stacks ABOVE the content rather than landing as a left
+  // column.
   display: flex;
+  flex-direction: column;
   overflow: hidden;
 
   // Default = draggable affordance ("open hand"). Readonly events
@@ -864,6 +868,48 @@ $cal-week-px-per-hour: 20px;
     overflow: hidden;
     mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
+  }
+
+  // Faded "travel time" band stacked above the solid event content.
+  // Flex sizing (set inline as `flex: 0 0 Npx`) reserves the vertical
+  // slice for the band; the diagonal stripe pattern + low alpha
+  // distinguishes it from the event itself without visually competing.
+  // The bottom border + box-shadow makes the seam between travel band
+  // and the solid event tile crisp instead of "color-mix bleed".
+  .cal-week-event-travel {
+    width: 100%;
+    border-radius: 3px 3px 0 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--agenda-color, #888) 55%, transparent);
+    box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+    opacity: 0.7;
+    background-image: repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--agenda-color, #888) 22%, transparent) 0 4px,
+      transparent 4px 8px
+    );
+    pointer-events: none;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 0 6px;
+  }
+
+  // "X min drive" label inside the travel band. Only emitted when the
+  // band has ≥11px height (see agenda_cal.js gate); below that the
+  // stripe pattern alone is the affordance. Italic + tabular-nums so
+  // the number column lines up vertically across stacked rows.
+  .cal-week-event-travel-label {
+    font-size: 8px;
+    font-style: italic;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    color: color-mix(in oklab, var(--agenda-color, #888) 40%, white);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
   }
 
   // Source event during drag — stays in its original slot at low alpha

@@ -271,4 +271,47 @@ RSpec.describe AgendaSchedule do
       end
     end
   end
+
+  describe "metadata column" do
+    it "round-trips a hash via jsonb" do
+      sched = build_schedule(recurrence: { "freq" => "daily" })
+      sched.update!(metadata: { travel_minutes: 17, travel_location: "X" })
+      expect(sched.reload.metadata).to eq("travel_minutes" => 17, "travel_location" => "X")
+    end
+
+    it "defaults to {}" do
+      sched = build_schedule(recurrence: { "freq" => "daily" })
+      expect(sched.metadata).to eq({})
+    end
+  end
+
+  describe "Jil trigger lifecycle" do
+    def trigger_capture
+      triggered = []
+      allow(::Jil).to receive(:trigger) { |_user, scope, data, **|
+        triggered << [scope, data[:action]]
+      }
+      triggered
+    end
+
+    it "fires :agenda_schedule action=:created on create" do
+      triggered = trigger_capture
+      build_schedule(recurrence: { "freq" => "daily" })
+      expect(triggered).to include([:agenda_schedule, :created])
+    end
+
+    it "fires :agenda_schedule action=:updated on a real-field update" do
+      sched = build_schedule(recurrence: { "freq" => "daily" })
+      triggered = trigger_capture
+      sched.update!(name: "Renamed")
+      expect(triggered).to include([:agenda_schedule, :updated])
+    end
+
+    it "does NOT refire on a metadata-only update" do
+      sched = build_schedule(recurrence: { "freq" => "daily" })
+      triggered = trigger_capture
+      sched.update!(metadata: { travel_minutes: 12 })
+      expect(triggered).to be_empty
+    end
+  end
 end

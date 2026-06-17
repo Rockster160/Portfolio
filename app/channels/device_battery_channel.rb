@@ -1,9 +1,9 @@
 class DeviceBatteryChannel < ApplicationCable::Channel
   def subscribed
-    stream_from "device_battery_channel"
+    stream_for current_user
   end
 
   def request(_)
-    ActionCable.server.broadcast(:device_battery_channel, DataStorage[:device_battery])
+    self.class.broadcast_to(current_user, current_user.caches.get(:battery) || {})
   end
 end

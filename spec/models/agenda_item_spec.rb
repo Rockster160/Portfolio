@@ -117,5 +117,38 @@ RSpec.describe AgendaItem do
       item.destroy!
       expect(triggered).to eq([[:agenda_item, :created], [:agenda_item, :destroyed]])
     end
+
+    it "does NOT refire on a metadata-only update (avoids Jil-write retrigger loop)" do
+      item = create(:agenda_item, agenda: agenda, kind: "task", start_at: 1.hour.from_now)
+      triggered = trigger_capture
+      item.update!(metadata: { travel_minutes: 12 })
+      expect(triggered).to be_empty
+    end
+
+    it "DOES refire when metadata changes alongside another field" do
+      item = create(:agenda_item, agenda: agenda, kind: "task", start_at: 1.hour.from_now)
+      triggered = trigger_capture
+      item.update!(metadata: { travel_minutes: 12 }, name: "Renamed")
+      expect(triggered).to eq([[:agenda_item, :updated]])
+    end
+  end
+
+  describe "metadata column" do
+    it "round-trips a hash via jsonb" do
+      item = create(:agenda_item, agenda: agenda, kind: "task",
+        start_at: 1.hour.from_now, metadata: { travel_minutes: 25, travel_location: "123 Main" })
+      expect(item.reload.metadata).to eq("travel_minutes" => 25, "travel_location" => "123 Main")
+    end
+
+    it "defaults to {}" do
+      item = create(:agenda_item, agenda: agenda, kind: "task", start_at: 1.hour.from_now)
+      expect(item.metadata).to eq({})
+    end
+
+    it "is included in #serialize" do
+      item = create(:agenda_item, agenda: agenda, kind: "task",
+        start_at: 1.hour.from_now, metadata: { travel_minutes: 7 })
+      expect(item.serialize["metadata"]).to eq("travel_minutes" => 7)
+    end
   end
 end

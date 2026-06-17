@@ -1,7 +1,7 @@
 class Jil::Methods::AgendaItem < Jil::Methods::Base
-  PERMIT_ATTRS = [:name, :notes, :location, :start_at, :end_at, :color].freeze
+  PERMIT_ATTRS = [:name, :notes, :location, :start_at, :end_at, :color, :metadata].freeze
   GETTER_ATTRS = [
-    :id, :kind, :completed_at, :trigger_expression, *PERMIT_ATTRS
+    :id, :kind, :completed_at, :trigger_expression, :agenda_schedule_id, *PERMIT_ATTRS
   ].freeze
 
   def cast(value)
@@ -64,6 +64,18 @@ class Jil::Methods::AgendaItem < Jil::Methods::Base
 
   def recurring?(item)
     cast(item)&.recurring? == true
+  end
+
+  # Parent AgendaSchedule (or nil for standalone items). The return value is
+  # a hash with `metadata` carried inline (via serialize_for_edit) so that
+  # downstream Jil casts to AgendaSchedule resolve without an extra DB
+  # round-trip. Use `.agenda_schedule_id` (Numeric, 0 when standalone) for
+  # quick branching without needing nil-comparison gymnastics.
+  def agenda_schedule(item_value)
+    i = cast(item_value)
+    return nil unless i&.agenda_schedule
+
+    i.agenda_schedule.serialize_for_edit
   end
 
   # Returns a minimal hash describing the parent agenda so Jil tasks can drill
@@ -138,6 +150,10 @@ class Jil::Methods::AgendaItem < Jil::Methods::Base
     { color: text }
   end
 
+  def metadata(hash)
+    { metadata: @jil.cast(hash, :Hash) }
+  end
+
   private
 
   def params(details)
@@ -172,6 +188,7 @@ end
 #   .notes::String
 #   .location::String
 #   .trigger_expression::String
+#   .metadata::Hash
 #   .agenda::Hash
 #   .completed?::Boolean
 #   .recurring?::Boolean
@@ -186,3 +203,4 @@ end
 #   #start_at(Date)
 #   #end_at(Date)
 #   #color(String)
+#   #metadata(Hash)

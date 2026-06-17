@@ -162,21 +162,21 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
   let batteryIcon = function (name, icon) {
     let data = cell.data.device_battery[name];
     if (!data) {
-      return "";
+      return Text.grey(icon + "?");
     }
-    let val = data.val;
+    let val = data.value;
     if (!val) {
       return Text.grey(icon + "?");
     }
     let char = clamp(Math.round(scaleVal(val, 10, 90, 0, 7)), 0, 7);
     let level = "▁▂▃▄▅▆▇█"[char];
-    let reported_at = Time.at(data.time);
-    let battery_color = battery_color_scale(val).hex;
-    if (Time.now() - reported_at > Time.hours(12)) {
-      battery_color = dash_colors.grey;
-    } else if (val == 100) {
-      battery_color = dash_colors.rocco;
-    }
+    let reported_at = data.time ? new Date(data.time) : new Date(0);
+    let is_stale = Time.now() - reported_at > Time.hours(12);
+    let battery_color = is_stale
+      ? dash_colors.grey
+      : val == 100
+        ? dash_colors.rocco
+        : battery_color_scale(val).hex;
     return icon + Text.color(battery_color, level);
   };
 
@@ -302,11 +302,11 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
     });
 
     let battery_icons = {
-      Phone: "[ico ti ti-fa-mobile_phone]",
-      Watch: "[ico ti ti-oct-watch]",
-      iPad: "[ico ti ti-mdi-tablet_ipad]",
-      Pencil: "[ico ti ti-mdi-pencil]",
-      TrackPad: "[ico ti ti-mdi-mouse]",
+      phone: "[ico ti ti-fa-mobile_phone]",
+      watch: "[ico ti ti-oct-watch]",
+      ipad: "[ico ti ti-mdi-tablet_ipad]",
+      pencil: "[ico ti ti-mdi-pencil]",
+      trackpad: "[ico ti ti-mdi-mouse]",
     };
     let battery_line = [];
     for (let [name, icon] of Object.entries(battery_icons)) {
@@ -428,23 +428,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
       cell,
       Server.socket("DeviceBatteryChannel", function (msg) {
         this.flash();
-
-        if (msg.Phone) {
-          cell.data.device_battery.Phone = msg.Phone;
-        }
-        if (msg.iPad) {
-          cell.data.device_battery.iPad = msg.iPad;
-        }
-        if (msg.Watch) {
-          cell.data.device_battery.Watch = msg.Watch;
-        }
-        if (msg.Pencil) {
-          cell.data.device_battery.Pencil = msg.Pencil;
-        }
-        if (msg.TrackPad) {
-          cell.data.device_battery.TrackPad = msg.TrackPad;
-        }
-
+        cell.data.device_battery = msg || {};
         renderLines();
       }),
     );

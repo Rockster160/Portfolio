@@ -18,6 +18,7 @@
 #  local_color         :string
 #  locally_modified_at :datetime
 #  location            :string
+#  metadata            :jsonb            not null
 #  name                :string           not null
 #  notes               :text
 #  notified_at         :datetime
@@ -392,6 +393,7 @@ class AgendaItem < ApplicationRecord
         :notes,
         :location,
         :all_day,
+        :metadata,
       ],
     }.merge(opts)).merge(
       id:                 display_id,
@@ -433,9 +435,25 @@ class AgendaItem < ApplicationRecord
     # broadcast at the tail of a sync rather than per-row. Avoids
     # trigger-storms on initial backfill of a busy calendar.
     return if Thread.current[::GoogleCalendar::Sync::SUPPRESS_KEY]
+    # Metadata is Jil-derived (travel time, etc.) — writing it shouldn't
+    # refire the agenda_item trigger and re-run the same task.
+    return if metadata_only_change?
 
     action = saved_change_to_id? ? :created : :updated
     ::Jil.trigger(user, :agenda_item, with_jil_attrs(action: action))
+  end
+
+  # True when this commit reflects either (a) no real attribute change at
+  # all — Rails still fires after_commit on no-op `update!` calls — or
+  # (b) a Jil-side metadata write. Either way the :agenda_item trigger
+  # would only re-run the same listener with stale-or-identical data;
+  # short-circuit instead so the Jil-side `evt.update!` doesn't recurse
+  # back into its own task.
+  def metadata_only_change?
+    return true if saved_changes.empty?
+    return true if (saved_changes.keys - ["metadata", "updated_at"]).empty? && saved_change_to_metadata?
+
+    false
   end
 
   def fire_jil_destroy_trigger

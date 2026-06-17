@@ -874,14 +874,26 @@
     node.style.setProperty("--agenda-color", color);
 
     const durationMin = isPoint ? 15 : Math.max(15, seg.endMin - seg.startMin);
-    const top = seg.startMin * pxPerMin;
-    const height = isPoint
+    const continuedTopMaybe = (seg.startMin === 0) && !isPoint;
+    // Travel-time band: faded extension above the solid event tile that
+    // visualises "you need to leave this much earlier to arrive on time".
+    // Suppressed for point events (tasks/triggers — no arrival semantics)
+    // and continued-top segments (the event already started yesterday).
+    // Clamped so the band can't push the tile above the column origin.
+    const travelMinRaw = parseInt(d.travelMinutes, 10) || 0;
+    const travelMin = (isPoint || continuedTopMaybe)
+      ? 0
+      : Math.min(travelMinRaw, seg.startMin);
+    const top = (seg.startMin - travelMin) * pxPerMin;
+    const eventHeight = isPoint
       ? Math.max(12, 15 * pxPerMin - 2)
       : Math.max(14, durationMin * pxPerMin - 2);
+    const height = eventHeight + (travelMin * pxPerMin);
     node.style.top = `${top}px`;
     node.style.height = `${height}px`;
     node.style.left = "2px";
     node.style.right = "2px";
+    if (travelMin > 0) node.classList.add("has-travel");
     // Very small events: switch to a single-line row layout so a 1h
     // event reads cleanly as `Title` instead of trying to stack a title
     // and a time line into 18px of vertical space. Anything taller uses
@@ -900,6 +912,25 @@
       && (endEpoch * 1000 > new Date(startEpoch * 1000).getTime() + (24 * 60 - seg.startMin) * 60_000 - 60_000);
     if (continuedTop) node.classList.add("is-continued-top");
     if (continuedBottom) node.classList.add("is-continued-bottom");
+
+    // Travel-time band: prepended as the first flex child so the content
+    // wrapper below gets pushed down by the band's reserved space.
+    if (travelMin > 0) {
+      const bandPx = travelMin * pxPerMin;
+      const travelBand = document.createElement("div");
+      travelBand.className = "cal-week-event-travel";
+      travelBand.style.flex = `0 0 ${bandPx}px`;
+      // Label fits comfortably with an 8px font + 1.2 line-height at ~11px.
+      // Below that, the stripe pattern alone communicates "travel time"
+      // without crowding what little room there is.
+      if (bandPx >= 11) {
+        const travelLabel = document.createElement("span");
+        travelLabel.className = "cal-week-event-travel-label";
+        travelLabel.textContent = `${travelMin} min drive`;
+        travelBand.appendChild(travelLabel);
+      }
+      node.appendChild(travelBand);
+    }
 
     // Content wrapper: this is what gets the right-edge mask in SCSS.
     // Putting the mask on a wrapper that lives INSIDE the card lets the
@@ -931,11 +962,22 @@
 
     node.appendChild(content);
 
-    // For overlap-layout: point events occupy a 15-min slot, not whatever
-    // their underlying end_at says — so they don't block other events
-    // visually behind them.
-    const effectiveEndMin = isPoint ? seg.startMin + 15 : seg.endMin;
-    return { node, dateISO: seg.dateISO, startMin: seg.startMin, endMin: effectiveEndMin };
+    // For overlap-layout:
+    //   * Travel band extends the EFFECTIVE start backward by travelMin
+    //     so a concurrent event in that window goes into a different
+    //     lane instead of visually colliding with the band.
+    //   * Point events (triggers/tasks) get rendered with a 12-px MINIMUM
+    //     height — at the default 20px/hr that's ~36 visual minutes, well
+    //     past the 15-min "logical slot". If we declare a 15-min footprint
+    //     for lanes, a next-door event whose travel band starts ~7:15am
+    //     after a 7am trigger is technically "adjacent" but visually
+    //     plows through the trigger tile. Use whichever is larger of the
+    //     logical slot and the actual rendered slot so lane detection
+    //     matches what the user sees.
+    const effectiveStartMin = seg.startMin - travelMin;
+    const pointSlotMin = Math.max(15, eventHeight / pxPerMin);
+    const effectiveEndMin = isPoint ? seg.startMin + pointSlotMin : seg.endMin;
+    return { node, dateISO: seg.dateISO, startMin: effectiveStartMin, endMin: effectiveEndMin };
   }
 
   function specForAllDay(seed) {

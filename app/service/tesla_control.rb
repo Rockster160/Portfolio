@@ -108,45 +108,24 @@ class TeslaControl
     command(:navigation_request, address_params)
   end
 
-  # Resolution order, matching how Jarvis voice and TeslaCommand already
-  # handle locations:
+  # Resolution order:
   #   1. Contact name match (highest priority — e.g. "Sarah" → her address).
-  #      Possessives and common location-suffixes are normalized first so
-  #      "Sarah", "Sarah's", "Sarahs", "Sarah's house", "Sarah's place",
-  #      etc. all resolve to the same contact lookup.
+  #      AddressBook#match_contact handles possessive/plural normalization
+  #      ("Sarah's", "Sarahs", "Sarah's house", "Sarah's place", etc.).
   #   2. Bare "lat,lng" pair (e.g. "40.4804,-111.998")
   #   3. Anything else passed through as a free-form address string
-  # Tesla's share endpoint parses both addresses and lat,lng so we just
+  # Tesla's share endpoint accepts both addresses and lat,lng — we just
   # hand the text along once we've picked the right form.
   def self.resolve_destination(input)
     text = input.to_s.strip
     return text if text.empty?
 
-    book = User.me.address_book
-    contact_address = contact_candidates(text)
-      .lazy
-      .map { |c| book.contact_by_name(c)&.primary_address&.street }
-      .find(&:present?)
+    contact_address = User.me.address_book.match_contact(text)&.primary_address&.street
     return contact_address if contact_address.present?
 
     return text.gsub(/\s/, "") if text.match?(/\A-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\z/)
 
     text
-  end
-
-  # Normalize natural-language variants down to plausible contact lookup
-  # keys. Tries each in priority order; the first one that matches a
-  # contact wins. Examples:
-  #   "Sarah"              → ["Sarah"]
-  #   "Sarah's"            → ["Sarah's", "Sarah"]
-  #   "Sarah's house"      → ["Sarah's house", "Sarah"]
-  #   "Sarahs"             → ["Sarahs", "Sarah"]
-  def self.contact_candidates(text)
-    variants = [text]
-    variants << text.sub(/['’]s\s+(house|home|place)s?\b/i, "").strip
-    variants << text.sub(/['’]s\b/i, "").strip
-    variants << text.sub(/(\b[A-Z][a-z]+)s\b/, '\1') if text.exclude?("'") && text.exclude?("’")
-    variants.uniq.compact_blank
   end
 
   def set_temp(temp_F, skip_verify: false)

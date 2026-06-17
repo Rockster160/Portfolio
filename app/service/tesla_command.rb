@@ -21,6 +21,12 @@ module TeslaCommand
   end
 
   def command(original_cmd, original_opt=nil, quick=false)
+    # Reset module-level state at the start of every dispatch. Otherwise a
+    # raised exception leaves `@cancel = true` from the previous call and
+    # silently no-ops the next user command. `@response` is the message
+    # eventually returned/Slacked; clearing it avoids stale carry-over.
+    @cancel = false
+    @response = nil
     ::PrettyLogger.info("command (quick #{quick})")
     broadcast(loading: true)
     car = Tesla.new unless quick
@@ -96,11 +102,12 @@ module TeslaCommand
       @response = "Turning on passenger seat heater"
       car.heat_passenger unless quick
     when :navigate
+      # Resolution priority:
+      #   1. Explicit address recognized by Jarvis::Regex (e.g. "1 Main St")
+      #   2. Smart contact match (handles "Sarah", "Sarah's house", etc.)
+      #   3. Fuzzy nearest-by-name fallback for things like landmarks
       address = opt[::Jarvis::Regex.address]&.squish.presence if opt.match?(::Jarvis::Regex.address)
-      # gps = address_book.geocode(address) if address.present?
-      # If specify nearest, search based on car location.
-      # Otherwise use the one in contacts and fallback to nearest to house
-      address ||= address_book.contact_by_name(original_opt)&.primary_address&.street
+      address ||= address_book.match_contact(original_opt)&.primary_address&.street
       address ||= address_book.nearest_from_name(original_opt, extract: :address)
 
       if address.present?
@@ -124,11 +131,16 @@ module TeslaCommand
         @response = "I can't find #{original_opt.squish}"
       end
     when :temp
-      temp = opt.to_s[/\d+/]
+      # Parse priority: explicit number, then natural-language keywords,
+      # then default to a sensible mid-range (72°F) if nothing was usable.
+      # Previously this fell through as nil → 0 → clamped silently to 59
+      # while reporting "Car temp set to 0" — wrong both ways.
+      temp = opt.to_s[/\d+/]&.to_i
       temp = TEMP_MAX if opt.to_s.match?(/\b(hot|heat|high)\b/)
       temp = TEMP_MIN if opt.to_s.match?(/\b(cold|cool|low)\b/)
-      @response = "Car temp set to #{temp.to_i}"
-      car.set_temp(temp.to_i) unless quick
+      temp ||= 72
+      @response = "Car temp set to #{temp}"
+      car.set_temp(temp) unless quick
     when :cool
       @response = "Car temp set to #{TEMP_MIN}"
       car.set_temp(TEMP_MIN) unless quick

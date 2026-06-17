@@ -11,6 +11,7 @@
 #  external_updated_at :datetime
 #  kind                :integer          not null
 #  location            :string
+#  metadata            :jsonb            not null
 #  name                :string           not null
 #  notes               :text
 #  occurrence_count    :integer
@@ -60,6 +61,7 @@ class AgendaSchedule < ApplicationRecord
 
   before_save :sync_until_on_from_occurrence_count, if: -> { occurrence_count.present? }
   after_save :materialize_upcoming!, if: :saved_change_affecting_materialization?
+  after_commit :fire_jil_trigger, on: [:create, :update]
 
   belongs_to :agenda
   has_many :agenda_items, dependent: :destroy
@@ -106,6 +108,7 @@ class AgendaSchedule < ApplicationRecord
       location:           location,
       notes:              notes,
       trigger_expression: trigger_expression,
+      metadata:           metadata,
     }.compact
   end
 
@@ -287,6 +290,26 @@ class AgendaSchedule < ApplicationRecord
   end
 
   private
+
+  # Mirrors AgendaItem#fire_jil_trigger so user tasks listening on
+  # `:agenda_schedule` can react to lifecycle changes. The metadata-only
+  # short-circuit keeps Jil-side metadata writes (travel-time caching)
+  # from refiring the schedule task.
+  def fire_jil_trigger
+    return if Thread.current[::GoogleCalendar::Sync::SUPPRESS_KEY]
+    return if metadata_only_change?
+
+    action = saved_change_to_id? ? :created : :updated
+    ::Jil.trigger(user, :agenda_schedule, with_jil_attrs(action: action))
+  end
+
+  # See AgendaItem#metadata_only_change? — same rationale: skip refire on
+  # no-op commits and on Jil-side metadata-only writes.
+  def metadata_only_change?
+    return true if saved_changes.empty?
+
+    (saved_changes.keys - ["metadata", "updated_at"]).empty? && saved_change_to_metadata?
+  end
 
   def saved_change_affecting_materialization?
     saved_change_to_starts_on? || saved_change_to_until_on? ||

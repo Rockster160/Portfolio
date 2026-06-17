@@ -240,6 +240,9 @@
   .notes::String
   .location::String
   .trigger_expression::String
+  .metadata::Hash
+  .agenda_schedule_id::Numeric
+  .agenda_schedule::AgendaSchedule
   .agenda::Hash
   .completed?::Boolean
   .recurring?::Boolean
@@ -254,6 +257,26 @@
   #start_at(Date)
   #end_at(Date)
   #color(String)
+  #metadata(Hash)
+*[AgendaSchedule]
+  .id::Numeric
+  .name::String
+  .kind::String
+  .color::String
+  .location::String
+  .notes::String
+  .starts_on::Date
+  .until_on::Date
+  .metadata::Hash
+  .agenda::Hash
+  .future_agenda_items::Array
+  .update!(content(AgendaScheduleData))::Hash
+*[AgendaScheduleData]
+  #name(String)
+  #notes(String)
+  #location(String)
+  #color(String)
+  #metadata(Hash)
 [Section]
   #find(String:List String:Section)
   #create(String:List String:Name String:Color)

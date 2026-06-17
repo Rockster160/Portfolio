@@ -737,6 +737,20 @@ body.ctr-agendas {
         overflow-wrap: anywhere;
       }
     }
+    .agenda-item-travel {
+      font-size: 10px;
+      opacity: 0.35;
+      line-height: 1.2;
+      display: flex;
+      align-items: baseline;
+      gap: 3px;
+      min-width: 0;
+      font-style: italic;
+      i {
+        font-size: 9px;
+        flex-shrink: 0;
+      }
+    }
     .agenda-item-badge {
       font-size: 10px;
       opacity: 0.4;

@@ -73,6 +73,7 @@
      data-name="<%= item.name %>"
      data-notes="<%= item.notes %>"
      data-location="<%= item.location %>"
+     data-travel-minutes="<%= item.metadata["travel_minutes"].to_i %>"
      data-trigger-expression="<%= item.trigger_expression %>"
      data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>">
 
@@ -105,6 +106,10 @@
       <span class="agenda-item-name"><%= item.name %></span>
       <% if item.location.present? && !location_is_url?(item.location) %>
         <span class="agenda-item-loc"><i class="fa fa-map-marker"></i><span class="agenda-item-loc-text"><%= item.location %></span></span>
+        <% travel_min = item.metadata["travel_minutes"].to_i %>
+        <% if travel_min > 0 %>
+          <span class="agenda-item-travel"><i class="fa fa-car"></i><span class="agenda-item-travel-text"><%= travel_min %> min away</span></span>
+        <% end %>
       <% end %>
     </span>
   </button>

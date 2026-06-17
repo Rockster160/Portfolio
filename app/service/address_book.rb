@@ -49,6 +49,57 @@ class AddressBook
     contacts.name_find(name)
   end
 
+  # Smart contact lookup that tries natural-language variants in priority
+  # order: the original string first, then with possessive / location-suffix
+  # / plural normalizations stripped. "Sarah", "Sarah's", "Sarah's house",
+  # "Sarah's place", "Sarahs" all resolve to the same Sarah contact.
+  # Returns the first matching Contact, or nil.
+  def match_contact(name)
+    self.class.name_variants(name)
+      .lazy
+      .map { |variant| contact_by_name(variant) }
+      .find(&:present?)
+  end
+
+  # Strings the Distance Matrix API can't (and shouldn't) be billed for:
+  # video-conf URLs, raw phone numbers, "tbd"/"online"/"virtual" placeholders.
+  # Caller responsibility to early-out when this returns true — keeps the
+  # API call (and the surrounding cache key) from being created with junk.
+  NON_TRAVELABLE_PREFIX = %r{\A(https?://|www\.|tel:|phone:|mailto:)}i
+  NON_TRAVELABLE_HOST = %r{\A(meet\.google\.com|zoom\.us|.*\.zoom\.us|teams\.microsoft\.com|webex\.com|.*\.webex\.com)}i
+  NON_TRAVELABLE_PLACEHOLDER = /\A(tbd|tba|online|virtual|remote|n\/?a)\z/i
+  NON_TRAVELABLE_PHONE = /\A[\d\s\-+().]+\z/
+
+  def self.non_travelable?(str)
+    s = str.to_s.strip
+    return true if s.empty?
+    return true if s.match?(NON_TRAVELABLE_PREFIX)
+    return true if s.match?(NON_TRAVELABLE_HOST)
+    return true if s.match?(NON_TRAVELABLE_PLACEHOLDER)
+    return true if s.match?(NON_TRAVELABLE_PHONE) && s.length < 20
+
+    false
+  end
+
+  # Normalize natural-language variants down to candidate contact names.
+  # Public/class-level so callers without an AddressBook instance can ask
+  # for the candidate list directly (e.g. for debugging).
+  def self.name_variants(text)
+    text = text.to_s.strip
+    return [] if text.empty?
+
+    variants = [text]
+    # Strip possessive `'s`, optionally followed by "house"/"home"/"place":
+    # "Sarah's", "Sarah's house", "Sarah's place(s)" all collapse to "Sarah".
+    variants << text.sub(/['’]s(\s+(house|home|place)s?)?\b/i, "").strip
+    # Apostrophe-less plural ("Sarahs" → "Sarah"). Gated by no-apostrophe so
+    # we don't touch the already-handled possessive case. May generate a
+    # noise variant for genuine names ending in `s` ("Charles" → "Charle"),
+    # which simply misses the contact lookup harmlessly.
+    variants << text.sub(/(\b[A-Z][a-z]+)s\b/, '\1') if text.exclude?("'") && text.exclude?("’")
+    variants.uniq.compact_blank
+  end
+
   def loc_from_address(address)
     geocode(address)
   end
@@ -82,9 +133,9 @@ class AddressBook
     return 2700 unless Rails.env.production?
 
     from ||= current_loc
-    # Should be stringified addresses
-    to, from = [to, from].map { |address| to_address(address) }
+    to, from = [to, from].map { |input| to_traveltime_param(input) }
     return if to.blank? || from.blank?
+    return 0 if to == from # same place — no API call needed
 
     nonnil_cache("traveltime_seconds(#{[to, from, at].compact_blank.join(",")})") {
       ::PrettyLogger.info("\b[AddressCache] Traveltime #{to},#{from},#{at}")
@@ -103,6 +154,35 @@ class AddressBook
   rescue StandardError => e
     SlackNotifier.err(e, "Traveltime failed: (to:\"#{to}\", from:\"#{from}\")")
     nil
+  end
+
+  # Normalize input shapes for the Google Distance Matrix API while skipping
+  # unnecessary lookups. Unlike #to_address, this:
+  #   • converts [lat, lng] arrays straight to "lat,lng" strings (no
+  #     reverse_geocode round-trip — Google accepts coords directly)
+  #   • for string input, tries the contact-name lookup so callers can pass
+  #     "Home", "Sarah", "Sarah's house" and get the right street address,
+  #     but skips the address-pattern regex / nearest-from-name fallbacks
+  #     that #to_address adds
+  # Falls back to the full #to_address pipeline for non-string/non-coord
+  # objects (Contact, Address, BetterJson, etc.).
+  def to_traveltime_param(input)
+    if input.is_a?(Array) && input.length == 2 && input.all? { |v| v.is_a?(Numeric) }
+      return input.join(",")
+    end
+
+    if input.is_a?(String)
+      str = input.strip
+      return nil if str.empty?
+      return nil if self.class.non_travelable?(str)
+
+      contact_address = match_contact(str)&.primary_address&.street
+      return contact_address if contact_address.present?
+
+      return str
+    end
+
+    to_address(input)
   end
 
   def nearest_from_name(name, loc: nil, extract: :address)

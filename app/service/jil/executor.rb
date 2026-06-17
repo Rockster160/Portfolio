@@ -275,7 +275,7 @@ class Jil::Executor
     when nil then magic_cast(value)
     when :Any, :Global then value
     when :None then nil
-    when :ScheduleData, :ContactData, :ActionEventData, :MonitorData, :PushNotification, :PromptQuestion, :AgendaData, :AgendaItemData, :TimerData, :TimerPageButtonData, :ChoreCompletionData
+    when :ScheduleData, :ContactData, :ActionEventData, :MonitorData, :PushNotification, :PromptQuestion, :AgendaData, :AgendaItemData, :AgendaScheduleData, :TimerData, :TimerPageButtonData, :ChoreCompletionData
       cast(value, :Hash)
     else klass_from_obj(type).new(self, current_ctx || @ctx).cast(value)
     end
@@ -293,6 +293,7 @@ class Jil::Executor
       when :ActionEvent, :ActionEventData then :ActionEvent
       when :Agenda, :AgendaData then :Agenda
       when :AgendaItem, :AgendaItemData then :AgendaItem
+      when :AgendaSchedule, :AgendaScheduleData then :AgendaSchedule
       when :Chore, :ChoreData, :ChoreCompletionData then :Chore
       when :Timer, :TimerData then :Timer
       when :TimerPage, :TimerPageButtonData then :TimerPage

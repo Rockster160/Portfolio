@@ -70,6 +70,7 @@
                   data-name="<%= item.name %>"
                   data-notes="<%= item.notes %>"
                   data-location="<%= item.location %>"
+                  data-travel-minutes="<%= item.metadata["travel_minutes"].to_i %>"
                   data-trigger-expression="<%= item.trigger_expression %>"
                   data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>"
                   style="--item-color: <%= item.display_color %>; --agenda-color: <%= item.agenda.color %>;">

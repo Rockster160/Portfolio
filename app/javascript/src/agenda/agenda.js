@@ -2080,6 +2080,13 @@
       if (locTarget) renderClickableLocation(locTarget, d.location || "");
     }
 
+    const travelRow = modal.querySelector("[data-travel-row]");
+    if (travelRow) {
+      const travelMin = parseInt(d.travelMinutes, 10) || 0;
+      travelRow.classList.toggle("hidden", travelMin <= 0);
+      set("[data-travel-target]", travelMin > 0 ? `${travelMin} min from Home` : "");
+    }
+
     const recurringRow = modal.querySelector("[data-recurring-row]");
     if (recurringRow) {
       const isRecurring = d.recurring === "true";
