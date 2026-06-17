@@ -771,6 +771,11 @@ body.ctr-agendas {
         font-size: 9px;
         flex-shrink: 0;
       }
+      .agenda-item-travel-leave {
+        font-variant-numeric: tabular-nums;
+        flex-shrink: 0;
+        margin-right: 3px;
+      }
     }
     .agenda-item-badge {
       font-size: 10px;
@@ -973,6 +978,9 @@ body.ctr-agendas {
   .agenda-details-travel-plus {
     margin: 0 6px 0 2px;
     opacity: 0.7;
+  }
+  .agenda-details-leave-at:not(:empty) {
+    margin-right: 8px;
   }
   // Subtle inline affordance on the "Recurring" row — edge-case toggle,
   // intentionally low-key so it doesn't compete with Close / Edit.

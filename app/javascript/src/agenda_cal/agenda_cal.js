@@ -61,6 +61,16 @@
     h = h % 12 || 12;
     return m === 0 ? `${h}${ampm}` : `${h}:${pad(m)}${ampm}`;
   }
+  // Compact local-tz time from an epoch — matches fmtCalTime in agenda.js
+  // (`9a`, `4:15p`) so the "Leave at" prefix reads the same across views.
+  function fmtCalTime(epoch) {
+    const d = new Date(Number(epoch) * 1000);
+    let h = d.getHours();
+    const m = d.getMinutes();
+    const suffix = h >= 12 ? "p" : "a";
+    h = h % 12 || 12;
+    return m === 0 ? `${h}${suffix}` : `${h}:${pad(m)}${suffix}`;
+  }
   function compareISO(a, b) { return a < b ? -1 : (a > b ? 1 : 0); }
   function addDaysISO(iso, n) {
     const d = new Date(iso + "T12:00:00");
@@ -1007,6 +1017,14 @@
         const earlyPart = arriveEarlyMinRaw > 0 ? arriveEarlyMinRaw : 0;
         const label = document.createElement("span");
         label.className = "cal-week-event-travel-label is-compact";
+        const startEpochRaw = parseInt(d.startAt, 10) || 0;
+        if (startEpochRaw > 0 && (earlyPart > 0 || drivePart > 0)) {
+          const leaveEpoch = startEpochRaw - (earlyPart + drivePart) * 60;
+          const leave = document.createElement("span");
+          leave.className = "cal-week-event-travel-leave";
+          leave.textContent = `→${fmtCalTime(leaveEpoch)}`;
+          label.appendChild(leave);
+        }
         if (earlyPart > 0) {
           label.appendChild(Object.assign(document.createElement("i"), { className: "fa fa-clock-o" }));
           label.appendChild(document.createTextNode(`${earlyPart}m`));

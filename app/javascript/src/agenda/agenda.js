@@ -90,6 +90,7 @@
     const start = node.getAttribute("data-start-epoch");
     const end   = node.getAttribute("data-end-epoch");
     const fmt   = node.getAttribute("data-format") || "time";
+    const prefix = node.getAttribute("data-prefix") || "";
     if (!start) return;
     let text = "";
     switch (fmt) {
@@ -105,7 +106,7 @@
       default:
         text = fmtTime(start);
     }
-    node.textContent = text;
+    node.textContent = `${prefix}${text}`;
   }
   function hydrateTimeNodes(root = document) {
     root.querySelectorAll("[data-time-hydrate]").forEach(hydrateOneTimeNode);
@@ -2206,6 +2207,9 @@
       plus?.toggleAttribute("hidden", !(arriveEarlyMin > 0 && travelMin > 0));
       set("[data-arrive-early-target]", arriveEarlyMin > 0 ? `${arriveEarlyMin}m` : "");
       set("[data-travel-target]",       travelMin > 0      ? `${travelMin}m`      : "");
+      const startEpoch = parseInt(d.startAt, 10) || 0;
+      const leaveEpoch = startEpoch - (arriveEarlyMin + travelMin) * 60;
+      set("[data-leave-at-target]", (visible && startEpoch > 0) ? `→${fmtCalTime(leaveEpoch)}` : "");
     }
 
     const recurringRow = modal.querySelector("[data-recurring-row]");

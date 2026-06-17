@@ -456,6 +456,11 @@ body.agenda-cal-body {
       font-size: 8px;
     }
 
+    .cal-month-item-travel-leave {
+      flex-shrink: 0;
+      margin-right: 3px;
+    }
+
     .cal-month-item-travel-plus {
       margin: 0 2px;
       font-style: normal;
@@ -991,6 +996,10 @@ $cal-week-px-per-hour: 20px;
       margin: 0 3px;
       opacity: 0.75;
       font-style: normal;
+    }
+
+    .cal-week-event-travel-leave {
+      margin-right: 3px;
     }
 
     // Single-number `[Nm clock]` fallback for narrow tiles (multi-lane

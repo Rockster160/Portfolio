@@ -119,7 +119,13 @@
                   <% cal_travel_min = item.metadata["travel_minutes"].to_i %>
                   <% cal_arrive_early_min = item.arrive_early_minutes.to_i %>
                   <% if cal_travel_min > 0 || cal_arrive_early_min > 0 %>
+                    <% cal_leave_epoch = item.start_at.to_i - (cal_arrive_early_min + cal_travel_min) * 60 %>
                     <span class="cal-month-item-travel">
+                      <span class="cal-month-item-travel-leave"
+                            data-time-hydrate
+                            data-start-epoch="<%= cal_leave_epoch %>"
+                            data-format="cal"
+                            data-prefix="→"></span>
                       <% if cal_arrive_early_min > 0 %><i class="fa fa-clock-o"></i><%= cal_arrive_early_min %>m<% end %>
                       <% if cal_arrive_early_min > 0 && cal_travel_min > 0 %><span class="cal-month-item-travel-plus">+</span><% end %>
                       <% if cal_travel_min > 0 %><i class="fa fa-car"></i><%= cal_travel_min %>m<% end %>

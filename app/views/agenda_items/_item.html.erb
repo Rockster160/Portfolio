@@ -116,7 +116,13 @@
         <% travel_min = item.metadata["travel_minutes"].to_i %>
         <% arrive_early_min = item.arrive_early_minutes.to_i %>
         <% if travel_min > 0 || arrive_early_min > 0 %>
+          <% leave_epoch = item.start_at.to_i - (arrive_early_min + travel_min) * 60 %>
           <span class="agenda-item-travel">
+            <span class="agenda-item-travel-leave"
+                  data-time-hydrate
+                  data-start-epoch="<%= leave_epoch %>"
+                  data-format="cal"
+                  data-prefix="→"></span>
             <% if arrive_early_min > 0 %><i class="fa fa-clock-o"></i><span class="agenda-item-travel-text"><%= arrive_early_min %>m</span><% end %>
             <% if arrive_early_min > 0 && travel_min > 0 %><span class="agenda-item-travel-plus">+</span><% end %>
             <% if travel_min > 0 %><i class="fa fa-car"></i><span class="agenda-item-travel-text"><%= travel_min %>m</span><% end %>
