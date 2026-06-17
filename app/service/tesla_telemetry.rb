@@ -140,7 +140,12 @@ class TeslaTelemetry
     new_speed = @car_data.dig(:drive_state, :speed).to_i
 
     if @prev_speed.zero? && new_speed.positive?
-      ::Jil.trigger(@user, :tesla_drive_start, speed: new_speed)
+      # Hash MUST be explicit braces — `::Jil.trigger`'s third positional
+      # arg is `data` with a default, so bare keyword-style args
+      # (`speed:`) get bound to the method's actual `**kwargs` (auth:,
+      # auth_id:) under Ruby 3's kwarg separation and raise
+      # `unknown keyword: :speed`.
+      ::Jil.trigger(@user, :tesla_drive_start, { speed: new_speed })
     elsif @prev_speed.positive? && new_speed.zero?
       ::Jil.trigger(@user, :tesla_drive_stop, {})
     end

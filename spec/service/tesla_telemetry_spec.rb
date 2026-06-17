@@ -103,4 +103,37 @@ RSpec.describe TeslaTelemetry do
       expect(chores).not_to have_received(:add).with(/Back Right/)
     end
   end
+
+  # The drive-change detection is one of the few hot paths that fires a
+  # Jil trigger directly. Locks the explicit-hash form so Ruby 3's
+  # keyword-arg separation doesn't bind `speed:` to the method's `auth:`
+  # / `auth_id:` kwargs and re-raise the `unknown keyword: :speed`
+  # webhook error.
+  describe "#detect_drive_changes — Jil trigger passes data as an explicit hash" do
+    let(:tel) {
+      instance = described_class.allocate
+      instance.instance_variable_set(:@user, user)
+      instance.instance_variable_set(:@data, { VehicleSpeed: 35 })
+      instance.instance_variable_set(:@car_data, { drive_state: { speed: 35 } })
+      instance.instance_variable_set(:@prev_speed, 0)
+      instance
+    }
+
+    before do
+      # Outer top-level `before` stubs detect_drive_changes (so other
+      # tests don't fire jil triggers) — un-stub it for this case.
+      allow_any_instance_of(described_class).to receive(:detect_drive_changes).and_call_original
+    end
+
+    it "fires :tesla_drive_start with the speed hash without ArgumentError" do
+      received = []
+      # Intercept the lower-level Executor.trigger so Ruby still runs
+      # Jil.trigger's real dispatch — that's where the kwarg-vs-hash
+      # binding bug would surface.
+      allow(::Jil::Executor).to receive(:trigger) { |*args, **kwargs| received << [args, kwargs]; [] }
+      expect { tel.send(:detect_drive_changes) }.not_to raise_error
+      args, _kwargs = received.first
+      expect(args[0..2]).to eq([user, :tesla_drive_start, { speed: 35 }])
+    end
+  end
 end

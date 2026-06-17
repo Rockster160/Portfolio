@@ -225,6 +225,12 @@ class TeslaControl
   private
 
   def tesla_exc_code(exc)
+    # Some failure modes (connection reset, timeout, DNS) raise the
+    # response-bearing exception class but with `response == nil`. The
+    # wakeup_retry caller treats anything non-401/403 as "give up", so
+    # collapsing to 500 lands in the right branch without leaking a
+    # NoMethodError into the worker's exception report.
+    return 500 if exc.response.nil?
     # Tesla Proxy Server is correctly receiving the errors codes, but returning 500 for them.
     return exc.response.code unless exc.response.code == 500
 
@@ -237,11 +243,34 @@ class TeslaControl
     500
   end
 
+  # Exceptions raised when the home-Mac proxies (Go + Ruby relay) can't
+  # be reached at all — laptop off, off the home wifi, proxy daemon not
+  # yet up, etc. Distinct from Tesla-API errors with an HTTP response.
+  # We treat these as "command skipped" rather than escalating to Slack.
+  PROXY_UNREACHABLE_ERRORS = [
+    Errno::ECONNREFUSED,
+    Errno::EHOSTUNREACH,
+    Errno::ENETUNREACH,
+    Errno::ETIMEDOUT,
+    SocketError,
+    RestClient::ServerBrokeConnection,
+    RestClient::Exceptions::OpenTimeout,
+    RestClient::Exceptions::ReadTimeout,
+  ].freeze
+
   def wakeup_retry(max_attempts: 5, &block)
     tries = 0
     begin
       tries += 1
       block.call if tries <= max_attempts
+    rescue *PROXY_UNREACHABLE_ERRORS => e
+      # Home proxy is down (most often: laptop is off / away from home
+      # wifi). Don't err() — that posts to Slack with a full stack trace
+      # and turns a known-expected scenario into noise. info() routes to
+      # PrettyLogger only.
+      info("Home proxy unreachable", "#{e.class.name}: #{e.message.to_s[0..120]} — Tesla command skipped.")
+      TeslaCommand.broadcast(loading: false)
+      false
     rescue RestClient::ExceptionWithResponse => e
       case tesla_exc_code(e)
       when 401, 403
