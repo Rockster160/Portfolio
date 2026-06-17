@@ -14,6 +14,7 @@ class GoogleCalendarSyncWorker
   # Sidekiq's dead queue without an operator-visible signal — and so a
   # transient failure doesn't burn the 3-retry budget silently.
   def perform(agenda_id=nil, reason="manual")
+    return unless ::Rails.env.production?
     return sync_all_stale if agenda_id.nil?
 
     agenda = ::Agenda.google.find_by(id: agenda_id)
@@ -50,7 +51,7 @@ class GoogleCalendarSyncWorker
   def report_sync_failure!(agenda, error)
     hint = migration_hint(error)
     msg = "[GoogleCalendarSyncWorker] agenda=#{agenda.id} (#{agenda.name.inspect}) " \
-          "FAILED #{error.class}: #{error.message}#{hint ? " — #{hint}" : ""}"
+          "FAILED #{error.class}: #{error.message}#{" — #{hint}" if hint}"
     ::Rails.logger.error(msg)
     ::Rails.logger.error(error.backtrace.first(10).join("\n")) if error.backtrace
     ::SlackNotifier.notify(msg) if ::Rails.env.production?

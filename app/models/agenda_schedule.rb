@@ -114,6 +114,44 @@ class AgendaSchedule < ApplicationRecord
     }.compact
   end
 
+  # Snapshot of everything the FE needs to (a) expand this schedule into
+  # phantom occurrences for any date locally, and (b) render those phantoms
+  # with the same fidelity as a server-rendered seed. Consumed by
+  # AgendaSyncController#bootstrap / #delta.
+  #
+  # Distinct from serialize_for_edit, which is shaped for prefilling the
+  # series edit form. This shape adds `agenda_id` for client-side perm
+  # scoping, `excluded_dates` as ISO strings (so the JS expander can skip
+  # them without a Ruby roundtrip), and `updated_at` for delta race guards.
+  def serialize_for_client
+    {
+      id:                   id,
+      agenda_id:            agenda_id,
+      kind:                 kind,
+      name:                 name,
+      notes:                notes,
+      location:             location,
+      color:                color,
+      all_day:              all_day,
+      start_time:           start_time&.strftime("%H:%M"),
+      duration_minutes:     duration_minutes,
+      arrive_early_minutes: arrive_early_minutes,
+      trigger_expression:   trigger_expression,
+      metadata:             metadata,
+      starts_on:            starts_on&.iso8601,
+      until_on:             until_on&.iso8601,
+      occurrence_count:     occurrence_count,
+      freq:                 freq,
+      interval:             recurrence_data[:interval]&.to_i,
+      unit:                 recurrence_data[:unit],
+      by_day:               Array(recurrence_data[:by_day]),
+      by_month_day:         Array(recurrence_data[:by_month_day]).map(&:to_i),
+      by_set_pos:           recurrence_data[:by_set_pos]&.to_i,
+      excluded_dates:       excluded_dates.map(&:iso8601).sort,
+      updated_at:           updated_at&.to_i,
+    }
+  end
+
   # Schedules whose effective window overlaps [from..to]: started by `to` AND
   # not ended before `from`.
   scope :active_between, ->(from, to) {

@@ -294,13 +294,17 @@ RSpec.describe AgendasController, type: :controller do
       expect(response.body).to include(%(data-week-start="#{week_start.iso8601}"))
     end
 
-    it "renders item seed nodes from accessible agendas" do
+    # cal_week now renders a data-free shell — events are hydrated
+    # FE-side from AgendaStore (/agenda/sync/bootstrap). This spec
+    # confirms the seeds container is still present as the JS lookup
+    # anchor but contains no embedded item data.
+    it "exposes an empty seeds container for AgendaStore to hydrate into" do
       create(:agenda_item, agenda: agenda, name: "Lunch with Pat",
         kind: :event, start_at: Date.current.beginning_of_day + 12.hours,
         end_at: Date.current.beginning_of_day + 13.hours)
       get :cal_week
-      expect(response.body).to include("Lunch with Pat")
-      expect(response.body).to include("cal-week-seed")
+      expect(response.body).to include('class="cal-week-seeds hidden"')
+      expect(response.body).not_to include("Lunch with Pat")
     end
 
     it "emits the 3am day-start hour as a grid data attribute" do

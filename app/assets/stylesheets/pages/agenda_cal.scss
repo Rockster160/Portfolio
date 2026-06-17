@@ -478,6 +478,26 @@ body.agenda-cal-body {
 
 // =================== Week view ===================
 
+// Cold-start spinner shown only on a true first-time visit (empty
+// localStorage + no completed bootstrap yet). On subsequent visits the
+// store hydrates from cache and paints immediately, so this stays
+// hidden the whole session.
+.agenda-cold-start {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(8, 16, 32, 0.92);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  z-index: 100;
+  pointer-events: none;
+  i { font-size: 24px; opacity: 0.8; }
+}
+
 .cal-week-grid {
   // The grid IS the scroll container now. That lets the header (day
   // labels) and the all-day band be `position: sticky` to the top of
@@ -675,9 +695,23 @@ $cal-week-px-per-hour: 20px;
   &[data-hour="0"] { border-top: 0; }
 
   .cal-week-hour-label {
+    // Vertically centered on the gridline — `top: 0` is the row's top edge
+    // (which IS the gridline because of border-box + border-top), and
+    // translateY(-50%) lifts the label so its visual middle sits on that
+    // line. Previously this was `top: -6px`, which floated the label
+    // entirely above the gridline; the eye locked onto the label center as
+    // "this is 1 PM" but events positioned at the actual gridline rendered
+    // several pixels lower than the label, making a 1:30pm event read as
+    // "too high" by a few pixels. Centering the label on the gridline
+    // collapses the two reference frames into one.
+    //
+    // The first row's label is omitted in ERB (would clip above the grid
+    // top); every other label has full row height above + below to render
+    // without colliding.
     position: absolute;
     right: 6px;
-    top: -6px;
+    top: 0;
+    transform: translateY(-50%);
     font-size: 9px;
     font-weight: 500;
     opacity: 0.6;

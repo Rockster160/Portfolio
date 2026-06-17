@@ -281,6 +281,16 @@ Rails.application.routes.draw do
   get "/agenda/cal/month" => "agendas#cal_month", as: :cal_month
   get "/agenda/cal/week"  => "agendas#cal_week",  as: :cal_week
   post "/agenda/test_push" => "agendas#test_push", as: :test_push_agenda
+
+  # Client-side calendar store — the Agenda PWA boots an empty shell,
+  # hydrates from localStorage, then pulls a full snapshot here. Every
+  # subsequent navigation (week→week, month→month) is a pure client state
+  # change against the cached store; only mutations + Monitor deltas hit
+  # the network. Lazy backfill for navigation further back than the
+  # bootstrap window comes through #page.
+  get "/agenda/sync/bootstrap" => "agenda_sync#bootstrap", as: :agenda_sync_bootstrap
+  get "/agenda/sync/delta"     => "agenda_sync#delta",     as: :agenda_sync_delta
+  get "/agenda/sync/page"      => "agenda_sync#page",      as: :agenda_sync_page
   post "/agenda/:id/resync" => "agendas#resync", as: :resync_agenda
 
   # Resourceful CRUD remapped onto /agenda/* (was /agendas/*). `except: :index`

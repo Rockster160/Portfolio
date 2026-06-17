@@ -134,47 +134,23 @@
       </div>
     </div>
 
-    <%# Seed nodes for JS — one for every item, even all-day. Hidden;
-        agenda_cal.js reads them, builds the visible blocks, and inserts
-        into the appropriate column or allday cell. Done this way so all
-        data-* hydration (color, name, etc.) goes through the same
-        server-rendered pipeline as month view. %>
-    <div class="cal-week-seeds hidden" data-week-seeds>
-      <% @items_by_date.each_value do |items| %>
-        <% items.each do |item| %>
-          <% cal_editable = item.agenda.editable_by?(current_user) %>
-          <div class="cal-week-seed agenda-item-data"
-               data-open-details
-               <%= "data-readonly".html_safe unless cal_editable %>
-               data-item-id="<%= item.display_id %>"
-               data-item-url="<%= agenda_item_path(item.display_id) %>"
-               data-phantom="<%= item.phantom? %>"
-               data-recurring="<%= item.recurring? %>"
-               data-agenda-schedule-id="<%= item.agenda_schedule_id %>"
-               data-kind="<%= item.kind %>"
-               data-color="<%= item.display_color %>"
-               data-agenda-id="<%= item.agenda_id %>"
-               data-agenda-name="<%= item.agenda.name %>"
-               data-agenda-color="<%= item.agenda.color %>"
-               data-agenda-source="<%= item.agenda.source %>"
-               data-all-day="<%= item.all_day? %>"
-               data-end-date="<%= item.end_date&.to_time&.to_i %>"
-               data-start-at="<%= item.start_at.to_i %>"
-               data-end-at="<%= item.end_at&.to_i %>"
-               data-name="<%= item.name %>"
-               data-notes="<%= item.notes %>"
-               data-location="<%= item.location %>"
-               data-arrive-early-minutes="<%= item.arrive_early_minutes.to_i %>"
-               data-travel-minutes="<%= item.metadata["travel_minutes"].to_i %>"
-               data-trigger-expression="<%= item.trigger_expression %>"
-               data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>"
-               data-attendees="<%= item.attendees.to_json %>"
-               data-organizer="<%= item.organizer.to_json %>"
-               data-self-response="<%= item.self_response %>">
-          </div>
-        <% end %>
-      <% end %>
-    </div>
+    <%# Event seeds are NO LONGER server-rendered. agenda_cal.js builds
+        every .cal-week-event / .cal-week-allday-chip directly from
+        AgendaStore (src/agenda_store/store.js), which hydrates from
+        localStorage on page load and then refreshes from the
+        /agenda/sync/bootstrap + /agenda/sync/delta endpoints.
+        Leaving this empty <div> as the lookup anchor for
+        per-render hydrated nodes (kept hidden — it's just a marker
+        for buildWeekBlocks to know seeds USED to live here). %>
+    <div class="cal-week-seeds hidden" data-week-seeds></div>
+  </div>
+
+  <%# Cold-start spinner — visible only on a true cold-boot (no
+      localStorage cache AND no completed sync yet). agenda_cal.js
+      hides this once the first authoritative payload lands. %>
+  <div class="agenda-cold-start hidden" data-cold-start>
+    <i class="fa fa-spinner fa-spin"></i>
+    <span>Loading calendar…</span>
   </div>
 
   <%= render "agenda_items/add_modal", agendas: @agendas, date: @date %>

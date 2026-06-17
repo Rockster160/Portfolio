@@ -89,16 +89,18 @@ class AgendasController < ApplicationController
   # Mac-style Calendar PWA — week time-grid. `?date=YYYY-MM-DD` picks any
   # day in the visible week; the column it lands in is "today" visually
   # only when the user's perceived_today is in the range.
+  #
+  # NOTE: this action no longer loads items. The view renders a data-
+  # free shell; agenda_cal.js hydrates events from AgendaStore (which
+  # boots from /agenda/sync/bootstrap + localStorage). Keeping
+  # @week_start/@agendas only so the toolbar can render the right title
+  # and the add/edit modals' agenda <select>s have their options.
   def cal_week
     @date = parse_date(params[:date]) || current_user.perceived_today
     @week_start = @date.beginning_of_week(cal_week_start_day)
     @week_end = @week_start + 6.days
 
     @agendas = current_user.accessible_agendas.order(:sort_order, :id)
-    items = current_user.agenda_items_for_range(@week_start, @week_end + 1.day)
-    @items_by_date = items.group_by { |i| i.start_at.in_time_zone(current_user.timezone).to_date }
-    # Title shows the month of the user's perceived "today" if it's in
-    # the visible week, otherwise the month of the week's first day.
     today = current_user.perceived_today
     @focus_date = today.between?(@week_start, @week_end) ? today : @week_start
   end

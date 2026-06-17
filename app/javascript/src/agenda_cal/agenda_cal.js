@@ -604,6 +604,7 @@
       installRefreshTriggers(root);
       installNavInterception(root);
       startNowTick(root);
+      bootAgendaStore(root);
     }
 
     buildWeekBlocks(root);
@@ -614,6 +615,67 @@
       updateStickyOffsets(root);
       scrollWeekToEarliestEvent(root);
     });
+  }
+
+  // ============================================================
+  // AgendaStore boot — fires once per page load (initWeekView and
+  // initMonthView both call this; the guard makes it idempotent).
+  // Hydrates from localStorage immediately so the first paint comes
+  // from cache, then kicks off the network bootstrap; subsequent
+  // updates flow through the store subscriber below.
+  // ============================================================
+  let agendaStoreBooted = false;
+  function bootAgendaStore(root) {
+    if (agendaStoreBooted) return;
+    if (!window.AgendaStore || !window.AgendaSync) return; // graceful no-op
+    agendaStoreBooted = true;
+
+    const cold = $("[data-cold-start]");
+    const hadCache = window.AgendaStore.hydrateFromLocal();
+    if (!hadCache && cold) cold.classList.remove("hidden");
+
+    // Re-render whenever the store changes — bootstrap, delta, optimistic
+    // mutation, broadcast. Cheap because buildWeekBlocks re-hydrates seeds
+    // from the store snapshot and reuses the same downstream layout pass.
+    window.AgendaStore.subscribe((reason) => {
+      // `hydrate` is the initial localStorage replay — already painted by
+      // the explicit buildWeekBlocks in initWeekView. Bootstrap/delta/page
+      // arrive after with authoritative data; everything else is per-item
+      // mutation that may have shifted what's visible.
+      if (reason === "hydrate") return;
+      if (cold) cold.classList.add("hidden");
+      const r = $(".agenda-cal-page");
+      if (!r) return;
+      if (r.classList.contains("agenda-cal-week-page")) buildWeekBlocks(r);
+      else if (r.classList.contains("agenda-cal-month-page")) {
+        layoutMonthBanners(r);
+        recountMonthOverflow(r);
+      }
+    });
+
+    window.AgendaSync.subscribeMonitor();
+    window.AgendaSync.installResumeTriggers();
+    window.AgendaSync.boot().then(() => {
+      if (cold) cold.classList.add("hidden");
+    });
+  }
+
+  // Pulls the visible week's events from AgendaStore and rewrites the
+  // hidden seed DOM that the rest of this file consumes. Called from
+  // buildWeekBlocks before the seeds-to-blocks pass runs. No-op if the
+  // store isn't loaded — the legacy server-seeds path still works.
+  function rehydrateSeedsFromStore(grid) {
+    if (!window.AgendaSeedHydrator || !window.AgendaStore) return;
+    const seedsContainer = $(".cal-week-seeds", grid);
+    if (!seedsContainer) return;
+    const weekStart = grid.dataset.weekStart;
+    const weekEnd = grid.dataset.weekEnd;
+    if (!weekStart || !weekEnd) return;
+    // Lazy backfill: if the visible week is earlier than the store's
+    // known floor, kick off the page request. The subscriber re-renders
+    // when it lands.
+    window.AgendaSync?.ensureRangeLoaded(weekStart, weekEnd);
+    window.AgendaSeedHydrator.hydrateWeekSeeds(seedsContainer, weekStart, weekEnd);
   }
 
   // Width of the right-edge strip on each day column that's reserved for
@@ -741,6 +803,12 @@
   function buildWeekBlocks(root) {
     const grid = $(".cal-week-grid", root);
     if (!grid) return;
+    // Rebuild the hidden seed DOM from AgendaStore so the rest of this
+    // pass works against the cached set instead of whatever ERB last
+    // emitted. No-op if the store isn't loaded yet (still-rendering
+    // bootstrap, or page hasn't called bootAgendaStore).
+    rehydrateSeedsFromStore(grid);
+
     const dayStart = Number(grid.dataset.dayStartHour) || 0;
     const pxPerMin = weekPxPerMin(grid);
     const snapPx = weekSnapPx(grid);
@@ -888,9 +956,14 @@
       ? 0
       : Math.min(travelMinRaw + arriveEarlyMinRaw, seg.startMin);
     const top = (seg.startMin - travelMin) * pxPerMin;
+    // Tile height equals the event's actual duration in pixels — no
+    // "visual gap" trim. Anything smaller (the old `- 2`) left the bottom
+    // edge floating short of the end-time gridline, which read as a
+    // bottom-alignment bug. Adjacent events at the exact same time would
+    // briefly touch — that's fine and arguably correct.
     const eventHeight = isPoint
-      ? Math.max(12, 15 * pxPerMin - 2)
-      : Math.max(14, durationMin * pxPerMin - 2);
+      ? Math.max(12, 15 * pxPerMin)
+      : Math.max(14, durationMin * pxPerMin);
     const height = eventHeight + (travelMin * pxPerMin);
     node.style.top = `${top}px`;
     node.style.height = `${height}px`;
@@ -1247,83 +1320,130 @@
   // ============================================================
   // CLIENT-SIDE NAVIGATION
   // ============================================================
-  // Prev/Today/Next + Month↔Week + Today-pill clicks fetch the new
-  // page's HTML and swap just the toolbar + grid in place instead of
-  // doing a full browser navigation. The page wrapper, listeners, and
-  // CSS/JS bundles all stay alive. Falls back to a hard navigate if
-  // the fetch fails so the link still works offline / on error.
-  let navInFlight = null;
-  async function navigateToUrl(url) {
+  // Client-side navigation. Prev/Next/Today/Month↔Week/Today-pill
+  // clicks NEVER hit the server for data — AgendaStore already knows
+  // every event and schedule in the cache, including future phantoms
+  // built locally from the recurrence rules. We just:
+  //   1. pushState the URL so refresh/share/bookmark reflect the
+  //      viewing date.
+  //   2. Update the grid's `data-week-start` / `data-week-end` and the
+  //      per-day-column `data-date` + is-today markers.
+  //   3. Re-paint toolbar title.
+  //   4. Re-run buildWeekBlocks, which calls rehydrateSeedsFromStore
+  //      and lays out events for the new window.
+  //
+  // Cross-view nav (week ↔ month) still hits the server (the month
+  // shell has different DOM scaffolding). Once that view is also
+  // converted to AgendaStore, this can promote to pure client-side
+  // too.
+  function navigateClientSide(url) {
     const root = $(".agenda-cal-page");
     if (!root) { window.location.assign(url); return; }
-    // Best-effort cancel of any prior in-flight nav.
-    if (navInFlight && navInFlight.controller) navInFlight.controller.abort();
-    const controller = new AbortController();
-    navInFlight = { controller };
 
-    // Snap the URL immediately so a refresh / bookmark / share reflects
-    // the date the user is currently on. We don't wire popstate — this
-    // is a PWA with no browser back/forward chrome, and the on-page
-    // prev/next/Today pills are the only intended navigation surface.
-    history.pushState(null, "", url);
+    const isWeekTarget = url.pathname === "/agenda/cal/week" || url.pathname === "/agenda/cal";
+    const isMonthTarget = url.pathname === "/agenda/cal/month";
+    const onWeek = root.classList.contains("agenda-cal-week-page");
+    const onMonth = root.classList.contains("agenda-cal-month-page");
 
-    try {
-      const res = await fetch(url, {
-        credentials: "same-origin",
-        headers: { "Accept": "text/html", "X-Requested-With": "XMLHttpRequest" },
-        signal: controller.signal,
-      });
-      if (!res.ok) throw new Error(`fetch ${res.status}`);
-      const html = await res.text();
-      const doc = new DOMParser().parseFromString(html, "text/html");
-      const incoming = doc.querySelector(".agenda-cal-page");
-      if (!incoming) throw new Error("no .agenda-cal-page in response");
-
-      // Promote any view-class swaps (month ↔ week share the same root
-      // class `.agenda-cal-page`, but differ on `.agenda-cal-week-page`
-      // vs `.agenda-cal-month-page`). Carry all classes + data-* fresh.
-      root.className = incoming.className;
-      // Strip stale data-* (server may have removed some attrs).
-      Array.from(root.attributes).forEach((a) => {
-        if (a.name.startsWith("data-") && a.name !== "data-cal-bound") root.removeAttribute(a.name);
-      });
-      Array.from(incoming.attributes).forEach((a) => {
-        if (a.name.startsWith("data-")) root.setAttribute(a.name, a.value);
-      });
-
-      // Body class (`agenda-cal-body`) is set by `content_for` on the
-      // server — re-apply it if the incoming body had it set, in case
-      // the user navigated from a non-cal page.
-      const incomingBodyClass = doc.body && doc.body.className;
-      if (incomingBodyClass && /\bagenda-cal-body\b/.test(incomingBodyClass)) {
-        document.body.classList.add("agenda-cal-body");
-      }
-
-      // Swap the inner DOM. All delegated listeners are on `root`
-      // itself, so they stay alive. Anything else that depended on
-      // specific child nodes gets re-initialized below.
-      root.innerHTML = incoming.innerHTML;
-
-      // Reset per-render flags so the view-specific init re-runs.
-      // (The bind-once handlers on document / root persist; only the
-      // per-render setup re-fires.)
-      if (root.classList.contains("agenda-cal-week-page")) {
-        buildWeekBlocks(root);
-        requestAnimationFrame(() => {
-          updateStickyOffsets(root);
-          scrollWeekToEarliestEvent(root);
-        });
-      } else if (root.classList.contains("agenda-cal-month-page")) {
-        layoutMonthBanners(root);
-        recountMonthOverflow(root);
-      }
-    } catch (err) {
-      if (err && err.name === "AbortError") return;
-      console.warn("[agenda-cal] client nav failed, falling back", err);
-      window.location.assign(url);
-    } finally {
-      if (navInFlight && navInFlight.controller === controller) navInFlight = null;
+    // Same-view nav (the common case): pure client-side state change.
+    if (isWeekTarget && onWeek) {
+      history.pushState(null, "", url.href);
+      const dateParam = url.searchParams.get("date");
+      const targetISO = dateParam || logicalDateISO(new Date(), 3);
+      renderWeekFor(root, targetISO);
+      return;
     }
+
+    // Cross-view (or unknown target): fall back to a real navigation.
+    // Phase 3 (month-view AgendaStore conversion) collapses this to
+    // a client-side renderMonthFor in the same shape.
+    window.location.assign(url.href);
+  }
+
+  // Re-render the week view for the visible window that contains
+  // `dateISO`. Updates per-day data attributes, the toolbar title, the
+  // current-time markers, and finally repaints events from the store.
+  function renderWeekFor(root, dateISO) {
+    const grid = $(".cal-week-grid", root);
+    if (!grid) return;
+    const weekStartISO = mondayOf(dateISO);
+    const weekEndISO = addDaysISO(weekStartISO, 6);
+    grid.dataset.weekStart = weekStartISO;
+    grid.dataset.weekEnd = weekEndISO;
+    root.dataset.weekStart = weekStartISO;
+    root.dataset.weekEnd = weekEndISO;
+    root.dataset.currentDate = dateISO;
+
+    const todayISO = logicalDateISO(new Date(), Number(grid.dataset.dayStartHour) || 3);
+
+    // Header day cells: numbers + today highlight.
+    const headerCells = $$(".cal-week-header-day", root);
+    headerCells.forEach((cell, idx) => {
+      const d = addDaysISO(weekStartISO, idx);
+      cell.dataset.date = d;
+      cell.classList.toggle("is-today", d === todayISO);
+      const dow = cell.querySelector(".cal-week-header-dow");
+      const num = cell.querySelector(".cal-week-header-day-num");
+      const dt = parseISODate(d);
+      if (dow) dow.textContent = dt.toLocaleDateString(undefined, { weekday: "short" });
+      if (num) num.textContent = String(dt.getDate());
+    });
+
+    // All-day cells.
+    $$(".cal-week-allday-cell", root).forEach((cell, idx) => {
+      const d = addDaysISO(weekStartISO, idx);
+      cell.dataset.date = d;
+      cell.dataset.weekday = String(idx);
+      cell.classList.toggle("is-today", d === todayISO);
+    });
+
+    // Day columns.
+    $$(".cal-week-column", root).forEach((col, idx) => {
+      const d = addDaysISO(weekStartISO, idx);
+      col.dataset.date = d;
+      col.dataset.weekday = String(idx);
+      col.classList.toggle("is-today", d === todayISO);
+    });
+
+    // Toolbar title — "January 2026". Mirrors the server-side logic
+    // (perceived-today's month if in-week, else week's first day).
+    const titleEl = $(".cal-toolbar-title", root);
+    if (titleEl) {
+      const focusISO = (todayISO >= weekStartISO && todayISO <= weekEndISO) ? todayISO : weekStartISO;
+      const focusDt = parseISODate(focusISO);
+      titleEl.textContent = focusDt.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    }
+
+    // Update prev/next/today links so click → next-week URL stays
+    // accurate after a client-side jump.
+    const prevLink = $(".cal-toolbar-nav a.prev", root);
+    const nextLink = $(".cal-toolbar-nav a.next", root);
+    if (prevLink) prevLink.href = `/agenda/cal/week?date=${addDaysISO(weekStartISO, -7)}`;
+    if (nextLink) nextLink.href = `/agenda/cal/week?date=${addDaysISO(weekStartISO, 7)}`;
+
+    buildWeekBlocks(root);
+    updateNowLine(root);
+  }
+
+  // --- Date helpers used by client-side nav ---
+  // Don't go through native Date for arithmetic — DST shifts can move
+  // wall midnight by an hour and corrupt "+7 days". String math
+  // against ISO components is timezone-free.
+  function parseISODate(iso) {
+    const [y, m, d] = String(iso).split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }
+  function addDaysISO(iso, n) {
+    const [y, m, d] = String(iso).split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d + n, 12, 0, 0));
+    return `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`;
+  }
+  function mondayOf(iso) {
+    const [y, m, d] = String(iso).split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+    const wday = dt.getUTCDay(); // 0=Sun
+    const delta = wday === 0 ? -6 : 1 - wday;
+    return addDaysISO(iso, delta);
   }
 
   function installNavInterception(root) {
@@ -1347,7 +1467,7 @@
         return;
       }
       e.preventDefault();
-      navigateToUrl(url.href);
+      navigateClientSide(url);
     });
   }
 
@@ -1683,16 +1803,23 @@
   };
 
   function runRefresh() {
-    // Stale-inflight guard: clear the flight token if it's been hanging
-    // longer than the stale window so a one-off failed fetch can't
-    // wedge live refresh for the rest of the session.
+    // Now backed by AgendaSync's delta path — server returns only the
+    // items + schedules changed since the last server_ts, and the
+    // store subscriber re-paints via buildWeekBlocks. No HTML refetch,
+    // no full template render.
+    refreshDirty = false;
+    if (window.AgendaSync) {
+      window.AgendaSync.scheduleDelta();
+      return;
+    }
+    // Fallback for the (vanishingly small) case where AgendaSync didn't
+    // load: legacy HTML-snapshot refresh from the same URL.
     if (refreshInFlight && Date.now() - refreshInFlightAt > REFRESH_INFLIGHT_STALE_MS) {
       refreshInFlight = null;
     }
     if (refreshInFlight) return;
     const root = $(".agenda-cal-page");
     if (!root) return;
-    refreshDirty = false;
     refreshInFlightAt = Date.now();
     const url = window.location.pathname + window.location.search;
     const controller = new AbortController();
@@ -1709,10 +1836,7 @@
         applyHtmlSnapshot(root, doc);
       })
       .catch((err) => {
-        // Network drop or abort — re-arm refreshDirty so the next focus
-        // / online / connect event tries again. Don't swallow silently.
         if (err && err.name !== "AbortError") {
-          // eslint-disable-next-line no-console
           console.warn("[agenda-cal] refresh failed", err);
         }
         refreshDirty = true;
