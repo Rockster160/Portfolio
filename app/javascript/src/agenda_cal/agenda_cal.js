@@ -1549,11 +1549,18 @@
         const ph = eventDrag.placeholder;
         if (!ph) return;
         if (targetCol) {
-          const { snapPx, pxPerMin } = eventDrag.ctx;
+          const { snapPx, pxPerMin, grid } = eventDrag.ctx;
           const colRect = targetCol.getBoundingClientRect();
           const targetY = snapPxDown(e.clientY - colRect.top - eventDrag.grabOffsetY, snapPx);
           if (ph.parentElement !== targetCol) targetCol.appendChild(ph);
           ph.style.top = `${targetY}px`;
+          const dayStart = Number(grid?.dataset?.dayStartHour) || 0;
+          const origStart = Number(eventDrag.btn.dataset.startAt);
+          const origEnd = Number(eventDrag.btn.dataset.endAt) || origStart;
+          const durMin = Math.max(15, Math.round((origEnd - origStart) / 60));
+          const startClock = (dayStart * 60 + targetY / pxPerMin) % (24 * 60);
+          const endClock = (startClock + durMin) % (24 * 60);
+          ph.textContent = `${formatLabelTime(startClock)} – ${formatLabelTime(endClock)}`;
           eventDrag.dropCol = targetCol;
           eventDrag.dropTop = targetY;
         } else if (ph.parentElement) {
