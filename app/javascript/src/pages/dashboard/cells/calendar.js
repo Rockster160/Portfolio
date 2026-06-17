@@ -133,7 +133,12 @@ import { dash_colors } from "../vars";
           lines.push(Text.grey(cleanLocation));
         }
 
-        if (notes) {
+        // OCS calendar events tend to carry long meeting blurbs (agendas,
+        // dial-in info, paragraphs of context) that don't earn their
+        // cell-real-estate cost on the dashboard. The blurb still shows
+        // in the agenda detail modal; just suppressed here.
+        const isOcs = (calendar || "").toLowerCase().includes("oneclaimsolution");
+        if (notes && !isOcs) {
           notes
             .split("\n")
             .map((line) => line.trim())
