@@ -112,9 +112,9 @@ import { dash_colors } from "../vars";
           const endTime = new Date(end_time * 1000);
           timeStr = `${timeStr}-${timeFromDate(endTime)}`;
         }
-        timeStr = Text.yellow(timeStr);
+        timeStr = Text.grey(timeStr);
 
-        const nameLine = Text.color(resolvedColor, name);
+        const nameLine = Text.color(resolvedColor, `• ${name}`);
 
         lines.push(nameLine);
         lines.push(timeStr);
@@ -130,7 +130,7 @@ import { dash_colors } from "../vars";
             .replace(/,?\s*UT\b\s*$/i, "")
             .trim()
             .replace(/,\s*$/, "");
-          lines.push(Text.grey(cleanLocation));
+          lines.push(Text.yellow(cleanLocation));
         }
 
         // OCS calendar events tend to carry long meeting blurbs (agendas,
