@@ -208,7 +208,7 @@ body.agenda-cal-body {
   min-height: 0;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 8px;
-  overflow: hidden;
+  overflow-y: auto;
   position: relative;
   background: rgba(0, 0, 0, 0.15);
 }
@@ -216,8 +216,11 @@ body.agenda-cal-body {
 .cal-month-weekdays {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(8, 16, 32, 0.96);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  position: sticky;
+  top: 0;
+  z-index: 3;
 }
 
 .cal-month-weekday-head {
@@ -233,8 +236,13 @@ body.agenda-cal-body {
 .cal-month-row {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  flex: 1 1 0;
-  min-height: 110px;
+  // Grow into spare grid height when the viewport is tall, but never
+  // shrink below content + min-height. With the old `flex: 1 1 0` rows
+  // could shrink to fit any viewport — combined with `overflow: hidden`
+  // on the cells, the grid's content sum exactly equalled its own
+  // height, so the scroll container had nothing to overflow.
+  flex: 1 0 auto;
+  min-height: 140px;
   position: relative;
 
   & + .cal-month-row {
@@ -254,6 +262,11 @@ body.agenda-cal-body {
   height: 100%;
   pointer-events: none;
   z-index: 2;
+  // Absolutely-positioned children of a `display: grid` parent get
+  // auto-placed into a single grid cell (column 1). Without this, `left:0;
+  // right:0` only spans 1/7 of the row, and banner widths computed in JS
+  // as `calc(span * 14.28% - 4px)` shrink to single-letter chips.
+  grid-column: 1 / -1;
 }
 
 .cal-month-banner {

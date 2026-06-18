@@ -513,7 +513,19 @@ class AgendaItemsController < ApplicationController
     render json: { errors: ["Calendar is busy syncing right now — please retry in a moment."] }, status: :service_unavailable
   end
 
+  # `belongs_to :google_account, optional: true` lets an externally-managed
+  # agenda exist with a nil account (hard-deleted account, prod data copied
+  # into dev without the matching google_accounts row, etc.). Raise the same
+  # error the upstream API failures use so the caller gets a clean 422
+  # instead of a NoMethodError.
+  def assert_google_account!(agenda)
+    return if agenda.google_account.present?
+
+    raise GoogleSyncFailed, "This calendar isn't connected to Google right now. Reconnect it from Manage Agendas to make changes."
+  end
+
   def google_insert!(target, google_attrs)
+    assert_google_account!(target)
     target.google_account.api.insert_event(target.external_id, google_attrs)
   rescue ::RestClient::Exception => e
     ::Rails.logger.warn("[GoogleCalendar] insert failed agenda=#{target.id} #{e.class}: #{e.message}")
@@ -521,6 +533,7 @@ class AgendaItemsController < ApplicationController
   end
 
   def mirror_to_google!(google_attrs)
+    assert_google_account!(@item.agenda)
     @item.agenda.google_account.api.patch_event(
       @item.agenda.external_id,
       @item.external_uid,
@@ -532,6 +545,7 @@ class AgendaItemsController < ApplicationController
   end
 
   def mirror_destroy_to_google!(item)
+    assert_google_account!(item.agenda)
     item.agenda.google_account.api.delete_event(item.agenda.external_id, item.external_uid)
   rescue ::RestClient::NotFound, ::RestClient::Gone
     # Already gone upstream — treat as success.
