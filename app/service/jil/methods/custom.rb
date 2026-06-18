@@ -15,6 +15,8 @@ class Jil::Methods::Custom < Jil::Methods::Base
       return refresh_travel_time(evalargs(line.args).first)
     when :trip_waypoints
       return trip_waypoints(evalargs(line.args).first)
+    when :is_car_moving
+      return is_car_moving
     end
 
     task = @jil.user.tasks.active.enabled.functions.by_method_name(line.methodname).take
@@ -47,6 +49,15 @@ class Jil::Methods::Custom < Jil::Methods::Base
     return [] unless item
 
     ::AgendaTravelChain.trip_waypoints(item).map(&:stringify_keys)
+  end
+
+  # Cached car speed > 0 → user is currently driving. Used by the mid-chain
+  # "Head to <next>" ping to skip the notification when the user is already
+  # in the car between stops (would otherwise interrupt navigation audio).
+  def is_car_moving
+    speed = @jil.user.caches.get(:car_data)&.dig(:drive_state, :speed) ||
+            @jil.user.caches.get(:car_data)&.dig("drive_state", "speed")
+    speed.to_i.positive?
   end
 
   private

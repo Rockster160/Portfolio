@@ -102,6 +102,7 @@ RSpec.describe AgendaTravelChain::Service do
       expect(b_meta["travel_from"]).to eq("Office")
       expect(b_meta["travel_from_kind"]).to eq("event")
       expect(b_meta["travel_seconds"]).to eq(600)  # Office→Gym
+      expect(b_meta["chain_prev_end_at"]).to eq(a.end_at.to_i)
     end
 
     it "does NOT chain when the gap is large enough to go home" do
@@ -172,6 +173,32 @@ RSpec.describe AgendaTravelChain::Service do
       expect(holiday.metadata["travel"]).to be_nil
     end
 
+    it "skips events whose location is non-travelable (Google Meet, Zoom, etc.)" do
+      allow(::AddressBook).to receive(:non_travelable?).and_call_original
+
+      virtual = make_event(
+        name: "Standup",
+        start_at: Time.zone.parse("2026-06-18 14:00"),
+        end_at:   Time.zone.parse("2026-06-18 15:00"),
+        location: "https://meet.google.com/abc-defg-hij",
+      )
+      described_class.new(user, Date.new(2026, 6, 18)).run
+      expect(virtual.reload.metadata["travel"]).to be_nil
+    end
+
+    it "skips events on agendas listed in EXCLUDED_AGENDA_FRAGMENTS" do
+      ocs_agenda = create(:agenda, user: user, name: "rocco@oneclaimsolution.com")
+      ocs_evt = ocs_agenda.agenda_items.create!(
+        kind:     :event,
+        name:     "Work meeting",
+        start_at: Time.zone.parse("2026-06-18 14:00"),
+        end_at:   Time.zone.parse("2026-06-18 15:00"),
+        location: "Office",
+      )
+      described_class.new(user, Date.new(2026, 6, 18)).run
+      expect(ocs_evt.reload.metadata["travel"]).to be_nil
+    end
+
     it "skips events with blank locations" do
       no_loc = make_event(
         name: "Phone call",
@@ -234,6 +261,41 @@ RSpec.describe AgendaTravelChain::Service do
       expect(meta["overrides"]["before"]).to eq(["Gym"])
       # Drive seconds should be Home→Gym (1200), not Home→Office (600).
       expect(meta["travel_seconds"]).to eq(1200)
+    end
+
+    describe "backfill mode" do
+      it "uses cached travel_minutes for the home-leg overlap check (no Google for symmetric assumption)" do
+        a = make_event(name: "A", start_at: Time.zone.parse("2026-06-18 14:00"), end_at: Time.zone.parse("2026-06-18 15:00"), location: "Office")
+        b = make_event(name: "B", start_at: Time.zone.parse("2026-06-18 15:15"), end_at: Time.zone.parse("2026-06-18 16:15"), location: "Gym")
+        # Seed both with cached travel_minutes the way the legacy task 388 did.
+        a.update_columns(metadata: a.metadata.merge("travel_minutes" => 10))
+        b.update_columns(metadata: b.metadata.merge("travel_minutes" => 10))
+
+        # In backfill mode the home-leg is read from cache. Only the
+        # chain-confirmed A→B drive should hit AddressBook.
+        expect(address_book).not_to receive(:traveltime_seconds).with("Home St", anything, anything)
+        expect(address_book).not_to receive(:traveltime_seconds).with(anything, "Home St", anything)
+        expect(address_book).to receive(:traveltime_seconds).with("Gym", "Office", anything).and_return(600).at_least(:once)
+
+        described_class.new(user, Date.new(2026, 6, 18), mode: :backfill).run
+
+        expect(a.reload.metadata.dig("travel", "chain_successor_id")).to eq(b.id)
+        expect(b.reload.metadata.dig("travel", "chain_predecessor_id")).to eq(a.id)
+      end
+
+      it "does NOT chain when cached travel_minutes don't satisfy the overlap rule" do
+        a = make_event(name: "A", start_at: Time.zone.parse("2026-06-18 09:00"), end_at: Time.zone.parse("2026-06-18 10:00"), location: "Office")
+        b = make_event(name: "B", start_at: Time.zone.parse("2026-06-18 18:00"), end_at: Time.zone.parse("2026-06-18 19:00"), location: "Gym")
+        a.update_columns(metadata: a.metadata.merge("travel_minutes" => 10))
+        b.update_columns(metadata: b.metadata.merge("travel_minutes" => 10))
+
+        # Gap is huge — no chain. Nothing should hit the Distance Matrix.
+        expect(address_book).not_to receive(:traveltime_seconds)
+        described_class.new(user, Date.new(2026, 6, 18), mode: :backfill).run
+
+        expect(a.reload.metadata.dig("travel", "chain_successor_id")).to be_nil
+        expect(b.reload.metadata.dig("travel", "chain_predecessor_id")).to be_nil
+      end
     end
 
     it "uses after: list's last entry as the outgoing location for next chain decision" do

@@ -894,6 +894,10 @@
     Object.keys(timedByDate).forEach((date) => layoutLanes(timedByDate[date]));
     layoutAllDayChips(alldaySpecs, alldayCells, alldayWrap);
     updateNowLine(root);
+    // After lane widths are settled, hide the time on any tile whose
+    // title can't fit. The title is the most important info on the
+    // event — the time below should never be visible at its expense.
+    requestAnimationFrame(() => hideTimeWhenTitleClips(grid));
     // Filter-hidden seeds left lane layout untouched (they never went
     // in), so visible blocks already claim the freed lanes. Now drop a
     // breadcrumb in the left gutter for each one.
@@ -933,6 +937,34 @@
     return out;
   }
 
+  // Toggles `data-time-hidden` on tiles where the title would otherwise
+  // be clipped. The CSS rule then `display: none`s the .cal-week-event-
+  // time inside, freeing the entire content box for the title.
+  function hideTimeWhenTitleClips(grid) {
+    grid.querySelectorAll(".cal-week-event").forEach((tile) => {
+      const name = tile.querySelector(".cal-week-event-name");
+      const time = tile.querySelector(".cal-week-event-time");
+      if (!name || !time) return;
+
+      // Always reset first so a previously-hidden time reappears if the
+      // tile is now big enough (e.g. user dragged to resize / widened
+      // the column / lane count dropped).
+      tile.removeAttribute("data-time-hidden");
+
+      // Two-axis overflow check: vertical for stacked layout (.cal-week-
+      // event-content is column-flex), horizontal for `.is-tiny` (row-
+      // flex). The ±1 fudge avoids hiding on subpixel rounding.
+      const overflowsVertically = name.scrollHeight > name.clientHeight + 1;
+      const overflowsHorizontally = name.scrollWidth > name.clientWidth + 1;
+      if (overflowsVertically || overflowsHorizontally) {
+        tile.setAttribute("data-time-hidden", "");
+        // Re-check after hiding — if the title now fits, great. If it
+        // STILL overflows, leave the attribute so at least the time
+        // isn't competing for the space.
+      }
+    });
+  }
+
   function buildTimedEventNode(seed, seg, pxPerMin, dayStart) {
     const d = seed.dataset;
     const kind = d.kind || "event";
@@ -960,26 +992,61 @@
     // Clamped so the band can't push the tile above the column origin.
     const travelMinRaw = parseInt(d.travelMinutes, 10) || 0;
     const arriveEarlyMinRaw = parseInt(d.arriveEarlyMinutes, 10) || 0;
-    // arrive_early gets baked INTO the travel band — visually one expanded
-    // band above the tile, since both push the user's departure earlier.
+    // Chained events fill the visual GAP between the predecessor's end and
+    // this event's start — even when the actual drive time is shorter.
+    // For solo / chain-head events, the band is just arrive_early + travel
+    // as it always was.
+    const isChained = (d.travelFromKind === "event") && !isPoint && !continuedTopMaybe;
+    const startEpochForBand = Number(d.startAt) || 0;
+    const chainPrevEndEpoch = parseInt(d.chainPrevEndEpoch, 10) || 0;
+    const chainGapMin = (isChained && chainPrevEndEpoch && startEpochForBand)
+      ? Math.max(0, (startEpochForBand - chainPrevEndEpoch) / 60)
+      : 0;
     const travelMin = (isPoint || continuedTopMaybe)
       ? 0
-      : Math.min(travelMinRaw + arriveEarlyMinRaw, seg.startMin);
-    const top = (seg.startMin - travelMin) * pxPerMin;
-    // Tile height equals the event's actual duration in pixels — no
-    // "visual gap" trim. Anything smaller (the old `- 2`) left the bottom
-    // edge floating short of the end-time gridline, which read as a
-    // bottom-alignment bug. Adjacent events at the exact same time would
-    // briefly touch — that's fine and arguably correct.
+      : (isChained
+        ? Math.min(chainGapMin, seg.startMin)
+        : Math.min(travelMinRaw + arriveEarlyMinRaw, seg.startMin));
+    // Tile box CONTAINS the band as its first flex child. Tile height
+    // is band + true event duration; the content area (where the title
+    // renders) is locked to exactly the event's pixel duration via
+    // `--event-content-px`, so the title always gets the event's true
+    // slot regardless of band size.
+    //
+    // Single `border-left` on the tile runs through both band and
+    // content area — one strip, one element, no alignment to manage.
+    // Point events (triggers + tasks) have no duration semantics, so we
+    // give them exactly a 30-min visual slot — same vertical room as a
+    // typical short event and consistent across columns. The previous
+    // `Math.max(12, 15 * pxPerMin)` was rendering ~36-min worth of
+    // pixels at the default 20px/hr.
     const eventHeight = isPoint
-      ? Math.max(12, 15 * pxPerMin)
-      : Math.max(14, durationMin * pxPerMin);
-    const height = eventHeight + (travelMin * pxPerMin);
+      ? 30 * pxPerMin
+      : (durationMin * pxPerMin);
+    const bandPx = travelMin * pxPerMin;
+    const top = (seg.startMin - travelMin) * pxPerMin;
+    const height = eventHeight + bandPx;
     node.style.top = `${top}px`;
     node.style.height = `${height}px`;
     node.style.left = "2px";
     node.style.right = "2px";
+    node.style.setProperty("--event-content-px", `${eventHeight}px`);
+    // Title gets a small top padding whenever the slot is at least 30
+    // min — events, triggers, tasks alike. Roughly centers the title
+    // in a 30-min block. Anything shorter drops it to zero so the
+    // title gets every available pixel for legibility.
+    const minSlotPx = 30 * pxPerMin;
+    const titlePadTop = eventHeight >= minSlotPx ? 2 : 0;
+    node.style.setProperty("--title-pad-top", `${titlePadTop}px`);
     if (travelMin > 0) node.classList.add("has-travel");
+    // When THIS event is followed by another event in the chain, the
+    // next event's incoming band sits directly below this tile. Square
+    // off the bottom corners so the visual reads as a continuous block.
+    if ((parseInt(d.chainSuccessorId, 10) || 0) > 0) node.classList.add("has-chain-successor");
+    // When THIS event has a chained predecessor (its band's top edge
+    // attaches to the previous event's squared bottom), square this
+    // tile's TOP corners to meet the connection.
+    if (isChained) node.classList.add("has-chain-predecessor");
     // Very small events: switch to a single-line row layout so a 1h
     // event reads cleanly as `Title` instead of trying to stack a title
     // and a time line into 18px of vertical space. Anything taller uses
@@ -1002,10 +1069,11 @@
     // Travel-time band: prepended as the first flex child so the content
     // wrapper below gets pushed down by the band's reserved space.
     if (travelMin > 0) {
-      const bandPx = travelMin * pxPerMin;
       const travelBand = document.createElement("div");
       travelBand.className = "cal-week-event-travel";
-      travelBand.style.flex = `0 0 ${bandPx}px`;
+      if (isChained) travelBand.classList.add("is-chained");
+      // Flex child — reserve the band's vertical slice via inline height.
+      travelBand.style.height = `${bandPx}px`;
       // Always the condensed `[clock] Nm + [car] Mm` form. Hide the label
       // entirely on tiny bands (<6px) — stripes only, no text.
       // A second, summed `[clock] (N+M)m` label rides along — hidden by
@@ -1022,7 +1090,9 @@
           const leaveEpoch = startEpochRaw - (earlyPart + drivePart) * 60;
           const leave = document.createElement("span");
           leave.className = "cal-week-event-travel-leave";
-          leave.textContent = `→${fmtCalTime(leaveEpoch)}`;
+          // ↳ for chained legs (travel between two events on the calendar),
+          // → for the default home-origin leg. Time math is identical.
+          leave.textContent = `${isChained ? "↳" : "→"}${fmtCalTime(leaveEpoch)}`;
           label.appendChild(leave);
         }
         if (earlyPart > 0) {

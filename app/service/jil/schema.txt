@@ -526,6 +526,7 @@
   #heatPassenger(Boolean)
   #vent(Boolean)
   #defrost(Boolean)
+  #waypoints(Array)
 [Schedule]
   #find(Numeric)
   #search(Text("*") "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array # Using listener syntax trigger:word::data

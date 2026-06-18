@@ -15,6 +15,14 @@ module AgendaTravelChain
     Service.new(user, date).run
   end
 
+  # Variant of `run_for` for the one-shot migration off the legacy task
+  # 388 metadata. Uses each event's cached `travel_minutes` for the
+  # symmetric home leg in the overlap check; only burns a fresh Google
+  # query when overlap actually fires (chain middle's A→B drive).
+  def backfill_for(user, date)
+    Service.new(user, date, mode: :backfill).run
+  end
+
   # Returns the full ordered trip the chain head's prepare task would send to
   # the car. Each entry: { name:, address:, lat:, lng: }. Home is appended
   # as the final waypoint when the trip doesn't already end there.
@@ -26,15 +34,26 @@ module AgendaTravelChain
     TripBuilder.new(head).waypoints
   end
 
-  # Force re-resolve and re-chain for a single item's day. Used by
-  # `Custom.refreshTravelTime` (the user's 15-min-before bump task). The
-  # caller (Jil-side) decides WHEN this happens — we just do the work.
+  # Re-runs the chain compute for a single item's day. NOT a force — the
+  # Service's per-event `input_fingerprint` short-circuit keeps repeated
+  # calls cheap when nothing material changed (typical for prepare / go
+  # / head-out / schedule callers). For an explicit force (e.g. a 15-min
+  # traffic recheck) use `force_refresh_for` instead.
   def refresh_for(item)
     return unless item
 
-    item.update_column(:metadata, item.metadata.merge("travel" => (item.metadata["travel"] || {}).except("input_fingerprint", "location_fingerprint")))
     date = item.user.timezone { item.start_at.to_date }
     Service.new(item.user, date).run
+  end
+
+  # Drops the per-event fingerprint so the next Service.run does a real
+  # recompute. Use when you genuinely want a fresh Google round-trip.
+  def force_refresh_for(item)
+    return unless item
+
+    travel = (item.metadata["travel"] || {}).except("input_fingerprint", "location_fingerprint")
+    item.update_columns(metadata: item.metadata.merge("travel" => travel), updated_at: Time.current)
+    refresh_for(item)
   end
 end
 

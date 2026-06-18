@@ -851,11 +851,13 @@ $cal-week-px-per-hour: 20px;
   // Looks exactly like the event "disappears on click".
   position: absolute !important;
   margin: 0 !important;
-  // Same 6px / 4px horizontal padding as the single-line `.is-tiny`
-  // variant below so a narrow column event (lots of left padding as a
-  // % of width) and a wide column event (same padding) at least look
-  // visually consistent on the same row.
-  padding: 3px 4px 3px 6px !important;
+  // No vertical padding — the tile's top edge must land exactly on the
+  // band's top (which itself lands at event-start minus travel) and
+  // the bottom on the event's end-time. Padding-top would push the
+  // band/content stack down by Npx, offsetting content from its true
+  // event-time slot. Vertical breathing room belongs on the content
+  // wrapper, applied INSIDE the locked --event-content-px area.
+  padding: 0 4px 0 6px !important;
   border: 0 !important;
   border-left: 3px solid var(--agenda-color, #888) !important;
   border-radius: 4px !important;
@@ -873,18 +875,20 @@ $cal-week-px-per-hour: 20px;
   text-shadow: none !important;
   box-shadow: none !important;
   box-sizing: border-box;
-  min-height: 12px;
+  // No `min-height` floor — the JS sizes the tile to its TRUE duration
+  // in pixels. A floor would force short events (e.g. a 5-min meeting at
+  // 20px/hr) to render taller than their slot and overlap into the next
+  // event's space. Title legibility on tiny events is a fair tradeoff
+  // for column-wide alignment fidelity.
 
-  // The card itself is just a solid container — no flex magic, no mask.
-  // The inner `.cal-week-event-content` (added by JS) carries the
-  // mask + the text layout, so the card's background, border, and
-  // rounded corners render unmasked. `flex-direction: column` matters
-  // when the optional `.cal-week-event-travel` band is prepended so
-  // the band stacks ABOVE the content rather than landing as a left
-  // column.
+  // The band lives inside the tile box as the first flex child, so we
+  // need `overflow: hidden` to clip the band's stripe background to
+  // the tile's `border-radius` rounded corners. Otherwise the band's
+  // rectangle bleeds past the rounded top.
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 
   // Default = draggable affordance ("open hand"). Readonly events
   // (events on agendas the user can view but not edit) override to
@@ -920,7 +924,16 @@ $cal-week-px-per-hour: 20px;
   // or fading accent strip) while the text content still fades on
   // overflow.
   .cal-week-event-content {
-    flex: 1 1 auto;
+    // Locked to the event's TRUE pixel duration via `--event-content-px`
+    // (set inline from JS). When a band is present, the band takes its
+    // own slice above this; the title area stays at exactly the event's
+    // own duration and the band never squishes it.
+    //
+    // `--title-pad-top` adds a small offset so the title doesn't sit
+    // flush against the band/tile-top edge. JS sets 2px when the event
+    // has at least a 30-min slot (visually roughly centers the title),
+    // 0 for shorter slots so the title has every available pixel.
+    flex: 0 0 var(--event-content-px, auto);
     min-width: 0;
     min-height: 0;
     display: flex;
@@ -929,6 +942,7 @@ $cal-week-px-per-hour: 20px;
     align-items: stretch;
     gap: 1px;
     overflow: hidden;
+    padding-top: var(--title-pad-top, 0);
     mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
   }
@@ -939,15 +953,33 @@ $cal-week-px-per-hour: 20px;
   // distinguishes it from the event itself without visually competing.
   // The bottom border + box-shadow makes the seam between travel band
   // and the solid event tile crisp instead of "color-mix bleed".
+  // The travel band is OVERLAID above the tile — positioned absolute with
+  // bottom: 100% so the band visually attaches to the top of the event
+  // without consuming any of the event's box. The tile's geometry
+  // (`node.style.height`) equals the event's true duration; the title
+  // therefore always gets the full event-slot area regardless of how
+  // big the band is.
+  //
+  // `left: -3px` extends the band across the tile's `border-left: 3px`
+  // accent strip so the band's visual width matches the tile's outer
+  // edge (absolute children otherwise position relative to the padding
+  // edge, which sits INSIDE the colored left border — that's why the
+  // band looked inset before).
   .cal-week-event-travel {
-    width: 100%;
-    border-radius: 3px 3px 0 0;
-    border-bottom: 1px solid color-mix(in srgb, var(--agenda-color, #888) 55%, transparent);
-    box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
-    opacity: 0.7;
+    // FIRST flex child of the tile. Height set inline from JS
+    // (`travelBand.style.height = ${bandPx}px`). Negative horizontal
+    // margins escape the tile's `padding: 0 4px 0 6px` so the stripe
+    // background spans the band's FULL width — flush against the
+    // border-left on the left and the tile's rounded outer edge on the
+    // right. Padding on the band itself restores the inset for the
+    // label text so it sits where the title text below it does.
+    width: auto;
+    flex: 0 0 auto;
+    margin: 0 -4px 0 -6px;
+    padding: 0 4px 0 6px;
     background-image: repeating-linear-gradient(
       135deg,
-      color-mix(in srgb, var(--agenda-color, #888) 22%, transparent) 0 4px,
+      color-mix(in srgb, var(--agenda-color, #888) 16%, transparent) 0 4px,
       transparent 4px 8px
     );
     pointer-events: none;
@@ -955,7 +987,25 @@ $cal-week-px-per-hour: 20px;
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    padding: 0 2px 0 0;
+
+    // Faded text (was inherited from the parent opacity). Tuned lower
+    // than before so the label sits quietly against the stripes and
+    // doesn't compete with the tile's title.
+    color: color-mix(in oklab, var(--agenda-color, #888) 25%, white);
+
+    // Chained leg — the travel here goes from the previous event's
+    // location, not from Home. Stripe runs the other way + slightly
+    // bolder fill so it reads as "different kind of gap". Top corners
+    // square so the band connects cleanly to the previous event's
+    // (also-squared) bottom edge.
+    &.is-chained {
+      border-radius: 0;
+      background-image: repeating-linear-gradient(
+        45deg,
+        color-mix(in srgb, var(--agenda-color, #888) 24%, transparent) 0 4px,
+        transparent 4px 8px
+      );
+    }
   }
 
   // "X min drive" label inside the travel band. Only emitted when the
@@ -968,7 +1018,10 @@ $cal-week-px-per-hour: 20px;
     font-weight: 500;
     line-height: 1.2;
     letter-spacing: 0.02em;
-    color: color-mix(in oklab, var(--agenda-color, #888) 40%, white);
+    // Toned down — quieter than the title, still legible against the
+    // striped band.
+    color: color-mix(in oklab, var(--agenda-color, #888) 25%, white);
+    opacity: 0.75;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1032,7 +1085,7 @@ $cal-week-px-per-hour: 20px;
   // fade above handles overflow.
   .cal-week-event-name {
     font-weight: 700;
-    font-size: 11px;
+    font-size: 9px;
     line-height: 1.15;
     overflow: hidden;
     white-space: normal;
@@ -1047,7 +1100,7 @@ $cal-week-px-per-hour: 20px;
   // container, the time gets clipped by `overflow: hidden` — exactly
   // the behavior we want without any height-priority manipulation.
   .cal-week-event-time {
-    font-size: 9px;
+    font-size: 7px;
     font-weight: 500;
     opacity: 0.7;
     line-height: 1.1;
@@ -1085,7 +1138,7 @@ $cal-week-px-per-hour: 20px;
     .cal-week-event-name {
       flex: none;
       white-space: nowrap;
-      font-size: 10px;
+      font-size: 8px;
       font-weight: 600;
     }
     .cal-week-event-time {
@@ -1096,6 +1149,29 @@ $cal-week-px-per-hour: 20px;
 
   &.is-tiny { line-height: 12px; }
   &.is-point { line-height: 10px; }
+
+  // Title-priority — set by JS (`hideTimeWhenTitleClips`) when the
+  // title would otherwise be clipped. The time gets fully removed so
+  // the title gets the entire content box.
+  &[data-time-hidden] .cal-week-event-time {
+    display: none;
+  }
+
+  // Chain visual: when this tile's incoming band IS chained (its top
+  // edge connects to the previous event's bottom), square off the
+  // tile's top corners so the connection reads as one continuous shape.
+  &.has-chain-predecessor {
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+  }
+
+  // When this event has a successor in the chain, the next event's
+  // incoming travel band sits flush against this tile's bottom edge.
+  // Square the bottom corners so the visual continues as one block.
+  &.has-chain-successor {
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+  }
 
   &.is-continued-top {
     border-top-left-radius: 0 !important;

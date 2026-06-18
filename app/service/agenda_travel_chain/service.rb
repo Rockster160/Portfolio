@@ -21,9 +21,17 @@ module AgendaTravelChain
     FROM_KIND_HOME = "home".freeze
     FROM_KIND_EVENT = "event".freeze
 
-    def initialize(user, date)
+    # Agenda-name fragments (case-insensitive) for calendars the user has
+    # explicitly opted OUT of travel calculations. Mirrors the original
+    # task 388 check (`agendaName.contains?("oneclaimsolution")`). Add
+    # entries here as the user opts more calendars out — or migrate to a
+    # per-agenda flag later if the list grows.
+    EXCLUDED_AGENDA_FRAGMENTS = %w[oneclaimsolution].freeze
+
+    def initialize(user, date, mode: :normal)
       @user = user
       @date = date
+      @mode = mode
       @resolver = Resolver.new(user)
       @overrides_cache = {}
     end
@@ -34,7 +42,11 @@ module AgendaTravelChain
 
       return if candidates.empty?
 
-      ensure_resolved_all(candidates)
+      # Backfill skips per-event geocoding — those events were created
+      # before phase 1 and don't have lat/lng cached. Trip-building
+      # (Custom.tripWaypoints) lazily geocodes when the chain head's
+      # prepare task fires. Saves a Google round-trip per event today.
+      ensure_resolved_all(candidates) unless backfill?
       links = link_pairs(candidates)
       head_for = compute_head_map(candidates, links)
 
@@ -57,8 +69,21 @@ module AgendaTravelChain
         .where(all_day: false)
         .where(start_at: day_range)
         .where.not(location: [nil, ""])
+        .includes(:agenda)
         .order(:start_at, :id)
-      scope.to_a.reject { |evt| overrides_for(evt)[:nonav] }
+      scope.to_a.reject { |evt|
+        overrides_for(evt)[:nonav] ||
+          excluded_agenda?(evt) ||
+          ::AddressBook.non_travelable?(evt.location)
+      }
+    end
+
+    # An event whose host agenda is on the user's opt-out list — e.g.
+    # the OCS work calendar where events are virtual / on-site by default
+    # and travel triggers would be noise.
+    def excluded_agenda?(evt)
+      name = evt.agenda&.name.to_s.downcase
+      EXCLUDED_AGENDA_FRAGMENTS.any? { |frag| name.include?(frag) }
     end
 
     def day_range
@@ -127,20 +152,47 @@ module AgendaTravelChain
     end
 
     # Overlap rule: A chains to B when "go home, then leave for B from home"
-    # wouldn't actually have time to happen. before/after overrides shift the
-    # endpoints we compute against.
+    # wouldn't actually have time to happen. before/after overrides shift
+    # the endpoints we compute against.
+    #
+    # In `backfill` mode the home-leg seconds come straight from each
+    # event's cached `travel_minutes` (the OLD task 388 wrote it as a
+    # Home→event distance, and we assume travel is symmetric — burning a
+    # fresh Google query just to confirm that on every event would torch
+    # the Distance Matrix budget for no real gain). The fresh A→B drive
+    # only fires AFTER chain is confirmed, inside persist_event.
     def chain?(a, b)
       a_out = outgoing_last_location(a)
       b_in  = incoming_first_location(b)
       return false if a_out.blank? || b_in.blank?
       return false if home_text.blank?
 
-      a_home = @resolver.travel_seconds(a_out, home_text, at: a.end_at)
-      home_b = @resolver.travel_seconds(home_text, b_in,  at: b.start_at)
+      a_home = chain_home_seconds(a, a_out, a.end_at)
+      home_b = chain_home_seconds(b, b_in,  b.start_at)
       return false if a_home.nil? || home_b.nil?
 
       leave_for_b_from_home = b.start_at.to_i - (b.arrive_early_minutes.to_i * 60) - home_b
       a.end_at.to_i + a_home > leave_for_b_from_home
+    end
+
+    def chain_home_seconds(evt, other_loc, at)
+      if backfill?
+        cached = cached_travel_seconds(evt)
+        return cached if cached&.positive?
+      end
+      @resolver.travel_seconds(other_loc, home_text, at: at)
+    end
+
+    def cached_travel_seconds(evt)
+      nested = evt.metadata.dig("travel", "travel_seconds")
+      return nested.to_i if nested.to_i.positive?
+
+      legacy = evt.metadata["travel_minutes"].to_i
+      legacy.positive? ? legacy * 60 : nil
+    end
+
+    def backfill?
+      @mode == :backfill
     end
 
     def outgoing_last_location(evt)
@@ -177,7 +229,19 @@ module AgendaTravelChain
       from_for_drive = pred ? outgoing_last_location(pred) : home_text
 
       incoming_first = incoming_first_location(evt)
-      drive_secs = @resolver.travel_seconds(from_for_drive, incoming_first, at: evt.start_at)
+      # Backfill optimisation: solo / chain-head events leave FROM Home,
+      # which is exactly what the cached `travel_minutes` already
+      # represents. Use it directly, skip Google. Chain middles / tails
+      # come from a previous event's location — that IS the new Google
+      # round-trip we're willing to pay for once the chain has been
+      # confirmed.
+      drive_secs = (
+        if backfill? && pred.nil?
+          cached_travel_seconds(evt)
+        else
+          @resolver.travel_seconds(from_for_drive, incoming_first, at: evt.start_at)
+        end
+      )
       drive_mins = drive_secs && (drive_secs / 60.0).ceil
       leave_at = drive_secs && (evt.start_at.to_i - (evt.arrive_early_minutes.to_i * 60) - drive_secs)
 
@@ -193,6 +257,10 @@ module AgendaTravelChain
         "chain_predecessor_id" => pred_id,
         "chain_successor_id"   => succ_id,
         "chain_head_id"        => head_for[evt.id],
+        # Predecessor's end_at gives the calendar the upper bound to extend
+        # the travel band to, since chain bands fill the GAP between two
+        # events visually rather than just rendering the drive minutes.
+        "chain_prev_end_at"    => (pred&.end_at&.to_i if pred),
         "leave_at"             => leave_at,
         "overrides"            => overrides_for(evt).transform_keys(&:to_s),
       }

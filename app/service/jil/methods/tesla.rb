@@ -28,11 +28,18 @@ class Jil::Methods::Tesla < Jil::Methods::Base
       opts = Array.wrap(option_blocks).reduce({}) { |acc, h| acc.merge(h.to_h) }.symbolize_keys
 
       ctrl.set_temp(opts[:temp].to_f)         if opts[:temp].present?
-      ctrl.navigate(opts[:navigate].to_s)     if opts[:navigate].present?
       ctrl.heat_driver                        if opts[:heatDriver]
       ctrl.heat_passenger                     if opts[:heatPassenger]
       ctrl.windows(:open)                     if opts[:vent]
       ctrl.defrost(true)                      if opts[:defrost]
+      # Trip plan beats single-destination navigate — if both are present,
+      # the trip wins (a multi-stop request would otherwise be overwritten
+      # by the single navigate immediately).
+      if opts[:waypoints].present?
+        ctrl.navigate_trip(opts[:waypoints])
+      elsif opts[:navigate].present?
+        ctrl.navigate(opts[:navigate].to_s)
+      end
     }
   end
 
