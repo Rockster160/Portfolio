@@ -137,19 +137,27 @@ class AddressBook
     return if to.blank? || from.blank?
     return 0 if to == from # same place — no API call needed
 
-    nonnil_cache("traveltime_seconds(#{[to, from, at].compact_blank.join(",")})") {
-      ::PrettyLogger.info("\b[AddressCache] Traveltime #{to},#{from},#{at}")
+    # Google's Distance Matrix only returns traffic-aware estimates when called
+    # with departure_time (driving mode ignores arrival_time). Use the event's
+    # arrival timestamp as the predicted departure when it's in the future;
+    # otherwise fall back to "now" for the 15-min pre-check.
+    departure = (at.present? && at.to_i > Time.current.to_i) ? at.to_i : "now"
+    bucket = Time.current.to_i / 10.minutes.to_i
+    nonnil_cache("traveltime_seconds(#{to},#{from},#{departure},#{bucket})") {
+      ::PrettyLogger.info("\b[AddressCache] Traveltime #{to},#{from},#{departure}")
       params = {
-        destinations: to,
-        origins:      from,
-        key:          ENV.fetch("PORTFOLIO_GMAPS_PAID_KEY", nil),
-        arrival_time: at.presence&.to_i,
+        destinations:   to,
+        origins:        from,
+        key:            ENV.fetch("PORTFOLIO_GMAPS_PAID_KEY", nil),
+        departure_time: departure,
+        traffic_model:  "best_guess",
       }.compact_blank.to_query
       url = "https://maps.googleapis.com/maps/api/distancematrix/json?#{params}"
       res = RestClient.get(url)
       json = JSON.parse(res.body, symbolize_names: true)
 
-      json.dig(:rows, 0, :elements, 0, :duration, :value)
+      element = json.dig(:rows, 0, :elements, 0)
+      element&.dig(:duration_in_traffic, :value) || element&.dig(:duration, :value)
     }
   rescue StandardError => e
     SlackNotifier.err(e, "Traveltime failed: (to:\"#{to}\", from:\"#{from}\")")

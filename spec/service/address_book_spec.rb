@@ -61,10 +61,77 @@ RSpec.describe AddressBook do
   describe "#traveltime_seconds" do
     let(:book) { described_class.new(User.me) }
 
-    it "returns 0 and skips the API call when origin == destination" do
+    def stub_response(duration_in_traffic: nil, duration: nil)
+      element = {}
+      element[:duration_in_traffic] = { value: duration_in_traffic } if duration_in_traffic
+      element[:duration] = { value: duration } if duration
+      double(body: { rows: [{ elements: [element] }] }.to_json)
+    end
+
+    before do
       allow(Rails.env).to receive(:production?).and_return(true)
+      allow(book).to receive(:to_traveltime_param) { |x| x }
+      allow(book).to receive(:current_loc).and_return("origin")
+    end
+
+    it "returns 0 and skips the API call when origin == destination" do
       expect(RestClient).not_to receive(:get)
       expect(book.traveltime_seconds("Home", "Home")).to eq(0)
+    end
+
+    it "sends departure_time=now + traffic_model and reads duration_in_traffic" do
+      captured_url = nil
+      allow(RestClient).to receive(:get) { |url|
+        captured_url = url
+        stub_response(duration_in_traffic: 2700, duration: 2100)
+      }
+
+      expect(book.traveltime_seconds("dest", "origin")).to eq(2700)
+      expect(captured_url).to include("traffic_model=best_guess")
+      expect(captured_url).to include("departure_time=now")
+      expect(captured_url).not_to include("arrival_time=")
+    end
+
+    it "passes a future arrival timestamp as departure_time" do
+      future = 1.hour.from_now.to_i
+      captured_url = nil
+      allow(RestClient).to receive(:get) { |url|
+        captured_url = url
+        stub_response(duration_in_traffic: 1800)
+      }
+
+      book.traveltime_seconds("dest", "origin", at: future)
+      expect(captured_url).to include("departure_time=#{future}")
+    end
+
+    it "falls back to plain duration when duration_in_traffic is missing" do
+      allow(RestClient).to receive(:get).and_return(stub_response(duration: 1500))
+      expect(book.traveltime_seconds("dest", "origin")).to eq(1500)
+    end
+
+    it "re-queries Google after the 10-minute cache bucket rolls over" do
+      memory_store = ActiveSupport::Cache::MemoryStore.new
+      allow(Rails).to receive(:cache).and_return(memory_store)
+
+      allow(RestClient).to receive(:get).and_return(
+        stub_response(duration_in_traffic: 1800),
+        stub_response(duration_in_traffic: 2700),
+      )
+
+      t = Time.current
+      travel_to(t) do
+        expect(book.traveltime_seconds("dest", "origin")).to eq(1800)
+      end
+      travel_to(t + 2.minutes) do
+        # Same bucket — cache hit, no new fetch
+        expect(book.traveltime_seconds("dest", "origin")).to eq(1800)
+      end
+      travel_to(t + 11.minutes) do
+        # Next bucket — re-fetches and gets the fresher number
+        expect(book.traveltime_seconds("dest", "origin")).to eq(2700)
+      end
+
+      expect(RestClient).to have_received(:get).twice
     end
   end
 
