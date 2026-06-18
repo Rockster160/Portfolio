@@ -955,7 +955,7 @@ $cal-week-px-per-hour: 20px;
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    padding: 0 2px;
+    padding: 0 2px 0 0;
   }
 
   // "X min drive" label inside the travel band. Only emitted when the
@@ -982,14 +982,15 @@ $cal-week-px-per-hour: 20px;
       letter-spacing: 0;
     }
 
-    // Condensed `→Hh:Mm[clock]Nm[car]Mm` form — pairs sit flush together
-    // inside the narrow band, no separators.
+    // Condensed `→Hh:Mm [clock]Nm [car]Mm` form — number stays flush
+    // against its icon; the gap goes BEFORE each icon to separate the
+    // sections from the prior one.
     display: inline-flex;
     align-items: baseline;
     gap: 0;
     i {
       font-size: 7px;
-      margin: 0;
+      margin: 0 0 0 3px;
       font-style: normal;
     }
 
