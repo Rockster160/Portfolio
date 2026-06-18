@@ -1029,10 +1029,6 @@
           label.appendChild(Object.assign(document.createElement("i"), { className: "fa fa-clock-o" }));
           label.appendChild(document.createTextNode(`${earlyPart}m`));
         }
-        if (earlyPart > 0 && drivePart > 0) {
-          label.appendChild(Object.assign(document.createElement("span"),
-            { className: "cal-week-event-travel-plus", textContent: "+" }));
-        }
         if (drivePart > 0) {
           label.appendChild(Object.assign(document.createElement("i"), { className: "fa fa-car" }));
           label.appendChild(document.createTextNode(`${drivePart}m`));
