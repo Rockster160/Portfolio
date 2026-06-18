@@ -1937,11 +1937,24 @@
   function scheduleDayRollover(root) {
     const grid = root.querySelector(".cal-week-grid, .cal-month-grid");
     const dayStart = Number(grid?.dataset?.dayStartHour) || 3;
+    let lastSeenDate = logicalDateISO(new Date(), dayStart);
     const tick = () => {
+      lastSeenDate = logicalDateISO(new Date(), dayStart);
       handleDayRollover(root, dayStart);
       setTimeout(tick, msUntilNextLogicalDay(dayStart));
     };
     setTimeout(tick, msUntilNextLogicalDay(dayStart));
+
+    // setTimeout doesn't fire across device sleep / PWA backgrounding, so
+    // re-check on foreground. Only act when the logical date actually
+    // changed since the last tick to avoid redundant refreshes.
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible") return;
+      const now = logicalDateISO(new Date(), dayStart);
+      if (now === lastSeenDate) return;
+      lastSeenDate = now;
+      handleDayRollover(root, dayStart);
+    });
   }
 
   function handleDayRollover(root, dayStart) {
