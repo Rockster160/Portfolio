@@ -139,7 +139,23 @@ class AmazonEmailParser
 
   def email_items
     @email_items ||= item_asins.map { |asin|
-      AmazonOrder.find_or_create(asin_order_id(asin), asin).tap { |item|
+      asin_oid = asin_order_id(asin)
+
+      # Amazon sometimes re-IDs items between the "Ordered" and "Shipped" emails
+      # (consolidated shipments often live under a different order_id than the
+      # original order). If we already have a pending row for this ASIN, reuse
+      # it and adopt the latest order_id rather than creating a duplicate. A
+      # row that's already delivered is left alone, so a genuine re-order
+      # months later still creates a fresh entry.
+      pending = AmazonOrder.all.find { |o| o.item_id == asin && !o.delivered && o.order_id != "CUSTOM" }
+      item = if pending
+        pending.order_id = asin_oid
+        pending
+      else
+        AmazonOrder.find_or_create(asin_oid, asin)
+      end
+
+      item.tap {
         @changed = true
         item.errors = []
         item.email_ids << @email.id unless item.email_ids.include?(@email.id)

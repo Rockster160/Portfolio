@@ -371,6 +371,51 @@ RSpec.describe AmazonEmailParser do
     end
   end
 
+  describe "Amazon re-IDs an item between Ordered and Shipped (consolidated shipments)" do
+    # 50780 "Ordered: JUKMO Tactical Belt" -> order_id 114-1846143-1178640
+    # 50789 "Shipped: JUKMO + 2 more"     -> order_id 111-5331586-9870663
+    # Same physical ASIN B09BZP5YNT, two different Amazon order_ids in two different emails.
+    it "merges the shipped row into the existing pending row, adopting the new order_id" do
+      AmazonEmailParser.parse(double(
+        "Email",
+        id:      50_780,
+        to_html: html_fixture("email_body_50780", raw: true),
+        subject: 'Ordered: "JUKMO Tactical Belt,..."',
+      ))
+      AmazonEmailParser.parse(double(
+        "Email",
+        id:      50_789,
+        to_html: html_fixture("email_body_50789", raw: true),
+        subject: 'Shipped: "JUKMO Tactical Belt,..." and 2 more items',
+      ))
+
+      jukmo_rows = AmazonOrder.all.select { |o| o.item_id == "B09BZP5YNT" }
+      expect(jukmo_rows.size).to eq(1), "expected a single JUKMO row, not one per email-claimed order_id"
+      expect(jukmo_rows.first.order_id).to eq("111-5331586-9870663") # the latest (shipped) order_id wins
+      expect(jukmo_rows.first.email_ids).to include(50_780, 50_789)
+    end
+
+    it "does NOT merge into a delivered row (preserve genuine re-orders months later)" do
+      AmazonEmailParser.parse(double(
+        "Email",
+        id:      50_780,
+        to_html: html_fixture("email_body_50780", raw: true),
+        subject: 'Ordered: "JUKMO Tactical Belt,..."',
+      ))
+      AmazonOrder.find("114-1846143-1178640", "B09BZP5YNT").delivered = true
+
+      AmazonEmailParser.parse(double(
+        "Email",
+        id:      50_789,
+        to_html: html_fixture("email_body_50789", raw: true),
+        subject: 'Shipped: "JUKMO Tactical Belt,..." and 2 more items',
+      ))
+
+      jukmo_rows = AmazonOrder.all.select { |o| o.item_id == "B09BZP5YNT" }
+      expect(jukmo_rows.map(&:order_id)).to match_array(["114-1846143-1178640", "111-5331586-9870663"])
+    end
+  end
+
   describe "refund / cancellation / payment-declined emails" do
     it "refund email (50726) has no item card; parser flags it without creating items" do
       jarvis_calls = []
