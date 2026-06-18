@@ -69,6 +69,7 @@ class AgendaItem < ApplicationRecord
   after_update_commit :propagate_start_at_to_derived_triggers, if: :saved_change_to_start_at?
   after_commit :fire_jil_trigger, on: [:create, :update]
   after_commit :fire_jil_destroy_trigger, on: :destroy
+  after_commit :enqueue_travel_chain_sync, on: [:create, :update, :destroy]
 
   # State filters are mandatory `is:<state>` markers (or the `kind:` filter for
   # type). Bare words like "upcoming" or "today" are treated as ordinary text
@@ -502,6 +503,80 @@ class AgendaItem < ApplicationRecord
     return if Thread.current[::GoogleCalendar::Sync::SUPPRESS_KEY]
 
     ::Jil.trigger(user, :agenda_item, with_jil_attrs(action: :destroyed))
+  end
+
+  # Enqueue the travel-chain sync only when something the chain actually
+  # cares about has changed — every other update (notes prose, attendees,
+  # color, completion) should be a no-op so we don't burn worker capacity
+  # or cache misses. Guards layered in order of cheapness.
+  CHAIN_RELEVANT_COLUMNS = %w[start_at end_at location arrive_early_minutes kind all_day].freeze
+
+  def enqueue_travel_chain_sync
+    return if Thread.current[::GoogleCalendar::Sync::SUPPRESS_KEY]
+    return unless chain_sync_relevant?
+
+    dates = chain_sync_dates
+    return if dates.empty?
+
+    dates.each do |date|
+      ::AgendaTravelChainSyncWorker.perform_async(user.id, date.iso8601)
+    end
+  end
+
+  def chain_sync_relevant?
+    return false unless user
+
+    # Destroyed event: only matters if it was an event and had a location at
+    # destroy-time. metadata_only_change? doesn't apply to destroy.
+    if destroyed?
+      return event? && location.present?
+    end
+
+    # Metadata-only writes are how the chain sync itself updates events —
+    # never re-enqueue on those, otherwise the worker recursively re-fires.
+    return false if metadata_only_change?
+
+    # Kind must currently BE event, or have just become one. all_day events
+    # are excluded — they don't get travel chains.
+    return false unless event_after_save?
+    return false if all_day? && !saved_change_to_all_day?
+
+    return true if (saved_changes.keys & CHAIN_RELEVANT_COLUMNS).any?
+    return true if overrides_changed?
+
+    false
+  end
+
+  def event_after_save?
+    return true if event?
+
+    saved_change_to_kind? && saved_changes["kind"].last == self.class.kinds[:event]
+  end
+
+  def overrides_changed?
+    return false unless saved_change_to_notes?
+
+    old_n, new_n = saved_changes["notes"]
+    ::AgendaTravelChain::OverrideParser.changed?(old_n, new_n)
+  end
+
+  # Compute the affected perceived-day(s). For a moved event we want both the
+  # old day and the new day so the previous day's chain rebuilds without the
+  # event (and the new day's chain rebuilds with it).
+  def chain_sync_dates
+    out = []
+    out << perceived_date_for(start_at) if start_at.present?
+    if saved_change_to_start_at? && saved_changes["start_at"].first.present?
+      out << perceived_date_for(saved_changes["start_at"].first)
+    end
+    out.compact.uniq
+  end
+
+  def perceived_date_for(timestamp)
+    return nil if timestamp.blank?
+
+    zone = ::ActiveSupport::TimeZone[user.timezone] || ::Time.zone
+    zone.at(timestamp.to_i).to_date
   end
 
   # When this item's start_at moves, every derived ScheduledTrigger's

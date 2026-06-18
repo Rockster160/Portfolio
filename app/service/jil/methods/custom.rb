@@ -11,6 +11,10 @@ class Jil::Methods::Custom < Jil::Methods::Base
         from, to, at = evalargs(line.args)
         return @jil.user.address_book.traveltime_seconds(to, from.presence, at: at.presence)
       end
+    when :refresh_travel_time
+      return refresh_travel_time(evalargs(line.args).first)
+    when :trip_waypoints
+      return trip_waypoints(evalargs(line.args).first)
     end
 
     task = @jil.user.tasks.active.enabled.functions.by_method_name(line.methodname).take
@@ -21,6 +25,40 @@ class Jil::Methods::Custom < Jil::Methods::Base
       input_data, broadcast_task: @jil.broadcast_task,
       auth: :exec, auth_id: @jil.task&.id, trigger_scope: :exec
     )&.result
+  end
+
+  # Force a re-resolve of an event's location + drive time and re-run the
+  # day's chain detection. User's Jil task calls this at whatever cadence
+  # they like (e.g. 15 min before leave) — no scheduling assumptions here.
+  def refresh_travel_time(item_ref)
+    item = resolve_agenda_item(item_ref)
+    return nil unless item
+
+    ::AgendaTravelChain.refresh_for(item)
+    item.reload
+    item.metadata["travel"] || {}
+  end
+
+  # Returns the ordered trip the chain head (or a solo event) should send to
+  # the car: [{name, address, lat, lng}, ...]. Safe to call on a chain
+  # middle/tail too — the helper walks back to the head before building.
+  def trip_waypoints(item_ref)
+    item = resolve_agenda_item(item_ref)
+    return [] unless item
+
+    ::AgendaTravelChain.trip_waypoints(item).map(&:stringify_keys)
+  end
+
+  private
+
+  def resolve_agenda_item(value)
+    return value if value.is_a?(::AgendaItem)
+
+    hash = @jil.cast(value, :Hash)
+    id = hash[:id] || hash["id"]
+    return nil if id.blank?
+
+    ::AgendaItem.locate_for_user(id, @jil.user)
   end
 
   private
