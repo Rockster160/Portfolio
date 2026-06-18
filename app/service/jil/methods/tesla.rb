@@ -21,11 +21,11 @@ class Jil::Methods::Tesla < Jil::Methods::Base
   #   heatPassenger:  Boolean
   #   vent:           Boolean  (vent windows)
   #   defrost:        Boolean
-  def start(options=nil)
+  def start(option_blocks=nil)
     wrap {
       ctrl = ::TeslaControl.me
       ctrl.start_car
-      opts = (options || {}).to_h.symbolize_keys
+      opts = Array.wrap(option_blocks).reduce({}) { |acc, h| acc.merge(h.to_h) }.symbolize_keys
 
       ctrl.set_temp(opts[:temp].to_f)         if opts[:temp].present?
       ctrl.navigate(opts[:navigate].to_s)     if opts[:navigate].present?
