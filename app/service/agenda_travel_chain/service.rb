@@ -4,7 +4,14 @@ module AgendaTravelChain
   # the last sync, no AddressBook calls, no DB writes.
   #
   # Persistence model — all under `metadata["travel"]`, keyed by event:
-  #   location_address       (string)  — original event.location text
+  #   location_address       (string)  — resolved street address from the
+  #                                       Resolver (Places-API formatted for
+  #                                       casual names like "Costco", raw
+  #                                       text for full addresses). The
+  #                                       Distance Matrix call uses this so
+  #                                       Google can disambiguate; the user's
+  #                                       typed `event.location` stays as-is
+  #                                       for display.
   #   location_lat / _lng    (float)   — geocoded coords (sticky until address text changes)
   #   location_fingerprint   (sha)     — invalidates lat/lng resolution
   #   travel_from            (string)  — "Home" or a previous event's location
@@ -196,11 +203,20 @@ module AgendaTravelChain
     end
 
     def outgoing_last_location(evt)
-      overrides_for(evt)[:after].last.presence || evt.location.to_s
+      overrides_for(evt)[:after].last.presence || resolved_location(evt) || evt.location.to_s
     end
 
     def incoming_first_location(evt)
-      overrides_for(evt)[:before].first.presence || evt.location.to_s
+      overrides_for(evt)[:before].first.presence || resolved_location(evt) || evt.location.to_s
+    end
+
+    # Resolved street address stashed by `ensure_resolved` — prefer it over
+    # the raw location text when feeding the Distance Matrix call, since
+    # Google can't disambiguate casual names ("Texas Roadhouse" → which
+    # branch?). Stays as the user-typed value for display (`travel_from`,
+    # FE labels) — only the API-bound path uses the resolved version.
+    def resolved_location(evt)
+      evt.metadata.dig("travel", "location_address").presence
     end
 
     def home_text

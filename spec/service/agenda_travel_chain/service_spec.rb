@@ -81,6 +81,47 @@ RSpec.describe AgendaTravelChain::Service do
       expect(meta["travel_minutes"]).to eq(10)
     end
 
+    it "uses metadata.travel.location_address for Distance Matrix when the raw text was resolved via Places (e.g. 'Texas Roadhouse')" do
+      resolved = "11593 4000 W, South Jordan, UT 84009, USA"
+      # Stubs must be in place BEFORE make_event because the inline-Sidekiq
+      # auto-sync fires off the create's after_commit and writes the
+      # fingerprint; a later override would be short-circuited by it.
+      allow(address_book).to receive(:geocode) { |addr|
+        next nil if addr == "Texas Roadhouse"
+        [40.0 + addr.to_s.length * 0.001, -111.0]
+      }
+      allow(address_book).to receive(:nearest_from_name) { |_name, **opts|
+        case opts[:extract]
+        when :address then resolved
+        when :loc then [40.54, -111.98]
+        end
+      }
+      # Distance Matrix only succeeds for the resolved address — proves the
+      # service is passing the resolved value, not the raw "Texas Roadhouse".
+      allow(address_book).to receive(:traveltime_seconds) { |to, from, _opts = {}|
+        if from == "Home St" && to == resolved
+          1500
+        elsif from == "Home St" && to == "Texas Roadhouse"
+          nil # what would happen pre-fix
+        else
+          drive_matrix[[from.to_s, to.to_s]] || 600
+        end
+      }
+
+      evt = make_event(
+        name: "Dinner",
+        start_at: Time.zone.parse("2026-06-18 20:00"),
+        end_at:   Time.zone.parse("2026-06-18 22:00"),
+        location: "Texas Roadhouse",
+      )
+      described_class.new(user, Date.new(2026, 6, 18)).run
+
+      meta = evt.reload.metadata["travel"]
+      expect(meta["location_address"]).to eq(resolved)
+      expect(meta["travel_seconds"]).to eq(1500)
+      expect(meta["travel_minutes"]).to eq(25)
+    end
+
     it "chains two events when going home in between wouldn't fit" do
       a = make_event(
         name: "Meeting A",
