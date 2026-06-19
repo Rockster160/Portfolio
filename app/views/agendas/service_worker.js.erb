@@ -1,0 +1,141 @@
+<%# Service worker for the agenda PWA. Served by AgendasController#service_worker
+    at `/agenda_sw.js` so we can interpolate fingerprinted asset paths and a
+    deploy-stamped VERSION; the SW spec requires same-origin, and `updateViaCache: 'none'`
+    on register makes the browser bypass its own HTTP cache when re-checking
+    this file for updates.
+
+    Strategy by route:
+      * Navigations (HTML) under /agenda  → stale-while-revalidate.
+        Cached shell paints instantly offline; the fresh version is fetched
+        in the background and lands on next nav.
+      * Static assets (asset pipeline)    → cache-first, no revalidation
+        (fingerprinted filenames mean a new bundle = new URL = new entry).
+      * /agenda/sync/* (bootstrap/delta/page) → network-first, cache-fallback.
+        Data freshness wins, but if the device is offline the last successful
+        response is served so the store can still hydrate.
+      * Mutations (POST/PATCH/DELETE)     → passthrough. The page's offline
+        queue in agenda.js handles retries; the SW must not silently swallow.
+
+    No `beforeinstallprompt` handling here or in the page-side JS — browsers
+    surface their own install affordance once the manifest + SW criteria
+    are met, and that's the behavior we want. %>
+const VERSION = "<%= AgendasController.helpers.sw_cache_version %>";
+const CACHE_NAME = `agenda-${VERSION}`;
+
+// Pre-cached on install. The first agenda navigation an offline user
+// makes hits one of these paths; pre-caching guarantees the shell is
+// available even from a clean browser profile that's never been online.
+const PRECACHE_URLS = [
+  "<%= day_path %>",
+  "<%= week_path %>",
+  "<%= cal_month_path %>",
+  "<%= cal_week_path %>",
+  "<%= asset_path('application.js') %>",
+  "<%= asset_path('application.css') %>",
+  "/agenda.webmanifest",
+];
+
+self.addEventListener("install", (event) => {
+  // skipWaiting + clients.claim (in activate) so a fresh deploy takes effect
+  // on the next nav rather than waiting for every tab to close. The
+  // version-bumped CACHE_NAME guarantees we don't serve a mixed-version
+  // bundle from the old cache.
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) =>
+      // `cache: "reload"` per-request so the install-time pre-cache pulls
+      // fresh from the server even if the HTTP cache has stale copies.
+      Promise.all(PRECACHE_URLS.map((url) =>
+        cache.add(new Request(url, { cache: "reload" })).catch(() => null)
+      ))
+    )
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((names) =>
+      Promise.all(
+        names
+          .filter((n) => n.startsWith("agenda-") && n !== CACHE_NAME)
+          .map((n) => caches.delete(n))
+      )
+    ).then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  if (req.method !== "GET") return; // mutations passthrough — queue owns retries
+
+  let url;
+  try { url = new URL(req.url); }
+  catch (_) { return; }
+  if (url.origin !== self.location.origin) return; // CDN / cross-origin untouched
+
+  // Sync endpoints: freshness > offline cache. Cache only as a fallback.
+  if (url.pathname.startsWith("/agenda/sync/")) {
+    event.respondWith(networkFirst(req));
+    return;
+  }
+
+  // Asset pipeline: fingerprinted, immutable. Cache-first; misses go to net.
+  if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/agenda_favicon/") || url.pathname === "/agenda.webmanifest") {
+    event.respondWith(cacheFirst(req));
+    return;
+  }
+
+  // Agenda navigations + everything else under /agenda: stale-while-revalidate.
+  // Anything outside /agenda is left to the browser default — the SW scope
+  // limits us to /agenda already, but this is belt-and-suspenders for
+  // any unexpected wildcards.
+  if (url.pathname.startsWith("/agenda")) {
+    event.respondWith(staleWhileRevalidate(req));
+    return;
+  }
+});
+
+async function cacheFirst(req) {
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(req, { ignoreSearch: false });
+  if (cached) return cached;
+  try {
+    const res = await fetch(req);
+    if (res && res.ok) cache.put(req, res.clone());
+    return res;
+  } catch (_) {
+    // Truly offline + no cache — let the browser fail. The agenda app
+    // shell is pre-cached, so this only fires for never-loaded assets.
+    return new Response("", { status: 503, statusText: "offline" });
+  }
+}
+
+async function networkFirst(req) {
+  const cache = await caches.open(CACHE_NAME);
+  try {
+    const res = await fetch(req);
+    if (res && res.ok) cache.put(req, res.clone());
+    return res;
+  } catch (_) {
+    const cached = await cache.match(req);
+    if (cached) return cached;
+    return new Response(JSON.stringify({ offline: true }), {
+      status: 503,
+      statusText: "offline",
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+}
+
+async function staleWhileRevalidate(req) {
+  const cache = await caches.open(CACHE_NAME);
+  // ignoreSearch on the cache lookup so `?date=2026-06-19` and `?source=pwa`
+  // don't fragment the shell cache — every navigation gets the same
+  // pre-cached HTML, then the store-driven JS hydrates per-URL state.
+  const cached = await cache.match(req, { ignoreSearch: true });
+  const fetched = fetch(req).then((res) => {
+    if (res && res.ok) cache.put(req, res.clone());
+    return res;
+  }).catch(() => null);
+  return cached || (await fetched) || new Response("", { status: 503 });
+}

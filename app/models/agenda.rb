@@ -268,12 +268,28 @@ class Agenda < ApplicationRecord
     return if agendas.empty?
 
     destroyed_ids = Array(destroyed_item_ids).map(&:to_s).compact_blank
-    per_user = Hash.new { |h, k| h[k] = [] }
-    agendas.each do |a|
-      a.access_users.find_each { |u| per_user[u] << a }
+    agenda_ids = agendas.map(&:id)
+
+    # Per-agenda access_users would fire (count_shares + 1) queries per
+    # agenda — a multi-agenda change (item move) compounds the cost. Build
+    # the agenda_id → user_ids map in two batched queries instead: one
+    # for owners (already in-memory on the records) and one for every
+    # share row across all touched agendas.
+    user_ids_by_agenda = Hash.new { |h, k| h[k] = [] }
+    agendas.each { |a| user_ids_by_agenda[a.id] << a.user_id }
+    AgendaShare.where(agenda_id: agenda_ids).pluck(:agenda_id, :user_id).each do |aid, uid|
+      user_ids_by_agenda[aid] << uid
     end
 
-    per_user.each do |user, accessible|
+    # Pivot agenda→users to user→accessible-agendas. Compact + dedup at the
+    # end so the per-user fan-out matches what each user actually sees.
+    per_user_ids = Hash.new { |h, k| h[k] = [] }
+    agendas.each do |a|
+      user_ids_by_agenda[a.id].uniq.each { |uid| per_user_ids[uid] << a }
+    end
+
+    User.where(id: per_user_ids.keys).find_each do |user|
+      accessible = per_user_ids[user.id]
       MonitorChannel.broadcast_to(user, {
         id:        :agenda,
         channel:   :agenda,

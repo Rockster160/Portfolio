@@ -282,6 +282,11 @@ Rails.application.routes.draw do
   get "/agenda/grid"   => "agendas#cal_week", as: :cal_week
   post "/agenda/test_push" => "agendas#test_push", as: :test_push_agenda
 
+  # PWA service worker source. Must live at the scope root (/agenda_sw.js)
+  # so the SW's effective scope can be `/agenda` — browsers reject a SW
+  # whose script URL sits deeper than its requested scope.
+  get "/agenda_sw.js" => "agendas#service_worker", as: :agenda_service_worker, format: false
+
   # Legacy redirects — older route names still serving deep links from
   # bookmarks, notifications, and Slack hints. 301 so browsers + bots
   # promote the new paths on next visit.

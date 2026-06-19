@@ -10,6 +10,7 @@ class AgendaItemsController < ApplicationController
   before_action :authorize_user_or_guest
   before_action :set_item, only: [:update, :destroy]
   before_action :authorize_item_edit!, only: [:update, :destroy]
+  before_action :reject_stale_client_mutation!, only: [:update, :destroy]
 
   rescue_from GoogleSyncFailed, with: :render_google_sync_failed
 
@@ -874,5 +875,40 @@ class AgendaItemsController < ApplicationController
       end
     end
     attrs
+  end
+
+  # X-Client-Mutation-At carries the wall-clock instant (epoch ms) when
+  # the user actually made the change. The JS queue stamps this on
+  # enqueue, so a 2pm offline edit replayed at 2:45pm still arrives with
+  # `client_ts: 2pm`. If we find the row has been touched by another
+  # device since then (another tab, another phone, Google sync),
+  # short-circuit with 409 Conflict + the canonical current row so the
+  # client can prune its stale op + replace its local copy. The JS queue
+  # treats 4xx as permanent and pushes the op into `agendaDroppedOps`
+  # for the dismissable banner — the user sees that something didn't
+  # apply.
+  #
+  # Skipped when the header is missing (browsers that don't set it,
+  # server-side test specs that don't simulate it) so existing flows
+  # keep working.
+  def reject_stale_client_mutation!
+    raw = request.headers["X-Client-Mutation-At"]
+    return if raw.blank?
+
+    client_ms = Integer(raw, 10)
+    server_ms = (@item.updated_at.to_f * 1000).round
+    return if client_ms >= server_ms
+
+    # Phantoms have no persisted updated_at to compare against — fall
+    # through so the materialization can run as a fresh write.
+    return if @item.respond_to?(:phantom?) && @item.phantom?
+
+    render json: {
+      errors: ["Stale write — server has a newer version of this item."],
+      current: @item.serialize.merge(editable: @item.agenda.editable_by?(current_user)),
+    }, status: :conflict
+  rescue ArgumentError
+    # Malformed header — ignore silently rather than 500.
+    nil
   end
 end

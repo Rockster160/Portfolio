@@ -13,6 +13,11 @@ class AgendasController < ApplicationController
   # which also stops the watch + cleans up).
   before_action -> { refuse_external_write!(@agenda) }, only: [:destroy]
   before_action :ensure_default_agenda!, only: [:day, :week, :calendar, :cal_month, :cal_week]
+  # The SW must be reachable even when the user isn't signed in — `register`
+  # in agenda.js fires on every page load under /agenda, and a 302-to-login
+  # would make `serviceWorker.register()` reject. Auth happens on the routes
+  # the SW caches, not on the SW source itself.
+  skip_before_action :authorize_user_or_guest, only: [:service_worker]
 
   # JSON accepts `?days=N` (default 1, max 30) to extend the lookahead;
   # week.json uses the same payload shape with days=7.
@@ -99,6 +104,21 @@ class AgendasController < ApplicationController
     else
       render json: { errors: @agenda.errors.full_messages }, status: :unprocessable_entity
     end
+  end
+
+  # Serves the agenda PWA's service worker source. Rendered via ERB so
+  # we can interpolate the current fingerprinted asset paths + a
+  # deploy-stamped version into the cache key — the browser auto-busts
+  # the SW cache on every deploy, no manual update required.
+  #
+  # `expires_in 0` prevents the browser's HTTP cache from holding the
+  # SW source past one update cycle; `updateViaCache: 'none'` on the JS
+  # register call seals the contract from the other side.
+  def service_worker
+    expires_in 0, public: false, must_revalidate: true
+    render template: "agendas/service_worker",
+      layout:       false,
+      content_type: "application/javascript"
   end
 
   def update

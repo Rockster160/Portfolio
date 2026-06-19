@@ -36,7 +36,33 @@
   // optimistic state from being clobbered by a race-stale broadcast or
   // out-of-order POST response.
   const localClickTs = new Map();
-  const inFlight = new Set();
+  // pendingMutationIds: per-chore stack of client_mutation_ids for
+  // queued/flushed completes that have not been undone in this session.
+  // Push on every complete enqueue, pop on every undo enqueue. The
+  // popped id is the undo's target — collapses with a still-queued
+  // complete (no server round-trip), or rides as `target_client_mutation_id`
+  // so the server deletes exactly that row idempotently on replay.
+  // Stack lives in-memory only; on cold load, undos with no popped id
+  // fall back to the server's "most recent today" path.
+  const pendingMutationIds = new Map();
+  function pushPendingMutation(choreId, mid) {
+    const arr = pendingMutationIds.get(choreId) || [];
+    arr.push(mid);
+    pendingMutationIds.set(choreId, arr);
+  }
+  function popPendingMutation(choreId) {
+    const arr = pendingMutationIds.get(choreId);
+    if (!arr || !arr.length) return null;
+    const mid = arr.pop();
+    if (!arr.length) pendingMutationIds.delete(choreId);
+    return mid;
+  }
+  function newMutationId() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    // Fallback for older WebViews: timestamp + random, collision-safe
+    // enough for per-user idempotency keys.
+    return `m-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  }
 
   // ============================================================
   // helpers
@@ -2107,42 +2133,23 @@
       last_actor_username: VIEWER_USERNAME || c.last_actor_username,
     });
 
-    const body = { client_completed_at: clickAt, tab_id: TAB_ID };
+    const mid = newMutationId();
+    const body = { client_completed_at: clickAt, tab_id: TAB_ID, client_mutation_id: mid };
     const overrides = {};
     if (note != null && note !== "") overrides.note = note;
     if (noteValues && Object.keys(noteValues).length > 0) overrides.note_values = noteValues;
     if (Object.keys(overrides).length > 0) body.chore_completion = overrides;
 
-    if (!navigator.onLine || reloadPending) {
-      enqueue({ url: `/chores/items/${c.id}/completion`, method: "POST",
-                body: body, meta: queueMetaFor(c) });
-      return;
-    }
-
-    inFlight.add(sid);
-    try {
-      const data = await api(`/chores/items/${c.id}/completion`, "POST", body);
-      reconcile(data);
-      if (data.skipped) flash(data.skipped_reason || "Cooldown — no payout", "warn");
-      else if (data.paid) flash(`+${formatCount(data.paid)}p`);
-      (data.achieved_goals || []).forEach(g => {
-        const tail = g.pebbles ? ` +${formatCount(g.pebbles)}p` : "";
-        flash(`🏆 ${g.name}${tail}`, "ok");
-      });
-    } catch (err) {
-      if (isTransientError(err)) {
-        // Network / rate-limit / upstream-503: queue so the next flush
-        // (online event, Monitor reconnect, scheduled retry) sends it.
-        // User never sees an "Error" flash — their tap was accepted
-        // locally and will sync.
-        enqueue({ url: `/chores/items/${c.id}/completion`, method: "POST",
-                  body: body, meta: queueMetaFor(c) });
-        setConnDot("syncing");
-        scheduleQueueRetry();
-      } else {
-        flash("Couldn't complete: " + err.message, "error");
-      }
-    } finally { inFlight.delete(sid); }
+    pushPendingMutation(c.id, mid);
+    enqueue({
+      kind:               "complete",
+      url:                `/chores/items/${c.id}/completion`,
+      method:             "POST",
+      body:               body,
+      meta:               queueMetaFor(c),
+      client_mutation_id: mid,
+    });
+    flushQueue();
   }
 
   // Back-off retry for the offline queue when we hit a soft failure
@@ -2201,27 +2208,40 @@
       progress_count: Math.max(0, priorProgress - 1),
     });
     localClickTs.set(sid, Date.now());
-    if (!navigator.onLine || reloadPending) {
-      enqueue({ url: `/chores/items/${c.id}/completion`, method: "DELETE",
-                meta: queueMetaFor(c) });
+
+    // The undo targets the most recent complete this session enqueued —
+    // either a still-queued one (collapse, no server call) or a flushed
+    // one (DELETE with target_client_mutation_id so a replay is a no-op).
+    const targetMid = popPendingMutation(c.id);
+    if (targetMid && collapseQueuedCompleteIfPresent(c.id, targetMid)) {
+      // Local-only cancel: matching queued complete dropped before flush.
+      // ChoreStore patch above already mirrors the cancel; nothing else.
+      renderQueueState();
       return;
     }
-    inFlight.add(sid);
-    try {
-      const data = await api(`/chores/items/${c.id}/completion`, "DELETE");
-      reconcile(data);
-      flash("Undone", "warn");
-    } catch (err) {
-      if (isTransientError(err)) {
-        enqueue({ url: `/chores/items/${c.id}/completion`, method: "DELETE",
-                  meta: queueMetaFor(c) });
-        setConnDot("syncing");
-        scheduleQueueRetry();
-      } else {
-        ChoreStore.patch(c.id, { done_count_today: priorDoneCount, progress_count: priorProgress });
-        flash("Nothing to undo", "warn");
-      }
-    } finally { inFlight.delete(sid); }
+    const body = { tab_id: TAB_ID };
+    if (targetMid) body.target_client_mutation_id = targetMid;
+    enqueue({
+      kind:               "undo",
+      url:                `/chores/items/${c.id}/completion`,
+      method:             "DELETE",
+      body:               body,
+      meta:               queueMetaFor(c),
+      client_mutation_id: targetMid,
+    });
+    flushQueue();
+  }
+
+  // Drops a queued complete with the given mutation id, if any. Returns
+  // true on hit. Called by undo to collapse a complete that hasn't been
+  // sent yet — avoids a round-trip the user effectively cancelled.
+  function collapseQueuedCompleteIfPresent(choreId, mid) {
+    const q = loadQueue();
+    const idx = q.findIndex(it => it.kind === "complete" && it.client_mutation_id === mid);
+    if (idx < 0) return false;
+    q.splice(idx, 1);
+    saveQueue(q);
+    return true;
   }
 
   // Apply a server payload to the store. Two shapes:
@@ -5155,6 +5175,14 @@
   // ============================================================
   // connection + offline queue
   // ============================================================
+  // All chore mutations are write-ahead to this queue, then the queue
+  // drains via flushQueue. The user's tap is durable in localStorage
+  // BEFORE the network is touched — backgrounding the app mid-flight
+  // can't lose work. Queue items carry a `loud` flag: silent by default
+  // so a momentarily slow happy-path drain doesn't flash a "pending"
+  // badge in the user's face. Items become loud on confirmed failure,
+  // on enqueue-while-offline, or on app wake when items still exist
+  // (their presence proves a prior attempt was interrupted).
   const QUEUE_KEY = "chores:offline_queue:v2";
   let queueCsrf = CSRF;
   let queueBlockedReason = null;
@@ -5163,9 +5191,23 @@
   function enqueue(item) {
     const q = loadQueue();
     item.queued_at = item.queued_at || new Date().toISOString();
+    item.loud = item.loud || !navigator.onLine; // offline at write time → user has a right to know now
     q.push(item);
     saveQueue(q);
-    updatePendingBadge(q.length);
+    renderQueueState();
+  }
+  function loudItems() { return loadQueue().filter(it => it.loud); }
+  function markAllQueueLoud() {
+    const q = loadQueue();
+    if (!q.length) return;
+    let changed = false;
+    q.forEach(it => { if (!it.loud) { it.loud = true; changed = true; } });
+    if (changed) { saveQueue(q); renderQueueState(); }
+  }
+  function renderQueueState() {
+    const loud = loudItems();
+    updatePendingBadge(loud.length);
+    renderPerCardPending(loud);
   }
   function updatePendingBadge(n) {
     const el = document.querySelector("[data-pending-badge]");
@@ -5178,6 +5220,22 @@
       el.classList.add("hidden");
       el.classList.remove("blocked");
     }
+  }
+  // Per-card pending visual: any chore card whose id appears in a loud
+  // queue item gets `data-sync-pending="true"`. CSS keys off that. Items
+  // not in any loud queue entry have the attribute removed. Driven off
+  // the same loudItems() derivation as the global badge, so the two can
+  // never disagree. `data-chore-id` lives on every render of a chore
+  // (main grid card + hot strip cell child); set the attribute on all
+  // so whichever surface the user is viewing shows the indicator.
+  function renderPerCardPending(loud) {
+    const choreIds = new Set();
+    loud.forEach(it => { const cid = it.meta?.chore_id; if (cid != null) choreIds.add(String(cid)); });
+    document.querySelectorAll("[data-chore-id]").forEach(el => {
+      const cid = el.getAttribute("data-chore-id");
+      if (choreIds.has(String(cid))) el.setAttribute("data-sync-pending", "true");
+      else el.removeAttribute("data-sync-pending");
+    });
   }
   function setConnDot(state) {
     const dot = document.querySelector("[data-conn-dot]");
@@ -5221,11 +5279,28 @@
     if (res.status === 429 || (res.status >= 500 && res.status <= 599)) return "keep";
     return "keep";
   }
+  // Single-flight guard for flushQueue: every mutation kicks a flush,
+  // so concurrent invocations are normal. If one is already running,
+  // remember that a follow-up is needed and exit; the active flush
+  // re-runs itself when it ends, picking up anything enqueued during
+  // the loop.
+  let flushInFlight = false;
+  let flushFollowupPending = false;
   async function flushQueue() {
+    if (flushInFlight) { flushFollowupPending = true; return; }
+    flushInFlight = true;
+    try {
+      await _flushQueueInner();
+    } finally {
+      flushInFlight = false;
+      if (flushFollowupPending) { flushFollowupPending = false; flushQueue(); }
+    }
+  }
+  async function _flushQueueInner() {
     let q = loadQueue();
-    if (!q.length) { queueBlockedReason = null; setConnDot("online"); updatePendingBadge(0); return; }
-    if (!navigator.onLine) { setConnDot("offline"); return; }
-    if (reloadPending) { updatePendingBadge(q.length); return; }
+    if (!q.length) { queueBlockedReason = null; setConnDot("online"); renderQueueState(); return; }
+    if (!navigator.onLine) { setConnDot("offline"); markAllQueueLoud(); return; }
+    if (reloadPending) { markAllQueueLoud(); return; }
     // History view: the user is editing/triaging pending items. Do
     // NOT send them while they're being curated — they'd race the
     // user. Monitor still subscribes (so live updates flow into the
@@ -5233,21 +5308,25 @@
     // away. The next page load (or focus event) will resume.
     if (root?.dataset.mode === "history") {
       setConnDot(navigator.onLine ? "online" : "offline");
-      updatePendingBadge(q.length);
+      markAllQueueLoud();
       return;
     }
-    setConnDot("syncing");
     queueBlockedReason = null;
     let csrf = queueCsrf;
     let csrfRefreshedThisFlush = false;
     const remaining = [];
     let halted = false;
+    let hadFailure = false;
     for (let i = 0; i < q.length; i++) {
       const item = q[i];
       if (halted) { remaining.push(item); continue; }
       let res;
       try { res = await postQueueItem(item, csrf); }
-      catch (e) { remaining.push(...q.slice(i)); halted = true; setConnDot("offline"); break; }
+      catch (e) {
+        remaining.push(...q.slice(i)); halted = true; hadFailure = true;
+        setConnDot("offline");
+        break;
+      }
       let action = classify(res);
       if (action === "csrf_stale" && !csrfRefreshedThisFlush) {
         const fresh = await refreshCsrf();
@@ -5255,33 +5334,66 @@
         if (fresh) {
           csrf = fresh;
           try { res = await postQueueItem(item, csrf); action = classify(res); }
-          catch (e) { remaining.push(...q.slice(i)); halted = true; setConnDot("offline"); break; }
+          catch (e) {
+            remaining.push(...q.slice(i)); halted = true; hadFailure = true;
+            setConnDot("offline");
+            break;
+          }
         } else { action = "auth_needed"; }
       }
       if (action === "ok") {
-        try {
-          const data = await res.json();
-          if (data) reconcile(data);
-        } catch (e) {}
+        let data = null;
+        try { data = await res.json(); } catch (e) {}
+        if (data) {
+          reconcile(data);
+          applyDrainEffects(item, data);
+        }
         continue;
       }
       if (action === "auth_needed") {
         remaining.push(...q.slice(i));
         queueBlockedReason = "needs re-auth";
         halted = true;
+        hadFailure = true;
         flash("Sign-in expired — your changes are saved and will sync after you sign back in.", "warn");
         break;
       }
       remaining.push(item);
+      hadFailure = true;
+    }
+    // Anything left in the queue after this loop got there via a
+    // confirmed failure (network err, 429/5xx, auth, csrf). User now
+    // has a right to see the pending state — mark every remaining item
+    // loud, including ones that were silent at enqueue.
+    if (hadFailure && remaining.length) {
+      remaining.forEach(it => { it.loud = true; });
     }
     saveQueue(remaining);
-    updatePendingBadge(remaining.length);
+    renderQueueState();
     setConnDot(remaining.length === 0 ? "online" : (queueBlockedReason ? "offline" : "syncing"));
     if (remaining.length === 0) queueBlockedReason = null;
     // Any leftover items (transient errors, not auth-blocked) get a
     // back-off retry — covers the 429 case where the rate-limiter
     // needs a moment.
     if (remaining.length > 0 && !queueBlockedReason) scheduleQueueRetry();
+  }
+  // Fire the user-visible effects for a successfully-drained item
+  // (toasts that the previous direct-fetch path fired inline). Skipped
+  // when the server reports the response was deduped — a replayed POST
+  // shouldn't double-flash "+5p". Achievement flashes fire only on the
+  // original drain.
+  function applyDrainEffects(item, data) {
+    if (data.deduped) return;
+    if (item.kind === "complete") {
+      if (data.skipped) flash(data.skipped_reason || "Cooldown — no payout", "warn");
+      else if (data.paid) flash(`+${formatCount(data.paid)}p`);
+      (data.achieved_goals || []).forEach(g => {
+        const tail = g.pebbles ? ` +${formatCount(g.pebbles)}p` : "";
+        flash(`🏆 ${g.name}${tail}`, "ok");
+      });
+    } else if (item.kind === "undo") {
+      flash("Undone", "warn");
+    }
   }
   // Mirror navigator.onLine onto `root` so styles can red-out
   // server-dependent buttons (chore save, archive, goal, withdraw,
@@ -5291,8 +5403,21 @@
     if (root) root.dataset.online = navigator.onLine ? "true" : "false";
   }
   syncOnlineAttr();
-  window.addEventListener("online", () => { syncOnlineAttr(); setConnDot("syncing"); flushQueue(); });
-  window.addEventListener("offline", () => { syncOnlineAttr(); setConnDot("offline"); });
+  // online/offline AND visibilitychange→visible AND pageshow (BFCache
+  // restore) all signify "the app just (re)connected to the world."
+  // Any queue items left at that moment are by definition from a prior
+  // failed/interrupted attempt — mark them loud so the user sees the
+  // pending state immediately rather than waiting for the next flush
+  // result. Then flush.
+  function onAppWake() {
+    syncOnlineAttr();
+    const q = loadQueue();
+    if (q.length) markAllQueueLoud();
+    flushQueue();
+  }
+  window.addEventListener("online", () => { onAppWake(); });
+  window.addEventListener("offline", () => { syncOnlineAttr(); setConnDot("offline"); markAllQueueLoud(); });
+  window.addEventListener("pageshow", (e) => { if (e.persisted) onAppWake(); });
   // Helper: every server-call submit handler funnels through here.
   // Returns true when the action may proceed. When offline, flashes
   // an escalation toast — the red button alone is the AMBIENT signal,
@@ -5305,7 +5430,12 @@
     flash("You're offline — that'll work again once you're connected.", "warn");
     return false;
   };
-  updatePendingBadge(loadQueue().length);
+  // Boot: if any queue items survive from a prior session, they're by
+  // definition from a prior failed attempt — mark loud so the user
+  // sees the pending state on this page load rather than discovering
+  // it only after the next failure.
+  if (loadQueue().length) markAllQueueLoud();
+  renderQueueState();
   if (!navigator.onLine) setConnDot("offline");
 
   // ============================================================
@@ -5377,6 +5507,12 @@
     if (document.visibilityState === "visible") {
       pingSwRefresh();
       if (unifiedPage) fullSync();
+      // Foreground after backgrounding: if any queue items survive,
+      // surface the pending state and try to drain. Covers the
+      // canonical "tapped chore on weak signal, walked away from app"
+      // case — the in-flight fetch died with the page, but the queue
+      // item persists and now flushes.
+      onAppWake();
     }
   });
   // Tracked at boot so a controllerchange can be classified as

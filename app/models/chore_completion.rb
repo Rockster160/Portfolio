@@ -18,6 +18,7 @@
 #  created_at                :datetime         not null
 #  updated_at                :datetime         not null
 #  chore_id                  :bigint           not null
+#  client_mutation_id        :string
 #  sub_chore_id              :bigint
 #  user_id                   :bigint           not null
 #

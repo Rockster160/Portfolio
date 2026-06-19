@@ -143,12 +143,18 @@ class AgendaSyncController < ApplicationController
   # Materialized rows whose effective time span overlaps the requested
   # window. `to_date=nil` means "open-ended forward" — used by bootstrap
   # so the FE caches every known future item up front.
+  #
+  # `.includes(:agenda, :agenda_schedule)` is essential — `AgendaItem#serialize`
+  # → `presentation_attrs` reads `agenda.name/color/source` and
+  # `agenda_schedule&.serialize_for_edit` per item; without the preloads
+  # bootstrap fires N+1 on each association.
   def serialized_items(from_date, to_date)
     zone = ::ActiveSupport::TimeZone[current_user.timezone] || ::Time.zone
     range_start = zone.local(from_date.year, from_date.month, from_date.day).beginning_of_day
     range_end = to_date && zone.local(to_date.year, to_date.month, to_date.day).end_of_day
 
     scope = current_user.accessible_agenda_items.not_cancelled
+      .includes(:agenda, :agenda_schedule)
     scope = scope.where("COALESCE(end_at, start_at) >= ?", range_start)
     scope = scope.where("start_at <= ?", range_end) if range_end
     scope.order(:start_at).map { |i|
@@ -159,9 +165,10 @@ class AgendaSyncController < ApplicationController
   # Delta variant — includes cancelled rows on purpose so the FE prunes
   # locally-rendered events that the user / Google cancelled while the
   # client was offline. The store uses `status: cancelled` as the prune
-  # signal.
+  # signal. Same eager-load contract as serialized_items above.
   def serialized_items_since(since)
     current_user.accessible_agenda_items
+      .includes(:agenda, :agenda_schedule)
       .where("agenda_items.updated_at >= ?", since)
       .order(:updated_at)
       .map { |i| i.serialize.merge(editable: editable_agenda_ids.include?(i.agenda_id)) }

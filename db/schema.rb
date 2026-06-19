@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_17_123641) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_19_111510) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -102,6 +102,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_17_123641) do
     t.integer "arrive_early_minutes", default: 0, null: false
     t.index ["agenda_id", "external_uid"], name: "index_agenda_items_on_agenda_external_uid", unique: true, where: "(external_uid IS NOT NULL)"
     t.index ["agenda_id", "start_at"], name: "index_agenda_items_on_agenda_id_and_start_at"
+    t.index ["agenda_id", "updated_at"], name: "index_agenda_items_on_agenda_id_and_updated_at"
     t.index ["agenda_id"], name: "index_agenda_items_on_agenda_id"
     t.index ["agenda_schedule_id", "start_at"], name: "index_agenda_items_on_agenda_schedule_id_and_start_at"
     t.index ["agenda_schedule_id"], name: "index_agenda_items_on_agenda_schedule_id"
@@ -382,9 +383,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_17_123641) do
     t.float "streak_multiplier", default: 1.0, null: false
     t.boolean "anonymous", default: false, null: false
     t.bigint "sub_chore_id"
+    t.string "client_mutation_id"
     t.index ["chore_id", "user_id", "day_key"], name: "index_chore_completions_on_chore_id_and_user_id_and_day_key"
     t.index ["chore_id"], name: "index_chore_completions_on_chore_id"
     t.index ["sub_chore_id"], name: "index_chore_completions_on_sub_chore_id"
+    t.index ["user_id", "client_mutation_id"], name: "index_chore_completions_on_user_and_mutation_id", unique: true, where: "(client_mutation_id IS NOT NULL)"
     t.index ["user_id", "completed_at"], name: "index_chore_completions_on_user_id_and_completed_at"
     t.index ["user_id", "day_key"], name: "index_chore_completions_on_user_id_and_day_key"
     t.index ["user_id"], name: "index_chore_completions_on_user_id"

@@ -35,6 +35,22 @@ class ChoreCompletionsController < ApplicationController
     chore = current_user.accessible_chores.find(params[:chore_id])
     completed_at = parse_client_time(params[:client_completed_at]) || Time.current
 
+    # Queue-first replays POST the same body twice if the response of
+    # the first attempt never made it back. Dedupe by client_mutation_id:
+    # if we already have a completion for this user with that id, return
+    # the same shape the original POST returned. No new row, no double
+    # payout, no double Jil trigger.
+    mutation_id = params[:client_mutation_id].presence
+    if mutation_id && (existing = current_user.chore_completions.find_by(client_mutation_id: mutation_id))
+      render json: response_payload(existing.chore, existing).merge(
+        skipped:        existing.payout_skipped,
+        skipped_reason: existing.skipped_reason,
+        achieved_goals: [],
+        deduped:        true,
+      ), status: :ok
+      return
+    end
+
     result = ChoreCompleter.new(chore, current_user, at: completed_at).call
 
     # When a pending push was edited on the History page before being
@@ -43,6 +59,7 @@ class ChoreCompletionsController < ApplicationController
     # ChoreCompleter — multipliers / hot_pick are historical record
     # only, mirroring the update path.
     apply_create_overrides!(result.completion) if result.completion
+    result.completion&.update_column(:client_mutation_id, mutation_id) if mutation_id
 
     render json: response_payload(chore, result.completion).merge(
       skipped:        result.skipped?,
@@ -106,6 +123,29 @@ class ChoreCompletionsController < ApplicationController
   def destroy_last_today
     tapped = current_user.accessible_chores.unscope(where: :archived_at).find(params[:chore_id])
     day = ChoreDay.current(current_user)
+
+    # Queue-first undo: the client carries the client_mutation_id of the
+    # specific create it's undoing. Targets THAT row directly, not "the
+    # most recent today" — otherwise a replayed undo could delete a
+    # later, legitimate completion. When the target is already gone
+    # (first undo flushed and we're replaying), return 200 idempotently.
+    target_id = params[:target_client_mutation_id].presence
+    if target_id
+      completion = current_user.chore_completions.find_by(client_mutation_id: target_id)
+      if completion.nil?
+        render json: response_payload(tapped, nil).merge(deduped: true)
+        return
+      end
+
+      credit_chore = completion.chore
+      day_at_delete = completion.day_key
+      completion.destroy!
+      rebuild_streak(credit_chore, day_at_delete)
+      ChoreBroadcaster.broadcast_changes!(current_user, credit_chore, actor_tab_id: params[:tab_id])
+      ChoreBroadcaster.broadcast_changes!(current_user, tapped, actor_tab_id: params[:tab_id]) if tapped.id != credit_chore.id
+      render json: response_payload(tapped, nil)
+      return
+    end
 
     # Per the sharing spec: household + personal/assigned each undo only
     # the CURRENT user's record. Household never removes another user's

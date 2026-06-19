@@ -6,6 +6,78 @@ RSpec.describe AgendaItemsController, type: :controller do
 
   before { sign_in user }
 
+  describe "X-Client-Mutation-At conflict resolution" do
+    # Every JS mutation (offline-queued OR online) stamps the request
+    # with the wall-clock moment the user actually clicked / typed.
+    # Server compares against the row's current updated_at so a stale
+    # offline edit can't clobber a fresher edit that happened on
+    # another device while the first device was disconnected.
+    let!(:item) {
+      create(
+        :agenda_item, agenda: agenda, kind: :task, name: "Original",
+        start_at: Time.current,
+      )
+    }
+
+    it "accepts an edit whose client_ts is newer than the row's updated_at" do
+      future_ms = ((item.updated_at + 1.minute).to_f * 1000).round
+      request.headers["X-Client-Mutation-At"] = future_ms.to_s
+      patch :update, params: {
+        id:          item.id,
+        agenda_item: { name: "Renamed by fresher edit" },
+      }, format: :json
+      expect(response).to be_successful
+      expect(item.reload.name).to eq("Renamed by fresher edit")
+    end
+
+    it "rejects an edit whose client_ts predates the row's updated_at (409 with canonical current row)" do
+      # Simulate another device having touched the row 30s ago.
+      item.update_columns(updated_at: Time.current, name: "Already touched by other device")
+      stale_ms = ((item.updated_at - 60.seconds).to_f * 1000).round
+      request.headers["X-Client-Mutation-At"] = stale_ms.to_s
+
+      patch :update, params: {
+        id:          item.id,
+        agenda_item: { name: "Stale edit that should NOT apply" },
+      }, format: :json
+
+      expect(response).to have_http_status(:conflict)
+      body = JSON.parse(response.body)
+      expect(body["current"]).to be_present
+      expect(body["current"]["name"]).to eq("Already touched by other device")
+      expect(item.reload.name).to eq("Already touched by other device")
+    end
+
+    it "accepts edits with no client_ts header (back-compat with older callers / non-PWA clients)" do
+      patch :update, params: {
+        id:          item.id,
+        agenda_item: { name: "No header — should still work" },
+      }, format: :json
+      expect(response).to be_successful
+      expect(item.reload.name).to eq("No header — should still work")
+    end
+
+    it "ignores a malformed client_ts header without 500" do
+      request.headers["X-Client-Mutation-At"] = "not a number"
+      patch :update, params: {
+        id:          item.id,
+        agenda_item: { name: "Garbage header, sane response" },
+      }, format: :json
+      expect(response).to be_successful
+      expect(item.reload.name).to eq("Garbage header, sane response")
+    end
+
+    it "rejects a stale destroy too — not just updates" do
+      item.update_columns(updated_at: Time.current)
+      stale_ms = ((item.updated_at - 60.seconds).to_f * 1000).round
+      request.headers["X-Client-Mutation-At"] = stale_ms.to_s
+
+      expect { delete :destroy, params: { id: item.id } }
+        .not_to change { AgendaItem.exists?(item.id) }
+      expect(response).to have_http_status(:conflict)
+    end
+  end
+
   describe "PATCH #update with location/notes (regression)" do
     let!(:item) {
       create(

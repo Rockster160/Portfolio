@@ -418,6 +418,24 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     transform: translateY(-1px);
     box-shadow: 0 2px 10px #0006;
   }
+  // Per-card pending-sync indicator. Set by JS only after a confirmed
+  // failure (or on app wake while items remain) — the silent happy
+  // path never paints it. Small amber dot top-right; ambient, not
+  // alarming. Cleared the moment the matching queue item drains.
+  [data-chore-id][data-sync-pending="true"] {
+    &::after {
+      content: "";
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #d97706;
+      box-shadow: 0 0 0 1px var(--chores-card-bg, #1a1a1a);
+      pointer-events: none;
+    }
+  }
   // Icon box: flex-center so the glyph is centered. The countdown pill
   // and reward tag are absolutely positioned children — they sit ON
   // TOP of the icon without affecting its center alignment.

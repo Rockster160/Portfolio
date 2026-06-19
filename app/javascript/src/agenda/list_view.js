@@ -40,6 +40,12 @@
       const cold = root.querySelector("[data-cold-start]");
       if (cold) cold.classList.remove("hidden");
     }
+    // Expose a render-trigger for callers that change the visible-date
+    // context without mutating the store (3am rollover in agenda.js,
+    // ad-hoc date jumps, etc). Pairs with __refreshAgendaCal exposed
+    // by agenda_cal.js — agenda.js's refreshCurrentView calls whichever
+    // hook is bound on the current page.
+    window.__refreshAgendaList = () => render(root);
   }
 
   function render(root) {
