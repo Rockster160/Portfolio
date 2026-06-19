@@ -31,6 +31,7 @@
 #  updated_at           :datetime         not null
 #  agenda_id            :bigint           not null
 #  agenda_schedule_id   :bigint
+#  client_mutation_id   :string
 #
 class AgendaItem < ApplicationRecord
   include Jilable
@@ -453,6 +454,7 @@ class AgendaItem < ApplicationRecord
       self_response:      self_response,
       needs_response:     needs_response?,
       declined:           declined?,
+      client_mutation_id: client_mutation_id,
       presentation_attrs: presentation_attrs,
     )
   end

@@ -224,7 +224,251 @@ function fillIcons(node, item, attrs, ctx) {
   }
 }
 
-const AgendaItemRenderer = { buildAgendaItem };
+// In-place patch — mutates an EXISTING `.agenda-item` node with the
+// latest item data without touching the node identity. Eliminates the
+// flicker, focus loss, and scroll jump that `replaceWith(buildAgendaItem(...))`
+// causes on every store change.
+//
+// Granularity: text content via `.textContent`, attribute values via
+// `setAttribute`, structural changes (location appears/disappears,
+// travel block toggles, RSVP slot swaps) handled per-zone. We never
+// re-clone the template here.
+//
+// Returns the same node it was given so callers can chain.
+function patchAgendaItem(node, item, opts = {}) {
+  if (!node || !item) return node;
+  const attrs = item.presentation_attrs || {};
+  const editable = opts.editable !== false && item.editable !== false;
+  const preview = !!opts.preview;
+
+  patchDataAttrs(node, attrs);
+  patchReadonly(node, editable);
+  patchClasses(node, item, attrs, { editable, preview });
+  patchStyleVars(node, attrs);
+  patchTitle(node, item);
+  patchCheckbox(node, item, attrs, { editable, preview });
+  patchBody(node, attrs);
+  patchIcons(node, item, attrs, { editable });
+
+  return node;
+}
+
+function patchDataAttrs(node, attrs) {
+  for (const key of Object.keys(attrs)) {
+    const value = attrs[key];
+    const next = value == null ? "" : String(value);
+    if (node.getAttribute(`data-${key}`) !== next) {
+      node.setAttribute(`data-${key}`, next);
+    }
+  }
+}
+
+function patchReadonly(node, editable) {
+  if (!editable && !node.hasAttribute("data-readonly")) {
+    node.setAttribute("data-readonly", "");
+  } else if (editable && node.hasAttribute("data-readonly")) {
+    node.removeAttribute("data-readonly");
+  }
+}
+
+function patchClasses(node, item, attrs, ctx) {
+  // Clear the dynamic class subset (everything except `.agenda-item`
+  // itself + any consumer-added marker) then re-apply. Cheaper than
+  // bookkeeping per-class toggles and stays bulletproof against
+  // future class additions.
+  const dynamicPrefixes = ["kind-", "all-day", "tentative", "cancelled", "crossed-out",
+    "recurring", "phantom", "preview", "readonly", "invite", "needs-response", "declined"];
+  Array.from(node.classList).forEach((c) => {
+    if (c === "agenda-item") return;
+    if (dynamicPrefixes.some((p) => c === p || c.startsWith(p + "-") || c === p)) {
+      node.classList.remove(c);
+    }
+  });
+  node.classList.add(`kind-${attrs.kind || "task"}`);
+  if (bool(attrs["all-day"])) node.classList.add("all-day");
+  if (item.status === "tentative" || item.status === "cancelled") node.classList.add(item.status);
+  if (item.crossed_out) node.classList.add("crossed-out");
+  if (bool(attrs.recurring)) node.classList.add("recurring");
+  if (bool(attrs.phantom)) node.classList.add("phantom");
+  if (ctx.preview) node.classList.add("preview");
+  if (!ctx.editable && !ctx.preview) node.classList.add("readonly");
+  if (item.attendees && Array.isArray(item.attendees) && item.attendees.length > 0) {
+    node.classList.add("invite");
+  }
+  const rsvp = attrs["self-response"];
+  if (rsvp === "needsAction") node.classList.add("needs-response");
+  if (rsvp === "declined") node.classList.add("declined");
+}
+
+function patchStyleVars(node, attrs) {
+  const color = attrs.color || "";
+  const agendaColor = attrs["agenda-color"] || "";
+  if (node.style.getPropertyValue("--item-color") !== color) {
+    node.style.setProperty("--item-color", color);
+  }
+  if (node.style.getPropertyValue("--agenda-color") !== agendaColor) {
+    node.style.setProperty("--agenda-color", agendaColor);
+  }
+}
+
+function patchTitle(node, item) {
+  const agendaName = (item.agenda_name || (item.agenda && item.agenda.name) || "").toString();
+  const isPhantom = item.phantom || (item.presentation_attrs && bool(item.presentation_attrs.phantom));
+  const idTitle = isPhantom
+    ? `Agenda #${item.agenda_id || ""}`
+    : `Item #${item.id || ""}`;
+  const next = `${agendaName} · ${idTitle}`;
+  if (node.getAttribute("title") !== next) node.setAttribute("title", next);
+}
+
+function patchCheckbox(node, item, attrs, ctx) {
+  const input = node.querySelector(".agenda-item-check");
+  if (!input) return;
+  const id = attrs["item-id"] || "";
+  const desiredId = `agenda_item_${id}`;
+  if (input.id !== desiredId) input.id = desiredId;
+  const desiredChecked = !!item.completed_at;
+  if (input.checked !== desiredChecked) input.checked = desiredChecked;
+  const checkDisabled = ctx.preview || !ctx.editable;
+  if (input.disabled !== checkDisabled) input.disabled = checkDisabled;
+  if (!checkDisabled) {
+    const url = attrs["item-url"] || "";
+    if (input.getAttribute("data-checked-url") !== url) {
+      input.setAttribute("data-checked-url", url);
+    }
+  }
+}
+
+function patchBody(node, attrs) {
+  // Time span — keep data-* in sync; the time-hydrator picks up dataset
+  // changes via the MutationObserver wired in agenda.js so we don't have
+  // to manually rebuild its textContent.
+  const timeSpan = node.querySelector(".agenda-item-time");
+  if (timeSpan) {
+    const allDay = bool(attrs["all-day"]);
+    const startEpoch = attrs["start-at"];
+    const endEpoch = attrs["end-at"];
+    setAttrIfChanged(timeSpan, "data-start-epoch", startEpoch == null ? "" : String(startEpoch));
+    setAttrIfChanged(timeSpan, "data-end-epoch", endEpoch == null ? "" : String(endEpoch));
+    setAttrIfChanged(timeSpan, "data-all-day", allDay ? "true" : "false");
+    const isEvent = attrs.kind === "event";
+    const fmt = allDay ? "day" : (isEvent && endEpoch ? "range" : "time");
+    setAttrIfChanged(timeSpan, "data-format", fmt);
+  }
+
+  const nameSpan = node.querySelector(".agenda-item-name");
+  if (nameSpan && nameSpan.textContent !== (attrs.name || "")) {
+    nameSpan.textContent = attrs.name || "";
+  }
+
+  // Location structural toggle — present in DOM only when applicable.
+  const textWrap = node.querySelector(".agenda-item-text");
+  if (textWrap) {
+    const location = attrs.location || "";
+    const showLoc = location && !locationLooksLikeUrl(location);
+    let locSpan = textWrap.querySelector(".agenda-item-loc");
+    if (showLoc) {
+      if (!locSpan) {
+        locSpan = document.createElement("span");
+        locSpan.className = "agenda-item-loc";
+        locSpan.innerHTML = '<i class="fa fa-map-marker"></i><span class="agenda-item-loc-text"></span>';
+        textWrap.appendChild(locSpan);
+      }
+      const locText = locSpan.querySelector(".agenda-item-loc-text");
+      if (locText && locText.textContent !== location) locText.textContent = location;
+    } else if (locSpan) {
+      locSpan.remove();
+    }
+  }
+
+  // Travel block structural toggle.
+  patchTravelBlock(node, attrs);
+}
+
+function patchTravelBlock(node, attrs) {
+  const textWrap = node.querySelector(".agenda-item-text");
+  if (!textWrap) return;
+  const travelMin = Number(attrs["travel-minutes"]) || 0;
+  const arriveMin = Number(attrs["arrive-early-minutes"]) || 0;
+  let block = textWrap.querySelector(".agenda-item-travel");
+  if (travelMin <= 0 && arriveMin <= 0) {
+    if (block) block.remove();
+    return;
+  }
+  if (!block) {
+    block = document.createElement("span");
+    block.className = "agenda-item-travel";
+    block.innerHTML = '<span class="agenda-item-travel-leave" data-time-hydrate data-format="cal" data-prefix="→"></span>';
+    textWrap.appendChild(block);
+  }
+  const startEpoch = Number(attrs["start-at"]) || 0;
+  const leaveEpoch = startEpoch - (arriveMin + travelMin) * 60;
+  const leaveSpan = block.querySelector(".agenda-item-travel-leave");
+  if (leaveSpan) setAttrIfChanged(leaveSpan, "data-start-epoch", String(leaveEpoch));
+
+  // Rebuild the icon/text segments — they're trivial spans + i's; cheap
+  // and keeps state-toggle complexity contained.
+  const segments = block.querySelectorAll(".__travel-seg");
+  segments.forEach((s) => s.remove());
+  const plus = block.querySelector(".agenda-item-travel-plus");
+  if (plus) plus.remove();
+
+  if (arriveMin > 0) {
+    const seg = document.createElement("span");
+    seg.className = "__travel-seg";
+    seg.innerHTML = `<i class="fa fa-clock-o"></i><span class="agenda-item-travel-text">${arriveMin}m</span>`;
+    block.appendChild(seg);
+  }
+  if (arriveMin > 0 && travelMin > 0) {
+    const sep = document.createElement("span");
+    sep.className = "agenda-item-travel-plus";
+    sep.textContent = "+";
+    block.appendChild(sep);
+  }
+  if (travelMin > 0) {
+    const seg = document.createElement("span");
+    seg.className = "__travel-seg";
+    seg.innerHTML = `<i class="fa fa-car"></i><span class="agenda-item-travel-text">${travelMin}m</span>`;
+    block.appendChild(seg);
+  }
+}
+
+function patchIcons(node, item, attrs, ctx) {
+  const rsvp = attrs["self-response"];
+  const rsvpSlot = node.querySelector(".agenda-item-rsvp-slot");
+  if (rsvpSlot) {
+    rsvpSlot.innerHTML = "";
+    if (rsvp === "needsAction") {
+      rsvpSlot.innerHTML = '<span class="agenda-item-badge rsvp-badge needs-response" title="Awaiting your response"><i class="fa fa-question-circle"></i></span>';
+    } else if (rsvp === "declined") {
+      rsvpSlot.innerHTML = '<span class="agenda-item-badge rsvp-badge declined" title="You declined"><i class="fa fa-times-circle"></i></span>';
+    }
+  }
+  const recurringSlot = node.querySelector(".agenda-item-recurring-slot");
+  if (recurringSlot) {
+    const hasBadge = !!recurringSlot.querySelector(".agenda-item-recurring-badge");
+    if (bool(attrs.recurring) && !hasBadge) {
+      recurringSlot.innerHTML = '<span class="agenda-item-badge agenda-item-recurring-badge" title="Recurring"><i class="fa fa-refresh"></i></span>';
+    } else if (!bool(attrs.recurring) && hasBadge) {
+      recurringSlot.innerHTML = "";
+    }
+  }
+  const editSlot = node.querySelector(".agenda-item-edit-slot");
+  if (editSlot) {
+    const hasBtn = !!editSlot.querySelector(".agenda-item-edit");
+    if (ctx.editable && !hasBtn) {
+      editSlot.innerHTML = '<button type="button" class="agenda-item-edit" data-edit-item aria-label="Edit"><i class="fa fa-pencil"></i></button>';
+    } else if (!ctx.editable && hasBtn) {
+      editSlot.innerHTML = "";
+    }
+  }
+}
+
+function setAttrIfChanged(el, name, value) {
+  if (el.getAttribute(name) !== value) el.setAttribute(name, value);
+}
+
+const AgendaItemRenderer = { buildAgendaItem, patchAgendaItem };
 
 if (typeof module !== "undefined" && module.exports) module.exports = AgendaItemRenderer;
 if (typeof window !== "undefined") window.AgendaItemRenderer = AgendaItemRenderer;

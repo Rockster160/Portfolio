@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_19_111510) do
+ActiveRecord::Schema[7.1].define(version: 2026_06_19_114000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -100,6 +100,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_19_111510) do
     t.datetime "ended_fired_at"
     t.jsonb "metadata", default: {}, null: false
     t.integer "arrive_early_minutes", default: 0, null: false
+    t.string "client_mutation_id"
     t.index ["agenda_id", "external_uid"], name: "index_agenda_items_on_agenda_external_uid", unique: true, where: "(external_uid IS NOT NULL)"
     t.index ["agenda_id", "start_at"], name: "index_agenda_items_on_agenda_id_and_start_at"
     t.index ["agenda_id", "updated_at"], name: "index_agenda_items_on_agenda_id_and_updated_at"
@@ -107,6 +108,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_19_111510) do
     t.index ["agenda_schedule_id", "start_at"], name: "index_agenda_items_on_agenda_schedule_id_and_start_at"
     t.index ["agenda_schedule_id"], name: "index_agenda_items_on_agenda_schedule_id"
     t.index ["cancelled_at"], name: "index_agenda_items_on_cancelled_at", where: "(cancelled_at IS NOT NULL)"
+    t.index ["client_mutation_id"], name: "index_agenda_items_on_client_mutation_id", unique: true, where: "(client_mutation_id IS NOT NULL)"
     t.index ["completed_at"], name: "index_agenda_items_on_completed_at"
     t.index ["fired_at"], name: "index_agenda_items_on_fired_at", where: "(fired_at IS NOT NULL)"
     t.index ["notified_at"], name: "index_agenda_items_on_notified_at"

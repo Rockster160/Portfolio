@@ -66,12 +66,21 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  if (req.method !== "GET") return; // mutations passthrough — queue owns retries
-
   let url;
   try { url = new URL(req.url); }
   catch (_) { return; }
   if (url.origin !== self.location.origin) return; // CDN / cross-origin untouched
+
+  // Mutations under /agenda/*: network-only with a synthetic 503 on
+  // network failure. The page-side mutation queue interprets that as
+  // "still offline, keep the op queued" without needing to read
+  // `navigator.onLine` (which lies on iOS PWAs in airplane mode).
+  if (req.method !== "GET") {
+    if (url.pathname.startsWith("/agenda")) {
+      event.respondWith(mutationPassthrough(req));
+    }
+    return;
+  }
 
   // Sync endpoints: freshness > offline cache. Cache only as a fallback.
   if (url.pathname.startsWith("/agenda/sync/")) {
@@ -123,6 +132,21 @@ async function networkFirst(req) {
       status: 503,
       statusText: "offline",
       headers: { "Content-Type": "application/json" },
+    });
+  }
+}
+
+async function mutationPassthrough(req) {
+  try {
+    return await fetch(req);
+  } catch (_) {
+    // Network truly gone — emit a synthetic 503 so the queue treats this
+    // as a transient failure (no body, JSON content-type so res.json()
+    // in flush() doesn't throw before reaching the 5xx branch).
+    return new Response(JSON.stringify({ offline: true }), {
+      status:     503,
+      statusText: "offline (sw synth)",
+      headers:    { "Content-Type": "application/json" },
     });
   }
 }

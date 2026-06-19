@@ -6,6 +6,78 @@ RSpec.describe AgendaItemsController, type: :controller do
 
   before { sign_in user }
 
+  describe "client_mutation_id idempotency" do
+    # Offline-first contract — every PWA mutation carries a client-generated
+    # UUID. The server stores it on the row and dedupes on retry so a
+    # replayed POST (queue drained twice, two tabs, browser killed
+    # mid-flight) never creates duplicates.
+    it "POST: stores client_mutation_id and dedupes a retry with the same id" do
+      mid = SecureRandom.uuid
+      expect {
+        post :create, params: {
+          agenda_item: {
+            agenda_id:           agenda.id,
+            name:                "Coffee",
+            kind:                "task",
+            start_at:            Time.current.to_i,
+            client_mutation_id:  mid,
+          },
+        }, format: :json
+      }.to change(AgendaItem, :count).by(1)
+      created = AgendaItem.order(created_at: :desc).first
+      expect(created.client_mutation_id).to eq(mid)
+      body = JSON.parse(response.body)
+      expect(body["client_mutation_id"]).to eq(mid)
+
+      # Replay — must NOT create a second row, must return the same one.
+      expect {
+        post :create, params: {
+          agenda_item: {
+            agenda_id:           agenda.id,
+            name:                "Coffee (retry — should dedupe)",
+            kind:                "task",
+            start_at:            Time.current.to_i,
+            client_mutation_id:  mid,
+          },
+        }, format: :json
+      }.not_to change(AgendaItem, :count)
+      retry_body = JSON.parse(response.body)
+      expect(retry_body["id"]).to eq(created.id.to_s)
+      expect(retry_body["name"]).to eq("Coffee") # original, not the retry's body
+      expect(retry_body["deduped"]).to be(true)
+    end
+
+    it "PATCH: dedupes a retry whose client_mutation_id matches what's already on the row" do
+      mid = SecureRandom.uuid
+      item = create(:agenda_item, agenda: agenda, kind: :task, name: "Original",
+        start_at: Time.current, client_mutation_id: mid)
+      patch :update, params: {
+        id:          item.id,
+        agenda_item: { name: "Should not apply", client_mutation_id: mid },
+      }, format: :json
+      expect(response).to be_successful
+      body = JSON.parse(response.body)
+      expect(body["deduped"]).to be(true)
+      expect(item.reload.name).to eq("Original")
+    end
+
+    it "serializes client_mutation_id on the response so the FE can match optimistic state" do
+      mid = SecureRandom.uuid
+      post :create, params: {
+        agenda_item: {
+          agenda_id:           agenda.id,
+          name:                "X",
+          kind:                "task",
+          start_at:            Time.current.to_i,
+          client_mutation_id:  mid,
+        },
+      }, format: :json
+      body = JSON.parse(response.body)
+      expect(body["client_mutation_id"]).to eq(mid)
+      expect(body["presentation_attrs"]).to be_present # canonical row payload too
+    end
+  end
+
   describe "X-Client-Mutation-At conflict resolution" do
     # Every JS mutation (offline-queued OR online) stamps the request
     # with the wall-clock moment the user actually clicked / typed.

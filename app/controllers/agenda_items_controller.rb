@@ -18,16 +18,30 @@ class AgendaItemsController < ApplicationController
     target = resolve_target_agenda(params.dig(:agenda_item, :agenda_id))
     return render json: { errors: ["Agenda not found"] }, status: :not_found if target.blank?
 
+    # Idempotency: if the FE retries (offline queue, double-tap, two tabs)
+    # the same client_mutation_id, return the row we already created
+    # instead of duplicating. The unique partial index on agenda_items
+    # makes a concurrent retry safe even if both reach the controller.
+    mutation_id = client_mutation_id
+    if mutation_id.present?
+      existing = current_user.accessible_agenda_items.find_by(client_mutation_id: mutation_id)
+      if existing
+        render json: existing.serialize.merge(deduped: true)
+        return
+      end
+    end
+
     if target.managed_externally? && item_params[:kind].to_s != "event"
       return render json: { errors: ["Only events can be added to a Google calendar."] }, status: :unprocessable_entity
     end
 
     base_attrs = item_params.except(:agenda_id)
+    base_attrs[:client_mutation_id] = mutation_id if mutation_id.present?
     with_agenda_write_lock(target) {
       if target.managed_externally?
         # Mirror to Google FIRST. If it fails, we never touch the local
         # table — the user sees the error and nothing has diverged.
-        _local_attrs, google_attrs = ::GoogleCalendar::EventWriter.translate(base_attrs)
+        _local_attrs, google_attrs = ::GoogleCalendar::EventWriter.translate(base_attrs.except(:client_mutation_id))
         response = google_insert!(target, google_attrs)
         external_attrs = {
           external_uid:        response[:id],
@@ -49,6 +63,16 @@ class AgendaItemsController < ApplicationController
   end
 
   def update
+    # Idempotency: if this exact mutation was already applied to this row
+    # (FE retry after a network drop), short-circuit with the canonical
+    # current row. Without this, a replayed PATCH would re-broadcast and
+    # re-run after_commit hooks for a no-op.
+    mutation_id = client_mutation_id
+    if mutation_id.present? && @item.client_mutation_id == mutation_id
+      render json: @item.serialize.merge(deduped: true)
+      return
+    end
+
     new_agenda_id = item_params[:agenda_id]
     moved = new_agenda_id.present? && new_agenda_id.to_i != @item.agenda_id
     target_agenda = moved ? resolve_target_agenda(new_agenda_id) : nil
@@ -793,7 +817,8 @@ class AgendaItemsController < ApplicationController
   def item_params
     raw = params.require(:agenda_item).permit(
       :agenda_id, :name, :kind, :color, :local_color, :start_at, :end_at, :all_day,
-      :notes, :location, :arrive_early_minutes, :completed_at, :trigger_expression
+      :notes, :location, :arrive_early_minutes, :completed_at, :trigger_expression,
+      :client_mutation_id
     )
 
     # Time fields cross the wire as integer epoch seconds (UTC) so the FE
@@ -875,6 +900,16 @@ class AgendaItemsController < ApplicationController
       end
     end
     attrs
+  end
+
+  # Extracts the client_mutation_id from either the request body
+  # (`agenda_item.client_mutation_id`, the queue's natural payload home)
+  # or a top-level `client_mutation_id` param (RSVP / completion flows
+  # that don't nest under :agenda_item). Returns nil for non-PWA
+  # callers so legacy paths keep working untouched.
+  def client_mutation_id
+    raw = params.dig(:agenda_item, :client_mutation_id) || params[:client_mutation_id]
+    raw.presence
   end
 
   # X-Client-Mutation-At carries the wall-clock instant (epoch ms) when

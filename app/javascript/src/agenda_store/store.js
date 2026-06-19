@@ -109,39 +109,71 @@ function notify(reason, payload) {
 
 // Bootstrap / Delta / Page -----------------------------------------------
 
+// Validates an incoming bootstrap/page payload BEFORE mutating any local
+// state. Malformed responses (partial JSON, server error rendered as a
+// blob, mid-flight network hang) get dropped here so the user's
+// optimistic + cached state survives untouched. Mirrors the Chores
+// `validateSyncPayload` contract — strict at the boundary, never half-
+// apply.
+function validateBootstrapPayload(payload) {
+  if (!payload || typeof payload !== "object") return false;
+  if (!Array.isArray(payload.items)) return false;
+  if (payload.agendas && !Array.isArray(payload.agendas)) return false;
+  if (payload.schedules && !Array.isArray(payload.schedules)) return false;
+  return true;
+}
+
 function applyBootstrap(payload) {
-  if (!payload) return;
+  if (!validateBootstrapPayload(payload)) {
+    console.warn("[AgendaStore] dropping malformed bootstrap payload — keeping local cache");
+    return false;
+  }
+  // Stage the new state on top of the existing one — only swap when the
+  // full payload has been parsed cleanly. A throw mid-build leaves the
+  // current state intact. Mirrors Chores' "never dump until confirmed".
+  const incoming = indexById(payload.items);
+  const merged = Object.assign({}, state.items);
+
+  // Authoritative range pruning happens against the merged copy first,
+  // then we install the merged object as the new state.items in one
+  // assignment.
+  const nextWindowFrom = (payload.window && payload.window.from) || null;
+  if (nextWindowFrom) {
+    const cutoffEpoch = isoToEpochSecondsFloor(nextWindowFrom);
+    Object.keys(merged).forEach((id) => {
+      const it = merged[id];
+      const tEnd = (it.end_at || it.start_at || 0);
+      // Optimistic temp rows (id starts with "temp:") are NEVER pruned
+      // by a bootstrap — they haven't been confirmed yet and dropping
+      // them would lose the user's offline write.
+      if (String(id).startsWith("temp:")) return;
+      if (tEnd >= cutoffEpoch && !incoming[id]) delete merged[id];
+    });
+  } else {
+    // No window in payload = cold bootstrap. Preserve temp:* rows
+    // regardless so an offline-created item survives the first sync.
+    Object.keys(merged).forEach((id) => {
+      if (!String(id).startsWith("temp:")) delete merged[id];
+    });
+  }
+  Object.assign(merged, incoming);
+
+  // Atomic install — all-or-nothing.
   state.serverTs     = payload.server_ts     || Date.now();
   state.dayKey       = payload.day_key       || null;
   state.timezone     = payload.timezone      || state.timezone;
   state.dayStartHour = (payload.day_start_hour ?? state.dayStartHour) | 0;
-  state.windowFrom   = payload.window && payload.window.from;
+  state.windowFrom   = nextWindowFrom;
   state.carryOverIds = payload.carry_over_ids || [];
-
-  state.agendas    = indexById(payload.agendas    || []);
-  state.schedules  = indexById(payload.schedules  || []);
-  state.preferences = payload.preferences || state.preferences;
+  state.agendas      = indexById(payload.agendas    || []);
+  state.schedules    = indexById(payload.schedules  || []);
+  state.preferences  = payload.preferences || state.preferences;
   state.notificationSettings = indexBy(payload.notification_settings || [], "agenda_id");
-
-  // Bootstrap is authoritative for items in `[windowFrom..∞)` — prune
-  // anything in the local cache that falls in that range and is NOT in
-  // the response. Below the floor we keep whatever the user already
-  // had (lazy backfill manages that range).
-  const incoming = indexById(payload.items || []);
-  if (state.windowFrom) {
-    const cutoffEpoch = isoToEpochSecondsFloor(state.windowFrom);
-    Object.keys(state.items).forEach((id) => {
-      const it = state.items[id];
-      const tEnd = (it.end_at || it.start_at || 0);
-      if (tEnd >= cutoffEpoch && !incoming[id]) delete state.items[id];
-    });
-  } else {
-    state.items = {};
-  }
-  Object.assign(state.items, incoming);
+  state.items        = merged;
 
   persist();
   notify("bootstrap");
+  return true;
 }
 
 function applyDelta(payload) {
@@ -186,11 +218,61 @@ function upsertItem(item, opts) {
   const id = String(item.id);
   if (item.status === "cancelled") {
     if (state.items[id]) delete state.items[id];
+    if (!opts || opts.persist !== false) persist();
+    notify("itemRemove", { id: id });
     return;
   }
+
+  // Reconciliation: if the server response carries a `client_mutation_id`
+  // and we have an optimistic temp:* row with that mutation id, swap the
+  // temp row's id to the server's canonical id so the DOM diff matches
+  // by id (no flash, no duplicate render). Mirrors how Chores merges
+  // pending → confirmed in-place.
+  if (item.client_mutation_id) {
+    const mid = item.client_mutation_id;
+    Object.keys(state.items).forEach((existingId) => {
+      if (existingId === id) return;
+      if (!existingId.startsWith("temp:")) return;
+      const ex = state.items[existingId];
+      if (ex && ex.client_mutation_id === mid) {
+        delete state.items[existingId];
+        notify("itemRemove", { id: existingId });
+      }
+    });
+  }
+
+  // Stale-time guard — never let an older `updated_at` from a Monitor
+  // broadcast overwrite a fresher local copy (e.g. another tab just
+  // edited and we received the broadcast before our own response).
+  const existing = state.items[id];
+  if (existing && existing.updated_at && item.updated_at &&
+      Number(item.updated_at) < Number(existing.updated_at)) {
+    // Drop the stale upsert silently. The next delta will deliver the
+    // newer version once the server catches up.
+    return;
+  }
+
   state.items[id] = item;
   if (!opts || opts.persist !== false) persist();
   notify("itemUpsert", item);
+}
+
+// Optimistic write-first surface. The mutation queue calls this BEFORE
+// the network drain so the user sees their change immediately and can
+// dismiss the app safely — both the store mutation and the queued op
+// are persisted before this returns.
+//
+// `temp:` prefix on the id marks a row that hasn't been confirmed by
+// the server yet; bootstrap will preserve it across a wipe, and the
+// reconciliation in upsertItem swaps the temp id for the real one once
+// the server responds.
+function patchItem(item, opts) {
+  if (!item || !item.id) return;
+  const id = String(item.id);
+  const existing = state.items[id] || {};
+  state.items[id] = Object.assign({}, existing, item);
+  if (!opts || opts.persist !== false) persist();
+  notify("itemUpsert", state.items[id]);
 }
 
 function removeItem(id) {
@@ -374,6 +456,7 @@ const AgendaStore = {
   localDayKey,
   // mutations
   upsertItem,
+  patchItem,
   removeItem,
   upsertSchedule,
   removeSchedule,

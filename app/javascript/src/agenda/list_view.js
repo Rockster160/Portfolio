@@ -107,10 +107,11 @@
     if (emptyHint) emptyHint.classList.toggle("hidden", items.length > 0);
   }
 
-  // Granular DOM diff: keep matching rows, remove gone, append new,
-  // re-order to match the sorted item list. Avoids `innerHTML = ...`
-  // so input focus, modal targets, and click handlers on existing
-  // rows survive a re-render.
+  // Granular DOM diff: keep matching rows by mutating fields in place
+  // (no flicker, no focus loss, no scroll jump); only build/insert when
+  // an item is genuinely new; only remove when it's gone. The renderer's
+  // `patchAgendaItem` is responsible for syncing every visible field
+  // and data-* attribute against the latest store snapshot.
   function diffItems(container, items, opts) {
     const existing = new Map();
     container.querySelectorAll(".agenda-item[data-item-id]").forEach((el) => {
@@ -121,18 +122,22 @@
     items.forEach((item) => {
       const id = String(item.id);
       desiredIds.add(id);
-      const node = window.AgendaItemRenderer.buildAgendaItem(item, { preview: !!opts.preview });
-      if (!node) return;
       const prev = existing.get(id);
-      if (prev) prev.replaceWith(node);
-      else container.appendChild(node);
+      if (prev) {
+        // In-place patch — keeps the node identity, no DOM lifecycle churn.
+        window.AgendaItemRenderer.patchAgendaItem(prev, item, { preview: !!opts.preview });
+      } else {
+        const node = window.AgendaItemRenderer.buildAgendaItem(item, { preview: !!opts.preview });
+        if (node) container.appendChild(node);
+      }
     });
 
     existing.forEach((el, id) => {
       if (!desiredIds.has(id)) el.remove();
     });
 
-    // Reorder to match the sorted desired list.
+    // Reorder to match the sorted desired list — uses `insertBefore` /
+    // `prepend` which keep node identity intact (move, not rebuild).
     let prev = null;
     items.forEach((item) => {
       const id = String(item.id);
