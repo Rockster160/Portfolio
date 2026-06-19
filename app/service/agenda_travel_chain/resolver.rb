@@ -26,10 +26,37 @@ module AgendaTravelChain
       return nil if text.blank?
       return nil if ::AddressBook.non_travelable?(text)
 
-      latlng = address_book.geocode(text)
-      return nil if latlng.blank?
+      # 1. Contact match wins — "Sarah's House", "Mom", "Costco" (if the
+      # user has a Costco contact). AddressBook#match_contact handles
+      # possessive/plural normalisation. We geocode the contact's street
+      # rather than the raw input so the lat/lng matches the address text
+      # we hand back.
+      contact_addr = address_book.match_contact(text)&.primary_address&.street
+      if contact_addr.present?
+        latlng = address_book.geocode(contact_addr)
+        return { address: contact_addr, lat: latlng[0], lng: latlng[1] } if latlng.present?
+        # Contact matched but their address won't geocode — fall through
+        # rather than return nil so we still try Places.
+      end
 
-      { address: text.to_s.strip, lat: latlng[0], lng: latlng[1] }
+      # 2. Direct geocode — full street addresses resolve cleanly here.
+      latlng = address_book.geocode(text)
+      address = text.to_s.strip
+
+      if latlng.blank?
+        # 3. Places `findplacefromtext` biased to the user's current
+        # location. Catches casual chain names ("Costco", "Texas
+        # Roadhouse") that Geocoding can't disambiguate. Both calls
+        # share the same upstream Google response (Rails.cache
+        # short-circuit), so this is one round-trip in steady state.
+        address = address_book.nearest_from_name(text, extract: :address)
+        return nil if address.blank?
+
+        latlng = address_book.nearest_from_name(text, extract: :loc)
+        return nil if latlng.blank?
+      end
+
+      { address: address, lat: latlng[0], lng: latlng[1] }
     end
 
     # at: optional Time / epoch; Google uses traffic-aware drive times when

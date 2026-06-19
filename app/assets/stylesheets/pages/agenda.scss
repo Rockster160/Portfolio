@@ -1022,6 +1022,12 @@ body.ctr-agendas {
       flex-shrink: 0;
       margin-right: 0;
     }
+    .agenda-details-loc-stack {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      flex: 1;
+    }
     .agenda-details-loc-body {
       min-width: 0;
       word-break: break-word;
@@ -1038,6 +1044,8 @@ body.ctr-agendas {
       font-size: 12px;
       opacity: 0.75;
       margin-top: 2px;
+      word-break: break-word;
+      overflow-wrap: anywhere;
     }
   }
   .agenda-details-notes {

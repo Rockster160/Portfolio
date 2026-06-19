@@ -76,6 +76,7 @@
      data-name="<%= item.name %>"
      data-notes="<%= item.notes %>"
      data-location="<%= item.location %>"
+     data-resolved-address="<%= item.metadata.dig("travel", "location_address") %>"
      data-arrive-early-minutes="<%= item.arrive_early_minutes.to_i %>"
      data-travel-minutes="<%= item.metadata["travel_minutes"].to_i %>"
      data-trigger-expression="<%= item.trigger_expression %>"

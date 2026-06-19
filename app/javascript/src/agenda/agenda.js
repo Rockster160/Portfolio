@@ -2188,6 +2188,19 @@
       locRow.classList.toggle("hidden", !hasLoc);
       const locTarget = locRow.querySelector("[data-loc-target]");
       if (locTarget) renderClickableLocation(locTarget, d.location || "");
+      // Resolved address subtext — what the travel-chain resolver landed on
+      // ("Costco" → "13123 S 5600 W, Herriman, UT 84096"). Hidden when it
+      // matches the raw location (user already typed a full address) or
+      // when no resolution happened yet.
+      const resolvedTarget = locRow.querySelector("[data-loc-resolved-target]");
+      if (resolvedTarget) {
+        const resolved = (d.resolvedAddress || "").trim();
+        const same = resolved.toLowerCase() === (d.location || "").trim().toLowerCase();
+        const show = hasLoc && resolved.length > 0 && !same;
+        resolvedTarget.classList.toggle("hidden", !show);
+        if (show) renderClickableLocation(resolvedTarget, resolved);
+        else resolvedTarget.textContent = "";
+      }
     }
 
     const travelRow = modal.querySelector("[data-travel-row]");

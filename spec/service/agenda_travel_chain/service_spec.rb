@@ -33,6 +33,9 @@ RSpec.describe AgendaTravelChain::Service do
     # otherwise route through the real AddressBook + Google.
     allow_any_instance_of(::User).to receive(:address_book).and_return(address_book)
     allow(address_book).to receive(:home).and_return(home_address)
+    # Default to no contact match — individual specs can override when testing
+    # the contact-first branch added in resolver.rb.
+    allow(address_book).to receive(:match_contact).and_return(nil)
     allow(address_book).to receive(:geocode) { |addr| [40.0 + addr.to_s.length * 0.001, -111.0] }
     allow(address_book).to receive(:traveltime_seconds) { |to, from, _opts = {}|
       drive_matrix[[from.to_s, to.to_s]] || 600

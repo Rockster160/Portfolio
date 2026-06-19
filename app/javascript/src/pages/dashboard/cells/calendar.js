@@ -24,6 +24,16 @@ import { dash_colors } from "../vars";
     return `${hours}:${minutes}${period}`;
   }
 
+  // Compact "3p" / "2:30p" — matches fmtCalTime on the agenda pages so the
+  // leave-by stamp here reads the same as the agenda modal's `→` chip.
+  function calTimeFromDate(date) {
+    let hours = date.getHours();
+    const minutes = date.getMinutes();
+    const suffix = hours >= 12 ? "p" : "a";
+    hours = hours % 12 || 12;
+    return minutes === 0 ? `${hours}${suffix}` : `${hours}:${String(minutes).padStart(2, "0")}${suffix}`;
+  }
+
   const formatTime = (date, options) => {
     return new Intl.DateTimeFormat("en-US", {
       hour: "numeric",
@@ -111,6 +121,12 @@ import { dash_colors } from "../vars";
         if (end_time && !isTask) {
           const endTime = new Date(end_time * 1000);
           timeStr = `${timeStr}-${timeFromDate(endTime)}`;
+        }
+        const travelMin = parseInt(event.travel_minutes, 10) || 0;
+        const arriveEarlyMin = parseInt(event.arrive_early_minutes, 10) || 0;
+        if (!isTask && (travelMin > 0 || arriveEarlyMin > 0)) {
+          const leaveDate = new Date((start_time - (travelMin + arriveEarlyMin) * 60) * 1000);
+          timeStr = `${timeStr} →${calTimeFromDate(leaveDate)}`;
         }
         timeStr = Text.grey(timeStr);
 

@@ -16,8 +16,9 @@ RSpec.describe "agenda voice commands" do
     data = Global.input_data()::Hash
     captures = data.get("named_captures")::Hash
     rest = captures.get("rest")::String
-    hasTime = data.get("has_time")::Boolean
-    startTs = data.get("timestamp")::Date
+    phrase = data.get("full")::String
+
+    startTs = Date.parse(phrase, "future")::Date
 
     durMin = Date.extract_minutes(rest)::Numeric
     hasDur = Boolean.compare(durMin, ">", 0)::Boolean
@@ -50,15 +51,8 @@ RSpec.describe "agenda voice commands" do
     created = Global.if({
       hasDurRef = Global.ref(hasDur)::Boolean
     }, {
-      startUsed = Global.if({
-        hasTimeRef = Global.ref(hasTime)::Boolean
-      }, {
-        pickStartA = Global.ref(startTs)::Date
-      }, {
-        pickStartB = Date.now()::Date
-      })::Date
-      endUsed = startUsed.add(durMin, "minutes")::Date
-      evtMade = Agenda.add_event("Rockster160", itemName, startUsed, endUsed)::AgendaItem
+      endUsed = startTs.add(durMin, "minutes")::Date
+      evtMade = Agenda.add_event("Rockster160", itemName, startTs, endUsed)::AgendaItem
     }, {
       taskMade = Agenda.add_task("Rockster160", itemName, startTs)::AgendaItem
     })::AgendaItem
@@ -130,15 +124,15 @@ RSpec.describe "agenda voice commands" do
 
   let!(:agenda) { Agenda.find_by(user: user, name: "Rockster160") || Agenda.create!(user: user, name: "Rockster160") }
 
-  # Mirrors what Jarvis#command builds in trigger data: pre-stripped `words`,
-  # parsed `timestamp`/`has_time`, and the listener's named_captures.
-  def agenda_add_data(rest:, has_time: false, timestamp: nil)
-    ts = timestamp || Time.current
+  # Mirrors what Jarvis#command builds in trigger data. `rest` is what
+  # the listener regex captured (time pre-stripped by Jarvis); `full` is
+  # the original unstripped phrase that gets re-parsed with future bias.
+  def agenda_add_data(rest:, full: nil)
     {
       words:           "agenda add #{rest}",
-      full:            "agenda add #{rest}",
-      has_time:        has_time,
-      timestamp:       ts.is_a?(String) ? ts : ts.iso8601,
+      full:            "agenda add #{full || rest}",
+      has_time:        true, # ignored by current code; preserved for back-compat
+      timestamp:       Time.current.iso8601,
       named_captures: { rest: rest },
     }
   end
@@ -153,7 +147,7 @@ RSpec.describe "agenda voice commands" do
     it "duration + 'at' location → EVENT with location, name from after 'at'" do
       Timecop.freeze(Time.zone.local(2026, 6, 18, 10, 0)) do
         ts = Time.zone.local(2026, 6, 18, 16, 0)
-        data = agenda_add_data(rest: "20 minutes at Costco", has_time: true, timestamp: ts)
+        data = agenda_add_data(rest: "20 minutes at Costco", full: "20 minutes at Costco at 4")
         expect { Jil::Executor.call(user, AGENDA_ADD_CODE, data) }
           .to change { agenda.reload.agenda_items.count }.by(1)
 
@@ -166,15 +160,47 @@ RSpec.describe "agenda voice commands" do
       end
     end
 
-    it "reversed phrasing 'Costco for 20m' → EVENT with name+location both 'Costco'" do
+    it "future bias: 'at 8' said at 6:30pm rolls forward to 8pm tonight" do
+      Timecop.freeze(Time.zone.local(2026, 6, 18, 18, 30)) do
+        ts = Time.zone.local(2026, 6, 18, 20, 0)
+        data = agenda_add_data(
+          rest: "Texas Roadhouse for 2 hours",
+          full: "Texas Roadhouse for 2 hours at 8",
+        )
+        Jil::Executor.call(user, AGENDA_ADD_CODE, data)
+        item = agenda.agenda_items.order(created_at: :desc).first
+        expect(item.kind).to eq("event")
+        expect(item.name).to eq("Texas Roadhouse")
+        expect(item.start_at).to eq(ts)
+        expect(item.end_at).to eq(ts + 2.hours)
+      end
+    end
+
+    it "future bias: 'at 8:30am' said late at night rolls to tomorrow morning" do
+      Timecop.freeze(Time.zone.local(2026, 6, 18, 23, 57)) do
+        data = agenda_add_data(
+          rest: "Berry Breakfast",
+          full: "Berry Breakfast at 8:30am",
+        )
+        Jil::Executor.call(user, AGENDA_ADD_CODE, data)
+        item = agenda.agenda_items.order(created_at: :desc).first
+        local = item.start_at.in_time_zone(user.timezone)
+        expect(local.to_date).to eq(Date.new(2026, 6, 19))
+        expect(local.hour).to eq(8)
+        expect(local.min).to eq(30)
+      end
+    end
+
+    it "reversed phrasing 'Costco at 4 for 20m' → EVENT with name+location both 'Costco'" do
       Timecop.freeze(Time.zone.local(2026, 6, 18, 10, 0)) do
         ts = Time.zone.local(2026, 6, 18, 16, 0)
-        data = agenda_add_data(rest: "Costco for 20m", has_time: true, timestamp: ts)
+        data = agenda_add_data(rest: "Costco for 20m", full: "Costco at 4 for 20m")
         Jil::Executor.call(user, AGENDA_ADD_CODE, data)
         item = agenda.agenda_items.order(created_at: :desc).first
         expect(item.kind).to eq("event")
         expect(item.name).to eq("Costco")
         expect(item.location).to eq("Costco")
+        expect(item.start_at).to eq(ts)
         expect(item.end_at).to eq(ts + 20.minutes)
       end
     end
@@ -182,7 +208,7 @@ RSpec.describe "agenda voice commands" do
     it "compact '1h 30m' → 90-minute event" do
       Timecop.freeze(Time.zone.local(2026, 6, 18, 10, 0)) do
         ts = Time.zone.local(2026, 6, 18, 16, 0)
-        data = agenda_add_data(rest: "Costco for 1h 30m", has_time: true, timestamp: ts)
+        data = agenda_add_data(rest: "Costco for 1h 30m", full: "Costco at 4 for 1h 30m")
         Jil::Executor.call(user, AGENDA_ADD_CODE, data)
         item = agenda.agenda_items.order(created_at: :desc).first
         expect(item.end_at).to eq(ts + 90.minutes)
@@ -192,7 +218,10 @@ RSpec.describe "agenda voice commands" do
     it "explicit 'meeting at Costco for 1h' → name=meeting, location=Costco" do
       Timecop.freeze(Time.zone.local(2026, 6, 18, 10, 0)) do
         ts = Time.zone.local(2026, 6, 18, 16, 0)
-        data = agenda_add_data(rest: "meeting at Costco for 1h", has_time: true, timestamp: ts)
+        data = agenda_add_data(
+          rest: "meeting at Costco for 1h",
+          full: "meeting at Costco at 4 for 1h",
+        )
         Jil::Executor.call(user, AGENDA_ADD_CODE, data)
         item = agenda.agenda_items.order(created_at: :desc).first
         expect(item.name).to eq("meeting")
@@ -201,9 +230,9 @@ RSpec.describe "agenda voice commands" do
       end
     end
 
-    it "no time, just duration → EVENT starting now" do
+    it "no time at all + duration → EVENT starting now" do
       Timecop.freeze(Time.zone.local(2026, 6, 18, 10, 0)) do
-        data = agenda_add_data(rest: "Costco for 20 minutes", has_time: false, timestamp: Time.current)
+        data = agenda_add_data(rest: "Costco for 20 minutes")
         Jil::Executor.call(user, AGENDA_ADD_CODE, data)
         item = agenda.agenda_items.order(created_at: :desc).first
         expect(item.kind).to eq("event")
@@ -215,8 +244,7 @@ RSpec.describe "agenda voice commands" do
 
     it "no duration, just name → TASK" do
       Timecop.freeze(Time.zone.local(2026, 6, 18, 10, 0)) do
-        ts = Time.zone.local(2026, 6, 18, 16, 0)
-        data = agenda_add_data(rest: "buy milk", has_time: true, timestamp: ts)
+        data = agenda_add_data(rest: "buy milk")
         Jil::Executor.call(user, AGENDA_ADD_CODE, data)
         item = agenda.agenda_items.order(created_at: :desc).first
         expect(item.kind).to eq("task")
@@ -228,7 +256,7 @@ RSpec.describe "agenda voice commands" do
 
     it "stops propagation so other handlers don't double-respond" do
       Timecop.freeze(Time.zone.local(2026, 6, 18, 10, 0)) do
-        data = agenda_add_data(rest: "Costco for 20m", has_time: true, timestamp: Time.current)
+        data = agenda_add_data(rest: "Costco for 20m")
         jil = Jil::Executor.call(user, AGENDA_ADD_CODE, data)
         expect(jil.ctx[:stop_propagation]).to be(true)
       end
