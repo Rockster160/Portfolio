@@ -49,3 +49,37 @@ RSpec.describe "TeslaControl.resolve_destination" do
     end
   end
 end
+
+RSpec.describe "TeslaControl#add_stop" do
+  let(:ctrl) { TeslaControl.new(User.me) }
+  let(:address_book) { instance_double("AddressBook") }
+
+  before do
+    allow(User.me).to receive(:address_book).and_return(address_book)
+    allow(TeslaControl).to receive(:resolve_destination).with("Costco").and_return("Costco")
+  end
+
+  it "geocodes the resolved address and sends a single navigation_gps_request at order:1" do
+    allow(address_book).to receive(:geocode).with("Costco").and_return([40.5, -111.9])
+    expect(ctrl).to receive(:proxy_command).with(:navigation_gps_request, lat: 40.5, lon: -111.9, order: 1)
+    expect(ctrl.add_stop("Costco")).to be(true)
+  end
+
+  it "returns false without sending if address resolves blank" do
+    allow(TeslaControl).to receive(:resolve_destination).with("").and_return("")
+    expect(ctrl).not_to receive(:proxy_command)
+    expect(ctrl.add_stop("")).to be(false)
+  end
+
+  it "returns false without sending if geocoding fails" do
+    allow(address_book).to receive(:geocode).with("Costco").and_return(nil)
+    expect(ctrl).not_to receive(:proxy_command)
+    expect(ctrl.add_stop("Costco")).to be(false)
+  end
+
+  it "accepts a custom order" do
+    allow(address_book).to receive(:geocode).with("Costco").and_return([40.5, -111.9])
+    expect(ctrl).to receive(:proxy_command).with(:navigation_gps_request, lat: 40.5, lon: -111.9, order: 2)
+    expect(ctrl.add_stop("Costco", order: 2)).to be(true)
+  end
+end

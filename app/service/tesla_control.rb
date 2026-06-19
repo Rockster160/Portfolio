@@ -135,6 +135,24 @@ class TeslaControl
     false
   end
 
+  # Inserts a single stop into the active trip at `order` (default 1 — first
+  # waypoint after the current destination). Resolves contact → address →
+  # lat/lng via AddressBook; no-op if geocoding fails. Unlike navigate_trip
+  # this preserves an in-progress route instead of replacing it.
+  def add_stop(input, order: 1)
+    address = self.class.resolve_destination(input)
+    return false if address.blank?
+
+    latlng = User.me.address_book.geocode(address)
+    return false if latlng.blank?
+
+    proxy_command(:navigation_gps_request, lat: latlng[0].to_f, lon: latlng[1].to_f, order: order.to_i)
+    true
+  rescue StandardError => e
+    err("add_stop", e)
+    false
+  end
+
   # Resolution order:
   #   1. Contact name match (highest priority — e.g. "Sarah" → her address).
   #      AddressBook#match_contact handles possessive/plural normalization

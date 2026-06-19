@@ -115,6 +115,8 @@
   #ago(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"] "ago")
   #from_now(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"] "from now")
   #parse(String ["any" "future" "past"])
+  #extract_minutes(String)::Numeric
+  #strip_duration(String)::String
   .piece(["second" "minute" "hour" "day" "week" "month" "year" "wday" "mday" "yday" "zday"])::Numeric
   .adjust(["+", "-"], Duration|Numeric)
   .add(Numeric ["seconds" "minutes" "hours" "days" "weeks" "months" "years"])
@@ -510,6 +512,7 @@
   #flashLights::Boolean
   #setTemp(Numeric)::Boolean
   #navigate(Text)::Boolean
+  #addStop(String)::Boolean
   #lockDoors::Boolean
   #unlockDoors::Boolean
   #closeWindows::Boolean

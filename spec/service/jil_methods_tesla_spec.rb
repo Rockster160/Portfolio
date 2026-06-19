@@ -70,4 +70,16 @@ RSpec.describe "Jil Tesla integration" do
     expect(jil.ctx[:error]).to be_nil
     expect(jil.ctx[:vars][:nav][:value]).to be(true)
   end
+
+  it "Tesla.addStop routes through TeslaControl#add_stop" do
+    expect(ctrl).to receive(:add_stop).with("Costco").and_return(true)
+
+    code = <<~'JIL'
+      added = Tesla.addStop("Costco")::Boolean
+    JIL
+    Jil::Validator.validate!(code)
+    jil = ::Jil::Executor.call(user, code, {})
+    expect(jil.ctx[:error]).to be_nil
+    expect(jil.ctx[:vars][:added][:value]).to be(true)
+  end
 end

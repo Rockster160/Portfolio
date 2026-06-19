@@ -52,6 +52,22 @@ class Jil::Methods::Tesla < Jil::Methods::Base
   # contact name > "lat,lng" > raw address string.
   def navigate(input) = wrap { ::TeslaControl.me.navigate(input.to_s) }
 
+  # Insert a stop into the active trip. Defaults to order:1 (first waypoint
+  # after the current destination). Unlike Tesla.start({waypoints:}) which
+  # replaces the whole route. Surfaces TeslaControl#add_stop's own boolean
+  # (false on bad address / geocoding miss) — unlike #wrap which collapses
+  # everything to true unless an exception fires.
+  def addStop(input)
+    return false unless @jil.user&.me?
+
+    ::TeslaControl.me.add_stop(input.to_s)
+  rescue ::TeslaNotAuthorized
+    false
+  rescue StandardError => e
+    ::PrettyLogger.error("[JIL TESLA] #{e.class}: #{e.message}")
+    false
+  end
+
   def lockDoors     = wrap { ::TeslaControl.me.doors(:close) }
   def unlockDoors   = wrap { ::TeslaControl.me.doors(:open) }
   def closeWindows  = wrap { ::TeslaControl.me.windows(:close) }

@@ -55,6 +55,19 @@ class Jil::Methods::Date < Jil::Methods::Base
     }
   end
 
+  # Extract a duration in minutes from a natural-language phrase. Supports
+  # "for 20 minutes", "1h 30m", "90m", "1.5 hours", "an hour", "half hour",
+  # etc. Returns 0 if no duration atom is found.
+  def extract_minutes(text)
+    ::Jarvis::Durations.extract(text.to_s)
+  end
+
+  # Returns the phrase with every duration atom (and optional leading "for")
+  # removed. Useful for pulling the name/location portion out.
+  def strip_duration(text)
+    ::Jarvis::Durations.strip(text.to_s)
+  end
+
   def adjust(date, direction, duration)
     return unless direction.in?(["+", "-"])
 
