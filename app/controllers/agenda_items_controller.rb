@@ -85,6 +85,7 @@ class AgendaItemsController < ApplicationController
 
   def destroy
     owning_agenda = @item.agenda
+    destroyed_ids = []
     with_agenda_write_lock(owning_agenda) {
       if scope == :series && @item.recurring?
         destroy_series!(owning_agenda)
@@ -99,11 +100,15 @@ class AgendaItemsController < ApplicationController
       else
         # Non-recurring: propagate the deletion upstream first, then
         # destroy locally so a Google failure leaves the row intact.
+        # Capture the display_id BEFORE destroy so the broadcast can carry
+        # it — the FE delta endpoint is upsert-only and can't tell the
+        # store the row is gone otherwise.
         mirror_destroy_to_google!(@item) if owning_agenda.managed_externally? && @item.external_uid.present?
+        destroyed_ids << @item.display_id
         @item.destroy
       end
 
-      owning_agenda.broadcast!
+      owning_agenda.broadcast!(destroyed_item_ids: destroyed_ids)
       head :no_content
     }
   end
@@ -155,8 +160,9 @@ class AgendaItemsController < ApplicationController
     mirror_destroy_to_google!(@item) if @item.agenda.managed_externally? && @item.external_uid.present?
 
     owning_agenda = @item.agenda
+    destroyed_id = @item.display_id
     @item.destroy
-    owning_agenda.broadcast!
+    owning_agenda.broadcast!(destroyed_item_ids: [destroyed_id])
     head :no_content
   end
 

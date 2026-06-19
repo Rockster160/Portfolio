@@ -1,8 +1,14 @@
 <%= meta_title "Agenda", include_name: false %>
 <% content_for(:favicon) { render "agendas/favicon" } %>
 
-<div class="agenda-page"
-     data-current-date="<%= @date.iso8601 %>">
+<%# Day view — empty shell. Items are rendered client-side by
+    `agenda/day_view.js` from the shared AgendaStore (boots via
+    `/agenda/sync/bootstrap` + localStorage hydrate). The agenda LIST
+    pages (day/week) and the cal_month/cal_week PWA all draw from the
+    same cache now; the only per-view code is the layout pass. %>
+<div class="agenda-page agenda-day-page"
+     data-current-date="<%= @date.iso8601 %>"
+     data-today="<%= current_user.perceived_today.iso8601 %>">
 
   <header class="agenda-page-header">
     <h1 class="agenda-page-title">Agenda</h1>
@@ -27,7 +33,7 @@
   <div class="cal-view-toggle">
     <a href="<%= day_path %>" class="cal-toggle-btn active">Day</a>
     <a href="<%= week_path %>" class="cal-toggle-btn">Week</a>
-    <a href="<%= calendar_path %>" class="cal-toggle-btn">Month</a>
+    <a href="<%= cal_month_path %>" class="cal-toggle-btn">Month</a>
   </div>
 
   <div class="agenda-error hidden">Disconnected — changes will sync when reconnected.</div>
@@ -44,19 +50,12 @@
       No agendas yet. <a href="<%= new_agenda_path %>">Create your first one.</a>
     </div>
   <% else %>
-    <% if @date == Date.current %>
-      <% carry_over = current_user.agenda_carry_over_items.to_a %>
-      <% if carry_over.any? %>
-        <section class="agenda-section section-carry">
-          <header class="section-header">Carry over <span class="section-count"><%= carry_over.size %></span></header>
-          <div class="agenda-items">
-            <% carry_over.each do |item| %>
-              <%= render "agenda_items/item", item: item %>
-            <% end %>
-          </div>
-        </section>
-      <% end %>
-    <% end %>
+    <%# Carry-over section — hidden until the JS finds items to fill it
+        (incomplete tasks past their start_at, today view only). %>
+    <section class="agenda-section section-carry hidden">
+      <header class="section-header">Carry over <span class="section-count"></span></header>
+      <div class="agenda-items" data-section="carry"></div>
+    </section>
 
     <% is_today = (@date == Date.current) %>
     <% primary_label   = is_today ? "Today"    : @date.strftime("%A, %b %-d") %>
@@ -64,29 +63,24 @@
 
     <section class="agenda-section section-today" data-section-day="0">
       <header class="section-header"><%= primary_label %></header>
-      <div class="agenda-items" data-section="day-0">
-        <% today_items = current_user.agenda_visible_items_for(@date) %>
-        <% if today_items.empty? %>
-          <div class="agenda-empty">Nothing scheduled.</div>
-        <% end %>
-        <% today_items.each do |item| %>
-          <%= render "agenda_items/item", item: item %>
-        <% end %>
-      </div>
+      <div class="agenda-items" data-section="day-0"></div>
+      <div class="agenda-empty agenda-section-empty hidden">Nothing scheduled.</div>
     </section>
 
     <section class="agenda-section section-tomorrow" data-section-day="1">
       <header class="section-header"><%= secondary_label %></header>
-      <div class="agenda-items preview" data-section="day-1">
-        <% tomorrow_items = current_user.agenda_visible_items_for(@date + 1) %>
-        <% if tomorrow_items.empty? %>
-          <div class="agenda-empty muted">Nothing scheduled yet.</div>
-        <% end %>
-        <% tomorrow_items.each do |item| %>
-          <%= render "agenda_items/item", item: item, preview: true %>
-        <% end %>
-      </div>
+      <div class="agenda-items preview" data-section="day-1"></div>
+      <div class="agenda-empty agenda-section-empty muted hidden">Nothing scheduled yet.</div>
     </section>
+
+    <%# Cold-start hint — visible until the store hydrates. Hidden by JS
+        once an initial paint lands (even an empty one). %>
+    <div class="agenda-cold-start" data-cold-start>
+      <i class="fa fa-refresh fa-spin"></i> Loading agenda…
+    </div>
+
+    <%# Template the JS clones per item — see `agenda_item_renderer.js`. %>
+    <%= render "agenda_items/template" %>
 
     <%# Picker includes Google agendas — new items mirror to Google via
         events.insert, but kind is locked to Event in the form. %>

@@ -247,17 +247,27 @@ class Agenda < ApplicationRecord
     }
   end
 
-  def broadcast!
-    self.class.broadcast_changes!([self])
+  def broadcast!(destroyed_item_ids: [])
+    self.class.broadcast_changes!([self], destroyed_item_ids: destroyed_item_ids)
   end
 
   # Fans out a change signal: each recipient's payload includes only the
   # agendas they can access, so an item move between agendas never leaks
   # the foreign agenda's metadata to users who can't see it.
-  def self.broadcast_changes!(agendas)
+  #
+  # `destroyed_item_ids` carries display_ids of items that were HARD
+  # destroyed (not status-cancelled) since the last broadcast — the
+  # delta endpoint is upsert-only and can't return rows that no longer
+  # exist, so the FE store would otherwise hold them indefinitely until
+  # a bootstrap / page-refresh. Callers pass these in from the controller
+  # after `@item.destroy`. Cancelled items are NOT included here; they
+  # come through delta with `status: "cancelled"` and the store prunes
+  # them in `upsertItem`.
+  def self.broadcast_changes!(agendas, destroyed_item_ids: [])
     agendas = Array(agendas).compact.uniq
     return if agendas.empty?
 
+    destroyed_ids = Array(destroyed_item_ids).map(&:to_s).compact_blank
     per_user = Hash.new { |h, k| h[k] = [] }
     agendas.each do |a|
       a.access_users.find_each { |u| per_user[u] << a }
@@ -269,7 +279,8 @@ class Agenda < ApplicationRecord
         channel:   :agenda,
         timestamp: Time.current.to_i,
         data:      {
-          changed: accessible.map { |a| { agenda_id: a.id, slug: a.parameterized_name } },
+          changed:            accessible.map { |a| { agenda_id: a.id, slug: a.parameterized_name } },
+          destroyed_item_ids: destroyed_ids,
         },
       })
     end

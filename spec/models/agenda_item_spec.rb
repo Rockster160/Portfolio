@@ -222,4 +222,75 @@ RSpec.describe AgendaItem do
       expect(payload[:attendees].size).to eq(2)
     end
   end
+
+  describe "#presentation_attrs" do
+    # Single source of truth for the data-* attribute payload shared by
+    # `_data_attrs.html.erb` (server-rendered views) and
+    # `seed_hydrator.js` (client-rendered cal views). Adding or removing
+    # an entry here lands in both render paths automatically.
+    before do
+      # Block the inline-Sidekiq travel-chain-sync from making real Google
+      # calls during the create — these specs aren't about chain behavior.
+      address_book = instance_double("AddressBook")
+      allow_any_instance_of(::User).to receive(:address_book).and_return(address_book)
+      allow(address_book).to receive(:home).and_return(nil)
+      allow(address_book).to receive(:match_contact).and_return(nil)
+      allow(address_book).to receive(:geocode).and_return(nil)
+      allow(address_book).to receive(:nearest_from_name).and_return(nil)
+      allow(address_book).to receive(:traveltime_seconds).and_return(nil)
+      allow(::AddressBook).to receive(:non_travelable?).and_return(false)
+    end
+
+    it "returns the kebab-case attribute hash both render paths iterate" do
+      item = create(:agenda_item, agenda: agenda, kind: "event", name: "Dinner",
+        location: "Texas Roadhouse", arrive_early_minutes: 10,
+        start_at: Time.zone.local(2026, 6, 18, 20, 0),
+        end_at:   Time.zone.local(2026, 6, 18, 22, 0),
+        metadata: {
+          "travel_minutes" => 25,
+          "travel"         => {
+            "location_address"     => "11593 4000 W, South Jordan, UT 84009, USA",
+            "travel_from"          => "Home St",
+            "travel_from_kind"     => "home",
+            "chain_predecessor_id" => 99,
+            "chain_successor_id"   => 100,
+            "chain_prev_end_at"    => 1234,
+            "leave_at"             => 5678,
+          },
+        })
+
+      attrs = item.presentation_attrs
+      expect(attrs).to include(
+        "item-id"               => item.display_id,
+        "item-url"              => "/agenda_items/#{item.display_id}",
+        "kind"                  => "event",
+        "name"                  => "Dinner",
+        "location"              => "Texas Roadhouse",
+        "resolved-address"      => "11593 4000 W, South Jordan, UT 84009, USA",
+        "travel-from"           => "Home St",
+        "travel-from-kind"      => "home",
+        "chain-predecessor-id"  => 99,
+        "chain-successor-id"    => 100,
+        "chain-prev-end-epoch"  => 1234,
+        "leave-at-epoch"        => 5678,
+        "arrive-early-minutes"  => 10,
+        "travel-minutes"        => 25,
+      )
+    end
+
+    it "is included in #serialize output under :presentation_attrs so seed_hydrator can iterate it" do
+      item = create(:agenda_item, agenda: agenda, kind: :task, name: "Foo",
+        start_at: 1.hour.from_now)
+      expect(item.serialize[:presentation_attrs]).to eq(item.presentation_attrs)
+    end
+
+    it "tolerates a blank/missing travel metadata hash without raising" do
+      item = create(:agenda_item, agenda: agenda, kind: :task, name: "Foo",
+        start_at: 1.hour.from_now, metadata: {})
+      attrs = item.presentation_attrs
+      expect(attrs["resolved-address"]).to be_nil
+      expect(attrs["travel-minutes"]).to eq(0)
+      expect(attrs["chain-predecessor-id"]).to be_nil
+    end
+  end
 end

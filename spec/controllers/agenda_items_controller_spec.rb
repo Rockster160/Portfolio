@@ -271,6 +271,31 @@ RSpec.describe AgendaItemsController, type: :controller do
       expect(sched.reload.excluded?(Date.current + 30.days)).to be true
     end
 
+    it "non-recurring hard destroy broadcasts the display_id so the FE store prunes the gone row" do
+      one_off = create(
+        :agenda_item, agenda: agenda, kind: :task,
+        name: "One-off", start_at: Time.current,
+      )
+      payloads = []
+      allow(MonitorChannel).to receive(:broadcast_to) { |_user, payload| payloads << payload }
+
+      expect { delete :destroy, params: { id: one_off.id } }
+        .to change { AgendaItem.exists?(one_off.id) }.from(true).to(false)
+
+      destroy_payload = payloads.find { |p| p[:id] == :agenda }
+      expect(destroy_payload).to be_present
+      expect(destroy_payload.dig(:data, :destroyed_item_ids)).to eq([one_off.id.to_s])
+    end
+
+    it "cancel-only deletes (recurring occurrence) do NOT populate destroyed_item_ids — delta carries them" do
+      payloads = []
+      allow(MonitorChannel).to receive(:broadcast_to) { |_user, payload| payloads << payload }
+      delete :destroy, params: { id: phantom_id, scope: :occurrence }
+
+      payload = payloads.find { |p| p[:id] == :agenda }
+      expect(payload.dig(:data, :destroyed_item_ids)).to eq([])
+    end
+
     it "occurrence-scope delete on a DETACHED recurring item soft-cancels + excludes date" do
       # Detached items used to be destroyed; we now soft-cancel (cancelled_at)
       # to match the "deleting an occurrence shouldn't destroy" rule. The

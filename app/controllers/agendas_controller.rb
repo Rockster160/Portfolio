@@ -36,14 +36,10 @@ class AgendasController < ApplicationController
   def week
     @date = parse_date(params[:date]) || current_user.perceived_today
     @agendas = current_user.accessible_agendas.order(:sort_order, :id)
-    items = current_user.agenda_items_for_range(@date, @date + 7.days)
-    zone = current_user.timezone
-    @items_by_date = items.group_by { |i| i.start_at.in_time_zone(zone).to_date }
-    @carry_over = current_user.agenda_carry_over_items.to_a
 
     respond_to do |format|
       format.json { render json: aggregate_payload(@date, lookahead: 7) }
-      format.html
+      format.html # shell only; list_view.js fills sections from AgendaStore
     end
   end
 
@@ -53,34 +49,17 @@ class AgendasController < ApplicationController
 
   def edit; end
 
-  # Optional ?agenda_id query param filters the month to a single agenda.
-  def calendar
-    @month = parse_month(params[:month]) || current_user.perceived_today.beginning_of_month
-    @first_visible = @month.beginning_of_week(:sunday)
-    @last_visible = @month.end_of_month.end_of_week(:sunday)
-
-    scope_user = current_user
-    scope_agendas = scope_user.accessible_agendas
-    if params[:agenda_id].present?
-      scope_agendas = scope_agendas.where(id: params[:agenda_id])
-    end
-    @agendas = scope_agendas.order(:sort_order, :id)
-
-    items = @agendas.flat_map { |a| a.items_for_range(@first_visible, @last_visible) }
-    @items_by_date = items.group_by { |item| item.start_at.in_time_zone(scope_user.timezone).to_date }
-  end
-
-  # Mac-style Calendar PWA — month view. Same range math as #calendar
-  # (full visible weeks) so the grid renders the visible-month block, but
-  # no per-day truncation: the JS lays out as many event blocks as fit.
+  # Month view — renders an empty shell; `month_view.js` fills the
+  # timed-items-in-cells and `agenda_cal.js` builds the all-day banners
+  # row from AgendaStore. No per-item DB work needed at controller time.
+  # The legacy /agenda/calendar URL route-redirects to /agenda/month
+  # at the routing layer — no controller action involved on that path.
   def cal_month
     @month = parse_month(params[:month]) || current_user.perceived_today.beginning_of_month
     @first_visible = @month.beginning_of_week(cal_week_start_day)
     @last_visible = @month.end_of_month.end_of_week(cal_week_start_day)
 
     @agendas = current_user.accessible_agendas.order(:sort_order, :id)
-    items = @agendas.flat_map { |a| a.items_for_range(@first_visible, @last_visible) }
-    @items_by_date = items.group_by { |item| item.start_at.in_time_zone(current_user.timezone).to_date }
     # Title shows whichever month the visible block belongs to (always
     # the requested month for cal_month).
     @focus_date = @month

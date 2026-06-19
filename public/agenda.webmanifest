@@ -19,7 +19,7 @@
   "display": "standalone",
   "scope": "/agenda",
   "theme_color": "#0160FF",
-  "description": "Your daily agenda — tasks, events, and reminders across every agenda you can access.",
+  "description": "Your agenda — day list, week, and month views. All views share one cache (AgendaStore) and live-update across devices.",
   "shortcuts": [
     {
       "name": "Today",
@@ -27,14 +27,19 @@
       "url": "/agenda?source=pwa"
     },
     {
-      "name": "Week ahead",
+      "name": "Week",
       "short_name": "Week",
       "url": "/agenda/week?source=pwa"
     },
     {
       "name": "Month",
       "short_name": "Month",
-      "url": "/agenda/calendar?source=pwa"
+      "url": "/agenda/month?source=pwa"
+    },
+    {
+      "name": "Week grid",
+      "short_name": "Grid",
+      "url": "/agenda/grid?source=pwa"
     }
   ]
 }

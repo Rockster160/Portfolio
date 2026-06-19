@@ -1,5 +1,5 @@
 <%= meta_title @month.strftime("%B %Y"), include_name: false %>
-<% content_for(:favicon) { render "agendas/cal_favicon" } %>
+<% content_for(:favicon) { render "agendas/favicon" } %>
 <% content_for(:body_classes) { "agenda-cal-body" } %>
 
 <%# `agenda-page` triggers shared init in agenda.js (filter, modals,
@@ -60,10 +60,6 @@
            data-row-end="<%= week.last.iso8601 %>">
         <div class="cal-month-row-banners" data-row-banners aria-hidden="true"></div>
         <% week.each do |day| %>
-          <%# Drop all-day items from cell rendering — they appear as
-              banners in the row layer (built by agenda_cal.js from the
-              seed nodes at the bottom of the grid). %>
-          <% items = (@items_by_date[day] || []).reject(&:all_day?).sort_by(&:start_at) %>
           <% in_month = (day.month == @month.month) %>
           <% is_today = (day == Date.current) %>
           <div class="cal-month-cell <%= 'is-today' if is_today %> <%= 'other-month' unless in_month %>"
@@ -76,112 +72,25 @@
                 <%= day.day == 1 ? day.strftime("%b %-d") : day.day.to_s %>
               </span>
             </div>
-            <div class="cal-month-cell-items" data-items-container>
-              <% items.each do |item| %>
-                <% cal_editable = item.agenda.editable_by?(current_user) %>
-                <button type="button"
-                        class="cal-month-item agenda-item-data"
-                        data-open-details
-                        <%= "data-readonly".html_safe unless cal_editable %>
-                        data-item-id="<%= item.display_id %>"
-                        data-item-url="<%= agenda_item_path(item.display_id) %>"
-                        data-phantom="<%= item.phantom? %>"
-                        data-recurring="<%= item.recurring? %>"
-                        data-agenda-schedule-id="<%= item.agenda_schedule_id %>"
-                        data-kind="<%= item.kind %>"
-                        data-color="<%= item.display_color %>"
-                        data-agenda-id="<%= item.agenda_id %>"
-                        data-agenda-name="<%= item.agenda.name %>"
-                        data-agenda-color="<%= item.agenda.color %>"
-                        data-agenda-source="<%= item.agenda.source %>"
-                        data-all-day="false"
-                        data-end-date="<%= item.end_date&.to_time&.to_i %>"
-                        data-start-at="<%= item.start_at.to_i %>"
-                        data-end-at="<%= item.end_at&.to_i %>"
-                        data-name="<%= item.name %>"
-                        data-notes="<%= item.notes %>"
-                        data-location="<%= item.location %>"
-                        data-resolved-address="<%= item.metadata.dig("travel", "location_address") %>"
-                        data-arrive-early-minutes="<%= item.arrive_early_minutes.to_i %>"
-                        data-travel-minutes="<%= item.metadata["travel_minutes"].to_i %>"
-                        data-trigger-expression="<%= item.trigger_expression %>"
-                        data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>"
-                        data-attendees="<%= item.attendees.to_json %>"
-                        data-organizer="<%= item.organizer.to_json %>"
-                        data-self-response="<%= item.self_response %>"
-                        style="--item-color: <%= item.display_color %>; --agenda-color: <%= item.agenda.color %>;">
-                  <span class="cal-month-item-dot" aria-hidden="true"></span>
-                  <span class="cal-month-item-time"
-                        data-time-hydrate
-                        data-start-epoch="<%= item.start_at.to_i %>"
-                        data-format="cal"
-                  ></span>
-                  <span class="cal-month-item-name"><%= item.name %></span>
-                  <% cal_travel_min = item.metadata["travel_minutes"].to_i %>
-                  <% cal_arrive_early_min = item.arrive_early_minutes.to_i %>
-                  <% if cal_travel_min > 0 || cal_arrive_early_min > 0 %>
-                    <% cal_leave_epoch = item.start_at.to_i - (cal_arrive_early_min + cal_travel_min) * 60 %>
-                    <span class="cal-month-item-travel">
-                      <span class="cal-month-item-travel-leave"
-                            data-time-hydrate
-                            data-start-epoch="<%= cal_leave_epoch %>"
-                            data-format="cal"
-                            data-prefix="→"></span>
-                      <% if cal_arrive_early_min > 0 %><i class="fa fa-clock-o"></i><%= cal_arrive_early_min %>m<% end %>
-                      <% if cal_arrive_early_min > 0 && cal_travel_min > 0 %><span class="cal-month-item-travel-plus">+</span><% end %>
-                      <% if cal_travel_min > 0 %><i class="fa fa-car"></i><%= cal_travel_min %>m<% end %>
-                    </span>
-                  <% end %>
-                </button>
-              <% end %>
-            </div>
+            <%# Timed items in this cell — filled client-side by
+                `month_view.js` from AgendaStore. all-day events show up
+                as banners on the row above (built by agenda_cal.js
+                from the hidden seed nodes below). %>
+            <div class="cal-month-cell-items" data-items-container></div>
             <span class="cal-month-overflow hidden" aria-hidden="true"></span>
           </div>
         <% end %>
       </div>
     <% end %>
 
-    <%# All-day seed nodes for JS row-banner layout. Same data-* payload
-        as the timed items, just rendered as plain divs in a hidden
-        container; the banner overlay is built per-row from these. %>
-    <div class="cal-month-allday-seeds hidden" data-month-allday-seeds>
-      <% @items_by_date.each_value do |items| %>
-        <% items.each do |item| %>
-          <% next unless item.all_day? %>
-          <% cal_editable = item.agenda.editable_by?(current_user) %>
-          <div class="cal-month-allday-seed agenda-item-data"
-               <%= "data-readonly".html_safe unless cal_editable %>
-               data-item-id="<%= item.display_id %>"
-               data-item-url="<%= agenda_item_path(item.display_id) %>"
-               data-phantom="<%= item.phantom? %>"
-               data-recurring="<%= item.recurring? %>"
-               data-agenda-schedule-id="<%= item.agenda_schedule_id %>"
-               data-kind="<%= item.kind %>"
-               data-color="<%= item.display_color %>"
-               data-agenda-id="<%= item.agenda_id %>"
-               data-agenda-name="<%= item.agenda.name %>"
-               data-agenda-color="<%= item.agenda.color %>"
-               data-agenda-source="<%= item.agenda.source %>"
-               data-all-day="true"
-               data-end-date="<%= item.end_date&.to_time&.to_i %>"
-               data-start-at="<%= item.start_at.to_i %>"
-               data-end-at="<%= item.end_at&.to_i %>"
-               data-name="<%= item.name %>"
-               data-notes="<%= item.notes %>"
-               data-location="<%= item.location %>"
-               data-resolved-address="<%= item.metadata.dig("travel", "location_address") %>"
-               data-arrive-early-minutes="<%= item.arrive_early_minutes.to_i %>"
-               data-travel-minutes="<%= item.metadata["travel_minutes"].to_i %>"
-               data-trigger-expression="<%= item.trigger_expression %>"
-               data-schedule="<%= item.agenda_schedule&.serialize_for_edit&.to_json %>"
-               data-attendees="<%= item.attendees.to_json %>"
-               data-organizer="<%= item.organizer.to_json %>"
-               data-self-response="<%= item.self_response %>">
-          </div>
-        <% end %>
-      <% end %>
-    </div>
+    <%# All-day seed container — `agenda_cal.js`'s seed_hydrator fills
+        this from the store on every render; nothing needs to be
+        server-emitted here. Kept hidden because agenda_cal.js positions
+        the banners absolutely on the row layer above. %>
+    <div class="cal-month-allday-seeds hidden" data-month-allday-seeds></div>
   </div>
+
+  <%= render "agenda_items/template" %>
 
   <%= render "agenda_items/add_modal", agendas: @agendas, date: Date.current %>
   <%= render "agenda_items/edit_modal", agendas: @agendas %>

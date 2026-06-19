@@ -453,11 +453,62 @@ class AgendaItem < ApplicationRecord
       self_response:      self_response,
       needs_response:     needs_response?,
       declined:           declined?,
+      presentation_attrs: presentation_attrs,
     )
   end
 
   def jil_serialize(additional={})
     serialize.merge(agenda: { id: agenda.id, name: agenda.name }).merge(additional)
+  end
+
+  # Canonical data-* payload for an item. Used in two contexts:
+  #   * `_data_attrs.html.erb` iterates this hash to emit attributes for
+  #     the agenda list (day/week) + calendar (cal_month/cal_week) views.
+  #   * `AgendaItem#serialize` includes it under `presentation_attrs` so
+  #     `seed_hydrator.js` builds the same attributes from the JS store
+  #     without a parallel hardcoded attribute list.
+  #
+  # Keys are the kebab-case stems (no `data-` prefix). View-context flags
+  # like `data-readonly` and the cal_month `data-all-day` override are
+  # applied by the partial / hydrator, not here — this hash is pure item
+  # data, no caller context.
+  def presentation_attrs
+    travel = metadata.is_a?(Hash) ? (metadata["travel"] || {}) : {}
+    {
+      "item-id"               => display_id,
+      "item-url"              => "/agenda_items/#{display_id}",
+      "phantom"               => phantom?,
+      "recurring"             => recurring?,
+      "agenda-schedule-id"    => agenda_schedule_id,
+      "detached"              => detached?,
+      "kind"                  => kind,
+      "color"                 => display_color,
+      "agenda-id"             => agenda_id,
+      "agenda-name"           => agenda&.name,
+      "agenda-color"          => agenda&.color,
+      "agenda-source"         => agenda&.source,
+      "all-day"               => all_day?,
+      "end-date"              => end_date&.to_time&.to_i,
+      "start-at"              => start_at&.to_i,
+      "end-at"                => end_at&.to_i,
+      "name"                  => name,
+      "notes"                 => notes,
+      "location"              => location,
+      "resolved-address"      => travel["location_address"],
+      "arrive-early-minutes"  => arrive_early_minutes.to_i,
+      "travel-minutes"        => metadata["travel_minutes"].to_i,
+      "travel-from-kind"      => travel["travel_from_kind"],
+      "travel-from"           => travel["travel_from"],
+      "chain-predecessor-id"  => travel["chain_predecessor_id"],
+      "chain-successor-id"    => travel["chain_successor_id"],
+      "chain-prev-end-epoch"  => travel["chain_prev_end_at"],
+      "leave-at-epoch"        => travel["leave_at"],
+      "trigger-expression"    => trigger_expression,
+      "schedule"              => agenda_schedule&.serialize_for_edit&.to_json,
+      "attendees"             => attendees.to_json,
+      "organizer"             => organizer.to_json,
+      "self-response"         => self_response,
+    }
   end
 
   private

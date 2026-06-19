@@ -1,0 +1,50 @@
+<%# Source-of-truth template for `.agenda-item` rows built client-side
+    by `agenda_item_renderer.js` from AgendaStore JSON. Mirrors the body
+    structure of `_item.html.erb` so the two render paths produce
+    equivalent DOM (one source for shape: the template; one source for
+    attribute data: AgendaItem#presentation_attrs).
+
+    All conditional spans are present here; the JS renderer removes
+    inapplicable nodes (location-is-URL / no travel / not editable / etc.)
+    so the resulting HTML matches the server-rendered ERB byte-for-byte.
+
+    Embedded once per page (or per layout) inside any view that wants to
+    live-render items. The `<template>` tag is inert until JS clones it. %>
+<template id="agenda-item-template">
+  <div class="agenda-item">
+    <label class="agenda-item-check-zone">
+      <input type="checkbox" class="agenda-item-check">
+    </label>
+    <button type="button" class="agenda-item-body" data-open-details>
+      <span class="agenda-item-time"
+            data-time-hydrate></span>
+      <span class="agenda-item-text">
+        <span class="agenda-item-name"></span>
+        <span class="agenda-item-loc">
+          <i class="fa fa-map-marker"></i><span class="agenda-item-loc-text"></span>
+        </span>
+        <span class="agenda-item-travel">
+          <span class="agenda-item-travel-leave"
+                data-time-hydrate
+                data-format="cal"
+                data-prefix="→"></span>
+          <i class="fa fa-clock-o agenda-item-travel-arrive-icon"></i><span class="agenda-item-travel-text agenda-item-travel-arrive-text"></span>
+          <span class="agenda-item-travel-plus">+</span>
+          <i class="fa fa-car agenda-item-travel-car-icon"></i><span class="agenda-item-travel-text agenda-item-travel-car-text"></span>
+        </span>
+      </span>
+    </button>
+    <span class="agenda-item-icons">
+      <span class="agenda-item-icon-slot agenda-item-rsvp-slot">
+        <span class="agenda-item-badge rsvp-badge needs-response" title="Awaiting your response"><i class="fa fa-question-circle"></i></span>
+        <span class="agenda-item-badge rsvp-badge declined" title="You declined"><i class="fa fa-times-circle"></i></span>
+      </span>
+      <span class="agenda-item-icon-slot agenda-item-recurring-slot">
+        <span class="agenda-item-badge agenda-item-recurring-badge" title="Recurring"><i class="fa fa-refresh"></i></span>
+      </span>
+      <span class="agenda-item-icon-slot agenda-item-edit-slot">
+        <button type="button" class="agenda-item-edit" data-edit-item aria-label="Edit"><i class="fa fa-pencil"></i></button>
+      </span>
+    </span>
+  </div>
+</template>

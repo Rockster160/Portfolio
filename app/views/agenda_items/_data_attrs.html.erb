@@ -1,0 +1,26 @@
+<%
+  # Single source of truth for an agenda item's data-* attributes —
+  # embedded inside the wrapper tag the four agenda / calendar views
+  # render. Wrapper, classes, style, and inner body stay per-view since
+  # those genuinely differ; the data payload that agenda.js reads via
+  # dataset.* is identical and comes from AgendaItem#presentation_attrs.
+  #
+  # The companion JS (seed_hydrator.js) iterates the same hash from
+  # `serialize`d store items, so the attribute list is declared exactly
+  # once — in the Ruby model.
+  #
+  # Params:
+  #   item          (required) — AgendaItem (real or phantom)
+  #   editable      (required) — Boolean; emits `data-readonly` when false
+  #   all_day_value (optional) — overrides the item's all_day? value.
+  #                              cal_month renders timed + all-day items in
+  #                              separately-filtered loops, so it hardcodes
+  #                              for safety even though the filter already
+  #                              guarantees the value.
+  attrs = item.presentation_attrs
+  attrs = attrs.merge("all-day" => all_day_value) if local_assigns.key?(:all_day_value)
+%>
+<%= "data-readonly" unless editable %>
+<% attrs.each do |key, value| -%>
+data-<%= key %>="<%= value %>"
+<% end -%>

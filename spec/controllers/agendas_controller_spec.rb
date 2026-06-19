@@ -95,9 +95,9 @@ RSpec.describe AgendasController, type: :controller do
       expect(user.agendas.reload.pluck(:name)).to eq([user.username])
     end
 
-    it "also creates one when they hit /agenda/calendar" do
+    it "also creates one when they hit /agenda/month (legacy /agenda/calendar redirects there)" do
       user.agendas.destroy_all
-      get :calendar
+      get :cal_month
       expect(response).to be_successful
       expect(user.agendas.reload.pluck(:name)).to eq([user.username])
     end
@@ -177,49 +177,17 @@ RSpec.describe AgendasController, type: :controller do
     end
   end
 
-  describe "GET #calendar" do
-    it "renders the month grid" do
-      get :calendar
-      expect(response).to be_successful
-      expect(response.body).to include(Date.current.strftime("%B %Y"))
-    end
-
-    it "navigates to a specified month" do
-      get :calendar, params: { month: "2026-12" }
-      expect(response).to be_successful
-      expect(response.body).to include("December 2026")
-    end
-
-    it "shows phantom items from schedules in their schedule color" do
-      create(:agenda_schedule, agenda: agenda, name: "Standup",
-        recurrence: { "freq" => "daily" }, starts_on: Date.current,
-        color: "#ff8800")
-      get :calendar
-      expect(response.body).to include("#ff8800")
-      expect(response.body).to include("Standup")
-    end
-
-    it "defaults to the perceived_today's month (3am rollover)" do
-      # At 1am on June 1 local, perceived_today is May 31 → @month = May.
-      # Without this rule the calendar would prematurely flip to June at
-      # midnight UTC even though the user still considers it 'May 31 night'.
-      Timecop.freeze(Time.utc(2026, 6, 1, 7, 0)) do # 1am MDT
-        get :calendar
-        expect(response).to be_successful
-        expect(response.body).to include("May 2026")
-        expect(response.body).not_to include("June 2026")
-      end
-    end
-
-    it "filters to a single agenda when agenda_id query param is given" do
-      other = create(:agenda, user: user, name: "Other")
-      create(:agenda_schedule, agenda: other, name: "Solo",
-        recurrence: { "freq" => "daily" }, starts_on: Date.current)
-      create(:agenda_schedule, agenda: agenda, name: "Main",
-        recurrence: { "freq" => "daily" }, starts_on: Date.current)
-      get :calendar, params: { agenda_id: agenda.id }
-      expect(response.body).to include("Main")
-      expect(response.body).not_to include("Solo")
+  describe "canonical agenda routes (post-consolidation)" do
+    # Single PWA — day, week, month, grid all live under /agenda/*.
+    # Legacy /agenda/calendar, /agenda/cal/* redirect at the routing
+    # layer (Rails::Redirect) so deep links survive without an action
+    # hop. URL helpers point at the canonical paths.
+    it "canonical helpers resolve to the new paths" do
+      expect(day_path).to        eq("/agenda")
+      expect(week_path).to       eq("/agenda/week")
+      expect(cal_month_path).to  eq("/agenda/month")
+      expect(cal_week_path).to   eq("/agenda/grid")
+      expect(manage_agenda_path).to eq("/agenda/manage")
     end
   end
 
@@ -236,9 +204,11 @@ RSpec.describe AgendasController, type: :controller do
       expect(response.body).to include("December 2026")
     end
 
-    it "renders the cal PWA favicon (separate webmanifest)" do
+    it "renders the unified agenda PWA webmanifest" do
+      # Single PWA — there is no longer a separate /agenda_calendar.webmanifest.
       get :cal_month
-      expect(response.body).to include("/agenda_calendar.webmanifest")
+      expect(response.body).to include("/agenda.webmanifest")
+      expect(response.body).not_to include("/agenda_calendar.webmanifest")
     end
 
     it "uses the focused month as the page title (not the literal word 'Calendar')" do
@@ -247,26 +217,31 @@ RSpec.describe AgendasController, type: :controller do
       expect(response.body).to_not match(%r(<h1[^>]*>Calendar</h1>))
     end
 
-    it "links into week view from the toggle" do
+    it "links into week-grid view from the toggle" do
       get :cal_month
-      expect(response.body).to include("/agenda/cal/week")
+      expect(response.body).to include("/agenda/grid")
     end
 
-    it "renders items from accessible agendas" do
+    it "renders an empty cells shell — items live-fill from AgendaStore" do
+      # Server emits cells with data-date but no item markup; month_view.js
+      # populates `.cal-month-cell-items` from the store on every change.
       create(:agenda_schedule, agenda: agenda, name: "Standup",
         recurrence: { "freq" => "daily" }, starts_on: Date.current)
       get :cal_month
-      expect(response.body).to include("Standup")
+      expect(response.body).to include('class="cal-month-cell-items"')
+      expect(response.body).to include('data-items-container')
+      # No server-side item buttons in the response — the store fills them.
+      expect(response.body).not_to include("Standup")
     end
 
-    it "emits all-day items as seed nodes (not in cells) for the row-banner overlay" do
+    it "emits an empty all-day seed container — seed_hydrator fills it from the store" do
       create(:agenda_item, agenda: agenda, name: "Conference",
         kind: :event, all_day: true,
         start_at: Date.current.beginning_of_day,
         end_at: Date.current.end_of_day)
       get :cal_month
-      expect(response.body).to include("cal-month-allday-seed")
-      expect(response.body).to include("Conference")
+      expect(response.body).to include('data-month-allday-seeds')
+      expect(response.body).not_to include("Conference")
       # Conference name should appear inside a seed node (not inside a
       # cell), since all-day items are rendered as row banners by JS.
       expect(response.body).not_to match(%r(<button[^>]*class="cal-month-item[^>]*>[^<]*Conference))
@@ -312,8 +287,8 @@ RSpec.describe AgendasController, type: :controller do
       expect(response.body).to include(%(data-day-start-hour="3"))
     end
 
-    it "is the default landing under /agenda/cal" do
-      expect(Rails.application.routes.recognize_path("/agenda/cal")).to eq(
+    it "is reachable at /agenda/grid (canonical post-consolidation)" do
+      expect(Rails.application.routes.recognize_path("/agenda/grid")).to eq(
         controller: "agendas", action: "cal_week"
       )
     end

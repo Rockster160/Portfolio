@@ -263,24 +263,32 @@ Rails.application.routes.draw do
     resources :sections, only: [:edit, :create, :update, :destroy]
   end
 
-  # Everything users NAVIGATE to lives under /agenda/* so the PWA scope
-  # ("/agenda" in agenda.webmanifest) covers all of it — manage, edit, new,
-  # share routes don't pop the user out of the installed app.
+  # Single agenda PWA — all views share one cache (AgendaStore), one
+  # webmanifest (`agenda.webmanifest`, scope `/agenda`), one item
+  # renderer (`agenda_item_renderer.js` + `agenda_items/_template`).
+  # The views are pure shells; data flows in via `/agenda/sync/*`.
   #
   # Helpers are named after the VIEW (not the resource) for the singular
   # routes so they don't collide with the resourceful agenda_path(record).
-  get "/agenda"          => "agendas#day",      as: :day
-  get "/agenda/week"     => "agendas#week",     as: :week
-  get "/agenda/calendar" => "agendas#calendar", as: :calendar
-  get "/agenda/manage"   => "agendas#index",    as: :manage_agenda
+  get "/agenda"        => "agendas#day",      as: :day
+  get "/agenda/week"   => "agendas#week",     as: :week
+  get "/agenda/month"  => "agendas#cal_month", as: :cal_month
+  get "/agenda/manage" => "agendas#index",    as: :manage_agenda
 
-  # Mac-style Calendar PWA — installs as a separate app (own webmanifest,
-  # scope `/agenda/cal`). Month is the landing page; Week is the time-grid
-  # view with drag-to-create + current-time line.
-  get "/agenda/cal"       => "agendas#cal_week",  as: :cal
-  get "/agenda/cal/month" => "agendas#cal_month", as: :cal_month
-  get "/agenda/cal/week"  => "agendas#cal_week",  as: :cal_week
+  # Time-grid week view (drag-to-create, current-time line). Lives at
+  # /agenda/grid for now until the responsive merge with /agenda/week
+  # lets one route flip between vertical-list (narrow) and time-grid
+  # (wide) on viewport.
+  get "/agenda/grid"   => "agendas#cal_week", as: :cal_week
   post "/agenda/test_push" => "agendas#test_push", as: :test_push_agenda
+
+  # Legacy redirects — older route names still serving deep links from
+  # bookmarks, notifications, and Slack hints. 301 so browsers + bots
+  # promote the new paths on next visit.
+  get "/agenda/calendar"  => redirect { |_p, req| "/agenda/month?#{req.query_string}".chomp("?") }
+  get "/agenda/cal"       => redirect("/agenda/grid")
+  get "/agenda/cal/month" => redirect { |_p, req| "/agenda/month?#{req.query_string}".chomp("?") }
+  get "/agenda/cal/week"  => redirect { |_p, req| "/agenda/grid?#{req.query_string}".chomp("?") }
 
   # Client-side calendar store — the Agenda PWA boots an empty shell,
   # hydrates from localStorage, then pulls a full snapshot here. Every

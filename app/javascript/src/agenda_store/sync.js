@@ -154,6 +154,14 @@ function subscribeMonitor() {
         Store.setPreferences(data.data.preferences);
         return;
       }
+      // Hard-destroyed items: the delta endpoint is upsert-only and can't
+      // return rows that no longer exist, so the server piggybacks the
+      // display_ids on the broadcast. Cancelled rows are NOT here — they
+      // still come through delta with status:"cancelled" and the store's
+      // upsertItem prunes them.
+      if (data.data && Array.isArray(data.data.destroyed_item_ids)) {
+        data.data.destroyed_item_ids.forEach((id) => Store.removeItem(id));
+      }
       scheduleDelta();
     },
     connected() {
