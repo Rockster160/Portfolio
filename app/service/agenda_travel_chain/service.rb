@@ -52,9 +52,9 @@ module AgendaTravelChain
       return if candidates.empty?
 
       # Backfill skips per-event geocoding — those events were created
-      # before phase 1 and don't have lat/lng cached. Trip-building
-      # (Custom.tripWaypoints) lazily geocodes when the chain head's
-      # prepare task fires. Saves a Google round-trip per event today.
+      # before phase 1 and don't have lat/lng cached, and per-event nav
+      # uses the raw event.location string anyway. Saves a Google
+      # round-trip per event during the migration sweep.
       ensure_resolved_all(candidates) unless backfill?
       links = link_pairs(candidates)
       head_for = compute_head_map(candidates, links)

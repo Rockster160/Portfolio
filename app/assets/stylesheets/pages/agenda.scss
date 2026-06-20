@@ -880,12 +880,14 @@ body.ctr-agendas {
     border: 1px solid rgba(255, 255, 255, 0.08) !important;
     border-radius: 10px !important;
     font-family: inherit !important;
-    // `.app-card-container` is the same div as `.modal-content`; restore
-    // the wrapper's centering convention (10% from top, auto horizontal)
-    // here so flat-dark modals aren't jammed against the viewport top.
-    // The bang overrides the forms.scss `.app-card-container { margin-top: 30px }`
-    // default that would otherwise clash.
-    margin: 10% auto !important;
+    // Vertically position a touch below the top edge — 10% of viewport
+    // height ≈ 100px on a typical laptop, but per CSS spec percentage
+    // margins resolve against parent WIDTH (not height), which pushes
+    // modals way too low on wide screens. `vh` anchors to viewport
+    // height instead. Bang overrides the forms.scss
+    // `.app-card-container { margin-top: 30px }` default that would
+    // otherwise let the modal drift further down on tall viewports.
+    margin: 5vh auto !important;
     overflow: hidden;
   }
   .app-card-title {

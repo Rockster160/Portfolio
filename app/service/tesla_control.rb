@@ -108,37 +108,9 @@ class TeslaControl
     command(:navigation_request, address_params)
   end
 
-  # Sends a multi-stop trip via N sequential `navigation_gps_request` calls,
-  # each with an incrementing `order`. The car composes them into a single
-  # trip with stops; no Waypoints API needed.
-  #
-  # Each stop is `{ lat:, lng:, name?: }`. Stops without lat/lng are
-  # skipped with a logged warning (caller should geocode upstream). Cap at
-  # MAX_TRIP_STOPS so a runaway chain can't flood Tesla's command queue.
-  MAX_TRIP_STOPS = 10
-  def navigate_trip(stops)
-    valid = Array(stops).filter_map { |s|
-      h = s.respond_to?(:symbolize_keys) ? s.symbolize_keys : s.to_h.symbolize_keys
-      lat, lng = h[:lat], h[:lng]
-      next info("navigate_trip skip — missing lat/lng", h.to_s) unless lat && lng
-
-      { lat: lat.to_f, lng: lng.to_f, name: h[:name].to_s }
-    }.first(MAX_TRIP_STOPS)
-    return false if valid.empty?
-
-    valid.each_with_index do |stop, idx|
-      proxy_command(:navigation_gps_request, lat: stop[:lat], lon: stop[:lng], order: idx)
-    end
-    true
-  rescue StandardError => e
-    err("navigate_trip", e)
-    false
-  end
-
   # Inserts a single stop into the active trip at `order` (default 1 — first
   # waypoint after the current destination). Resolves contact → address →
-  # lat/lng via AddressBook; no-op if geocoding fails. Unlike navigate_trip
-  # this preserves an in-progress route instead of replacing it.
+  # lat/lng via AddressBook; no-op if geocoding fails.
   def add_stop(input, order: 1)
     address = self.class.resolve_destination(input)
     return false if address.blank?

@@ -301,7 +301,12 @@ RSpec.describe AgendaItemsController, type: :controller do
   end
 
   describe "phantom interactions" do
-    let(:sched) {
+    # `let!` so the schedule's after_save → materialize_upcoming! runs
+    # in the test setup, not inside the `change(...).by(1)` block. The
+    # daily standup pre-materializes tomorrow's occurrence on create;
+    # without this, that row would count toward each test's count delta
+    # and throw the assertions off by one.
+    let!(:sched) {
       create(
         :agenda_schedule, agenda: agenda, name: "Standup", kind: "task",
         start_time: "09:00", recurrence: { "freq" => "daily" }, starts_on: Date.current

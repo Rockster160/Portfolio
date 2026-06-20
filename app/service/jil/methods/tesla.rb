@@ -13,14 +13,6 @@ class Jil::Methods::Tesla < Jil::Methods::Base
   # the content block: target temp, navigate destination, heated seats,
   # vented windows, defrost. Empty content block (or no content) is fine:
   # just starts climate.
-  #
-  # Content keys (see [TeslaStartOptions] in schema):
-  #   temp:           Numeric (°F)
-  #   navigate:       Text  (contact name, address, or "lat,lng")
-  #   heatDriver:     Boolean
-  #   heatPassenger:  Boolean
-  #   vent:           Boolean  (vent windows)
-  #   defrost:        Boolean
   def start(option_blocks=nil)
     wrap {
       ctrl = ::TeslaControl.me
@@ -28,18 +20,11 @@ class Jil::Methods::Tesla < Jil::Methods::Base
       opts = Array.wrap(option_blocks).reduce({}) { |acc, h| acc.merge(h.to_h) }.symbolize_keys
 
       ctrl.set_temp(opts[:temp].to_f)         if opts[:temp].present?
+      ctrl.navigate(opts[:navigate].to_s)     if opts[:navigate].present?
       ctrl.heat_driver                        if opts[:heatDriver]
       ctrl.heat_passenger                     if opts[:heatPassenger]
       ctrl.windows(:open)                     if opts[:vent]
       ctrl.defrost(true)                      if opts[:defrost]
-      # Trip plan beats single-destination navigate — if both are present,
-      # the trip wins (a multi-stop request would otherwise be overwritten
-      # by the single navigate immediately).
-      if opts[:waypoints].present?
-        ctrl.navigate_trip(opts[:waypoints])
-      elsif opts[:navigate].present?
-        ctrl.navigate(opts[:navigate].to_s)
-      end
     }
   end
 
@@ -53,10 +38,9 @@ class Jil::Methods::Tesla < Jil::Methods::Base
   def navigate(input) = wrap { ::TeslaControl.me.navigate(input.to_s) }
 
   # Insert a stop into the active trip. Defaults to order:1 (first waypoint
-  # after the current destination). Unlike Tesla.start({waypoints:}) which
-  # replaces the whole route. Surfaces TeslaControl#add_stop's own boolean
-  # (false on bad address / geocoding miss) — unlike #wrap which collapses
-  # everything to true unless an exception fires.
+  # after the current destination). Surfaces TeslaControl#add_stop's own
+  # boolean (false on bad address / geocoding miss) — unlike #wrap which
+  # collapses everything to true unless an exception fires.
   def addStop(input)
     return false unless @jil.user&.me?
 
