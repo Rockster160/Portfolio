@@ -53,7 +53,13 @@
       "agenda-color":          agendaColor,
       "agenda-source":         agendaSource,
       "all-day":               !!allDay,
-      "end-date":              endAt || startAt,
+      // `end-date` mirrors `AgendaItem#presentation_attrs` which emits the
+      // INCLUSIVE end date as an epoch (server does `(end_at - 1.second).to_date.to_time.to_i`).
+      // For all-day, `endAt` is the exclusive next-day-midnight epoch
+      // (Google convention) so we walk back to the inclusive day — without
+      // this the optimistic banner spans one extra day until the server
+      // response lands.
+      "end-date":              allDay && endAt ? endAt - 86400 : (endAt || startAt),
       "start-at":              startAt,
       "end-at":                endAt,
       "name":                  minimal.name || "",

@@ -340,9 +340,12 @@ function patchCheckbox(node, item, attrs, ctx) {
 }
 
 function patchBody(node, attrs) {
-  // Time span — keep data-* in sync; the time-hydrator picks up dataset
-  // changes via the MutationObserver wired in agenda.js so we don't have
-  // to manually rebuild its textContent.
+  // Time span — keep data-* in sync, then explicitly re-hydrate. The
+  // MutationObserver in agenda.js only watches for added nodes, NOT
+  // attribute changes on existing ones, so an in-place patch (e.g.
+  // flipping an event to all-day) would leave the text label showing
+  // its prior format (e.g. "9:00–10:00") indefinitely without this
+  // explicit hydrate call.
   const timeSpan = node.querySelector(".agenda-item-time");
   if (timeSpan) {
     const allDay = bool(attrs["all-day"]);
@@ -354,6 +357,9 @@ function patchBody(node, attrs) {
     const isEvent = attrs.kind === "event";
     const fmt = allDay ? "day" : (isEvent && endEpoch ? "range" : "time");
     setAttrIfChanged(timeSpan, "data-format", fmt);
+    if (typeof window.__hydrateAgendaTimeNode === "function") {
+      window.__hydrateAgendaTimeNode(timeSpan);
+    }
   }
 
   const nameSpan = node.querySelector(".agenda-item-name");
@@ -404,7 +410,12 @@ function patchTravelBlock(node, attrs) {
   const startEpoch = Number(attrs["start-at"]) || 0;
   const leaveEpoch = startEpoch - (arriveMin + travelMin) * 60;
   const leaveSpan = block.querySelector(".agenda-item-travel-leave");
-  if (leaveSpan) setAttrIfChanged(leaveSpan, "data-start-epoch", String(leaveEpoch));
+  if (leaveSpan) {
+    setAttrIfChanged(leaveSpan, "data-start-epoch", String(leaveEpoch));
+    if (typeof window.__hydrateAgendaTimeNode === "function") {
+      window.__hydrateAgendaTimeNode(leaveSpan);
+    }
+  }
 
   // Rebuild the icon/text segments — they're trivial spans + i's; cheap
   // and keeps state-toggle complexity contained.

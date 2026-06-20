@@ -124,9 +124,19 @@
     if (btn.style.getPropertyValue("--item-color") !== color) btn.style.setProperty("--item-color", color);
     if (btn.style.getPropertyValue("--agenda-color") !== agendaColor) btn.style.setProperty("--agenda-color", agendaColor);
 
+    // Re-hydrate the time label after patching — the MutationObserver
+    // in agenda.js only fires on added nodes, so an in-place attribute
+    // change here would otherwise leave the visible "9a" / "2:30p" text
+    // pointing at the previous start_at.
     const timeSpan = btn.querySelector(".cal-month-item-time");
-    if (timeSpan && timeSpan.getAttribute("data-start-epoch") !== String(attrs["start-at"] || "")) {
-      timeSpan.setAttribute("data-start-epoch", String(attrs["start-at"] || ""));
+    if (timeSpan) {
+      const next = String(attrs["start-at"] || "");
+      if (timeSpan.getAttribute("data-start-epoch") !== next) {
+        timeSpan.setAttribute("data-start-epoch", next);
+      }
+      if (typeof window.__hydrateAgendaTimeNode === "function") {
+        window.__hydrateAgendaTimeNode(timeSpan);
+      }
     }
     const nameSpan = btn.querySelector(".cal-month-item-name");
     if (nameSpan && nameSpan.textContent !== (attrs.name || "")) nameSpan.textContent = attrs.name || "";

@@ -854,6 +854,7 @@ class AgendaItemsController < ApplicationController
       :location,
       :arrive_early_minutes,
       :trigger_expression,
+      :all_day,
       recurrence: [:freq, :interval, :unit, :by_set_pos, { by_day: [], by_month_day: [], excluded_dates: [] }],
     )
   end
@@ -887,6 +888,7 @@ class AgendaItemsController < ApplicationController
     attrs[:arrive_early_minutes] = item_params[:arrive_early_minutes] if item_params.key?(:arrive_early_minutes)
     attrs[:color] = item_params[:color] if item_params[:color].present?
     attrs[:trigger_expression] = item_params[:trigger_expression] if item_params.key?(:trigger_expression)
+    attrs[:all_day] = item_params[:all_day] if item_params.key?(:all_day)
     # item_params has already coerced start_at / end_at to Time. The
     # schedule's `start_time` column is a wall-clock time-of-day, so
     # render in the server-anchored user zone (Denver) — this is the only

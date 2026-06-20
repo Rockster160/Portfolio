@@ -816,10 +816,12 @@
       if (child.classList?.contains(className)) { badge = child; break; }
     }
     const visible = value != null && (className === "hot-badge" || value > 1);
+    const rare = className === "hot-badge" && Number(value) >= 5;
     if (visible) {
       const text = `${formatMultiplier(value)}×`;
       if (badge) {
         if (badge.textContent !== text) badge.textContent = text;
+        badge.classList.toggle("rare", rare);
       } else {
         // Clone the generic corner-badge template, set the class +
         // text via DOM API, insert at the start. Replaces the
@@ -827,6 +829,7 @@
         const node = cloneTemplate("corner-badge");
         if (node) {
           node.className = className;
+          if (rare) node.classList.add("rare");
           node.textContent = text;
           el.insertBefore(node, el.firstChild);
         }

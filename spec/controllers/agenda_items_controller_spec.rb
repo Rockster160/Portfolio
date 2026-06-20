@@ -413,6 +413,38 @@ RSpec.describe AgendaItemsController, type: :controller do
       expect(sched.reload.name).to eq("All-future name")
     end
 
+    # Regression guard for the "all-day toggle doesn't persist on series edits"
+    # bug. The schedule's permit-list and the FE's buildSchedulePayload both
+    # used to drop `all_day` silently — so a recurring event flipped to
+    # all-day kept rendering as a 1-hour event after save. Locking the
+    # round-trip here means a future refactor that drops `all_day` from
+    # either side will fail loudly.
+    it "series-scope edit propagates all_day=true to the schedule + materialized rows" do
+      event_sched = create(:agenda_schedule, agenda: agenda, name: "Bday", kind: "event",
+        start_time: "08:00", duration_minutes: 60, all_day: false,
+        recurrence: { "freq" => "yearly" }, starts_on: Date.current)
+      materialized = event_sched.agenda_items.first
+      phantom = "p-#{event_sched.id}-#{Date.current.iso8601}"
+
+      patch :update, params: {
+        id:    phantom,
+        scope: :series,
+        agenda_item: {
+          name: "Bday", kind: "event", all_day: true,
+          start_at: Time.current.to_i, end_at: (Time.current + 1.day).to_i,
+        },
+        agenda_schedule: {
+          name: "Bday", kind: "event", all_day: true,
+          start_time: "00:00", duration_minutes: 1440,
+          recurrence: { freq: "yearly", interval: 1, unit: "year" },
+        },
+      }, format: :json
+
+      expect(response).to be_successful, "body=#{response.body}"
+      expect(event_sched.reload.all_day).to be true
+      expect(materialized.reload.all_day).to be true
+    end
+
     it "occurrence-scope delete just pushes to excluded_dates (no row created)" do
       expect {
         delete :destroy, params: { id: phantom_id, scope: :occurrence }

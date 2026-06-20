@@ -104,6 +104,13 @@
   function hydrateTimeNodes(root = document) {
     root.querySelectorAll("[data-time-hydrate]").forEach(hydrateOneTimeNode);
   }
+  // In-place renderers (agenda_item_renderer.js, month_view.js, etc.) patch
+  // an existing time node's data-* attributes without removing/replacing the
+  // node. The MutationObserver below only fires on added-nodes, so without
+  // this surface, a changed format/epoch is silently ignored and the visible
+  // text stays stale — e.g. flipping an event to all-day patched every data
+  // attr correctly but the time label kept showing the old "9:00–10:00" range.
+  window.__hydrateAgendaTimeNode = hydrateOneTimeNode;
   document.addEventListener("DOMContentLoaded", () => hydrateTimeNodes());
   // Watch for server-rendered fragments inserted after page load (Monitor
   // updates, modal opens, section replaces) so new items also hydrate.
@@ -498,7 +505,7 @@
     // Build agenda_schedule payload from form state. `startsOn` preserves
     // the schedule's original start date during edit-series flows so the
     // rule edit doesn't shift starts_on onto the occurrence's date.
-    function buildSchedulePayload({ name, kind, color, startTime, endTime, date, triggerExpression, startsOn }) {
+    function buildSchedulePayload({ name, kind, color, startTime, endTime, date, triggerExpression, startsOn, allDay }) {
       const freq = freqSelect.value;
       const recurrence = { freq };
 
@@ -542,6 +549,7 @@
         until_on:           untilOn,
         occurrence_count:   occurrenceCount,
         trigger_expression: triggerExpression,
+        all_day:            !!allDay,
         recurrence,
       };
     }
@@ -861,6 +869,7 @@
       const schedulePayload = sched.buildSchedulePayload({
         name, kind: activeKind, color,
         startTime, endTime, date, triggerExpression,
+        allDay: isAllDay,
       });
       schedulePayload.agenda_id = agendaId;
       schedulePayload.location = location;
@@ -1332,6 +1341,7 @@
           color,
           startTime, endTime, date, triggerExpression,
           startsOn: currentScheduleData?.starts_on,
+          allDay: isAllDay,
         });
         payload.agenda_schedule.location = payload.agenda_item.location;
         payload.agenda_schedule.arrive_early_minutes = payload.agenda_item.arrive_early_minutes;

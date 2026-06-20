@@ -96,6 +96,8 @@ class AgendaSchedulesController < ApplicationController
       :notes,
       :location,
       :trigger_expression,
+      :all_day,
+      :arrive_early_minutes,
       recurrence: [:freq, :interval, :unit, :by_set_pos, { by_day: [], by_month_day: [], excluded_dates: [] }],
     )
   end

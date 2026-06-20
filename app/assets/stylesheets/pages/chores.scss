@@ -36,6 +36,7 @@
   --chores-text: #ECF0F1;
   --chores-muted: #94A3B8;
   --chores-hot: #16A34A;
+  --chores-hot-rare: #C2410C;
   --chores-done: #16A34A;
   --chores-accent: #2563EB;
   // Cooldown badges + rings used to inherit --chores-hot which made
@@ -609,6 +610,9 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     left: 5%;
     background: var(--chores-hot);
   }
+  .chore-card .hot-badge.rare {
+    background: var(--chores-hot-rare);
+  }
   .chore-card .streak-badge {
     right: 5%;
     background: var(--actor-color);
@@ -1000,6 +1004,9 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   .chore-circle .hot-badge {
     left: -6px;
     background: var(--chores-hot);
+  }
+  .chore-circle .hot-badge.rare {
+    background: var(--chores-hot-rare);
   }
   .chore-circle .streak-badge {
     right: -6px;
