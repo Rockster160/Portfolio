@@ -104,21 +104,65 @@ function expand(schedule, fromISO, toISO) {
 
 // Build an AgendaItem-shaped phantom for `dateISO`. Caller must pass a
 // `localEpoch(dateISO, "HH:MM") → seconds_since_epoch` function that
-// honors the user's timezone — see ./timezone.js.
-function buildPhantom(schedule, dateISO, { localEpoch }) {
+// honors the user's timezone — see ./timezone.js. The optional `agenda`
+// lookup lets us populate the agenda-name/color/source presentation
+// attrs so the renderer fills the row exactly like a materialized one.
+function buildPhantom(schedule, dateISO, { localEpoch, agenda }) {
   const startEpoch = localEpoch(dateISO, schedule.start_time);
   const endEpoch = (schedule.kind === "event" && schedule.duration_minutes)
     ? startEpoch + (Number(schedule.duration_minutes) * 60)
     : null;
+  const id = `p-${schedule.id}-${dateISO}`;
+  const color = schedule.color || (agenda && agenda.color) || "";
+  // Mirrors `AgendaItem#presentation_attrs` — the renderer reads from
+  // this hash; without it phantoms render as blank rows (just the
+  // template skeleton: checkbox + edit pencil, no name/time/anything).
+  const presentation_attrs = {
+    "item-id":              id,
+    "item-url":             `/agenda_items/${id}`,
+    "phantom":              true,
+    "recurring":            true,
+    "agenda-schedule-id":   schedule.id,
+    "detached":             false,
+    "kind":                 schedule.kind,
+    "color":                color,
+    "agenda-id":            schedule.agenda_id,
+    "agenda-name":          agenda ? agenda.name : "",
+    "agenda-color":         agenda ? agenda.color : "",
+    "agenda-source":        agenda ? agenda.source : "",
+    "all-day":              !!schedule.all_day,
+    "end-date":             endEpoch || startEpoch,
+    "start-at":             startEpoch,
+    "end-at":               endEpoch,
+    "name":                 schedule.name || "",
+    "notes":                schedule.notes || "",
+    "location":             schedule.location || "",
+    "resolved-address":     "",
+    "arrive-early-minutes": Number(schedule.arrive_early_minutes) || 0,
+    "travel-minutes":       0,
+    "travel-from-kind":     "",
+    "travel-from":          "",
+    "chain-predecessor-id": "",
+    "chain-successor-id":   "",
+    "chain-prev-end-epoch": "",
+    "leave-at-epoch":       "",
+    "trigger-expression":   schedule.trigger_expression || "",
+    "schedule":             JSON.stringify(schedule),
+    "attendees":            "[]",
+    "organizer":            "null",
+    "self-response":        "",
+  };
   return {
-    id:                   `p-${schedule.id}-${dateISO}`,
+    id:                   id,
     agenda_id:            schedule.agenda_id,
+    agenda_name:          agenda ? agenda.name : "",
+    agenda_color:         agenda ? agenda.color : "",
     agenda_schedule_id:   schedule.id,
     kind:                 schedule.kind,
     name:                 schedule.name,
     notes:                schedule.notes,
     location:             schedule.location,
-    color:                schedule.color,
+    color:                color,
     all_day:              !!schedule.all_day,
     arrive_early_minutes: Number(schedule.arrive_early_minutes) || 0,
     trigger_expression:   schedule.trigger_expression,
@@ -129,8 +173,14 @@ function buildPhantom(schedule, dateISO, { localEpoch }) {
     recurring:            true,
     detached:             false,
     status:               "confirmed",
+    completed_at:         null,
+    attendees:            [],
+    organizer:            null,
+    self_response:        "",
+    editable:             agenda ? agenda.editable !== false : true,
     schedule:             schedule,
     occurrence_date:      dateISO,
+    presentation_attrs:   presentation_attrs,
   };
 }
 

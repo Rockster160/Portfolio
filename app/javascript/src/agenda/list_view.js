@@ -36,6 +36,12 @@
     window.AgendaSync.installResumeTriggers();
     window.AgendaSync.boot().then(() => render(root));
     render(root);
+    installNavInterception(root);
+    window.addEventListener("popstate", () => {
+      const params = new URLSearchParams(window.location.search);
+      const dateISO = params.get("date") || todayISO();
+      renderForDate(root, dateISO);
+    });
     // No cold-start blocking indicator — empty sections naturally show
     // their "Nothing scheduled" empty hint while the first sync lands
     // (sub-second window in practice). Any in-flight sync state lives
@@ -43,16 +49,129 @@
     window.__refreshAgendaList = () => render(root);
   }
 
+  // Same-view nav (prev/next day, "Jump to Today") is pure client-side:
+  // update the URL, re-stamp date data attributes on root + sections, then
+  // re-render from AgendaStore. Cross-view links (.cal-toggle-btn) hit
+  // different shells so we let them navigate normally. Without this, every
+  // arrow click was a full page reload — and the PWA service worker's
+  // shell cache served the same /agenda HTML regardless of `?date=...`,
+  // so the URL changed but the page stayed pinned on today.
+  function installNavInterception(root) {
+    root.addEventListener("click", (e) => {
+      const link = e.target.closest(
+        ".date-nav.prev, .date-nav.next, .agenda-jump-today"
+      );
+      if (!link) return;
+      const href = link.getAttribute("href");
+      if (!href || href.startsWith("#")) return;
+      let url;
+      try { url = new URL(href, window.location.origin); }
+      catch (_) { return; }
+      // Only same-pathname (same view) qualifies for client-side.
+      if (url.pathname !== window.location.pathname) return;
+      e.preventDefault();
+      const dateISO = url.searchParams.get("date") || todayISO();
+      history.pushState(null, "", url.href);
+      renderForDate(root, dateISO);
+    });
+  }
+
+  // Re-stamp every date-bearing attribute on the shell (root + sections +
+  // date label + prev/next hrefs + jump-row visibility) so the next
+  // `render()` reads them as if the page had been server-rendered for
+  // `dateISO`. The shell never gets re-rendered — only the data
+  // attributes change, then list_view's normal render pass paints the
+  // store-backed sections.
+  function renderForDate(root, dateISO) {
+    root.dataset.currentDate = dateISO;
+
+    const dateLabel = root.querySelector(".agenda-date-bar .date-label");
+    if (dateLabel) {
+      dateLabel.textContent = labelFor(dateISO);
+    }
+
+    const isDayView = root.classList.contains("agenda-day-page");
+    const basePath = isDayView ? "/agenda" : "/agenda/week";
+    const prevLink = root.querySelector(".date-nav.prev");
+    const nextLink = root.querySelector(".date-nav.next");
+    if (prevLink) prevLink.setAttribute("href", `${basePath}?date=${addDays(dateISO, -1)}`);
+    if (nextLink) nextLink.setAttribute("href", `${basePath}?date=${addDays(dateISO, +1)}`);
+
+    // Jump-to-today row: visible unless dateISO === today
+    const today = todayISO();
+    const jumpRow = root.querySelector(".agenda-jump-row");
+    if (jumpRow) jumpRow.classList.toggle("hidden", dateISO === today);
+
+    // Sections: section-today is offset 0, section-tomorrow is offset 1
+    // for day view; week view uses offsets 0..7. Stamp data-date on each
+    // and update the header label.
+    const dayViewLabels = (offset) => {
+      if (dateISO === today) return offset === 0 ? "Today" : "Tomorrow";
+      const d = addDays(dateISO, offset);
+      return d === today ? "Today" : labelFor(d, /* short */ true);
+    };
+    const weekViewLabels = (offset) => {
+      const d = addDays(dateISO, offset);
+      if (offset === 0 && dateISO === today) return "Today";
+      if (offset === 1 && dateISO === today) return "Tomorrow";
+      return labelFor(d, /* short */ true);
+    };
+
+    root.querySelectorAll(".agenda-section[data-section-day]").forEach((section) => {
+      const offset = parseInt(section.dataset.sectionDay, 10);
+      if (Number.isNaN(offset)) return;
+      const sectionDate = addDays(dateISO, offset);
+      section.dataset.date = sectionDate;
+      const labelEl = section.querySelector(".section-header");
+      if (labelEl) {
+        labelEl.textContent = isDayView ? dayViewLabels(offset) : weekViewLabels(offset);
+      }
+    });
+
+    render(root);
+  }
+
+  function todayISO() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
+  }
+
+  function labelFor(dateISO, short) {
+    const d = new Date(`${dateISO}T12:00:00`);
+    return d.toLocaleDateString(undefined, short
+      ? { weekday: "long", month: "short", day: "numeric" }
+      : { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  }
+
   function render(root) {
     const todayISO = root.dataset.today;
+    // Materialized items only — used for the carry-over scan, which is a
+    // pure "what tasks are LATE but still active" query and only makes
+    // sense for real persisted rows.
     const state = window.AgendaStore.getState();
-    const items = Object.values(state.items || {});
+    const materializedItems = Object.values(state.items || {});
+
+    // For day/week sections we want materialized rows AND recurring
+    // phantoms (a weekday standup whose Friday/Monday occurrences sit
+    // beyond MATERIALIZE_WINDOW still needs to render). `itemsForRange`
+    // is the store's authoritative "what's visible across this window"
+    // — it expands schedules + suppresses materialized overrides for us.
+    // Without this, navigating into next week showed nothing because
+    // `state.items` only carries persisted rows; phantoms live in the
+    // recurrence expander and never land in state.items.
+    const dates = sectionDates(root);
+    const sectionItems = dates.length > 0
+      ? window.AgendaStore.itemsForRange(dates[0], dates[dates.length - 1])
+      : [];
 
     // Carry-over: only painted if visible AND we cover today.
     const carrySection = root.querySelector(".section-carry");
     if (carrySection) {
-      const coversToday = sectionDates(root).includes(todayISO);
-      const carryItems = coversToday ? carryOver(items, todayISO) : [];
+      const coversToday = dates.includes(todayISO);
+      const carryItems = coversToday ? carryOver(materializedItems, todayISO) : [];
       paintCarry(carrySection, carryItems);
     }
 
@@ -63,7 +182,7 @@
       const date = section.dataset.date || sectionDateFromOffset(root, section);
       if (!date) return;
       const preview = section.classList.contains("section-tomorrow");
-      const dayItems = itemsForDate(items, date);
+      const dayItems = itemsForDate(sectionItems, date);
       paintDaySection(section, dayItems, { preview: preview });
     });
   }
@@ -164,8 +283,14 @@
   function itemVisibleOn(item, dateISO) {
     if (!item.start_at) return false;
     if (item.all_day) {
+      // end_at follows Google's exclusive-next-day-midnight convention,
+      // so a 1-day all-day Bday has end_at = tomorrow's midnight epoch.
+      // Walk back one second to get the inclusive last-day epoch, then
+      // convert to ISO — without this a Bday would render on both today
+      // AND tomorrow's sections.
       const startISO = epochToISO(item.start_at);
-      const endISO = epochToISO(item.end_at || item.start_at);
+      const endEpoch = item.end_at || item.start_at;
+      const endISO = epochToISO(Number(endEpoch) - 1);
       return dateISO >= startISO && dateISO <= endISO;
     }
     return epochToISO(item.start_at) === dateISO;

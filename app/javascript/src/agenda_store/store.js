@@ -344,9 +344,15 @@ function itemsForRange(fromISO, toISO) {
   const localEpoch = Tz.localEpochFn(tz);
   const phantoms = [];
   Object.values(state.schedules).forEach((sched) => {
+    // Pass the schedule's agenda through so buildPhantom can populate
+    // agenda-name / agenda-color / agenda-source in presentation_attrs.
+    // Without this the row renders blank (no name, no time, no agenda
+    // chrome) because the renderer reads everything via
+    // `item.presentation_attrs`.
+    const agenda = state.agendas[sched.agenda_id] || null;
     Recurrence.expand(sched, fromISO, toISO).forEach((dateISO) => {
       if (suppressed.has(`${sched.id}:${dateISO}`)) return;
-      const ph = Recurrence.buildPhantom(sched, dateISO, { localEpoch });
+      const ph = Recurrence.buildPhantom(sched, dateISO, { localEpoch, agenda });
       // Re-check the produced phantom actually overlaps the window —
       // an event scheduled for 11pm with a duration_minutes that crosses
       // midnight might extend past `to`, which is fine; one anchored at

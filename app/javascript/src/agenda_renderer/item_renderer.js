@@ -419,10 +419,15 @@ function patchTravelBlock(node, attrs) {
 
   // Rebuild the icon/text segments — they're trivial spans + i's; cheap
   // and keeps state-toggle complexity contained.
-  const segments = block.querySelectorAll(".__travel-seg");
-  segments.forEach((s) => s.remove());
-  const plus = block.querySelector(".agenda-item-travel-plus");
-  if (plus) plus.remove();
+  // Strip EVERY non-leave child before re-adding: that covers both the
+  // segments we appended on a prior patch (`.__travel-seg`, `.plus`) AND
+  // the template-cloned icons (`.agenda-item-travel-arrive-icon` etc.)
+  // that buildAgendaItem leaves in place. Without this, the first patch
+  // after build doubles every icon ("[clock]5m+[car]45m[clock]5m+[car]45m").
+  Array.from(block.children).forEach((child) => {
+    if (child.classList.contains("agenda-item-travel-leave")) return;
+    child.remove();
+  });
 
   if (arriveMin > 0) {
     const seg = document.createElement("span");

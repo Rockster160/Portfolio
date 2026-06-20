@@ -127,14 +127,17 @@
 </div>
 
 <% if mode == :edit %>
-  <%# Default to "this occurrence" — the cautious choice. Renaming one
-      day's standup shouldn't accidentally rename every future one too;
-      users who want the series edit toggle to series explicitly. %>
+  <%# Default to "this and all future" — the common case for recurring
+      events (rename / move a daily standup, propagate to the whole series).
+      The HTML default matches what JS sets at modal-open time so the user
+      visually sees the same scope that submit() will read. Detached
+      occurrences hide the series option entirely (see openModal in agenda.js)
+      because they have no series to apply to. %>
   <div class="ff add-scope-field hidden">
     <label>Apply changes to</label>
     <div class="scope-radios">
-      <label><input type="radio" name="scope" value="occurrence" checked> This occurrence</label>
-      <label><input type="radio" name="scope" value="series"> This and all future</label>
+      <label class="scope-occurrence-label"><input type="radio" name="scope" value="occurrence"> This occurrence</label>
+      <label class="scope-series-label"><input type="radio" name="scope" value="series" checked> This and all future</label>
     </div>
   </div>
 <% end %>

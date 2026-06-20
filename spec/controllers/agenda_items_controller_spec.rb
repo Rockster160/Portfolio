@@ -419,30 +419,51 @@ RSpec.describe AgendaItemsController, type: :controller do
     # all-day kept rendering as a 1-hour event after save. Locking the
     # round-trip here means a future refactor that drops `all_day` from
     # either side will fail loudly.
-    it "series-scope edit propagates all_day=true to the schedule + materialized rows" do
-      event_sched = create(:agenda_schedule, agenda: agenda, name: "Bday", kind: "event",
-        start_time: "08:00", duration_minutes: 60, all_day: false,
-        recurrence: { "freq" => "yearly" }, starts_on: Date.current)
-      materialized = event_sched.agenda_items.first
-      phantom = "p-#{event_sched.id}-#{Date.current.iso8601}"
+    it "series-scope edit propagates all_day=true to the schedule + today's already-started row" do
+      # Bday is a yearly event whose first occurrence is today at 7pm. The
+      # whole regression hinged on `materialize_upcoming!` skipping today's
+      # already-started row (it filtered `start_at: now..`), so a series
+      # edit landed on the schedule but never touched the materialized
+      # row — `all_day` flipped on the schedule but the row kept 7pm /
+      # 60min / `all_day: false`. Travel back in time so the test always
+      # runs after 7pm regardless of wall-clock.
+      zone = ActiveSupport::TimeZone[user.timezone]
+      seven_pm_today = zone.local(Date.current.year, Date.current.month, Date.current.day, 19, 0)
+      travel_to(seven_pm_today + 30.minutes) do
+        event_sched = create(:agenda_schedule, agenda: agenda, name: "Bday", kind: "event",
+          start_time: "19:00", duration_minutes: 60, all_day: false,
+          recurrence: { "freq" => "yearly" }, starts_on: Date.current)
+        materialized = event_sched.agenda_items.first
+        expect(materialized).to be_present, "expected today's 7pm row to materialize"
+        phantom = "p-#{event_sched.id}-#{Date.current.iso8601}"
 
-      patch :update, params: {
-        id:    phantom,
-        scope: :series,
-        agenda_item: {
-          name: "Bday", kind: "event", all_day: true,
-          start_at: Time.current.to_i, end_at: (Time.current + 1.day).to_i,
-        },
-        agenda_schedule: {
-          name: "Bday", kind: "event", all_day: true,
-          start_time: "00:00", duration_minutes: 1440,
-          recurrence: { freq: "yearly", interval: 1, unit: "year" },
-        },
-      }, format: :json
+        patch :update, params: {
+          id:    phantom,
+          scope: :series,
+          agenda_item: {
+            name: "Bday", kind: "event", all_day: true,
+            start_at: Time.current.to_i, end_at: (Time.current + 1.day).to_i,
+          },
+          # Mirrors what the FE's buildSchedulePayload now sends when
+          # `all_day: true` — anchored at 00:00 with 1440min so the
+          # materialized occurrences are internally consistent.
+          agenda_schedule: {
+            name: "Bday", kind: "event", all_day: true,
+            start_time: "00:00", duration_minutes: 1440,
+            recurrence: { freq: "yearly", interval: 1, unit: "year" },
+          },
+        }, format: :json
 
-      expect(response).to be_successful, "body=#{response.body}"
-      expect(event_sched.reload.all_day).to be true
-      expect(materialized.reload.all_day).to be true
+        expect(response).to be_successful, "body=#{response.body}"
+        expect(event_sched.reload.all_day).to be true
+        expect(event_sched.start_time.strftime("%H:%M")).to eq("00:00")
+        expect(event_sched.duration_minutes).to eq(1440)
+        materialized.reload
+        expect(materialized.all_day).to be true
+        # Materialized row's start_at lands at 00:00 local — NOT the
+        # original 7pm anchor. This is the line that proves the fix.
+        expect(materialized.start_at.in_time_zone(user.timezone).strftime("%H:%M")).to eq("00:00")
+      end
     end
 
     it "occurrence-scope delete just pushes to excluded_dates (no row created)" do

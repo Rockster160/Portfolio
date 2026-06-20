@@ -306,12 +306,17 @@ class AgendaSchedule < ApplicationRecord
     from_date = now.in_time_zone(user.timezone).to_date
     to_date = through.in_time_zone(user.timezone).to_date
 
-    # Key existing non-detached future items by logical date. start_time
-    # may have just changed, so don't match on start_at directly — match
-    # on the date the occurrence belongs to. Unbounded forward: items
-    # already materialized stay updated regardless of window.
+    # Key existing non-detached items by logical date. start_time may have
+    # just changed, so don't match on start_at directly — match on the
+    # date the occurrence belongs to. Lower bound is the START of today
+    # in the user's zone (not `now`), so a series-edit lands on today's
+    # already-started occurrence too — otherwise an event at 7pm flipped
+    # to all-day at 10pm keeps its old 7pm/60min shape because the scan
+    # filtered it out. Unbounded forward: items already materialized stay
+    # updated regardless of window.
+    today_start = from_date.in_time_zone(user.timezone).beginning_of_day
     existing_by_date = agenda_items
-      .where(start_at: now..)
+      .where(start_at: today_start..)
       .where(detached_at: nil)
       .order(:start_at)
       .each_with_object({}) { |item, h|
@@ -338,13 +343,19 @@ class AgendaSchedule < ApplicationRecord
     end
 
     # Create occurrences rolling into the window that don't have a
-    # materialized row yet. Skip dates already handled above.
+    # materialized row yet. Skip dates already handled above. We allow
+    # `occurrence_start < now` for today specifically — a user flipping
+    # today's event to all-day mid-day expects today's row to exist with
+    # the new shape, not "next year only". For all other dates we keep
+    # the "must be in the future window" gate so worker ticks don't
+    # backfill ancient occurrences.
     (from_date..to_date).each do |date|
       next unless matches?(date)
       next if existing_by_date.key?(date)
 
       occurrence_start = occurrence_start_at(date)
-      next if occurrence_start < now || occurrence_start > through
+      next if occurrence_start > through
+      next if date != from_date && occurrence_start < now
 
       attrs = base_item_attrs(date)
       attrs[:metadata] = metadata

@@ -32,8 +32,16 @@
   });
 
   function render(root) {
-    const state = window.AgendaStore.getState();
-    const items = Object.values(state.items || {});
+    // Use `itemsForRange` (not state.items) so recurring phantoms render
+    // beyond MATERIALIZE_WINDOW. Day-grid cells beyond ~30h of "now" won't
+    // have materialized rows yet for daily/weekday standups; the store's
+    // expander generates phantoms across the visible month window.
+    const grid = root.querySelector(".cal-month-grid[data-month-start][data-month-end]");
+    const fromISO = grid?.dataset?.monthStart;
+    const toISO = grid?.dataset?.monthEnd;
+    const items = (fromISO && toISO)
+      ? window.AgendaStore.itemsForRange(fromISO, toISO)
+      : Object.values(window.AgendaStore.getState().items || {});
     const byDate = bucketByDate(items);
 
     root.querySelectorAll(".cal-month-cell[data-date]").forEach((cell) => {

@@ -185,6 +185,14 @@ async function flush() {
         // feeds the store reconciliation hook.
         const payload = await readJson(res);
         popHead(op);
+        // Clear pending UI markers BEFORE the reconciler runs — same
+        // contract as `queue_reconciler.js#clearPendingMarkers` but lives
+        // here as a backstop so the lifecycle never depends on a single
+        // hook firing. A failure inside `onMutationResolved` (subscriber
+        // throws, store guard short-circuits, etc.) used to strand the
+        // row in `.is-pending` forever; doing it here guarantees the
+        // class clears on every successful resolve.
+        clearPendingMarkersForOp(op, payload);
         if (payload && typeof onMutationResolved === "function") {
           try { onMutationResolved(op, payload, { conflict: res.status === 409 }); }
           catch (err) { console.warn("[agenda queue] reconcile hook error", err); }
@@ -225,6 +233,31 @@ function popHead(op) {
     q.shift();
     saveQueue(q);
   }
+}
+
+// Strip the optimistic `.is-pending` / `.is-pending-delete` markers stamped
+// in `agenda.js` at submit time. Matched DOM nodes are anything carrying
+// the op's `target_id` OR the canonical id returned in the response, so a
+// `temp:` row swapped out by `upsertItem`'s reconciliation still gets
+// cleaned up properly.
+function clearPendingMarkersForOp(op, payload) {
+  if (typeof document === "undefined") return;
+  const itemPayload = payload && payload.current && typeof payload.current === "object"
+    ? payload.current
+    : payload;
+  const ids = new Set();
+  if (op && op.target_id) ids.add(String(op.target_id));
+  if (itemPayload && itemPayload.id) ids.add(String(itemPayload.id));
+  ids.forEach((id) => {
+    if (!id) return;
+    const esc = (window.CSS && window.CSS.escape)
+      ? window.CSS.escape(id)
+      : String(id).replace(/"/g, '\\"');
+    document.querySelectorAll(`[data-item-id="${esc}"]`).forEach((el) => {
+      el.classList.remove("is-pending");
+      el.classList.remove("is-pending-delete");
+    });
+  });
 }
 
 function scheduleRetry() {

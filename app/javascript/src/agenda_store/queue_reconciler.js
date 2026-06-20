@@ -33,6 +33,17 @@
       window.AgendaStore.removeItem(op.target_id);
     }
 
+    // Clear pending UI markers on the row now that the server has
+    // confirmed the mutation. `.is-pending` / `.is-pending-delete` get
+    // stamped in agenda.js at submit time and are intentionally NOT
+    // stripped by `patchClasses` on every store-render (otherwise the
+    // optimistic patch would clear them before the request even goes
+    // out). The submitted op's target_id matches either the new server
+    // id or the temp:* id; in the swap-on-confirm case the temp id node
+    // may have been retitled in place by `upsertItem`'s reconciliation
+    // so we look for BOTH ids defensively.
+    clearPendingMarkers(op, itemPayload);
+
     if (ctx && ctx.conflict) {
       // 409 already had its canonical row upserted above; nothing extra
       // to do here. The dropped-banner path is triggered by 4xx in the
@@ -40,4 +51,21 @@
       // server's view.
     }
   });
+
+  function clearPendingMarkers(op, itemPayload) {
+    const ids = new Set();
+    if (op && op.target_id) ids.add(String(op.target_id));
+    if (itemPayload && itemPayload.id) ids.add(String(itemPayload.id));
+    ids.forEach((id) => {
+      const sel = `[data-item-id="${cssEscape(id)}"]`;
+      document.querySelectorAll(sel).forEach((el) => {
+        el.classList.remove("is-pending");
+        el.classList.remove("is-pending-delete");
+      });
+    });
+  }
+
+  function cssEscape(str) {
+    return (window.CSS && window.CSS.escape) ? window.CSS.escape(str) : String(str).replace(/"/g, '\\"');
+  }
 })();

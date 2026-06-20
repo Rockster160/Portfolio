@@ -505,7 +505,7 @@
     // Build agenda_schedule payload from form state. `startsOn` preserves
     // the schedule's original start date during edit-series flows so the
     // rule edit doesn't shift starts_on onto the occurrence's date.
-    function buildSchedulePayload({ name, kind, color, startTime, endTime, date, triggerExpression, startsOn, allDay }) {
+    function buildSchedulePayload({ name, kind, color, startTime, endTime, date, triggerExpression, startsOn, allDay, allDayEnd }) {
       const freq = freqSelect.value;
       const recurrence = { freq };
 
@@ -532,7 +532,29 @@
         }
       }
 
-      const duration = kind === "event" ? Math.max(15, minutesBetween(startTime, endTime)) : null;
+      // All-day schedules anchor at 00:00 with a 1-day-per-banner duration.
+      // For a single-day all-day event allDayEnd === date → 24h (1440min).
+      // For a multi-day all-day span (Mac-style drag across cells) we walk
+      // the inclusive day count + multiply by 1440. Without this, all-day
+      // schedules used to carry whatever the hidden time inputs had (e.g.
+      // 19:00 + 60min) — materialize_upcoming! then built every occurrence
+      // at 7pm for 1 hour, producing internally-inconsistent "all-day from
+      // 7pm to 8pm" rows that displayed (and re-edited) as 1-hour events.
+      let effectiveStartTime = startTime;
+      let duration = null;
+      if (kind === "event") {
+        if (allDay) {
+          effectiveStartTime = "00:00";
+          const endIso = allDayEnd || date;
+          const dayMs = 24 * 60 * 60 * 1000;
+          const startDt = new Date(`${date}T00:00`);
+          const endDt = new Date(`${endIso}T00:00`);
+          const days = Math.max(1, Math.round((endDt - startDt) / dayMs) + 1);
+          duration = days * 24 * 60;
+        } else {
+          duration = Math.max(15, minutesBetween(startTime, endTime));
+        }
+      }
       const endMode = endModeSelect ? endModeSelect.value : "never";
       const untilOn = endMode === "until" && untilInput?.value ? untilInput.value : null;
       const occurrenceCount = endMode === "count" && countInput?.value
@@ -543,7 +565,7 @@
         name,
         kind,
         color,
-        start_time:         startTime,
+        start_time:         effectiveStartTime,
         duration_minutes:   duration,
         starts_on:          startsOn || date,
         until_on:           untilOn,
@@ -870,6 +892,7 @@
         name, kind: activeKind, color,
         startTime, endTime, date, triggerExpression,
         allDay: isAllDay,
+        allDayEnd: allDayEnd,
       });
       schedulePayload.agenda_id = agendaId;
       schedulePayload.location = location;
@@ -1163,20 +1186,30 @@
       const isDetached = d.detached === "true";
       $(".add-scope-field", form).classList.toggle("hidden", !currentRecurring);
 
-      // Series radio + restore button toggle on detachment: an unaltered
-      // recurring item defaults to "this and all future" (the common case
-      // — rename/move a daily standup, propagate to the series). An
-      // already-detached one is a one-off and stays a one-off; instead of
-      // a series radio, surface a "Restore to cycle" button that puts it
-      // back into the recurrence.
+      // Series radio + restore button toggle on detachment.
+      //
+      // What the user sees IS what gets submitted: `currentScope()` reads
+      // whichever radio is :checked, so the visual state is the source of
+      // truth. Two cases:
+      //   * Detached occurrence — it's a one-off; the series option has
+      //     no series to apply to. We hide the series label AND uncheck
+      //     it AND force the occurrence radio so the form can never
+      //     silently submit `scope=series` for a row with no series.
+      //   * Non-detached recurring — default to "this and all future"
+      //     (the common case). HTML already has `checked` on the series
+      //     radio, but re-affirm here so a prior detached-open doesn't
+      //     leak state forward.
+      // Restore button only appears for detached rows.
       const seriesRadio  = form.querySelector("input[name='scope'][value='series']");
       const occRadio     = form.querySelector("input[name='scope'][value='occurrence']");
       const seriesLabel  = seriesRadio?.closest("label");
       if (currentRecurring && isDetached) {
+        if (seriesRadio) seriesRadio.checked = false;
         if (occRadio) occRadio.checked = true;
         if (seriesLabel) seriesLabel.classList.add("hidden");
         if (restoreBtn) restoreBtn.classList.remove("hidden");
       } else {
+        if (occRadio) occRadio.checked = false;
         if (seriesRadio) seriesRadio.checked = true;
         if (seriesLabel) seriesLabel.classList.remove("hidden");
         if (restoreBtn) restoreBtn.classList.add("hidden");
@@ -1342,6 +1375,7 @@
           startTime, endTime, date, triggerExpression,
           startsOn: currentScheduleData?.starts_on,
           allDay: isAllDay,
+          allDayEnd: allDayEnd,
         });
         payload.agenda_schedule.location = payload.agenda_item.location;
         payload.agenda_schedule.arrive_early_minutes = payload.agenda_item.arrive_early_minutes;
