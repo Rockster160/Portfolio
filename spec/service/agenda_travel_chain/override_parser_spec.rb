@@ -59,6 +59,37 @@ RSpec.describe AgendaTravelChain::OverrideParser do
       expect(result[:nonav]).to be(false)
       expect(result[:before]).to eq([])
     end
+
+    it "parses from: and to: as single string values" do
+      notes = <<~NOTES
+        Pickup detour
+        from:123 Main St, Springfield
+        to:Side entrance
+      NOTES
+      result = p.parse(notes)
+      expect(result[:from]).to eq("123 Main St, Springfield")
+      expect(result[:to]).to eq("Side entrance")
+    end
+
+    it "honors surrounding quotes on from:/to: values" do
+      notes = 'from:"123 Main St, Apt 4"'
+      expect(p.parse(notes)[:from]).to eq("123 Main St, Apt 4")
+    end
+
+    it "leaves from:/to: nil when absent" do
+      expect(p.parse("nonav")[:from]).to be_nil
+      expect(p.parse("nonav")[:to]).to be_nil
+    end
+
+    it "is case-insensitive for from:/to:" do
+      expect(p.parse("FROM:Costco")[:from]).to eq("Costco")
+      expect(p.parse("To:Home")[:to]).to eq("Home")
+    end
+
+    it "only matches from:/to: at line start" do
+      notes = "I'll drive from:somewhere fun"
+      expect(p.parse(notes)[:from]).to be_nil
+    end
   end
 
   describe ".changed?" do
@@ -74,6 +105,11 @@ RSpec.describe AgendaTravelChain::OverrideParser do
 
     it "is true when a flag toggles" do
       expect(p.changed?("", "nonav")).to be(true)
+    end
+
+    it "is true when from:/to: change" do
+      expect(p.changed?("from:Home", "from:Office")).to be(true)
+      expect(p.changed?("", "to:Side entrance")).to be(true)
     end
   end
 end

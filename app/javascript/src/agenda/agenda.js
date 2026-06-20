@@ -1,6 +1,4 @@
 (function () {
-  const QUEUE_KEY = "agendaPendingOps:v3";
-
   // Cross-modal handoff: initAddModal exposes a prefill+show entry point so
   // the follow-up flow can fill the add modal with a source event's
   // attributes + a new date. initFollowUpModal exposes `.open(source)` so
@@ -17,11 +15,6 @@
     t.innerHTML = html.trim();
     return t.content.firstElementChild;
   }
-
-  function escapeHtml(s) {
-    return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  }
-  function escapeAttr(s) { return escapeHtml(s).replace(/'/g, "&#39;"); }
 
   function csrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
@@ -208,224 +201,36 @@
     });
   }
 
-  // ---------- offline queue ----------
-  function getQueue() {
-    try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]"); }
-    catch (_) { return []; }
-  }
-  function saveQueue(q) {
-    try {
-      localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
-    } catch (err) {
-      // QuotaExceededError — surface the dropped banner so the user sees
-      // something stalled rather than silently losing offline edits.
-      // Doesn't re-throw because the queue stays in memory for the
-      // current tab even if persistence failed.
-      console.error("agenda: queue persist failed (quota / disabled storage)", err);
-      showApiErrorBanner();
-    }
-    updatePendingBadge();
-  }
-  // Every queued op carries `client_ts` — the wall-clock instant the
-  // user actually made the change (NOT when the request finally goes
-  // out). Sent to the server as `X-Client-Mutation-At` so it can
-  // respect real edit ordering across devices: a queued 2pm edit
-  // replayed at 2:45pm shouldn't clobber another device's 2:30pm
-  // online edit. The dedup_key path preserves the existing op's
-  // client_ts so reusing a key (e.g. edit-then-edit-again offline)
-  // keeps the user's earliest edit moment for the merged op — that
-  // way the server compares against the right "edited at" time.
-  function enqueue(op) {
-    const q = getQueue();
-    const idx = q.findIndex((p) => p.dedup_key === op.dedup_key);
-    const ts = (idx >= 0 && q[idx].client_ts) || op.client_ts || Date.now();
-    const stamped = Object.assign({}, op, { client_ts: ts });
-    if (idx >= 0) q[idx] = stamped;
-    else q.push(stamped);
-    saveQueue(q);
-  }
-
+  // ---------- pending badge + dropped banner ----------
+  // The write-first mutation queue (`AgendaMutationQueue` in
+  // `src/agenda_store/mutation_queue.js`) owns everything queue-shaped:
+  // persistence, FIFO drain, retry / backoff, cross-tab dedup, the
+  // synthetic 503 fallback wired through the service worker. This file
+  // owns only the user-visible reflection: the spinner badge in the
+  // header and the dismissable "didn't save" banner.
   function updatePendingBadge() {
     const badge = document.querySelector(".agenda-pending-badge");
-    if (!badge) return;
-    let count = 0;
-    try { count = (JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]")).length; }
-    catch (_) { count = 0; }
+    if (!badge || !window.AgendaMutationQueue) return;
+    const count = window.AgendaMutationQueue.loadQueue().length;
     const numEl = badge.querySelector(".agenda-pending-badge-count");
     if (numEl) numEl.textContent = count > 0 ? ` ${count}` : "";
     badge.classList.toggle("hidden", count === 0);
   }
-  // Persistent banner + queue of permanently-failed ops so the user
-  // knows which changes were dropped server-side and can dismiss when
-  // they've understood. Bumping the version key (DROPPED_KEY) drops
-  // anything left from a stale session.
-  const DROPPED_KEY = "agendaDroppedOps:v1";
-  function getDropped() {
-    try { return JSON.parse(localStorage.getItem(DROPPED_KEY) || "[]"); }
-    catch (_) { return []; }
-  }
-  function saveDropped(list) {
-    localStorage.setItem(DROPPED_KEY, JSON.stringify(list));
-    updateDroppedBanner();
-  }
-  function recordDropped(op, status) {
-    const list = getDropped();
-    list.push({ url: op.url, method: op.method, status, at: new Date().toISOString() });
-    saveDropped(list);
-  }
+
   function updateDroppedBanner() {
     const banner = document.querySelector(".agenda-error-dropped");
-    if (!banner) return;
-    const list = getDropped();
+    if (!banner || !window.AgendaMutationQueue) return;
+    const list = window.AgendaMutationQueue.loadDropped();
     banner.classList.toggle("hidden", list.length === 0);
     const count = banner.querySelector(".agenda-error-dropped-count");
     if (count) count.textContent = list.length > 1 ? ` (${list.length})` : "";
   }
 
-  // Drains one op at a time, removing the head only after `res.ok` so a
-  // tab close or network drop mid-flight leaves the op queued for retry.
-  // Five consecutive 5xx attempts surface the disconnect banner so the
-  // user sees that something is wrong even though the WS may still be up.
-  let _processing = false;
-  let _consecutive5xx = 0;
-  async function processQueue() {
-    if (_processing) return; // single-flight
-    _processing = true;
-    try {
-      while (true) {
-        const q = getQueue();
-        if (q.length === 0) {
-          _consecutive5xx = 0;
-          // Clear the banner if it was up only because of 5xx retries.
-          clearApiErrorBanner();
-          return;
-        }
-        const op = q[0];
-        let res;
-        try {
-          const headers = {
-            "Content-Type":     "application/json",
-            "Accept":           "application/json",
-            "X-CSRF-Token":     csrfToken(),
-            "X-Requested-With": "XMLHttpRequest",
-          };
-          // `X-Client-Mutation-At` carries the moment the user made the
-          // change. The server uses it for last-write-wins: an old queued
-          // edit replayed late won't overwrite a fresher edit from
-          // another device.
-          if (op.client_ts) headers["X-Client-Mutation-At"] = String(op.client_ts);
-          res = await fetch(op.url, {
-            method:      op.method,
-            credentials: "same-origin",
-            headers,
-            body: op.body ? JSON.stringify(op.body) : undefined,
-          });
-        } catch (_e) {
-          // Network drop — leave op queued, retry on next online / WS connect.
-          showApiErrorBanner();
-          return;
-        }
-        if (!res.ok) {
-          if (res.status >= 400 && res.status < 500) {
-            // 4xx is permanent. Drop the op so we don't loop, but record
-            // it so the user gets a persistent indicator they can read
-            // and dismiss — silent drops were leaving changes lost
-            // without any explanation.
-            const dropped = getQueue();
-            if (dropped[0] && dropped[0].dedup_key === op.dedup_key) {
-              dropped.shift();
-              saveQueue(dropped);
-            }
-            recordDropped(op, res.status);
-            console.error(`Dropped queued op (server ${res.status}):`, op);
-            continue;
-          }
-          // 5xx — transient. Leave queued; surface a banner if it keeps
-          // happening so the user sees that retries are stalling.
-          _consecutive5xx += 1;
-          if (_consecutive5xx >= 5) showApiErrorBanner();
-          return;
-        }
-        _consecutive5xx = 0;
-        // Server ack'd. Pop the head off persistent storage. Re-read first
-        // in case another op was enqueued concurrently.
-        const after = getQueue();
-        if (after[0] && after[0].dedup_key === op.dedup_key) {
-          after.shift();
-          saveQueue(after);
-        }
-      }
-    } finally {
-      _processing = false;
-    }
-  }
-
-  // Reuses the existing .agenda-error "Disconnected" banner copy — the
-  // user-facing message is the same either way ("changes aren't reaching
-  // the server"). The Monitor connect handler also clears it.
-  function showApiErrorBanner() { $(".agenda-error")?.classList.remove("hidden"); }
-  function clearApiErrorBanner() {
-    // Don't clear if Monitor is currently disconnected — that handler owns
-    // the banner too.
-    if (window.__agendaMonitorDisconnected) return;
-    $(".agenda-error")?.classList.add("hidden");
-  }
-
-  window.addEventListener("online", processQueue);
-
-  // Cross-tab coordination: when another tab edits the queue (drains an
-  // op, enqueues a new one), refresh the badge so the user sees a single
-  // consistent state across every open tab. The dedup_key path already
-  // prevents double-submit if both tabs try to drain the same op.
-  window.addEventListener("storage", (e) => {
-    if (e.key !== QUEUE_KEY && e.key !== DROPPED_KEY) return;
-    updatePendingBadge();
-    updateDroppedBanner();
-  });
-
-  // Lightweight optimistic placeholder for a just-submitted add. Server
-  // re-renders the real row on the post-broadcast HTML refresh. This is
-  // intentionally minimal — no item id, no kind classes, no edit affordance —
-  // because anything more would duplicate _item.html.erb and drift.
-  function insertPendingPlaceholder(data) {
-    const root = $(".agenda-page");
-    if (!root) return; // calendar view has no day sections
-    const currentDate = root.dataset.currentDate;
-    if (!currentDate) return;
-    const startTs = Number(data.start_at) * 1000;
-    if (!Number.isFinite(startTs)) return;
-    const startDate = new Date(startTs);
-    const pad = (n) => String(n).padStart(2, "0");
-    const itemDate = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}-${pad(startDate.getDate())}`;
-    const offset = Math.round(
-      (new Date(itemDate + "T12:00:00") - new Date(currentDate + "T12:00:00")) / 86400000,
-    );
-    if (offset < 0) return;
-    const section = $(`[data-section="day-${offset}"]`);
-    if (!section) return;
-    section.querySelector(".agenda-empty")?.remove();
-
-    const color = data.color || data.agenda_color || "#0160FF";
-    const placeholder = el(`
-      <div class="agenda-item is-pending"
-           style="--item-color: ${color}; --agenda-color: ${data.agenda_color || color};"
-           data-start-at="${data.start_at}">
-        <div class="agenda-item-body">
-          <span class="agenda-item-time">${fmtTime(data.start_at)}</span>
-          <span class="agenda-item-text">
-            <span class="agenda-item-name">${escapeHtml(data.name || "")}</span>
-          </span>
-        </div>
-      </div>
-    `);
-
-    const existing = Array.from(section.querySelectorAll(".agenda-item"));
-    const next = existing.find((node) => {
-      const t = Number(node.dataset.startAt) * 1000;
-      return Number.isFinite(t) && t > startTs;
+  if (window.AgendaMutationQueue) {
+    window.AgendaMutationQueue.subscribe(() => {
+      updatePendingBadge();
+      updateDroppedBanner();
     });
-    if (next) section.insertBefore(placeholder, next);
-    else section.appendChild(placeholder);
   }
 
   // ---------- shared agenda picker ----------
@@ -1008,40 +813,51 @@
           },
         };
 
-        // Optimistic placeholder so the user sees the item immediately. The
-        // server response (or the WS broadcast for cross-device sync) feeds
-        // AgendaStore, which re-renders the row in place. If the request
-        // fails, the placeholder stays visible (pending) and the op is
-        // queued for replay on reconnect.
-        insertPendingPlaceholder({
+        // Write-FIRST: build the canonical optimistic item, patch the
+        // store (renderers pick it up on the next subscriber tick), and
+        // queue the POST. Once the server confirms, upsertItem matches
+        // by client_mutation_id and swaps the temp:* id for the real
+        // one in-place — no flicker, no duplicate, no DOM identity
+        // change.
+        const mid    = window.AgendaMutationQueue.newMutationId();
+        const tempId = window.AgendaMutationQueue.newTempId();
+        const optimistic = window.AgendaOptimisticItem.buildOptimisticItem({
+          id:                  tempId,
+          client_mutation_id:  mid,
           name,
-          kind:               activeKind,
+          kind:                activeKind,
           color,
-          start_at:           startAt,
-          end_at:             endAt,
+          start_at:            Number(startAt),
+          end_at:              endAt == null ? null : Number(endAt),
+          all_day:             !!isAllDay,
           location,
           notes,
-          agenda_id:          agendaId,
-          agenda_color:       agendaMeta.color,
-          agenda_name:        agendaMeta.name,
+          arrive_early_minutes: arriveEarlyMinutes,
+          agenda_id:           agendaId,
+          agenda_name:         agendaMeta.name,
+          agenda_color:        agendaMeta.color,
+          agenda_source:       agendaMeta.source || "",
         });
+        window.AgendaStore.upsertItem(optimistic);
 
+        itemBody.agenda_item.client_mutation_id = mid;
+        window.AgendaMutationQueue.enqueue({
+          client_mutation_id: mid,
+          kind:               "create",
+          url:                form.dataset.itemUrl,
+          method:             "POST",
+          body:               itemBody,
+          target_id:          tempId,
+        });
+        window.AgendaMutationQueue.flush();
         closeModal();
-
-        ajax("POST", form.dataset.itemUrl, itemBody)
-          .then(() => toast("Added"))
-          .catch(() => {
-            enqueue({
-              dedup_key: `create:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
-              url:       form.dataset.itemUrl,
-              method:    "POST",
-              body:      itemBody,
-            });
-            toast("Saved offline — will sync when reconnected");
-          });
         return;
       }
 
+      // Schedules don't have an in-store optimistic representation yet
+      // (recurrence expansion is server-driven), so we don't patch the
+      // store — but we DO go through the mutation queue so an offline
+      // schedule-create is persisted and replayed on next reconnect.
       const schedulePayload = sched.buildSchedulePayload({
         name, kind: activeKind, color,
         startTime, endTime, date, triggerExpression,
@@ -1050,19 +866,18 @@
       schedulePayload.location = location;
       schedulePayload.arrive_early_minutes = arriveEarlyMinutes;
       schedulePayload.notes = notes;
+      const scheduleMid = window.AgendaMutationQueue.newMutationId();
+      schedulePayload.client_mutation_id = scheduleMid;
       const scheduleBody = { agenda_schedule: schedulePayload };
+      window.AgendaMutationQueue.enqueue({
+        client_mutation_id: scheduleMid,
+        kind:               "create-schedule",
+        url:                form.dataset.scheduleUrl,
+        method:             "POST",
+        body:               scheduleBody,
+      });
+      window.AgendaMutationQueue.flush();
       closeModal();
-      ajax("POST", form.dataset.scheduleUrl, scheduleBody)
-        .then(() => toast("Added"))
-        .catch(() => {
-          enqueue({
-            dedup_key: `create-schedule:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
-            url:       form.dataset.scheduleUrl,
-            method:    "POST",
-            body:      scheduleBody,
-          });
-          toast("Saved offline — will sync when reconnected");
-        });
     }
 
     // Prefill+open path used by the follow-up flow. Source data carries the
@@ -1128,27 +943,38 @@
       if (!cb) return;
       const url = cb.dataset.checkedUrl;
       const row = cb.closest(".agenda-item");
+      const itemId = row?.dataset.itemId;
       const intent = cb.checked;
-      const op = {
-        dedup_key: `check:${url}`,
-        url,
-        method:    "PATCH",
-        body:      { agenda_item: { completed_at: intent ? "now" : "" } },
-      };
 
       row?.classList.add("is-pending");
 
-      ajax(op.method, op.url, op.body)
-        .catch(() => {
-          // Queue + keep the box checked. The processor will keep
-          // retrying on reconnect / next visibility tick; the persistent
-          // error banner surfaces if it lands in the 4xx-dropped state.
-          enqueue(op);
-          toast("Saved offline — will sync");
-        });
-      // No .then(): on success we wait for the broadcast → HTML swap to
-      // replace this row with the server-rendered truth, which carries
-      // .crossed-out (or not) authoritatively and drops .is-pending.
+      // Write-FIRST: optimistic store patch + persistent queue BEFORE
+      // any network. User can dismiss the tab the instant they click
+      // and the change replays on next launch. The renderer reads
+      // `completed_at` to drive the checkbox state, so re-renders
+      // (broadcasts, store changes) won't revert the user's click
+      // until the server actually disagrees.
+      if (!itemId) return;
+      const mid = window.AgendaMutationQueue.newMutationId();
+      window.AgendaStore.patchItem({
+        id:           itemId,
+        completed_at: intent ? Math.floor(Date.now() / 1000) : null,
+      });
+      window.AgendaMutationQueue.enqueue({
+        client_mutation_id: mid,
+        kind:               intent ? "complete" : "uncomplete",
+        url,
+        method:             "PATCH",
+        body:               {
+          agenda_item: {
+            completed_at:       intent ? "now" : "",
+            client_mutation_id: mid,
+          },
+        },
+        dedup_key: `check:${url}`,
+        target_id: itemId,
+      });
+      window.AgendaMutationQueue.flush();
     });
   }
 
@@ -1514,22 +1340,59 @@
 
       // Mark pending and close immediately; .is-pending stays on if the
       // request fails because the op gets queued for retry.
-      const itemEl = findItemEl($(".add-item-id", form).value);
+      const itemIdRaw = $(".add-item-id", form).value;
+      const itemEl = findItemEl(itemIdRaw);
       itemEl?.classList.add("is-pending");
       closeModal();
 
-      ajax("PATCH", form.dataset.itemUrl, payload)
-        .then(() => toast("Saved"))
-        .catch(() => {
-          enqueue({
-            // Latest edit to a given item wins — dedup by URL.
-            dedup_key: `update:${form.dataset.itemUrl}`,
-            url:       form.dataset.itemUrl,
-            method:    "PATCH",
-            body:      payload,
-          });
-          toast("Saved offline — will sync when reconnected");
+      if (!itemIdRaw) return;
+      // Write-FIRST: optimistic patch + persistent queue, no network in
+      // the hot path. The store's stale-time guard prevents a slow
+      // broadcast from reverting the user's edit until the server
+      // catches up (with a fresher updated_at).
+      const mid = window.AgendaMutationQueue.newMutationId();
+      const patch = {
+        id:            String(itemIdRaw),
+        name:          payload.agenda_item.name,
+        location:      payload.agenda_item.location,
+        notes:         payload.agenda_item.notes,
+        start_at:      payload.agenda_item.start_at,
+        end_at:        payload.agenda_item.end_at,
+        all_day:       payload.agenda_item.all_day,
+        color:         payload.agenda_item.color,
+        arrive_early_minutes: payload.agenda_item.arrive_early_minutes,
+        client_mutation_id: mid,
+        updated_at:    Math.floor(Date.now() / 1000),
+      };
+      // Reflect into presentation_attrs too so the in-place patcher
+      // sees the fresh values on the next render.
+      const existing = window.AgendaStore.getItem(String(itemIdRaw));
+      if (existing) {
+        const pa = Object.assign({}, existing.presentation_attrs || {}, {
+          "name":     patch.name || "",
+          "location": patch.location || "",
+          "notes":    patch.notes || "",
+          "color":    patch.color || "",
+          "start-at": patch.start_at || 0,
+          "end-at":   patch.end_at == null ? null : patch.end_at,
+          "all-day":  !!patch.all_day,
+          "arrive-early-minutes": patch.arrive_early_minutes || 0,
         });
+        patch.presentation_attrs = pa;
+      }
+      window.AgendaStore.patchItem(patch);
+
+      payload.agenda_item.client_mutation_id = mid;
+      window.AgendaMutationQueue.enqueue({
+        client_mutation_id: mid,
+        kind:               "update",
+        url:                form.dataset.itemUrl,
+        method:             "PATCH",
+        body:               payload,
+        target_id:          String(itemIdRaw),
+        dedup_key:          `update:${form.dataset.itemUrl}`,
+      });
+      window.AgendaMutationQueue.flush();
     });
     bindEnterSubmit(form);
 
@@ -1547,16 +1410,15 @@
       const url = `${form.dataset.itemUrl}/restore`;
       closeModal();
 
-      ajax("POST", url)
-        .then(() => toast("Restored to cycle"))
-        .catch(() => {
-          enqueue({
-            dedup_key: `restore:${form.dataset.itemUrl}`,
-            url,
-            method: "POST",
-          });
-          toast("Saved offline — will sync when reconnected");
-        });
+      const mid = window.AgendaMutationQueue.newMutationId();
+      window.AgendaMutationQueue.enqueue({
+        client_mutation_id: mid,
+        kind:               "restore",
+        url,
+        method:             "POST",
+        dedup_key:          `restore:${form.dataset.itemUrl}`,
+      });
+      window.AgendaMutationQueue.flush();
     });
 
     deleteBtn.addEventListener("click", async () => {
@@ -1576,21 +1438,28 @@
       });
       if (!ok) return;
 
-      const itemEl = findItemEl($(".add-item-id", form).value);
+      const itemIdRaw = $(".add-item-id", form).value;
+      const itemEl = findItemEl(itemIdRaw);
       itemEl?.classList.add("is-pending-delete");
       const deleteUrl = `${form.dataset.itemUrl}?scope=${scope}`;
       closeModal();
 
-      ajax("DELETE", deleteUrl)
-        .then(() => toast("Deleted"))
-        .catch(() => {
-          enqueue({
-            dedup_key: `delete:${form.dataset.itemUrl}`,
-            url:       deleteUrl,
-            method:    "DELETE",
-          });
-          toast("Saved offline — will sync when reconnected");
-        });
+      if (!itemIdRaw) return;
+      // Write-FIRST: optimistically remove from the store + queue the
+      // DELETE. The row vanishes instantly from every subscribed view
+      // (no waiting on round-trip); the queue handles the actual
+      // server call. On any 4xx the dropped-bucket banner surfaces.
+      const mid = window.AgendaMutationQueue.newMutationId();
+      window.AgendaStore.removeItem(String(itemIdRaw));
+      window.AgendaMutationQueue.enqueue({
+        client_mutation_id: mid,
+        kind:               "destroy",
+        url:                deleteUrl,
+        method:             "DELETE",
+        target_id:          String(itemIdRaw),
+        dedup_key:          `delete:${form.dataset.itemUrl}`,
+      });
+      window.AgendaMutationQueue.flush();
     });
 
     function findItemEl(id) {
@@ -2324,6 +2193,12 @@
     }
   }
 
+  // RSVP is intentionally online-only — the response mirrors directly to
+  // Google's responseStatus and the server's `sendUpdates=none` flow,
+  // and there's no meaningful local optimistic state to surface beyond
+  // the immediate button-disable. Offline RSVP would queue, but the
+  // round-trip Google patch can't be replayed by the client. Surface a
+  // visible "Sending response…" + revert on failure rather than enqueueing.
   function submitRsvp(itemUrl, response, btn, dataEl, modal) {
     if (!itemUrl || !response) return;
     const url = `${itemUrl}/respond`;
@@ -2378,11 +2253,12 @@
   }
 
   // ---------- follow-up modal ----------
-  // Mini month picker shown when the user clicks "Follow up" from the edit
-  // modal. Pulls `/agenda/calendar?month=YYYY-MM` HTML, extracts each
-  // `.cal-day` cell, and renders a compact grid with per-day event counts.
-  // Selecting a day enables Confirm; Confirm hands the source event +
-  // chosen date to the add modal's prefill entry point.
+  // Mini month picker shown when the user clicks "Follow up" from the
+  // edit modal. Reads ALL items directly from AgendaStore — no HTML
+  // scraping, no extra HTTP roundtrip, works fully offline since the
+  // store already has the visible window. Selecting a day enables
+  // Confirm; Confirm hands the source event + chosen date to the add
+  // modal's prefill entry point.
   function initFollowUpModal() {
     const modal = document.getElementById("agenda-follow-up-modal");
     if (!modal) return null;
@@ -2397,14 +2273,18 @@
 
     let currentMonth = null;
     let selectedDate = null;
-    let itemsByDate = new Map();      // from month grid (capped at 4 + count)
-    let fullDayCache = new Map();     // full day items keyed by isoDate
-    let fetchSeq = 0;
-    let daySeq = 0;
+    let itemsByDate = new Map();      // keyed by isoDate → array of items in that day
     let source = null;
 
     function pad(n) { return String(n).padStart(2, "0"); }
     function isoMonth(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; }
+    function isoDate(d) {
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+    function epochToISO(epoch) {
+      const d = new Date(Number(epoch) * 1000);
+      return isoDate(d);
+    }
     function monthLabelText(monthIso) {
       const [y, m] = monthIso.split("-").map(Number);
       const d = new Date(y, m - 1, 1);
@@ -2419,41 +2299,47 @@
     function setMonth(monthIso) {
       currentMonth = monthIso;
       if (monthLabel) monthLabel.textContent = monthLabelText(monthIso);
-      fetchAndRender(monthIso);
+      renderFromStore(monthIso);
     }
 
-    function fetchAndRender(monthIso) {
-      const reqId = ++fetchSeq;
-      calMount.innerHTML = `<div class="follow-up-cal-loading">Loading…</div>`;
-      fetch(`/agenda/calendar?month=${encodeURIComponent(monthIso)}`, {
-        credentials: "same-origin",
-        headers:     { "Accept": "text/html", "X-Requested-With": "XMLHttpRequest" },
-      })
-        .then((res) => (res.ok ? res.text() : null))
-        .then((html) => {
-          if (reqId !== fetchSeq) return; // a newer fetch superseded this
-          if (!html) {
-            calMount.innerHTML = `<div class="follow-up-cal-error">Couldn't load month.</div>`;
-            return;
-          }
-          renderMonth(html);
-        })
-        .catch((err) => {
-          console.error("[follow-up] month fetch failed", err);
-          if (reqId === fetchSeq) {
-            calMount.innerHTML = `<div class="follow-up-cal-error">Couldn't load month.</div>`;
-          }
-        });
-    }
+    // Builds the month grid from AgendaStore directly. Range covers the
+    // full visible block (Sun..Sat enclosing the month), matching the
+    // legacy server-rendered shape. Nudges AgendaSync to lazy-backfill
+    // any items older than the store's currently-loaded window.
+    function renderFromStore(monthIso) {
+      const [y, m] = monthIso.split("-").map(Number);
+      const firstOfMonth = new Date(y, m - 1, 1);
+      // beginning_of_week(:sunday) — go back to the most recent Sunday.
+      const firstVisible = new Date(firstOfMonth);
+      firstVisible.setDate(firstVisible.getDate() - firstVisible.getDay());
+      // end_of_month → end_of_week(:sunday)
+      const lastOfMonth = new Date(y, m, 0);
+      const lastVisible = new Date(lastOfMonth);
+      lastVisible.setDate(lastVisible.getDate() + (6 - lastVisible.getDay()));
 
-    function renderMonth(html) {
-      const doc = new DOMParser().parseFromString(html, "text/html");
-      const cells = doc.querySelectorAll(".cal-day");
+      const fromIso = isoDate(firstVisible);
+      const toIso   = isoDate(lastVisible);
+      window.AgendaSync?.ensureRangeLoaded(fromIso, toIso);
+
       itemsByDate = new Map();
+      const state = window.AgendaStore?.getState?.() || { items: {} };
+      Object.values(state.items || {}).forEach((it) => {
+        if (!it || !it.start_at) return;
+        const startISO = epochToISO(it.start_at);
+        if (startISO < fromIso || startISO > toIso) return;
+        if (!itemsByDate.has(startISO)) itemsByDate.set(startISO, []);
+        itemsByDate.get(startISO).push({
+          name:        it.name,
+          startAt:     Number(it.start_at),
+          color:       it.color,
+          agendaColor: it.agenda_color,
+          allDay:      !!it.all_day,
+        });
+      });
 
+      const todayISO = isoDate(new Date());
       const grid = document.createElement("div");
       grid.className = "follow-up-cal-grid";
-
       ["S", "M", "T", "W", "T", "F", "S"].forEach((wd) => {
         const head = document.createElement("div");
         head.className = "follow-up-cal-weekday";
@@ -2461,22 +2347,13 @@
         grid.appendChild(head);
       });
 
-      cells.forEach((cell) => {
-        const date = cell.dataset.date;
-        if (!date) return;
-        const isOther = cell.classList.contains("other-month");
-        const isToday = cell.classList.contains("is-today");
-        const items = Array.from(cell.querySelectorAll(".cal-item")).map((b) => ({
-          name:        b.dataset.name,
-          startAt:     Number(b.dataset.startAt),
-          color:       b.dataset.color,
-          agendaColor: b.dataset.agendaColor,
-          allDay:      b.dataset.allDay === "true",
-        }));
-        const moreEl = cell.querySelector(".cal-more");
-        const more = moreEl ? parseInt(moreEl.textContent.match(/\d+/)?.[0] || "0", 10) : 0;
-        const total = items.length + more;
-        itemsByDate.set(date, { items, more, total });
+      const cursor = new Date(firstVisible);
+      while (cursor <= lastVisible) {
+        const date = isoDate(cursor);
+        const dayItems = itemsByDate.get(date) || [];
+        const total = dayItems.length;
+        const isOther = (cursor.getMonth() + 1) !== m;
+        const isToday = date === todayISO;
 
         const dayBtn = document.createElement("button");
         dayBtn.type = "button";
@@ -2488,7 +2365,7 @@
 
         const num = document.createElement("span");
         num.className = "follow-up-cal-day-num";
-        num.textContent = String(Number(date.split("-")[2]));
+        num.textContent = String(cursor.getDate());
         dayBtn.appendChild(num);
 
         if (total > 0) {
@@ -2500,7 +2377,8 @@
 
         dayBtn.addEventListener("click", () => selectDay(date));
         grid.appendChild(dayBtn);
-      });
+        cursor.setDate(cursor.getDate() + 1);
+      }
 
       calMount.innerHTML = "";
       calMount.appendChild(grid);
@@ -2514,44 +2392,15 @@
       });
       renderDetail(date);
       if (confirmBtn) confirmBtn.disabled = false;
-      // Month grid caps cells at 4 items + "+N more" text — not enough to
-      // judge availability. Fetch the day view's full item list, cache,
-      // and re-render the detail panel once it arrives.
-      if (!fullDayCache.has(date)) {
-        const reqId = ++daySeq;
-        fetch(`/agenda?date=${encodeURIComponent(date)}`, {
-          credentials: "same-origin",
-          headers:     { "Accept": "text/html", "X-Requested-With": "XMLHttpRequest" },
-        })
-          .then((res) => (res.ok ? res.text() : null))
-          .then((html) => {
-            if (!html) return;
-            const doc = new DOMParser().parseFromString(html, "text/html");
-            const section = doc.querySelector('.agenda-section[data-section-day="0"]');
-            const rows = section ? section.querySelectorAll(".agenda-item") : [];
-            const items = Array.from(rows).map((row) => ({
-              name:        row.dataset.name,
-              startAt:     Number(row.dataset.startAt),
-              color:       row.dataset.color,
-              agendaColor: row.dataset.agendaColor,
-              allDay:      row.dataset.allDay === "true",
-            }));
-            fullDayCache.set(date, items);
-            if (reqId === daySeq && selectedDate === date) renderDetail(date);
-          })
-          .catch((err) => console.warn("[follow-up] day fetch failed", err));
-      }
     }
 
     function renderDetail(date) {
-      const fromMonth = itemsByDate.get(date);
-      const full = fullDayCache.get(date);
-      // Prefer the full day fetch when we have it; otherwise the month-grid
-      // sample (capped at 4). The header's total comes from the month grid
-      // until the day fetch arrives, then from the full set.
-      const items = full || fromMonth?.items || [];
-      const total = full ? full.length : (fromMonth?.total ?? 0);
-      const truncated = !full && fromMonth ? fromMonth.more : 0;
+      // The store-driven month build is authoritative — every item in
+      // the visible window is already in itemsByDate, no per-day fetch
+      // needed. Renders identical output to the old day-HTML scrape.
+      const items = itemsByDate.get(date) || [];
+      const total = items.length;
+      const truncated = 0;
 
       const d = new Date(date + "T12:00:00");
       const dateLabel = d.toLocaleDateString(undefined, {
@@ -2617,7 +2466,6 @@
     function open(src) {
       source = src;
       selectedDate = null;
-      fullDayCache = new Map(); // fresh cache per open — source event's day items may have changed
       if (confirmBtn) confirmBtn.disabled = true;
       if (sourceName) sourceName.textContent = src.name || "this event";
       if (sourceMeta) sourceMeta.textContent = formatSourceMeta(src);
@@ -2703,9 +2551,11 @@
         disconnectTimer = null;
         window.__agendaMonitorDisconnected = false;
         $(".agenda-error")?.classList.add("hidden");
-        // Two things on reconnect: drain anything that piled up offline AND
-        // re-sync the view, since we likely missed broadcasts while down.
-        processQueue();
+        // On reconnect, nudge the queue drain (AgendaMutationQueue's own
+        // online/visibility hooks will fire too, but reconnect can lag
+        // those events on iOS PWAs) and re-sync the visible view since
+        // we likely missed broadcasts while down.
+        window.AgendaMutationQueue?.flush();
         const r = $(".agenda-page");
         if (r) refreshCurrentView();
       },
@@ -2866,26 +2716,25 @@
     initEdit(root);
     initAgendaFilter();
     initChecks(root);
-    // Wire the dismiss button on the permanent-failure banner.
+    // Wire the dismiss button on the permanent-failure banner. The
+    // mutation queue owns the dropped bucket; we just trigger its clear.
     document.querySelector(".agenda-error-dropped .agenda-error-dismiss")?.addEventListener("click", () => {
-      saveDropped([]);
+      window.AgendaMutationQueue?.dismissDropped();
     });
     updateDroppedBanner();
     updatePendingBadge();
     const checkRollover = scheduleAutoDateAdvance(root);
 
     // Foreground re-sync — mobile browsers suspend the ActionCable socket
-    // while backgrounded and may miss broadcasts. AgendaSync.installResumeTriggers
-    // already nudges its own delta fetch on visibilitychange/focus/online;
-    // we only need to drain the pending-ops queue here.
+    // while backgrounded and may miss broadcasts. The mutation queue's
+    // own visibility hook will drain too; we keep the rollover check
+    // co-located so the 3am date roll still fires when the tab wakes.
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState !== "visible") return;
       if (checkRollover) checkRollover();
-      processQueue();
     });
 
     subscribeMonitor();
-    processQueue();
 
     // Deep link: ?item=<display_id> auto-opens the details modal for that
     // row once the page has rendered. Used by the Jarvis "schedule" reply

@@ -358,6 +358,15 @@ body.ctr-agendas {
     color: rgba(255, 200, 100, 0.9);
     margin-left: 4px;
     line-height: 1.2;
+    cursor: pointer;
+    transition: background 0.12s ease;
+    &:hover {
+      background: rgba(255, 200, 100, 0.18);
+    }
+    &:focus-visible {
+      outline: 2px solid rgba(255, 200, 100, 0.6);
+      outline-offset: 1px;
+    }
     i {
       font-size: 10px;
       animation: agenda-pending-spin 1.6s linear infinite;
@@ -366,6 +375,7 @@ body.ctr-agendas {
       display: none;
     }
   }
+
   @keyframes agenda-pending-spin {
     from {
       transform: rotate(0deg);
@@ -870,7 +880,12 @@ body.ctr-agendas {
     border: 1px solid rgba(255, 255, 255, 0.08) !important;
     border-radius: 10px !important;
     font-family: inherit !important;
-    margin-top: 0 !important;
+    // `.app-card-container` is the same div as `.modal-content`; restore
+    // the wrapper's centering convention (10% from top, auto horizontal)
+    // here so flat-dark modals aren't jammed against the viewport top.
+    // The bang overrides the forms.scss `.app-card-container { margin-top: 30px }`
+    // default that would otherwise clash.
+    margin: 10% auto !important;
     overflow: hidden;
   }
   .app-card-title {
@@ -932,6 +947,84 @@ body.ctr-agendas {
   }
 }
 
+// Pending-queue inspector modal — list of every queued offline mutation
+// with a per-row Drop button. Mirrors `#agenda-confirm-modal`'s layout
+// inside the shared `.modal-flat` chrome: outer `.app-card-inner` is
+// already zeroed by modal-flat, so we handle padding per-element here.
+#agenda-pending-queue {
+  .agenda-pending-modal-empty {
+    padding: 18px 18px 4px;
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.45;
+    color: inherit;
+    opacity: 0.75;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  .agenda-pending-modal-list {
+    list-style: none;
+    margin: 0;
+    padding: 4px 0;
+    max-height: 360px;
+    overflow-y: auto;
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  .agenda-pending-modal-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 13px;
+    line-height: 1.35;
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+
+  .agenda-pending-modal-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .agenda-pending-modal-kind {
+    font-weight: 500;
+    color: inherit;
+    word-break: break-word;
+  }
+
+  .agenda-pending-modal-when {
+    font-size: 11px;
+    opacity: 0.55;
+  }
+
+  .agenda-pending-modal-drop {
+    flex-shrink: 0;
+  }
+
+  .agenda-pending-modal-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+}
+
 .agenda-details {
   padding: 18px 18px 14px;
   display: flex;
@@ -982,10 +1075,12 @@ body.ctr-agendas {
   .agenda-details-leave-at:not(:empty) {
     margin-right: 8px;
   }
-  // Subtle inline affordance on the "Recurring" row — edge-case toggle,
-  // intentionally low-key so it doesn't compete with Close / Edit.
+  // Subtle standalone affordance — edge-case toggle, intentionally
+  // low-key so it doesn't compete with Close / Edit.
+  .agenda-details-hide-row {
+    opacity: 1;
+  }
   .agenda-details-hide-recurring {
-    margin-left: 10px !important;
     padding: 1px 6px !important;
     font-size: 11px !important;
     font-weight: 400 !important;

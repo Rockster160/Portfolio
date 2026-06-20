@@ -73,12 +73,6 @@
       <div class="agenda-empty agenda-section-empty muted hidden">Nothing scheduled yet.</div>
     </section>
 
-    <%# Cold-start hint — visible until the store hydrates. Hidden by JS
-        once an initial paint lands (even an empty one). %>
-    <div class="agenda-cold-start" data-cold-start>
-      <i class="fa fa-refresh fa-spin"></i> Loading agenda…
-    </div>
-
     <%# Template the JS clones per item — see `agenda_item_renderer.js`. %>
     <%= render "agenda_items/template" %>
 
@@ -89,5 +83,6 @@
     <%= render "agenda_items/follow_up_modal" %>
     <%= render "agenda_items/details_modal" %>
     <%= render "agenda_items/confirm_modal" %>
+    <%= render "agenda_items/pending_queue_modal" %>
   <% end %>
 </div>

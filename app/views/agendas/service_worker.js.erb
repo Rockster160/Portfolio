@@ -33,6 +33,7 @@ const PRECACHE_URLS = [
   "<%= asset_path('application.js') %>",
   "<%= asset_path('application.css') %>",
   "/agenda.webmanifest",
+  "/agenda_calendar.webmanifest",
 ];
 
 self.addEventListener("install", (event) => {
@@ -89,7 +90,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Asset pipeline: fingerprinted, immutable. Cache-first; misses go to net.
-  if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/agenda_favicon/") || url.pathname === "/agenda.webmanifest") {
+  if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/agenda_favicon/") || url.pathname === "/agenda.webmanifest" || url.pathname === "/agenda_calendar.webmanifest") {
     event.respondWith(cacheFirst(req));
     return;
   }

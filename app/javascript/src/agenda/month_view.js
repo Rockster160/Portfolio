@@ -62,9 +62,10 @@
     return buckets;
   }
 
-  // Granular diff per cell — same shape as list_view.js but builds
-  // `.cal-month-item` buttons (compact one-liners) instead of full
-  // agenda rows.
+  // Granular diff per cell — mutates existing `.cal-month-item` buttons
+  // in place when the same id is already present (no replaceWith → no
+  // flicker, no DOM identity churn). Build a fresh button only for
+  // genuinely new items; remove only when the item left the cell.
   function diffCells(container, items) {
     const existing = new Map();
     container.querySelectorAll(".cal-month-item[data-item-id]").forEach((el) => {
@@ -75,11 +76,13 @@
     items.forEach((item) => {
       const id = String(item.id);
       desiredIds.add(id);
-      const node = buildCalMonthItem(item);
-      if (!node) return;
       const prev = existing.get(id);
-      if (prev) prev.replaceWith(node);
-      else container.appendChild(node);
+      if (prev) {
+        patchCalMonthItem(prev, item);
+      } else {
+        const node = buildCalMonthItem(item);
+        if (node) container.appendChild(node);
+      }
     });
 
     existing.forEach((el, id) => {
@@ -98,6 +101,63 @@
       }
       prev = el;
     });
+  }
+
+  // Mutate an existing cell button to match the latest item — same
+  // contract as `AgendaItemRenderer.patchAgendaItem`, scoped to the
+  // narrower cal_month markup (dot + time + name + optional travel).
+  function patchCalMonthItem(btn, item) {
+    const attrs = item.presentation_attrs || {};
+
+    for (const key of Object.keys(attrs)) {
+      const v = attrs[key];
+      const next = v == null ? "" : String(v);
+      if (btn.getAttribute(`data-${key}`) !== next) btn.setAttribute(`data-${key}`, next);
+    }
+    if (btn.getAttribute("data-all-day") !== "false") btn.setAttribute("data-all-day", "false");
+    const readonly = item.editable === false;
+    if (readonly && !btn.hasAttribute("data-readonly")) btn.setAttribute("data-readonly", "");
+    else if (!readonly && btn.hasAttribute("data-readonly")) btn.removeAttribute("data-readonly");
+
+    const color = attrs.color || "";
+    const agendaColor = attrs["agenda-color"] || "";
+    if (btn.style.getPropertyValue("--item-color") !== color) btn.style.setProperty("--item-color", color);
+    if (btn.style.getPropertyValue("--agenda-color") !== agendaColor) btn.style.setProperty("--agenda-color", agendaColor);
+
+    const timeSpan = btn.querySelector(".cal-month-item-time");
+    if (timeSpan && timeSpan.getAttribute("data-start-epoch") !== String(attrs["start-at"] || "")) {
+      timeSpan.setAttribute("data-start-epoch", String(attrs["start-at"] || ""));
+    }
+    const nameSpan = btn.querySelector(".cal-month-item-name");
+    if (nameSpan && nameSpan.textContent !== (attrs.name || "")) nameSpan.textContent = attrs.name || "";
+
+    // Travel block toggle (same structural rules as list_view's variant).
+    const travelMin = Number(attrs["travel-minutes"]) || 0;
+    const arriveMin = Number(attrs["arrive-early-minutes"]) || 0;
+    let travelWrap = btn.querySelector(".cal-month-item-travel");
+    if (travelMin <= 0 && arriveMin <= 0) {
+      if (travelWrap) travelWrap.remove();
+      return;
+    }
+    if (!travelWrap) {
+      travelWrap = document.createElement("span");
+      travelWrap.className = "cal-month-item-travel";
+      btn.appendChild(travelWrap);
+    }
+    const startEpoch = Number(attrs["start-at"]) || 0;
+    const leaveEpoch = startEpoch - (arriveMin + travelMin) * 60;
+    // Rebuild travel children — they're small static spans + i tags,
+    // cheap to recreate and avoids tracking per-icon presence.
+    travelWrap.innerHTML = `<span class="cal-month-item-travel-leave" data-time-hydrate data-start-epoch="${leaveEpoch}" data-format="cal" data-prefix="→"></span>`;
+    if (arriveMin > 0) {
+      travelWrap.insertAdjacentHTML("beforeend", `<i class="fa fa-clock-o"></i>${arriveMin}m`);
+    }
+    if (arriveMin > 0 && travelMin > 0) {
+      travelWrap.insertAdjacentHTML("beforeend", '<span class="cal-month-item-travel-plus">+</span>');
+    }
+    if (travelMin > 0) {
+      travelWrap.insertAdjacentHTML("beforeend", `<i class="fa fa-car"></i>${travelMin}m`);
+    }
   }
 
   // Build the compact cell-row button — different shape from the full

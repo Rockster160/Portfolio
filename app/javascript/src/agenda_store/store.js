@@ -372,7 +372,10 @@ function getServerTs()             { return state.serverTs; }
 function getWindowFrom()           { return state.windowFrom; }
 function getCarryOverIds()         { return state.carryOverIds || []; }
 function getDayKey()               { return state.dayKey; }
-function snapshot()                { return state; }
+// Returns the live state object. DO NOT mutate the return — the store
+// owns it. Use the dedicated `patchItem` / `upsertItem` / `removeItem`
+// setters to change state and notify subscribers.
+function getState()                { return state; }
 
 function reset() {
   state = emptyState();
@@ -475,7 +478,7 @@ const AgendaStore = {
   getWindowFrom,
   getCarryOverIds,
   getDayKey,
-  snapshot,
+  getState,
   // subscriptions
   subscribe,
   notify,

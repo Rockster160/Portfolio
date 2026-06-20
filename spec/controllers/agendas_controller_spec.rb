@@ -204,11 +204,13 @@ RSpec.describe AgendasController, type: :controller do
       expect(response.body).to include("December 2026")
     end
 
-    it "renders the unified agenda PWA webmanifest" do
-      # Single PWA — there is no longer a separate /agenda_calendar.webmanifest.
+    it "renders the Mac-calendar PWA webmanifest (distinct id from the iOS day PWA)" do
+      # cal_month is part of the Mac-style calendar PWA (id=agenda-calendar,
+      # start_url=/agenda/grid). The day-list iOS PWA uses /agenda.webmanifest
+      # and is installable from /agenda; both can coexist on one device.
       get :cal_month
-      expect(response.body).to include("/agenda.webmanifest")
-      expect(response.body).not_to include("/agenda_calendar.webmanifest")
+      expect(response.body).to include("/agenda_calendar.webmanifest")
+      expect(response.body).not_to match(%r{rel="manifest"\s+href="/agenda\.webmanifest"})
     end
 
     it "uses the focused month as the page title (not the literal word 'Calendar')" do

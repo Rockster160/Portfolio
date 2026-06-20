@@ -1,5 +1,5 @@
 <%= meta_title @week_start.strftime("Week of %b %-d"), include_name: false %>
-<% content_for(:favicon) { render "agendas/favicon" } %>
+<% content_for(:favicon) { render "agendas/cal_favicon" } %>
 <% content_for(:body_classes) { "agenda-cal-body" } %>
 
 <%# `agenda-page` triggers shared init in agenda.js (filter, modals,
@@ -22,8 +22,9 @@
       <span class="agenda-error cal-error-dot hidden" role="status" aria-live="polite" title="Disconnected — changes will sync when reconnected."></span>
       <h1 class="cal-toolbar-title"><%= @focus_date.strftime("%B %Y") %></h1>
       <div class="cal-toolbar-toggle cal-view-toggle cal-pwa-toggle">
-        <a href="<%= cal_month_path %>" class="cal-toggle-btn">Month</a>
+        <a href="<%= day_path %>" class="cal-toggle-btn">Day</a>
         <a href="<%= cal_week_path %>" class="cal-toggle-btn active">Week</a>
+        <a href="<%= cal_month_path %>" class="cal-toggle-btn">Month</a>
       </div>
     </div>
 
@@ -145,13 +146,10 @@
     <div class="cal-week-seeds hidden" data-week-seeds></div>
   </div>
 
-  <%# Cold-start spinner — visible only on a true cold-boot (no
-      localStorage cache AND no completed sync yet). agenda_cal.js
-      hides this once the first authoritative payload lands. %>
-  <div class="agenda-cold-start hidden" data-cold-start>
-    <i class="fa fa-spinner fa-spin"></i>
-    <span>Loading calendar…</span>
-  </div>
+  <%# Cold-start indicator removed — empty grid speaks for itself on a
+      true first visit (sub-second window before bootstrap lands). The
+      `.agenda-pending-badge` in the toolbar handles ongoing sync state
+      subtly. Center-stage spinners are off-limits per project rule. %>
 
   <%= render "agenda_items/add_modal", agendas: @agendas, date: @date %>
   <%= render "agenda_items/edit_modal", agendas: @agendas %>
@@ -159,4 +157,5 @@
   <%= render "agenda_items/details_modal" %>
   <%= render "agenda_items/hidden_list_modal" %>
   <%= render "agenda_items/confirm_modal" %>
+  <%= render "agenda_items/pending_queue_modal" %>
 </div>

@@ -8,9 +8,17 @@ module AgendaTravelChain
   #   notme                      → bool: kick the car / build the trip silently
   #   before:Foo,Bar,"3rd, St"   → array: waypoints inserted on the incoming leg
   #   after:Foo,Bar              → array: waypoints inserted on the outgoing leg
+  #   from:123 Main St           → string: explicit start of the incoming drive
+  #                                 (overrides home / predecessor); also breaks
+  #                                 the travel chain into this event since it's
+  #                                 explicitly coming from elsewhere
+  #   to:Side entrance           → string: explicit end of the incoming drive
+  #                                 (overrides the event's location). Quoted
+  #                                 segments preserve commas inside the value.
   #
-  # before/after take a comma-separated list. Quoted segments preserve commas
-  # ("3rd, St" stays one waypoint). Trailing whitespace is stripped.
+  # before/after take a comma-separated list. from/to take a single address.
+  # Quoted segments preserve commas ("3rd, St" stays one entry). Trailing
+  # whitespace is stripped.
   module OverrideParser
     module_function
 
@@ -19,6 +27,8 @@ module AgendaTravelChain
       notme:  false,
       before: [].freeze,
       after:  [].freeze,
+      from:   nil,
+      to:     nil,
     }.freeze
 
     def parse(notes)
@@ -30,6 +40,8 @@ module AgendaTravelChain
         notme:  text.match?(/^notme\b/i),
         before: extract_list(text, "before"),
         after:  extract_list(text, "after"),
+        from:   extract_single(text, "from"),
+        to:     extract_single(text, "to"),
       }
     end
 
@@ -42,6 +54,20 @@ module AgendaTravelChain
       return [].freeze if match.blank?
 
       split_csv(match).freeze
+    end
+
+    # Single-value tokens (from:/to:) — strip surrounding quotes if the entire
+    # value was quoted, but otherwise keep punctuation/commas intact so a full
+    # street address survives unmangled.
+    def extract_single(text, key)
+      match = text[/^#{Regexp.escape(key)}:\s*([^\n]+)/i, 1]
+      return nil if match.blank?
+
+      stripped = match.strip
+      if stripped.start_with?('"') && stripped.end_with?('"') && stripped.length >= 2
+        stripped = stripped[1..-2]
+      end
+      stripped.presence
     end
 
     # Split on commas, but keep "double quoted" segments together so addresses

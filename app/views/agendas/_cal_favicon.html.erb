@@ -1,0 +1,16 @@
+<%# Manifest used by the Mac-style calendar PWA (/agenda/grid + /agenda/month).
+    Distinct from `_favicon.html.erb` (the iOS day-list PWA) via the
+    different manifest `id` — both can be installed simultaneously,
+    each launching to its own start_url. Same icon set + scope so both
+    apps live under /agenda. %>
+<link rel="apple-touch-icon" sizes="180x180" href="/agenda_favicon/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="/agenda_favicon/favicon-32x32.png" sizes="32x32">
+<link rel="icon" type="image/png" href="/agenda_favicon/favicon-16x16.png" sizes="16x16">
+<link rel="manifest" href="/agenda_calendar.webmanifest">
+<link rel="mask-icon" href="/agenda_favicon/safari-pinned-tab.svg" color="#0160FF">
+<link rel="shortcut icon" href="/agenda_favicon/favicon.ico">
+<meta name="theme-color" content="#0160FF">
+<meta name="apple-mobile-web-app-title" content="Calendar">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

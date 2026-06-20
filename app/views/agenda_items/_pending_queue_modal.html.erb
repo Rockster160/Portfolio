@@ -1,0 +1,14 @@
+<%# Modal that lists every queued offline mutation so the user can
+    inspect what's still pending sync and dismiss individual ops they
+    no longer want to send. Wired by `pending_queue_modal.js` — the
+    `.agenda-pending-badge` in every header opens this on click. %>
+<%= render_modal("agenda-pending-queue", "Pending sync", "modal-flat agenda-pending-modal") do %>
+  <p class="agenda-pending-modal-empty" data-pending-empty hidden>
+    Nothing pending — all of your changes are synced.
+  </p>
+  <ul class="agenda-pending-modal-list" data-pending-list></ul>
+  <div class="agenda-pending-modal-actions">
+    <button type="button" class="af-btn af-btn-secondary" data-dismiss="#agenda-pending-queue">Close</button>
+    <button type="button" class="af-btn af-btn-primary" data-pending-retry hidden>Retry now</button>
+  </div>
+<% end %>

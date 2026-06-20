@@ -342,6 +342,96 @@ RSpec.describe AgendaTravelChain::Service do
       end
     end
 
+    describe "from:/to: overrides" do
+      it "uses from: as the drive origin and labels travel_from accordingly" do
+        evt = make_event(
+          name: "Pickup detour",
+          start_at: Time.zone.parse("2026-06-18 14:00"),
+          end_at:   Time.zone.parse("2026-06-18 15:00"),
+          location: "Office",
+          notes:    "from:Gym",
+        )
+        described_class.new(user, Date.new(2026, 6, 18)).run
+
+        meta = evt.reload.metadata["travel"]
+        expect(meta["travel_from"]).to eq("Gym")
+        expect(meta["travel_from_kind"]).to eq("override")
+        expect(meta["travel_seconds"]).to eq(600)  # Gym→Office, not Home St→Office
+        expect(meta["overrides"]["from"]).to eq("Gym")
+      end
+
+      it "uses to: as the drive destination" do
+        evt = make_event(
+          name: "Side entrance",
+          start_at: Time.zone.parse("2026-06-18 14:00"),
+          end_at:   Time.zone.parse("2026-06-18 15:00"),
+          location: "Office",
+          notes:    "to:Gym",
+        )
+        described_class.new(user, Date.new(2026, 6, 18)).run
+
+        meta = evt.reload.metadata["travel"]
+        # Home St→Gym is 1200s, vs Home St→Office (the default) at 600s.
+        expect(meta["travel_seconds"]).to eq(1200)
+        expect(meta["overrides"]["to"]).to eq("Gym")
+      end
+
+      it "combines from: and to: into an explicit point-to-point drive" do
+        evt = make_event(
+          name: "Explicit nav",
+          start_at: Time.zone.parse("2026-06-18 14:00"),
+          end_at:   Time.zone.parse("2026-06-18 15:00"),
+          location: "Far",  # would normally be 7200s Home→Far
+          notes:    "from:Office\nto:Gym",
+        )
+        described_class.new(user, Date.new(2026, 6, 18)).run
+
+        meta = evt.reload.metadata["travel"]
+        expect(meta["travel_seconds"]).to eq(600)  # Office→Gym
+        expect(meta["travel_from"]).to eq("Office")
+        expect(meta["travel_from_kind"]).to eq("override")
+      end
+
+      it "breaks the travel chain when a successor declares an explicit from:" do
+        a = make_event(
+          name: "Meeting A",
+          start_at: Time.zone.parse("2026-06-18 14:00"),
+          end_at:   Time.zone.parse("2026-06-18 15:00"),
+          location: "Office",
+        )
+        b = make_event(
+          name: "Workout",
+          start_at: Time.zone.parse("2026-06-18 15:15"),
+          end_at:   Time.zone.parse("2026-06-18 16:15"),
+          location: "Gym",
+          notes:    "from:Home St",  # explicit — break chain even though gap is tight
+        )
+        described_class.new(user, Date.new(2026, 6, 18)).run
+
+        a_meta = a.reload.metadata["travel"]
+        b_meta = b.reload.metadata["travel"]
+        expect(a_meta["chain_successor_id"]).to be_nil
+        expect(b_meta["chain_predecessor_id"]).to be_nil
+        expect(b_meta["travel_from_kind"]).to eq("override")
+        expect(b_meta["travel_from"]).to eq("Home St")
+      end
+
+      it "lets before: outrank to: as the first incoming stop" do
+        evt = make_event(
+          name: "Stop first",
+          start_at: Time.zone.parse("2026-06-18 14:00"),
+          end_at:   Time.zone.parse("2026-06-18 15:00"),
+          location: "Office",
+          notes:    "before:Gym\nto:Far",
+        )
+        described_class.new(user, Date.new(2026, 6, 18)).run
+
+        meta = evt.reload.metadata["travel"]
+        # Drive is Home St → first waypoint (Gym), not Home St → to:Far.
+        expect(meta["travel_seconds"]).to eq(1200)
+      end
+    end
+
     it "uses after: list's last entry as the outgoing location for next chain decision" do
       a = make_event(
         name: "A",

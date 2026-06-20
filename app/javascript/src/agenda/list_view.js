@@ -27,7 +27,7 @@
   });
 
   function init(root) {
-    const hadCache = window.AgendaStore.hydrateFromLocal();
+    window.AgendaStore.hydrateFromLocal();
     window.AgendaStore.subscribe((reason) => {
       if (reason === "hydrate") return; // already painted below
       render(root);
@@ -36,15 +36,10 @@
     window.AgendaSync.installResumeTriggers();
     window.AgendaSync.boot().then(() => render(root));
     render(root);
-    if (!hadCache) {
-      const cold = root.querySelector("[data-cold-start]");
-      if (cold) cold.classList.remove("hidden");
-    }
-    // Expose a render-trigger for callers that change the visible-date
-    // context without mutating the store (3am rollover in agenda.js,
-    // ad-hoc date jumps, etc). Pairs with __refreshAgendaCal exposed
-    // by agenda_cal.js — agenda.js's refreshCurrentView calls whichever
-    // hook is bound on the current page.
+    // No cold-start blocking indicator — empty sections naturally show
+    // their "Nothing scheduled" empty hint while the first sync lands
+    // (sub-second window in practice). Any in-flight sync state lives
+    // subtly in `.agenda-pending-badge` (header).
     window.__refreshAgendaList = () => render(root);
   }
 
@@ -71,9 +66,6 @@
       const dayItems = itemsForDate(items, date);
       paintDaySection(section, dayItems, { preview: preview });
     });
-
-    const cold = root.querySelector("[data-cold-start]");
-    if (cold) cold.classList.add("hidden");
   }
 
   // Fallback for day view, which has only two sections (today/tomorrow)

@@ -14,19 +14,21 @@ module AgendaTravelChain
   #                                       for display.
   #   location_lat / _lng    (float)   — geocoded coords (sticky until address text changes)
   #   location_fingerprint   (sha)     — invalidates lat/lng resolution
-  #   travel_from            (string)  — "Home" or a previous event's location
-  #   travel_from_kind       (string)  — "home" | "event"
+  #   travel_from            (string)  — "Home", a previous event's location,
+  #                                       or the event's `from:` override
+  #   travel_from_kind       (string)  — "home" | "event" | "override"
   #   travel_seconds         (int)     — drive seconds for the incoming leg
   #   travel_minutes         (int)     — ceil-rounded minutes (mirrored to legacy top-level)
   #   chain_predecessor_id   (int|nil)
   #   chain_successor_id     (int|nil)
   #   chain_head_id          (int)     — self if solo head
   #   leave_at               (int)     — epoch: when the user should start driving for this leg
-  #   overrides              (hash)    — { nonav, notme, before, after }
+  #   overrides              (hash)    — { nonav, notme, before, after, from, to }
   #   input_fingerprint      (sha)     — full chain-input hash; skip recompute when matched
   class Service
     FROM_KIND_HOME = "home".freeze
     FROM_KIND_EVENT = "event".freeze
+    FROM_KIND_OVERRIDE = "override".freeze
 
     # Agenda-name fragments (case-insensitive) for calendars the user has
     # explicitly opted OUT of travel calculations. Mirrors the original
@@ -169,6 +171,10 @@ module AgendaTravelChain
     # the Distance Matrix budget for no real gain). The fresh A→B drive
     # only fires AFTER chain is confirmed, inside persist_event.
     def chain?(a, b)
+      # `from:` on B asserts an explicit start that isn't A's location — chain
+      # detection no longer applies because B isn't rolling forward from A.
+      return false if overrides_for(b)[:from].present?
+
       a_out = outgoing_last_location(a)
       b_in  = incoming_first_location(b)
       return false if a_out.blank? || b_in.blank?
@@ -206,8 +212,15 @@ module AgendaTravelChain
       overrides_for(evt)[:after].last.presence || resolved_location(evt) || evt.location.to_s
     end
 
+    # `to:` overrides the drive's destination but is outranked by an explicit
+    # `before:` waypoint — `before:` already names the first stop of the
+    # incoming leg, so it takes priority over the leg's terminus.
     def incoming_first_location(evt)
-      overrides_for(evt)[:before].first.presence || resolved_location(evt) || evt.location.to_s
+      overrides = overrides_for(evt)
+      overrides[:before].first.presence ||
+        overrides[:to].presence ||
+        resolved_location(evt) ||
+        evt.location.to_s
     end
 
     # Resolved street address stashed by `ensure_resolved` — prefer it over
@@ -241,8 +254,17 @@ module AgendaTravelChain
       succ_id = links.dig(evt.id, :successor_id)
 
       pred = pred_id ? prev : nil # candidates are ordered; pred is always prev when linked
-      from_text, from_kind = pred ? [pred.location.to_s, FROM_KIND_EVENT] : [home_text, FROM_KIND_HOME]
-      from_for_drive = pred ? outgoing_last_location(pred) : home_text
+      override_from = overrides_for(evt)[:from].presence
+      from_text, from_kind = (
+        if override_from
+          [override_from, FROM_KIND_OVERRIDE]
+        elsif pred
+          [pred.location.to_s, FROM_KIND_EVENT]
+        else
+          [home_text, FROM_KIND_HOME]
+        end
+      )
+      from_for_drive = override_from || (pred ? outgoing_last_location(pred) : home_text)
 
       incoming_first = incoming_first_location(evt)
       # Backfill optimisation: solo / chain-head events leave FROM Home,
@@ -250,9 +272,10 @@ module AgendaTravelChain
       # represents. Use it directly, skip Google. Chain middles / tails
       # come from a previous event's location — that IS the new Google
       # round-trip we're willing to pay for once the chain has been
-      # confirmed.
+      # confirmed. `from:` is an explicit start we have no cached drive
+      # for, so always go fetch a fresh one.
       drive_secs = (
-        if backfill? && pred.nil?
+        if backfill? && pred.nil? && override_from.nil?
           cached_travel_seconds(evt)
         else
           @resolver.travel_seconds(from_for_drive, incoming_first, at: evt.start_at)

@@ -1,5 +1,5 @@
 <%= meta_title @month.strftime("%B %Y"), include_name: false %>
-<% content_for(:favicon) { render "agendas/favicon" } %>
+<% content_for(:favicon) { render "agendas/cal_favicon" } %>
 <% content_for(:body_classes) { "agenda-cal-body" } %>
 
 <%# `agenda-page` triggers shared init in agenda.js (filter, modals,
@@ -19,8 +19,9 @@
       <span class="agenda-error cal-error-dot hidden" role="status" aria-live="polite" title="Disconnected — changes will sync when reconnected."></span>
       <h1 class="cal-toolbar-title"><%= @focus_date.strftime("%B %Y") %></h1>
       <div class="cal-toolbar-toggle cal-view-toggle cal-pwa-toggle">
-        <a href="<%= cal_month_path %>" class="cal-toggle-btn active">Month</a>
+        <a href="<%= day_path %>" class="cal-toggle-btn">Day</a>
         <a href="<%= cal_week_path %>" class="cal-toggle-btn">Week</a>
+        <a href="<%= cal_month_path %>" class="cal-toggle-btn active">Month</a>
       </div>
     </div>
 
@@ -97,4 +98,5 @@
   <%= render "agenda_items/follow_up_modal" %>
   <%= render "agenda_items/details_modal" %>
   <%= render "agenda_items/confirm_modal" %>
+  <%= render "agenda_items/pending_queue_modal" %>
 </div>

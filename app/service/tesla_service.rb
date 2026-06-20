@@ -21,6 +21,20 @@ class TeslaService
       TpmsPressureRr: 1.hour,
       InsideTemp:     30.minutes,
       OutsideTemp:    30.minutes,
+      HvacPower:      1.minute,
+
+      # Location
+      # InsideTemp
+      # OutsideTemp
+      # RouteLastUpdated
+      # RouteLine
+      # MilesToArrival
+      # MinutesToArrival
+      # OriginLocation
+      # DestinationLocation
+      # DefrostForPreconditioning
+      # HvacPower
+
       # ChargeState:                               1.second,
       # VehicleSpeed:                              1.minute,
       # Odometer:                                  30.minutes,
@@ -122,7 +136,7 @@ class TeslaService
       # # HvacFanSpeed:                              30.minutes,
       # # HvacFanStatus:                             30.minutes,
       # # HvacLeftTemperatureRequest:                30.minutes,
-      # # HvacPower:                                 30.minutes,
+      # HvacPower:                                 30.minutes,
       # # HvacRightTemperatureRequest:               30.minutes,
       # # HvacSteeringWheelHeatAuto:                 30.minutes,
       # # HvacSteeringWheelHeatLevel:                30.minutes,

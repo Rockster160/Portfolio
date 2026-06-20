@@ -46,6 +46,23 @@ RSpec.describe "agenda service worker (PWA)", type: :request do
       expect(response.body).to include('"/agenda.webmanifest"')
     end
 
+    it "pre-caches the calendar webmanifest so the Mac PWA installs offline" do
+      # Mac-style /agenda/grid + /agenda/month PWA — separate id from
+      # the iOS day-list PWA so both can be installed side-by-side.
+      get "/agenda_sw.js"
+      expect(response.body).to include('"/agenda_calendar.webmanifest"')
+    end
+
+    it "treats nav requests as stale-while-revalidate with ignoreSearch" do
+      # Belt-and-suspenders for offline view-to-view navigation: every
+      # canonical shell URL is pre-cached, and the SW's match call
+      # collapses `?date=...` / `?source=pwa` variants onto the same
+      # cached entry so any deep link still hits the cached shell.
+      get "/agenda_sw.js"
+      expect(response.body).to include("staleWhileRevalidate")
+      expect(response.body).to include("ignoreSearch: true")
+    end
+
     it "treats /agenda/sync/* as network-first (data freshness > offline cache)" do
       get "/agenda_sw.js"
       expect(response.body).to include('"/agenda/sync/"')

@@ -312,11 +312,35 @@
       scheduleDayRollover(root);
       installRefreshTriggers(root);
       installNavInterception(root);
+      // AgendaStore is the data source for both halves of the month view
+      // (timed cells via month_view.js, all-day banners via this file's
+      // layoutMonthBanners). Without this boot the page sees no items
+      // until a navigation event and stays blank — the gap that made
+      // /agenda/month look broken even when other views worked.
+      bootAgendaStore(root);
     }
 
     // -- everything else runs every time, since the grid contents change.
+    rehydrateMonthSeedsFromStore(root);
     layoutMonthBanners(root);
     recountMonthOverflow(root);
+  }
+
+  // Refill the hidden `[data-month-allday-seeds]` container from the
+  // store's view of the visible-block range. layoutMonthBanners reads
+  // from those seed nodes to lay out the row-spanning all-day banners.
+  // No-op if the store/hydrator aren't loaded yet.
+  function rehydrateMonthSeedsFromStore(root) {
+    if (!window.AgendaSeedHydrator || !window.AgendaStore) return;
+    const grid = $(".cal-month-grid", root);
+    if (!grid) return;
+    const seedsContainer = $("[data-month-allday-seeds]", grid);
+    if (!seedsContainer) return;
+    const from = grid.dataset.monthStart;
+    const to = grid.dataset.monthEnd;
+    if (!from || !to) return;
+    window.AgendaSync?.ensureRangeLoaded(from, to);
+    window.AgendaSeedHydrator.hydrateMonthAllDaySeeds(seedsContainer, from, to);
   }
 
   function bindMonthHandlers(root) {
@@ -640,24 +664,25 @@
     if (!window.AgendaStore || !window.AgendaSync) return; // graceful no-op
     agendaStoreBooted = true;
 
-    const cold = $("[data-cold-start]");
-    const hadCache = window.AgendaStore.hydrateFromLocal();
-    if (!hadCache && cold) cold.classList.remove("hidden");
+    window.AgendaStore.hydrateFromLocal();
 
     // Re-render whenever the store changes — bootstrap, delta, optimistic
     // mutation, broadcast. Cheap because buildWeekBlocks re-hydrates seeds
     // from the store snapshot and reuses the same downstream layout pass.
+    // No cold-start overlay — empty grid speaks for itself during the
+    // sub-second window before bootstrap lands.
     window.AgendaStore.subscribe((reason) => {
       // `hydrate` is the initial localStorage replay — already painted by
       // the explicit buildWeekBlocks in initWeekView. Bootstrap/delta/page
       // arrive after with authoritative data; everything else is per-item
       // mutation that may have shifted what's visible.
       if (reason === "hydrate") return;
-      if (cold) cold.classList.add("hidden");
       const r = $(".agenda-cal-page");
       if (!r) return;
       if (r.classList.contains("agenda-cal-week-page")) buildWeekBlocks(r);
       else if (r.classList.contains("agenda-cal-month-page")) {
+        // Seeds first — banner layout reads from the hidden seed container.
+        rehydrateMonthSeedsFromStore(r);
         layoutMonthBanners(r);
         recountMonthOverflow(r);
       }
@@ -665,9 +690,7 @@
 
     window.AgendaSync.subscribeMonitor();
     window.AgendaSync.installResumeTriggers();
-    window.AgendaSync.boot().then(() => {
-      if (cold) cold.classList.add("hidden");
-    });
+    window.AgendaSync.boot();
   }
 
   // Pulls the visible week's events from AgendaStore and rewrites the
@@ -1438,8 +1461,8 @@
     const root = $(".agenda-cal-page");
     if (!root) { window.location.assign(url); return; }
 
-    const isWeekTarget = url.pathname === "/agenda/cal/week" || url.pathname === "/agenda/cal";
-    const isMonthTarget = url.pathname === "/agenda/cal/month";
+    const isWeekTarget = url.pathname === "/agenda/grid";
+    const isMonthTarget = url.pathname === "/agenda/month";
     const onWeek = root.classList.contains("agenda-cal-week-page");
     const onMonth = root.classList.contains("agenda-cal-month-page");
 
@@ -1516,8 +1539,8 @@
     // accurate after a client-side jump.
     const prevLink = $(".cal-toolbar-nav a.prev", root);
     const nextLink = $(".cal-toolbar-nav a.next", root);
-    if (prevLink) prevLink.href = `/agenda/cal/week?date=${addDaysISO(weekStartISO, -7)}`;
-    if (nextLink) nextLink.href = `/agenda/cal/week?date=${addDaysISO(weekStartISO, 7)}`;
+    if (prevLink) prevLink.href = `/agenda/grid?date=${addDaysISO(weekStartISO, -7)}`;
+    if (nextLink) nextLink.href = `/agenda/grid?date=${addDaysISO(weekStartISO, 7)}`;
 
     buildWeekBlocks(root);
     updateNowLine(root);
@@ -1899,6 +1922,7 @@
       if (root.classList.contains("agenda-cal-week-page")) {
         buildWeekBlocks(root);
       } else if (root.classList.contains("agenda-cal-month-page")) {
+        rehydrateMonthSeedsFromStore(root);
         layoutMonthBanners(root);
         recountMonthOverflow(root);
       }
@@ -2034,7 +2058,7 @@
       const we = root.querySelector(".cal-week-grid")?.dataset?.weekEnd;
       if (ws && we && (compareISO(today, ws) < 0 || compareISO(today, we) > 0)) {
         // Today walked off the visible week — navigate to today's week.
-        window.location.assign("/agenda/cal/week");
+        window.location.assign("/agenda/grid");
         return;
       }
     } else if (root.classList.contains("agenda-cal-month-page")) {
@@ -2043,7 +2067,7 @@
         const viewedMonth = cur.slice(0, 7);
         const todayMonth = today.slice(0, 7);
         if (todayMonth !== viewedMonth) {
-          window.location.assign("/agenda/cal/month");
+          window.location.assign("/agenda/month");
           return;
         }
       }

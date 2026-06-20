@@ -496,25 +496,9 @@ body.agenda-cal-body {
 
 // =================== Week view ===================
 
-// Cold-start spinner shown only on a true first-time visit (empty
-// localStorage + no completed bootstrap yet). On subsequent visits the
-// store hydrates from cache and paints immediately, so this stays
-// hidden the whole session.
-.agenda-cold-start {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 8px;
-  background: rgba(8, 16, 32, 0.92);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 13px;
-  z-index: 100;
-  pointer-events: none;
-  i { font-size: 24px; opacity: 0.8; }
-}
+// `.agenda-cold-start` was a fullscreen overlay on first visit — removed.
+// Never block the user. Sync state lives in `.agenda-pending-badge`
+// (header) + `.agenda-error` (top banner) — both subtle.
 
 .cal-week-grid {
   // The grid IS the scroll container now. That lets the header (day

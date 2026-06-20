@@ -33,6 +33,21 @@ function buildWeekSeed(item, _agenda) {
   return `<div ${parts.filter(Boolean).join(" ")}></div>`;
 }
 
+function buildMonthAllDaySeed(item) {
+  const attrs = item.presentation_attrs || {};
+  const parts = [
+    `class="cal-month-allday-seed agenda-item-data"`,
+    item.editable === false ? `data-readonly` : "",
+  ];
+  for (const key of Object.keys(attrs)) {
+    parts.push(`data-${key}="${escapeAttr(attrs[key])}"`);
+  }
+  // Force `data-all-day="true"` regardless of the underlying flag — the
+  // banner-layout pass uses this attr as its "is a banner" predicate.
+  parts.push(`data-all-day="true"`);
+  return `<div ${parts.filter(Boolean).join(" ")}></div>`;
+}
+
 // Replace every seed in `container` with freshly-built ones from the
 // store's view of `[fromISO..toISO]`. Idempotent — calling twice in a
 // row produces the same DOM.
@@ -48,9 +63,21 @@ function hydrateWeekSeeds(container, fromISO, toISO) {
   container.innerHTML = html;
 }
 
+// Month-view companion: fills the hidden seed container that
+// `agenda_cal.js`'s layoutMonthBanners reads to draw row-banner overlays
+// for all-day events. Timed events are filtered out — those live in the
+// per-cell list owned by `month_view.js`.
+function hydrateMonthAllDaySeeds(container, fromISO, toISO) {
+  if (!container) return;
+  const items = Store.itemsForRange(fromISO, toISO).filter((it) => !!it.all_day);
+  container.innerHTML = items.map((it) => buildMonthAllDaySeed(it)).join("");
+}
+
 const AgendaSeedHydrator = {
   hydrateWeekSeeds,
+  hydrateMonthAllDaySeeds,
   buildWeekSeed,
+  buildMonthAllDaySeed,
 };
 
 if (typeof module !== "undefined" && module.exports) module.exports = AgendaSeedHydrator;

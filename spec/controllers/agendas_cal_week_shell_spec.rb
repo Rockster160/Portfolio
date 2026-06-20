@@ -30,7 +30,9 @@ RSpec.describe AgendasController, type: :controller do
       expect(response.body).not_to match(/cal-week-seed\s+agenda-item-data/)
       expect(response.body).not_to include("INSIDE WINDOW")
       expect(response.body).not_to include("SOLID EVENT")
-      expect(response.body).to include("data-cold-start")
+      # Cold-start centered overlay was removed (per never-block-user rule).
+      # Empty grid speaks for itself; agenda-pending-badge handles subtle sync state.
+      expect(response.body).not_to include("data-cold-start")
     end
 
     it "still renders the toolbar + week scaffold for the requested date" do
