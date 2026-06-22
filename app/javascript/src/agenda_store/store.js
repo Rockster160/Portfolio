@@ -109,17 +109,59 @@ function notify(reason, payload) {
 
 // Bootstrap / Delta / Page -----------------------------------------------
 
-// Validates an incoming bootstrap/page payload BEFORE mutating any local
-// state. Malformed responses (partial JSON, server error rendered as a
-// blob, mid-flight network hang) get dropped here so the user's
-// optimistic + cached state survives untouched. Mirrors the Chores
-// `validateSyncPayload` contract — strict at the boundary, never half-
-// apply.
-function validateBootstrapPayload(payload) {
+// Validates an incoming bootstrap/page/delta payload BEFORE mutating any
+// local state. Malformed responses (partial JSON, server error rendered
+// as a blob, mid-flight network hang, auth interstitial decoded as JSON)
+// get dropped here so the user's optimistic + cached state survives
+// untouched. Mirrors the Chores `validateSyncPayload` contract — strict
+// at the boundary, never half-apply.
+//
+// Every envelope MUST carry:
+//   * `server_ts` — positive integer (ms epoch). The race-guard cutoff
+//     for `upsertItem` and the proof the server actually produced this
+//     payload (an HTML auth page decoded as `{}` won't have it).
+//   * `day_key` — `YYYY-MM-DD`. Drives day-rollover detection; a missing
+//     or malformed value would silently break the rollover bootstrap.
+// Bootstrap additionally requires `items` to be an array (the canonical
+// item set). Page payloads must carry `items` + a `window` range. Delta
+// payloads have no required collection — the keys above are enough proof
+// the response is real.
+function validateEnvelope(payload) {
   if (!payload || typeof payload !== "object") return false;
+  if (!Number.isFinite(payload.server_ts) || payload.server_ts <= 0) return false;
+  if (typeof payload.day_key !== "string") return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(payload.day_key)) return false;
+  return true;
+}
+
+function validateBootstrapPayload(payload) {
+  if (!validateEnvelope(payload)) return false;
   if (!Array.isArray(payload.items)) return false;
   if (payload.agendas && !Array.isArray(payload.agendas)) return false;
   if (payload.schedules && !Array.isArray(payload.schedules)) return false;
+  return true;
+}
+
+function validateDeltaPayload(payload) {
+  if (!validateEnvelope(payload)) return false;
+  if (payload.items && !Array.isArray(payload.items)) return false;
+  if (payload.schedules && !Array.isArray(payload.schedules)) return false;
+  if (payload.agendas && !Array.isArray(payload.agendas)) return false;
+  return true;
+}
+
+function validatePagePayload(payload) {
+  if (!validateEnvelope(payload)) return false;
+  if (!Array.isArray(payload.items)) return false;
+  if (payload.schedules && !Array.isArray(payload.schedules)) return false;
+  // `window` is optional on a page payload — when present it must carry
+  // from/to so the range-pruning step has bounds. When absent, the
+  // payload behaves as an additive upsert.
+  if (payload.window) {
+    if (typeof payload.window !== "object") return false;
+    if (payload.window.from && typeof payload.window.from !== "string") return false;
+    if (payload.window.to && typeof payload.window.to !== "string") return false;
+  }
   return true;
 }
 
@@ -177,21 +219,29 @@ function applyBootstrap(payload) {
 }
 
 function applyDelta(payload) {
-  if (!payload) return;
-  if (payload.server_ts && payload.server_ts >= state.serverTs) state.serverTs = payload.server_ts;
-  state.dayKey = payload.day_key || state.dayKey;
+  if (!validateDeltaPayload(payload)) {
+    console.warn("[AgendaStore] dropping malformed delta payload — keeping local cache");
+    return false;
+  }
+  if (payload.server_ts >= state.serverTs) state.serverTs = payload.server_ts;
+  state.dayKey = payload.day_key;
   if (payload.agendas)   state.agendas   = indexById(payload.agendas);
   (payload.schedules || []).forEach((s) => upsertSchedule(s));
   (payload.items     || []).forEach((i) => upsertItem(i));
   persist();
   notify("delta");
+  return true;
 }
 
 function applyPage(payload) {
-  if (!payload) return;
-  if (payload.server_ts && payload.server_ts >= state.serverTs) state.serverTs = payload.server_ts;
+  if (!validatePagePayload(payload)) {
+    console.warn("[AgendaStore] dropping malformed page payload — keeping local cache");
+    return false;
+  }
+  if (payload.server_ts >= state.serverTs) state.serverTs = payload.server_ts;
+  state.dayKey = payload.day_key;
   const { from, to } = payload.window || {};
-  const incoming = indexById(payload.items || []);
+  const incoming = indexById(payload.items);
   if (from && to) {
     const lo = isoToEpochSecondsFloor(from);
     const hi = isoToEpochSecondsCeil(to);
@@ -209,6 +259,7 @@ function applyPage(payload) {
   if (from && (!state.windowFrom || from < state.windowFrom)) state.windowFrom = from;
   persist();
   notify("page");
+  return true;
 }
 
 // Mutations -------------------------------------------------------------
@@ -310,6 +361,17 @@ function setPreferences(prefs) {
 // against the range; phantoms shadowed by a materialized override (the
 // item carries `original_start_at` matching the phantom date OR a
 // matching schedule_id+occurrence date) are suppressed.
+// All-day items store `end_at` as Google's EXCLUSIVE next-day midnight.
+// For range-overlap checks we need the INCLUSIVE last moment so a
+// Sunday-only all-day event doesn't get pulled into the Monday-start
+// week (which is what made Tela's Birthday on Sun Jun 21 render in the
+// Mon Jun 22 - Sun Jun 28 week, falling back to the first cell when
+// layoutAllDayChips couldn't find a cell for Sun Jun 21).
+function inclusiveEnd(item) {
+  const raw = item.end_at || item.start_at || 0;
+  return item.all_day ? raw - 1 : raw;
+}
+
 function itemsForRange(fromISO, toISO) {
   const tz = state.timezone || guessLocalTimezone();
   const epochAt = (iso) => isoToEpochSecondsFloor(iso);
@@ -320,7 +382,7 @@ function itemsForRange(fromISO, toISO) {
   const materialized = Object.values(state.items).filter((it) => {
     if (!it || it.status === "cancelled") return false;
     const start = it.start_at || 0;
-    const end = it.end_at || start;
+    const end = inclusiveEnd(it);
     return (start <= hi) && (end >= lo);
   });
 
@@ -358,7 +420,7 @@ function itemsForRange(fromISO, toISO) {
       // midnight might extend past `to`, which is fine; one anchored at
       // 4am for a 3am-start logical-day might not match.
       const start = ph.start_at || 0;
-      const end = ph.end_at || start;
+      const end = inclusiveEnd(ph);
       if ((start <= hi) && (end >= lo)) phantoms.push(ph);
     });
   });

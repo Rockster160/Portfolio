@@ -151,5 +151,57 @@ RSpec.describe Jarvis::Times do
         expect(parsed).to be_present
       end
     end
+
+    # Previously the top-of-file `NOT WORKING: ... on the 16th` TODO. The
+    # parser now rewrites `(on|for) the Nth` into a concrete `Month N` so
+    # Chronic has something it knows how to parse, with current-vs-next
+    # month chosen by whether N is still future this month.
+    describe "ordinal day-of-month ('on the 16th')" do
+      around { |ex| Time.use_zone("Mountain Time (US & Canada)") { ex.run } }
+
+      it "resolves 'on the 16th' to the 16th of the current month when still future" do
+        Timecop.freeze(Time.zone.local(2026, 6, 10, 9, 0)) do
+          pre_text, parsed = described_class.extract_time("dentist on the 16th")
+          expect(pre_text).to be_present
+          expect(parsed.to_date).to eq(Date.new(2026, 6, 16))
+        end
+      end
+
+      it "rolls 'on the 16th' to next month when the 16th already passed" do
+        Timecop.freeze(Time.zone.local(2026, 6, 20, 9, 0)) do
+          _pre_text, parsed = described_class.extract_time("dentist on the 16th")
+          expect(parsed.to_date).to eq(Date.new(2026, 7, 16))
+        end
+      end
+
+      it "honors 'for the 22nd' the same way" do
+        Timecop.freeze(Time.zone.local(2026, 6, 10, 9, 0)) do
+          _pre_text, parsed = described_class.extract_time("reserve a table for the 22nd")
+          expect(parsed.to_date).to eq(Date.new(2026, 6, 22))
+        end
+      end
+
+      it "combines 'on the 16th at 7pm' into one timestamp" do
+        Timecop.freeze(Time.zone.local(2026, 6, 10, 9, 0)) do
+          _pre_text, parsed = described_class.extract_time("dentist on the 16th at 7pm")
+          expect(parsed.to_date).to eq(Date.new(2026, 6, 16))
+          expect(parsed.hour).to eq(19)
+        end
+      end
+
+      it "rolls forward when the requested day doesn't exist in current month (Jan 30 → Mar 30 from Feb)" do
+        Timecop.freeze(Time.zone.local(2026, 2, 5, 9, 0)) do
+          _pre_text, parsed = described_class.extract_time("ping me on the 30th")
+          # Feb 2026 has no 30; March 2026 does (skip Feb entirely).
+          expect(parsed.to_date).to eq(Date.new(2026, 3, 30))
+        end
+      end
+
+      it "leaves nonsensical ordinals (e.g. 'on the 99th') alone" do
+        _pre_text, parsed = described_class.extract_time("file on the 99th")
+        # 99th can't resolve; Chronic should also return nil.
+        expect(parsed).to be_nil
+      end
+    end
   end
 end

@@ -864,7 +864,12 @@ class AgendaItemsController < ApplicationController
   end
 
   def completion_only_update?
-    keys = params.fetch(:agenda_item, {}).keys.map(&:to_s)
+    # `client_mutation_id` is metadata the FE attaches to every mutation —
+    # it's not a field change, so it doesn't disqualify the completion-only
+    # fast path. Without this allowance, the controller falls through to
+    # `apply_occurrence_update!` where `item_params` runs `epoch_param_to_time`
+    # on the sentinel string `"now"` and silently writes nil to completed_at.
+    keys = params.fetch(:agenda_item, {}).keys.map(&:to_s) - %w[client_mutation_id]
     keys.present? && (keys - %w[completed_at]).empty?
   end
 
@@ -877,7 +882,14 @@ class AgendaItemsController < ApplicationController
     else
       epoch_param_to_time(raw)
     end
-    { completed_at: val }
+    attrs = { completed_at: val }
+    # Persist the mutation id so a replayed PATCH (FE retry after a network
+    # drop) short-circuits via the dedup check at the top of `update` instead
+    # of re-running after_commit hooks + re-broadcasting.
+    if (mid = client_mutation_id).present?
+      attrs[:client_mutation_id] = mid
+    end
+    attrs
   end
 
   def schedule_attrs_from_item_params

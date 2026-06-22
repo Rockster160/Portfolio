@@ -292,5 +292,41 @@ RSpec.describe AgendaItem do
       expect(attrs["travel-minutes"]).to eq(0)
       expect(attrs["chain-predecessor-id"]).to be_nil
     end
+
+    # Regression guard for "all-day events span two days in the cal_week
+    # banner row". `end-date` must be the INCLUSIVE last-day midnight in
+    # the user's tz — NOT `end_at` (which is the exclusive next-day midnight
+    # per Google convention) and NOT `Date#to_time` (which lands in
+    # Rails Time.zone, defaulting to UTC and silently shifting the day
+    # for any user whose tz differs).
+    # `user.timezone` is hardcoded "America/Denver" on the User model
+    # (not a per-user column), so these specs simply assert the math
+    # against that fixed value.
+    it "emits end-date as inclusive last-day midnight in the user's tz for single-day all-day" do
+      zone = ::ActiveSupport::TimeZone["America/Denver"]
+      item = create(:agenda_item, agenda: agenda, kind: :event, name: "Bday",
+        all_day: true,
+        start_at: zone.local(2026, 6, 21),
+        end_at:   zone.local(2026, 6, 22)) # exclusive
+
+      attrs = item.presentation_attrs
+      # For a single-day all-day event, end-date must equal start-at so
+      # the cal-week chip spans exactly one column.
+      expect(attrs["end-date"]).to eq(attrs["start-at"])
+      # And NOT the exclusive end_at — that's the bug we're guarding.
+      expect(attrs["end-date"]).not_to eq(attrs["end-at"])
+    end
+
+    it "emits end-date == start-at + 2 days for a three-day all-day event" do
+      zone = ::ActiveSupport::TimeZone["America/Denver"]
+      item = create(:agenda_item, agenda: agenda, kind: :event, name: "Trip",
+        all_day: true,
+        start_at: zone.local(2026, 6, 21),
+        end_at:   zone.local(2026, 6, 24)) # exclusive
+
+      attrs = item.presentation_attrs
+      # Last inclusive day is 2026-06-23; start_at is 2026-06-21 midnight.
+      expect(attrs["end-date"]).to eq(attrs["start-at"] + (2 * 86_400))
+    end
   end
 end

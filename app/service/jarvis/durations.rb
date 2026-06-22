@@ -24,8 +24,14 @@ module Jarvis::Durations
   # prevents truncating "hours" → "h" since `h` would be followed by `o`.
   NON_UNIT_LETTER = "a-gi-ln-rt-z".freeze
   END_BOUNDARY = '(?![a-zA-Z])'.freeze
-  ATOM_RX = /(?<![#{NON_UNIT_LETTER}])(?<qty>#{QTY_PATTERN})\s*(?<unit>#{UNIT_PATTERN})#{END_BOUNDARY}/i
-  STRIP_RX = /(?:\bfor\s+)?(?<![#{NON_UNIT_LETTER}])#{QTY_PATTERN}\s*(?:#{UNIT_PATTERN})#{END_BOUNDARY}\s*/i
+  # Qty→unit gap: numeric qty may abut the unit ("1h", "1.5m"); word qty
+  # ("a", "an", "half") MUST be separated by whitespace, so "Sam"/"ham"/
+  # "9am"/"I am ..." can't be misread as `qty="a", unit="m"`. The
+  # `(?<=\d)` lookbehind admits the digit-adjacent case at zero width; the
+  # `\s+` branch handles every other valid form ("a min", "half hour").
+  QTY_UNIT_GAP = '(?:(?<=\d)|\s+)'.freeze
+  ATOM_RX = /(?<![#{NON_UNIT_LETTER}])(?<qty>#{QTY_PATTERN})#{QTY_UNIT_GAP}(?<unit>#{UNIT_PATTERN})#{END_BOUNDARY}/i
+  STRIP_RX = /(?:\bfor\s+)?(?<![#{NON_UNIT_LETTER}])#{QTY_PATTERN}#{QTY_UNIT_GAP}(?:#{UNIT_PATTERN})#{END_BOUNDARY}\s*/i
 
   # Total minutes across all qty+unit atoms in the text. "1h 30m" → 90.
   # Returns 0 if nothing matches; rounded to the nearest minute.

@@ -131,7 +131,16 @@ function buildPhantom(schedule, dateISO, { localEpoch, agenda }) {
     "agenda-color":         agenda ? agenda.color : "",
     "agenda-source":        agenda ? agenda.source : "",
     "all-day":              !!schedule.all_day,
-    "end-date":             endEpoch || startEpoch,
+    // `end-date` is the INCLUSIVE last-day-midnight epoch (mirrors
+    // `AgendaItem#presentation_attrs` and `optimistic_item.js`). For an
+    // all-day phantom, `endEpoch` is the exclusive next-day-midnight
+    // (start + duration_minutes*60, where Google-synced all-day events
+    // always set duration to a multiple of 1440). Walk back one day so
+    // the cal_week / cal_month banner layout doesn't render a single-day
+    // all-day event across two columns. Was: `endEpoch || startEpoch` —
+    // missed the walk-back and made every Google-synced recurring all-day
+    // event bleed into the next day's column.
+    "end-date":             (!!schedule.all_day && endEpoch) ? (endEpoch - 86400) : (endEpoch || startEpoch),
     "start-at":             startEpoch,
     "end-at":               endEpoch,
     "name":                 schedule.name || "",

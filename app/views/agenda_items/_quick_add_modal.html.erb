@@ -1,0 +1,47 @@
+<%# Agenda Quick Add modal. Single text field + live preview + submit.
+   Natural-language parsing happens entirely client-side in
+   `app/javascript/src/agenda/quick_add.js` (which reads
+   `quick_add_parser.js`). The "Advanced" button closes this and opens
+   the existing `#agenda-add-modal` so power users still reach the full
+   field set without an extra route. %>
+<%= render_modal("agenda-quick-add", "Quick add", "modal-flat") do %>
+  <form class="basic agenda-quick-form"
+        data-item-url="<%= agenda_items_path %>"
+        data-default-agenda-id="<%= local_assigns[:default_agenda_id] %>">
+
+    <input type="text"
+           class="quick-add-input"
+           name="quick_input"
+           autocomplete="off"
+           autocapitalize="sentences"
+           spellcheck="false"
+           placeholder="Take out the trash at 7"
+           aria-label="Describe the event">
+
+    <%# Live preview: the JS controller fills .qa-preview-name and
+        .qa-preview-when on every keystroke. Hidden by default to avoid
+        showing stale data when the input is empty. %>
+    <div class="qa-preview hidden" data-quick-preview>
+      <div class="qa-preview-name" data-preview-name></div>
+      <div class="qa-preview-when" data-preview-when></div>
+    </div>
+
+    <%# Inline error placeholder (e.g. parser rejected the input). %>
+    <div class="qa-error hidden" data-quick-error role="alert"></div>
+
+    <%# Compact "try one of these" hints. Clicking a chip drops the
+        text into the input so the user can edit + submit, matching how
+        most NLU surfaces teach themselves. %>
+    <div class="qa-examples" aria-label="Examples">
+      <button type="button" class="qa-example" data-quick-example>Take out the trash</button>
+      <button type="button" class="qa-example" data-quick-example>Dentist at 9am</button>
+      <button type="button" class="qa-example" data-quick-example>Lucky Ones Saturday at 4 for 3 hours</button>
+      <button type="button" class="qa-example" data-quick-example>Birthday all day Saturday</button>
+    </div>
+
+    <div class="qa-actions">
+      <button type="button" class="af-btn af-btn-secondary qa-advanced" data-quick-advanced>Advanced</button>
+      <button type="submit" class="af-btn af-btn-primary qa-submit" data-quick-submit disabled>Add</button>
+    </div>
+  </form>
+<% end %>

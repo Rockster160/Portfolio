@@ -12,6 +12,23 @@
     margin: 0 0 18px;
   }
 
+  // Quiet diagnostic footer below the agenda list — currently just the
+  // service-worker cache version. Same `.sw-version` styling rules apply.
+  .agenda-diag {
+    margin-top: 32px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.35);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .agenda-diag-label {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
   .agendas-index-back,
   .agendas-index-new {
     width: 36px;
@@ -374,6 +391,23 @@ body.ctr-agendas {
     &.hidden {
       display: none;
     }
+  }
+
+  // The SW version badge used to live in every agenda shell header. It
+  // looked like noise next to the filter / + / cog cluster, so we moved
+  // it to a quiet diagnostic footer on the Manage page (see `.agenda-diag`
+  // in the index styles below). The `.sw-version` rules below still
+  // apply wherever the element is rendered.
+  .sw-version {
+    font-size: 10px;
+    opacity: 0.55;
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+    margin-left: 4px;
+  }
+  .sw-version.stale {
+    opacity: 0.3;
+    text-decoration: line-through;
   }
 
   @keyframes agenda-pending-spin {
@@ -2085,6 +2119,120 @@ body.ctr-agendas {
   color: #FFF !important;
   &:hover {
     background: rgba(220, 40, 40, 0.95) !important;
+  }
+}
+
+// =================== Quick Add modal ===================
+// Compact single-field surface for natural-language event creation. The
+// parser lives in app/javascript/src/agenda/quick_add_parser.js and the
+// DOM wiring in quick_add.js. CSS here just keeps the field big enough
+// to feel like the only thing in the room (it IS, on the quick path).
+
+#agenda-quick-add {
+  // `.modal-flat` zeroes out `.app-card-inner` padding so each modal
+  // body owns its own gutters — match `.agenda-form`'s 16px so the
+  // quick-add modal lines up with the rest of the agenda surfaces.
+  .agenda-quick-form {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    font-family: inherit;
+    font-size: 14px;
+    color: inherit;
+  }
+
+  .quick-add-input {
+    width: 100%;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #FFF;
+    font-size: 16px;
+    border-radius: 6px;
+    outline: none;
+    transition: border-color 0.12s ease, background 0.12s ease;
+
+    &:focus {
+      border-color: $base-blue;
+      background: rgba(1, 96, 255, 0.06);
+    }
+
+    &::placeholder {
+      color: rgba(255, 255, 255, 0.35);
+    }
+  }
+
+  .qa-preview {
+    padding: 10px 12px;
+    background: rgba(1, 96, 255, 0.08);
+    border: 1px solid rgba(1, 96, 255, 0.25);
+    border-radius: 6px;
+    color: #FFF;
+
+    &.hidden { display: none; }
+
+    .qa-preview-name {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    .qa-preview-when {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.7);
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  .qa-error {
+    padding: 8px 12px;
+    background: rgba(190, 30, 30, 0.15);
+    border: 1px solid rgba(190, 30, 30, 0.35);
+    border-radius: 6px;
+    color: #FFD8D8;
+    font-size: 12px;
+
+    &.hidden { display: none; }
+  }
+
+  .qa-examples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  // Click-to-prefill chips. Scoped resets here override the global
+  // <button> cascade (gradient bg + bold white text) coming from
+  // forms.scss so these read as quiet inline hints, not CTAs.
+  .qa-example {
+    padding: 4px 10px !important;
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 999px !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+    font-size: 11px !important;
+    font-weight: 400 !important;
+    cursor: pointer;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    transition: background 0.12s ease, color 0.12s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.08) !important;
+      color: #FFF !important;
+    }
+  }
+
+  .qa-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .qa-submit[disabled] {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 }
 

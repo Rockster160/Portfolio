@@ -1,6 +1,3 @@
-# NOT WORKING:
-# ... on the 16th
-
 module Jarvis::Times
   module_function
 
@@ -9,12 +6,22 @@ module Jarvis::Times
   WEAK_DAY_WORDS = %w[morning afternoon evening night].freeze
   MONTH_WORDS = (Date::MONTHNAMES + Date::ABBR_MONTHNAMES).compact.freeze
 
+  # "(on|for) the 16th" \u2192 "June 16" (or "July 16" if the 16th has already
+  # passed this month). Pre-processing it into a month/day shape lets the
+  # existing month-name regex + Chronic handle it without a parallel
+  # custom resolver branch. Bare "16th" (no leading "on"/"for") is left
+  # alone \u2014 too noisy a hook ("the 4th of July" should stay intact, and
+  # an ordinal embedded in unrelated prose shouldn't suddenly become a
+  # date).
+  ORDINAL_DAY_RX = /\b(?:on|for) the (\d{1,2})(?:st|nd|rd|th)?\b/i
+
   def extract_time(words, chronic_opts={})
     rx = Jarvis::Regex
     drx = /\d+(?:\.\d+)?/
     # Strip quoted sections so time-like text inside quotes isn't matched
     words = words.gsub(/(?<!\S)["\u201C\u201D].*["\u201C\u201D]/m, " ").squish
     words = words.gsub(rx.words(:later), "today")
+    words = resolve_ordinal_day(words)
     month_words_regex = /(?<![\w-])(?:#{MONTH_WORDS.join("|")})(?![\w-])/i
     strong_day_regex = /(?<![\w-])(?:#{STRONG_DAY_WORDS.join("|")})(?![\w-])/i
     weak_day_regex = /(?<![\w-])(?:#{WEAK_DAY_WORDS.join("|")})(?![\w-])/i
@@ -83,5 +90,37 @@ module Jarvis::Times
     # -- https://github.com/mojombo/chronic/issues/415
     #   ::Chronic.parse("3 hours and 30 minutes before")
     #   → NoMethodError: undefined method `start=' for nil:NilClass
+  end
+
+  # Substitutes "(on|for) the Nth" with a concrete "Month N" so Chronic
+  # has something familiar to parse. Picks the current month if N is
+  # still future this month (day not yet passed); otherwise rolls forward
+  # one month. Skips replacement for absurd day numbers and leaves the
+  # original substring intact so downstream regexes can decide whether
+  # they want it.
+  def resolve_ordinal_day(text)
+    text.gsub(ORDINAL_DAY_RX) do |original|
+      day = Regexp.last_match(1).to_i
+      next original if day < 1 || day > 31
+
+      now = Time.current
+      candidate = (Date.new(now.year, now.month, day) rescue nil)
+      target = if candidate && candidate >= now.to_date
+        candidate
+      else
+        # Next month — find the first month forward that has this day
+        # (e.g. "the 30th" from Jan should land on Feb 30 → invalid, so
+        # roll to March).
+        cursor = now.to_date.beginning_of_month
+        result = nil
+        1.upto(12) do
+          cursor = cursor >> 1
+          result = (Date.new(cursor.year, cursor.month, day) rescue nil)
+          break if result
+        end
+        result
+      end
+      target ? target.strftime("%B %-d") : original
+    end
   end
 end

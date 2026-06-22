@@ -37,7 +37,7 @@
     <div class="cal-toolbar-actions">
       <span class="agenda-pending-badge hidden" aria-live="polite" title="Pending sync"><i class="fa fa-refresh"></i><span class="agenda-pending-badge-count"></span></span>
       <%= render "agendas/filter", agendas: @agendas %>
-      <button type="button" class="agenda-add-btn" data-modal="#agenda-add-modal" aria-label="Add event"><i class="fa fa-plus"></i></button>
+      <button type="button" class="agenda-add-btn" data-modal="#agenda-quick-add" aria-label="Add event"><i class="fa fa-plus"></i></button>
       <a href="<%= manage_agenda_path %>" class="agenda-page-cog" aria-label="Manage agendas"><i class="fa fa-cog"></i></a>
     </div>
   </header>
@@ -151,6 +151,7 @@
       `.agenda-pending-badge` in the toolbar handles ongoing sync state
       subtly. Center-stage spinners are off-limits per project rule. %>
 
+  <%= render "agenda_items/quick_add_modal", agendas: @agendas %>
   <%= render "agenda_items/add_modal", agendas: @agendas, date: @date %>
   <%= render "agenda_items/edit_modal", agendas: @agendas %>
   <%= render "agenda_items/follow_up_modal" %>

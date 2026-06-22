@@ -4595,6 +4595,23 @@
   // ============================================================
   // Goals + Streak Bonuses management (Balance page)
   // ============================================================
+  // Rebuild a chore-picker <select> from ChoreStore on every modal open
+  // so a chore created in this session is available without a reload.
+  // Server-rendered <option>s are a one-shot snapshot; the store is the
+  // live source of truth.
+  function populateChoreOptions(selectEl, selectedId) {
+    if (!selectEl) return;
+    const sel = selectedId != null ? parseInt(selectedId, 10) : null;
+    const chores = ChoreStore.all()
+      .filter(c => !c.archived)
+      .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    selectEl.innerHTML = "";
+    chores.forEach(c => {
+      const opt = new Option(c.name || "", c.id, false, c.id === sel);
+      selectEl.appendChild(opt);
+    });
+  }
+
   // ---------- Goals (now covers former achievements via kinds) ----------
   const goalModal     = document.querySelector('[data-goal-modal]');
   const goalForm      = goalModal?.querySelector('[data-goal-form]');
@@ -4702,6 +4719,7 @@
     goalForm.elements["goal_id"].value = "";
     goalForm.elements["target_value"].value = 100;
     goalForm.elements["awarded_pebbles"].value = 0;
+    populateChoreOptions(goalForm.elements["chore_id"], null);
     applyGoalPills("cumulative", "saved");
     updateGoalKindUI();
     updateGoalScopeHint();
@@ -4722,8 +4740,7 @@
     // representation (emoji vs <img> vs inline SVG).
     const stack = goalForm.querySelector("[data-icon-stack]");
     stack?.__setIconValue?.(p.image_url || "");
-    const choreSelect = goalForm.elements["chore_id"];
-    if (choreSelect && p.chore_id) choreSelect.value = p.chore_id;
+    populateChoreOptions(goalForm.elements["chore_id"], p.chore_id);
     updateGoalKindUI();
     updateGoalScopeHint();
     updateGoalTrackingHint();
@@ -4861,6 +4878,7 @@
     if (!streakBonusForm) return;
     streakBonusForm.reset();
     streakBonusForm.elements["streak_bonus_id"].value = "";
+    populateChoreOptions(streakBonusForm.elements["chore_id"], null);
     streakBonusForm.querySelector('[data-level-rows]').innerHTML = "";
     addLevelRow();
     updateStreakBonusKindUI();
@@ -4870,8 +4888,7 @@
     streakBonusForm.elements["streak_bonus_id"].value = p.id;
     streakBonusForm.elements["name"].value = p.name;
     streakBonusForm.elements["kind"].value = p.kind;
-    if (p.chore_id && streakBonusForm.elements["chore_id"])
-      streakBonusForm.elements["chore_id"].value = p.chore_id;
+    populateChoreOptions(streakBonusForm.elements["chore_id"], p.chore_id);
     streakBonusForm.querySelector('[data-level-rows]').innerHTML = "";
     const levels = Array.isArray(p.config?.levels) ? p.config.levels : [];
     if (levels.length === 0) addLevelRow();

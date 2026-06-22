@@ -2,36 +2,36 @@ class TeslaService
   # https://github.com/teslamotors/fleet-telemetry/blob/main/protos/vehicle_data.proto
   def self.fields(_interval)
     {
-      VehicleName:    1.second,
-      ChargeState:    1.second,
-      VehicleSpeed:   1.minute,
-      Odometer:       30.minutes,
-      Location:       1.minute,
-      GpsState:       1.minute,
-      GpsHeading:     1.minute,
-      DoorState:      1.minute,
-      Locked:         1.minute,
-      FdWindow:       30.seconds,
-      FpWindow:       30.seconds,
-      RdWindow:       30.seconds,
-      RpWindow:       30.seconds,
-      TpmsPressureFl: 1.hour,
-      TpmsPressureFr: 1.hour,
-      TpmsPressureRl: 1.hour,
-      TpmsPressureRr: 1.hour,
-      InsideTemp:     30.minutes,
-      OutsideTemp:    30.minutes,
-      HvacPower:      1.minute,
+      VehicleName:         1.second,
+      ChargeState:         1.second,
+      VehicleSpeed:        1.minute,
+      Odometer:            30.minutes,
+      Location:            1.minute,
+      GpsState:            1.minute,
+      GpsHeading:          1.minute,
+      DoorState:           1.minute,
+      Locked:              1.minute,
+      FdWindow:            30.seconds,
+      FpWindow:            30.seconds,
+      RdWindow:            30.seconds,
+      RpWindow:            30.seconds,
+      TpmsPressureFl:      1.hour,
+      TpmsPressureFr:      1.hour,
+      TpmsPressureRl:      1.hour,
+      TpmsPressureRr:      1.hour,
+      InsideTemp:          30.minutes,
+      OutsideTemp:         30.minutes,
+      HvacPower:           1.minute,
+      MilesToArrival:      5.minutes,
+      MinutesToArrival:    5.minutes,
+      RouteLine:           1.minute,
+      OriginLocation:      1.minute,
+      DestinationLocation: 1.minute,
 
       # Location
       # InsideTemp
       # OutsideTemp
       # RouteLastUpdated
-      # RouteLine
-      # MilesToArrival
-      # MinutesToArrival
-      # OriginLocation
-      # DestinationLocation
       # DefrostForPreconditioning
       # HvacPower
 

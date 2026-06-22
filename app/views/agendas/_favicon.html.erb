@@ -9,3 +9,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<%# Shell-validity marker. The agenda service worker refuses to `cache.put`
+   any response missing this exact meta tag — guards the cache against
+   being poisoned by a 200 OK error page, a wrong-controller render, or
+   an auth interstitial that happened to land at this URL. %>
+<meta name="agenda-shell" content="ok">

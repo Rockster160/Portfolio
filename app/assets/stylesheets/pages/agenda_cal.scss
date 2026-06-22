@@ -640,9 +640,22 @@ $cal-week-px-per-hour: 20px;
   &.is-today {
     background: rgba(1, 96, 255, 0.1);
   }
+
+  // Drag-to-create highlight on the all-day strip. Painted by
+  // `agenda_cal.js#paintAllDayDragSelection` while the user holds the
+  // mouse down and drags across days; cleared on mouseup.
+  &.is-drag-target {
+    background: rgba(1, 96, 255, 0.22);
+  }
 }
 
 // All-day chip — absolutely positioned by JS to span its day range.
+//
+// `box-shadow` paints a 1.5px ring in the chrome color around every
+// chip. Combined with the 6px-per-side inset in `layoutAllDayChips`,
+// this guarantees adjacent chips that share an agenda color (e.g. two
+// back-to-back family events) read as two distinct pills rather than
+// one continuous blue bar — even at the tightest cell widths.
 .cal-week-allday-chip {
   position: absolute;
   top: 2px;
@@ -661,8 +674,26 @@ $cal-week-px-per-hour: 20px;
   cursor: pointer;
   border: 0;
   text-align: left;
-  box-shadow: none !important;
+  // Chrome-tinted halo. Same color as `.cal-week-allday`'s background
+  // so the halo blends into the band and reads as a gap between
+  // adjacent chips. `!important` defeats the global form-button cascade
+  // (forms.scss:180) which would otherwise re-introduce a blue glow
+  // shadow on every button.
+  box-shadow: 0 0 0 1.5px rgba(8, 16, 32, 0.94) !important;
   text-shadow: none !important;
+
+  // Continuation-edge cues — drop the rounded corner on whichever side
+  // the event spills past the visible week so a multi-week event reads
+  // as a clearly-truncated segment instead of a single self-contained
+  // pill. Mirrors `.cal-month-banner` styling above.
+  &.is-continued-right {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+  &.is-continued-left {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
 
   &:hover {
     filter: brightness(1.1);

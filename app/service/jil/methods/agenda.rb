@@ -25,9 +25,22 @@ class Jil::Methods::Agenda < Jil::Methods::Base
     fallback(line)
   end
 
+  # Soft lookup for voice/text inputs. Tries exact parameterized match,
+  # then exact name, then ILIKE substring on either column. Lets
+  # "ours" resolve "Ours 💕" and "tasks" resolve "Tasks" without the
+  # user having to spell the stored name verbatim.
   def find(name)
+    return nil if name.to_s.strip.empty?
+
     scope = @jil.user.accessible_agendas
-    scope.by_param(name).first || scope.find_by(name: name)
+    param = name.to_s.parameterize
+    return nil if param.empty?
+
+    exact = scope.by_param(name).first || scope.find_by(name: name)
+    return exact if exact
+
+    scope.where("parameterized_name ILIKE ?", "%#{param}%").first ||
+      scope.where("name ILIKE ?", "%#{name}%").first
   end
 
   def add_task(agenda_name, item_name, start_at)

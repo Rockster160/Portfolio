@@ -490,7 +490,14 @@ class AgendaItem < ApplicationRecord
       "agenda-color"          => agenda&.color,
       "agenda-source"         => agenda&.source,
       "all-day"               => all_day?,
-      "end-date"              => end_date&.to_time&.to_i,
+      # Inclusive last-day midnight, anchored in the user's timezone — NOT
+      # `to_time` (which lands in Rails' Time.zone, defaulting to UTC) and
+      # NOT `end_at.to_i` (which is the exclusive next-day-midnight per
+      # Google convention). Using user.timezone keeps the epoch aligned
+      # with the day the browser will format it into for any user whose
+      # browser shares their tz. Mirrors `optimistic_item.js` (`endAt -
+      # 86400` for all-day) and `recurrence.js` for phantom parity.
+      "end-date"              => end_date&.in_time_zone(user.timezone)&.beginning_of_day&.to_i,
       "start-at"              => start_at&.to_i,
       "end-at"                => end_at&.to_i,
       "name"                  => name,

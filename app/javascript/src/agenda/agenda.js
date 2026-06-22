@@ -957,6 +957,9 @@
       if (window.showModal) window.showModal("#agenda-add-modal");
     }
     addModalPrefillAndShow = prefillAndShow;
+    // Expose globally so quick_add.js can hand off to the advanced form
+    // when the user taps "Advanced" with a partially-parsed input.
+    window.__agendaAddModalPrefill = prefillAndShow;
 
     syncKind();
   }
@@ -2074,10 +2077,34 @@
 
     const start = d.startAt ? new Date(Number(d.startAt) * 1000) : null;
     const end = d.endAt ? new Date(Number(d.endAt) * 1000) : null;
-    const dayLabel = start ? start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) : "";
-    let timeLabel = start ? fmtTime(d.startAt) : "";
-    if (d.kind === "event" && end) timeLabel += ` – ${fmtTime(d.endAt)}`;
-    set("[data-when-target]", `${dayLabel}${timeLabel ? " · " + timeLabel : ""}`);
+    const isAllDay = d.allDay === "true";
+    const dayFmt = (dt) => dt.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    let whenLabel = "";
+    if (isAllDay && start) {
+      // `data-end-date` is the INCLUSIVE last-day midnight (see
+      // AgendaItem#presentation_attrs + recurrence.js#buildPhantom).
+      // Use it directly so a multi-day all-day event reads as
+      // "Sun Jun 21 → Tue Jun 23  ·  All day"; a single-day event
+      // collapses to just "Sun Jun 21  ·  All day". Times are
+      // intentionally omitted — 12:00am – 12:00am is noise for an
+      // all-day event.
+      const endDateEpoch = Number(d.endDate) || Number(d.startAt);
+      const endDt = new Date(endDateEpoch * 1000);
+      const sameDay = (
+        start.getFullYear() === endDt.getFullYear() &&
+        start.getMonth() === endDt.getMonth() &&
+        start.getDate() === endDt.getDate()
+      );
+      whenLabel = sameDay
+        ? `${dayFmt(start)} · All day`
+        : `${dayFmt(start)} → ${dayFmt(endDt)} · All day`;
+    } else if (start) {
+      const dayLabel = dayFmt(start);
+      let timeLabel = fmtTime(d.startAt);
+      if (d.kind === "event" && end) timeLabel += ` – ${fmtTime(d.endAt)}`;
+      whenLabel = `${dayLabel} · ${timeLabel}`;
+    }
+    set("[data-when-target]", whenLabel);
 
     const locRow = modal.querySelector("[data-loc-row]");
     if (locRow) {

@@ -92,10 +92,14 @@
 
     const isDayView = root.classList.contains("agenda-day-page");
     const basePath = isDayView ? "/agenda" : "/agenda/week";
+    // Day view steps by 1; week view steps by 7 (jumping a whole week at
+    // a time matches the visible content — clicking prev/next on a
+    // week-list view should not leave 6 of 7 days unchanged on screen).
+    const stride = isDayView ? 1 : 7;
     const prevLink = root.querySelector(".date-nav.prev");
     const nextLink = root.querySelector(".date-nav.next");
-    if (prevLink) prevLink.setAttribute("href", `${basePath}?date=${addDays(dateISO, -1)}`);
-    if (nextLink) nextLink.setAttribute("href", `${basePath}?date=${addDays(dateISO, +1)}`);
+    if (prevLink) prevLink.setAttribute("href", `${basePath}?date=${addDays(dateISO, -stride)}`);
+    if (nextLink) nextLink.setAttribute("href", `${basePath}?date=${addDays(dateISO, +stride)}`);
 
     // Jump-to-today row: visible unless dateISO === today
     const today = todayISO();

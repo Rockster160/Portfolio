@@ -134,6 +134,17 @@
       </li>
     <% end %>
   </ul>
+
+  <%# Diagnostic footer — surfaces the active service-worker cache
+      version (handy when debugging "is the new build actually on this
+      device?") without cluttering the day/week/cal headers with a
+      noisy ID badge. Painted by `service_worker_register.js` from the
+      live SW's broadcast; the localStorage fallback shows the last
+      known value with a `.stale` indicator until the live SW confirms. %>
+  <div class="agenda-diag">
+    <span class="agenda-diag-label">Service worker</span>
+    <span class="sw-version stale" data-sw-version title="Active service worker cache version">—</span>
+  </div>
 </div>
 
 <% content_for :after_body do %>

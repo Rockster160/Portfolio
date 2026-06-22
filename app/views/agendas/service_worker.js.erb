@@ -1,68 +1,303 @@
 <%# Service worker for the agenda PWA. Served by AgendasController#service_worker
     at `/agenda_sw.js` so we can interpolate fingerprinted asset paths and a
-    deploy-stamped VERSION; the SW spec requires same-origin, and `updateViaCache: 'none'`
-    on register makes the browser bypass its own HTTP cache when re-checking
-    this file for updates.
+    deploy-stamped VERSION; the SW spec requires same-origin, and
+    `updateViaCache: 'none'` on register makes the browser bypass its own
+    HTTP cache when re-checking this file for updates.
 
-    Strategy by route:
-      * Navigations (HTML) under /agenda  → stale-while-revalidate.
-        Cached shell paints instantly offline; the fresh version is fetched
-        in the background and lands on next nav.
-      * Static assets (asset pipeline)    → cache-first, no revalidation
-        (fingerprinted filenames mean a new bundle = new URL = new entry).
-      * /agenda/sync/* (bootstrap/delta/page) → network-first, cache-fallback.
-        Data freshness wins, but if the device is offline the last successful
-        response is served so the store can still hydrate.
-      * Mutations (POST/PATCH/DELETE)     → passthrough. The page's offline
-        queue in agenda.js handles retries; the SW must not silently swallow.
+    Mirrors the chores SW patterns exactly so both PWAs share the same
+    offline-first guarantees:
 
-    No `beforeinstallprompt` handling here or in the page-side JS — browsers
-    surface their own install affordance once the manifest + SW criteria
-    are met, and that's the behavior we want. %>
+      * Shell + asset warming is ATOMIC per shell. A shell HTML response
+        is parsed for every `src`/`href` URL; the response is only written
+        into the cache after EVERY referenced asset has been warmed too.
+        A flaky CDN, a 404 on one bundle, or a network drop mid-fetch
+        leaves the previous (working) shell + assets live — never a
+        half-cached deploy that boots to a black screen.
+
+      * `activate` only deletes prior `agenda-*` caches AFTER verifying the
+        new cache has at least one shell populated. An offline / partial
+        install leaves the old cache alive so the user still has a working
+        app to fall back to.
+
+      * Shell fetches fall back through current cache → ANY older
+        `agenda-*` cache → network → ANY cached shell (even from a prior
+        version) before finally letting the browser show its native
+        offline page. A user can never see a blank screen as long as
+        they've loaded the app online once.
+
+      * Shell responses must carry the `<meta name="agenda-shell"
+        content="ok">` marker (added in _favicon partials) to be eligible
+        for `cache.put`. A 200 OK error page or auth interstitial that
+        somehow lands at /agenda is rejected and the previous shell stays
+        live.
+
+      * `get_version` postMessage is broadcast back via
+        `clients.matchAll` (NOT a MessagePort reply — those silently drop
+        in iOS PWA contexts).
+%>
 const VERSION = "<%= AgendasController.helpers.sw_cache_version %>";
-const CACHE_NAME = `agenda-${VERSION}`;
+const CACHE = `agenda-${VERSION}`;
 
-// Pre-cached on install. The first agenda navigation an offline user
-// makes hits one of these paths; pre-caching guarantees the shell is
-// available even from a clean browser profile that's never been online.
-const PRECACHE_URLS = [
+// The four canonical shell paths. Each is body-empty for per-page content
+// — data is hydrated client-side from AgendaStore + localStorage. The
+// shell load itself is offline-tolerant; the sync fetches degrade
+// gracefully when there is no connection.
+const SHELL_PATHS = [
   "<%= day_path %>",
   "<%= week_path %>",
   "<%= cal_month_path %>",
   "<%= cal_week_path %>",
-  "<%= asset_path('application.js') %>",
-  "<%= asset_path('application.css') %>",
-  "/agenda.webmanifest",
-  "/agenda_calendar.webmanifest",
 ];
 
-self.addEventListener("install", (event) => {
-  // skipWaiting + clients.claim (in activate) so a fresh deploy takes effect
-  // on the next nav rather than waiting for every tab to close. The
-  // version-bumped CACHE_NAME guarantees we don't serve a mixed-version
-  // bundle from the old cache.
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      // `cache: "reload"` per-request so the install-time pre-cache pulls
-      // fresh from the server even if the HTTP cache has stale copies.
-      Promise.all(PRECACHE_URLS.map((url) =>
-        cache.add(new Request(url, { cache: "reload" })).catch(() => null)
-      ))
-    )
+// Validity marker every agenda shell carries in its <head>. The SW refuses
+// to `cache.put` any response missing this exact substring, which guards
+// the cache from being poisoned by a 200 OK error page, a wrong-controller
+// render, or an auth interstitial.
+const SHELL_MARKER = '<meta name="agenda-shell" content="ok">';
+function isValidShellBody(html) {
+  return typeof html === "string" && html.indexOf(SHELL_MARKER) !== -1;
+}
+
+// Query params that are launch / analytics only and do not change which
+// shell to serve. The webmanifest's `start_url` carries `?source=pwa`,
+// so without this allow-list the very first request a PWA makes on every
+// launch would bypass the shell cache entirely and fall through to network
+// — exactly the blank-screen-when-offline scenario this SW exists to
+// prevent.
+const SHELL_PASSTHROUGH_PARAMS = new Set([
+  "source", "utm_source", "utm_medium", "utm_campaign", "date",
+]);
+
+function isShellRequest(url) {
+  if (!SHELL_PATHS.includes(url.pathname)) return false;
+  for (const k of url.searchParams.keys()) {
+    if (!SHELL_PASSTHROUGH_PARAMS.has(k)) return false;
+  }
+  return true;
+}
+
+function isPrecachableAssetURL(url) {
+  if (url.origin !== self.location.origin) return false;
+  if (url.pathname.startsWith("/assets/")) return true;
+  if (url.pathname.startsWith("/agenda_favicon/")) return true;
+  if (url.pathname === "/agenda.webmanifest") return true;
+  if (url.pathname === "/agenda_calendar.webmanifest") return true;
+  return false;
+}
+
+function isStaticAsset(url) {
+  return (
+    url.pathname.startsWith("/assets/") ||
+    url.pathname.startsWith("/agenda_favicon/") ||
+    url.pathname === "/agenda.webmanifest" ||
+    url.pathname === "/agenda_calendar.webmanifest"
   );
+}
+
+// Parse a shell HTML body for asset URLs the page needs to render and
+// warm them into the cache. ATOMIC: returns true only if EVERY
+// precachable asset succeeded. The caller uses this to gate writing the
+// shell itself — a shell is never cached unless all of its assets are
+// also in cache. Without this guarantee, a deploy that races with a slow
+// CDN, an offline install, or any asset fetch that 404s would leave a
+// shell entry referencing dead URLs → JS fails to load → blank screen on
+// next boot.
+async function warmShellAssets(cache, shellHtml, baseUrl) {
+  const urls = new Set();
+  const re = /\b(?:src|href)=["']([^"']+)["']/g;
+  let m;
+  while ((m = re.exec(shellHtml)) !== null) {
+    let u;
+    try { u = new URL(m[1], baseUrl); }
+    catch (e) { continue; }
+    if (isPrecachableAssetURL(u)) urls.add(u.toString());
+  }
+  const results = await Promise.all(
+    Array.from(urls).map(async (u) => {
+      try {
+        const existing = await cache.match(u);
+        if (existing) return true;
+        const r = await fetch(u, { credentials: "same-origin", cache: "no-store" });
+        if (!r || !r.ok) return false;
+        await cache.put(u, r.clone());
+        return true;
+      } catch (e) { return false; }
+    }),
+  );
+  return results.every(Boolean);
+}
+
+// Background shell refresh — fired by install, by activate's re-verify
+// path, and by the page-script on focus/Monitor broadcast. `cache:
+// "no-store"` is critical: without it, fetch() inside a service worker
+// still respects the browser's HTTP cache, which can serve stale HTML
+// and re-poison our SW cache with it.
+async function refreshAllShells() {
+  const cache = await caches.open(CACHE);
+  await Promise.all(
+    SHELL_PATHS.map(async (p) => {
+      try {
+        const r = await fetch(p, {
+          credentials: "same-origin",
+          redirect:    "manual",
+          cache:       "no-store",
+        });
+        if (!r || !r.ok || r.type === "opaqueredirect") {
+          await broadcastToClients({ kind: "shell_sync_failed", path: p });
+          return;
+        }
+        const clone = r.clone();
+        const html = await clone.text();
+        if (!isValidShellBody(html)) {
+          await broadcastToClients({ kind: "shell_sync_failed", path: p });
+          return;
+        }
+        const baseUrl = new URL(p, self.location.origin).toString();
+        const assetsOk = await warmShellAssets(cache, html, baseUrl);
+        if (!assetsOk) {
+          await broadcastToClients({ kind: "shell_sync_failed", path: p });
+          return;
+        }
+        await cache.put(p, r.clone());
+        await broadcastToClients({ kind: "shell_synced", path: p });
+      } catch (e) {
+        await broadcastToClients({ kind: "shell_sync_failed", path: p });
+      }
+    }),
+  );
+}
+
+// Hard verification that every shell + every asset referenced inside
+// those shells is sitting in the current cache. The page-script can use
+// this to decide whether it's safe to expose a "tap to reload" — only
+// when this returns ok can the user reload without risk of landing on a
+// half-cached deploy. Returns { ok: true } or { ok: false, reason }.
+async function verifyShellReady() {
+  const cache = await caches.open(CACHE);
+  for (const p of SHELL_PATHS) {
+    const shellResp = await cache.match(p);
+    if (!shellResp) return { ok: false, reason: `missing shell ${p}` };
+    const html = await shellResp.clone().text();
+    const re = /\b(?:src|href)=["']([^"']+)["']/g;
+    let m;
+    while ((m = re.exec(html)) !== null) {
+      let u;
+      try { u = new URL(m[1], new URL(p, self.location.origin)); }
+      catch (e) { continue; }
+      if (!isPrecachableAssetURL(u)) continue;
+      const hit = await cache.match(u.toString());
+      if (!hit) return { ok: false, reason: `missing asset ${u.pathname}` };
+    }
+  }
+  return { ok: true };
+}
+
+// Look in every other agenda-* cache for a request/path. Used as a last-
+// resort fallback when the current cache hasn't been populated yet (e.g.
+// a flaky install) so the previous deploy's cache still serves.
+async function matchFromOldCaches(reqOrPath) {
+  const keys = await caches.keys();
+  for (const k of keys) {
+    if (k === CACHE || !k.startsWith("agenda-")) continue;
+    const c = await caches.open(k);
+    const hit = await c.match(reqOrPath);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+// Last-resort: any real cached shell is better than no page at all. If
+// the user asked for /agenda/week but only /agenda is in cache, serving
+// /agenda still gives them the real Agenda UI which hydrates from
+// AgendaStore + localStorage and lets them keep using the app. The
+// client-side view router resolves the active view from location.pathname
+// once JS runs.
+async function anyCachedShell() {
+  const cache = await caches.open(CACHE);
+  for (const p of SHELL_PATHS) {
+    const hit = await cache.match(p);
+    if (hit) return hit;
+  }
+  for (const p of SHELL_PATHS) {
+    const old = await matchFromOldCaches(p);
+    if (old) return old;
+  }
+  return null;
+}
+
+async function broadcastToClients(payload) {
+  const clients = await self.clients.matchAll({ includeUncontrolled: true });
+  clients.forEach((c) => c.postMessage(payload));
+}
+
+self.addEventListener("install", (event) => {
+  // skipWaiting + clients.claim (in activate) so a fresh deploy takes
+  // effect on the next nav rather than waiting for every tab to close.
+  // The asset/shell atomicity guarantees inside refreshAllShells (plus
+  // the verify-before-purge in activate) keep us safe — partial install
+  // never reaches the user as a broken cache.
+  event.waitUntil(refreshAllShells());
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((names) =>
-      Promise.all(
-        names
-          .filter((n) => n.startsWith("agenda-") && n !== CACHE_NAME)
-          .map((n) => caches.delete(n))
-      )
-    ).then(() => self.clients.claim())
+    (async () => {
+      const newCache = await caches.open(CACHE);
+      // Only purge old agenda-* caches when the new cache actually has
+      // at least one shell populated. An offline / flaky install leaves
+      // the new cache empty; deleting the previous cache then would
+      // strand the user with nothing to serve on the next visit. With
+      // the old cache alive, anyCachedShell() and matchFromOldCaches()
+      // can fall back to it until a fresh install succeeds.
+      let hasShell = false;
+      for (const p of SHELL_PATHS) {
+        if (await newCache.match(p)) { hasShell = true; break; }
+      }
+      if (hasShell) {
+        const keys = await caches.keys();
+        await Promise.all(
+          keys
+            .filter((k) => k.startsWith("agenda-") && k !== CACHE)
+            .map((k) => caches.delete(k)),
+        );
+      }
+      await self.clients.claim();
+    })(),
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.action === "refresh_shells") {
+    event.waitUntil(refreshAllShells());
+  }
+  if (event.data?.action === "get_version") {
+    // Broadcast rather than reply via a transferred MessagePort:
+    // port-based round-trips from a SW silently drop in some iOS PWA
+    // contexts, leaving the page stuck thinking the SW never answered.
+    // A broadcast hits the page's existing message listener reliably.
+    event.waitUntil(broadcastToClients({ kind: "sw_version", cache: CACHE }));
+  }
+  if (event.data?.action === "verify_ready") {
+    const port = event.ports?.[0];
+    event.waitUntil(
+      (async () => {
+        let result;
+        try {
+          result = await verifyShellReady();
+          if (!result.ok) {
+            // One retry: maybe install raced and missed something. Force
+            // a clean refresh, then re-verify.
+            await refreshAllShells();
+            result = await verifyShellReady();
+          }
+        } catch (e) {
+          result = { ok: false, reason: `verify threw: ${e?.message || e}` };
+        }
+        port?.postMessage(result);
+      })(),
+    );
+  }
 });
 
 self.addEventListener("fetch", (event) => {
@@ -70,7 +305,7 @@ self.addEventListener("fetch", (event) => {
   let url;
   try { url = new URL(req.url); }
   catch (_) { return; }
-  if (url.origin !== self.location.origin) return; // CDN / cross-origin untouched
+  if (url.origin !== self.location.origin) return;
 
   // Mutations under /agenda/*: network-only with a synthetic 503 on
   // network failure. The page-side mutation queue interprets that as
@@ -83,45 +318,108 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Shells: cache-first with background revalidate (stale-while-
+  // revalidate) AND a fallback chain that prefers any cached shell over
+  // a 503/blank page. The revalidate is gated by isValidShellBody +
+  // warmShellAssets so the previous good shell stays live until the
+  // new one is fully cacheable.
+  if (isShellRequest(url)) {
+    event.respondWith(handleShellFetch(event, req, url));
+    return;
+  }
+
+  // Static assets: cache-first, with prior-cache fallback so a page
+  // served from an old shell still has its CSS/JS instead of dropping
+  // to an unstyled render.
+  if (isStaticAsset(url)) {
+    event.respondWith(handleStaticAsset(req));
+    return;
+  }
+
   // Sync endpoints: freshness > offline cache. Cache only as a fallback.
   if (url.pathname.startsWith("/agenda/sync/")) {
     event.respondWith(networkFirst(req));
     return;
   }
 
-  // Asset pipeline: fingerprinted, immutable. Cache-first; misses go to net.
-  if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/agenda_favicon/") || url.pathname === "/agenda.webmanifest" || url.pathname === "/agenda_calendar.webmanifest") {
-    event.respondWith(cacheFirst(req));
-    return;
-  }
-
-  // Agenda navigations + everything else under /agenda: stale-while-revalidate.
-  // Anything outside /agenda is left to the browser default — the SW scope
-  // limits us to /agenda already, but this is belt-and-suspenders for
-  // any unexpected wildcards.
+  // Anything else under /agenda: network-first with cache fallback. If
+  // the request is a navigation (e.g. a deep link inside /agenda that
+  // isn't one of the four shells), serve any cached shell rather than
+  // a bare 503 — the page-side router then mounts the right view.
   if (url.pathname.startsWith("/agenda")) {
-    event.respondWith(staleWhileRevalidate(req));
+    event.respondWith(networkFirstWithShellFallback(req));
     return;
   }
 });
 
-async function cacheFirst(req) {
-  const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(req, { ignoreSearch: false });
+async function handleShellFetch(event, req, url) {
+  const cache = await caches.open(CACHE);
+  // Look up the cached shell by pathname (ignoring search) so `?date=…`
+  // and `?source=pwa` deep-link variants all hit the same precached
+  // entry. The page's JS reads the search string at boot and renders
+  // the requested date.
+  let cached = await cache.match(url.pathname);
+  if (!cached) cached = await matchFromOldCaches(url.pathname);
+
+  const revalidate = (async () => {
+    try {
+      const fresh = await fetch(req, { cache: "no-store" });
+      if (!fresh || !fresh.ok || fresh.type === "opaqueredirect") return;
+      const clone = fresh.clone();
+      const html = await clone.text();
+      if (!isValidShellBody(html)) {
+        await broadcastToClients({ kind: "shell_sync_failed", path: url.pathname });
+        return;
+      }
+      const assetsOk = await warmShellAssets(cache, html, url.toString());
+      if (!assetsOk) {
+        await broadcastToClients({ kind: "shell_sync_failed", path: url.pathname });
+        return;
+      }
+      await cache.put(url.pathname, fresh.clone());
+      await broadcastToClients({ kind: "shell_synced", path: url.pathname });
+    } catch (e) {
+      await broadcastToClients({ kind: "shell_sync_failed", path: url.pathname });
+    }
+  })();
+  event.waitUntil(revalidate);
+
   if (cached) return cached;
+  // No shell cached at this exact path AND no older cache had it.
+  // Wait for the revalidate to land — it may succeed where the cache
+  // lookup didn't — then fall through to network, then to ANY cached
+  // shell from any version, then finally to the browser's own offline
+  // page.
+  await revalidate;
+  const afterRevalidate = await cache.match(url.pathname);
+  if (afterRevalidate) return afterRevalidate;
   try {
-    const res = await fetch(req);
-    if (res && res.ok) cache.put(req, res.clone());
-    return res;
-  } catch (_) {
-    // Truly offline + no cache — let the browser fail. The agenda app
-    // shell is pre-cached, so this only fires for never-loaded assets.
-    return new Response("", { status: 503, statusText: "offline" });
-  }
+    const net = await fetch(req);
+    if (net && (net.ok || net.type === "opaque")) return net;
+  } catch (e) {}
+  const anyShell = await anyCachedShell();
+  if (anyShell) return anyShell;
+  // Truly nothing cached. Let the browser show its native "no internet"
+  // page rather than a synthetic placeholder we'd have to invent.
+  return fetch(req);
+}
+
+async function handleStaticAsset(req) {
+  const cache = await caches.open(CACHE);
+  const hit = await cache.match(req);
+  if (hit) return hit;
+  // Older content-hashed asset might still live in a prior cache — use
+  // it offline so a page served from an old shell still has its CSS/JS
+  // instead of dropping to an unstyled render.
+  const fallback = await matchFromOldCaches(req);
+  let fresh = null;
+  try { fresh = await fetch(req); } catch (e) {}
+  if (fresh && fresh.ok) cache.put(req, fresh.clone());
+  return fresh || fallback || new Response("offline", { status: 503 });
 }
 
 async function networkFirst(req) {
-  const cache = await caches.open(CACHE_NAME);
+  const cache = await caches.open(CACHE);
   try {
     const res = await fetch(req);
     if (res && res.ok) cache.put(req, res.clone());
@@ -130,10 +428,27 @@ async function networkFirst(req) {
     const cached = await cache.match(req);
     if (cached) return cached;
     return new Response(JSON.stringify({ offline: true }), {
-      status: 503,
+      status:     503,
       statusText: "offline",
-      headers: { "Content-Type": "application/json" },
+      headers:    { "Content-Type": "application/json" },
     });
+  }
+}
+
+async function networkFirstWithShellFallback(req) {
+  const cache = await caches.open(CACHE);
+  try {
+    const res = await fetch(req);
+    if (res && res.ok) cache.put(req, res.clone());
+    return res;
+  } catch (_) {
+    const hit = await cache.match(req);
+    if (hit) return hit;
+    if (req.mode === "navigate") {
+      const anyShell = await anyCachedShell();
+      if (anyShell) return anyShell;
+    }
+    return new Response("offline", { status: 503 });
   }
 }
 
@@ -150,17 +465,4 @@ async function mutationPassthrough(req) {
       headers:    { "Content-Type": "application/json" },
     });
   }
-}
-
-async function staleWhileRevalidate(req) {
-  const cache = await caches.open(CACHE_NAME);
-  // ignoreSearch on the cache lookup so `?date=2026-06-19` and `?source=pwa`
-  // don't fragment the shell cache — every navigation gets the same
-  // pre-cached HTML, then the store-driven JS hydrates per-URL state.
-  const cached = await cache.match(req, { ignoreSearch: true });
-  const fetched = fetch(req).then((res) => {
-    if (res && res.ok) cache.put(req, res.clone());
-    return res;
-  }).catch(() => null);
-  return cached || (await fetched) || new Response("", { status: 503 });
 }

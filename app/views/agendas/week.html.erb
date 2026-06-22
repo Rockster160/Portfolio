@@ -12,21 +12,21 @@
     <h1 class="agenda-page-title">Agenda</h1>
     <span class="agenda-pending-badge hidden" aria-live="polite" title="Pending sync"><i class="fa fa-refresh"></i><span class="agenda-pending-badge-count"></span></span>
     <%= render "agendas/filter", agendas: @agendas %>
-    <button type="button" class="agenda-add-btn" data-modal="#agenda-add-modal" aria-label="Add to agenda"><i class="fa fa-plus"></i></button>
+    <button type="button" class="agenda-add-btn" data-modal="#agenda-quick-add" aria-label="Add to agenda"><i class="fa fa-plus"></i></button>
     <a href="<%= manage_agenda_path %>" class="agenda-page-cog" aria-label="Manage agendas"><i class="fa fa-cog"></i></a>
   </header>
 
-  <% if @date != Date.current %>
-    <div class="agenda-jump-row">
-      <a class="agenda-jump-today" href="<%= week_path %>">Jump to Today</a>
-    </div>
-  <% end %>
-
   <nav class="agenda-date-bar">
-    <a class="date-nav prev" href="<%= week_path(date: (@date - 1).iso8601) %>" aria-label="Previous day"><i class="fa fa-chevron-left"></i></a>
+    <a class="date-nav prev" href="<%= week_path(date: (@date - 7).iso8601) %>" aria-label="Previous week"><i class="fa fa-chevron-left"></i></a>
     <span class="date-label"><%= @date.strftime("%a, %b %-d, %Y") %></span>
-    <a class="date-nav next" href="<%= week_path(date: (@date + 1).iso8601) %>" aria-label="Next day"><i class="fa fa-chevron-right"></i></a>
+    <a class="date-nav next" href="<%= week_path(date: (@date + 7).iso8601) %>" aria-label="Next week"><i class="fa fa-chevron-right"></i></a>
   </nav>
+
+  <%# Placed BELOW the nav so the prev/next/date-label row holds a fixed
+      position. See the matching note in day.html.erb. %>
+  <div class="agenda-jump-row <%= "hidden" if @date == Date.current %>">
+    <a class="agenda-jump-today" href="<%= week_path %>">Jump to Today</a>
+  </div>
 
   <div class="cal-view-toggle">
     <a href="<%= day_path %>" class="cal-toggle-btn">Day</a>
@@ -73,6 +73,7 @@
 
     <%= render "agenda_items/template" %>
 
+    <%= render "agenda_items/quick_add_modal", agendas: @agendas %>
     <%= render "agenda_items/add_modal", agendas: @agendas, date: @date %>
     <%= render "agenda_items/edit_modal", agendas: @agendas %>
     <%= render "agenda_items/follow_up_modal" %>

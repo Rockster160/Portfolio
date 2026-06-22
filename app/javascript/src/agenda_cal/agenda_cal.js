@@ -180,6 +180,10 @@
   // HTML swap doesn't shadow it and document-level handlers stay correct.
   const monthDrag = { startCell: null, lastCell: null, moved: false };
   const weekDrag = { col: null, startPx: 0, top: 0, bottom: 0, sel: null, moved: false, ctx: null };
+  // All-day strip drag-to-create state. `startCell` is where mousedown
+  // fired; `currentCell` is whichever all-day cell the cursor is over
+  // right now. Both stay null when no drag is in flight.
+  const allDayDrag = { startCell: null, currentCell: null, moved: false, root: null };
   // Event-drag state. mousedown on an editable event puts us in a
   // "maybe-drag" state; mousemove past a threshold promotes it to a real
   // drag with a cursor-following ghost and a drop-slot placeholder.
@@ -725,6 +729,30 @@
   // ~8px the user is almost certainly trying to click, not drag.
   const EVENT_DRAG_THRESHOLD_PX = 8;
 
+  // Highlights every all-day cell between the start cell and the cell
+  // currently under the cursor. Tolerant of either drag direction
+  // (Mon → Wed or Wed → Mon, both should highlight Mon/Tue/Wed).
+  function paintAllDayDragSelection(root, startCell, currentCell) {
+    if (!root || !startCell || !currentCell) return;
+    const cells = $$(".cal-week-allday-cell", root);
+    const dates = cells.map((c) => c.dataset.date).sort();
+    const startISO = startCell.dataset.date;
+    const currentISO = currentCell.dataset.date;
+    const lo = startISO <= currentISO ? startISO : currentISO;
+    const hi = startISO <= currentISO ? currentISO : startISO;
+    cells.forEach((c) => {
+      const inRange = c.dataset.date >= lo && c.dataset.date <= hi;
+      c.classList.toggle("is-drag-target", inRange);
+    });
+  }
+
+  function clearAllDayDragSelection(root) {
+    if (!root) return;
+    $$(".cal-week-allday-cell.is-drag-target", root).forEach((c) => {
+      c.classList.remove("is-drag-target");
+    });
+  }
+
   function startWeekCreateDrag(root, col, e) {
     e.preventDefault();
     const grid = $(".cal-week-grid", root);
@@ -795,6 +823,25 @@
       }
 
       if (e.target.closest(".cal-week-allday-chip")) return;
+
+      // ---- all-day strip drag-to-create init ----
+      // Mousedown on an all-day cell starts a date-range select. The
+      // body-grid drag uses Y-pixel snapping inside one column; for the
+      // all-day strip we instead track which CELL the cursor is over,
+      // since the granularity is whole days.
+      const alldayCell = e.target.closest(".cal-week-allday-cell");
+      if (alldayCell) {
+        e.preventDefault();
+        allDayDrag.startCell = alldayCell;
+        allDayDrag.currentCell = alldayCell;
+        allDayDrag.moved = false;
+        allDayDrag.root = root;
+        // Highlight the start cell immediately so the user gets visual
+        // feedback even before they move.
+        paintAllDayDragSelection(root, alldayCell, alldayCell);
+        return;
+      }
+
       if (!colAtCursor) return;
       startWeekCreateDrag(root, colAtCursor, e);
     });
@@ -1294,17 +1341,46 @@
     const wrapRect = alldayWrap.getBoundingClientRect();
     const rowHeight = 20;
     const rowGap = 2;
+    // Per-side inset bites px out of each chip's column-edge so two
+    // back-to-back chips (one ending Mon, the next starting Tue) show
+    // a visible gap instead of merging into one continuous blue bar.
+    // 6px each side → 12px gap. The chip CSS also adds a chrome-tinted
+    // outline so each chip carries its own crisp edge even when adjacent
+    // chips share an agenda color and would otherwise blur together.
+    const sideInset = 6;
     specs.forEach((s) => {
-      const startCell = alldayCells[s.startDate] || Object.values(alldayCells)[0];
-      const endCell = alldayCells[s.endDate] || alldayCells[s.startDate] || Object.values(alldayCells).slice(-1)[0];
+      // Bail if neither end of the chip's date range overlaps the
+      // visible week. Without this, a stray item (e.g. an all-day event
+      // whose exclusive next-day-midnight falsely passed the range
+      // filter) would render against the first cell as a fallback,
+      // painting on the wrong day. The store's `inclusiveEnd` fix
+      // upstream should keep this list clean; this is belt-and-braces.
+      const visibleDates = Object.keys(alldayCells).sort();
+      const firstISO = visibleDates[0];
+      const lastISO = visibleDates[visibleDates.length - 1];
+      if (!firstISO || compareISO(s.endDate, firstISO) < 0) return;
+      if (!lastISO || compareISO(s.startDate, lastISO) > 0) return;
+      // Clamp the visible span to what this week actually shows so
+      // multi-week events render only their in-week segment.
+      const segStart = compareISO(s.startDate, firstISO) < 0 ? firstISO : s.startDate;
+      const segEnd = compareISO(s.endDate, lastISO) > 0 ? lastISO : s.endDate;
+      const startCell = alldayCells[segStart];
+      const endCell = alldayCells[segEnd] || startCell;
       if (!startCell) return;
+      // Mark the chip when its real span extends past the visible week
+      // on either side so the CSS can drop the rounded corner and make
+      // it clear the event continues. Mirrors month-banner styling.
+      const continuedLeft = compareISO(s.startDate, firstISO) < 0;
+      const continuedRight = compareISO(s.endDate, lastISO) > 0;
+      s.node.classList.toggle("is-continued-left", continuedLeft);
+      s.node.classList.toggle("is-continued-right", continuedRight);
       const sRect = startCell.getBoundingClientRect();
       const eRect = endCell.getBoundingClientRect();
       const left = sRect.left - wrapRect.left;
       const right = eRect.right - wrapRect.left;
       s.node.style.position = "absolute";
-      s.node.style.left = `${left + 1}px`;
-      s.node.style.width = `${right - left - 2}px`;
+      s.node.style.left = `${left + sideInset}px`;
+      s.node.style.width = `${right - left - (sideInset * 2)}px`;
       s.node.style.top = `${2 + s.row * (rowHeight + rowGap)}px`;
       s.node.style.height = `${rowHeight - 2}px`;
       alldayWrap.appendChild(s.node);
@@ -1474,10 +1550,15 @@
       renderWeekFor(root, targetISO);
       return;
     }
+    if (isMonthTarget && onMonth) {
+      history.pushState(null, "", url.href);
+      const monthParam = url.searchParams.get("month"); // "YYYY-MM" or null
+      const targetMonthISO = monthParam || todayMonthISO();
+      renderMonthFor(root, targetMonthISO);
+      return;
+    }
 
     // Cross-view (or unknown target): fall back to a real navigation.
-    // Phase 3 (month-view AgendaStore conversion) collapses this to
-    // a client-side renderMonthFor in the same shape.
     window.location.assign(url.href);
   }
 
@@ -1546,6 +1627,140 @@
     updateNowLine(root);
   }
 
+  // Re-render the month view for a new target month, ENTIRELY
+  // client-side. Mirrors `renderWeekFor`: rebuild the grid DOM, update
+  // toolbar + nav hrefs, then run the same hydration + layout passes
+  // `initMonthView` runs on first mount.
+  //
+  // `monthISO` is "YYYY-MM". The visible range extends from the Monday
+  // of the week containing day 1 through the Sunday of the week
+  // containing the last day — same convention as
+  // AgendasController#cal_month.
+  function renderMonthFor(root, monthISO) {
+    const grid = $(".cal-month-grid", root);
+    if (!grid) return;
+    const [yStr, mStr] = monthISO.split("-");
+    const year = parseInt(yStr, 10);
+    const monthIdx = parseInt(mStr, 10) - 1;
+    if (!Number.isFinite(year) || monthIdx < 0 || monthIdx > 11) return;
+
+    const monthStartDt = new Date(year, monthIdx, 1);
+    const monthEndDt = new Date(year, monthIdx + 1, 0); // last day
+    const firstVisibleISO = mondayOf(toISO(monthStartDt));
+    const lastVisibleISO = sundayOf(toISO(monthEndDt));
+    const todayISO = toISO(new Date());
+
+    // Toolbar title — "<Month> <Year>".
+    const titleEl = $(".cal-toolbar-title", root);
+    if (titleEl) {
+      titleEl.textContent = monthStartDt.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    }
+
+    // Prev/next/Today links. The toolbar's "Today" link is a static
+    // `/agenda/month` href that's already correct; we only need to
+    // refresh prev/next.
+    const prevMonth = addMonthsISO(monthISO, -1);
+    const nextMonth = addMonthsISO(monthISO, +1);
+    const prevLink = $(".cal-toolbar-nav a.prev", root);
+    const nextLink = $(".cal-toolbar-nav a.next", root);
+    if (prevLink) prevLink.href = `/agenda/month?month=${prevMonth}`;
+    if (nextLink) nextLink.href = `/agenda/month?month=${nextMonth}`;
+
+    // Update the grid's window markers — agenda_cal + month_view both
+    // read these to drive their item-range queries against AgendaStore.
+    grid.dataset.monthStart = firstVisibleISO;
+    grid.dataset.monthEnd = lastVisibleISO;
+    root.dataset.currentDate = `${monthISO}-01`;
+
+    // Replace the weekday header row text (still 7 columns starting
+    // Monday). Keeps existing DOM nodes — just rewrites textContent so
+    // any locale-changes flow through.
+    const weekdayHeads = $$(".cal-month-weekday-head", grid);
+    weekdayHeads.forEach((cell, idx) => {
+      const dt = parseISODate(addDaysISO(firstVisibleISO, idx));
+      cell.textContent = dt.toLocaleDateString(undefined, { weekday: "short" });
+    });
+
+    // Rebuild the week rows + cells. Walk firstVisible..lastVisible in
+    // 7-day strides and emit one .cal-month-row per stride.
+    const oldRows = $$(".cal-month-row", grid);
+    oldRows.forEach((r) => r.remove());
+
+    // Anchor for insertion: row markup sits between .cal-month-weekdays
+    // and .cal-month-allday-seeds. Insert before the seeds container so
+    // the rows land in the right z-stack.
+    const seedsContainer = grid.querySelector(".cal-month-allday-seeds");
+
+    let cursorISO = firstVisibleISO;
+    while (cursorISO <= lastVisibleISO) {
+      const weekEndISO = addDaysISO(cursorISO, 6);
+      const row = document.createElement("div");
+      row.className = "cal-month-row";
+      row.dataset.rowStart = cursorISO;
+      row.dataset.rowEnd = weekEndISO;
+
+      const banners = document.createElement("div");
+      banners.className = "cal-month-row-banners";
+      banners.setAttribute("data-row-banners", "");
+      banners.setAttribute("aria-hidden", "true");
+      row.appendChild(banners);
+
+      for (let offset = 0; offset < 7; offset++) {
+        const dayISO = addDaysISO(cursorISO, offset);
+        const dt = parseISODate(dayISO);
+        const inMonth = dt.getMonth() === monthIdx;
+        const isToday = dayISO === todayISO;
+        const cell = document.createElement("div");
+        cell.className = `cal-month-cell${isToday ? " is-today" : ""}${inMonth ? "" : " other-month"}`;
+        cell.dataset.date = dayISO;
+        cell.dataset.weekday = String(dt.getDay());
+        cell.setAttribute("role", "button");
+        cell.setAttribute("tabindex", "0");
+
+        const head = document.createElement("div");
+        head.className = "cal-month-cell-head";
+        const num = document.createElement("span");
+        const isFirstOfMonth = dt.getDate() === 1;
+        num.className = `cal-month-day-num${isFirstOfMonth ? " first-of-month" : ""}`;
+        num.textContent = isFirstOfMonth
+          ? dt.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+          : String(dt.getDate());
+        head.appendChild(num);
+        cell.appendChild(head);
+
+        const items = document.createElement("div");
+        items.className = "cal-month-cell-items";
+        items.setAttribute("data-items-container", "");
+        cell.appendChild(items);
+
+        const overflow = document.createElement("span");
+        overflow.className = "cal-month-overflow hidden";
+        overflow.setAttribute("aria-hidden", "true");
+        cell.appendChild(overflow);
+
+        row.appendChild(cell);
+      }
+
+      if (seedsContainer) grid.insertBefore(row, seedsContainer);
+      else grid.appendChild(row);
+
+      cursorISO = addDaysISO(weekEndISO, 1);
+    }
+
+    // Ensure the store has data for the new window, then notify
+    // subscribers so month_view + agenda_cal both repaint against the
+    // freshly-rebuilt DOM.
+    window.AgendaSync?.ensureRangeLoaded(firstVisibleISO, lastVisibleISO);
+    rehydrateMonthSeedsFromStore(root);
+    layoutMonthBanners(root);
+    recountMonthOverflow(root);
+    // Re-fire a notify so month_view.js (which lives in its own module
+    // and subscribes to the store) re-runs its per-cell render against
+    // the new cell DOM. Without this the cells stay empty until the
+    // next sync.
+    window.AgendaStore?.notify?.("page");
+  }
+
   // --- Date helpers used by client-side nav ---
   // Don't go through native Date for arithmetic — DST shifts can move
   // wall midnight by an hour and corrupt "+7 days". String math
@@ -1565,6 +1780,35 @@
     const wday = dt.getUTCDay(); // 0=Sun
     const delta = wday === 0 ? -6 : 1 - wday;
     return addDaysISO(iso, delta);
+  }
+
+  // Sunday of the week containing `iso`, with Monday as the week start
+  // (same convention as AgendasController#cal_week_start_day :monday).
+  function sundayOf(iso) {
+    const [y, m, d] = String(iso).split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+    const wday = dt.getUTCDay(); // 0=Sun, 1=Mon, ... 6=Sat
+    const delta = wday === 0 ? 0 : 7 - wday;
+    return addDaysISO(iso, delta);
+  }
+
+  // Local-date ISO for a JS Date (uses local year/month/day, not UTC).
+  function toISO(dt) {
+    return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+  }
+
+  // "YYYY-MM" + delta months → "YYYY-MM". Wraps year correctly.
+  function addMonthsISO(monthISO, delta) {
+    const [yStr, mStr] = String(monthISO).split("-");
+    const year = parseInt(yStr, 10);
+    const month0 = parseInt(mStr, 10) - 1 + delta;
+    const dt = new Date(year, month0, 1);
+    return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}`;
+  }
+
+  function todayMonthISO() {
+    const dt = new Date();
+    return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}`;
   }
 
   function installNavInterception(root) {
@@ -1589,6 +1833,23 @@
       }
       e.preventDefault();
       navigateClientSide(url);
+    });
+
+    // popstate: browser back/forward needs to re-render against the
+    // restored URL. Without this, hitting Back after a client-side jump
+    // updates the URL but leaves the grid pinned on the previous
+    // week/month.
+    window.addEventListener("popstate", () => {
+      const onWeek = root.classList.contains("agenda-cal-week-page");
+      const onMonth = root.classList.contains("agenda-cal-month-page");
+      const params = new URLSearchParams(window.location.search);
+      if (onWeek) {
+        const targetISO = params.get("date") || logicalDateISO(new Date(), 3);
+        renderWeekFor(root, targetISO);
+      } else if (onMonth) {
+        const targetMonthISO = params.get("month") || todayMonthISO();
+        renderMonthFor(root, targetMonthISO);
+      }
     });
   }
 
@@ -1700,6 +1961,24 @@
           if (root) paintMonthDragRange(root, monthDrag.startCell, cell);
         }
       }
+      // ---- all-day drag (date-range select) ----
+      if (allDayDrag.startCell) {
+        // Find which all-day cell the cursor is over right now. If none
+        // (cursor left the strip), keep the current selection in place.
+        const hit = document.elementFromPoint(e.clientX, e.clientY)
+          ?.closest(".cal-week-allday-cell");
+        if (hit && hit !== allDayDrag.currentCell) {
+          allDayDrag.currentCell = hit;
+          allDayDrag.moved = true;
+          paintAllDayDragSelection(allDayDrag.root, allDayDrag.startCell, hit);
+        } else if (hit && !allDayDrag.moved) {
+          // Cursor still on the start cell but the user may be just
+          // hovering — leave the highlight as-is.
+        }
+        // Don't `return` — we want to keep both drags exclusive of each
+        // other anyway, and weekDrag.col will be null when this branch
+        // is the active drag.
+      }
       // ---- week drag ----
       if (weekDrag.col) {
         const { snapPx, pxPerMin } = weekDrag.ctx;
@@ -1797,6 +2076,27 @@
           // click outside the just-opened modal and close it.
           armClickSuppressor();
         }
+      }
+      // ---- all-day drag finish ----
+      if (allDayDrag.startCell) {
+        const startCell = allDayDrag.startCell;
+        const endCell = allDayDrag.currentCell || allDayDrag.startCell;
+        const moved = allDayDrag.moved;
+        const root = allDayDrag.root;
+        allDayDrag.startCell = null;
+        allDayDrag.currentCell = null;
+        allDayDrag.moved = false;
+        allDayDrag.root = null;
+        clearAllDayDragSelection(root);
+        const startDate = startCell.dataset.date;
+        const endDate = endCell.dataset.date;
+        // Single-cell click ALSO opens the add modal — mirrors the
+        // body-grid `dblclick` behavior, but on a single click since the
+        // all-day strip has no fine-grained selection to disambiguate.
+        const lo = startDate <= endDate ? startDate : endDate;
+        const hi = startDate <= endDate ? endDate : startDate;
+        openAddModalForRange(lo, hi, true);
+        if (moved) armClickSuppressor();
       }
       // ---- week drag finish ----
       if (weekDrag.col) {

@@ -327,6 +327,24 @@ RSpec.describe AgendaItemsController, type: :controller do
       expect(row.completed_at).to be_present
     end
 
+    # Regression: the real FE payload always carries `client_mutation_id`
+    # alongside `completed_at` (mutation-queue durability). A stricter
+    # `completion_only_update?` would route this through the generic update
+    # path, where `item_params` runs `epoch_param_to_time("now")` and silently
+    # writes nil — checkbox flipped, server cleared it on save, broadcast
+    # reverted the FE. Lock the round-trip with the real payload shape.
+    it "completes when the FE includes client_mutation_id with completed_at" do
+      patch :update, params: {
+        id:          phantom_id,
+        agenda_item: { completed_at: "now", client_mutation_id: "cm-1" },
+      }, format: :json
+
+      expect(response).to be_successful, "body=#{response.body}"
+      row = AgendaItem.last
+      expect(row.completed_at).to be_present
+      expect(row.client_mutation_id).to eq("cm-1")
+    end
+
     it "occurrence-scope edit materializes + pins the date to excluded_dates" do
       patch :update, params: {
         id:          phantom_id,
