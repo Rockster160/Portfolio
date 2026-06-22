@@ -2007,10 +2007,21 @@
       target.appendChild(a);
       return;
     }
-    // Name path — show the raw text, then asynchronously try to resolve
-    // it against the user's contacts. A late-arriving response is fine
-    // because the target stays in the DOM as long as the modal is open.
+    // Name path — show the raw text.
     target.appendChild(document.createTextNode(text));
+    // Skip the contact-lookup auto-resolve when the surrounding row has
+    // its own dedicated resolved-address target. The travel-chain
+    // resolver fills `data-resolved-address` directly on the seed and
+    // the modal renders that into a sibling span; firing this fetch
+    // would just paint the same address a second time nested inside
+    // THIS target. (Reproduced as the "Horsetail Falls" event showing
+    // the trail address twice underlined.)
+    const row = target.closest("[data-loc-row]");
+    const hasDedicatedResolved = !!row?.querySelector("[data-loc-resolved-target]");
+    if (hasDedicatedResolved) return;
+    // Fallback for any future caller that doesn't sit inside the
+    // details-modal row layout — async contact lookup so a typed name
+    // like "Mom" still resolves to a clickable address.
     fetch(`/contacts/lookup?name=${encodeURIComponent(text)}`, {
       headers: { Accept: "application/json" },
       credentials: "same-origin",
@@ -2018,7 +2029,6 @@
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!data || !data.address) return;
-        // Guard against a stale response landing after the modal moved on.
         if (!target.isConnected) return;
         const resolved = document.createElement("span");
         resolved.className = "agenda-details-loc-resolved";
