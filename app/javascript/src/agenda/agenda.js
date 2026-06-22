@@ -880,6 +880,9 @@
           target_id:          tempId,
         });
         window.AgendaMutationQueue.flush();
+        // Same shell-aware hook the quick-add modal uses — bring the
+        // user to the date their event landed on.
+        try { window.__agendaJumpToDate?.(Number(startAt)); } catch (_e) {}
         closeModal();
         return;
       }
@@ -909,6 +912,7 @@
         body:               scheduleBody,
       });
       window.AgendaMutationQueue.flush();
+      try { window.__agendaJumpToDate?.(Number(startAt)); } catch (_e) {}
       closeModal();
     }
 
@@ -1150,6 +1154,15 @@
       $(".add-item-id", form).value = d.itemId;
       $(".add-name", form).value = d.name;
       if (d.agendaId) editAgendaPicker?.setValue(d.agendaId);
+
+      // Mirror the details modal: surface item-id + agenda-id as a
+      // hover tooltip on the agenda-picker dot so users can read off
+      // both IDs without poking at the DOM. Visible color of the dot
+      // is set by the picker; the title attribute is debug-only.
+      const pickDot = form.querySelector(".agenda-pick-toggle .agenda-pick-dot");
+      if (pickDot) {
+        pickDot.title = `Item: ${d.itemId || "—"}\nAgenda: ${d.agendaId || "—"}`;
+      }
 
       activeKind = d.kind || "task";
 
@@ -1696,10 +1709,15 @@
   // covers the prefs that can be determined from seed data alone
   // (agenda, schedule, item, name pattern) — completed/tentative still
   // ride the post-hoc `.hidden-by-filter` path.
+  // Pre-render predicate: would this seed land in the GUTTER (still
+  // clickable breadcrumb in the cal-week's left gutter, lane reclaims
+  // the freed horizontal space)? Only the "Hide event", "Hide
+  // recurring", "Hide name pattern", and "Declined invite" paths
+  // qualify — agenda-toggle hides are handled by the stronger
+  // `__agendaSeedShouldRemove` below so the agenda's events vanish
+  // entirely instead of leaving a breadcrumb.
   window.__agendaSeedIsHidden = (seed) => {
     if (!seed) return false;
-    const hiddenAgendas = new Set((currentPrefs.hidden_agenda_ids || []).map(String));
-    if (hiddenAgendas.has(String(seed.dataset.agendaId))) return true;
     const hiddenSchedules = new Set((currentPrefs.hidden_schedule_ids || []).map(String));
     const sId = seed.dataset.agendaScheduleId;
     if (sId && hiddenSchedules.has(String(sId))) return true;
@@ -1717,6 +1735,21 @@
     if (seed.dataset.selfResponse === "declined") return true;
     return false;
   };
+
+  // Agenda-toggle hides are SCOPE-WIDE: "Show Agenda" off → every event
+  // in that agenda is completely removed from every view, no gutter
+  // breadcrumb, no DOM trace. Callers in buildWeekBlocks and
+  // layoutMonthBanners short-circuit on this BEFORE the gutter check
+  // above so the item never enters lane layout OR the gutter painter.
+  window.__agendaSeedShouldRemove = (seed) => {
+    if (!seed) return false;
+    const hiddenAgendas = new Set((currentPrefs.hidden_agenda_ids || []).map(String));
+    return hiddenAgendas.has(String(seed.dataset.agendaId));
+  };
+
+  // Thin pass-through for module-decoupled callers (e.g. month_view.js)
+  // that don't own a seed node but need the same agenda-toggle list.
+  window.__agendaHiddenAgendaIds = () => currentPrefs.hidden_agenda_ids || [];
 
   // Reflects the current prefs snapshot into the filter panel checkboxes.
   // Used both on initial hydrate and after a Monitor broadcast updates
@@ -2066,8 +2099,17 @@
       const node = modal.querySelector(sel);
       if (node) node.textContent = val || "";
     };
+
     const dot = modal.querySelector("[data-agenda-color-target]");
-    if (dot) dot.style.background = d.agendaColor || "";
+    if (dot) {
+      dot.style.background = d.agendaColor || "";
+      // Hover-only debug surface: item-id + agenda-id. Stays out of the
+      // visible chrome but is one mouseover away when the user needs to
+      // grep logs, hit the API, or report a bug. Same payload appears
+      // on the edit modal's agenda-pick dot so users land on the same
+      // affordance regardless of which surface they opened.
+      dot.title = `Item: ${d.itemId || "—"}\nAgenda: ${d.agendaId || "—"}`;
+    }
     // Scope --agenda-color on the modal so the Edit button picks up the
     // event's color via the SCSS rule on .agenda-details-foot .af-btn-primary.
     if (d.agendaColor) modal.style.setProperty("--agenda-color", d.agendaColor);

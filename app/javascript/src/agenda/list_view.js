@@ -47,6 +47,23 @@
     // (sub-second window in practice). Any in-flight sync state lives
     // subtly in `.agenda-pending-badge` (header).
     window.__refreshAgendaList = () => render(root);
+
+    // Jump to the date of a freshly-created event so the user can see
+    // what they just made. Accepts epoch seconds. Used by the quick-add
+    // and advanced-add submit paths via `window.__agendaJumpToDate`.
+    window.__agendaJumpToDate = (epochSec) => {
+      if (!epochSec) return;
+      const d = new Date(Number(epochSec) * 1000);
+      const isoDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      const path = root.classList.contains("agenda-day-page") ? "/agenda" : "/agenda/week";
+      const url = new URL(`${path}?date=${isoDate}`, window.location.origin);
+      // No-op if we're already on the same date — saves a redundant
+      // re-render. Same-date check uses the root's stamped current
+      // date, which matches whatever `renderForDate` last set.
+      if (root.dataset.currentDate === isoDate) return;
+      history.pushState(null, "", url.href);
+      renderForDate(root, isoDate);
+    };
   }
 
   // Same-view nav (prev/next day, "Jump to Today") is pure client-side:
@@ -167,15 +184,30 @@
     // `state.items` only carries persisted rows; phantoms live in the
     // recurrence expander and never land in state.items.
     const dates = sectionDates(root);
-    const sectionItems = dates.length > 0
+    let sectionItems = dates.length > 0
       ? window.AgendaStore.itemsForRange(dates[0], dates[dates.length - 1])
       : [];
+
+    // "Show Agenda" off → drop every event in that agenda from the
+    // section list entirely. No `.agenda-item` DOM is built, so the
+    // row leaves no trace (display:none would still leave the node
+    // around for screen-reader/focus traversal). Item-level / pattern
+    // hides are applied later by `applyAgendaVisibility` and use the
+    // gutter-style CSS instead.
+    const hiddenAgendaIds = new Set((window.__agendaHiddenAgendaIds?.() || []).map(String));
+    if (hiddenAgendaIds.size > 0) {
+      sectionItems = sectionItems.filter((it) => !hiddenAgendaIds.has(String(it.agenda_id)));
+    }
 
     // Carry-over: only painted if visible AND we cover today.
     const carrySection = root.querySelector(".section-carry");
     if (carrySection) {
       const coversToday = dates.includes(todayISO);
-      const carryItems = coversToday ? carryOver(materializedItems, todayISO) : [];
+      let carryItems = coversToday ? carryOver(materializedItems, todayISO) : [];
+      // Same agenda-toggle pre-filter as the day sections.
+      if (hiddenAgendaIds.size > 0) {
+        carryItems = carryItems.filter((it) => !hiddenAgendaIds.has(String(it.agenda_id)));
+      }
       paintCarry(carrySection, carryItems);
     }
 

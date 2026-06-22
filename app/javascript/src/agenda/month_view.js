@@ -56,6 +56,11 @@
 
   function bucketByDate(items) {
     const buckets = new Map();
+    // "Show Agenda" off → the item never enters the per-cell list, so
+    // it leaves no `.cal-month-item` DOM trace and no lane gap. Mirrors
+    // the same agenda-toggle removal path used by `layoutMonthBanners`
+    // and `buildWeekBlocks`.
+    const hiddenAgendaIds = collectHiddenAgendaIds();
     items.forEach((item) => {
       if (!item.start_at) return;
       if (item.all_day) {
@@ -63,11 +68,22 @@
         // handles those as banners, so we skip them entirely here.
         return;
       }
+      if (hiddenAgendaIds.has(String(item.agenda_id))) return;
       const dateISO = epochToISO(item.start_at);
       if (!buckets.has(dateISO)) buckets.set(dateISO, []);
       buckets.get(dateISO).push(item);
     });
     return buckets;
+  }
+
+  // Mirrors `currentPrefs.hidden_agenda_ids` from agenda.js but reads
+  // from a thin global hook so month_view stays decoupled from the
+  // bigger module. Falls back to an empty set if the hook isn't loaded
+  // yet (e.g. cold boot before agenda.js binds).
+  function collectHiddenAgendaIds() {
+    const fn = window.__agendaHiddenAgendaIds;
+    try { return new Set((fn?.() || []).map(String)); }
+    catch (_e) { return new Set(); }
   }
 
   // Granular diff per cell — mutates existing `.cal-month-item` buttons

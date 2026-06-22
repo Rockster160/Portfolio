@@ -316,6 +316,7 @@
       scheduleDayRollover(root);
       installRefreshTriggers(root);
       installNavInterception(root);
+      installCalJumpHook(root);
       // AgendaStore is the data source for both halves of the month view
       // (timed cells via month_view.js, all-day banners via this file's
       // layoutMonthBanners). Without this boot the page sees no items
@@ -424,6 +425,11 @@
       allSeeds.forEach((seed) => {
         const startEpoch = Number(seed.dataset.startAt);
         if (!startEpoch) return;
+        // Agenda-toggle hides remove the banner entirely (no banner DOM
+        // built, nothing for `applyAgendaVisibility` to mark later).
+        // Item / pattern / declined hides still flow through and get
+        // tagged `.hidden-by-filter` by the post-hoc pass.
+        if (window.__agendaSeedShouldRemove?.(seed)) return;
         const startDateISO = formatDateISO(new Date(startEpoch * 1000));
         const endRaw = Number(seed.dataset.endDate) || startEpoch;
         const endDateISO = formatDateISO(new Date(endRaw * 1000));
@@ -641,6 +647,7 @@
       scheduleDayRollover(root);
       installRefreshTriggers(root);
       installNavInterception(root);
+      installCalJumpHook(root);
       startNowTick(root);
       bootAgendaStore(root);
     }
@@ -930,6 +937,11 @@
       const d = seed.dataset;
       const startEpoch = Number(d.startAt);
       if (!startEpoch) return;
+      // Agenda-toggle hides skip every render path — no chip, no gutter
+      // breadcrumb, no lane slot. Only the explicit "Hide event" /
+      // "Hide recurring" / "Hide name pattern" / "Declined" reasons
+      // ride the gutter path below.
+      if (window.__agendaSeedShouldRemove?.(seed)) return;
       const hiddenByFilter = !!window.__agendaSeedIsHidden?.(seed);
       if (d.allDay === "true") {
         if (!hiddenByFilter) alldaySpecs.push(specForAllDay(seed));
@@ -2230,6 +2242,39 @@
       calRebuildInFlight = false;
     }
   };
+
+  // Jump to the date of a freshly-created event on the cal views. Both
+  // /agenda/grid (week) and /agenda/month route here. The list views
+  // (`agenda-day-page` / `agenda-week-page`) install their own hook with
+  // the same name in `list_view.js`, so each shell self-registers and
+  // the submit path can call `window.__agendaJumpToDate(epochSec)`
+  // without caring which surface it's on.
+  function installCalJumpHook(root) {
+    window.__agendaJumpToDate = (epochSec) => {
+      if (!epochSec) return;
+      const d = new Date(Number(epochSec) * 1000);
+      const isoDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      if (root.classList.contains("agenda-cal-week-page")) {
+        const url = `/agenda/grid?date=${isoDate}`;
+        history.pushState(null, "", url);
+        renderWeekFor(root, isoDate);
+      } else if (root.classList.contains("agenda-cal-month-page")) {
+        const monthISO = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+        const url = `/agenda/month?month=${monthISO}`;
+        // Skip when already on the target month — saves a redundant
+        // grid rebuild.
+        const grid = root.querySelector(".cal-month-grid");
+        const currentMonthMatches = grid && (() => {
+          const ms = grid.dataset.monthStart;
+          if (!ms) return false;
+          return ms.startsWith(monthISO);
+        })();
+        if (currentMonthMatches) return;
+        history.pushState(null, "", url);
+        renderMonthFor(root, monthISO);
+      }
+    };
+  }
 
   function runRefresh() {
     // Now backed by AgendaSync's delta path — server returns only the

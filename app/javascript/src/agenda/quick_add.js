@@ -163,6 +163,11 @@
         target_id: tempId,
       });
       window.AgendaMutationQueue.flush();
+      // Jump the visible view to whichever date the new event lives on
+      // so the user can see it. The hook is registered by whichever
+      // shell is mounted (list_view OR agenda_cal) and routes to the
+      // right re-render function automatically.
+      try { window.__agendaJumpToDate?.(lastParse.startAt); } catch (_e) {}
       resetForm();
       if (window.hideModal) window.hideModal("#agenda-quick-add");
     }

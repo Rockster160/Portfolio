@@ -1380,6 +1380,7 @@ body.cal-event-drag-blocked * {
 // and `.agenda-item` rows by class. Mirror those onto the cal PWA's
 // item classes so the existing filter applies without changes.
 .cal-month-item.hidden-by-filter,
+.cal-month-banner.hidden-by-filter,
 .cal-week-event.hidden-by-filter,
 .cal-week-allday-chip.hidden-by-filter {
   display: none !important;
