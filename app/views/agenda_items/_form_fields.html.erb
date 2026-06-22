@@ -80,8 +80,9 @@
   </div>
 </div>
 
-<%# All-day toggle: hides time fields + swaps the single Date input for a
-    Date / End-date pair. Only meaningful for kind=event. %>
+<%# All-day toggle: hides the time inputs on each row but keeps the dates
+    visible so the user can still pick a date range. Only meaningful for
+    kind=event. %>
 <div class="ff add-allday-field hidden">
   <label class="add-allday-toggle">
     <input type="checkbox" class="add-allday-input">
@@ -89,24 +90,19 @@
   </label>
 </div>
 
-<div class="ff">
-  <label>Date</label>
-  <input type="date" class="add-date" value="<%= default_date_value %>">
-</div>
-
-<div class="ff add-allday-end-field hidden">
-  <label>End date</label>
-  <input type="date" class="add-allday-end" value="<%= default_date_value %>">
-</div>
-
-<div class="ff-pair add-time-fields">
-  <div class="ff">
-    <label>Start</label>
-    <input type="time" class="add-start" value="09:00">
+<div class="ff add-start-row">
+  <label>Start</label>
+  <div class="dt-pair">
+    <input type="date" class="add-date" value="<%= default_date_value %>">
+    <input type="time" class="add-start add-start-time" value="09:00">
   </div>
-  <div class="ff add-end-field hidden">
-    <label>End</label>
-    <input type="time" class="add-end" value="10:00">
+</div>
+
+<div class="ff add-end-row hidden">
+  <label>End</label>
+  <div class="dt-pair">
+    <input type="date" class="add-end-date" value="<%= default_date_value %>">
+    <input type="time" class="add-end add-end-time" value="10:00">
   </div>
 </div>
 

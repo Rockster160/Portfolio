@@ -155,7 +155,7 @@
     setAllDay(modal, !!allDay);
     const dateInput = modal.querySelector(".add-date");
     if (dateInput) dateInput.value = startDate;
-    const endDateInput = modal.querySelector(".add-allday-end");
+    const endDateInput = modal.querySelector(".add-end-date");
     if (endDateInput) endDateInput.value = endDate;
     openAddModal(modal);
   }
@@ -1078,16 +1078,27 @@
     // this event's start — even when the actual drive time is shorter.
     // For solo / chain-head events, the band is just arrive_early + travel
     // as it always was.
-    const isChained = (d.travelFromKind === "event") && !isPoint && !continuedTopMaybe;
+    const isChainCandidate = (d.travelFromKind === "event") && !isPoint && !continuedTopMaybe;
     const startEpochForBand = Number(d.startAt) || 0;
     const chainPrevEndEpoch = parseInt(d.chainPrevEndEpoch, 10) || 0;
-    const chainGapMin = (isChained && chainPrevEndEpoch && startEpochForBand)
+    const rawChainGapMin = (isChainCandidate && chainPrevEndEpoch && startEpochForBand)
       ? Math.max(0, (startEpochForBand - chainPrevEndEpoch) / 60)
       : 0;
+    // Only honor the chain-gap visualization when the predecessor sits
+    // INSIDE this event's logical day. If the gap exceeds `seg.startMin`
+    // (the minutes from the logical day-start to this event), the chain
+    // crosses a day boundary — which usually means a move left stale
+    // metadata behind ("Plunge?" got dragged to Sunday but still points
+    // at Saturday's predecessor). Falling back to the standard
+    // travel + arrive_early band here keeps the visual sane while the
+    // server-side `AgendaTravelChainSyncWorker` rebuilds the chain in
+    // the background.
+    const isChained = isChainCandidate && rawChainGapMin > 0 && rawChainGapMin <= seg.startMin;
+    const chainGapMin = isChained ? rawChainGapMin : 0;
     const travelMin = (isPoint || continuedTopMaybe)
       ? 0
       : (isChained
-        ? Math.min(chainGapMin, seg.startMin)
+        ? chainGapMin
         : Math.min(travelMinRaw + arriveEarlyMinRaw, seg.startMin));
     // Tile box CONTAINS the band as its first flex child. Tile height
     // is band + true event duration; the content area (where the title
@@ -1177,13 +1188,14 @@
           leave.textContent = `${isChained ? "↳" : "→"}${fmtCalTime(leaveEpoch)}`;
           label.appendChild(leave);
         }
+        const fmtMin = window.AgendaItemRenderer?.fmtMinutes || ((n) => `${n}m`);
         if (earlyPart > 0) {
           label.appendChild(Object.assign(document.createElement("i"), { className: "fa fa-clock-o" }));
-          label.appendChild(document.createTextNode(`${earlyPart}m`));
+          label.appendChild(document.createTextNode(fmtMin(earlyPart)));
         }
         if (drivePart > 0) {
           label.appendChild(Object.assign(document.createElement("i"), { className: "fa fa-car" }));
-          label.appendChild(document.createTextNode(`${drivePart}m`));
+          label.appendChild(document.createTextNode(fmtMin(drivePart)));
         }
         travelBand.appendChild(label);
 
@@ -1191,7 +1203,7 @@
         if (sumPart > 0) {
           const narrowLabel = document.createElement("span");
           narrowLabel.className = "cal-week-event-travel-label is-narrow-fallback";
-          narrowLabel.appendChild(document.createTextNode(`${sumPart}m`));
+          narrowLabel.appendChild(document.createTextNode(fmtMin(sumPart)));
           narrowLabel.appendChild(Object.assign(document.createElement("i"), { className: "fa fa-clock-o" }));
           travelBand.appendChild(narrowLabel);
         }
@@ -1904,6 +1916,17 @@
           // the cursor regardless of grid scroll.
           const btnRect = eventDrag.btn.getBoundingClientRect();
           eventDrag.grabOffsetY = eventDrag.startY - btnRect.top;
+          // Travel band height — used to size the placeholder to the
+          // EVENT portion only and to offset drop math by the band so
+          // the dropped `start_at` lands at the event's start, not the
+          // band's top. Without this, dragging an event with a 218m
+          // travel band visually showed the placeholder at e.g. "7am"
+          // (the band's top) but on drop set the event start to 7am,
+          // backing the band up into the early morning. Now the
+          // placeholder represents exactly where the event will land.
+          const bandEl = eventDrag.btn.querySelector(".cal-week-event-travel");
+          const bandPx = bandEl ? bandEl.getBoundingClientRect().height : 0;
+          eventDrag.bandPx = bandPx;
           const ghost = eventDrag.btn.cloneNode(true);
           ghost.classList.remove("is-dragging-source");
           ghost.classList.add("cal-week-drag-ghost");
@@ -1920,10 +1943,13 @@
 
           // Placeholder = a dashed outline that shows the user where the
           // event will land. Inserted into the drop column on each
-          // mousemove. Same height as the original.
+          // mousemove. Height excludes the travel band so the
+          // placeholder represents the event's true slot — the band
+          // gets recomputed for the new start_at after drop anyway.
+          const eventPx = Math.max(0, btnRect.height - bandPx);
           const ph = document.createElement("div");
           ph.className = "cal-week-drop-placeholder";
-          ph.style.height = `${btnRect.height}px`;
+          ph.style.height = `${eventPx}px`;
           ph.style.setProperty("--agenda-color", eventDrag.btn.dataset.agendaColor || "#888");
           eventDrag.placeholder = ph;
         }
@@ -1945,7 +1971,11 @@
         if (targetCol) {
           const { snapPx, pxPerMin, grid } = eventDrag.ctx;
           const colRect = targetCol.getBoundingClientRect();
-          const targetY = snapPxDown(e.clientY - colRect.top - eventDrag.grabOffsetY, snapPx);
+          // `grabOffsetY` is measured from the TILE top (band + content).
+          // Add `bandPx` so we land the placeholder at the EVENT top —
+          // the placeholder represents the event's slot, not the tile's.
+          const bandPx = eventDrag.bandPx || 0;
+          const targetY = snapPxDown(e.clientY - colRect.top - eventDrag.grabOffsetY + bandPx, snapPx);
           if (ph.parentElement !== targetCol) targetCol.appendChild(ph);
           ph.style.top = `${targetY}px`;
           const dayStart = Number(grid?.dataset?.dayStartHour) || 0;
@@ -2039,13 +2069,20 @@
           if (dropCol && ctx) {
             const { pxPerMin, grid } = ctx;
             const dayStart = Number(grid.dataset.dayStartHour) || 0;
+            // `dropTop` is the EVENT top (placeholder was sized + offset
+            // to event-only, excluding the travel band). That's exactly
+            // what newStartAt math needs. For the inline DOM move we
+            // need the TILE top (band + event), so subtract bandPx
+            // when positioning the button so the visible event content
+            // sits at the placeholder's location.
+            const bandPx = eventDrag.bandPx || 0;
             const newStartMin = dropTop / pxPerMin;
             const origStart = Number(btn.dataset.startAt);
             const origEnd = Number(btn.dataset.endAt) || origStart;
             const durSec = Math.max(900, origEnd - origStart);
             const newStartAt = computeEpochForLogicalSlot(dropCol.dataset.date, dayStart, newStartMin);
             const newEndAt = newStartAt + durSec;
-            applyInlineMove(btn, dropCol, dropTop, pxPerMin);
+            applyInlineMove(btn, dropCol, dropTop - bandPx, pxPerMin);
             sendEventMove(btn, newStartAt, newEndAt);
           }
           // Tear down ghost + placeholder, restore the source button.

@@ -22,6 +22,24 @@ function locationLooksLikeUrl(text) {
   return /^https?:\/\//i.test(String(text || "").trim());
 }
 
+// Compact "Nh Mm" formatter for travel/arrive labels. Centralised here
+// so every renderer (agenda list rows, cal_week tiles, cal_month items,
+// month_view cells) presents long drives the same way. "216m" was
+// reading as a single opaque number; "3h 36m" is what a user actually
+// parses at a glance.
+//
+//   45  → "45m"
+//   60  → "1h"
+//   75  → "1h 15m"
+//   216 → "3h 36m"
+function fmtMinutes(min) {
+  const n = Math.max(0, Number(min) || 0);
+  if (n < 60) return `${n}m`;
+  const h = Math.floor(n / 60);
+  const m = n - h * 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
 function bool(v) {
   return v === true || v === "true";
 }
@@ -171,13 +189,13 @@ function fillBody(node, attrs) {
   const plus       = node.querySelector(".agenda-item-travel-plus");
 
   if (arriveEarlyMin > 0) {
-    if (arriveText) arriveText.textContent = `${arriveEarlyMin}m`;
+    if (arriveText) arriveText.textContent = fmtMinutes(arriveEarlyMin);
   } else {
     arriveIcon?.remove();
     arriveText?.remove();
   }
   if (travelMin > 0) {
-    if (carText) carText.textContent = `${travelMin}m`;
+    if (carText) carText.textContent = fmtMinutes(travelMin);
   } else {
     carIcon?.remove();
     carText?.remove();
@@ -432,7 +450,7 @@ function patchTravelBlock(node, attrs) {
   if (arriveMin > 0) {
     const seg = document.createElement("span");
     seg.className = "__travel-seg";
-    seg.innerHTML = `<i class="fa fa-clock-o"></i><span class="agenda-item-travel-text">${arriveMin}m</span>`;
+    seg.innerHTML = `<i class="fa fa-clock-o"></i><span class="agenda-item-travel-text">${fmtMinutes(arriveMin)}</span>`;
     block.appendChild(seg);
   }
   if (arriveMin > 0 && travelMin > 0) {
@@ -444,7 +462,7 @@ function patchTravelBlock(node, attrs) {
   if (travelMin > 0) {
     const seg = document.createElement("span");
     seg.className = "__travel-seg";
-    seg.innerHTML = `<i class="fa fa-car"></i><span class="agenda-item-travel-text">${travelMin}m</span>`;
+    seg.innerHTML = `<i class="fa fa-car"></i><span class="agenda-item-travel-text">${fmtMinutes(travelMin)}</span>`;
     block.appendChild(seg);
   }
 }
@@ -484,7 +502,7 @@ function setAttrIfChanged(el, name, value) {
   if (el.getAttribute(name) !== value) el.setAttribute(name, value);
 }
 
-const AgendaItemRenderer = { buildAgendaItem, patchAgendaItem };
+const AgendaItemRenderer = { buildAgendaItem, patchAgendaItem, fmtMinutes };
 
 if (typeof module !== "undefined" && module.exports) module.exports = AgendaItemRenderer;
 if (typeof window !== "undefined") window.AgendaItemRenderer = AgendaItemRenderer;

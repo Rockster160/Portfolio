@@ -43,29 +43,39 @@ module AgendaTravelChain
       @mode = mode
       @resolver = Resolver.new(user)
       @overrides_cache = {}
+      # Agendas whose items had a metadata write this run. Collected so
+      # we can broadcast a single fan-out at the end — `update_columns`
+      # in `apply_metadata!` bypasses after_commit, which means clients
+      # never see chain recomputes live (they only catch up on a hard
+      # reload or focus refresh) unless we explicitly notify here. This
+      # is what caused a cross-day move to leave a stale `chain_prev_end_at`
+      # visible on screen until the user manually reloaded.
+      @touched_agendas = {}
     end
 
     def run
       candidates = collect_candidates
       clear_dropouts(candidates)
 
-      return if candidates.empty?
+      if candidates.any?
+        # Backfill skips per-event geocoding — those events were created
+        # before phase 1 and don't have lat/lng cached, and per-event nav
+        # uses the raw event.location string anyway. Saves a Google
+        # round-trip per event during the migration sweep.
+        ensure_resolved_all(candidates) unless backfill?
+        links = link_pairs(candidates)
+        head_for = compute_head_map(candidates, links)
 
-      # Backfill skips per-event geocoding — those events were created
-      # before phase 1 and don't have lat/lng cached, and per-event nav
-      # uses the raw event.location string anyway. Saves a Google
-      # round-trip per event during the migration sweep.
-      ensure_resolved_all(candidates) unless backfill?
-      links = link_pairs(candidates)
-      head_for = compute_head_map(candidates, links)
-
-      # Now write metadata. The fingerprint short-circuit is evaluated PER
-      # event during write — events whose effective inputs match their stored
-      # fingerprint just skip the write entirely.
-      candidates.each_with_index do |evt, idx|
-        prev = idx.positive? ? candidates[idx - 1] : nil
-        persist_event(evt, prev, links, head_for, candidates)
+        # Now write metadata. The fingerprint short-circuit is evaluated PER
+        # event during write — events whose effective inputs match their stored
+        # fingerprint just skip the write entirely.
+        candidates.each_with_index do |evt, idx|
+          prev = idx.positive? ? candidates[idx - 1] : nil
+          persist_event(evt, prev, links, head_for, candidates)
+        end
       end
+
+      broadcast_touched_agendas!
     end
 
     private
@@ -350,6 +360,20 @@ module AgendaTravelChain
     def apply_metadata!(evt, new_meta)
       evt.update_columns(metadata: new_meta, updated_at: Time.current)
       evt.metadata.replace(new_meta)
+      # Stage the agenda for the end-of-run broadcast. `update_columns`
+      # bypassed the after_commit broadcast path, so without this clients
+      # would never see the chain recompute land — a cross-day move's
+      # stale `chain_prev_end_at` would stick on screen until a hard
+      # reload (and even that only worked if the worker's write actually
+      # landed before the user reloaded).
+      agenda = evt.agenda
+      @touched_agendas[agenda.id] = agenda if agenda
+    end
+
+    def broadcast_touched_agendas!
+      return if @touched_agendas.empty?
+
+      ::Agenda.broadcast_changes!(@touched_agendas.values)
     end
 
     # Keep `metadata.travel_minutes` populated at the top level — the

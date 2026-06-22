@@ -24,12 +24,22 @@
   // time/date/color pickers swallow Enter; some select dropdowns do the same).
   // Make Enter always submit, unless the user is in a textarea (newline) or
   // focused on a button (let the button's own activation handle it).
+  // Cmd/Ctrl+Enter ALWAYS submits — including from inside a textarea —
+  // so Notes (the only textarea in these modals) gets the universal
+  // "send" shortcut from Slack/Discord/Gmail without losing newline
+  // typing via plain Enter.
   function bindEnterSubmit(form) {
     form.addEventListener("keydown", (e) => {
-      if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key !== "Enter") return;
       const t = e.target;
-      if (t instanceof HTMLTextAreaElement) return;
       if (t instanceof HTMLButtonElement) return;
+      if (e.metaKey || e.ctrlKey) {
+        e.preventDefault();
+        form.requestSubmit();
+        return;
+      }
+      if (e.shiftKey || e.altKey) return;
+      if (t instanceof HTMLTextAreaElement) return;
       e.preventDefault();
       form.requestSubmit();
     });
@@ -60,6 +70,39 @@
     if (!localStr) return null;
     const ts = new Date(localStr).getTime();
     return Number.isFinite(ts) ? Math.floor(ts / 1000) : null;
+  }
+
+  // YYYY-MM-DD → YYYY-MM-DD shifted by `days` (positive or negative),
+  // anchored at local noon so DST transitions can't bump us across a day.
+  function shiftIsoDate(iso, days) {
+    if (!iso) return iso;
+    const d = new Date(`${iso}T12:00:00`);
+    d.setDate(d.getDate() + days);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
+  // Whole-day delta between two YYYY-MM-DD strings (anchored at local
+  // noon to dodge DST). Returns non-negative — used to preserve a
+  // start↔end day-span as the user moves the start date.
+  function isoDateDelta(fromIso, toIso) {
+    if (!fromIso || !toIso) return 0;
+    const dayMs = 24 * 60 * 60 * 1000;
+    const a = new Date(`${fromIso}T12:00:00`);
+    const b = new Date(`${toIso}T12:00:00`);
+    return Math.max(0, Math.round((b - a) / dayMs));
+  }
+
+  // Epoch seconds → YYYY-MM-DD in the browser's local timezone. Used to
+  // hydrate the end-date input from data-end-date (server emits the
+  // inclusive last-day midnight as epoch seconds).
+  function epochToIsoDate(epoch) {
+    if (epoch === null || epoch === undefined || epoch === "") return null;
+    const n = Number(epoch);
+    if (!Number.isFinite(n)) return null;
+    const d = new Date(n * 1000);
+    const pad = (k) => String(k).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   }
 
   // ---------- server-rendered time hydration ----------
@@ -505,7 +548,7 @@
     // Build agenda_schedule payload from form state. `startsOn` preserves
     // the schedule's original start date during edit-series flows so the
     // rule edit doesn't shift starts_on onto the occurrence's date.
-    function buildSchedulePayload({ name, kind, color, startTime, endTime, date, triggerExpression, startsOn, allDay, allDayEnd }) {
+    function buildSchedulePayload({ name, kind, color, startTime, endTime, date, endDate, triggerExpression, startsOn, allDay }) {
       const freq = freqSelect.value;
       const recurrence = { freq };
 
@@ -545,12 +588,19 @@
       if (kind === "event") {
         if (allDay) {
           effectiveStartTime = "00:00";
-          const endIso = allDayEnd || date;
+          const endIso = endDate || date;
           const dayMs = 24 * 60 * 60 * 1000;
           const startDt = new Date(`${date}T00:00`);
           const endDt = new Date(`${endIso}T00:00`);
           const days = Math.max(1, Math.round((endDt - startDt) / dayMs) + 1);
           duration = days * 24 * 60;
+        } else if (endDate && endDate !== date) {
+          // Multi-day timed: duration spans the wall-clock delta between
+          // the start and end datetimes. minutesBetween() collapses to
+          // time-of-day only, which would silently truncate to <24h.
+          const startDt = new Date(`${date}T${startTime}`);
+          const endDt = new Date(`${endDate}T${endTime}`);
+          duration = Math.max(15, Math.round((endDt - startDt) / 60000));
         } else {
           duration = Math.max(15, minutesBetween(startTime, endTime));
         }
@@ -647,7 +697,6 @@
     const nameInput = $(".add-name", form);
     const startInput = $(".add-start", form);
     const endInput = $(".add-end", form);
-    const endField = $(".add-end-field", form);
     const dateInput = $(".add-date", form);
     const colorInput = $(".add-color", form);
     const colorHexPreview = $(".color-hex-preview", form);
@@ -684,12 +733,15 @@
 
     const alldayField    = $(".add-allday-field", form);
     const alldayInput    = $(".add-allday-input", form);
-    const alldayEndField = $(".add-allday-end-field", form);
-    const timeFields     = $(".add-time-fields", form);
+    const endRow         = $(".add-end-row", form);
+    const endDateInput   = $(".add-end-date", form);
+    const startTimeInput = $(".add-start-time", form);
+    const endTimeInput   = $(".add-end-time", form);
 
     function syncKind() {
       $$(".kind-btn", form).forEach((b) => b.classList.toggle("active", b.dataset.kind === activeKind));
-      endField.classList.toggle("hidden", activeKind !== "event");
+      // End row (date + time) only meaningful for events.
+      endRow?.classList.toggle("hidden", activeKind !== "event");
       $(".add-trigger-field", form)?.classList.toggle("hidden", activeKind !== "trigger");
       // All-day only applies to events.
       alldayField?.classList.toggle("hidden", activeKind !== "event");
@@ -699,8 +751,10 @@
 
     function syncAllDay() {
       const isAllDay = !!alldayInput?.checked;
-      timeFields?.classList.toggle("hidden", isAllDay);
-      alldayEndField?.classList.toggle("hidden", !isAllDay);
+      // Hide the time inputs but keep the date inputs visible — multi-day
+      // all-day events still need both start + end date pickers.
+      startTimeInput?.classList.toggle("hidden", isAllDay);
+      endTimeInput?.classList.toggle("hidden", isAllDay);
     }
 
     function resetForm() {
@@ -708,6 +762,8 @@
       activeKind = "event";
       sched.resetChips();
       dateInput.value = form.dataset.defaultDate;
+      if (endDateInput) endDateInput.value = form.dataset.defaultDate;
+      priorStartDate = dateInput.value;
       // Re-sync the picker's label/dot to the hidden input's reset value.
       const currentId = agendaPicker?.value();
       if (currentId) agendaPicker.setValue(currentId);
@@ -731,6 +787,21 @@
       if (!Number.isFinite(h) || !Number.isFinite(m)) return;
       const pad = (n) => String(n).padStart(2, "0");
       endInput.value = `${pad((h + 1) % 24)}:${pad(m)}`;
+    });
+
+    // End date auto-tracks start date, preserving the day-delta the user
+    // already configured (so a multi-day span shifts as a unit when start
+    // moves). `priorStartDate` snapshots the value before the change so
+    // we can measure the delta against the prior end-date.
+    let priorStartDate = dateInput?.value || "";
+    dateInput?.addEventListener("change", () => {
+      const prev = priorStartDate;
+      const next = dateInput.value;
+      if (endDateInput && prev && next && prev !== next) {
+        const delta = isoDateDelta(prev, endDateInput.value || prev);
+        endDateInput.value = shiftIsoDate(next, delta);
+      }
+      priorStartDate = next;
     });
 
     if (colorInput) {
@@ -783,22 +854,25 @@
       const startTime = startInput.value || "09:00";
       const endTime = endInput.value || "10:00";
       const isAllDay = activeKind === "event" && !!alldayInput?.checked;
-      // All-day: start at 00:00 on `date`, end exclusive on next day (or
-      // user-specified end-date+1). Matches the Google convention so the
-      // overlap query + duration math agree across both write paths.
-      const allDayEnd = $(".add-allday-end", form)?.value || date;
+      // End date is the user's picked inclusive last day (for all-day) or
+      // the wall-clock end day (for timed multi-day). Defaults to start
+      // date for single-day events.
+      const endDate = endDateInput?.value || date;
       const startAt = localInputToEpoch(isAllDay ? `${date}T00:00` : `${date}T${startTime}`);
 
       const endAt = (() => {
         if (activeKind !== "event") return null;
         if (!isAllDay) {
-          const e = localInputToEpoch(`${date}T${endTime}`);
-          return e <= startAt ? e + 24 * 60 * 60 : e;
+          const e = localInputToEpoch(`${endDate}T${endTime}`);
+          // Same-day fallback: end-time earlier than start-time on the
+          // same day wraps to next day (preserves the pre-multi-day
+          // behavior for a single-line timed event).
+          if (endDate === date && e <= startAt) return e + 24 * 60 * 60;
+          return e;
         }
-        const next = new Date(`${allDayEnd}T00:00`);
-        next.setDate(next.getDate() + 1);
-        const pad = (n) => String(n).padStart(2, "0");
-        return localInputToEpoch(`${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}T00:00`);
+        // All-day: mirror Google's exclusive end-date — bump one day past
+        // the picked inclusive end.
+        return localInputToEpoch(`${shiftIsoDate(endDate, 1)}T00:00`);
       })();
       const freq = $(".add-freq", form).value;
       const color = colorInput?.value || null;
@@ -893,9 +967,8 @@
       // schedule-create is persisted and replayed on next reconnect.
       const schedulePayload = sched.buildSchedulePayload({
         name, kind: activeKind, color,
-        startTime, endTime, date, triggerExpression,
+        startTime, endTime, date, endDate, triggerExpression,
         allDay: isAllDay,
-        allDayEnd: allDayEnd,
       });
       schedulePayload.agenda_id = agendaId;
       schedulePayload.location = location;
@@ -939,8 +1012,11 @@
       syncKind();
 
       if (dateInput && d.date) dateInput.value = d.date;
-      const alldayEnd = $(".add-allday-end", form);
-      if (alldayEnd) alldayEnd.value = d.alldayEnd || d.date || dateInput?.value || "";
+      // `endDate` is the canonical key; fall back to legacy `alldayEnd`
+      // for callers that haven't migrated yet (quick_add follow-up etc).
+      const prefillEndDate = d.endDate || d.alldayEnd || d.date || dateInput?.value || "";
+      if (endDateInput) endDateInput.value = prefillEndDate;
+      priorStartDate = dateInput?.value || "";
       if (startInput) startInput.value = d.startTime || "09:00";
       if (endInput) endInput.value = d.endTime || "10:00";
       // Mark end as user-touched so input on start doesn't auto-bump it.
@@ -1028,17 +1104,20 @@
     const restoreBtn = $(".add-restore", form);
     const alldayField    = $(".add-allday-field", form);
     const alldayInput    = $(".add-allday-input", form);
-    const alldayEndField = $(".add-allday-end-field", form);
-    const alldayEndInput = $(".add-allday-end", form);
-    const timeFields     = $(".add-time-fields", form);
+    const endRow         = $(".add-end-row", form);
+    const endDateInput   = $(".add-end-date", form);
+    const startTimeInput = $(".add-start-time", form);
+    const endTimeInput   = $(".add-end-time", form);
+    const dateInput      = $(".add-date", form);
 
     let activeKind = "task";
     let currentRecurring = false;
     let currentScheduleData = null;
+    let priorStartDate = "";
 
     function syncKind() {
       $$(".kind-btn", form).forEach((b) => b.classList.toggle("active", b.dataset.kind === activeKind));
-      $(".add-end-field", form).classList.toggle("hidden", activeKind !== "event");
+      endRow?.classList.toggle("hidden", activeKind !== "event");
       $(".add-trigger-field", form)?.classList.toggle("hidden", activeKind !== "trigger");
       // All-day toggle only applies to events. Hide for non-events but
       // don't reset its value — the user may toggle kind back and we want
@@ -1050,11 +1129,26 @@
 
     function syncAllDay() {
       const isAllDay = !!alldayInput?.checked;
-      timeFields?.classList.toggle("hidden", isAllDay);
-      alldayEndField?.classList.toggle("hidden", !isAllDay);
+      // Hide just the time inputs — date inputs stay visible so a
+      // multi-day all-day event can still pick its end date.
+      startTimeInput?.classList.toggle("hidden", isAllDay);
+      endTimeInput?.classList.toggle("hidden", isAllDay);
     }
 
     alldayInput?.addEventListener("change", syncAllDay);
+
+    // End date auto-tracks start date with delta-preservation (matches
+    // the add-modal behavior — a span configured by the user shifts as
+    // a unit when start moves).
+    dateInput?.addEventListener("change", () => {
+      const prev = priorStartDate;
+      const next = dateInput.value;
+      if (endDateInput && prev && next && prev !== next) {
+        const delta = isoDateDelta(prev, endDateInput.value || prev);
+        endDateInput.value = shiftIsoDate(next, delta);
+      }
+      priorStartDate = next;
+    });
 
     $$(".kind-btn", form).forEach((btn) => {
       btn.addEventListener("click", () => { activeKind = btn.dataset.kind; syncKind(); });
@@ -1174,16 +1268,20 @@
 
       // Item's start_at is integer epoch seconds; split into local date + time-of-day.
       const [startDate, startTime] = splitEpochToDateAndTime(d.startAt);
-      const [, endTime] = splitEpochToDateAndTime(d.endAt);
+      const [endDateFromEnd, endTime] = splitEpochToDateAndTime(d.endAt);
       $(".add-date", form).value = startDate;
       $(".add-start", form).value = startTime || "09:00";
       $(".add-end", form).value = endTime || "10:00";
-      // For all-day, populate the end-date field with the item's inclusive
-      // end_date (server emits via data-end-date so we don't recompute the
-      // exclusive→inclusive conversion in JS).
-      if (alldayEndInput) {
-        alldayEndInput.value = (isAllDay ? (d.endDate || startDate) : startDate);
+      // End-date input is unified for all-day and timed multi-day events.
+      // - All-day: prefer the server's inclusive end-date epoch (mirrors
+      //   the exclusive→inclusive convention without recomputing in JS).
+      // - Timed: use the actual end_at's local date so a multi-day timed
+      //   event round-trips correctly.
+      if (endDateInput) {
+        const allDayEnd = epochToIsoDate(d.endDate) || startDate;
+        endDateInput.value = isAllDay ? allDayEnd : (endDateFromEnd || startDate);
       }
+      priorStartDate = startDate;
 
       $(".add-location", form).value = d.location || "";
       $(".add-arrive-early", form).value = parseInt(d.arriveEarlyMinutes, 10) || 0;
@@ -1320,7 +1418,7 @@
         color:             $(".add-color", form).value,
         allDay:            isAllDay,
         date:              dateVal,
-        alldayEnd:         isAllDay ? (alldayEndInput?.value || dateVal) : null,
+        endDate:           endDateInput?.value || dateVal,
         startTime:         $(".add-start", form).value,
         endTime:           $(".add-end", form).value,
         location:          $(".add-location", form).value,
@@ -1339,21 +1437,20 @@
       const startTime = $(".add-start", form).value || "09:00";
       const endTime = $(".add-end", form).value || "10:00";
       const isAllDay = activeKind === "event" && !!alldayInput?.checked;
-      const allDayEnd = alldayEndInput?.value || date;
+      const endDate = endDateInput?.value || date;
       const startAt = localInputToEpoch(isAllDay ? `${date}T00:00` : `${date}T${startTime}`);
-      // For all-day we mirror Google's convention (exclusive end-date): a
-      // one-day all-day from May 27 ends at May 28T00:00. Multi-day adds
-      // one day to the picked end-date.
+      // Timed: use the user-picked end date + time directly. Same-day
+      // wraps to next day if end<=start to preserve legacy behavior.
+      // All-day: mirror Google's exclusive end-date (bump one day past
+      // the inclusive end the user picked).
       const endAt = (() => {
         if (activeKind !== "event") return null;
         if (!isAllDay) {
-          const e = localInputToEpoch(`${date}T${endTime}`);
-          return e <= startAt ? e + 24 * 60 * 60 : e;
+          const e = localInputToEpoch(`${endDate}T${endTime}`);
+          if (endDate === date && e <= startAt) return e + 24 * 60 * 60;
+          return e;
         }
-        const next = new Date(`${allDayEnd}T00:00`);
-        next.setDate(next.getDate() + 1);
-        const pad = (n) => String(n).padStart(2, "0");
-        return localInputToEpoch(`${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}T00:00`);
+        return localInputToEpoch(`${shiftIsoDate(endDate, 1)}T00:00`);
       })();
       const triggerExpression = activeKind === "trigger"
         ? ($(".add-trigger-expression", form).value || null)
@@ -1388,10 +1485,9 @@
           name: payload.agenda_item.name,
           kind: activeKind,
           color,
-          startTime, endTime, date, triggerExpression,
+          startTime, endTime, date, endDate, triggerExpression,
           startsOn: currentScheduleData?.starts_on,
           allDay: isAllDay,
-          allDayEnd: allDayEnd,
         });
         payload.agenda_schedule.location = payload.agenda_item.location;
         payload.agenda_schedule.arrive_early_minutes = payload.agenda_item.arrive_early_minutes;
@@ -2194,8 +2290,9 @@
       arriveIcon?.toggleAttribute("hidden", arriveEarlyMin <= 0);
       travelIcon?.toggleAttribute("hidden", travelMin <= 0);
       plus?.toggleAttribute("hidden", !(arriveEarlyMin > 0 && travelMin > 0));
-      set("[data-arrive-early-target]", arriveEarlyMin > 0 ? `${arriveEarlyMin}m` : "");
-      set("[data-travel-target]",       travelMin > 0      ? `${travelMin}m`      : "");
+      const fmtMin = window.AgendaItemRenderer?.fmtMinutes || ((n) => `${n}m`);
+      set("[data-arrive-early-target]", arriveEarlyMin > 0 ? fmtMin(arriveEarlyMin) : "");
+      set("[data-travel-target]",       travelMin > 0      ? fmtMin(travelMin)      : "");
       const startEpoch = parseInt(d.startAt, 10) || 0;
       const leaveEpoch = startEpoch - (arriveEarlyMin + travelMin) * 60;
       set("[data-leave-at-target]", (visible && startEpoch > 0) ? `→${fmtCalTime(leaveEpoch)}` : "");
@@ -2628,6 +2725,10 @@
 
   function advanceToAddModal(source, newDate) {
     if (typeof addModalPrefillAndShow !== "function") return;
+    // Preserve the source's day-span (start→end delta) when relocating
+    // the follow-up to a new start date — applies to both multi-day
+    // all-day events and multi-day timed events.
+    const sourceEnd = source.endDate || source.alldayEnd;
     addModalPrefillAndShow({
       agendaId:          source.agendaId,
       name:              source.name,
@@ -2635,7 +2736,7 @@
       color:             source.color,
       allDay:            source.allDay,
       date:              newDate,
-      alldayEnd:         source.allDay ? shiftAllDayEnd(source.date, source.alldayEnd, newDate) : null,
+      endDate:           sourceEnd ? shiftAllDayEnd(source.date, sourceEnd, newDate) : newDate,
       startTime:         source.startTime,
       endTime:           source.endTime,
       location:          source.location,
@@ -2644,8 +2745,9 @@
     });
   }
 
-  // For multi-day all-day follow-ups: preserve the source span (delta in
-  // days between start and end) when shifting to the chosen day.
+  // For multi-day events (all-day or timed) being relocated by the
+  // follow-up flow: preserve the source span (day-delta between start
+  // and end) when shifting to the chosen day.
   function shiftAllDayEnd(origStart, origEnd, newStart) {
     if (!origStart || !origEnd) return newStart;
     const s = new Date(origStart + "T12:00:00");

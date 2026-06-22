@@ -1645,6 +1645,25 @@ body.ctr-agendas {
     flex: 0 0 84px;
   }
 
+  // Start / End rows: a single label ("Start" or "End") above a
+  // horizontal pair of date + time inputs. The time input collapses
+  // via the global .hidden utility when all-day; the date input keeps
+  // the row anchored.
+  .dt-pair {
+    display: flex;
+    gap: 8px;
+    min-width: 0;
+
+    > input[type="date"] {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    > input[type="time"] {
+      flex: 0 1 132px;
+      min-width: 0;
+    }
+  }
+
   .ff.agenda-pick {
     flex-direction: row;
     align-items: center;

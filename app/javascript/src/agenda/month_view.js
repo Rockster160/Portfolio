@@ -182,15 +182,16 @@
     const leaveEpoch = startEpoch - (arriveMin + travelMin) * 60;
     // Rebuild travel children — they're small static spans + i tags,
     // cheap to recreate and avoids tracking per-icon presence.
+    const fmtMin = window.AgendaItemRenderer?.fmtMinutes || ((n) => `${n}m`);
     travelWrap.innerHTML = `<span class="cal-month-item-travel-leave" data-time-hydrate data-start-epoch="${leaveEpoch}" data-format="cal" data-prefix="→"></span>`;
     if (arriveMin > 0) {
-      travelWrap.insertAdjacentHTML("beforeend", `<i class="fa fa-clock-o"></i>${arriveMin}m`);
+      travelWrap.insertAdjacentHTML("beforeend", `<i class="fa fa-clock-o"></i>${fmtMin(arriveMin)}`);
     }
     if (arriveMin > 0 && travelMin > 0) {
       travelWrap.insertAdjacentHTML("beforeend", '<span class="cal-month-item-travel-plus">+</span>');
     }
     if (travelMin > 0) {
-      travelWrap.insertAdjacentHTML("beforeend", `<i class="fa fa-car"></i>${travelMin}m`);
+      travelWrap.insertAdjacentHTML("beforeend", `<i class="fa fa-car"></i>${fmtMin(travelMin)}`);
     }
   }
 
@@ -246,11 +247,12 @@
       leaveSpan.setAttribute("data-prefix", "→");
       wrap.appendChild(leaveSpan);
 
+      const fmtMin = window.AgendaItemRenderer?.fmtMinutes || ((n) => `${n}m`);
       if (arriveMin > 0) {
         const i = document.createElement("i");
         i.className = "fa fa-clock-o";
         wrap.appendChild(i);
-        wrap.appendChild(document.createTextNode(`${arriveMin}m`));
+        wrap.appendChild(document.createTextNode(fmtMin(arriveMin)));
       }
       if (arriveMin > 0 && travelMin > 0) {
         const plus = document.createElement("span");
@@ -262,7 +264,7 @@
         const i = document.createElement("i");
         i.className = "fa fa-car";
         wrap.appendChild(i);
-        wrap.appendChild(document.createTextNode(`${travelMin}m`));
+        wrap.appendChild(document.createTextNode(fmtMin(travelMin)));
       }
       btn.appendChild(wrap);
     }
