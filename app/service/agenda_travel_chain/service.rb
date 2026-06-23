@@ -18,7 +18,7 @@ module AgendaTravelChain
   #                                       or the event's `from:` override
   #   travel_from_kind       (string)  — "home" | "event" | "override"
   #   travel_seconds         (int)     — drive seconds for the incoming leg
-  #   travel_minutes         (int)     — ceil-rounded minutes (mirrored to legacy top-level)
+  #   travel_minutes         (int)     — ceil-rounded minutes
   #   chain_predecessor_id   (int|nil)
   #   chain_successor_id     (int|nil)
   #   chain_head_id          (int)     — self if solo head
@@ -231,10 +231,7 @@ module AgendaTravelChain
 
     def cached_travel_seconds(evt)
       nested = evt.metadata.dig("travel", "travel_seconds")
-      return nested.to_i if nested.to_i.positive?
-
-      legacy = evt.metadata["travel_minutes"].to_i
-      legacy.positive? ? legacy * 60 : nil
+      nested.to_i.positive? ? nested.to_i : nil
     end
 
     def backfill?
@@ -402,16 +399,14 @@ module AgendaTravelChain
     def merge_travel_metadata(evt, **changes)
       current = (evt.metadata["travel"] || {}).merge(changes.stringify_keys)
       new_meta = evt.metadata.merge("travel" => current)
-      mirror_legacy_keys!(new_meta, current)
       apply_metadata!(evt, new_meta)
     end
 
-    # Pass `nil` for `travel_hash` to fully clear the travel key (and its
-    # mirrored legacy fields) for events that have dropped out of the chain.
+    # Pass `nil` for `travel_hash` to fully clear the travel key for events
+    # that have dropped out of the chain.
     def write_metadata(evt, travel_hash)
       new_meta = evt.metadata.except("travel")
       new_meta = new_meta.merge("travel" => travel_hash) if travel_hash.present?
-      mirror_legacy_keys!(new_meta, travel_hash || {})
       apply_metadata!(evt, new_meta)
     end
 
@@ -432,19 +427,6 @@ module AgendaTravelChain
       return if @touched_agendas.empty?
 
       ::Agenda.broadcast_changes!(@touched_agendas.values)
-    end
-
-    # Keep `metadata.travel_minutes` populated at the top level — the
-    # calendar/seed-hydrator/JS still read from there. Phase 2 migrates them
-    # to the nested key.
-    def mirror_legacy_keys!(meta, travel)
-      if travel.empty?
-        meta.delete("travel_minutes")
-        meta.delete("travel_location")
-        return
-      end
-      meta["travel_minutes"]  = travel["travel_minutes"]
-      meta["travel_location"] = travel["travel_from"]
     end
   end
 end

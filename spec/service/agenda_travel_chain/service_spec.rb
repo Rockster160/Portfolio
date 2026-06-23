@@ -308,12 +308,15 @@ RSpec.describe AgendaTravelChain::Service do
     end
 
     describe "backfill mode" do
-      it "uses cached travel_minutes for the home-leg overlap check (no Google for symmetric assumption)" do
+      def seed_cached_travel(item, seconds)
+        item.update_columns(metadata: item.metadata.merge("travel" => { "travel_seconds" => seconds }))
+      end
+
+      it "uses cached travel_seconds for the home-leg overlap check (no Google for symmetric assumption)" do
         a = make_event(name: "A", start_at: Time.zone.parse("2026-06-18 14:00"), end_at: Time.zone.parse("2026-06-18 15:00"), location: "Office")
         b = make_event(name: "B", start_at: Time.zone.parse("2026-06-18 15:15"), end_at: Time.zone.parse("2026-06-18 16:15"), location: "Gym")
-        # Seed both with cached travel_minutes the way the legacy task 388 did.
-        a.update_columns(metadata: a.metadata.merge("travel_minutes" => 10))
-        b.update_columns(metadata: b.metadata.merge("travel_minutes" => 10))
+        seed_cached_travel(a, 600)
+        seed_cached_travel(b, 600)
 
         # In backfill mode the home-leg is read from cache. Only the
         # chain-confirmed A→B drive should hit AddressBook.
@@ -327,11 +330,11 @@ RSpec.describe AgendaTravelChain::Service do
         expect(b.reload.metadata.dig("travel", "chain_predecessor_id")).to eq(a.id)
       end
 
-      it "does NOT chain when cached travel_minutes don't satisfy the overlap rule" do
+      it "does NOT chain when cached travel_seconds don't satisfy the overlap rule" do
         a = make_event(name: "A", start_at: Time.zone.parse("2026-06-18 09:00"), end_at: Time.zone.parse("2026-06-18 10:00"), location: "Office")
         b = make_event(name: "B", start_at: Time.zone.parse("2026-06-18 18:00"), end_at: Time.zone.parse("2026-06-18 19:00"), location: "Gym")
-        a.update_columns(metadata: a.metadata.merge("travel_minutes" => 10))
-        b.update_columns(metadata: b.metadata.merge("travel_minutes" => 10))
+        seed_cached_travel(a, 600)
+        seed_cached_travel(b, 600)
 
         # Gap is huge — no chain. Nothing should hit the Distance Matrix.
         expect(address_book).not_to receive(:traveltime_seconds)

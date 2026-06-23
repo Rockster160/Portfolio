@@ -114,13 +114,12 @@ function buildPhantom(schedule, dateISO, { localEpoch, agenda }) {
     : null;
   const id = `p-${schedule.id}-${dateISO}`;
   const color = schedule.color || (agenda && agenda.color) || "";
-  // Travel metadata is inherited from the schedule the same way Rails'
-  // `AgendaSchedule#build_phantom` does it — `metadata["travel_minutes"]`
-  // at the top level (legacy shape) plus a nested `metadata.travel` hash
-  // for the chain/resolved fields. Without this, every phantom rendered
-  // a 0-minute band even when the parent schedule's resolver had landed
-  // a real travel time (e.g. the recurring TMS event showed the band on
-  // today's materialized row but not on Friday's phantom).
+  // Travel metadata is inherited from the schedule's nested `metadata.travel`
+  // hash — populated by AgendaTravelChain::Service for the parent schedule.
+  // Without this, every phantom rendered a 0-minute band even when the
+  // parent schedule's resolver had landed a real travel time (e.g. the
+  // recurring TMS event showed the band on today's materialized row but
+  // not on Friday's phantom).
   const meta = (schedule && schedule.metadata) || {};
   const travel = (meta && meta.travel) || {};
   // Mirrors `AgendaItem#presentation_attrs` — the renderer reads from
@@ -157,10 +156,7 @@ function buildPhantom(schedule, dateISO, { localEpoch, agenda }) {
     "location":             schedule.location || "",
     "resolved-address":     travel.location_address || "",
     "arrive-early-minutes": Number(schedule.arrive_early_minutes) || 0,
-    // Canonical nested key first; fall back to the legacy top-level
-    // mirror only when the chain service hasn't materialized the nested
-    // hash yet (matches `AgendaItem#presentation_attrs`).
-    "travel-minutes":       Number(travel.travel_minutes ?? meta.travel_minutes) || 0,
+    "travel-minutes":       Number(travel.travel_minutes) || 0,
     "travel-from-kind":     travel.travel_from_kind || "",
     "travel-from":          travel.travel_from || "",
     "chain-predecessor-id": travel.chain_predecessor_id || "",

@@ -247,11 +247,11 @@ RSpec.describe AgendaItem do
         start_at: Time.zone.local(2026, 6, 18, 20, 0),
         end_at:   Time.zone.local(2026, 6, 18, 22, 0),
         metadata: {
-          "travel_minutes" => 25,
-          "travel"         => {
+          "travel" => {
             "location_address"     => "11593 4000 W, South Jordan, UT 84009, USA",
             "travel_from"          => "Home St",
             "travel_from_kind"     => "home",
+            "travel_minutes"       => 25,
             "chain_predecessor_id" => 99,
             "chain_successor_id"   => 100,
             "chain_prev_end_at"    => 1234,
@@ -293,19 +293,18 @@ RSpec.describe AgendaItem do
       expect(attrs["chain-predecessor-id"]).to be_nil
     end
 
-    # Reproduces the prod regression where GoogleCalendar::Sync's
-    # `metadata.to_h.merge(...)` path left a stale top-level
-    # `travel_minutes` behind after the chain worker rewrote the nested
-    # hash. Reading nested keeps the UI in sync with reality.
-    it "prefers the nested travel.travel_minutes over the legacy top-level mirror" do
+    # The legacy top-level `metadata["travel_minutes"]` mirror was retired —
+    # any leftover value (e.g. stale data from a pre-cleanup write) must be
+    # ignored. The nested travel hash is the only source of truth.
+    it "ignores any stale top-level travel_minutes — nested is the only source" do
       item = create(:agenda_item, agenda: agenda, kind: "event", name: "Return Home",
         location: "Greens Lake Campground",
         start_at: Time.zone.local(2026, 6, 25, 17, 0),
         end_at:   Time.zone.local(2026, 6, 25, 18, 0),
         metadata: {
-          "travel_minutes" => 216, # stale legacy mirror
+          "travel_minutes" => 216, # stale, must NOT be read
           "travel"         => {
-            "travel_minutes" => 0,  # canonical, post `from:`-short-circuit
+            "travel_minutes" => 0,
             "travel_from"    => "Greens Lake Campground",
           },
         })
