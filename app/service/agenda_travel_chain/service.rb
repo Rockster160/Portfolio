@@ -259,6 +259,17 @@ module AgendaTravelChain
         evt.location.to_s
     end
 
+    # Loose equality for two location strings — strip + downcase. Lets a
+    # `from:Greens Lake Campground` on an event ALREADY at "Greens Lake
+    # Campground" short-circuit the drive to 0 without a Google round-trip
+    # (and without depending on Distance Matrix's behavior for same-point
+    # queries, which can return small non-zero distances).
+    def same_place?(a, b)
+      return false if a.blank? || b.blank?
+
+      a.to_s.strip.casecmp(b.to_s.strip).zero?
+    end
+
     # Resolved street address stashed by `ensure_resolved` — prefer it over
     # the raw location text when feeding the Distance Matrix call, since
     # Google can't disambiguate casual names ("Texas Roadhouse" → which
@@ -311,7 +322,13 @@ module AgendaTravelChain
       # confirmed. `from:` is an explicit start we have no cached drive
       # for, so always go fetch a fresh one.
       drive_secs = (
-        if backfill? && pred.nil? && override_from.nil?
+        if same_place?(from_for_drive, incoming_first)
+          # User explicitly says they're already at the event's start point
+          # (`from:` matches the event location, or chained predecessor's
+          # outgoing endpoint already equals it). Skip the Google round-trip
+          # and represent it as a 0-minute leg.
+          0
+        elsif backfill? && pred.nil? && override_from.nil?
           cached_travel_seconds(evt)
         else
           @resolver.travel_seconds(from_for_drive, incoming_first, at: evt.start_at)
@@ -323,7 +340,8 @@ module AgendaTravelChain
       post_to = overrides_for(evt)[:to].presence
       post_drive_secs = (
         if post_to
-          @resolver.travel_seconds(evt.location.to_s, outgoing_last_location(evt), at: evt.end_at)
+          outgoing = outgoing_last_location(evt)
+          same_place?(evt.location.to_s, outgoing) ? 0 : @resolver.travel_seconds(evt.location.to_s, outgoing, at: evt.end_at)
         end
       )
       post_drive_mins = post_drive_secs && (post_drive_secs / 60.0).ceil

@@ -402,6 +402,41 @@ RSpec.describe AgendaTravelChain::Service do
         expect(meta["post_travel_to"]).to eq("Gym")
       end
 
+      it "short-circuits incoming drive to 0 when from: matches the event's location" do
+        evt = make_event(
+          name: "Return Home",
+          start_at: Time.zone.parse("2026-06-18 20:00"),
+          end_at:   Time.zone.parse("2026-06-18 21:00"),
+          location: "Greens Lake Campground",
+          notes:    "from:Greens Lake Campground\nto:Home St",
+        )
+        # Fail the spec if resolver gets called for the no-op leg.
+        expect(address_book).not_to receive(:traveltime_seconds).with("Greens Lake Campground", "Greens Lake Campground", anything)
+        described_class.new(user, Date.new(2026, 6, 18)).run
+
+        meta = evt.reload.metadata["travel"]
+        expect(meta["travel_seconds"]).to eq(0)
+        expect(meta["travel_minutes"]).to eq(0)
+        expect(meta["travel_from"]).to eq("Greens Lake Campground")
+        expect(meta["travel_from_kind"]).to eq("override")
+      end
+
+      it "short-circuits post-travel to 0 when to: matches the event's location" do
+        evt = make_event(
+          name: "Stay put",
+          start_at: Time.zone.parse("2026-06-18 14:00"),
+          end_at:   Time.zone.parse("2026-06-18 15:00"),
+          location: "Greens Lake Campground",
+          notes:    "to:greens lake campground",  # case-insensitive match
+        )
+        expect(address_book).not_to receive(:traveltime_seconds).with("greens lake campground", "Greens Lake Campground", anything)
+        described_class.new(user, Date.new(2026, 6, 18)).run
+
+        meta = evt.reload.metadata["travel"]
+        expect(meta["post_travel_seconds"]).to eq(0)
+        expect(meta["post_travel_minutes"]).to eq(0)
+      end
+
       it "leaves post_travel_* nil when no to: override is set" do
         evt = make_event(
           name: "No outbound",
