@@ -498,6 +498,43 @@ RSpec.describe AgendaTravelChain::Service do
       end
     end
 
+    describe "schedule write-through" do
+      it "mirrors an item's chain-computed travel onto its parent schedule" do
+        schedule = create(:agenda_schedule, agenda: agenda, name: "TMS", start_time: "14:00",
+          duration_minutes: 60, recurrence: { freq: "weekdays" },
+          starts_on: Date.parse("2026-06-01"))
+        schedule.update_columns(metadata: {})
+        # Wipe any auto-materialized rows so this test owns the items.
+        schedule.agenda_items.delete_all
+
+        evt = agenda.agenda_items.create!(
+          agenda_schedule: schedule,
+          name: "TMS", kind: :event, location: "Office",
+          start_at: Time.zone.parse("2026-06-22 14:00"),
+          end_at:   Time.zone.parse("2026-06-22 15:00"),
+        )
+        described_class.new(user, Date.new(2026, 6, 22)).run
+
+        schedule.reload
+        sched_travel = schedule.metadata["travel"]
+        expect(sched_travel["travel_minutes"]).to eq(10)
+        expect(sched_travel["travel_seconds"]).to eq(600)
+        expect(sched_travel["travel_from"]).to eq("Home St")
+        # Chain pointers and `leave_at` are item-specific — must NOT leak.
+        expect(sched_travel).not_to have_key("chain_predecessor_id")
+        expect(sched_travel).not_to have_key("leave_at")
+      end
+
+      it "does nothing for standalone items with no parent schedule" do
+        evt = make_event(name: "Standalone", start_at: Time.zone.parse("2026-06-22 14:00"),
+          end_at: Time.zone.parse("2026-06-22 15:00"), location: "Office")
+        described_class.new(user, Date.new(2026, 6, 22)).run
+
+        expect(evt.reload.metadata.dig("travel", "travel_minutes")).to eq(10)
+        # No raise — schedule is nil.
+      end
+    end
+
     describe "to: post-travel and chain detection" do
       it "chains A → B when A has to:X and B follows tightly via X" do
         # A: 14:00-15:00 at Home St, to:Office. Via Office, drive to B's

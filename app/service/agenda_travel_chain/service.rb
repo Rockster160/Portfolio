@@ -400,6 +400,7 @@ module AgendaTravelChain
       current = (evt.metadata["travel"] || {}).merge(changes.stringify_keys)
       new_meta = evt.metadata.merge("travel" => current)
       apply_metadata!(evt, new_meta)
+      propagate_to_schedule(evt, current)
     end
 
     # Pass `nil` for `travel_hash` to fully clear the travel key for events
@@ -408,6 +409,37 @@ module AgendaTravelChain
       new_meta = evt.metadata.except("travel")
       new_meta = new_meta.merge("travel" => travel_hash) if travel_hash.present?
       apply_metadata!(evt, new_meta)
+      propagate_to_schedule(evt, travel_hash) if travel_hash.present?
+    end
+
+    # Mirror the static (non-chain, non-time-anchored) slice of an item's
+    # travel hash onto its parent schedule. Phantoms inherit from the
+    # schedule (recurrence.js builds them by cloning `schedule.metadata`),
+    # so without this every future occurrence renders a 0-minute band.
+    # Chain pointers and `leave_at` / `post_arrive_at` are intentionally
+    # excluded — they're computed per-occurrence and meaningless on the
+    # schedule level.
+    SCHEDULE_TRAVEL_KEYS = %w[
+      location_address location_lat location_lng location_fingerprint
+      travel_from travel_from_kind
+      travel_seconds travel_minutes
+      post_travel_to post_travel_seconds post_travel_minutes
+    ].freeze
+    private_constant :SCHEDULE_TRAVEL_KEYS
+
+    def propagate_to_schedule(evt, travel_hash)
+      schedule = evt.agenda_schedule
+      return unless schedule
+
+      slice = travel_hash.slice(*SCHEDULE_TRAVEL_KEYS).compact
+      return if slice.empty?
+
+      current_sched_travel = schedule.metadata["travel"] || {}
+      next_sched_travel = current_sched_travel.merge(slice)
+      return if current_sched_travel == next_sched_travel
+
+      new_meta = schedule.metadata.merge("travel" => next_sched_travel)
+      schedule.update_columns(metadata: new_meta, updated_at: Time.current)
     end
 
     def apply_metadata!(evt, new_meta)
