@@ -157,7 +157,10 @@ function buildPhantom(schedule, dateISO, { localEpoch, agenda }) {
     "location":             schedule.location || "",
     "resolved-address":     travel.location_address || "",
     "arrive-early-minutes": Number(schedule.arrive_early_minutes) || 0,
-    "travel-minutes":       Number(meta.travel_minutes) || 0,
+    // Canonical nested key first; fall back to the legacy top-level
+    // mirror only when the chain service hasn't materialized the nested
+    // hash yet (matches `AgendaItem#presentation_attrs`).
+    "travel-minutes":       Number(travel.travel_minutes ?? meta.travel_minutes) || 0,
     "travel-from-kind":     travel.travel_from_kind || "",
     "travel-from":          travel.travel_from || "",
     "chain-predecessor-id": travel.chain_predecessor_id || "",

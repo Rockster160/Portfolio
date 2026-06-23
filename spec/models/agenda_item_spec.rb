@@ -293,6 +293,26 @@ RSpec.describe AgendaItem do
       expect(attrs["chain-predecessor-id"]).to be_nil
     end
 
+    # Reproduces the prod regression where GoogleCalendar::Sync's
+    # `metadata.to_h.merge(...)` path left a stale top-level
+    # `travel_minutes` behind after the chain worker rewrote the nested
+    # hash. Reading nested keeps the UI in sync with reality.
+    it "prefers the nested travel.travel_minutes over the legacy top-level mirror" do
+      item = create(:agenda_item, agenda: agenda, kind: "event", name: "Return Home",
+        location: "Greens Lake Campground",
+        start_at: Time.zone.local(2026, 6, 25, 17, 0),
+        end_at:   Time.zone.local(2026, 6, 25, 18, 0),
+        metadata: {
+          "travel_minutes" => 216, # stale legacy mirror
+          "travel"         => {
+            "travel_minutes" => 0,  # canonical, post `from:`-short-circuit
+            "travel_from"    => "Greens Lake Campground",
+          },
+        })
+
+      expect(item.presentation_attrs["travel-minutes"]).to eq(0)
+    end
+
     # Regression guard for "all-day events span two days in the cal_week
     # banner row". `end-date` must be the INCLUSIVE last-day midnight in
     # the user's tz — NOT `end_at` (which is the exclusive next-day midnight

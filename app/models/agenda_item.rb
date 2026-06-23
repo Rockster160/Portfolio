@@ -505,7 +505,12 @@ class AgendaItem < ApplicationRecord
       "location"              => location,
       "resolved-address"      => travel["location_address"],
       "arrive-early-minutes"  => arrive_early_minutes.to_i,
-      "travel-minutes"        => metadata["travel_minutes"].to_i,
+      # Read from the canonical nested key — the top-level `travel_minutes`
+      # is a legacy mirror and can lag behind when concurrent writers (e.g.
+      # GoogleCalendar::Sync's `metadata: item.metadata.to_h.merge(...)`
+      # path) preserve stale top-level scalars while the chain worker
+      # rewrites the nested `travel` hash via `update_columns`.
+      "travel-minutes"        => (travel["travel_minutes"] || metadata["travel_minutes"]).to_i,
       "travel-from-kind"      => travel["travel_from_kind"],
       "travel-from"           => travel["travel_from"],
       "chain-predecessor-id"  => travel["chain_predecessor_id"],
