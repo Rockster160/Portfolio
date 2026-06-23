@@ -360,9 +360,9 @@ RSpec.describe AgendaTravelChain::Service do
         expect(meta["overrides"]["from"]).to eq("Gym")
       end
 
-      it "uses to: as the drive destination" do
+      it "treats to: as a POST-event leg from event location → to: destination" do
         evt = make_event(
-          name: "Side entrance",
+          name: "Leave",
           start_at: Time.zone.parse("2026-06-18 14:00"),
           end_at:   Time.zone.parse("2026-06-18 15:00"),
           location: "Office",
@@ -371,25 +371,50 @@ RSpec.describe AgendaTravelChain::Service do
         described_class.new(user, Date.new(2026, 6, 18)).run
 
         meta = evt.reload.metadata["travel"]
-        # Home St→Gym is 1200s, vs Home St→Office (the default) at 600s.
-        expect(meta["travel_seconds"]).to eq(1200)
+        # Incoming = Home St → Office (default 600s); `to:` no longer
+        # overrides the incoming destination.
+        expect(meta["travel_seconds"]).to eq(600)
+        # Post-event = Office → Gym (600s), arriving at end_at + 600s.
+        expect(meta["post_travel_to"]).to eq("Gym")
+        expect(meta["post_travel_seconds"]).to eq(600)
+        expect(meta["post_travel_minutes"]).to eq(10)
+        expect(meta["post_arrive_at"]).to eq(evt.end_at.to_i + 600)
         expect(meta["overrides"]["to"]).to eq("Gym")
       end
 
-      it "combines from: and to: into an explicit point-to-point drive" do
+      it "combines from: (incoming origin) and to: (outgoing endpoint) independently" do
         evt = make_event(
           name: "Explicit nav",
           start_at: Time.zone.parse("2026-06-18 14:00"),
           end_at:   Time.zone.parse("2026-06-18 15:00"),
-          location: "Far",  # would normally be 7200s Home→Far
-          notes:    "from:Office\nto:Gym",
+          location: "Office",
+          notes:    "from:Gym\nto:Gym",
         )
         described_class.new(user, Date.new(2026, 6, 18)).run
 
         meta = evt.reload.metadata["travel"]
-        expect(meta["travel_seconds"]).to eq(600)  # Office→Gym
-        expect(meta["travel_from"]).to eq("Office")
+        # Incoming = Gym → Office (600s) — from: overrides origin only.
+        expect(meta["travel_seconds"]).to eq(600)
+        expect(meta["travel_from"]).to eq("Gym")
         expect(meta["travel_from_kind"]).to eq("override")
+        # Post-event = Office → Gym (600s).
+        expect(meta["post_travel_seconds"]).to eq(600)
+        expect(meta["post_travel_to"]).to eq("Gym")
+      end
+
+      it "leaves post_travel_* nil when no to: override is set" do
+        evt = make_event(
+          name: "No outbound",
+          start_at: Time.zone.parse("2026-06-18 14:00"),
+          end_at:   Time.zone.parse("2026-06-18 15:00"),
+          location: "Office",
+        )
+        described_class.new(user, Date.new(2026, 6, 18)).run
+
+        meta = evt.reload.metadata["travel"]
+        expect(meta["post_travel_to"]).to be_nil
+        expect(meta["post_travel_seconds"]).to be_nil
+        expect(meta["post_arrive_at"]).to be_nil
       end
 
       it "breaks the travel chain when a successor declares an explicit from:" do
@@ -416,19 +441,72 @@ RSpec.describe AgendaTravelChain::Service do
         expect(b_meta["travel_from"]).to eq("Home St")
       end
 
-      it "lets before: outrank to: as the first incoming stop" do
+      it "uses before: as the incoming first stop independent of to:" do
         evt = make_event(
           name: "Stop first",
           start_at: Time.zone.parse("2026-06-18 14:00"),
           end_at:   Time.zone.parse("2026-06-18 15:00"),
-          location: "Office",
+          location: "Home St",
           notes:    "before:Gym\nto:Far",
         )
         described_class.new(user, Date.new(2026, 6, 18)).run
 
         meta = evt.reload.metadata["travel"]
-        # Drive is Home St → first waypoint (Gym), not Home St → to:Far.
+        # Incoming = Home St → first before-waypoint (Gym) = 1200s.
         expect(meta["travel_seconds"]).to eq(1200)
+        # Post-event = Home St → to:Far = 7200s.
+        expect(meta["post_travel_seconds"]).to eq(7200)
+        expect(meta["post_travel_to"]).to eq("Far")
+      end
+    end
+
+    describe "to: post-travel and chain detection" do
+      it "chains A → B when A has to:X and B follows tightly via X" do
+        # A: 14:00-15:00 at Home St, to:Office. Via Office, drive to B's
+        # location (Gym) is 600s. B starts 15:05 at Gym — the gap
+        # (14:55 leave-by) is BEFORE A's end + via-drive (15:10), so chain.
+        a = make_event(
+          name: "Leave",
+          start_at: Time.zone.parse("2026-06-18 14:00"),
+          end_at:   Time.zone.parse("2026-06-18 15:00"),
+          location: "Home St",
+          notes:    "to:Office",
+        )
+        b = make_event(
+          name: "Arrive",
+          start_at: Time.zone.parse("2026-06-18 15:05"),
+          end_at:   Time.zone.parse("2026-06-18 16:00"),
+          location: "Gym",
+        )
+        described_class.new(user, Date.new(2026, 6, 18)).run
+
+        a_meta = a.reload.metadata["travel"]
+        b_meta = b.reload.metadata["travel"]
+        expect(a_meta["chain_successor_id"]).to eq(b.id)
+        expect(b_meta["chain_predecessor_id"]).to eq(a.id)
+      end
+
+      it "does not chain when the via-to: route fits within the gap" do
+        # A ends 12:00, to:Office. B starts 16:00 at Gym — plenty of slack.
+        a = make_event(
+          name: "Meeting",
+          start_at: Time.zone.parse("2026-06-18 11:00"),
+          end_at:   Time.zone.parse("2026-06-18 12:00"),
+          location: "Home St",
+          notes:    "to:Office",
+        )
+        b = make_event(
+          name: "Workout",
+          start_at: Time.zone.parse("2026-06-18 16:00"),
+          end_at:   Time.zone.parse("2026-06-18 17:00"),
+          location: "Gym",
+        )
+        described_class.new(user, Date.new(2026, 6, 18)).run
+
+        a_meta = a.reload.metadata["travel"]
+        b_meta = b.reload.metadata["travel"]
+        expect(a_meta["chain_successor_id"]).to be_nil
+        expect(b_meta["chain_predecessor_id"]).to be_nil
       end
     end
 

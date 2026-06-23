@@ -12,8 +12,12 @@ module AgendaTravelChain
   #                                 (overrides home / predecessor); also breaks
   #                                 the travel chain into this event since it's
   #                                 explicitly coming from elsewhere
-  #   to:Side entrance           → string: explicit end of the incoming drive
-  #                                 (overrides the event's location). Quoted
+  #   to:Greens Lake Campground  → string: explicit POST-event destination — the
+  #                                 user is leaving the event's location and
+  #                                 driving here. Adds a post-travel band AFTER
+  #                                 the event (mirror of the incoming band) and
+  #                                 acts as the outgoing endpoint for chain
+  #                                 detection with the next event. Quoted
   #                                 segments preserve commas inside the value.
   #
   # before/after take a comma-separated list. from/to take a single address.

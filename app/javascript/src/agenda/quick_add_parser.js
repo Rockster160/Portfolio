@@ -45,9 +45,15 @@
 //   the user (or the heuristic) put it.
 //
 // Ambiguous hour disambiguation (no am/pm given):
-//   * Hours 1-7   → PM (afternoon meeting intuition; "4" → 4pm)
-//   * Hours 8-11  → AM (typical morning)
-//   * 0 / 12      → as-is ("at noon" / "at midnight" use their own words)
+//   Pick the NEAREST future occurrence of the time on the target date
+//   (AM if earlier and still future, else PM), EXCEPT when the AM
+//   occurrence falls in the 12am-5am window — those are skipped to the
+//   matching PM time. Concretely:
+//     * Hours 1-5  → PM (skip 12am-5am AM range)
+//     * Hour  12   → 12pm noon (skip midnight)
+//     * Hours 6-11 → pick AM vs PM by which one is the nearer future
+//                    moment; if both are past, AM wins (always-future
+//                    gate rolls the day forward).
 //
 // API:
 //   parseQuickAdd(input, { now, defaultDurationMin })
@@ -155,6 +161,19 @@ const NOON_RE     = /\bat\s+noon\b/i;
 const MIDNIGHT_RE = /\bat\s+midnight\b/i;
 const CLOCK_RE    = /\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm|a|p)?\b/i;
 
+// "from 8 to 10", "from 8am until 10:30pm", "from noon to 3pm".
+// Both ends optionally carry am/pm; meridiem propagation is resolved
+// in phase 7 so it can lean on the same NEAREST-future heuristic as
+// the bare-clock parser. "to|until|till|thru|through|-" all delimit.
+const RANGE_END_RE_SRC = "(?:to|until|till|thru|through|\\-)";
+const RANGE_RE = new RegExp(
+  "\\bfrom\\s+" +
+    "(noon|midnight|\\d{1,2}(?::\\d{2})?)\\s*(am|pm|a|p)?" +
+    `\\s+${RANGE_END_RE_SRC}\\s+` +
+    "(noon|midnight|\\d{1,2}(?::\\d{2})?)\\s*(am|pm|a|p)?\\b",
+  "i",
+);
+
 // ----- All-day grammar -----------------------------------------------
 // "all day", "all-day", "allday" anywhere in the input opts this event
 // into the all-day path: start at midnight of the target date, duration
@@ -218,6 +237,10 @@ function parseRelativeOffset(text, now) {
 
 // ----- Helpers --------------------------------------------------------
 
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function consume(text, re) {
   const m = text.match(re);
   if (!m) return { match: null, rest: text };
@@ -274,16 +297,133 @@ function nextHalfHour(now) {
   return t;
 }
 
+// Pick the 24-hour value for a bare ambiguous clock entry (no am/pm).
+// See the file header "Ambiguous hour disambiguation" block for the
+// full rule — this is the implementation.
+function pickAmbiguousMeridiem(hour, minute, targetDate, now) {
+  // Hours 1-5 and 12 are always-PM (the AM occurrence lands in
+  // 12am-5am, which the rule unconditionally skips).
+  if (hour === 12) return 12;
+  if (hour >= 1 && hour <= 5) return hour + 12;
+  // Hours 6-11: pick whichever occurrence on targetDate is the nearest
+  // strictly-future moment. If AM is future and not later than PM,
+  // take AM. Else if PM is future, take PM. If both are past, fall
+  // back to AM — the always-future gate then rolls the day forward,
+  // and AM tomorrow comes before PM tomorrow.
+  const am = new Date(targetDate);
+  am.setHours(hour, minute, 0, 0);
+  const pm = new Date(targetDate);
+  pm.setHours(hour + 12, minute, 0, 0);
+  if (am > now && (pm <= now || am <= pm)) return hour;
+  if (pm > now) return hour + 12;
+  return hour;
+}
+
+// Parse a single clock spec from the from-to grammar — a numeric "H"
+// or "H:MM", or the words "noon"/"midnight". Returns null for shapes
+// that don't fit (out-of-range hours/minutes).
+function parseClockSpec(spec) {
+  const token = spec.token;
+  if (token === "noon")     return { hour: 12, minute: 0, ap: "p", forced: true };
+  if (token === "midnight") return { hour: 0,  minute: 0, ap: "a", forced: true };
+  const m = token.match(/^(\d{1,2})(?::(\d{2}))?$/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const min = m[2] ? parseInt(m[2], 10) : 0;
+  if (h < 0 || h > 23 || min > 59) return null;
+  return { hour: h, minute: min, ap: spec.ap, forced: false };
+}
+
+// Apply an explicit am/pm token to an hour, returning the 24-hour value.
+function applyAp(hour, ap) {
+  if (ap === "p" && hour < 12)   return hour + 12;
+  if (ap === "a" && hour === 12) return 0;
+  return hour;
+}
+
+// Resolve a from-to range into concrete startDate / endDate on the
+// given target date. Meridiem propagates from explicit→ambiguous; if
+// both ambiguous, the start uses the same nearest-future picker as
+// the bare clock and the end picks the meridiem that puts it strictly
+// after the start (overnight ranges are honored if both ends land
+// past midnight). Either end can be `noon`/`midnight` (forced).
+function resolveRange(range, targetDate, now) {
+  const s = parseClockSpec(range.startSpec) || { hour: 0, minute: 0, ap: null, forced: false };
+  const e = parseClockSpec(range.endSpec)   || { hour: 0, minute: 0, ap: null, forced: false };
+
+  let sH;
+  let eH;
+
+  if (s.forced) {
+    sH = applyAp(s.hour, s.ap);
+  } else if (s.ap) {
+    sH = applyAp(s.hour, s.ap);
+  } else if (e.ap && !e.forced) {
+    // Explicit end meridiem propagates to ambiguous start.
+    sH = applyAp(s.hour, e.ap);
+  } else {
+    sH = pickAmbiguousMeridiem(s.hour, s.minute, targetDate, now);
+  }
+
+  if (e.forced) {
+    eH = applyAp(e.hour, e.ap);
+  } else if (e.ap) {
+    eH = applyAp(e.hour, e.ap);
+  } else {
+    // Prefer the same-half-of-day meridiem as the start, fall back to
+    // the opposite if the same one makes end<=start. Last resort:
+    // accept whatever and treat as overnight.
+    const sameAp = sH >= 12 ? "p" : "a";
+    const sameH = applyAp(e.hour, sameAp);
+    if (sameH > sH) {
+      eH = sameH;
+    } else {
+      const altH = applyAp(e.hour, sameAp === "p" ? "a" : "p");
+      eH = altH > sH ? altH : sameH;
+    }
+  }
+
+  const startDate = new Date(targetDate);
+  startDate.setHours(sH, s.minute, 0, 0);
+  const endDate = new Date(targetDate);
+  endDate.setHours(eH, e.minute, 0, 0);
+  // Overnight ranges (e.g. "from 11pm to 1am") roll the end past
+  // midnight onto the next day.
+  if (endDate <= startDate) endDate.setDate(endDate.getDate() + 1);
+  return { startDate, endDate };
+}
+
 // ----- Main parser ---------------------------------------------------
 
 function parseQuickAdd(rawInput, opts) {
   const cfg = Object.assign({
     now:                new Date(),
     defaultDurationMin: 60,
+    agendas:            [],
   }, opts || {});
   const now = cfg.now;
   let work = String(rawInput || "").trim();
   if (!work) return { ok: false, name: "", error: "empty" };
+
+  // "<AgendaName> to <event>" — route to a named agenda. Caller passes
+  // the live agendas list; we match the LONGEST agenda name that fits
+  // at the head of the input followed by " to ". Matches are case-
+  // insensitive. If nothing matches, the input flows through unchanged
+  // (the eventual "to" stays inside the name).
+  let agendaId = null;
+  if (cfg.agendas.length) {
+    const byLen = cfg.agendas.slice().sort((a, b) => (b.name || "").length - (a.name || "").length);
+    for (const a of byLen) {
+      const aname = String(a.name || "").trim();
+      if (!aname) continue;
+      const re = new RegExp(`^${escapeRegex(aname)}\\s+to\\s+`, "i");
+      if (re.test(work)) {
+        agendaId = a.id;
+        work = work.replace(re, "").trim();
+        break;
+      }
+    }
+  }
 
   // Detect (and strip) the all-day keyword up front. Any time hint that
   // appears alongside it is ignored — "all day at 4pm" makes no sense;
@@ -315,16 +455,37 @@ function parseQuickAdd(rawInput, opts) {
     const durationMin = cfg.defaultDurationMin;
     const endDate = new Date(rel.start.getTime() + durationMin * 60 * 1000);
     return successResult(name, rel.start, endDate, durationMin, {
-      timeKnown: true, dayHint: "relative", durationKnown: false, location: relLocation, allDay: false,
+      timeKnown: true, dayHint: "relative", durationKnown: false, location: relLocation, allDay: false, agendaId,
     });
   }
 
-  // 2. Duration extraction.
+  // 1b. "from X to Y" / "from X until Y" — a range that sets BOTH the
+  // start clock AND the duration in one shot. Detected before duration
+  // and time phases so neither gobbles tokens that belong to the range.
+  // Meridiem is resolved in phase 7 (after targetDate is known) so the
+  // nearest-future heuristic can use the right date as its anchor.
+  let pendingRange = null;
+  {
+    const { match, rest } = consume(work, RANGE_RE);
+    if (match) {
+      pendingRange = {
+        startSpec: { token: match[1].toLowerCase(), ap: match[2] ? match[2][0].toLowerCase() : null },
+        endSpec:   { token: match[3].toLowerCase(), ap: match[4] ? match[4][0].toLowerCase() : null },
+      };
+      work = rest;
+    }
+  }
+
+  // 2. Duration extraction. Skipped when a from-to range matched —
+  // the range defines duration, and any stray "for N min" alongside
+  // would either double-count or contradict.
   let durationMin = null;
-  const dur = extractDuration(work);
-  if (dur.matched && dur.minutes > 0) {
-    durationMin = dur.minutes;
-    work = dur.rest;
+  if (!pendingRange) {
+    const dur = extractDuration(work);
+    if (dur.matched && dur.minutes > 0) {
+      durationMin = dur.minutes;
+      work = dur.rest;
+    }
   }
 
   // 3. Date / day phase. The first hit wins, but each phase strips its
@@ -457,7 +618,10 @@ function parseQuickAdd(rawInput, opts) {
   let meridiem = null;
   let timeKnown = false;
 
-  if (!isAllDay) {
+  // Skip the regular time phase when a from-to range matched — the
+  // range owns both ends of the event and a stray "at 4pm" alongside
+  // it would either contradict or get re-parsed as a third clock.
+  if (!isAllDay && !pendingRange) {
     if (NOON_RE.test(work)) {
       hour = 12; minute = 0; meridiem = "pm"; timeKnown = true;
       work = work.replace(NOON_RE, "").replace(/\s{2,}/g, " ").trim();
@@ -518,12 +682,18 @@ function parseQuickAdd(rawInput, opts) {
 
   // 7. Resolve the hour-of-day.
   let startDate;
+  let endDateFromRange = null;
   if (isAllDay) {
     // All-day events anchor to midnight of the target date. No top-of-
     // hour default, no clock parse — both are intentionally ignored
     // when `all day` is in the input.
     startDate = new Date(targetDate);
     startDate.setHours(0, 0, 0, 0);
+  } else if (pendingRange) {
+    const resolved = resolveRange(pendingRange, targetDate, now);
+    startDate = resolved.startDate;
+    endDateFromRange = resolved.endDate;
+    timeKnown = true;
   } else if (!timeKnown) {
     // Default: next half-hour from `now`. Applied as HH:MM to whichever
     // target date the day phase picked (today by default; could be next
@@ -541,19 +711,24 @@ function parseQuickAdd(rawInput, opts) {
     let h24 = hour;
     if (meridiem === "pm" && hour < 12) h24 = hour + 12;
     else if (meridiem === "am" && hour === 12) h24 = 0;
-    else if (meridiem == null && hour >= 1 && hour <= 11) {
-      // Ambiguous: 1-7 → PM (afternoon meeting intuition), 8-11 → AM.
-      h24 = (hour <= 7) ? hour + 12 : hour;
-    }
+    else if (meridiem == null) h24 = pickAmbiguousMeridiem(hour, minute, targetDate, now);
     startDate = new Date(targetDate);
     startDate.setHours(h24, minute, 0, 0);
   }
 
   // Resolve duration. All-day events default to a full day (1440 min)
-  // when no `for N days/weeks` was given.
-  const defaultDur = isAllDay ? 1440 : cfg.defaultDurationMin;
-  const durMin = durationMin != null ? durationMin : defaultDur;
-  let endDate = new Date(startDate.getTime() + durMin * 60 * 1000);
+  // when no `for N days/weeks` was given. From-to ranges have already
+  // produced an explicit endDate — duration is just the gap.
+  let endDate;
+  let durMin;
+  if (endDateFromRange) {
+    endDate = endDateFromRange;
+    durMin = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
+  } else {
+    const defaultDur = isAllDay ? 1440 : cfg.defaultDurationMin;
+    durMin = durationMin != null ? durationMin : defaultDur;
+    endDate = new Date(startDate.getTime() + durMin * 60 * 1000);
+  }
 
   // 8. ALWAYS future. Gates on the EVENT END so that an all-day event
   // for today (start at midnight = past, but the event spans the rest
@@ -565,7 +740,12 @@ function parseQuickAdd(rawInput, opts) {
   }
 
   return successResult(name, startDate, endDate, durMin, {
-    dayHint, timeKnown, durationKnown: durationMin != null, location, allDay: isAllDay,
+    dayHint,
+    timeKnown,
+    durationKnown: durationMin != null || pendingRange != null,
+    location,
+    allDay:        isAllDay,
+    agendaId,
   });
 }
 
@@ -575,6 +755,7 @@ function successResult(name, startDate, endDate, durationMin, hints) {
     name,
     location:    hints.location || null,
     allDay:      !!hints.allDay,
+    agendaId:    hints.agendaId == null ? null : hints.agendaId,
     startAt:     Math.floor(startDate.getTime() / 1000),
     endAt:       Math.floor(endDate.getTime()   / 1000),
     durationMin,

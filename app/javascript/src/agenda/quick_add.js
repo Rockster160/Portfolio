@@ -26,7 +26,13 @@
     function parseCurrent() {
       const parser = window.AgendaQuickAddParser;
       if (!parser) return null;
-      return parser.parseQuickAdd(input.value, { now: new Date() });
+      // Pass writable agendas so "<AgendaName> to <event>" can route to
+      // the named agenda. Google-source / read-only ones are excluded
+      // since the quick-add path creates a new local item.
+      const agendas = (window.AgendaStore?.getAgendas?.() || [])
+        .filter((a) => a.editable !== false && a.source !== "google")
+        .map((a) => ({ id: a.id, name: a.name }));
+      return parser.parseQuickAdd(input.value, { now: new Date(), agendas });
     }
 
     function paintPreview() {
@@ -115,7 +121,10 @@
 
     function submit() {
       if (!lastParse || !lastParse.ok) return;
-      const agendaId = resolveDefaultAgendaId();
+      // Parser routing wins over the form's default: "<AgendaName> to
+      // <event>" stamps lastParse.agendaId so the event lands on the
+      // named agenda even when another one is active.
+      const agendaId = lastParse.agendaId || resolveDefaultAgendaId();
       if (!agendaId) {
         errorEl.textContent = "No agenda available — open Advanced to pick one.";
         errorEl.classList.remove("hidden");

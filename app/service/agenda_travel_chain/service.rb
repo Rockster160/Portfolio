@@ -23,6 +23,14 @@ module AgendaTravelChain
   #   chain_successor_id     (int|nil)
   #   chain_head_id          (int)     — self if solo head
   #   leave_at               (int)     — epoch: when the user should start driving for this leg
+  #   post_travel_to         (string)  — `to:` override text — where the user is
+  #                                       headed AFTER the event ends (only
+  #                                       written when the override is set)
+  #   post_travel_seconds    (int)     — drive seconds for the outgoing leg
+  #                                       (event.location → post_travel_to)
+  #   post_travel_minutes    (int)     — ceil-rounded minutes for the outgoing leg
+  #   post_arrive_at         (int)     — epoch: end_at + post_travel_seconds
+  #                                       (when the user arrives at post_travel_to)
   #   overrides              (hash)    — { nonav, notme, before, after, from, to }
   #   input_fingerprint      (sha)     — full chain-input hash; skip recompute when matched
   class Service
@@ -188,14 +196,29 @@ module AgendaTravelChain
       a_out = outgoing_last_location(a)
       b_in  = incoming_first_location(b)
       return false if a_out.blank? || b_in.blank?
-      return false if home_text.blank?
 
-      a_home = chain_home_seconds(a, a_out, a.end_at)
-      home_b = chain_home_seconds(b, b_in,  b.start_at)
-      return false if a_home.nil? || home_b.nil?
+      a_to = overrides_for(a)[:to].presence
+      if a_to
+        # A is committed to `to:` after the event. The via-point is the
+        # `to:` location instead of home — chain when B's required leave
+        # time wouldn't accommodate the user arriving at to: and driving
+        # onward to B.
+        a_via = @resolver.travel_seconds(a_out, a_to, at: a.end_at)
+        via_b = @resolver.travel_seconds(a_to,   b_in, at: b.start_at)
+        return false if a_via.nil? || via_b.nil?
 
-      leave_for_b_from_home = b.start_at.to_i - (b.arrive_early_minutes.to_i * 60) - home_b
-      a.end_at.to_i + a_home > leave_for_b_from_home
+        leave_for_b_via = b.start_at.to_i - (b.arrive_early_minutes.to_i * 60) - via_b
+        a.end_at.to_i + a_via > leave_for_b_via
+      else
+        return false if home_text.blank?
+
+        a_home = chain_home_seconds(a, a_out, a.end_at)
+        home_b = chain_home_seconds(b, b_in,  b.start_at)
+        return false if a_home.nil? || home_b.nil?
+
+        leave_for_b_from_home = b.start_at.to_i - (b.arrive_early_minutes.to_i * 60) - home_b
+        a.end_at.to_i + a_home > leave_for_b_from_home
+      end
     end
 
     def chain_home_seconds(evt, other_loc, at)
@@ -218,17 +241,20 @@ module AgendaTravelChain
       @mode == :backfill
     end
 
+    # `to:` declares an explicit POST-event destination; treat it as the
+    # final outgoing endpoint when present, otherwise fall back to the last
+    # `after:` waypoint (legacy behavior) and finally the event's location.
     def outgoing_last_location(evt)
-      overrides_for(evt)[:after].last.presence || resolved_location(evt) || evt.location.to_s
+      overrides = overrides_for(evt)
+      overrides[:to].presence ||
+        overrides[:after].last.presence ||
+        resolved_location(evt) ||
+        evt.location.to_s
     end
 
-    # `to:` overrides the drive's destination but is outranked by an explicit
-    # `before:` waypoint — `before:` already names the first stop of the
-    # incoming leg, so it takes priority over the leg's terminus.
     def incoming_first_location(evt)
       overrides = overrides_for(evt)
       overrides[:before].first.presence ||
-        overrides[:to].presence ||
         resolved_location(evt) ||
         evt.location.to_s
     end
@@ -294,6 +320,15 @@ module AgendaTravelChain
       drive_mins = drive_secs && (drive_secs / 60.0).ceil
       leave_at = drive_secs && (evt.start_at.to_i - (evt.arrive_early_minutes.to_i * 60) - drive_secs)
 
+      post_to = overrides_for(evt)[:to].presence
+      post_drive_secs = (
+        if post_to
+          @resolver.travel_seconds(evt.location.to_s, outgoing_last_location(evt), at: evt.end_at)
+        end
+      )
+      post_drive_mins = post_drive_secs && (post_drive_secs / 60.0).ceil
+      post_arrive_at = post_drive_secs && (evt.end_at.to_i + post_drive_secs)
+
       travel = {
         "location_address"     => evt.metadata.dig("travel", "location_address"),
         "location_lat"         => evt.metadata.dig("travel", "location_lat"),
@@ -311,6 +346,10 @@ module AgendaTravelChain
         # events visually rather than just rendering the drive minutes.
         "chain_prev_end_at"    => (pred&.end_at&.to_i if pred),
         "leave_at"             => leave_at,
+        "post_travel_to"       => post_to,
+        "post_travel_seconds"  => post_drive_secs,
+        "post_travel_minutes"  => post_drive_mins,
+        "post_arrive_at"       => post_arrive_at,
         "overrides"            => overrides_for(evt).transform_keys(&:to_s),
       }
       fp = input_fingerprint(evt, all_events, travel)
@@ -331,6 +370,7 @@ module AgendaTravelChain
         chain:    [travel["chain_predecessor_id"], travel["chain_successor_id"]],
         from:     travel["travel_from"],
         drive:    travel["travel_seconds"],
+        post:     [travel["post_travel_to"], travel["post_travel_seconds"]],
         home:     home_text,
       }
       ::Digest::SHA256.hexdigest(payload.to_json)

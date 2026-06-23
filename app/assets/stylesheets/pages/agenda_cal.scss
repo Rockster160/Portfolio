@@ -1034,6 +1034,19 @@ $cal-week-px-per-hour: 20px;
         transparent 4px 8px
       );
     }
+
+    // Post-event leg — driven by a `to:<location>` override in notes.
+    // Sits BELOW the event tile, mirroring the pre-event band.
+    &.is-post {
+      // Stripe direction flipped relative to the pre-event band so the
+      // outgoing leg reads visually distinct at a glance even before the
+      // user reads the label. Same alpha / mix as the default pre-band.
+      background-image: repeating-linear-gradient(
+        45deg,
+        color-mix(in srgb, var(--agenda-color, #888) 16%, transparent) 0 4px,
+        transparent 4px 8px
+      );
+    }
   }
 
   // "X min drive" label inside the travel band. Only emitted when the

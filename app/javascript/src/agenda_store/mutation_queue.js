@@ -105,6 +105,20 @@ if (typeof window !== "undefined") {
   window.addEventListener("storage", (e) => {
     if (e.key === QUEUE_KEY || e.key === DROPPED_KEY) notifySubscribers();
   });
+  // Belt-and-braces re-notify on focus/visibility/online — if a
+  // subscriber missed an update (e.g. the badge was painted before the
+  // mutation queue module finished loading, or a cross-tab storage
+  // event got dropped by the browser under load), the spinner can
+  // otherwise stay visible after the underlying queue is empty.
+  // Cheap idempotent call — subscribers all read the live queue length.
+  ["focus", "online"].forEach((evt) => {
+    window.addEventListener(evt, () => notifySubscribers());
+  });
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") notifySubscribers();
+    });
+  }
 }
 
 // ----- enqueue -----
@@ -143,7 +157,12 @@ function enqueue(op) {
 
 let flushing = false;
 let backoffMs = 0;
-const BACKOFF_BASE = 2000;
+// 500ms first retry (was 2s) — the pending-spinner badge is keyed off
+// queue length, so a single transient 5xx used to keep the badge
+// visible for 2 full seconds after the underlying mutation actually
+// recovered on retry. 500ms still gives a real server breathing room
+// without that visual lag.
+const BACKOFF_BASE = 500;
 const BACKOFF_CAP  = 60_000;
 
 async function flush() {

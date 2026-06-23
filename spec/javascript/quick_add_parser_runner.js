@@ -29,8 +29,16 @@ function describe(result) {
   };
 }
 
-function run(input, atDate) {
-  return describe(parseQuickAdd(input, { now: atDate }));
+function run(input, atDate, extraOpts) {
+  return describe(parseQuickAdd(input, Object.assign({ now: atDate }, extraOpts || {})));
+}
+
+function runFull(input, atDate, extraOpts) {
+  // Surfaces agendaId — the agenda-routing fixtures need it.
+  const r = parseQuickAdd(input, Object.assign({ now: atDate }, extraOpts || {}));
+  const d = describe(r);
+  if (r.ok) d.agendaId = r.agendaId;
+  return d;
 }
 
 // Pinned reference points so cases stay readable.
@@ -44,7 +52,9 @@ const cases = [
   // === Original three examples =========================================
   { name: "trash_no_time",          result: run("take out the trash", MON_10_23) },
   { name: "trash_at_7_morning",     result: run("take out the trash at 7", MON_10_23) },
-  // At 8pm "at 7" → 7pm tomorrow (PM default + roll forward, NEVER flips to AM).
+  // At 8pm "at 7" — under the nearest-future rule, 7am tomorrow comes
+  // sooner than 7pm tomorrow and 7 is outside the 12am-5am skip
+  // window, so AM wins.
   { name: "trash_at_7_after_7pm",   result: run("take out the trash at 7", MON_20_00) },
   { name: "lucky_ones_saturday",    result: run("Lucky Ones Saturday at 4 for 3 hours", MON_10_23) },
 
@@ -64,7 +74,8 @@ const cases = [
   // === Always-future ===================================================
   // 9am at 10:23am → tomorrow 9am.
   { name: "future_roll_explicit_am", result: run("Standup at 9am", MON_10_23) },
-  // 8 with no AM/PM → AM (8 falls in 8-11 morning band); 8am is past 10:23, roll to tomorrow.
+  // 8 with no am/pm — at 10:23am, 8am has already passed but 8pm is
+  // still future, so the nearest-future rule picks 8pm today.
   { name: "future_roll_ambiguous_8", result: run("Standup at 8", MON_10_23) },
 
   // === Duration variants (mirror jarvis/durations.rb) ==================
@@ -151,6 +162,59 @@ const cases = [
   // === Errors ==========================================================
   { name: "empty",               result: run("", MON_10_23) },
   { name: "no_name_only_time",   result: run("at 4pm", MON_10_23) },
+
+  // === Nearest-future ambiguous hour (12am-5am skip window) ============
+  // 9 at 10:23am → 9am has passed, 9pm is future → 9pm today.
+  { name: "ambig_9_morning",  result: run("Storage at 9", MON_10_23) },
+  // 9 at 7am → 9am still future, 9am < 9pm → 9am today.
+  { name: "ambig_9_early_morning", result: run("Storage at 9", TUE_07_00) },
+  // 3 at 4pm → 3am tomorrow is the next occurrence, but 3am is in
+  // the 12am-5am skip window → bump to 3pm tomorrow.
+  { name: "ambig_3_after_3pm",     result: run("Storage at 3", new Date(2026, 5, 22, 16, 0)) },
+  // 12 at 1pm → next 12 = midnight tonight, but that's in the skip
+  // window → bump to next noon.
+  { name: "ambig_12_after_noon",   result: run("Storage at 12", new Date(2026, 5, 22, 13, 0)) },
+  // "tomorrow at 8" at 6pm → tomorrow's AM occurrence (8am) is sooner
+  // than tomorrow's PM occurrence (8pm) and 8 is outside the skip
+  // window → 8am tomorrow.
+  { name: "ambig_tomorrow_at_8",   result: run("Standup tomorrow at 8", MON_18_00) },
+
+  // === From-to range ===================================================
+  { name: "range_from_8_to_10",          result: run("Storage from 8 to 10", MON_10_23) },
+  { name: "range_from_8_until_10",       result: run("Storage from 8 until 10", MON_10_23) },
+  // Explicit meridiems propagate when one end is bare ("from 8 to 10pm").
+  { name: "range_from_8_to_10pm",        result: run("Storage from 8 to 10pm", MON_10_23) },
+  { name: "range_from_8am_to_10",        result: run("Storage from 8am to 10", MON_10_23) },
+  // Multi-hour with explicit AM range starting earlier than now.
+  { name: "range_from_9am_to_11am",      result: run("Standup from 9am to 11am", MON_10_23) },
+  // Noon/midnight tokens inside the range.
+  { name: "range_from_noon_to_3pm",      result: run("Conference from noon to 3pm", MON_10_23) },
+  // Half-hour minutes.
+  { name: "range_from_8_30_to_10",       result: run("Storage from 8:30 to 10pm", MON_10_23) },
+  // Overnight: "from 11pm to 1am" → end on the next day.
+  { name: "range_overnight",             result: run("Watch from 11pm to 1am", MON_10_23) },
+  // Day hint + range stays on that day.
+  { name: "range_with_day_hint",         result: run("Show from 7 to 9 on Friday", MON_10_23) },
+
+  // === Agenda routing ==================================================
+  // Leading agenda name routes the event; "Storage" is stripped.
+  { name: "agenda_routes_costco",   result: runFull(
+    "Costco to Storage at 5", MON_10_23, { agendas: [{ id: 42, name: "Costco" }, { id: 1, name: "Personal" }] },
+  ) },
+  // No matching agenda → input stays whole, agendaId null.
+  { name: "agenda_no_match",        result: runFull(
+    "Drive to Costco at 5", MON_10_23, { agendas: [{ id: 1, name: "Personal" }] },
+  ) },
+  // Multi-word agenda name wins over a substring agenda.
+  { name: "agenda_longest_wins",    result: runFull(
+    "Family Trips to Disneyland tomorrow", MON_10_23, {
+      agendas: [{ id: 7, name: "Family Trips" }, { id: 8, name: "Family" }],
+    },
+  ) },
+  // Case-insensitive match.
+  { name: "agenda_case_insensitive", result: runFull(
+    "costco to Storage at 5", MON_10_23, { agendas: [{ id: 42, name: "Costco" }] },
+  ) },
 
   // === Pure duration probes (extractDuration only) =====================
   { name: "dur_probe_1h30m",  result: { minutes: extractDuration("1h30m").minutes } },

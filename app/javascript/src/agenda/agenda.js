@@ -276,12 +276,12 @@
     if (count) count.textContent = list.length > 1 ? ` (${list.length})` : "";
   }
 
-  if (window.AgendaMutationQueue) {
-    window.AgendaMutationQueue.subscribe(() => {
-      updatePendingBadge();
-      updateDroppedBanner();
-    });
-  }
+  // Subscribe registration runs inside DOMContentLoaded (below) — at
+  // IIFE top-level `window.AgendaMutationQueue` isn't defined yet
+  // because the esbuild-rails glob plugin invokes `src/agenda/agenda.js`
+  // before `src/agenda_store/mutation_queue.js` (alphabetical). The
+  // queue still drains; what got lost without this fix was the badge
+  // updating on enqueue/dequeue.
 
   // ---------- shared agenda picker ----------
   // Custom dropdown — Safari ignores backgrounds inside native <option>s,
@@ -2298,6 +2298,19 @@
       set("[data-leave-at-target]", (visible && startEpoch > 0) ? `→${fmtCalTime(leaveEpoch)}` : "");
     }
 
+    // Post-travel row — populated when the event has a `to:<location>`
+    // override and the chain service has computed the outgoing leg.
+    const postTravelRow = modal.querySelector("[data-post-travel-row]");
+    if (postTravelRow) {
+      const postTravelMin = parseInt(d.postTravelMinutes, 10) || 0;
+      const postArriveEpoch = parseInt(d.postArriveAtEpoch, 10) || 0;
+      const postVisible = postTravelMin > 0;
+      postTravelRow.classList.toggle("hidden", !postVisible);
+      const fmtMin = window.AgendaItemRenderer?.fmtMinutes || ((n) => `${n}m`);
+      set("[data-post-travel-target]",    postVisible ? fmtMin(postTravelMin) : "");
+      set("[data-post-arrive-at-target]", (postVisible && postArriveEpoch > 0) ? `→${fmtCalTime(postArriveEpoch)}` : "");
+    }
+
     const recurringRow = modal.querySelector("[data-recurring-row]");
     if (recurringRow) {
       const isRecurring = d.recurring === "true";
@@ -2948,6 +2961,10 @@
     });
     updateDroppedBanner();
     updatePendingBadge();
+    window.AgendaMutationQueue?.subscribe(() => {
+      updatePendingBadge();
+      updateDroppedBanner();
+    });
     const checkRollover = scheduleAutoDateAdvance(root);
 
     // Foreground re-sync — mobile browsers suspend the ActionCable socket

@@ -34,9 +34,9 @@ RSpec.describe "AgendaQuickAddParser (JS-side)" do
       expect(r[:startsAt]).to eq("2026-06-22 19:00")
     end
 
-    it "`at 7` at 8pm → 7pm tomorrow (PM default + roll-day-forward; NEVER flips to AM)" do
+    it "`at 7` at 8pm → 7am tomorrow (nearest-future occurrence, 7 is outside 12am-5am skip)" do
       r = by_name[:trash_at_7_after_7pm]
-      expect(r[:startsAt]).to eq("2026-06-23 19:00")
+      expect(r[:startsAt]).to eq("2026-06-23 07:00")
     end
 
     it "`Saturday at 4 for 3 hours` → next Saturday 4pm, 180-minute duration" do
@@ -61,9 +61,9 @@ RSpec.describe "AgendaQuickAddParser (JS-side)" do
       expect(by_name[:at_4_am_explicit][:startsAt]).to eq("2026-06-24 04:00")
     end
 
-    it "ambiguous `at 8` defaults to AM and rolls to tomorrow when past" do
-      # 10:23 → 8am has passed → tomorrow 8am.
-      expect(by_name[:future_roll_ambiguous_8][:startsAt]).to eq("2026-06-23 08:00")
+    it "ambiguous `at 8` picks 8pm same day when 8am has passed (nearest future)" do
+      # 10:23 → 8am has passed, 8pm is still future → 8pm today.
+      expect(by_name[:future_roll_ambiguous_8][:startsAt]).to eq("2026-06-22 20:00")
     end
 
     it "explicit `at 9am` past-due rolls forward 24h" do
@@ -278,6 +278,120 @@ RSpec.describe "AgendaQuickAddParser (JS-side)" do
       r = by_name[:rel_in_4_days_user]
       expect(r[:name]).to eq("doit")
       expect(r[:startsAt]).to eq("2026-06-26 13:30")
+    end
+  end
+
+  describe "nearest-future ambiguous hour (skip 12am-5am)" do
+    it "`Storage at 9` at 10:23am → 9pm today (9am already passed)" do
+      expect(by_name[:ambig_9_morning][:startsAt]).to eq("2026-06-22 21:00")
+    end
+
+    it "`Storage at 9` at 7am → 9am today (still future, nearer than 9pm)" do
+      expect(by_name[:ambig_9_early_morning][:startsAt]).to eq("2026-06-23 09:00")
+    end
+
+    it "`Storage at 3` at 4pm → 3pm tomorrow (3am tomorrow falls in skip window)" do
+      expect(by_name[:ambig_3_after_3pm][:startsAt]).to eq("2026-06-23 15:00")
+    end
+
+    it "`Storage at 12` at 1pm → noon tomorrow (midnight tonight is in skip window)" do
+      expect(by_name[:ambig_12_after_noon][:startsAt]).to eq("2026-06-23 12:00")
+    end
+
+    it "`tomorrow at 8` at 6pm → 8am tomorrow (nearer than 8pm on the target day)" do
+      expect(by_name[:ambig_tomorrow_at_8][:startsAt]).to eq("2026-06-23 08:00")
+    end
+  end
+
+  describe "from-to range" do
+    it "`from 8 to 10` resolves to both ends PM (under skip+nearest-future)" do
+      r = by_name[:range_from_8_to_10]
+      expect(r[:startsAt]).to    eq("2026-06-22 20:00")
+      expect(r[:endsAt]).to      eq("2026-06-22 22:00")
+      expect(r[:durationMin]).to eq(120)
+    end
+
+    it "`from 8 until 10` works the same as `from 8 to 10`" do
+      expect(by_name[:range_from_8_until_10][:startsAt]).to eq("2026-06-22 20:00")
+      expect(by_name[:range_from_8_until_10][:endsAt]).to   eq("2026-06-22 22:00")
+    end
+
+    it "explicit PM on end propagates to ambiguous start (`from 8 to 10pm`)" do
+      r = by_name[:range_from_8_to_10pm]
+      expect(r[:startsAt]).to eq("2026-06-22 20:00")
+      expect(r[:endsAt]).to   eq("2026-06-22 22:00")
+    end
+
+    it "explicit AM on start propagates to ambiguous end (`from 8am to 10`)" do
+      r = by_name[:range_from_8am_to_10]
+      # 8am today is past (10:23), so the always-future gate rolls both
+      # ends to tomorrow.
+      expect(r[:startsAt]).to eq("2026-06-23 08:00")
+      expect(r[:endsAt]).to   eq("2026-06-23 10:00")
+    end
+
+    it "`from 9am to 11am` keeps both ends AM" do
+      r = by_name[:range_from_9am_to_11am]
+      # 11am hasn't passed yet at 10:23, so it stays today.
+      expect(r[:startsAt]).to eq("2026-06-22 09:00")
+      expect(r[:endsAt]).to   eq("2026-06-22 11:00")
+    end
+
+    it "`from noon to 3pm` honors the noon word" do
+      r = by_name[:range_from_noon_to_3pm]
+      expect(r[:startsAt]).to eq("2026-06-22 12:00")
+      expect(r[:endsAt]).to   eq("2026-06-22 15:00")
+    end
+
+    it "`from 8:30 to 10pm` parses minutes on the start" do
+      r = by_name[:range_from_8_30_to_10]
+      expect(r[:startsAt]).to eq("2026-06-22 20:30")
+      expect(r[:endsAt]).to   eq("2026-06-22 22:00")
+    end
+
+    it "overnight `from 11pm to 1am` rolls the end onto the next day" do
+      r = by_name[:range_overnight]
+      expect(r[:startsAt]).to eq("2026-06-22 23:00")
+      expect(r[:endsAt]).to   eq("2026-06-23 01:00")
+    end
+
+    it "day hint + range stays on that day (`Show from 7 to 9 on Friday`)" do
+      r = by_name[:range_with_day_hint]
+      # Nearest-future picker sees AM on Friday as future + earlier
+      # than PM (7 is outside the 12am-5am skip window), so it lands
+      # at 7am Friday. User adds `am/pm` explicitly when they mean PM.
+      expect(r[:startsAt]).to eq("2026-06-26 07:00")
+      expect(r[:endsAt]).to   eq("2026-06-26 09:00")
+      expect(r[:name]).to     eq("Show")
+    end
+  end
+
+  describe "agenda routing" do
+    it "leading agenda name routes the event and strips itself + `to`" do
+      r = by_name[:agenda_routes_costco]
+      expect(r[:agendaId]).to eq(42)
+      expect(r[:name]).to     eq("Storage")
+      expect(r[:startsAt]).to eq("2026-06-22 17:00")
+    end
+
+    it "no agenda matches → agendaId nil and the input stays intact" do
+      r = by_name[:agenda_no_match]
+      expect(r[:agendaId]).to be_nil
+      # "Drive to Costco" is the event name; "at 5" is the time.
+      expect(r[:name]).to     eq("Drive to Costco")
+      expect(r[:startsAt]).to eq("2026-06-22 17:00")
+    end
+
+    it "longest agenda name wins over a substring match" do
+      r = by_name[:agenda_longest_wins]
+      expect(r[:agendaId]).to eq(7)
+      expect(r[:name]).to     eq("Disneyland")
+    end
+
+    it "agenda match is case-insensitive" do
+      r = by_name[:agenda_case_insensitive]
+      expect(r[:agendaId]).to eq(42)
+      expect(r[:name]).to     eq("Storage")
     end
   end
 

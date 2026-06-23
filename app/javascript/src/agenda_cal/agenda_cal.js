@@ -221,24 +221,6 @@
     document.body.classList.remove("cal-event-dragging");
   }
 
-  // ---------- CSRF + PATCH helper for event-drag-to-move ----------
-  function csrfToken() {
-    return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
-  }
-  function patchAgendaItem(itemId, body) {
-    return fetch(`/agenda_items/${itemId}`, {
-      method: "PATCH",
-      credentials: "same-origin",
-      headers: {
-        "Content-Type":     "application/json",
-        "Accept":           "application/json",
-        "X-CSRF-Token":     csrfToken(),
-        "X-Requested-With": "XMLHttpRequest",
-      },
-      body: JSON.stringify(body),
-    });
-  }
-
   // Build a UTC epoch (seconds) for `minutesAfterDayStart` minutes past
   // `dayStart` on the local calendar `dateISO`. The date string IS the
   // logical day (3am-anchored), so a slot 23:30 minutes past the 3am
@@ -274,29 +256,41 @@
     if (dropCol !== btn.parentElement) dropCol.appendChild(btn);
   }
 
+  // Drag-to-move goes through AgendaMutationQueue (same path as modal
+  // edits), so the pending-sync badge surfaces while the queue drains,
+  // the SW's synthetic 503 keeps the op queued for replay when offline,
+  // and a permanent 4xx lands in the dropped-bucket banner.
   function sendEventMove(btn, newStartAt, newEndAt) {
     const itemId = btn.dataset.itemId;
     if (!itemId) return;
     const recurring = btn.dataset.recurring === "true";
-    const origStartAt = btn.dataset.startAt;
-    const origEndAt = btn.dataset.endAt;
-    const origParent = btn.parentElement;
     btn.dataset.startAt = String(newStartAt);
     btn.dataset.endAt = String(newEndAt);
 
-    const body = { agenda_item: { start_at: newStartAt, end_at: newEndAt } };
+    const url = `/agenda_items/${itemId}`;
+    const mid = window.AgendaMutationQueue.newMutationId();
+    const payload = {
+      agenda_item: {
+        start_at:           newStartAt,
+        end_at:             newEndAt,
+        client_mutation_id: mid,
+      },
+    };
     // For recurring items default to occurrence-only — moving a single
     // standup shouldn't drag the whole series with it.
-    if (recurring) body.agenda_item.scope = "occurrence";
+    if (recurring) payload.agenda_item.scope = "occurrence";
 
-    patchAgendaItem(itemId, body).catch(() => {
-      // Revert local state + force a refresh to recover authoritative
-      // server state.
-      btn.dataset.startAt = origStartAt;
-      btn.dataset.endAt = origEndAt;
-      if (origParent) origParent.appendChild(btn);
-      window.__refreshAgendaCal?.();
+    btn.classList.add("is-pending");
+    window.AgendaMutationQueue.enqueue({
+      client_mutation_id: mid,
+      kind:               "update",
+      url,
+      method:             "PATCH",
+      body:               payload,
+      target_id:          String(itemId),
+      dedup_key:          `update:${url}`,
     });
+    window.AgendaMutationQueue.flush();
   }
 
   // ============================================================
@@ -1116,9 +1110,16 @@
     const eventHeight = isPoint
       ? 30 * pxPerMin
       : (durationMin * pxPerMin);
+    // Post-travel band — driven by `to:<location>` in notes. Sits BELOW
+    // the event tile (mirror of the pre-event band). Suppressed for point
+    // events (no duration semantics) and multi-day top-continuation
+    // segments (today's slice doesn't actually own the event's end).
+    const postTravelMinRaw = parseInt(d.postTravelMinutes, 10) || 0;
+    const postTravelMin = (isPoint || continuedTopMaybe) ? 0 : postTravelMinRaw;
     const bandPx = travelMin * pxPerMin;
+    const postBandPx = postTravelMin * pxPerMin;
     const top = (seg.startMin - travelMin) * pxPerMin;
-    const height = eventHeight + bandPx;
+    const height = eventHeight + bandPx + postBandPx;
     node.style.top = `${top}px`;
     node.style.height = `${height}px`;
     node.style.left = "2px";
@@ -1241,10 +1242,47 @@
 
     node.appendChild(content);
 
+    // Post-travel band — appended LAST so it occupies the bottom flex
+    // slot of the tile (`event-content-px` locks the middle slot to the
+    // event's true duration, so the band naturally fills `postBandPx`
+    // below it). Format mirrors the pre-event band: car icon + minutes,
+    // then `→arrive-time` instead of `leave-time→`.
+    if (postTravelMin > 0) {
+      const postBand = document.createElement("div");
+      postBand.className = "cal-week-event-travel is-post";
+      postBand.style.height = `${postBandPx}px`;
+      node.classList.add("has-post-travel");
+      if (postBandPx >= 6) {
+        const fmtMin = window.AgendaItemRenderer?.fmtMinutes || ((n) => `${n}m`);
+        const label = document.createElement("span");
+        label.className = "cal-week-event-travel-label is-compact";
+        label.appendChild(Object.assign(document.createElement("i"), { className: "fa fa-car" }));
+        label.appendChild(document.createTextNode(fmtMin(postTravelMin)));
+        const postArriveEpoch = parseInt(d.postArriveAtEpoch, 10) || 0;
+        if (postArriveEpoch > 0) {
+          const arrive = document.createElement("span");
+          arrive.className = "cal-week-event-travel-leave";
+          arrive.textContent = `→${fmtCalTime(postArriveEpoch)}`;
+          label.appendChild(arrive);
+        }
+        postBand.appendChild(label);
+
+        const narrowLabel = document.createElement("span");
+        narrowLabel.className = "cal-week-event-travel-label is-narrow-fallback";
+        narrowLabel.appendChild(document.createTextNode(fmtMin(postTravelMin)));
+        narrowLabel.appendChild(Object.assign(document.createElement("i"), { className: "fa fa-car" }));
+        postBand.appendChild(narrowLabel);
+      }
+      node.appendChild(postBand);
+    }
+
     // For overlap-layout:
     //   * Travel band extends the EFFECTIVE start backward by travelMin
     //     so a concurrent event in that window goes into a different
     //     lane instead of visually colliding with the band.
+    //   * Post-travel band extends the EFFECTIVE end forward by
+    //     postTravelMin so an event scheduled in the outgoing window also
+    //     lands in a separate lane.
     //   * Point events (triggers/tasks) get rendered with a 12-px MINIMUM
     //     height — at the default 20px/hr that's ~36 visual minutes, well
     //     past the 15-min "logical slot". If we declare a 15-min footprint
@@ -1255,7 +1293,7 @@
     //     matches what the user sees.
     const effectiveStartMin = seg.startMin - travelMin;
     const pointSlotMin = Math.max(15, eventHeight / pxPerMin);
-    const effectiveEndMin = isPoint ? seg.startMin + pointSlotMin : seg.endMin;
+    const effectiveEndMin = isPoint ? seg.startMin + pointSlotMin : seg.endMin + postTravelMin;
     return { node, dateISO: seg.dateISO, startMin: effectiveStartMin, endMin: effectiveEndMin };
   }
 
@@ -1924,7 +1962,9 @@
           // (the band's top) but on drop set the event start to 7am,
           // backing the band up into the early morning. Now the
           // placeholder represents exactly where the event will land.
-          const bandEl = eventDrag.btn.querySelector(".cal-week-event-travel");
+          // Pre-event band only — `.is-post` lives BELOW the event and
+          // doesn't affect grab-to-event-top math.
+          const bandEl = eventDrag.btn.querySelector(".cal-week-event-travel:not(.is-post)");
           const bandPx = bandEl ? bandEl.getBoundingClientRect().height : 0;
           eventDrag.bandPx = bandPx;
           const ghost = eventDrag.btn.cloneNode(true);
