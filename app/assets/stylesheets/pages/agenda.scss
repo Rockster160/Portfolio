@@ -802,7 +802,8 @@ body.ctr-agendas {
         overflow-wrap: anywhere;
       }
     }
-    .agenda-item-travel {
+    .agenda-item-travel,
+    .agenda-item-post-travel {
       font-size: 10px;
       opacity: 0.35;
       line-height: 1.2;
@@ -815,11 +816,16 @@ body.ctr-agendas {
         font-size: 9px;
         flex-shrink: 0;
       }
-      .agenda-item-travel-leave {
+      .agenda-item-travel-leave,
+      .agenda-item-post-travel-arrive {
         font-variant-numeric: tabular-nums;
         flex-shrink: 0;
-        margin-right: 3px;
+        margin-left: 3px;
       }
+    }
+    .agenda-item-travel .agenda-item-travel-leave {
+      margin-left: 0;
+      margin-right: 3px;
     }
     .agenda-item-badge {
       font-size: 10px;

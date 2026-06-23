@@ -166,6 +166,11 @@ function fillBody(node, attrs) {
     if (locText) locText.textContent = location;
   }
 
+  // Post-travel runs FIRST so an event with `to:` (post-travel only,
+  // zero incoming) still gets its outgoing band hydrated even when the
+  // incoming-travel block early-exits below.
+  fillPostTravel(node, attrs);
+
   // Travel block — leave-at time + arrive-early + car drive minutes.
   // Whole block hides when both halves are zero; each half hides
   // independently otherwise (matches the inline conditionals in ERB).
@@ -201,6 +206,25 @@ function fillBody(node, attrs) {
     carText?.remove();
   }
   if (!(arriveEarlyMin > 0 && travelMin > 0)) plus?.remove();
+}
+
+// Post-travel block — outgoing drive when the event has a `to:<location>`
+// in notes. Removed entirely when post_travel_minutes is 0; otherwise
+// shows `🚗 Nm →arrive-time` mirroring the calendar's post band.
+function fillPostTravel(node, attrs) {
+  const block = node.querySelector(".agenda-item-post-travel");
+  if (!block) return;
+  const postMin = Number(attrs["post-travel-minutes"]) || 0;
+  if (postMin <= 0) {
+    block.remove();
+    return;
+  }
+  const text = block.querySelector(".agenda-item-post-travel-text");
+  if (text) text.textContent = fmtMinutes(postMin);
+  const arriveEpoch = Number(attrs["post-arrive-at-epoch"]) || 0;
+  const arrive = block.querySelector(".agenda-item-post-travel-arrive");
+  if (arrive && arriveEpoch > 0) arrive.setAttribute("data-start-epoch", arriveEpoch);
+  else arrive?.remove();
 }
 
 function fillIcons(node, item, attrs, ctx) {
@@ -407,6 +431,41 @@ function patchBody(node, attrs) {
 
   // Travel block structural toggle.
   patchTravelBlock(node, attrs);
+  patchPostTravelBlock(node, attrs);
+}
+
+// Mirrors fillPostTravel's shape on the update path. Adds/removes the
+// `.agenda-item-post-travel` block in place; safe to call when the
+// node was last patched with or without one.
+function patchPostTravelBlock(node, attrs) {
+  const textWrap = node.querySelector(".agenda-item-text");
+  if (!textWrap) return;
+  const postMin = Number(attrs["post-travel-minutes"]) || 0;
+  let block = textWrap.querySelector(".agenda-item-post-travel");
+  if (postMin <= 0) {
+    if (block) block.remove();
+    return;
+  }
+  if (!block) {
+    block = document.createElement("span");
+    block.className = "agenda-item-post-travel";
+    block.innerHTML =
+      '<i class="fa fa-car"></i><span class="agenda-item-post-travel-text"></span>' +
+      '<span class="agenda-item-post-travel-arrive" data-time-hydrate data-format="cal" data-prefix="→"></span>';
+    textWrap.appendChild(block);
+  }
+  const text = block.querySelector(".agenda-item-post-travel-text");
+  if (text) text.textContent = fmtMinutes(postMin);
+  const arriveEpoch = Number(attrs["post-arrive-at-epoch"]) || 0;
+  const arrive = block.querySelector(".agenda-item-post-travel-arrive");
+  if (arrive && arriveEpoch > 0) {
+    setAttrIfChanged(arrive, "data-start-epoch", String(arriveEpoch));
+    if (typeof window.__hydrateAgendaTimeNode === "function") {
+      window.__hydrateAgendaTimeNode(arrive);
+    }
+  } else if (arrive) {
+    arrive.remove();
+  }
 }
 
 function patchTravelBlock(node, attrs) {

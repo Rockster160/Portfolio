@@ -100,7 +100,17 @@ class FitnessBroadcast
   end
 
   def water
-    row("💧", "name::Water", need(2))
+    chore = @user.chores.find_by(name: "8oz Water")
+    expected = need(chore&.target_count || 2)
+    counts_by_day = (
+      if chore
+        ChoreCompletion.where(chore_id: chore.id, user: @user, day_key: @days).group(:day_key).count
+      else
+        {}
+      end
+    )
+
+    "💧 " + dates("💧") { |date| colorize_count(counts_by_day[date] || 0, expected) }
   end
 
   def workout
@@ -165,7 +175,10 @@ class FitnessBroadcast
   end
 
   def status(date, q, color_map)
-    count = query(q, date).count
+    colorize_count(query(q, date).count, color_map)
+  end
+
+  def colorize_count(count, color_map)
     icon = count.zero? ? "-" : count
     color_map[:icons].each do |ico, range|
       icon = ico if range.is_a?(Integer) && count == range
