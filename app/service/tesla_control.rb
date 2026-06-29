@@ -62,7 +62,7 @@ class TeslaControl
     direction = parse_to(direction, :open, :close)
     return proxy_command(:actuate_trunk, which_trunk: :rear) if direction == :toggle
 
-    rt_open = vehicle_data.dig(:doors, :rt) == true
+    rt_open = vehicle_data.dig(:doors, :trunk) == true
     state = rt_open ? :open : :close
     return if state == direction
 
@@ -74,7 +74,8 @@ class TeslaControl
     return proxy_command(:window_control, command: :vent) if direction == :open
 
     data = vehicle_data
-    is_open = [:fd, :fp, :rd, :rp].any? { |w| data.dig(:windows, w) == true }
+    window_keys = [:driver_front, :passenger_front, :driver_rear, :passenger_rear]
+    is_open = window_keys.any? { |w| data.dig(:windows, w) == true }
     state = direction == :toggle && !is_open ? :vent : :close
 
     proxy_command(:window_control, command: state, lat: loc[0], lon: loc[1])

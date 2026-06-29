@@ -57,18 +57,18 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
     lines.push("")
     let opens = []
     if (data.doors) {
-      if (isOpen(data.doors.ft)) { opens.push("Frunk") }
-      if (isOpen(data.doors.df)) { opens.push("FDD") }
-      if (isOpen(data.doors.pf)) { opens.push("FPD") }
-      if (isOpen(data.doors.dr)) { opens.push("RDD") }
-      if (isOpen(data.doors.pr)) { opens.push("RPD") }
-      if (isOpen(data.doors.rt)) { opens.push("Trunk") }
+      if (isOpen(data.doors.frunk))           { opens.push("Frunk") }
+      if (isOpen(data.doors.driver_front))    { opens.push("FDD") }
+      if (isOpen(data.doors.passenger_front)) { opens.push("FPD") }
+      if (isOpen(data.doors.driver_rear))     { opens.push("RDD") }
+      if (isOpen(data.doors.passenger_rear))  { opens.push("RPD") }
+      if (isOpen(data.doors.trunk))           { opens.push("Trunk") }
     }
     if (data.windows) {
-      if (isOpen(data.windows.fd)) { opens.push("FDW") }
-      if (isOpen(data.windows.fp)) { opens.push("FPW") }
-      if (isOpen(data.windows.rd)) { opens.push("RDW") }
-      if (isOpen(data.windows.rp)) { opens.push("RPW") }
+      if (isOpen(data.windows.driver_front))    { opens.push("FDW") }
+      if (isOpen(data.windows.passenger_front)) { opens.push("FPW") }
+      if (isOpen(data.windows.driver_rear))     { opens.push("RDW") }
+      if (isOpen(data.windows.passenger_rear))  { opens.push("RPW") }
     }
     lines.push(opens.length > 0 ? Text.center("Open: " + opens.join(",")) : "")
     lines.push("")

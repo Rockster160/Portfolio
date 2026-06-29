@@ -36,7 +36,37 @@ class TeslaCacheStore
     meta:     %i[VehicleName Vin],
   }.freeze
 
-  WINDOW_KEYS = { fd: :FdWindow, fp: :FpWindow, rd: :RdWindow, rp: :RpWindow }.freeze
+  # Position keys are shared by doors and windows so a "driver_front" door
+  # and "driver_front" window read the same way. Matches the snake_case form
+  # of Tesla's own DoorState keys (DriverFront → driver_front).
+  WINDOW_KEYS = {
+    driver_front:    :FdWindow,
+    passenger_front: :FpWindow,
+    driver_rear:     :RdWindow,
+    passenger_rear:  :RpWindow,
+  }.freeze
+
+  DOOR_KEYS = {
+    driver_front:    :DriverFront,
+    passenger_front: :PassengerFront,
+    driver_rear:     :DriverRear,
+    passenger_rear:  :PassengerRear,
+    frunk:           :TrunkFront,
+    trunk:           :TrunkRear,
+  }.freeze
+
+  # Endpoint-poll car_data uses these short keys for the same positions
+  # (df=driver front, ft=frunk, rt=trunk). Used to fall back to the poll
+  # snapshot when telemetry hasn't sent DoorState yet.
+  DOOR_ENDPOINT_FALLBACK = {
+    driver_front:    :df,
+    passenger_front: :pf,
+    driver_rear:     :dr,
+    passenger_rear:  :pr,
+    frunk:           :ft,
+    trunk:           :rt,
+  }.freeze
+
   TIRE_TEL_KEYS = {
     fl: :TpmsPressureFl, fr: :TpmsPressureFr,
     rl: :TpmsPressureRl, rr: :TpmsPressureRr,
@@ -243,16 +273,12 @@ class TeslaCacheStore
     def compose_doors(ep, tel, sec_ts)
       ds = tel[:DoorState] if tel[:DoorState].is_a?(Hash)
       v  = ep[:vehicle_state] || {}
-      {
-        df:     ds ? ds[:DriverFront]     : v[:df],
-        pf:     ds ? ds[:PassengerFront]  : v[:pf],
-        dr:     ds ? ds[:DriverRear]      : v[:dr],
-        pr:     ds ? ds[:PassengerRear]   : v[:pr],
-        ft:     ds ? ds[:TrunkFront]      : v[:ft],
-        rt:     ds ? ds[:TrunkRear]       : v[:rt],
-        locked: tel[:Locked].nil? ? v[:locked] : tel[:Locked],
-        ts:     sec_ts[:doors] || v[:timestamp],
-      }.compact
+      out = DOOR_KEYS.each_with_object({}) { |(key, tel_key), h|
+        h[key] = ds ? ds[tel_key] : v[DOOR_ENDPOINT_FALLBACK[key]]
+      }
+      out[:locked] = tel[:Locked].nil? ? v[:locked] : tel[:Locked]
+      out[:ts] = sec_ts[:doors] || v[:timestamp]
+      out.compact
     end
 
     def compose_windows(ep, tel, sec_ts)

@@ -115,19 +115,19 @@ RSpec.describe TeslaCacheStore do
       expect(car_data.dig(:charging, :state)).to eq("Charging")
     end
 
-    it "maps DoorState (PascalCase telemetry) to short keys in doors" do
+    it "maps DoorState (PascalCase telemetry) to descriptive keys in doors" do
       described_class.record_telemetry(DoorState: {
-        DriverFront: true, TrunkFront: false, TrunkRear: true
+        DriverFront: true, TrunkFront: false, TrunkRear: true,
       })
-      expect(car_data.dig(:doors, :df)).to be(true)
-      expect(car_data.dig(:doors, :ft)).to be(false)
-      expect(car_data.dig(:doors, :rt)).to be(true)
+      expect(car_data.dig(:doors, :driver_front)).to be(true)
+      expect(car_data.dig(:doors, :frunk)).to be(false)
+      expect(car_data.dig(:doors, :trunk)).to be(true)
     end
 
-    it "normalizes window-state strings to bool open/closed" do
+    it "normalizes window-state strings to bool open/closed (matching door key names)" do
       described_class.record_telemetry(FdWindow: "WindowStateClosed", FpWindow: "WindowStateVent")
-      expect(car_data.dig(:windows, :fd)).to be(false)
-      expect(car_data.dig(:windows, :fp)).to be(true)
+      expect(car_data.dig(:windows, :driver_front)).to be(false)
+      expect(car_data.dig(:windows, :passenger_front)).to be(true)
     end
 
     it "converts BAR tire pressures to PSI in tires section" do
