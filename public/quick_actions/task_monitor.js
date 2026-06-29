@@ -143,6 +143,22 @@ setInterval(function() {
   Monitor.all().forEach(monitor => monitor.setTime())
 }, 1000)
 
+// iPadOS aggressively suspends backgrounded PWAs and kills the underlying
+// WebSocket without firing onclose, so ReconnectingWebSocket never retries.
+// Force a reconnect when the tab returns from a non-trivial hide.
+let hiddenAt = 0
+document.addEventListener("visibilitychange", function() {
+  if (document.visibilityState === "hidden") {
+    hiddenAt = Date.now()
+    return
+  }
+  if (!hiddenAt) { return }
+  let hiddenFor = Date.now() - hiddenAt
+  hiddenAt = 0
+  if (hiddenFor < 2000) { return }
+  try { Monitor.socket.reopen() } catch (_) {}
+})
+
 document.addEventListener("click", function(evt) {
   if (evt.cancelBubble) { return }
 

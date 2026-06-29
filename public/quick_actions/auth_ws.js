@@ -22,13 +22,15 @@ class SimpleWS {
     let sock = sws.auth_socket;
 
     // Detach handlers from any prior socket so its late close/message events
-    // can't flip sock.open back to false after the new socket has connected.
+    // can't flip sock.open back to false after the new socket has connected,
+    // and force-close it so ReconnectingWebSocket stops its own retry loop.
     if (sws.socket) {
       let noop = function () {};
       sws.socket.onopen = noop;
       sws.socket.onclose = noop;
       sws.socket.onerror = noop;
       sws.socket.onmessage = noop;
+      try { sws.socket.close(); } catch (_) {}
     }
 
     sws.socket = new ReconnectingWebSocket(url);
@@ -109,7 +111,8 @@ class SimpleWS {
   }
   reopen() {
     let sws = this;
-    sws.socket = new ReconnectingWebSocket(sws.init_data.url);
+    sws.auth_socket.open = false;
+    sws.setupSocket(sws.init_data.url);
   }
   close() {
     let sws = this;
@@ -182,5 +185,9 @@ export class AuthWS {
 
   send(packet) {
     this.simple_socket.send(packet);
+  }
+
+  reopen() {
+    this.simple_socket.reopen();
   }
 }
