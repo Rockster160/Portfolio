@@ -102,7 +102,10 @@ class Jil::Executor
     @task = task
     @broadcast_task = broadcast_task || task
     @ctx = { vars: {}, return_val: nil, state: :running, output: [] }
-    @input_data = input_data || {}
+    # External entrypoints (controller + Sidekiq JSON roundtrip) deliver
+    # string keys; internal Custom.X calls deliver symbol keys. Normalize so
+    # Global.params / Global.functionParams (which dig symbols) work either way.
+    @input_data = (input_data || {}).with_indifferent_access
     payload = ::ExecutionPayload.create(
       code: code, ctx: @ctx, input_data: ::Tokenizing::TriggerData.serialize(input_data),
     )

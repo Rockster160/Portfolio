@@ -1,37 +1,37 @@
 <% title ||= task.name %>
-<%= content_tag(:div, class: "execute-btn-wrapper", data: task.monitor? ? { task_id: task.id, type: :monitor, monitor: task.monitor } : {}) do %>
-  <%= link_to run_jil_task_path(task, data: { execute: true }), method: :post, remote: true, class: "execute-btn" do %>
-    <div class="execute-btn-title"><%= title %></div>
-    <div class="execute-btn-subtext"></div>
+<%
+  func_args = (task.respond_to?(:function?) && task.function?) ? task.function_args_str : nil
+  wrapper_data = {}
+  wrapper_data.merge!(task_id: task.id, type: :monitor, monitor: task.monitor) if task.monitor?
+  if func_args.present?
+    wrapper_data.merge!(
+      task_id:       task.id,
+      task_name:     task.name,
+      run_url:       run_jil_task_path(task),
+      function_args: func_args,
+    )
+  end
+%>
+<%= content_tag(:div, class: "execute-btn-wrapper", data: wrapper_data) do %>
+  <% if func_args.present? %>
+    <a href="#" class="execute-btn" role="button">
+      <div class="execute-btn-title"><%= title %><span class="execute-btn-args-hint" title="Asks for inputs">…</span></div>
+      <div class="execute-btn-subtext"></div>
+    </a>
+  <% else %>
+    <%= link_to run_jil_task_path(task, data: { execute: true }), method: :post, remote: true, class: "execute-btn" do %>
+      <div class="execute-btn-title"><%= title %></div>
+      <div class="execute-btn-subtext"></div>
+    <% end %>
   <% end %>
   <span class="execute-btn-base"></span>
   <div class="message-wrapper"></div>
 <% end %>
 
-<%#
-
-*ja794 = Global.input_data()::Hash
-
-# -- Runs when the button is pressed --
-zc186 = Global.if({
-  *x8561 = ja794.get("execute")::Boolean
-}, {
-  sd7de = ActionEvent.create({
-    p6a8a = ActionEventData.name("Whisper")::ActionEventData
-    g0449 = ActionEventData.notes("1")::ActionEventData
-  })::ActionEvent
-}, {})::Any
-
-# -- Runs every time the button reconnects or monitor broadcasts --
-c8c98 = Global.get_cache("eevee", "home")::Boolean
-color = Global.ternary(c8c98, "green", "red")::String
-text = Global.ternary(c8c98, "Eevee Home!", "Eevee Gone")::String
-data = Hash.new({
-  h270d = Keyval.new("text", text)::Keyval
-  haab2 = Keyval.new("color", color)::Keyval
-})::Hash
-v62df = Monitor.broadcast("eevee-btn", {
-  lbdb7 = MonitorData.data(data)::MonitorData
-}, false)::Monitor
-
-%>
+<% if func_args.present? && !@jil_run_modal_setup_emitted %>
+  <% @jil_run_modal_setup_emitted = true %>
+  <% content_for :after_body do %>
+    <script type="text/javascript">window.load_schema = `<%= Task.schema(current_user) %>`;</script>
+    <%= javascript_include_tag "jil_run_modal", defer: true %>
+  <% end %>
+<% end %>

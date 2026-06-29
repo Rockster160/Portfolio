@@ -123,4 +123,4 @@ export default class Schema {
   }
 }
 
-Schema.load(window.load_schema)
+if (window.load_schema) { Schema.load(window.load_schema) }

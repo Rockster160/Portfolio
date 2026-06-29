@@ -66,7 +66,14 @@
       <%= f.text_field :listener, placeholder: :Listener, readonly: @readonly %>
 
       <div class="btns">
-        <div class="btn btn-run" href="<%= run_jil_task_path(@task.id || :new) %>">Run</div>
+        <% run_data_attrs = { href: run_jil_task_path(@task.id || :new) }
+           run_label = "Run"
+           if @task.respond_to?(:function?) && @task.function? && @task.function_args_str.present?
+             run_data_attrs["data-function-args"] = @task.function_args_str
+             run_data_attrs["data-task-name"] = @task.name
+             run_label = "Run…"
+           end %>
+        <%= content_tag(:div, run_label, { class: "btn btn-run" }.merge(run_data_attrs)) %>
         <% if @task.persisted? %>
           <a class="btn btn-history" href="<%= jil_task_executions_path(@task) %>">History</a>
           <a class="btn btn-history" href="<%= dashboard_jil_task_executions_path(@task) %>">Dashboard</a>

@@ -226,6 +226,20 @@ class Task < ApplicationRecord
     listener.to_s.split(":", 2).first.presence&.to_sym
   end
 
+  def function?
+    listener.to_s.match?(self.class.func_regex)
+  end
+
+  # Raw args string from a `function(...)` listener, e.g.
+  # `name:String action:["flash" "pulse"]`. Returns nil if not a function
+  # or function has no args.
+  def function_args_str
+    match = listener.to_s.match(self.class.func_regex)
+    return nil if match.blank?
+
+    match[:args].to_s.strip.presence
+  end
+
   def monitor
     return unless listener.to_s.starts_with?("monitor:")
 

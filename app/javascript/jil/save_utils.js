@@ -1,5 +1,6 @@
 import SaveBtn from "./save_btn.js";
 import Toast from "./toast.js";
+import promptForArgs from "./run_args_modal.js";
 
 window.onbeforeunload = function (evt) {
   if (formSubmitting || !formDirty) {
@@ -167,9 +168,18 @@ runBtn
   .onClick(async () => {
     const code = Statement.toCode();
 
+    const argsStr = runBtn.btn?.dataset?.functionArgs;
+    let data = {};
+    if (argsStr) {
+      const taskName = runBtn.btn?.dataset?.taskName;
+      const collected = await promptForArgs({ argsStr, taskName });
+      if (collected === null) { return; } // User dismissed
+      data = collected;
+    }
+
     await fetch(runBtn.btn.getAttribute("href"), {
       method: "POST",
-      body: JSON.stringify({ code: code }),
+      body: JSON.stringify({ code: code, data: data }),
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
@@ -180,9 +190,6 @@ runBtn
           `HTTP error! status: ${res.status} response: ${JSON.stringify(res)}`,
         );
       }
-      // res.json().then(function(json) {
-      //   console.log("Started")
-      // })
     });
   })
   .onError(async (evt) => {

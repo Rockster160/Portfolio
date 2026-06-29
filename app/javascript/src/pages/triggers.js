@@ -1,6 +1,8 @@
 document.addEventListener("click", (e) => {
   const btn = e.target.closest(".execute-btn");
   if (!btn) return;
+  // Function tasks open a modal — let jil_run_modal own the disable/enable.
+  if (btn.closest(".execute-btn-wrapper[data-function-args]")) return;
 
   btn.style.pointerEvents = "none";
   btn.classList.add("disabled");
