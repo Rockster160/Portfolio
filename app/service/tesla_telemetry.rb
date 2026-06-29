@@ -1,3 +1,7 @@
+## After changing app/service/tesla_service.rb, run `request_telemetry` to update.
+# ::Oauth::TeslaApi.me.request_telemetry
+# ::Oauth::TeslaApi.me.check_telemetry
+
 class TeslaTelemetry
   # Receives fleet-telemetry records (via bin/tesla_telemetry_bridge.rb →
   # /webhooks/tesla_telemetry → here) and runs side-effect detections.
