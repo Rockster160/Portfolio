@@ -47,6 +47,7 @@
   #trigger_for(Any:Source String:Name Numeric:Offset ["seconds" "minutes" "hours" "days"] BR "Trigger" TAB String:Scope BR "Data" TAB Hash)::Schedule
   #trigger_for_end(Any:Source String:Name Numeric:Offset ["seconds" "minutes" "hours" "days"] BR "Trigger" TAB String:Scope BR "Data" TAB Hash)::Schedule
   #remove_trigger_for(Any:Source String:Name)::Boolean
+  #remove_triggers_by_scope(Any:Source String:Scope String?:ExceptName)::Numeric
   #triggerWith(String TAB Date BR "" TAB Hash)::Schedule
   #triggerNow(String TAB Hash)::Array
   !#triggerRaw(Hash)::Array # Should this just be a trigger class?

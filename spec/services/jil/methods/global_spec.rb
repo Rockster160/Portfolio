@@ -287,6 +287,81 @@ RSpec.describe Jil::Methods::Global do
     end
   end
 
+  describe "#remove_triggers_by_scope" do
+    let(:source_item) {
+      agenda = create(:agenda, user: user)
+      allow(::AddressBook).to receive(:non_travelable?).and_return(true)
+      agenda.agenda_items.create!(
+        name: "TMS",
+        kind: :event,
+        start_at: 2.days.from_now.beginning_of_hour,
+        end_at:   2.days.from_now.beginning_of_hour + 1.hour,
+        location: "Office",
+      )
+    }
+
+    let(:input_data) { source_item }
+    let(:code) {
+      <<-JIL
+        evt = Global.input_data()::AgendaItem
+        removed = Global.remove_triggers_by_scope(evt, "agenda-travel-refresh")::Numeric
+      JIL
+    }
+
+    it "destroys every scheduled_trigger with matching (source, scope), regardless of name" do
+      user.scheduled_triggers.create!(
+        source_item: source_item, name: "🔄 Pick up red wine",
+        trigger: "agenda-travel-refresh", execute_at: 1.hour.from_now, offset_seconds: -600,
+      )
+      user.scheduled_triggers.create!(
+        source_item: source_item, name: "🔄 Pick up red wine & milanos",
+        trigger: "agenda-travel-refresh", execute_at: 1.hour.from_now, offset_seconds: -600,
+      )
+      user.scheduled_triggers.create!(
+        source_item: source_item, name: "🏠 Drive home",
+        trigger: "agenda-travel-nav-home", execute_at: 2.hours.from_now, offset_seconds: -600,
+      )
+
+      expect_successful_jil
+
+      expect(ctx[:vars][:removed][:value]).to eq(2)
+      expect(user.scheduled_triggers.where(source_item_id: source_item.id, trigger: "agenda-travel-refresh").count).to eq(0)
+      # Untouched: different scope.
+      expect(user.scheduled_triggers.where(source_item_id: source_item.id, trigger: "agenda-travel-nav-home").count).to eq(1)
+    end
+
+    it "returns 0 when nothing matches" do
+      expect_successful_jil
+      expect(ctx[:vars][:removed][:value]).to eq(0)
+    end
+
+    context "with except_name" do
+      let(:code) {
+        <<-JIL
+          evt = Global.input_data()::AgendaItem
+          keep = String.new("🔄 Pick up red wine & milanos")::String
+          removed = Global.remove_triggers_by_scope(evt, "agenda-travel-refresh", keep)::Numeric
+        JIL
+      }
+
+      it "keeps the matching row, removes the rest" do
+        user.scheduled_triggers.create!(
+          source_item: source_item, name: "🔄 Pick up red wine",
+          trigger: "agenda-travel-refresh", execute_at: 1.hour.from_now, offset_seconds: -600,
+        )
+        kept = user.scheduled_triggers.create!(
+          source_item: source_item, name: "🔄 Pick up red wine & milanos",
+          trigger: "agenda-travel-refresh", execute_at: 1.hour.from_now, offset_seconds: -600,
+        )
+
+        expect_successful_jil
+
+        expect(ctx[:vars][:removed][:value]).to eq(1)
+        expect(user.scheduled_triggers.where(source_item_id: source_item.id, trigger: "agenda-travel-refresh").pluck(:id)).to eq([kept.id])
+      end
+    end
+  end
+
   describe "#trigger" do
     let(:task_code) {
       <<-JIL

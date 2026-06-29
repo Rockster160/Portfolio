@@ -377,6 +377,31 @@ class Jil::Methods::Global < Jil::Methods::Base
     rec.destroy.destroyed?
   end
 
+  # Bulk tear-down by (source, trigger_scope) instead of (source, name).
+  # Use when a rule's display name is derived from mutable state — e.g.
+  # event name or current travel minutes — so the prior run's row can't
+  # be located by name on the current run. Pair with `trigger_for` to
+  # produce single-row-per-scope semantics across renames.
+  #
+  # Optional `except_name` keeps the matching row alive (avoids the
+  # delete-then-recreate churn on unchanged runs): call with the about-
+  # to-be-scheduled name so `trigger_for`'s `find_by(source, name)` then
+  # updates that row in place. Returns the number of rows removed.
+  def remove_triggers_by_scope(source, scope, except_name=nil)
+    source_item = resolve_source_item(source)
+    return 0 unless source_item
+    return 0 if scope.blank?
+
+    rel = @jil.user.scheduled_triggers.where(
+      source_item_id: source_item.id, trigger: scope.to_s,
+    )
+    rel = rel.where.not(name: except_name.to_s) if except_name.present?
+    recs = rel.to_a
+    recs.each { |rec| ::Jil::Schedule.cancel(rec) }
+    recs.each(&:destroy)
+    recs.size
+  end
+
   # times(Numeric content(["Break"::Any "Next"::Any "Index"::Numeric]))::Numeric
   private
 
