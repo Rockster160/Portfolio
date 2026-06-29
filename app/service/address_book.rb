@@ -67,7 +67,7 @@ class AddressBook
   # API call (and the surrounding cache key) from being created with junk.
   NON_TRAVELABLE_PREFIX = %r{\A(https?://|www\.|tel:|phone:|mailto:)}i
   NON_TRAVELABLE_HOST = %r{\A(meet\.google\.com|zoom\.us|.*\.zoom\.us|teams\.microsoft\.com|webex\.com|.*\.webex\.com)}i
-  NON_TRAVELABLE_PLACEHOLDER = /\A(tbd|tba|online|virtual|remote|n\/?a)\z/i
+  NON_TRAVELABLE_PLACEHOLDER = /\A(tbd|tba|online|virtual|zoom|remote|n\/?a)\z/i
   NON_TRAVELABLE_PHONE = /\A[\d\s\-+().]+\z/
 
   def self.non_travelable?(str)
@@ -141,7 +141,7 @@ class AddressBook
     # with departure_time (driving mode ignores arrival_time). Use the event's
     # arrival timestamp as the predicted departure when it's in the future;
     # otherwise fall back to "now" for the 15-min pre-check.
-    departure = (at.present? && at.to_i > Time.current.to_i) ? at.to_i : "now"
+    departure = at.present? && at.to_i > Time.current.to_i ? at.to_i : "now"
     bucket = Time.current.to_i / 10.minutes.to_i
     nonnil_cache("traveltime_seconds(#{to},#{from},#{departure},#{bucket})") {
       ::PrettyLogger.info("\b[AddressCache] Traveltime #{to},#{from},#{departure}")
