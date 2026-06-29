@@ -22,7 +22,7 @@ class ApplicationController < ActionController::Base
   rescue_from ::ActionDispatch::Http::Parameters::ParseError, with: :rescue_bad_params
 
   if Rails.env.production?
-    rescue_from ::ActionController::InvalidAuthenticityToken, with: :ban_spam_ip
+    rescue_from ::ActionController::InvalidAuthenticityToken, with: :handle_stale_csrf
     rescue_from ::ActionController::UnknownHttpMethod, with: :under_rug
     rescue_from ::ActionDispatch::Http::MimeNegotiation::InvalidType, with: :under_rug
     rescue_from ::ActionController::ParameterMissing, with: :under_rug
@@ -86,6 +86,25 @@ class ApplicationController < ActionController::Base
     end
 
     raise exception
+  end
+
+  # PWAs hold pages open for days; CSRF tokens rotate with the session
+  # under them. The mutation queue already recovers on 422 by refetching
+  # /chores/csrf and retrying — but if we let the exception escape, every
+  # stale-token POST also hits ExceptionNotifier and Slacks. Render 422
+  # cleanly so legit stale tokens stay silent; keep spam-IP banning for
+  # actual hostile traffic.
+  def handle_stale_csrf(exception)
+    if !ip_whitelisted? && current_ip_spamming?
+      BannedIp.find_or_create_by(ip: current_ip)
+      SlackNotifier.notify("Banned: #{current_ip}")
+      raise exception
+    end
+
+    respond_to do |format|
+      format.json { render json: { error: "stale_csrf" }, status: :unprocessable_entity }
+      format.any  { head :unprocessable_entity }
+    end
   end
 
   def rescue_login
