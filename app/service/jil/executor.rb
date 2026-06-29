@@ -105,7 +105,10 @@ class Jil::Executor
     # External entrypoints (controller + Sidekiq JSON roundtrip) deliver
     # string keys; internal Custom.X calls deliver symbol keys. Normalize so
     # Global.params / Global.functionParams (which dig symbols) work either way.
-    @input_data = (input_data || {}).with_indifferent_access
+    # Listener triggers pass AR records (Jilable.with_jil_attrs returns self) —
+    # leave those untouched so Global.input_data().notes() etc. still work.
+    @input_data = input_data || {}
+    @input_data = @input_data.with_indifferent_access if @input_data.is_a?(::Hash)
     payload = ::ExecutionPayload.create(
       code: code, ctx: @ctx, input_data: ::Tokenizing::TriggerData.serialize(input_data),
     )

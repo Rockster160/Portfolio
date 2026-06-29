@@ -37,4 +37,20 @@ RSpec.describe Jil::Executor do
     exe = described_class.call(user, named_code, { "person" => "Alice", "params" => ["Alice"] })
     expect(exe.result).to eq("Alice")
   end
+
+  # Regression: 0e6b39fd wrapped input_data in .with_indifferent_access
+  # unconditionally, which exploded on AR records and silently dropped every
+  # event:add / agenda_item / chore_completion listener trigger.
+  it "accepts an ApplicationRecord as input_data (Jilable trigger path)" do
+    event = ActionEvent.create!(user: user, name: "Whisper", notes: "Nap")
+    record_code = <<~'JIL'
+      evt = Global.input_data()::ActionEvent
+      act = evt.notes()::String
+      out = Global.return(act)::String
+    JIL
+    exe = described_class.call(user, record_code, event.with_jil_attrs(action: :added))
+    expect(exe.result).to eq("Nap")
+  ensure
+    event&.destroy
+  end
 end
