@@ -153,6 +153,22 @@ body.agenda-cal-body {
   .cal-toolbar-left  { gap: 8px; }
 }
 
+// Phone viewports — split the toolbar into two rows so the nav and the
+// title/view-toggle stop colliding. Row 1: title + view-toggle | actions.
+// Row 2: prev / Today / next, centered.
+@media (max-width: 600px) {
+  .cal-toolbar {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "left actions"
+      "nav  nav";
+    row-gap: 4px;
+  }
+  .cal-toolbar-left    { grid-area: left;    justify-self: start; }
+  .cal-toolbar-actions { grid-area: actions; justify-self: end;   }
+  .cal-toolbar-nav     { grid-area: nav;     justify-self: center; }
+}
+
 // Date-nav buttons (prev / today / next) — used inside the condensed
 // toolbar. Scope to the toolbar nav so the styles only apply in the cal
 // PWA context (not other agenda pages).
@@ -187,6 +203,18 @@ body.agenda-cal-body {
 
     &:hover {
       background: rgba(255, 255, 255, 0.08);
+    }
+
+    // When the viewed week/month is NOT today, the button gets a tinted
+    // background so the user sees that they're off-day. Tapping it
+    // navigates back to today.
+    &.is-off-today {
+      background: $base-blue;
+      border-color: $base-blue;
+      color: #FFF;
+      opacity: 1;
+
+      &:hover { filter: brightness(1.1); }
     }
   }
 }
@@ -557,6 +585,11 @@ $cal-week-px-per-hour: 20px;
   font-size: 12px;
   text-align: center;
   border-left: 1px solid rgba(255, 255, 255, 0.08);
+  // min-width: 0 lets the grid track shrink below the cell's intrinsic
+  // content width on phones — combined with the stacked layout in the
+  // narrow-viewport media query below, the cell can fit MON + 22 in a
+  // ~46px column without spilling into the next track.
+  min-width: 0;
 
   &:first-child { border-left: 0; }
 
@@ -573,6 +606,7 @@ $cal-week-px-per-hour: 20px;
     font-size: 16px;
     width: 26px;
     height: 26px;
+    flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1385,6 +1419,21 @@ body.cal-event-drag-blocked * {
   }
   .cal-month-item .cal-month-item-time {
     display: none;
+  }
+}
+
+// Phone-width — "MON 22" side-by-side doesn't fit in ~46px per column
+// without truncation. Stack the dow ABOVE the day-num bubble so each
+// piece uses vertical room instead of fighting for horizontal width.
+// Never ellipsize the weekday — that's worse than just stacking.
+@media (max-width: 600px) {
+  .cal-week-header-day {
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 2px;
+
+    .cal-week-header-dow      { font-size: 10px; letter-spacing: 0.04em; }
+    .cal-week-header-day-num  { font-size: 13px; width: 22px; height: 22px; }
   }
 }
 

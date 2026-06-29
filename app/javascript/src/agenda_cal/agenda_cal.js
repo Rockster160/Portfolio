@@ -300,6 +300,12 @@
     const grid = $(".cal-month-grid", root);
     if (!grid) return;
 
+    // Capture the load-time "anchored to today" state + paint the initial
+    // Today-pill state. Both happen before the listeners bind so the very
+    // first rollover tick sees a populated dataset flag.
+    setAnchoredToToday(root, 3);
+    updateTodayBtnState(root, 3);
+
     // -- listeners delegated to the root so an HTML grid swap doesn't
     //    invalidate them. Marked with a guard attribute so calling
     //    initMonthView() multiple times only binds once.
@@ -633,6 +639,10 @@
   function initWeekView(root) {
     const grid = $(".cal-week-grid", root);
     if (!grid) return;
+
+    const dayStart = Number(grid.dataset.dayStartHour) || 3;
+    setAnchoredToToday(root, dayStart);
+    updateTodayBtnState(root, dayStart);
 
     if (!root.hasAttribute("data-cal-bound")) {
       root.setAttribute("data-cal-bound", "");
@@ -1687,6 +1697,13 @@
 
     buildWeekBlocks(root);
     updateNowLine(root);
+    // After an in-page jump (prev/next/Today), update the Today-pill
+    // state + the anchored flag so a future midnight rollover behaves as
+    // if the page were freshly loaded onto whatever date the user landed
+    // on. Today-button click → anchored=true → snap back next midnight.
+    // Next-week click → anchored=false → stay put.
+    setAnchoredToToday(root, Number(grid.dataset.dayStartHour) || 3);
+    updateTodayBtnState(root, Number(grid.dataset.dayStartHour) || 3);
   }
 
   // Re-render the month view for a new target month, ENTIRELY
@@ -1821,6 +1838,10 @@
     // the new cell DOM. Without this the cells stay empty until the
     // next sync.
     window.AgendaStore?.notify?.("page");
+    // See renderWeekFor's tail: keep the anchored-to-today flag in sync
+    // with whatever the user just jumped to.
+    setAnchoredToToday(root, 3);
+    updateTodayBtnState(root, 3);
   }
 
   // --- Date helpers used by client-side nav ---
@@ -2259,6 +2280,9 @@
     // the network reports online, force a refresh so we catch up on
     // anything we missed while suspended.
     window.addEventListener("focus", () => {
+      const grid = root.querySelector(".cal-week-grid, .cal-month-grid");
+      const dayStart = Number(grid?.dataset?.dayStartHour) || 3;
+      updateTodayBtnState(root, dayStart);
       window.__refreshAgendaCal?.();
     });
     window.addEventListener("online", () => {
@@ -2439,6 +2463,43 @@
   // ============================================================
   // DAY ROLLOVER
   // ============================================================
+  // Does the currently displayed view contain today?
+  //   week  — today falls inside [weekStart, weekEnd]
+  //   month — today's YYYY-MM matches the viewed month
+  function isViewingToday(root, dayStart) {
+    const today = logicalDateISO(new Date(), dayStart);
+    if (root.classList.contains("agenda-cal-week-page")) {
+      const grid = root.querySelector(".cal-week-grid");
+      const ws = grid?.dataset?.weekStart;
+      const we = grid?.dataset?.weekEnd;
+      if (!ws || !we) return false;
+      return compareISO(today, ws) >= 0 && compareISO(today, we) <= 0;
+    }
+    if (root.classList.contains("agenda-cal-month-page")) {
+      const cur = root.dataset.currentDate;
+      if (!cur) return false;
+      return cur.slice(0, 7) === today.slice(0, 7);
+    }
+    return false;
+  }
+
+  // The "Today" pill in the toolbar gets a tinted state whenever the user
+  // is off today's view, so they can spot at a glance that they've
+  // navigated away. Toggled on init, after every in-page render, and on
+  // each rollover tick + focus event.
+  function updateTodayBtnState(root, dayStart) {
+    const btn = root.querySelector(".cal-today-btn");
+    if (!btn) return;
+    btn.classList.toggle("is-off-today", !isViewingToday(root, dayStart));
+  }
+
+  // Set the load-time "anchored to today" flag — read by handleDayRollover
+  // to decide whether to auto-navigate on midnight / refocus. Stored on
+  // the root dataset so it survives the per-call closure boundary.
+  function setAnchoredToToday(root, dayStart) {
+    root.dataset.anchoredToToday = isViewingToday(root, dayStart) ? "1" : "0";
+  }
+
   function msUntilNextLogicalDay(dayStartHour) {
     const now = new Date();
     const next = new Date(now);
@@ -2462,10 +2523,14 @@
     setTimeout(tick, msUntilNextLogicalDay(dayStart));
 
     // setTimeout doesn't fire across device sleep / PWA backgrounding, so
-    // re-check on foreground. Only act when the logical date actually
-    // changed since the last tick to avoid redundant refreshes.
+    // re-check on foreground. Always re-evaluate the Today-button state
+    // on refocus (the calendar date may have crossed midnight while the
+    // PWA was suspended even when the same week is still in view); only
+    // run the full rollover handler when the logical date has actually
+    // changed since the last tick.
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState !== "visible") return;
+      updateTodayBtnState(root, dayStart);
       const now = logicalDateISO(new Date(), dayStart);
       if (now === lastSeenDate) return;
       lastSeenDate = now;
@@ -2474,28 +2539,25 @@
   }
 
   function handleDayRollover(root, dayStart) {
-    const today = logicalDateISO(new Date(), dayStart);
-    if (root.classList.contains("agenda-cal-week-page")) {
-      const ws = root.querySelector(".cal-week-grid")?.dataset?.weekStart;
-      const we = root.querySelector(".cal-week-grid")?.dataset?.weekEnd;
-      if (ws && we && (compareISO(today, ws) < 0 || compareISO(today, we) > 0)) {
-        // Today walked off the visible week — navigate to today's week.
+    // Only snap back to today if the user was anchored to today when the
+    // page loaded. A deep-link or user-driven navigation away from today
+    // is preserved — they stay on the date they chose; the Today pill
+    // just lights up so they can see they're not on today.
+    const anchored = root.dataset.anchoredToToday === "1";
+    if (anchored && !isViewingToday(root, dayStart)) {
+      if (root.classList.contains("agenda-cal-week-page")) {
         window.location.assign("/agenda/grid");
         return;
       }
-    } else if (root.classList.contains("agenda-cal-month-page")) {
-      const cur = root.dataset.currentDate;
-      if (cur) {
-        const viewedMonth = cur.slice(0, 7);
-        const todayMonth = today.slice(0, 7);
-        if (todayMonth !== viewedMonth) {
-          window.location.assign("/agenda/month");
-          return;
-        }
+      if (root.classList.contains("agenda-cal-month-page")) {
+        window.location.assign("/agenda/month");
+        return;
       }
     }
-    // Same range — just refresh in place so today markers + carry-over
-    // get re-rendered with the new logical date.
+    // Same range OR user navigated away on purpose — refresh in place so
+    // today markers + carry-over re-render with the new logical date, and
+    // light up the Today pill if needed.
+    updateTodayBtnState(root, dayStart);
     window.__refreshAgendaCal();
   }
 
