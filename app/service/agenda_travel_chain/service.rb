@@ -126,12 +126,18 @@ module AgendaTravelChain
     end
 
     # Events whose previous run wrote `metadata["travel"]` but which no longer
-    # qualify (location cleared, nonav added, all_day toggled, kind flipped,
-    # destroyed) need their stored chain pointers cleared so the calendar/
-    # triggers stop treating them as chain participants.
+    # qualify (location cleared, nonav added, all_day toggled, destroyed)
+    # need their stored chain pointers cleared so the calendar/triggers stop
+    # treating them as chain participants.
+    #
+    # Scoped to the candidate base (kind=event, all_day=false, has location)
+    # — non-event items (tasks, triggers) can legitimately carry travel
+    # metadata from Jil's task 388 and must not be stripped here.
     def clear_dropouts(current)
       current_ids = current.map(&:id).to_set
       @user.accessible_agenda_items
+        .where(kind: ::AgendaItem.kinds[:event])
+        .where(all_day: false)
         .where(start_at: day_range)
         .where("metadata ? 'travel'")
         .find_each do |evt|

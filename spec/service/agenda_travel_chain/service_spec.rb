@@ -271,6 +271,28 @@ RSpec.describe AgendaTravelChain::Service do
       expect(a.reload.metadata["travel"]).to be_nil
     end
 
+    it "preserves nested travel metadata on non-event items (kind=task)" do
+      task_item = agenda.agenda_items.create!(
+        kind:     :task,
+        name:     "Pick up wine",
+        start_at: Time.zone.parse("2026-06-18 14:00"),
+        end_at:   Time.zone.parse("2026-06-18 14:30"),
+        location: "Liquor Store",
+        metadata: {
+          "travel" => { "travel_minutes" => 10, "travel_location" => "Liquor Store" },
+          "travel_minutes" => 10, "travel_location" => "Liquor Store",
+        },
+      )
+      described_class.new(user, Date.new(2026, 6, 18)).run
+
+      reloaded = task_item.reload
+      expect(reloaded.metadata["travel"]).to include(
+        "travel_minutes" => 10, "travel_location" => "Liquor Store",
+      )
+      expect(reloaded.metadata["travel_minutes"]).to eq(10)
+      expect(reloaded.metadata["travel_location"]).to eq("Liquor Store")
+    end
+
     it "is a no-op on a second run when inputs are unchanged (fingerprint short-circuit)" do
       make_event(
         name: "Solo",
