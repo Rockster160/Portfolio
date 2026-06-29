@@ -1,73 +1,33 @@
 class TeslaTelemetry
-  # Maps Fleet Telemetry field names (PascalCase) to the existing car_data cache
-  # structure used by TeslaControl, TeslaCommand, and the dashboard.
+  # Receives fleet-telemetry records (via bin/tesla_telemetry_bridge.rb →
+  # /webhooks/tesla_telemetry → here) and runs side-effect detections.
   #
-  # Fleet Telemetry sends data via MQTT → bridge → POST here.
-  # We merge into the same User.me.caches.get(:car_data) hash so all existing
-  # code (dashboard, Jarvis commands, etc.) works unchanged.
+  # All the raw recording, deep-merging, unit conversion, and shape
+  # projection happens in TeslaCacheStore. TeslaTelemetry only owns the
+  # "did something interesting just change?" → Jil trigger logic.
 
-  FIELD_MAP = {
-    VehicleSpeed:   [:drive_state, :speed],
-    Odometer:       [:vehicle_state, :odometer],
-    GpsHeading:     [:drive_state, :heading],
-    Locked:         [:vehicle_state, :locked],
-    FdWindow:       [:vehicle_state, :fd_window],
-    FpWindow:       [:vehicle_state, :fp_window],
-    RdWindow:       [:vehicle_state, :rd_window],
-    RpWindow:       [:vehicle_state, :rp_window],
-    TpmsPressureFl: [:vehicle_state, :tpms_pressure_fl],
-    TpmsPressureFr: [:vehicle_state, :tpms_pressure_fr],
-    TpmsPressureRl: [:vehicle_state, :tpms_pressure_rl],
-    TpmsPressureRr: [:vehicle_state, :tpms_pressure_rr],
-    InsideTemp:     [:climate_state, :inside_temp],
-    OutsideTemp:    [:climate_state, :outside_temp],
-  }.freeze
-
-  # Tire pressure threshold in PSI — below this triggers soft warning.
-  # Tesla reports `tpms_pressure_*` in BAR (both via vehicle_data and the
-  # fleet-telemetry `TpmsPressure*` fields) — `pressure_psi` below converts
-  # so this threshold stays in the unit a US driver actually reads.
+  # Tire pressure threshold in PSI. Tesla reports BAR; TeslaCacheStore
+  # converts to PSI during compose, so by the time we read car_data the
+  # value is already in the unit a US driver reads.
   TIRE_PRESSURE_LOW = 39.0
-  BAR_TO_PSI = 14.504
-
-  # Tesla returns tire pressure in BAR (~2.5–3.1 for a healthy tire).
-  # If we see a value above 10, assume it's already PSI (defensive — would
-  # only happen if a future ingest path stored PSI directly). Magnitudes
-  # below 10 are BAR and need converting.
-  def self.pressure_psi(raw)
-    raw_f = raw.to_f
-    return nil unless raw_f.positive?
-    return raw_f if raw_f > 10
-
-    (raw_f * BAR_TO_PSI).round(1)
-  end
 
   def self.process(data)
     new(data).process
   end
 
   def initialize(data)
-    raw = data.to_h.symbolize_keys
-    # Fleet Telemetry wraps every record as { data: {...}, metadata: {...},
-    # msg: "record_payload", ... }. Unwrap to the inner :data hash if that's
-    # what we got; if a caller hands us a flat hash directly (older API or
-    # tests), use as-is.
-    @data = raw[:data].is_a?(Hash) ? raw[:data].symbolize_keys : raw
-    @metadata = raw[:metadata].is_a?(Hash) ? raw[:metadata].symbolize_keys : {}
+    @raw = data.to_h.symbolize_keys
     @user = User.me
-    prev_car_data = @user.caches.get(:car_data) || {}
-    @prev_speed = prev_car_data.dig(:drive_state, :speed).to_i
-    @prev_charge_state = prev_car_data.dig(:charge_state, :charging_state)
+    @prev = @user.caches.get(:car_data) || {}
   end
 
   def process
-    # TeslaCacheStore handles all the raw recording, merging, and mapping
-    # into the legacy car_data shape. We read back the composed result to
-    # run the side-effect checks that TeslaTelemetry owns.
-    @car_data = ::TeslaCacheStore.record_telemetry(@data)
+    @car_data = ::TeslaCacheStore.record_telemetry(@raw)
 
     detect_drive_changes
     detect_charge_changes
+    detect_hvac_changes
+    detect_trip_changes
     check_tire_pressure
     fire_general_trigger
 
@@ -76,74 +36,133 @@ class TeslaTelemetry
 
   private
 
+  # "Drive" here = vehicle moving. Fires at every red-light → green-light
+  # transition, which is noisy as a "car is on" signal — use
+  # :tesla_hvac_on/:tesla_hvac_off for that. Speed-zero is also reported as
+  # "<invalid>" by Tesla when the sensor is offline (key out, etc.) — the
+  # raw cache stripper drops that before we read here, but the resulting
+  # `speed_mph` of 0 in car_data WOULD still fire :tesla_drive_stop on a
+  # one-off invalid push. Skip when the inbound record's VehicleSpeed was
+  # the sentinel.
   def detect_drive_changes
-    return unless @data.key?(:VehicleSpeed)
-    # Tesla sends the literal string "<invalid>" when the speed sensor is
-    # offline (stopped, key out, etc.). That's NOT "speed is 0" — coercing
-    # it to 0 was misfiring :tesla_drive_stop every time the car parked.
-    return if @data[:VehicleSpeed] == "<invalid>"
+    return unless @raw.key?(:VehicleSpeed) || @raw.dig(:data, :VehicleSpeed)
+    return if speed_in_record == "<invalid>"
 
-    new_speed = @car_data.dig(:drive_state, :speed).to_i
+    new_speed = @car_data.dig(:drive, :speed_mph).to_i
+    prev_speed = @prev.dig(:drive, :speed_mph).to_i
 
-    if @prev_speed.zero? && new_speed.positive?
-      # Hash MUST be explicit braces — `::Jil.trigger`'s third positional
-      # arg is `data` with a default, so bare keyword-style args
-      # (`speed:`) get bound to the method's actual `**kwargs` (auth:,
-      # auth_id:) under Ruby 3's kwarg separation and raise
-      # `unknown keyword: :speed`.
-      ::Jil.trigger(@user, :tesla_drive_start, { speed: new_speed })
-    elsif @prev_speed.positive? && new_speed.zero?
-      ::Jil.trigger(@user, :tesla_drive_stop, {})
+    if prev_speed.zero? && new_speed.positive?
+      payload = { speed: new_speed }
+      ::Jil.trigger(@user, :tesla_drive_start, payload)
+    elsif prev_speed.positive? && new_speed.zero?
+      empty = {}
+      ::Jil.trigger(@user, :tesla_drive_stop, empty)
     end
   end
 
   def detect_charge_changes
-    return unless @data.key?(:ChargeState)
-    # "ClearFaults" is a transient pulse Tesla emits on state-machine
-    # housekeeping, not a real charging state. TeslaCacheStore filters it
-    # from car_data already; skip the detection too.
-    return if @data[:ChargeState] == "ClearFaults"
+    return unless @raw.key?(:ChargeState) || @raw.dig(:data, :ChargeState)
 
-    new_charge_state = @car_data.dig(:charge_state, :charging_state)
-    return if new_charge_state == @prev_charge_state
+    new_state = @car_data.dig(:charging, :state)
+    prev_state = @prev.dig(:charging, :state)
+    return if new_state == prev_state
+    return if new_state.nil?
 
-    ::Jil.trigger(@user, :tesla_charge, {
-      state:    new_charge_state,
-      previous: @prev_charge_state,
-    })
+    payload = { state: new_state, previous: prev_state }
+    ::Jil.trigger(@user, :tesla_charge, payload)
   end
 
-  # A real TPMS reading is always > 0 (anything <= 0 means sensor offline /
-  # not reporting). Treat 0 as "no reading" so we don't fire false alarms.
-  # Pressures are normalized to PSI via `pressure_psi` because Tesla
-  # delivers BAR (~3.0 for a healthy tire); comparing 3.0 < 39 would
-  # otherwise mark every tire as low.
-  def check_tire_pressure
-    real = {
-      fl: self.class.pressure_psi(@car_data.dig(:vehicle_state, :tpms_pressure_fl)),
-      fr: self.class.pressure_psi(@car_data.dig(:vehicle_state, :tpms_pressure_fr)),
-      rl: self.class.pressure_psi(@car_data.dig(:vehicle_state, :tpms_pressure_rl)),
-      rr: self.class.pressure_psi(@car_data.dig(:vehicle_state, :tpms_pressure_rr)),
+  # HvacPower is the real "car has actually started / actually stopped"
+  # signal — Tesla powers the HVAC system on when the driver gets in (or
+  # when remote-start fires) and off when the car truly powers down.
+  # Distinct from drive speed (red light != stopped).
+  def detect_hvac_changes
+    return unless @raw.key?(:HvacPower) || @raw.dig(:data, :HvacPower)
+
+    new_on  = @car_data.dig(:climate, :hvac_on)
+    prev_on = @prev.dig(:climate, :hvac_on)
+    return if new_on == prev_on
+    return if new_on.nil?
+
+    scope = new_on ? :tesla_hvac_on : :tesla_hvac_off
+    empty = {}
+    ::Jil.trigger(@user, scope, empty)
+  end
+
+  # Fires when a nav trip is started, updated, or ended. "Started" =
+  # destination appeared. "Ended" = destination went away. "Updated" =
+  # destination changed (rerouted to a new place).
+  def detect_trip_changes
+    new_trip  = @car_data[:trip]
+    prev_trip = @prev[:trip]
+
+    new_dest  = new_trip&.dig(:destination)
+    prev_dest = prev_trip&.dig(:destination)
+
+    if prev_dest.nil? && new_dest.present?
+      payload = trip_payload(new_trip)
+      ::Jil.trigger(@user, :tesla_trip_started, payload)
+    elsif prev_dest.present? && new_dest.nil?
+      empty = {}
+      ::Jil.trigger(@user, :tesla_trip_ended, empty)
+    elsif prev_dest.present? && new_dest.present? && dest_changed?(prev_dest, new_dest)
+      payload = trip_payload(new_trip)
+      ::Jil.trigger(@user, :tesla_trip_updated, payload)
+    end
+  end
+
+  def trip_payload(trip)
+    {
+      destination_address: trip&.dig(:destination, :address),
+      destination_lat:     trip&.dig(:destination, :lat),
+      destination_lng:     trip&.dig(:destination, :lng),
+      miles_to_arrival:    trip&.dig(:miles_to_arrival),
+      minutes_to_arrival:  trip&.dig(:minutes_to_arrival),
     }
-    return if real.values.all?(&:nil?)
+  end
+
+  def dest_changed?(a, b)
+    return false if a[:lat] == b[:lat] && a[:lng] == b[:lng]
+
+    # A small lat/lng wiggle (GPS jitter, route refinement) shouldn't count
+    # as a re-route. ~0.001 degrees ≈ 100 meters.
+    (a[:lat].to_f - b[:lat].to_f).abs > 0.001 ||
+      (a[:lng].to_f - b[:lng].to_f).abs > 0.001
+  end
+
+  # Maintain the Chores entries for soft-warned tires whose PSI is also
+  # actually below threshold (both conditions must agree — Tesla's soft-
+  # warning flag can stick on a stale cached value while the real pressure
+  # is fine). Operates entirely on the composed car_data.tires section.
+  def check_tire_pressure
+    tires = @car_data[:tires]
+    return unless tires.is_a?(Hash)
 
     chores = @user.list_by_name(:Chores)
-    real.each do |tire, psi|
+    [:fl, :fr, :rl, :rr].each do |tire|
+      psi  = tires[:"#{tire}_psi"]
       next if psi.nil?
 
-      tirename = tire.to_s.chars.then { |dir, side|
-        [dir == "f" ? "Front" : "Back", side == "l" ? "Left" : "Right"]
-      }.join(" ")
-
-      if psi < TIRE_PRESSURE_LOW
-        chores.add("#{tirename} tire pressure low")
+      soft  = tires[:"#{tire}_soft"] == true
+      label = "#{tire_label(tire)} tire pressure low"
+      if soft && psi < TIRE_PRESSURE_LOW
+        chores.add(label)
       else
-        chores.remove("#{tirename} tire pressure low")
+        chores.remove(label)
       end
     end
   end
 
+  def tire_label(tire)
+    dir, side = tire.to_s.chars
+    "#{dir == "f" ? "Front" : "Back"} #{side == "l" ? "Left" : "Right"}"
+  end
+
   def fire_general_trigger
-    ::Jil.trigger(@user, :tesla, @data)
+    ::Jil.trigger(@user, :tesla, @raw)
+  end
+
+  def speed_in_record
+    @raw[:VehicleSpeed] || @raw.dig(:data, :VehicleSpeed)
   end
 end

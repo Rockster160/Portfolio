@@ -180,87 +180,30 @@ module TeslaCommand
       l.include?("/app/") ? l.gsub("`", "'").gsub(/^.*\/app\//, "") : nil
     }.compact.join("\n").truncate(2000)
     SlackNotifier.notify(
-      "*Failed to command:* #{e.inspect}\n" \
-      "#{TeslaControl::SLACK_ERROR_HINTS}\n" \
-      "```\n#{backtrace}\n```",
+      [
+        TeslaErrorClassifier.slack_message(
+          e,
+          where:       "TeslaCommand##{cmd}",
+          toggle_link: TeslaSwitch.toggle_link(:disable),
+        ),
+        "```\n#{backtrace}\n```",
+      ].join("\n"),
     )
     raise e # Re-raise to stop worker from sleeping and attempting to re-get
     "Failed to request from Tesla"
   end
 
-  def cToF(c)
-    return unless c
-
-    (c * (9 / 5.to_f)).round + 32
-  end
-
+  # The broadcast IS the clean :car_data, plus a few ephemeral flags
+  # (loading, failed, forbidden, sleeping) that don't belong on the
+  # persistent cache but the dashboard cell needs to render. Dashboard JS
+  # reads car_data field paths directly — no Rails-side reshaping.
   def format_data(extra_data={})
-    data = Tesla.new.cached_vehicle_data.merge(extra_data)
-
+    data = Tesla.new.cached_vehicle_data || {}
     return {} if data.blank?
-    return data if data[:charge_state].blank?
 
-    {
+    data.merge(extra_data.symbolize_keys).merge(
       forbidden: DataStorage[:tesla_forbidden],
-      loading:   !!data[:loading],
-      sleeping:  data[:state] == "asleep" || !!data[:sleeping],
-      charge:    data.dig(:charge_state, :battery_level),
-      miles:     data.dig(:charge_state, :battery_range)&.floor,
-      charging:  {
-        state:  data.dig(:charge_state, :charging_state),
-        active: data.dig(:charge_state, :charging_state) != "Complete", # FIXME
-        speed:  data.dig(:charge_state, :charge_rate),
-        eta:    data.dig(:charge_state, :minutes_to_full_charge),
-      },
-      climate:   {
-        on:      data.dig(:climate_state, :is_climate_on),
-        set:     cToF(data.dig(:climate_state, :driver_temp_setting)),
-        current: cToF(data.dig(:climate_state, :inside_temp)),
-      },
-      open:      {
-        ft:        data.dig(:vehicle_state, :ft), # Frunk
-        df:        data.dig(:vehicle_state, :df), # Driver Door
-        fd_window: data.dig(:vehicle_state, :fd_window), # Driver Window
-        pf:        data.dig(:vehicle_state, :pf), # Passenger Door
-        fp_window: data.dig(:vehicle_state, :fp_window), # Passenger Window
-        dr:        data.dig(:vehicle_state, :dr), # Rear Driver Door
-        rd_window: data.dig(:vehicle_state, :rd_window), # Rear Driver Window
-        pr:        data.dig(:vehicle_state, :pr), # Rear Passenger Door
-        rp_window: data.dig(:vehicle_state, :rp_window), # Rear Passenger Window
-        rt:        data.dig(:vehicle_state, :rt), # Trunk
-      },
-      locked:    data.dig(:vehicle_state, :locked),
-      drive:     drive_data(data).merge(speed: data.dig(:drive_state, :speed).to_i),
-      loc:       [
-        data.dig(:drive_state, :latitude),
-        data.dig(:drive_state, :longitude),
-      ],
-      timestamp: data[:timestamp].to_i / 1000,
-    }
-  end
-
-  def drive_data(data)
-    loc = [
-      data.dig(:drive_state, :latitude),
-      data.dig(:drive_state, :longitude),
-    ]
-    is_driving = data.dig(:drive_state, :speed).to_i.positive?
-
-    place = address_book.find_contact_near(loc)
-    action = is_driving ? :Near : :At
-    return { action: action, location: place[:name] } if place.present?
-
-    action = is_driving ? :Driving : :Stopped
-    if loc.compact.length == 2
-      city = address_book.reverse_geocode(
-        loc,
-        get: is_driving ? :city : :name,
-      )
-    end
-    return { action: action, location: city } if city.present?
-
-    { action: action, location: loc.compact.map { |v|
-      v&.round(2)
-    }&.join(",").presence || "<Unknown>" }
+      sleeping:  data[:state] == "asleep" || !!extra_data[:sleeping],
+    )
   end
 end

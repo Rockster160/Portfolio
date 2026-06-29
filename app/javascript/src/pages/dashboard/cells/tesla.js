@@ -5,6 +5,26 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
 (function() {
   let cell = undefined
 
+  // Action label for the bottom drive-status line. Mirrors the old Rails-side
+  // drive_data resolution: contact name > city > coords, with verb varying
+  // by whether the car is moving.
+  let driveLabel = function(data) {
+    let moving = data.drive?.moving === true
+    let place = data.location?.name
+    if (place) {
+      return (moving ? "Near " : "At ") + place
+    }
+    let lat = data.location?.lat, lng = data.location?.lng
+    if (lat != null && lng != null) {
+      return (moving ? "Driving " : "Stopped ") + lat.toFixed(2) + "," + lng.toFixed(2)
+    }
+    return moving ? "Driving" : "Stopped"
+  }
+
+  let isOpen = function(v) {
+    return v === true || v === 1
+  }
+
   let renderLines = function() {
     let lines = [], data = cell.data.car
     let topchar = cell.data.loading ? "[ico ti ti-fa-spinner ti-spin]" : "  "
@@ -18,67 +38,65 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
     lines.push(topline)
 
     let status_pieces = []
-    if (data.climate?.current) {
-      status_pieces.push(shiftTempToColor(data.climate.current))
+    if (data.climate?.inside_f != null) {
+      status_pieces.push(shiftTempToColor(data.climate.inside_f))
     }
-    status_pieces.push(Text.yellow((data.charge || "?") + "%"))
-    status_pieces.push(Text.yellow((data.miles || "?") + "m"))
+    status_pieces.push(Text.yellow((data.battery?.pct ?? "?") + "%"))
+    let miles = data.battery?.range_mi != null ? Math.floor(data.battery.range_mi) : "?"
+    status_pieces.push(Text.yellow(miles + "m"))
     lines.push(Text.center(status_pieces.join(" | ")))
 
-    if (data.charging?.active && data.charging.eta > 0 && data.charging.speed > 0 && !(data.drive?.speed > 0)) {
-      let charging_text = "Full: " + data.charging.eta + "min | [ico ti ti-weather-lightning]" + data.charging.speed + "mph"
+    let speed = data.drive?.speed_mph || 0
+    if (data.charging?.active && data.charging.eta_min > 0 && data.charging.rate_mph > 0 && !(speed > 0)) {
+      let charging_text = "Full: " + data.charging.eta_min + "min | [ico ti ti-weather-lightning]" + data.charging.rate_mph + "mph"
       lines.push(Text.center(Text.yellow(charging_text)))
     } else {
       lines.push("")
     }
 
     lines.push("")
-    if (data.open) {
-      let opens = []
-      if (data.open.ft > 0)        { opens.push("Frunk") }
-      if (data.open.df > 0)        { opens.push("FDD") }
-      if (data.open.fd_window > 0) { opens.push("FDW") }
-      if (data.open.pf > 0)        { opens.push("FPD") }
-      if (data.open.fp_window > 0) { opens.push("FPW") }
-      if (data.open.dr > 0)        { opens.push("RDD") }
-      if (data.open.rd_window > 0) { opens.push("RDW") }
-      if (data.open.pr > 0)        { opens.push("RPD") }
-      if (data.open.rp_window > 0) { opens.push("RPW") }
-      if (data.open.rt > 0)        { opens.push("Trunk") }
-      if (opens.length > 0) {
-        lines.push(Text.center("Open: " + opens.join(",")))
-      } else {
-        lines.push("")
-      }
-    } else {
-      lines.push("")
+    let opens = []
+    if (data.doors) {
+      if (isOpen(data.doors.ft)) { opens.push("Frunk") }
+      if (isOpen(data.doors.df)) { opens.push("FDD") }
+      if (isOpen(data.doors.pf)) { opens.push("FPD") }
+      if (isOpen(data.doors.dr)) { opens.push("RDD") }
+      if (isOpen(data.doors.pr)) { opens.push("RPD") }
+      if (isOpen(data.doors.rt)) { opens.push("Trunk") }
     }
+    if (data.windows) {
+      if (isOpen(data.windows.fd)) { opens.push("FDW") }
+      if (isOpen(data.windows.fp)) { opens.push("FPW") }
+      if (isOpen(data.windows.rd)) { opens.push("RDW") }
+      if (isOpen(data.windows.rp)) { opens.push("RPW") }
+    }
+    lines.push(opens.length > 0 ? Text.center("Open: " + opens.join(",")) : "")
     lines.push("")
 
-    if (data.climate?.on) {
-      let climate_text = "Climate: " // [ico ti ti-mdi-fan ti-spin] - Not centered, so looks weird
+    if (data.climate?.hvac_on) {
+      let climate_text = "Climate: "
       climate_text += Text.green("[ON] ")
-      climate_text += shiftTempToColor(data.climate.set)
+      if (data.climate.set_f != null) {
+        climate_text += shiftTempToColor(data.climate.set_f)
+      }
       lines.push(Text.center(climate_text))
     } else {
       lines.push(Text.center(Text.grey("[OFF]")))
     }
 
-    if (data.drive) {
-      let lock = data.locked ? "[ico ti ti-fa-lock]" : "[ico ti ti-fa-unlock]"
-      let drive_text = lock
-
-      drive_text += "[ico ti ti-oct-location]" + data.drive.location
-      if (data.drive.speed > 0) { drive_text += " [ico ti ti-mdi-speedometer]" + data.drive.speed + "mph" }
-      lines.push(Text.center(Text.grey(drive_text)))
-    } else {
-      lines.push("")
+    let lock = data.doors?.locked ? "[ico ti ti-fa-lock]" : "[ico ti ti-fa-unlock]"
+    let drive_text = lock
+    drive_text += "[ico ti ti-oct-location]" + driveLabel(data)
+    if (speed > 0) {
+      drive_text += " [ico ti ti-mdi-speedometer]" + speed + "mph"
     }
+    lines.push(Text.center(Text.grey(drive_text)))
 
     let notify = cell.data.failed ? Text.orange("[FAILED]") : ""
     notify = cell.data.sleeping ? Text.grey("[sleep]") : notify
     notify = cell.data.forbidden ? Text.orange("[AUTH]") : notify
-    lines.push(Text.justify(notify, Time.timeago(data.timestamp * 1000)))
+    let ts = (data.updated_at || 0)
+    lines.push(Text.justify(notify, Time.timeago(ts)))
 
     cell.lines(lines)
   }
@@ -126,14 +144,13 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
       this.data.car = msg
 
       let refresh_next
-      if (this.data.car.climate?.on || this.data.car.drive?.action == "driving") {
+      let car = this.data.car
+      let moving = car.drive?.moving === true
+      if (car.climate?.hvac_on || moving) {
         refresh_next = Time.minute(5)
-      } else if (this.data.car.charging?.active) {
-        let eta_minutes = clamp(parseInt(this.data.car.charging.eta) || 10, 1, 10)
+      } else if (car.charging?.active) {
+        let eta_minutes = clamp(parseInt(car.charging.eta_min) || 10, 1, 10)
         refresh_next = Time.minutes(eta_minutes)
-      // } else if (Time.now().getHours() < 7 || Time.now().getHours() > 22) { // 10pm-7am
-      //   // Every 3 hours during night, every 1 hour during day
-      //   refresh_next = Time.hours(3)
       } else {
         refresh_next = Time.hour()
       }

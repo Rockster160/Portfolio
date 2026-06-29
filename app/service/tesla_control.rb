@@ -25,7 +25,19 @@ class TeslaControl
   end
 
   def perform_requests?
+    return false if ::TeslaSwitch.disabled?
+
     ::Rails.env.production? || self.class.force_live_dev
+  end
+
+  # Short-circuit when the master switch is off — broadcast loading:false so
+  # the UI clears, post the once-per-day "muted" reminder, return falsy.
+  def skip_if_muted!(attempted)
+    return false if ::TeslaSwitch.enabled?
+
+    TeslaCommand.broadcast(loading: false)
+    ::TeslaSwitch.maybe_remind_muted!(attempted)
+    true
   end
 
   def initialize(user)
@@ -50,7 +62,8 @@ class TeslaControl
     direction = parse_to(direction, :open, :close)
     return proxy_command(:actuate_trunk, which_trunk: :rear) if direction == :toggle
 
-    state = vehicle_data.dig(:vehicle_state, :rt).to_i.positive? ? :open : :close
+    rt_open = vehicle_data.dig(:doors, :rt) == true
+    state = rt_open ? :open : :close
     return if state == direction
 
     proxy_command(:actuate_trunk, which_trunk: :rear)
@@ -61,8 +74,7 @@ class TeslaControl
     return proxy_command(:window_control, command: :vent) if direction == :open
 
     data = vehicle_data
-    windows = [:fd, :fp, :rd, :rp]
-    is_open = windows.any? { |window| data.dig(:vehicle_state, :"#{window}_window").to_i.positive? }
+    is_open = [:fd, :fp, :rd, :rp].any? { |w| data.dig(:windows, w) == true }
     state = direction == :toggle && !is_open ? :vent : :close
 
     proxy_command(:window_control, command: state, lat: loc[0], lon: loc[1])
@@ -73,7 +85,7 @@ class TeslaControl
     return proxy_command(:door_lock) if direction == :lock
     return proxy_command(:door_unlock) if direction == :unlock
 
-    locked = vehicle_data.dig(:vehicle_state, :locked)
+    locked = vehicle_data.dig(:doors, :locked)
     locked ? proxy_command(:door_unlock) : proxy_command(:door_lock)
   end
 
@@ -175,6 +187,7 @@ class TeslaControl
   end
 
   def vehicle_data(wake: false)
+    return cached_vehicle_data if skip_if_muted!(:vehicle_data)
     return @vehicle_data = cached_vehicle_data unless perform_requests?
     return @vehicle_data if defined?(@vehicle_data)
 
@@ -184,46 +197,10 @@ class TeslaControl
       cached_data = cached_vehicle_data
       break cached_data if response.blank?
 
-      response[:timestamp] = response.dig(:vehicle_state, :timestamp) # Bubble up to higher key
-
-      # Raw response → :tesla_endpoint history+current; car_data gets
-      # recomposed from endpoint+telemetry currents.
       car_data = ::TeslaCacheStore.record_endpoint(response)
       break car_data if response[:state] == "asleep"
 
-      # Tire pressure: ONLY add a Chores/TODO item when Tesla reports a
-      # warning AND the latest pressure reading is actually below threshold.
-      # This avoids re-adding items every poll when Tesla's soft-warning
-      # value is cached/stale and the real pressure is fine. Both checks
-      # must independently agree before we treat it as an alert.
-      if car_data[:vehicle_state]&.key?(:tpms_soft_warning_fl)
-        chores = User.me.list_by_name(:Chores)
-        todo   = User.me.list_by_name(:TODO)
-        [:fl, :fr, :rl, :rr].each do |tire|
-          tirename = tire.to_s.chars.then { |dir, side|
-            [dir == "f" ? "Front" : "Back", side == "l" ? "Left" : "Right"]
-          }.join(" ")
-          label = "#{tirename} tire pressure low"
-          # Tesla returns pressure in BAR (~3.0 healthy). pressure_psi
-          # normalizes to PSI so the threshold (39) is meaningful.
-          psi   = ::TeslaTelemetry.pressure_psi(car_data.dig(:vehicle_state, :"tpms_pressure_#{tire}"))
-          truly_low = !psi.nil? && psi < ::TeslaTelemetry::TIRE_PRESSURE_LOW
-
-          soft = car_data.dig(:vehicle_state, :"tpms_soft_warning_#{tire}") == true
-          if soft && truly_low
-            chores.add(label)
-          else
-            chores.remove(label)
-          end
-
-          hard = car_data.dig(:vehicle_state, :"tpms_hard_warning_#{tire}") == true
-          if hard && truly_low
-            todo.add(label)
-          else
-            todo.remove(label)
-          end
-        end
-      end
+      maintain_tire_pressure_alerts!(car_data)
     } || cached_vehicle_data
   rescue StandardError => e
     err("Vehicle Data Error", e)
@@ -231,7 +208,35 @@ class TeslaControl
   end
 
   def loc
-    [vehicle_data.dig(:drive_state, :latitude), vehicle_data.dig(:drive_state, :longitude)]
+    [vehicle_data.dig(:location, :lat), vehicle_data.dig(:location, :lng)]
+  end
+
+  # Tire pressure: ONLY add a Chores/TODO item when Tesla reports a warning
+  # AND the latest pressure reading is actually below threshold. This avoids
+  # re-adding items every poll when Tesla's soft-warning value is cached/
+  # stale and the real pressure is fine. Both checks must independently
+  # agree before we treat it as an alert.
+  def maintain_tire_pressure_alerts!(car_data)
+    tires = car_data[:tires]
+    return unless tires.is_a?(Hash)
+
+    chores = User.me.list_by_name(:Chores)
+    todo   = User.me.list_by_name(:TODO)
+    [:fl, :fr, :rl, :rr].each do |tire|
+      psi = tires[:"#{tire}_psi"]
+      next if psi.nil?
+
+      truly_low = psi < ::TeslaTelemetry::TIRE_PRESSURE_LOW
+      label = "#{tire_label(tire)} tire pressure low"
+
+      tires[:"#{tire}_soft"] && truly_low ? chores.add(label) : chores.remove(label)
+      tires[:"#{tire}_hard"] && truly_low ? todo.add(label)   : todo.remove(label)
+    end
+  end
+
+  def tire_label(tire)
+    dir, side = tire.to_s.chars
+    "#{dir == "f" ? "Front" : "Back"} #{side == "l" ? "Left" : "Right"}"
   end
 
   def vin
@@ -239,6 +244,8 @@ class TeslaControl
   end
 
   def wake_up
+    return false if skip_if_muted!(:wake_up)
+
     res = proxy_post_vehicle(:wake_up)
     res&.dig(:response, :state) == "online"
   end
@@ -264,32 +271,17 @@ class TeslaControl
     500
   end
 
-  # Exceptions raised when the home-Mac proxies (Go + Ruby relay) can't
-  # be reached at all — laptop off, off the home wifi, proxy daemon not
-  # yet up, etc. Distinct from Tesla-API errors with an HTTP response.
-  # We treat these as "command skipped" rather than escalating to Slack.
-  PROXY_UNREACHABLE_ERRORS = [
-    Errno::ECONNREFUSED,
-    Errno::EHOSTUNREACH,
-    Errno::ENETUNREACH,
-    Errno::ETIMEDOUT,
-    SocketError,
-    RestClient::ServerBrokeConnection,
-    RestClient::Exceptions::OpenTimeout,
-    RestClient::Exceptions::ReadTimeout,
-  ].freeze
-
   def wakeup_retry(max_attempts: 5, &block)
     tries = 0
     begin
       tries += 1
       block.call if tries <= max_attempts
-    rescue *PROXY_UNREACHABLE_ERRORS => e
-      # Home proxy is down (most often: laptop is off / away from home
-      # wifi). Don't err() — that posts to Slack with a full stack trace
-      # and turns a known-expected scenario into noise. info() routes to
-      # PrettyLogger only.
-      info("Home proxy unreachable", "#{e.class.name}: #{e.message.to_s[0..120]} — Tesla command skipped.")
+    rescue *::TeslaErrorClassifier::PROXY_UNREACHABLE_CLASSES => e
+      # Home Mac proxies are down or unreachable. Previously this swallowed
+      # silently to avoid noise when laptop was off — now the TeslaSwitch
+      # mute covers that case, so being unreachable WITHOUT a deliberate
+      # mute is genuinely worth a Slack notification with kickstart steps.
+      err("Home proxy unreachable", e)
       TeslaCommand.broadcast(loading: false)
       false
     rescue RestClient::ExceptionWithResponse => e
@@ -328,6 +320,8 @@ class TeslaControl
   end
 
   def get(url, wake: false)
+    return false if skip_if_muted!("GET #{url}")
+
     TeslaCommand.broadcast(loading: true)
 
     return dev_output(:GET, url) unless perform_requests?
@@ -338,23 +332,27 @@ class TeslaControl
   end
 
   def proxy_command(cmd, params={})
+    return false if skip_if_muted!("proxy_command:#{cmd}")
+
     TeslaCommand.broadcast(loading: true)
     wakeup_retry {
       info(cmd.to_s)
       proxy_post_vehicle("command/#{cmd}", params)
     }
   rescue StandardError => e
-    err("Proxy Command Error", e)
+    err("proxy_command:#{cmd}", e)
   end
 
   def command(cmd, params={})
+    return false if skip_if_muted!("command:#{cmd}")
+
     TeslaCommand.broadcast(loading: true)
     wakeup_retry {
       info(cmd.to_s)
       post_vehicle("command/#{cmd}", params)
     }
   rescue StandardError => e
-    err("Command Error", e)
+    err("command:#{cmd}", e)
   end
 
   def parse_to(val, truthy, falsy)
@@ -402,23 +400,14 @@ class TeslaControl
     ::PrettyLogger.info("\b\e[94m[TESLA]\n#{title}#{detail}\e[0m")
   end
 
-  # Multi-line context that gets prepended to every Tesla error post in Slack.
-  # The point is that future-you sees the error months from now after Tesla
-  # changes something and doesn't have to remember how any of this works —
-  # the message itself points at the wizard, the runbooks, and the re-auth
-  # one-liner.
-  SLACK_ERROR_HINTS = <<~MSG.freeze
-    *Tesla error.* If this is unfamiliar, start here:
-    • Smoke-test commands locally: `TeslaSetup.run` → option 7 → `a` (flash_lights)
-    • Re-auth (if 401 / refresh failed): `Oauth::TeslaApi.me.auth_url` from prod console, open in browser, approve
-    • Re-register telemetry: `Oauth::TeslaApi.me.request_telemetry`
-    • Architecture + cheat sheet: `_scripts/tesla/README.md`
-    • Prod telemetry runbook (systemd, certs, logs): `config/tesla/fleet_telemetry/SETUP.md`
-    • Home Mac proxies (Go + Ruby relay): `_scripts/tesla/launchd/SETUP.md`
-  MSG
-
   def err(title=nil, exception)
-    ::SlackNotifier.err(exception, "#{SLACK_ERROR_HINTS}\n*Where:* #{title}\n")
+    ::SlackNotifier.notify(
+      ::TeslaErrorClassifier.slack_message(
+        exception,
+        where:       title.to_s,
+        toggle_link: ::TeslaSwitch.toggle_link(:disable),
+      ),
+    )
     ::PrettyLogger.error(
       "\b\e[94m[TESLA]\e[31m[ERROR]\n",
       title,

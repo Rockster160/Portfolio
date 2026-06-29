@@ -131,6 +131,11 @@ class Oauth::TeslaApi < Oauth::Base
   private
 
   def must_be_live!
+    if ::TeslaSwitch.disabled?
+      ::TeslaSwitch.maybe_remind_muted!(:oauth_tesla_api)
+      raise "Tesla calls are muted via TeslaSwitch (`#{::TeslaSwitch.reason || "no reason set"}`). " \
+            "Re-enable with `TeslaSwitch.enable!` or via the Slack link."
+    end
     return if ::Rails.env.production?
     return if self.class.force_live_dev
 

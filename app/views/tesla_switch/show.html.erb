@@ -1,0 +1,29 @@
+<%= meta_title "Tesla Switch", include_name: false %>
+
+<div class="system-page" style="padding: 24px; max-width: 540px; margin: 0 auto">
+  <h1>Tesla — <%= TeslaSwitch.enabled? ? "ENABLED" : "MUTED" %></h1>
+
+  <% if TeslaSwitch.disabled? %>
+    <p>Muted at <strong><%= TeslaSwitch.disabled_at&.in_time_zone(current_user.timezone) %></strong></p>
+    <% if TeslaSwitch.reason.present? %>
+      <p>Reason: <em><%= TeslaSwitch.reason %></em></p>
+    <% end %>
+    <p>
+      <a class="big-button" href="<%= tesla_switch_path(to: :enable) %>">
+        <i class="fa fa-bolt"></i> Re-enable Tesla
+      </a>
+    </p>
+  <% else %>
+    <p>All Tesla calls (Jil, Jarvis, workers, console) will fire normally.</p>
+    <form action="<%= tesla_switch_path %>" method="get" class="basic" style="margin-top: 12px">
+      <input type="hidden" name="to" value="disable" />
+      <label>Reason (optional, shown in muted-reminder Slack):</label>
+      <input type="text" name="reason" placeholder="e.g. traveling for the weekend" />
+      <button type="submit"><i class="fa fa-volume-off"></i> Mute Tesla</button>
+    </form>
+  <% end %>
+
+  <hr style="margin: 32px 0" />
+  <h3>State</h3>
+  <pre><%= JSON.pretty_generate(@state) %></pre>
+</div>

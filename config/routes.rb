@@ -17,6 +17,7 @@ Rails.application.routes.draw do
 
   post "tesla/api/1/vehicles/:vin/command/:command" => "vehicles#command"
   post "tesla/oauth2/v3/token" => "vehicles#token"
+  get "tesla/switch" => "tesla_switch#show", as: :tesla_switch
 
   root "index#home"
   post "/talk" => "index#talk"

@@ -17,22 +17,20 @@ RSpec.describe TeslaControl do
     end
 
     it "returns the exception's status code when response is present and non-500" do
-      response = instance_double("RestClient::Response", code: 401)
-      exc = instance_double("RestClient::ExceptionWithResponse", response: response)
+      response = instance_double(RestClient::Response, code: 401)
+      exc = instance_double(RestClient::ExceptionWithResponse, response: response)
       expect(control.send(:tesla_exc_code, exc)).to eq(401)
     end
   end
 
   describe "#wakeup_retry — home proxy unreachable" do
     before do
-      allow(control).to receive(:info)
       allow(TeslaCommand).to receive(:broadcast)
-      # Critical: do NOT post to Slack on proxy-unreachable.
       allow(control).to receive(:err)
     end
 
-    TeslaControl::PROXY_UNREACHABLE_ERRORS.each do |klass|
-      it "returns false + logs info (not err) when #{klass} is raised" do
+    TeslaErrorClassifier::PROXY_UNREACHABLE_CLASSES.each do |klass|
+      it "returns false + calls err() (which posts a Slack notification) when #{klass} is raised" do
         called = 0
         result = control.send(:wakeup_retry) {
           called += 1
@@ -40,8 +38,7 @@ RSpec.describe TeslaControl do
         }
         expect(result).to be(false)
         expect(called).to eq(1)
-        expect(control).not_to have_received(:err)
-        expect(control).to have_received(:info).with(/Home proxy unreachable/, /#{klass.name}/)
+        expect(control).to have_received(:err).with("Home proxy unreachable", kind_of(klass))
       end
     end
   end

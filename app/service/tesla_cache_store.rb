@@ -1,24 +1,14 @@
-# Two raw source-of-truth caches + the formatted `:car_data` view.
+# Two raw source-of-truth caches + the formatted `:car_data` view that every
+# reader (dashboard, Jarvis, Jil tasks, tire check) consumes.
 #
-#   :tesla_telemetry  → fleet-telemetry pushes
-#   :tesla_endpoint   → vehicle_data HTTP polls
-#   :car_data         → formatted/cleaned/meta-augmented view that the
-#                       dashboard cell, Jarvis commands, tire check, and
-#                       every other reader consume
+#   :tesla_telemetry → fleet-telemetry pushes (raw, deep-merged + section_ts)
+#   :tesla_endpoint  → vehicle_data HTTP polls (raw, last response)
+#   :car_data        → small, flat, normalized projection of the above
 #
-# Each of the two source caches has the same shape:
-#   {
-#     current: <deep-merged raw across every push from that source>,
-#     history: [{ timestamp:, data: <raw payload> }, …]   # newest first, capped
-#   }
-#
-# `current` and `history` are intentionally untouched — whatever Tesla sent
-# is what we keep. Trust the telemetry; partial pushes (e.g. only the
-# Location latitude changed) are exactly that — partial, and a deep_merge
-# preserves any previously-set siblings. All normalization (BAR→PSI,
-# window-state strings → 0/1, ChargeState "ClearFaults" filter, sentinel
-# `"<invalid>"` skipping, DoorState key remapping, location_name lookup,
-# etc.) happens during the `compose` that builds `:car_data`.
+# The raw caches are kept for debugging. `car_data` is the source of truth
+# for everything human-facing — small enough to read at a glance, with each
+# field normalized (units converted, enum strings → bools, etc.) and per-
+# section timestamps so readers can reason about freshness.
 class TeslaCacheStore
   HISTORY_LIMIT = 10
   TELEMETRY_KEY = :tesla_telemetry
@@ -27,20 +17,39 @@ class TeslaCacheStore
 
   INVALID_SENTINEL = "<invalid>".freeze
   TRANSIENT_CHARGE_STATES = ["ClearFaults"].freeze
-  DOOR_STATE_KEY_MAP = {
-    df: :DriverFront, pf: :PassengerFront,
-    dr: :DriverRear,  pr: :PassengerRear,
-    ft: :TrunkFront,  rt: :TrunkRear,
+  BAR_TO_PSI = 14.504
+
+  # Which telemetry field belongs to which car_data section. Used both to
+  # apply values during compose AND to stamp the section's :ts whenever a
+  # telemetry record touches any of its fields.
+  TELEMETRY_SECTIONS = {
+    location: %i[Location GpsHeading GpsState],
+    battery:  %i[],
+    charging: %i[ChargeState],
+    drive:    %i[VehicleSpeed],
+    trip:     %i[MilesToArrival MinutesToArrival OriginLocation DestinationLocation RouteLine],
+    climate:  %i[HvacPower InsideTemp OutsideTemp],
+    doors:    %i[DoorState Locked],
+    windows:  %i[FdWindow FpWindow RdWindow RpWindow],
+    tires:    %i[TpmsPressureFl TpmsPressureFr TpmsPressureRl TpmsPressureRr],
+    odometer: %i[Odometer],
+    meta:     %i[VehicleName Vin],
+  }.freeze
+
+  WINDOW_KEYS = { fd: :FdWindow, fp: :FpWindow, rd: :RdWindow, rp: :RpWindow }.freeze
+  TIRE_TEL_KEYS = {
+    fl: :TpmsPressureFl, fr: :TpmsPressureFr,
+    rl: :TpmsPressureRl, rr: :TpmsPressureRr,
   }.freeze
 
   class << self
     def record_telemetry(payload)
-      store(TELEMETRY_KEY, payload)
+      store_telemetry(payload)
       refresh_car_data!
     end
 
     def record_endpoint(payload)
-      store(ENDPOINT_KEY, payload)
+      store_endpoint(payload)
       refresh_car_data!
     end
 
@@ -49,51 +58,47 @@ class TeslaCacheStore
     def car_data        = User.me.caches.get(CAR_DATA_KEY)  || {}
 
     def refresh_car_data!
-      composed = compose(endpoint_cache[:current] || {}, telemetry_cache[:current] || {})
+      composed = compose(endpoint_cache, telemetry_cache)
       User.me.caches.set(CAR_DATA_KEY, composed)
       composed
     end
 
-    # Build car_data from the endpoint snapshot (full nested baseline)
-    # overlaid by the telemetry running merge, with every transformation
-    # the readers care about applied here so nothing has to redo it later.
-    def compose(endpoint_current, telemetry_current)
-      out = endpoint_current.deep_dup
-
-      apply_field_map(out, telemetry_current)
-      apply_location(out, telemetry_current)
-      apply_charge_state(out, telemetry_current)
-      apply_door_state(out, telemetry_current)
-      normalize_tire_pressures!(out)
-      normalize_window_states!(out)
-      annotate_location_name!(out)
-      bubble_timestamp!(out)
-
-      out
-    end
-
     private
 
-    # `history` is intentionally raw — exactly what Tesla sent.
-    # `current` deep-merges incoming pushes BUT strips `"<invalid>"` leaves
-    # first, so a transient sensor-offline reading doesn't replace the last
-    # known good value. The empty-hash collapsing keeps a `DoorState`
-    # consisting entirely of `<invalid>` leaves from clobbering current's
-    # full door snapshot.
-    def store(key, payload)
-      raw_symbolized = payload.to_h.deep_symbolize_keys
-      cleaned = strip_invalid(raw_symbolized) || {}
-      existing = User.me.caches.get(key) || {}
+    # Deep-merge incoming telemetry into `current`, dropping `<invalid>` and
+    # noise. Track per-section last-touched timestamps in `section_ts` so the
+    # composer can stamp each section's :ts without re-scanning history.
+    def store_telemetry(payload)
+      raw      = payload.to_h.deep_symbolize_keys
+      data     = raw[:data].is_a?(Hash) ? raw[:data] : raw
+      cleaned  = strip_invalid(data) || {}
+      now_ms   = (Time.current.to_f * 1000).round
+      existing = User.me.caches.get(TELEMETRY_KEY) || {}
       current  = (existing[:current] || {}).deep_merge(cleaned)
-      entry    = { timestamp: (Time.current.to_f * 1000).round, data: payload }
+      section_ts = (existing[:section_ts] || {}).symbolize_keys
+      sections_in_record(cleaned).each { |s| section_ts[s] = now_ms }
+      entry    = { timestamp: now_ms, data: data }
       history  = [entry, *(existing[:history] || [])].first(HISTORY_LIMIT)
 
-      User.me.caches.set(key, { current: current, history: history })
+      User.me.caches.set(TELEMETRY_KEY, {
+        current:    current,
+        section_ts: section_ts,
+        history:    history,
+      })
     end
 
-    # Recursively drop INVALID_SENTINEL leaves. Empty hashes/arrays that
-    # remain after stripping collapse to nil so they don't deep-merge as
-    # empty-but-present keys (which would still overwrite existing values).
+    # The endpoint poll is a full snapshot; replace rather than merge.
+    def store_endpoint(payload)
+      raw = payload.to_h.deep_symbolize_keys
+      User.me.caches.set(ENDPOINT_KEY, {
+        current:   raw,
+        timestamp: (Time.current.to_f * 1000).round,
+      })
+    end
+
+    # Drop `<invalid>` leaves AND collapse hashes/arrays that become empty
+    # after stripping — empty containers still deep-merge as "present" and
+    # would overwrite known-good prior values.
     def strip_invalid(value)
       case value
       when Hash
@@ -112,135 +117,225 @@ class TeslaCacheStore
       end
     end
 
-    # PascalCase telemetry → nested snake_case car_data fields, skipping
-    # any invalid/empty values so they don't blow away the endpoint baseline.
-    def apply_field_map(out, telemetry_current)
-      ::TeslaTelemetry::FIELD_MAP.each do |tel_key, (section, field)|
-        val = telemetry_current[tel_key]
-        next if invalid?(val)
-
-        out[section] ||= {}
-        out[section][field] = normalize_scalar(tel_key, val)
-      end
+    def sections_in_record(cleaned)
+      keys = cleaned.keys.to_set(&:to_sym)
+      TELEMETRY_SECTIONS.select { |_, fields| fields.any? { |f| keys.include?(f) } }.keys
     end
 
-    # Partial overlay — only update each coordinate that's actually present
-    # in the telemetry merge. Trust whatever Tesla sent; a lat-only update
-    # means lng didn't change, not that it was reset.
-    def apply_location(out, telemetry_current)
-      loc = telemetry_current[:Location]
-      return unless loc.is_a?(Hash)
+    # Compose the projected car_data from both raw caches.
+    def compose(endpoint_cache_hash, telemetry_cache_hash)
+      ep = endpoint_cache_hash[:current] || {}
+      tel = telemetry_cache_hash[:current] || {}
+      sec_ts = (telemetry_cache_hash[:section_ts] || {}).symbolize_keys
 
-      lat = loc[:latitude]  || loc[:lat]
-      lng = loc[:longitude] || loc[:lng] || loc[:lon]
-      return if lat.nil? && lng.nil?
+      {
+        state:      ep[:state] || (tel.any? ? "online" : nil),
+        name:       tel[:VehicleName] || ep[:vehicle_state]&.dig(:vehicle_name),
+        vin:        tel[:Vin] || ep[:vin],
 
-      out[:drive_state] ||= {}
-      out[:drive_state][:latitude]  = lat if lat.present?
-      out[:drive_state][:longitude] = lng if lng.present?
+        location:   compose_location(ep, tel, sec_ts),
+        battery:    compose_battery(ep, sec_ts),
+        charging:   compose_charging(ep, tel, sec_ts),
+        drive:      compose_drive(ep, tel, sec_ts),
+        trip:       compose_trip(ep, tel, sec_ts),
+        climate:    compose_climate(ep, tel, sec_ts),
+        doors:      compose_doors(ep, tel, sec_ts),
+        windows:    compose_windows(ep, tel, sec_ts),
+        tires:      compose_tires(ep, tel, sec_ts),
+        odometer:   compose_odometer(ep, tel, sec_ts),
+
+        updated_at: max_ts(endpoint_cache_hash[:timestamp], *sec_ts.values),
+      }.compact
     end
 
-    def apply_charge_state(out, telemetry_current)
-      cs = telemetry_current[:ChargeState]
-      return unless cs.is_a?(String) && cs.present?
-      return if TRANSIENT_CHARGE_STATES.include?(cs)
+    def compose_location(ep, tel, sec_ts)
+      loc = tel[:Location]
+      lat = (loc.is_a?(Hash) ? (loc[:latitude] || loc[:lat]) : nil) || ep.dig(:drive_state, :latitude)
+      lng = (loc.is_a?(Hash) ? (loc[:longitude] || loc[:lng] || loc[:lon]) : nil) || ep.dig(:drive_state, :longitude)
+      return nil unless lat && lng
 
-      out[:charge_state] ||= {}
-      out[:charge_state][:charging_state] = cs
+      {
+        lat:     lat.to_f.round(6),
+        lng:     lng.to_f.round(6),
+        name:    location_name(lat, lng),
+        heading: (tel[:GpsHeading] || ep.dig(:drive_state, :heading))&.to_f&.round(1),
+        ts:      sec_ts[:location] || ep.dig(:drive_state, :timestamp),
+      }.compact
     end
 
-    # Tesla telemetry's DoorState uses TrunkFront / TrunkRear (not FrontTrunk
-    # / RearTrunk). The legacy car_data keys are df/pf/dr/pr/ft/rt.
-    def apply_door_state(out, telemetry_current)
-      ds = telemetry_current[:DoorState]
-      return unless ds.is_a?(Hash)
+    def compose_battery(ep, _sec_ts)
+      cs = ep[:charge_state]
+      return nil unless cs.is_a?(Hash)
+      return nil unless cs[:battery_level].present? || cs[:battery_range].present?
 
-      out[:vehicle_state] ||= {}
-      DOOR_STATE_KEY_MAP.each do |cache_key, door_key|
-        out[:vehicle_state][cache_key] = ds[door_key] if ds.key?(door_key)
-      end
+      {
+        pct:      cs[:battery_level],
+        range_mi: cs[:battery_range]&.to_f&.round(1),
+        ts:       cs[:timestamp],
+      }.compact
     end
 
-    # Tesla returns tire pressures in BAR (both vehicle_data poll and the
-    # TpmsPressure* telemetry fields). Normalize to PSI in car_data so the
-    # threshold and dashboard logic operate in the unit a US driver reads.
-    def normalize_tire_pressures!(out)
-      return unless out[:vehicle_state].is_a?(Hash)
+    def compose_charging(ep, tel, sec_ts)
+      state = tel[:ChargeState]
+      state = nil if TRANSIENT_CHARGE_STATES.include?(state)
+      state ||= ep.dig(:charge_state, :charging_state)
+      return nil unless state
 
-      [:fl, :fr, :rl, :rr].each do |tire|
-        key = :"tpms_pressure_#{tire}"
-        raw = out[:vehicle_state][key]
-        next if raw.nil?
+      cs = ep[:charge_state] || {}
+      {
+        state:    state,
+        active:   ["Disconnected", "Complete", "Idle", "NoPower"].exclude?(state),
+        rate_mph: cs[:charge_rate]&.to_f,
+        amps:     cs[:charger_actual_current],
+        voltage:  cs[:charger_voltage],
+        eta_min:  cs[:minutes_to_full_charge],
+        ts:       sec_ts[:charging] || cs[:timestamp],
+      }.compact
+    end
 
-        psi = ::TeslaTelemetry.pressure_psi(raw)
-        if psi
-          out[:vehicle_state][key] = psi
+    def compose_drive(ep, tel, sec_ts)
+      speed_raw = tel[:VehicleSpeed]
+      speed = speed_raw.is_a?(Numeric) ? speed_raw : ep.dig(:drive_state, :speed)
+      shift = ep.dig(:drive_state, :shift_state)
+
+      {
+        speed_mph: speed.to_i,
+        moving:    speed.to_i.positive?,
+        shift:     shift,
+        ts:        sec_ts[:drive] || ep.dig(:drive_state, :timestamp),
+      }.compact
+    end
+
+    def compose_trip(ep, tel, sec_ts)
+      miles   = tel[:MilesToArrival] || ep.dig(:drive_state, :active_route_miles_to_arrival)
+      minutes = tel[:MinutesToArrival] || ep.dig(:drive_state, :active_route_minutes_to_arrival)
+      dest    = tel[:DestinationLocation] || ep_route_dest(ep)
+      origin  = tel[:OriginLocation]
+      return nil if miles.nil? && minutes.nil? && dest.nil? && origin.nil?
+
+      {
+        destination:        normalize_loc(dest, ep.dig(:drive_state, :active_route_destination)),
+        origin:             normalize_loc(origin),
+        miles_to_arrival:   miles&.to_f&.round(2),
+        minutes_to_arrival: minutes&.to_f&.round(2),
+        ts:                 sec_ts[:trip] || ep.dig(:drive_state, :timestamp),
+      }.compact
+    end
+
+    def compose_climate(ep, tel, sec_ts)
+      hvac = tel[:HvacPower]
+      hvac_on = hvac == "HvacPowerStateOn" if hvac.is_a?(String)
+      hvac_on = ep.dig(:climate_state, :is_climate_on) if hvac_on.nil?
+
+      inside_c  = tel[:InsideTemp]  || ep.dig(:climate_state, :inside_temp)
+      outside_c = tel[:OutsideTemp] || ep.dig(:climate_state, :outside_temp)
+      set_c     = ep.dig(:climate_state, :driver_temp_setting)
+
+      {
+        hvac_on:   hvac_on,
+        inside_f:  c_to_f(inside_c),
+        outside_f: c_to_f(outside_c),
+        set_f:     c_to_f(set_c),
+        ts:        sec_ts[:climate] || ep.dig(:climate_state, :timestamp),
+      }.compact
+    end
+
+    def compose_doors(ep, tel, sec_ts)
+      ds = tel[:DoorState] if tel[:DoorState].is_a?(Hash)
+      v  = ep[:vehicle_state] || {}
+      {
+        df:     ds ? ds[:DriverFront]     : v[:df],
+        pf:     ds ? ds[:PassengerFront]  : v[:pf],
+        dr:     ds ? ds[:DriverRear]      : v[:dr],
+        pr:     ds ? ds[:PassengerRear]   : v[:pr],
+        ft:     ds ? ds[:TrunkFront]      : v[:ft],
+        rt:     ds ? ds[:TrunkRear]       : v[:rt],
+        locked: tel[:Locked].nil? ? v[:locked] : tel[:Locked],
+        ts:     sec_ts[:doors] || v[:timestamp],
+      }.compact
+    end
+
+    def compose_windows(ep, tel, sec_ts)
+      out = ::TeslaCacheStore::WINDOW_KEYS.each_with_object({}) { |(key, tel_key), h|
+        raw = tel[tel_key]
+        raw = ep.dig(:vehicle_state, :"#{key}_window") if raw.nil?
+        # Telemetry sends strings ("WindowStateClosed"/"WindowStateVent");
+        # endpoint poll sends ints (0/1). Both → bool: closed=false, open=true.
+        h[key] = if raw.is_a?(String)
+          raw != "WindowStateClosed"
+        elsif raw.nil?
+          nil
         else
-          # Sensor offline ("<invalid>", 0, etc.) — drop the key so readers
-          # don't treat a stale value as current truth.
-          out[:vehicle_state].delete(key)
+          raw.to_i.positive?
         end
-      end
+      }
+      out[:ts] = sec_ts[:windows] || ep.dig(:vehicle_state, :timestamp)
+      out.compact
     end
 
-    # Telemetry sends "WindowStateClosed" / "WindowStateVent" etc.; legacy
-    # readers do `.to_i.positive?` for any-open detection. Map closed → 0,
-    # anything else → 1.
-    def normalize_window_states!(out)
-      return unless out[:vehicle_state].is_a?(Hash)
-
-      [:fd_window, :fp_window, :rd_window, :rp_window].each do |key|
-        raw = out[:vehicle_state][key]
-        next unless raw.is_a?(String)
-
-        out[:vehicle_state][key] = (raw == "WindowStateClosed" ? 0 : 1)
-      end
+    def compose_tires(ep, tel, sec_ts)
+      v = ep[:vehicle_state] || {}
+      out = ::TeslaCacheStore::TIRE_TEL_KEYS.each_with_object({}) { |(t, tel_key), h|
+        raw = tel[tel_key] || v[:"tpms_pressure_#{t}"]
+        h[:"#{t}_psi"]  = bar_or_psi_to_psi(raw)
+        h[:"#{t}_soft"] = v[:"tpms_soft_warning_#{t}"] == true
+        h[:"#{t}_hard"] = v[:"tpms_hard_warning_#{t}"] == true
+      }
+      out[:ts] = sec_ts[:tires] || v[:timestamp]
+      out.compact
     end
 
-    # Meta: resolved name for the car's current location. Tries the user's
-    # contacts (Home, Sarah's, etc.) before falling back to reverse-geocoded
-    # city. Cheap once cached.
-    def annotate_location_name!(out)
-      lat = out.dig(:drive_state, :latitude)
-      lng = out.dig(:drive_state, :longitude)
-      return unless lat && lng
+    def compose_odometer(ep, tel, sec_ts)
+      raw = tel[:Odometer] || ep.dig(:vehicle_state, :odometer)
+      return nil if raw.nil?
 
+      { mi: raw.to_f.round(1), ts: sec_ts[:odometer] || ep.dig(:vehicle_state, :timestamp) }.compact
+    end
+
+    def ep_route_dest(ep)
+      lat = ep.dig(:drive_state, :active_route_latitude)
+      lng = ep.dig(:drive_state, :active_route_longitude)
+      return nil if lat.nil? && lng.nil?
+
+      { latitude: lat, longitude: lng }
+    end
+
+    def normalize_loc(loc, address=nil)
+      return nil unless loc.is_a?(Hash)
+
+      lat = loc[:latitude] || loc[:lat]
+      lng = loc[:longitude] || loc[:lng] || loc[:lon]
+      return nil if lat.nil? && lng.nil?
+
+      { lat: lat&.to_f&.round(6), lng: lng&.to_f&.round(6), address: address }.compact
+    end
+
+    def location_name(lat, lng)
       book = User.me.address_book
       contact = book.find_contact_near([lat, lng])
-      if contact.respond_to?(:name) && contact.name.present?
-        out[:location_name] = contact.name
-        return
-      end
+      return contact.name if contact.respond_to?(:name) && contact.name.present?
 
-      city = book.reverse_geocode([lat, lng], get: :city)
-      out[:location_name] = city if city.present?
+      book.reverse_geocode([lat, lng], get: :city).presence
     end
 
-    def bubble_timestamp!(out)
-      ts_candidates = [
-        out[:timestamp],
-        out.dig(:vehicle_state, :timestamp),
-        telemetry_cache.dig(:history, 0, :timestamp),
-        endpoint_cache.dig(:history, 0, :timestamp),
-      ].compact
-      out[:timestamp] = ts_candidates.max if ts_candidates.any?
+    def max_ts(*values) = values.compact.max
+
+    def c_to_f(c)
+      return nil if c.nil?
+
+      ((c.to_f * 9 / 5) + 32).round(1)
     end
 
-    def invalid?(val)
-      return true if val.nil?
-      return true if val == INVALID_SENTINEL
-      return true if val.is_a?(String) && val.empty?
-      return true if val.is_a?(Hash) && val.empty?
+    # Telemetry sends BAR (~3.0 for a healthy tire); endpoint sometimes sends
+    # PSI directly. Anything above 10 we treat as already-PSI; otherwise
+    # convert. <=0 = sensor offline → nil so downstream readers don't think
+    # the tire is flat.
+    def bar_or_psi_to_psi(raw)
+      f = raw.to_f
+      return nil unless f.positive?
+      return f.round(1) if f > 10
 
-      false
-    end
-
-    def normalize_scalar(telemetry_key, val)
-      if telemetry_key.to_s.end_with?("Window") && val.is_a?(String)
-        return val == "WindowStateClosed" ? 0 : 1
-      end
-
-      val
+      (f * BAR_TO_PSI).round(1)
     end
   end
 end

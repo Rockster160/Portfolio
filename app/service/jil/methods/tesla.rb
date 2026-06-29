@@ -67,6 +67,11 @@ class Jil::Methods::Tesla < Jil::Methods::Base
   def wrap(&block)
     return false unless @jil.user&.me?
 
+    if ::TeslaSwitch.disabled?
+      ::TeslaSwitch.maybe_remind_muted!(:jil_methods_tesla)
+      return false
+    end
+
     block.call
     true
   rescue ::TeslaNotAuthorized

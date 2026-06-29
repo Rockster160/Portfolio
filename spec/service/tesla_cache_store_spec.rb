@@ -1,12 +1,14 @@
 require "rails_helper"
 
-# Locks in the divided-responsibility cache architecture:
-#   :tesla_telemetry → raw deep-merged telemetry (history + current both raw)
-#   :tesla_endpoint  → raw deep-merged poll responses (history + current raw)
-#   :car_data        → formatted/normalized/meta-augmented derived view
-# Everything that transforms data (BAR→PSI, window strings → ints,
-# ChargeState filtering, sentinel rejection, location_name lookup) happens
-# in compose. The two source caches preserve exactly what Tesla sent.
+# Locks in the cache architecture and the projection from raw caches → the
+# clean :car_data schema:
+#   :tesla_telemetry → raw deep-merged telemetry (current + section_ts + history)
+#   :tesla_endpoint  → last vehicle_data poll response
+#   :car_data        → projected/normalized view: location, battery, charging,
+#                      drive, trip, climate, doors, windows, tires, odometer.
+# Every transformation (BAR→PSI, C→F, window enum → bool, HvacPower → bool,
+# ChargeState ClearFaults filter, <invalid> sentinel stripping) happens during
+# compose. Raw caches preserve what Tesla sent.
 RSpec.describe TeslaCacheStore do
   let(:user) { User.me }
 
@@ -14,8 +16,6 @@ RSpec.describe TeslaCacheStore do
     [:tesla_telemetry, :tesla_endpoint, :car_data].each do |key|
       user.caches.find_or_create_by!(key: key).update!(data: {})
     end
-    # find_contact_near goes through the real address_book; stub so we
-    # don't hit AR/Google in tests.
     allow_any_instance_of(AddressBook).to receive(:find_contact_near).and_return(nil)
     allow_any_instance_of(AddressBook).to receive(:reverse_geocode).and_return(nil)
   end
@@ -24,8 +24,8 @@ RSpec.describe TeslaCacheStore do
   def endpoint_cache  = user.caches.get(:tesla_endpoint)
   def car_data        = user.caches.get(:car_data) || {}
 
-  describe "raw history + current" do
-    it "stores history exactly as Tesla sent it — no formatting, no pruning" do
+  describe "raw telemetry history + current" do
+    it "stores history exactly as Tesla sent it — no formatting" do
       payload = { VehicleSpeed: "<invalid>", TpmsPressureFl: 3.0, FdWindow: "WindowStateClosed" }
       described_class.record_telemetry(payload)
 
@@ -44,7 +44,6 @@ RSpec.describe TeslaCacheStore do
       described_class.record_telemetry(DoorState: { DriverFront: true, TrunkRear: false })
       described_class.record_telemetry(DoorState: { DriverFront: "<invalid>" })
 
-      # The known-good DriverFront stays; invalid is filtered.
       expect(telemetry_cache[:current][:DoorState]).to eq({ DriverFront: true, TrunkRear: false })
     end
 
@@ -65,94 +64,121 @@ RSpec.describe TeslaCacheStore do
       expect(history.length).to eq(described_class::HISTORY_LIMIT)
       expect(history.first[:data][:VehicleSpeed]).to eq(described_class::HISTORY_LIMIT + 3)
     end
+
+    it "stamps section_ts when telemetry record includes a field for that section" do
+      described_class.record_telemetry(HvacPower: "HvacPowerStateOn")
+      expect(telemetry_cache[:section_ts][:climate]).to be_present
+      expect(telemetry_cache[:section_ts][:drive]).to be_nil
+    end
   end
 
-  describe "car_data compose: cleaning + normalization" do
-    it "skips '<invalid>' sentinels so a sensor going offline doesn't crater car_data" do
-      described_class.record_endpoint(drive_state: { speed: 35 })
-      described_class.record_telemetry(VehicleSpeed: "<invalid>")
-
-      # endpoint baseline still has speed=35; telemetry's invalid is ignored
-      expect(car_data.dig(:drive_state, :speed)).to eq(35)
+  describe "car_data projection" do
+    it "exposes battery from the endpoint poll" do
+      described_class.record_endpoint(charge_state: { battery_level: 87, battery_range: 250.4, timestamp: 1 })
+      expect(car_data[:battery]).to include(pct: 87, range_mi: 250.4)
     end
 
-    it "filters 'ClearFaults' (transient pulse) from charging_state" do
-      described_class.record_endpoint(charge_state: { charging_state: "Charging" })
+    it "exposes climate.hvac_on as true when telemetry says HvacPowerStateOn" do
+      described_class.record_telemetry(HvacPower: "HvacPowerStateOn", InsideTemp: 22.0)
+      expect(car_data.dig(:climate, :hvac_on)).to be(true)
+      expect(car_data.dig(:climate, :inside_f)).to eq(71.6) # 22C → 71.6F
+    end
+
+    it "exposes climate.hvac_on as false for HvacPowerStateOff" do
+      described_class.record_telemetry(HvacPower: "HvacPowerStateOff")
+      expect(car_data.dig(:climate, :hvac_on)).to be(false)
+    end
+
+    it "falls back to endpoint is_climate_on when telemetry hasn't sent HvacPower" do
+      described_class.record_endpoint(climate_state: { is_climate_on: true })
+      expect(car_data.dig(:climate, :hvac_on)).to be(true)
+    end
+
+    it "exposes trip data when nav is active" do
+      described_class.record_telemetry(
+        MilesToArrival:      2.34,
+        MinutesToArrival:    6.7,
+        DestinationLocation: { latitude: 40.5, longitude: -111.5 },
+        OriginLocation:      { latitude: 40.4, longitude: -111.6 },
+      )
+      expect(car_data[:trip]).to include(
+        miles_to_arrival:   2.34,
+        minutes_to_arrival: 6.7,
+      )
+      expect(car_data.dig(:trip, :destination)).to include(lat: 40.5, lng: -111.5)
+      expect(car_data.dig(:trip, :origin)).to include(lat: 40.4, lng: -111.6)
+    end
+
+    it "filters 'ClearFaults' (transient pulse) from charging.state" do
+      described_class.record_endpoint(charge_state: { battery_level: 50, charging_state: "Charging" })
       described_class.record_telemetry(ChargeState: "ClearFaults")
-
-      expect(car_data.dig(:charge_state, :charging_state)).to eq("Charging")
+      expect(car_data.dig(:charging, :state)).to eq("Charging")
     end
 
-    it "maps DoorState.TrunkFront/TrunkRear → ft/rt (the bug fix)" do
+    it "maps DoorState (PascalCase telemetry) to short keys in doors" do
       described_class.record_telemetry(DoorState: {
-        DriverFront: true, TrunkFront: false, TrunkRear: true,
+        DriverFront: true, TrunkFront: false, TrunkRear: true
       })
-
-      expect(car_data.dig(:vehicle_state, :df)).to eq(true)
-      expect(car_data.dig(:vehicle_state, :ft)).to eq(false)
-      expect(car_data.dig(:vehicle_state, :rt)).to eq(true)
+      expect(car_data.dig(:doors, :df)).to be(true)
+      expect(car_data.dig(:doors, :ft)).to be(false)
+      expect(car_data.dig(:doors, :rt)).to be(true)
     end
 
-    it "normalizes window-state strings to int 0/1" do
+    it "normalizes window-state strings to bool open/closed" do
       described_class.record_telemetry(FdWindow: "WindowStateClosed", FpWindow: "WindowStateVent")
-
-      expect(car_data.dig(:vehicle_state, :fd_window)).to eq(0)
-      expect(car_data.dig(:vehicle_state, :fp_window)).to eq(1)
+      expect(car_data.dig(:windows, :fd)).to be(false)
+      expect(car_data.dig(:windows, :fp)).to be(true)
     end
 
-    it "converts BAR tire pressures to PSI in car_data" do
+    it "converts BAR tire pressures to PSI in tires section" do
       described_class.record_endpoint(vehicle_state: {
-        tpms_pressure_fl: 3.0, tpms_pressure_fr: 3.1,
-        tpms_pressure_rl: 2.95, tpms_pressure_rr: 2.975,
+        tpms_pressure_fl: 3.0, tpms_pressure_fr: 3.1, tpms_pressure_rl: 2.95, tpms_pressure_rr: 2.975
       })
-
-      expect(car_data.dig(:vehicle_state, :tpms_pressure_fl)).to eq(43.5)
-      expect(car_data.dig(:vehicle_state, :tpms_pressure_fr)).to eq(45.0)
+      expect(car_data.dig(:tires, :fl_psi)).to eq(43.5)
+      expect(car_data.dig(:tires, :fr_psi)).to eq(45.0)
     end
 
-    it "drops tpms_pressure_* when sensor offline (so readers don't see a stale value)" do
-      described_class.record_endpoint(vehicle_state: {
-        tpms_pressure_fl: 3.0, tpms_pressure_fr: "<invalid>",
-      })
+    it "omits tire psi when sensor offline" do
+      described_class.record_endpoint(vehicle_state: { tpms_pressure_fl: 3.0, tpms_pressure_fr: 0 })
+      expect(car_data.dig(:tires, :fl_psi)).to eq(43.5)
+      expect(car_data.dig(:tires, :fr_psi)).to be_nil
+    end
 
-      expect(car_data.dig(:vehicle_state, :tpms_pressure_fl)).to eq(43.5)
-      expect(car_data.dig(:vehicle_state)&.key?(:tpms_pressure_fr)).to eq(false)
+    it "exposes per-tire soft/hard warnings from endpoint" do
+      described_class.record_endpoint(vehicle_state: {
+        tpms_pressure_fl: 3.0, tpms_soft_warning_fl: true, tpms_hard_warning_fl: false
+      })
+      expect(car_data.dig(:tires, :fl_soft)).to be(true)
+      expect(car_data.dig(:tires, :fl_hard)).to be(false)
     end
   end
 
-  describe "Location overlay — trust whatever Tesla sent" do
+  describe "location overlay" do
     it "applies a partial Location (lat only) without clobbering existing lng" do
       described_class.record_endpoint(drive_state: { latitude: 40.0, longitude: -111.0 })
       described_class.record_telemetry(Location: { latitude: 40.5 })
-
-      # The lat that Tesla just reported wins; lng remains from the endpoint.
-      expect(car_data.dig(:drive_state, :latitude)).to eq(40.5)
-      expect(car_data.dig(:drive_state, :longitude)).to eq(-111.0)
+      expect(car_data.dig(:location, :lat)).to eq(40.5)
+      expect(car_data.dig(:location, :lng)).to eq(-111.0)
     end
 
-    it "applies a full Location" do
+    it "uses telemetry Location when both coords present" do
       described_class.record_telemetry(Location: { latitude: 40.5, longitude: -111.5 })
-
-      expect(car_data.dig(:drive_state, :latitude)).to eq(40.5)
-      expect(car_data.dig(:drive_state, :longitude)).to eq(-111.5)
+      expect(car_data.dig(:location, :lat)).to eq(40.5)
+      expect(car_data.dig(:location, :lng)).to eq(-111.5)
     end
-  end
 
-  describe "location_name meta" do
-    it "sets car_data[:location_name] from the matched contact when one is nearby" do
+    it "sets location.name from matched contact when one is nearby" do
       contact = double(name: "Home", present?: true)
       allow_any_instance_of(AddressBook).to receive(:find_contact_near).and_return(contact)
       described_class.record_telemetry(Location: { latitude: 40.5, longitude: -111.5 })
-
-      expect(car_data[:location_name]).to eq("Home")
+      expect(car_data.dig(:location, :name)).to eq("Home")
     end
 
     it "falls back to reverse-geocoded city when no contact is near" do
       allow_any_instance_of(AddressBook).to receive(:find_contact_near).and_return(nil)
       allow_any_instance_of(AddressBook).to receive(:reverse_geocode).and_return("Salt Lake City")
       described_class.record_telemetry(Location: { latitude: 40.7, longitude: -111.9 })
-
-      expect(car_data[:location_name]).to eq("Salt Lake City")
+      expect(car_data.dig(:location, :name)).to eq("Salt Lake City")
     end
   end
 end
