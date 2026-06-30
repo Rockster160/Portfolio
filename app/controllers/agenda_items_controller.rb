@@ -114,7 +114,10 @@ class AgendaItemsController < ApplicationController
 
       # Moves rely on AgendaItem#broadcast_agenda_change! to fan out to both
       # old + new agendas; in-place edits broadcast the one agenda here.
-      @item.agenda.broadcast! unless moved
+      # `@destroyed_item_ids` is populated by apply_future_update! when a
+      # detached row is replaced by the tail series; the FE store is
+      # upsert-only and needs the explicit display_id list to prune.
+      @item.agenda.broadcast!(destroyed_item_ids: Array(@destroyed_item_ids)) unless moved
       render json: @item.serialize
     }
   end
@@ -275,23 +278,54 @@ class AgendaItemsController < ApplicationController
 
     old_sched = @item.agenda_schedule
     return render(json: { errors: ["No recurrence schedule on this item."] }, status: :unprocessable_entity) if old_sched.blank?
-    if @item.detached?
-      # A detached row is already standalone — "and following" has no
-      # series to walk forward. Fall back to a plain occurrence update.
+
+    zone           = ::ActiveSupport::TimeZone[@item.user.timezone] || Time.zone
+    # For a detached row, the pattern anchor is the row's ORIGINAL
+    # position in the parent series — `original_start_at` — not where it
+    # currently sits. The current position was a one-off exception; the
+    # cutoff + by_day shift apply against the parent's repeating slot,
+    # which is the original date. A non-detached phantom/row uses its
+    # own occurrence_date.
+    old_date = (
+      if @item.detached? && @item.original_start_at.present?
+        @item.original_start_at.in_time_zone(zone).to_date
+      else
+        @item.occurrence_date
+      end
+    )
+    # Edge case: the parent series has already been truncated past this
+    # detached row's original date (e.g. a prior series-split). There's
+    # no live series to walk forward — fall back to a plain occurrence
+    # update instead of accidentally re-extending the parent's window.
+    if @item.detached? && old_sched.until_on.present? && old_sched.until_on < old_date
       return apply_occurrence_update!(moved: moved, target: target)
     end
 
-    zone           = ::ActiveSupport::TimeZone[@item.user.timezone] || Time.zone
-    old_date       = @item.occurrence_date
     new_start_at   = item_params[:start_at] || @item.start_at
     new_end_at     = item_params[:end_at] || @item.end_at
     new_date       = new_start_at.in_time_zone(zone).to_date
     owning_agenda  = @item.agenda
     landing_agenda = target || owning_agenda
 
+    # If the dragged row is itself a detached exception of the parent
+    # series, destroy it FIRST so the tail's after_save materialize can
+    # create a fresh row at new_date without colliding. The user's
+    # mental model is "move this event AND every following one" — the
+    # detached row was a temporary deviation that's now subsumed by the
+    # new pattern. (Any name/notes overrides on it are lost; that's an
+    # acceptable trade-off for the common case.)
+    drag_was_detached = @item.detached? && @item.persisted?
+    # Capture display_id BEFORE destroy so the trailing broadcast can
+    # carry it to the FE store. Without this, the AgendaStore (upsert-
+    # only) keeps rendering the stale row at its old slot indefinitely,
+    # making the whole change look like a no-op to the user.
+    @destroyed_item_ids ||= []
+    @destroyed_item_ids << @item.display_id if drag_was_detached
+
     tail_sched = nil
     ActiveRecord::Base.transaction do
       truncate_schedule_at!(old_sched, owning_agenda, old_date)
+      @item.destroy! if drag_was_detached
       tail_sched = build_tail_schedule!(
         old_sched: old_sched, landing_agenda: landing_agenda,
         old_date: old_date, new_date: new_date,
@@ -301,7 +335,12 @@ class AgendaItemsController < ApplicationController
     end
 
     @item = resolve_item_after_series_update(tail_sched, new_date)
-    Agenda.broadcast_changes!([owning_agenda, landing_agenda].uniq) if moved
+    if moved
+      Agenda.broadcast_changes!(
+        [owning_agenda, landing_agenda].uniq,
+        destroyed_item_ids: Array(@destroyed_item_ids),
+      )
+    end
   end
 
   # Truncate the original schedule's window so it ends the day BEFORE the

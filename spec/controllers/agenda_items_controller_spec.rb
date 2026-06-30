@@ -775,14 +775,204 @@ RSpec.describe AgendaItemsController, type: :controller do
       expect(tail.recurrence_data[:by_set_pos].to_i).to eq(((second_wed.day - 1) / 7) + 1)
     end
 
-    it "falls back to occurrence-only when the item is already detached (no series tail to split)" do
+    it "broadcasts the destroyed detached row's display_id so the FE store can prune it" do
+      original_at = zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 9, 0)
+      current_at  = zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 14, 0)
       detached = event_sched.agenda_items.create!(
         agenda: agenda, kind: :event, name: "Standup",
-        start_at: zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 9, 0),
-        end_at:   zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 9, 30),
-        detached_at: Time.current, original_start_at: zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 9, 0),
+        start_at: current_at, end_at: current_at + 30.minutes,
+        detached_at: Time.current, original_start_at: original_at,
       )
-      new_start = zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 14, 0)
+      new_start = zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 17, 0)
+
+      expect(MonitorChannel).to receive(:broadcast_to).with(
+        user,
+        hash_including(data: hash_including(destroyed_item_ids: include(detached.display_id))),
+      )
+
+      patch :update, params: {
+        id:    detached.id,
+        scope: :future,
+        agenda_item: { start_at: new_start.to_i, end_at: (new_start + 30.minutes).to_i },
+      }, format: :json
+    end
+
+    it "splits the series using ORIGINAL_START_AT when the dragged item is a detached row" do
+      # A previous "Just this event" drag moved the cutoff_date 9am
+      # occurrence to 2pm — the materialized row carries detached_at +
+      # original_start_at pointing at the parent's slot. Now the user
+      # drags THAT row to 5pm with "this and following": the parent
+      # series should still get truncated at the ORIGINAL slot (so
+      # future 9am occurrences stop), the tail starts at the new date
+      # with the new wall-clock, and the obsolete detached row is
+      # destroyed (subsumed by the tail's fresh first-occurrence).
+      original_at = zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 9, 0)
+      current_at  = zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 14, 0)
+      detached = event_sched.agenda_items.create!(
+        agenda: agenda, kind: :event, name: "Standup",
+        start_at: current_at, end_at: current_at + 30.minutes,
+        detached_at: Time.current, original_start_at: original_at,
+      )
+      new_start = zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 17, 0)
+
+      expect {
+        patch :update, params: {
+          id:    detached.id,
+          scope: :future,
+          agenda_item: { start_at: new_start.to_i, end_at: (new_start + 30.minutes).to_i },
+        }, format: :json
+      }.to change { agenda.agenda_schedules.count }.by(1)
+
+      # Parent truncated at the day BEFORE the detached row's ORIGINAL
+      # slot (not its current Saturday landing), so future regular
+      # occurrences stop there.
+      event_sched.reload
+      expect(event_sched.until_on).to eq(cutoff_date - 1)
+
+      # Tail picks up at the new wall-clock.
+      tail = agenda.agenda_schedules.where.not(id: event_sched.id).order(:created_at).last
+      expect(tail.start_time.strftime("%H:%M")).to eq("17:00")
+      expect(tail.starts_on).to eq(cutoff_date)
+
+      # The detached row is gone — replaced by the tail's fresh
+      # first-occurrence row.
+      expect(AgendaItem.exists?(detached.id)).to be false
+    end
+
+    it "splits a monthly Nth-weekday series via a detached row drag (Game Night scenario)" do
+      # User's exact recurrence shape from the screenshots: "the first
+      # Friday of every month at 9:30pm." First detach Fri → Sat (just
+      # this event), then drag the detached Sat → Thu (this and
+      # following). Both rules need to be rewritten so future first-
+      # Fridays stop and future first-Thursdays start.
+      first_friday_of_month = (Date.current.beginning_of_month..Date.current.end_of_month).find { |d| d.wday == 5 } || Date.current.next_occurring(:friday)
+      monthly = create(
+        :agenda_schedule, agenda: agenda, name: "Game Night", kind: :event,
+        start_time: "21:30", duration_minutes: 180,
+        recurrence: { "freq" => "monthly", "by_set_pos" => 1, "by_day" => ["fri"] },
+        starts_on: first_friday_of_month,
+      )
+
+      # Detach next month's first Friday → next-day Saturday.
+      target_friday = (first_friday_of_month >> 1).beginning_of_month
+      target_friday += ((5 - target_friday.wday) % 7) # roll to that month's first Friday
+      target_saturday = target_friday + 1
+      detached = monthly.agenda_items.create!(
+        agenda: agenda, kind: :event, name: "Game Night",
+        start_at: zone.local(target_saturday.year, target_saturday.month, target_saturday.day, 21, 30),
+        end_at:   zone.local(target_saturday.year, target_saturday.month, target_saturday.day, 21, 30) + 180.minutes,
+        detached_at: Time.current,
+        original_start_at: zone.local(target_friday.year, target_friday.month, target_friday.day, 21, 30),
+      )
+      monthly.add_excluded_date!(target_friday)
+
+      # Drag detached Sat → Thu (= target_friday - 1, which is in the SAME
+      # week so still the first Thursday of that month).
+      target_thursday = target_friday - 1
+      thu_start = zone.local(target_thursday.year, target_thursday.month, target_thursday.day, 16, 15)
+      patch :update, params: {
+        id:    detached.id,
+        scope: :future,
+        agenda_item: { start_at: thu_start.to_i, end_at: (thu_start + 180.minutes).to_i },
+      }, format: :json
+
+      # Parent truncated, detached destroyed.
+      monthly.reload
+      expect(monthly.until_on).to eq(target_friday - 1)
+      expect(AgendaItem.exists?(detached.id)).to be false
+
+      # Tail is "first Thursday of every month" at the new wall-clock.
+      tail = agenda.agenda_schedules.where.not(id: monthly.id).order(:created_at).last
+      expect(tail.recurrence_data[:freq].to_s).to eq("monthly")
+      expect(tail.recurrence_data[:by_day]).to eq(["thu"])
+      expect(tail.recurrence_data[:by_set_pos].to_i).to eq(1)
+      expect(tail.starts_on).to eq(target_thursday)
+      expect(tail.start_time.strftime("%H:%M")).to eq("16:15")
+
+      # Sanity: tail matches the NEXT first Thursday, not first Friday.
+      next_month_first = (target_friday >> 1).beginning_of_month
+      next_first_thu = next_month_first + ((4 - next_month_first.wday) % 7)
+      next_first_fri = next_month_first + ((5 - next_month_first.wday) % 7)
+      expect(tail.matches?(next_first_thu)).to be true
+      expect(tail.matches?(next_first_fri)).to be false
+      # Parent does NOT match anything future.
+      expect(monthly.matches?(next_first_fri)).to be false
+    end
+
+    it "supports a second future-scope split AFTER an earlier detach+future-split (real user flow)" do
+      # Step 1: weekly Friday Game Night.
+      friday = Date.current.beginning_of_week(:sunday) + 5
+      weekly = create(
+        :agenda_schedule, agenda: agenda, name: "Game Night", kind: :event,
+        start_time: "21:30", duration_minutes: 180,
+        recurrence: { "freq" => "weekly", "by_day" => ["fri"] },
+        starts_on: friday,
+      )
+      target_friday = friday + 14
+      target_saturday = target_friday + 1
+
+      # Step 2: "Just this event" moves target Friday → Saturday → detached row.
+      detached = weekly.agenda_items.create!(
+        agenda: agenda, kind: :event, name: "Game Night",
+        start_at: zone.local(target_saturday.year, target_saturday.month, target_saturday.day, 21, 30),
+        end_at:   zone.local(target_saturday.year, target_saturday.month, target_saturday.day, 21, 30) + 180.minutes,
+        detached_at: Time.current,
+        original_start_at: zone.local(target_friday.year, target_friday.month, target_friday.day, 21, 30),
+      )
+      weekly.add_excluded_date!(target_friday)
+
+      # Step 3: "This and following" from the detached row → Thursday at new time.
+      target_thursday = target_friday - 1
+      thu_start = zone.local(target_thursday.year, target_thursday.month, target_thursday.day, 16, 15)
+      patch :update, params: {
+        id:    detached.id,
+        scope: :future,
+        agenda_item: { start_at: thu_start.to_i, end_at: (thu_start + 180.minutes).to_i },
+      }, format: :json
+
+      # Verify: parent truncated, detached gone, tail on Thursdays.
+      weekly.reload
+      expect(weekly.until_on).to eq(target_friday - 1)
+      expect(AgendaItem.exists?(detached.id)).to be false
+      tail = agenda.agenda_schedules.where.not(id: weekly.id).order(:created_at).last
+      expect(tail.recurrence_data[:by_day]).to eq(["thu"])
+      expect(tail.starts_on).to eq(target_thursday)
+      expect(tail.start_time.strftime("%H:%M")).to eq("16:15")
+
+      # Step 4: drag a FURTHER tail row to a different day, "this and following" again.
+      next_thu = target_thursday + 7
+      next_phantom = "p-#{tail.id}-#{next_thu.iso8601}"
+      target_monday = next_thu + 4 # Mon (skipping Fri/Sat/Sun ahead)
+      mon_start = zone.local(target_monday.year, target_monday.month, target_monday.day, 14, 0)
+
+      patch :update, params: {
+        id:    next_phantom,
+        scope: :future,
+        agenda_item: { start_at: mon_start.to_i, end_at: (mon_start + 180.minutes).to_i },
+      }, format: :json
+
+      # Verify: tail truncated, tail2 on Mondays.
+      tail.reload
+      expect(tail.until_on).to eq(next_thu - 1)
+      tail2 = agenda.agenda_schedules.where.not(id: [weekly.id, tail.id]).order(:created_at).last
+      expect(tail2.recurrence_data[:by_day]).to eq(["mon"])
+      expect(tail2.starts_on).to eq(target_monday)
+      expect(tail2.start_time.strftime("%H:%M")).to eq("14:00")
+    end
+
+    it "still falls back to occurrence-only when the parent is already truncated past the detached row's original date" do
+      # The parent series was already split previously — until_on is
+      # BEFORE this detached row's original slot. "And following"
+      # against a dead series has no future to walk forward, so we
+      # gracefully degrade to a plain occurrence update.
+      original_at = zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 9, 0)
+      detached = event_sched.agenda_items.create!(
+        agenda: agenda, kind: :event, name: "Standup",
+        start_at: original_at + 5.hours, end_at: original_at + 5.hours + 30.minutes,
+        detached_at: Time.current, original_start_at: original_at,
+      )
+      event_sched.update!(until_on: cutoff_date - 5)
+      new_start = original_at + 10.hours
 
       expect {
         patch :update, params: {
@@ -792,9 +982,7 @@ RSpec.describe AgendaItemsController, type: :controller do
         }, format: :json
       }.not_to change { agenda.agenda_schedules.count }
 
-      # Original schedule unchanged.
-      expect(event_sched.reload.until_on).to be_nil
-      # The detached row took the new time as a plain occurrence update.
+      # Detached row moved to the new time (occurrence-only behavior).
       detached.reload
       expect(detached.start_at.to_i).to eq(new_start.to_i)
     end

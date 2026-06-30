@@ -571,7 +571,11 @@
         client_mutation_id: mid,
       },
     };
-    if (scope) payload.agenda_item.scope = scope;
+    // `scope` is a TOP-LEVEL param on the BE — `params[:scope]`, not
+    // `params[:agenda_item][:scope]`. Nesting it under agenda_item meant
+    // every "this and following" drag silently fell through to the
+    // occurrence-only branch in AgendaItemsController#update.
+    if (scope) payload.scope = scope;
 
     btn.classList.add("is-pending");
     window.AgendaMutationQueue.enqueue({
@@ -609,13 +613,19 @@
     // Pattern row — only when the tile carries a recurrence rule. The
     // BE shifts the rule to anchor on the new occurrence date; preview
     // the same shift locally so the modal copy reflects what
-    // "This and following" would actually do.
+    // "This and following" would actually do. For a detached row, the
+    // pattern's "from" anchor is the row's ORIGINAL slot
+    // (`original-start-at`), not where it currently sits — matches the
+    // BE's apply_future_update! using original_start_at as the cutoff.
     let patternFrom = null;
     let patternTo = null;
     const rule = readScheduleRecurrence(btn);
     if (rule) {
-      const beforeDesc = describeRecurrence(rule, snap?.startAt);
-      const shifted = shiftRecurrencePreview(rule, snap?.startAt, newStartAt);
+      const detached = btn.dataset.detached === "true";
+      const origStartAt = Number(btn.dataset.originalStartAt) || null;
+      const anchorEpoch = (detached && origStartAt) ? origStartAt : snap?.startAt;
+      const beforeDesc = describeRecurrence(rule, anchorEpoch);
+      const shifted = shiftRecurrencePreview(rule, anchorEpoch, newStartAt);
       const afterDesc = describeRecurrence(shifted, newStartAt);
       if (beforeDesc) patternFrom = `${beforeDesc} at ${formatRangeShort(snap.startAt, snap.endAt || snap.startAt)}`;
       if (afterDesc)  patternTo   = `${afterDesc} at ${formatRangeShort(newStartAt, newEndAt)}`;

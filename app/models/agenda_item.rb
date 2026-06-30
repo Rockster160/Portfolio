@@ -500,6 +500,13 @@ class AgendaItem < ApplicationRecord
       "end-date"              => end_date&.in_time_zone(user.timezone)&.beginning_of_day&.to_i,
       "start-at"              => start_at&.to_i,
       "end-at"                => end_at&.to_i,
+      # The row's slot in the parent recurrence pattern BEFORE detach —
+      # used by the recurring-scope-modal preview to shift the
+      # describeRecurrence output against the right anchor weekday/day.
+      # Without this, dragging a Sat-landing detached row to Thursday
+      # would shift "Sat → Thu" against a `by_day: [fri]` rule and the
+      # pattern preview would silently stay on Fridays.
+      "original-start-at"     => original_start_at&.to_i,
       "name"                  => name,
       "notes"                 => notes,
       "location"              => location,
