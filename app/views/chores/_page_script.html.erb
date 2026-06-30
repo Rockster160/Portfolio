@@ -12,7 +12,13 @@
   // ============================================================
   // bootstrap + constants
   // ============================================================
-  const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || "";
+  // Read meta dynamically on every request — the SW serves a cached
+  // shell that may carry a CSRF token from weeks ago (whenever the
+  // shell was first cached). Capturing once at boot would freeze that
+  // stale token; reading dynamically lets refreshCsrf() heal it.
+  function currentCsrf() {
+    return document.querySelector('meta[name="csrf-token"]')?.content || "";
+  }
   const root = document.querySelector('[data-chores-root]');
   const DAY_KEY = root?.dataset.dayKey || "";
   const CUTOFF_HOUR = parseInt(root?.dataset.cutoffHour || "4", 10);
@@ -89,12 +95,28 @@
     return f.toLocaleString();
   }
   async function api(url, method, body) {
-    const res = await fetch(url, {
+    // First attempt with whatever CSRF is currently in meta. If it
+    // comes back 422 (stale token after a session rotation), refresh
+    // the token via /chores/csrf and retry exactly once. Persistent
+    // 422 after refresh means a genuine validation failure, not a
+    // CSRF issue, and we surface it to the caller.
+    let res = await fetch(url, {
       method,
       credentials: "same-origin",
-      headers: { "Content-Type": "application/json", "Accept": "application/json", "X-CSRF-Token": CSRF },
+      headers: { "Content-Type": "application/json", "Accept": "application/json", "X-CSRF-Token": currentCsrf() },
       body: body ? JSON.stringify(body) : undefined,
     });
+    if (res.status === 422) {
+      const fresh = await refreshCsrf();
+      if (fresh) {
+        res = await fetch(url, {
+          method,
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", "Accept": "application/json", "X-CSRF-Token": fresh },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+      }
+    }
     if (!res.ok) {
       const text = await res.text();
       const err = new Error(`${res.status}: ${text}`);
@@ -3490,12 +3512,21 @@
       const id = btn.dataset.customId;
       const label = btn.title || "this icon";
       if (!window.confirm(`Delete "${label}" from your household icons?`)) return;
-      const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
-      const res = await fetch(`/chores/icons/${id}`, {
+      let res = await fetch(`/chores/icons/${id}`, {
         method: "DELETE",
         credentials: "same-origin",
-        headers: { "Accept": "application/json", "X-CSRF-Token": csrf },
+        headers: { "Accept": "application/json", "X-CSRF-Token": currentCsrf() },
       });
+      if (res.status === 422) {
+        const fresh = await refreshCsrf();
+        if (fresh) {
+          res = await fetch(`/chores/icons/${id}`, {
+            method: "DELETE",
+            credentials: "same-origin",
+            headers: { "Accept": "application/json", "X-CSRF-Token": fresh },
+          });
+        }
+      }
       if (res.ok) await IconPool.refreshCustom();
     });
 
@@ -4021,26 +4052,33 @@
       if (saveBtn.disabled) return;
       await withSavingState(saveBtn, async () => {
         showError(stageError, "");
-        const csrf = document.querySelector('meta[name="csrf-token"]')?.content || "";
         const dataUrl = renderOutput();
-        try {
-          const res = await fetch("/chores/icons", {
+        const payload = JSON.stringify({ household_icon: {
+          name:       nameInput.value.trim(),
+          keywords:   keysInput.value.trim(),
+          image_data: dataUrl,
+        } });
+        async function postIcon(token) {
+          return fetch("/chores/icons", {
             method: "POST",
             credentials: "same-origin",
             headers: {
               "Content-Type": "application/json",
               "Accept":       "application/json",
-              "X-CSRF-Token": csrf,
+              "X-CSRF-Token": token,
             },
-            body: JSON.stringify({ household_icon: {
-              name:       nameInput.value.trim(),
-              keywords:   keysInput.value.trim(),
-              image_data: dataUrl,
-            } }),
+            body: payload,
           });
+        }
+        try {
+          let res = await postIcon(currentCsrf());
+          if (res.status === 422) {
+            const fresh = await refreshCsrf();
+            if (fresh) res = await postIcon(fresh);
+          }
           if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            showError(stageError, (body.errors || ["Save failed"]).join(", "));
+            const errBody = await res.json().catch(() => ({}));
+            showError(stageError, (errBody.errors || ["Save failed"]).join(", "));
             return;
           }
           const saved = await res.json();
@@ -5431,6 +5469,11 @@
   // result. Then flush.
   function onAppWake() {
     syncOnlineAttr();
+    // PWA shells served from SW cache carry whatever CSRF token was
+    // baked into the HTML when the shell was first cached — potentially
+    // days/weeks old. Refresh before any tap so the first user action
+    // doesn't have to eat a 422+retry round-trip.
+    if (navigator.onLine) refreshCsrf();
     const q = loadQueue();
     if (q.length) markAllQueueLoud();
     flushQueue();

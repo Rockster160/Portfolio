@@ -35,6 +35,30 @@ RSpec.describe ApplicationController, type: :controller do
       expect(JSON.parse(response.body)).to eq("error" => "stale_csrf")
     end
 
+    it "stays silent for a single stale-token hit (normal client recovery)" do
+      sign_in user
+      allow(controller).to receive(:current_ip_spamming?).and_return(false)
+      allow(SlackNotifier).to receive(:notify)
+      Rails.cache.clear
+
+      post :create, format: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(SlackNotifier).not_to have_received(:notify)
+    end
+
+    it "Slacks once when the same user hits stale CSRF repeatedly (recovery is broken)" do
+      sign_in user
+      allow(controller).to receive(:current_ip_spamming?).and_return(false)
+      allow(SlackNotifier).to receive(:notify)
+      memory_store = ActiveSupport::Cache::MemoryStore.new
+      allow(Rails).to receive(:cache).and_return(memory_store)
+
+      5.times { post :create, format: :json }
+
+      expect(SlackNotifier).to have_received(:notify).once
+    end
+
     it "still bans + re-raises (so ExceptionNotifier fires) when the IP is actually spamming" do
       sign_in user
       allow(controller).to receive(:current_ip_spamming?).and_return(true)

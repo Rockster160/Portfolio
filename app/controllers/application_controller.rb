@@ -90,10 +90,11 @@ class ApplicationController < ActionController::Base
 
   # PWAs hold pages open for days; CSRF tokens rotate with the session
   # under them. The mutation queue already recovers on 422 by refetching
-  # /chores/csrf and retrying — but if we let the exception escape, every
-  # stale-token POST also hits ExceptionNotifier and Slacks. Render 422
-  # cleanly so legit stale tokens stay silent; keep spam-IP banning for
-  # actual hostile traffic.
+  # the csrf endpoint and retrying — but if we let the exception escape,
+  # every stale-token POST also hits ExceptionNotifier and Slacks.
+  # Render 422 cleanly so legit stale tokens stay silent; escalate only
+  # when the same user keeps hitting it (i.e., client recovery is
+  # actually broken, not just a one-off rotation).
   def handle_stale_csrf(exception)
     if !ip_whitelisted? && current_ip_spamming?
       BannedIp.find_or_create_by(ip: current_ip)
@@ -101,10 +102,35 @@ class ApplicationController < ActionController::Base
       raise exception
     end
 
+    notify_if_stuck(exception)
+
     respond_to do |format|
       format.json { render json: { error: "stale_csrf" }, status: :unprocessable_entity }
       format.any  { head :unprocessable_entity }
     end
+  end
+
+  # Count stale-CSRF hits per user across a short window. A normal
+  # recovery is a single 422 → /<csrf endpoint> → success, so one hit.
+  # If a real user logs 3+ within a minute, their client is not
+  # recovering — surface to Slack (throttled to once per user per 10m
+  # so we know without flooding).
+  def notify_if_stuck(exception)
+    user = current_user
+    return if user.nil? || user.id == 1
+
+    count_key = "csrf_stale_count:user:#{user.id}"
+    alert_key = "csrf_stale_alerted:user:#{user.id}"
+    count = Rails.cache.increment(count_key, 1, expires_in: 60.seconds, initial: 0) || 1
+    return if count < 3
+    return if Rails.cache.exist?(alert_key)
+
+    Rails.cache.write(alert_key, true, expires_in: 10.minutes)
+    SlackNotifier.notify(
+      "`#{user.username}` is hitting stale CSRF repeatedly on " \
+      "`#{request.method} #{request.path}` — client recovery isn't working " \
+      "(exception: `#{exception.class}`).",
+    )
   end
 
   def rescue_login

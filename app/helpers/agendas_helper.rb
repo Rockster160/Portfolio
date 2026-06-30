@@ -8,8 +8,16 @@ module AgendasHelper
   # SW activate handler delete the old cache and re-precache. Falls back
   # to the deploy timestamp in dev so iterating on the SW gives a fresh
   # cache on every reload.
+  # Manual epoch knob — bump to force every installed agenda PWA to
+  # activate a fresh SW + re-cache its shells on next page load. Use for
+  # changes that don't naturally bump asset digests (server-side
+  # behavior, shell-inline script edits served by ERB partials) but
+  # still need to invalidate existing client caches.
+  SW_CACHE_EPOCH = 1
+
   def sw_cache_version
     parts = [
+      SW_CACHE_EPOCH.to_s,
       Rails.application.config.assets.version.to_s,
       safe_asset_digest("application.js"),
       safe_asset_digest("application.css"),
