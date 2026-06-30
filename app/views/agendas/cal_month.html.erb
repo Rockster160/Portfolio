@@ -17,7 +17,7 @@
   <header class="cal-toolbar">
     <div class="cal-toolbar-left">
       <span class="agenda-error cal-error-dot hidden" role="status" aria-live="polite" title="Disconnected — changes will sync when reconnected."></span>
-      <h1 class="cal-toolbar-title"><%= @focus_date.strftime("%B %Y") %></h1>
+      <h1 class="cal-toolbar-title"><%= @focus_date.strftime("%b %Y") %></h1>
       <div class="cal-toolbar-toggle cal-view-toggle cal-pwa-toggle">
         <a href="<%= day_path %>" class="cal-toggle-btn">Day</a>
         <a href="<%= cal_week_path %>" class="cal-toggle-btn">Week</a>
@@ -48,41 +48,70 @@
       <% end %>
     </div>
 
-    <%# Mac Calendar groups the visible weeks into rows so the cells can
-        stretch to fill the viewport vertically. Each row is a flex row of
-        7 cells with the same height. %>
-    <% (@first_visible..@last_visible).each_slice(7) do |week| %>
-      <%# A week-row stacks the 7 day cells + (above them, positioned
-          absolutely by JS) a banner layer for all-day events that span
-          one-or-more days WITHIN this row. Multi-day events crossing the
-          Sat→Sun boundary are split into one banner per row. %>
-      <div class="cal-month-row"
-           data-row-start="<%= week.first.iso8601 %>"
-           data-row-end="<%= week.last.iso8601 %>">
-        <div class="cal-month-row-banners" data-row-banners aria-hidden="true"></div>
-        <% week.each do |day| %>
-          <% in_month = (day.month == @month.month) %>
-          <% is_today = (day == Date.current) %>
-          <div class="cal-month-cell <%= 'is-today' if is_today %> <%= 'other-month' unless in_month %>"
-               data-date="<%= day.iso8601 %>"
-               data-weekday="<%= day.wday %>"
-               role="button"
-               tabindex="0">
-            <div class="cal-month-cell-head">
-              <span class="cal-month-day-num <%= 'first-of-month' if day.day == 1 %>">
-                <%= day.day == 1 ? day.strftime("%b %-d") : day.day.to_s %>
-              </span>
-            </div>
-            <%# Timed items in this cell — filled client-side by
-                `month_view.js` from AgendaStore. all-day events show up
-                as banners on the row above (built by agenda_cal.js
-                from the hidden seed nodes below). %>
-            <div class="cal-month-cell-items" data-items-container></div>
-            <span class="cal-month-overflow hidden" aria-hidden="true"></span>
+    <%# `.cal-month-stack` is the scrolling region. Desktop renders exactly
+        one `.cal-month-block` (the requested month); mobile activation in
+        `agenda_cal.js` prepends/appends sibling blocks for infinite scroll
+        with `[data-month-loader]` sentinels above and below. %>
+    <div class="cal-month-stack" data-month-stack>
+      <div class="cal-month-loader" data-month-loader="up" aria-hidden="true"></div>
+
+      <div class="cal-month-block"
+           data-month-block
+           data-month-iso="<%= @month.strftime("%Y-%m") %>"
+           data-block-start="<%= @first_visible.iso8601 %>"
+           data-block-end="<%= @last_visible.iso8601 %>">
+        <div class="cal-month-block-header" data-block-header aria-hidden="true"><%= @month.strftime("%B %Y") %></div>
+
+        <%# Mac Calendar groups the visible weeks into rows so the cells can
+            stretch to fill the viewport vertically. Each row is a flex row
+            of 7 cells with the same height. %>
+        <% (@first_visible..@last_visible).each_slice(7) do |week| %>
+          <%# A week-row stacks the 7 day cells + (above them, positioned
+              absolutely by JS) a banner layer for all-day events that span
+              one-or-more days WITHIN this row. Multi-day events crossing the
+              Sat→Sun boundary are split into one banner per row.
+              `has-month-start` marks any row that contains the 1st of
+              the block's month — drives the iOS-style divider + inline
+              month label on mobile (no-op on desktop). %>
+          <% has_month_start = week.any? { |d| d.day == 1 && d.month == @month.month } %>
+          <div class="cal-month-row <%= 'has-month-start' if has_month_start %>"
+               data-row-start="<%= week.first.iso8601 %>"
+               data-row-end="<%= week.last.iso8601 %>">
+            <div class="cal-month-row-banners" data-row-banners aria-hidden="true"></div>
+            <% week.each do |day| %>
+              <% in_month = (day.month == @month.month) %>
+              <% is_today = (day == Date.current) %>
+              <div class="cal-month-cell <%= 'is-today' if is_today %> <%= 'other-month' unless in_month %>"
+                   data-date="<%= day.iso8601 %>"
+                   data-weekday="<%= day.wday %>"
+                   role="button"
+                   tabindex="0">
+                <div class="cal-month-cell-head">
+                  <%# Two-span first-of-month treatment: a small month
+                      abbreviation sibling + a bare day number. Desktop
+                      lays them side-by-side (visual "Sep 1") via flex-row;
+                      mobile stacks them via flex-column. Splitting the
+                      label out of the day-num span is what lets mobile
+                      hide the month-only portion when needed. %>
+                  <% if day.day == 1 %>
+                    <span class="cal-month-cell-month-label" aria-hidden="true"><%= day.strftime("%b") %></span>
+                  <% end %>
+                  <span class="cal-month-day-num"><%= day.day %></span>
+                </div>
+                <%# Timed items in this cell — filled client-side by
+                    `month_view.js` from AgendaStore. all-day events show up
+                    as banners on the row above (built by agenda_cal.js
+                    from the hidden seed nodes below). %>
+                <div class="cal-month-cell-items" data-items-container></div>
+                <span class="cal-month-overflow hidden" aria-hidden="true"></span>
+              </div>
+            <% end %>
           </div>
         <% end %>
       </div>
-    <% end %>
+
+      <div class="cal-month-loader" data-month-loader="down" aria-hidden="true"></div>
+    </div>
 
     <%# All-day seed container — `agenda_cal.js`'s seed_hydrator fills
         this from the store on every render; nothing needs to be

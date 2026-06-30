@@ -515,6 +515,13 @@ class AgendaItem < ApplicationRecord
       "post-travel-to"        => travel["post_travel_to"],
       "post-travel-minutes"   => travel["post_travel_minutes"].to_i,
       "post-arrive-at-epoch"  => travel["post_arrive_at"],
+      # JSON-encoded leg breakdown for multi-stop travel rendering. Each
+      # entry: `{to, drive_seconds, dwell_seconds}`. Absent when there are
+      # no waypoints — a single-drive band is rendered from travel-minutes
+      # alone. `from` is omitted from the payload since chain rendering
+      # only needs each stop's destination + leg/dwell sizes.
+      "before-legs"           => leg_payload(travel["before_legs"]),
+      "after-legs"            => leg_payload(travel["after_legs"]),
       "trigger-expression"    => trigger_expression,
       "schedule"              => agenda_schedule&.serialize_for_edit&.to_json,
       "attendees"             => attendees.to_json,
@@ -524,6 +531,18 @@ class AgendaItem < ApplicationRecord
   end
 
   private
+
+  def leg_payload(legs)
+    return nil if legs.blank?
+
+    legs.map { |leg|
+      {
+        "to"            => leg["to"],
+        "drive_seconds" => leg["drive_seconds"].to_i,
+        "dwell_seconds" => leg["dwell_seconds"].to_i,
+      }
+    }.to_json
+  end
 
   # Emits a Jil trigger so user tasks listening on `agenda_item` (e.g. the
   # dashboard re-broadcast trigger) can react to lifecycle changes. Mirrors

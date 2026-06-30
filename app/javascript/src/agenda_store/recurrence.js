@@ -122,6 +122,17 @@ function buildPhantom(schedule, dateISO, { localEpoch, agenda }) {
   // not on Friday's phantom).
   const meta = (schedule && schedule.metadata) || {};
   const travel = (meta && meta.travel) || {};
+  // Project the leg array (server sends [{to, drive_seconds, dwell_seconds, ...}])
+  // down to the minimal shape the renderer needs. Returning null collapses
+  // to the empty-string presentation attr — recurrence schedules without a
+  // multi-stop chain stay byte-identical to before.
+  const legPayload = (legs) => Array.isArray(legs) && legs.length > 1
+    ? legs.map((leg) => ({
+        to:             leg.to || "",
+        drive_seconds:  Number(leg.drive_seconds) || 0,
+        dwell_seconds:  Number(leg.dwell_seconds) || 0,
+      }))
+    : null;
   // Mirrors `AgendaItem#presentation_attrs` — the renderer reads from
   // this hash; without it phantoms render as blank rows (just the
   // template skeleton: checkbox + edit pencil, no name/time/anything).
@@ -166,6 +177,8 @@ function buildPhantom(schedule, dateISO, { localEpoch, agenda }) {
     "post-travel-to":       travel.post_travel_to || "",
     "post-travel-minutes":  Number(travel.post_travel_minutes) || 0,
     "post-arrive-at-epoch": travel.post_arrive_at || "",
+    "before-legs":          travel.before_legs ? JSON.stringify(legPayload(travel.before_legs)) : "",
+    "after-legs":           travel.after_legs ? JSON.stringify(legPayload(travel.after_legs)) : "",
     "trigger-expression":   schedule.trigger_expression || "",
     "schedule":             JSON.stringify(schedule),
     "attendees":            "[]",

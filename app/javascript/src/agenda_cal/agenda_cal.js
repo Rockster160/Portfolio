@@ -71,6 +71,54 @@
     h = h % 12 || 12;
     return m === 0 ? `${h}${suffix}` : `${h}:${pad(m)}${suffix}`;
   }
+  // Parse a JSON `data-*-legs` attribute string off seed.dataset. Tolerates
+  // empty/missing strings (recurring schedules without a multi-stop chain
+  // carry "") and malformed JSON (returns null — render falls back to the
+  // single-band visual).
+  function parseLegsAttr(raw) {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : null;
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  // Append per-leg subdivisions inside a travel band. Each drive leg renders
+  // as a stripe segment with alternating angle (135deg / 45deg by index); each
+  // dwell renders as a solid contrast bar with thickness ∝ the dwell duration.
+  // Heights are proportional to leg seconds vs the total band seconds, so the
+  // sum exactly fills the band regardless of pxPerMin rounding.
+  function appendLegBars(band, legs, totalSeconds, bandPx) {
+    if (!legs || !legs.length || !totalSeconds || !bandPx) return;
+
+    const totalIncludingDwell = legs.reduce((acc, leg) => (
+      acc + (Number(leg.drive_seconds) || 0) + (Number(leg.dwell_seconds) || 0)
+    ), 0);
+    if (totalIncludingDwell <= 0) return;
+
+    legs.forEach((leg, idx) => {
+      const driveSecs = Number(leg.drive_seconds) || 0;
+      const dwellSecs = Number(leg.dwell_seconds) || 0;
+      if (driveSecs > 0) {
+        const drive = document.createElement("div");
+        drive.className = "cal-week-event-travel-leg cal-week-event-travel-leg-drive";
+        drive.dataset.legIndex = String(idx);
+        if (idx % 2 === 1) drive.classList.add("is-alt");
+        drive.style.height = `${(driveSecs / totalIncludingDwell) * bandPx}px`;
+        band.appendChild(drive);
+      }
+      if (dwellSecs > 0) {
+        const dwell = document.createElement("div");
+        dwell.className = "cal-week-event-travel-leg cal-week-event-travel-leg-dwell";
+        dwell.dataset.dwellSeconds = String(dwellSecs);
+        dwell.style.height = `${(dwellSecs / totalIncludingDwell) * bandPx}px`;
+        band.appendChild(dwell);
+      }
+    });
+  }
+
   function compareISO(a, b) { return a < b ? -1 : (a > b ? 1 : 0); }
   function addDaysISO(iso, n) {
     const d = new Date(iso + "T12:00:00");
@@ -179,6 +227,26 @@
   // Drag state lives outside the init functions so re-init after a live
   // HTML swap doesn't shadow it and document-level handlers stay correct.
   const monthDrag = { startCell: null, lastCell: null, moved: false };
+
+  // Mobile month-view infinite scroll state. `edgeObserver` watches the
+  // up/down loader sentinels and prepends/appends month blocks as the
+  // user nears either edge. `titleObserver` syncs the toolbar title to
+  // whichever block dominates the viewport. Both are torn down + rebuilt
+  // on every full DOM swap (renderMonthFor + the mobile media-query
+  // transitioning above its breakpoint).
+  const mobileInfinite = {
+    observed: false,
+    edgeObserver: null,
+    titleObserver: null,
+    loading: false, // re-entrancy guard for the prepend/append callbacks
+    mql: null,
+    // Flipped true on the first real user gesture (wheel/touch/pointer/
+    // key) against the grid. Until then, the edge observer's
+    // load-more callback is a no-op — this is what prevents the
+    // initial layout pass from chaining additional month loads that
+    // would scroll the user away from the current month.
+    userInteracted: false,
+  };
   const weekDrag = { col: null, startPx: 0, top: 0, bottom: 0, sel: null, moved: false, ctx: null };
   // All-day strip drag-to-create state. `startCell` is where mousedown
   // fired; `currentCell` is whichever all-day cell the cursor is over
@@ -329,6 +397,10 @@
     rehydrateMonthSeedsFromStore(root);
     layoutMonthBanners(root);
     recountMonthOverflow(root);
+    // Mobile only: turn the single server-rendered month into a stack
+    // of months with infinite vertical scroll. No-op on desktop and on
+    // re-mount when already activated for the current DOM.
+    activateMobileMonthInfinite(root);
   }
 
   // Refill the hidden `[data-month-allday-seeds]` container from the
@@ -356,14 +428,38 @@
       if (e.target.closest(".cal-month-item, .cal-month-banner")) return;
       const cell = findCell(e);
       if (!cell || !root.querySelector(".cal-month-grid").contains(cell)) return;
+      // Mobile: cell tap drills into /agenda/day. Skip the drag-create
+      // setup so the click registers cleanly. Event-pill / banner taps
+      // still open details (early-return above) and the toolbar's `+`
+      // button is the explicit add-event affordance.
+      if (isMobileMonthView()) return;
       e.preventDefault();
       monthDrag.startCell = cell;
       monthDrag.lastCell = cell;
       monthDrag.moved = false;
     });
 
+    // Mobile single-tap → /agenda/day for that date. Listening on click
+    // (not mousedown) so the tap reads as a click in both pointer and
+    // touch contexts, and so event-pill clicks bubble to their own
+    // open-details handler first without being eaten here.
+    root.addEventListener("click", (e) => {
+      if (!isMobileMonthView()) return;
+      if (e.defaultPrevented) return;
+      if (e.target.closest(".cal-month-item, .cal-month-banner")) return;
+      const cell = findCell(e);
+      if (!cell || !root.querySelector(".cal-month-grid").contains(cell)) return;
+      const date = cell.dataset.date;
+      if (!date) return;
+      e.preventDefault();
+      window.location.assign(`/agenda?date=${date}`);
+    });
+
     root.addEventListener("dblclick", (e) => {
       if (e.target.closest(".cal-month-item, .cal-month-banner")) return;
+      // Mobile uses single-tap → day view; double-tap-create would
+      // conflict with that and adds zero affordance on touch.
+      if (isMobileMonthView()) return;
       const cell = findCell(e);
       if (!cell || !root.querySelector(".cal-month-grid").contains(cell)) return;
       openAddModalForDate(cell.dataset.date);
@@ -420,7 +516,34 @@
       const rowStart = cells[0].dataset.date;
       const rowEnd = cells[6].dataset.date;
 
-      // Each candidate banner clamped to this row's window.
+      // When the stack holds multiple month-blocks (mobile infinite
+      // scroll), each row "belongs" to exactly ONE month. Without
+      // clipping, an event on Jan 30 would render in BOTH the Jan
+      // block's last row AND the Feb block's first row (both rows
+      // physically contain Jan 30 — as current-month and as other-month
+      // spill-over respectively), producing a visible duplicate.
+      // Clamp the row's effective range to its block's month so each
+      // banner appears in exactly one block; multi-month spans split at
+      // the month boundary with proper continued-left/right cues.
+      const block = row.closest("[data-month-block]");
+      let inMonthStart = rowStart;
+      let inMonthEnd = rowEnd;
+      if (block && block.dataset.monthIso) {
+        const [yy, mm] = block.dataset.monthIso.split("-").map(Number);
+        const monthFirstISO = `${yy}-${String(mm).padStart(2, "0")}-01`;
+        const lastDay = new Date(yy, mm, 0).getDate();
+        const monthLastISO = `${yy}-${String(mm).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+        if (compareISO(monthFirstISO, inMonthStart) > 0) inMonthStart = monthFirstISO;
+        if (compareISO(monthLastISO, inMonthEnd) < 0) inMonthEnd = monthLastISO;
+      }
+      // No overlap at all → row is entirely other-month (shouldn't
+      // happen in practice but kept for safety).
+      if (compareISO(inMonthStart, rowEnd) > 0 || compareISO(inMonthEnd, rowStart) < 0) {
+        row.style.setProperty("--cal-banner-rows", 0);
+        return;
+      }
+
+      // Each candidate banner clamped to this row's in-month window.
       const candidates = [];
       allSeeds.forEach((seed) => {
         const startEpoch = Number(seed.dataset.startAt);
@@ -433,15 +556,18 @@
         const startDateISO = formatDateISO(new Date(startEpoch * 1000));
         const endRaw = Number(seed.dataset.endDate) || startEpoch;
         const endDateISO = formatDateISO(new Date(endRaw * 1000));
-        // Overlap with [rowStart, rowEnd]?
-        if (compareISO(endDateISO, rowStart) < 0) return;
-        if (compareISO(startDateISO, rowEnd) > 0) return;
-        const segStart = compareISO(startDateISO, rowStart) < 0 ? rowStart : startDateISO;
-        const segEnd = compareISO(endDateISO, rowEnd) > 0 ? rowEnd : endDateISO;
+        // Overlap with the row's in-month window?
+        if (compareISO(endDateISO, inMonthStart) < 0) return;
+        if (compareISO(startDateISO, inMonthEnd) > 0) return;
+        const segStart = compareISO(startDateISO, inMonthStart) < 0 ? inMonthStart : startDateISO;
+        const segEnd = compareISO(endDateISO, inMonthEnd) > 0 ? inMonthEnd : endDateISO;
         candidates.push({
           seed, segStart, segEnd,
-          continuedLeft: compareISO(startDateISO, rowStart) < 0,
-          continuedRight: compareISO(endDateISO, rowEnd) > 0,
+          // Continuation cues fire when the EVENT extends past the row
+          // window (either physical row bounds or the in-month clip).
+          // Both produce a "→" / "←" hint on the appropriate edge.
+          continuedLeft: compareISO(startDateISO, inMonthStart) < 0,
+          continuedRight: compareISO(endDateISO, inMonthEnd) > 0,
         });
       });
 
@@ -473,8 +599,22 @@
 
       // Each cell is `100/7 %` wide.
       const pct = 100 / 7;
-      const reservedTop = 22; // day-num height + a little
-      const bannerHeight = 17;
+      // Measure the actual day-num band height instead of hardcoding —
+      // the mobile media query enlarges cell-head substantially (~46px)
+      // vs. desktop (~22px), and a hardcoded reservedTop was overlapping
+      // banners onto day numbers. Use the first cell's cell-head bottom
+      // (relative to the row) + a 2px breath; falls back to 22 if the
+      // measurement isn't ready (e.g. row hidden on initial render).
+      const firstHead = cells[0].querySelector(".cal-month-cell-head");
+      let reservedTop = 22;
+      if (firstHead) {
+        const rowRect = row.getBoundingClientRect();
+        const headRect = firstHead.getBoundingClientRect();
+        const measured = (headRect.bottom - rowRect.top) + 2;
+        if (measured > 0 && Number.isFinite(measured)) reservedTop = measured;
+      }
+      const mobile = isMobileMonthView();
+      const bannerHeight = mobile ? 18 : 17;
       const bannerGap = 2;
 
       candidates.forEach((c) => {
@@ -490,7 +630,11 @@
         layer.appendChild(node);
       });
 
+      // Items get pushed down by the LAYOUT height, not the rendered
+      // banner height — keep in sync with bannerHeight + bannerGap so
+      // banners and items never collide.
       row.style.setProperty("--cal-banner-rows", lanes.length);
+      row.style.setProperty("--cal-banner-row-h", `${bannerHeight + bannerGap}px`);
     });
   }
 
@@ -1178,6 +1322,14 @@
       if (isChained) travelBand.classList.add("is-chained");
       // Flex child — reserve the band's vertical slice via inline height.
       travelBand.style.height = `${bandPx}px`;
+
+      // Multi-stop visualization: alternating-stripe drive segments + solid
+      // dwell bars at each waypoint. Renders ONLY when there are ≥2 legs
+      // (waypoints present) — solo drives stay as a single stripe band.
+      const beforeLegs = parseLegsAttr(d.beforeLegs);
+      if (beforeLegs && beforeLegs.length > 1 && travelMinRaw > 0) {
+        appendLegBars(travelBand, beforeLegs, travelMinRaw * 60, bandPx);
+      }
       // Always the condensed `[clock] Nm + [car] Mm` form. Hide the label
       // entirely on tiny bands (<6px) — stripes only, no text.
       // A second, summed `[clock] (N+M)m` label rides along — hidden by
@@ -1262,6 +1414,11 @@
       postBand.className = "cal-week-event-travel is-post";
       postBand.style.height = `${postBandPx}px`;
       node.classList.add("has-post-travel");
+
+      const afterLegs = parseLegsAttr(d.afterLegs);
+      if (afterLegs && afterLegs.length > 1) {
+        appendLegBars(postBand, afterLegs, postTravelMin * 60, postBandPx);
+      }
       if (postBandPx >= 6) {
         const fmtMin = window.AgendaItemRenderer?.fmtMinutes || ((n) => `${n}m`);
         const label = document.createElement("span");
@@ -1706,6 +1863,105 @@
     updateTodayBtnState(root, Number(grid.dataset.dayStartHour) || 3);
   }
 
+  // Build a `.cal-month-block` DOM node for `monthISO` ("YYYY-MM").
+  // No insertion — caller appends/prepends as needed. Reused by both
+  // the single-month reset path (`renderMonthFor`) and the mobile
+  // infinite-scroll prepender/appender.
+  function buildMonthBlockNode(monthISO) {
+    const [yStr, mStr] = monthISO.split("-");
+    const year = parseInt(yStr, 10);
+    const monthIdx = parseInt(mStr, 10) - 1;
+    if (!Number.isFinite(year) || monthIdx < 0 || monthIdx > 11) return null;
+
+    const monthStartDt = new Date(year, monthIdx, 1);
+    const monthEndDt = new Date(year, monthIdx + 1, 0); // last day
+    const firstVisibleISO = mondayOf(toISO(monthStartDt));
+    const lastVisibleISO = sundayOf(toISO(monthEndDt));
+    const todayISO = toISO(new Date());
+
+    const block = document.createElement("div");
+    block.className = "cal-month-block";
+    block.dataset.monthBlock = "";
+    block.dataset.monthIso = monthISO;
+    block.dataset.blockStart = firstVisibleISO;
+    block.dataset.blockEnd = lastVisibleISO;
+
+    const blockHeader = document.createElement("div");
+    blockHeader.className = "cal-month-block-header";
+    blockHeader.setAttribute("data-block-header", "");
+    blockHeader.setAttribute("aria-hidden", "true");
+    blockHeader.textContent = monthStartDt.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    block.appendChild(blockHeader);
+
+    let cursorISO = firstVisibleISO;
+    while (cursorISO <= lastVisibleISO) {
+      const weekEndISO = addDaysISO(cursorISO, 6);
+      const row = document.createElement("div");
+      row.className = "cal-month-row";
+      row.dataset.rowStart = cursorISO;
+      row.dataset.rowEnd = weekEndISO;
+
+      const banners = document.createElement("div");
+      banners.className = "cal-month-row-banners";
+      banners.setAttribute("data-row-banners", "");
+      banners.setAttribute("aria-hidden", "true");
+      row.appendChild(banners);
+
+      // Tracks whether this row contains the 1st of THIS block's month —
+      // drives the mobile divider + inline label (no-op on desktop).
+      // Mirrors the ERB's `has_month_start` flag.
+      let hasMonthStart = false;
+
+      for (let offset = 0; offset < 7; offset++) {
+        const dayISO = addDaysISO(cursorISO, offset);
+        const dt = parseISODate(dayISO);
+        const inMonth = dt.getMonth() === monthIdx;
+        const isToday = dayISO === todayISO;
+        const cell = document.createElement("div");
+        cell.className = `cal-month-cell${isToday ? " is-today" : ""}${inMonth ? "" : " other-month"}`;
+        cell.dataset.date = dayISO;
+        cell.dataset.weekday = String(dt.getDay());
+        cell.setAttribute("role", "button");
+        cell.setAttribute("tabindex", "0");
+
+        const head = document.createElement("div");
+        head.className = "cal-month-cell-head";
+        const isFirstOfMonth = dt.getDate() === 1;
+        if (isFirstOfMonth) {
+          const monthLabel = document.createElement("span");
+          monthLabel.className = "cal-month-cell-month-label";
+          monthLabel.setAttribute("aria-hidden", "true");
+          monthLabel.textContent = dt.toLocaleDateString(undefined, { month: "short" });
+          head.appendChild(monthLabel);
+          if (inMonth) hasMonthStart = true;
+        }
+        const num = document.createElement("span");
+        num.className = "cal-month-day-num";
+        num.textContent = String(dt.getDate());
+        head.appendChild(num);
+        cell.appendChild(head);
+
+        const items = document.createElement("div");
+        items.className = "cal-month-cell-items";
+        items.setAttribute("data-items-container", "");
+        cell.appendChild(items);
+
+        const overflow = document.createElement("span");
+        overflow.className = "cal-month-overflow hidden";
+        overflow.setAttribute("aria-hidden", "true");
+        cell.appendChild(overflow);
+
+        row.appendChild(cell);
+      }
+
+      if (hasMonthStart) row.classList.add("has-month-start");
+      block.appendChild(row);
+      cursorISO = addDaysISO(weekEndISO, 1);
+    }
+
+    return block;
+  }
+
   // Re-render the month view for a new target month, ENTIRELY
   // client-side. Mirrors `renderWeekFor`: rebuild the grid DOM, update
   // toolbar + nav hrefs, then run the same hydration + layout passes
@@ -1718,21 +1974,20 @@
   function renderMonthFor(root, monthISO) {
     const grid = $(".cal-month-grid", root);
     if (!grid) return;
-    const [yStr, mStr] = monthISO.split("-");
-    const year = parseInt(yStr, 10);
-    const monthIdx = parseInt(mStr, 10) - 1;
-    if (!Number.isFinite(year) || monthIdx < 0 || monthIdx > 11) return;
+    const stack = grid.querySelector("[data-month-stack]");
+    const block = buildMonthBlockNode(monthISO);
+    if (!stack || !block) return;
+    const firstVisibleISO = block.dataset.blockStart;
+    const lastVisibleISO = block.dataset.blockEnd;
 
-    const monthStartDt = new Date(year, monthIdx, 1);
-    const monthEndDt = new Date(year, monthIdx + 1, 0); // last day
-    const firstVisibleISO = mondayOf(toISO(monthStartDt));
-    const lastVisibleISO = sundayOf(toISO(monthEndDt));
-    const todayISO = toISO(new Date());
-
-    // Toolbar title — "<Month> <Year>".
+    // Toolbar title — "<Mon> <Year>". Short form (matches ERB
+    // server-render + the mobile scroll-driven title tracker) so a
+    // long month name like "September" doesn't squeeze the right-side
+    // toolbar controls on narrow viewports.
     const titleEl = $(".cal-toolbar-title", root);
     if (titleEl) {
-      titleEl.textContent = monthStartDt.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+      const dt = parseISODate(`${monthISO}-01`);
+      titleEl.textContent = dt.toLocaleDateString(undefined, { month: "short", year: "numeric" });
     }
 
     // Prev/next/Today links. The toolbar's "Today" link is a static
@@ -1760,71 +2015,14 @@
       cell.textContent = dt.toLocaleDateString(undefined, { weekday: "short" });
     });
 
-    // Rebuild the week rows + cells. Walk firstVisible..lastVisible in
-    // 7-day strides and emit one .cal-month-row per stride.
-    const oldRows = $$(".cal-month-row", grid);
-    oldRows.forEach((r) => r.remove());
-
-    // Anchor for insertion: row markup sits between .cal-month-weekdays
-    // and .cal-month-allday-seeds. Insert before the seeds container so
-    // the rows land in the right z-stack.
-    const seedsContainer = grid.querySelector(".cal-month-allday-seeds");
-
-    let cursorISO = firstVisibleISO;
-    while (cursorISO <= lastVisibleISO) {
-      const weekEndISO = addDaysISO(cursorISO, 6);
-      const row = document.createElement("div");
-      row.className = "cal-month-row";
-      row.dataset.rowStart = cursorISO;
-      row.dataset.rowEnd = weekEndISO;
-
-      const banners = document.createElement("div");
-      banners.className = "cal-month-row-banners";
-      banners.setAttribute("data-row-banners", "");
-      banners.setAttribute("aria-hidden", "true");
-      row.appendChild(banners);
-
-      for (let offset = 0; offset < 7; offset++) {
-        const dayISO = addDaysISO(cursorISO, offset);
-        const dt = parseISODate(dayISO);
-        const inMonth = dt.getMonth() === monthIdx;
-        const isToday = dayISO === todayISO;
-        const cell = document.createElement("div");
-        cell.className = `cal-month-cell${isToday ? " is-today" : ""}${inMonth ? "" : " other-month"}`;
-        cell.dataset.date = dayISO;
-        cell.dataset.weekday = String(dt.getDay());
-        cell.setAttribute("role", "button");
-        cell.setAttribute("tabindex", "0");
-
-        const head = document.createElement("div");
-        head.className = "cal-month-cell-head";
-        const num = document.createElement("span");
-        const isFirstOfMonth = dt.getDate() === 1;
-        num.className = `cal-month-day-num${isFirstOfMonth ? " first-of-month" : ""}`;
-        num.textContent = isFirstOfMonth
-          ? dt.toLocaleDateString(undefined, { month: "short", day: "numeric" })
-          : String(dt.getDate());
-        head.appendChild(num);
-        cell.appendChild(head);
-
-        const items = document.createElement("div");
-        items.className = "cal-month-cell-items";
-        items.setAttribute("data-items-container", "");
-        cell.appendChild(items);
-
-        const overflow = document.createElement("span");
-        overflow.className = "cal-month-overflow hidden";
-        overflow.setAttribute("aria-hidden", "true");
-        cell.appendChild(overflow);
-
-        row.appendChild(cell);
-      }
-
-      if (seedsContainer) grid.insertBefore(row, seedsContainer);
-      else grid.appendChild(row);
-
-      cursorISO = addDaysISO(weekEndISO, 1);
-    }
+    // Tear down any existing month blocks; insert the freshly-built one
+    // between the up/down loader sentinels (which stay put for the
+    // mobile infinite-scroll observer to re-anchor to).
+    $$("[data-month-block]", stack).forEach((b) => b.remove());
+    mobileInfinite.observed = false; // force re-bind after DOM swap
+    const downLoader = stack.querySelector('[data-month-loader="down"]');
+    if (downLoader) stack.insertBefore(block, downLoader);
+    else stack.appendChild(block);
 
     // Ensure the store has data for the new window, then notify
     // subscribers so month_view + agenda_cal both repaint against the
@@ -1842,6 +2040,392 @@
     // with whatever the user just jumped to.
     setAnchoredToToday(root, 3);
     updateTodayBtnState(root, 3);
+
+    // Mobile: re-activate the infinite-scroll layer around the new
+    // center month (adds 2 prior + 2 next blocks, rebinds observers).
+    activateMobileMonthInfinite(root);
+  }
+
+  // ============================================================
+  // MOBILE INFINITE SCROLL
+  // ============================================================
+  // Below the mobile breakpoint, the month view becomes a continuous
+  // vertical stack of months (iOS Calendar style). The server still
+  // renders one month-block; this layer seeds 2 prior + 2 next around
+  // it and uses IntersectionObserver sentinels to grow the stack as
+  // the user nears either edge.
+  //
+  // Desktop nav (prev/next link clicks → renderMonthFor) tears down all
+  // blocks and rebuilds a single one. The same path is taken on the
+  // mobile side after popstate; the activate function below re-seeds
+  // siblings around whatever the new center month is.
+  function activateMobileMonthInfinite(root) {
+    if (!root) return;
+    const grid = root.querySelector(".cal-month-grid");
+    const stack = grid && grid.querySelector("[data-month-stack]");
+    if (!grid || !stack) return;
+    // Ensure the matchMedia listener exists once per page life — it
+    // re-activates on resize across the breakpoint (rotation, dev
+    // tools, etc.) so the layout never desyncs.
+    ensureMobileMqlListener(root);
+
+    if (!isMobileMonthView()) {
+      // Desktop / wide-tablet: keep the existing single-block layout.
+      // Tear down any leftover observers from a previous mobile pass.
+      teardownMobileInfinite();
+      return;
+    }
+
+    // Make sure exactly one block currently lives in the stack — the
+    // anchor for siblings. If the stack is empty (defensive) bail; if
+    // it has many (e.g. a previous mobile pass), trim to the closest
+    // block matching the grid's current month window.
+    let blocks = $$("[data-month-block]", stack);
+    if (blocks.length === 0) return;
+    if (blocks.length > 1) {
+      const centerISO = root.dataset.currentDate?.slice(0, 7);
+      const keep = blocks.find((b) => b.dataset.monthIso === centerISO) || blocks[Math.floor(blocks.length / 2)];
+      blocks.forEach((b) => { if (b !== keep) b.remove(); });
+      blocks = [keep];
+    }
+
+    const center = blocks[0];
+    const centerISO = center.dataset.monthIso;
+    if (!centerISO) return;
+
+    // Build all sibling blocks as detached DOM nodes first, then insert
+    // them in TWO batches (prior above the center, next below). A
+    // single scroll-compensation per batch eliminates the per-prepend
+    // rounding drift the original implementation accumulated — that
+    // drift was what occasionally left the viewport anchored on the
+    // top-of-stack (looking like the page had "scrolled back to
+    // January") instead of on the current month.
+    const priorBlocks = [];
+    for (let i = 1; i <= 3; i++) {
+      const b = buildMonthBlockNode(addMonthsISO(centerISO, -i));
+      if (b) priorBlocks.push(b);
+    }
+    // Built in i=1..3 order (May, Apr, Mar). Reverse so iterator
+    // insertion produces chronological [Mar, Apr, May, Jun] in the DOM.
+    priorBlocks.reverse();
+
+    const nextBlocks = [];
+    for (let i = 1; i <= 3; i++) {
+      const b = buildMonthBlockNode(addMonthsISO(centerISO, +i));
+      if (b) nextBlocks.push(b);
+    }
+
+    // Insert prior blocks above the center. Lock scroll-behavior to
+    // 'auto' inline so the mobile CSS's `scroll-behavior: smooth` can't
+    // animate the compensation — Safari/Chrome honor the inline
+    // override even when the option-form `behavior: "auto"` is
+    // ambiguous, which is what was making the page visibly "scroll
+    // back" to earlier months on load.
+    const prevScrollBehavior = grid.style.scrollBehavior;
+    grid.style.scrollBehavior = "auto";
+
+    const beforeH = grid.scrollHeight;
+    const beforeTop = grid.scrollTop;
+    priorBlocks.forEach((b) => stack.insertBefore(b, center));
+    const afterH = grid.scrollHeight;
+    grid.scrollTop = beforeTop + (afterH - beforeH);
+
+    // Append next blocks BELOW the center — no scroll compensation
+    // needed because adding content below the viewport never shifts
+    // what's visible.
+    const downLoader = stack.querySelector('[data-month-loader="down"]');
+    nextBlocks.forEach((b) => {
+      if (downLoader) stack.insertBefore(b, downLoader);
+      else stack.appendChild(b);
+    });
+
+    // Single post-mutation pass: extend the window markers, kick off
+    // backfill, refresh seeds, re-layout banners. month_view.js's
+    // store subscriber fills the new cells with timed items.
+    expandGridRangeMarkers(grid);
+    repaintAfterMutation(grid);
+
+    // Two rAFs: the first lets the just-notified item-render pass paint
+    // into cells (which can push some rows past their min-height); the
+    // second is when we can safely measure today's cell and lock the
+    // viewport there. Setting scrollTop directly (vs scrollTo()) with
+    // the inline 'auto' lock is the most reliable way to make the
+    // initial anchor stick across browsers.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const todayISO = toISO(new Date());
+        const todayCell = grid.querySelector(`.cal-month-cell[data-date="${cssEscape(todayISO)}"]`);
+        const gridRect = grid.getBoundingClientRect();
+        const weekdaysH = grid.querySelector(".cal-month-weekdays")?.getBoundingClientRect().height || 32;
+        let target;
+        if (todayCell) {
+          const cellRect = todayCell.getBoundingClientRect();
+          target = grid.scrollTop + (cellRect.top - gridRect.top) - weekdaysH - 8;
+        } else {
+          const centerRect = center.getBoundingClientRect();
+          target = grid.scrollTop + (centerRect.top - gridRect.top);
+        }
+        grid.scrollTop = Math.max(0, target);
+        grid.style.scrollBehavior = prevScrollBehavior;
+        bindMobileObservers(root, grid, stack);
+      });
+    });
+  }
+
+  function isMobileMonthView() {
+    return window.matchMedia && window.matchMedia("(max-width: 720px)").matches;
+  }
+
+  function ensureMobileMqlListener(root) {
+    if (mobileInfinite.mql) return;
+    if (!window.matchMedia) return;
+    const mql = window.matchMedia("(max-width: 720px)");
+    mobileInfinite.mql = mql;
+    const handler = () => {
+      // Re-activate on every transition. When crossing into desktop the
+      // activate function tears down observers + leaves the existing
+      // blocks (still valid markup). When crossing into mobile it seeds
+      // siblings around the current center.
+      activateMobileMonthInfinite(root);
+    };
+    if (mql.addEventListener) mql.addEventListener("change", handler);
+    else if (mql.addListener) mql.addListener(handler);
+  }
+
+  function teardownMobileInfinite() {
+    if (mobileInfinite.scrollHandler && mobileInfinite.scrollGrid) {
+      mobileInfinite.scrollGrid.removeEventListener("scroll", mobileInfinite.scrollHandler);
+      mobileInfinite.scrollHandler = null;
+      mobileInfinite.scrollGrid = null;
+    }
+    mobileInfinite.observed = false;
+  }
+
+  // Prepend a freshly-built block above the current first block, and
+  // compensate the scroll position so the viewport stays exactly where
+  // the user left it (no visible jump when content grows upward).
+  function prependMonthBlock(grid, monthISO) {
+    const stack = grid.querySelector("[data-month-stack]");
+    if (!stack) return null;
+    if (stack.querySelector(`[data-month-block][data-month-iso="${cssEscape(monthISO)}"]`)) return null;
+    const block = buildMonthBlockNode(monthISO);
+    if (!block) return null;
+    const firstBlock = stack.querySelector("[data-month-block]");
+    const anchor = firstBlock || stack.querySelector('[data-month-loader="down"]');
+    const beforeH = grid.scrollHeight;
+    const beforeTop = grid.scrollTop;
+    if (anchor) stack.insertBefore(block, anchor);
+    else stack.appendChild(block);
+    const afterH = grid.scrollHeight;
+    // scrollTo with behavior:auto bypasses the grid's CSS
+    // `scroll-behavior: smooth` so a prepend never animates — a smooth
+    // scroll here would visually drag the user through the freshly
+    // inserted month and undo the whole point of compensation.
+    grid.scrollTo({ top: beforeTop + (afterH - beforeH), behavior: "auto" });
+    expandGridRangeMarkers(grid);
+    repaintAfterMutation(grid);
+    return block;
+  }
+
+  function appendMonthBlock(grid, monthISO) {
+    const stack = grid.querySelector("[data-month-stack]");
+    if (!stack) return null;
+    if (stack.querySelector(`[data-month-block][data-month-iso="${cssEscape(monthISO)}"]`)) return null;
+    const block = buildMonthBlockNode(monthISO);
+    if (!block) return null;
+    const downLoader = stack.querySelector('[data-month-loader="down"]');
+    if (downLoader) stack.insertBefore(block, downLoader);
+    else stack.appendChild(block);
+    expandGridRangeMarkers(grid);
+    repaintAfterMutation(grid);
+    return block;
+  }
+
+  // After any block prepend/append, extend the grid's data-month-start
+  // and data-month-end to cover the union of every block. Store
+  // queries (itemsForRange, ensureRangeLoaded, hydrateMonthAllDaySeeds)
+  // all read these markers, so they have to track the full visible
+  // window — not the original single-month range.
+  function expandGridRangeMarkers(grid) {
+    const stack = grid.querySelector("[data-month-stack]");
+    const blocks = $$("[data-month-block]", stack);
+    if (blocks.length === 0) return;
+    let lo = blocks[0].dataset.blockStart;
+    let hi = blocks[0].dataset.blockEnd;
+    blocks.forEach((b) => {
+      if (b.dataset.blockStart < lo) lo = b.dataset.blockStart;
+      if (b.dataset.blockEnd > hi) hi = b.dataset.blockEnd;
+    });
+    grid.dataset.monthStart = lo;
+    grid.dataset.monthEnd = hi;
+  }
+
+  // Single shared post-mutation pass: backfill the store, re-hydrate
+  // the all-day seed container for the union range, then re-run the
+  // banner layout + overflow count. Triggered after every block append
+  // or prepend; cheap because layoutMonthBanners early-exits on rows
+  // with no candidate banners.
+  function repaintAfterMutation(grid) {
+    const root = grid.closest(".agenda-cal-page");
+    if (!root) return;
+    const from = grid.dataset.monthStart;
+    const to = grid.dataset.monthEnd;
+    if (from && to) window.AgendaSync?.ensureRangeLoaded(from, to);
+    rehydrateMonthSeedsFromStore(root);
+    layoutMonthBanners(root);
+    recountMonthOverflow(root);
+    // Wake month_view.js's subscriber so the new cells fill with items.
+    window.AgendaStore?.notify?.("page");
+  }
+
+  // Wire up two scroll-driven concerns: edge loading (prepend/append
+  // month blocks as the user nears either end) and toolbar title
+  // tracking (report whichever block dominates the viewport).
+  //
+  // Why scroll events, not IntersectionObserver: IO fires on
+  // intersection STATE CHANGE only. After the loader callback adds
+  // blocks the sentinel stays inside the rootMargin (it never exits
+  // — there's nowhere for it to go), so the next time the user
+  // approaches the edge no fresh IO callback fires. Fast scrolling
+  // would silently stop loading. Scroll events fire continuously
+  // during inertial scroll, so re-checking distance-to-edge on each
+  // tick is the simple, reliable path.
+  function bindMobileObservers(root, grid, stack) {
+    teardownMobileInfinite();
+
+    // Arm the user-interaction gate. Edge loading ignores scrolls
+    // until the user has touched, wheel'd, or keyboard-navigated the
+    // grid at least once — this neutralises the initial layout's
+    // programmatic scroll-to-today, which would otherwise look like
+    // an "approach the bottom" signal and chain immediate appends.
+    mobileInfinite.userInteracted = false;
+    const markInteracted = () => { mobileInfinite.userInteracted = true; };
+    ["wheel", "touchstart", "pointerdown", "keydown"].forEach((evt) => {
+      grid.addEventListener(evt, markInteracted, { passive: true, once: true });
+    });
+
+    const EDGE_THRESHOLD_PX = 1800;
+
+    // Single throttled scroll handler — coalesces multiple scroll
+    // events per frame and drives both the edge loader and the title
+    // tracker from the same measurement.
+    let scrollScheduled = false;
+    const onScroll = () => {
+      if (scrollScheduled) return;
+      scrollScheduled = true;
+      requestAnimationFrame(() => {
+        scrollScheduled = false;
+        runEdgeLoad();
+        updateTitleFromBlock(pickDominantBlock());
+      });
+    };
+
+    const runEdgeLoad = () => {
+      if (!mobileInfinite.userInteracted) return;
+      if (mobileInfinite.loading) return;
+      const distToBottom = grid.scrollHeight - (grid.scrollTop + grid.clientHeight);
+      const distToTop = grid.scrollTop;
+      const blocks = $$("[data-month-block]", stack);
+      if (blocks.length === 0) return;
+      // Bottom takes priority — typical user scrolls forward in time.
+      if (distToBottom < EDGE_THRESHOLD_PX) {
+        mobileInfinite.loading = true;
+        const lastISO = blocks[blocks.length - 1].dataset.monthIso;
+        appendMonthBlock(grid, addMonthsISO(lastISO, +1));
+        appendMonthBlock(grid, addMonthsISO(lastISO, +2));
+        // Unlock next frame so the just-appended height is reflected
+        // in scrollHeight before the next scroll tick re-checks
+        // distance. Without the frame gap a long inertial scroll can
+        // double-load on the next event.
+        requestAnimationFrame(() => { mobileInfinite.loading = false; });
+        return;
+      }
+      if (distToTop < EDGE_THRESHOLD_PX) {
+        mobileInfinite.loading = true;
+        const firstISO = blocks[0].dataset.monthIso;
+        prependMonthBlock(grid, addMonthsISO(firstISO, -1));
+        prependMonthBlock(grid, addMonthsISO(firstISO, -2));
+        requestAnimationFrame(() => { mobileInfinite.loading = false; });
+        return;
+      }
+    };
+
+    grid.addEventListener("scroll", onScroll, { passive: true });
+    mobileInfinite.scrollHandler = onScroll;
+    mobileInfinite.scrollGrid = grid;
+
+    // Toolbar title tracker: report whichever block contains the
+    // probe line just below the sticky weekday row. A scroll listener
+    // (rAF-throttled) does the picking directly — the previous
+    // IntersectionObserver attempt was unreliable because multiple
+    // blocks can intersect the same band simultaneously (one ending,
+    // one beginning) and IO entry order doesn't correspond to which
+    // block actually fills the viewport.
+    const titleEl = $(".cal-toolbar-title", root);
+    const formatMonthShort = (iso) => {
+      const dt = parseISODate(`${iso}-01`);
+      // Short month form ("Sep 2026") keeps the title narrow enough
+      // that long months ("September 2026") can't push the right-side
+      // toolbar controls into overlap.
+      return dt.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+    };
+    const updateTitleFromBlock = (block) => {
+      if (!titleEl || !block) return;
+      const iso = block.dataset.monthIso;
+      if (!iso) return;
+      const txt = formatMonthShort(iso);
+      if (titleEl.textContent !== txt) titleEl.textContent = txt;
+    };
+    const pickDominantBlock = () => {
+      const gridRect = grid.getBoundingClientRect();
+      const weekdaysH = grid.querySelector(".cal-month-weekdays")?.getBoundingClientRect().height || 32;
+      // Probe a few px below the weekday header — that's the visual
+      // "what month am I reading" point.
+      const probeY = gridRect.top + weekdaysH + 4;
+      const allBlocks = $$("[data-month-block]", stack);
+      // The block whose vertical range [top, bottom] contains the
+      // probe line is the dominant one. Exactly one block will match
+      // when the stack is contiguous; if no block matches (e.g. the
+      // probe is in a divider gap), fall back to the first block whose
+      // top is below the probe.
+      for (const b of allBlocks) {
+        const r = b.getBoundingClientRect();
+        if (r.top <= probeY && r.bottom > probeY) return b;
+      }
+      for (const b of allBlocks) {
+        const r = b.getBoundingClientRect();
+        if (r.top > probeY) return b;
+      }
+      return allBlocks[allBlocks.length - 1] || null;
+    };
+
+    // Initial paint — covers the case where the activate scroll-to-
+    // today landed in a non-server-month, so the toolbar title shouldn't
+    // stay on whatever the server rendered.
+    updateTitleFromBlock(pickDominantBlock());
+
+    mobileInfinite.observed = true;
+  }
+
+  // Smooth-scroll the cell whose data-date matches `dateISO` into view.
+  // Used by the Today button on mobile (where prev/next are hidden and
+  // scrolling IS the navigation). Falls back to a renderMonthFor if the
+  // requested date isn't currently in any rendered block.
+  function scrollMonthToDate(root, dateISO) {
+    const grid = root.querySelector(".cal-month-grid");
+    if (!grid) return false;
+    const cell = grid.querySelector(`.cal-month-cell[data-date="${cssEscape(dateISO)}"]`);
+    if (!cell) return false;
+    const gridRect = grid.getBoundingClientRect();
+    const cellRect = cell.getBoundingClientRect();
+    const weekdaysH = grid.querySelector(".cal-month-weekdays")?.getBoundingClientRect().height || 32;
+    const target = grid.scrollTop + (cellRect.top - gridRect.top) - weekdaysH - 8;
+    grid.scrollTo({ top: target, behavior: "smooth" });
+    return true;
+  }
+
+  function cssEscape(str) {
+    return (window.CSS && window.CSS.escape) ? window.CSS.escape(str) : String(str).replace(/"/g, '\\"');
   }
 
   // --- Date helpers used by client-side nav ---
@@ -1908,6 +2492,19 @@
       if (link.target === "_blank" || !link.href) return;
       const url = new URL(link.href, window.location.href);
       if (url.origin !== window.location.origin) return;
+      // Mobile month view: Today button scrolls the today cell into
+      // view rather than navigating. The cell is virtually always in
+      // the stack (server-rendered current month + seeded siblings); if
+      // somehow it isn't, fall through to the normal nav.
+      if (link.classList.contains("cal-today-btn")
+          && root.classList.contains("agenda-cal-month-page")
+          && isMobileMonthView()) {
+        const todayISO = toISO(new Date());
+        if (scrollMonthToDate(root, todayISO)) {
+          e.preventDefault();
+          return;
+        }
+      }
       if (url.pathname === window.location.pathname && url.search === window.location.search) {
         // Same URL — still useful (e.g. "Today" when already on this
         // week). Treat as a no-op rather than a reload.

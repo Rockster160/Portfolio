@@ -115,9 +115,9 @@ body.agenda-cal-body {
   font-weight: 700;
   letter-spacing: -0.01em;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
+  // No ellipsis — shell-generated content must never get mutilated.
+  // The toolbar layout (single row on desktop, stacked rows on mobile)
+  // is responsible for giving the title enough room to render in full.
 }
 
 .cal-toolbar-nav {
@@ -153,20 +153,26 @@ body.agenda-cal-body {
   .cal-toolbar-left  { gap: 8px; }
 }
 
-// Phone viewports — split the toolbar into two rows so the nav and the
-// title/view-toggle stop colliding. Row 1: title + view-toggle | actions.
-// Row 2: prev / Today / next, centered.
+// Phone viewports — three rows: title|actions, toggle|today.
+// `display: contents` on `.cal-toolbar-left` promotes its children
+// (error-dot, title, view-toggle) into the parent grid so we can place
+// the title and the view-toggle on different rows. Result: the title
+// owns the entire top-row left column (never overlaps actions, never
+// needs ellipsizing) and the view-toggle drops to row 2 alongside
+// Today.
 @media (max-width: 600px) {
   .cal-toolbar {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      "left actions"
-      "nav  nav";
-    row-gap: 4px;
+      "title  actions"
+      "toggle nav";
+    row-gap: 6px;
   }
-  .cal-toolbar-left    { grid-area: left;    justify-self: start; }
-  .cal-toolbar-actions { grid-area: actions; justify-self: end;   }
-  .cal-toolbar-nav     { grid-area: nav;     justify-self: center; }
+  .cal-toolbar-left { display: contents; }
+  .cal-toolbar .cal-toolbar-title  { grid-area: title;   justify-self: start; }
+  .cal-toolbar .cal-toolbar-toggle { grid-area: toggle;  justify-self: start; }
+  .cal-toolbar-actions             { grid-area: actions; justify-self: end;   }
+  .cal-toolbar-nav                 { grid-area: nav;     justify-self: end;   }
 }
 
 // Date-nav buttons (prev / today / next) — used inside the condensed
@@ -239,6 +245,49 @@ body.agenda-cal-body {
   overflow-y: auto;
   position: relative;
   background: rgba(0, 0, 0, 0.15);
+}
+
+// Scroll stack wraps every visible month-block. On desktop it holds
+// exactly one block (the single requested month, rendered server-side).
+// On mobile, agenda_cal.js attaches sentinels via the `[data-month-loader]`
+// nodes and prepends/appends sibling `.cal-month-block` nodes for the
+// iOS-style continuous scroll.
+.cal-month-stack {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto; // grow with content; never shrink content out of view
+  min-height: 0;
+  position: relative;
+}
+
+// A month-block groups one month's weekday rows. Desktop hides the inline
+// header — the toolbar title is enough. Mobile shows a bold inline title
+// ABOVE the first row so multiple months stay visually distinguishable
+// as they stack.
+.cal-month-block {
+  display: flex;
+  flex-direction: column;
+  // flex-grow on the block lets the lone-desktop block stretch its rows
+  // to fill the grid. With multiple blocks (mobile) we override below so
+  // every block hugs its content instead.
+  flex: 1 0 auto;
+  min-height: 0;
+  position: relative;
+}
+
+.cal-month-block-header {
+  display: none; // desktop: title lives in the toolbar
+}
+
+// Single-pixel sentinel rows. IntersectionObserver in agenda_cal.js
+// watches these to trigger prepend/append when the user nears either
+// edge of the scroll stack. Zero visual footprint — they only exist so
+// the observer has a target with a meaningful viewport position.
+.cal-month-loader {
+  flex: 0 0 1px;
+  height: 1px;
+  width: 100%;
+  pointer-events: none;
 }
 
 .cal-month-weekdays {
@@ -399,10 +448,18 @@ body.agenda-cal-body {
   border-radius: 999px;
   line-height: 1.4;
   letter-spacing: 0.02em;
+}
 
-  &.first-of-month {
-    padding: 1px 8px;
-  }
+// Sibling label rendered before the day-num on the 1st of any month
+// (e.g. "Sep" + "1" → desktop reads as "Sep 1"). Mobile flips the
+// flex direction so the label sits ABOVE the day number, matching
+// Apple's per-month-transition treatment.
+.cal-month-cell-month-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-right: 4px;
+  opacity: 0.85;
 }
 
 .cal-month-cell-items {
@@ -414,8 +471,10 @@ body.agenda-cal-body {
   overflow: hidden;
   // `--cal-banner-rows` is set on the parent row by JS (0..N). Push the
   // timed-item stack down by however many banner rows the week-row has
-  // so banners and items don't collide.
-  margin-top: calc(var(--cal-banner-rows, 0) * 19px);
+  // so banners and items don't collide. `--cal-banner-row-h` is the
+  // per-lane vertical advance (bannerHeight + bannerGap) and is also
+  // set by JS — defaults to 19px which matches the desktop tuning.
+  margin-top: calc(var(--cal-banner-rows, 0) * var(--cal-banner-row-h, 19px));
 }
 
 // .cal-month-item is a <button> — fully reset the global cascade from
@@ -1081,6 +1140,57 @@ $cal-week-px-per-hour: 20px;
         transparent 4px 8px
       );
     }
+
+    // Multi-stop leg subdivisions — drive segments and dwell bars stacked
+    // inside the band, sized inline so they sum to the band's height. When
+    // present, the band's own background pattern is masked out (each leg
+    // paints its own); the LABEL still floats over the stack via absolute
+    // positioning so the leave-time read continues to work.
+    &:has(.cal-week-event-travel-leg) {
+      background-image: none;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-start;
+      position: relative;
+
+      .cal-week-event-travel-label {
+        position: absolute;
+        inset: 0 4px 0 6px;
+        display: flex;
+        align-items: center;
+        z-index: 1;
+      }
+    }
+  }
+
+  // Per-leg subdivisions inside a multi-stop travel band.
+  //   * `-drive` segments carry the stripe pattern; `.is-alt` flips the
+  //     angle so adjacent drive legs read as distinct trips.
+  //   * `-dwell` bars are solid fills — sized by the dwell duration so a
+  //     longer planned stop renders as a thicker bar without needing a
+  //     label.
+  .cal-week-event-travel-leg {
+    flex: 0 0 auto;
+    width: 100%;
+    pointer-events: none;
+  }
+  .cal-week-event-travel-leg-drive {
+    background-image: repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--agenda-color, #888) 16%, transparent) 0 4px,
+      transparent 4px 8px
+    );
+    &.is-alt {
+      background-image: repeating-linear-gradient(
+        45deg,
+        color-mix(in srgb, var(--agenda-color, #888) 16%, transparent) 0 4px,
+        transparent 4px 8px
+      );
+    }
+  }
+  .cal-week-event-travel-leg-dwell {
+    background-color: color-mix(in srgb, var(--agenda-color, #888) 60%, transparent);
+    min-height: 2px;
   }
 
   // "X min drive" label inside the travel band. Only emitted when the
@@ -1414,11 +1524,209 @@ body.cal-event-drag-blocked * {
   .cal-week-body {
     grid-template-columns: 44px repeat(7, minmax(0, 1fr));
   }
-  .cal-month-row {
-    min-height: 80px;
-  }
-  .cal-month-item .cal-month-item-time {
-    display: none;
+
+  // ============== iOS-style mobile month view ==============
+  // Goal: scannable, large numerals, tinted event pills, continuous
+  // vertical scroll across months (driven by JS in agenda_cal.js).
+  .agenda-cal-month-page {
+    .cal-month-grid {
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      // Smooth-scroll the Today jump on mobile; desktop nav is jump-cut.
+      scroll-behavior: smooth;
+      overscroll-behavior: contain;
+    }
+
+    .cal-month-weekdays {
+      background: rgba(8, 16, 32, 0.96);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .cal-month-weekday-head {
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      padding: 8px 0 6px;
+      opacity: 0.45;
+    }
+
+    // Blocks hug their content so several months stack naturally for
+    // the continuous-scroll experience. Padding-bottom is zero — the
+    // visual separation between months is the divider on the next
+    // block's `has-month-start` row, NOT block padding (Apple's pattern).
+    .cal-month-block {
+      flex: 0 0 auto;
+      padding-bottom: 0;
+    }
+    // No section header on mobile — Apple folds the month transition
+    // into the calendar grid itself via a divider + inline label.
+    .cal-month-block-header { display: none; }
+
+    // Rows are content-sized on mobile (vs. flex-grown on desktop).
+    .cal-month-row {
+      flex: 0 0 auto;
+      min-height: 80px;
+    }
+    .cal-month-row + .cal-month-row {
+      border-top: 0; // borders feel noisy at phone widths; let whitespace do the work
+    }
+    // The horizontal divider line that signals "new month begins here"
+    // — drawn on any row that opens a month. Tight margin/padding
+    // keeps the months close (Apple's pattern is a thin line + small
+    // breathing space, not a big gap). The very first row of the very
+    // first block suppresses the divider so the page doesn't start
+    // with a hairline directly below the weekday header.
+    .cal-month-row.has-month-start {
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 0;
+      margin-top: 6px;
+    }
+    .cal-month-stack > .cal-month-block:first-child > .cal-month-row:first-child.has-month-start {
+      border-top: 0;
+      margin-top: 0;
+    }
+
+    // Day cells — bigger, centered number above events. Top/bottom
+    // padding acts as the visual week-to-week separator (no inter-row
+    // borders); the cell-head's own min-height guarantees a consistent
+    // day-num band height regardless of whether the cell carries an
+    // optional month label.
+    .cal-month-cell {
+      padding: 6px 2px 6px;
+      gap: 0;
+
+      & + .cal-month-cell { border-left: 0; }
+
+      &:hover { background: transparent; }
+
+      // Apple hides the spill-over days from prior/next months entirely
+      // — adjacent month blocks each fade to empty cells where the
+      // other month's day would have been. `visibility: hidden` keeps
+      // the grid column structure intact while making the cell-head
+      // invisible. CRITICAL: also `display: none` the inner items +
+      // overflow because `visibility: hidden` PRESERVES LAYOUT — a
+      // hidden Oct 26-31 cell with 5 stacked events would still
+      // contribute ~120px of row height, leaving a huge gap above the
+      // single-event Nov 1 cell next door. Removing those children
+      // from layout lets the row collapse to its actual visible
+      // content (governed by the row min-height floor).
+      &.other-month {
+        visibility: hidden;
+        .cal-month-cell-items,
+        .cal-month-overflow { display: none; }
+      }
+
+      // iOS today = solid red circle around the day number.
+      &.is-today .cal-month-day-num {
+        background: #FF3B30;
+        color: #FFF;
+        box-shadow: none;
+      }
+    }
+
+    // Stack the optional month-label above the day number, with a
+    // fixed min-height tall enough to hold BOTH (label + 26px circle +
+    // 1px gap = ~40px). `justify-content: flex-end` anchors the
+    // day-num to the bottom of the cell-head box, so cells WITH a
+    // label and cells WITHOUT one still render their day-num at the
+    // same Y position — the label just appears above. Without the
+    // tall min-height, cells with a label grew the cell-head past the
+    // shared height, dropping their day-num a few px lower than
+    // sibling cells in the same row.
+    .cal-month-cell-head {
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 1px;
+      min-height: 40px;
+      margin-bottom: 4px;
+    }
+    .cal-month-cell-month-label {
+      font-size: 13px;
+      font-weight: 600;
+      opacity: 0.85;
+      letter-spacing: 0.01em;
+      margin: 0;
+      line-height: 1;
+    }
+
+    .cal-month-day-num {
+      font-size: 17px;
+      font-weight: 500;
+      width: 26px;
+      height: 26px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      line-height: 1;
+    }
+
+    // Tinted-pill events. Background uses the agenda color at low alpha
+    // (handled via the in-button gradient below) and the text uses the
+    // agenda color at full strength so the pill reads as both colorful
+    // and legible against the dark page background.
+    .cal-month-item {
+      padding: 1px 5px !important;
+      border-radius: 4px !important;
+      // Color-mix gives us a tinted background without juggling rgba
+      // alphas per-event. Falls back gracefully where unsupported (~all
+      // recent mobile browsers support color-mix).
+      background: color-mix(in srgb, var(--agenda-color, #888) 22%, transparent) !important;
+      color: var(--agenda-color, #FFF) !important;
+      font-size: 10.5px !important;
+      font-weight: 600 !important;
+      line-height: 1.25;
+
+      &:hover {
+        background: color-mix(in srgb, var(--agenda-color, #888) 32%, transparent) !important;
+      }
+
+      .cal-month-item-dot { display: none; }
+      .cal-month-item-time { display: none; }
+      .cal-month-item-travel { display: none; }
+
+      .cal-month-item-name {
+        font-weight: 600;
+      }
+
+      // All-day timed item (rare path); keep the solid fill so it
+      // reads as a banner, matching the multi-day banners above.
+      &.is-all-day {
+        color: #FFF !important;
+        background: var(--agenda-color, #888) !important;
+      }
+    }
+
+    // Banner pills match the in-cell tinted look. The shared
+    // `--agenda-color` already drives both, so we just override the
+    // background to the tinted variant.
+    .cal-month-banner {
+      background: color-mix(in srgb, var(--agenda-color, #888) 28%, transparent) !important;
+      color: var(--agenda-color, #FFF) !important;
+      border-radius: 4px !important;
+      height: 16px;
+      line-height: 16px;
+      font-size: 10.5px !important;
+      padding: 0 6px !important;
+    }
+
+    .cal-month-overflow {
+      text-align: center;
+      font-size: 10px;
+      padding: 0;
+    }
+
+    // Toolbar on phone: bigger title (set live by JS to whichever month
+    // dominates the viewport), prev/next arrows hidden since scrolling
+    // is the navigation primitive. The Today button stays — it's the
+    // jump-back-to-today affordance and is harmless when already on it.
+    .cal-toolbar-title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .cal-toolbar-nav .date-nav { display: none; }
   }
 }
 
