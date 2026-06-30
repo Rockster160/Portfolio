@@ -216,25 +216,34 @@
   // Resolves to "occurrence" | "future" | null (null = cancel / dismiss).
   // Uses the shared #agenda-recurring-scope-modal partial; same modal
   // infra (showModal + jQuery modal.hidden) as agendaConfirm.
-  function agendaRecurringScope({ title, from, to }) {
+  function agendaRecurringScope({ title, from, to, patternFrom, patternTo }) {
     const modal = document.getElementById("agenda-recurring-scope-modal");
     if (!modal || typeof window.showModal !== "function" || !window.jQuery) {
       // No modal available — degrade to default-occurrence (safest: only
       // moves this one event, matches pre-modal behavior).
       return Promise.resolve("occurrence");
     }
-    const titleEl  = modal.querySelector(".agenda-recurring-scope-title");
-    const occBtn   = modal.querySelector(".agenda-recurring-scope-occurrence");
-    const futBtn   = modal.querySelector(".agenda-recurring-scope-future");
-    const diffEl   = modal.querySelector("[data-recurring-scope-diff]");
-    const fromEl   = modal.querySelector("[data-recurring-scope-from]");
-    const toEl     = modal.querySelector("[data-recurring-scope-to]");
+    const titleEl    = modal.querySelector(".agenda-recurring-scope-title");
+    const occBtn     = modal.querySelector(".agenda-recurring-scope-occurrence");
+    const futBtn     = modal.querySelector(".agenda-recurring-scope-future");
+    const diffEl     = modal.querySelector("[data-recurring-scope-diff]");
+    const fromEl     = modal.querySelector("[data-recurring-scope-from]");
+    const toEl       = modal.querySelector("[data-recurring-scope-to]");
+    const pLabelEl   = modal.querySelector("[data-recurring-scope-pattern-label]");
+    const pRowEl     = modal.querySelector("[data-recurring-scope-pattern-row]");
+    const pFromEl    = modal.querySelector("[data-recurring-scope-pattern-from]");
+    const pToEl      = modal.querySelector("[data-recurring-scope-pattern-to]");
     if (titleEl) titleEl.textContent = title || "Edit recurring event";
     if (diffEl) {
-      const hasDiff = !!(from && to);
-      diffEl.classList.toggle("hidden", !hasDiff);
+      const hasOcc = !!(from && to);
+      const hasPattern = !!(patternFrom && patternTo);
+      diffEl.classList.toggle("hidden", !hasOcc && !hasPattern);
       if (fromEl) fromEl.textContent = from || "";
       if (toEl)   toEl.textContent   = to   || "";
+      pLabelEl?.classList.toggle("hidden", !hasPattern);
+      pRowEl?.classList.toggle("hidden", !hasPattern);
+      if (pFromEl) pFromEl.textContent = patternFrom || "";
+      if (pToEl)   pToEl.textContent   = patternTo   || "";
     }
 
     return new Promise((resolve) => {
@@ -930,7 +939,14 @@
       };
 
       const location = $(".add-location", form)?.value || null;
-      const arriveEarlyMinutes = parseInt($(".add-arrive-early", form)?.value, 10) || 0;
+      // The form prefills arrive-early to a sensible default for events
+      // that actually have a location to travel to, but a location-less
+      // task/event has no "travel" to be early for — gate the field's
+      // value behind a present location so phantom 5-minute pre-travel
+      // bands don't show up on every location-less item.
+      const arriveEarlyMinutes = location
+        ? (parseInt($(".add-arrive-early", form)?.value, 10) || 0)
+        : 0;
       const notes = $(".add-notes", form)?.value || null;
 
       const agendaId = agendaPicker?.value() ? parseInt(agendaPicker.value(), 10) : null;

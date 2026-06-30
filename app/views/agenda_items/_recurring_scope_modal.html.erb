@@ -6,13 +6,25 @@
                  '<span class="agenda-recurring-scope-title">Edit recurring event</span>'.html_safe,
                  "modal-flat agenda-recurring-scope-modal") do %>
   <p class="agenda-recurring-scope-body">Apply this change to:</p>
-  <%# Optional before/after diff; the JS helper hides this block when no
-      from/to is supplied (e.g. an in-place name edit). %>
+  <%# Two-row diff. Each row stacks the BEFORE value (struck through +
+      faded so it's clearly the "was") above the AFTER value (full
+      intensity, slightly emphasised). Stacked layout makes the change
+      scannable at a glance even with long descriptions like "The first
+      Friday of every month"; the previous inline `before → after`
+      pattern wrapped awkwardly and forced left-to-right comparison.
+      Row 1 = this single occurrence; row 2 = the recurring pattern.
+      JS hides whichever rows have no data. %>
   <dl class="agenda-recurring-scope-diff hidden" data-recurring-scope-diff>
-    <dt>From</dt>
-    <dd data-recurring-scope-from></dd>
-    <dt>To</dt>
-    <dd data-recurring-scope-to></dd>
+    <dt data-recurring-scope-occurrence-label>This event</dt>
+    <dd>
+      <span class="agenda-recurring-scope-old" data-recurring-scope-from></span>
+      <span class="agenda-recurring-scope-new" data-recurring-scope-to></span>
+    </dd>
+    <dt data-recurring-scope-pattern-label class="hidden">All future</dt>
+    <dd data-recurring-scope-pattern-row class="hidden">
+      <span class="agenda-recurring-scope-old" data-recurring-scope-pattern-from></span>
+      <span class="agenda-recurring-scope-new" data-recurring-scope-pattern-to></span>
+    </dd>
   </dl>
   <div class="agenda-recurring-scope-actions">
     <button type="button" class="af-btn af-btn-secondary agenda-recurring-scope-cancel" data-dismiss="#agenda-recurring-scope-modal">Cancel</button>

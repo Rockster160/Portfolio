@@ -14,7 +14,16 @@ class AgendaSchedulesController < ApplicationController
     refuse_external_write!(target)
     return if performed?
 
-    @schedule = target.agenda_schedules.new(schedule_params.except(:agenda_id))
+    attrs = schedule_params.except(:agenda_id)
+    # Same rule as agenda_items#create: zero the arrive-early prefill
+    # when there's nothing physical to travel to (blank, Zoom URLs,
+    # "online", phone numbers — anything AddressBook.non_travelable?
+    # catches). Otherwise every recurring Zoom standup would carry a
+    # 5-minute phantom pre-travel band on every materialised row.
+    if attrs[:arrive_early_minutes].present? && ::AddressBook.non_travelable?(attrs[:location])
+      attrs[:arrive_early_minutes] = 0
+    end
+    @schedule = target.agenda_schedules.new(attrs)
 
     if @schedule.save
       target.broadcast!

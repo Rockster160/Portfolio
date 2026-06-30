@@ -214,6 +214,14 @@
     setAllDay(modal, false);
     const dateInput = modal.querySelector(".add-date");
     if (dateInput) dateInput.value = dateStr;
+    // End-date input lives in a normally-hidden row and resetForm fills
+    // it with form.dataset.defaultDate (today). Without this line, a
+    // drag on a non-today column leaves endDate stuck on today — submit
+    // then computes end_at against today, producing a negative
+    // duration (server rejects or the optimistic tile collapses to the
+    // renderer's 15-min visual minimum).
+    const endDateInput = modal.querySelector(".add-end-date");
+    if (endDateInput) endDateInput.value = dateStr;
     afterModalShown(modal, () => {
       const startInput = modal.querySelector(".add-start");
       if (startInput) startInput.value = formatTimeHHMM(startMin);
@@ -404,6 +412,144 @@
     return `${date} · ${range}`;
   }
 
+  // Compact range without the date prefix — "8pm – 11pm" — for the
+  // pattern row of the recurring-scope modal where the date is already
+  // implied by the description ("Fridays").
+  function formatRangeShort(startAt, endAt) {
+    const startD = new Date(Number(startAt) * 1000);
+    const endD = new Date(Number(endAt) * 1000);
+    const startMin = startD.getHours() * 60 + startD.getMinutes();
+    const endMin = endD.getHours() * 60 + endD.getMinutes();
+    return (endAt && endAt !== startAt)
+      ? `${formatLabelTime(startMin)} – ${formatLabelTime(endMin)}`
+      : formatLabelTime(startMin);
+  }
+
+  // Turn a recurrence rule + the occurrence's anchor date into a human
+  // phrase: "Fridays", "Every 21st", "The second Tuesday of every month",
+  // "Yearly on July 3", "Every 3 days". Mirrors the recurrence shapes
+  // supported by AgendaSchedule + the BE's shift_recurrence helper.
+  function describeRecurrence(rule, anchorEpoch) {
+    if (!rule || !rule.freq) return null;
+    const interval = Math.max(1, Number(rule.interval) || 1);
+    const wkeys = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+    const wplural = ["Sundays", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays"];
+    const wsingle = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const anchor = anchorEpoch ? new Date(Number(anchorEpoch) * 1000) : null;
+    const ord = (n) => {
+      const s = ["th", "st", "nd", "rd"];
+      const v = Math.abs(n) % 100;
+      return n < 0 ? "the last" : `the ${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
+    };
+    const setPosName = (p) => ({ 1: "first", 2: "second", 3: "third", 4: "fourth", "-1": "last" })[p] || `${p}`;
+    const joinList = (xs) => xs.length <= 1 ? (xs[0] || "") : xs.length === 2 ? xs.join(" and ") : `${xs.slice(0, -1).join(", ")}, and ${xs[xs.length - 1]}`;
+
+    // Shared describers for the weekly / monthly shapes. Both `weekly`
+    // and `custom`+`unit=week` route through `describeWeekly`; both
+    // `monthly` and `custom`+`unit=month` route through `describeMonthly`.
+    // Without this routing, a custom-month rule with by_set_pos+by_day
+    // (e.g. "every 1st Friday") collapsed to a bare "Every month".
+    const describeWeekly = (n) => {
+      const days = (rule.by_day && rule.by_day.length)
+        ? rule.by_day.map((k) => wkeys.indexOf(String(k).toLowerCase())).filter((i) => i >= 0)
+        : (anchor ? [anchor.getDay()] : []);
+      if (n === 1) return joinList(days.map((i) => wplural[i])) || "Weekly";
+      return `Every ${n} weeks on ${joinList(days.map((i) => wsingle[i]))}`;
+    };
+    const describeMonthly = (n) => {
+      if (rule.by_set_pos && rule.by_day && rule.by_day.length) {
+        const wi = wkeys.indexOf(String(rule.by_day[0]).toLowerCase());
+        const dayName = wi >= 0 ? wsingle[wi] : "day";
+        const pos = setPosName(Number(rule.by_set_pos));
+        return n === 1
+          ? `The ${pos} ${dayName} of every month`
+          : `The ${pos} ${dayName} of every ${n} months`;
+      }
+      const days = (rule.by_month_day && rule.by_month_day.length)
+        ? rule.by_month_day.map((d) => Number(d))
+        : (anchor ? [anchor.getDate()] : []);
+      const desc = joinList(days.map((d) => ord(d)));
+      return n === 1 ? `Monthly on ${desc}` : `Every ${n} months on ${desc}`;
+    };
+
+    switch (String(rule.freq).toLowerCase()) {
+      case "daily":
+        return interval === 1 ? "Every day" : `Every ${interval} days`;
+      case "weekdays":
+        return "Weekdays";
+      case "weekly":
+        return describeWeekly(interval);
+      case "monthly":
+        return describeMonthly(interval);
+      case "yearly": {
+        if (!anchor) return "Yearly";
+        const month = anchor.toLocaleString(undefined, { month: "long" });
+        return `Yearly on ${month} ${ord(anchor.getDate()).replace(/^the /, "")}`;
+      }
+      case "custom": {
+        const unit = String(rule.unit || "day").toLowerCase();
+        if (unit === "week")  return describeWeekly(interval);
+        if (unit === "month") return describeMonthly(interval);
+        // Default unit=day fallback.
+        return interval === 1 ? "Every day" : `Every ${interval} days`;
+      }
+      default: return null;
+    }
+  }
+
+  // Read the recurrence rule embedded in the tile's `data-schedule`
+  // attribute (server-rendered by AgendaItem#presentation_attrs). Returns
+  // null for non-recurring tiles or for malformed JSON — caller treats
+  // null as "no pattern row in the modal."
+  function readScheduleRecurrence(btn) {
+    const raw = btn?.dataset?.schedule;
+    if (!raw || raw === "null") return null;
+    try {
+      const sched = JSON.parse(raw);
+      if (!sched || !sched.freq) return null;
+      // serialize_for_edit flattens these to top-level; reshape into the
+      // {freq, by_day, ...} envelope describeRecurrence expects.
+      return {
+        freq:         sched.freq,
+        interval:     sched.interval,
+        unit:         sched.unit,
+        by_day:       sched.by_day || [],
+        by_month_day: sched.by_month_day || [],
+        by_set_pos:   sched.by_set_pos,
+      };
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  // Mirror the BE's shift_recurrence: rewrite the rule so it anchors on
+  // the NEW date instead of the OLD one. Used only for the modal preview;
+  // the canonical shift happens server-side.
+  function shiftRecurrencePreview(rule, oldEpoch, newEpoch) {
+    if (!rule || !oldEpoch || !newEpoch) return rule;
+    const oldD = new Date(Number(oldEpoch) * 1000);
+    const newD = new Date(Number(newEpoch) * 1000);
+    const oldDate = `${oldD.getFullYear()}-${oldD.getMonth() + 1}-${oldD.getDate()}`;
+    const newDate = `${newD.getFullYear()}-${newD.getMonth() + 1}-${newD.getDate()}`;
+    if (oldDate === newDate) return rule;
+
+    const wkeys = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+    const oldW = wkeys[oldD.getDay()];
+    const newW = wkeys[newD.getDay()];
+    const next = { ...rule };
+    if (Array.isArray(rule.by_day) && rule.by_day.length) {
+      next.by_day = rule.by_day.map((k) => String(k).toLowerCase() === oldW ? newW : String(k).toLowerCase());
+    }
+    if (Array.isArray(rule.by_month_day) && rule.by_month_day.length) {
+      next.by_month_day = rule.by_month_day.map((d) => Number(d) === oldD.getDate() ? newD.getDate() : Number(d));
+    }
+    if (rule.by_set_pos) {
+      const plus7 = new Date(newD.getFullYear(), newD.getMonth(), newD.getDate() + 7);
+      next.by_set_pos = plus7.getMonth() !== newD.getMonth() ? -1 : Math.floor((newD.getDate() - 1) / 7) + 1;
+    }
+    return next;
+  }
+
   // Enqueues the PATCH for a confirmed move. `scope` is one of
   // "occurrence" | "future" | null (null = non-recurring). Drag-to-move
   // goes through AgendaMutationQueue (same path as modal edits), so the
@@ -460,8 +606,22 @@
       ? formatRangeLong(snap.startAt, snap.endAt || snap.startAt)
       : null;
     const to = formatRangeLong(newStartAt, newEndAt);
+    // Pattern row — only when the tile carries a recurrence rule. The
+    // BE shifts the rule to anchor on the new occurrence date; preview
+    // the same shift locally so the modal copy reflects what
+    // "This and following" would actually do.
+    let patternFrom = null;
+    let patternTo = null;
+    const rule = readScheduleRecurrence(btn);
+    if (rule) {
+      const beforeDesc = describeRecurrence(rule, snap?.startAt);
+      const shifted = shiftRecurrencePreview(rule, snap?.startAt, newStartAt);
+      const afterDesc = describeRecurrence(shifted, newStartAt);
+      if (beforeDesc) patternFrom = `${beforeDesc} at ${formatRangeShort(snap.startAt, snap.endAt || snap.startAt)}`;
+      if (afterDesc)  patternTo   = `${afterDesc} at ${formatRangeShort(newStartAt, newEndAt)}`;
+    }
     const choose = (window.AgendaRecurringScope)
-      ? window.AgendaRecurringScope({ title, from, to })
+      ? window.AgendaRecurringScope({ title, from, to, patternFrom, patternTo })
       : Promise.resolve("occurrence");
     choose.then((choice) => {
       if (choice === "occurrence" || choice === "future") {

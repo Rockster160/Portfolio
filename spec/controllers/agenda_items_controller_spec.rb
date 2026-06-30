@@ -277,6 +277,37 @@ RSpec.describe AgendaItemsController, type: :controller do
       }, format: :json
       expect(response).to have_http_status(:not_found)
     end
+
+    it "zeroes arrive_early_minutes on create when the location is non-travelable" do
+      post :create, params: {
+        agenda_item: {
+          agenda_id:            agenda.id,
+          name:                 "Standup",
+          kind:                 "event",
+          start_at:             Time.current.to_i,
+          end_at:               (Time.current + 30.minutes).to_i,
+          location:             "https://zoom.us/j/123",
+          arrive_early_minutes: 5,
+        },
+      }, format: :json
+      created = AgendaItem.order(created_at: :desc).first
+      expect(created.location).to eq("https://zoom.us/j/123")
+      expect(created.arrive_early_minutes).to eq(0)
+    end
+
+    it "zeroes arrive_early_minutes on create when the location is blank" do
+      post :create, params: {
+        agenda_item: {
+          agenda_id:            agenda.id,
+          name:                 "Read book",
+          kind:                 "task",
+          start_at:             Time.current.to_i,
+          arrive_early_minutes: 5,
+        },
+      }, format: :json
+      created = AgendaItem.order(created_at: :desc).first
+      expect(created.arrive_early_minutes).to eq(0)
+    end
   end
 
   describe "moving an item between agendas" do
@@ -615,9 +646,7 @@ RSpec.describe AgendaItemsController, type: :controller do
       expect(tail.recurrence_data[:freq].to_s).to eq("daily")
     end
 
-    it "leaves materialized rows before the cutoff untouched and cascade-cancels future rows on the old schedule" do
-      # Materialize a row well before the cutoff (the daily already does
-      # this for today) and a row at the cutoff via series-affecting save.
+    it "leaves materialized rows before the cutoff untouched and the after_save hook prunes future ones" do
       pre_cutoff_row = event_sched.agenda_items.order(:start_at).first
       expect(pre_cutoff_row).to be_present
 
@@ -628,11 +657,122 @@ RSpec.describe AgendaItemsController, type: :controller do
         agenda_item: { start_at: new_start.to_i, end_at: (new_start + 30.minutes).to_i },
       }, format: :json
 
+      # Pre-cutoff row stays exactly as it was — no cancel, no destroy.
       expect(pre_cutoff_row.reload.cancelled_at).to be_nil
+      expect(AgendaItem.exists?(pre_cutoff_row.id)).to be true
 
-      # Any rows the old schedule had at or after the cutoff are cancelled.
-      stragglers = event_sched.agenda_items.where(start_at: new_start.beginning_of_day..)
-      stragglers.each { |row| expect(row.cancelled_at).to be_present, "expected #{row.start_at} cancelled" }
+      # Future rows on the old schedule that no longer match (now past
+      # until_on) are pruned by materialize_upcoming!. Nothing left ≥ cutoff
+      # that's still attached to the old schedule.
+      expect(event_sched.agenda_items.where(start_at: new_start.beginning_of_day..)).to be_empty
+    end
+
+    it "shifts a weekly+by_day rule to the new weekday when the drop crosses days" do
+      weekly = create(
+        :agenda_schedule, agenda: agenda, name: "Game Night", kind: :event,
+        start_time: "20:00", duration_minutes: 180,
+        recurrence: { "freq" => "weekly", "by_day" => ["fri"] },
+        starts_on: Date.current.beginning_of_week(:sunday) + 5, # Friday
+      )
+      original_fri = weekly.starts_on + 14 # two weeks out, still a Friday
+      target_thu = original_fri - 1
+      phantom_id = "p-#{weekly.id}-#{original_fri.iso8601}"
+      new_start = zone.local(target_thu.year, target_thu.month, target_thu.day, 17, 30)
+
+      patch :update, params: {
+        id:    phantom_id,
+        scope: :future,
+        agenda_item: { start_at: new_start.to_i, end_at: (new_start + 180.minutes).to_i },
+      }, format: :json
+
+      weekly.reload
+      expect(weekly.until_on).to eq(original_fri - 1)
+
+      tail = agenda.agenda_schedules.where.not(id: weekly.id).order(:created_at).last
+      expect(tail.starts_on).to eq(target_thu)
+      expect(tail.recurrence_data[:freq].to_s).to eq("weekly")
+      expect(tail.recurrence_data[:by_day]).to eq(["thu"])
+    end
+
+    it "shifts a monthly by_month_day rule to the new day-of-month" do
+      monthly = create(
+        :agenda_schedule, agenda: agenda, name: "Rent", kind: :event,
+        start_time: "09:00", duration_minutes: 30,
+        recurrence: { "freq" => "monthly", "by_month_day" => [21] },
+        starts_on: Date.new(Date.current.year, Date.current.month, 21),
+      )
+      original_21st = monthly.starts_on >> 1 # next month's 21st
+      target_22nd = original_21st + 1
+      phantom_id = "p-#{monthly.id}-#{original_21st.iso8601}"
+      new_start = zone.local(target_22nd.year, target_22nd.month, target_22nd.day, 10, 0)
+
+      patch :update, params: {
+        id:    phantom_id,
+        scope: :future,
+        agenda_item: { start_at: new_start.to_i, end_at: (new_start + 30.minutes).to_i },
+      }, format: :json
+
+      tail = agenda.agenda_schedules.where.not(id: monthly.id).order(:created_at).last
+      expect(tail.starts_on).to eq(target_22nd)
+      expect(tail.recurrence_data[:by_month_day].map(&:to_i)).to eq([22])
+    end
+
+    it "reparents detached rows past the cutoff to the tail schedule and excludes their dates so the new pattern doesn't duplicate" do
+      # User previously moved one Standup (Day +14, 9am → 2pm) — that
+      # detached row is now standalone but still linked to the old
+      # schedule's history. The :future drop happens on Day +10 (the new
+      # tail starts there). The detached row at Day +14 must:
+      #   (a) survive,
+      #   (b) get reparented to the new tail,
+      #   (c) NOT trigger a duplicate phantom from the new tail on its date.
+      detached_date = cutoff_date + 4
+      detached_row = event_sched.agenda_items.create!(
+        agenda: agenda, kind: :event, name: "Standup",
+        start_at: zone.local(detached_date.year, detached_date.month, detached_date.day, 14, 0),
+        end_at:   zone.local(detached_date.year, detached_date.month, detached_date.day, 14, 30),
+        detached_at: Time.current,
+        original_start_at: zone.local(detached_date.year, detached_date.month, detached_date.day, 9, 0),
+      )
+
+      new_start = zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 11, 0)
+      patch :update, params: {
+        id:    cutoff_phantom,
+        scope: :future,
+        agenda_item: { start_at: new_start.to_i, end_at: (new_start + 30.minutes).to_i },
+      }, format: :json
+
+      tail = agenda.agenda_schedules.where.not(id: event_sched.id).order(:created_at).last
+      detached_row.reload
+      expect(detached_row.agenda_schedule_id).to eq(tail.id)
+      expect(detached_row.detached_at).to be_present
+      expect(tail.excluded_dates).to include(detached_date)
+      # No phantom should be generated for the detached row's date.
+      expect(tail.matches?(detached_date)).to be false
+    end
+
+    it "shifts a monthly by_set_pos + by_day rule (Nth weekday of month)" do
+      nth = create(
+        :agenda_schedule, agenda: agenda, name: "Board Meeting", kind: :event,
+        start_time: "09:00", duration_minutes: 60,
+        recurrence: { "freq" => "monthly", "by_set_pos" => 2, "by_day" => ["tue"] },
+        starts_on: Date.current.beginning_of_month, # find next 2nd Tue below
+      )
+      # Pick an occurrence date that IS a second-Tuesday-of-month.
+      second_tue = (Date.new(Date.current.year, Date.current.month, 1)..Date.new(Date.current.year, Date.current.month, 14)).find { |d| d.wday == 2 && ((d.day - 1) / 7) + 1 == 2 } || (Date.current + 7)
+      # Move it to the second Wednesday of the SAME month.
+      second_wed = second_tue + 1
+      phantom_id = "p-#{nth.id}-#{second_tue.iso8601}"
+      new_start = zone.local(second_wed.year, second_wed.month, second_wed.day, 10, 0)
+
+      patch :update, params: {
+        id:    phantom_id,
+        scope: :future,
+        agenda_item: { start_at: new_start.to_i, end_at: (new_start + 60.minutes).to_i },
+      }, format: :json
+
+      tail = agenda.agenda_schedules.where.not(id: nth.id).order(:created_at).last
+      expect(tail.recurrence_data[:by_day]).to eq(["wed"])
+      expect(tail.recurrence_data[:by_set_pos].to_i).to eq(((second_wed.day - 1) / 7) + 1)
     end
 
     it "falls back to occurrence-only when the item is already detached (no series tail to split)" do

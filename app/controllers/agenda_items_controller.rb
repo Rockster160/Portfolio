@@ -37,6 +37,15 @@ class AgendaItemsController < ApplicationController
 
     base_attrs = item_params.except(:agenda_id)
     base_attrs[:client_mutation_id] = mutation_id if mutation_id.present?
+    # The add-modal prefills `arrive_early_minutes` to a sensible default
+    # for events with a physical location to travel to. When the location
+    # is blank or non-travelable (a Zoom/Meet/Teams URL, "online",
+    # "tbd", a phone number, etc.) "be there 5 minutes early" is
+    # nonsense — zero it out so the pre-event travel band doesn't show
+    # up on every Zoom call.
+    if base_attrs[:arrive_early_minutes].present? && ::AddressBook.non_travelable?(base_attrs[:location])
+      base_attrs[:arrive_early_minutes] = 0
+    end
     with_agenda_write_lock(target) {
       if target.managed_externally?
         # Mirror to Google FIRST. If it fails, we never touch the local
@@ -272,46 +281,71 @@ class AgendaItemsController < ApplicationController
       return apply_occurrence_update!(moved: moved, target: target)
     end
 
-    cutoff_date    = @item.occurrence_date
-    cutoff_time    = @item.start_at
+    zone           = ::ActiveSupport::TimeZone[@item.user.timezone] || Time.zone
+    old_date       = @item.occurrence_date
     new_start_at   = item_params[:start_at] || @item.start_at
     new_end_at     = item_params[:end_at] || @item.end_at
+    new_date       = new_start_at.in_time_zone(zone).to_date
     owning_agenda  = @item.agenda
     landing_agenda = target || owning_agenda
 
     tail_sched = nil
     ActiveRecord::Base.transaction do
-      truncate_schedule_at!(old_sched, owning_agenda, cutoff_date, cutoff_time)
-      tail_sched = build_tail_schedule!(old_sched, landing_agenda, cutoff_date, new_start_at, new_end_at)
+      truncate_schedule_at!(old_sched, owning_agenda, old_date)
+      tail_sched = build_tail_schedule!(
+        old_sched: old_sched, landing_agenda: landing_agenda,
+        old_date: old_date, new_date: new_date,
+        new_start_at: new_start_at, new_end_at: new_end_at,
+        zone: zone,
+      )
     end
 
-    @item = resolve_item_after_series_update(tail_sched, cutoff_date)
+    @item = resolve_item_after_series_update(tail_sched, new_date)
     Agenda.broadcast_changes!([owning_agenda, landing_agenda].uniq) if moved
   end
 
-  # Same shape as the truncate inside `destroy_series!`: PATCH the upstream
-  # RRULE first so a Google rejection rolls back the local until_on change,
-  # then update locally + cascade-cancel future materialized rows.
-  def truncate_schedule_at!(sched, agenda, cutoff_date, cutoff_time)
+  # Truncate the original schedule's window so it ends the day BEFORE the
+  # dragged occurrence's original date. The upstream PATCH happens first
+  # so a Google rejection rolls back the local until_on change. The
+  # after_save :materialize_upcoming! hook prunes any auto-materialized
+  # rows whose dates no longer match (i.e. past until_on); detached rows
+  # are excluded from that scan so user-customized exceptions survive.
+  # Unlike destroy_series! we don't soft-cancel rows — those future rows
+  # weren't completed work, they were stale placeholders the new tail
+  # schedule is about to re-materialize at the new time.
+  def truncate_schedule_at!(sched, agenda, cutoff_date)
     if agenda.managed_externally? && sched.external_uid.present?
       mirror_series_truncate_to_google!(agenda, sched, cutoff_date)
     end
     sched.update!(occurrence_count: nil, until_on: cutoff_date - 1)
-    sched.agenda_items.where(start_at: cutoff_time..).update_all( # rubocop:disable Rails/SkipsModelValidations
-      status:       AgendaItem.statuses[:cancelled],
-      cancelled_at: Time.current,
-    )
   end
 
   # Clones the schedule's recurrence rule + descriptive fields onto a new
-  # AgendaSchedule starting at `cutoff_date` with `new_start_at` as the
-  # wall-clock anchor. For Google-managed agendas, INSERT a new master
-  # event upstream and record the returned uid/etag.
-  def build_tail_schedule!(old_sched, landing_agenda, cutoff_date, new_start_at, new_end_at)
-    zone = ::ActiveSupport::TimeZone[old_sched.user.timezone] || Time.zone
+  # AgendaSchedule. `starts_on` and `start_time` come from the NEW occurrence
+  # (so a drag to a different day shifts the pattern, not just the time),
+  # and the recurrence rule itself is rewritten so weekly/monthly/yearly/
+  # custom rules track the new anchor weekday or day-of-month. Mirrors
+  # the new master to Google when the landing agenda is externally
+  # managed.
+  def build_tail_schedule!(old_sched:, landing_agenda:, old_date:, new_date:, new_start_at:, new_end_at:, zone:)
     local_start = new_start_at.in_time_zone(zone)
     wall_clock = format("%02d:%02d:00", local_start.hour, local_start.min)
     new_duration_minutes = (((new_end_at.to_i - new_start_at.to_i) / 60).to_i).clamp(1, nil)
+    shifted_recurrence = shift_recurrence(old_sched.recurrence_data, old_date, new_date)
+
+    # Detached rows from the old schedule with start_at past the cutoff
+    # are user-customized exceptions we don't want to lose AND don't want
+    # to render twice. Carry their current calendar dates onto the new
+    # tail's excluded_dates BEFORE save so the after_save
+    # materialize_upcoming! doesn't generate a phantom on top of them.
+    # The reparent itself happens after save (we need tail.id).
+    cutoff_start = old_date.in_time_zone(zone).beginning_of_day
+    detached_rows = old_sched.agenda_items.where(start_at: cutoff_start..).where.not(detached_at: nil).to_a
+    if detached_rows.any?
+      detached_iso = detached_rows.map { |r| r.start_at.in_time_zone(zone).to_date.iso8601 }
+      existing = Array(shifted_recurrence[:excluded_dates]).map(&:to_s)
+      shifted_recurrence[:excluded_dates] = (existing + detached_iso).uniq
+    end
 
     tail = landing_agenda.agenda_schedules.new(
       name:                 old_sched.name,
@@ -323,17 +357,75 @@ class AgendaItemsController < ApplicationController
       location:             old_sched.location,
       notes:                old_sched.notes,
       trigger_expression:   old_sched.trigger_expression,
-      recurrence:           old_sched.recurrence,
+      recurrence:           shifted_recurrence,
       start_time:           wall_clock,
-      starts_on:            cutoff_date,
+      starts_on:            new_date,
     )
     tail.save!
+
+    # Reparent: the detached exception now conceptually belongs to the
+    # new tail series (same logical event, new pattern going forward).
+    # update_all is fine — agenda_schedule_id is the only column changing
+    # and skipping callbacks here avoids re-firing materialize on every
+    # row. (Detached rows on Google calendars stay as exceptions to the
+    # OLD master; we don't push the reparent upstream because Google has
+    # no concept of "swap which master series owns this exception" —
+    # they just appear orphaned from the old series, which is fine since
+    # the local store renders them off the materialized row.)
+    if detached_rows.any?
+      AgendaItem.where(id: detached_rows.map(&:id)).update_all(agenda_schedule_id: tail.id) # rubocop:disable Rails/SkipsModelValidations
+    end
 
     if landing_agenda.managed_externally?
       mirror_tail_schedule_insert_to_google!(landing_agenda, tail, local_start, new_duration_minutes)
     end
 
     tail
+  end
+
+  # Rewrite the recurrence rule so it tracks the new anchor date. Shifts
+  # apply to every shape we support:
+  #   * weekly + by_day      → swap `old_date`'s weekday for `new_date`'s
+  #   * monthly + by_month_day → swap `old_date.day` for `new_date.day`
+  #   * monthly + by_set_pos + by_day → swap weekday AND week-of-month index
+  #   * yearly               → starts_on anchors the month+day; no rewrite needed
+  #   * custom unit=week     → swap by_day weekday (same as weekly)
+  #   * custom unit=month    → same as monthly
+  # excluded_dates are dropped — they referenced occurrences of the OLD
+  # pattern and are meaningless against the new one.
+  def shift_recurrence(rule, old_date, new_date)
+    rule = (rule || {}).with_indifferent_access
+    rule.delete(:excluded_dates)
+    return rule.to_h if old_date.nil? || new_date.nil? || old_date == new_date
+
+    old_wkey = AgendaSchedule::WEEKDAY_KEYS[old_date.wday]
+    new_wkey = AgendaSchedule::WEEKDAY_KEYS[new_date.wday]
+    by_day = Array(rule[:by_day]).map { |k| k.to_s.downcase }
+    if by_day.any?
+      shifted = by_day.map { |k| k == old_wkey.to_s ? new_wkey.to_s : k }.uniq
+      rule[:by_day] = shifted
+    end
+
+    by_md = Array(rule[:by_month_day]).map(&:to_i)
+    if by_md.any?
+      shifted_md = by_md.map { |d| d == old_date.day ? new_date.day : d }.uniq
+      rule[:by_month_day] = shifted_md
+    end
+
+    if rule[:by_set_pos].present?
+      rule[:by_set_pos] = week_of_month_index(new_date)
+    end
+
+    rule.to_h
+  end
+
+  # 1..4 for the first four weeks of the month; -1 for the last weekday
+  # of the same kind (e.g. "last Friday"). Matches the convention used by
+  # AgendaSchedule#matches_nth_weekday_of_month?.
+  def week_of_month_index(date)
+    return -1 if (date + 7).month != date.month
+
+    ((date.day - 1) / 7) + 1
   end
 
   # INSERT a new recurring event upstream for the freshly-created tail

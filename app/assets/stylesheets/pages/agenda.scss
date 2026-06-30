@@ -994,28 +994,47 @@ body.ctr-agendas {
   }
 }
 
-// Before/after diff block inside the recurring-scope prompt. Compact
-// two-column grid that mirrors the body's typography — From/To labels
-// faded, values at full intensity so the actual change stands out.
+// Before/after diff block inside the recurring-scope prompt. Two-column
+// grid: a tiny label column ("This event" / "All future"), and a value
+// column where the BEFORE value sits struck-through + faded above the
+// AFTER value at full intensity. The vertical stack lets a longer
+// description ("The first Friday of every month at 8pm – 11pm") read on
+// one line without wrapping mid-arrow, and the strikethrough makes the
+// "was vs. is" relationship obvious without any arrow glyph.
 #agenda-recurring-scope-modal {
   .agenda-recurring-scope-diff {
     display: grid;
     grid-template-columns: auto 1fr;
-    column-gap: 12px;
-    row-gap: 4px;
+    column-gap: 14px;
+    row-gap: 12px;
     margin: 0;
-    padding: 4px 18px 8px;
+    padding: 6px 18px 10px;
     font-size: 13px;
     line-height: 1.4;
 
     dt {
       opacity: 0.55;
       font-weight: 500;
+      white-space: nowrap;
+      align-self: start;
+      padding-top: 2px;
     }
 
     dd {
       margin: 0;
-      opacity: 0.95;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .agenda-recurring-scope-old {
+      opacity: 0.5;
+      text-decoration: line-through;
+    }
+
+    .agenda-recurring-scope-new {
+      opacity: 1;
+      font-weight: 500;
     }
   }
 }
