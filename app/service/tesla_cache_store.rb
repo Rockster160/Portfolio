@@ -26,7 +26,7 @@ class TeslaCacheStore
     location: %i[Location GpsHeading GpsState],
     battery:  %i[],
     charging: %i[ChargeState],
-    drive:    %i[VehicleSpeed],
+    drive:    %i[VehicleSpeed Gear],
     trip:     %i[MilesToArrival MinutesToArrival OriginLocation DestinationLocation RouteLine],
     climate:  %i[HvacPower InsideTemp OutsideTemp],
     doors:    %i[DoorState Locked],
@@ -226,14 +226,36 @@ class TeslaCacheStore
     def compose_drive(ep, tel, sec_ts)
       speed_raw = tel[:VehicleSpeed]
       speed = speed_raw.is_a?(Numeric) ? speed_raw : ep.dig(:drive_state, :speed)
-      shift = ep.dig(:drive_state, :shift_state)
+      # Telemetry's Gear field is the live source — endpoint poll's
+      # shift_state is the fallback for when telemetry hasn't pushed
+      # yet. The normalizer absorbs whatever enum shape Tesla actually
+      # sends ("ShiftStateP" vs bare "P" vs unknown).
+      shift = normalize_shift(tel[:Gear]) || ep.dig(:drive_state, :shift_state)
 
       {
         speed_mph: speed.to_i,
         moving:    speed.to_i.positive?,
         shift:     shift,
+        parked:    shift.to_s == "P",
         ts:        sec_ts[:drive] || ep.dig(:drive_state, :timestamp),
       }.compact
+    end
+
+    # Tesla fleet-telemetry pushes ShiftState as an enum. The expected
+    # shape (by analogy with HvacPower → "HvacPowerStateOn") is the
+    # enum-name string "ShiftStateP" / "ShiftStateR" / etc. We also
+    # tolerate the short form ("P") that the endpoint poll uses, and
+    # the integer form (2..5) just in case Tesla serializes that way.
+    # `<invalid>` is already stripped upstream by strip_invalid, so we
+    # only see real values here. Unknown shapes → nil (compose drops it
+    # via .compact) so a misformatted value never poisons the bool.
+    def normalize_shift(raw)
+      return nil if raw.blank?
+
+      s = raw.to_s
+      return ::Regexp.last_match(1) if s =~ /\AShiftState([PRND])\z/
+      return s if s.match?(/\A[PRND]\z/)
+      { "2" => "P", "3" => "R", "4" => "N", "5" => "D" }[s]
     end
 
     def compose_trip(ep, tel, sec_ts)

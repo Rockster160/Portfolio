@@ -23,27 +23,107 @@ RSpec.describe AgendaTravelChain::OverrideParser do
     it "is case-insensitive" do
       expect(p.parse("NoNaV")[:nonav]).to be(true)
       expect(p.parse("NOTME")[:notme]).to be(true)
-      expect(p.parse("Before:Costco")[:before]).to eq(["Costco"])
+      expect(p.parse("Before:Costco")[:before]).to eq([{ location: "Costco", dwell_seconds: 0 }])
     end
 
-    it "parses before: and after: as comma-separated lists" do
+    it "parses before: and after: as comma-separated waypoint hashes" do
       notes = <<~NOTES
         Errand run before main meeting
         before:Costco,Harmons
         after:Lowe's,In N Out,Doug's,Home
       NOTES
       result = p.parse(notes)
-      expect(result[:before]).to eq(["Costco", "Harmons"])
-      expect(result[:after]).to eq(["Lowe's", "In N Out", "Doug's", "Home"])
+      expect(result[:before]).to eq([
+        { location: "Costco",  dwell_seconds: 0 },
+        { location: "Harmons", dwell_seconds: 0 },
+      ])
+      expect(result[:after]).to eq([
+        { location: "Lowe's",   dwell_seconds: 0 },
+        { location: "In N Out", dwell_seconds: 0 },
+        { location: "Doug's",   dwell_seconds: 0 },
+        { location: "Home",     dwell_seconds: 0 },
+      ])
     end
 
     it "honors quoted commas inside list entries" do
       notes = 'after:"123 Main St, Apt 4",Doug'
-      expect(p.parse(notes)[:after]).to eq(["123 Main St, Apt 4", "Doug"])
+      expect(p.parse(notes)[:after]).to eq([
+        { location: "123 Main St, Apt 4", dwell_seconds: 0 },
+        { location: "Doug",               dwell_seconds: 0 },
+      ])
     end
 
     it "tolerates whitespace around items" do
-      expect(p.parse("before:  Costco , Harmons  ")[:before]).to eq(["Costco", "Harmons"])
+      expect(p.parse("before:  Costco , Harmons  ")[:before]).to eq([
+        { location: "Costco",  dwell_seconds: 0 },
+        { location: "Harmons", dwell_seconds: 0 },
+      ])
+    end
+
+    describe "dwell durations on waypoints" do
+      it "parses trailing `Nm` as dwell minutes" do
+        expect(p.parse("before:Costco 15m")[:before]).to eq([
+          { location: "Costco", dwell_seconds: 900 },
+        ])
+      end
+
+      it "parses trailing `Nh` as dwell hours" do
+        expect(p.parse("before:Office 2h")[:before]).to eq([
+          { location: "Office", dwell_seconds: 7200 },
+        ])
+      end
+
+      it "parses combined `NhMm` (with or without spaces)" do
+        expect(p.parse("before:Office 1h30m")[:before]).to eq([
+          { location: "Office", dwell_seconds: 5400 },
+        ])
+        expect(p.parse("before:Office 1h 30m")[:before]).to eq([
+          { location: "Office", dwell_seconds: 5400 },
+        ])
+      end
+
+      it "accepts longer unit forms (min, hrs, hour, hours)" do
+        expect(p.parse("before:Costco 45min")[:before]).to eq([
+          { location: "Costco", dwell_seconds: 2700 },
+        ])
+        expect(p.parse("before:Office 2hrs")[:before]).to eq([
+          { location: "Office", dwell_seconds: 7200 },
+        ])
+        expect(p.parse("before:Office 1hour")[:before]).to eq([
+          { location: "Office", dwell_seconds: 3600 },
+        ])
+      end
+
+      it "handles a mix of waypoints with and without dwells" do
+        result = p.parse("before:Harmon's 10m, Costco 15m, Lowes")
+        expect(result[:before]).to eq([
+          { location: "Harmon's", dwell_seconds: 600 },
+          { location: "Costco",   dwell_seconds: 900 },
+          { location: "Lowes",    dwell_seconds: 0 },
+        ])
+      end
+
+      it "applies dwell parsing to after: as well" do
+        expect(p.parse("after:Bar 30m, Home")[:after]).to eq([
+          { location: "Bar",  dwell_seconds: 1800 },
+          { location: "Home", dwell_seconds: 0 },
+        ])
+      end
+
+      it "does not split locations whose names just happen to end in a digit" do
+        # No trailing unit suffix → entire entry is location
+        expect(p.parse("before:Building 4, Suite 200")[:before]).to eq([
+          { location: "Building 4", dwell_seconds: 0 },
+          { location: "Suite 200",  dwell_seconds: 0 },
+        ])
+      end
+
+      it "preserves quoted addresses with internal numbers" do
+        result = p.parse('before:"123 Main St, Apt 4" 10m')
+        expect(result[:before]).to eq([
+          { location: "123 Main St, Apt 4", dwell_seconds: 600 },
+        ])
+      end
     end
 
     it "returns frozen empty arrays when a token is missing" do
@@ -101,6 +181,10 @@ RSpec.describe AgendaTravelChain::OverrideParser do
 
     it "is true when an override list changes" do
       expect(p.changed?("before:A", "before:A,B")).to be(true)
+    end
+
+    it "is true when only a dwell duration changes" do
+      expect(p.changed?("before:Costco 10m", "before:Costco 20m")).to be(true)
     end
 
     it "is true when a flag toggles" do

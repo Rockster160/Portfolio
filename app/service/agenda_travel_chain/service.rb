@@ -250,14 +250,14 @@ module AgendaTravelChain
     def outgoing_last_location(evt)
       overrides = overrides_for(evt)
       overrides[:to].presence ||
-        overrides[:after].last.presence ||
+        overrides[:after].last&.dig(:location).presence ||
         resolved_location(evt) ||
         evt.location.to_s
     end
 
     def incoming_first_location(evt)
       overrides = overrides_for(evt)
-      overrides[:before].first.presence ||
+      overrides[:before].first&.dig(:location).presence ||
         resolved_location(evt) ||
         evt.location.to_s
     end
@@ -316,35 +316,22 @@ module AgendaTravelChain
       )
       from_for_drive = override_from || (pred ? outgoing_last_location(pred) : home_text)
 
-      incoming_first = incoming_first_location(evt)
-      # Backfill optimisation: solo / chain-head events leave FROM Home,
-      # which is exactly what the cached `travel_minutes` already
-      # represents. Use it directly, skip Google. Chain middles / tails
-      # come from a previous event's location — that IS the new Google
-      # round-trip we're willing to pay for once the chain has been
-      # confirmed. `from:` is an explicit start we have no cached drive
-      # for, so always go fetch a fresh one.
-      drive_secs = (
-        if same_place?(from_for_drive, incoming_first)
-          # User explicitly says they're already at the event's start point
-          # (`from:` matches the event location, or chained predecessor's
-          # outgoing endpoint already equals it). Skip the Google round-trip
-          # and represent it as a 0-minute leg.
-          0
-        elsif backfill? && pred.nil? && override_from.nil?
-          cached_travel_seconds(evt)
-        else
-          @resolver.travel_seconds(from_for_drive, incoming_first, at: evt.start_at)
-        end
-      )
-      drive_mins = drive_secs && (drive_secs / 60.0).ceil
-      leave_at = drive_secs && (evt.start_at.to_i - (evt.arrive_early_minutes.to_i * 60) - drive_secs)
+      before_entries = overrides_for(evt)[:before]
+      before_legs = build_incoming_legs(evt, from_for_drive, before_entries, pred: pred, override_from: override_from)
+      total_drive_secs = before_legs.sum { |leg| leg["drive_seconds"].to_i } if before_legs.all? { |leg| leg["drive_seconds"] }
+      total_dwell_secs = before_entries.sum { |w| w[:dwell_seconds].to_i }
+      travel_secs = total_drive_secs && (total_drive_secs + total_dwell_secs)
+      travel_mins = travel_secs && (travel_secs / 60.0).ceil
+      leave_at = travel_secs && (evt.start_at.to_i - (evt.arrive_early_minutes.to_i * 60) - travel_secs)
 
       post_to = overrides_for(evt)[:to].presence
+      after_entries = overrides_for(evt)[:after]
+      after_legs = build_outgoing_legs(evt, post_to, after_entries)
       post_drive_secs = (
-        if post_to
-          outgoing = outgoing_last_location(evt)
-          same_place?(evt.location.to_s, outgoing) ? 0 : @resolver.travel_seconds(evt.location.to_s, outgoing, at: evt.end_at)
+        if after_legs.empty?
+          nil
+        elsif after_legs.all? { |leg| leg["drive_seconds"] }
+          after_legs.sum { |leg| leg["drive_seconds"].to_i } + after_entries.sum { |w| w[:dwell_seconds].to_i }
         end
       )
       post_drive_mins = post_drive_secs && (post_drive_secs / 60.0).ceil
@@ -357,8 +344,12 @@ module AgendaTravelChain
         "location_fingerprint" => evt.metadata.dig("travel", "location_fingerprint"),
         "travel_from"          => from_text,
         "travel_from_kind"     => from_kind,
-        "travel_seconds"       => drive_secs,
-        "travel_minutes"       => drive_mins,
+        "travel_seconds"       => travel_secs,
+        "travel_minutes"       => travel_mins,
+        # Only emit per-leg breakdown when there's an actual chain of stops
+        # (waypoints present) — a solo drive is already captured in
+        # travel_seconds and the FE can render it as a single band.
+        "before_legs"          => (before_legs if before_entries.any?),
         "chain_predecessor_id" => pred_id,
         "chain_successor_id"   => succ_id,
         "chain_head_id"        => head_for[evt.id],
@@ -371,6 +362,7 @@ module AgendaTravelChain
         "post_travel_seconds"  => post_drive_secs,
         "post_travel_minutes"  => post_drive_mins,
         "post_arrive_at"       => post_arrive_at,
+        "after_legs"           => (after_legs if after_entries.any?),
         "overrides"            => overrides_for(evt).transform_keys(&:to_s),
       }
       fp = input_fingerprint(evt, all_events, travel)
@@ -379,6 +371,96 @@ module AgendaTravelChain
 
       travel["input_fingerprint"] = fp
       write_metadata(evt, travel.compact)
+    end
+
+    # Walks the incoming travel chain: from_for_drive → before[0] → … → event.
+    # Returns an array of legs, each `{ "from", "to", "drive_seconds",
+    # "dwell_seconds" }`. The final leg's `dwell_seconds` is 0 (the event
+    # itself isn't "dwell"). Returns the legs even with nil drive seconds in
+    # them — the caller decides how to treat a partially-computed chain.
+    #
+    # Backfill optimisation only applies when there are NO before: waypoints
+    # and no override_from / pred — that's the "cached symmetric drive from
+    # home" shortcut that task 388 originally seeded.
+    def build_incoming_legs(evt, from_for_drive, before_entries, pred:, override_from:)
+      event_to = incoming_first_location(evt) if before_entries.empty?
+      event_to ||= resolved_location(evt) || evt.location.to_s
+
+      legs = []
+      cursor_from = from_for_drive
+
+      before_entries.each do |entry|
+        loc = entry[:location].to_s
+        next if loc.empty?
+
+        drive_secs = leg_drive_seconds(cursor_from, loc, evt.start_at)
+        legs << {
+          "from"          => cursor_from,
+          "to"            => loc,
+          "drive_seconds" => drive_secs,
+          "dwell_seconds" => entry[:dwell_seconds].to_i,
+        }
+        cursor_from = loc
+      end
+
+      # Final leg into the event itself
+      drive_secs = (
+        if same_place?(cursor_from, event_to)
+          0
+        elsif before_entries.empty? && backfill? && pred.nil? && override_from.nil?
+          cached_travel_seconds(evt)
+        else
+          @resolver.travel_seconds(cursor_from, event_to, at: evt.start_at)
+        end
+      )
+      legs << {
+        "from"          => cursor_from,
+        "to"            => event_to,
+        "drive_seconds" => drive_secs,
+        "dwell_seconds" => 0,
+      }
+      legs
+    end
+
+    # Walks the outgoing chain: event → after[0] → … → post_to. Returns
+    # the same leg shape as build_incoming_legs. Empty array when there's
+    # neither a `to:` override nor any after: waypoints.
+    def build_outgoing_legs(evt, post_to, after_entries)
+      return [] if post_to.blank? && after_entries.empty?
+
+      legs = []
+      cursor_from = evt.location.to_s
+
+      after_entries.each do |entry|
+        loc = entry[:location].to_s
+        next if loc.empty?
+
+        drive_secs = leg_drive_seconds(cursor_from, loc, evt.end_at)
+        legs << {
+          "from"          => cursor_from,
+          "to"            => loc,
+          "drive_seconds" => drive_secs,
+          "dwell_seconds" => entry[:dwell_seconds].to_i,
+        }
+        cursor_from = loc
+      end
+
+      if post_to.present?
+        drive_secs = same_place?(cursor_from, post_to) ? 0 : @resolver.travel_seconds(cursor_from, post_to, at: evt.end_at)
+        legs << {
+          "from"          => cursor_from,
+          "to"            => post_to,
+          "drive_seconds" => drive_secs,
+          "dwell_seconds" => 0,
+        }
+      end
+      legs
+    end
+
+    def leg_drive_seconds(from_text, to_text, at)
+      return 0 if same_place?(from_text, to_text)
+
+      @resolver.travel_seconds(from_text, to_text, at: at)
     end
 
     def input_fingerprint(evt, _all_events, travel)

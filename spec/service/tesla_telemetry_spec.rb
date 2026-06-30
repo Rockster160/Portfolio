@@ -126,6 +126,44 @@ RSpec.describe TeslaTelemetry do
     end
   end
 
+  describe "#detect_park_changes" do
+    it "fires :tesla_parked on shift INTO P (from D)" do
+      seed_car_data(drive: { speed_mph: 0, shift: "D" })
+      process(Gear: "ShiftStateP")
+      expect(triggered?(:tesla_parked) { |d| d[:shift] == "P" && d[:previous] == "D" }).to be(true)
+    end
+
+    it "accepts short-form 'P' shift values" do
+      seed_car_data(drive: { speed_mph: 0, shift: "D" })
+      process(Gear: "P")
+      expect(triggered?(:tesla_parked)).to be(true)
+    end
+
+    it "does NOT fire when shift stays at P" do
+      seed_car_data(drive: { speed_mph: 0, shift: "P", parked: true })
+      process(Gear: "ShiftStateP")
+      expect(triggered?(:tesla_parked)).to be(false)
+    end
+
+    it "does NOT fire on transitions to non-park gears (D, R, N)" do
+      seed_car_data(drive: { speed_mph: 0, shift: "P" })
+      process(Gear: "ShiftStateD")
+      expect(triggered?(:tesla_parked)).to be(false)
+    end
+
+    it "does NOT fire on '<invalid>' Gear records" do
+      seed_car_data(drive: { speed_mph: 0, shift: "D" })
+      process(Gear: "<invalid>")
+      expect(triggered?(:tesla_parked)).to be(false)
+    end
+
+    it "does NOT fire when Gear isn't in the inbound record at all" do
+      seed_car_data(drive: { speed_mph: 0, shift: "D" })
+      process(VehicleSpeed: 5)
+      expect(triggered?(:tesla_parked)).to be(false)
+    end
+  end
+
   describe "#check_tire_pressure" do
     let(:chores) { instance_double(List, add: nil, remove: nil) }
 

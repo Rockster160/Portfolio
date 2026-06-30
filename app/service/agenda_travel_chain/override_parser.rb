@@ -6,8 +6,14 @@ module AgendaTravelChain
   # Recognized forms:
   #   nonav                      → bool: treat the event as if it had no location
   #   notme                      → bool: kick the car / build the trip silently
-  #   before:Foo,Bar,"3rd, St"   → array: waypoints inserted on the incoming leg
-  #   after:Foo,Bar              → array: waypoints inserted on the outgoing leg
+  #   before:Foo,Bar,"3rd, St"   → array of waypoints inserted on the incoming
+  #                                 leg. Each entry may carry a trailing dwell
+  #                                 duration ("Costco 15m", "Office 1h30m");
+  #                                 the duration is the time the user plans to
+  #                                 spend at that stop. Parsed shape:
+  #                                 `[{ location:, dwell_seconds: }, …]`.
+  #   after:Foo 10m,Bar          → array of waypoints on the outgoing leg.
+  #                                 Same dwell syntax as `before:`.
   #   from:123 Main St           → string: explicit start of the incoming drive
   #                                 (overrides home / predecessor); also breaks
   #                                 the travel chain into this event since it's
@@ -22,7 +28,8 @@ module AgendaTravelChain
   #
   # before/after take a comma-separated list. from/to take a single address.
   # Quoted segments preserve commas ("3rd, St" stays one entry). Trailing
-  # whitespace is stripped.
+  # whitespace is stripped. Dwell tokens accept `Nm`, `Nh`, `NhMm`, `Nmin`,
+  # `Nhr`, `Nhrs`, etc. Entries with no dwell parse as `dwell_seconds: 0`.
   module OverrideParser
     module_function
 
@@ -57,7 +64,32 @@ module AgendaTravelChain
       match = text[/^#{Regexp.escape(key)}:\s*([^\n]+)/i, 1]
       return [].freeze if match.blank?
 
-      split_csv(match).freeze
+      split_csv(match).map { |raw| parse_waypoint(raw) }.freeze
+    end
+
+    # Splits a waypoint entry into `{location:, dwell_seconds:}`. Trailing
+    # tokens like `10m`, `1h30m`, `2hrs`, `45min` are stripped off as the
+    # dwell duration; everything before is the location text. Entries without
+    # a recognizable trailing duration produce `dwell_seconds: 0`.
+    #
+    # Greedy on the suffix: `Costco 1h 30m` is one duration (90 min), not a
+    # bare location named "Costco 1h" with a 30m dwell.
+    DURATION_SUFFIX_RE = /\A(.+?)\s+((?:\d+\s*(?:h(?:ours?|rs?)?|m(?:in(?:utes?)?)?)\s*)+)\z/i
+    DURATION_TOKEN_RE  = /(\d+)\s*([hm])/i
+    private_constant :DURATION_SUFFIX_RE, :DURATION_TOKEN_RE
+
+    def parse_waypoint(raw)
+      stripped = raw.to_s.strip
+      return { location: "", dwell_seconds: 0 }.freeze if stripped.empty?
+
+      if (m = stripped.match(DURATION_SUFFIX_RE))
+        seconds = m[2].scan(DURATION_TOKEN_RE).sum { |n, unit|
+          n.to_i * (unit.downcase == "h" ? 3600 : 60)
+        }
+        { location: m[1].strip, dwell_seconds: seconds }.freeze
+      else
+        { location: stripped, dwell_seconds: 0 }.freeze
+      end
     end
 
     # Single-value tokens (from:/to:) — strip surrounding quotes if the entire

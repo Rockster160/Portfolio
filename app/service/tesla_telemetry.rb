@@ -29,6 +29,7 @@ class TeslaTelemetry
     @car_data = ::TeslaCacheStore.record_telemetry(@raw)
 
     detect_drive_changes
+    detect_park_changes
     detect_charge_changes
     detect_hvac_changes
     detect_trip_changes
@@ -62,6 +63,29 @@ class TeslaTelemetry
       empty = {}
       ::Jil.trigger(@user, :tesla_drive_stop, empty)
     end
+  end
+
+  # Fires `:tesla_parked` when the user shifts INTO Park. This is the
+  # arrival signal — distinct from `:tesla_drive_stop` (every red light)
+  # and from `:tesla_hvac_off` (powered down, may lag the actual park
+  # by a moment while the user collects belongings). Only fires on the
+  # transition INTO P, not on every record where shift is already P.
+  def detect_park_changes
+    return unless @raw.key?(:Gear) || @raw.dig(:data, :Gear)
+    return if gear_in_record == "<invalid>"
+
+    new_shift  = @car_data.dig(:drive, :shift)
+    prev_shift = @prev.dig(:drive, :shift)
+    return if new_shift == prev_shift
+
+    if new_shift.to_s == "P"
+      payload = { shift: new_shift, previous: prev_shift }
+      ::Jil.trigger(@user, :tesla_parked, payload)
+    end
+  end
+
+  def gear_in_record
+    @raw[:Gear] || @raw.dig(:data, :Gear)
   end
 
   def detect_charge_changes

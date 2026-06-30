@@ -109,6 +109,36 @@ RSpec.describe TeslaCacheStore do
       expect(car_data.dig(:trip, :origin)).to include(lat: 40.4, lng: -111.6)
     end
 
+    describe "drive.shift normalization" do
+      it "accepts Tesla's enum-string form (ShiftStateP)" do
+        described_class.record_telemetry(Gear: "ShiftStateP")
+        expect(car_data.dig(:drive, :shift)).to eq("P")
+        expect(car_data.dig(:drive, :parked)).to be(true)
+      end
+
+      it "accepts the short single-letter form ('D')" do
+        described_class.record_telemetry(Gear: "D")
+        expect(car_data.dig(:drive, :shift)).to eq("D")
+        expect(car_data.dig(:drive, :parked)).to be(false)
+      end
+
+      it "accepts the integer-as-string form ('2' → P)" do
+        described_class.record_telemetry(Gear: "2")
+        expect(car_data.dig(:drive, :shift)).to eq("P")
+      end
+
+      it "falls through to endpoint drive_state.shift_state when telemetry hasn't sent Gear" do
+        described_class.record_endpoint(drive_state: { shift_state: "D", speed: 0, timestamp: 1 })
+        expect(car_data.dig(:drive, :shift)).to eq("D")
+      end
+
+      it "drops unknown shift shapes (returns nil rather than poisoning .parked)" do
+        described_class.record_telemetry(Gear: "ShiftStateQuasar")
+        expect(car_data.dig(:drive, :shift)).to be_nil
+        expect(car_data.dig(:drive, :parked)).to be(false)
+      end
+    end
+
     it "filters 'ClearFaults' (transient pulse) from charging.state" do
       described_class.record_endpoint(charge_state: { battery_level: 50, charging_state: "Charging" })
       described_class.record_telemetry(ChargeState: "ClearFaults")

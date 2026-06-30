@@ -324,9 +324,62 @@ RSpec.describe AgendaTravelChain::Service do
       described_class.new(user, Date.new(2026, 6, 18)).run
 
       meta = a.reload.metadata["travel"]
-      expect(meta["overrides"]["before"]).to eq(["Gym"])
-      # Drive seconds should be Home→Gym (1200), not Home→Office (600).
-      expect(meta["travel_seconds"]).to eq(1200)
+      expect(meta["overrides"]["before"]).to eq([{ "location" => "Gym", "dwell_seconds" => 0 }])
+      # Multi-segment: Home → Gym (1200) + Gym → Office (600) = 1800.
+      expect(meta["travel_seconds"]).to eq(1800)
+      expect(meta["before_legs"]).to eq([
+        { "from" => "Home St", "to" => "Gym",    "drive_seconds" => 1200, "dwell_seconds" => 0 },
+        { "from" => "Gym",     "to" => "Office", "drive_seconds" => 600,  "dwell_seconds" => 0 },
+      ])
+    end
+
+    it "walks all before: waypoints and sums drive + dwell into travel_seconds" do
+      evt = make_event(
+        name: "Multi-stop", start_at: Time.zone.parse("2026-06-18 14:00"),
+        end_at: Time.zone.parse("2026-06-18 15:00"), location: "Office",
+        notes: "before:Gym 10m, Home St 5m",
+      )
+      described_class.new(user, Date.new(2026, 6, 18)).run
+
+      meta = evt.reload.metadata["travel"]
+      # Home → Gym 1200 + 600 dwell + Gym → Home 1200 + 300 dwell + Home → Office 600 = 3900s
+      expect(meta["travel_seconds"]).to eq(3900)
+      expect(meta["before_legs"]).to eq([
+        { "from" => "Home St", "to" => "Gym",     "drive_seconds" => 1200, "dwell_seconds" => 600 },
+        { "from" => "Gym",     "to" => "Home St", "drive_seconds" => 1200, "dwell_seconds" => 300 },
+        { "from" => "Home St", "to" => "Office",  "drive_seconds" => 600,  "dwell_seconds" => 0 },
+      ])
+      # leave_at = start - arrive_early - travel_seconds = 14:00 - 0 - 3900s
+      expect(meta["leave_at"]).to eq(Time.zone.parse("2026-06-18 14:00").to_i - 3900)
+    end
+
+    it "writes no before_legs when there are no waypoints (back-compat)" do
+      evt = make_event(
+        name: "Solo", start_at: Time.zone.parse("2026-06-18 14:00"),
+        end_at: Time.zone.parse("2026-06-18 15:00"), location: "Office",
+      )
+      described_class.new(user, Date.new(2026, 6, 18)).run
+
+      meta = evt.reload.metadata["travel"]
+      expect(meta["travel_seconds"]).to eq(600)
+      expect(meta).not_to have_key("before_legs")
+    end
+
+    it "walks after: waypoints into post_travel when `to:` is also set" do
+      evt = make_event(
+        name: "After stops", start_at: Time.zone.parse("2026-06-18 14:00"),
+        end_at: Time.zone.parse("2026-06-18 15:00"), location: "Office",
+        notes: "after:Gym 10m\nto:Home St",
+      )
+      described_class.new(user, Date.new(2026, 6, 18)).run
+
+      meta = evt.reload.metadata["travel"]
+      # Office → Gym 600 + 600 dwell + Gym → Home 1200 = 2400
+      expect(meta["post_travel_seconds"]).to eq(2400)
+      expect(meta["after_legs"]).to eq([
+        { "from" => "Office", "to" => "Gym",     "drive_seconds" => 600,  "dwell_seconds" => 600 },
+        { "from" => "Gym",    "to" => "Home St", "drive_seconds" => 1200, "dwell_seconds" => 0 },
+      ])
     end
 
     describe "backfill mode" do
@@ -512,8 +565,8 @@ RSpec.describe AgendaTravelChain::Service do
         described_class.new(user, Date.new(2026, 6, 18)).run
 
         meta = evt.reload.metadata["travel"]
-        # Incoming = Home St → first before-waypoint (Gym) = 1200s.
-        expect(meta["travel_seconds"]).to eq(1200)
+        # Multi-segment: Home St → Gym (1200) + Gym → Home St (1200, symmetric) = 2400.
+        expect(meta["travel_seconds"]).to eq(2400)
         # Post-event = Home St → to:Far = 7200s.
         expect(meta["post_travel_seconds"]).to eq(7200)
         expect(meta["post_travel_to"]).to eq("Far")

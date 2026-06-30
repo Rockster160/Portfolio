@@ -512,7 +512,7 @@
   #honk::Boolean
   #flashLights::Boolean
   #setTemp(Numeric)::Boolean
-  #navigate(Text)::Boolean
+  #navigate(String)::Boolean
   #addStop(String)::Boolean
   #lockDoors::Boolean
   #unlockDoors::Boolean
@@ -530,6 +530,14 @@
   #heatPassenger(Boolean)
   #vent(Boolean)
   #defrost(Boolean)
+[Trip]
+  #start(AgendaItem)::Boolean
+  #advance::Boolean
+  #finish::Boolean
+  #active?::Boolean
+  #current_stop::String
+  #next_stop::String
+  #arrived?::Boolean
 [Schedule]
   #find(Numeric)
   #search(Text("*") "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array # Using listener syntax trigger:word::data
