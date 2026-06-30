@@ -1,3 +1,7 @@
+## After changing app/service/tesla_service.rb, run `request_telemetry` to update.
+# ::Oauth::TeslaApi.me.request_telemetry
+# ::Oauth::TeslaApi.me.check_telemetry
+
 class TeslaService
   # https://github.com/teslamotors/fleet-telemetry/blob/main/protos/vehicle_data.proto
   def self.fields(_interval)

@@ -1,0 +1,14 @@
+<%# Three-way choice prompt for recurring-event edits (drag-and-drop on
+    the calendar grids). Driven from JS via window.AgendaRecurringScope —
+    mirrors the AgendaConfirm pattern. The .agenda-recurring-scope-title
+    span gets the event name set per-call. %>
+<%= render_modal("agenda-recurring-scope-modal",
+                 '<span class="agenda-recurring-scope-title">Edit recurring event</span>'.html_safe,
+                 "modal-flat agenda-recurring-scope-modal") do %>
+  <p class="agenda-recurring-scope-body">Apply this change to:</p>
+  <div class="agenda-recurring-scope-actions">
+    <button type="button" class="af-btn af-btn-primary agenda-recurring-scope-occurrence">Just this event</button>
+    <button type="button" class="af-btn af-btn-primary agenda-recurring-scope-future">This and following events</button>
+    <button type="button" class="af-btn af-btn-secondary agenda-recurring-scope-cancel" data-dismiss="#agenda-recurring-scope-modal">Cancel</button>
+  </div>
+<% end %>

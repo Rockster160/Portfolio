@@ -59,7 +59,24 @@
 <% end %>
 
 <script type="module">
-  const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || "";
+  // Read CSRF dynamically — the host shell may be SW-cached with an
+  // old token; refreshCsrf() heals it after the first 422.
+  function currentCsrf() {
+    return document.querySelector('meta[name="csrf-token"]')?.content || "";
+  }
+  async function refreshCsrf() {
+    try {
+      const res = await fetch("/chores/csrf", { credentials: "same-origin", headers: { Accept: "application/json" }, redirect: "manual" });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data?.token) {
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) meta.content = data.token;
+        return data.token;
+      }
+    } catch (e) {}
+    return null;
+  }
   const grid = document.querySelector("[data-icons-grid]");
   const empty = document.querySelector("[data-icons-empty]");
   const countEl = document.querySelector("[data-icons-count]");
@@ -80,19 +97,27 @@
 
   async function patchIcon(tile, field, value) {
     const id = tile.dataset.iconId;
-    const res = await fetch(`/chores/icons/${id}`, {
-      method: "PATCH",
-      credentials: "same-origin",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "X-CSRF-Token": CSRF,
-      },
-      body: JSON.stringify({ household_icon: { [field]: value } }),
-    });
+    const body = JSON.stringify({ household_icon: { [field]: value } });
+    async function send(token) {
+      return fetch(`/chores/icons/${id}`, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "X-CSRF-Token": token,
+        },
+        body,
+      });
+    }
+    let res = await send(currentCsrf());
+    if (res.status === 422) {
+      const fresh = await refreshCsrf();
+      if (fresh) res = await send(fresh);
+    }
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error((body.errors || ["Save failed"]).join(", "));
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error((errBody.errors || ["Save failed"]).join(", "));
     }
   }
 
@@ -124,11 +149,18 @@
       if (!confirm(`Delete "${name}"? Chores already using it keep their copy.`)) return;
       showError(tile, "");
       try {
-        const res = await fetch(`/chores/icons/${tile.dataset.iconId}`, {
-          method: "DELETE",
-          credentials: "same-origin",
-          headers: { "Accept": "application/json", "X-CSRF-Token": CSRF },
-        });
+        async function send(token) {
+          return fetch(`/chores/icons/${tile.dataset.iconId}`, {
+            method: "DELETE",
+            credentials: "same-origin",
+            headers: { "Accept": "application/json", "X-CSRF-Token": token },
+          });
+        }
+        let res = await send(currentCsrf());
+        if (res.status === 422) {
+          const fresh = await refreshCsrf();
+          if (fresh) res = await send(fresh);
+        }
         if (!res.ok) throw new Error("Delete failed");
         tile.remove();
         refreshCounts();

@@ -212,6 +212,41 @@
   }
   window.AgendaConfirm = agendaConfirm;
 
+  // Three-way prompt for a drag-and-drop edit on a recurring event.
+  // Resolves to "occurrence" | "future" | null (null = cancel / dismiss).
+  // Uses the shared #agenda-recurring-scope-modal partial; same modal
+  // infra (showModal + jQuery modal.hidden) as agendaConfirm.
+  function agendaRecurringScope({ title }) {
+    const modal = document.getElementById("agenda-recurring-scope-modal");
+    if (!modal || typeof window.showModal !== "function" || !window.jQuery) {
+      // No modal available — degrade to default-occurrence (safest: only
+      // moves this one event, matches pre-modal behavior).
+      return Promise.resolve("occurrence");
+    }
+    const titleEl  = modal.querySelector(".agenda-recurring-scope-title");
+    const occBtn   = modal.querySelector(".agenda-recurring-scope-occurrence");
+    const futBtn   = modal.querySelector(".agenda-recurring-scope-future");
+    if (titleEl) titleEl.textContent = title || "Edit recurring event";
+
+    return new Promise((resolve) => {
+      let choice = null;
+      const $modal   = window.jQuery(modal);
+      const onOcc    = () => { choice = "occurrence"; window.hideModal("#agenda-recurring-scope-modal"); };
+      const onFut    = () => { choice = "future";     window.hideModal("#agenda-recurring-scope-modal"); };
+      const onHidden = () => {
+        occBtn?.removeEventListener("click", onOcc);
+        futBtn?.removeEventListener("click", onFut);
+        $modal.off("modal.hidden", onHidden);
+        resolve(choice);
+      };
+      occBtn?.addEventListener("click", onOcc);
+      futBtn?.addEventListener("click", onFut);
+      $modal.on("modal.hidden", onHidden);
+      window.showModal("#agenda-recurring-scope-modal");
+    });
+  }
+  window.AgendaRecurringScope = agendaRecurringScope;
+
   function toast(msg, kind) {
     const cls = kind === "error" ? "agenda-toast error" : "agenda-toast";
     let node = $(".agenda-toast");

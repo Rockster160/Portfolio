@@ -125,6 +125,11 @@ $text-color: darken($grey-blue, 20%);
   transition: border-color 1s;
   text-align: left;
 
+  &.dashboard-isolated {
+    grid-template-columns: 241px;
+    grid-template-rows: 144px;
+  }
+
   .dash-cell {
     position: relative;
     border: 2px solid $passive;

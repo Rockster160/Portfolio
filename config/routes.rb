@@ -211,6 +211,7 @@ Rails.application.routes.draw do
       get :octoprint_session
     end
   end
+  get "dashboard/:cell" => "dashboard#show", as: :dashboard_cell, constraints: { cell: /[A-Za-z0-9_-]+/ }
 
   resource :nfc, only: [:show]
 

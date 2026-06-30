@@ -12,13 +12,14 @@
   </script>
 <% end %>
 
-<div class="dashboard no-markdown"></div>
+<div class="dashboard no-markdown<%= " dashboard-isolated" if @isolated_cell %>"></div>
 <div class="dashboard-omnibar">
   <input autofocus=true type="text">
   <div class="dashboard-omnibar-autocomplete"></div>
 </div>
 
 <script type="text/javascript">
+  window.DASHBOARD_ISOLATED_CELL = <%= raw @isolated_cell.to_json %>;
   (function load() {
     if (!window.jQuery) { return setTimeout(load, 50); }
 

@@ -54,6 +54,16 @@ RSpec.describe TeslaTelemetry do
       process(ChargeState: "Idle")
       expect(user.caches.get(:car_data).dig(:charging, :state)).to eq("Idle")
     end
+
+    it "tolerates Fleet Telemetry's alert envelope where :data is an Array (no Symbol-into-Integer crash)" do
+      # Real-world shape from Fleet Telemetry's alert/error payloads —
+      # used to blow up every detect_* via `@raw.dig(:data, :Field)`
+      # because Array#dig refuses a Symbol index.
+      seed_car_data(drive: { speed_mph: 0 })
+      expect { process({ data: [{ name: "VCFRONT_a460_railVoltage" }], msg: "alerts" }) }.not_to raise_error
+      expect(triggered?(:tesla_drive_start)).to be(false)
+      expect(triggered?(:tesla_parked)).to be(false)
+    end
   end
 
   describe "#detect_hvac_changes" do

@@ -74,7 +74,27 @@ Cell.init = function (cell, config) {
   cell.reloader(cell.init_data.reloader, cell.refreshInterval);
   return cell;
 };
+Cell.normalizeName = function (name) {
+  return String(name)
+    .replace(/^\s*|\s*$/gi, "")
+    .replace(/[\s-]+/gi, "_")
+    .replace(/[^a-z_]/gi, "")
+    .toLowerCase()
+    .replace(/_/g, "");
+};
 Cell.loadConfig = function (all_config) {
+  var isolated = window.DASHBOARD_ISOLATED_CELL;
+  if (isolated) {
+    var target = Cell.normalizeName(isolated);
+    var match = Object.entries(all_config).find(function (entry) {
+      return Cell.normalizeName(entry[0]) === target;
+    });
+    if (!match) {
+      return console.error("No cell found for: ", isolated);
+    }
+    var config = Object.assign({}, match[1], { x: 1, y: 1 });
+    return Cell.initByName(match[0], config);
+  }
   for (var [name, config] of Object.entries(all_config)) {
     Cell.initByName(name, config);
   }

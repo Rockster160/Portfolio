@@ -5242,7 +5242,7 @@
   // on enqueue-while-offline, or on app wake when items still exist
   // (their presence proves a prior attempt was interrupted).
   const QUEUE_KEY = "chores:offline_queue:v2";
-  let queueCsrf = CSRF;
+  let queueCsrf = currentCsrf();
   let queueBlockedReason = null;
   function loadQueue() { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]"); } catch (e) { return []; } }
   function saveQueue(q) { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }

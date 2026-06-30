@@ -236,16 +236,20 @@
   // transitioning above its breakpoint).
   const mobileInfinite = {
     observed: false,
-    edgeObserver: null,
-    titleObserver: null,
-    loading: false, // re-entrancy guard for the prepend/append callbacks
     mql: null,
-    // Flipped true on the first real user gesture (wheel/touch/pointer/
-    // key) against the grid. Until then, the edge observer's
-    // load-more callback is a no-op — this is what prevents the
-    // initial layout pass from chaining additional month loads that
-    // would scroll the user away from the current month.
+    scrollHandler: null,
+    scrollGrid: null,
+    // Flipped true on the first real user gesture against the grid.
+    // Until then the edge loader is inert — neutralises the initial
+    // layout's programmatic scroll-to-today, which would otherwise
+    // look like an "approach the bottom" signal and chain loads.
     userInteracted: false,
+    // Hard cooldown: at most one load every LOAD_COOLDOWN_MS, no
+    // matter how many scroll events queue up. This is what stops the
+    // "phone-down self-scrolling" cascade where a JS-blocked frame
+    // backed up scroll events that then all fired loads in sequence.
+    loading: false,
+    lastLoadAt: 0,
   };
   const weekDrag = { col: null, startPx: 0, top: 0, bottom: 0, sel: null, moved: false, ctx: null };
   // All-day strip drag-to-create state. `startCell` is where mousedown
@@ -328,10 +332,47 @@
   // edits), so the pending-sync badge surfaces while the queue drains,
   // the SW's synthetic 503 keeps the op queued for replay when offline,
   // and a permanent 4xx lands in the dropped-bucket banner.
-  function sendEventMove(btn, newStartAt, newEndAt) {
+  // Snapshot the tile's DOM position + style + epoch dataset before the
+  // optimistic inline move runs, so the recurring-scope-modal "Cancel"
+  // path can restore the tile to exactly where it started. Captured
+  // BEFORE applyInlineMove mutates style; restored without rebuilding
+  // the week (same reasons applyInlineMove avoids buildWeekBlocks).
+  function captureTileState(btn) {
+    return {
+      parent:      btn.parentElement,
+      nextSibling: btn.nextElementSibling,
+      top:         btn.style.top,
+      height:      btn.style.height,
+      left:        btn.style.left,
+      right:       btn.style.right,
+      width:       btn.style.width,
+      startAt:     btn.dataset.startAt,
+      endAt:       btn.dataset.endAt,
+    };
+  }
+
+  function revertTileState(btn, snap) {
+    if (snap.parent && btn.parentElement !== snap.parent) {
+      snap.parent.insertBefore(btn, snap.nextSibling);
+    }
+    btn.style.top    = snap.top    || "";
+    btn.style.height = snap.height || "";
+    btn.style.left   = snap.left   || "";
+    btn.style.right  = snap.right  || "";
+    btn.style.width  = snap.width  || "";
+    if (snap.startAt != null) btn.dataset.startAt = snap.startAt;
+    if (snap.endAt   != null) btn.dataset.endAt   = snap.endAt;
+  }
+
+  // Enqueues the PATCH for a confirmed move. `scope` is one of
+  // "occurrence" | "future" | null (null = non-recurring). Drag-to-move
+  // goes through AgendaMutationQueue (same path as modal edits), so the
+  // pending-sync badge surfaces while the queue drains, the SW's
+  // synthetic 503 keeps the op queued for replay when offline, and a
+  // permanent 4xx lands in the dropped-bucket banner.
+  function commitEventMove(btn, newStartAt, newEndAt, scope) {
     const itemId = btn.dataset.itemId;
     if (!itemId) return;
-    const recurring = btn.dataset.recurring === "true";
     btn.dataset.startAt = String(newStartAt);
     btn.dataset.endAt = String(newEndAt);
 
@@ -344,9 +385,7 @@
         client_mutation_id: mid,
       },
     };
-    // For recurring items default to occurrence-only — moving a single
-    // standup shouldn't drag the whole series with it.
-    if (recurring) payload.agenda_item.scope = "occurrence";
+    if (scope) payload.agenda_item.scope = scope;
 
     btn.classList.add("is-pending");
     window.AgendaMutationQueue.enqueue({
@@ -359,6 +398,30 @@
       dedup_key:          `update:${url}`,
     });
     window.AgendaMutationQueue.flush();
+  }
+
+  // Top-level move dispatcher. For non-recurring items, commits
+  // immediately. For recurring items, opens the three-way scope modal
+  // (just this / this and following / cancel) and either commits with
+  // the chosen scope or reverts the tile to `snap`. The tile is already
+  // optimistically moved in the DOM by the time this runs.
+  function sendEventMove(btn, newStartAt, newEndAt, snap) {
+    const recurring = btn.dataset.recurring === "true";
+    if (!recurring) {
+      commitEventMove(btn, newStartAt, newEndAt, null);
+      return;
+    }
+    const title = btn.dataset.name || "this event";
+    const choose = (window.AgendaRecurringScope)
+      ? window.AgendaRecurringScope({ title })
+      : Promise.resolve("occurrence");
+    choose.then((choice) => {
+      if (choice === "occurrence" || choice === "future") {
+        commitEventMove(btn, newStartAt, newEndAt, choice);
+      } else if (snap) {
+        revertTileState(btn, snap);
+      }
+    });
   }
 
   // ============================================================
@@ -2047,39 +2110,50 @@
   }
 
   // ============================================================
-  // MOBILE INFINITE SCROLL
+  // MOBILE MONTH VIEW (iOS-style continuous + lazy infinite scroll)
   // ============================================================
   // Below the mobile breakpoint, the month view becomes a continuous
-  // vertical stack of months (iOS Calendar style). The server still
-  // renders one month-block; this layer seeds 2 prior + 2 next around
-  // it and uses IntersectionObserver sentinels to grow the stack as
-  // the user nears either edge.
+  // vertical stack of months. At activate we seed a small ±N window
+  // around the server-rendered center; as the user nears either edge,
+  // a single new month is loaded.
   //
-  // Desktop nav (prev/next link clicks → renderMonthFor) tears down all
-  // blocks and rebuilds a single one. The same path is taken on the
-  // mobile side after popstate; the activate function below re-seeds
-  // siblings around whatever the new center month is.
+  // Three guards prevent the cascading-load death spiral that haunted
+  // the first attempts:
+  //   - userInteracted gate: the loader is inert until the user has
+  //     actually scrolled/touched/wheel'd. Initial layout's
+  //     programmatic scroll-to-today doesn't trigger loads.
+  //   - timestamp cooldown (LOAD_COOLDOWN_MS): at most one load per
+  //     window of time, no matter how many scroll events queue. This
+  //     is what stops the "phone-down self-scrolling" bug — when JS
+  //     blocks on a load, scroll events back up in the browser queue;
+  //     when JS unblocks, they all fire at once. Without a wall-clock
+  //     cooldown, every queued event sees "still near edge" and fires
+  //     more loads, cascading until the user happens to scroll into a
+  //     safe zone.
+  //   - one block per fire: keeps each load's JS work bounded so the
+  //     thread isn't blocked long enough for a meaningful backlog to
+  //     accumulate.
+  const MOBILE_INITIAL_RANGE = 6;
+  const EDGE_THRESHOLD_PX = 1500;
+  const LOAD_COOLDOWN_MS = 250;
+
   function activateMobileMonthInfinite(root) {
     if (!root) return;
     const grid = root.querySelector(".cal-month-grid");
     const stack = grid && grid.querySelector("[data-month-stack]");
     if (!grid || !stack) return;
-    // Ensure the matchMedia listener exists once per page life — it
-    // re-activates on resize across the breakpoint (rotation, dev
-    // tools, etc.) so the layout never desyncs.
     ensureMobileMqlListener(root);
 
     if (!isMobileMonthView()) {
       // Desktop / wide-tablet: keep the existing single-block layout.
-      // Tear down any leftover observers from a previous mobile pass.
       teardownMobileInfinite();
       return;
     }
 
-    // Make sure exactly one block currently lives in the stack — the
-    // anchor for siblings. If the stack is empty (defensive) bail; if
-    // it has many (e.g. a previous mobile pass), trim to the closest
-    // block matching the grid's current month window.
+    // Reduce to exactly one block (the server-rendered center or the
+    // post-nav target). Subsequent activates (matchMedia transitions,
+    // popstate, etc.) trim the previously-built stack down to that
+    // single anchor before rebuilding around it.
     let blocks = $$("[data-month-block]", stack);
     if (blocks.length === 0) return;
     if (blocks.length > 1) {
@@ -2093,64 +2167,47 @@
     const centerISO = center.dataset.monthIso;
     if (!centerISO) return;
 
-    // Build all sibling blocks as detached DOM nodes first, then insert
-    // them in TWO batches (prior above the center, next below). A
-    // single scroll-compensation per batch eliminates the per-prepend
-    // rounding drift the original implementation accumulated — that
-    // drift was what occasionally left the viewport anchored on the
-    // top-of-stack (looking like the page had "scrolled back to
-    // January") instead of on the current month.
-    const priorBlocks = [];
-    for (let i = 1; i <= 3; i++) {
+    // Build the initial sibling window in a detached fragment first,
+    // then insert in two batches. Smaller initial range keeps the
+    // first paint fast; the edge loader adds more as the user
+    // approaches either end.
+    const priorFrag = document.createDocumentFragment();
+    for (let i = MOBILE_INITIAL_RANGE; i >= 1; i--) {
       const b = buildMonthBlockNode(addMonthsISO(centerISO, -i));
-      if (b) priorBlocks.push(b);
+      if (b) priorFrag.appendChild(b); // descending so insertion is chronological
     }
-    // Built in i=1..3 order (May, Apr, Mar). Reverse so iterator
-    // insertion produces chronological [Mar, Apr, May, Jun] in the DOM.
-    priorBlocks.reverse();
-
-    const nextBlocks = [];
-    for (let i = 1; i <= 3; i++) {
+    const nextFrag = document.createDocumentFragment();
+    for (let i = 1; i <= MOBILE_INITIAL_RANGE; i++) {
       const b = buildMonthBlockNode(addMonthsISO(centerISO, +i));
-      if (b) nextBlocks.push(b);
+      if (b) nextFrag.appendChild(b);
     }
 
-    // Insert prior blocks above the center. Lock scroll-behavior to
-    // 'auto' inline so the mobile CSS's `scroll-behavior: smooth` can't
-    // animate the compensation — Safari/Chrome honor the inline
-    // override even when the option-form `behavior: "auto"` is
-    // ambiguous, which is what was making the page visibly "scroll
-    // back" to earlier months on load.
-    const prevScrollBehavior = grid.style.scrollBehavior;
-    grid.style.scrollBehavior = "auto";
-
+    // Bulk insert. Prior fragment goes above the center; record the
+    // height delta and compensate scrollTop in one shot. Direct
+    // scrollTop assignment (not scrollTo) sidesteps any pending
+    // browser smooth-scroll behavior.
     const beforeH = grid.scrollHeight;
     const beforeTop = grid.scrollTop;
-    priorBlocks.forEach((b) => stack.insertBefore(b, center));
+    stack.insertBefore(priorFrag, center);
     const afterH = grid.scrollHeight;
     grid.scrollTop = beforeTop + (afterH - beforeH);
 
-    // Append next blocks BELOW the center — no scroll compensation
-    // needed because adding content below the viewport never shifts
-    // what's visible.
     const downLoader = stack.querySelector('[data-month-loader="down"]');
-    nextBlocks.forEach((b) => {
-      if (downLoader) stack.insertBefore(b, downLoader);
-      else stack.appendChild(b);
-    });
+    if (downLoader) stack.insertBefore(nextFrag, downLoader);
+    else stack.appendChild(nextFrag);
 
-    // Single post-mutation pass: extend the window markers, kick off
-    // backfill, refresh seeds, re-layout banners. month_view.js's
-    // store subscriber fills the new cells with timed items.
+    // Single post-mutation pass: extend window markers, fire seed
+    // hydration + banner layout + overflow counts. Items hydrate from
+    // the store; AgendaSync.ensureRangeLoaded backfills any missing
+    // history asynchronously and the existing store subscriber
+    // re-renders cells when data arrives.
     expandGridRangeMarkers(grid);
     repaintAfterMutation(grid);
 
-    // Two rAFs: the first lets the just-notified item-render pass paint
-    // into cells (which can push some rows past their min-height); the
-    // second is when we can safely measure today's cell and lock the
-    // viewport there. Setting scrollTop directly (vs scrollTo()) with
-    // the inline 'auto' lock is the most reliable way to make the
-    // initial anchor stick across browsers.
+    // Anchor on today after layout settles. Two rAFs: first lets the
+    // notify-driven cell renders paint; second is when measurements
+    // are stable. We do NOT keep adjusting scrollTop after this — any
+    // further scroll motion is the user's, not ours.
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const todayISO = toISO(new Date());
@@ -2166,7 +2223,6 @@
           target = grid.scrollTop + (centerRect.top - gridRect.top);
         }
         grid.scrollTop = Math.max(0, target);
-        grid.style.scrollBehavior = prevScrollBehavior;
         bindMobileObservers(root, grid, stack);
       });
     });
@@ -2202,8 +2258,9 @@
   }
 
   // Prepend a freshly-built block above the current first block, and
-  // compensate the scroll position so the viewport stays exactly where
-  // the user left it (no visible jump when content grows upward).
+  // compensate scrollTop in the same synchronous tick so the user
+  // never sees a jump. Returns the inserted block (or null if the
+  // month was already present or buildMonthBlockNode failed).
   function prependMonthBlock(grid, monthISO) {
     const stack = grid.querySelector("[data-month-stack]");
     if (!stack) return null;
@@ -2217,11 +2274,9 @@
     if (anchor) stack.insertBefore(block, anchor);
     else stack.appendChild(block);
     const afterH = grid.scrollHeight;
-    // scrollTo with behavior:auto bypasses the grid's CSS
-    // `scroll-behavior: smooth` so a prepend never animates — a smooth
-    // scroll here would visually drag the user through the freshly
-    // inserted month and undo the whole point of compensation.
-    grid.scrollTo({ top: beforeTop + (afterH - beforeH), behavior: "auto" });
+    // Direct scrollTop assignment (not scrollTo) — avoids any pending
+    // smooth-scroll behavior animating the compensation.
+    grid.scrollTop = beforeTop + (afterH - beforeH);
     expandGridRangeMarkers(grid);
     repaintAfterMutation(grid);
     return block;
@@ -2241,11 +2296,12 @@
     return block;
   }
 
-  // After any block prepend/append, extend the grid's data-month-start
-  // and data-month-end to cover the union of every block. Store
-  // queries (itemsForRange, ensureRangeLoaded, hydrateMonthAllDaySeeds)
-  // all read these markers, so they have to track the full visible
-  // window — not the original single-month range.
+  // After bulk-inserting blocks at activate, extend the grid's
+  // data-month-start and data-month-end to cover the union of every
+  // block. Store queries (itemsForRange, ensureRangeLoaded,
+  // hydrateMonthAllDaySeeds) all read these markers, so they have to
+  // track the full visible window — not the original single-month
+  // range.
   function expandGridRangeMarkers(grid) {
     const stack = grid.querySelector("[data-month-stack]");
     const blocks = $$("[data-month-block]", stack);
@@ -2278,89 +2334,17 @@
     window.AgendaStore?.notify?.("page");
   }
 
-  // Wire up two scroll-driven concerns: edge loading (prepend/append
-  // month blocks as the user nears either end) and toolbar title
-  // tracking (report whichever block dominates the viewport).
-  //
-  // Why scroll events, not IntersectionObserver: IO fires on
-  // intersection STATE CHANGE only. After the loader callback adds
-  // blocks the sentinel stays inside the rootMargin (it never exits
-  // — there's nowhere for it to go), so the next time the user
-  // approaches the edge no fresh IO callback fires. Fast scrolling
-  // would silently stop loading. Scroll events fire continuously
-  // during inertial scroll, so re-checking distance-to-edge on each
-  // tick is the simple, reliable path.
+  // Bind the scroll handler: throttled title tracker + cooldown-gated
+  // edge loader. The edge loader is the only thing that can mutate
+  // the stack after activate, and it's protected by THREE guards
+  // (user-interaction gate, hard timestamp cooldown, in-flight lock)
+  // so a backlog of scroll events can't cascade into runaway loads.
   function bindMobileObservers(root, grid, stack) {
     teardownMobileInfinite();
 
-    // Arm the user-interaction gate. Edge loading ignores scrolls
-    // until the user has touched, wheel'd, or keyboard-navigated the
-    // grid at least once — this neutralises the initial layout's
-    // programmatic scroll-to-today, which would otherwise look like
-    // an "approach the bottom" signal and chain immediate appends.
-    mobileInfinite.userInteracted = false;
-    const markInteracted = () => { mobileInfinite.userInteracted = true; };
-    ["wheel", "touchstart", "pointerdown", "keydown"].forEach((evt) => {
-      grid.addEventListener(evt, markInteracted, { passive: true, once: true });
-    });
-
-    const EDGE_THRESHOLD_PX = 1800;
-
-    // Single throttled scroll handler — coalesces multiple scroll
-    // events per frame and drives both the edge loader and the title
-    // tracker from the same measurement.
-    let scrollScheduled = false;
-    const onScroll = () => {
-      if (scrollScheduled) return;
-      scrollScheduled = true;
-      requestAnimationFrame(() => {
-        scrollScheduled = false;
-        runEdgeLoad();
-        updateTitleFromBlock(pickDominantBlock());
-      });
-    };
-
-    const runEdgeLoad = () => {
-      if (!mobileInfinite.userInteracted) return;
-      if (mobileInfinite.loading) return;
-      const distToBottom = grid.scrollHeight - (grid.scrollTop + grid.clientHeight);
-      const distToTop = grid.scrollTop;
-      const blocks = $$("[data-month-block]", stack);
-      if (blocks.length === 0) return;
-      // Bottom takes priority — typical user scrolls forward in time.
-      if (distToBottom < EDGE_THRESHOLD_PX) {
-        mobileInfinite.loading = true;
-        const lastISO = blocks[blocks.length - 1].dataset.monthIso;
-        appendMonthBlock(grid, addMonthsISO(lastISO, +1));
-        appendMonthBlock(grid, addMonthsISO(lastISO, +2));
-        // Unlock next frame so the just-appended height is reflected
-        // in scrollHeight before the next scroll tick re-checks
-        // distance. Without the frame gap a long inertial scroll can
-        // double-load on the next event.
-        requestAnimationFrame(() => { mobileInfinite.loading = false; });
-        return;
-      }
-      if (distToTop < EDGE_THRESHOLD_PX) {
-        mobileInfinite.loading = true;
-        const firstISO = blocks[0].dataset.monthIso;
-        prependMonthBlock(grid, addMonthsISO(firstISO, -1));
-        prependMonthBlock(grid, addMonthsISO(firstISO, -2));
-        requestAnimationFrame(() => { mobileInfinite.loading = false; });
-        return;
-      }
-    };
-
-    grid.addEventListener("scroll", onScroll, { passive: true });
-    mobileInfinite.scrollHandler = onScroll;
-    mobileInfinite.scrollGrid = grid;
-
-    // Toolbar title tracker: report whichever block contains the
-    // probe line just below the sticky weekday row. A scroll listener
-    // (rAF-throttled) does the picking directly — the previous
-    // IntersectionObserver attempt was unreliable because multiple
-    // blocks can intersect the same band simultaneously (one ending,
-    // one beginning) and IO entry order doesn't correspond to which
-    // block actually fills the viewport.
+    // ---- helpers defined first so onScroll can call them without
+    // any temporal-dead-zone hazard, and so any throw in the loader
+    // never prevents the title tracker from running.
     const titleEl = $(".cal-toolbar-title", root);
     const formatMonthShort = (iso) => {
       const dt = parseISODate(`${iso}-01`);
@@ -2398,6 +2382,70 @@
       }
       return allBlocks[allBlocks.length - 1] || null;
     };
+
+    // User-interaction gate. Initial layout's programmatic scroll-to-
+    // today fires scroll events too; without this the loader would
+    // see "near the bottom" on first frame and immediately start
+    // appending months the user never asked for.
+    mobileInfinite.userInteracted = false;
+    const markInteracted = () => { mobileInfinite.userInteracted = true; };
+    ["wheel", "touchstart", "pointerdown", "keydown"].forEach((evt) => {
+      grid.addEventListener(evt, markInteracted, { passive: true, once: true });
+    });
+
+    const maybeLoadEdge = () => {
+      if (!mobileInfinite.userInteracted) return;
+      if (mobileInfinite.loading) return;
+      const now = performance.now();
+      if (now - mobileInfinite.lastLoadAt < LOAD_COOLDOWN_MS) return;
+
+      const distToBottom = grid.scrollHeight - (grid.scrollTop + grid.clientHeight);
+      const distToTop = grid.scrollTop;
+      const blocks = $$("[data-month-block]", stack);
+      if (blocks.length === 0) return;
+
+      // ONE block per fire — bounds the JS work to ~30ms so the
+      // thread stays responsive. The cooldown caps load frequency
+      // at 1/250ms ≈ 4 months/sec, comfortably above any natural
+      // inertial-scroll velocity (~600px/month × 4 = 2400 px/sec).
+      let task = null;
+      if (distToBottom < EDGE_THRESHOLD_PX) {
+        const lastISO = blocks[blocks.length - 1].dataset.monthIso;
+        task = () => appendMonthBlock(grid, addMonthsISO(lastISO, +1));
+      } else if (distToTop < EDGE_THRESHOLD_PX) {
+        const firstISO = blocks[0].dataset.monthIso;
+        task = () => prependMonthBlock(grid, addMonthsISO(firstISO, -1));
+      }
+      if (!task) return;
+
+      mobileInfinite.loading = true;
+      mobileInfinite.lastLoadAt = now;
+      try { task(); }
+      finally { mobileInfinite.loading = false; }
+    };
+
+    let scrollScheduled = false;
+    const onScroll = () => {
+      // Title tracker FIRST + try/catch around the loader. If
+      // maybeLoadEdge ever throws (a subscriber error inside
+      // repaintAfterMutation, etc.) we must not lose the title
+      // update — the user notices a stale title immediately, but a
+      // missing edge-load is a degraded-but-recoverable state.
+      if (!scrollScheduled) {
+        scrollScheduled = true;
+        requestAnimationFrame(() => {
+          scrollScheduled = false;
+          try { updateTitleFromBlock(pickDominantBlock()); }
+          catch (e) { console.error("[mobileInfinite] title update failed", e); }
+        });
+      }
+      try { maybeLoadEdge(); }
+      catch (e) { console.error("[mobileInfinite] edge load failed", e); }
+    };
+
+    grid.addEventListener("scroll", onScroll, { passive: true });
+    mobileInfinite.scrollHandler = onScroll;
+    mobileInfinite.scrollGrid = grid;
 
     // Initial paint — covers the case where the activate scroll-to-
     // today landed in a non-server-month, so the toolbar title shouldn't
@@ -2740,8 +2788,11 @@
             const durSec = Math.max(900, origEnd - origStart);
             const newStartAt = computeEpochForLogicalSlot(dropCol.dataset.date, dayStart, newStartMin);
             const newEndAt = newStartAt + durSec;
+            // Snapshot before applyInlineMove so a cancelled
+            // recurring-scope choice can put the tile back exactly.
+            const snap = captureTileState(btn);
             applyInlineMove(btn, dropCol, dropTop - bandPx, pxPerMin);
-            sendEventMove(btn, newStartAt, newEndAt);
+            sendEventMove(btn, newStartAt, newEndAt, snap);
           }
           // Tear down ghost + placeholder, restore the source button.
           cancelEventDrag();

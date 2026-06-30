@@ -93,6 +93,8 @@ class AgendaItemsController < ApplicationController
         materialize_with(completion_attrs)
       elsif scope == :series && @item.recurring?
         apply_series_update!(moved: moved, target: target_agenda)
+      elsif scope == :future && @item.recurring?
+        apply_future_update!(moved: moved, target: target_agenda)
       else
         apply_occurrence_update!(moved: moved, target: target_agenda)
       end
@@ -245,6 +247,120 @@ class AgendaItemsController < ApplicationController
     # the action's trailing render has a row (real or phantom) to serialize.
     @item = resolve_item_after_series_update(sched, occurrence_date)
     apply_agenda_move!(target) if moved
+  end
+
+  # Splits a recurring series at @item's occurrence date: truncates the
+  # original schedule so it ends the day before @item, then creates a new
+  # tail schedule starting at @item's occurrence date with the new time and
+  # duration. All later occurrences inherit the new time. Mirrors both
+  # sides to Google when the agenda is externally managed (PATCH master
+  # UNTIL + INSERT new master). Cross-source splits are refused for the
+  # same reason as series moves.
+  def apply_future_update!(moved:, target:)
+    if moved && cross_source_move?(@item.agenda, target)
+      return render(
+        json:   { errors: ["\"This and following\" moves between Google and local agendas aren't supported — move occurrences individually."] },
+        status: :unprocessable_entity,
+      )
+    end
+
+    old_sched = @item.agenda_schedule
+    return render(json: { errors: ["No recurrence schedule on this item."] }, status: :unprocessable_entity) if old_sched.blank?
+    if @item.detached?
+      # A detached row is already standalone — "and following" has no
+      # series to walk forward. Fall back to a plain occurrence update.
+      return apply_occurrence_update!(moved: moved, target: target)
+    end
+
+    cutoff_date    = @item.occurrence_date
+    cutoff_time    = @item.start_at
+    new_start_at   = item_params[:start_at] || @item.start_at
+    new_end_at     = item_params[:end_at] || @item.end_at
+    owning_agenda  = @item.agenda
+    landing_agenda = target || owning_agenda
+
+    tail_sched = nil
+    ActiveRecord::Base.transaction do
+      truncate_schedule_at!(old_sched, owning_agenda, cutoff_date, cutoff_time)
+      tail_sched = build_tail_schedule!(old_sched, landing_agenda, cutoff_date, new_start_at, new_end_at)
+    end
+
+    @item = resolve_item_after_series_update(tail_sched, cutoff_date)
+    Agenda.broadcast_changes!([owning_agenda, landing_agenda].uniq) if moved
+  end
+
+  # Same shape as the truncate inside `destroy_series!`: PATCH the upstream
+  # RRULE first so a Google rejection rolls back the local until_on change,
+  # then update locally + cascade-cancel future materialized rows.
+  def truncate_schedule_at!(sched, agenda, cutoff_date, cutoff_time)
+    if agenda.managed_externally? && sched.external_uid.present?
+      mirror_series_truncate_to_google!(agenda, sched, cutoff_date)
+    end
+    sched.update!(occurrence_count: nil, until_on: cutoff_date - 1)
+    sched.agenda_items.where(start_at: cutoff_time..).update_all( # rubocop:disable Rails/SkipsModelValidations
+      status:       AgendaItem.statuses[:cancelled],
+      cancelled_at: Time.current,
+    )
+  end
+
+  # Clones the schedule's recurrence rule + descriptive fields onto a new
+  # AgendaSchedule starting at `cutoff_date` with `new_start_at` as the
+  # wall-clock anchor. For Google-managed agendas, INSERT a new master
+  # event upstream and record the returned uid/etag.
+  def build_tail_schedule!(old_sched, landing_agenda, cutoff_date, new_start_at, new_end_at)
+    zone = ::ActiveSupport::TimeZone[old_sched.user.timezone] || Time.zone
+    local_start = new_start_at.in_time_zone(zone)
+    wall_clock = format("%02d:%02d:00", local_start.hour, local_start.min)
+    new_duration_minutes = (((new_end_at.to_i - new_start_at.to_i) / 60).to_i).clamp(1, nil)
+
+    tail = landing_agenda.agenda_schedules.new(
+      name:                 old_sched.name,
+      kind:                 old_sched.kind,
+      color:                old_sched.color,
+      duration_minutes:     new_duration_minutes,
+      all_day:              old_sched.all_day,
+      arrive_early_minutes: old_sched.arrive_early_minutes,
+      location:             old_sched.location,
+      notes:                old_sched.notes,
+      trigger_expression:   old_sched.trigger_expression,
+      recurrence:           old_sched.recurrence,
+      start_time:           wall_clock,
+      starts_on:            cutoff_date,
+    )
+    tail.save!
+
+    if landing_agenda.managed_externally?
+      mirror_tail_schedule_insert_to_google!(landing_agenda, tail, local_start, new_duration_minutes)
+    end
+
+    tail
+  end
+
+  # INSERT a new recurring event upstream for the freshly-created tail
+  # schedule. Captures the response uid/etag so subsequent edits can route
+  # through the existing mirror_to_google! / mirror_series_* helpers.
+  def mirror_tail_schedule_insert_to_google!(agenda, sched, local_start, duration_minutes)
+    rrule_lines = ::GoogleCalendar::RRule.serialize(sched)
+    body = {
+      summary:     sched.name,
+      location:    sched.location.presence,
+      description: sched.notes.presence,
+      start:       { dateTime: local_start.iso8601 },
+      end:         { dateTime: (local_start + duration_minutes.minutes).iso8601 },
+    }.compact
+    body[:recurrence] = rrule_lines if rrule_lines.present?
+
+    response = agenda.google_account.api.insert_event(agenda.external_id, body)
+    return unless response.is_a?(::Hash)
+
+    sched.update!(
+      external_uid:        response[:id],
+      external_etag:       response[:etag],
+      external_updated_at: response[:updated].present? ? Time.zone.parse(response[:updated].to_s) : ::Time.current,
+    )
+  rescue ::RestClient::Exception => e
+    ::Rails.logger.warn("[GoogleCalendar] tail series insert failed agenda=#{agenda.id} #{e.class}: #{e.message}")
+    raise GoogleSyncFailed, google_error_message(e, "create the new series")
   end
 
   # Series move within the same source kind:
@@ -860,7 +976,7 @@ class AgendaItemsController < ApplicationController
   end
 
   def scope
-    params[:scope].to_s.to_sym.presence_in([:occurrence, :series]) || :occurrence
+    params[:scope].to_s.to_sym.presence_in([:occurrence, :future, :series]) || :occurrence
   end
 
   def completion_only_update?

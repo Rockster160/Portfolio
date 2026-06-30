@@ -3,6 +3,7 @@ class DashboardController < ApplicationController
 
   def show
     @skip_dark_mode = true
+    @isolated_cell = params[:cell].to_s.downcase.gsub(/[^a-z]/, "").presence
   end
 
   def octoprint_session

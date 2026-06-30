@@ -1533,8 +1533,11 @@ body.cal-event-drag-blocked * {
       border: 0;
       border-radius: 0;
       background: transparent;
-      // Smooth-scroll the Today jump on mobile; desktop nav is jump-cut.
-      scroll-behavior: smooth;
+      // No CSS `scroll-behavior: smooth` — iOS Safari can briefly lock
+      // touch input while a smooth-scroll animation is in flight, which
+      // was making the page feel "stuck" right after load. Smooth
+      // scrolling is opt-in per call (the Today button passes
+      // `behavior: "smooth"` via scrollTo).
       overscroll-behavior: contain;
     }
 

@@ -50,7 +50,7 @@ class TeslaTelemetry
   # one-off invalid push. Skip when the inbound record's VehicleSpeed was
   # the sentinel.
   def detect_drive_changes
-    return unless @raw.key?(:VehicleSpeed) || @raw.dig(:data, :VehicleSpeed)
+    return unless field_present_in_record?(:VehicleSpeed)
     return if speed_in_record == "<invalid>"
 
     new_speed = @car_data.dig(:drive, :speed_mph).to_i
@@ -71,7 +71,7 @@ class TeslaTelemetry
   # by a moment while the user collects belongings). Only fires on the
   # transition INTO P, not on every record where shift is already P.
   def detect_park_changes
-    return unless @raw.key?(:Gear) || @raw.dig(:data, :Gear)
+    return unless field_present_in_record?(:Gear)
     return if gear_in_record == "<invalid>"
 
     new_shift  = @car_data.dig(:drive, :shift)
@@ -85,11 +85,11 @@ class TeslaTelemetry
   end
 
   def gear_in_record
-    @raw[:Gear] || @raw.dig(:data, :Gear)
+    field_in_record(:Gear)
   end
 
   def detect_charge_changes
-    return unless @raw.key?(:ChargeState) || @raw.dig(:data, :ChargeState)
+    return unless field_present_in_record?(:ChargeState)
 
     new_state = @car_data.dig(:charging, :state)
     prev_state = @prev.dig(:charging, :state)
@@ -105,7 +105,7 @@ class TeslaTelemetry
   # when remote-start fires) and off when the car truly powers down.
   # Distinct from drive speed (red light != stopped).
   def detect_hvac_changes
-    return unless @raw.key?(:HvacPower) || @raw.dig(:data, :HvacPower)
+    return unless field_present_in_record?(:HvacPower)
 
     new_on  = @car_data.dig(:climate, :hvac_on)
     prev_on = @prev.dig(:climate, :hvac_on)
@@ -191,6 +191,26 @@ class TeslaTelemetry
   end
 
   def speed_in_record
-    @raw[:VehicleSpeed] || @raw.dig(:data, :VehicleSpeed)
+    field_in_record(:VehicleSpeed)
+  end
+
+  # Field lookup that tolerates both Fleet-Telemetry envelope shapes:
+  #   * flat:           { VehicleSpeed: 10 }
+  #   * record_payload: { data: { VehicleSpeed: 10 }, msg: "...", … }
+  #   * alert/error:    { data: [ ... ], msg: "alerts" }  ← Array, NOT Hash
+  #
+  # The Array shape used to crash every detect_* via
+  # `@raw.dig(:data, :Field)` → TypeError "no implicit conversion of
+  # Symbol into Integer" (Array#dig refused the symbol). Anything that
+  # isn't a Hash data section now returns nil instead.
+  def field_in_record(name)
+    return @raw[name] if @raw.key?(name)
+    return @raw[:data][name] if @raw[:data].is_a?(::Hash) && @raw[:data].key?(name)
+
+    nil
+  end
+
+  def field_present_in_record?(name)
+    @raw.key?(name) || (@raw[:data].is_a?(::Hash) && @raw[:data].key?(name))
   end
 end

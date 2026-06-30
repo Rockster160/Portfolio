@@ -141,7 +141,25 @@
     // not load here).
     // ===========================================================
 
-    const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || "";
+    // Read CSRF dynamically — the SW-cached shell may carry a token from
+    // whenever the shell was first cached. refreshCsrf() heals it after
+    // the first 422 by fetching a fresh token off the live session.
+    function currentCsrf() {
+      return document.querySelector('meta[name="csrf-token"]')?.content || "";
+    }
+    async function refreshCsrf() {
+      try {
+        const res = await fetch("/chores/csrf", { credentials: "same-origin", headers: { Accept: "application/json" }, redirect: "manual" });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (data?.token) {
+          const meta = document.querySelector('meta[name="csrf-token"]');
+          if (meta) meta.content = data.token;
+          return data.token;
+        }
+      } catch (e) {}
+      return null;
+    }
     const QUEUE_KEY = "chores:offline_queue:v2";
     // History entries are NEVER cached client-side: this list is
     // audit-style and must always reflect the live DB. Every visit,
@@ -212,12 +230,23 @@
       return `<span class="icon-glyph">${esc(v)}</span>`;
     }
     async function api(url, method, body) {
-      const res = await fetch(url, {
+      let res = await fetch(url, {
         method,
         credentials: "same-origin",
-        headers: { "Content-Type": "application/json", "Accept": "application/json", "X-CSRF-Token": CSRF },
+        headers: { "Content-Type": "application/json", "Accept": "application/json", "X-CSRF-Token": currentCsrf() },
         body: body ? JSON.stringify(body) : undefined,
       });
+      if (res.status === 422) {
+        const fresh = await refreshCsrf();
+        if (fresh) {
+          res = await fetch(url, {
+            method,
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json", "Accept": "application/json", "X-CSRF-Token": fresh },
+            body: body ? JSON.stringify(body) : undefined,
+          });
+        }
+      }
       if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
       return res.status === 204 ? null : res.json();
     }
