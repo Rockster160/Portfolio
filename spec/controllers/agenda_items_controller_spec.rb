@@ -572,4 +572,91 @@ RSpec.describe AgendaItemsController, type: :controller do
       expect(sched.reload.until_on).to eq(target_date - 1)
     end
   end
+
+  describe "future-scope (this and following) edit on a recurring item" do
+    # Uses an event schedule because that's the drag-and-drop entry point
+    # on /agenda/grid; the FE only opens the recurring-scope modal for
+    # events with a time + duration.
+    let!(:event_sched) {
+      create(
+        :agenda_schedule, agenda: agenda, name: "Standup", kind: :event,
+        start_time: "09:00", duration_minutes: 30,
+        recurrence: { "freq" => "daily" }, starts_on: Date.current
+      )
+    }
+    let(:zone) { ActiveSupport::TimeZone[user.timezone] || Time.zone }
+    let(:cutoff_date) { Date.current + 10.days }
+    let(:cutoff_phantom) { "p-#{event_sched.id}-#{cutoff_date.iso8601}" }
+
+    it "truncates the old schedule at cutoff-1 and creates a tail schedule with the new wall-clock" do
+      # User dragged the 9am occurrence on cutoff_date down to 11am.
+      new_start = zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 11, 0)
+      new_end   = new_start + 30.minutes
+
+      expect {
+        patch :update, params: {
+          id:    cutoff_phantom,
+          scope: :future,
+          agenda_item: {
+            start_at: new_start.to_i,
+            end_at:   new_end.to_i,
+          },
+        }, format: :json
+      }.to change { agenda.agenda_schedules.count }.by(1)
+
+      event_sched.reload
+      expect(event_sched.until_on).to eq(cutoff_date - 1)
+
+      tail = agenda.agenda_schedules.where.not(id: event_sched.id).order(:created_at).last
+      expect(tail.name).to eq("Standup")
+      expect(tail.starts_on).to eq(cutoff_date)
+      expect(tail.start_time.strftime("%H:%M")).to eq("11:00")
+      expect(tail.duration_minutes).to eq(30)
+      expect(tail.recurrence_data[:freq].to_s).to eq("daily")
+    end
+
+    it "leaves materialized rows before the cutoff untouched and cascade-cancels future rows on the old schedule" do
+      # Materialize a row well before the cutoff (the daily already does
+      # this for today) and a row at the cutoff via series-affecting save.
+      pre_cutoff_row = event_sched.agenda_items.order(:start_at).first
+      expect(pre_cutoff_row).to be_present
+
+      new_start = zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 11, 0)
+      patch :update, params: {
+        id:    cutoff_phantom,
+        scope: :future,
+        agenda_item: { start_at: new_start.to_i, end_at: (new_start + 30.minutes).to_i },
+      }, format: :json
+
+      expect(pre_cutoff_row.reload.cancelled_at).to be_nil
+
+      # Any rows the old schedule had at or after the cutoff are cancelled.
+      stragglers = event_sched.agenda_items.where(start_at: new_start.beginning_of_day..)
+      stragglers.each { |row| expect(row.cancelled_at).to be_present, "expected #{row.start_at} cancelled" }
+    end
+
+    it "falls back to occurrence-only when the item is already detached (no series tail to split)" do
+      detached = event_sched.agenda_items.create!(
+        agenda: agenda, kind: :event, name: "Standup",
+        start_at: zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 9, 0),
+        end_at:   zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 9, 30),
+        detached_at: Time.current, original_start_at: zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 9, 0),
+      )
+      new_start = zone.local(cutoff_date.year, cutoff_date.month, cutoff_date.day, 14, 0)
+
+      expect {
+        patch :update, params: {
+          id:    detached.id,
+          scope: :future,
+          agenda_item: { start_at: new_start.to_i, end_at: (new_start + 30.minutes).to_i },
+        }, format: :json
+      }.not_to change { agenda.agenda_schedules.count }
+
+      # Original schedule unchanged.
+      expect(event_sched.reload.until_on).to be_nil
+      # The detached row took the new time as a plain occurrence update.
+      detached.reload
+      expect(detached.start_at.to_i).to eq(new_start.to_i)
+    end
+  end
 end

@@ -50,11 +50,13 @@
 
     <%# `.cal-month-stack` is the scrolling region. Desktop renders exactly
         one `.cal-month-block` (the requested month); mobile activation in
-        `agenda_cal.js` prepends/appends sibling blocks for infinite scroll
-        with `[data-month-loader]` sentinels above and below. %>
+        `agenda_cal.js` seeds one prior + one next sibling block, then
+        appends more forward as the user scrolls toward the bottom. The
+        `[data-month-loader="down"]` sentinel marks the append insertion
+        anchor. There is no `up` sentinel — back-scroll is intentionally
+        bounded to the single seeded prior month (see the comment block
+        above `MOBILE_INITIAL_PRIOR` in agenda_cal.js for the why). %>
     <div class="cal-month-stack" data-month-stack>
-      <div class="cal-month-loader" data-month-loader="up" aria-hidden="true"></div>
-
       <div class="cal-month-block"
            data-month-block
            data-month-iso="<%= @month.strftime("%Y-%m") %>"

@@ -2110,30 +2110,33 @@
   }
 
   // ============================================================
-  // MOBILE MONTH VIEW (iOS-style continuous + lazy infinite scroll)
+  // MOBILE MONTH VIEW (iOS-style continuous + lazy forward scroll)
   // ============================================================
-  // Below the mobile breakpoint, the month view becomes a continuous
-  // vertical stack of months. At activate we seed a small ±N window
-  // around the server-rendered center; as the user nears either edge,
-  // a single new month is loaded.
+  // Below the mobile breakpoint, the month view is a continuous
+  // vertical stack of months. Activate seeds just three blocks:
+  //   - 1 prior month  (one month of back-context)
+  //   - the center     (server-rendered current month)
+  //   - 1 next month   (smooths the first forward-scroll)
+  // Forward scroll is infinite — the down-loader appends one month
+  // at a time as the user approaches the bottom. Back-scroll is NOT
+  // dynamic — the up-loader has been removed. The user explicitly
+  // accepted "prior month + current is sufficient" because every
+  // dynamic-prepend implementation had subtle jump-to-month bugs
+  // (scrollTop compensation drifts when async data fills cells above
+  // the viewport, and the freeze on initial load was caused by the
+  // wide ±6 range fetching + rendering thousands of recurring
+  // phantoms upfront).
   //
-  // Three guards prevent the cascading-load death spiral that haunted
-  // the first attempts:
-  //   - userInteracted gate: the loader is inert until the user has
-  //     actually scrolled/touched/wheel'd. Initial layout's
-  //     programmatic scroll-to-today doesn't trigger loads.
+  // Three guards still protect the down-loader from cascading:
+  //   - userInteracted gate: inert until the user has actually
+  //     touched / wheel'd / scrolled the grid. The initial layout's
+  //     programmatic scroll-to-today never triggers loads.
   //   - timestamp cooldown (LOAD_COOLDOWN_MS): at most one load per
-  //     window of time, no matter how many scroll events queue. This
-  //     is what stops the "phone-down self-scrolling" bug — when JS
-  //     blocks on a load, scroll events back up in the browser queue;
-  //     when JS unblocks, they all fire at once. Without a wall-clock
-  //     cooldown, every queued event sees "still near edge" and fires
-  //     more loads, cascading until the user happens to scroll into a
-  //     safe zone.
-  //   - one block per fire: keeps each load's JS work bounded so the
-  //     thread isn't blocked long enough for a meaningful backlog to
-  //     accumulate.
-  const MOBILE_INITIAL_RANGE = 6;
+  //     window of time, no matter how many scroll events queue.
+  //     Stops the "phone-down self-scrolling" cascade.
+  //   - one block per fire: keeps each load's JS work bounded.
+  const MOBILE_INITIAL_PRIOR = 1;
+  const MOBILE_INITIAL_NEXT = 1;
   const EDGE_THRESHOLD_PX = 1500;
   const LOAD_COOLDOWN_MS = 250;
 
@@ -2168,16 +2171,17 @@
     if (!centerISO) return;
 
     // Build the initial sibling window in a detached fragment first,
-    // then insert in two batches. Smaller initial range keeps the
-    // first paint fast; the edge loader adds more as the user
-    // approaches either end.
+    // then insert in two batches. Tiny initial range keeps the first
+    // paint fast; the down-loader extends forward as the user
+    // scrolls. There is no up-loader, so MOBILE_INITIAL_PRIOR is the
+    // hard cap on how far back the user can scroll.
     const priorFrag = document.createDocumentFragment();
-    for (let i = MOBILE_INITIAL_RANGE; i >= 1; i--) {
+    for (let i = MOBILE_INITIAL_PRIOR; i >= 1; i--) {
       const b = buildMonthBlockNode(addMonthsISO(centerISO, -i));
       if (b) priorFrag.appendChild(b); // descending so insertion is chronological
     }
     const nextFrag = document.createDocumentFragment();
-    for (let i = 1; i <= MOBILE_INITIAL_RANGE; i++) {
+    for (let i = 1; i <= MOBILE_INITIAL_NEXT; i++) {
       const b = buildMonthBlockNode(addMonthsISO(centerISO, +i));
       if (b) nextFrag.appendChild(b);
     }
@@ -2255,31 +2259,6 @@
       mobileInfinite.scrollGrid = null;
     }
     mobileInfinite.observed = false;
-  }
-
-  // Prepend a freshly-built block above the current first block, and
-  // compensate scrollTop in the same synchronous tick so the user
-  // never sees a jump. Returns the inserted block (or null if the
-  // month was already present or buildMonthBlockNode failed).
-  function prependMonthBlock(grid, monthISO) {
-    const stack = grid.querySelector("[data-month-stack]");
-    if (!stack) return null;
-    if (stack.querySelector(`[data-month-block][data-month-iso="${cssEscape(monthISO)}"]`)) return null;
-    const block = buildMonthBlockNode(monthISO);
-    if (!block) return null;
-    const firstBlock = stack.querySelector("[data-month-block]");
-    const anchor = firstBlock || stack.querySelector('[data-month-loader="down"]');
-    const beforeH = grid.scrollHeight;
-    const beforeTop = grid.scrollTop;
-    if (anchor) stack.insertBefore(block, anchor);
-    else stack.appendChild(block);
-    const afterH = grid.scrollHeight;
-    // Direct scrollTop assignment (not scrollTo) — avoids any pending
-    // smooth-scroll behavior animating the compensation.
-    grid.scrollTop = beforeTop + (afterH - beforeH);
-    expandGridRangeMarkers(grid);
-    repaintAfterMutation(grid);
-    return block;
   }
 
   function appendMonthBlock(grid, monthISO) {
@@ -2399,28 +2378,25 @@
       const now = performance.now();
       if (now - mobileInfinite.lastLoadAt < LOAD_COOLDOWN_MS) return;
 
+      // DOWN-only loader. Back-scroll is fixed at activate
+      // (MOBILE_INITIAL_PRIOR months); we never prepend during
+      // scroll. This eliminates the jump-to-month bug that came from
+      // scrollTop compensation drifting when async data filled cells
+      // above the viewport.
       const distToBottom = grid.scrollHeight - (grid.scrollTop + grid.clientHeight);
-      const distToTop = grid.scrollTop;
+      if (distToBottom >= EDGE_THRESHOLD_PX) return;
+
       const blocks = $$("[data-month-block]", stack);
       if (blocks.length === 0) return;
+      const lastISO = blocks[blocks.length - 1].dataset.monthIso;
 
       // ONE block per fire — bounds the JS work to ~30ms so the
       // thread stays responsive. The cooldown caps load frequency
       // at 1/250ms ≈ 4 months/sec, comfortably above any natural
       // inertial-scroll velocity (~600px/month × 4 = 2400 px/sec).
-      let task = null;
-      if (distToBottom < EDGE_THRESHOLD_PX) {
-        const lastISO = blocks[blocks.length - 1].dataset.monthIso;
-        task = () => appendMonthBlock(grid, addMonthsISO(lastISO, +1));
-      } else if (distToTop < EDGE_THRESHOLD_PX) {
-        const firstISO = blocks[0].dataset.monthIso;
-        task = () => prependMonthBlock(grid, addMonthsISO(firstISO, -1));
-      }
-      if (!task) return;
-
       mobileInfinite.loading = true;
       mobileInfinite.lastLoadAt = now;
-      try { task(); }
+      try { appendMonthBlock(grid, addMonthsISO(lastISO, +1)); }
       finally { mobileInfinite.loading = false; }
     };
 

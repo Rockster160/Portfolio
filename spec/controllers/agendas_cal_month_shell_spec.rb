@@ -32,9 +32,9 @@ RSpec.describe AgendasController, type: :controller do
       expect(response.body).to include("data-month-stack")
       expect(response.body).to include("data-month-block")
       expect(response.body).to include("data-month-iso=\"2026-07\"")
-      # Both sentinels render so the IntersectionObserver has something
-      # to bind to the moment the mobile layer activates.
-      expect(response.body).to include('data-month-loader="up"')
+      # Only the "down" loader sentinel renders — back-scroll is
+      # bounded to the seeded prior month (no up-loader by design).
+      expect(response.body).not_to include('data-month-loader="up"')
       expect(response.body).to include('data-month-loader="down"')
       # Inline block header is present (display:none on desktop, visible
       # on mobile) — drives the iOS-style "June 2026" between blocks.
