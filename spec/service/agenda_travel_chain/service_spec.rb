@@ -608,6 +608,191 @@ RSpec.describe AgendaTravelChain::Service do
         expect(evt.reload.metadata.dig("travel", "travel_minutes")).to eq(10)
         # No raise — schedule is nil.
       end
+
+      it "does NOT clobber the schedule's from-Home baseline when the occurrence is chained behind another event at the same location" do
+        # The TMS bug: a recurring event (every weekday at the same place)
+        # chains behind a back-to-back predecessor at the same address, the
+        # chain-derived travel_minutes=0 used to overwrite the schedule's
+        # cached from-Home baseline (e.g. 10m), poisoning every future
+        # phantom and stripping prepare/go triggers across the calendar.
+        schedule = create(:agenda_schedule, agenda: agenda, name: "TMS", start_time: "14:00",
+          duration_minutes: 60, recurrence: { freq: "weekdays" },
+          starts_on: Date.parse("2026-06-01"))
+        schedule.update_columns(metadata: {
+          "travel" => {
+            "travel_from"      => "Home St",
+            "travel_from_kind" => "home",
+            "travel_seconds"   => 600,
+            "travel_minutes"   => 10,
+            "location_address" => "Office",
+          },
+        })
+        schedule.agenda_items.delete_all
+
+        predecessor = make_event(
+          name: "Prep",
+          start_at: Time.zone.parse("2026-06-22 13:40"),
+          end_at:   Time.zone.parse("2026-06-22 14:00"),
+          location: "Office",
+        )
+        tms = agenda.agenda_items.create!(
+          agenda_schedule: schedule,
+          name: "TMS", kind: :event, location: "Office",
+          start_at: Time.zone.parse("2026-06-22 14:00"),
+          end_at:   Time.zone.parse("2026-06-22 15:00"),
+        )
+        described_class.new(user, Date.new(2026, 6, 22)).run
+
+        # Per-occurrence: chained behind Prep, so travel_seconds drops to 0
+        # and travel_from_kind flips to "event".
+        tms_meta = tms.reload.metadata["travel"]
+        expect(tms_meta["chain_predecessor_id"]).to eq(predecessor.id)
+        expect(tms_meta["travel_from_kind"]).to eq("event")
+        expect(tms_meta["travel_seconds"]).to eq(0)
+        # Schedule baseline survives untouched — phantoms for next week still
+        # see 10m from home.
+        schedule.reload
+        sched_travel = schedule.metadata["travel"]
+        expect(sched_travel["travel_minutes"]).to eq(10)
+        expect(sched_travel["travel_seconds"]).to eq(600)
+        expect(sched_travel["travel_from_kind"]).to eq("home")
+      end
+
+      it "does NOT mirror travel cost when the occurrence has before: waypoints (per-occurrence delta, not baseline)" do
+        schedule = create(:agenda_schedule, agenda: agenda, name: "Errands", start_time: "14:00",
+          duration_minutes: 60, recurrence: { freq: "weekdays" },
+          starts_on: Date.parse("2026-06-01"))
+        schedule.update_columns(metadata: {
+          "travel" => {
+            "travel_from"      => "Home St",
+            "travel_from_kind" => "home",
+            "travel_seconds"   => 600,
+            "travel_minutes"   => 10,
+          },
+        })
+        schedule.agenda_items.delete_all
+
+        agenda.agenda_items.create!(
+          agenda_schedule: schedule,
+          name: "Errands", kind: :event, location: "Office",
+          start_at: Time.zone.parse("2026-06-22 14:00"),
+          end_at:   Time.zone.parse("2026-06-22 15:00"),
+          notes:    "before:Gym 5m",
+        )
+        described_class.new(user, Date.new(2026, 6, 22)).run
+
+        sched_travel = schedule.reload.metadata["travel"]
+        # Baseline 10m / 600s is intact — the per-occurrence Gym stop's cost
+        # didn't get mirrored back.
+        expect(sched_travel["travel_minutes"]).to eq(10)
+        expect(sched_travel["travel_seconds"]).to eq(600)
+      end
+    end
+
+    describe "chain-flip refire" do
+      # write_metadata uses update_columns to avoid recursive self-fire,
+      # which also bypasses after_commit — so Task 388 ("Agenda Travel
+      # Schedule") never sees the chain_predecessor_id flip and its
+      # already-scheduled prepare/go go stale. The Service must emit
+      # :agenda_item :updated explicitly when chain state changes.
+      def collect_triggers
+        triggers = []
+        allow(::Jil::Executor).to receive(:trigger) { |*args, **_kw|
+          triggers << args
+          nil
+        }
+        triggers
+      end
+
+      def flips_for(triggers, evt)
+        # Jil::Executor.trigger receives (user, scope, data, auth: …) — the
+        # AgendaItem with execution_attrs is the data positional, args[2].
+        triggers.count { |args|
+          payload = args[2]
+          args[1] == :agenda_item &&
+            payload.respond_to?(:execution_attrs) &&
+            payload.execution_attrs.is_a?(::Hash) &&
+            payload.execution_attrs[:action] == :updated &&
+            payload.id == evt.id
+        }
+      end
+
+      it "fires :agenda_item :updated when an occurrence becomes chained (predecessor appears)" do
+        a = make_event(
+          name: "Prep",
+          start_at: Time.zone.parse("2026-06-22 13:40"),
+          end_at:   Time.zone.parse("2026-06-22 14:00"),
+          location: "Office",
+        )
+        # Seed B without inline auto-sync interference by directly running
+        # the Service after capture begins. First create has no chain (only
+        # A exists at time of create), then B is added and we explicitly
+        # rerun the Service to detect the new chain link.
+        b = make_event(
+          name: "TMS",
+          start_at: Time.zone.parse("2026-06-22 14:00"),
+          end_at:   Time.zone.parse("2026-06-22 15:00"),
+          location: "Office",
+        )
+        # Pre-clear B's chain metadata so the explicit run below sees a
+        # nil→a.id transition. (Inline auto-sync from B's create has
+        # already-run unpredictably across rspec configurations; this
+        # makes the assertion deterministic.)
+        b.update_columns(metadata: b.metadata.except("travel"))
+        a.update_columns(metadata: a.metadata.except("travel"))
+
+        triggers = collect_triggers
+        described_class.new(user, Date.new(2026, 6, 22)).run
+
+        # A goes from nil-pred to nil-pred (no flip), B goes from nil-pred
+        # to a.id (flip → :agenda_item :updated).
+        expect(flips_for(triggers, b)).to eq(1)
+        expect(flips_for(triggers, a)).to eq(0)
+      end
+
+      it "does NOT refire when chain state is unchanged across runs" do
+        evt = make_event(
+          name: "Solo",
+          start_at: Time.zone.parse("2026-06-22 14:00"),
+          end_at:   Time.zone.parse("2026-06-22 15:00"),
+          location: "Office",
+        )
+        # Establish baseline first.
+        described_class.new(user, Date.new(2026, 6, 22)).run
+
+        triggers = collect_triggers
+        # Second run — fingerprint matches, write skipped, no refire.
+        described_class.new(user, Date.new(2026, 6, 22)).run
+
+        expect(flips_for(triggers, evt)).to eq(0)
+      end
+
+      it "fires :agenda_item :updated when an occurrence becomes unchained (predecessor removed)" do
+        a = make_event(
+          name: "Prep",
+          start_at: Time.zone.parse("2026-06-22 13:40"),
+          end_at:   Time.zone.parse("2026-06-22 14:00"),
+          location: "Office",
+        )
+        b = make_event(
+          name: "TMS",
+          start_at: Time.zone.parse("2026-06-22 14:00"),
+          end_at:   Time.zone.parse("2026-06-22 15:00"),
+          location: "Office",
+        )
+        # Seed chained state.
+        described_class.new(user, Date.new(2026, 6, 22)).run
+        expect(b.reload.metadata.dig("travel", "chain_predecessor_id")).to eq(a.id)
+
+        # A goes away — B's chain dissolves.
+        a.destroy!
+
+        triggers = collect_triggers
+        described_class.new(user, Date.new(2026, 6, 22)).run
+
+        expect(b.reload.metadata.dig("travel", "chain_predecessor_id")).to be_nil
+        expect(flips_for(triggers, b)).to eq(1)
+      end
     end
 
     describe "to: post-travel and chain detection" do

@@ -959,8 +959,10 @@ body.ctr-agendas {
 // block just lays out the body + action row inside the now-zeroed
 // `.app-card-inner`. Buttons use the existing `.af-btn` family which is
 // already styled for the dark surface.
-#agenda-confirm-modal {
-  .agenda-confirm-body {
+#agenda-confirm-modal,
+#agenda-recurring-scope-modal {
+  .agenda-confirm-body,
+  .agenda-recurring-scope-body {
     padding: 18px 18px 4px;
     margin: 0;
     font-size: 14px;
@@ -971,7 +973,8 @@ body.ctr-agendas {
     &:empty { display: none; }
   }
 
-  .agenda-confirm-actions {
+  .agenda-confirm-actions,
+  .agenda-recurring-scope-actions {
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -982,11 +985,38 @@ body.ctr-agendas {
   // The title span sits inside the flat-modal title bar; inherit those
   // chrome styles and just keep the text on one line so a longer prompt
   // ellipsizes instead of pushing the close-X off.
-  .agenda-confirm-title {
+  .agenda-confirm-title,
+  .agenda-recurring-scope-title {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
+  }
+}
+
+// Before/after diff block inside the recurring-scope prompt. Compact
+// two-column grid that mirrors the body's typography — From/To labels
+// faded, values at full intensity so the actual change stands out.
+#agenda-recurring-scope-modal {
+  .agenda-recurring-scope-diff {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 12px;
+    row-gap: 4px;
+    margin: 0;
+    padding: 4px 18px 8px;
+    font-size: 13px;
+    line-height: 1.4;
+
+    dt {
+      opacity: 0.55;
+      font-weight: 500;
+    }
+
+    dd {
+      margin: 0;
+      opacity: 0.95;
+    }
   }
 }
 

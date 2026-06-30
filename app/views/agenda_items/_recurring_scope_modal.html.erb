@@ -6,9 +6,17 @@
                  '<span class="agenda-recurring-scope-title">Edit recurring event</span>'.html_safe,
                  "modal-flat agenda-recurring-scope-modal") do %>
   <p class="agenda-recurring-scope-body">Apply this change to:</p>
+  <%# Optional before/after diff; the JS helper hides this block when no
+      from/to is supplied (e.g. an in-place name edit). %>
+  <dl class="agenda-recurring-scope-diff hidden" data-recurring-scope-diff>
+    <dt>From</dt>
+    <dd data-recurring-scope-from></dd>
+    <dt>To</dt>
+    <dd data-recurring-scope-to></dd>
+  </dl>
   <div class="agenda-recurring-scope-actions">
-    <button type="button" class="af-btn af-btn-primary agenda-recurring-scope-occurrence">Just this event</button>
-    <button type="button" class="af-btn af-btn-primary agenda-recurring-scope-future">This and following events</button>
     <button type="button" class="af-btn af-btn-secondary agenda-recurring-scope-cancel" data-dismiss="#agenda-recurring-scope-modal">Cancel</button>
+    <button type="button" class="af-btn af-btn-secondary agenda-recurring-scope-future">This and following events</button>
+    <button type="button" class="af-btn af-btn-primary agenda-recurring-scope-occurrence">Just this event</button>
   </div>
 <% end %>

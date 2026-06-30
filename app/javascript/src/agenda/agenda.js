@@ -216,7 +216,7 @@
   // Resolves to "occurrence" | "future" | null (null = cancel / dismiss).
   // Uses the shared #agenda-recurring-scope-modal partial; same modal
   // infra (showModal + jQuery modal.hidden) as agendaConfirm.
-  function agendaRecurringScope({ title }) {
+  function agendaRecurringScope({ title, from, to }) {
     const modal = document.getElementById("agenda-recurring-scope-modal");
     if (!modal || typeof window.showModal !== "function" || !window.jQuery) {
       // No modal available — degrade to default-occurrence (safest: only
@@ -226,7 +226,16 @@
     const titleEl  = modal.querySelector(".agenda-recurring-scope-title");
     const occBtn   = modal.querySelector(".agenda-recurring-scope-occurrence");
     const futBtn   = modal.querySelector(".agenda-recurring-scope-future");
+    const diffEl   = modal.querySelector("[data-recurring-scope-diff]");
+    const fromEl   = modal.querySelector("[data-recurring-scope-from]");
+    const toEl     = modal.querySelector("[data-recurring-scope-to]");
     if (titleEl) titleEl.textContent = title || "Edit recurring event";
+    if (diffEl) {
+      const hasDiff = !!(from && to);
+      diffEl.classList.toggle("hidden", !hasDiff);
+      if (fromEl) fromEl.textContent = from || "";
+      if (toEl)   toEl.textContent   = to   || "";
+    }
 
     return new Promise((resolve) => {
       let choice = null;

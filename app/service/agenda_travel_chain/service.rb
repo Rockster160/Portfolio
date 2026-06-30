@@ -302,6 +302,7 @@ module AgendaTravelChain
     def persist_event(evt, prev, links, head_for, all_events)
       pred_id = links.dig(evt.id, :predecessor_id)
       succ_id = links.dig(evt.id, :successor_id)
+      prev_pred_id = evt.metadata.dig("travel", "chain_predecessor_id")
 
       pred = pred_id ? prev : nil # candidates are ordered; pred is always prev when linked
       override_from = overrides_for(evt)[:from].presence
@@ -371,6 +372,24 @@ module AgendaTravelChain
 
       travel["input_fingerprint"] = fp
       write_metadata(evt, travel.compact)
+
+      maybe_notify_chain_flip(evt, prev_pred_id, pred_id)
+    end
+
+    # When an occurrence's chain predecessor changes (linked ↔ unlinked, or
+    # re-linked to a different predecessor), Task 388 ("Agenda Travel
+    # Schedule") needs to re-evaluate whether to schedule prepare/go for
+    # this item. write_metadata uses update_columns to avoid recursive
+    # self-fire, which also bypasses after_commit — so we emit an explicit
+    # :agenda_item :updated here for the case where Task 388's downstream
+    # state needs to update. Fingerprint short-circuit already guarantees
+    # we only land here when something materially changed; this just narrows
+    # the broadcast to chain-state flips so we don't re-run Task 388 on
+    # every pure travel-seconds tweak.
+    def maybe_notify_chain_flip(evt, prev_pred_id, new_pred_id)
+      return if prev_pred_id == new_pred_id
+
+      ::Jil.trigger(@user, :agenda_item, evt.with_jil_attrs(action: :updated))
     end
 
     # Walks the incoming travel chain: from_for_drive → before[0] → … → event.
@@ -500,26 +519,42 @@ module AgendaTravelChain
       propagate_to_schedule(evt, travel_hash) if travel_hash.present?
     end
 
-    # Mirror the static (non-chain, non-time-anchored) slice of an item's
-    # travel hash onto its parent schedule. Phantoms inherit from the
-    # schedule (recurrence.js builds them by cloning `schedule.metadata`),
-    # so without this every future occurrence renders a 0-minute band.
-    # Chain pointers and `leave_at` / `post_arrive_at` are intentionally
-    # excluded — they're computed per-occurrence and meaningless on the
-    # schedule level.
-    SCHEDULE_TRAVEL_KEYS = %w[
+    # Mirror two distinct slices of an item's travel hash onto its parent
+    # schedule. The schedule is the cache that lets a recurring event
+    # (TMS every weekday, etc.) avoid a Google Distance Matrix call per
+    # occurrence — phantoms inherit travel_minutes from it.
+    #
+    # STATIC keys describe WHERE the event is and are stable across every
+    # occurrence — always safe to mirror.
+    #
+    # BASELINE keys describe the from-Home drive cost. They're only safe
+    # to mirror when THIS occurrence is itself the from-Home baseline —
+    # i.e. travel_from_kind == "home" AND no before: waypoints. A chained
+    # occurrence (travel_from_kind == "event", chain_predecessor_id set)
+    # has travel_seconds reflecting the chain, not the schedule's intrinsic
+    # from-Home cost, and propagating it would poison every future
+    # materialization with that chain's 0/short value.
+    #
+    # post_travel_* is deliberately omitted entirely — it depends on the
+    # per-occurrence `to:` / `after:` overrides and isn't a stable schedule
+    # property.
+    STATIC_SCHEDULE_KEYS = %w[
       location_address location_lat location_lng location_fingerprint
-      travel_from travel_from_kind
-      travel_seconds travel_minutes
-      post_travel_to post_travel_seconds post_travel_minutes
     ].freeze
-    private_constant :SCHEDULE_TRAVEL_KEYS
+    private_constant :STATIC_SCHEDULE_KEYS
+
+    BASELINE_SCHEDULE_KEYS = %w[
+      travel_from travel_from_kind travel_seconds travel_minutes
+    ].freeze
+    private_constant :BASELINE_SCHEDULE_KEYS
 
     def propagate_to_schedule(evt, travel_hash)
       schedule = evt.agenda_schedule
       return unless schedule
 
-      slice = travel_hash.slice(*SCHEDULE_TRAVEL_KEYS).compact
+      static = travel_hash.slice(*STATIC_SCHEDULE_KEYS).compact
+      baseline = baseline_eligible?(travel_hash) ? travel_hash.slice(*BASELINE_SCHEDULE_KEYS).compact : {}
+      slice = static.merge(baseline)
       return if slice.empty?
 
       current_sched_travel = schedule.metadata["travel"] || {}
@@ -528,6 +563,17 @@ module AgendaTravelChain
 
       new_meta = schedule.metadata.merge("travel" => next_sched_travel)
       schedule.update_columns(metadata: new_meta, updated_at: Time.current)
+    end
+
+    # True when this occurrence's travel cost is the schedule's intrinsic
+    # from-Home baseline — safe to write back. Chained occurrences and
+    # before-waypoint occurrences have per-occurrence costs that would
+    # otherwise overwrite the cached baseline for every future phantom.
+    def baseline_eligible?(travel_hash)
+      return false unless travel_hash["travel_from_kind"] == FROM_KIND_HOME
+      return false if (travel_hash.dig("overrides", "before") || []).any?
+
+      true
     end
 
     def apply_metadata!(evt, new_meta)

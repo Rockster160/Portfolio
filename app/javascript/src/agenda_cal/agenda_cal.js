@@ -338,6 +338,7 @@
   // BEFORE applyInlineMove mutates style; restored without rebuilding
   // the week (same reasons applyInlineMove avoids buildWeekBlocks).
   function captureTileState(btn) {
+    const timeLabel = btn.querySelector(".cal-week-event-time");
     return {
       parent:      btn.parentElement,
       nextSibling: btn.nextElementSibling,
@@ -348,6 +349,8 @@
       width:       btn.style.width,
       startAt:     btn.dataset.startAt,
       endAt:       btn.dataset.endAt,
+      timeLabel:   timeLabel,
+      timeText:    timeLabel ? timeLabel.textContent : null,
     };
   }
 
@@ -362,6 +365,43 @@
     btn.style.width  = snap.width  || "";
     if (snap.startAt != null) btn.dataset.startAt = snap.startAt;
     if (snap.endAt   != null) btn.dataset.endAt   = snap.endAt;
+    if (snap.timeLabel && snap.timeText != null) snap.timeLabel.textContent = snap.timeText;
+  }
+
+  // Refresh the tile's inner time label so the optimistic move shows the
+  // new clock range, not the original ("8pm – 11pm" → "5pm – 8pm").
+  // Mirrors the formatting used at tile-build time in buildWeekBlocks.
+  function applyInlineTimeLabel(btn, newStartAt, newEndAt) {
+    const timeLabel = btn.querySelector(".cal-week-event-time");
+    if (!timeLabel) return;
+    const startMin = epochToClockMinutes(newStartAt);
+    const endMin = epochToClockMinutes(newEndAt);
+    timeLabel.textContent = (newEndAt && newEndAt !== newStartAt)
+      ? `${formatLabelTime(startMin)} – ${formatLabelTime(endMin)}`
+      : formatLabelTime(startMin);
+  }
+
+  function epochToClockMinutes(epoch) {
+    const d = new Date(Number(epoch) * 1000);
+    return d.getHours() * 60 + d.getMinutes();
+  }
+
+  // Long-form "Tue Jun 30 · 8:00pm – 11:00pm" for the recurring-scope
+  // modal's before/after diff. Days only differ when the drop crosses a
+  // day boundary, so the date prefix is always shown — keeps the layout
+  // stable and makes a cross-day move unambiguous.
+  function formatRangeLong(startAt, endAt) {
+    const startD = new Date(Number(startAt) * 1000);
+    const endD = new Date(Number(endAt) * 1000);
+    const date = startD.toLocaleDateString(undefined, {
+      weekday: "short", month: "short", day: "numeric",
+    });
+    const startMin = startD.getHours() * 60 + startD.getMinutes();
+    const endMin = endD.getHours() * 60 + endD.getMinutes();
+    const range = (endAt && endAt !== startAt)
+      ? `${formatLabelTime(startMin)} – ${formatLabelTime(endMin)}`
+      : formatLabelTime(startMin);
+    return `${date} · ${range}`;
   }
 
   // Enqueues the PATCH for a confirmed move. `scope` is one of
@@ -412,8 +452,16 @@
       return;
     }
     const title = btn.dataset.name || "this event";
+    // Build a before/after diff from the snapshot's preserved epochs vs
+    // the dropped position, so the user sees exactly what they're about
+    // to change. Snap captured the dataset BEFORE applyInlineMove
+    // mutated it, so snap.startAt/endAt are the original values.
+    const from = (snap && snap.startAt)
+      ? formatRangeLong(snap.startAt, snap.endAt || snap.startAt)
+      : null;
+    const to = formatRangeLong(newStartAt, newEndAt);
     const choose = (window.AgendaRecurringScope)
-      ? window.AgendaRecurringScope({ title })
+      ? window.AgendaRecurringScope({ title, from, to })
       : Promise.resolve("occurrence");
     choose.then((choice) => {
       if (choice === "occurrence" || choice === "future") {
@@ -2768,6 +2816,7 @@
             // recurring-scope choice can put the tile back exactly.
             const snap = captureTileState(btn);
             applyInlineMove(btn, dropCol, dropTop - bandPx, pxPerMin);
+            applyInlineTimeLabel(btn, newStartAt, newEndAt);
             sendEventMove(btn, newStartAt, newEndAt, snap);
           }
           // Tear down ghost + placeholder, restore the source button.

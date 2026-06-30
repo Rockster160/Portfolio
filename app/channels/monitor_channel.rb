@@ -32,22 +32,34 @@ class MonitorChannel < ApplicationCable::Channel
 
   def execute(data) # Runs task with executing:true
     ::Jil.trigger(
-      current_user, :monitor, data.symbolize_keys.merge({ execute: true }),
+      current_user, :monitor, with_channel(data).merge({ execute: true }),
       auth: :userpass, auth_id: current_user.id
     )
   end
 
   def refresh(data) # Runs task with executing:false
     ::Jil.trigger(
-      current_user, :monitor, data.symbolize_keys.merge({ refresh: true }),
+      current_user, :monitor, with_channel(data).merge({ refresh: true }),
       auth: :userpass, auth_id: current_user.id
     )
   end
 
   def resync(data) # Pulls most recent result without Running
     ::Jil.trigger(
-      current_user, :monitor, data.symbolize_keys.merge({ resync: true }),
+      current_user, :monitor, with_channel(data).merge({ resync: true }),
       auth: :userpass, auth_id: current_user.id
     )
+  end
+
+  private
+
+  # Quick-actions widgets only know their `id`; the Task listener fast-path
+  # for `monitor::<name>` matches on `trigger_data[:channel]`. Default it
+  # from `id` so resync/refresh/execute from any client routes to the
+  # right task instead of silently missing.
+  def with_channel(data)
+    sym_data = data.symbolize_keys
+    sym_data[:channel] ||= sym_data[:id]
+    sym_data
   end
 end
