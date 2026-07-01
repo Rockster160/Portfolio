@@ -119,6 +119,23 @@ class TripState
       leg_destination(user, current(user)[:leg_index].to_i + 1)
     end
 
+    # Geofence check for any address — is the user's car currently within
+    # ARRIVAL_THRESHOLD of `destination`? Used by Tesla.start / Tesla.navigate
+    # to skip a redundant car-start when the driver's already there. Same
+    # threshold + coord source as `arrived_at_current_stop?`, but takes any
+    # destination string rather than being tied to the active trip's leg.
+    def car_at?(destination, user: ::User.me)
+      return false if destination.blank?
+
+      geocoded = user.address_book.geocode(destination.to_s)
+      return false unless geocoded.is_a?(::Array) && geocoded.length == 2 && geocoded.none?(&:blank?)
+
+      coord = car_coord(user)
+      return false unless coord.is_a?(::Array) && coord.length == 2 && coord.none?(&:blank?)
+
+      distance(coord.map(&:to_f), geocoded.map(&:to_f)) <= ARRIVAL_THRESHOLD
+    end
+
     # Geofence cross-check. Returns true when the car's reported coord
     # is within ARRIVAL_THRESHOLD of the geocoded current-stop address.
     #

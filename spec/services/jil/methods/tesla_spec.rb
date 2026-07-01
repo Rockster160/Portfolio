@@ -15,6 +15,11 @@ RSpec.describe Jil::Methods::Tesla do
     allow(::TeslaSwitch).to receive(:disabled?).and_return(false)
     allow(::TeslaControl).to receive(:me).and_return(control)
     allow(::PrettyLogger).to receive(:error)
+    # Default: car is not at the destination — individual specs override
+    # when they need the already-at branch. Without this, the wrapper
+    # hits AddressBook#geocode → Google Maps unstubbed.
+    allow(::TripState).to receive(:car_at?).and_return(false)
+    allow(::TripState).to receive(:start_for_destination!)
     %i[start_car off_car honk set_temp navigate add_stop doors windows pop_frunk pop_boot defrost heat_driver heat_passenger send].each do |m|
       allow(control).to receive(m).and_return(true)
     end
@@ -26,14 +31,18 @@ RSpec.describe Jil::Methods::Tesla do
     allow(::WebPushNotifications).to receive(:send_to) { |_u, payload, **_kw| push_payloads << payload; true }
   end
 
-  def expect_notify(title_matcher)
-    expect(@push_payloads.any? { |p| title_matcher === p[:title] && p[:tag] == :tesla_action }).to be(true),
-      "expected a notification with title matching #{title_matcher.inspect}; got #{@push_payloads.inspect}"
+  def expect_notify(title_matcher, body_matcher=nil)
+    expect(@push_payloads.any? { |p|
+      p[:tag] == :tesla_action &&
+        title_matcher === p[:title] &&
+        (body_matcher.nil? || body_matcher === p[:body])
+    }).to be(true),
+      "expected a notification title=#{title_matcher.inspect} body=#{body_matcher.inspect}; got #{@push_payloads.inspect}"
   end
 
-  it "notifies on navigate with the destination" do
+  it "notifies on navigate with the destination in the body" do
     expect(tesla.navigate("Costco")).to be(true)
-    expect_notify(match(/Navigating.+Costco/))
+    expect_notify("Navigating", "Costco")
   end
 
   it "calls TripState.start_for_destination! on every navigate" do
@@ -59,31 +68,50 @@ RSpec.describe Jil::Methods::Tesla do
     expect(@push_payloads.size).to eq(12)
   end
 
-  it "notifies on setTemp with the temperature" do
+  it "notifies on setTemp with the temperature in the body" do
     tesla.setTemp(72)
-    expect_notify(match(/72°F/))
+    expect_notify("Temperature set", "72°F")
   end
 
-  it "notifies on start with a summary of selected options" do
+  it "notifies on start with a summary of selected options in the body" do
     tesla.start([{ temp: 70, heatDriver: true }, { vent: true }])
-    expect_notify(match(/Climate on.+70°F.+driver seat.+vent/))
+    expect_notify("Climate on", match(/70°F.+driver seat.+vent/))
   end
 
-  it "notifies on start with a simple message when no options" do
+  it "notifies on start with a title-only message when no options" do
     tesla.start(nil)
-    expect_notify("🚗 Climate on")
+    expect_notify("Climate on", nil)
   end
 
-  it "notifies on addStop success with the destination" do
+  it "notifies on addStop success with the destination in the body" do
     allow(control).to receive(:add_stop).and_return(true)
     expect(tesla.addStop("Lowes")).to be(true)
-    expect_notify(match(/Added stop.+Lowes/))
+    expect_notify("Stop added", "Lowes")
   end
 
-  it "notifies on addStop failure with a different message" do
+  it "notifies on addStop failure with a different title" do
     allow(control).to receive(:add_stop).and_return(false)
     expect(tesla.addStop("nonsense location")).to be(false)
-    expect_notify(match(/Couldn't add stop.+nonsense location/))
+    expect_notify("Couldn't add stop", "nonsense location")
+  end
+
+  it "carries no leading emoji in any tag" do
+    tesla.stop
+    tesla.honk
+    tesla.flashLights
+    tesla.lockDoors
+    tesla.unlockDoors
+    tesla.closeWindows
+    tesla.ventWindows
+    tesla.popFrunk
+    tesla.popTrunk
+    tesla.defrost
+    tesla.heatDriver
+    tesla.heatPassenger
+    @push_payloads.each do |p|
+      expect(p[:title]).not_to match(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/),
+        "unexpected emoji in title #{p[:title].inspect}"
+    end
   end
 
   it "skips the broadcast (and notification) when TeslaSwitch is disabled" do
@@ -97,5 +125,70 @@ RSpec.describe Jil::Methods::Tesla do
     allow(user).to receive(:me?).and_return(false)
     expect(tesla.navigate("Costco")).to be(false)
     expect(@push_payloads).to be_empty
+  end
+
+  describe "already-at destination" do
+    it "on navigate: skips TeslaControl and notifies 'Already at destination' when car is at destination" do
+      allow(::TripState).to receive(:car_at?).with("Costco", user: user).and_return(true)
+      expect(control).not_to receive(:navigate)
+      expect(tesla.navigate("Costco")).to be(true)
+      expect_notify("Already at destination", "Costco")
+    end
+
+    it "on start with navigate: skips start_car AND navigate when car is at destination" do
+      allow(::TripState).to receive(:car_at?).with("Costco", user: user).and_return(true)
+      expect(control).not_to receive(:start_car)
+      expect(control).not_to receive(:navigate)
+      expect(tesla.start([{ navigate: "Costco" }])).to be(true)
+      expect_notify("Already at destination", "Costco")
+    end
+
+    it "on start without navigate: does NOT consult TripState (no destination to compare)" do
+      expect(::TripState).not_to receive(:car_at?)
+      tesla.start([{ temp: 70 }])
+      expect_notify("Climate on", match(/70°F/))
+    end
+
+    it "on start: runs the full flow when car is NOT at destination" do
+      allow(::TripState).to receive(:car_at?).with("Costco", user: user).and_return(false)
+      expect(control).to receive(:start_car)
+      expect(control).to receive(:navigate).with("Costco")
+      tesla.start([{ navigate: "Costco" }])
+    end
+  end
+
+  describe "title/body override" do
+    before { allow(::TripState).to receive(:car_at?).and_return(false) }
+
+    it "uses caller-provided title + body instead of the default 'Climate on · …'" do
+      tesla.start([{ navigate: "Costco", title: "Starting Car", body: "10m drive to Costco" }])
+      payload = @push_payloads.last
+      expect(payload[:title]).to eq("Starting Car")
+      expect(payload[:body]).to eq("10m drive to Costco")
+    end
+
+    it "supports title-only (body optional)" do
+      tesla.start([{ title: "Starting car" }])
+      payload = @push_payloads.last
+      expect(payload[:title]).to eq("Starting car")
+      expect(payload).not_to have_key(:body)
+    end
+  end
+
+  describe "silent" do
+    before { allow(::TripState).to receive(:car_at?).and_return(false) }
+
+    it "runs the car commands but suppresses the notification" do
+      expect(control).to receive(:start_car)
+      expect(control).to receive(:navigate).with("Costco")
+      tesla.start([{ navigate: "Costco", silent: true }])
+      expect(@push_payloads).to be_empty
+    end
+
+    it "suppresses even the 'Already at' notification (guest-mode caller opted out)" do
+      allow(::TripState).to receive(:car_at?).with("Costco", user: user).and_return(true)
+      tesla.start([{ navigate: "Costco", silent: true }])
+      expect(@push_payloads).to be_empty
+    end
   end
 end

@@ -180,4 +180,40 @@ RSpec.describe TripState do
       expect(described_class.arrived_at_current_stop?(user)).to be(false)
     end
   end
+
+  describe ".car_at?" do
+    let(:address_book) { instance_double("AddressBook") }
+
+    before do
+      allow(user).to receive(:address_book).and_return(address_book)
+    end
+
+    it "is true when the car's cached coord is within ~500m of the geocoded destination" do
+      allow(address_book).to receive(:geocode).with("Costco").and_return([40.5, -111.9])
+      user.caches.set(:car_data, { location: { lat: 40.5001, lng: -111.9001 } })
+      expect(described_class.car_at?("Costco", user: user)).to be(true)
+    end
+
+    it "is false when the car is far from the destination" do
+      allow(address_book).to receive(:geocode).with("Costco").and_return([40.5, -111.9])
+      user.caches.set(:car_data, { location: { lat: 42.0, lng: -112.0 } })
+      expect(described_class.car_at?("Costco", user: user)).to be(false)
+    end
+
+    it "is false when destination is blank (no destination = never 'already there')" do
+      expect(described_class.car_at?(nil, user: user)).to be(false)
+      expect(described_class.car_at?("",  user: user)).to be(false)
+    end
+
+    it "is false when geocoding returns nil" do
+      allow(address_book).to receive(:geocode).with("Nowhere").and_return(nil)
+      user.caches.set(:car_data, { location: { lat: 40.5, lng: -111.9 } })
+      expect(described_class.car_at?("Nowhere", user: user)).to be(false)
+    end
+
+    it "is false when there's no car_data location" do
+      allow(address_book).to receive(:geocode).with("Costco").and_return([40.5, -111.9])
+      expect(described_class.car_at?("Costco", user: user)).to be(false)
+    end
+  end
 end

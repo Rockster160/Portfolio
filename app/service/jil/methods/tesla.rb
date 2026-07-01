@@ -21,44 +21,87 @@ class Jil::Methods::Tesla < Jil::Methods::Base
   # just starts climate.
   def start(option_blocks=nil)
     wrap {
+      opts = Array.wrap(option_blocks).reduce({}) { |acc, h| acc.merge(h.to_h) }.symbolize_keys
+      dest = opts[:navigate].presence&.to_s
+
+      if dest && ::TripState.car_at?(dest, user: @jil.user)
+        notify_user("Already at destination", dest) unless opts[:silent]
+        next
+      end
+
       ctrl = ::TeslaControl.me
       ctrl.start_car
-      opts = Array.wrap(option_blocks).reduce({}) { |acc, h| acc.merge(h.to_h) }.symbolize_keys
-
       ctrl.set_temp(opts[:temp].to_f)         if opts[:temp].present?
-      ctrl.navigate(opts[:navigate].to_s)     if opts[:navigate].present?
+      ctrl.navigate(dest)                     if dest
       ctrl.heat_driver                        if opts[:heatDriver]
       ctrl.heat_passenger                     if opts[:heatPassenger]
       ctrl.windows(:open)                     if opts[:vent]
       ctrl.defrost(true)                      if opts[:defrost]
 
-      bits = []
-      bits << "#{opts[:temp].to_i}°F"    if opts[:temp].present?
-      bits << "→ #{opts[:navigate]}"     if opts[:navigate].present?
-      bits << "driver seat"              if opts[:heatDriver]
-      bits << "passenger seat"           if opts[:heatPassenger]
-      bits << "vent"                     if opts[:vent]
-      bits << "defrost"                  if opts[:defrost]
-      notify_user(bits.any? ? "🚗 Climate on · #{bits.join(' · ')}" : "🚗 Climate on")
+      next if opts[:silent]
+
+      if opts[:title].present?
+        notify_user(opts[:title].to_s, opts[:body].to_s.presence)
+      else
+        bits = []
+        bits << "#{opts[:temp].to_i}°F" if opts[:temp].present?
+        bits << "heading to #{opts[:navigate]}" if opts[:navigate].present?
+        bits << "driver seat"               if opts[:heatDriver]
+        bits << "passenger seat"            if opts[:heatPassenger]
+        bits << "vent"                      if opts[:vent]
+        bits << "defrost"                   if opts[:defrost]
+        notify_user("Climate on", bits.join(" · ").presence)
+      end
     }
   end
 
-  def stop          = wrap { ::TeslaControl.me.off_car;   notify_user("🚗 Climate off") }
-  def honk          = wrap { ::TeslaControl.me.honk;      notify_user("🚗 Honking") }
-  def flashLights   = wrap { ::TeslaControl.me.send(:proxy_command, :flash_lights); notify_user("🚗 Flashing lights") }
-  def setTemp(f)    = wrap { ::TeslaControl.me.set_temp(f.to_f); notify_user("🚗 Temp → #{f.to_i}°F") }
+  def stop
+    wrap {
+      ::TeslaControl.me.off_car
+      notify_user("Climate off")
+    }
+  end
+
+  def honk
+    wrap {
+      ::TeslaControl.me.honk
+      notify_user("Honking")
+    }
+  end
+
+  def flashLights
+    wrap {
+      ::TeslaControl.me.send(:proxy_command, :flash_lights)
+      notify_user("Flashing lights")
+    }
+  end
+
+  def setTemp(f)
+    wrap {
+      ::TeslaControl.me.set_temp(f.to_f)
+      notify_user("Temperature set to: #{f.to_i}°F")
+    }
+  end
 
   # Smart resolution — same priority as Jarvis voice nav:
   # contact name > "lat,lng" > raw address string.
+  #
+  # No-op (with a "Already at …" toast) when the car is already parked
+  # at the requested destination — pushing a nav command in that state
+  # is confusing and wakes the car for nothing.
   def navigate(input)
     wrap {
       dest = input.to_s
+      if ::TripState.car_at?(dest, user: @jil.user)
+        notify_user("Already at destination", dest)
+        next
+      end
       ::TeslaControl.me.navigate(dest)
       # Auto-arm trip stepping when this destination matches the first
       # leg of an upcoming event. No-op when no candidate is found or a
       # trip is already in flight — see TripState.start_for_destination!.
       ::TripState.start_for_destination!(dest, @jil.user)
-      notify_user("🚗 Navigating → #{dest}")
+      notify_user("Navigating", dest)
     }
   end
 
@@ -71,7 +114,7 @@ class Jil::Methods::Tesla < Jil::Methods::Base
 
     dest = input.to_s
     result = ::TeslaControl.me.add_stop(dest)
-    notify_user(result ? "🚗 Added stop → #{dest}" : "🚗 Couldn't add stop · #{dest}")
+    notify_user(result ? "Stop added" : "Couldn't add stop", dest)
     result
   rescue ::TeslaNotAuthorized
     false
@@ -80,15 +123,68 @@ class Jil::Methods::Tesla < Jil::Methods::Base
     false
   end
 
-  def lockDoors     = wrap { ::TeslaControl.me.doors(:close);   notify_user("🔒 Doors locked") }
-  def unlockDoors   = wrap { ::TeslaControl.me.doors(:open);    notify_user("🔓 Doors unlocked") }
-  def closeWindows  = wrap { ::TeslaControl.me.windows(:close); notify_user("🚗 Windows closed") }
-  def ventWindows   = wrap { ::TeslaControl.me.windows(:open);  notify_user("🚗 Windows vented") }
-  def popFrunk      = wrap { ::TeslaControl.me.pop_frunk;       notify_user("🚗 Frunk open") }
-  def popTrunk      = wrap { ::TeslaControl.me.pop_boot;        notify_user("🚗 Trunk open") }
-  def defrost       = wrap { ::TeslaControl.me.defrost(true);   notify_user("🚗 Defrost on") }
-  def heatDriver    = wrap { ::TeslaControl.me.heat_driver;     notify_user("🚗 Driver seat heat on") }
-  def heatPassenger = wrap { ::TeslaControl.me.heat_passenger;  notify_user("🚗 Passenger seat heat on") }
+  def lockDoors
+    wrap {
+      ::TeslaControl.me.doors(:close)
+      notify_user("Doors locked")
+    }
+  end
+
+  def unlockDoors
+    wrap {
+      ::TeslaControl.me.doors(:open)
+      notify_user("Doors unlocked")
+    }
+  end
+
+  def closeWindows
+    wrap {
+      ::TeslaControl.me.windows(:close)
+      notify_user("Windows closed")
+    }
+  end
+
+  def ventWindows
+    wrap {
+      ::TeslaControl.me.windows(:open)
+      notify_user("Windows vented")
+    }
+  end
+
+  def popFrunk
+    wrap {
+      ::TeslaControl.me.pop_frunk
+      notify_user("Frunk open")
+    }
+  end
+
+  def popTrunk
+    wrap {
+      ::TeslaControl.me.pop_boot
+      notify_user("Trunk open")
+    }
+  end
+
+  def defrost
+    wrap {
+      ::TeslaControl.me.defrost(true)
+      notify_user("Defrost on")
+    }
+  end
+
+  def heatDriver
+    wrap {
+      ::TeslaControl.me.heat_driver
+      notify_user("Driver seat heat on")
+    }
+  end
+
+  def heatPassenger
+    wrap {
+      ::TeslaControl.me.heat_passenger
+      notify_user("Passenger seat heat on")
+    }
+  end
 
   private
 

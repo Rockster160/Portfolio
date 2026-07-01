@@ -9,7 +9,15 @@ RSpec.describe "Jil Tesla integration" do
   let(:user) { User.me }
   let(:ctrl) { instance_double(::TeslaControl) }
 
-  before { allow(::TeslaControl).to receive(:me).and_return(ctrl) }
+  before do
+    allow(::TeslaControl).to receive(:me).and_return(ctrl)
+    # The wrapper consults TripState.car_at? on any nav destination —
+    # stub false so these specs exercise the normal-flow branch, not
+    # the "already at destination" short-circuit.
+    allow(::TripState).to receive(:car_at?).and_return(false)
+    allow(::TripState).to receive(:start_for_destination!)
+    allow(::WebPushNotifications).to receive(:send_to)
+  end
 
   it "Tesla.start with a single TeslaStartOptions.navigate routes through TeslaControl" do
     expect(ctrl).to receive(:start_car)
