@@ -645,9 +645,62 @@
   // ============================================================
   // MONTH VIEW
   // ============================================================
+  // Boot-time reconciliation: if the URL says one date and the shell
+  // (potentially served from a stale SW cache under the plain pathname
+  // key) says another, hand the URL's date to the same client-side
+  // renderer used for prev/next clicks. Param name differs per view:
+  // cal-week uses `?date=YYYY-MM-DD`, cal-month uses `?month=YYYY-MM`.
+  function syncCalDateFromURL(root, paramName) {
+    const params = new URLSearchParams(window.location.search);
+    const urlValue = params.get(paramName);
+    if (!urlValue) return;
+    if (paramName === "month") {
+      if (!/^\d{4}-\d{2}$/.test(urlValue)) return;
+      const currentMonth = (root.dataset.currentDate || "").slice(0, 7);
+      if (currentMonth === urlValue) return;
+      renderMonthFor(root, urlValue);
+    } else {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(urlValue)) return;
+      if (root.dataset.currentDate === urlValue) return;
+      renderWeekFor(root, urlValue);
+    }
+  }
+
+  // Stamp the current view's date onto every toggle-tab link so a click
+  // on Day/Week/Month carries the currently-focused date across. The
+  // ERB emits plain paths because the shell is meant to be view-
+  // agnostic; we rewrite here now that we know the anchor.
+  function rewriteToggleLinks(root) {
+    const currentDate = root.dataset.currentDate;
+    if (!currentDate) return;
+    const monthISO = currentDate.slice(0, 7);
+    $$(".cal-toggle-btn", root).forEach((link) => {
+      const href = link.getAttribute("href");
+      if (!href) return;
+      try {
+        const url = new URL(href, window.location.origin);
+        if (url.pathname === "/agenda" || url.pathname === "/agenda/week" || url.pathname === "/agenda/grid") {
+          url.searchParams.set("date", currentDate);
+        } else if (url.pathname === "/agenda/month") {
+          url.searchParams.set("month", monthISO);
+        } else {
+          return;
+        }
+        link.setAttribute("href", url.pathname + url.search);
+      } catch (_) { /* leave bad hrefs alone */ }
+    });
+  }
+
   function initMonthView(root) {
     const grid = $(".cal-month-grid", root);
     if (!grid) return;
+
+    // SW cache is pathname-keyed; a `/agenda/month?month=X` may return
+    // a cached shell baked for a different month. Reconcile before the
+    // first render so the grid matches the URL. Cal-month reads its
+    // date from `?month=YYYY-MM` rather than `?date=`.
+    syncCalDateFromURL(root, "month");
+    rewriteToggleLinks(root);
 
     // Capture the load-time "anchored to today" state + paint the initial
     // Today-pill state. Both happen before the listeners bind so the very
@@ -1064,6 +1117,13 @@
   function initWeekView(root) {
     const grid = $(".cal-week-grid", root);
     if (!grid) return;
+
+    // SW's shell cache is keyed on pathname; a `/agenda/grid?date=X`
+    // request can be served from a cached shell baked for a different
+    // date. Reconcile URL → view BEFORE the first paint so the visible
+    // grid matches what the user asked for.
+    syncCalDateFromURL(root, "date");
+    rewriteToggleLinks(root);
 
     const dayStart = Number(grid.dataset.dayStartHour) || 3;
     setAnchoredToToday(root, dayStart);

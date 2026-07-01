@@ -363,7 +363,18 @@ async function handleShellFetch(event, req, url) {
 
   const revalidate = (async () => {
     try {
-      const fresh = await fetch(req, { cache: "no-store" });
+      // Revalidate against the PLAIN pathname, not the incoming request.
+      // Otherwise a `/agenda?date=Aug15` request would cache the Aug-15
+      // shell HTML under the `/agenda` key, and every subsequent shell
+      // fetch (regardless of query) would render Aug 15 until the next
+      // revalidate against another dated URL rewrote it again. The FE
+      // reads its date from `window.location.search` at boot; the
+      // cached HTML only needs to be a valid shell for the pathname.
+      const fresh = await fetch(url.pathname, {
+        credentials: "same-origin",
+        redirect:    "manual",
+        cache:       "no-store",
+      });
       if (!fresh || !fresh.ok || fresh.type === "opaqueredirect") return;
       const clone = fresh.clone();
       const html = await clone.text();
@@ -371,7 +382,8 @@ async function handleShellFetch(event, req, url) {
         await broadcastToClients({ kind: "shell_sync_failed", path: url.pathname });
         return;
       }
-      const assetsOk = await warmShellAssets(cache, html, url.toString());
+      const baseUrl = new URL(url.pathname, self.location.origin).toString();
+      const assetsOk = await warmShellAssets(cache, html, baseUrl);
       if (!assetsOk) {
         await broadcastToClients({ kind: "shell_sync_failed", path: url.pathname });
         return;

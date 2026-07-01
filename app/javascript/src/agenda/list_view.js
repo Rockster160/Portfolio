@@ -27,6 +27,19 @@
   });
 
   function init(root) {
+    // The service worker's shell cache is keyed on pathname (not the
+    // full URL), and its revalidate step writes whichever dated variant
+    // came back last. So `/agenda?date=X` can be served from a cached
+    // shell that was baked for a different date — the URL is right,
+    // `root.dataset.currentDate` is wrong, and the whole page renders
+    // for yesterday's date. Reconcile from the URL BEFORE the first
+    // render so the first paint matches what the user asked for.
+    syncDateFromURL(root);
+    // Toggle-tabs are static links on the server (day_path, week_path,
+    // cal_month_path) with no date param. Rewriting them here means a
+    // click on any tab carries the currently-selected date across to
+    // the next view instead of jumping back to today.
+    rewriteToggleLinks(root);
     window.AgendaStore.hydrateFromLocal();
     window.AgendaStore.subscribe((reason) => {
       if (reason === "hydrate") return; // already painted below
@@ -64,6 +77,44 @@
       history.pushState(null, "", url.href);
       renderForDate(root, isoDate);
     };
+  }
+
+  // If the URL carries a `?date=YYYY-MM-DD` that disagrees with the
+  // server-rendered `data-current-date`, walk the shell forward to
+  // match. Used at boot to work around the SW's pathname-only shell
+  // cache (see comment in init).
+  function syncDateFromURL(root) {
+    const params = new URLSearchParams(window.location.search);
+    const urlDate = params.get("date");
+    if (!urlDate || !/^\d{4}-\d{2}-\d{2}$/.test(urlDate)) return;
+    if (root.dataset.currentDate === urlDate) return;
+    renderForDate(root, urlDate);
+  }
+
+  // Stamp the currently-selected date onto every view-toggle link so
+  // switching between day/week/month carries the date across. Server
+  // renders these with plain paths (no query params) because the shell
+  // is meant to be view-agnostic; we rewrite here now that we know the
+  // current view's date.
+  function rewriteToggleLinks(root) {
+    const currentDate = root.dataset.currentDate;
+    if (!currentDate) return;
+    const monthISO = currentDate.slice(0, 7);
+    root.querySelectorAll(".cal-toggle-btn").forEach((link) => {
+      const href = link.getAttribute("href");
+      if (!href) return;
+      try {
+        const url = new URL(href, window.location.origin);
+        if (url.pathname === "/agenda" || url.pathname === "/agenda/week") {
+          url.searchParams.set("date", currentDate);
+        } else if (url.pathname === "/agenda/month") {
+          url.searchParams.set("month", monthISO);
+        } else {
+          return;
+        }
+        link.setAttribute("href", url.pathname + url.search);
+      } catch (_) { /* leave bad hrefs alone */ }
+    });
   }
 
   // Same-view nav (prev/next day, "Jump to Today") is pure client-side:
