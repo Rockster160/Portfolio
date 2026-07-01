@@ -1111,21 +1111,38 @@
     // from the store snapshot and reuses the same downstream layout pass.
     // No cold-start overlay — empty grid speaks for itself during the
     // sub-second window before bootstrap lands.
+    // rAF-coalesced re-render. Bootstrap, delta, and page notifies all
+    // arrive in quick succession right after page load; without
+    // coalescing, each one triggers a full sync DOM pass
+    // (rehydrateMonthSeedsFromStore + layoutMonthBanners +
+    // recountMonthOverflow, which walks every cell and calls
+    // getBoundingClientRect). The stacked passes blocked the main
+    // thread long enough that scroll input was queued behind them —
+    // producing the "grid loads instantly but I can't scroll for a
+    // second" symptom. One rAF-frame render per notify burst keeps the
+    // browser responsive.
+    let repaintPending = false;
+    const schedulePaint = () => {
+      if (repaintPending) return;
+      repaintPending = true;
+      requestAnimationFrame(() => {
+        repaintPending = false;
+        const r = $(".agenda-cal-page");
+        if (!r) return;
+        if (r.classList.contains("agenda-cal-week-page")) buildWeekBlocks(r);
+        else if (r.classList.contains("agenda-cal-month-page")) {
+          // Seeds first — banner layout reads from the hidden seed container.
+          rehydrateMonthSeedsFromStore(r);
+          layoutMonthBanners(r);
+          recountMonthOverflow(r);
+        }
+      });
+    };
     window.AgendaStore.subscribe((reason) => {
-      // `hydrate` is the initial localStorage replay — already painted by
-      // the explicit buildWeekBlocks in initWeekView. Bootstrap/delta/page
-      // arrive after with authoritative data; everything else is per-item
-      // mutation that may have shifted what's visible.
+      // `hydrate` is the initial localStorage replay — already painted
+      // by the explicit buildWeekBlocks in initWeekView.
       if (reason === "hydrate") return;
-      const r = $(".agenda-cal-page");
-      if (!r) return;
-      if (r.classList.contains("agenda-cal-week-page")) buildWeekBlocks(r);
-      else if (r.classList.contains("agenda-cal-month-page")) {
-        // Seeds first — banner layout reads from the hidden seed container.
-        rehydrateMonthSeedsFromStore(r);
-        layoutMonthBanners(r);
-        recountMonthOverflow(r);
-      }
+      schedulePaint();
     });
 
     window.AgendaSync.subscribeMonitor();

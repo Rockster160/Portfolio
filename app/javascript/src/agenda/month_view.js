@@ -22,11 +22,22 @@
     if (!window.AgendaStore || !window.AgendaSync || !window.AgendaItemRenderer) return;
     // AgendaStore boot is owned by agenda_cal.js for the cal pages; we
     // just subscribe so our slice re-renders on each store change.
-    if (window.AgendaStore.subscribe) {
-      window.AgendaStore.subscribe((reason) => {
-        if (reason === "hydrate") render(root); // hydrate IS our cue here
-        else render(root);
+    // rAF-coalesced — bootstrap/delta/page notifies can pile up on load
+    // and each render iterates every cell + calls diffCells. Without
+    // coalescing the stacked passes block the main thread long enough
+    // that scroll input queues behind them; one render per animation
+    // frame keeps interaction responsive.
+    let pending = false;
+    const schedule = () => {
+      if (pending) return;
+      pending = true;
+      requestAnimationFrame(() => {
+        pending = false;
+        render(root);
       });
+    };
+    if (window.AgendaStore.subscribe) {
+      window.AgendaStore.subscribe(schedule);
     }
     render(root);
   });
