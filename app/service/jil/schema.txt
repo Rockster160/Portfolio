@@ -530,6 +530,9 @@
   #heatPassenger(Boolean)
   #vent(Boolean)
   #defrost(Boolean)
+  #title(String)
+  #body(String)
+  #silent(Boolean)
 [Trip]
   #start(AgendaItem)::Boolean
   #advance::Boolean

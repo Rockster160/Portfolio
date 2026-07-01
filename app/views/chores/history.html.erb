@@ -277,7 +277,12 @@
       try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]"); }
       catch (e) { return []; }
     }
-    function saveQueue(q) { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }
+    function saveQueue(q) {
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+      // Notify page_script so the header badge count updates in the
+      // same page (storage events only fire cross-tab).
+      window.dispatchEvent(new CustomEvent("chores:queue_changed"));
+    }
 
     // ---------- templates ----------
     function committedRowHTML(entry) {

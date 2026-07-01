@@ -5476,11 +5476,23 @@
     if (navigator.onLine) refreshCsrf();
     const q = loadQueue();
     if (q.length) markAllQueueLoud();
+    // Reconnect / app-reopen means the failure conditions that grew the
+    // backoff are almost certainly gone. Cancel any armed retry and
+    // reset the delay so the next attempt is immediate and fresh, not
+    // sitting on a 60s timer inherited from the pre-reconnect state.
+    if (queueRetryTimer) { clearTimeout(queueRetryTimer); queueRetryTimer = null; }
+    queueRetryDelay = 2000;
     flushQueue();
   }
   window.addEventListener("online", () => { onAppWake(); });
   window.addEventListener("offline", () => { syncOnlineAttr(); setConnDot("offline"); markAllQueueLoud(); });
   window.addEventListener("pageshow", (e) => { if (e.persisted) onAppWake(); });
+  // History page mutates the queue directly (X-out / modal delete of a
+  // pending push) without going through enqueue/flush. Same-page storage
+  // events don't fire, so the header badge would stay stale until reload.
+  // History dispatches this event after every queue write so the badge
+  // stays in sync.
+  window.addEventListener("chores:queue_changed", () => renderQueueState());
   // Helper: every server-call submit handler funnels through here.
   // Returns true when the action may proceed. When offline, flashes
   // an escalation toast — the red button alone is the AMBIENT signal,
@@ -5511,7 +5523,15 @@
   function subscribeMonitor() {
     if (typeof window.Monitor === "undefined") { setTimeout(subscribeMonitor, 200); return; }
     window.Monitor.subscribe("chores", {
-      connected() { setConnDot("online"); flushQueue(); pingSwRefresh(); if (unifiedPage) fullSync(); broadcastRemoteChange("connected"); },
+      connected() {
+        setConnDot("online");
+        if (queueRetryTimer) { clearTimeout(queueRetryTimer); queueRetryTimer = null; }
+        queueRetryDelay = 2000;
+        flushQueue();
+        pingSwRefresh();
+        if (unifiedPage) fullSync();
+        broadcastRemoteChange("connected");
+      },
       disconnected() { setConnDot("offline"); },
       received(data) {
         pingSwRefresh();
