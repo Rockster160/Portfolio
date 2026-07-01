@@ -6,6 +6,7 @@ class SimpleWS {
     this.auth_socket = auth_socket;
     let sock = this.auth_socket;
     this.init_data = init_data;
+    this.last_msg = Date.now();
 
     sock.open = false;
     sock.presend = init_data.presend;
@@ -14,6 +15,18 @@ class SimpleWS {
       return;
     }
     sws.setupSocket(init_data.url);
+
+    // iPadOS silently kills backgrounded PWA WebSockets without firing
+    // onclose, so ReconnectingWebSocket never retries. ActionCable pings
+    // every 3s, so a >15s gap in ANY inbound frame (broadcast or ping) is
+    // proof the socket is dead. Force a reopen. Chosen 15s > 5s watchdog
+    // to tolerate ordinary network hiccups without churn.
+    setInterval(function () {
+      if (Date.now() - sws.last_msg > 15_000) {
+        console.log("No ping found in 15s — reopening WS.");
+        sws.reopen();
+      }
+    }, 5_000);
   }
 
   setupSocket(url) {
@@ -88,6 +101,7 @@ class SimpleWS {
     };
 
     sws.socket.onmessage = function (msg) {
+      sws.last_msg = Date.now();
       if (init_data.receive && typeof init_data.receive === "function") {
         // if (sock.should_flash) { sock.cell.flash() }
         init_data.receive.call(sws, msg);
@@ -112,6 +126,9 @@ class SimpleWS {
   reopen() {
     let sws = this;
     sws.auth_socket.open = false;
+    // Give the new socket a fresh grace window; otherwise the watchdog
+    // fires again 5s later before the reconnect has completed.
+    sws.last_msg = Date.now();
     sws.setupSocket(sws.init_data.url);
   }
   close() {
