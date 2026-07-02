@@ -29,12 +29,18 @@ class Jil::Methods::AgendaSchedule < Jil::Methods::Base
 
   # ---- actions / setters ----
 
+  # metadata is deep-merged onto the existing column rather than replaced,
+  # matching Jil::Methods::AgendaItem#update! — a Jil task that writes one
+  # key can't accidentally wipe out sibling travel-chain or other-writer
+  # fields.
   def update!(schedule_value, details)
     schedule = cast(schedule_value)
     return schedule if schedule.blank?
 
     attrs = params(details)
     return schedule if attrs.empty?
+
+    merge_metadata!(schedule, attrs)
 
     schedule.update!(attrs)
     schedule
@@ -105,6 +111,14 @@ class Jil::Methods::AgendaSchedule < Jil::Methods::Base
 
   def params(details)
     @jil.cast(details, :Hash).slice(*PERMIT_ATTRS)
+  end
+
+  def merge_metadata!(schedule, attrs)
+    return unless attrs.key?(:metadata)
+
+    incoming = attrs[:metadata].to_h.deep_stringify_keys
+    existing = (schedule.metadata.presence || {}).deep_stringify_keys
+    attrs[:metadata] = existing.deep_merge(incoming)
   end
 
   def load_schedule(hash)

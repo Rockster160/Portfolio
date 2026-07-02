@@ -101,12 +101,18 @@ class Jil::Methods::AgendaItem < Jil::Methods::Base
   # block whose lines build a hash of attrs. Phantoms are materialised first
   # so the change persists. Returns the AgendaItem record — Jil's set_value
   # triggers on the `!` suffix so the caller's variable is reassigned.
+  #
+  # metadata is deep-merged onto the existing column rather than replaced —
+  # a Jil task that writes one key can't accidentally wipe out sibling
+  # travel-chain or other-writer fields.
   def update!(item_value, details)
     item = cast(item_value)
     return item if item.blank?
 
     attrs = params(details)
     return item if attrs.empty?
+
+    merge_metadata!(item, attrs)
 
     if item.phantom?
       item.materialize!(attrs)
@@ -166,6 +172,14 @@ class Jil::Methods::AgendaItem < Jil::Methods::Base
 
   def params(details)
     @jil.cast(details, :Hash).slice(*PERMIT_ATTRS)
+  end
+
+  def merge_metadata!(item, attrs)
+    return unless attrs.key?(:metadata)
+
+    incoming = attrs[:metadata].to_h.deep_stringify_keys
+    existing = (item.metadata.presence || {}).deep_stringify_keys
+    attrs[:metadata] = existing.deep_merge(incoming)
   end
 
   def parse_time(val)
