@@ -185,26 +185,53 @@
   // Monitor channel — `window.Monitor` is bootstrapped from
   // dashboard/cells/monitor.js (globbed into every page). Re-fetch
   // the icon list whenever the household_icons set changes (created
-  // here, on another device, or via the bulk script).
+  // here, on another device, or via the bulk script). Also runs a
+  // cheap signature check on reconnect to catch changes that landed
+  // while this tab was offline.
+  let lastSignature = null;
   function subscribeMonitor() {
     if (typeof window.Monitor === "undefined") { setTimeout(subscribeMonitor, 200); return; }
     window.Monitor.subscribe("chores", {
+      connected() { syncIfChanged(); },
       received(msg) {
-        if (msg?.data?.reason !== "household_icons_changed") return;
+        if (msg?.data?.reason !== "icons_changed") return;
         reloadIcons();
       },
     });
   }
 
-  async function reloadIcons() {
+  async function fetchSignature() {
     try {
-      const res = await fetch("/chores/icons.json", {
+      const res = await fetch("/chores/icons/signature", {
         credentials: "same-origin",
         headers: { "Accept": "application/json" },
       });
-      if (!res.ok) return;
-      const rows = await res.json();
+      return res.ok ? await res.json() : null;
+    } catch (_e) { return null; }
+  }
+
+  async function syncIfChanged() {
+    const sig = await fetchSignature();
+    if (!sig) return;
+    if (lastSignature
+      && sig.updated_at === lastSignature.updated_at
+      && sig.count === lastSignature.count) return;
+    await reloadIcons();
+  }
+
+  async function reloadIcons() {
+    try {
+      const [iconsRes, sig] = await Promise.all([
+        fetch("/chores/icons.json", {
+          credentials: "same-origin",
+          headers: { "Accept": "application/json" },
+        }),
+        fetchSignature(),
+      ]);
+      if (!iconsRes.ok) return;
+      const rows = await iconsRes.json();
       renderIcons(rows);
+      if (sig) lastSignature = sig;
     } catch (_e) {}
   }
 

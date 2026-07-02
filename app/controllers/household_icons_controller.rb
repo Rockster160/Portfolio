@@ -12,6 +12,19 @@ class HouseholdIconsController < ApplicationController
     render json: icons.map(&:as_pool_row)
   end
 
+  # GET /chores/icons/signature
+  # Tiny fingerprint of the household's icon set — the client polls this
+  # on WS reconnect and only re-fetches the full pool when the value has
+  # changed since its last known signature. Count is included so that
+  # deletes register even when the newest-updated_at didn't move.
+  def signature
+    scope = @household ? @household.icons : HouseholdIcon.none
+    render json: {
+      updated_at: scope.maximum(:updated_at)&.utc&.iso8601(3),
+      count:      scope.count,
+    }
+  end
+
   # GET /chores/icons
   # HTML page to browse / rename / delete custom icons for the household.
   # Bulk uploads (script-driven) and the in-modal cropper all funnel into

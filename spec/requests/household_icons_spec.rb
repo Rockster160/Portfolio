@@ -82,6 +82,55 @@ RSpec.describe "Household Icons API", type: :request do
     end
   end
 
+  describe "GET /chores/icons/signature" do
+    it "returns the max updated_at and icon count for the household" do
+      icon = HouseholdIcon.create!(
+        chore_household: household, uploaded_by_user: user,
+        name: "Sig", image_data: tiny_png_url,
+      )
+
+      get chores_icons_signature_path
+      body = JSON.parse(response.body)
+      expect(response).to have_http_status(:ok)
+      expect(body["count"]).to eq(1)
+      expect(body["updated_at"]).to eq(icon.updated_at.utc.iso8601(3))
+    end
+
+    it "returns nil updated_at and 0 count when the household has no icons" do
+      get chores_icons_signature_path
+      body = JSON.parse(response.body)
+      expect(response).to have_http_status(:ok)
+      expect(body).to eq({ "updated_at" => nil, "count" => 0 })
+    end
+
+    it "reflects changes across create/update/delete" do
+      get chores_icons_signature_path
+      empty_sig = JSON.parse(response.body)
+
+      icon = HouseholdIcon.create!(
+        chore_household: household, uploaded_by_user: user,
+        name: "One", image_data: tiny_png_url,
+      )
+      get chores_icons_signature_path
+      after_create = JSON.parse(response.body)
+      expect(after_create).not_to eq(empty_sig)
+      expect(after_create["count"]).to eq(1)
+
+      travel 1.second do
+        icon.update!(keywords: "changed")
+        get chores_icons_signature_path
+        after_update = JSON.parse(response.body)
+        expect(after_update["updated_at"]).not_to eq(after_create["updated_at"])
+        expect(after_update["count"]).to eq(1)
+      end
+
+      icon.destroy!
+      get chores_icons_signature_path
+      after_destroy = JSON.parse(response.body)
+      expect(after_destroy["count"]).to eq(0)
+    end
+  end
+
   describe "GET /chores/icons (manage)" do
     it "renders the household's icons" do
       HouseholdIcon.create!(

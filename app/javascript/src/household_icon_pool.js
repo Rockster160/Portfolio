@@ -8,6 +8,7 @@ import { Monitor } from "./pages/dashboard/cells/monitor";
 class HouseholdIconPool {
   static #byName = new Map();
   static #loadPromise = null;
+  static #signature = null;
 
   static normalize(name) {
     return String(name || "")
@@ -22,12 +23,14 @@ class HouseholdIconPool {
 
   static load() {
     if (HouseholdIconPool.#loadPromise) return HouseholdIconPool.#loadPromise;
-    HouseholdIconPool.#loadPromise = fetch("/chores/icons.json", {
-      headers: { Accept: "application/json" },
-      credentials: "same-origin",
-    })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rows) => HouseholdIconPool.#ingest(rows))
+    HouseholdIconPool.#loadPromise = Promise.all([
+      HouseholdIconPool.#fetchJson("/chores/icons.json", []),
+      HouseholdIconPool.#fetchJson("/chores/icons/signature", null),
+    ])
+      .then(([rows, sig]) => {
+        HouseholdIconPool.#ingest(rows);
+        HouseholdIconPool.#signature = sig;
+      })
       .catch(() => { HouseholdIconPool.#ingest([]); });
     return HouseholdIconPool.#loadPromise;
   }
@@ -35,6 +38,31 @@ class HouseholdIconPool {
   static refresh() {
     HouseholdIconPool.#loadPromise = null;
     return HouseholdIconPool.load();
+  }
+
+  // Called on WS reconnect. Cheap — fetches only the {updated_at, count}
+  // fingerprint. Refreshes the full pool iff the signature has changed
+  // since we last synced. Catches the case where a create/update/delete
+  // broadcast fired while this tab was disconnected.
+  static async syncIfChanged() {
+    const sig = await HouseholdIconPool.#fetchJson("/chores/icons/signature", null);
+    if (!sig) return;
+    if (HouseholdIconPool.#signature && HouseholdIconPool.#sigEqual(sig, HouseholdIconPool.#signature)) return;
+    HouseholdIconPool.#signature = sig;
+    return HouseholdIconPool.refresh();
+  }
+
+  static #sigEqual(a, b) {
+    return a.updated_at === b.updated_at && a.count === b.count;
+  }
+
+  static #fetchJson(url, fallback) {
+    return fetch(url, {
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    })
+      .then((r) => (r.ok ? r.json() : fallback))
+      .catch(() => fallback);
   }
 
   static #ingest(rows) {
@@ -70,6 +98,11 @@ if (typeof document !== "undefined") {
 }
 
 Monitor.subscribe("chores", {
+  connected: function () {
+    // Catches any create/update/delete that landed while we were offline —
+    // the live broadcast is missed on disconnected tabs.
+    HouseholdIconPool.syncIfChanged();
+  },
   received: function (payload) {
     const data = payload && payload.data;
     if (!data || data.reason !== "icons_changed") return;

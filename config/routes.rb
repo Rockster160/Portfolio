@@ -105,8 +105,9 @@ Rails.application.routes.draw do
   get  "/chores/recent_history" => "chores#recent_history", as: :chores_recent_history
   get  "/chores/csrf"           => "chores#csrf",           as: :chores_csrf
   get  "/chores/sync"    => "chores#sync",    as: :chores_sync
-  get  "/chores/icons.json" => "household_icons#index",  as: :chores_icons_index
-  get  "/chores/icons"      => "household_icons#manage", as: :chores_icons_manage
+  get  "/chores/icons.json"      => "household_icons#index",     as: :chores_icons_index
+  get  "/chores/icons/signature" => "household_icons#signature", as: :chores_icons_signature
+  get  "/chores/icons"           => "household_icons#manage",    as: :chores_icons_manage
   scope path: "chores", as: :chore_routes do
     resources :icons, only: [:create, :update, :destroy], controller: :household_icons
     get  "/new"          => "chores#new",            as: :new

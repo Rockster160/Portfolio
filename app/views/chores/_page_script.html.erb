@@ -3190,6 +3190,7 @@
     let GLOBAL_POOL = null;     // emoji + ti, fetched once per page
     let CUSTOM_POOL = [];       // per-household, refreshable on upload/delete
     let loadPromise = null;
+    let customSignature = null; // {updated_at, count} — reconnect check
     const customListeners = [];
 
     async function fetchJson(url) {
@@ -3214,12 +3215,14 @@
     async function load() {
       if (!loadPromise) {
         loadPromise = (async () => {
-          const [emoji, icons, custom] = await Promise.all([
+          const [emoji, icons, custom, sig] = await Promise.all([
             fetchJson("/emoji_index.json"),
             fetchJson("/icons_index.json"),
             fetchJson("/chores/icons.json"),
+            fetchJson("/chores/icons/signature"),
           ]);
           CUSTOM_POOL = tag(custom, "custom");
+          customSignature = sig && !Array.isArray(sig) ? sig : null;
           // Emoji-first concat so default-order tiebreak prefers emoji.
           GLOBAL_POOL = tag(emoji, "emoji").concat(tag(icons, "ti"));
         })();
@@ -3238,12 +3241,29 @@
     // Re-fetch just the custom pool. Notifies listeners (the open
     // picker re-renders).
     async function refreshCustom() {
-      const fresh = await fetchJson("/chores/icons.json");
+      const [fresh, sig] = await Promise.all([
+        fetchJson("/chores/icons.json"),
+        fetchJson("/chores/icons/signature"),
+      ]);
       CUSTOM_POOL = tag(fresh, "custom");
+      customSignature = sig && !Array.isArray(sig) ? sig : customSignature;
       // Invalidate per-row score caches on touched rows next render.
       customListeners.forEach(fn => { try { fn(); } catch (_e) {} });
     }
     function onCustomChanged(fn) { customListeners.push(fn); }
+
+    // Cheap fingerprint check — called on WS reconnect. Only pulls the
+    // full pool when the household's icon set has actually changed
+    // since our last sync (catches create/update/delete broadcasts that
+    // fired while this tab was disconnected).
+    async function syncCustomIfChanged() {
+      const sig = await fetchJson("/chores/icons/signature");
+      if (!sig || Array.isArray(sig)) return;
+      if (customSignature
+        && sig.updated_at === customSignature.updated_at
+        && sig.count === customSignature.count) return;
+      await refreshCustom();
+    }
 
     function normalize(q) {
       return (q || "").toLowerCase().replace(/[\s\-_:]+/g, "");
@@ -3416,7 +3436,7 @@
       return bestScore >= 3 ? bestRow : null;
     }
 
-    return { load, normalize, variants, scoreRow, search, bestMatch, refreshCustom, onCustomChanged };
+    return { load, normalize, variants, scoreRow, search, bestMatch, refreshCustom, syncCustomIfChanged, onCustomChanged };
   })();
 
   // ============================================================
@@ -5530,6 +5550,7 @@
         flushQueue();
         pingSwRefresh();
         if (unifiedPage) fullSync();
+        IconPool.syncCustomIfChanged();
         broadcastRemoteChange("connected");
       },
       disconnected() { setConnDot("offline"); },
@@ -5548,6 +5569,14 @@
           // both sections in place.
           if (actorTab && String(actorTab) === TAB_ID) return;
           if (Array.isArray(payload.daily_ids)) ChoreStore.setDailyIds(payload.daily_ids);
+          return;
+        }
+        if (payload.reason === "icons_changed") {
+          // Fired by HouseholdIconsController on create/update/destroy.
+          // Refresh the picker's custom pool so remote uploads/renames
+          // land immediately on this tab.
+          if (actorTab && String(actorTab) === TAB_ID) return;
+          IconPool.refreshCustom();
           return;
         }
         if (actorTab && String(actorTab) === TAB_ID) return;
