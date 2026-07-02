@@ -241,6 +241,20 @@ function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// Build a regex fragment that matches an agenda name under
+// normalization: lowercased, split into alphanumeric words, joined by
+// permissive `[^a-z0-9]+` gaps so spaces/punctuation/emoji between the
+// words don't matter, with a trailing `[^a-z0-9]*` that eats optional
+// decorators (e.g. an emoji suffix). `normLen` is the alphanumeric-only
+// character count — used as the tiebreaker so longer names beat shorter
+// prefixes ("Family Trips" wins over "Family").
+function normalizedAgendaPattern(name) {
+  const words = String(name || "").toLowerCase().split(/[^a-z0-9]+/i).filter(Boolean);
+  if (!words.length) return null;
+  const regex = words.map(escapeRegex).join("[^a-z0-9]+") + "[^a-z0-9]*";
+  return { regex, normLen: words.reduce((n, w) => n + w.length, 0) };
+}
+
 function consume(text, re) {
   const m = text.match(re);
   if (!m) return { match: null, rest: text };
@@ -405,21 +419,38 @@ function parseQuickAdd(rawInput, opts) {
   let work = String(rawInput || "").trim();
   if (!work) return { ok: false, name: "", error: "empty" };
 
-  // "<AgendaName> to <event>" — route to a named agenda. Caller passes
-  // the live agendas list; we match the LONGEST agenda name that fits
-  // at the head of the input followed by " to ". Matches are case-
-  // insensitive. If nothing matches, the input flows through unchanged
-  // (the eventual "to" stays inside the name).
+  // "... to <AgendaName> ..." — route to a named agenda. The " to
+  // <AgendaName>" segment can sit anywhere in the input (tail is the
+  // common case, but "Coffee to Work at 9" and "Team lunch to Work
+  // tomorrow" work too). The match is case-insensitive AND normalized:
+  // an agenda named "Ours ✨" matches user text "to ours", "to OURS",
+  // "to Ours ✨", etc. — normalization strips every non-alphanumeric
+  // character (spaces, punctuation, emoji) from both sides, and
+  // agenda-name-word gaps become flexible `[^a-z0-9]+` runs so
+  // multi-word names like "Family Trips" match "to family trips" and
+  // "to Family    Trips ✨" identically.
+  //
+  // Must run BEFORE the location phase — otherwise LOCATION_RE's greedy
+  // "at <...>$" would swallow the "to <Agenda>" segment into a location
+  // ("Coffee at Blue Bottle to Work" → location "Blue Bottle to Work").
+  //
+  // Longest normalized agenda name wins so "Family Trips" beats "Family"
+  // when both would match. Agendas whose names contain no alphanumeric
+  // characters (e.g. a pure-emoji name) can't be matched by keyboard and
+  // are skipped.
   let agendaId = null;
   if (cfg.agendas.length) {
-    const byLen = cfg.agendas.slice().sort((a, b) => (b.name || "").length - (a.name || "").length);
-    for (const a of byLen) {
-      const aname = String(a.name || "").trim();
-      if (!aname) continue;
-      const re = new RegExp(`^${escapeRegex(aname)}\\s+to\\s+`, "i");
-      if (re.test(work)) {
-        agendaId = a.id;
-        work = work.replace(re, "").trim();
+    const scored = cfg.agendas
+      .map((a) => ({ agenda: a, pattern: normalizedAgendaPattern(a.name) }))
+      .filter((x) => x.pattern)
+      .sort((a, b) => b.pattern.normLen - a.pattern.normLen);
+    for (const { agenda, pattern } of scored) {
+      const re = new RegExp(`(?:^|\\s)to\\s+${pattern.regex}(?![a-z0-9])`, "i");
+      const m = work.match(re);
+      if (m) {
+        agendaId = agenda.id;
+        work = (work.slice(0, m.index) + work.slice(m.index + m[0].length))
+                  .replace(/\s{2,}/g, " ").trim();
         break;
       }
     }

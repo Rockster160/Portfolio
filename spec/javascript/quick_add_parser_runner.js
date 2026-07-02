@@ -197,23 +197,77 @@ const cases = [
   { name: "range_with_day_hint",         result: run("Show from 7 to 9 on Friday", MON_10_23) },
 
   // === Agenda routing ==================================================
-  // Leading agenda name routes the event; "Storage" is stripped.
+  // Trailing agenda name routes the event; " to Costco" is stripped.
   { name: "agenda_routes_costco",   result: runFull(
-    "Costco to Storage at 5", MON_10_23, { agendas: [{ id: 42, name: "Costco" }, { id: 1, name: "Personal" }] },
+    "Storage at 5 to Costco", MON_10_23, { agendas: [{ id: 42, name: "Costco" }, { id: 1, name: "Personal" }] },
   ) },
   // No matching agenda → input stays whole, agendaId null.
   { name: "agenda_no_match",        result: runFull(
     "Drive to Costco at 5", MON_10_23, { agendas: [{ id: 1, name: "Personal" }] },
   ) },
-  // Multi-word agenda name wins over a substring agenda.
+  // Multi-word agenda name wins over a substring agenda anywhere.
   { name: "agenda_longest_wins",    result: runFull(
-    "Family Trips to Disneyland tomorrow", MON_10_23, {
+    "Disneyland tomorrow to Family Trips", MON_10_23, {
       agendas: [{ id: 7, name: "Family Trips" }, { id: 8, name: "Family" }],
     },
   ) },
   // Case-insensitive match.
   { name: "agenda_case_insensitive", result: runFull(
-    "costco to Storage at 5", MON_10_23, { agendas: [{ id: 42, name: "Costco" }] },
+    "Storage at 5 to costco", MON_10_23, { agendas: [{ id: 42, name: "Costco" }] },
+  ) },
+  // Agenda match must run BEFORE location — otherwise the greedy `at
+  // <...>$` LOCATION_RE would swallow " to Work" into the location.
+  { name: "agenda_before_location", result: runFull(
+    "Coffee at Blue Bottle to Work", MON_10_23, { agendas: [{ id: 42, name: "Work" }] },
+  ) },
+  // Range grammar coexists — internal "from X to Y" stays inside the
+  // range, only " to <Agenda>" routes.
+  { name: "agenda_with_range",      result: runFull(
+    "Meeting from 2 to 4pm to Work", MON_10_23, { agendas: [{ id: 42, name: "Work" }] },
+  ) },
+  // Mid-input match: "to Work" sits before the time clause.
+  { name: "agenda_mid_input",       result: runFull(
+    "Coffee to Work at 9am", MON_10_23, { agendas: [{ id: 42, name: "Work" }] },
+  ) },
+  // Normalization: lowercased user text matches title-cased agenda.
+  { name: "agenda_norm_lowercase",  result: runFull(
+    "Standup to ours at 9am", MON_10_23, { agendas: [{ id: 7, name: "Ours" }] },
+  ) },
+  // Normalization: agenda name has emoji + spaces → user typing the
+  // plain lowercased alphanumerics still matches.
+  { name: "agenda_norm_emoji",      result: runFull(
+    "Standup to ours at 9am", MON_10_23, { agendas: [{ id: 7, name: "Ours ✨" }] },
+  ) },
+  // Normalization: user types full decorated form → matches too.
+  { name: "agenda_norm_emoji_typed", result: runFull(
+    "Standup to Ours ✨ at 9am", MON_10_23, { agendas: [{ id: 7, name: "Ours ✨" }] },
+  ) },
+  // Normalization: multi-word agenda name matches with any spacing.
+  { name: "agenda_norm_multi_word", result: runFull(
+    "Vacation to family trips next week", MON_10_23, { agendas: [{ id: 7, name: "Family Trips" }] },
+  ) },
+  // Longest normalized name wins even when both are decorated with
+  // emoji ("Family Trips ✨" beats "Family").
+  { name: "agenda_norm_longest_wins", result: runFull(
+    "Vacation to family trips tomorrow", MON_10_23, {
+      agendas: [{ id: 7, name: "Family Trips ✨" }, { id: 8, name: "Family" }],
+    },
+  ) },
+
+  // === Quick Add example chips (verbatim from _quick_add_modal.html.erb)
+  // Locks each chip string against grammar drift — if any chip stops
+  // parsing to something sensible, the modal is teaching a broken
+  // pattern.
+  { name: "chip_trash",             result: run("Take out the trash", MON_10_23) },
+  { name: "chip_dentist_9am",       result: run("Dentist at 9am", MON_10_23) },
+  { name: "chip_coffee_location",   result: run("Coffee at Blue Bottle tomorrow", MON_10_23) },
+  { name: "chip_range",             result: run("Meeting from 2 to 4pm", MON_10_23) },
+  { name: "chip_relative",          result: run("Standup in 30 minutes", MON_10_23) },
+  { name: "chip_lucky_ones",        result: run("Lucky Ones Saturday at 4 for 3 hours", MON_10_23) },
+  { name: "chip_ordinal",           result: run("Rent due on the 1st", MON_10_23) },
+  { name: "chip_multi_day_allday",  result: run("Vacation all day for 3 days", MON_10_23) },
+  { name: "chip_agenda_routing",    result: runFull(
+    "Team lunch at 12 to Work", MON_10_23, { agendas: [{ id: 42, name: "Work" }, { id: 1, name: "Personal" }] },
   ) },
 
   // === Pure duration probes (extractDuration only) =====================

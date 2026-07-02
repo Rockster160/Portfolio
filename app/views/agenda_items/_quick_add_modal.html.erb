@@ -31,12 +31,23 @@
 
     <%# Compact "try one of these" hints. Clicking a chip drops the
         text into the input so the user can edit + submit, matching how
-        most NLU surfaces teach themselves. %>
+        most NLU surfaces teach themselves. Chips are ordered from
+        simplest → most feature-rich so the eye moves through the parser
+        capabilities in the same order a user learns them. The dynamic
+        agenda-routing chip (data-quick-agenda-example) stays hidden
+        until the JS finds a second writable agenda name to fill it
+        with — showing "{agenda} to ..." with a broken placeholder
+        would be worse than not showing it at all. %>
     <div class="qa-examples" aria-label="Examples">
       <button type="button" class="qa-example" data-quick-example>Take out the trash</button>
       <button type="button" class="qa-example" data-quick-example>Dentist at 9am</button>
+      <button type="button" class="qa-example" data-quick-example>Coffee at Blue Bottle tomorrow</button>
+      <button type="button" class="qa-example" data-quick-example>Meeting from 2 to 4pm</button>
+      <button type="button" class="qa-example" data-quick-example>Standup in 30 minutes</button>
       <button type="button" class="qa-example" data-quick-example>Lucky Ones Saturday at 4 for 3 hours</button>
-      <button type="button" class="qa-example" data-quick-example>Birthday all day Saturday</button>
+      <button type="button" class="qa-example" data-quick-example>Rent due on the 1st</button>
+      <button type="button" class="qa-example" data-quick-example>Vacation all day for 3 days</button>
+      <button type="button" class="qa-example hidden" data-quick-example data-quick-agenda-example></button>
     </div>
 
     <div class="qa-actions">

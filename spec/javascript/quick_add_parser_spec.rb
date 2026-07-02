@@ -20,6 +20,55 @@ RSpec.describe "AgendaQuickAddParser (JS-side)" do
     JSON.parse(stdout, symbolize_names: true)[:cases].to_h { |c| [c[:name].to_sym, c[:result]] }
   }
 
+  describe "quick add example chips" do
+    it "chip: `Take out the trash` — bare name, next half-hour, 60 min" do
+      r = by_name[:chip_trash]
+      expect(r).to include(ok: true, name: "Take out the trash", durationMin: 60, allDay: false)
+    end
+
+    it "chip: `Dentist at 9am` — explicit AM clock" do
+      r = by_name[:chip_dentist_9am]
+      expect(r).to include(ok: true, name: "Dentist", durationMin: 60)
+    end
+
+    it "chip: `Coffee at Blue Bottle tomorrow` — location + day" do
+      r = by_name[:chip_coffee_location]
+      expect(r).to include(ok: true, name: "Coffee", location: "Blue Bottle", dayHint: "tomorrow")
+    end
+
+    it "chip: `Meeting from 2 to 4pm` — from-to range" do
+      r = by_name[:chip_range]
+      expect(r).to include(ok: true, name: "Meeting", durationMin: 120)
+      expect(r[:startsAt]).to eq("2026-06-22 14:00")
+      expect(r[:endsAt]).to   eq("2026-06-22 16:00")
+    end
+
+    it "chip: `Standup in 30 minutes` — relative offset" do
+      r = by_name[:chip_relative]
+      expect(r).to include(ok: true, name: "Standup", durationMin: 60)
+      # MON_10_23 + 30 min = 10:53.
+      expect(r[:startsAt]).to eq("2026-06-22 10:53")
+    end
+
+    it "chip: `Rent due on the 1st` — ordinal date" do
+      r = by_name[:chip_ordinal]
+      expect(r).to include(ok: true, name: "Rent due")
+      # Jun 1 already passed → next month's 1st (July 1).
+      expect(r[:startsAt]).to start_with("2026-07-01")
+    end
+
+    it "chip: `Vacation all day for 3 days` — multi-day all-day" do
+      r = by_name[:chip_multi_day_allday]
+      expect(r).to include(ok: true, name: "Vacation", allDay: true, durationMin: 4320)
+    end
+
+    it "chip: `Team lunch at 12 to Work` — agenda routing + time" do
+      r = by_name[:chip_agenda_routing]
+      expect(r).to include(ok: true, name: "Team lunch", agendaId: 42)
+      expect(r[:startsAt]).to eq("2026-06-22 12:00")
+    end
+  end
+
   describe "the three example inputs" do
     it "no-time input snaps to the next half-hour, 60-min default" do
       r = by_name[:trash_no_time]
@@ -367,14 +416,14 @@ RSpec.describe "AgendaQuickAddParser (JS-side)" do
   end
 
   describe "agenda routing" do
-    it "leading agenda name routes the event and strips itself + `to`" do
+    it "trailing agenda name routes the event and strips ` to <name>`" do
       r = by_name[:agenda_routes_costco]
       expect(r[:agendaId]).to eq(42)
       expect(r[:name]).to     eq("Storage")
       expect(r[:startsAt]).to eq("2026-06-22 17:00")
     end
 
-    it "no agenda matches → agendaId nil and the input stays intact" do
+    it "no agenda match → agendaId nil, input stays intact" do
       r = by_name[:agenda_no_match]
       expect(r[:agendaId]).to be_nil
       # "Drive to Costco" is the event name; "at 5" is the time.
@@ -392,6 +441,59 @@ RSpec.describe "AgendaQuickAddParser (JS-side)" do
       r = by_name[:agenda_case_insensitive]
       expect(r[:agendaId]).to eq(42)
       expect(r[:name]).to     eq("Storage")
+    end
+
+    it "agenda match runs BEFORE location so `at X to Agenda` splits cleanly" do
+      r = by_name[:agenda_before_location]
+      expect(r[:agendaId]).to eq(42)
+      expect(r[:name]).to     eq("Coffee")
+      expect(r[:location]).to eq("Blue Bottle")
+    end
+
+    it "range grammar (`from X to Y`) coexists with agenda routing" do
+      r = by_name[:agenda_with_range]
+      expect(r[:agendaId]).to eq(42)
+      expect(r[:name]).to     eq("Meeting")
+      expect(r[:durationMin]).to eq(120)
+      expect(r[:startsAt]).to eq("2026-06-22 14:00")
+      expect(r[:endsAt]).to   eq("2026-06-22 16:00")
+    end
+
+    it "agenda match works mid-input, not just at the tail" do
+      r = by_name[:agenda_mid_input]
+      expect(r[:agendaId]).to eq(42)
+      expect(r[:name]).to     eq("Coffee")
+      expect(r[:startsAt]).to eq("2026-06-22 09:00").or eq("2026-06-23 09:00")
+    end
+
+    it "normalized match: lowercase user text hits title-cased agenda name" do
+      r = by_name[:agenda_norm_lowercase]
+      expect(r[:agendaId]).to eq(7)
+      expect(r[:name]).to     eq("Standup")
+    end
+
+    it "normalized match: agenda name with emoji hit by plain lowercase text" do
+      r = by_name[:agenda_norm_emoji]
+      expect(r[:agendaId]).to eq(7)
+      expect(r[:name]).to     eq("Standup")
+    end
+
+    it "normalized match: user types decorated form and it still routes" do
+      r = by_name[:agenda_norm_emoji_typed]
+      expect(r[:agendaId]).to eq(7)
+      expect(r[:name]).to     eq("Standup")
+    end
+
+    it "normalized match: multi-word agenda name with flexible whitespace" do
+      r = by_name[:agenda_norm_multi_word]
+      expect(r[:agendaId]).to eq(7)
+      expect(r[:name]).to     eq("Vacation next week")
+    end
+
+    it "normalized-longest tiebreaker: `Family Trips ✨` beats `Family`" do
+      r = by_name[:agenda_norm_longest_wins]
+      expect(r[:agendaId]).to eq(7)
+      expect(r[:name]).to     eq("Vacation")
     end
   end
 

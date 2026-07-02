@@ -26,7 +26,7 @@
     function parseCurrent() {
       const parser = window.AgendaQuickAddParser;
       if (!parser) return null;
-      // Pass writable agendas so "<AgendaName> to <event>" can route to
+      // Pass writable agendas so "<event> to <AgendaName>" can route to
       // the named agenda. Google-source / read-only ones are excluded
       // since the quick-add path creates a new local item.
       const agendas = (window.AgendaStore?.getAgendas?.() || [])
@@ -242,11 +242,34 @@
       });
     });
 
+    // Fill the "... to <AgendaName>" routing example with a real writable
+    // agenda name so clicking it produces a working parse. Prefer an
+    // agenda OTHER than the current default (so it demonstrates
+    // cross-agenda routing, not a no-op). If only one writable agenda
+    // exists, or none, the chip stays hidden — a chip with an unresolved
+    // placeholder is worse than a missing chip.
+    function refreshAgendaExample() {
+      const chip = form.querySelector("[data-quick-agenda-example]");
+      if (!chip) return;
+      const defaultId = resolveDefaultAgendaId();
+      const writable = (window.AgendaStore?.getAgendas?.() || [])
+        .filter((a) => a.editable !== false && a.source !== "google" && a.name);
+      const other = writable.find((a) => a.id !== defaultId) || (writable.length > 1 ? writable[1] : null);
+      if (!other) {
+        chip.classList.add("hidden");
+        chip.textContent = "";
+        return;
+      }
+      chip.textContent = `Team lunch at 12 to ${other.name}`;
+      chip.classList.remove("hidden");
+    }
+
     // On open: clear stale state + focus input. jQuery is used by the
     // app's modal lifecycle so the event hook matches the other modals.
     if (window.jQuery) {
       window.jQuery(modal).on("modal.shown", () => {
         resetForm();
+        refreshAgendaExample();
         // Focus the input on the next tick so iOS Safari's keyboard
         // actually pops up (focus-during-show-animation gets dropped).
         setTimeout(() => input.focus(), 50);

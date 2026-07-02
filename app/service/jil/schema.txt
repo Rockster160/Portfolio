@@ -544,6 +544,7 @@
 [Schedule]
   #find(Numeric)
   #search(Text("*") "limit" Numeric(50) TAB "order" ["DESC" "ASC"])::Array # Using listener syntax trigger:word::data
+  #cancelByTag(String:"Trigger" String:"Tag")::Boolean
   #create(content(ScheduleData))
   .update!(content(ScheduleData))
   .cancel!::Boolean
