@@ -43,8 +43,17 @@ module QuickActionsHelper
         emoji(Regexp.last_match(1))
       }.gsub(/\[ico (.*?)(( \w+: .*?;)*)\]/) { |_f|
         emoji(nil, "ti ti-#{Regexp.last_match(1)}", style: Regexp.last_match(2))
+      }.gsub(/\[hicon (.*?)\]/) { |_f|
+        hicon(Regexp.last_match(1))
       }.gsub(/\[img (.*?)\]/) { |_f|
         img(Regexp.last_match(1))
       }.html_safe
+  end
+
+  def hicon(name)
+    icon = HouseholdIcon.lookup(current_user, name)
+    return emoji("❌") if icon.nil?
+
+    emoji("<img src='#{icon.image_data}'/>".html_safe)
   end
 end

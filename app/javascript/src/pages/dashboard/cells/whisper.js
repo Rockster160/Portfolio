@@ -144,7 +144,7 @@ import { dash_colors } from "../vars";
     lines.push(
       Text.justify(
         cell_width,
-        "[img /whisper.png]  ".padEnd(ageStr.length),
+        "[hicon Whisper]  ".padEnd(ageStr.length),
         `${status} `,
         Text.color(dash_colors.grey, ageStr),
       ),

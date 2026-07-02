@@ -33,6 +33,7 @@ class Markdown
       /~(.*?)~/                                                       => wrap('\1', :del),
       /\[\[\s*([^\]]*?)\s*\]\]\((.*?)\)/                              => color_wrapper,
       /\[\[\s*([^\]]*?)\s*\]\]/                                       => color_wrapper,
+      /\[hicon (.*?)\]/                                               => hicon_wrapper,
       /!\[(.*?)\]\((.*?)\)/                                           => wrap(nil, :img, src: '\2', alt: '\1'),
       /\[btn (.*?)\]\((.*?)\)/                                        => wrap('\2', :a, href: '\1', class: "btn"),
       /\[(.*?)\]\((.*?)\)/                                            => wrap('\1', :a, href: '\2', target: :_blank),
@@ -156,6 +157,16 @@ class Markdown
           match:     Regexp.last_match,
         }
       end
+    }
+  end
+
+  def hicon_wrapper
+    ->(match) {
+      name = match[1]
+      icon = HouseholdIcon.lookup(@user, name)
+      next "❌" if icon.nil?
+
+      wrap(nil, :img, src: icon.image_data, alt: name, class: "hicon")
     }
   end
 

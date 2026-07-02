@@ -96,7 +96,7 @@ class FitnessBroadcast
   end
 
   def animal_crossing
-    row("[img /Animal_Crossing_Leaf.svg]", "name::AnimalCrossing", need)
+    row("[hicon Animal Crossing Leaf]", "name::AnimalCrossing", need)
   end
 
   def water

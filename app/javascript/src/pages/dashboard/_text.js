@@ -1,5 +1,6 @@
 import { emoji_regex } from "./emoji_regex";
 import { text_height, single_width, cells, registered_cells } from "./vars";
+import { HouseholdIconPool } from "../../household_icon_pool";
 
 export function Text() {}
 Text.new = function (data) {
@@ -333,6 +334,9 @@ Text.markup = function (text) {
     /\[ani \"(.*?)\"\]/gi,
     '<textanimate steps="$1"> </textanimate>',
   );
+  text = text.replaceAll(/\[hicon (.*?)\]/gi, function (_match, name) {
+    return HouseholdIconPool.markupHtml(name);
+  });
   text = text.replaceAll(
     /\[img (.*?)\]/gi,
     '<span class="dashboard-img-wrapper"><img src="$1"\/></span>',

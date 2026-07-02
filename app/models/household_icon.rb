@@ -30,6 +30,23 @@ class HouseholdIcon < ApplicationRecord
 
   scope :ordered, -> { order(Arel.sql("LOWER(name) ASC")) }
 
+  # Case- and separator-insensitive lookup within the user's household.
+  # Returns nil when user has no household or no icon matches.
+  # Used by the [hicon <name>] markdown parser.
+  def self.lookup(user, name)
+    return nil if user.nil? || name.blank?
+
+    household = user.chore_household
+    return nil if household.nil?
+
+    key = normalize_name(name)
+    household.icons.detect { |i| normalize_name(i.name) == key }
+  end
+
+  def self.normalize_name(name)
+    name.to_s.downcase.gsub(/[\s_-]+/, " ").strip
+  end
+
   # Comma-separated user-supplied list. Indexed alongside the auto-split
   # name words on the client.
   def keyword_list
