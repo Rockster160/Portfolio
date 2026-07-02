@@ -1236,18 +1236,14 @@
     //     <label for> toggles the checkbox; we don't intercept.
     //   [data-open-details] (the body button)         → details modal
     //   [data-edit-item]   (the pencil)               → edit modal
-    //   .preview rows open the details modal (read-only view) but never
-    //     the edit modal — edits land on the wrong day if applied to a
-    //     tomorrow stub. Checkbox stays disabled on previews via the
-    //     server-rendered `disabled` attr.
+    //   Checkbox stays disabled on previews via the server-rendered
+    //   `disabled` attr; edits on preview rows resolve to the underlying
+    //   item just like the details-modal Edit button does.
     root.addEventListener("click", (e) => {
       const dataEl = e.target.closest("[data-item-id]");
       if (!dataEl) return;
 
-      const isPreview = dataEl.classList.contains("preview");
-
       if (e.target.closest("[data-edit-item]")) {
-        if (isPreview) return;
         e.preventDefault();
         e.stopPropagation();
         openModal(dataEl);

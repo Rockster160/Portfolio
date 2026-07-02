@@ -286,12 +286,12 @@
       opacity: 0.75;
 
       &.agenda-card-sync-state-warn {
-        color: #f9d76b;
+        color: #F9D76B;
         opacity: 0.95;
       }
 
       &.agenda-card-sync-state-bad {
-        color: #ff8b8b;
+        color: #FF8B8B;
         opacity: 0.95;
       }
     }
@@ -640,10 +640,10 @@ body.ctr-agendas {
 
     .rsvp-badge {
       &.needs-response {
-        color: #ffb74d;
+        color: #FFB74D;
       }
       &.declined {
-        color: #e57373;
+        color: #E57373;
       }
     }
 
@@ -700,7 +700,7 @@ body.ctr-agendas {
         top: 0px;
         width: 5px;
         height: 10px;
-        border: solid #fff;
+        border: solid #FFF;
         border-width: 0 2px 2px 0;
         transform: rotate(45deg);
       }
@@ -946,13 +946,22 @@ body.ctr-agendas {
       opacity: 0.4;
       float: none;
       line-height: 1;
-      &:hover { opacity: 1; }
-      .fa-2x { font-size: 16px !important; }
+      &:hover {
+        opacity: 1;
+      }
+      .fa-2x {
+        font-size: 16px !important;
+      }
     }
-
   }
-  .app-card-body  { margin: 0 !important; padding: 0 !important; }
-  .app-card-inner { margin: 0 !important; padding: 0 !important; }
+  .app-card-body {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .app-card-inner {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
 }
 
 // Agenda confirm modal — inherits the flat-dark chrome above; this
@@ -970,7 +979,9 @@ body.ctr-agendas {
     color: inherit;
     opacity: 0.85;
 
-    &:empty { display: none; }
+    &:empty {
+      display: none;
+    }
   }
 
   .agenda-confirm-actions,
@@ -1185,7 +1196,9 @@ body.ctr-agendas {
     cursor: pointer;
     box-shadow: none !important;
     text-shadow: none !important;
-    transition: opacity 0.12s ease, background 0.12s ease;
+    transition:
+      opacity 0.12s ease,
+      background 0.12s ease;
     i {
       width: auto;
       margin: 0 4px 0 0;
@@ -1284,7 +1297,9 @@ body.ctr-agendas {
       background: rgba(255, 255, 255, 0.06);
       color: inherit;
       border: 1px solid rgba(255, 255, 255, 0.12);
-      i { margin-right: 6px; }
+      i {
+        margin-right: 6px;
+      }
       &.is-current {
         background: rgba(255, 255, 255, 0.18);
         border-color: rgba(255, 255, 255, 0.4);
@@ -1293,10 +1308,18 @@ body.ctr-agendas {
         opacity: 0.5;
         cursor: progress;
       }
-      &.rsvp-accepted.is-current  { border-color: #4caf50; }
-      &.rsvp-tentative.is-current { border-color: #ffb74d; }
-      &.rsvp-declined.is-current  { border-color: #e57373; }
-      &[disabled] { cursor: not-allowed; }
+      &.rsvp-accepted.is-current {
+        border-color: #4CAF50;
+      }
+      &.rsvp-tentative.is-current {
+        border-color: #FFB74D;
+      }
+      &.rsvp-declined.is-current {
+        border-color: #E57373;
+      }
+      &[disabled] {
+        cursor: not-allowed;
+      }
     }
     .agenda-details-rsvp-feedback {
       margin: 6px 0 0;
@@ -1341,12 +1364,26 @@ body.ctr-agendas {
         font-size: 11px;
         opacity: 0.5;
       }
-      &.rsvp-accepted i  { color: #4caf50; }
-      &.rsvp-tentative i { color: #ffb74d; }
-      &.rsvp-declined i  { color: #e57373; opacity: 0.7; }
-      &.rsvp-declined .agenda-details-attendee-label { text-decoration: line-through; opacity: 0.6; }
-      &.rsvp-needsAction i { color: rgba(255, 255, 255, 0.4); }
-      &.is-organizer .agenda-details-attendee-label { font-weight: 600; }
+      &.rsvp-accepted i {
+        color: #4CAF50;
+      }
+      &.rsvp-tentative i {
+        color: #FFB74D;
+      }
+      &.rsvp-declined i {
+        color: #E57373;
+        opacity: 0.7;
+      }
+      &.rsvp-declined .agenda-details-attendee-label {
+        text-decoration: line-through;
+        opacity: 0.6;
+      }
+      &.rsvp-needsAction i {
+        color: rgba(255, 255, 255, 0.4);
+      }
+      &.is-organizer .agenda-details-attendee-label {
+        font-weight: 600;
+      }
     }
   }
 }
@@ -1566,7 +1603,7 @@ body.ctr-agendas {
     .agenda-pattern-error {
       flex: 1 0 100%;
       font-size: 12px;
-      color: #ff8080;
+      color: #FF8080;
       padding: 2px 2px 0;
 
       &.hidden {
@@ -1690,7 +1727,9 @@ body.ctr-agendas {
     // overflow into the Color column.
     @media (max-width: 480px) {
       flex-direction: column;
-      > .ff { flex: 1 1 auto; }
+      > .ff {
+        flex: 1 1 auto;
+      }
     }
   }
 
@@ -1704,6 +1743,14 @@ body.ctr-agendas {
   // horizontal pair of date + time inputs. The time input collapses
   // via the global .hidden utility when all-day; the date input keeps
   // the row anchored.
+  .add-allday-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    cursor: pointer;
+  }
+
   .dt-pair {
     display: flex;
     gap: 8px;
@@ -1714,7 +1761,7 @@ body.ctr-agendas {
       min-width: 0;
     }
     > input[type="time"] {
-      flex: 0 1 132px;
+      flex: 0 1 200px;
       min-width: 0;
     }
   }
@@ -2226,7 +2273,9 @@ body.ctr-agendas {
     font-size: 16px;
     border-radius: 6px;
     outline: none;
-    transition: border-color 0.12s ease, background 0.12s ease;
+    transition:
+      border-color 0.12s ease,
+      background 0.12s ease;
 
     &:focus {
       border-color: $base-blue;
@@ -2245,7 +2294,9 @@ body.ctr-agendas {
     border-radius: 6px;
     color: #FFF;
 
-    &.hidden { display: none; }
+    &.hidden {
+      display: none;
+    }
 
     .qa-preview-name {
       font-size: 14px;
@@ -2267,7 +2318,9 @@ body.ctr-agendas {
     color: #FFD8D8;
     font-size: 12px;
 
-    &.hidden { display: none; }
+    &.hidden {
+      display: none;
+    }
   }
 
   .qa-examples {
@@ -2290,7 +2343,9 @@ body.ctr-agendas {
     cursor: pointer;
     box-shadow: none !important;
     text-shadow: none !important;
-    transition: background 0.12s ease, color 0.12s ease;
+    transition:
+      background 0.12s ease,
+      color 0.12s ease;
 
     &:hover {
       background: rgba(255, 255, 255, 0.08) !important;
@@ -2690,7 +2745,11 @@ body.ctr-agendas {
     flex: 1;
     min-width: 0;
     mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+    -webkit-mask-image: linear-gradient(
+      to right,
+      #000 calc(100% - 14px),
+      transparent
+    );
   }
 }
 
@@ -2793,7 +2852,7 @@ body.ctr-agendas {
     font-size: 13px;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.1);
     }
   }
 }
@@ -2957,7 +3016,7 @@ body.ctr-agendas {
   }
 
   .agenda-connect-note-warn {
-    color: #f9d76b;
+    color: #F9D76B;
     opacity: 0.85;
   }
 
@@ -3000,7 +3059,9 @@ body.ctr-agendas {
   font-size: 11px;
   opacity: 0.55;
   font-variant-numeric: tabular-nums;
-  &:empty { display: none; }
+  &:empty {
+    display: none;
+  }
 }
 
 // The month nav uses .date-nav buttons; without an override they pick
@@ -3030,7 +3091,9 @@ body.ctr-agendas {
     cursor: pointer;
     line-height: 1;
 
-    &:hover { opacity: 1; }
+    &:hover {
+      opacity: 1;
+    }
   }
   .date-label {
     font-weight: 600;
@@ -3091,7 +3154,9 @@ body.ctr-agendas {
   font-size: 12px !important;
   line-height: 1.3 !important;
   cursor: pointer;
-  transition: background 0.1s ease, border-color 0.1s ease;
+  transition:
+    background 0.1s ease,
+    border-color 0.1s ease;
 
   &:hover {
     background: rgba(255, 255, 255, 0.07) !important;

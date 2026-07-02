@@ -205,6 +205,13 @@
     if (dateInput) dateInput.value = startDate;
     const endDateInput = modal.querySelector(".add-end-date");
     if (endDateInput) endDateInput.value = endDate;
+    // Re-apply after modal.shown so agenda.js's applyDefaultStartTime +
+    // focus flow can't leak a stale end-date from a prior dismissed open
+    // (resetForm only fires on submit-close, not dismiss).
+    afterModalShown(modal, () => {
+      if (dateInput) dateInput.value = startDate;
+      if (endDateInput) endDateInput.value = endDate;
+    });
     openAddModal(modal);
   }
   function openAddModalForTime(dateStr, startMin, endMin) {
@@ -214,15 +221,16 @@
     setAllDay(modal, false);
     const dateInput = modal.querySelector(".add-date");
     if (dateInput) dateInput.value = dateStr;
-    // End-date input lives in a normally-hidden row and resetForm fills
-    // it with form.dataset.defaultDate (today). Without this line, a
-    // drag on a non-today column leaves endDate stuck on today — submit
-    // then computes end_at against today, producing a negative
-    // duration (server rejects or the optimistic tile collapses to the
-    // renderer's 15-min visual minimum).
+    // End-date input lives in a normally-hidden row. Set it here for the
+    // initial paint, and again in afterModalShown so it survives any
+    // handler that runs during `modal.shown` (agenda.js's applyDefaultStartTime
+    // + focus flow can otherwise leave a stale value from the previous
+    // open, since resetForm only runs on submit-close, not dismiss).
     const endDateInput = modal.querySelector(".add-end-date");
     if (endDateInput) endDateInput.value = dateStr;
     afterModalShown(modal, () => {
+      if (dateInput) dateInput.value = dateStr;
+      if (endDateInput) endDateInput.value = dateStr;
       const startInput = modal.querySelector(".add-start");
       if (startInput) startInput.value = formatTimeHHMM(startMin);
       const endInput = modal.querySelector(".add-end");
@@ -3111,7 +3119,6 @@
       if (allDayDrag.startCell) {
         const startCell = allDayDrag.startCell;
         const endCell = allDayDrag.currentCell || allDayDrag.startCell;
-        const moved = allDayDrag.moved;
         const root = allDayDrag.root;
         allDayDrag.startCell = null;
         allDayDrag.currentCell = null;
@@ -3126,7 +3133,11 @@
         const lo = startDate <= endDate ? startDate : endDate;
         const hi = startDate <= endDate ? endDate : startDate;
         openAddModalForRange(lo, hi, true);
-        if (moved) armClickSuppressor();
+        // Always suppress — the synthesized click on mouseup bubbles to
+        // modals.js's document-click handler which would immediately close
+        // the modal we just opened. Both the drag-finish and single-cell
+        // click paths need the suppressor.
+        armClickSuppressor();
       }
       // ---- week drag finish ----
       if (weekDrag.col) {
