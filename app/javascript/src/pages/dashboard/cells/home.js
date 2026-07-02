@@ -68,6 +68,13 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
       this._update("status", val);
     }
 
+    get order_id_confirmed() {
+      return this._data.order_id_confirmed;
+    }
+    set order_id_confirmed(val) {
+      this._update("order_id_confirmed", val);
+    }
+
     get date() {
       return this._data.date;
     }
@@ -99,8 +106,22 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
     }
 
     openAmz() {
-      let url = "https://www.amazon.com/gp/your-account/order-details?orderID=";
-      window.open(url + this.order_id.replace("#", ""), "_blank");
+      // For rows built from an actual "Ordered:" confirmation the order_id is
+      // trustworthy — link directly to that order. For rows we only ever saw
+      // via Shipped/Delivery emails (S&S subscriptions, orphaned shipments)
+      // Amazon's printed id is often a shipment id that opens a partial view,
+      // so search Amazon's order history by ASIN instead — always resolves.
+      let url;
+      if (this.order_id_confirmed) {
+        url =
+          "https://www.amazon.com/gp/your-account/order-details?orderID=" +
+          this.order_id.replace("#", "");
+      } else {
+        url =
+          "https://www.amazon.com/gp/your-account/order-history?search=" +
+          encodeURIComponent(this.item_id);
+      }
+      window.open(url, "_blank");
     }
 
     openEmails() {
@@ -132,6 +153,8 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
       if ("delivered" in newData)
         this._update("delivered", newData.delivered, true);
       if ("status" in newData) this._update("status", newData.status, true);
+      if ("order_id_confirmed" in newData)
+        this._update("order_id_confirmed", newData.order_id_confirmed, true);
       if ("date" in newData) this._update("date", newData.date, true);
       if ("time_range" in newData)
         this._update("time_range", newData.time_range, true);

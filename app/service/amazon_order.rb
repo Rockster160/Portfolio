@@ -9,6 +9,7 @@ class AmazonOrder
     :time_range,
     :delivered,
     :status,
+    :order_id_confirmed,
     :email_ids,
     :errors,
     :just_added,
@@ -131,17 +132,18 @@ class AmazonOrder
 
   def serialize
     {
-      order_id:      order_id,
-      item_id:       item_id,
-      listed_name:   listed_name,
-      full_name:     full_name,
-      name:          name,
-      delivery_date: delivery_date,
-      time_range:    time_range,
-      delivered:     delivered,
-      status:        status,
-      email_ids:     email_ids,
-      errors:        errors,
+      order_id:           order_id,
+      item_id:            item_id,
+      listed_name:        listed_name,
+      full_name:          full_name,
+      name:               name,
+      delivery_date:      delivery_date,
+      time_range:         time_range,
+      delivered:          delivered,
+      status:             status,
+      order_id_confirmed: order_id_confirmed,
+      email_ids:          email_ids,
+      errors:             errors,
     }
   end
 end

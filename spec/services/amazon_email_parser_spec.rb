@@ -372,10 +372,10 @@ RSpec.describe AmazonEmailParser do
   end
 
   describe "Amazon re-IDs an item between Ordered and Shipped (consolidated shipments)" do
-    # 50780 "Ordered: JUKMO Tactical Belt" -> order_id 114-1846143-1178640
-    # 50789 "Shipped: JUKMO + 2 more"     -> order_id 111-5331586-9870663
-    # Same physical ASIN B09BZP5YNT, two different Amazon order_ids in two different emails.
-    it "merges the shipped row into the existing pending row, adopting the new order_id" do
+    # 50780 "Ordered: JUKMO Tactical Belt" -> order_id 114-1846143-1178640 (AUTHORITATIVE)
+    # 50789 "Shipped: JUKMO + 2 more"     -> order_id 111-5331586-9870663 (consolidated shipment id)
+    # Same physical ASIN B09BZP5YNT, two different Amazon order_ids across the lifecycle.
+    it "merges the shipped row into the existing pending row and KEEPS the original ordered order_id" do
       AmazonEmailParser.parse(double(
         "Email",
         id:      50_780,
@@ -391,8 +391,33 @@ RSpec.describe AmazonEmailParser do
 
       jukmo_rows = AmazonOrder.all.select { |o| o.item_id == "B09BZP5YNT" }
       expect(jukmo_rows.size).to eq(1), "expected a single JUKMO row, not one per email-claimed order_id"
-      expect(jukmo_rows.first.order_id).to eq("111-5331586-9870663") # the latest (shipped) order_id wins
+      expect(jukmo_rows.first.order_id).to eq("114-1846143-1178640") # the ORIGINAL ordered id
+      expect(jukmo_rows.first.order_id_confirmed).to eq(true)
       expect(jukmo_rows.first.email_ids).to include(50_780, 50_789)
+    end
+
+    # 50882 "Ordered: Rope Tightening" -> 114-7901614 (Rope's own order)
+    # 50907 "Shipped: Premier + Rope"  -> 114-7901614 (S&S consolidation - same id printed for both)
+    # No "Ordered" email ever comes for Premier Protein (Subscribe & Save skips the notification).
+    it "marks the S&S orphan as order_id_confirmed=false so the dashboard links via search" do
+      AmazonEmailParser.parse(double(
+        "Email",
+        id:      50_882,
+        to_html: html_fixture("email_body_50882", raw: true),
+        subject: 'Ordered: "Upgrade 6-Pack Rope..."',
+      ))
+      AmazonEmailParser.parse(double(
+        "Email",
+        id:      50_907,
+        to_html: html_fixture("email_body_50907", raw: true),
+        subject: 'Shipped: "Premier Protein Shake, Café..." and 1 more item',
+      ))
+
+      rope     = AmazonOrder.find("114-7901614-0331459", "B0H2Y3S4DZ")
+      premier  = AmazonOrder.find("114-7901614-0331459", "B0DFJP6LZF")
+
+      expect(rope.order_id_confirmed).to eq(true),   "Rope had an Ordered email — order_id is trustworthy"
+      expect(premier.order_id_confirmed).to eq(false), "Premier Protein came only from a Shipped email — order_id may be a shipment id"
     end
 
     it "does NOT merge into a delivered row (preserve genuine re-orders months later)" do

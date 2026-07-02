@@ -140,19 +140,26 @@ class AmazonEmailParser
   def email_items
     @email_items ||= item_asins.map { |asin|
       asin_oid = asin_order_id(asin)
+      is_ordered = ordered_email?
 
-      # Amazon sometimes re-IDs items between the "Ordered" and "Shipped" emails
-      # (consolidated shipments often live under a different order_id than the
-      # original order). If we already have a pending row for this ASIN, reuse
-      # it and adopt the latest order_id rather than creating a duplicate. A
-      # row that's already delivered is left alone, so a genuine re-order
-      # months later still creates a fresh entry.
+      # Amazon sometimes re-IDs items between "Ordered" and "Shipped" emails
+      # (S&S auto-shipments, consolidated packages). We keep the ORIGINAL
+      # ordered-email order_id whenever we have it - that's the id Amazon.com
+      # shows on the user's order page. The shipping email's order_id is often
+      # a shipment id that only opens a partial view. Delivered rows are left
+      # alone so a genuine re-order months later still creates a fresh entry.
       pending = AmazonOrder.all.find { |o| o.item_id == asin && !o.delivered && o.order_id != "CUSTOM" }
       item = if pending
-        pending.order_id = asin_oid
+        # An Ordered email supersedes anything Shipped/Delivery said earlier.
+        if is_ordered && !pending.order_id_confirmed
+          pending.order_id = asin_oid
+          pending.order_id_confirmed = true
+        end
         pending
       else
-        AmazonOrder.find_or_create(asin_oid, asin)
+        AmazonOrder.find_or_create(asin_oid, asin).tap { |o|
+          o.order_id_confirmed = is_ordered
+        }
       end
 
       item.tap {
@@ -162,6 +169,11 @@ class AmazonEmailParser
       }
     }
   end
+
+  # An "Ordered:" subject line is Amazon's order-confirmation email, which
+  # prints the item's original (authoritative) order_id. Shipped/Delivery
+  # emails may quote a consolidated shipment id instead.
+  💾(:ordered_email?) { @email.subject.to_s.match?(/^Ordered:/i) }
 
   # Walks up the DOM from each ASIN's /dp/ link to find the smallest ancestor
   # within the order_card that names exactly one order_id. That sub-block is
