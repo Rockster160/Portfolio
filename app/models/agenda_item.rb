@@ -68,6 +68,7 @@ class AgendaItem < ApplicationRecord
   before_save :clear_notified_at_on_future_reschedule
   after_update :broadcast_agenda_change!, if: :saved_change_to_agenda_id?
   after_update_commit :propagate_start_at_to_derived_triggers, if: :saved_change_to_start_at?
+  after_update_commit :purge_pending_derived_triggers, if: :saved_change_to_status?
   after_commit :fire_jil_trigger, on: [:create, :update]
   after_commit :fire_jil_destroy_trigger, on: :destroy
   after_commit :enqueue_travel_chain_sync, on: [:create, :update, :destroy]
@@ -681,6 +682,18 @@ class AgendaItem < ApplicationRecord
       sched.update_columns(execute_at: new_execute_at)
       ::Jil::Schedule.update(sched)
     end
+  end
+
+  # When an occurrence becomes cancelled — directly via cancel_occurrence!
+  # or as fallout from AgendaSchedule#add_excluded_date! sweeping this row
+  # — its pending "N minutes before" triggers must not fire; the event
+  # isn't happening. Sidekiq's JilRunnerWorker is per-user, so we don't
+  # touch the queued job; the runner queries scheduled_triggers.ready at
+  # execute time and simply won't find the deleted rows.
+  def purge_pending_derived_triggers
+    return unless cancelled?
+
+    derived_triggers.not_started.delete_all
   end
 
   # Fan out a combined broadcast for both the old and new agendas — each

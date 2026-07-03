@@ -173,9 +173,21 @@ class AgendaSchedule < ApplicationRecord
     Array(recurrence_data[:excluded_dates]).filter_map { |d| safe_parse_date(d) }.to_set
   end
 
+  # Adding a date to excluded_dates always means "this occurrence is gone"
+  # — whether the caller was the destroy controller, a Google sync mirroring
+  # an upstream cancellation, or a series edit shifting the tail. Any row
+  # already materialized on that date (including detached overrides that
+  # kept their original_start_at) needs to flip to cancelled so the agenda
+  # list, carryover, and — critically — its derived ScheduledTriggers
+  # ("fire 45m before") don't survive as ghosts. AgendaItem's
+  # after_update_commit purges the pending triggers when status flips.
   def add_excluded_date!(date)
-    next_set = excluded_dates + [date.to_date]
-    update!(recurrence: recurrence_data.merge(excluded_dates: next_set.map(&:to_s)).to_h)
+    target = date.to_date
+    next_set = excluded_dates + [target]
+    transaction {
+      update!(recurrence: recurrence_data.merge(excluded_dates: next_set.map(&:to_s)).to_h)
+      sweep_materialized_on!(target)
+    }
   end
 
   def remove_excluded_date!(date)
@@ -443,6 +455,15 @@ class AgendaSchedule < ApplicationRecord
 
   def user_zone
     ActiveSupport::TimeZone[user.timezone] || Time.zone
+  end
+
+  def sweep_materialized_on!(date)
+    day_start = user_zone.local(date.year, date.month, date.day).beginning_of_day
+    day_end   = user_zone.local(date.year, date.month, date.day).end_of_day
+    agenda_items
+      .not_cancelled
+      .where(start_at: day_start..day_end)
+      .find_each { |item| item.update!(status: :cancelled, cancelled_at: ::Time.current) }
   end
 
   def weekday_indices
