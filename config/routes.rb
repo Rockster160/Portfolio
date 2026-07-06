@@ -30,9 +30,8 @@ Rails.application.routes.draw do
   get "playground" => "index#playground"
   resource :ping, only: :create
 
-  resource :whisper, only: [:show], controller: :whisper do
-    post :log_vomit
-  end
+  get "/whisper", to: redirect(subdomain: "whisper", path: "/")
+  post "/whisper/log_vomit" => "whisper#log_vomit"
 
   namespace :internal do
     get "auth", to: "auth#check"
