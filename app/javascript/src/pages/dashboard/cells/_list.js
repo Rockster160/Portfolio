@@ -79,6 +79,22 @@ export class ListCell {
           setList(msg);
         },
       },
+      oncontextmenu: function (evt, ctx) {
+        if (ctx.lineIndex == null || ctx.charIndex == null) return;
+        const rawLine = this.lines()[ctx.lineIndex];
+        if (!rawLine) return;
+
+        const cleanLine = rawLine.replace(/\[bg [^\]]*\]|\[\/bg\]/g, "");
+        const numMatch = cleanLine.match(/^(\d+)\./);
+        if (!numMatch) return;
+        const numLen = numMatch[1].length + 1;
+
+        if (ctx.charIndex >= numLen) return;
+
+        evt.preventDefault();
+        const itemName = cleanLine.replace(/^\d+\.\s+/, "");
+        this.socket.send({ remove: itemName });
+      },
       command: function (text) {
         text = text.trim();
         if (text == "o") {

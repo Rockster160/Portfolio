@@ -140,6 +140,37 @@ $(document).ready(function() {
   }).on("click", ".dash-cell", function() {
     var cell = Cell.from_ele(this)
     if (cell) { cell.active(true) }
+  }).on("contextmenu", ".dash-cell", function(evt) {
+    var cell = Cell.from_ele(this)
+    if (!cell || typeof cell.oncontextmenu !== "function") { return }
+
+    var ctx = { lineIndex: null, charIndex: null, lineEl: null }
+    var lineEl = evt.target.closest(".line")
+    if (lineEl) {
+      var dashContent = lineEl.parentElement
+      ctx.lineEl = lineEl
+      ctx.lineIndex = Array.from(dashContent.querySelectorAll(".line")).indexOf(lineEl)
+
+      var caretNode = null, caretOffset = 0
+      if (document.caretPositionFromPoint) {
+        var pos = document.caretPositionFromPoint(evt.clientX, evt.clientY)
+        if (pos) { caretNode = pos.offsetNode; caretOffset = pos.offset }
+      } else if (document.caretRangeFromPoint) {
+        var rng = document.caretRangeFromPoint(evt.clientX, evt.clientY)
+        if (rng) { caretNode = rng.startContainer; caretOffset = rng.startOffset }
+      }
+
+      if (caretNode && lineEl.contains(caretNode)) {
+        var walker = document.createTreeWalker(lineEl, NodeFilter.SHOW_TEXT)
+        var chars = 0, node
+        while ((node = walker.nextNode())) {
+          if (node === caretNode) { ctx.charIndex = chars + caretOffset; break }
+          chars += node.nodeValue.length
+        }
+      }
+    }
+
+    cell.oncontextmenu(evt, ctx)
   }).on("keyup", function(evt) {
     var cell = Cell.from_selector(omniSelector())
     if (cell) {

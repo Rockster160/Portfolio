@@ -27,6 +27,7 @@ Cell.register = function (init_data) {
   cell.onload = init_data.onload || undefined;
   cell.onblur = init_data.onblur || undefined;
   cell.onfocus = init_data.onfocus || undefined;
+  cell.oncontextmenu = init_data.oncontextmenu || undefined;
   cell.livekey = init_data.livekey || undefined;
   cell.livekey_active = false;
   cell.autocomplete_options =
