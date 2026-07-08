@@ -5,6 +5,18 @@ const VAPID_PUBLIC_KEY =
   "BO7gUf6gNtfyxWRaYVjmL38uqi8TGKZZ9Fw7tEKzxCosTAtTERuv2ohHEiNB21CBs7ue5eOWMe2p4jtZjZTTAFU=";
 const OPT_OUT_KEY = "jarvis-push-opted-out";
 
+export async function checkJarvisNotificationStatus() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return "unsupported";
+  if (Notification.permission === "denied") return "blocked";
+  if (Notification.permission !== "granted") return "unregistered";
+
+  const registration = await navigator.serviceWorker.getRegistration("/");
+  if (!registration) return "unregistered";
+
+  const subscription = await registration.pushManager.getSubscription();
+  return subscription ? "registered" : "unregistered";
+}
+
 // Soft re-registration on page load to recover from iOS clearing subscriptions
 export async function ensureJarvisServiceWorker() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
@@ -44,7 +56,7 @@ export async function ensureJarvisServiceWorker() {
 export default function registerNotifications() {
   if ("serviceWorker" in navigator && "PushManager" in window) {
     // Register the service worker
-    navigator.serviceWorker
+    return navigator.serviceWorker
       .register("/push_worker.js")
       .then((registration) => {
         console.log(

@@ -194,6 +194,7 @@ document.addEventListener("click", function(evt) {
   let mode_name = evt.target.getAttribute("data-mode")
   if (!mode_name) { return }
 
+  hideModal("quick-actions-settings")
   Mode.current = mode_name
 })
 

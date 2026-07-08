@@ -2,12 +2,7 @@
   <div class="status"></div>
   <div class="close"><i class="ti ti-fa-close"></i></div>
   <div class="modal-content">
-    <div class="settings">
-      <a href="#" class="btn" data-mode="add">Add</a>
-      <a href="#" class="btn" data-mode="edit">Edit</a>
-      <a href="#" class="btn" data-mode="move">Move</a>
-      <a href="#" class="btn" data-mode="delete">Delete</a>
-    </div>
+    <button type="button" class="settings-trigger" data-modal="quick-actions-settings" aria-label="Settings"><i class="ti ti-fa-cog"></i></button>
     <div class="widget-wrapper">
       <% widget_data[:buttons]&.each do |item| %>
         <%= widget(item) %>
