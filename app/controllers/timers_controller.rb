@@ -20,6 +20,35 @@ class TimersController < ApplicationController
     render :page
   end
 
+  # GET /timers/page/:slug/manifest.webmanifest
+  #
+  # Per-page PWA manifest so each timer page installs as a distinct
+  # standalone app. The static /timers.webmanifest declares `id: "timers"`
+  # + `start_url: "/timers"`, which means the OS treats every timer page's
+  # install as the same PWA and opens the root /timers URL on launch.
+  # Serving a slug-scoped manifest here gives each page its own id, scope,
+  # and start_url so it launches back into itself.
+  def page_manifest
+    page = current_user.timer_pages.find_by!(slug: params[:slug])
+    label = page.name.presence || page.slug
+
+    render json: {
+      short_name:       label.truncate(12),
+      name:             label,
+      icons:            [
+        { src: "/assets/favicon/android-chrome-192x192.png", sizes: "192x192", type: "image/png" },
+        { src: "/assets/favicon/android-chrome-512x512.png", sizes: "512x512", type: "image/png" },
+      ],
+      id:               "timers-page-#{page.slug}",
+      start_url:        "/timers/page/#{page.slug}?source=pwa",
+      scope:            "/timers/page/#{page.slug}",
+      background_color: "#0d1117",
+      display:          :standalone,
+      theme_color:      "#0d1117",
+      description:      "Timers: #{label}",
+    }, content_type: "application/manifest+json"
+  end
+
   # GET /timers/sync?since=<iso>
   def sync
     since_ts = parse_iso(params[:since])

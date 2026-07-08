@@ -147,6 +147,7 @@ Rails.application.routes.draw do
   # ============================================================
   get  "/timers"            => "timers#index",  as: :timers
   get  "/timers/page/:slug" => "timers#page",   as: :timer_page
+  get  "/timers/page/:slug/manifest.webmanifest" => "timers#page_manifest", as: :timer_page_manifest
   get  "/timers/sync"       => "timers#sync",   as: :timers_sync
   get  "/timers/csrf"       => "timers#csrf",   as: :timers_csrf
 
@@ -344,6 +345,9 @@ Rails.application.routes.draw do
   # Fetch-only endpoints — never navigated to, so they can sit outside the
   # PWA scope without breaking the installed-app experience.
   resources :agenda_items, only: [:create, :update, :destroy] do
+    collection do
+      get :search
+    end
     member do
       post :restore
       post :respond

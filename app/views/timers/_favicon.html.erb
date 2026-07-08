@@ -5,9 +5,13 @@
 <link rel="icon" type="image/png" sizes="32x32" href="<%= asset_path 'favicon/favicon-32x32.png' %>">
 <link rel="icon" type="image/png" sizes="16x16" href="<%= asset_path 'favicon/favicon-16x16.png' %>">
 <link rel="shortcut icon" href="<%= asset_path 'favicon/favicon.ico' %>">
-<link rel="manifest" href="/timers.webmanifest">
+<% if @active_page.present? %>
+  <link rel="manifest" href="<%= timer_page_manifest_path(slug: @active_page.slug) %>">
+<% else %>
+  <link rel="manifest" href="/timers.webmanifest">
+<% end %>
 <meta name="theme-color" content="#0d1117">
-<meta name="apple-mobile-web-app-title" content="Timers">
+<meta name="apple-mobile-web-app-title" content="<%= @active_page&.name.presence || @active_page&.slug || 'Timers' %>">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

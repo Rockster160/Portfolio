@@ -110,6 +110,33 @@ RSpec.describe TimersController do
     end
   end
 
+  describe "GET /timers/page/:slug/manifest.webmanifest" do
+    let!(:page) { user.timer_pages.create!(slug: "slime-colony", name: "Slime Colony") }
+
+    it "renders a per-page manifest with a unique id, scope, and start_url" do
+      get timer_page_manifest_path(slug: "slime-colony")
+      expect(response).to have_http_status(:ok)
+      expect(response.media_type).to eq("application/manifest+json")
+      json = JSON.parse(response.body)
+      expect(json["id"]).to eq("timers-page-slime-colony")
+      expect(json["scope"]).to eq("/timers/page/slime-colony")
+      expect(json["start_url"]).to eq("/timers/page/slime-colony?source=pwa")
+      expect(json["name"]).to eq("Slime Colony")
+    end
+
+  end
+
+  describe "GET /timers/page/:slug" do
+    let!(:page) { user.timer_pages.create!(slug: "slime-colony", name: "Slime Colony") }
+
+    it "links the per-page manifest so the PWA installs distinctly" do
+      get timer_page_path(slug: "slime-colony")
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include(%(href="/timers/page/slime-colony/manifest.webmanifest"))
+      expect(response.body).not_to include(%(href="/timers.webmanifest"))
+    end
+  end
+
   describe "DELETE /timers/items/:id" do
     let!(:timer) { create(:timer, user: user, duration_ms: 60_000) }
 
