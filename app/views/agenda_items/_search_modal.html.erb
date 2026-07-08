@@ -1,0 +1,56 @@
+<%# Agenda search modal. Two sections:
+   1. Future & near-past — filtered live from AgendaStore (already
+      loaded on the page).
+   2. Older past — fetched from /agenda_items/search when the query
+      changes; only items older than the bootstrap window come from
+      the endpoint (the store already covers everything after).
+   Rendering is handled entirely by `agenda/search.js`; server just
+   drops the shell. %>
+<%# `modal-flat` gives the dark chrome + zero-padded body; the nested
+   `modal-reset` variant is the shared child-element reset that stops
+   forms.scss / code_formatting.scss from styling the search input,
+   hint chips, and buttons like the rest of the site. Any new agenda
+   modal should opt into BOTH classes. %>
+<%= render_modal("agenda-search", "Search", "modal-flat modal-reset") do %>
+  <form class="basic agenda-search" data-search-url="<%= search_agenda_items_path %>" onsubmit="return false;">
+    <input type="text"
+           class="basic agenda-search-input"
+           name="agenda_search"
+           autocomplete="off"
+           autocapitalize="off"
+           spellcheck="false"
+           placeholder="Search all agendas"
+           aria-label="Search agenda items"
+           data-search-input>
+
+    <p class="agenda-search-hint">
+      Try
+      <span class="agenda-search-hint-chip">is:overdue</span>,
+      <span class="agenda-search-hint-chip">kind:event</span>,
+      or a plain phrase.
+    </p>
+
+    <div class="agenda-search-results" data-search-results>
+      <section class="agenda-search-section agenda-search-future hidden" data-search-section="future">
+        <header class="agenda-search-section-head">Upcoming &amp; recent</header>
+        <div class="agenda-search-items" data-search-items="future"></div>
+        <p class="agenda-search-empty hidden" data-search-empty="future">No matches in your visible window.</p>
+      </section>
+
+      <section class="agenda-search-section agenda-search-past hidden" data-search-section="past">
+        <header class="agenda-search-section-head">
+          Older
+          <span class="agenda-search-past-status" data-search-past-status></span>
+        </header>
+        <div class="agenda-search-items" data-search-items="past"></div>
+        <p class="agenda-search-empty hidden" data-search-empty="past">No older matches.</p>
+      </section>
+
+      <p class="agenda-search-idle" data-search-idle>Start typing to search.</p>
+    </div>
+
+    <div class="agenda-search-foot">
+      <button type="button" class="af-btn af-btn-secondary" data-dismiss="#agenda-search">Close</button>
+    </div>
+  </form>
+<% end %>

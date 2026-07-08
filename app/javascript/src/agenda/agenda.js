@@ -2383,8 +2383,66 @@
     }
 
     hydrateRsvp(modal, dataEl);
+    syncGoToDate(modal, dataEl);
 
     if (window.showModal) window.showModal("#agenda-item-details");
+  }
+
+  // "Go to date" jumps the current calendar to whatever date the item
+  // is on. Hidden when the item's date is already the visible date (or,
+  // for the month view, in the visible month) — nothing to go to. The
+  // href targets the SAME view the user is currently on so a click from
+  // the day page navigates to another day, not a month view.
+  function syncGoToDate(modal, dataEl) {
+    const btn = modal.querySelector("[data-go-to-date]");
+    if (!btn) return;
+    const startEpoch = parseInt(dataEl.dataset.startAt, 10) || 0;
+    if (!startEpoch) { btn.classList.add("hidden"); return; }
+    const target = new Date(startEpoch * 1000);
+    const y = target.getFullYear();
+    const m = String(target.getMonth() + 1).padStart(2, "0");
+    const day = String(target.getDate()).padStart(2, "0");
+    const iso = `${y}-${m}-${day}`;
+
+    const root = document.querySelector(".agenda-page");
+    const current = (root && root.getAttribute("data-current-date")) || "";
+    let href = null;
+    let sameView = false;
+
+    if (root?.classList.contains("agenda-cal-month-page")) {
+      href = `/agenda/month?month=${y}-${m}`;
+      // Month view: hide when the item is already in the visible month.
+      const curMatch = current.match(/^(\d{4})-(\d{2})/);
+      sameView = !!curMatch && curMatch[1] === String(y) && curMatch[2] === m;
+    } else if (root?.classList.contains("agenda-cal-page")) {
+      href = `/agenda/grid?date=${iso}`;
+      sameView = weekContains(current, iso);
+    } else if (root?.classList.contains("agenda-week-page")) {
+      href = `/agenda/week?date=${iso}`;
+      sameView = weekContains(current, iso);
+    } else if (root?.classList.contains("agenda-day-page")) {
+      href = `/agenda?date=${iso}`;
+      sameView = current === iso;
+    }
+
+    if (!href || sameView) {
+      btn.classList.add("hidden");
+      btn.removeAttribute("href");
+    } else {
+      btn.classList.remove("hidden");
+      btn.setAttribute("href", href);
+    }
+  }
+
+  // Returns true when `iso` (YYYY-MM-DD) lies in the same 7-day window as
+  // `anchor`. Used by the week / cal_week "already on that date?" check.
+  function weekContains(anchor, iso) {
+    if (!anchor || !iso) return false;
+    const a = new Date(`${anchor}T00:00:00`);
+    const b = new Date(`${iso}T00:00:00`);
+    if (isNaN(a) || isNaN(b)) return false;
+    const diffDays = Math.abs(Math.round((b - a) / 86400000));
+    return diffDays < 7;
   }
 
   // Pulls the attendees + self_response payload off the clicked seed and

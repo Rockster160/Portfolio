@@ -460,6 +460,7 @@ body.ctr-agendas {
     }
   }
 
+
   .agenda-date-bar {
     display: flex;
     align-items: center;
@@ -964,6 +965,71 @@ body.ctr-agendas {
   }
 }
 
+// Reusable child-element reset for modals whose body includes inputs,
+// hint chips, or buttons that would otherwise inherit the site-wide
+// forms.scss / code_formatting.scss cascades. Opt in by adding
+// `modal-reset` to `render_modal`'s `additional_classes` — pairs with
+// `modal-flat` (the chrome reset) so a new modal just says
+// `render_modal("foo", "Foo", "modal-flat modal-reset")` and gets a
+// clean slate without another wall of per-id `!important`s.
+.modal-reset {
+  input,
+  textarea,
+  select {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #FFF;
+    font-family: inherit;
+    font-size: 15px;
+    line-height: 1.3;
+    outline: none;
+    transition:
+      border-color 0.12s ease,
+      background 0.12s ease;
+
+    &:focus {
+      border-color: $base-blue;
+      background: rgba(1, 96, 255, 0.06);
+    }
+
+    &::placeholder {
+      color: rgba(255, 255, 255, 0.35);
+    }
+  }
+
+  // Bare <button> in modal body inherits the blue-gradient cascade. Reset
+  // it to a quiet button; use `.af-btn` variants for actual CTA styling.
+  button:not(.af-btn):not(.close-btn) {
+    background: transparent !important;
+    background-image: none !important;
+    color: inherit !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    border: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-family: inherit !important;
+    font-weight: inherit !important;
+    font-size: inherit !important;
+  }
+
+  // `<code>` and `<kbd>` get a light-grey block bg from
+  // components/code_formatting.scss that reads wrong on a dark modal.
+  // Neutralise so modal bodies can style their own inline chips.
+  code,
+  kbd {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+    font-family: ui-monospace, monospace;
+    white-space: normal;
+  }
+}
+
 // Agenda confirm modal — inherits the flat-dark chrome above; this
 // block just lays out the body + action row inside the now-zeroed
 // `.app-card-inner`. Buttons use the existing `.af-btn` family which is
@@ -1403,7 +1469,14 @@ body.ctr-agendas {
 }
 
 // Filter button + floating panel in the page header.
-.agenda-filter-btn {
+// Shared toolbar icon button. Small square icon-only affordance that
+// resets the global blue-gradient <button> cascade from forms.scss so
+// header actions read as quiet chrome, not CTAs. Both the filter and
+// the search buttons opt in via class; add more here (bell, share,
+// print…) rather than reinventing this box.
+.agenda-tool-btn,
+.agenda-filter-btn,
+.agenda-search-btn {
   width: 36px;
   height: 36px;
   display: inline-flex;
@@ -1416,6 +1489,8 @@ body.ctr-agendas {
   border-radius: 8px !important;
   box-shadow: none !important;
   text-shadow: none !important;
+  font-family: inherit !important;
+  font-weight: normal !important;
   font-size: 14px !important;
   padding: 0 !important;
   margin: 0 !important;
@@ -2363,6 +2438,173 @@ body.ctr-agendas {
   .qa-submit[disabled] {
     opacity: 0.45;
     cursor: not-allowed;
+  }
+
+}
+
+// =================== Search modal ===================
+// Scoped to `#agenda-search` (NOT nested under `#agenda-quick-add`) so
+// the styles actually reach the search modal. Modal-reset handles the
+// input's background/border/color; this block owns layout and spacing.
+
+#agenda-search {
+  .agenda-search {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    font-family: inherit;
+    font-size: 14px;
+    color: inherit;
+  }
+
+  .agenda-search-input {
+    width: 100%;
+    font-size: 16px;
+  }
+
+  .agenda-search-hint {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .agenda-search-hint-chip {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: ui-monospace, monospace;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.75);
+  }
+
+  .agenda-search-results {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-height: 55vh;
+    overflow-y: auto;
+  }
+
+  .agenda-search-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    &.hidden { display: none; }
+  }
+
+  .agenda-search-section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .agenda-search-past-status {
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .agenda-search-items {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .agenda-search-empty {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 12px;
+    font-style: italic;
+
+    &.hidden { display: none; }
+  }
+
+  .agenda-search-idle {
+    margin: 8px 0;
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 12px;
+    text-align: center;
+
+    &.hidden { display: none; }
+  }
+
+  .agenda-search-hit {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.025);
+    border-radius: 5px;
+    border-left: 3px solid var(--agenda-color, rgba(255, 255, 255, 0.15));
+    cursor: pointer;
+    transition: background 0.1s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.07);
+    }
+  }
+
+  .agenda-search-hit-dot { display: none; } // reserved slot; borders carry the color
+
+  .agenda-search-hit-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .agenda-search-hit-when {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .agenda-search-hit-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #FFF;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &.completed {
+      text-decoration: line-through;
+      opacity: 0.55;
+    }
+  }
+
+  .agenda-search-hit-loc {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.55);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .agenda-search-hit-sub {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+    margin-top: 2px;
+  }
+
+  .agenda-search-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
   }
 }
 

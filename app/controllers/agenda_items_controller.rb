@@ -186,6 +186,23 @@ class AgendaItemsController < ApplicationController
     }
   end
 
+  # Server-side search across every accessible agenda's items. The client
+  # already has the current visible-window (~30 days back → forever) in
+  # `AgendaStore`, so it filters future/near-past hits locally; this
+  # endpoint fills in the older-than-window tail. Results are capped at
+  # 50, ordered newest-first.
+  def search
+    q      = params[:q].to_s.strip
+    before = parse_search_before(params[:before])
+    return render json: { items: [] } if q.blank?
+
+    scope = AgendaItem.query(q).where(agenda_id: current_user.accessible_agendas.select(:id))
+    scope = scope.where("start_at < ?", before) if before
+    items = scope.order(start_at: :desc).limit(50)
+
+    render json: { items: items.map(&:serialize) }
+  end
+
   def restore
     @item = AgendaItem.locate_for_user(params[:id], current_user, editable: true)
     return head :not_found unless @item
@@ -206,6 +223,14 @@ class AgendaItemsController < ApplicationController
   end
 
   private
+
+  def parse_search_before(raw)
+    return nil if raw.blank?
+
+    Time.zone.parse(raw.to_s)
+  rescue ArgumentError
+    nil
+  end
 
   def set_item
     @item = AgendaItem.locate_for_user(params[:id], current_user)

@@ -14,6 +14,7 @@
     <h1 class="agenda-page-title">Agenda</h1>
     <span class="agenda-pending-badge hidden" aria-live="polite" title="Pending sync"><i class="fa fa-refresh"></i><span class="agenda-pending-badge-count"></span></span>
     <%= render "agendas/filter", agendas: @agendas %>
+    <button type="button" class="agenda-search-btn" data-modal="#agenda-search" aria-label="Search agenda"><i class="fa fa-search"></i></button>
     <button type="button" class="agenda-add-btn" data-modal="#agenda-quick-add" aria-label="Add to agenda"><i class="fa fa-plus"></i></button>
     <a href="<%= manage_agenda_path %>" class="agenda-page-cog" aria-label="Manage agendas"><i class="fa fa-cog"></i></a>
   </header>
@@ -83,6 +84,7 @@
 
     <%# Picker includes Google agendas — new items mirror to Google via
         events.insert, but kind is locked to Event in the form. %>
+    <%= render "agenda_items/search_modal" %>
     <%= render "agenda_items/quick_add_modal", agendas: @agendas %>
     <%= render "agenda_items/add_modal", agendas: @agendas, date: @date %>
     <%= render "agenda_items/edit_modal", agendas: @agendas %>
