@@ -55,6 +55,7 @@ class Page < ApplicationRecord
       timestamp: updated_at.to_i,
       name:      parameterized_name,
       folder:    folder&.parameterized_name,
+      deleted:   destroyed?,
     }
   end
 
