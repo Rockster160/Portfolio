@@ -162,6 +162,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         openVomitModal();
       });
     }
+
+    const napLocalBtn = menu.querySelector('[data-action="play-nap-local"]');
+    if (napLocalBtn) {
+      napLocalBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        menuItems.classList.add("hidden");
+        playNapBeeps();
+      });
+    }
   }
 
   const vomitModal = container.querySelector("[data-whisper-vomit-modal]");
