@@ -15,7 +15,7 @@
 class Page < ApplicationRecord
   attr_accessor :skip_broadcast
 
-  include Folderable, Orderable
+  include Folderable, Orderable, Taggable
 
   belongs_to :folder, optional: true, touch: true
   belongs_to :user

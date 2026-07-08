@@ -42,6 +42,26 @@
         <%= f.label :phone %>
         <%= f.phone_field :phone %>
       </div>
+
+      <div class="form-field">
+        <%= f.label :email %>
+        <%= f.email_field :email %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :birthday %>
+        <%= f.date_field :birthday %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :tag_strings, "Tags (Comma separated)" %>
+        <%= f.text_field :tag_strings %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :notes %>
+        <%= f.text_area :notes %>
+      </div>
     </div>
 
     <div class="form-submission">

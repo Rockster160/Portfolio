@@ -4,11 +4,14 @@
 #
 #  id               :bigint           not null, primary key
 #  address          :text
+#  birthday         :date
 #  data             :jsonb
+#  email            :text
 #  lat              :float
 #  lng              :float
 #  name             :text
 #  nickname         :text
+#  notes            :text
 #  permit_relay     :boolean          default(TRUE)
 #  phone            :text
 #  raw              :jsonb
@@ -19,11 +22,15 @@
 #  user_id          :bigint
 #
 class Contact < ApplicationRecord
+  include Taggable
+
   belongs_to :user
   belongs_to :friend, optional: true, class_name: "User"
   has_many :addresses
+  has_many :contact_tags
+  has_many :tags, through: :contact_tags
 
-  search_terms :id, :name, :nickname, :phone
+  search_terms :id, :name, :nickname, :phone, :email
 
   json_serialize :raw, coder: ::BetterJsonSerializer
 
@@ -72,6 +79,10 @@ class Contact < ApplicationRecord
       username:     username,
       permit_relay: friend_id.presence && permit_relay,
       phone:        phone,
+      email:        email,
+      birthday:     birthday,
+      notes:        notes,
+      tags:         tags.map(&:name),
       data:         data,
     }
   end
@@ -111,6 +122,7 @@ class Contact < ApplicationRecord
     update(
       name:     json[:name]&.split(" ", 2)&.first, # Should include aliases and allow last names?
       phone:    json[:phones]&.first&.dig(:value)&.gsub(/[^\d]/, "")&.last(10),
+      email:    json[:emails]&.first&.dig(:value),
       nickname: json[:nickname],
     )
   end

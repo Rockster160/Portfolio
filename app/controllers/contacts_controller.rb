@@ -75,6 +75,10 @@ class ContactsController < ApplicationController
       :nickname,
       :username,
       :phone,
+      :email,
+      :birthday,
+      :notes,
+      :tag_strings,
       :permit_relay,
     )
   end

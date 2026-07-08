@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_06_19_114000) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_08_134221) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -595,6 +595,15 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_19_114000) do
     t.datetime "updated_at", precision: nil, null: false
   end
 
+  create_table "contact_tags", force: :cascade do |t|
+    t.bigint "contact_id", null: false
+    t.bigint "tag_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["contact_id"], name: "index_contact_tags_on_contact_id"
+    t.index ["tag_id"], name: "index_contact_tags_on_tag_id"
+  end
+
   create_table "contacts", force: :cascade do |t|
     t.bigint "user_id"
     t.text "name"
@@ -610,6 +619,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_19_114000) do
     t.jsonb "data", default: {}
     t.bigint "friend_id"
     t.boolean "permit_relay", default: true
+    t.text "email"
+    t.date "birthday"
+    t.text "notes"
     t.index ["friend_id"], name: "index_contacts_on_friend_id"
     t.index ["user_id"], name: "index_contacts_on_user_id"
   end
@@ -1356,6 +1368,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_06_19_114000) do
   add_foreign_key "chores", "chores", column: "parent_chore_id"
   add_foreign_key "chores", "users", column: "assigned_to_user_id"
   add_foreign_key "chores", "users", column: "created_by_user_id"
+  add_foreign_key "contact_tags", "contacts"
+  add_foreign_key "contact_tags", "tags"
   add_foreign_key "emails", "users"
   add_foreign_key "google_accounts", "users"
   add_foreign_key "household_icons", "chore_households", on_delete: :cascade

@@ -10,6 +10,8 @@
 class Tag < ApplicationRecord
   has_many :page_tags
   has_many :folder_tags
+  has_many :contact_tags
   has_many :pages, through: :page_tags
   has_many :folders, through: :folder_tags
+  has_many :contacts, through: :contact_tags
 end
