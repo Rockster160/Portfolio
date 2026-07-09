@@ -42,33 +42,44 @@ class Contact < ApplicationRecord
     joins("LEFT JOIN users AS friends ON friends.id = contacts.friend_id")
   end
 
+  # nickname is a comma-separated list; each token is a valid alias.
+  NICKNAME_TOKENS_SQL = "regexp_split_to_array(LOWER(nickname), '\\s*,\\s*')".freeze
+
   def self.name_find(name)
     name = name.to_s.downcase
     return if name.blank?
 
     # Exact match (no casing)
     found = find_by("name ILIKE ?", name)
-    found ||= find_by("nickname ILIKE ?", name)
+    found ||= find_by("? = ANY(#{NICKNAME_TOKENS_SQL})", name)
     found ||= friends.find_by("friends.username ILIKE ?", name)
     # Exact match without 's and/or house|place
     if found.nil? && name =~ /'?s? ?(house|place)?$/
-      found ||= find_by("name ILIKE :name", name: name.gsub(/'?s? ?(house|place)?$/, ""))
-      found ||= find_by("nickname ILIKE :name", name: name.gsub(/'?s? ?(house|place)?$/, ""))
-      found ||= friends.find_by("friends.username ILIKE :name", name: name.gsub(/'?s? ?(house|place)?$/, ""))
+      trimmed = name.gsub(/'?s? ?(house|place)?$/, "")
+      found ||= find_by("name ILIKE ?", trimmed)
+      found ||= find_by("? = ANY(#{NICKNAME_TOKENS_SQL})", trimmed)
+      found ||= friends.find_by("friends.username ILIKE ?", trimmed)
     end
     # Match without special chars
     if found.nil? && name =~ /[^a-z0-9]/
-      found ||= find_by("REGEXP_REPLACE(name, '[^ a-z0-9]', '', 'i') ILIKE :name", name: name.gsub(/[^ a-z0-9]/, ""))
-      found ||= find_by("REGEXP_REPLACE(nickname, '[^ a-z0-9]', '', 'i') ILIKE :name", name: name.gsub(/[^ a-z0-9]/, ""))
-      found ||= friends.find_by("REGEXP_REPLACE(friends.username, '[^ a-z0-9]', '', 'i') ILIKE :name", name: name.gsub(/[^ a-z0-9]/, ""))
+      stripped = name.gsub(/[^ a-z0-9]/, "")
+      found ||= find_by("REGEXP_REPLACE(name, '[^ a-z0-9]', '', 'i') ILIKE ?", stripped)
+      found ||= find_by(nickname_token_regexp_sql("[^ a-z0-9]"), stripped)
+      found ||= friends.find_by("REGEXP_REPLACE(friends.username, '[^ a-z0-9]', '', 'i') ILIKE ?", stripped)
     end
     # Match with only letters
     if found.nil? && name =~ /[^a-z]/
-      found ||= find_by("REGEXP_REPLACE(name, '[^a-z]', '', 'i') ILIKE :name", name: name.gsub(/[^a-z]/, ""))
-      found ||= find_by("REGEXP_REPLACE(nickname, '[^a-z]', '', 'i') ILIKE :name", name: name.gsub(/[^a-z]/, ""))
-      found ||= friends.find_by("REGEXP_REPLACE(friends.username, '[^a-z]', '', 'i') ILIKE :name", name: name.gsub(/[^a-z]/, ""))
+      stripped = name.gsub(/[^a-z]/, "")
+      found ||= find_by("REGEXP_REPLACE(name, '[^a-z]', '', 'i') ILIKE ?", stripped)
+      found ||= find_by(nickname_token_regexp_sql("[^a-z]"), stripped)
+      found ||= friends.find_by("REGEXP_REPLACE(friends.username, '[^a-z]', '', 'i') ILIKE ?", stripped)
     end
     found
+  end
+
+  def self.nickname_token_regexp_sql(strip_pattern)
+    "EXISTS (SELECT 1 FROM unnest(#{NICKNAME_TOKENS_SQL}) AS nick " \
+      "WHERE REGEXP_REPLACE(nick, '#{strip_pattern}', '', 'g') = ?)"
   end
 
   def serialize
