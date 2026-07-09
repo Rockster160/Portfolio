@@ -19,6 +19,14 @@
       <div class="list-item-container" data-list-id="<%= contact.id %>">
         <a href="<%= edit_contact_path(contact) %>" class="list-item">
           <span class="item-name"><%= contact.name %><%= " (#{contact.nickname})" if contact.nickname.present? %></span>
+          <div class="list-item-brief">
+            <div class="left-brief">
+              Created <%= contact.created_at.in_time_zone(current_user.timezone)&.to_formatted_s(:compact_week_month_time).gsub(":00 ", "") %>
+            </div>
+            <div class="right-brief">
+              Updated <%= contact.updated_at.in_time_zone(current_user.timezone)&.to_formatted_s(:compact_week_month_time).gsub(":00 ", "") %>
+            </div>
+          </div>
         </a>
       </div>
     <% end %>

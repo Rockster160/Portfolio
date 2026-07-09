@@ -250,28 +250,18 @@ class TeslaCacheStore
     end
 
     def compose_drive(ep, tel, sec_ts)
-      # The endpoint poll's shift_state is authoritative for "parked" — it's
-      # a fresh full snapshot every time, so a "P" from it cannot be a stale
-      # merge artifact. Telemetry's Gear is a deep_merged field and can hold
-      # a stale "D" indefinitely if the car powered down without sending an
-      # updated Gear. When the endpoint says P, force parked defaults so the
-      # UI doesn't show phantom driving.
-      ep_shift  = ep.dig(:drive_state, :shift_state)
-      parked_ep = ep_shift.to_s == "P"
-
-      # Telemetry's Gear is the live source when the endpoint doesn't
-      # already say parked. The normalizer absorbs whatever enum shape
-      # Tesla sends ("ShiftStateP" vs bare "P" vs unknown).
-      tel_shift = normalize_shift(tel[:Gear])
-      shift     = parked_ep ? "P" : (tel_shift || ep_shift)
-
       speed_raw = tel[:VehicleSpeed]
-      speed_num = speed_raw.is_a?(Numeric) ? speed_raw : ep.dig(:drive_state, :speed)
-      speed_i   = parked_ep ? 0 : speed_num.to_i
+      speed = speed_raw.is_a?(Numeric) ? speed_raw : ep.dig(:drive_state, :speed)
+      # Telemetry's Gear is the live source — endpoint poll's shift_state
+      # can be minutes/hours stale (poll-on-demand, not scheduled), so it's
+      # only a fallback for when telemetry hasn't pushed Gear yet. The
+      # normalizer absorbs whatever enum shape Tesla actually sends
+      # ("ShiftStateP" vs bare "P" vs unknown).
+      shift = normalize_shift(tel[:Gear]) || ep.dig(:drive_state, :shift_state)
 
       {
-        speed_mph: speed_i,
-        moving:    speed_i.positive?,
+        speed_mph: speed.to_i,
+        moving:    speed.to_i.positive?,
         shift:     shift,
         parked:    shift.to_s == "P",
         ts:        sec_ts[:drive] || ep.dig(:drive_state, :timestamp),
@@ -296,15 +286,20 @@ class TeslaCacheStore
     end
 
     def compose_trip(ep, tel, sec_ts)
-      miles   = tel[:MilesToArrival] || ep.dig(:drive_state, :active_route_miles_to_arrival)
-      minutes = tel[:MinutesToArrival] || ep.dig(:drive_state, :active_route_minutes_to_arrival)
-      dest    = tel[:DestinationLocation] || ep_route_dest(ep)
-      origin  = tel[:OriginLocation]
-      return nil if miles.nil? && minutes.nil? && dest.nil? && origin.nil?
+      # Tesla clears `active_route_miles_to_arrival` and
+      # `active_route_minutes_to_arrival` in the endpoint poll when nav ends,
+      # but leaves stale lat/lng behind (both in the endpoint's active_route_*
+      # AND in the deep_merged telemetry DestinationLocation). Presence of
+      # either miles or minutes in the endpoint is the reliable "route
+      # active" signal — anything else is a phantom trip from a prior
+      # session. Origin comes from telemetry only and is likewise stale, so
+      # we drop it here rather than surface an old one.
+      miles   = ep.dig(:drive_state, :active_route_miles_to_arrival)
+      minutes = ep.dig(:drive_state, :active_route_minutes_to_arrival)
+      return nil if miles.nil? && minutes.nil?
 
       {
-        destination:        normalize_loc(dest, ep.dig(:drive_state, :active_route_destination)),
-        origin:             normalize_loc(origin),
+        destination:        normalize_loc(ep_route_dest(ep), ep.dig(:drive_state, :active_route_destination)),
         miles_to_arrival:   miles&.to_f&.round(2),
         minutes_to_arrival: minutes&.to_f&.round(2),
         ts:                 sec_ts[:trip] || ep.dig(:drive_state, :timestamp),

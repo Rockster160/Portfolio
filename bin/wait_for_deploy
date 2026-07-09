@@ -12,8 +12,13 @@
 # Env:
 #   PORTFOLIO_LOCAL_APIKEY  Bearer API key (auto-sourced from .env if unset)
 #   PORTFOLIO_CABLE_URL     Override wss://ardesian.com/cable
+#   DEPLOY_WAIT_DEBUG=1     Print verbose connect/subscribe/resync logs
 
 set -euo pipefail
+
+# Flip to 1 (or export DEPLOY_WAIT_DEBUG=1) to keep the timestamped debug
+# stream visible alongside the status dot.
+: "${DEPLOY_WAIT_DEBUG:=0}"
 
 if [[ -z "${PORTFOLIO_LOCAL_APIKEY:-}" && -f "$(dirname "$0")/../.env" ]]; then
   PORTFOLIO_LOCAL_APIKEY="$(grep -E '^PORTFOLIO_LOCAL_APIKEY=' "$(dirname "$0")/../.env" | head -1 | cut -d= -f2- | tr -d '"'"'")"
@@ -26,8 +31,9 @@ CHANNEL_ID="${1:-deploy}"
 CABLE_URL="${PORTFOLIO_CABLE_URL:-wss://ardesian.com/cable}"
 
 exec node --experimental-websocket --no-warnings - \
-  "$CABLE_URL" "$PORTFOLIO_LOCAL_APIKEY" "$CHANNEL_ID" <<'NODE'
-const [,, cableUrl, apiKey, channelId] = process.argv;
+  "$CABLE_URL" "$PORTFOLIO_LOCAL_APIKEY" "$CHANNEL_ID" "$DEPLOY_WAIT_DEBUG" <<'NODE'
+const [,, cableUrl, apiKey, channelId, debugFlag] = process.argv;
+const DEBUG = debugFlag === "1";
 const url = `${cableUrl}?Authorization=${encodeURIComponent(`Bearer ${apiKey}`)}`;
 const identifier = JSON.stringify({ channel: "MonitorChannel" });
 const resyncData = JSON.stringify({ action: "resync", id: channelId, channel: channelId });
@@ -41,25 +47,61 @@ let baseline = null;
 let attempt = 0;
 let ws = null;
 
+const isTTY = process.stderr.isTTY;
+const c = {
+  green:  isTTY ? "\x1b[32m" : "",
+  red:    isTTY ? "\x1b[31m" : "",
+  dim:    isTTY ? "\x1b[2m"  : "",
+  reset:  isTTY ? "\x1b[0m"  : "",
+};
+
 function log(msg) {
-  process.stderr.write(`[${new Date().toISOString()}] ${msg}\n`);
+  if (!DEBUG) return;
+  const prefix = isTTY ? "\r\x1b[2K" : "";
+  process.stderr.write(`${prefix}[${new Date().toISOString()}] ${msg}\n`);
+  redraw();
+}
+
+let currentStatus = { dot: c.dim + "●" + c.reset, text: "Connecting..." };
+
+function status(dot, text) {
+  currentStatus = { dot, text };
+  redraw();
+}
+
+function redraw() {
+  if (!isTTY) return;
+  process.stderr.write(`\r\x1b[2K${currentStatus.dot} ${currentStatus.text}`);
+}
+
+function finalize(dot, text) {
+  const prefix = isTTY ? "\r\x1b[2K" : "";
+  process.stderr.write(`${prefix}${dot} ${text}\n`);
 }
 
 function scheduleReconnect() {
   const delay = Math.min(30000, 500 * 2 ** Math.min(attempt, 6));
   log(`reconnecting in ${delay}ms`);
+  status(c.red + "●" + c.reset, `Reconnecting in ${Math.round(delay / 1000)}s...`);
   setTimeout(connect, delay);
 }
 
-function terminal(status, data) {
-  log(`${status} sha=${data.sha || "?"} ${data.message || ""}`);
+function terminal(kind, data) {
+  log(`${kind} sha=${data.sha || "?"} ${data.message || ""}`);
   try { ws.close(); } catch {}
-  process.exit(status === "success" ? 0 : 1);
+  if (kind === "success") {
+    finalize(c.green + "✔" + c.reset, "Deploy Success!");
+    process.exit(0);
+  } else {
+    finalize(c.red + "✘" + c.reset, "Deploy Failed!");
+    process.exit(1);
+  }
 }
 
 function connect() {
   attempt++;
   log(`connect (attempt ${attempt}) → ${cableUrl}`);
+  status(c.dim + "●" + c.reset, "Connecting...");
 
   ws = new WebSocket(url);
 
@@ -77,6 +119,7 @@ function connect() {
 
     if (msg.type === "confirm_subscription") {
       log(`subscribed → MonitorChannel (watching id=${channelId})`);
+      status(c.green + "●" + c.reset, "Waiting for deploy...");
       ws.send(JSON.stringify({ command: "message", identifier, data: resyncData }));
       return;
     }
@@ -105,6 +148,7 @@ function connect() {
 
   ws.addEventListener("close", (ev) => {
     log(`close code=${ev.code} reason=${ev.reason || ""}`);
+    status(c.red + "●" + c.reset, "Disconnected");
     scheduleReconnect();
   });
 
@@ -112,6 +156,8 @@ function connect() {
     log(`error ${ev.message || ""}`);
   });
 }
+
+redraw();
 
 process.on("SIGINT",  () => process.exit(130));
 process.on("SIGTERM", () => process.exit(143));

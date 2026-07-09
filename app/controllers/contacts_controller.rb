@@ -3,7 +3,7 @@ class ContactsController < ApplicationController
   before_action :authorize_owner, only: [:edit, :update, :destroy]
 
   def index
-    @contacts = current_user.contacts.order(:created_at)
+    @contacts = current_user.contacts.order("LOWER(name)")
   end
 
   # JSON lookup used by the agenda details modal to resolve a contact-name

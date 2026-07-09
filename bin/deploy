@@ -11,11 +11,12 @@ fi
 
 source ~/.zshrc
 
+gpo || exit $?
+"$(dirname "$0")/wait_for_deploy" deploy || exit $?
+
 if (( $# == 0 )); then
-  gpo || exit $?
+  # No-op- gets hit if there are no scripts to run after the deploy.
 else
-  gpo || exit $?
-  "$(dirname "$0")/wait_for_deploy" deploy || exit $?
   for script in "$@"; do
     prodExec "$script" || exit $?
   done

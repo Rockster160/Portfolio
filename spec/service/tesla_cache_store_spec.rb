@@ -101,26 +101,50 @@ RSpec.describe TeslaCacheStore do
       expect(car_data.dig(:climate, :hvac_on)).to be(true)
     end
 
-    it "exposes trip data when nav is active" do
-      described_class.record_telemetry(
-        MilesToArrival:      2.34,
-        MinutesToArrival:    6.7,
-        DestinationLocation: { latitude: 40.5, longitude: -111.5 },
-        OriginLocation:      { latitude: 40.4, longitude: -111.6 },
-      )
+    it "exposes trip data from the endpoint poll when nav is active" do
+      described_class.record_endpoint(drive_state: {
+        active_route_latitude:            40.5,
+        active_route_longitude:           -111.5,
+        active_route_miles_to_arrival:    2.34,
+        active_route_minutes_to_arrival:  6.7,
+        timestamp:                        1,
+      })
       expect(car_data[:trip]).to include(
         miles_to_arrival:   2.34,
         minutes_to_arrival: 6.7,
       )
       expect(car_data.dig(:trip, :destination)).to include(lat: 40.5, lng: -111.5)
-      expect(car_data.dig(:trip, :origin)).to include(lat: 40.4, lng: -111.6)
     end
 
     it "resolves trip.destination.name from the address book (used by the dashboard route line)" do
       home = double(name: "Home", present?: true)
       allow_any_instance_of(AddressBook).to receive(:find_contact_near).with([40.5, -111.5]).and_return(home)
-      described_class.record_telemetry(DestinationLocation: { latitude: 40.5, longitude: -111.5 })
+      described_class.record_endpoint(drive_state: {
+        active_route_latitude:           40.5,
+        active_route_longitude:          -111.5,
+        active_route_miles_to_arrival:   1.0,
+        active_route_minutes_to_arrival: 2.0,
+      })
       expect(car_data.dig(:trip, :destination, :name)).to eq("Home")
+    end
+
+    it "returns no trip when nav is cleared (endpoint drops miles+minutes even if stale lat/lng linger)" do
+      # Simulate a prior active route recorded in telemetry, then a nav-clear
+      # reflected in the endpoint (miles/minutes gone, stale coords remain).
+      described_class.record_telemetry(
+        DestinationLocation: { latitude: 40.4, longitude: -112.0 },
+        MilesToArrival:      1.85,
+        MinutesToArrival:    3.5,
+      )
+      described_class.record_endpoint(drive_state: {
+        active_route_latitude:            40.4,
+        active_route_longitude:           -112.0,
+        active_route_miles_to_arrival:    nil,
+        active_route_minutes_to_arrival:  nil,
+        timestamp:                        1,
+      })
+
+      expect(car_data[:trip]).to be_nil
     end
 
     describe "drive.shift normalization" do
@@ -152,14 +176,13 @@ RSpec.describe TeslaCacheStore do
         expect(car_data.dig(:drive, :parked)).to be(false)
       end
 
-      it "endpoint shift_state=P overrides a stale telemetry Gear=D (endpoint poll is authoritative when parked)" do
-        described_class.record_telemetry(Gear: "ShiftStateD", VehicleSpeed: 25)
+      it "telemetry Gear wins over endpoint shift_state (endpoint poll can be stale mid-drive)" do
         described_class.record_endpoint(drive_state: { shift_state: "P", speed: 0, timestamp: 1 })
+        described_class.record_telemetry(Gear: "ShiftStateD", VehicleSpeed: 25)
 
-        expect(car_data.dig(:drive, :shift)).to eq("P")
-        expect(car_data.dig(:drive, :parked)).to be(true)
-        expect(car_data.dig(:drive, :speed_mph)).to eq(0)
-        expect(car_data.dig(:drive, :moving)).to be(false)
+        expect(car_data.dig(:drive, :shift)).to eq("D")
+        expect(car_data.dig(:drive, :parked)).to be(false)
+        expect(car_data.dig(:drive, :speed_mph)).to eq(25)
       end
     end
 
