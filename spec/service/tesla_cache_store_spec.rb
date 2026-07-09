@@ -116,6 +116,13 @@ RSpec.describe TeslaCacheStore do
       expect(car_data.dig(:trip, :origin)).to include(lat: 40.4, lng: -111.6)
     end
 
+    it "resolves trip.destination.name from the address book (used by the dashboard route line)" do
+      home = double(name: "Home", present?: true)
+      allow_any_instance_of(AddressBook).to receive(:find_contact_near).with([40.5, -111.5]).and_return(home)
+      described_class.record_telemetry(DestinationLocation: { latitude: 40.5, longitude: -111.5 })
+      expect(car_data.dig(:trip, :destination, :name)).to eq("Home")
+    end
+
     describe "drive.shift normalization" do
       it "accepts Tesla's enum-string form (ShiftStateP)" do
         described_class.record_telemetry(Gear: "ShiftStateP")

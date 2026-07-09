@@ -105,15 +105,15 @@ class User < ApplicationRecord
   }
 
   def self.me
-    @@me ||= find(1) || admin.first
+    @@me ||= find_by(id: 1) || admin.first
   end
 
   def self.chelsea
-    @@chelsea ||= find(58_128)
+    @@chelsea ||= find_by(id: 58_128)
   end
 
   def self.eve
-    @@eve ||= find(4)
+    @@eve ||= find_by(id: 4)
   end
 
   singleton_class.alias_method :mom, :eve
@@ -122,7 +122,7 @@ class User < ApplicationRecord
   def chelsea? = id == 58_128
   def eve? = id == 4
 
-  alias_method :mom?, :eve? # rubocop:disable Style/Alias
+  alias mom? eve?
 
   # "Perceived today" — the date the user mentally still considers as today,
   # using a 3am rollover instead of midnight. At 1am-2:59am local, this

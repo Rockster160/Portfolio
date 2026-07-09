@@ -458,9 +458,13 @@
 </div>
 
 <%# Opened by the secret-agent button on the Edit Chore modal head.
-  Marks the chore as done for the day so it doesn't show up as
-  overdue, but nobody in the household gets credit or pebbles. The
-  done ring on the card paints grey to make it obvious. %>
+  Two paths off the same form:
+    * "Credit to" = Nobody → anonymous. Marks the chore done so it
+      doesn't show up overdue, but no household member gets credit or
+      pebbles. Done ring paints grey.
+    * "Credit to" = a household member → full credited completion under
+      that member's name (points, streak, Jil triggers), even if the
+      recorder is someone else in the household. %>
 <div id="chore-anonymous-modal" class="chores-modal-backdrop hidden" data-anonymous-modal>
   <div class="chores-modal">
     <div class="modal-head">
@@ -468,7 +472,17 @@
       <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
     </div>
     <form class="chore-form basic" data-anonymous-form autocomplete="off" novalidate>
-      <p class="field-hint">Marks this as done so it doesn't keep coming up. Nobody in the household gets the pebbles.</p>
+      <p class="field-hint" data-anonymous-hint>Marks this as done so it doesn't keep coming up. Nobody in the household gets the pebbles.</p>
+      <div class="form-section">
+        <label class="field-label">Credit to</label>
+        <select data-anonymous-credit-user data-1p-ignore="true" data-lpignore="true">
+          <option value="">Nobody (outside household)</option>
+          <% (defined?(assignable_users) ? assignable_users : [current_user]).each do |u| %>
+            <option value="<%= u.id %>"
+                    data-username="<%= u.username %>"><%= u.username %><%= " (me)" if u.id == current_user.id %></option>
+          <% end %>
+        </select>
+      </div>
       <div class="form-section">
         <label class="field-label">When was it done?</label>
         <input type="datetime-local" data-anonymous-completed-at required>
@@ -479,7 +493,7 @@
       </div>
       <div class="form-actions">
         <button type="button" class="ghost" data-action="cancel">Cancel</button>
-        <button type="submit" class="primary">Mark done</button>
+        <button type="submit" class="primary" data-anonymous-submit>Mark done</button>
       </div>
     </form>
   </div>

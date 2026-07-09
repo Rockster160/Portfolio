@@ -1512,13 +1512,35 @@
   const anonymousModal = document.querySelector('[data-anonymous-modal]');
   const anonymousForm  = anonymousModal?.querySelector('[data-anonymous-form]');
   const anonymousTitle = anonymousModal?.querySelector('[data-anonymous-title]');
+  const anonymousHint  = anonymousModal?.querySelector('[data-anonymous-hint]');
+  const anonymousSubmit = anonymousModal?.querySelector('[data-anonymous-submit]');
+  const anonymousCreditSel = anonymousModal?.querySelector('[data-anonymous-credit-user]');
   let anonymousTargetChoreId = null;
+  let anonymousBaseName = "";
+
+  // Reflect the "Credit to" selection in title/hint/submit copy so it's
+  // unambiguous whose completion this is. Blank id = anonymous branch.
+  function refreshAnonymousCopy() {
+    if (!anonymousModal) return;
+    const opt = anonymousCreditSel?.selectedOptions?.[0];
+    const creditName = opt?.dataset?.username || "";
+    if (creditName) {
+      if (anonymousTitle) anonymousTitle.textContent = `${anonymousBaseName} — done by ${creditName}`;
+      if (anonymousHint)  anonymousHint.textContent = `Credits ${creditName} with the pebbles as if they did it themselves.`;
+      if (anonymousSubmit) anonymousSubmit.textContent = `Mark done for ${creditName}`;
+    } else {
+      if (anonymousTitle) anonymousTitle.textContent = `${anonymousBaseName} — done by someone else`;
+      if (anonymousHint)  anonymousHint.textContent  = "Marks this as done so it doesn't keep coming up. Nobody in the household gets the pebbles.";
+      if (anonymousSubmit) anonymousSubmit.textContent = "Mark done";
+    }
+  }
+  anonymousCreditSel?.addEventListener("change", refreshAnonymousCopy);
 
   function openAnonymousModal(choreId) {
     if (!anonymousModal) return;
     anonymousTargetChoreId = choreId;
     const c = ChoreStore.get(choreId);
-    if (anonymousTitle && c) anonymousTitle.textContent = `${c.short_name || c.name} — done by someone else`;
+    anonymousBaseName = (c && (c.short_name || c.name)) || "";
     // Default the "completed at" field to NOW in local time (the input
     // expects a YYYY-MM-DDTHH:mm string without timezone).
     const tsField = anonymousModal.querySelector('[data-anonymous-completed-at]');
@@ -1529,6 +1551,8 @@
     }
     const noteField = anonymousModal.querySelector('[data-anonymous-note]');
     if (noteField) noteField.value = "";
+    if (anonymousCreditSel) anonymousCreditSel.value = "";
+    refreshAnonymousCopy();
     anonymousModal.classList.remove("hidden");
   }
   function closeAnonymousModal() {
@@ -1546,6 +1570,7 @@
       if (!id) { closeAnonymousModal(); return; }
       const tsStr = anonymousModal.querySelector('[data-anonymous-completed-at]')?.value || "";
       const note = anonymousModal.querySelector('[data-anonymous-note]')?.value || "";
+      const creditUserId = anonymousCreditSel?.value || "";
       // Parse the local datetime-local string as a local-clock instant
       // (no implicit UTC interpretation) and serialize to ISO 8601.
       const dt = tsStr ? new Date(tsStr) : new Date();
@@ -1553,10 +1578,10 @@
       await withSavingState(submit, async () => {
         try {
           const data = await api(`/chores/items/${id}/anonymous_completion`, "POST", {
-            client_completed_at: iso, note, tab_id: TAB_ID,
+            client_completed_at: iso, note, credit_user_id: creditUserId, tab_id: TAB_ID,
           });
           reconcile(data);
-          flash("Marked done");
+          flash(data.credited_to ? `Marked done for ${data.credited_to.username}` : "Marked done");
           closeAnonymousModal();
           dismissEditModalExplicit();
         } catch (err) {

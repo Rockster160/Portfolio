@@ -388,7 +388,12 @@ class TeslaCacheStore
       lng = loc[:longitude] || loc[:lng] || loc[:lon]
       return nil if lat.nil? && lng.nil?
 
-      { lat: lat&.to_f&.round(6), lng: lng&.to_f&.round(6), address: address }.compact
+      {
+        lat:     lat&.to_f&.round(6),
+        lng:     lng&.to_f&.round(6),
+        name:    (location_name(lat, lng) if lat && lng),
+        address: address,
+      }.compact
     end
 
     def location_name(lat, lng)

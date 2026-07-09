@@ -3,18 +3,44 @@ class ChoreCompletionsController < ApplicationController
   before_action :require_chore_manager!, only: [:update]
 
   # POST /chores/items/:chore_id/anonymous_completion
-  # Records a completion for scheduling/cooldown purposes that credits
-  # no household member. user_id captures the recorder; everything
-  # display-side ignores anonymous rows (see ChoreCompletion#credited).
+  # Two modes, chosen by whether `credit_user_id` is present:
+  #   * blank → anonymous. Credits no household member; user_id captures
+  #     the recorder; display-side ignores the row (see ChoreCompletion#credited).
+  #   * household member id → run the full ChoreCompleter pipeline as
+  #     that user. Points, streak, Jil triggers all fire under their name.
+  #     Any household member may credit any other member here.
   def anonymous_completion
     tapped = current_user.accessible_chores.find(params[:chore_id])
+    completed_at = parse_client_time(params[:client_completed_at]) || Time.current
+    credit_user = resolve_credit_user(params[:credit_user_id])
+
+    if credit_user
+      result = ChoreCompleter.new(
+        tapped, credit_user,
+        at:   completed_at,
+        note: params[:note].presence,
+      ).call
+      # ChoreCompleter already broadcasts against the credited user; also
+      # broadcast to the recorder so their device refreshes (household
+      # channels are per-user, and the recorder may not be the actor).
+      if credit_user.id != current_user.id
+        ChoreBroadcaster.broadcast_changes!(current_user, result.completion.chore, actor_tab_id: params[:tab_id])
+        ChoreBroadcaster.broadcast_changes!(current_user, tapped, actor_tab_id: params[:tab_id]) if tapped.id != result.completion.chore_id
+      end
+      render json: response_payload(tapped, result.completion).merge(
+        skipped:        result.skipped?,
+        skipped_reason: result.skipped_reason,
+        achieved_goals: result.achieved_goals.map { |g| { name: g.name, pebbles: g.awarded_pebbles.to_i } },
+        credited_to:    { id: credit_user.id, username: credit_user.username },
+      ), status: :created
+      return
+    end
+
     # Sub-chore taps credit the parent the same way ChoreCompleter does
     # — anonymous or not, the chore_id column always points at the
     # creditable row. Without this, the parent's schedule + cooldown
     # would silently ignore an anonymous tap of a sub-chore.
     credit = tapped.parent_chore || tapped
-    completed_at = parse_client_time(params[:client_completed_at]) || Time.current
-
     completion = ChoreCompletion.create!(
       chore:          credit,
       sub_chore_id:   (tapped.id if tapped.id != credit.id),
@@ -113,6 +139,19 @@ class ChoreCompletionsController < ApplicationController
   end
 
   private
+
+  # Anonymous-modal "Credit to" selector. Returns the target user only
+  # when the id belongs to the same household — silently falls back to
+  # the anonymous path otherwise (the modal shouldn't have offered a
+  # non-household id in the first place; a stale form is treated as if
+  # the user picked "Nobody").
+  def resolve_credit_user(raw)
+    id = raw.to_i
+    return nil if id.zero?
+    return nil unless current_user.chore_household_user_ids.include?(id)
+
+    User.find_by(id: id)
+  end
 
   def require_chore_manager!
     return if current_user.can_manage_chores?

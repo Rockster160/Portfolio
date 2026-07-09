@@ -5,20 +5,38 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
 (function() {
   let cell = undefined
 
-  // Action label for the bottom drive-status line. Mirrors the old Rails-side
-  // drive_data resolution: contact name > city > coords, with verb varying
-  // by whether the car is moving.
+  // Action label for the drive-status line. Contact name > city > coords.
+  // When moving, we show just the place ("Home") — the "Near " prefix eats
+  // characters we don't have. When stopped, we keep "At " for clarity.
   let driveLabel = function(data) {
     let moving = data.drive?.moving === true
     let place = data.location?.name
     if (place) {
-      return (moving ? "Near " : "At ") + place
+      return moving ? place : "At " + place
     }
     let lat = data.location?.lat, lng = data.location?.lng
     if (lat != null && lng != null) {
-      return (moving ? "Driving " : "Stopped ") + lat.toFixed(2) + "," + lng.toFixed(2)
+      return (moving ? "" : "Stopped ") + lat.toFixed(2) + "," + lng.toFixed(2)
     }
     return moving ? "Driving" : "Stopped"
+  }
+
+  // Route line: shown when navigation has an active destination. Prefers the
+  // resolved contact/city name, falls back to the raw address, then coords.
+  let routeLabel = function(data) {
+    let trip = data.trip
+    if (!trip) { return "" }
+    let dest = trip.destination
+    let label = dest?.name || dest?.address
+    if (!label && dest?.lat != null && dest?.lng != null) {
+      label = dest.lat.toFixed(2) + "," + dest.lng.toFixed(2)
+    }
+    if (!label) { return "" }
+    let suffix = ""
+    if (trip.miles_to_arrival != null && trip.minutes_to_arrival != null) {
+      suffix = " " + Text.grey("(" + Math.round(trip.miles_to_arrival) + "mi/" + Math.round(trip.minutes_to_arrival) + "min)")
+    }
+    return "→ " + label + suffix
   }
 
   let isOpen = function(v) {
@@ -54,25 +72,6 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
       lines.push("")
     }
 
-    lines.push("")
-    let opens = []
-    if (data.doors) {
-      if (isOpen(data.doors.frunk))           { opens.push("Frunk") }
-      if (isOpen(data.doors.driver_front))    { opens.push("FDD") }
-      if (isOpen(data.doors.passenger_front)) { opens.push("FPD") }
-      if (isOpen(data.doors.driver_rear))     { opens.push("RDD") }
-      if (isOpen(data.doors.passenger_rear))  { opens.push("RPD") }
-      if (isOpen(data.doors.trunk))           { opens.push("Trunk") }
-    }
-    if (data.windows) {
-      if (isOpen(data.windows.driver_front))    { opens.push("FDW") }
-      if (isOpen(data.windows.passenger_front)) { opens.push("FPW") }
-      if (isOpen(data.windows.driver_rear))     { opens.push("RDW") }
-      if (isOpen(data.windows.passenger_rear))  { opens.push("RPW") }
-    }
-    lines.push(opens.length > 0 ? Text.center("Open: " + opens.join(",")) : "")
-    lines.push("")
-
     if (data.climate?.hvac_on) {
       let climate_text = "Climate: "
       climate_text += Text.green("[ON] ")
@@ -91,6 +90,27 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
       drive_text += " [ico ti ti-mdi-speedometer]" + speed + "mph"
     }
     lines.push(Text.center(Text.grey(drive_text)))
+
+    let route = routeLabel(data)
+    lines.push(route ? Text.center(Text.grey(route)) : "")
+
+    lines.push("")
+    let opens = []
+    if (data.doors) {
+      if (isOpen(data.doors.frunk))           { opens.push("Frunk") }
+      if (isOpen(data.doors.driver_front))    { opens.push("FDD") }
+      if (isOpen(data.doors.passenger_front)) { opens.push("FPD") }
+      if (isOpen(data.doors.driver_rear))     { opens.push("RDD") }
+      if (isOpen(data.doors.passenger_rear))  { opens.push("RPD") }
+      if (isOpen(data.doors.trunk))           { opens.push("Trunk") }
+    }
+    if (data.windows) {
+      if (isOpen(data.windows.driver_front))    { opens.push("FDW") }
+      if (isOpen(data.windows.passenger_front)) { opens.push("FPW") }
+      if (isOpen(data.windows.driver_rear))     { opens.push("RDW") }
+      if (isOpen(data.windows.passenger_rear))  { opens.push("RPW") }
+    }
+    lines.push(opens.length > 0 ? Text.center("Open: " + opens.join(",")) : "")
 
     let notify = cell.data.failed ? Text.orange("[FAILED]") : ""
     notify = cell.data.sleeping ? Text.grey("[sleep]") : notify
