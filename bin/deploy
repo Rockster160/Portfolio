@@ -15,7 +15,7 @@ if (( $# == 0 )); then
   gpo || exit $?
 else
   gpo || exit $?
-  countdown 3:00
+  "$(dirname "$0")/wait_for_deploy" deploy || exit $?
   for script in "$@"; do
     prodExec "$script" || exit $?
   done

@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# Subscribes to Portfolio MonitorChannel and exits 0 when the "deploy"
+# monitor reports status=success. Exits 1 on status=failed. Auto-reconnects
+# with exponential backoff on any drop.
+#
+# Usage:
+#   bin/wait_for_deploy [channel_id] [sha]
+#
+# Args:
+#   channel_id  Monitor id to watch (default: "deploy")
+#   sha         If set, only match broadcasts whose data.sha == this sha
+#
+# Env:
+#   PORTFOLIO_LOCAL_APIKEY  Bearer API key (auto-sourced from .env if unset)
+#   PORTFOLIO_CABLE_URL     Override wss://ardesian.com/cable
+
+set -euo pipefail
+
+if [[ -z "${PORTFOLIO_LOCAL_APIKEY:-}" && -f "$(dirname "$0")/../.env" ]]; then
+  PORTFOLIO_LOCAL_APIKEY="$(grep -E '^PORTFOLIO_LOCAL_APIKEY=' "$(dirname "$0")/../.env" | head -1 | cut -d= -f2- | tr -d '"'"'")"
+  export PORTFOLIO_LOCAL_APIKEY
+fi
+
+: "${PORTFOLIO_LOCAL_APIKEY:?PORTFOLIO_LOCAL_APIKEY must be set}"
+
+CHANNEL_ID="${1:-deploy}"
+MATCH_SHA="${2:-}"
+CABLE_URL="${PORTFOLIO_CABLE_URL:-wss://ardesian.com/cable}"
+
+exec node --experimental-websocket --no-warnings - \
+  "$CABLE_URL" "$PORTFOLIO_LOCAL_APIKEY" "$CHANNEL_ID" "$MATCH_SHA" <<'NODE'
+const [,, cableUrl, apiKey, channelId, matchSha] = process.argv;
+const url = `${cableUrl}?Authorization=${encodeURIComponent(`Bearer ${apiKey}`)}`;
+const identifier = JSON.stringify({ channel: "MonitorChannel" });
+
+let attempt = 0;
+let ws = null;
+
+function log(msg) {
+  process.stderr.write(`[${new Date().toISOString()}] ${msg}\n`);
+}
+
+function scheduleReconnect() {
+  const delay = Math.min(30000, 500 * 2 ** Math.min(attempt, 6));
+  log(`reconnecting in ${delay}ms`);
+  setTimeout(connect, delay);
+}
+
+function connect() {
+  attempt++;
+  log(`connect (attempt ${attempt}) → ${cableUrl}`);
+
+  ws = new WebSocket(url);
+
+  ws.addEventListener("open", () => log("open"));
+
+  ws.addEventListener("message", (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+
+    if (msg.type === "welcome") {
+      attempt = 0;
+      ws.send(JSON.stringify({ command: "subscribe", identifier }));
+      log(`subscribed → MonitorChannel (watching id=${channelId}${matchSha ? ` sha=${matchSha}` : ""})`);
+      return;
+    }
+
+    if (msg.type) return; // ping / confirm_subscription / disconnect / reject
+
+    const payload = msg.message;
+    if (!payload || payload.id !== channelId) return;
+
+    const data = payload.data || {};
+    if (matchSha && data.sha !== matchSha) return;
+
+    if (data.status === "success") {
+      log(`success sha=${data.sha || "?"} ${data.message || ""}`);
+      try { ws.close(); } catch {}
+      process.exit(0);
+    }
+    if (data.status === "failed") {
+      log(`failed sha=${data.sha || "?"} ${data.message || ""}`);
+      try { ws.close(); } catch {}
+      process.exit(1);
+    }
+  });
+
+  ws.addEventListener("close", (ev) => {
+    log(`close code=${ev.code} reason=${ev.reason || ""}`);
+    scheduleReconnect();
+  });
+
+  ws.addEventListener("error", (ev) => {
+    log(`error ${ev.message || ""}`);
+  });
+}
+
+process.on("SIGINT",  () => process.exit(130));
+process.on("SIGTERM", () => process.exit(143));
+
+connect();
+NODE
