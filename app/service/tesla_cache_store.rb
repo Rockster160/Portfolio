@@ -19,6 +19,12 @@ class TeslaCacheStore
   TRANSIENT_CHARGE_STATES = ["ClearFaults"].freeze
   BAR_TO_PSI = 14.504
 
+  # Telemetry fields where `<invalid>` means "sensor offline" (parked/key-out)
+  # rather than "no update this record". Normalized to a concrete default so
+  # the deep_merge overwrites the last valid value instead of retaining it
+  # forever — otherwise a stale 20mph reading survives the drive ending.
+  INVALID_DEFAULTS = { VehicleSpeed: 0 }.freeze
+
   # Which telemetry field belongs to which car_data section. Used both to
   # apply values during compose AND to stamp the section's :ts whenever a
   # telemetry record touches any of its fields.
@@ -101,7 +107,10 @@ class TeslaCacheStore
     def store_telemetry(payload)
       raw      = payload.to_h.deep_symbolize_keys
       data     = raw[:data].is_a?(Hash) ? raw[:data] : raw
-      cleaned  = strip_invalid(data) || {}
+      # History preserves the raw record verbatim — apply the invalid-default
+      # rewrite only to what flows into current/cleaned.
+      defaulted = apply_invalid_defaults(data)
+      cleaned  = strip_invalid(defaulted) || {}
       now_ms   = (Time.current.to_f * 1000).round
       existing = User.me.caches.get(TELEMETRY_KEY) || {}
       current  = (existing[:current] || {}).deep_merge(cleaned)
@@ -124,6 +133,19 @@ class TeslaCacheStore
         current:   raw,
         timestamp: (Time.current.to_f * 1000).round,
       })
+    end
+
+    # For fields listed in INVALID_DEFAULTS, rewrite an `<invalid>` sentinel to
+    # the default value BEFORE strip_invalid drops it. Otherwise strip_invalid
+    # would remove the key from the payload, deep_merge would preserve the
+    # previous non-zero value, and the projection would show phantom motion
+    # after the car parked.
+    def apply_invalid_defaults(data)
+      return data unless data.is_a?(Hash)
+
+      INVALID_DEFAULTS.each_with_object(data.dup) { |(key, default), h|
+        h[key] = default if h[key] == INVALID_SENTINEL
+      }
     end
 
     # Drop `<invalid>` leaves AND collapse hashes/arrays that become empty
@@ -224,17 +246,28 @@ class TeslaCacheStore
     end
 
     def compose_drive(ep, tel, sec_ts)
+      # The endpoint poll's shift_state is authoritative for "parked" — it's
+      # a fresh full snapshot every time, so a "P" from it cannot be a stale
+      # merge artifact. Telemetry's Gear is a deep_merged field and can hold
+      # a stale "D" indefinitely if the car powered down without sending an
+      # updated Gear. When the endpoint says P, force parked defaults so the
+      # UI doesn't show phantom driving.
+      ep_shift  = ep.dig(:drive_state, :shift_state)
+      parked_ep = ep_shift.to_s == "P"
+
+      # Telemetry's Gear is the live source when the endpoint doesn't
+      # already say parked. The normalizer absorbs whatever enum shape
+      # Tesla sends ("ShiftStateP" vs bare "P" vs unknown).
+      tel_shift = normalize_shift(tel[:Gear])
+      shift     = parked_ep ? "P" : (tel_shift || ep_shift)
+
       speed_raw = tel[:VehicleSpeed]
-      speed = speed_raw.is_a?(Numeric) ? speed_raw : ep.dig(:drive_state, :speed)
-      # Telemetry's Gear field is the live source — endpoint poll's
-      # shift_state is the fallback for when telemetry hasn't pushed
-      # yet. The normalizer absorbs whatever enum shape Tesla actually
-      # sends ("ShiftStateP" vs bare "P" vs unknown).
-      shift = normalize_shift(tel[:Gear]) || ep.dig(:drive_state, :shift_state)
+      speed_num = speed_raw.is_a?(Numeric) ? speed_raw : ep.dig(:drive_state, :speed)
+      speed_i   = parked_ep ? 0 : speed_num.to_i
 
       {
-        speed_mph: speed.to_i,
-        moving:    speed.to_i.positive?,
+        speed_mph: speed_i,
+        moving:    speed_i.positive?,
         shift:     shift,
         parked:    shift.to_s == "P",
         ts:        sec_ts[:drive] || ep.dig(:drive_state, :timestamp),

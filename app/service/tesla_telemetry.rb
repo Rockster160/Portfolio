@@ -43,15 +43,12 @@ class TeslaTelemetry
 
   # "Drive" here = vehicle moving. Fires at every red-light → green-light
   # transition, which is noisy as a "car is on" signal — use
-  # :tesla_hvac_on/:tesla_hvac_off for that. Speed-zero is also reported as
-  # "<invalid>" by Tesla when the sensor is offline (key out, etc.) — the
-  # raw cache stripper drops that before we read here, but the resulting
-  # `speed_mph` of 0 in car_data WOULD still fire :tesla_drive_stop on a
-  # one-off invalid push. Skip when the inbound record's VehicleSpeed was
-  # the sentinel.
+  # :tesla_hvac_on/:tesla_hvac_off for that. Tesla reports VehicleSpeed as
+  # "<invalid>" when the sensor is offline (key out, etc.), which is exactly
+  # the parked transition we want to fire on — TeslaCacheStore normalizes
+  # that sentinel to 0 pre-merge so composed speed_mph correctly falls to 0.
   def detect_drive_changes
     return unless field_present_in_record?(:VehicleSpeed)
-    return if speed_in_record == "<invalid>"
 
     new_speed = @car_data.dig(:drive, :speed_mph).to_i
     prev_speed = @prev.dig(:drive, :speed_mph).to_i
@@ -188,10 +185,6 @@ class TeslaTelemetry
 
   def fire_general_trigger
     ::Jil.trigger(@user, :tesla, @raw)
-  end
-
-  def speed_in_record
-    field_in_record(:VehicleSpeed)
   end
 
   # Field lookup that tolerates both Fleet-Telemetry envelope shapes:

@@ -34,10 +34,17 @@ RSpec.describe TeslaCacheStore do
     end
 
     it "strips '<invalid>' leaves before merging into current (so prior good values survive)" do
+      described_class.record_telemetry(TpmsPressureFl: 3.0)
+      described_class.record_telemetry(TpmsPressureFl: "<invalid>")
+
+      expect(telemetry_cache[:current][:TpmsPressureFl]).to eq(3.0)
+    end
+
+    it "rewrites '<invalid>' VehicleSpeed to 0 pre-merge — sensor-offline = parked, not 'no update'" do
       described_class.record_telemetry(VehicleSpeed: 35)
       described_class.record_telemetry(VehicleSpeed: "<invalid>")
 
-      expect(telemetry_cache[:current][:VehicleSpeed]).to eq(35)
+      expect(telemetry_cache[:current][:VehicleSpeed]).to eq(0)
     end
 
     it "strips '<invalid>' nested leaves without losing the rest of a sibling field" do
@@ -136,6 +143,16 @@ RSpec.describe TeslaCacheStore do
         described_class.record_telemetry(Gear: "ShiftStateQuasar")
         expect(car_data.dig(:drive, :shift)).to be_nil
         expect(car_data.dig(:drive, :parked)).to be(false)
+      end
+
+      it "endpoint shift_state=P overrides a stale telemetry Gear=D (endpoint poll is authoritative when parked)" do
+        described_class.record_telemetry(Gear: "ShiftStateD", VehicleSpeed: 25)
+        described_class.record_endpoint(drive_state: { shift_state: "P", speed: 0, timestamp: 1 })
+
+        expect(car_data.dig(:drive, :shift)).to eq("P")
+        expect(car_data.dig(:drive, :parked)).to be(true)
+        expect(car_data.dig(:drive, :speed_mph)).to eq(0)
+        expect(car_data.dig(:drive, :moving)).to be(false)
       end
     end
 

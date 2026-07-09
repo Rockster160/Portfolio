@@ -129,10 +129,10 @@ RSpec.describe TeslaTelemetry do
       expect(triggered?(:tesla_drive_stop)).to be(true)
     end
 
-    it "skips '<invalid>' VehicleSpeed records (sensor offline, not a real stop)" do
+    it "fires :tesla_drive_stop on '<invalid>' VehicleSpeed — sensor-offline IS the park signal" do
       seed_car_data(drive: { speed_mph: 35 })
       process(VehicleSpeed: "<invalid>")
-      expect(triggered?(:tesla_drive_stop)).to be(false)
+      expect(triggered?(:tesla_drive_stop)).to be(true)
     end
   end
 
