@@ -4,11 +4,10 @@
 # with exponential backoff on any drop.
 #
 # Usage:
-#   bin/wait_for_deploy [channel_id] [sha]
+#   bin/wait_for_deploy [channel_id]
 #
 # Args:
 #   channel_id  Monitor id to watch (default: "deploy")
-#   sha         If set, only match broadcasts whose data.sha == this sha
 #
 # Env:
 #   PORTFOLIO_LOCAL_APIKEY  Bearer API key (auto-sourced from .env if unset)
@@ -24,15 +23,21 @@ fi
 : "${PORTFOLIO_LOCAL_APIKEY:?PORTFOLIO_LOCAL_APIKEY must be set}"
 
 CHANNEL_ID="${1:-deploy}"
-MATCH_SHA="${2:-}"
 CABLE_URL="${PORTFOLIO_CABLE_URL:-wss://ardesian.com/cable}"
 
 exec node --experimental-websocket --no-warnings - \
-  "$CABLE_URL" "$PORTFOLIO_LOCAL_APIKEY" "$CHANNEL_ID" "$MATCH_SHA" <<'NODE'
-const [,, cableUrl, apiKey, channelId, matchSha] = process.argv;
+  "$CABLE_URL" "$PORTFOLIO_LOCAL_APIKEY" "$CHANNEL_ID" <<'NODE'
+const [,, cableUrl, apiKey, channelId] = process.argv;
 const url = `${cableUrl}?Authorization=${encodeURIComponent(`Bearer ${apiKey}`)}`;
 const identifier = JSON.stringify({ channel: "MonitorChannel" });
+const resyncData = JSON.stringify({ action: "resync", id: channelId, channel: channelId });
 
+// Baseline of the deploy monitor state at the moment we started watching.
+// null until the first broadcast lands (from our initial resync). Any later
+// broadcast whose sha or timestamp differs is treated as a new deploy —
+// including a resync response after reconnect, which is how we detect a
+// deploy that finished while the socket was down.
+let baseline = null;
 let attempt = 0;
 let ws = null;
 
@@ -44,6 +49,12 @@ function scheduleReconnect() {
   const delay = Math.min(30000, 500 * 2 ** Math.min(attempt, 6));
   log(`reconnecting in ${delay}ms`);
   setTimeout(connect, delay);
+}
+
+function terminal(status, data) {
+  log(`${status} sha=${data.sha || "?"} ${data.message || ""}`);
+  try { ws.close(); } catch {}
+  process.exit(status === "success" ? 0 : 1);
 }
 
 function connect() {
@@ -61,28 +72,35 @@ function connect() {
     if (msg.type === "welcome") {
       attempt = 0;
       ws.send(JSON.stringify({ command: "subscribe", identifier }));
-      log(`subscribed → MonitorChannel (watching id=${channelId}${matchSha ? ` sha=${matchSha}` : ""})`);
       return;
     }
 
-    if (msg.type) return; // ping / confirm_subscription / disconnect / reject
+    if (msg.type === "confirm_subscription") {
+      log(`subscribed → MonitorChannel (watching id=${channelId})`);
+      ws.send(JSON.stringify({ command: "message", identifier, data: resyncData }));
+      return;
+    }
+
+    if (msg.type) return; // ping / disconnect / reject
 
     const payload = msg.message;
     if (!payload || payload.id !== channelId) return;
 
     const data = payload.data || {};
-    if (matchSha && data.sha !== matchSha) return;
+    const sha = data.sha || null;
+    const ts = payload.timestamp || 0;
 
-    if (data.status === "success") {
-      log(`success sha=${data.sha || "?"} ${data.message || ""}`);
-      try { ws.close(); } catch {}
-      process.exit(0);
+    if (!baseline) {
+      baseline = { sha, ts };
+      log(`baseline sha=${sha || "?"} ts=${ts} status=${data.status || "?"}`);
+      return;
     }
-    if (data.status === "failed") {
-      log(`failed sha=${data.sha || "?"} ${data.message || ""}`);
-      try { ws.close(); } catch {}
-      process.exit(1);
-    }
+
+    const isNew = (sha && sha !== baseline.sha) || (ts && ts > baseline.ts);
+    if (!isNew) return;
+
+    if (data.status === "success") return terminal("success", data);
+    if (data.status === "failed")  return terminal("failed",  data);
   });
 
   ws.addEventListener("close", (ev) => {
