@@ -312,7 +312,7 @@ html.html-ctr-whisper {
     }
   }
 
-  &.quieted:not([data-duration-key="quiet"]) {
+  &.quieted:not([data-duration-key="quiet"]):not([data-duration-key="kennel"]) {
     .ring-bg {
       stroke: #1A1A2E;
     }
@@ -322,6 +322,18 @@ html.html-ctr-whisper {
     .ring-progress.overdue {
       stroke: #666;
       animation: none;
+    }
+  }
+
+  &[data-duration-key="kennel"] {
+    .ring-progress,
+    .ring-progress.overdue {
+      stroke: #800000;
+      animation: none;
+    }
+    .ring-timer,
+    .ring-timer.overdue {
+      color: #800000;
     }
   }
 

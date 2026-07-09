@@ -31,7 +31,7 @@ CHANNEL_ID="${1:-deploy}"
 CABLE_URL="${PORTFOLIO_CABLE_URL:-wss://ardesian.com/cable}"
 
 exec node --experimental-websocket --no-warnings - \
-  "$CABLE_URL" "$PORTFOLIO_LOCAL_APIKEY" "$CHANNEL_ID" "$DEPLOY_WAIT_DEBUG" <<'NODE'
+  "$CABLE_URL" "$PORTFOLIO_LOCAL_APIKEY" "$CHANNEL_ID" "$DEPLOY_WAIT_DEBUG" <<'JS'
 const [,, cableUrl, apiKey, channelId, debugFlag] = process.argv;
 const DEBUG = debugFlag === "1";
 const url = `${cableUrl}?Authorization=${encodeURIComponent(`Bearer ${apiKey}`)}`;
@@ -46,14 +46,37 @@ const resyncData = JSON.stringify({ action: "resync", id: channelId, channel: ch
 let baseline = null;
 let attempt = 0;
 let ws = null;
+let reconnectTicker = null;
+const startedAt = Date.now();
+
+// First few retries use a fixed short delay — a dropped socket almost
+// always comes right back. Only escalate to exponential backoff if we
+// keep failing (server actually down / restart mid-deploy).
+const FAST_RETRIES = 5;
+const FAST_RETRY_MS = 3000;
+
+function formatElapsed(ms) {
+  const total = Math.round(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h) return `${h}h ${m}m ${s}s`;
+  if (m) return `${m}m ${s}s`;
+  return `${s}s`;
+}
 
 const isTTY = process.stderr.isTTY;
 const c = {
   green:  isTTY ? "\x1b[32m" : "",
   red:    isTTY ? "\x1b[31m" : "",
   dim:    isTTY ? "\x1b[2m"  : "",
+  grey:   isTTY ? "\x1b[90m" : "",
   reset:  isTTY ? "\x1b[0m"  : "",
 };
+
+function greyText(s) {
+  return c.grey + s + c.reset;
+}
 
 function log(msg) {
   if (!DEBUG) return;
@@ -62,7 +85,7 @@ function log(msg) {
   redraw();
 }
 
-let currentStatus = { dot: c.dim + "●" + c.reset, text: "Connecting..." };
+let currentStatus = { dot: c.dim + "●" + c.reset, text: greyText("Connecting...") };
 
 function status(dot, text) {
   currentStatus = { dot, text };
@@ -80,20 +103,46 @@ function finalize(dot, text) {
 }
 
 function scheduleReconnect() {
-  const delay = Math.min(30000, 500 * 2 ** Math.min(attempt, 6));
-  log(`reconnecting in ${delay}ms`);
-  status(c.red + "●" + c.reset, `Reconnecting in ${Math.round(delay / 1000)}s...`);
-  setTimeout(connect, delay);
+  const delay = (
+    attempt <= FAST_RETRIES
+      ? FAST_RETRY_MS
+      : Math.min(30000, 3000 * 2 ** (attempt - FAST_RETRIES))
+  );
+  log(`reconnecting in ${delay}ms (attempt ${attempt})`);
+
+  let remaining = Math.ceil(delay / 1000);
+  const tick = () => {
+    status(c.red + "●" + c.reset, greyText(`Reconnecting in ${remaining}s...`));
+  };
+  tick();
+  clearInterval(reconnectTicker);
+  reconnectTicker = setInterval(() => {
+    remaining--;
+    if (remaining <= 0) {
+      clearInterval(reconnectTicker);
+      reconnectTicker = null;
+      return;
+    }
+    tick();
+  }, 1000);
+
+  setTimeout(() => {
+    clearInterval(reconnectTicker);
+    reconnectTicker = null;
+    connect();
+  }, delay);
 }
 
 function terminal(kind, data) {
   log(`${kind} sha=${data.sha || "?"} ${data.message || ""}`);
+  clearInterval(reconnectTicker);
   try { ws.close(); } catch {}
+  const elapsed = greyText(` (${formatElapsed(Date.now() - startedAt)})`);
   if (kind === "success") {
-    finalize(c.green + "✔" + c.reset, "Deploy Success!");
+    finalize(c.green + "✔" + c.reset, "Deploy Success!" + elapsed);
     process.exit(0);
   } else {
-    finalize(c.red + "✘" + c.reset, "Deploy Failed!");
+    finalize(c.red + "✘" + c.reset, "Deploy Failed!" + elapsed);
     process.exit(1);
   }
 }
@@ -101,7 +150,7 @@ function terminal(kind, data) {
 function connect() {
   attempt++;
   log(`connect (attempt ${attempt}) → ${cableUrl}`);
-  status(c.dim + "●" + c.reset, "Connecting...");
+  status(c.dim + "●" + c.reset, greyText("Connecting..."));
 
   ws = new WebSocket(url);
 
@@ -119,7 +168,7 @@ function connect() {
 
     if (msg.type === "confirm_subscription") {
       log(`subscribed → MonitorChannel (watching id=${channelId})`);
-      status(c.green + "●" + c.reset, "Waiting for deploy...");
+      status(c.green + "●" + c.reset, greyText("Waiting for deploy..."));
       ws.send(JSON.stringify({ command: "message", identifier, data: resyncData }));
       return;
     }
@@ -148,7 +197,7 @@ function connect() {
 
   ws.addEventListener("close", (ev) => {
     log(`close code=${ev.code} reason=${ev.reason || ""}`);
-    status(c.red + "●" + c.reset, "Disconnected");
+    status(c.red + "●" + c.reset, greyText("Disconnected"));
     scheduleReconnect();
   });
 
@@ -162,5 +211,8 @@ redraw();
 process.on("SIGINT",  () => process.exit(130));
 process.on("SIGTERM", () => process.exit(143));
 
+if (isTTY) {
+  process.stderr.write(greyText("(Ctrl+C to stop waiting — deploy will continue on the server)") + "\n");
+}
 connect();
-NODE
+JS
