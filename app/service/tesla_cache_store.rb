@@ -19,11 +19,15 @@ class TeslaCacheStore
   TRANSIENT_CHARGE_STATES = ["ClearFaults"].freeze
   BAR_TO_PSI = 14.504
 
-  # Telemetry fields where `<invalid>` means "sensor offline" (parked/key-out)
+  # Telemetry fields where `<invalid>` means "sensor offline / disconnected"
   # rather than "no update this record". Normalized to a concrete default so
   # the deep_merge overwrites the last valid value instead of retaining it
-  # forever — otherwise a stale 20mph reading survives the drive ending.
-  INVALID_DEFAULTS = { VehicleSpeed: 0 }.freeze
+  # forever — otherwise a stale 20mph or "Idle" charge state survives the
+  # drive/charge ending and shows phantom motion or a phantom bolt.
+  INVALID_DEFAULTS = {
+    VehicleSpeed: 0,
+    ChargeState:  "Disconnected",
+  }.freeze
 
   # Which telemetry field belongs to which car_data section. Used both to
   # apply values during compose AND to stamp the section's :ts whenever a

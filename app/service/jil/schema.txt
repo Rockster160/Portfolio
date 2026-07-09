@@ -472,6 +472,7 @@
   .permitRelay?::Boolean
   .phone::String
   .data::Hash
+  .tags::Array
   .update!(content(ContactData))
   .relay(content(Hash|Keyval [Keyval.new]))::Boolean
   .get(String)::Any

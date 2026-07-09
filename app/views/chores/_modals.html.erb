@@ -476,7 +476,7 @@
       <div class="form-section">
         <label class="field-label">Credit to</label>
         <select data-anonymous-credit-user data-1p-ignore="true" data-lpignore="true">
-          <option value="">Nobody (outside household)</option>
+          <option value="">Somebody Else</option>
           <% (defined?(assignable_users) ? assignable_users : [current_user]).each do |u| %>
             <option value="<%= u.id %>"
                     data-username="<%= u.username %>"><%= u.username %><%= " (me)" if u.id == current_user.id %></option>

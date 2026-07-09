@@ -42,6 +42,10 @@ class Jil::Methods::Contact < Jil::Methods::Base
       when :ContactData
         send(method_sym, *evalargs(line.args))
       end
+    when :tags
+      return tag_names(token_val(line.objname)) if token_class(line.objname) == :Contact
+
+      fallback(line)
     else fallback(line)
     end
   end
@@ -141,6 +145,12 @@ class Jil::Methods::Contact < Jil::Methods::Base
   end
 
   private
+
+  def tag_names(contact)
+    return [] if contact.nil?
+
+    contact.tags.pluck(:name)
+  end
 
   def params(details)
     @jil.cast(details, :Hash).slice(*PERMIT_ATTRS).tap { |obj|

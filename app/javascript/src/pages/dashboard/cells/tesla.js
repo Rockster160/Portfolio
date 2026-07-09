@@ -6,19 +6,16 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
   let cell = undefined
 
   // Action label for the drive-status line. Contact name > city > coords.
-  // When moving, we show just the place ("Home") — the "Near " prefix eats
-  // characters we don't have. When stopped, we keep "At " for clarity.
+  // No verb prefix — the shift (P/D/R/N) rendered between the lock and pin
+  // icons carries the moving/stopped state already.
   let driveLabel = function(data) {
-    let moving = data.drive?.moving === true
     let place = data.location?.name
-    if (place) {
-      return moving ? place : "At " + place
-    }
+    if (place) { return place }
     let lat = data.location?.lat, lng = data.location?.lng
     if (lat != null && lng != null) {
-      return (moving ? "" : "Stopped ") + lat.toFixed(2) + "," + lng.toFixed(2)
+      return lat.toFixed(2) + "," + lng.toFixed(2)
     }
-    return moving ? "Driving" : "Stopped"
+    return ""
   }
 
   // Route line: shown when navigation has an active destination. Prefers the
@@ -72,28 +69,6 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
       lines.push("")
     }
 
-    if (data.climate?.hvac_on) {
-      let climate_text = "Climate: "
-      climate_text += Text.green("[ON] ")
-      if (data.climate.set_f != null) {
-        climate_text += shiftTempToColor(data.climate.set_f)
-      }
-      lines.push(Text.center(climate_text))
-    } else {
-      lines.push(Text.center(Text.grey("[OFF]")))
-    }
-
-    let lock = data.doors?.locked ? "[ico ti ti-fa-lock]" : "[ico ti ti-fa-unlock]"
-    let drive_text = lock
-    drive_text += "[ico ti ti-oct-location]" + driveLabel(data)
-    if (speed > 0) {
-      drive_text += " [ico ti ti-mdi-speedometer]" + speed + "mph"
-    }
-    lines.push(Text.center(Text.grey(drive_text)))
-
-    let route = routeLabel(data)
-    lines.push(route ? Text.center(Text.grey(route)) : "")
-
     lines.push("")
     let opens = []
     if (data.doors) {
@@ -111,6 +86,30 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
       if (isOpen(data.windows.passenger_rear))  { opens.push("RPW") }
     }
     lines.push(opens.length > 0 ? Text.center("Open: " + opens.join(",")) : "")
+
+    if (data.climate?.hvac_on) {
+      let climate_text = "Climate: "
+      climate_text += Text.green("[ON] ")
+      if (data.climate.set_f != null) {
+        climate_text += shiftTempToColor(data.climate.set_f)
+      }
+      lines.push(Text.center(climate_text))
+    } else {
+      lines.push(Text.center(Text.grey("[OFF]")))
+    }
+
+    let lock = data.doors?.locked ? "[ico ti ti-fa-lock]" : "[ico ti ti-fa-unlock]"
+    let shift = data.drive?.shift || ""
+    let drive_text = lock
+    if (shift) { drive_text += shift }
+    drive_text += "[ico ti ti-oct-location]" + driveLabel(data)
+    if (speed > 0) {
+      drive_text += " [ico ti ti-mdi-speedometer]" + speed + "mph"
+    }
+    lines.push(Text.center(Text.grey(drive_text)))
+
+    let route = routeLabel(data)
+    lines.push(route ? Text.center(Text.grey(route)) : "")
 
     let notify = cell.data.failed ? Text.orange("[FAILED]") : ""
     notify = cell.data.sleeping ? Text.grey("[sleep]") : notify
