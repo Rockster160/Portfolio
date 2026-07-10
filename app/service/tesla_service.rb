@@ -10,7 +10,7 @@ class TeslaService
       ChargeState:         1.second,
       ChargePort:          30.seconds,
       VehicleSpeed:        1.minute,
-      Gear:                30.seconds,
+      Gear:                5.seconds,
       Odometer:            30.minutes,
       Location:            1.minute,
       GpsState:            1.minute,

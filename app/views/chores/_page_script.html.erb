@@ -2952,6 +2952,7 @@
     editForm.querySelector('[data-after-chore-wrap]')?.classList.toggle("hidden",
       freq !== "after_chore");
     editForm.querySelector('[data-weekdays-wrap]')?.classList.add("hidden");
+    editForm.querySelector('[data-starts-on-wrap]')?.classList.toggle("hidden", freq === "never");
     syncAfterChoreLaterRow();
     if (freq === "weekly") {
       const chips = Array.from(editForm.querySelectorAll('[data-weekday-chips] .chip-day.active'));

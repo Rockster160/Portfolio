@@ -185,6 +185,7 @@ class TeslaCacheStore
       ep = endpoint_cache_hash[:current] || {}
       tel = telemetry_cache_hash[:current] || {}
       sec_ts = (telemetry_cache_hash[:section_ts] || {}).symbolize_keys
+      ep_ts = endpoint_cache_hash[:timestamp]
 
       {
         state:      ep[:state] || (tel.any? ? "online" : nil),
@@ -193,7 +194,7 @@ class TeslaCacheStore
 
         location:   compose_location(ep, tel, sec_ts),
         battery:    compose_battery(ep, sec_ts),
-        charging:   compose_charging(ep, tel, sec_ts),
+        charging:   compose_charging(ep, tel, sec_ts, ep_ts),
         drive:      compose_drive(ep, tel, sec_ts),
         trip:       compose_trip(ep, tel, sec_ts),
         climate:    compose_climate(ep, tel, sec_ts),
@@ -233,19 +234,24 @@ class TeslaCacheStore
       }.compact
     end
 
-    def compose_charging(ep, tel, sec_ts)
-      # Tesla doesn't push a "Disconnected" ChargeState when the cable is
-      # unplugged — it just goes quiet, leaving the deep_merged current stuck
-      # at whatever the last live value was ("Idle", "Charging", etc). The
-      # endpoint poll's `charging_state` DOES cleanly transition to
-      # "Disconnected" on unplug, so when it says so it wins over stale
-      # telemetry. Endpoint's charge-related fields don't have the shift_state
-      # staleness risk (they don't change per-second during a drive), so
-      # trusting endpoint here is safe.
-      ep_state = ep.dig(:charge_state, :charging_state)
-      state = ep_state == "Disconnected" ? "Disconnected" : tel[:ChargeState]
-      state = nil if TRANSIENT_CHARGE_STATES.include?(state)
-      state ||= ep_state
+    def compose_charging(ep, tel, sec_ts, ep_ts)
+      # Neither source is perfect for charging state:
+      #   - Telemetry pushes live transitions but never pushes "Disconnected"
+      #     on unplug (Tesla just goes quiet, leaving a stale "Idle").
+      #   - The endpoint poll cleanly reports "Disconnected" — but endpoint
+      #     polls are on-demand, so its cached snapshot can be arbitrarily
+      #     stale in the OTHER direction after a plug-in.
+      # Resolution: use whichever source has the more recent timestamp.
+      # Ties or missing timestamps favor telemetry (usually the live source).
+      tel_state = tel[:ChargeState]
+      tel_state = nil if TRANSIENT_CHARGE_STATES.include?(tel_state)
+      ep_state  = ep.dig(:charge_state, :charging_state)
+
+      state = if tel_fresher?(sec_ts[:charging], ep_ts)
+        tel_state || ep_state
+      else
+        ep_state || tel_state
+      end
       return nil unless state
 
       cs = ep[:charge_state] || {}
@@ -415,6 +421,16 @@ class TeslaCacheStore
     end
 
     def max_ts(*values) = values.compact.max
+
+    # True when the telemetry section is at least as fresh as the endpoint
+    # snapshot. Nil telemetry ts (no push received for this section) → endpoint
+    # wins; nil endpoint ts (never polled) → telemetry wins.
+    def tel_fresher?(tel_ts, ep_ts)
+      return false if tel_ts.nil?
+      return true if ep_ts.nil?
+
+      tel_ts >= ep_ts
+    end
 
     def c_to_f(c)
       return nil if c.nil?

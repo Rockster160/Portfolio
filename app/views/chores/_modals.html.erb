@@ -120,13 +120,16 @@
         </label>
       </div>
 
-      <%# ----- Start Date (starts_on) — schedule anchor for recurring
-        chores (controls when patterns like "every 5 days" begin and is
-        the reference point for monthly/yearly recurrences). Recurring
-        only; single tasks use the top-level Due Date field instead. ----- %>
-      <div class="form-section" data-recurring-only>
-        <label class="field-label">Start Date</label>
-        <input type="date" data-field="starts_on" class="add-date"
+      <%# ----- Due Date (marked_due_at) — when this chore needs doing.
+        For single tasks it's the only date field (Repeats is hidden).
+        For recurring chores it sits above the schedule as an optional
+        one-time override on top of the regular pattern. Leave blank to
+        follow the schedule (or, for single tasks, to leave the chore
+        parked in Scheduled until manually marked). The modal-head !
+        button is the same field set to "right now." ----- %>
+      <div class="form-section">
+        <label class="field-label">Due Date</label>
+        <input type="date" data-field="marked_due_at" class="add-date"
                autocomplete="off" data-1p-ignore="true" data-lpignore="true">
       </div>
 
@@ -145,6 +148,18 @@
           <button type="button" class="pill" data-value="after_chore">Follows another chore</button>
         </div>
         <input type="hidden" data-field="freq" value="never">
+
+        <%# ----- Start Date (starts_on) — schedule anchor for recurring
+          chores (controls when patterns like "every 5 days" begin and
+          is the reference point for monthly/yearly recurrences). Hidden
+          when freq is "never" — a chore with no repeat has no anchor
+          to set. Single tasks hide the whole Repeats block via
+          data-recurring-only above. ----- %>
+        <div class="repeat-detail hidden" data-starts-on-wrap>
+          <label class="field-label">Start Date</label>
+          <input type="date" data-field="starts_on" class="add-date"
+                 autocomplete="off" data-1p-ignore="true" data-lpignore="true">
+        </div>
 
         <%# Weekly chips %>
         <div data-weekly-wrap class="repeat-detail hidden">
@@ -249,19 +264,6 @@
           </div>
           <span class="field-hint">Surfaces in Scheduled when the anchor is completed and stays there until you complete it. (It can always be completed from Grid view too.)</span>
         </div>
-      </div>
-
-      <%# ----- Due Date (marked_due_at) — when this chore needs doing.
-        For single tasks it's the only date field (Repeats is hidden).
-        For recurring chores it sits below the schedule as an optional
-        one-time override on top of the regular pattern. Leave blank to
-        follow the schedule (or, for single tasks, to leave the chore
-        parked in Scheduled until manually marked). The modal-head !
-        button is the same field set to "right now." ----- %>
-      <div class="form-section">
-        <label class="field-label">Due Date</label>
-        <input type="date" data-field="marked_due_at" class="add-date"
-               autocomplete="off" data-1p-ignore="true" data-lpignore="true">
       </div>
 
       <%# ----- Notes (free-form scratchpad) -----

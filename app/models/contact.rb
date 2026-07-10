@@ -7,6 +7,7 @@
 #  birthday         :date
 #  data             :jsonb
 #  email            :text
+#  last_name        :text
 #  lat              :float
 #  lng              :float
 #  name             :text

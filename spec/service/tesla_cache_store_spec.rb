@@ -192,11 +192,26 @@ RSpec.describe TeslaCacheStore do
       expect(car_data.dig(:charging, :state)).to eq("Charging")
     end
 
-    it "endpoint charging_state=Disconnected overrides stale telemetry ChargeState (Tesla doesn't push Disconnected via telemetry)" do
+    it "endpoint charging_state=Disconnected overrides stale telemetry Idle (Tesla doesn't push Disconnected via telemetry)" do
       described_class.record_telemetry(ChargeState: "Idle")
       described_class.record_endpoint(charge_state: { battery_level: 90, charging_state: "Disconnected" })
       expect(car_data.dig(:charging, :state)).to eq("Disconnected")
       expect(car_data.dig(:charging, :active)).to be(false)
+    end
+
+    it "fresh telemetry wins over a stale endpoint snapshot (timestamp-based)" do
+      # Endpoint polled first (older), then telemetry pushes a live update.
+      described_class.record_endpoint(charge_state: { battery_level: 30, charging_state: "Disconnected" })
+      described_class.record_telemetry(ChargeState: "Enable")
+      expect(car_data.dig(:charging, :state)).to eq("Enable")
+      expect(car_data.dig(:charging, :active)).to be(true)
+    end
+
+    it "fresh endpoint wins over stale telemetry (unplug: tel goes silent at Idle, endpoint later polls Disconnected)" do
+      described_class.record_telemetry(ChargeState: "Idle")
+      # Simulate the endpoint poll landing after the tel Idle push (typical unplug sequence).
+      described_class.record_endpoint(charge_state: { battery_level: 90, charging_state: "Disconnected" })
+      expect(car_data.dig(:charging, :state)).to eq("Disconnected")
     end
 
     it "rewrites '<invalid>' Gear to ShiftStateP pre-merge (Tesla's key-out signal)" do

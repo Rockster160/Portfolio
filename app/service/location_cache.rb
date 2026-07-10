@@ -9,6 +9,10 @@ class LocationCache
     return if driving? == bool
 
     departed = bool
+    # At the transition moment `recent_locations[-1]` is the current stopped
+    # location — the arrival point for :arrived, the departure point for
+    # :departed. Same coord source for both actions.
+    here_loc = recent_locations[-1]&.dig(:loc)
 
     ::Jil.trigger(
       User.me, :trytravel,
@@ -16,6 +20,9 @@ class LocationCache
         coord: departed ? nil : recent_locations[-1], # If arrived, show current
         from: recent_locations[departed ? -1 : -2], # If arrived, show previous, otherwise current
         location: current_location_name, # Most recent stopped
+        lat: here_loc&.first,
+        lng: here_loc&.last,
+        source: :phone,
         action: departed ? :departed : :arrived,
         (departed ? :departed : :arrived) => current_location_name, # Add this for convenient matchers `travel:arrive:home`
         timestamp: Time.current,

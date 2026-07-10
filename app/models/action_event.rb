@@ -20,8 +20,15 @@ class ActionEvent < ApplicationRecord
 
   before_save { self.timestamp ||= ::Time.current }
 
-  search_terms :id, :name, :notes, :timestamp
+  search_terms :id, :name, :notes, :timestamp, data_source: :search_data_source
 
+  # Sources are stored as top-level truthy keys on `data` (e.g. `{ phone:
+  # true, car: true, lat, lng }`) so a single event can accumulate multiple
+  # reporters. Query matches events whose data has any of the given source
+  # keys.
+  scope :search_data_source, ->(*sources) {
+    where("data ?| array[:sources]", sources: Array.wrap(sources).flatten.compact.map(&:to_s))
+  }
   # Contains ANY
   scope :search_data_actions_any, ->(*qs) {
     where("data -> 'actions' ?| array[:actions]", actions: Array.wrap(qs).flatten.compact)
