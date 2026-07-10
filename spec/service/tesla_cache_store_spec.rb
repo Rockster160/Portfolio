@@ -192,11 +192,18 @@ RSpec.describe TeslaCacheStore do
       expect(car_data.dig(:charging, :state)).to eq("Charging")
     end
 
-    it "rewrites '<invalid>' ChargeState to Disconnected pre-merge (Tesla's unplug signal)" do
-      described_class.record_telemetry(ChargeState: "Charging")
-      described_class.record_telemetry(ChargeState: "<invalid>")
+    it "endpoint charging_state=Disconnected overrides stale telemetry ChargeState (Tesla doesn't push Disconnected via telemetry)" do
+      described_class.record_telemetry(ChargeState: "Idle")
+      described_class.record_endpoint(charge_state: { battery_level: 90, charging_state: "Disconnected" })
       expect(car_data.dig(:charging, :state)).to eq("Disconnected")
       expect(car_data.dig(:charging, :active)).to be(false)
+    end
+
+    it "rewrites '<invalid>' Gear to ShiftStateP pre-merge (Tesla's key-out signal)" do
+      described_class.record_telemetry(Gear: "ShiftStateR")
+      described_class.record_telemetry(Gear: "<invalid>")
+      expect(car_data.dig(:drive, :shift)).to eq("P")
+      expect(car_data.dig(:drive, :parked)).to be(true)
     end
 
     it "maps DoorState (PascalCase telemetry) to descriptive keys in doors" do

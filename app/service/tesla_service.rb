@@ -8,6 +8,7 @@ class TeslaService
     {
       VehicleName:         1.second,
       ChargeState:         1.second,
+      ChargePort:          30.seconds,
       VehicleSpeed:        1.minute,
       Gear:                30.seconds,
       Odometer:            30.minutes,

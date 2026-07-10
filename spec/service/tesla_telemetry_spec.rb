@@ -99,12 +99,24 @@ RSpec.describe TeslaTelemetry do
 
     it "fires :tesla_trip_started when destination appears" do
       seed_car_data(trip: nil)
+      seed_endpoint(drive_state: {
+        active_route_latitude:            40.5,
+        active_route_longitude:           -111.5,
+        active_route_miles_to_arrival:    5.0,
+        active_route_minutes_to_arrival:  10.0,
+      })
       process(DestinationLocation: dest, MilesToArrival: 5.0, MinutesToArrival: 10.0)
       expect(triggered?(:tesla_trip_started) { |d| d.key?(:destination_lat) }).to be(true)
     end
 
     it "fires :tesla_trip_updated when destination changes to a new location" do
       seed_car_data(trip: { destination: { lat: 40.5, lng: -111.5 } })
+      seed_endpoint(drive_state: {
+        active_route_latitude:            41.0,
+        active_route_longitude:           -112.0,
+        active_route_miles_to_arrival:    8.0,
+        active_route_minutes_to_arrival:  15.0,
+      })
       process(DestinationLocation: other_dest)
       expect(triggered?(:tesla_trip_updated) { |d| d.key?(:destination_lat) }).to be(true)
     end

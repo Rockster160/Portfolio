@@ -19,14 +19,16 @@ class TeslaCacheStore
   TRANSIENT_CHARGE_STATES = ["ClearFaults"].freeze
   BAR_TO_PSI = 14.504
 
-  # Telemetry fields where `<invalid>` means "sensor offline / disconnected"
-  # rather than "no update this record". Normalized to a concrete default so
-  # the deep_merge overwrites the last valid value instead of retaining it
-  # forever — otherwise a stale 20mph or "Idle" charge state survives the
-  # drive/charge ending and shows phantom motion or a phantom bolt.
+  # Telemetry fields where Tesla actively pushes `<invalid>` on sensor-offline
+  # (key-out) — we rewrite to a concrete default so the deep_merge overwrites
+  # the last valid value instead of retaining it forever. Empirically verified
+  # from fleet-telemetry captures: VehicleSpeed and Gear both push `<invalid>`;
+  # ChargeState does not (it either stops updating or lingers as "Idle"), so
+  # the phantom-bolt fix has to live in the endpoint-preference logic inside
+  # compose_charging instead.
   INVALID_DEFAULTS = {
     VehicleSpeed: 0,
-    ChargeState:  "Disconnected",
+    Gear:         "ShiftStateP",
   }.freeze
 
   # Which telemetry field belongs to which car_data section. Used both to
@@ -232,9 +234,18 @@ class TeslaCacheStore
     end
 
     def compose_charging(ep, tel, sec_ts)
-      state = tel[:ChargeState]
+      # Tesla doesn't push a "Disconnected" ChargeState when the cable is
+      # unplugged — it just goes quiet, leaving the deep_merged current stuck
+      # at whatever the last live value was ("Idle", "Charging", etc). The
+      # endpoint poll's `charging_state` DOES cleanly transition to
+      # "Disconnected" on unplug, so when it says so it wins over stale
+      # telemetry. Endpoint's charge-related fields don't have the shift_state
+      # staleness risk (they don't change per-second during a drive), so
+      # trusting endpoint here is safe.
+      ep_state = ep.dig(:charge_state, :charging_state)
+      state = ep_state == "Disconnected" ? "Disconnected" : tel[:ChargeState]
       state = nil if TRANSIENT_CHARGE_STATES.include?(state)
-      state ||= ep.dig(:charge_state, :charging_state)
+      state ||= ep_state
       return nil unless state
 
       cs = ep[:charge_state] || {}
