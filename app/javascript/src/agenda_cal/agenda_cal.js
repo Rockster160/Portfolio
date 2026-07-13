@@ -3487,9 +3487,35 @@
     }
     // Same range OR user navigated away on purpose — refresh in place so
     // today markers + carry-over re-render with the new logical date, and
-    // light up the Today pill if needed.
+    // light up the Today pill if needed. `__refreshAgendaCal` only fetches
+    // deltas + repaints event blocks; the `is-today` CSS class on day
+    // cells is written by renderWeekFor/buildMonthBlockNode, so we have
+    // to sweep it ourselves when rollover happens in-place.
+    refreshTodayMarkers(root, dayStart);
     updateTodayBtnState(root, dayStart);
     window.__refreshAgendaCal();
+  }
+
+  // Toggle `is-today` on the visible day cells against the current
+  // logical (week) or wall-clock (month) date. Idempotent.
+  function refreshTodayMarkers(root, dayStart) {
+    if (root.classList.contains("agenda-cal-week-page")) {
+      const todayISO = logicalDateISO(new Date(), dayStart);
+      const cells = $$(
+        ".cal-week-header-day, .cal-week-allday-cell, .cal-week-column",
+        root,
+      );
+      cells.forEach((cell) => {
+        cell.classList.toggle("is-today", cell.dataset.date === todayISO);
+      });
+      return;
+    }
+    if (root.classList.contains("agenda-cal-month-page")) {
+      const todayISO = toISO(new Date());
+      $$(".cal-month-cell", root).forEach((cell) => {
+        cell.classList.toggle("is-today", cell.dataset.date === todayISO);
+      });
+    }
   }
 
   // ============================================================
