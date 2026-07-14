@@ -10,7 +10,7 @@
         `data-balance` hook with the header pill — the header pill is
         always "earned today". Distinct attribute = no JS handler can
         cross-write them. %>
-    <div class="balance-amount"><span data-lifetime-balance><%= format_count(@balance) %></span>p</div>
+    <div class="balance-amount <%= "is-negative" if @balance.to_i.negative? %>" data-lifetime-balance-wrap><span data-lifetime-balance><%= format_count(@balance) %></span>p</div>
   </div>
 
   <div class="balance-section-heading" style="margin-top:12px;">
@@ -48,8 +48,8 @@
 
   <h3 style="margin-top:24px;">Withdraw</h3>
   <form class="basic" data-withdraw-form>
-    <fieldset class="balance-form-row" data-withdraw-fieldset <%= "disabled" if @balance.to_i <= 0 %>>
-      <input class="basic withdraw-amount" type="number" name="amount_pebbles" placeholder="Amount" min="1" max="<%= [@balance.to_i, 1].max %>" autocomplete="off">
+    <fieldset class="balance-form-row" data-withdraw-fieldset>
+      <input class="basic withdraw-amount" type="number" name="amount_pebbles" placeholder="Amount" min="1" autocomplete="off">
       <input class="basic withdraw-note" type="text" name="note" placeholder="Note (optional)" autocomplete="off">
       <div class="withdraw-time-submit">
         <input class="basic withdraw-time" type="datetime-local" name="created_at" data-withdraw-when autocomplete="off">

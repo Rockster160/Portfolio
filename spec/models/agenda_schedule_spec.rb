@@ -207,6 +207,42 @@ RSpec.describe AgendaSchedule do
     end
   end
 
+  describe "#add_excluded_date!" do
+    let(:sched) {
+      build_schedule(
+        kind:             "event",
+        start_time:       "09:30",
+        duration_minutes: 60,
+        recurrence:       { "freq" => "weekdays" },
+        starts_on:        Date.new(2026, 5, 4),
+      )
+    }
+    let(:day) { Date.new(2026, 5, 4) }
+    let(:day_start) { ActiveSupport::TimeZone[user.timezone].local(day.year, day.month, day.day, 9, 30) }
+    let(:day_end) { day_start + 60.minutes }
+
+    it "cancels a non-detached materialized phantom on that date" do
+      item = sched.agenda_items.create!(
+        agenda: agenda, kind: "event", name: "Phantom", start_at: day_start, end_at: day_end,
+      )
+      sched.add_excluded_date!(day)
+      expect(item.reload.status).to eq("cancelled")
+      expect(item.reload.cancelled_at).to be_present
+    end
+
+    it "leaves a detached override on that date untouched" do
+      override = sched.agenda_items.create!(
+        agenda:            agenda, kind: "event", name: "Override",
+        start_at:          day_start, end_at: day_end,
+        detached_at:       Time.current,
+        original_start_at: day_start,
+      )
+      sched.add_excluded_date!(day)
+      expect(override.reload.status).to eq("confirmed")
+      expect(override.reload.cancelled_at).to be_nil
+    end
+  end
+
   describe "#occurrence_start_at" do
     it "uses the schedule's start_time as the wall-clock for phantoms even when a past materialized item carries a different time" do
       sched = build_schedule(

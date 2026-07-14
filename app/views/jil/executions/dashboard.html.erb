@@ -21,8 +21,10 @@
   status_keys = %w[success failed cancelled started]
   status_id_to_name = Execution.statuses.invert.transform_values(&:to_s)
 
+  scope_param = @view_scope == :all ? { scope: :all } : {}
   dashboard_url = ->(opts) {
-    @task ? dashboard_jil_task_executions_path(@task, **opts) : dashboard_jil_executions_path(**opts)
+    merged = scope_param.merge(opts)
+    @task ? dashboard_jil_task_executions_path(@task, **merged) : dashboard_jil_executions_path(**merged)
   }
 %>
 
@@ -45,6 +47,19 @@
       <small>Execution Dashboard</small>
     <% end %>
   </div>
+
+  <% if @admin %>
+    <div class="executions-filters">
+      <a href="<%= @task ? dashboard_jil_task_executions_path(@task, rapid_threshold: @rapid_threshold, window: @window_key) : dashboard_jil_executions_path(rapid_threshold: @rapid_threshold, window: @window_key) %>"
+         class="btn btn-small status-filter <%= 'active' if @view_scope == :mine %>">
+        Mine
+      </a>
+      <a href="<%= @task ? dashboard_jil_task_executions_path(@task, scope: :all, rapid_threshold: @rapid_threshold, window: @window_key) : dashboard_jil_executions_path(scope: :all, rapid_threshold: @rapid_threshold, window: @window_key) %>"
+         class="btn btn-small status-filter <%= 'active' if @view_scope == :all %>">
+        All users
+      </a>
+    </div>
+  <% end %>
 
   <div class="executions-filters">
     <% Jil::ExecutionsController::WINDOW_OPTIONS.each do |key, opts| %>
@@ -156,7 +171,10 @@
             <div class="tcell rank-cell"><%= idx + 1 %></div>
             <div class="tcell task-cell">
               <% if task %>
-                <a href="<%= dashboard_jil_task_executions_path(task) %>"><%= task.name %></a>
+                <a href="<%= dashboard_jil_task_executions_path(task, **scope_param) %>"><%= task.name %></a>
+                <% if @view_scope == :all && (owner = @user_lookup[task.user_id]) %>
+                  <div class="task-owner">@<%= owner.username %></div>
+                <% end %>
               <% elsif row.task_id %>
                 <span class="no-task">Task #<%= row.task_id %></span>
               <% else %>
@@ -194,6 +212,9 @@
     </div>
     <form method="get" action="<%= dashboard_url.call({}) %>" class="threshold-form">
       <input type="hidden" name="window" value="<%= @window_key %>">
+      <% if @view_scope == :all %>
+        <input type="hidden" name="scope" value="all">
+      <% end %>
       <label for="rapid_threshold">Threshold (seconds):</label>
       <input type="number" name="rapid_threshold" id="rapid_threshold" value="<%= @rapid_threshold %>" min="1" max="300" step="1">
       <button type="submit" class="btn btn-small">Update</button>
@@ -219,7 +240,10 @@
           <% unless @task %>
             <div class="tcell task-cell">
               <% if task %>
-                <a href="<%= dashboard_jil_task_executions_path(task) %>"><%= task.name %></a>
+                <a href="<%= dashboard_jil_task_executions_path(task, **scope_param) %>"><%= task.name %></a>
+                <% if @view_scope == :all && (owner = @user_lookup[task.user_id]) %>
+                  <div class="task-owner">@<%= owner.username %></div>
+                <% end %>
               <% else %>
                 <span class="no-task">Task #<%= row["task_id"] %></span>
               <% end %>
@@ -394,6 +418,12 @@
 
     .breakdown-footer strong {
       color: #C9D1D9;
+    }
+
+    .task-owner {
+      font-size: 12px;
+      color: #8B949E;
+      margin-top: 2px;
     }
   </style>
 <% end %>

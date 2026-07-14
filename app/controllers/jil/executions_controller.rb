@@ -27,10 +27,15 @@ class Jil::ExecutionsController < ApplicationController
     @since = Time.current - window[:duration]
     @rapid_threshold = (params[:rapid_threshold].presence || 10).to_i
 
-    @task = current_user.accessible_tasks.find(params[:task_id]) if params[:task_id].present?
+    @admin = current_user.admin?
+    @view_scope = (@admin && params[:scope] == "all") ? :all : :mine
 
-    user_id = current_user.id
-    scope = Execution.where(user_id: user_id).where(started_at: @since..)
+    if params[:task_id].present?
+      @task = @view_scope == :all ? Task.find(params[:task_id]) : current_user.accessible_tasks.find(params[:task_id])
+    end
+
+    scope = Execution.where(started_at: @since..)
+    scope = scope.where(user_id: current_user.id) if @view_scope == :mine
     scope = scope.where(task_id: @task.id) if @task
 
     @total_count = scope.count
@@ -59,6 +64,8 @@ class Jil::ExecutionsController < ApplicationController
       @task_lookup = Task.where(id: task_ids).index_by(&:id)
     end
 
+    user_filter_sql = @view_scope == :mine ? "user_id = ? AND" : ""
+    user_filter_args = @view_scope == :mine ? [current_user.id] : []
     task_filter_sql = @task ? "AND task_id = ?" : ""
     task_filter_args = @task ? [@task.id] : []
 
@@ -69,13 +76,13 @@ class Jil::ExecutionsController < ApplicationController
                  status,
                  COUNT(*) AS count
           FROM executions
-          WHERE user_id = ? AND started_at >= ? #{task_filter_sql}
+          WHERE #{user_filter_sql} started_at >= ? #{task_filter_sql}
           GROUP BY bucket, status
           ORDER BY bucket
         SQL
         @bucket_seconds,
         @bucket_seconds,
-        user_id,
+        *user_filter_args,
         @since,
         *task_filter_args,
       ]),
@@ -94,14 +101,14 @@ class Jil::ExecutionsController < ApplicationController
                    started_at,
                    EXTRACT(EPOCH FROM (started_at - LAG(started_at) OVER (PARTITION BY task_id ORDER BY started_at))) AS gap
             FROM executions
-            WHERE user_id = ? AND started_at >= ? AND task_id IS NOT NULL #{task_filter_sql}
+            WHERE #{user_filter_sql} started_at >= ? AND task_id IS NOT NULL #{task_filter_sql}
           ) sub
           WHERE gap IS NOT NULL AND gap < ?
           GROUP BY task_id
           ORDER BY rapid_count DESC, min_gap ASC
           LIMIT 25
         SQL
-        user_id,
+        *user_filter_args,
         @since,
         *task_filter_args,
         @rapid_threshold,
@@ -110,6 +117,13 @@ class Jil::ExecutionsController < ApplicationController
 
     rapid_task_ids = @rapid_fire.pluck("task_id").compact - @task_lookup.keys
     @task_lookup.merge!(Task.where(id: rapid_task_ids).index_by(&:id)) if rapid_task_ids.any?
+
+    if @view_scope == :all
+      owner_ids = @task_lookup.values.map(&:user_id).uniq
+      @user_lookup = User.where(id: owner_ids).index_by(&:id)
+    else
+      @user_lookup = {}
+    end
   end
 
   def show

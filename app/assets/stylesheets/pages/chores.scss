@@ -1330,6 +1330,9 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     font-weight: 700;
     color: #FBBF24;
   }
+  .balance-card .balance-amount.is-negative {
+    color: #EF4444;
+  }
   .balance-card .balance-label {
     color: var(--chores-muted);
     font-size: 12px;

@@ -5,7 +5,7 @@ class ChoreWithdrawalsController < ApplicationController
     amount = params.dig(:chore_withdrawal, :amount_pebbles).to_i
     note = params.dig(:chore_withdrawal, :note)
     created_at = params.dig(:chore_withdrawal, :created_at).presence
-    if amount <= 0 || amount > current_user.chore_balance
+    if amount <= 0
       return render json: { error: "Invalid amount" }, status: :unprocessable_entity
     end
 

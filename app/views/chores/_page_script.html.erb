@@ -2428,6 +2428,8 @@
     if (root) root.dataset.balanceTotal = value;
     const el = document.querySelector("[data-lifetime-balance]");
     if (el) el.textContent = formatCount(value);
+    const wrap = document.querySelector("[data-lifetime-balance-wrap]");
+    if (wrap) wrap.classList.toggle("is-negative", Number(value) < 0);
     writeBalanceCache({ balance: value });
   }
   // Hydrate the pill + lifetime card from localStorage on boot. Runs
@@ -2444,6 +2446,8 @@
       if (root) root.dataset.balanceTotal = cache.balance;
       const el = document.querySelector("[data-lifetime-balance]");
       if (el) el.textContent = formatCount(cache.balance);
+      const wrap = document.querySelector("[data-lifetime-balance-wrap]");
+      if (wrap) wrap.classList.toggle("is-negative", Number(cache.balance) < 0);
     }
   }
 

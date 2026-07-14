@@ -159,5 +159,42 @@ RSpec.describe Jil::ExecutionsController, type: :controller do
         expect(response).not_to be_successful
       end
     end
+
+    context "when admin views scope=all" do
+      let(:admin) { FactoryBot.create(:user, phone: "5550000099", role: :admin) }
+      before { sign_in admin }
+
+      it "includes executions from other users" do
+        get :dashboard, params: { scope: "all" }
+        expect(controller.instance_variable_get(:@view_scope)).to eq(:all)
+        expect(controller.instance_variable_get(:@total_count)).to eq(8)
+      end
+
+      it "surfaces other users' tasks in top offenders" do
+        get :dashboard, params: { scope: "all" }
+        offenders = controller.instance_variable_get(:@top_offenders)
+        expect(offenders.map(&:task_id)).to include(task_a.id, task_b.id)
+      end
+
+      it "loads owner records for the user_lookup" do
+        get :dashboard, params: { scope: "all" }
+        lookup = controller.instance_variable_get(:@user_lookup)
+        expect(lookup[user.id]).to eq(user)
+      end
+
+      it "allows drilling into a task the admin does not own" do
+        get :dashboard, params: { scope: "all", task_id: task_a.id }
+        expect(response).to be_successful
+        expect(controller.instance_variable_get(:@task)).to eq(task_a)
+      end
+    end
+
+    context "when non-admin passes scope=all" do
+      it "ignores the param and stays scoped to the current user" do
+        get :dashboard, params: { scope: "all" }
+        expect(controller.instance_variable_get(:@view_scope)).to eq(:mine)
+        expect(controller.instance_variable_get(:@total_count)).to eq(7)
+      end
+    end
   end
 end

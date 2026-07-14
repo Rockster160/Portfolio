@@ -173,14 +173,18 @@ class AgendaSchedule < ApplicationRecord
     Array(recurrence_data[:excluded_dates]).filter_map { |d| safe_parse_date(d) }.to_set
   end
 
-  # Adding a date to excluded_dates always means "this occurrence is gone"
-  # — whether the caller was the destroy controller, a Google sync mirroring
-  # an upstream cancellation, or a series edit shifting the tail. Any row
-  # already materialized on that date (including detached overrides that
-  # kept their original_start_at) needs to flip to cancelled so the agenda
-  # list, carryover, and — critically — its derived ScheduledTriggers
-  # ("fire 45m before") don't survive as ghosts. AgendaItem's
-  # after_update_commit purges the pending triggers when status flips.
+  # Adding a date to excluded_dates always means "no more phantom on this
+  # date" — whether the caller was the destroy controller, a Google sync
+  # mirroring an upstream cancellation, or a series edit shifting the tail.
+  # `sweep_materialized_on!` cancels any *non-detached* row on that date
+  # (leftover phantoms that Jil workers materialized ahead of time) so the
+  # agenda list, carryover, and derived ScheduledTriggers ("fire 45m
+  # before") don't survive as ghosts. Detached overrides are skipped — they
+  # represent an explicit user/Google-driven modification and are handled
+  # by their own code paths (`handle_cancellation` destroys them directly,
+  # `cancel_occurrence!` cancels self via its trailing update!).
+  # AgendaItem's after_update_commit purges the pending triggers when the
+  # status flips.
   def add_excluded_date!(date)
     target = date.to_date
     next_set = excluded_dates + [target]
@@ -462,6 +466,7 @@ class AgendaSchedule < ApplicationRecord
     day_end   = user_zone.local(date.year, date.month, date.day).end_of_day
     agenda_items
       .not_cancelled
+      .where(detached_at: nil)
       .where(start_at: day_start..day_end)
       .find_each { |item| item.update!(status: :cancelled, cancelled_at: ::Time.current) }
   end
