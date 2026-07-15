@@ -72,39 +72,56 @@ class AmazonEmailParser
     false
   end
 
-  # Amazon redacts item details for some categories (Pet, Beauty, gift cards, etc.)
-  # and just says "Ordered: 1 Pet item" with an order # but no product card. Also
-  # covers bare "Delivered: Order # …" notices with no per-item detail. Behavior:
-  #   * Ordered email + no card → create/update placeholder keyed by order_id
-  #     (item_id == order_id) so the delivery date shows on the dashboard.
-  #   * Shipped/Delivered + no card → only update an existing placeholder; never
-  #     create a phantom item, and never flip sibling ASINs on the same order.
+  # Amazon redacts item details for some categories (Pet, Beauty, Office, gift
+  # cards, etc.) and just prints "Ordered: 1 Pet item" / "Delivered: 1 Office
+  # item" with an order # but no product card. The order # is always present,
+  # so we route by it:
+  #   * Non-delivered rows exist on this order_id → update them (delivered flag,
+  #     arrival date, time range). We can't tell WHICH sibling the redacted
+  #     notification is about, so we apply to all of them.
+  #   * All rows on this order_id are delivered → idempotently attach the
+  #     email_id to the most recent one (no phantom placeholder).
+  #   * No rows exist on this order_id → create a placeholder keyed by
+  #     (order_id, order_id) with a name pulled from the subject.
   def parse_no_card_email(delivered)
-    is_ordered = ordered_email?
-    placeholder = AmazonOrder.find(order_id, order_id)
-
-    if placeholder.nil? && !is_ordered
+    unless shipment_lifecycle_email?
       tag = delivered ? "delivered, no order card" : "no order card"
       return Jarvis.cmd("Add Amazon Email #{tag}: #{@email.id}")
     end
 
-    placeholder ||= AmazonOrder.find_or_create(order_id, order_id).tap { |o|
-      o.order_id_confirmed = true
-    }
+    all_siblings = AmazonOrder.by_order(order_id)
+    active = all_siblings.reject(&:delivered)
+
+    if all_siblings.any? && active.empty?
+      target = all_siblings.max_by { |o| o.email_ids.max || 0 }
+      target.email_ids << @email.id unless target.email_ids.include?(@email.id)
+      AmazonOrder.save
+      AmazonOrder.broadcast
+      return true
+    end
+
+    targets = active.presence || [
+      AmazonOrder.find_or_create(order_id, order_id).tap { |o|
+        o.order_id_confirmed = true
+        o.listed_name ||= redacted_name_from_subject
+        o.name        ||= o.listed_name
+      },
+    ]
 
     text = redacted_email_text
     new_status = status_from_subject
     date = arrival_date_from(text)
+    time_range = arrival_time_from(text)
 
-    placeholder.listed_name ||= redacted_name_from_subject
-    placeholder.name        ||= placeholder.listed_name
-    placeholder.delivery_date = date.iso8601.encode("UTF-8") if date.present?
-    placeholder.time_range = arrival_time_from(text)
-    placeholder.delivered = true if delivered
-    placeholder.errors = []
-    placeholder.email_ids << @email.id unless placeholder.email_ids.include?(@email.id)
-    apply_status(placeholder, new_status)
-    @changed = true
+    targets.each { |item|
+      item.delivery_date = date.iso8601.encode("UTF-8") if date.present?
+      item.time_range = time_range if time_range
+      item.delivered = true if delivered
+      item.errors = []
+      item.email_ids << @email.id unless item.email_ids.include?(@email.id)
+      apply_status(item, new_status)
+      @changed = true
+    }
 
     AmazonOrder.save
     AmazonOrder.broadcast
@@ -120,8 +137,18 @@ class AmazonEmailParser
   # Turns "Ordered: ⁦1⁩ Pet item" (with unicode directional isolates) into
   # "Pet item". Also handles "Shipped: 1 Pet item" and similar variants.
   def redacted_name_from_subject
-    subj = @email.subject.to_s.gsub(/[⁦-⁩‎‏]/, "")
-    subj[/^\s*(?:Ordered|Shipped|Delivered|Delivery update|Arriving)\s*:?\s*\d*\s*(?:x\s*)?(.+?)\s*$/i, 1]&.strip.presence
+    normalized_subject[/^\s*(?:Ordered|Shipped|Delivered|Delivery update|Arriving)\s*:?\s*\d*\s*(?:x\s*)?(.+?)\s*$/i, 1]&.strip.presence
+  end
+
+  # True only for the shipment-lifecycle subject shapes we know how to handle
+  # (Ordered/Shipped/Delivered/etc.). Refund, review-request, "Get ready for
+  # your delivery" marketing, etc. should fall back to the Jarvis-flag path.
+  def shipment_lifecycle_email?
+    normalized_subject.match?(/^\s*(?:Ordered|Shipped|Delivered|Delivery update|Arriving)\b/i)
+  end
+
+  def normalized_subject
+    @normalized_subject ||= @email.subject.to_s.gsub(/[⁦-⁩‎‏]/, "")
   end
 
   # The order details card - the .rio-card containing "Order # XXX-XXXXXXX-XXXXXXX"

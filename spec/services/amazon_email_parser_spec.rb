@@ -200,24 +200,33 @@ RSpec.describe AmazonEmailParser do
       double("Email", id: id, to_html: html, subject: "Delivered: Order # #{oid}")
     end
 
-    it "does not create a phantom item when no items are known for the order" do
-      jarvis_calls = []
-      allow(Jarvis).to receive(:cmd) { |msg| jarvis_calls << msg }
-
+    it "creates a delivered placeholder when no items are known for the order" do
       AmazonEmailParser.parse(delivery_notice_email(99_101, order_id))
 
-      expect(AmazonOrder.by_order(order_id)).to be_empty
-      expect(jarvis_calls.last).to include("99101")
+      placeholder = AmazonOrder.find(order_id, order_id)
+      expect(placeholder).to be_present
+      expect(placeholder.delivered).to eq(true)
+      expect(placeholder.email_ids).to include(99_101)
     end
 
-    it "does NOT auto-mark pre-existing items delivered (siblings may still ship later)" do
+    it "marks pre-existing items on the same order as delivered" do
       existing = AmazonOrder.create(order_id: order_id, item_id: "B0AAAAAAAA", name: "Existing item")
-      allow(Jarvis).to receive(:cmd).and_return(nil)
 
       AmazonEmailParser.parse(delivery_notice_email(99_102, order_id))
 
-      expect(existing.delivered).to be_falsey
-      expect(existing.email_ids).not_to include(99_102)
+      expect(existing.delivered).to eq(true)
+      expect(existing.email_ids).to include(99_102)
+    end
+
+    it "does not double-up when a duplicate delivery notice arrives after siblings are already delivered" do
+      existing = AmazonOrder.create(order_id: order_id, item_id: "B0AAAAAAAA", name: "Existing item")
+      AmazonEmailParser.parse(delivery_notice_email(99_103, order_id))
+      expect(existing.delivered).to eq(true)
+
+      AmazonEmailParser.parse(delivery_notice_email(99_104, order_id))
+
+      expect(AmazonOrder.by_order(order_id).size).to eq(1) # no phantom placeholder
+      expect(existing.email_ids).to include(99_103, 99_104)
     end
 
     it "anchors order_id to the order-card text, ignoring stray ids elsewhere in the html" do
@@ -466,18 +475,47 @@ RSpec.describe AmazonEmailParser do
       expect(calls).to be_empty
     end
 
-    it "still flags a bare 'Delivered: Order # …' notice that has no matching placeholder" do
-      calls = []
-      allow(Jarvis).to receive(:cmd) { |m| calls << m }
-      email = double(
+    it "marks existing items on the same order delivered when a redacted 'Delivered: N Office item' email arrives" do
+      paper  = AmazonOrder.create(order_id: "114-3295736-0173045", item_id: "B09NXN8GTH", name: "Paper Guillotine")
+      sleeve = AmazonOrder.create(order_id: "114-3295736-0173045", item_id: "B0FPHJF3CR", name: "Matte Euro Sleeves")
+
+      AmazonEmailParser.parse(double(
         "Email",
-        id:      99_201,
-        to_html: "<html><body><div>Order # 999-0000000-0000000. Your package was delivered.</div></body></html>",
-        subject: "Delivered: Order # 999-0000000-0000000",
-      )
-      AmazonEmailParser.parse(email)
-      expect(AmazonOrder.by_order("999-0000000-0000000")).to be_empty
-      expect(calls.last).to include("99201")
+        id:      51_049,
+        to_html: html_fixture("email_body_51049", raw: true),
+        subject: "Delivered: ⁦1⁩ Office item",
+      ))
+
+      expect(paper.delivered).to eq(true)
+      expect(sleeve.delivered).to eq(true)
+      expect(paper.email_ids).to include(51_049)
+      expect(sleeve.email_ids).to include(51_049)
+      # No phantom placeholder created when real siblings already covered the order.
+      expect(AmazonOrder.find("114-3295736-0173045", "114-3295736-0173045")).to be_nil
+    end
+
+    it "does not create a phantom placeholder when a duplicate redacted delivery notice arrives" do
+      # Amazon sometimes sends the same "Delivered: 1 Office item" twice (51049 and 51050).
+      # If the first pass already delivered every sibling, the second pass should just
+      # attach its email_id to one — never create a new placeholder row.
+      AmazonEmailParser.parse(double(
+        "Email",
+        id:      51_049,
+        to_html: html_fixture("email_body_51049", raw: true),
+        subject: "Delivered: ⁦1⁩ Office item",
+      ))
+      before_count = AmazonOrder.by_order("114-3295736-0173045").size
+
+      AmazonEmailParser.parse(double(
+        "Email",
+        id:      51_050,
+        to_html: html_fixture("email_body_51050", raw: true),
+        subject: "Delivered: ⁦1⁩ Office item",
+      ))
+
+      after = AmazonOrder.by_order("114-3295736-0173045")
+      expect(after.size).to eq(before_count)
+      expect(after.flat_map(&:email_ids)).to include(51_049, 51_050)
     end
   end
 
