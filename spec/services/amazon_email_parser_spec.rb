@@ -441,6 +441,46 @@ RSpec.describe AmazonEmailParser do
     end
   end
 
+  describe "redacted-category emails (Amazon omits the product card)" do
+    # Email 51048: "Ordered: ⁦1⁩ Pet item" - Amazon redacted the item name and
+    # sent no product link at all. Order # 114-0583723-4455423, "Arriving Monday".
+    let(:subject_51048) { "Ordered: ⁦1⁩ Pet item" }
+
+    it "creates a placeholder keyed by order_id when the Ordered email has no product card" do
+      parse(51_048, subject_51048)
+
+      placeholder = AmazonOrder.find("114-0583723-4455423", "114-0583723-4455423")
+      expect(placeholder).to be_present
+      expect(placeholder.order_id_confirmed).to eq(true)
+      expect(placeholder.listed_name).to eq("Pet item")
+      expect(placeholder.name).to eq("Pet item")
+      expect(placeholder.delivery_date).to be_present
+      expect(placeholder.delivered).to be_falsey
+      expect(placeholder.email_ids).to include(51_048)
+    end
+
+    it "does not fire the Jarvis 'no order card' fallback for redacted Ordered emails" do
+      calls = []
+      allow(Jarvis).to receive(:cmd) { |m| calls << m }
+      parse(51_048, subject_51048)
+      expect(calls).to be_empty
+    end
+
+    it "still flags a bare 'Delivered: Order # …' notice that has no matching placeholder" do
+      calls = []
+      allow(Jarvis).to receive(:cmd) { |m| calls << m }
+      email = double(
+        "Email",
+        id:      99_201,
+        to_html: "<html><body><div>Order # 999-0000000-0000000. Your package was delivered.</div></body></html>",
+        subject: "Delivered: Order # 999-0000000-0000000",
+      )
+      AmazonEmailParser.parse(email)
+      expect(AmazonOrder.by_order("999-0000000-0000000")).to be_empty
+      expect(calls.last).to include("99201")
+    end
+  end
+
   describe "refund / cancellation / payment-declined emails" do
     it "refund email (50726) has no item card; parser flags it without creating items" do
       jarvis_calls = []

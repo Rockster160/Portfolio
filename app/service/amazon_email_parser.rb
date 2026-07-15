@@ -37,13 +37,7 @@ class AmazonEmailParser
 
     delivered = delivered_email?
 
-    if order_card.nil?
-      # No item card → we can't tell which items shipped. Flag for manual review
-      # rather than guessing (a bare "Delivered: Order # …" notice doesn't promise
-      # the WHOLE order delivered — siblings may still be in transit).
-      tag = delivered ? "delivered, no order card" : "no order card"
-      return Jarvis.cmd("Add Amazon Email #{tag}: #{@email.id}")
-    end
+    return parse_no_card_email(delivered) if order_card.nil?
 
     # Only update state for items actually referenced by this email's order card.
     # Other items on the same order_id (shipped/delivered separately) keep their own state.
@@ -76,6 +70,58 @@ class AmazonEmailParser
       "Error parsing Amazon:\n<#{Rails.application.routes.url_helpers.email_url(id: @email.id)}|Click here to view.>", username: "Mail-Bot", icon_emoji: ":mailbox:"
     )
     false
+  end
+
+  # Amazon redacts item details for some categories (Pet, Beauty, gift cards, etc.)
+  # and just says "Ordered: 1 Pet item" with an order # but no product card. Also
+  # covers bare "Delivered: Order # …" notices with no per-item detail. Behavior:
+  #   * Ordered email + no card → create/update placeholder keyed by order_id
+  #     (item_id == order_id) so the delivery date shows on the dashboard.
+  #   * Shipped/Delivered + no card → only update an existing placeholder; never
+  #     create a phantom item, and never flip sibling ASINs on the same order.
+  def parse_no_card_email(delivered)
+    is_ordered = ordered_email?
+    placeholder = AmazonOrder.find(order_id, order_id)
+
+    if placeholder.nil? && !is_ordered
+      tag = delivered ? "delivered, no order card" : "no order card"
+      return Jarvis.cmd("Add Amazon Email #{tag}: #{@email.id}")
+    end
+
+    placeholder ||= AmazonOrder.find_or_create(order_id, order_id).tap { |o|
+      o.order_id_confirmed = true
+    }
+
+    text = redacted_email_text
+    new_status = status_from_subject
+    date = arrival_date_from(text)
+
+    placeholder.listed_name ||= redacted_name_from_subject
+    placeholder.name        ||= placeholder.listed_name
+    placeholder.delivery_date = date.iso8601.encode("UTF-8") if date.present?
+    placeholder.time_range = arrival_time_from(text)
+    placeholder.delivered = true if delivered
+    placeholder.errors = []
+    placeholder.email_ids << @email.id unless placeholder.email_ids.include?(@email.id)
+    apply_status(placeholder, new_status)
+    @changed = true
+
+    AmazonOrder.save
+    AmazonOrder.broadcast
+    @changed
+  end
+
+  # Whole-email text (no card to scope to). We still get the "Arriving …" line
+  # and any delivered indicator; that's enough for placeholder updates.
+  def redacted_email_text
+    @doc.text.to_s.gsub(/\s+/, " ").strip
+  end
+
+  # Turns "Ordered: ⁦1⁩ Pet item" (with unicode directional isolates) into
+  # "Pet item". Also handles "Shipped: 1 Pet item" and similar variants.
+  def redacted_name_from_subject
+    subj = @email.subject.to_s.gsub(/[⁦-⁩‎‏]/, "")
+    subj[/^\s*(?:Ordered|Shipped|Delivered|Delivery update|Arriving)\s*:?\s*\d*\s*(?:x\s*)?(.+?)\s*$/i, 1]&.strip.presence
   end
 
   # The order details card - the .rio-card containing "Order # XXX-XXXXXXX-XXXXXXX"

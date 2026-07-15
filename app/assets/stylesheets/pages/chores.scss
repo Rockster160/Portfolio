@@ -3260,3 +3260,99 @@ body:has(.chores-modal-backdrop:not(.hidden)) {
 .chores-flash.warn {
   background: #F59E0B;
 }
+
+// Confetti overlay for goal-achieved. Uses the popover top layer where
+// available so pieces render above open <dialog> modals (z-index alone
+// can't beat the browser's top layer). Falls back to a max-z fixed
+// overlay for older engines.
+.confetti-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2147483647;
+}
+.confetti-overlay[popover] {
+  max-width: none;
+  max-height: none;
+  color: inherit;
+}
+// Three nested elements — X, Y, and rotation each animate on their
+// own layer so timing on one axis doesn't leak into another. The
+// old single-transform approach made both axes decelerate together
+// into the peak keyframe, which read as an unnatural hang; giving
+// X its own burst-then-drift shape (mirroring Y) keeps the piece
+// moving sideways through the top of the arc so the launch reads as
+// diagonal, not straight up.
+.confetti-piece {
+  position: absolute;
+  will-change: transform;
+  animation-name: chores-confetti-x;
+  animation-fill-mode: forwards;
+}
+.confetti-piece-y {
+  will-change: transform;
+  animation-name: chores-confetti-y;
+  animation-fill-mode: forwards;
+}
+.confetti-piece-r {
+  width: 10px;
+  height: 14px;
+  border-radius: 2px;
+  will-change: transform;
+  animation-name: chores-confetti-r;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+// X: ease-out from launch corner to the aim point (var(--dx)) by
+// 30% of duration, then HOLDS. Deliberately not projectile motion —
+// pieces converge on the aim point and then fall straight down, so
+// horizontal velocity must drop to zero at the peak instead of
+// continuing sideways. Bezier ends at slope 0 so the transition to
+// "hold" is smooth (X decelerates to a stop, no jerk).
+@keyframes chores-confetti-x {
+  0% {
+    transform: translate3d(0, 0, 0);
+    animation-timing-function: cubic-bezier(0.15, 0.7, 0.35, 1);
+  }
+  30% {
+    transform: translate3d(var(--dx), 0, 0);
+  }
+  100% {
+    transform: translate3d(var(--dx), 0, 0);
+  }
+}
+// Y: ease-out ascent to peak (piece slows into aim point), a short
+// gravity-nudge segment (30→45%) that spins Y up from rest to the
+// terminal drift velocity, then LINEAR terminal-velocity fall the
+// rest of the way. The 45% multiplier (0.70) matches pre- and post-
+// 45% descent rates so there's no jerk when the piece hits terminal
+// velocity. From peak the piece falls STRAIGHT DOWN because X is
+// held constant.
+@keyframes chores-confetti-y {
+  0% {
+    transform: translate3d(0, 0, 0);
+    animation-timing-function: cubic-bezier(0.15, 0.7, 0.35, 1);
+  }
+  30% {
+    transform: translate3d(0, var(--vy-peak), 0);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.7, 0.7);
+  }
+  45% {
+    transform: translate3d(0, calc(var(--vy-peak) * 0.70), 0);
+    animation-timing-function: linear;
+  }
+  100% {
+    transform: translate3d(0, calc(var(--vy-peak) * -0.4), 0);
+  }
+}
+@keyframes chores-confetti-r {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(var(--rot)); }
+}

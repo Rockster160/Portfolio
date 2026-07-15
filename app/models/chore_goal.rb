@@ -211,5 +211,16 @@ class ChoreGoal < ApplicationRecord
     return unless saved_change_to_achieved_at? && achieved_at.present?
 
     ChoreNotifier.goal_achieved!(self)
+    MonitorChannel.broadcast_to(user, {
+      id:        :chores,
+      channel:   :chores,
+      timestamp: Time.current.to_i,
+      data:      {
+        reason:    :goal_achieved,
+        goal_id:   id,
+        goal_name: name,
+        server_ts: Time.current.iso8601(3),
+      },
+    })
   end
 end

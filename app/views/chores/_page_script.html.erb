@@ -5564,6 +5564,81 @@
   if (!navigator.onLine) setConnDot("offline");
 
   // ============================================================
+  // confetti — goal-achieved celebration
+  // ============================================================
+  // Popover-based so pieces render in the browser's top layer and sit
+  // above open <dialog> modals. Falls back to a max-z fixed overlay on
+  // engines that don't support the popover API. Never blocks input:
+  // pointer-events on the overlay is `none`.
+  function showConfetti() {
+    const overlay = document.createElement("div");
+    overlay.className = "confetti-overlay";
+    const supportsPopover = typeof HTMLElement !== "undefined" && "popover" in HTMLElement.prototype;
+    if (supportsPopover) overlay.setAttribute("popover", "manual");
+    document.body.appendChild(overlay);
+
+    const colors = ["#FBBF24", "#EF4444", "#3B82F6", "#10B981", "#EC4899", "#8B5CF6", "#F97316", "#22D3EE"];
+    const count = 80;
+    const vw = window.innerWidth || document.documentElement.clientWidth || 375;
+    const vh = window.innerHeight || document.documentElement.clientHeight || 640;
+
+    for (let i = 0; i < count; i++) {
+      const x = document.createElement("div");
+      x.className = "confetti-piece";
+      const y = document.createElement("div");
+      y.className = "confetti-piece-y";
+      const r = document.createElement("div");
+      r.className = "confetti-piece-r";
+      y.appendChild(r);
+      x.appendChild(y);
+
+      const fromLeft = Math.random() < 0.5;
+      if (fromLeft) x.style.left = `${Math.random() * 40}px`;
+      else x.style.right = `${Math.random() * 40}px`;
+      x.style.bottom = "0px";
+      r.style.background = colors[Math.floor(Math.random() * colors.length)];
+
+      // Aim REGION centered on (50% vw, 10–15% from top) — not a
+      // single point. Since X is held constant after 30%, pieces
+      // stop wherever they peaked and rain straight down from
+      // there, so peak positions ARE the final horizontal
+      // distribution. Wider ranges → pieces cover most of the
+      // screen. Left-launched pieces with dx up to 0.85 vw fly all
+      // the way across; combined with right-launched pieces there's
+      // coverage across the full width, with peak density near
+      // center-top.
+      const vyPeak = -(0.50 + Math.random() * 0.40) * vh;
+      const dx = (0.20 + Math.random() * 0.65) * vw * (fromLeft ? 1 : -1);
+
+      // Longer than a projectile arc: since the descent phase is
+      // constant-velocity terminal drift and the fall distance is
+      // ~85% of vh, a 4.5–6s duration keeps the drift rate in
+      // paper-drift territory rather than plummeting.
+      const duration = `${(4.5 + Math.random() * 1.5).toFixed(2)}s`;
+      const delay = `${(Math.random() * 0.15).toFixed(2)}s`;
+      x.style.setProperty("--dx", `${dx.toFixed(1)}px`);
+      x.style.animationDuration = duration;
+      x.style.animationDelay = delay;
+      y.style.setProperty("--vy-peak", `${vyPeak.toFixed(1)}px`);
+      y.style.animationDuration = duration;
+      y.style.animationDelay = delay;
+      r.style.setProperty("--rot", `${(Math.random() * 720 - 360).toFixed(0)}deg`);
+      r.style.animationDuration = duration;
+      r.style.animationDelay = delay;
+      overlay.appendChild(x);
+    }
+
+    if (supportsPopover) {
+      try { overlay.showPopover(); } catch (_) { /* already open / detached */ }
+    }
+    setTimeout(() => {
+      try { if (supportsPopover) overlay.hidePopover(); } catch (_) { /* noop */ }
+      overlay.remove();
+    }, 6500);
+  }
+  window.showChoresConfetti = showConfetti;
+
+  // ============================================================
   // sw + monitor
   // ============================================================
   function pingSwRefresh() {
@@ -5588,6 +5663,15 @@
         pingSwRefresh();
         const payload = data?.data || {};
         const actorTab = payload.actor_tab_id;
+        // Goal-achieved: fire on every session for this user, including
+        // the actor's own tab. Do NOT gate on actor_tab_id — the user
+        // who hit the goal should see the celebration too. Confetti is
+        // decoration; downstream refresh still runs via the general
+        // ChoreBroadcaster fan-out that follows completion/withdrawal.
+        if (payload.reason === "goal_achieved") {
+          showConfetti();
+          return;
+        }
         if (payload.reason === "order_changed") {
           if (actorTab && String(actorTab) === TAB_ID) return;
           if (Array.isArray(payload.ids)) applyOrderToDom(payload.ids);

@@ -142,6 +142,48 @@ RSpec.describe ChoreGoal do
     end
   end
 
+  describe "goal-achieved broadcast" do
+    let(:chore) { create(:chore, created_by_user: user, reward_pebbles: 5) }
+
+    it "broadcasts a goal_achieved MonitorChannel event to the user on first achievement" do
+      goal = ChoreGoal.create!(
+        user: user, name: "First 10p", kind: :pebbles,
+        scope_mode: :cumulative, target_value: 10
+      )
+      create(:chore_completion, user: user, chore: chore, paid_pebbles: 12)
+      allow(ChoreNotifier).to receive(:goal_achieved!)
+
+      expect(MonitorChannel).to receive(:broadcast_to).with(
+        user,
+        hash_including(
+          id:      :chores,
+          channel: :chores,
+          data:    hash_including(
+            reason:    :goal_achieved,
+            goal_id:   goal.id,
+            goal_name: "First 10p",
+          ),
+        ),
+      )
+      goal.refresh!
+    end
+
+    it "does not re-broadcast on a subsequent update once already achieved" do
+      goal = ChoreGoal.create!(
+        user: user, name: "G", kind: :pebbles,
+        scope_mode: :cumulative, target_value: 1
+      )
+      create(:chore_completion, user: user, chore: chore, paid_pebbles: 5)
+      allow(ChoreNotifier).to receive(:goal_achieved!)
+      allow(MonitorChannel).to receive(:broadcast_to)
+      goal.refresh!
+      expect(MonitorChannel).to have_received(:broadcast_to).once
+
+      goal.update!(description: "note change")
+      expect(MonitorChannel).to have_received(:broadcast_to).once
+    end
+  end
+
   describe "default scope_mode" do
     it "defaults to :relative (so existing progress doesn't pre-fill a new goal)" do
       goal = ChoreGoal.new(user: user, name: "G", kind: :pebbles, target_value: 10)
