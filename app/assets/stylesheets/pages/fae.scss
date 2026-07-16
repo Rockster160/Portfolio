@@ -1,0 +1,47 @@
+html.html-ctr-fae {
+  height: auto !important;
+  min-height: 100%;
+}
+
+.ctr-fae {
+  background: linear-gradient(135deg, #2A1A3A 0%, #3E1F4B 50%, #4A2F5F 100%);
+  min-height: 100vh;
+  color: #EEE;
+}
+
+.fae-container {
+  position: relative;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.fae-header {
+  text-align: center;
+  font-size: 2rem;
+  font-weight: bold;
+  padding-top: 20px;
+
+  .fae-icon-line {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .fae-icon img {
+      width: 96px;
+      height: 96px;
+      margin: 10px 0 0;
+      border-radius: 12px;
+    }
+  }
+}
+
+.fae-buttons.task-trigger-btns {
+  justify-content: center;
+  gap: 20px;
+  max-width: 560px;
+  margin: 0 auto;
+}

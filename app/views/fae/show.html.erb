@@ -1,0 +1,35 @@
+<%= meta_title "Fae", include_name: false %>
+<%= meta_description "Track Fae's food, litter, and care." %>
+<%= content_for(:favicon) { render "fae/favicon" } %>
+<%= content_for(:meta) do %>
+  <script src="https://kit.fontawesome.com/b00e44a575.js" crossorigin="anonymous"></script>
+<% end %>
+
+<div class="fae-container">
+  <div class="fae-header">
+    <span class="fae-name">Fae</span>
+    <div class="fae-icon-line">
+      <span class="fae-icon"><%= image_tag "fae_favicon/fae-detail.png" %></span>
+    </div>
+  </div>
+
+  <div class="task-trigger-btns fae-buttons">
+    <% @tasks.each do |task| %>
+      <%= render partial: "jil/tasks/trigger", locals: { task: task } %>
+    <% end %>
+  </div>
+
+  <% if @list %>
+    <div class="ctr-lists act-show">
+      <div class="skinny-container list-container" data-list-id="<%= @list.id %>" data-list-mode="kiosk" data-list-reset="5m">
+        <div class="list-error hidden">Disconnected...</div>
+        <template id="list-item-template">
+          <%= render template: "list_items/show", locals: { list: @list, template: true }, layout: false %>
+        </template>
+        <div class="list-items" data-update-url="<%= receive_update_list_path(@list) %>">
+          <%= render template: "list_items/index", locals: { list: @list } %>
+        </div>
+      </div>
+    </div>
+  <% end %>
+</div>

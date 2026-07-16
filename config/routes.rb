@@ -15,6 +15,10 @@ Rails.application.routes.draw do
     root "whisper#show", as: :whisper_root
   end
 
+  constraints subdomain: "fae" do
+    root "fae#show", as: :fae_root
+  end
+
   post "tesla/api/1/vehicles/:vin/command/:command" => "vehicles#command"
   post "tesla/oauth2/v3/token" => "vehicles#token"
   get "tesla/switch" => "tesla_switch#show", as: :tesla_switch
@@ -32,6 +36,8 @@ Rails.application.routes.draw do
 
   get "/whisper", to: redirect(subdomain: "whisper", path: "/")
   post "/whisper/log_vomit" => "whisper#log_vomit"
+
+  get "/fae", to: redirect(subdomain: "fae", path: "/")
 
   namespace :internal do
     get "auth", to: "auth#check"

@@ -1,0 +1,25 @@
+{
+  "short_name": "Fae",
+  "name": "Fae",
+  "icons": [
+    {
+      "src": "/fae_favicon/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/fae_favicon/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "fae",
+  "start_url": "/?source=pwa",
+  "background_color": "#2A1A3A",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#2A1A3A",
+  "description": "Cat Chores & Care"
+}

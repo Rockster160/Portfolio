@@ -145,7 +145,7 @@
     "🩹":  ["band-aid", "bandage", "first aid", "wound", "injury"],
     "🩸":  ["blood", "bleed", "injury", "drop"],
     "💉":  ["shot", "vaccine", "injection", "medical", "syringe"],
-    "💊":  ["pill", "medicine", "meds", "drug", "vitamin", "take meds"],
+    "💊":  ["pill", "medicine", "meds", "drugs", "vitamin", "take meds", "rx"],
     "🦷":  ["tooth", "teeth", "dental", "molar"],
     "🧠":  ["mind", "smart", "think", "brain"],
     "❤️":  ["love", "favorite", "like", "heart"],
