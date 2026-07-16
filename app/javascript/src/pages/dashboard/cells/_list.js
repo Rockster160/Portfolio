@@ -85,11 +85,10 @@ export class ListCell {
         if (!rawLine) return;
 
         const cleanLine = rawLine.replace(/\[bg [^\]]*\]|\[\/bg\]/g, "");
-        const numMatch = cleanLine.match(/^(\d+)\./);
+        const numMatch = cleanLine.match(/^\d+\.\s/);
         if (!numMatch) return;
-        const numLen = numMatch[1].length + 1;
 
-        if (ctx.charIndex >= numLen) return;
+        if (ctx.charIndex >= numMatch[0].length) return;
 
         evt.preventDefault();
         const itemName = cleanLine.replace(/^\d+\.\s+/, "");

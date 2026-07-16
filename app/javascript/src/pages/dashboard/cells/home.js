@@ -576,6 +576,21 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
         }
       },
     },
+    oncontextmenu: function (evt, ctx) {
+      if (ctx.lineIndex == null || ctx.charIndex == null) return;
+      const rawLine = this.lines()[ctx.lineIndex];
+      if (!rawLine) return;
+
+      const numMatch = rawLine.match(/^\d+\.\s/);
+      if (!numMatch) return;
+      if (ctx.charIndex >= numMatch[0].length) return;
+
+      const order = cell.data.orders[parseInt(numMatch[0]) - 1];
+      if (!order) return;
+
+      evt.preventDefault();
+      order.remove();
+    },
     command: function (msg) {
       if (msg.trim() == "o") {
         window.open(cell.config.google_api_url, "_blank");
