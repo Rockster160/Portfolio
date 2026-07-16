@@ -810,12 +810,30 @@
       endTimeInput?.classList.toggle("hidden", isAllDay);
     }
 
+    // The `.agenda-page` shell stamps `data-current-date` as the day
+    // the user is looking at (list_view rewrites it on client-side
+    // nav). Reading it live means the advanced add form defaults to
+    // that day instead of the day the page was originally
+    // server-rendered for. Cal-month's `data-current-date` is a month
+    // anchor (YYYY-MM-01), not a selected day — skip that view so the
+    // 1st doesn't silently become the default for the whole month.
+    function selectedDefaultDate() {
+      const root = document.querySelector(".agenda-page");
+      if (root && !root.classList.contains("agenda-cal-month-page")) {
+        const iso = root.dataset?.currentDate || "";
+        if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+      }
+      return form.dataset.defaultDate;
+    }
+
     function resetForm() {
       form.reset();
       activeKind = "event";
       sched.resetChips();
-      dateInput.value = form.dataset.defaultDate;
-      if (endDateInput) endDateInput.value = form.dataset.defaultDate;
+      const defaultDate = selectedDefaultDate();
+      form.dataset.defaultDate = defaultDate;
+      dateInput.value = defaultDate;
+      if (endDateInput) endDateInput.value = defaultDate;
       priorStartDate = dateInput.value;
       // Re-sync the picker's label/dot to the hidden input's reset value.
       const currentId = agendaPicker?.value();
@@ -873,7 +891,19 @@
 
     if (window.jQuery) {
       window.jQuery(modal).on("modal.shown", () => {
-        if (!suppressDefaultTime) applyDefaultStartTime();
+        if (!suppressDefaultTime) {
+          // Sync to the currently-viewed date so an add opened via the
+          // header "+" after nav lands on the visible day, not the day
+          // the shell was originally server-rendered for. Skipped when a
+          // prefill already assigned specific values (follow-up flow +
+          // quick-add advanced hand-off).
+          const defaultDate = selectedDefaultDate();
+          form.dataset.defaultDate = defaultDate;
+          dateInput.value = defaultDate;
+          if (endDateInput) endDateInput.value = defaultDate;
+          priorStartDate = defaultDate;
+          applyDefaultStartTime();
+        }
         suppressDefaultTime = false;
         nameInput.focus();
       });

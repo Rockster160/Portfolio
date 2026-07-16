@@ -497,6 +497,31 @@ RSpec.describe "AgendaQuickAddParser (JS-side)" do
     end
   end
 
+  describe "defaultDate fallback" do
+    it "uses caller-supplied defaultDate when input has no date hint" do
+      r = by_name[:default_date_no_hint]
+      # "Standup at 9am" on 2026-07-03 with defaultDate=2026-06-22 →
+      # lands 2026-06-22 09:00, always-future gate would normally roll
+      # since 9am on Jun 22 is well past Jul 3, but the user asked for
+      # the viewed date so we treat the always-future gate + past-hour
+      # combo as intentional. Assertion: date is Jun 22.
+      expect(r[:startsAt]).to start_with("2026-06-22")
+    end
+
+    it "explicit day hint in input overrides defaultDate" do
+      r = by_name[:default_date_hint_wins]
+      # "tomorrow" from 2026-07-03 = 2026-07-04, not 2026-06-22.
+      expect(r[:startsAt]).to start_with("2026-07-04")
+    end
+
+    it "malformed defaultDate is ignored" do
+      r = by_name[:default_date_malformed]
+      # Falls back to startOfDay(MON_10_23) = 2026-06-22, then 9am has
+      # passed so always-future gate rolls to Jun 23.
+      expect(r[:startsAt]).to start_with("2026-06-23")
+    end
+  end
+
   describe "errors" do
     it "empty input is rejected" do
       expect(by_name[:empty]).to eq(ok: false, error: "empty")

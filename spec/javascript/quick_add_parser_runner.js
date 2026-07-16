@@ -270,6 +270,17 @@ const cases = [
     "Team lunch at 12 to Work", MON_10_23, { agendas: [{ id: 42, name: "Work" }, { id: 1, name: "Personal" }] },
   ) },
 
+  // === Default-date fallback ===========================================
+  // Caller-supplied `defaultDate` — the Day/Week page's currently-viewed
+  // date — takes over when the input carries no date hint, so a quick
+  // add on Fri Jul 3 while viewing Mon Jun 22 lands on Jun 22.
+  { name: "default_date_no_hint", result: run("Standup at 9am", new Date(2026, 6, 3, 8, 0), { defaultDate: "2026-06-22" }) },
+  // Explicit day hint wins over defaultDate — "tomorrow" beats the
+  // viewed date so the user's typed intent isn't silently overridden.
+  { name: "default_date_hint_wins", result: run("Standup tomorrow at 9am", new Date(2026, 6, 3, 8, 0), { defaultDate: "2026-06-22" }) },
+  // Malformed defaultDate is ignored, parser falls back to startOfDay(now).
+  { name: "default_date_malformed", result: run("Standup at 9am", MON_10_23, { defaultDate: "not-a-date" }) },
+
   // === Pure duration probes (extractDuration only) =====================
   { name: "dur_probe_1h30m",  result: { minutes: extractDuration("1h30m").minutes } },
   { name: "dur_probe_half",   result: { minutes: extractDuration("for half hour").minutes } },

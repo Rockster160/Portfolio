@@ -32,7 +32,25 @@
       const agendas = (window.AgendaStore?.getAgendas?.() || [])
         .filter((a) => a.editable !== false && a.source !== "google")
         .map((a) => ({ id: a.id, name: a.name }));
-      return parser.parseQuickAdd(input.value, { now: new Date(), agendas });
+      return parser.parseQuickAdd(input.value, {
+        now:         new Date(),
+        agendas,
+        defaultDate: currentSelectedDateISO(),
+      });
+    }
+
+    // The Day/Week/cal-week shells stamp `data-current-date` on
+    // `.agenda-page` as the specific day the user is looking at, and
+    // list_view rewrites it on client-side date nav. Reading it live
+    // means a quick add without an explicit date lands on that day
+    // instead of today. Cal-month's `data-current-date` is a month
+    // anchor (YYYY-MM-01), not a selected day — skip that view so the
+    // 1st doesn't silently become the fallback for the whole month.
+    function currentSelectedDateISO() {
+      const root = document.querySelector(".agenda-page");
+      if (!root || root.classList.contains("agenda-cal-month-page")) return null;
+      const iso = root.dataset?.currentDate || "";
+      return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : null;
     }
 
     function paintPreview() {

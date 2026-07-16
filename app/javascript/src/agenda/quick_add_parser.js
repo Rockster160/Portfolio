@@ -56,9 +56,13 @@
 //                    gate rolls the day forward).
 //
 // API:
-//   parseQuickAdd(input, { now, defaultDurationMin })
+//   parseQuickAdd(input, { now, defaultDurationMin, defaultDate })
 //     → { ok: true, name, startAt, endAt, durationMin, hints: {...} }
 //     → { ok: false, name: "", error: "empty" | "missing_name" }
+//
+// `defaultDate` (YYYY-MM-DD, optional) is the fallback target day when
+// the input carries no date hint — used by the Day/Week pages so quick
+// adds land on the currently-viewed date, not today.
 
 // ----- Duration grammar (mirrors jarvis/durations.rb) -----------------
 
@@ -284,6 +288,16 @@ function addDays(d, n) {
   return r;
 }
 
+// YYYY-MM-DD → local-midnight Date, or null for missing/malformed input.
+// Using the numeric constructor avoids `new Date("2026-07-20")` parsing
+// as UTC (which shifts one day back in negative timezones).
+function parseDefaultDate(iso) {
+  if (!iso || typeof iso !== "string") return null;
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
 // "Next half hour" — rounds `now` up to the next :00 or :30 boundary,
 // always producing a strictly-future Date. The Quick Add modal uses
 // this as its default scheduling moment when the user gives no time
@@ -414,6 +428,7 @@ function parseQuickAdd(rawInput, opts) {
     now:                new Date(),
     defaultDurationMin: 60,
     agendas:            [],
+    defaultDate:        null,
   }, opts || {});
   const now = cfg.now;
   let work = String(rawInput || "").trim();
@@ -706,9 +721,22 @@ function parseQuickAdd(rawInput, opts) {
     .trim();
   if (!name) return { ok: false, name: "", error: "missing_name" };
 
-  // 6. Default day if none extracted.
+  // 6. Default day if none extracted. Falls back to the caller-supplied
+  // `defaultDate` (the Day/Week page's currently-viewed date) so quick
+  // adds land where the user is looking instead of today. Only kicks in
+  // when the viewed date differs from today — a defaultDate that equals
+  // today should behave identically to no defaultDate at all, so the
+  // "always future" roll below still bumps past-time events to tomorrow
+  // on the today view.
+  let usedDefaultDate = false;
   if (!targetDate) {
-    targetDate = startOfDay(now);
+    const fallback = parseDefaultDate(cfg.defaultDate);
+    if (fallback && fallback.getTime() !== startOfDay(now).getTime()) {
+      targetDate = fallback;
+      usedDefaultDate = true;
+    } else {
+      targetDate = startOfDay(now);
+    }
   }
 
   // 7. Resolve the hour-of-day.
@@ -764,10 +792,16 @@ function parseQuickAdd(rawInput, opts) {
   // 8. ALWAYS future. Gates on the EVENT END so that an all-day event
   // for today (start at midnight = past, but the event spans the rest
   // of the day) doesn't roll forward unnecessarily. For timed events
-  // this still rolls past-due times to tomorrow same-time.
-  while (endDate <= now) {
-    startDate = addDays(startDate, 1);
-    endDate = addDays(endDate, 1);
+  // this still rolls past-due times to tomorrow same-time. Skipped when
+  // the target date came from the viewed-date fallback — the user is
+  // explicitly looking at that date, so honoring it (even for a past
+  // day / past hour) matches intent better than silently jumping the
+  // event forward to today.
+  if (!usedDefaultDate) {
+    while (endDate <= now) {
+      startDate = addDays(startDate, 1);
+      endDate = addDays(endDate, 1);
+    }
   }
 
   return successResult(name, startDate, endDate, durMin, {
