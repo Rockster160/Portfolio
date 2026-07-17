@@ -12,7 +12,7 @@
 #  uploaded_by_user_id :bigint           not null
 #
 class HouseholdIcon < ApplicationRecord
-  MAX_IMAGE_BYTES = 200_000        # raw byte length of the data-URL string
+  MAX_IMAGE_BYTES = 300_000        # raw byte length of the data-URL string
   MAX_NAME_LENGTH = 60
   MAX_KEYWORDS_LENGTH = 400
 
@@ -56,12 +56,12 @@ class HouseholdIcon < ApplicationRecord
   # Shape consumed by the JS IconPool — same `{ c, n, k }` envelope as
   # emoji / ti rows. Kind is tagged on the client side.
   def as_pool_row
-    name_words = name.to_s.downcase.split(/[\s_\-]+/).reject(&:empty?)
+    name_words = name.to_s.downcase.split(/[\s_-]+/).reject(&:empty?)
     {
-      id: id,
-      c:  image_data,
-      n:  name,
-      k:  (keyword_list + name_words).map(&:downcase).uniq,
+      id:          id,
+      c:           image_data,
+      n:           name,
+      k:           (keyword_list + name_words).map(&:downcase).uniq,
       uploaded_by: uploaded_by_user_id,
     }
   end
