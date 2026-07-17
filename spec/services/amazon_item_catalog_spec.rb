@@ -18,6 +18,22 @@ RSpec.describe AmazonItemCatalog do
       expect(described_class.get("B0FDLFSZ1S")).to eq(name: "Genie Bags")
     end
 
+    it "refuses to write under an order-id key" do
+      # Placeholder rows use order_id as item_id. Renaming one on the dashboard
+      # used to pollute the SKU catalog with `\d{3}-\d{7}-\d{7}` keys.
+      allow(MeCache).to receive(:get).with(described_class::CACHE_KEY).and_return({})
+      expect(MeCache).not_to receive(:set)
+
+      expect(described_class.set("114-0583723-4455423", name: "Pet item")).to be_nil
+    end
+
+    it "refuses to write under a CUSTOM- key" do
+      allow(MeCache).to receive(:get).with(described_class::CACHE_KEY).and_return({})
+      expect(MeCache).not_to receive(:set)
+
+      expect(described_class.set("CUSTOM-51c5", name: "Lily Rug")).to be_nil
+    end
+
     it "preserves a manual rename across a simulated reload" do
       stored = {}
       allow(MeCache).to receive(:get).with(described_class::CACHE_KEY) { stored }

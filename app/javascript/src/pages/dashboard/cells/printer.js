@@ -359,5 +359,24 @@ let contrastText = function (hex, text) {
         return Printer.post("pre");
       },
     },
+    oncontextmenu: function (evt, ctx) {
+      if (ctx.lineIndex !== 0) return;
+      if (ctx.charIndex == null || ctx.charIndex > 1) return;
+
+      evt.preventDefault();
+
+      if (!isPrinterOn()) {
+        Printer.post("on");
+        return;
+      }
+
+      let status = (cell.data.monitor_data || {}).status;
+      let msg = status == "printing"
+        ? "A print is in progress. Turning off the printer will interrupt it. Are you sure?"
+        : "Turn off the printer?";
+      if (window.confirm(msg)) {
+        Printer.post("off");
+      }
+    },
   });
 })();

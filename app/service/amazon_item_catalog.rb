@@ -9,6 +9,14 @@
 #   }
 class AmazonItemCatalog
   CACHE_KEY = :amazon_item_catalog
+  # Amazon ASINs are 10 alphanumeric chars starting with a letter (usually B0…).
+  # Placeholder rows use their order_id as item_id (`\d{3}-\d{7}-\d{7}`) and
+  # manually-added items use `CUSTOM-…` - neither belongs in the per-SKU cache.
+  ASIN_KEY_REGEX = /\A[A-Z0-9]{10,}\z/i
+
+  def self.asin?(key)
+    key.to_s.match?(ASIN_KEY_REGEX)
+  end
 
   def self.all
     # MeCache backs to a JSONB column via SafeJsonSerializer, which symbolizes
@@ -26,6 +34,7 @@ class AmazonItemCatalog
 
   def self.set(asin, name: nil, listed_name: nil, full_name: nil)
     return if asin.blank?
+    return unless asin?(asin)
 
     catalog = all
     entry = catalog[asin.to_s] || {}

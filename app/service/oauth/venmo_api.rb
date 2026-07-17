@@ -127,7 +127,7 @@ class Oauth::VenmoApi < Oauth::Base
     }
   end
 
-  def venmo_id_from_contact(contact)
+  def venmo_id_from_contact(contact, venmo_username=nil)
     return if contact.blank?
 
     venmo_id = contact_mapping[contact.id.to_s.to_sym]
@@ -135,7 +135,8 @@ class Oauth::VenmoApi < Oauth::Base
 
     Jarvis.say("Searching for #{contact.name} in Venmo.")
 
-    user = search(contact.raw[:name])
+    user = search(venmo_username) if venmo_username.present?
+    user ||= search(contact.raw[:name])
     user ||= search(contact.name)
     user ||= search(contact.nickname)
     return Jarvis.ping("Unable to find Venmo id for #{contact.name}.") if user.blank?

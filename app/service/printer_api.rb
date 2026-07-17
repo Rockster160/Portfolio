@@ -42,7 +42,7 @@ module PrinterApi
 
   def pre
     on
-    sleep 1
+    sleep 5
     tool_temp(200)
     bed_temp(40)
   end
