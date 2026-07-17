@@ -1,5 +1,5 @@
 class FaeController < ApplicationController
-  BUTTON_TASK_IDS = [410, 411, 412, 413, 414, 415, 417].freeze
+  BUTTON_TASK_IDS = [410, 411, 412, 413, 414, 415, 417, 418].freeze
 
   before_action :authorize_user
 

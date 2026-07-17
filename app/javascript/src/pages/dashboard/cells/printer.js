@@ -366,7 +366,11 @@ let contrastText = function (hex, text) {
       evt.preventDefault();
 
       if (!isPrinterOn()) {
-        Printer.post("on");
+        $.ajax({
+          url: "/jil/trigger/printer-power-on",
+          type: "POST",
+          dataType: "json",
+        });
         return;
       }
 
