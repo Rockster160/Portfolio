@@ -216,4 +216,41 @@ RSpec.describe TripState do
       expect(described_class.car_at?("Costco", user: user)).to be(false)
     end
   end
+
+  describe ".car_navigating_to?" do
+    let(:address_book) { instance_double("AddressBook") }
+
+    before do
+      allow(user).to receive(:address_book).and_return(address_book)
+    end
+
+    it "is true when the active trip destination is within ~500m of the candidate" do
+      allow(address_book).to receive(:geocode).with("Costco").and_return([40.5, -111.9])
+      user.caches.set(:car_data, { trip: { destination: { lat: 40.5001, lng: -111.9001 } } })
+      expect(described_class.car_navigating_to?("Costco", user: user)).to be(true)
+    end
+
+    it "is false when the active trip is heading somewhere else" do
+      allow(address_book).to receive(:geocode).with("Costco").and_return([40.5, -111.9])
+      user.caches.set(:car_data, { trip: { destination: { lat: 42.0, lng: -112.0 } } })
+      expect(described_class.car_navigating_to?("Costco", user: user)).to be(false)
+    end
+
+    it "is false when there's no active trip" do
+      allow(address_book).to receive(:geocode).with("Costco").and_return([40.5, -111.9])
+      user.caches.set(:car_data, {})
+      expect(described_class.car_navigating_to?("Costco", user: user)).to be(false)
+    end
+
+    it "is false when destination is blank" do
+      expect(described_class.car_navigating_to?(nil, user: user)).to be(false)
+      expect(described_class.car_navigating_to?("",  user: user)).to be(false)
+    end
+
+    it "is false when geocoding returns nil" do
+      allow(address_book).to receive(:geocode).with("Nowhere").and_return(nil)
+      user.caches.set(:car_data, { trip: { destination: { lat: 40.5, lng: -111.9 } } })
+      expect(described_class.car_navigating_to?("Nowhere", user: user)).to be(false)
+    end
+  end
 end

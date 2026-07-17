@@ -29,6 +29,7 @@ class TeslaTelemetry
     @car_data = ::TeslaCacheStore.record_telemetry(@raw)
 
     detect_drive_changes
+    detect_shift_changes
     detect_park_changes
     detect_charge_changes
     detect_hvac_changes
@@ -62,6 +63,23 @@ class TeslaTelemetry
       empty = {}
       ::Jil.trigger(@user, :tesla_drive_stop, empty)
     end
+  end
+
+  # Fires `:tesla_shift` on ANY gear transition (P→D, D→N, R→D, etc.)
+  # so Jil tasks can pattern-match specific shifts via the listener
+  # (e.g. `tesla_shift:shift:N`). `:tesla_parked` remains a dedicated
+  # sugar for the P transition — see `detect_park_changes`.
+  def detect_shift_changes
+    return unless field_present_in_record?(:Gear)
+    return if gear_in_record == "<invalid>"
+
+    new_shift  = @car_data.dig(:drive, :shift)
+    prev_shift = @prev.dig(:drive, :shift)
+    return if new_shift == prev_shift
+    return if new_shift.blank?
+
+    payload = { shift: new_shift, previous: prev_shift }
+    ::Jil.trigger(@user, :tesla_shift, payload)
   end
 
   # Fires `:tesla_parked` when the user shifts INTO Park. This is the

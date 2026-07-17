@@ -19,6 +19,7 @@ RSpec.describe Jil::Methods::Tesla do
     # when they need the already-at branch. Without this, the wrapper
     # hits AddressBook#geocode → Google Maps unstubbed.
     allow(::TripState).to receive(:car_at?).and_return(false)
+    allow(::TripState).to receive(:car_navigating_to?).and_return(false)
     allow(::TripState).to receive(:start_for_destination!)
     %i[start_car off_car honk set_temp navigate add_stop doors windows pop_frunk pop_boot defrost heat_driver heat_passenger send].each do |m|
       allow(control).to receive(m).and_return(true)
@@ -154,6 +155,47 @@ RSpec.describe Jil::Methods::Tesla do
       expect(control).to receive(:start_car)
       expect(control).to receive(:navigate).with("Costco")
       tesla.start([{ navigate: "Costco" }])
+    end
+  end
+
+  describe "already-navigating-there destination" do
+    it "on navigate: skips TeslaControl and notifies 'Already navigating there' when trip is en route" do
+      allow(::TripState).to receive(:car_navigating_to?).with("Costco", user: user).and_return(true)
+      expect(control).not_to receive(:navigate)
+      expect(tesla.navigate("Costco")).to be(true)
+      expect_notify("Already navigating there", "Costco")
+    end
+
+    it "on start with navigate: skips start_car AND navigate when trip is en route" do
+      allow(::TripState).to receive(:car_navigating_to?).with("Costco", user: user).and_return(true)
+      expect(control).not_to receive(:start_car)
+      expect(control).not_to receive(:navigate)
+      expect(tesla.start([{ navigate: "Costco" }])).to be(true)
+      expect_notify("Already navigating there", "Costco")
+    end
+
+    it "car_at? takes precedence over car_navigating_to? when both are true" do
+      allow(::TripState).to receive(:car_at?).with("Costco", user: user).and_return(true)
+      allow(::TripState).to receive(:car_navigating_to?).with("Costco", user: user).and_return(true)
+      tesla.navigate("Costco")
+      expect_notify("Already at destination", "Costco")
+    end
+  end
+
+  describe "#isAt" do
+    it "returns true when TripState.car_at? is true" do
+      allow(::TripState).to receive(:car_at?).with("Quick Quack", user: user).and_return(true)
+      expect(tesla.isAt("Quick Quack")).to be(true)
+    end
+
+    it "returns false when TripState.car_at? is false" do
+      allow(::TripState).to receive(:car_at?).with("Quick Quack", user: user).and_return(false)
+      expect(tesla.isAt("Quick Quack")).to be(false)
+    end
+
+    it "swallows errors and returns false" do
+      allow(::TripState).to receive(:car_at?).and_raise(StandardError.new("boom"))
+      expect(tesla.isAt("Quick Quack")).to be(false)
     end
   end
 

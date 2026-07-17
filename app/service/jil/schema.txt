@@ -524,6 +524,7 @@
   #defrost::Boolean
   #heatDriver::Boolean
   #heatPassenger::Boolean
+  #isAt(String:"Contact/Address")::Boolean
 *[TeslaStartOptions]
   #temp(Numeric)
   #navigate(Text)

@@ -119,6 +119,27 @@ class TripState
       leg_destination(user, current(user)[:leg_index].to_i + 1)
     end
 
+    # Is Tesla's active navigation destination effectively the same place
+    # as `destination`? Uses the geofence threshold so a curbside-vs-parking-
+    # lot geocode mismatch doesn't defeat the check. Used by Tesla.navigate /
+    # Tesla.start to skip issuing a redundant nav command when the car is
+    # already routing there.
+    def car_navigating_to?(destination, user: ::User.me)
+      return false if destination.blank?
+
+      car_dest = user.caches.dig(:car_data, :trip, :destination)
+      return false unless car_dest.is_a?(::Hash)
+
+      car_lat = car_dest[:lat] || car_dest["lat"]
+      car_lng = car_dest[:lng] || car_dest["lng"]
+      return false if car_lat.blank? || car_lng.blank?
+
+      geocoded = user.address_book.geocode(destination.to_s)
+      return false unless geocoded.is_a?(::Array) && geocoded.length == 2 && geocoded.none?(&:blank?)
+
+      distance([car_lat.to_f, car_lng.to_f], geocoded.map(&:to_f)) <= ARRIVAL_THRESHOLD
+    end
+
     # Geofence check for any address — is the user's car currently within
     # ARRIVAL_THRESHOLD of `destination`? Used by Tesla.start / Tesla.navigate
     # to skip a redundant car-start when the driver's already there. Same

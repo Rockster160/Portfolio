@@ -29,6 +29,11 @@ class Jil::Methods::Tesla < Jil::Methods::Base
         next
       end
 
+      if dest && ::TripState.car_navigating_to?(dest, user: @jil.user)
+        notify_user("Already navigating there", dest) unless opts[:silent]
+        next
+      end
+
       ctrl = ::TeslaControl.me
       ctrl.start_car
       ctrl.set_temp(opts[:temp].to_f)         if opts[:temp].present?
@@ -88,12 +93,18 @@ class Jil::Methods::Tesla < Jil::Methods::Base
   #
   # No-op (with a "Already at …" toast) when the car is already parked
   # at the requested destination — pushing a nav command in that state
-  # is confusing and wakes the car for nothing.
+  # is confusing and wakes the car for nothing. Same guard for a trip
+  # already routing to that destination, so an automation re-firing
+  # mid-drive doesn't wake the car to nav to where it's already going.
   def navigate(input)
     wrap {
       dest = input.to_s
       if ::TripState.car_at?(dest, user: @jil.user)
         notify_user("Already at destination", dest)
+        next
+      end
+      if ::TripState.car_navigating_to?(dest, user: @jil.user)
+        notify_user("Already navigating there", dest)
         next
       end
       ::TeslaControl.me.navigate(dest)
@@ -184,6 +195,20 @@ class Jil::Methods::Tesla < Jil::Methods::Base
       ::TeslaControl.me.heat_passenger
       notify_user("Passenger seat heat on")
     }
+  end
+
+  # Is the car currently at `destination`? Wraps `TripState.car_at?` so
+  # Jil tasks can gate on car location (e.g. only fire an automation when
+  # the car is at a specific contact). Same ~500m threshold as the
+  # nav/start "already there" skip. Returns false silently on any error
+  # so a bad geocode doesn't blow up the task.
+  def isAt(input)
+    return false unless @jil.user
+
+    ::TripState.car_at?(input.to_s, user: @jil.user)
+  rescue StandardError => e
+    ::PrettyLogger.error("[JIL TESLA] isAt: #{e.class}: #{e.message}")
+    false
   end
 
   private
