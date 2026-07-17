@@ -60,6 +60,17 @@
       }
     }
 
+    .hicon-wrapper {
+      display: inline-block;
+      line-height: 0;
+
+      img {
+        width: 1em;
+        height: 1em;
+        vertical-align: middle;
+      }
+    }
+
     .execute-btn-subtext {
       position: absolute;
       bottom: -25px;

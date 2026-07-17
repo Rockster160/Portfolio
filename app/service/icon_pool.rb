@@ -86,6 +86,10 @@ module IconPool
       c:    row["c"],
       n:    row["n"],
       k:    row["k"] || [],
+      # HouseholdIcon rows carry an `id` (via as_pool_row); the shared
+      # emoji / ti indexes don't. Callers use it to build `hicon:<id>`
+      # references — see `best_match_value`.
+      id:   row["id"],
       nn:   normalize(row["n"].to_s),
       nk:   (row["k"] || []).map { |k| normalize(k.to_s) },
       kind: kind,
@@ -281,8 +285,15 @@ module IconPool
   end
 
   # Convenience for the common "I just want the emoji/class/data-URL
-  # string" caller — used by Jil method bindings.
+  # string" caller — used by Jil method bindings. Custom household
+  # icons return their `hicon:<id>` reference (not the raw data URL) so
+  # downstream writers (Jil `Chore.add`, etc.) store a pointer instead
+  # of duplicating the icon bytes onto every chore.
   def best_match_value(query, for_household: nil)
-    best_match(query, for_household: for_household)&.dig(:c)
+    row = best_match(query, for_household: for_household)
+    return nil if row.nil?
+    return "hicon:#{row[:id]}" if row[:kind] == :custom && row[:id]
+
+    row[:c]
   end
 end

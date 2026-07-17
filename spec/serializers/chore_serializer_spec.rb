@@ -35,6 +35,57 @@ RSpec.describe ChoreSerializer, type: :serializer do
     expect(described_class.new(blank, viewer: user).as_json[:icon_kind]).to eq(:empty)
   end
 
+  describe "hicon:<id> references" do
+    let(:tiny_png_url) {
+      "data:image/png;base64," \
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAfbLI3wAAAABJRU5ErkJggg=="
+    }
+    let(:household) {
+      ChoreHousehold.create!(name: "Home", owner_user: user).tap { |h|
+        user.update!(chore_household_id: h.id)
+      }
+    }
+    let(:icon) {
+      HouseholdIcon.create!(
+        chore_household: household, uploaded_by_user: user,
+        name: "Whisper", image_data: tiny_png_url,
+      )
+    }
+    let(:chore) {
+      household # ensure household exists first
+      create(:chore, created_by_user: user, icon: "hicon:#{icon.id}", chore_household: household)
+    }
+
+    it "resolves icon to the image_data and keeps icon_ref as the raw ref" do
+      json = described_class.new(chore, viewer: user).as_json
+      expect(json[:icon]).to      eq(tiny_png_url)
+      expect(json[:icon_ref]).to  eq("hicon:#{icon.id}")
+      expect(json[:icon_kind]).to eq(:image)
+    end
+
+    it "collapses to :empty when the referenced icon has been deleted" do
+      chore # instantiate before destroy
+      icon.destroy!
+      json = described_class.new(chore.reload, viewer: user).as_json
+      expect(json[:icon]).to      eq("")
+      expect(json[:icon_ref]).to  eq("hicon:#{icon.id}")
+      expect(json[:icon_kind]).to eq(:empty)
+    end
+
+    it "resolves via the bulk-loaded context without a per-chore HouseholdIcon query" do
+      chore
+      ctx = ChoreSerializerContext.for_user(user)
+      icon_queries = 0
+      counter = ->(_name, _start, _finish, _id, payload) {
+        icon_queries += 1 if payload[:sql].to_s.include?("household_icons")
+      }
+      ActiveSupport::Notifications.subscribed(counter, "sql.active_record") {
+        described_class.new(chore, viewer: user, ctx: ctx).as_json
+      }
+      expect(icon_queries).to eq(0)
+    end
+  end
+
   it "cooldown_kind maps the sentinel to :day_reset" do
     day_reset = create(:chore, created_by_user: user, threshold_seconds: Chore::THRESHOLD_DAY_RESET)
     none      = create(:chore, created_by_user: user, threshold_seconds: nil)

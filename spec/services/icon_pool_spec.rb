@@ -89,5 +89,18 @@ RSpec.describe IconPool do
     it "returns nil when no match" do
       expect(described_class.best_match_value("qqqxxnonsenseword")).to be_nil
     end
+
+    it "returns a hicon:<id> ref (not the raw data URL) for custom household matches" do
+      user = create(:user)
+      household = ChoreHousehold.create!(name: "Home", owner_user: user)
+      user.update!(chore_household_id: household.id)
+      icon = HouseholdIcon.create!(
+        chore_household: household, uploaded_by_user: user,
+        name: "Whisper", image_data: "data:image/png;base64,iVBORw0KGgo=",
+        keywords: "cat",
+      )
+
+      expect(described_class.best_match_value("whisper", for_household: household)).to eq("hicon:#{icon.id}")
+    end
   end
 end

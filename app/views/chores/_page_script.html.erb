@@ -666,7 +666,10 @@
     el.dataset.doneCount = c.done_count_today || 0;
     el.dataset.choreName = c.name || "";
     el.dataset.choreShort = c.short_name || "";
-    el.dataset.choreIcon = c.icon || "";
+    // Store the RAW ref (`hicon:<id>` or a glyph) rather than the
+    // resolved icon so change-detection compares short strings instead
+    // of full data URLs. Falls back to `icon` for legacy stores.
+    el.dataset.choreIcon = c.icon_ref || c.icon || "";
     el.dataset.choreReward = c.reward_pebbles || 0;
     el.dataset.choreShowOnTodayView = c.show_on_today_view || "when_scheduled";
     el.dataset.choreSharingMode = c.sharing_mode || "personal";
@@ -822,7 +825,7 @@
   // full re-render — but they preserve the existing done-ring element
   // so the animation state survives the swap.
   function structuralChange(el, c) {
-    return el.dataset.choreIcon !== (c.icon || "") ||
+    return el.dataset.choreIcon !== (c.icon_ref || c.icon || "") ||
            String(el.dataset.choreCooldown || "0") !== String(c.threshold_seconds || 0);
   }
   function preserveDoneRing(oldEl, newEl) {
@@ -3070,6 +3073,11 @@
   // Callers wire it once per form via `bindIconUploader(form)`. The
   // setter is exposed on `stack.__setIconValue` so `fillFromExisting`
   // logic in each form can hydrate it after `form.reset()`.
+  // Local shim so setIconValue doesn't need to reach into the IconPool
+  // IIFE directly. IconPool is closed-over above; this just proxies.
+  function customIconSrcById(id) {
+    return IconPool.customSrcById(id);
+  }
   function bindIconUploader(form) {
     const stack = form?.querySelector("[data-icon-stack]");
     if (!stack) return;
@@ -3092,7 +3100,14 @@
       if (source === "user") stack.__iconUserDirty = true;
       if (!renderFromValue || !preview) return;
       if (!v) { preview.innerHTML = ""; return; }
-      if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://")) {
+      if (v.startsWith("hicon:")) {
+        // Resolve the reference against the already-loaded custom pool
+        // and render its data URL. Missing (deleted) icons collapse to
+        // empty rather than a broken image.
+        const id = v.slice("hicon:".length);
+        const src = customIconSrcById(id);
+        preview.innerHTML = src ? `<img src="${esc(src)}" alt="" loading="lazy" draggable="false">` : "";
+      } else if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://")) {
         preview.innerHTML = `<img src="${esc(v)}" alt="" loading="lazy" draggable="false">`;
       } else if (v.startsWith("<svg")) {
         preview.innerHTML = v;
@@ -3147,14 +3162,32 @@
       if (imageItem) {
         e.preventDefault();
         const file = imageItem.getAsFile();
-        if (file) { const v = await readFileAsValue(file); if (v) setIconValue(v); }
+        // Route pasted images through the cropper so they persist as a
+        // HouseholdIcon (referenced by `hicon:<id>`) rather than an
+        // inline data URL duplicated onto every chore that uses them.
+        if (file) {
+          document.dispatchEvent(new CustomEvent("chore-icon-cropper-open", {
+            detail: { stack, file },
+          }));
+        }
         return;
       }
       const text = (e.clipboardData?.getData?.("text/plain") || "").trim();
       if (!text) return;
-      if (text.startsWith("<svg") || text.startsWith("http://") || text.startsWith("https://") || text.startsWith("data:image/")) {
+      // SVGs are cheap inline strings; keep the direct-set path so
+      // pasted icon markup lands as-is.
+      if (text.startsWith("<svg")) {
         e.preventDefault();
         setIconValue(text);
+        return;
+      }
+      // Image URLs / data URLs route through the cropper (which knows
+      // how to load either) so they become named HouseholdIcons.
+      if (text.startsWith("http://") || text.startsWith("https://") || text.startsWith("data:image/")) {
+        e.preventDefault();
+        document.dispatchEvent(new CustomEvent("chore-icon-cropper-open", {
+          detail: { stack, url: text },
+        }));
       }
     });
     // Image drops route through the cropper so the user lands on the
@@ -3169,12 +3202,16 @@
         detail: { stack, file },
       }));
     }));
+    // File-pick from the icon-stack's upload chip mirrors the drop
+    // path — the cropper persists the image as a HouseholdIcon and
+    // writes `hicon:<id>` back to the form.
     uploadBtn?.addEventListener("click", e => { e.preventDefault(); fileInput?.click(); });
-    fileInput?.addEventListener("change", async () => {
+    fileInput?.addEventListener("change", () => {
       const file = fileInput.files?.[0];
-      if (!file) return;
-      const v = await readFileAsValue(file);
-      if (v) setIconValue(v);
+      if (!file) { fileInput.value = ""; return; }
+      document.dispatchEvent(new CustomEvent("chore-icon-cropper-open", {
+        detail: { stack, file },
+      }));
       fileInput.value = "";
     });
   }
@@ -3466,7 +3503,16 @@
       return bestScore >= 3 ? bestRow : null;
     }
 
-    return { load, normalize, variants, scoreRow, search, bestMatch, refreshCustom, syncCustomIfChanged, onCustomChanged };
+    // Resolve a HouseholdIcon id to its data URL from the already-loaded
+    // custom pool. Returns "" when the id isn't in the pool (deleted or
+    // still loading) — callers render an empty preview in that case.
+    function customSrcById(id) {
+      const key = String(id);
+      const row = CUSTOM_POOL.find(r => String(r._id) === key);
+      return row?.c || "";
+    }
+
+    return { load, normalize, variants, scoreRow, search, bestMatch, refreshCustom, syncCustomIfChanged, onCustomChanged, customSrcById };
   })();
 
   // ============================================================
@@ -3490,9 +3536,11 @@
         return `<button type="button" data-pick-value="${safe}" title="${esc(row.n || v)}"><i class="ti ${safe}" aria-hidden="true"></i></button>`;
       }
       if (row._kind === "custom") {
-        // Custom icons are pre-cropped data URLs. Long-press / right-click
-        // opens the manage menu (see manage wireup below).
-        return `<button type="button" data-pick-value="${safe}" data-custom-id="${row._id}" title="${esc(row.n || "")}"><img class="icon-img" src="${safe}" alt="${esc(row.n || "")}" loading="lazy" draggable="false"></button>`;
+        // Custom icons resolve to household-scoped `hicon:<id>` refs so
+        // the chore stores a short pointer instead of duplicating the
+        // data URL onto every chore that uses this icon. The <img>
+        // preview inside the tile still uses the resolved data URL.
+        return `<button type="button" data-pick-value="hicon:${row._id}" data-custom-id="${row._id}" title="${esc(row.n || "")}"><img class="icon-img" src="${safe}" alt="${esc(row.n || "")}" loading="lazy" draggable="false"></button>`;
       }
       return `<button type="button" data-pick-value="${safe}" title="${esc(row.n || "")}">${safe}</button>`;
     }
@@ -4133,13 +4181,15 @@
           }
           const saved = await res.json();
           await IconPool.refreshCustom();
-          // If the cropper was opened from a chore-form picker, drop the
-          // freshly-saved icon straight into the form so the user lands
-          // back on a populated state.
+          // If the cropper was opened from a chore-form picker, drop
+          // the freshly-saved icon straight into the form as a
+          // `hicon:<id>` REFERENCE (not the raw data URL) so the chore
+          // stores a pointer instead of duplicating the image bytes.
           if (activeStack?.__setIconValue) {
-            activeStack.__setIconValue(saved.c, { source: "user" });
+            const ref = `hicon:${saved.id}`;
+            activeStack.__setIconValue(ref, { source: "user" });
             activeStack.dispatchEvent(new CustomEvent("chore-icon-picked", {
-              bubbles: true, detail: { value: saved.c },
+              bubbles: true, detail: { value: ref },
             }));
           }
           modal.classList.add("hidden");
@@ -4155,6 +4205,7 @@
       resetState();
       modal.classList.remove("hidden");
       if (e.detail?.file) loadFile(e.detail.file);
+      else if (e.detail?.url) loadFromUrl(e.detail.url);
     });
 
     modal.querySelectorAll('[data-action="cancel"]').forEach(b =>
@@ -4206,7 +4257,11 @@
       const match = title.length >= 2 ? await IconPool.bestMatch(title) : null;
       if (token !== inflight) return;     // a newer keystroke superseded us
       if (!canSuggest()) return;          // user touched the icon mid-flight
-      const next = match ? match.c : "";
+      // Custom-pool matches store as `hicon:<id>` refs so the chore
+      // doesn't duplicate the icon's data URL onto its own record.
+      const next = match
+        ? (match._kind === "custom" ? `hicon:${match._id}` : match.c)
+        : "";
       if ((hidden.value || "") === next) return;
       stack.__setIconValue(next, { source: "suggest" });
     });
@@ -4342,7 +4397,11 @@
     resetEditFormToDefaults();
     setField("name", c.name);
     setField("short_name", c.short_name === c.name ? "" : c.short_name);
-    setIconField(c.icon || "");
+    // Hydrate from the RAW storage value (`hicon:<id>` for custom
+    // icons, else same as `icon`) so the hidden field round-trips the
+    // reference on next PATCH. Fall back to `icon` for records
+    // serialized before `icon_ref` was added.
+    setIconField(c.icon_ref || c.icon || "");
     setField("aliases_csv", (c.aliases || []).join(", "));
     setField("notes_template", c.notes_template || "");
     setField("notes", c.notes || "");

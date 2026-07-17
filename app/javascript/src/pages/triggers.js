@@ -44,6 +44,8 @@ document.addEventListener("ajax:error", (e) => {
   reenable(btn);
 });
 
+import { HouseholdIconPool } from "../household_icon_pool";
+
 const splitGraphemes = (s) => {
   if (window.Intl && Intl.Segmenter) {
     const seg = new Intl.Segmenter(undefined, { granularity: "grapheme" });
@@ -51,6 +53,8 @@ const splitGraphemes = (s) => {
   }
   return Array.from(s);
 };
+
+const HICON_RX = /\[hicon (.*?)\]/gi;
 
 const setButtonText = (titleEl, text) => {
   const stackMatch = text.match(/^\[stack (.+)\]$/);
@@ -65,6 +69,22 @@ const setButtonText = (titleEl, text) => {
       stack.appendChild(span);
     });
     titleEl.appendChild(stack);
+  } else if (HICON_RX.test(text)) {
+    // innerHTML is only safe once we've escaped the non-hicon parts —
+    // broadcast text can be arbitrary and could otherwise inject markup.
+    HICON_RX.lastIndex = 0;
+    const escape = (s) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    let out = "";
+    let cursor = 0;
+    text.replace(HICON_RX, (match, name, offset) => {
+      out += escape(text.slice(cursor, offset));
+      out += HouseholdIconPool.markupHtml(name);
+      cursor = offset + match.length;
+      return match;
+    });
+    out += escape(text.slice(cursor));
+    titleEl.innerHTML = out;
   } else {
     titleEl.textContent = text;
   }

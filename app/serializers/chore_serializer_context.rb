@@ -12,6 +12,7 @@ class ChoreSerializerContext
     :completion_days_before_today_by_chore,
     :anchor_last_day_by_chore,
     :household_user_ids, :daily_chore_ids,
+    :household_icons_by_id,
     # Sub-chore parallels: keyed by sub_chore_id rather than chore_id.
     # Sub-chore cards must look at completions WHERE sub_chore_id =
     # sub.id (the parent's chore_id rollup would include every other
@@ -44,11 +45,24 @@ class ChoreSerializerContext
     chores.map { |c| ChoreSerializer.new(c, viewer: viewer, ctx: self).as_json }
   end
 
+  def household_icon_for(id)
+    @household_icons_by_id[id]
+  end
+
   private
 
   def preload!
     @hot_picks = ChoreHotPick.lookup_for(day)
     @daily_chore_ids = ChoreDaily.for_user(viewer).pluck(:chore_id).to_set
+    # Preload every household icon once so the serializer's
+    # hicon:<id> → image_data resolve is O(1) per chore. Household is
+    # tiny (~10s of icons) so we bulk-load the whole set rather than
+    # scanning chore icon strings to build a targeted IN(...) list.
+    @household_icons_by_id = if viewer.chore_household_id
+      HouseholdIcon.where(chore_household_id: viewer.chore_household_id).index_by(&:id)
+    else
+      {}
+    end
 
     @last_completion_by_chore = bulk_last_completion(@personal_chore_ids, [viewer.id])
       .merge(bulk_last_completion(@household_chore_ids, household_user_ids))

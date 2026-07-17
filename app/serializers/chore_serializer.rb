@@ -13,6 +13,8 @@
 # `.as_json` to emit. For bulk page rendering, build a
 # ChoreSerializerContext once and reuse it across N serializers.
 class ChoreSerializer
+  HICON_PREFIX = "hicon:"
+
   attr_reader :chore, :viewer, :day, :ctx
 
   def initialize(chore, viewer:, ctx: nil, day: nil)
@@ -27,7 +29,13 @@ class ChoreSerializer
       id:                   chore.id,
       name:                 chore.name,
       short_name:           chore.short_name.presence || chore.name,
-      icon:                 chore.icon,
+      # `icon` is the RESOLVED value the client renders (a data URL for
+      # hicon:<id> refs, or the raw glyph/ti-*/data-URL otherwise).
+      # `icon_ref` is the storage value — what the edit form's hidden
+      # input carries so PATCH round-trips the reference instead of the
+      # heavy resolved payload.
+      icon:                 display_icon,
+      icon_ref:             chore.icon.to_s,
       icon_kind:            icon_kind, # "emoji" | "image" | "svg" | "ti_icon" | "empty"
       aliases:              chore.aliases_array,
       notes_template:       chore.notes_template.to_s,
@@ -122,6 +130,7 @@ class ChoreSerializer
 
   def icon_kind
     return :empty if chore.icon.blank?
+    return household_icon ? :image : :empty if hicon_id
 
     v = chore.icon.to_s.strip
     return :image   if v.start_with?("data:image/", "http://", "https://")
@@ -129,6 +138,33 @@ class ChoreSerializer
     return :ti_icon if v.start_with?("ti-")
 
     :emoji
+  end
+
+  # `hicon:<id>` references resolve to the HouseholdIcon's stored image
+  # data URL. A dangling ref (icon was deleted) collapses to blank so
+  # the client falls back to the empty-icon placeholder.
+  def display_icon
+    return household_icon&.image_data.to_s if hicon_id
+
+    chore.icon
+  end
+
+  def hicon_id
+    return @hicon_id if defined?(@hicon_id)
+
+    v = chore.icon.to_s.strip
+    @hicon_id = v.start_with?(HICON_PREFIX) ? v.delete_prefix(HICON_PREFIX).to_i : nil
+  end
+
+  def household_icon
+    return @household_icon if defined?(@household_icon)
+    return @household_icon = nil if hicon_id.nil?
+
+    @household_icon = if ctx&.respond_to?(:household_icon_for)
+      ctx.household_icon_for(hicon_id)
+    else
+      HouseholdIcon.find_by(id: hicon_id)
+    end
   end
 
   def cooldown_kind

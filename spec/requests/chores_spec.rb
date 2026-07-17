@@ -199,6 +199,29 @@ RSpec.describe "Chores", type: :request do
     expect(chore.reload.target_count).to eq(3)
   end
 
+  it "PATCH round-trips a hicon:<id> ref and returns the resolved data URL" do
+    tiny_png_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAfbLI3wAAAABJRU5ErkJggg=="
+    household = ChoreHousehold.create!(name: "Home", owner_user: user)
+    user.update!(chore_household_id: household.id)
+    icon = HouseholdIcon.create!(
+      chore_household: household, uploaded_by_user: user,
+      name: "Whisper", image_data: tiny_png_url,
+    )
+    chore = create(:chore, created_by_user: user, chore_household: household, icon: "🧹")
+
+    patch "/chores/items/#{chore.id}",
+      params:  { chore: { icon: "hicon:#{icon.id}" } }.to_json,
+      headers: { "CONTENT_TYPE" => "application/json", "Accept" => "application/json" }
+
+    expect(response).to have_http_status(:ok)
+    expect(chore.reload.icon).to eq("hicon:#{icon.id}")
+
+    body = response.parsed_body["chore"]
+    expect(body["icon_ref"]).to eq("hicon:#{icon.id}")
+    expect(body["icon"]).to      eq(tiny_png_url)
+    expect(body["icon_kind"]).to eq("image")
+  end
+
   it "POST /chores/items persists notes_template and serializes it back" do
     template = 'Fed Whisper {Food Type:Select [Beef, Chicken, "Turkey, Shredded"]} with {Kibble Ounces:Numeric}oz kibble'
     post "/chores/items",
