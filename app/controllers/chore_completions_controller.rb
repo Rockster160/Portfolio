@@ -24,8 +24,8 @@ class ChoreCompletionsController < ApplicationController
       # broadcast to the recorder so their device refreshes (household
       # channels are per-user, and the recorder may not be the actor).
       if credit_user.id != current_user.id
-        ChoreBroadcaster.broadcast_changes!(current_user, result.completion.chore, actor_tab_id: params[:tab_id])
-        ChoreBroadcaster.broadcast_changes!(current_user, tapped, actor_tab_id: params[:tab_id]) if tapped.id != result.completion.chore_id
+        related_sub = (tapped if tapped.id != result.completion.chore_id)
+        ChoreBroadcaster.broadcast_changes!(current_user, result.completion.chore, related: related_sub, actor_tab_id: params[:tab_id])
       end
       render json: response_payload(tapped, result.completion).merge(
         skipped:        result.skipped?,
@@ -52,8 +52,8 @@ class ChoreCompletionsController < ApplicationController
       anonymous:      true,
       note:           params[:note].to_s,
     )
-    ChoreBroadcaster.broadcast_changes!(current_user, credit, actor_tab_id: params[:tab_id])
-    ChoreBroadcaster.broadcast_changes!(current_user, tapped, actor_tab_id: params[:tab_id]) if tapped.id != credit.id
+    related_sub = (tapped if tapped.id != credit.id)
+    ChoreBroadcaster.broadcast_changes!(current_user, credit, related: related_sub, actor_tab_id: params[:tab_id])
     render json: response_payload(tapped, completion).merge(anonymous: true), status: :created
   end
 
@@ -180,8 +180,8 @@ class ChoreCompletionsController < ApplicationController
       day_at_delete = completion.day_key
       completion.destroy!
       rebuild_streak(credit_chore, day_at_delete)
-      ChoreBroadcaster.broadcast_changes!(current_user, credit_chore, actor_tab_id: params[:tab_id])
-      ChoreBroadcaster.broadcast_changes!(current_user, tapped, actor_tab_id: params[:tab_id]) if tapped.id != credit_chore.id
+      related_sub = (tapped if tapped.id != credit_chore.id)
+      ChoreBroadcaster.broadcast_changes!(current_user, credit_chore, related: related_sub, actor_tab_id: params[:tab_id])
       render json: response_payload(tapped, nil)
       return
     end
@@ -203,8 +203,8 @@ class ChoreCompletionsController < ApplicationController
       credit_chore = completion.chore
       completion.destroy!
       rebuild_streak(credit_chore, day)
-      ChoreBroadcaster.broadcast_changes!(current_user, credit_chore, actor_tab_id: params[:tab_id])
-      ChoreBroadcaster.broadcast_changes!(current_user, tapped, actor_tab_id: params[:tab_id]) if tapped.id != credit_chore.id
+      related_sub = (tapped if tapped.id != credit_chore.id)
+      ChoreBroadcaster.broadcast_changes!(current_user, credit_chore, related: related_sub, actor_tab_id: params[:tab_id])
       render json: response_payload(tapped, nil)
     else
       render json: { error: "no completion to undo" }, status: :not_found

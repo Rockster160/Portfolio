@@ -42,6 +42,53 @@
   // optimistic state from being clobbered by a race-stale broadcast or
   // out-of-order POST response.
   const localClickTs = new Map();
+
+  // Absolute click-protection window: while the user is actively
+  // tapping a chore (repeat-tap chores may fire 5-10 taps in rapid
+  // succession), ANY incoming server data for that chore is dropped
+  // entirely — even if its server_ts is newer than our tap. Otherwise
+  // the ack for tap #1 (done_count=1) races the user's ongoing taps
+  // (local done_count=6) and drags the count backwards, producing the
+  // "numbers jitter" symptom users reported.
+  //
+  // Once the window closes (no taps for CLICK_PROTECTION_MS), a single
+  // /chores/items/:id/state fetch is issued to converge with server
+  // truth. Any drops during the window are caught up by that verify.
+  const CLICK_PROTECTION_MS = 3000;
+  // per-chore: { lastClickAt: epoch ms, verifyTimer: handle | null }
+  const clickProtection = new Map();
+
+  function noteClientTap(choreId) {
+    const id = parseInt(choreId, 10);
+    if (!id) return;
+    const now = Date.now();
+    const prior = clickProtection.get(id) || {};
+    if (prior.verifyTimer) clearTimeout(prior.verifyTimer);
+    // Legacy alias — other timestamp comparisons in reconcile still
+    // read from localClickTs, so keep it in sync per-tap.
+    localClickTs.set(String(id), now);
+    const state = { lastClickAt: now, verifyTimer: null };
+    state.verifyTimer = setTimeout(() => {
+      // Fire only if no new tap arrived after this one. Any newer tap
+      // would have replaced verifyTimer during clearTimeout above.
+      const cur = clickProtection.get(id);
+      if (!cur || cur.lastClickAt !== now) return;
+      cur.verifyTimer = null;
+      // Optional: skip the fetch when offline — nothing to converge
+      // against. onAppWake() runs a fresh fullSync when we come back
+      // and will pull the correct value then.
+      if (!navigator.onLine) return;
+      api(`/chores/items/${id}/state`, "GET").then(reconcile).catch(() => {});
+    }, CLICK_PROTECTION_MS + 250);
+    clickProtection.set(id, state);
+  }
+
+  function isChoreProtected(choreId) {
+    const id = parseInt(choreId, 10);
+    const state = clickProtection.get(id);
+    if (!state || !state.lastClickAt) return false;
+    return (Date.now() - state.lastClickAt) < CLICK_PROTECTION_MS;
+  }
   // pendingMutationIds: per-chore stack of client_mutation_ids for
   // queued/flushed completes that have not been undone in this session.
   // Push on every complete enqueue, pop on every undo enqueue. The
@@ -2175,9 +2222,8 @@
   async function doCompleteChore(c, opts) {
     const note = opts && opts.note;
     const noteValues = opts && opts.noteValues;
-    const sid = String(c.id);
     const clickAt = new Date().toISOString();
-    localClickTs.set(sid, Date.now());
+    noteClientTap(c.id);
 
     ChoreStore.patch(c.id, {
       done_count_today: (c.done_count_today || 0) + 1,
@@ -2253,14 +2299,13 @@
   async function undoLastCompletion(id) {
     const c = ChoreStore.get(parseInt(id, 10));
     if (!c) return;
-    const sid = String(id);
     const priorDoneCount = c.done_count_today || 0;
     const priorProgress = c.progress_count != null ? c.progress_count : priorDoneCount;
     ChoreStore.patch(c.id, {
       done_count_today: Math.max(0, priorDoneCount - 1),
       progress_count: Math.max(0, priorProgress - 1),
     });
-    localClickTs.set(sid, Date.now());
+    noteClientTap(c.id);
 
     // The undo targets the most recent complete this session enqueued —
     // either a still-queued one (collapse, no server call) or a flushed
@@ -2355,6 +2400,11 @@
       const id = data.chore.id;
       if (authoritative) {
         ChoreStore.upsert(data.chore, { authoritative: true });
+      } else if (isChoreProtected(id)) {
+        // Inside the tap-protection window: drop entirely so the
+        // in-progress optimistic count survives. The verify timer
+        // armed by noteClientTap will fetch /state once the user
+        // stops tapping and converge us with server truth then.
       } else {
         const localMs = localClickTs.get(String(id)) || 0;
         const serverMs = data.server_ts ? new Date(data.server_ts).getTime() : Date.now();
@@ -2367,6 +2417,7 @@
           ChoreStore.upsert(c, { authoritative: true });
           return;
         }
+        if (isChoreProtected(c.id)) return; // see single-chore branch above
         const localMs = localClickTs.get(String(c.id)) || 0;
         const serverMs = data.server_ts ? new Date(data.server_ts).getTime() :
                          c.updated_at ? new Date(c.updated_at).getTime() : Date.now();
@@ -5700,8 +5751,20 @@
   // ============================================================
   // sw + monitor
   // ============================================================
-  function pingSwRefresh() {
+  // Shell refresh is a deploy-catching mechanism: it re-fetches every
+  // /chores/* HTML shell and warms their assets. That's expensive
+  // (one HTTP round-trip per shell plus every asset it references),
+  // so it must NEVER fire per-broadcast — otherwise a household's
+  // chore taps fan out into a request storm large enough to trip the
+  // per-IP rate limit for every user on that IP. Throttle here caps
+  // it to at most once per interval, regardless of caller.
+  const SW_REFRESH_MIN_INTERVAL_MS = 5 * 60 * 1000;
+  let lastSwRefreshAt = 0;
+  function pingSwRefresh({ force = false } = {}) {
     if (!navigator.onLine || reloadPending) return;
+    const now = Date.now();
+    if (!force && now - lastSwRefreshAt < SW_REFRESH_MIN_INTERVAL_MS) return;
+    lastSwRefreshAt = now;
     navigator.serviceWorker?.controller?.postMessage({ action: "refresh_shells" });
   }
   function subscribeMonitor() {
@@ -5719,7 +5782,11 @@
       },
       disconnected() { setConnDot("offline"); },
       received(data) {
-        pingSwRefresh();
+        // pingSwRefresh() intentionally NOT called here. Chore-data
+        // broadcasts have no bearing on shell HTML freshness — the SW
+        // catches deploys via connected() / visibilitychange only.
+        // Prior code fanned out a 4-shell refresh per broadcast, which
+        // is what tipped households into per-IP rate limits.
         const payload = data?.data || {};
         const actorTab = payload.actor_tab_id;
         // Goal-achieved: fire on every session for this user, including
@@ -5762,10 +5829,17 @@
           broadcastRemoteChange("monitor", payload);
           return;
         }
-        // Cheap: just re-fetch the chore that changed.
-        const choreId = payload.chore_id;
-        if (choreId && unifiedPage) {
-          api(`/chores/items/${choreId}/state`, "GET").then(reconcile).catch(() => {});
+        // Cheap: re-fetch the changed chores in one shot. A sub-chore
+        // tap coalesces parent + sub into one broadcast carrying both
+        // ids — we fetch both in parallel (one broadcast, N cheap
+        // state fetches, still no fullSync).
+        const idsFromPayload = Array.isArray(payload.chore_ids) && payload.chore_ids.length
+          ? payload.chore_ids
+          : (payload.chore_id ? [payload.chore_id] : []);
+        if (idsFromPayload.length && unifiedPage) {
+          idsFromPayload.forEach(id => {
+            api(`/chores/items/${id}/state`, "GET").then(reconcile).catch(() => {});
+          });
         } else if (unifiedPage) {
           fullSync();
         }

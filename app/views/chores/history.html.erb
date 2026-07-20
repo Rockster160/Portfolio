@@ -126,9 +126,10 @@
       Monitor subscription, and sync dot stay alive consistently.
       Inside page_script, `data-mode === "history"` short-circuits the
       auto-flush so pending pushes don't ship while the user is
-      curating them — but Monitor still subscribes and emits a
-      `chores:remote_change` event so this view can refetch when a
-      broadcast lands. %>
+      curating them. History rows themselves refetch ONLY on explicit
+      user action (reload button, page/filter change, navigation) —
+      Monitor broadcasts do not trigger a refetch on this view, which
+      keeps typing in-edit safe and the request rate low. %>
   <%= render "page_script", mode: "history" %>
   <script type="module">
     // ===========================================================

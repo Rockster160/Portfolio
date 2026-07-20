@@ -179,11 +179,11 @@ class ChoreCompleter
   end
 
   def broadcast!
-    ChoreBroadcaster.broadcast_changes!(user, chore)
-    # Sub-chore taps need their own broadcast too — the sub-chore's card
-    # state is keyed off `sub_chore_id` lookups in the serializer, and
-    # the parent broadcast won't carry the sub-chore's id for refresh.
-    ChoreBroadcaster.broadcast_changes!(user, tapped) if tapped.id != chore.id
+    # Sub-chore taps ride along in the same broadcast via `related:` —
+    # the receiver refreshes state for both ids from one signal instead
+    # of firing two separate fan-outs.
+    related = (tapped if tapped.id != chore.id)
+    ChoreBroadcaster.broadcast_changes!(user, chore, related: related)
   end
 
   # Two-unit, integer-only duration formatter. NEVER produces decimals.
