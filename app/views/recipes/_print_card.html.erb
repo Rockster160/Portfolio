@@ -28,15 +28,15 @@
   <h1 class="card-title"><%= recipe.title %></h1>
   <hr class="rule">
 
-  <% if has_notes %>
-    <div class="meta-notes"><%= Markdown.new(recipe.notes, user: current_user).to_html %></div>
-    <hr class="rule thin">
-  <% end %>
-
   <% if stats.any? %>
     <div class="meta-stats">
       <%= stats.join("<span class='sep'>|</span>").html_safe %>
     </div>
+    <hr class="rule thin">
+  <% end %>
+
+  <% if has_notes %>
+    <div class="meta-notes"><%= Markdown.new(recipe.notes, user: current_user).to_html %></div>
     <hr class="rule thin">
   <% end %>
 
