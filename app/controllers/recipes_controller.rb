@@ -46,6 +46,24 @@ class RecipesController < ApplicationController
     end
   end
 
+  def print
+    @layout = %i[card full].map(&:to_s).include?(params[:layout]) ? params[:layout].to_sym : :card
+    slot_count = @layout == :card ? 4 : 1
+
+    raw_slots = params[:slots].to_s.split(",", slot_count).map { |s| s.strip.to_i.nonzero? }
+    raw_slots = raw_slots + Array.new(slot_count - raw_slots.length, nil)
+
+    lookup_ids = raw_slots.compact.uniq
+    viewable = Recipe.viewable(current_user).where(id: lookup_ids).index_by(&:id)
+
+    @slot_ids = raw_slots.map { |id| id && viewable.key?(id) ? id : nil }
+    @slot_recipes = @slot_ids.map { |id| id && viewable[id] }
+    @primary = @slot_recipes.compact.first
+    @pickable = Recipe.viewable(current_user).order(Arel.sql("LOWER(title)"))
+
+    render layout: "print"
+  end
+
   def export_to_list
     list = List.find(params[:list_id])
 
@@ -76,8 +94,12 @@ class RecipesController < ApplicationController
       :title,
       :description,
       :kitchen_of,
+      :servings,
+      :prep_time,
+      :cook_time,
       :ingredients,
       :instructions,
+      :notes,
       :public,
     )
   end

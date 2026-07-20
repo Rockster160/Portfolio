@@ -1,0 +1,23 @@
+<div class="slot empty">
+  <div class="picker">
+    <div class="picker-header">+ Add a recipe to this slot</div>
+    <input type="text" placeholder="Search your recipes…" autocomplete="off">
+    <div class="picker-list">
+      <% if pickable.any? %>
+        <% pickable.each do |r| %>
+          <%
+            new_slots = slot_ids.dup
+            new_slots[slot_index] = r.id
+            slots_param = new_slots.map { |x| x || "" }.join(",")
+          %>
+          <a href="<%= print_recipes_path(layout: layout_name, slots: slots_param) %>"
+             data-title="<%= r.title.to_s.downcase %>">
+            <%= r.title %>
+          </a>
+        <% end %>
+      <% else %>
+        <div class="picker-empty">No recipes available.</div>
+      <% end %>
+    </div>
+  </div>
+</div>

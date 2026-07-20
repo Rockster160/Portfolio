@@ -1,0 +1,55 @@
+<%
+  has_ing = recipe.ingredients.to_s.strip.present?
+  has_notes = recipe.notes.to_s.strip.present?
+  stats = [
+    ("<span class='stat'><strong>Servings</strong>#{ERB::Util.h(recipe.servings)}</span>" if recipe.servings.present?),
+    ("<span class='stat'><strong>Prep</strong>#{ERB::Util.h(recipe.prep_time)}</span>" if recipe.prep_time.present?),
+    ("<span class='stat'><strong>Cook</strong>#{ERB::Util.h(recipe.cook_time)}</span>" if recipe.cook_time.present?),
+  ].compact
+
+  cleared_slots = slot_ids.dup
+  cleared_slots[slot_index] = nil
+  clear_href = print_recipes_path(layout: layout_name, slots: cleared_slots.map { |x| x || "" }.join(","))
+
+  total_len = recipe.ingredients.to_s.length + recipe.instructions.to_s.length
+  density = case total_len
+            when 0..600 then nil
+            when 601..1100 then :dense
+            else :"very-dense"
+            end
+%>
+<%= tag.div(class: ["slot", density].compact) do %>
+  <div class="slot-actions">
+    <a href="<%= clear_href %>" title="Change (clear this slot)">Change</a>
+    <button type="button" onclick="window.location.reload()" title="Reload from server">↻</button>
+    <a href="<%= edit_recipe_path(recipe) %>" target="_blank" title="Edit recipe in a new tab">Edit</a>
+  </div>
+
+  <h1 class="card-title"><%= recipe.title %></h1>
+  <hr class="rule">
+
+  <% if has_notes %>
+    <div class="meta-notes"><%= Markdown.new(recipe.notes, user: current_user).to_html %></div>
+    <hr class="rule thin">
+  <% end %>
+
+  <% if stats.any? %>
+    <div class="meta-stats">
+      <%= stats.join("<span class='sep'>|</span>").html_safe %>
+    </div>
+    <hr class="rule thin">
+  <% end %>
+
+  <div class="card-body">
+    <% if has_ing %>
+      <div class="col-ingredients">
+        <div class="section-label">Ingredients</div>
+        <div class="md"><%= Markdown.new(recipe.ingredients, user: current_user).to_html %></div>
+      </div>
+    <% end %>
+    <div class="col-directions">
+      <div class="section-label">Directions</div>
+      <div class="md"><%= Markdown.new(recipe.instructions, user: current_user).to_html %></div>
+    </div>
+  </div>
+<% end %>

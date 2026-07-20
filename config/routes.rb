@@ -105,7 +105,8 @@ Rails.application.routes.draw do
   #   /chores/balance — balance, goals, multipliers, achievements, withdrawals
   get  "/chores"         => "chores#index",   as: :chores
   get  "/chores/today"   => "chores#today",   as: :chores_today
-  get  "/chores/balance" => "chores#balance", as: :chores_balance
+  get  "/chores/balance"        => "chores#balance",        as: :chores_balance
+  get  "/chores/balance_data"   => "chores#balance_data",   as: :chores_balance_data
   get  "/chores/history"        => "chores#history",        as: :chores_history
   get  "/chores/recent_history" => "chores#recent_history", as: :chores_recent_history
   get  "/chores/csrf"           => "chores#csrf",           as: :chores_csrf
@@ -446,6 +447,7 @@ Rails.application.routes.draw do
   get "/pages", to: "folders#index"
   resources :recipes, param: :friendly_id do
     post :export_to_list, on: :member
+    get :print, on: :collection
   end
 
   resource :maze, only: [:show] do

@@ -25,6 +25,28 @@
         <%= f.text_field :kitchen_of %>
       </div>
 
+      <div class="flex-fields">
+        <div class="form-field">
+          <%= f.label :servings, "Servings / Yield" %>
+          <%= f.text_field :servings, placeholder: "e.g. 8 small pancakes" %>
+        </div>
+
+        <div class="form-field">
+          <%= f.label :prep_time, "Prep time" %>
+          <%= f.text_field :prep_time, placeholder: "e.g. 10 min" %>
+        </div>
+
+        <div class="form-field">
+          <%= f.label :cook_time, "Cook time" %>
+          <%= f.text_field :cook_time, placeholder: "e.g. 15 min" %>
+        </div>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :notes, "Notes (shown on printed card)" %>
+        <%= f.text_area :notes, rows: [@recipe.notes.to_s.split("\n").length, 2].max %>
+      </div>
+
       <div class="form-field">
         <%= f.label :ingredients %>
         <%= f.text_area :ingredients, rows: [@recipe.ingredients.to_s.split("\n").length, 5].max %>

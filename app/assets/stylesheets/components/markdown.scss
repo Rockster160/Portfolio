@@ -77,4 +77,29 @@
     text-align: center;
     padding: 2px 6px;
   }
+
+  ul, ol {
+    padding-left: 0;
+    list-style: none;
+  }
+  ul > li::before {
+    content: "•";
+    margin-right: 4px;
+  }
+  ol {
+    counter-reset: md-ol;
+  }
+  ol > li::before {
+    counter-increment: md-ol;
+    content: counter(md-ol) ".";
+    margin-right: 4px;
+  }
+
+  blockquote {
+    border-left: 3px solid #bbb;
+    padding: 2px 12px;
+    margin: 6px 0;
+    color: #777;
+    font-style: italic;
+  }
 }

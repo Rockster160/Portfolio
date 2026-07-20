@@ -1,0 +1,22 @@
+<%
+  slot_count = @layout == :card ? 4 : 1
+%>
+<div class="sheet <%= @layout == :card ? 'cards' : 'full' %>">
+  <% (0...slot_count).each do |i| %>
+    <% recipe = @slot_recipes[i] %>
+    <% if recipe %>
+      <%= render "print_card",
+        recipe: recipe,
+        slot_ids: @slot_ids,
+        slot_index: i,
+        pickable: @pickable,
+        layout_name: @layout %>
+    <% else %>
+      <%= render "print_slot_picker",
+        slot_ids: @slot_ids,
+        slot_index: i,
+        pickable: @pickable,
+        layout_name: @layout %>
+    <% end %>
+  <% end %>
+</div>

@@ -3,16 +3,20 @@
 # Table name: recipes
 #
 #  id           :integer          not null, primary key
-#  user_id      :integer
-#  title        :string
-#  kitchen_of   :string
-#  ingredients  :text
-#  instructions :text
-#  public       :boolean
-#  created_at   :datetime         not null
-#  updated_at   :datetime         not null
+#  cook_time    :string
 #  description  :text
 #  friendly_url :string
+#  ingredients  :text
+#  instructions :text
+#  kitchen_of   :string
+#  notes        :text
+#  prep_time    :string
+#  public       :boolean
+#  servings     :string
+#  title        :string
+#  created_at   :datetime         not null
+#  updated_at   :datetime         not null
+#  user_id      :integer
 #
 
 class Recipe < ApplicationRecord
@@ -35,6 +39,15 @@ class Recipe < ApplicationRecord
     includes(:recipe_shares).references(:recipe_shares)
       .where(scopes.join(" OR "), user_id: current_user.try(:id))
   }
+
+  def steps_list
+    text = instructions.to_s.gsub("\r", "").strip
+    return [] if text.empty?
+
+    numbered = text.scan(/^\s*\d+\.\s*(.*?)(?=^\s*\d+\.|\z)/m).flatten
+    steps = numbered.presence || text.split(/\n{2,}/)
+    steps.map { |step| step.gsub(/\s+/, " ").strip.presence }.compact
+  end
 
   def ingredients_list
     ingredients.to_s.split("\n").map { |ingredient| ingredient.squish.presence }.compact

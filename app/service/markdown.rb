@@ -26,6 +26,7 @@ class Markdown
         style: "text-align: center;"
       ),
       /^\s*(-{3,}|={3,}|—{1,})\s*$/                                   => tag.hr,
+      /^&gt; (.*?)$/                                                  => ->(match) { tokenize(wrap(match[1], :blockquote)) },
       /`(.*?)`/                                                       => wrap('\1', :code),
       /\*\*(.+?)\*\*/                                                 => wrap('\1', :strong),
       /\b\*(.*?)\*\b/                                                 => wrap('\1', :strong),
@@ -38,7 +39,7 @@ class Markdown
       /\[btn (.*?)\]\((.*?)\)/                                        => wrap('\2', :a, href: '\1', class: "btn"),
       /\[(.*?)\]\((.*?)\)/                                            => wrap('\1', :a, href: '\2', target: :_blank),
       /\[(\w\s)*\]/                                                   => internal_link_wrapper,
-      /^(?: *\d+[.)-:]? +.*?(?:\n|\z)(?:[ \t]*[*-] .*?(?:\n|\z))*){2,}/m => ol_wrapper,
+      /^(?: *\d+ ?[.)\-] +[^\n]*(?:\n|\z)(?:[ \t]*[*-] [^\n]*(?:\n|\z))*){2,}/m => ol_wrapper,
       /^( *[*-] (?:.*?(?:\n|\z)))+/m                                  => ul_wrapper,
       /^ *(\|([^\n]+?\|)+ *(\n|\z))+/m                                => table_wrapper,
       /\n{3,}/m                                                       => ->(match) {
@@ -65,6 +66,10 @@ class Markdown
     @text.gsub!(/<p>(%%\w{8}%%)<\/p>/, '\1')
 
     untokenize! # Replace tokenized content
+
+    # Block-level elements shouldn't have <br> padding around them
+    @text.gsub!(/(?:<br\s*\/?>)+(<blockquote>)/, '\1')
+    @text.gsub!(/(<\/blockquote>)(?:<br\s*\/?>)+/, '\1')
 
     wrap(@text.strip.html_safe, :div, class: "markdown-container").html_safe
   end
@@ -204,8 +209,8 @@ class Markdown
     ->(match) {
       items = []
       match[0].split("\n").each do |line|
-        if line.match?(/^\s*\d+[.)-:]? +/)
-          items << { text: line[/^\s*\d+[.)-:]? +(.*?)$/, 1], subs: [] }
+        if line.match?(/^\s*\d+ ?[.)\-] +/)
+          items << { text: line[/^\s*\d+ ?[.)\-] +(.*?)$/, 1], subs: [] }
         elsif line.match?(/^\s*[*-] /) && items.any?
           items.last[:subs] << line[/^\s*[*-] (.*?)$/, 1]
         end
