@@ -682,6 +682,13 @@ $cal-week-px-per-hour: 20px;
       color: #FFF;
     }
   }
+
+  // Days that spill out of the toolbar-title month (e.g. Aug 1/2 in a
+  // week rendered under a "July 2026" title). Matches the month view's
+  // 42% opacity for consistency.
+  &.other-month {
+    opacity: 0.42;
+  }
 }
 
 .cal-week-allday {

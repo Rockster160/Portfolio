@@ -59,7 +59,8 @@
         <% (0..6).each do |offset| %>
           <% day = @week_start + offset.days %>
           <% is_today = (day == Date.current) %>
-          <div class="cal-week-header-day <%= 'is-today' if is_today %>" data-date="<%= day.iso8601 %>">
+          <% in_focus_month = (day.month == @focus_date.month && day.year == @focus_date.year) %>
+          <div class="cal-week-header-day <%= 'is-today' if is_today %> <%= 'other-month' unless in_focus_month %>" data-date="<%= day.iso8601 %>">
             <span class="cal-week-header-dow"><%= day.strftime("%a") %></span>
             <span class="cal-week-header-day-num"><%= day.day %></span>
           </div>

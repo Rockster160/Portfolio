@@ -2173,12 +2173,21 @@
 
     const todayISO = logicalDateISO(new Date(), Number(grid.dataset.dayStartHour) || 3);
 
-    // Header day cells: numbers + today highlight.
+    // "Focus month" = the month the toolbar title shows (today's month
+    // if today falls inside this week, else the week's first day). Days
+    // that fall outside that month get the `other-month` dim, matching
+    // the month-view convention.
+    const focusISOForMonth = (todayISO >= weekStartISO && todayISO <= weekEndISO)
+      ? todayISO : weekStartISO;
+    const focusMonth = focusISOForMonth.slice(0, 7);
+
+    // Header day cells: numbers + today highlight + other-month dim.
     const headerCells = $$(".cal-week-header-day", root);
     headerCells.forEach((cell, idx) => {
       const d = addDaysISO(weekStartISO, idx);
       cell.dataset.date = d;
       cell.classList.toggle("is-today", d === todayISO);
+      cell.classList.toggle("other-month", d.slice(0, 7) !== focusMonth);
       const dow = cell.querySelector(".cal-week-header-dow");
       const num = cell.querySelector(".cal-week-header-day-num");
       const dt = parseISODate(d);

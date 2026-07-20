@@ -186,9 +186,18 @@ RSpec.describe "AgendaQuickAddParser (JS-side)" do
   end
 
   describe "weekday hints" do
-    it("'next Monday' → next Monday at the next-half-hour default") do
-      # Mon Jun 22 → next Mon = Jun 29. Default at 10:23 → snap to 10:30.
-      expect(by_name[:next_monday][:startsAt]).to eq("2026-06-29 10:30")
+    it("'next Monday' → skips the upcoming Monday (in-a-week semantics)") do
+      # Mon Jun 22 → upcoming Mon = Jun 29 (a week out); "next" skips it
+      # → Jul 6. Default time at 10:23 snaps to 10:30.
+      expect(by_name[:next_monday][:startsAt]).to eq("2026-07-06 10:30")
+    end
+    it("'this Saturday' → upcoming Saturday (no skip)") do
+      # Mon Jun 22 → coming Sat = Jun 27.
+      expect(by_name[:this_saturday][:startsAt]).to eq("2026-06-27 10:30")
+    end
+    it("'next Saturday' → skips the upcoming Saturday") do
+      # Mon Jun 22 → coming Sat = Jun 27; "next" skips it → Jul 4.
+      expect(by_name[:next_saturday][:startsAt]).to eq("2026-07-04 10:30")
     end
     it("'Friday at 2' → coming Friday at 2pm (PM heuristic)") do
       expect(by_name[:bare_friday][:startsAt]).to eq("2026-06-26 14:00")

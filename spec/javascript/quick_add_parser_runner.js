@@ -102,6 +102,8 @@ const cases = [
 
   // === Days of week ====================================================
   { name: "next_monday",        result: run("Sprint planning next Monday", MON_10_23) },
+  { name: "this_saturday",      result: run("BBQ this Saturday", MON_10_23) },
+  { name: "next_saturday",      result: run("BBQ next Saturday", MON_10_23) },
   { name: "bare_friday",        result: run("Demo Friday at 2", MON_10_23) },
 
   // === Date forms ======================================================

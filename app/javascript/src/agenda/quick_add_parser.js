@@ -150,7 +150,7 @@ const MONTHS = {
 const MONTH_KEYS = Object.keys(MONTHS).sort((a, b) => b.length - a.length);
 
 const STRONG_DAY_RE   = new RegExp(`\\b(today|tonight|tomorrow)\\b`, "i");
-const NEXT_DOW_RE     = new RegExp(`\\b(?:next|this)\\s+(${DOW_KEYS.join("|")})\\b`, "i");
+const NEXT_DOW_RE     = new RegExp(`\\b(next|this)\\s+(${DOW_KEYS.join("|")})\\b`, "i");
 const BARE_DOW_RE     = new RegExp(`\\b(${DOW_KEYS.join("|")})\\b`, "i");
 const MONTH_DAY_RE    = new RegExp(`\\b(${MONTH_KEYS.join("|")})\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{2,4}))?\\b`, "i");
 const SLASH_DATE_RE   = /\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/;
@@ -616,16 +616,22 @@ function parseQuickAdd(rawInput, opts) {
     }
   }
 
-  // 3d. "next monday" / "this friday".
+  // 3d. "next monday" / "this friday". "this X" and bare X (3f) both
+  // mean the upcoming X — "next X" skips it and lands on the following
+  // week's X. Example on Mon Jul 20: "this Sat" = Jul 25, "next Sat" =
+  // Aug 1. Matches everyday speech; the parser used to treat "next" as
+  // a synonym for "this" which silently gave the wrong date.
   if (!targetDate) {
     const { match, rest } = consume(work, NEXT_DOW_RE);
     if (match) {
-      const targetDow = DOW[match[1].toLowerCase()];
+      const qualifier = match[1].toLowerCase();
+      const targetDow = DOW[match[2].toLowerCase()];
       const base = startOfDay(now);
       let delta = targetDow - base.getDay();
       if (delta <= 0) delta += 7;
+      if (qualifier === "next") delta += 7;
       targetDate = addDays(base, delta);
-      dayHint = match[1].toLowerCase();
+      dayHint = match[2].toLowerCase();
       work = rest;
     }
   }
