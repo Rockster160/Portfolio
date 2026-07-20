@@ -133,6 +133,15 @@ class ActionEventsController < ApplicationController
     }
   end
 
+  def latest
+    queries = Array.wrap(params[:queries]).map(&:to_s).reject(&:blank?).uniq
+    result = queries.index_with { |q|
+      scope = current_user.action_events.query(q).where(user: current_user)
+      scope.order(timestamp: :desc).limit(1).pick(:timestamp)&.iso8601
+    }
+    render json: result
+  end
+
   def create
     event = ActionEvent.create(event_params)
     jil_trigger(:event, event.with_jil_attrs(action: :added))

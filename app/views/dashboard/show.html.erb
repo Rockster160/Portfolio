@@ -26,10 +26,16 @@
     <% if Rails.env.development? %>
       Cell.loadConfig({
         // home: {},
-        recent: {},
-        recent: {},
+        // recent: {},
+        // recent: {},
+        // month: {
+        //   x: 3, y: 1,
+        //   markers: [
+        //     { query: "name::P", period: "4w", warn: "1w", color: "red", warn_color: "orange" },
+        //   ],
+        // },
         jarvis: { w: 2 },
-        whisper: { x: 3, y: 4},
+        // whisper: { x: 3, y: 4},
 
         // uptime: { x: 3, y: 3 },
 
@@ -59,7 +65,12 @@
       Cell.loadConfig({
         fitness: { x: 1, y: 1 },
         recent: { x: 2, y: 1 },
-        month: { x: 3, y: 1 },
+        month: {
+          x: 3, y: 1,
+          markers: [
+            { query: "name::P", period: "4w", warn: "1w", color: "red", warn_color: "orange" },
+          ],
+        },
         weather: {
           apikey: "<%= ENV.fetch("WEATHER_APIKEY") %>",
           x: 4,

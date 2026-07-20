@@ -236,6 +236,7 @@ Rails.application.routes.draw do
     get :calendar, on: :collection
     get :pullups, on: :collection
     get :feelings, on: :collection
+    get :latest, on: :collection
   end
 
   resource :inventory, controller: :inventory_management do
