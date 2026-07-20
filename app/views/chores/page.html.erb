@@ -1,4 +1,11 @@
-<% content_for :title, @active_view == :today ? "Chores · Today" : "Chores" %>
+<% content_for :title, (
+  case @active_view
+  when :today   then "Chores · Today"
+  when :balance then "Chores · Balance"
+  when :history then "Chores · History"
+  else               "Chores"
+  end
+) %>
 <%= render "shell_head" %>
 <% content_for :head do %>
   <script src="/chores_sortable.js" defer></script>
@@ -7,25 +14,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <% end %>
 
-<%# The page is intentionally lightweight: empty containers + a
-  bootstrap <script type="application/json"> that the JS picks up on
-  load. ALL card rendering happens client-side from the JSON store +
-  template literals — there is no server-side card HTML anywhere.
-  This is the single source of truth that fixed the cache/sync drift
-  that the previous HTML-shipping architecture kept introducing. %>
-<%# Shell root carries CONFIG + identity only — never per-request data.
-   cutoff-hour and viewer-username are stable per session; active-view
-   is the page-template selector. Balance, day-key, chore lists, etc.
-   are hydrated client-side from localStorage + /chores/sync ONLY, so
-   the cached shell stays valid across day rollovers and balance
-   changes without ever poisoning local truth. %>
+<%# Unified SPA shell — all four views (Grid, Today, Balance, History)
+   live in this ONE document. Only [data-active-view] flips which
+   section is visible; nav clicks pushState + toggle without any
+   round-trip. This means:
+     * A single SW-cached HTML file serves every /chores/* URL.
+     * ChoreStore, offline queue, Monitor subscription, and the
+       cross-partial `window.ChoresPWA` surface persist across
+       "navigations" — the browser never tears down the module.
+     * All per-user data (balance, goals, streak bonuses, transfer
+       recipients, history rows) hydrates client-side from JSON
+       endpoints, so the shell HTML itself remains user-agnostic and
+       cache-safe across day rollovers / balance changes.
+   Toolbar + hot strip are Grid/Today-only; Balance and History have
+   no chore-search or add-chore surface. %>
 <div class="chores-page" data-chores-root
      data-active-view="<%= @active_view %>"
      data-cutoff-hour="<%= @cutoff_hour %>"
      data-viewer-username="<%= current_user.username %>">
-  <%= render "header", balance: @balance, scope: :today %>
+  <%= render "header", balance: nil, scope: :today %>
   <div class="hot-strip" data-chores-hot-strip hidden></div>
-  <%= render "toolbar" %>
+  <div class="chores-toolbar-wrap" data-toolbar-wrap>
+    <%= render "toolbar" %>
+  </div>
+
   <%# Cold-start placeholder: visible only when localStorage has nothing
       AND no successful /chores/sync has ever landed. The page-script
       toggles `.hidden` on/off — never replaces or rerenders the
@@ -68,10 +80,217 @@
     <div class="chores-lookahead" data-chores-lookahead></div>
   </div>
 
+  <%# Balance view — empty containers. `hydrateBalanceView()` in
+      page_script fetches /chores/balance_data on activation and fills
+      these slots. `_goal_row.html.erb` + `_streak_bonus_card.html.erb`
+      remain the single source of truth for that markup; the endpoint
+      renders them via render_to_string and ships as `goals_html` /
+      `streak_bonuses_html`. %>
+  <div class="chores-view view-balance" data-view="balance" data-balance-hydrated="false">
+    <div class="balance-card">
+      <div class="balance-label">Pebbles available</div>
+      <div class="balance-amount" data-lifetime-balance-wrap>
+        <span data-lifetime-balance>—</span>p
+      </div>
+    </div>
+
+    <div class="balance-section-heading" style="margin-top:12px;">
+      <h3>Notifications</h3>
+      <button type="button" class="btn ghost" data-open-notifications>
+        <i class="fa fa-bell" aria-hidden="true"></i> Settings
+      </button>
+    </div>
+
+    <div class="balance-section-heading">
+      <h3>Goals</h3>
+      <button class="btn" data-add-goal>+ Add Goal</button>
+    </div>
+    <div data-goals-list>
+      <p data-goals-empty style="color:var(--chores-muted);">No goals yet.</p>
+      <div data-goals-cards></div>
+    </div>
+
+    <div class="balance-section-heading" style="margin-top:24px;">
+      <h3>Streak Bonuses</h3>
+      <button class="btn" data-add-streak-bonus>+ Add</button>
+    </div>
+    <div data-streak-bonuses-list>
+      <p data-streak-bonuses-empty style="color:var(--chores-muted);">No streak bonuses configured yet.</p>
+      <div class="multiplier-cards" data-streak-bonuses-cards></div>
+    </div>
+
+    <h3 style="margin-top:24px;">Withdraw</h3>
+    <form class="basic" data-withdraw-form>
+      <fieldset class="balance-form-row" data-withdraw-fieldset>
+        <input class="basic withdraw-amount" type="number" name="amount_pebbles" placeholder="Amount" min="1" autocomplete="off">
+        <input class="basic withdraw-note" type="text" name="note" placeholder="Note (optional)" autocomplete="off">
+        <div class="withdraw-time-submit">
+          <input class="basic withdraw-time" type="datetime-local" name="created_at" data-withdraw-when autocomplete="off">
+          <button class="btn" type="submit">Withdraw</button>
+        </div>
+      </fieldset>
+    </form>
+
+    <h3 style="margin-top:24px;">Transfer</h3>
+    <div data-transfer-empty style="display:none;color:var(--chores-muted);font-size:13px;">
+      No one to transfer to — add someone to your chore household first.
+    </div>
+    <form class="basic" data-transfer-form style="display:none;">
+      <fieldset class="balance-form-row" data-transfer-fieldset>
+        <select class="basic transfer-recipient" name="to_user_id" required></select>
+        <input class="basic transfer-amount" type="number" name="amount_pebbles" placeholder="Amount" min="1" autocomplete="off">
+        <div class="transfer-note-submit">
+          <input class="basic transfer-note" type="text" name="note" placeholder="Note (optional)" autocomplete="off">
+          <button class="btn" type="submit">Transfer</button>
+        </div>
+      </fieldset>
+    </form>
+
+    <div class="section-heading">
+      <h3>Recent History</h3>
+      <button type="button" class="section-reload" data-recent-history-reload
+              title="Reload recent history" aria-label="Reload recent history">
+        <i class="fa fa-refresh" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div data-recent-history>
+      <div class="history-row history-loading" data-recent-loading>
+        <span class="dim">Loading recent history…</span>
+      </div>
+    </div>
+    <div data-recent-history-cta hidden style="text-align:center;margin-top:8px;">
+      <a href="<%= chores_history_path %>" class="btn ghost" data-nav-view="history">Full history →</a>
+    </div>
+  </div>
+
+  <%# History view — empty shell. `hydrateHistoryView()` fetches
+      /chores/history.json on activation and populates via the same
+      builders used for the Recent History widget on Balance. Search /
+      pagination / edit modal are all handled by JS in page_script. %>
+  <div class="chores-view view-history" data-view="history">
+    <form class="history-search" data-history-search action="<%= chores_history_path %>" method="get">
+      <div class="search-wrap" style="flex:1;">
+        <input type="text" name="q" value="<%= @q %>" data-history-q
+               placeholder="Filter… e.g. notes:test, time>2026-05-01, amount>1, Cat"
+               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <button type="button" class="search-clear" data-search-clear aria-label="Clear" <%= 'hidden' if @q.blank? %>>×</button>
+      </div>
+    </form>
+
+    <div data-pending-section hidden>
+      <div class="section-heading">
+        <h3 class="pending-heading">
+          <i class="fa fa-clock-o" aria-hidden="true"></i>
+          Pending — <span data-pending-count>0</span>
+          <span class="dim" style="font-size:12px;font-weight:normal;">(not sending while you're here)</span>
+        </h3>
+        <button type="button" class="section-reload" data-pending-reload
+                title="Reload pending list" aria-label="Reload pending list">
+          <i class="fa fa-refresh" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="history-list" data-pending-list></div>
+    </div>
+
+    <div class="section-heading">
+      <h3>History</h3>
+      <button type="button" class="section-reload" data-history-reload
+              title="Reload history" aria-label="Reload history">
+        <i class="fa fa-refresh" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <div class="history-summary" data-history-summary hidden>
+      <span class="history-summary-left dim" data-summary-left></span>
+      <span class="history-summary-mid" data-summary-mid>
+        Page <strong data-summary-page>1</strong> of <strong data-summary-total-pages>1</strong>
+      </span>
+      <span class="history-summary-right dim" data-summary-right>
+        <span data-summary-from></span>&ndash;<span data-summary-to></span> / <span data-summary-total></span>
+      </span>
+    </div>
+
+    <div class="history-list" data-history-list>
+      <div class="history-row history-loading" data-history-loading>
+        <span class="dim">Loading history…</span>
+      </div>
+    </div>
+
+    <nav class="history-pager" data-history-pager hidden>
+      <button type="button" class="btn ghost" data-page="first">« First</button>
+      <button type="button" class="btn ghost" data-page="prev">‹ Prev</button>
+      <span class="history-pager-pos">Page <span data-page-cur>1</span> / <span data-page-total>1</span></span>
+      <button type="button" class="btn ghost" data-page="next">Next ›</button>
+      <button type="button" class="btn ghost" data-page="last">Last »</button>
+    </nav>
+
+    <%# Completion / withdrawal / transfer edit modal — used only on
+        History but part of the shell so it's always available. %>
+    <div id="completion-edit-modal" class="chores-modal-backdrop hidden" data-completion-modal>
+      <div class="chores-modal">
+        <div class="modal-head">
+          <h3 style="margin:0;" data-modal-title>Edit Completion</h3>
+          <button type="button" class="modal-close" data-modal-cancel aria-label="Close">×</button>
+        </div>
+        <div class="completion-details">
+          <div class="detail-row" data-modal-subject-row>
+            <span class="detail-label" data-modal-subject-label>Chore</span>
+            <span><span data-modal-icon></span> <span data-modal-name></span></span>
+          </div>
+          <div class="detail-row completion-only">
+            <span class="detail-label">Base reward</span>
+            <span><span data-modal-base>0</span>p</span>
+          </div>
+          <div class="detail-row completion-only">
+            <span class="detail-label">Multipliers</span>
+            <div class="mult-pills">
+              <button type="button" class="mult-pill" data-mult-edit="hot" title="Tap to set hot multiplier">
+                Hot <strong data-mult-display-hot>1</strong>×
+              </button>
+              <button type="button" class="mult-pill" data-mult-edit="streak" title="Tap to set streak multiplier">
+                Streak <strong data-mult-display-streak>1</strong>×
+              </button>
+              <input type="hidden" data-modal-hot-mult value="1">
+              <input type="hidden" data-modal-streak-mult value="1">
+            </div>
+          </div>
+          <div class="detail-row completion-only" data-modal-skipped-row hidden>
+            <span class="detail-label">Skipped</span>
+            <span data-modal-skipped-reason></span>
+          </div>
+          <hr style="border:0;border-top:1px solid #1F2A44;margin:8px 0;">
+          <div class="detail-row">
+            <span class="detail-label">When</span>
+            <input type="datetime-local" data-modal-completed-at class="modal-input">
+          </div>
+          <div class="detail-row" data-modal-amount-row>
+            <span class="detail-label" data-modal-amount-label>Paid pebbles</span>
+            <input type="number" min="0" data-modal-amount class="modal-input" style="max-width:80px;text-align:right;">
+          </div>
+          <div class="detail-row" style="flex-direction:column;align-items:stretch;gap:4px;">
+            <span class="detail-label">Note</span>
+            <textarea data-modal-note rows="2" class="modal-input" placeholder="(optional)"></textarea>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="danger" data-modal-delete>Delete</button>
+          <button type="button" class="ghost" data-modal-cancel>Cancel</button>
+          <button type="button" class="primary" data-modal-save>Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <%= render "modals" %>
   <%= render "templates" %>
 </div>
 
 <% content_for :after_body do %>
   <%= render "page_script" %>
+  <%# History view logic — extracted from the old dedicated
+      history.html.erb inline module. Runs on every /chores/* page
+      because the History view section is now always in the DOM;
+      hydrateHistoryView() fires only when the router activates the
+      view, so a fresh load at /chores doesn't burn a history fetch. %>
+  <%= render "history_script" %>
 <% end %>

@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title><%= @primary&.title || "Print Recipes" %> — Print</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <%= csrf_meta_tags %>
+  <style>
+    <% if @layout == :card %>
+      @page { size: letter landscape; margin: 0; }
+    <% else %>
+      @page { size: letter portrait; margin: 0; }
+    <% end %>
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #e8e8e8;
+      font-family: Georgia, "Times New Roman", serif;
+      color: #222;
+    }
+
+    .print-toolbar {
+      position: sticky;
+      top: 0;
+      background: #333;
+      color: #fff;
+      padding: 10px 16px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      z-index: 10;
+    }
+    .print-toolbar a, .print-toolbar button {
+      background: #555;
+      color: #fff;
+      border: 0;
+      padding: 6px 12px;
+      border-radius: 3px;
+      font: inherit;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .print-toolbar a.active { background: #0a7; }
+    .print-toolbar .primary { background: #0a7; margin-left: auto; }
+    .print-toolbar .back { background: transparent; text-decoration: underline; }
+
+    .sheet {
+      background: #fdfcf7;
+      margin: 20px auto;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+      overflow: hidden;
+      page-break-after: always;
+    }
+
+    /* ---- 2x2 landscape Letter ---- */
+    .sheet.cards {
+      width: 11in;
+      height: 8.5in;
+      padding: 0.3in;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 0;
+    }
+    .sheet.cards .slot {
+      border: 1px dashed #b8b8b8;
+      margin: -0.5px;
+      padding: 0.24in 0.28in;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+    .slot .slot-actions {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      display: flex;
+      gap: 4px;
+      opacity: 0.35;
+      transition: opacity 0.15s;
+      z-index: 2;
+    }
+    .slot:hover .slot-actions { opacity: 1; }
+    .slot .slot-actions a,
+    .slot .slot-actions button {
+      background: #fff;
+      border: 1px solid #ccc;
+      color: #444;
+      font: 8pt -apple-system, sans-serif;
+      padding: 2px 6px;
+      border-radius: 2px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .slot .slot-actions a:hover,
+    .slot .slot-actions button:hover { background: #eef; }
+
+    /* Card content */
+    .card-title {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 17pt;
+      font-weight: normal;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 6px;
+      margin: 0 0 4px;
+      padding: 0 36px 0 6px;
+      line-height: 1.15;
+    }
+    .rule {
+      border: 0;
+      border-top: 1px solid #6a6a6a;
+      margin: 0;
+    }
+    .rule.thin { border-top: 0.5px solid #b8b8b8; }
+
+    .meta-notes {
+      font-family: Georgia, serif;
+      font-style: italic;
+      font-size: 8.5pt;
+      color: #555;
+      text-align: center;
+      padding: 5px 12px;
+      line-height: 1.3;
+    }
+    .meta-stats {
+      font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 7pt;
+      text-transform: uppercase;
+      letter-spacing: 2.5px;
+      color: #555;
+      text-align: center;
+      padding: 5px 4px;
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .meta-stats .stat { white-space: nowrap; }
+    .meta-stats .stat strong { font-weight: 600; letter-spacing: 3px; margin-right: 5px; }
+    .meta-stats .sep { color: #ccc; }
+
+    .card-body {
+      display: flex;
+      gap: 10px;
+      flex: 1;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .card-body .col-ingredients {
+      flex: 0 0 32%;
+      padding-right: 8px;
+      border-right: 0.5px solid #d0d0d0;
+      overflow: hidden;
+    }
+    .card-body .col-directions {
+      flex: 1;
+      overflow: hidden;
+    }
+    .section-label {
+      font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 7.5pt;
+      text-transform: uppercase;
+      letter-spacing: 2.5px;
+      color: #888;
+      margin: 0 0 2px;
+    }
+
+    /* Markdown-rendered content — tight, minimal indent */
+    .md {
+      font-family: Georgia, serif;
+      font-size: 9pt;
+      line-height: 1.28;
+    }
+    .md > *:first-child { margin-top: 0; }
+    .md > *:last-child { margin-bottom: 0; }
+    .md p { margin: 0 0 4px; }
+    .md ul, .md ol { margin: 0 0 4px; padding-left: 0; list-style: none; }
+    .md ul > li::before { content: "•"; margin-right: 4px; }
+    .md ol { counter-reset: md-ol; }
+    .md ol > li::before { counter-increment: md-ol; content: counter(md-ol) "."; margin-right: 4px; }
+    .md li { margin: 0; padding: 0; }
+    .md li + li { margin-top: 1px; }
+    .md li > p { margin: 0; }
+    .md h1, .md h2, .md h3, .md h4 {
+      font-family: Georgia, serif;
+      font-weight: bold;
+      margin: 4px 0 2px;
+      font-size: 9.5pt;
+    }
+    .md hr { border: 0; border-top: 0.5px solid #ccc; margin: 4px 0; }
+    .md strong { font-weight: 600; }
+    .md em { font-style: italic; }
+    .md blockquote {
+      border-left: 2px solid #bbb;
+      padding: 1px 8px;
+      margin: 3px 0;
+      color: #777;
+      font-style: italic;
+    }
+
+    .slot.dense .md { font-size: 8pt; line-height: 1.22; }
+    .slot.very-dense .md { font-size: 7pt; line-height: 1.18; }
+
+    /* ---- Empty / picker slot ---- */
+    .slot.empty {
+      background:
+        repeating-linear-gradient(45deg, transparent 0 8px, rgba(180,180,180,0.06) 8px 16px);
+    }
+    .slot.empty .picker {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+    }
+    .picker .picker-header {
+      text-align: center;
+      color: #999;
+      font-family: -apple-system, sans-serif;
+      font-size: 9pt;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      margin-bottom: 8px;
+    }
+    .picker input[type="text"] {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #ccc;
+      font: inherit;
+      font-size: 10pt;
+      margin-bottom: 6px;
+    }
+    .picker-list {
+      flex: 1;
+      overflow: auto;
+      border: 1px solid #eee;
+      background: #fff;
+    }
+    .picker-list a {
+      display: block;
+      padding: 4px 8px;
+      text-decoration: none;
+      color: #333;
+      font-size: 9.5pt;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .picker-list a:hover { background: #eef; }
+    .picker-list a.hidden { display: none; }
+    .picker-empty {
+      color: #999;
+      font-style: italic;
+      padding: 20px;
+      text-align: center;
+      font-size: 9pt;
+    }
+
+    /* ---- Full page ---- */
+    .sheet.full {
+      width: 8.5in;
+      min-height: 11in;
+      padding: 0.9in 1in;
+      position: relative;
+    }
+    .full .slot-actions { top: 0.5in; right: 0.5in; }
+    .full .card-title { font-size: 28pt; letter-spacing: 12px; margin-bottom: 12px; padding: 0 40px; }
+    .full .meta-notes { font-size: 11pt; padding: 12px 40px; }
+    .full .meta-stats { font-size: 9pt; padding: 12px 0; letter-spacing: 3px; gap: 24px; }
+    .full .section-label { font-size: 10pt; letter-spacing: 4px; margin: 20px 0 6px; }
+    .full .card-body { display: block; margin-top: 20px; }
+    .full .card-body .col-ingredients {
+      border-right: none;
+      padding-right: 0;
+      margin-bottom: 20px;
+    }
+    .full .md { font-size: 12pt; line-height: 1.5; }
+
+    @media print {
+      html, body { background: #fff; }
+      .print-toolbar { display: none; }
+      .sheet { margin: 0; box-shadow: none; background: #fff; }
+      .slot.empty { background: none !important; }
+      .slot.empty .picker { display: none; }
+      .slot-actions { display: none !important; }
+    }
+  </style>
+</head>
+<body class="layout-<%= @layout %>">
+  <div class="print-toolbar">
+    <span>Layout:</span>
+    <% %i[card full].each do |l| %>
+      <a href="<%= print_recipes_path(layout: l, slots: @slot_ids.map { |x| x || '' }.join(',').presence) %>"
+         class="<%= 'active' if @layout == l %>">
+        <%= { card: "Cards (2×2)", full: "Full Page" }[l] %>
+      </a>
+    <% end %>
+    <a href="<%= @primary ? recipe_path(@primary) : recipes_path %>" class="back">← Back</a>
+    <button class="primary" onclick="window.print()">Print</button>
+  </div>
+  <%= yield %>
+
+  <script>
+    document.addEventListener("input", function(e) {
+      if (!e.target.matches(".picker input[type=text]")) return;
+      var q = e.target.value.trim().toLowerCase();
+      var list = e.target.closest(".picker").querySelector(".picker-list");
+      list.querySelectorAll("a").forEach(function(a) {
+        var match = !q || a.dataset.title.indexOf(q) !== -1;
+        a.classList.toggle("hidden", !match);
+      });
+    });
+  </script>
+</body>
+</html>

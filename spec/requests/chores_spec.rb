@@ -31,11 +31,69 @@ RSpec.describe "Chores", type: :request do
     expect(response.body).to include('<meta name="chores-shell" content="ok">')
   end
 
-  it "GET /chores/balance renders balance + goals" do
+  it "GET /chores/balance renders the SPA shell (no server-side goal HTML)" do
     create(:chore_goal, user: user, name: "Lego Set", target_value: 500)
     get chores_balance_path
     expect(response).to have_http_status(:ok)
-    expect(response.body).to include("Lego Set")
+    # Balance is now a JS-hydrated view inside the unified SPA shell —
+    # the goal name arrives via /chores/balance_data, NOT the shell.
+    expect(response.body).to include('data-active-view="balance"')
+    expect(response.body).to include("data-goals-cards")
+    expect(response.body).not_to include("Lego Set")
+  end
+
+  it "GET /chores/balance_data returns the goal + streak-bonus HTML fragments" do
+    create(:chore_goal, user: user, name: "Lego Set", target_value: 500)
+    get chores_balance_data_path, headers: { "Accept" => "application/json" }
+    expect(response).to have_http_status(:ok)
+    body = response.parsed_body
+    expect(body["goals_count"]).to eq(1)
+    expect(body["goals_html"]).to include("Lego Set")
+    expect(body).to have_key("streak_bonuses_html")
+    expect(body).to have_key("transfer_recipients")
+  end
+
+  describe "history icon resolution" do
+    let(:household) {
+      ChoreHousehold.create!(name: "Home", owner_user: user).tap { |h|
+        user.update!(chore_household_id: h.id)
+      }
+    }
+    let(:tiny_png_url) {
+      "data:image/png;base64," \
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAfbLI3wAAAABJRU5ErkJggg=="
+    }
+
+    it "resolves hicon:<id> refs to data URLs in history JSON (never emits the raw ref)" do
+      household # touch to create
+      icon = HouseholdIcon.create!(
+        chore_household: household, uploaded_by_user: user,
+        name: "Cat", keywords: "", image_data: tiny_png_url,
+      )
+      chore = create(:chore, created_by_user: user, name: "Feed Cat",
+                             reward_pebbles: 1, icon: "hicon:#{icon.id}")
+      create(:chore_completion, chore: chore, user: user, paid_pebbles: 1)
+
+      get "/chores/history.json"
+      entry = response.parsed_body["entries"].find { |e| e["kind"] == "completion" }
+      expect(entry).to be_present
+      # The `icon` field goes straight into <img src>, so it MUST be
+      # the resolved data URL — never the raw `hicon:<id>` reference.
+      expect(entry["chore"]["icon"]).to eq(tiny_png_url)
+      expect(entry["chore"]["icon"]).not_to start_with("hicon:")
+      expect(entry["chore"]["icon_kind"]).to eq("image")
+
+      # Same guarantee for the per-chore history modal endpoint.
+      get "/chores/items/#{chore.id}/history"
+      body = response.parsed_body
+      expect(body["chore"]["icon"]).to eq(tiny_png_url)
+      expect(body["chore"]["icon"]).not_to start_with("hicon:")
+
+      # And the Balance-page Recent History widget.
+      get chores_recent_history_path
+      recent = response.parsed_body["entries"].find { |e| e["kind"] == "completion" }
+      expect(recent["chore"]["icon"]).to eq(tiny_png_url)
+    end
   end
 
   describe "streak bonuses CRUD" do

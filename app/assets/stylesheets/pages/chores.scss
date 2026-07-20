@@ -66,18 +66,28 @@
     --actor-color: #94A3B8;
   }
 
-  // Unified page: BOTH `.view-grid` and `.view-today` render together;
-  // CSS hides the inactive one. Eliminates the entire class of "make a
-  // change on Grid, click Today, see stale data" bugs since both
-  // containers update from a single source.
+  // Unified SPA page: ALL FOUR views (Grid, Today, Balance, History)
+  // render together in one document; CSS hides the inactive three.
+  // Eliminates the entire class of "make a change on view A, click
+  // view B, see stale data" bugs since containers update from a
+  // single source and never tear down. Nav is pure DOM toggle +
+  // pushState — no page load.
   > .chores-view {
     display: none;
   }
-  &[data-active-view="grid"] > .chores-view.view-grid {
-    display: block;
-  }
-  &[data-active-view="today"] > .chores-view.view-today {
-    display: block;
+  &[data-active-view="grid"]    > .chores-view.view-grid    { display: block; }
+  &[data-active-view="today"]   > .chores-view.view-today   { display: block; }
+  &[data-active-view="balance"] > .chores-view.view-balance { display: block; }
+  &[data-active-view="history"] > .chores-view.view-history { display: block; }
+
+  // Toolbar (search / edit / add) and Hot Strip are Grid/Today-only.
+  // Hidden on Balance and History so those views don't inherit chore-
+  // list chrome that has no meaning there.
+  &[data-active-view="balance"] > .chores-toolbar-wrap,
+  &[data-active-view="history"] > .chores-toolbar-wrap,
+  &[data-active-view="balance"] > .hot-strip,
+  &[data-active-view="history"] > .hot-strip {
+    display: none;
   }
 
   // Sticky toolbar only — search / edit / add stay reachable while

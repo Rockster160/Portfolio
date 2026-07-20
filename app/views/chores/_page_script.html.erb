@@ -1989,64 +1989,100 @@
   const choreHistoryModal = document.querySelector('[data-chore-history-modal]');
   const choreHistoryBody  = document.querySelector('[data-chore-history-body]');
   const choreHistoryTitle = document.querySelector('[data-chore-history-title]');
+  // Placeholder rows for the per-chore history modal — cloned from the
+  // shared templates so the loading/empty/error variants stay consistent
+  // with the Balance Recent-History list.
+  function setChoreHistoryMessage(text) {
+    if (!choreHistoryBody) return;
+    const node = cloneTemplate("chore-history-message");
+    if (node) {
+      const slot = node.querySelector("[data-history-message]");
+      if (slot) slot.textContent = text;
+      choreHistoryBody.replaceChildren(node);
+    } else {
+      choreHistoryBody.replaceChildren();
+    }
+  }
   async function openChoreHistoryModal(id) {
     if (!choreHistoryModal) return;
     const c = ChoreStore.get(parseInt(id, 10));
     if (choreHistoryTitle) choreHistoryTitle.textContent = c ? c.name : "Chore History";
-    if (choreHistoryBody) choreHistoryBody.innerHTML = '<p style="color:var(--chores-muted);">Loading…</p>';
+    setChoreHistoryMessage("Loading…");
     choreHistoryModal.classList.remove("hidden");
     try {
       const data = await api(`/chores/items/${parseInt(id, 10)}/history`, "GET");
       renderChoreHistory(data);
     } catch (e) {
-      if (choreHistoryBody) choreHistoryBody.innerHTML = `<p style="color:#DC2626;">${esc(e.message || "Failed to load")}</p>`;
+      setChoreHistoryMessage(e.message || "Failed to load");
     }
   }
   function renderChoreHistory(data) {
     if (!choreHistoryBody) return;
     const entries = data?.entries || [];
     if (entries.length === 0) {
-      choreHistoryBody.innerHTML = '<p style="color:var(--chores-muted);">No history yet.</p>';
+      setChoreHistoryMessage("No history yet.");
       return;
     }
-    const rows = entries.map(e => {
-      // Anonymous entries paint the grey "Anonymous" pill instead of
-      // the recorder's username — the recorder is just who saved the
-      // row, not who did the work.
-      const actor = e.anonymous
-        ? `<span class="chore-history-actor anonymous">Anonymous</span>`
-        : (e.actor_username ? `<span class="chore-history-actor">${esc(e.actor_username)}</span>` : "");
+    const frag = document.createDocumentFragment();
+    entries.forEach(e => {
+      const row = cloneTemplate("chore-history-row");
+      if (!row) return;
+      // Row-level data-actor drives the per-entry ring color. For
+      // anonymous, switch to the same grey treatment cards use.
+      if (e.anonymous) row.dataset.actorAnonymous = "true";
+      else if (e.actor_username) row.dataset.actor = e.actor_username;
+
+      row.querySelector("[data-history-when]").textContent = e.when_label || "";
       // Inline tag is for the cooldown-blocked "skipped" case only.
       // Anonymous completions communicate the same intent via the
       // right-side "Anonymous" actor pill — no second badge needed.
-      const tag = (e.payout_skipped && !e.anonymous)
-        ? ' <span class="history-tag skipped">skipped</span>'
-        : "";
-      const mults = [];
-      if (e.hot_multiplier != null && e.hot_multiplier > 1) {
-        mults.push(`<span class="history-mult hot">Hot ${esc(formatMultiplier(e.hot_multiplier))}×</span>`);
+      const skippedTag = row.querySelector("[data-history-skipped-tag]");
+      if (skippedTag) skippedTag.hidden = !(e.payout_skipped && !e.anonymous);
+
+      row.querySelector("[data-history-paid]").textContent = `${formatCount(e.paid_pebbles)}p`;
+
+      const actor = row.querySelector("[data-history-actor]");
+      if (actor) {
+        if (e.anonymous) {
+          actor.classList.add("anonymous");
+          actor.textContent = "Anonymous";
+          actor.hidden = false;
+        } else if (e.actor_username) {
+          actor.textContent = e.actor_username;
+          actor.hidden = false;
+        } else {
+          actor.hidden = true;
+        }
       }
-      if (e.streak_multiplier != null && e.streak_multiplier > 1) {
-        mults.push(`<span class="history-mult streak">Streak ${esc(formatMultiplier(e.streak_multiplier))}×</span>`);
+
+      const mults = row.querySelector("[data-history-mults]");
+      if (mults) {
+        const pills = [];
+        if (e.hot_multiplier != null && e.hot_multiplier > 1) {
+          const pill = cloneTemplate("chore-history-mult-pill");
+          if (pill) { pill.classList.add("hot"); pill.textContent = `Hot ${formatMultiplier(e.hot_multiplier)}×`; pills.push(pill); }
+        }
+        if (e.streak_multiplier != null && e.streak_multiplier > 1) {
+          const pill = cloneTemplate("chore-history-mult-pill");
+          if (pill) { pill.classList.add("streak"); pill.textContent = `Streak ${formatMultiplier(e.streak_multiplier)}×`; pills.push(pill); }
+        }
+        if (pills.length) {
+          mults.replaceChildren(...pills);
+          mults.hidden = false;
+        } else {
+          mults.hidden = true;
+        }
       }
-      const multBlock = mults.length ? `<div class="chore-history-mults">${mults.join("")}</div>` : "";
-      const note = e.note ? `<div class="chore-history-note">${esc(e.note)}</div>` : "";
-      // Row-level data-actor drives the per-entry ring color. For
-      // anonymous, switch to the same grey treatment cards use.
-      const rowAttr = e.anonymous
-        ? 'data-actor-anonymous="true"'
-        : `data-actor="${esc(e.actor_username || '')}"`;
-      return `
-        <div class="chore-history-row" ${rowAttr}>
-          <div class="chore-history-when">${esc(e.when_label)}${tag}</div>
-          <div class="chore-history-paid">${esc(formatCount(e.paid_pebbles))}p</div>
-          ${actor}
-          ${multBlock}
-          ${note}
-        </div>
-      `;
-    }).join("");
-    choreHistoryBody.innerHTML = rows;
+
+      const noteEl = row.querySelector("[data-history-note]");
+      if (noteEl) {
+        if (e.note) { noteEl.textContent = e.note; noteEl.hidden = false; }
+        else        { noteEl.hidden = true; }
+      }
+
+      frag.appendChild(row);
+    });
+    choreHistoryBody.replaceChildren(frag);
   }
   // Dismiss wiring (including the drag-from-inside-to-outside fix) is
   // applied to every `.chores-modal-backdrop` in the Balance section.
@@ -2141,25 +2177,36 @@
   const notePromptTitle  = notePromptModal?.querySelector('[data-note-prompt-title]');
   let activeNotePrompt = null;
 
-  function renderNotePromptField(f, i) {
+  // Build one note-prompt form section from a parsed field spec.
+  // Returns a DOM node cloned from the type-appropriate template with
+  // id / for / dataset filled in. No HTML string construction.
+  function buildNotePromptField(f, i) {
     const id = `note-prompt-field-${i}`;
-    const keyAttr = esc(f.key);
-    const typeAttr = esc(f.type || "text");
-    const label = `<label class="field-label" for="${id}">${esc(f.label)}</label>`;
-    let input;
-    if (f.type === "select" && f.options && f.options.length) {
-      const opts = ['<option value=""></option>']
-        .concat(f.options.map(o => `<option value="${esc(o)}">${esc(o)}</option>`))
-        .join("");
-      input = `<select id="${id}" data-prompt-key="${keyAttr}" data-prompt-type="${typeAttr}">${opts}</select>`;
-    } else if (f.type === "numeric" || f.type === "number") {
-      input = `<input id="${id}" type="number" inputmode="decimal" data-prompt-key="${keyAttr}" data-prompt-type="${typeAttr}" autocomplete="off">`;
-    } else if (f.type === "date") {
-      input = `<input id="${id}" type="date" data-prompt-key="${keyAttr}" data-prompt-type="${typeAttr}" autocomplete="off">`;
-    } else {
-      input = `<input id="${id}" type="text" data-prompt-key="${keyAttr}" data-prompt-type="${typeAttr}" autocomplete="off">`;
+    const type = f.type || "text";
+    let tplName = "note-prompt-field-text";
+    if (type === "select" && f.options && f.options.length) tplName = "note-prompt-field-select";
+    else if (type === "numeric" || type === "number") tplName = "note-prompt-field-number";
+    else if (type === "date") tplName = "note-prompt-field-date";
+
+    const node = cloneTemplate(tplName);
+    if (!node) return null;
+    const labelEl = node.querySelector("[data-prompt-label]");
+    const inputEl = node.querySelector("[data-prompt-input]");
+    if (labelEl) {
+      labelEl.htmlFor = id;
+      labelEl.textContent = f.label;
     }
-    return `<div class="form-section">${label}${input}</div>`;
+    if (inputEl) {
+      inputEl.id = id;
+      inputEl.dataset.promptKey = f.key;
+      inputEl.dataset.promptType = type;
+      if (tplName === "note-prompt-field-select") {
+        const blank = new Option("", "");
+        inputEl.appendChild(blank);
+        f.options.forEach(o => inputEl.appendChild(new Option(o, o)));
+      }
+    }
+    return node;
   }
   // Map a raw form value to the type implied by the placeholder.
   // Empty strings become null so the server stores `null` rather than
@@ -2177,7 +2224,12 @@
     if (!notePromptModal || !notePromptForm || !notePromptFields) return;
     activeNotePrompt = { chore, parsed };
     if (notePromptTitle) notePromptTitle.textContent = chore.short_name || chore.name || "Notes";
-    notePromptFields.innerHTML = parsed.fields.map((f, i) => renderNotePromptField(f, i)).join("");
+    const frag = document.createDocumentFragment();
+    parsed.fields.forEach((f, i) => {
+      const node = buildNotePromptField(f, i);
+      if (node) frag.appendChild(node);
+    });
+    notePromptFields.replaceChildren(frag);
     notePromptModal.classList.remove("hidden");
     scrollModalToTop(notePromptModal);
     const first = notePromptFields.querySelector("input, select, textarea");
@@ -2186,7 +2238,7 @@
   function closeNotePrompt() {
     notePromptModal?.classList.add("hidden");
     activeNotePrompt = null;
-    if (notePromptFields) notePromptFields.innerHTML = "";
+    if (notePromptFields) notePromptFields.replaceChildren();
   }
   notePromptForm?.addEventListener("submit", e => {
     e.preventDefault();
@@ -3150,20 +3202,35 @@
       //   the dirty state explicitly (sealed if loaded with an existing icon).
       if (source === "user") stack.__iconUserDirty = true;
       if (!renderFromValue || !preview) return;
-      if (!v) { preview.innerHTML = ""; return; }
+      preview.replaceChildren();
+      if (!v) return;
+      // Reuse the icon-* templates shared with chore cards (icon-img /
+      // icon-ti / icon-glyph). Only exception: raw <svg> markup, which
+      // legitimately needs to be parsed into a DOM subtree — but as a
+      // <template>-parsed fragment, not innerHTML on the live target.
       if (v.startsWith("hicon:")) {
         // Resolve the reference against the already-loaded custom pool
         // and render its data URL. Missing (deleted) icons collapse to
         // empty rather than a broken image.
         const id = v.slice("hicon:".length);
         const src = customIconSrcById(id);
-        preview.innerHTML = src ? `<img src="${esc(src)}" alt="" loading="lazy" draggable="false">` : "";
+        if (src) {
+          const node = cloneTemplate("icon-img");
+          if (node) { node.src = src; preview.appendChild(node); }
+        }
       } else if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://")) {
-        preview.innerHTML = `<img src="${esc(v)}" alt="" loading="lazy" draggable="false">`;
+        const node = cloneTemplate("icon-img");
+        if (node) { node.src = v; preview.appendChild(node); }
       } else if (v.startsWith("<svg")) {
-        preview.innerHTML = v;
+        // Parse the SVG into a fragment via a detached <template>, so we
+        // never touch preview.innerHTML with attacker-controlled markup.
+        const parser = document.createElement("template");
+        parser.innerHTML = v;
+        const svgRoot = parser.content.firstElementChild;
+        if (svgRoot) preview.appendChild(svgRoot);
       } else if (v.startsWith("ti-")) {
-        preview.innerHTML = `<i class="ti ${esc(v)} icon-ti" aria-hidden="true"></i>`;
+        const node = cloneTemplate("icon-ti");
+        if (node) { node.classList.add(v); preview.appendChild(node); }
       } else {
         preview.textContent = v;
       }
@@ -3582,18 +3649,35 @@
 
     function buildTile(row) {
       const v = row.c;
-      const safe = esc(v);
       if (row._kind === "ti") {
-        return `<button type="button" data-pick-value="${safe}" title="${esc(row.n || v)}"><i class="ti ${safe}" aria-hidden="true"></i></button>`;
+        const node = cloneTemplate("icon-picker-tile-ti");
+        if (!node) return null;
+        node.dataset.pickValue = v;
+        node.title = row.n || v;
+        const iconEl = node.querySelector("[data-tile-icon]");
+        if (iconEl) iconEl.classList.add(v);
+        return node;
       }
       if (row._kind === "custom") {
         // Custom icons resolve to household-scoped `hicon:<id>` refs so
         // the chore stores a short pointer instead of duplicating the
         // data URL onto every chore that uses this icon. The <img>
         // preview inside the tile still uses the resolved data URL.
-        return `<button type="button" data-pick-value="hicon:${row._id}" data-custom-id="${row._id}" title="${esc(row.n || "")}"><img class="icon-img" src="${safe}" alt="${esc(row.n || "")}" loading="lazy" draggable="false"></button>`;
+        const node = cloneTemplate("icon-picker-tile-custom");
+        if (!node) return null;
+        node.dataset.pickValue = `hicon:${row._id}`;
+        node.dataset.customId = row._id;
+        node.title = row.n || "";
+        const imgEl = node.querySelector("[data-tile-img]");
+        if (imgEl) { imgEl.src = v; imgEl.alt = row.n || ""; }
+        return node;
       }
-      return `<button type="button" data-pick-value="${safe}" title="${esc(row.n || "")}">${safe}</button>`;
+      const node = cloneTemplate("icon-picker-tile-glyph");
+      if (!node) return null;
+      node.dataset.pickValue = v;
+      node.title = row.n || "";
+      node.textContent = v;
+      return node;
     }
 
     async function render() {
@@ -3602,7 +3686,12 @@
       // the empty-state copy is reserved for queries that score zero.
       const hasQuery = (searchEl.value || "").trim().length > 0;
       emptyEl.classList.toggle("hidden", !hasQuery || rows.length > 0);
-      gridEl.innerHTML = rows.map(buildTile).join("");
+      const frag = document.createDocumentFragment();
+      rows.forEach(r => {
+        const node = buildTile(r);
+        if (node) frag.appendChild(node);
+      });
+      gridEl.replaceChildren(frag);
     }
 
     let searchTimer = null;
@@ -5301,16 +5390,12 @@
     return row;
   }
   function truncate(s, n) { return s.length > n ? s.slice(0, n - 3) + "..." : s; }
-  if (root?.dataset.mode === "balance") {
-    // Recent History loads ONCE per page navigation, then stays
-    // static. Live-update triggers (Monitor broadcast, focus, online)
-    // were too aggressive: people noticed re-renders happening
-    // mid-keystroke while typing a withdrawal note. The reload
-    // button next to the heading is the explicit refresh path.
-    hydrateRecentHistory();
-    document.querySelector("[data-recent-history-reload]")
-      ?.addEventListener("click", () => hydrateRecentHistory());
-  }
+  // Recent History reload button — wired regardless of active view so
+  // the click handler is ready the instant the user nav'ies to Balance.
+  // The initial hydration itself is triggered by the SPA router when it
+  // activates the Balance view (see hydrateBalanceView below).
+  document.querySelector("[data-recent-history-reload]")
+    ?.addEventListener("click", () => hydrateRecentHistory());
 
   const withdrawWhenEl = document.querySelector("[data-withdraw-when]");
   if (withdrawWhenEl) {
@@ -5523,8 +5608,9 @@
     // NOT send them while they're being curated — they'd race the
     // user. Monitor still subscribes (so live updates flow into the
     // store), but outbound flushes are paused until they navigate
-    // away. The next page load (or focus event) will resume.
-    if (root?.dataset.mode === "history") {
+    // away. In the SPA the active view can change without a page load,
+    // so read MODE dynamically rather than a stamped data-mode attr.
+    if (MODE === "history") {
       setConnDot(navigator.onLine ? "online" : "offline");
       markAllQueueLoud();
       return;
@@ -5994,36 +6080,155 @@
   }
 
   // ============================================================
-  // view toggle (Grid ↔ Today) — pushState, no navigation
+  // SPA router — Grid ↔ Today ↔ Balance ↔ History, pushState only
   // ============================================================
+  // Every /chores/* URL renders the same shell (all four view sections
+  // are always in the DOM). Nav is pure DOM toggle + pushState + lazy
+  // hydration of per-view data. No page reload, no re-parse of the
+  // 6k-line module, no ChoreStore rehydrate.
+  const VIEW_PATHS = {
+    grid:    "/chores",
+    today:   "/chores/today",
+    balance: "/chores/balance",
+    history: "/chores/history",
+  };
+  const VIEW_TITLES = {
+    grid:    "Chores",
+    today:   "Chores · Today",
+    balance: "Chores · Balance",
+    history: "Chores · History",
+  };
+  const VALID_VIEWS = Object.keys(VIEW_PATHS);
+  function normalizeView(v) { return VALID_VIEWS.includes(v) ? v : "grid"; }
+  function viewFromPath(path) {
+    if (path.startsWith("/chores/today"))   return "today";
+    if (path.startsWith("/chores/balance")) return "balance";
+    if (path.startsWith("/chores/history")) return "history";
+    return "grid";
+  }
+
+  // Balance view hydration — lazy, once per session unless force:true.
+  // Uses the /chores/balance_data endpoint which ships pre-rendered
+  // goal + streak-bonus card fragments (same partials the mutation
+  // responses use) so there's ONE source of truth for that markup.
+  let balanceHydrated = false;
+  let balanceHydrating = false;
+  async function hydrateBalanceView({ force = false } = {}) {
+    if (balanceHydrating) return;
+    if (balanceHydrated && !force) return;
+    balanceHydrating = true;
+    try {
+      const data = await api("/chores/balance_data", "GET");
+      if (!data) return;
+
+      const goalsCards = document.querySelector("[data-goals-cards]");
+      // ERB partials are the single source of truth for these card
+      // shapes — the server renders them via render_to_string and we
+      // splat them in as-is. The rule against JS-string HTML applies
+      // to JS-authored markup; server-rendered fragments over the wire
+      // are the sanctioned alternative pattern.
+      if (goalsCards) goalsCards.innerHTML = data.goals_html || "";
+      const goalsEmpty = document.querySelector("[data-goals-empty]");
+      if (goalsEmpty) goalsEmpty.style.display = (data.goals_count > 0) ? "none" : "";
+
+      const streakCards = document.querySelector("[data-streak-bonuses-cards]");
+      if (streakCards) streakCards.innerHTML = data.streak_bonuses_html || "";
+      const streakEmpty = document.querySelector("[data-streak-bonuses-empty]");
+      if (streakEmpty) streakEmpty.style.display = (data.streak_bonuses_count > 0) ? "none" : "";
+
+      const transferForm = document.querySelector("[data-transfer-form]");
+      const transferEmpty = document.querySelector("[data-transfer-empty]");
+      const recipients = data.transfer_recipients || [];
+      if (recipients.length > 0) {
+        if (transferForm)  transferForm.style.display = "";
+        if (transferEmpty) transferEmpty.style.display = "none";
+        const sel = transferForm?.querySelector('select[name="to_user_id"]');
+        if (sel) {
+          sel.replaceChildren();
+          recipients.forEach(u => sel.appendChild(new Option(u.username, u.id)));
+        }
+        const fs = transferForm?.querySelector("[data-transfer-fieldset]");
+        if (fs) {
+          if (data.transfer_disabled) fs.setAttribute("disabled", "");
+          else                        fs.removeAttribute("disabled");
+        }
+      } else {
+        if (transferForm)  transferForm.style.display = "none";
+        if (transferEmpty) transferEmpty.style.display = "";
+      }
+
+      // Route the balance number through the canonical setters so the
+      // localStorage cache + negative-state class stay in step.
+      if (data.balance != null) setLifetimeBalance(data.balance);
+      if (data.today_earnings != null) setTodayEarnings(data.today_earnings);
+
+      balanceHydrated = true;
+      // Recent History widget lives on Balance and has its own once-
+      // per-visit fetch; kick it if the container is still showing the
+      // loading placeholder.
+      hydrateRecentHistory();
+    } catch (e) {
+      // Silent fail — the empty containers stay visible with the
+      // baseline "No goals yet" placeholders. User can retry via
+      // navigating away and back, or via any explicit reload button.
+    } finally {
+      balanceHydrating = false;
+    }
+  }
+
   function setActiveView(view, { push = true } = {}) {
     if (!unifiedPage) return;
-    if (!["grid", "today"].includes(view)) view = "grid";
-    if (MODE === view && root.dataset.activeView === view) return;
+    view = normalizeView(view);
+    const alreadyActive = (MODE === view && root.dataset.activeView === view);
     MODE = view;
     root.dataset.activeView = view;
     if (push) {
-      const url = view === "today" ? "/chores/today" : "/chores";
+      const url = VIEW_PATHS[view];
       if (location.pathname !== url) history.pushState({ view }, "", url);
     }
-    document.title = view === "today" ? "Chores · Today" : "Chores";
+    document.title = VIEW_TITLES[view];
     document.querySelectorAll(".chores-nav a").forEach(a => {
-      const href = a.getAttribute("href");
-      if (href === "/chores" || href === "/chores/today") {
-        a.classList.toggle("active", href === (view === "today" ? "/chores/today" : "/chores"));
-      }
+      const href = a.getAttribute("href") || "";
+      // Match by the base path (History carries query params like
+      // ?page=2 that shouldn't unset the active state).
+      const linkBase = href.split("?")[0];
+      a.classList.toggle("active", linkBase === VIEW_PATHS[view]);
     });
+    if (alreadyActive) return;
+    // Lazy-hydrate per-view data on activation. Grid/Today draw
+    // straight from ChoreStore so no fetch is needed — ChoreStore
+    // is populated at boot (hydrateFromLocal + fullSync).
+    if (view === "balance") hydrateBalanceView();
+    else if (view === "history") window.ChoresHistoryView?.hydrate();
   }
   if (unifiedPage) {
-    document.querySelectorAll(".chores-nav a").forEach(link => {
+    // Intercept in-shell nav links. Any anchor with an href that
+    // matches one of the view paths OR that carries data-nav-view
+    // becomes a soft nav. External links / same-tab downloads / any
+    // click with modifier keys are left alone so the browser handles
+    // them normally.
+    document.addEventListener("click", e => {
+      const link = e.target.closest("a[href]");
+      if (!link) return;
+      if (e.defaultPrevented) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      if (link.target && link.target !== "" && link.target !== "_self") return;
       const href = link.getAttribute("href");
-      if (href === "/chores")            link.addEventListener("click", e => { e.preventDefault(); setActiveView("grid"); });
-      else if (href === "/chores/today") link.addEventListener("click", e => { e.preventDefault(); setActiveView("today"); });
+      if (!href) return;
+      const dataView = link.dataset.navView;
+      const targetView = dataView || (
+        href === VIEW_PATHS.grid    ? "grid" :
+        href === VIEW_PATHS.today   ? "today" :
+        href === VIEW_PATHS.balance ? "balance" :
+        href === VIEW_PATHS.history ? "history" :
+        null
+      );
+      if (!targetView) return;
+      e.preventDefault();
+      setActiveView(targetView);
     });
     window.addEventListener("popstate", () => {
-      const path = location.pathname;
-      if (path === "/chores")            setActiveView("grid",  { push: false });
-      else if (path === "/chores/today") setActiveView("today", { push: false });
+      setActiveView(viewFromPath(location.pathname), { push: false });
     });
   }
 
@@ -6097,4 +6302,22 @@
   if (unifiedPage) {
     setActiveView(MODE, { push: false });
   }
+
+  // ============================================================
+  // Cross-partial utility surface. History's inline script (and any
+  // future chores partial) consumes utilities from here rather than
+  // re-defining them, so there's exactly one implementation of `api`,
+  // `flash`, template cloning, icon rendering, etc. Keep this list
+  // minimal — expose only what's genuinely shared. New chore views
+  // should live inside this same module rather than being separate
+  // <script type="module"> islands.
+  // ============================================================
+  window.ChoresPWA = Object.freeze({
+    esc, formatCount, formatMultiplier, truncate,
+    api, flash, withSavingState,
+    currentCsrf, refreshCsrf,
+    cloneTemplate, buildIconNodeFromKind,
+    loadQueue, saveQueue,
+    QUEUE_KEY,
+  });
 </script>

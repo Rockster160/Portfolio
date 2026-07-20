@@ -159,3 +159,153 @@
     <span class="dim">Offline — recent history will load when you're back.</span>
   </div>
 </template>
+
+<%# Full-width row variants used by the History page — one template per
+   kind so the builder never conditionally toggles unrelated DOM. Every
+   data-* attribute the edit modal reads (data-completion-id,
+   data-chore-name, etc.) is populated by the JS builder via
+   setAttribute — the template only carries the fixed structure. %>
+<template data-template="history-full-row-completion">
+  <div class="history-row" data-kind="completion">
+    <span class="history-when-name">
+      <span class="history-when" data-history-when></span>
+      <span class="history-sep"> · </span>
+      <span class="history-icon" data-history-icon></span>
+      <span class="history-name" data-history-name></span>
+      <span class="history-mult hot" data-history-hot hidden></span>
+      <span class="history-mult streak" data-history-streak hidden></span>
+      <span class="history-note" data-history-note hidden></span>
+    </span>
+    <span class="history-amount-cell">
+      <span class="history-amount" data-history-amount></span>
+      <button type="button" class="history-edit" data-edit-completion>
+        <i class="fa fa-pencil" aria-hidden="true"></i>
+      </button>
+    </span>
+  </div>
+</template>
+<template data-template="history-full-row-withdrawal">
+  <div class="history-row" data-kind="withdrawal">
+    <span class="history-when-name">
+      <span class="history-when" data-history-when></span>
+      <span class="history-sep"> · </span>
+      <span class="history-icon">🪙</span>
+      <span class="history-name">Withdraw</span>
+      <span class="history-note" data-history-note hidden></span>
+    </span>
+    <span class="history-amount-cell">
+      <span class="history-amount" data-history-amount></span>
+      <button type="button" class="history-edit" data-edit-withdrawal title="Edit">
+        <i class="fa fa-pencil" aria-hidden="true"></i>
+      </button>
+    </span>
+  </div>
+</template>
+<template data-template="history-full-row-transfer">
+  <div class="history-row" data-kind="transfer">
+    <span class="history-when-name">
+      <span class="history-when" data-history-when></span>
+      <span class="history-sep"> · </span>
+      <span class="history-icon">🤝</span>
+      <span class="history-name" data-history-name></span>
+      <span class="history-note" data-history-note hidden></span>
+    </span>
+    <span class="history-amount-cell">
+      <span class="history-amount" data-history-amount></span>
+      <button type="button" class="history-edit" data-edit-transfer title="Edit" hidden>
+        <i class="fa fa-pencil" aria-hidden="true"></i>
+      </button>
+    </span>
+  </div>
+</template>
+<template data-template="history-full-row-pending">
+  <div class="history-row pending-row">
+    <span class="history-when-name">
+      <span class="history-when" data-history-when></span>
+      <span class="history-sep"> · </span>
+      <span class="history-icon" data-history-icon></span>
+      <span class="history-name" data-history-name></span>
+      <span class="history-tag pending" data-history-action></span>
+      <span class="history-mult hot" data-history-hot hidden></span>
+      <span class="history-mult streak" data-history-streak hidden></span>
+      <span class="history-note" data-history-note hidden></span>
+    </span>
+    <span class="history-amount-cell">
+      <span class="history-amount" data-history-amount></span>
+      <button type="button" class="history-edit" data-edit-pending title="Edit" hidden>
+        <i class="fa fa-pencil" aria-hidden="true"></i>
+      </button>
+      <button type="button" class="history-edit" data-delete-pending title="Remove from queue">
+        <i class="fa fa-times" aria-hidden="true"></i>
+      </button>
+    </span>
+  </div>
+</template>
+<template data-template="history-row-message">
+  <div class="history-row history-loading"><span class="dim" data-history-message></span></div>
+</template>
+
+<%# Per-chore history modal row — used by the long-press modal that
+   shows a single chore's completion log. %>
+<template data-template="chore-history-row">
+  <div class="chore-history-row">
+    <div class="chore-history-when">
+      <span data-history-when></span>
+      <span class="history-tag skipped" data-history-skipped-tag hidden> skipped</span>
+    </div>
+    <div class="chore-history-paid" data-history-paid></div>
+    <span class="chore-history-actor" data-history-actor hidden></span>
+    <div class="chore-history-mults" data-history-mults hidden></div>
+    <div class="chore-history-note" data-history-note hidden></div>
+  </div>
+</template>
+<template data-template="chore-history-mult-pill">
+  <span class="history-mult"></span>
+</template>
+<template data-template="chore-history-message">
+  <p class="chore-history-message" data-history-message></p>
+</template>
+
+<%# Note-prompt modal — one template per field type. The builder clones
+   the right variant and fills id/name/data-* via DOM APIs. %>
+<template data-template="note-prompt-field-text">
+  <div class="form-section">
+    <label class="field-label" data-prompt-label></label>
+    <input type="text" autocomplete="off" data-prompt-input>
+  </div>
+</template>
+<template data-template="note-prompt-field-number">
+  <div class="form-section">
+    <label class="field-label" data-prompt-label></label>
+    <input type="number" inputmode="decimal" autocomplete="off" data-prompt-input>
+  </div>
+</template>
+<template data-template="note-prompt-field-date">
+  <div class="form-section">
+    <label class="field-label" data-prompt-label></label>
+    <input type="date" autocomplete="off" data-prompt-input>
+  </div>
+</template>
+<template data-template="note-prompt-field-select">
+  <div class="form-section">
+    <label class="field-label" data-prompt-label></label>
+    <select data-prompt-input></select>
+  </div>
+</template>
+
+<%# Icon picker tiles — three shapes for glyph / Tabler icon / custom
+   uploaded image. Each is a self-contained button; the builder sets
+   data-pick-value + title + inner content per row. %>
+<template data-template="icon-picker-tile-glyph">
+  <button type="button" data-icon-picker-tile></button>
+</template>
+<template data-template="icon-picker-tile-ti">
+  <button type="button" data-icon-picker-tile>
+    <i class="ti" aria-hidden="true" data-tile-icon></i>
+  </button>
+</template>
+<template data-template="icon-picker-tile-custom">
+  <button type="button" data-icon-picker-tile>
+    <img class="icon-img" alt="" loading="lazy" draggable="false" data-tile-img>
+  </button>
+</template>

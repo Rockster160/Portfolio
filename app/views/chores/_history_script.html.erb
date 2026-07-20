@@ -1,0 +1,727 @@
+<%# History view script — extracted from the old history.html.erb
+   inline module and adapted for the SPA shell. Rendered by
+   page.html.erb after _page_script so `window.ChoresPWA` is
+   populated by the time this module executes.
+
+   Boot: attaches DOM listeners (form / pager / modal). Data fetch
+   fires only when the router activates the History view via
+   `window.ChoresHistoryView.hydrate()`. That way a fresh page load
+   at /chores (Grid) doesn't burn a history round-trip.
+%>
+<script type="module">
+  const P = window.ChoresPWA;
+  const { esc, formatCount, api, flash, withSavingState,
+          cloneTemplate, buildIconNodeFromKind, truncate } = P;
+  const QUEUE_KEY = P.QUEUE_KEY;
+  const loadQueue = P.loadQueue;
+  const saveQueue = P.saveQueue;
+  // formatMultiplier returns "" for NaN; history rows want "1" as a
+  // safe default. Wrap here rather than diverging the shared util.
+  const formatMult = v => P.formatMultiplier(v) || "1";
+
+  const root = document.querySelector('[data-chores-root]');
+  const listEl = document.querySelector("[data-history-list]");
+  const summaryEl = document.querySelector("[data-history-summary]");
+  const pagerEl = document.querySelector("[data-history-pager]");
+  const pendingSection = document.querySelector("[data-pending-section]");
+  const pendingList = document.querySelector("[data-pending-list]");
+  const pendingCount = document.querySelector("[data-pending-count]");
+  const searchForm = document.querySelector("[data-history-search]");
+  const qInput = document.querySelector("[data-history-q]");
+  const clearBtn = qInput?.parentElement?.querySelector("[data-search-clear]");
+  const modal = document.querySelector('[data-completion-modal]');
+  // Empty DOM = SW served an old shell before this view existed.
+  // Bail cleanly rather than throwing on every selector.
+  if (!listEl || !summaryEl || !pagerEl || !searchForm || !modal) {
+    // Nothing to bind — page will still work for the other views.
+  } else {
+
+  let state = { page: 1, q: "", total_pages: 1 };
+  let currentEditTarget = null; // { kind: "committed" | "pending", row }
+  let didInitFromUrl = false;
+
+  // ---------- utils ----------
+  function pluralize(n, single, plural) {
+    return `${n} ${n === 1 ? single : (plural || single + "s")}`;
+  }
+  const NOTE_LIMIT = 120;
+  function toLocalInputValue(isoString) {
+    if (!isoString) return "";
+    const d = new Date(isoString);
+    const pad = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function formatWhenLabel(isoString) {
+    const d = new Date(isoString);
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    let h = d.getHours();
+    const ampm = h >= 12 ? "pm" : "am";
+    h = h % 12; if (h === 0) h = 12;
+    const m = String(d.getMinutes()).padStart(2, "0");
+    return `${months[d.getMonth()]} ${d.getDate()} ${h}:${m}${ampm}`;
+  }
+  function saveQueueAndNotify(q) {
+    saveQueue(q);
+    window.dispatchEvent(new CustomEvent("chores:queue_changed"));
+  }
+
+  // ---------- row builders (template + DOM fill; no HTML strings) ----------
+  const AMOUNT_COLOR = {
+    withdraw:  "#FCA5A5",
+    transferOut: "#FCA5A5",
+    transferIn:  "#34D399",
+    paid:      "#34D399",
+    anonymous: "#94A3B8",
+    skipped:   "#9CA3AF",
+    pending:   "#FACC15",
+    pendingUndo: "#9CA3AF",
+  };
+  function fillNoteSlot(row, noteText) {
+    const slot = row.querySelector("[data-history-note]");
+    if (!slot) return;
+    if (noteText) {
+      slot.textContent = `— ${truncate(String(noteText), NOTE_LIMIT)}`;
+      slot.hidden = false;
+    } else {
+      slot.hidden = true;
+    }
+  }
+  function fillMultSlots(row, hotMult, streakMult) {
+    const hotEl = row.querySelector("[data-history-hot]");
+    if (hotEl) {
+      if (hotMult != null && hotMult > 1) {
+        hotEl.textContent = `Hot ${formatMult(hotMult)}×`;
+        hotEl.hidden = false;
+      } else {
+        hotEl.hidden = true;
+      }
+    }
+    const streakEl = row.querySelector("[data-history-streak]");
+    if (streakEl) {
+      if (streakMult != null && streakMult > 1) {
+        streakEl.textContent = `Streak ${formatMult(streakMult)}×`;
+        streakEl.hidden = false;
+      } else {
+        streakEl.hidden = true;
+      }
+    }
+  }
+  function fillIconSlot(row, chore) {
+    const slot = row.querySelector("[data-history-icon]");
+    if (!slot) return;
+    if (!chore || !chore.icon) return;
+    while (slot.firstChild) slot.removeChild(slot.firstChild);
+    const node = buildIconNodeFromKind(chore);
+    if (node) slot.appendChild(node);
+  }
+  function buildWithdrawalRow(entry) {
+    const row = cloneTemplate("history-full-row-withdrawal");
+    if (!row) return null;
+    row.dataset.withdrawalId = entry.id;
+    row.dataset.amount = entry.amount_pebbles;
+    row.dataset.createdAt = entry.created_at || "";
+    row.dataset.note = entry.note || "";
+    row.querySelector("[data-history-when]").textContent = entry.when_label || "";
+    fillNoteSlot(row, entry.note);
+    const amt = row.querySelector("[data-history-amount]");
+    amt.textContent = `−${formatCount(entry.amount_pebbles)}p`;
+    amt.style.color = AMOUNT_COLOR.withdraw;
+    return row;
+  }
+  function buildTransferRow(entry) {
+    const row = cloneTemplate("history-full-row-transfer");
+    if (!row) return null;
+    const outgoing = entry.direction === "outgoing";
+    const peer = entry.counterparty_username || "someone";
+    row.dataset.transferId = entry.id;
+    row.dataset.direction = entry.direction || "";
+    row.dataset.peer = peer;
+    row.dataset.amount = entry.amount_pebbles;
+    row.dataset.createdAt = entry.created_at || "";
+    row.dataset.note = entry.note || "";
+    row.querySelector("[data-history-when]").textContent = entry.when_label || "";
+    row.querySelector("[data-history-name]").textContent = outgoing ? `Sent to ${peer}` : `From ${peer}`;
+    fillNoteSlot(row, entry.note);
+    const amt = row.querySelector("[data-history-amount]");
+    amt.textContent = `${outgoing ? "−" : "+"}${formatCount(entry.amount_pebbles)}p`;
+    amt.style.color = outgoing ? AMOUNT_COLOR.transferOut : AMOUNT_COLOR.transferIn;
+    const editBtn = row.querySelector("[data-edit-transfer]");
+    if (editBtn) editBtn.hidden = !outgoing;
+    return row;
+  }
+  function buildCompletionRow(entry) {
+    const row = cloneTemplate("history-full-row-completion");
+    if (!row) return null;
+    const chore = entry.chore || {};
+    const displayName = chore.short_name || chore.name || "";
+    row.dataset.completionId = entry.id;
+    row.dataset.choreId = chore.id ?? "";
+    row.dataset.choreName = displayName;
+    row.dataset.paid = entry.paid_pebbles ?? "";
+    row.dataset.base = entry.base_pebbles ?? "";
+    row.dataset.completedAt = entry.completed_at || "";
+    row.dataset.note = entry.note || "";
+    row.dataset.hot = entry.hot_pick ? "true" : "false";
+    row.dataset.hotMultiplier = entry.hot_multiplier ?? "";
+    row.dataset.streakMultiplier = entry.streak_multiplier ?? "";
+    row.dataset.skipped = entry.payout_skipped ? "true" : "false";
+    row.dataset.skippedReason = entry.skipped_reason || "";
+    row.dataset.choreIcon = chore.icon || "";
+    row.dataset.choreIconKind = chore.icon_kind || "empty";
+    row.querySelector("[data-history-when]").textContent = entry.when_label || "";
+    row.querySelector("[data-history-name]").textContent = displayName;
+    fillIconSlot(row, chore);
+    fillMultSlots(row, entry.hot_multiplier, entry.streak_multiplier);
+    fillNoteSlot(row, entry.note);
+    const amt = row.querySelector("[data-history-amount]");
+    if (entry.anonymous) {
+      amt.textContent = "(anonymous)";
+      amt.style.color = AMOUNT_COLOR.anonymous;
+    } else if (entry.payout_skipped) {
+      amt.textContent = "(skipped)";
+      amt.style.color = AMOUNT_COLOR.skipped;
+    } else {
+      amt.textContent = `+${formatCount(entry.paid_pebbles)}p`;
+      amt.style.color = AMOUNT_COLOR.paid;
+    }
+    const editBtn = row.querySelector("[data-edit-completion]");
+    if (editBtn) editBtn.title = `Edit completion #${entry.id}`;
+    return row;
+  }
+  function buildCommittedRow(entry) {
+    if (entry.kind === "withdrawal") return buildWithdrawalRow(entry);
+    if (entry.kind === "transfer")   return buildTransferRow(entry);
+    return buildCompletionRow(entry);
+  }
+  function buildPendingRow(item, idx) {
+    const row = cloneTemplate("history-full-row-pending");
+    if (!row) return null;
+    const meta = item.meta || {};
+    const body = item.body || {};
+    const chore = { icon: meta.icon, icon_kind: meta.icon_kind };
+    const ts = body.client_completed_at || item.queued_at;
+    const whenLabel = ts ? formatWhenLabel(ts) : "pending";
+    const isDelete = item.method === "DELETE";
+    row.dataset.pendingIndex = idx;
+    row.classList.add(isDelete ? "pending-undo" : "pending-complete");
+    row.querySelector("[data-history-when]").textContent = whenLabel;
+    row.querySelector("[data-history-name]").textContent = meta.chore_name || `Chore #${meta.chore_id ?? "?"}`;
+    row.querySelector("[data-history-action]").textContent = isDelete ? "Undo" : "Complete";
+    fillIconSlot(row, chore);
+    const hotMultVal    = parseFloat(body.hot_multiplier ?? 1) || 1;
+    const streakMultVal = parseFloat(body.streak_multiplier ?? body.total_multiplier ?? 1) || 1;
+    fillMultSlots(row, hotMultVal, streakMultVal);
+    fillNoteSlot(row, body.note);
+    const amt = row.querySelector("[data-history-amount]");
+    if (isDelete) {
+      amt.textContent = "undo";
+      amt.style.color = AMOUNT_COLOR.pendingUndo;
+    } else {
+      amt.textContent = `+${formatCount(meta.base_pebbles ?? 0)}p`;
+      amt.style.color = AMOUNT_COLOR.pending;
+    }
+    const editBtn = row.querySelector("[data-edit-pending]");
+    if (editBtn) editBtn.hidden = isDelete;
+    return row;
+  }
+
+  // ---------- rendering ----------
+  function replaceWithMessageRow(container, text) {
+    const node = cloneTemplate("history-row-message");
+    if (node) {
+      const slot = node.querySelector("[data-history-message]");
+      if (slot) slot.textContent = text;
+      container.replaceChildren(node);
+    } else {
+      container.replaceChildren();
+    }
+  }
+  function renderPending() {
+    const q = loadQueue();
+    if (q.length === 0) {
+      pendingSection.setAttribute("hidden", "");
+      pendingList.replaceChildren();
+      return;
+    }
+    pendingSection.removeAttribute("hidden");
+    pendingCount.textContent = String(q.length);
+    const frag = document.createDocumentFragment();
+    q.forEach((item, idx) => {
+      const row = buildPendingRow(item, idx);
+      if (row) frag.appendChild(row);
+    });
+    pendingList.replaceChildren(frag);
+  }
+  function renderHistory(data) {
+    const { entries = [], total_count = 0, total_pages = 1,
+            page_completions = 0, page_withdrawals = 0, page_transfers = 0,
+            from = 0, to = 0, page = 1 } = data || {};
+    state.total_pages = total_pages;
+    state.page = page;
+
+    summaryEl.removeAttribute("hidden");
+    const summaryMid = summaryEl.querySelector("[data-summary-mid]");
+    const summaryRight = summaryEl.querySelector("[data-summary-right]");
+    if (total_count === 0) {
+      summaryEl.querySelector("[data-summary-left]").textContent = "No matching history.";
+      if (summaryMid) summaryMid.hidden = true;
+      if (summaryRight) summaryRight.hidden = true;
+    } else {
+      if (summaryMid) summaryMid.hidden = false;
+      if (summaryRight) summaryRight.hidden = false;
+      const parts = [
+        pluralize(page_completions, "completion"),
+        pluralize(page_withdrawals, "withdrawal"),
+      ];
+      if (page_transfers > 0) parts.push(pluralize(page_transfers, "transfer"));
+      summaryEl.querySelector("[data-summary-left]").textContent =
+        `Showing ${parts.join(", ")}`;
+      summaryEl.querySelector("[data-summary-page]").textContent = page;
+      summaryEl.querySelector("[data-summary-total-pages]").textContent = total_pages;
+      summaryEl.querySelector("[data-summary-from]").textContent = formatCount(from);
+      summaryEl.querySelector("[data-summary-to]").textContent = formatCount(to);
+      summaryEl.querySelector("[data-summary-total]").textContent = formatCount(total_count);
+    }
+
+    if (entries.length === 0) {
+      if (total_count === 0) listEl.replaceChildren();
+      else                   replaceWithMessageRow(listEl, "No entries on this page.");
+    } else {
+      const frag = document.createDocumentFragment();
+      entries.forEach(entry => {
+        const row = buildCommittedRow(entry);
+        if (row) frag.appendChild(row);
+      });
+      listEl.replaceChildren(frag);
+    }
+
+    if (total_pages > 1) {
+      pagerEl.removeAttribute("hidden");
+      pagerEl.querySelector("[data-page-cur]").textContent = page;
+      pagerEl.querySelector("[data-page-total]").textContent = total_pages;
+      pagerEl.querySelector('[data-page="first"]').classList.toggle("disabled", page === 1);
+      pagerEl.querySelector('[data-page="prev"]').classList.toggle("disabled", page === 1);
+      pagerEl.querySelector('[data-page="next"]').classList.toggle("disabled", page === total_pages);
+      pagerEl.querySelector('[data-page="last"]').classList.toggle("disabled", page === total_pages);
+    } else {
+      pagerEl.setAttribute("hidden", "");
+    }
+
+    // Header pill: ALWAYS today_earnings on every view. Never lifetime.
+    if (data.today_earnings != null) setTodayEarnings(data.today_earnings);
+  }
+  function setTodayEarnings(value) {
+    if (value == null) return;
+    const el = document.querySelector("[data-balance]");
+    if (el) el.textContent = formatCount(value);
+  }
+  function setLoadingPlaceholder() {
+    const node = cloneTemplate("history-row-loading");
+    if (node) listEl.replaceChildren(node);
+    else      listEl.replaceChildren();
+    summaryEl.setAttribute("hidden", "");
+    pagerEl.setAttribute("hidden", "");
+  }
+  function setOfflinePlaceholder(msg) {
+    replaceWithMessageRow(listEl, msg || "Offline — history will load when you're back.");
+    summaryEl.setAttribute("hidden", "");
+    pagerEl.setAttribute("hidden", "");
+  }
+
+  // Single-flight guard so simultaneous nav + popstate can't double-fetch.
+  let fetchInFlight = false;
+  async function fetchHistory({ push = true } = {}) {
+    if (fetchInFlight) return;
+    fetchInFlight = true;
+    try {
+      const params = new URLSearchParams();
+      if (state.page > 1) params.set("page", state.page);
+      if (state.q) params.set("q", state.q);
+      const qs = params.toString();
+      const url = qs ? `/chores/history.json?${qs}` : "/chores/history.json";
+
+      if (push) {
+        const visibleQs = new URLSearchParams();
+        if (state.page > 1) visibleQs.set("page", state.page);
+        if (state.q) visibleQs.set("q", state.q);
+        const visible = visibleQs.toString();
+        const next = visible ? `/chores/history?${visible}` : "/chores/history";
+        history.pushState({ view: "history", page: state.page, q: state.q }, "", next);
+      }
+      setLoadingPlaceholder();
+      try {
+        const data = await api(url, "GET");
+        renderHistory(data);
+      } catch (e) {
+        setOfflinePlaceholder();
+      }
+    } finally {
+      fetchInFlight = false;
+    }
+  }
+
+  // ---------- pagination + filter ----------
+  pagerEl.addEventListener("click", e => {
+    const btn = e.target.closest("[data-page]");
+    if (!btn || btn.classList.contains("disabled")) return;
+    const dir = btn.dataset.page;
+    let next = state.page;
+    if (dir === "first") next = 1;
+    else if (dir === "prev") next = Math.max(1, state.page - 1);
+    else if (dir === "next") next = Math.min(state.total_pages, state.page + 1);
+    else if (dir === "last") next = state.total_pages;
+    if (next === state.page) return;
+    state.page = next;
+    fetchHistory();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+  searchForm.addEventListener("submit", e => {
+    e.preventDefault();
+    state.q = qInput.value.trim();
+    state.page = 1;
+    if (clearBtn) clearBtn.hidden = !state.q;
+    fetchHistory();
+  });
+  clearBtn?.addEventListener("click", () => {
+    qInput.value = "";
+    state.q = "";
+    state.page = 1;
+    clearBtn.hidden = true;
+    fetchHistory();
+  });
+  // popstate: only re-fetch when the URL is still a /chores/history one.
+  // Nav to another view is handled by the router's popstate in
+  // _page_script; this listener just keeps our state in sync when the
+  // history URL query changes (e.g. back/forward through pagination).
+  window.addEventListener("popstate", e => {
+    if (!location.pathname.startsWith("/chores/history")) return;
+    const url = new URL(location.href);
+    const nextQ = url.searchParams.get("q") || "";
+    const nextPage = parseInt(url.searchParams.get("page") || "1", 10) || 1;
+    if (nextQ === state.q && nextPage === state.page) return;
+    state.q = nextQ;
+    state.page = nextPage;
+    qInput.value = state.q;
+    if (clearBtn) clearBtn.hidden = !state.q;
+    fetchHistory({ push: false });
+  });
+
+  // ---------- modal: committed + pending share the same UI ----------
+  function setMultPill(kind, value) {
+    const v = Number.isFinite(value) ? value : 1;
+    modal.querySelector(`[data-modal-${kind}-mult]`).value = v;
+    modal.querySelector(`[data-mult-display-${kind}]`).textContent = formatMult(v);
+    if (kind === "hot") {
+      const btn = modal.querySelector('[data-mult-edit="hot"]');
+      if (btn) btn.classList.toggle("active", v > 1);
+    }
+  }
+  modal.querySelectorAll('[data-mult-edit]').forEach(btn => {
+    btn.addEventListener("click", () => {
+      const kind = btn.dataset.multEdit;
+      const current = modal.querySelector(`[data-modal-${kind}-mult]`).value;
+      const label = kind === "hot" ? "Hot" : "Streak";
+      const raw = prompt(`${label} multiplier:`, current);
+      if (raw == null) return;
+      const next = parseFloat(raw);
+      if (!Number.isFinite(next) || next < 0) { flash("Bad multiplier", "error"); return; }
+      setMultPill(kind, next);
+    });
+  });
+  function openCommittedModal(row) {
+    currentEditTarget = { kind: "committed", row };
+    const ds = row.dataset;
+    modal.querySelector('[data-modal-title]').textContent = "Edit Completion";
+    modal.querySelector('[data-modal-subject-label]').textContent = "Chore";
+    modal.querySelector('[data-modal-name]').textContent = ds.choreName;
+    modal.querySelector('[data-modal-base]').textContent = ds.base || "0";
+    modal.querySelector('[data-modal-completed-at]').value = toLocalInputValue(ds.completedAt);
+    modal.querySelector('[data-modal-amount]').value = ds.paid || "0";
+    modal.querySelector('[data-modal-amount-row]').removeAttribute("hidden");
+    modal.querySelector('[data-modal-amount-label]').textContent = "Paid pebbles";
+    setCompletionOnlyVisible(true);
+    setMultPill("hot",    parseFloat(ds.hotMultiplier    || "1"));
+    setMultPill("streak", parseFloat(ds.streakMultiplier || "1"));
+    modal.querySelector('[data-modal-note]').value = ds.note || "";
+    const skippedRow = modal.querySelector('[data-modal-skipped-row]');
+    if (ds.skipped === "true") {
+      skippedRow.removeAttribute("hidden");
+      modal.querySelector('[data-modal-skipped-reason]').textContent = ds.skippedReason || "Cooldown";
+    } else {
+      skippedRow.setAttribute("hidden", "");
+    }
+    const sourceIcon = row.querySelector(".history-icon");
+    const modalIcon = modal.querySelector('[data-modal-icon]');
+    if (modalIcon) {
+      modalIcon.replaceChildren();
+      if (sourceIcon && sourceIcon.firstChild) {
+        for (const child of sourceIcon.childNodes) modalIcon.appendChild(child.cloneNode(true));
+      } else {
+        modalIcon.textContent = "🧹";
+      }
+    }
+    modal.classList.remove("hidden");
+  }
+  function setCompletionOnlyVisible(visible) {
+    modal.querySelectorAll(".completion-only").forEach(el => {
+      if (visible) el.removeAttribute("hidden");
+      else         el.setAttribute("hidden", "");
+    });
+  }
+  function openWithdrawalModal(row) {
+    currentEditTarget = { kind: "withdrawal", row };
+    const ds = row.dataset;
+    modal.querySelector('[data-modal-title]').textContent = "Edit Withdrawal";
+    modal.querySelector('[data-modal-subject-label]').textContent = "Type";
+    const modalIcon = modal.querySelector('[data-modal-icon]');
+    if (modalIcon) modalIcon.textContent = "🪙";
+    modal.querySelector('[data-modal-name]').textContent = "Withdrawal";
+    modal.querySelector('[data-modal-completed-at]').value = toLocalInputValue(ds.createdAt);
+    modal.querySelector('[data-modal-amount]').value = ds.amount || "0";
+    modal.querySelector('[data-modal-amount-row]').removeAttribute("hidden");
+    modal.querySelector('[data-modal-amount-label]').textContent = "Amount";
+    modal.querySelector('[data-modal-note]').value = ds.note || "";
+    setCompletionOnlyVisible(false);
+    modal.classList.remove("hidden");
+  }
+  function openTransferModal(row) {
+    currentEditTarget = { kind: "transfer", row };
+    const ds = row.dataset;
+    const outgoing = ds.direction === "outgoing";
+    modal.querySelector('[data-modal-title]').textContent = "Edit Transfer";
+    modal.querySelector('[data-modal-subject-label]').textContent = outgoing ? "Sent to" : "From";
+    const modalIcon = modal.querySelector('[data-modal-icon]');
+    if (modalIcon) modalIcon.textContent = "🤝";
+    modal.querySelector('[data-modal-name]').textContent = ds.peer || "";
+    modal.querySelector('[data-modal-completed-at]').value = toLocalInputValue(ds.createdAt);
+    modal.querySelector('[data-modal-amount]').value = ds.amount || "0";
+    modal.querySelector('[data-modal-amount-row]').removeAttribute("hidden");
+    modal.querySelector('[data-modal-amount-label]').textContent = "Amount";
+    modal.querySelector('[data-modal-note]').value = ds.note || "";
+    setCompletionOnlyVisible(false);
+    modal.classList.remove("hidden");
+  }
+  function openPendingModal(row) {
+    const idx = parseInt(row.dataset.pendingIndex, 10);
+    const q = loadQueue();
+    const item = q[idx];
+    if (!item) { flash("Pending item is gone", "warn"); renderPending(); return; }
+    currentEditTarget = { kind: "pending", idx };
+    const meta = item.meta || {};
+    const body = item.body || {};
+    modal.querySelector('[data-modal-title]').textContent = "Edit Pending Push";
+    modal.querySelector('[data-modal-subject-label]').textContent = "Chore";
+    modal.querySelector('[data-modal-name]').textContent = meta.chore_name || `Chore #${meta.chore_id ?? "?"}`;
+    modal.querySelector('[data-modal-base]').textContent = String(meta.base_pebbles ?? 0);
+    setCompletionOnlyVisible(true);
+    modal.querySelector('[data-modal-completed-at]').value =
+      toLocalInputValue(body.client_completed_at || item.queued_at);
+    const hotMult0    = parseFloat(body.hot_multiplier    ?? "1") || 1;
+    const streakMult0 = parseFloat(body.streak_multiplier ?? body.total_multiplier ?? "1") || 1;
+    const base = parseInt(meta.base_pebbles ?? 0, 10) || 0;
+    const computedPaid = Math.round(base * hotMult0 * streakMult0);
+    modal.querySelector('[data-modal-amount-row]').removeAttribute("hidden");
+    modal.querySelector('[data-modal-amount-label]').textContent = "Paid pebbles";
+    modal.querySelector('[data-modal-amount]').value =
+      body.paid_pebbles != null ? String(body.paid_pebbles) : String(computedPaid);
+    setMultPill("hot",    hotMult0);
+    setMultPill("streak", streakMult0);
+    modal.querySelector('[data-modal-note]').value = body.note || "";
+    modal.querySelector('[data-modal-skipped-row]').setAttribute("hidden", "");
+    const sourceIcon = row.querySelector(".history-icon");
+    const modalIcon = modal.querySelector('[data-modal-icon]');
+    if (modalIcon) {
+      modalIcon.replaceChildren();
+      if (sourceIcon && sourceIcon.firstChild) {
+        for (const child of sourceIcon.childNodes) modalIcon.appendChild(child.cloneNode(true));
+      } else {
+        modalIcon.textContent = "🧹";
+      }
+    }
+    modal.classList.remove("hidden");
+  }
+  function closeModal() {
+    modal.classList.add("hidden");
+    currentEditTarget = null;
+  }
+  modal.querySelectorAll('[data-modal-cancel]').forEach(el => el.addEventListener("click", closeModal));
+  modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
+  listEl.addEventListener("click", e => {
+    const completionEdit = e.target.closest("[data-edit-completion]");
+    if (completionEdit) { openCommittedModal(completionEdit.closest("[data-completion-id]")); return; }
+    const withdrawalEdit = e.target.closest("[data-edit-withdrawal]");
+    if (withdrawalEdit) { openWithdrawalModal(withdrawalEdit.closest("[data-withdrawal-id]")); return; }
+    const transferEdit = e.target.closest("[data-edit-transfer]");
+    if (transferEdit) { openTransferModal(transferEdit.closest("[data-transfer-id]")); return; }
+  });
+  pendingList.addEventListener("click", e => {
+    const editBtn = e.target.closest("[data-edit-pending]");
+    if (editBtn) { openPendingModal(editBtn.closest("[data-pending-index]")); return; }
+    const delBtn = e.target.closest("[data-delete-pending]");
+    if (delBtn) {
+      const row = delBtn.closest("[data-pending-index]");
+      const idx = parseInt(row.dataset.pendingIndex, 10);
+      const q = loadQueue();
+      const removed = q.splice(idx, 1)[0];
+      saveQueueAndNotify(q);
+      renderPending();
+      flash(removed?.method === "DELETE" ? "Cancelled undo" : "Removed pending push", "warn");
+    }
+  });
+  modal.querySelector('[data-modal-save]').addEventListener("click", async (e) => {
+    if (!currentEditTarget) return;
+    const saveBtn = e.currentTarget;
+    const note = modal.querySelector('[data-modal-note]').value;
+    const completedLocal = modal.querySelector('[data-modal-completed-at]').value;
+    const hotMult    = parseFloat(modal.querySelector('[data-modal-hot-mult]').value);
+    const streakMult = parseFloat(modal.querySelector('[data-modal-streak-mult]').value);
+    const completedIso = completedLocal ? new Date(completedLocal).toISOString() : null;
+
+    if (currentEditTarget.kind === "withdrawal" || currentEditTarget.kind === "transfer") {
+      const row = currentEditTarget.row;
+      const amount = parseInt(modal.querySelector('[data-modal-amount]').value, 10);
+      if (Number.isNaN(amount) || amount <= 0) { flash("Bad amount", "error"); return; }
+      const key = currentEditTarget.kind === "withdrawal" ? "chore_withdrawal" : "chore_transfer";
+      const idField = currentEditTarget.kind === "withdrawal" ? "withdrawalId" : "transferId";
+      const path = currentEditTarget.kind === "withdrawal" ? "withdrawals" : "transfers";
+      const payload = { [key]: { amount_pebbles: amount, note: note } };
+      if (completedIso) payload[key].created_at = completedIso;
+      await withSavingState(saveBtn, async () => {
+        try {
+          const data = await api(`/chores/${path}/${row.dataset[idField]}`, "PATCH", payload);
+          if (data?.today_earnings != null) setTodayEarnings(data.today_earnings);
+          await fetchHistory({ push: false });
+          flash("Saved");
+          closeModal();
+        } catch (err) { flash("Save failed: " + err.message, "error"); }
+      });
+      return;
+    }
+    if (currentEditTarget.kind === "pending") {
+      const q = loadQueue();
+      const item = q[currentEditTarget.idx];
+      if (!item) { closeModal(); renderPending(); return; }
+      const paid = parseInt(modal.querySelector('[data-modal-amount]').value, 10);
+      if (Number.isNaN(paid) || paid < 0) { flash("Bad amount", "error"); return; }
+      item.body = item.body || {};
+      item.body.note = note;
+      item.body.hot_multiplier = Number.isFinite(hotMult) ? hotMult : 1;
+      item.body.streak_multiplier = Number.isFinite(streakMult) ? streakMult : 1;
+      item.body.paid_pebbles = paid;
+      if (completedIso) item.body.client_completed_at = completedIso;
+      saveQueueAndNotify(q);
+      renderPending();
+      flash("Saved");
+      closeModal();
+      return;
+    }
+    // committed
+    const row = currentEditTarget.row;
+    const amount = parseInt(modal.querySelector('[data-modal-amount]').value, 10);
+    if (Number.isNaN(amount) || amount < 0) { flash("Bad amount", "error"); return; }
+    const payload = {
+      chore_completion: {
+        paid_pebbles: amount,
+        note: note,
+        hot_multiplier: Number.isFinite(hotMult) ? hotMult : 1,
+        streak_multiplier: Number.isFinite(streakMult) ? streakMult : 1,
+      },
+    };
+    if (completedIso) payload.chore_completion.completed_at = completedIso;
+    await withSavingState(saveBtn, async () => {
+      try {
+        const data = await api(`/chores/completions/${row.dataset.completionId}`, "PATCH", payload);
+        if (data?.today_earnings != null) setTodayEarnings(data.today_earnings);
+        await fetchHistory({ push: false });
+        flash("Saved");
+        closeModal();
+      } catch (err) { flash("Save failed: " + err.message, "error"); }
+    });
+  });
+  modal.querySelector('[data-modal-delete]').addEventListener("click", async (e) => {
+    if (!currentEditTarget) return;
+    const delBtn = e.currentTarget;
+    if (currentEditTarget.kind === "pending") {
+      const q = loadQueue();
+      const removed = q.splice(currentEditTarget.idx, 1)[0];
+      saveQueueAndNotify(q);
+      renderPending();
+      flash(removed?.method === "DELETE" ? "Cancelled undo" : "Removed pending push", "warn");
+      closeModal();
+      return;
+    }
+    if (currentEditTarget.kind === "withdrawal" || currentEditTarget.kind === "transfer") {
+      const row = currentEditTarget.row;
+      const idField = currentEditTarget.kind === "withdrawal" ? "withdrawalId" : "transferId";
+      const path = currentEditTarget.kind === "withdrawal" ? "withdrawals" : "transfers";
+      const promptMsg = currentEditTarget.kind === "withdrawal"
+        ? "Delete this withdrawal? Balance will be recomputed."
+        : "Delete this transfer? Both balances will be refunded.";
+      if (!confirm(promptMsg)) return;
+      await withSavingState(delBtn, async () => {
+        try {
+          const data = await api(`/chores/${path}/${row.dataset[idField]}`, "DELETE");
+          if (data?.today_earnings != null) setTodayEarnings(data.today_earnings);
+          await fetchHistory({ push: false });
+          flash("Removed", "warn");
+          closeModal();
+        } catch (err) { flash("Delete failed: " + err.message, "error"); }
+      });
+      return;
+    }
+    const row = currentEditTarget.row;
+    if (!confirm("Delete this completion? Balance will be recomputed.")) return;
+    await withSavingState(delBtn, async () => {
+      try {
+        const data = await api(`/chores/completions/${row.dataset.completionId}`, "DELETE");
+        if (data?.today_earnings != null) setTodayEarnings(data.today_earnings);
+        await fetchHistory({ push: false });
+        flash("Removed", "warn");
+        closeModal();
+      } catch (err) { flash("Delete failed: " + err.message, "error"); }
+    }, "Deleting…");
+  });
+
+  // Explicit reload buttons only. Broadcasts / focus / online events
+  // do NOT auto-refresh — history is audit-style and refetching mid-
+  // edit would clobber the user's typed note.
+  document.querySelector("[data-history-reload]")
+    ?.addEventListener("click", () => fetchHistory({ push: false }));
+  document.querySelector("[data-pending-reload]")
+    ?.addEventListener("click", () => renderPending());
+  // Cross-tab queue edits: a pending push edited/removed in another
+  // tab fires a `storage` event here. Re-render so the pending list
+  // stays in sync — passive read from localStorage, no network call.
+  window.addEventListener("storage", e => {
+    if (e.key === QUEUE_KEY) renderPending();
+  });
+
+  // ---------- SPA activation hook ----------
+  // Called by the router (setActiveView in _page_script) whenever the
+  // user lands on / navigates to the History view. Idempotent: sync
+  // URL query params into state on the first call, then fetch fresh.
+  function hydrateHistoryView() {
+    if (!didInitFromUrl) {
+      const initUrl = new URL(location.href);
+      state.q = initUrl.searchParams.get("q") || "";
+      state.page = parseInt(initUrl.searchParams.get("page") || "1", 10) || 1;
+      qInput.value = state.q;
+      if (clearBtn) clearBtn.hidden = !state.q;
+      didInitFromUrl = true;
+    }
+    renderPending();
+    fetchHistory({ push: false });
+  }
+  window.ChoresHistoryView = { hydrate: hydrateHistoryView };
+
+  // Boot-time timing: _page_script executes and calls setActiveView
+  // BEFORE this partial runs, so a fresh /chores/history page-load
+  // won't reach hydrateHistoryView via the router. Detect that case
+  // here — if History is already the active view at module-parse
+  // time, kick the hydration ourselves.
+  if (root?.dataset.activeView === "history") {
+    hydrateHistoryView();
+  }
+
+  } // end DOM-guard else-branch
+</script>

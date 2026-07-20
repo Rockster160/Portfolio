@@ -273,38 +273,76 @@ class ChoresController < ApplicationController
     @chores.filter_map { |c| c.id if c.after_chore? && anchor_ints.include?(c.anchor_chore_id) }
   end
 
-  # GET /chores/balance — server-rendered shell. The Recent History
-  # block is hydrated client-side (via /chores/recent_history) so the
-  # cached shell never serves stale balance rows.
+  # GET /chores/balance — SPA shell. The Balance view section lives in
+  # page.html.erb alongside Grid/Today/History; the goals/streak-bonus
+  # cards + transfer recipients hydrate client-side via /balance_data
+  # on nav-to-balance. Keeping the shell data-free lets the SW cache
+  # it cross-user (a balance change no longer requires re-caching).
   def balance
-    @balance = current_user.chore_balance
-    @goals = current_user.chore_goals.active.ordered.to_a
+    @active_view = :balance
+    @cutoff_hour = ChoreDay::CUTOFF_HOURS
+    render :page
+  end
+
+  # GET /chores/balance_data — JSON hydration for the Balance view.
+  # Returns pre-rendered HTML fragments for goal + streak-bonus cards
+  # (same partials the mutation endpoints already ship in their
+  # responses, so one source of truth for that markup) plus the
+  # numeric balance + transfer recipient list. Called on nav-to-
+  # balance and on explicit reload.
+  def balance_data
+    balance = current_user.chore_balance
+    breakdown = current_user.chore_balance_breakdown
+    goals = current_user.chore_goals.active.ordered.to_a
     household_id = current_user.chore_household_id
-    @streak_bonuses = if household_id
-      ChoreStreakBonus.where(chore_household_id: household_id).includes(:chore).order(:sort_order, :id)
+    streak_bonuses = if household_id
+      ChoreStreakBonus.where(chore_household_id: household_id).includes(:chore).order(:sort_order, :id).to_a
     else
-      ChoreStreakBonus.none
+      []
     end
-    @household_chores = current_user.accessible_chores.order(:name).to_a
-    @transfer_recipients = if household_id
+    transfer_recipients = if household_id
       User.where(chore_household_id: household_id).where.not(id: current_user.id).order(:username).to_a
     else
       []
     end
-    @can_manage_chores = current_user.can_manage_chores?
+
+    render json: {
+      balance:             balance,
+      today_earnings:      breakdown[:today_earnings],
+      goals_html:          goals.map { |g|
+        render_to_string(partial: "chores/goal_row", formats: [:html], locals: { goal: g })
+      }.join,
+      goals_count:         goals.length,
+      streak_bonuses_html: streak_bonuses.map { |b|
+        render_to_string(partial: "chores/streak_bonus_card", formats: [:html], locals: { bonus: b })
+      }.join,
+      streak_bonuses_count: streak_bonuses.length,
+      transfer_recipients: transfer_recipients.map { |u| { id: u.id, username: u.username } },
+      transfer_disabled:   balance.to_i <= 0,
+      can_manage_chores:   current_user.can_manage_chores?,
+      server_ts:           Time.current.iso8601(3),
+    }
   end
 
   def history
-    @breakdown = current_user.chore_balance_breakdown
-    @balance = @breakdown[:balance]
     @page = [params[:page].to_i, 1].max
     @per = 50
     @q = params[:q].to_s
     @total_pages = 1 # filled in by load_history_window when JSON-requested
 
     respond_to do |format|
-      format.html
+      format.html {
+        @active_view = :history
+        @cutoff_hour = ChoreDay::CUTOFF_HOURS
+        render :page
+      }
       format.json {
+        # history_json_payload reads today_earnings off @breakdown, so
+        # compute it up front before load_history_window builds the
+        # rest of the response. Kept out of the HTML branch since the
+        # shell doesn't render any balance data — that hydrates via
+        # /chores/balance_data on view activation.
+        @breakdown = current_user.chore_balance_breakdown
         load_history_window
         render json: history_json_payload
       }
@@ -698,12 +736,18 @@ class ChoresController < ApplicationController
   end
 
   def history_chore_json(chore)
+    # icon must be the RESOLVED value (data URL for hicon:<id> refs),
+    # never the raw storage ref — the client's icon builder feeds it
+    # straight into <img src>, and `hicon:1` isn't a fetchable URL.
+    # Serializer's display_icon does the household-icon lookup + O(1)
+    # cache via ctx.household_icon_for.
+    serializer = ChoreSerializer.new(chore, viewer: current_user)
     {
       id:         chore.id,
       name:       chore.name,
       short_name: chore.display_short_name,
-      icon:       chore.icon.to_s,
-      icon_kind:  ChoreSerializer.new(chore, viewer: current_user).send(:icon_kind),
+      icon:       serializer.send(:display_icon),
+      icon_kind:  serializer.send(:icon_kind),
       one_off:    chore.one_off,
     }
   end

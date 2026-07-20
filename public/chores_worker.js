@@ -15,7 +15,7 @@
 // clients re-pull the HTML next time they're online.
 
 // Bump CACHE on shipping shell changes so old clients re-pull HTML.
-const CACHE = "chores-v102";
+const CACHE = "chores-v103";
 
 // Last-resort: any real cached shell is better than no page at all.
 // If the user requested e.g. /chores (Grid) but only /chores/today
