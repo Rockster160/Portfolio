@@ -34,9 +34,12 @@
      data-viewer-username="<%= current_user.username %>">
   <%= render "header", balance: nil, scope: :today %>
   <div class="hot-strip" data-chores-hot-strip hidden></div>
-  <div class="chores-toolbar-wrap" data-toolbar-wrap>
-    <%= render "toolbar" %>
-  </div>
+  <%# Toolbar sits as a direct child of .chores-page so its
+      `position: sticky` sticks against the page's scroll container.
+      Any wrapping div with no explicit height scrolls out with the
+      toolbar and breaks the sticky behavior. CSS hides it on balance
+      / history views via a direct sibling selector. %>
+  <%= render "toolbar" %>
 
   <%# Cold-start placeholder: visible only when localStorage has nothing
       AND no successful /chores/sync has ever landed. The page-script

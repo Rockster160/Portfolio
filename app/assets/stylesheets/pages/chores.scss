@@ -82,9 +82,11 @@
 
   // Toolbar (search / edit / add) and Hot Strip are Grid/Today-only.
   // Hidden on Balance and History so those views don't inherit chore-
-  // list chrome that has no meaning there.
-  &[data-active-view="balance"] > .chores-toolbar-wrap,
-  &[data-active-view="history"] > .chores-toolbar-wrap,
+  // list chrome that has no meaning there. Toolbar is a direct child
+  // (no wrapping div) so its position:sticky sticks against the page's
+  // scroll container, not a zero-height wrapper.
+  &[data-active-view="balance"] > .chores-toolbar,
+  &[data-active-view="history"] > .chores-toolbar,
   &[data-active-view="balance"] > .hot-strip,
   &[data-active-view="history"] > .hot-strip {
     display: none;

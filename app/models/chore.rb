@@ -77,7 +77,9 @@ class Chore < ApplicationRecord
   #   :always                       — always shown (even without a schedule)
   #   :when_scheduled (default)     — only on scheduled days (carryover allowed)
   #   :when_available               — whenever cooldown has elapsed
-  #   :when_scheduled_and_available — both scheduled AND cooldown elapsed
+  #   :when_scheduled_and_available — scheduled OR cooldown elapsed (union;
+  #                                    named "and" for the button label
+  #                                    "Scheduled or Available")
   #   :never                        — never (Grid view only)
   enum :show_on_today_view, {
     always:                       0,
@@ -355,7 +357,12 @@ class Chore < ApplicationRecord
     return true if threshold_seconds.to_i.zero?
 
     last = last_completion == :unset ? last_completion_for(user) : last_completion
-    return true if last.blank? || last.payout_skipped
+    return true if last.blank?
+    # Anonymous completions have payout_skipped=true but represent real
+    # work — they hold the cooldown just like a paid completion.
+    # Cooldown-skipped taps (payout_skipped without anonymous) don't
+    # gate the next payout; treat as if no relevant completion exists.
+    return true if last.payout_skipped && !last.anonymous
 
     if cooldown_until_day_reset?
       # Elapsed once we've crossed the ChoreDay boundary (4am).

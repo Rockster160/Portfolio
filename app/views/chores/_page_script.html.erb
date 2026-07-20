@@ -552,6 +552,11 @@
     if (freq === "never") return null;
     if (freq === "daily") return "fa-sun-o";
     if (c.due_today)      return "fa-clock-o";
+    // Hourglass = past due. A chore surfaced only because it's
+    // "available" (cooldown elapsed) with a future scheduled_due_on is
+    // not overdue; suppress the icon rather than mislabel.
+    const today = currentChoreDayIso();
+    if (c.scheduled_due_on && c.scheduled_due_on > today) return null;
     return "fa-hourglass-half";
   }
   // DOM builder for the state icon (Sun / Clock / Hourglass). Returns

@@ -153,5 +153,14 @@ RSpec.describe Chore, "visibility + relative scheduling" do
       create(:chore_completion, chore: chore, user: user, completed_at: now - 1.hour, payout_skipped: true, day_key: today)
       expect(chore.cooldown_elapsed?(user, now: now)).to eq(true)
     end
+
+    it "anonymous completions hold the cooldown like a real completion" do
+      now = Time.current
+      create(:chore_completion, chore: chore, user: user, completed_at: now - 1.hour,
+        payout_skipped: true, anonymous: true, day_key: today,
+        skipped_reason: "Marked done by someone outside the household")
+      expect(chore.cooldown_elapsed?(user, now: now)).to eq(false)
+      expect(chore.cooldown_elapsed?(user, now: now + 7.hours)).to eq(true)
+    end
   end
 end
