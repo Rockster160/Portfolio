@@ -61,6 +61,26 @@
     // subtly in `.agenda-pending-badge` (header).
     window.__refreshAgendaList = () => render(root);
 
+    // Snap the current list view to fresh "today", used by the 3am
+    // rollover machinery in agenda.js (applyDateRoll) and by any caller
+    // that needs to force a today-refresh. Only rewrites the URL when
+    // the view is currently unpinned — a `?date=` deep-link stays
+    // pinned; the caller (scheduleAutoDateAdvance) already guards on
+    // that, but we double-check here so this hook is safe to call from
+    // anywhere.
+    window.__agendaJumpToToday = () => {
+      const today = todayISO();
+      const params = new URLSearchParams(window.location.search);
+      if (!params.has("date")) {
+        const path = root.classList.contains("agenda-day-page") ? "/agenda" : "/agenda/week";
+        const url = new URL(path, window.location.origin);
+        if (window.location.pathname + window.location.search !== url.pathname) {
+          history.pushState(null, "", url.href);
+        }
+      }
+      renderForDate(root, today);
+    };
+
     // Jump to the date of a freshly-created event so the user can see
     // what they just made. Accepts epoch seconds. Used by the quick-add
     // and advanced-add submit paths via `window.__agendaJumpToDate`.
@@ -152,6 +172,11 @@
   // store-backed sections.
   function renderForDate(root, dateISO) {
     root.dataset.currentDate = dateISO;
+    // Refresh the "what is today" stamp too — the carry-over cover check
+    // in render() (below) reads root.dataset.today. Without this update
+    // a rollover-triggered re-render leaves the carry-over section
+    // hidden even when the visible range now covers the new today.
+    root.dataset.today = todayISO();
 
     const dateLabel = root.querySelector(".agenda-date-bar .date-label");
     if (dateLabel) {
@@ -203,7 +228,13 @@
     render(root);
   }
 
+  // Prefer the shared 3am-aware helper (defined in agenda.js) so a
+  // section rendered between midnight and 3am is still labeled with
+  // yesterday's date — matches User#perceived_today on the server.
   function todayISO() {
+    if (typeof window.__agendaLogicalToday === "function") {
+      return window.__agendaLogicalToday();
+    }
     const d = new Date();
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");

@@ -10,6 +10,17 @@
   function $(sel, root = document) { return root.querySelector(sel); }
   function $$(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
 
+  // 3am-aware "today". Hours 0:00–2:59 belong to the previous calendar
+  // day so the perceived day matches User#perceived_today on the server.
+  // Exposed on window so list_view.js and agenda_cal.js can share one
+  // implementation instead of reimplementing the pad-and-shift dance.
+  window.__agendaLogicalToday = function (dayStart = 3) {
+    const d = new Date();
+    if (d.getHours() < dayStart) d.setDate(d.getDate() - 1);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
   function el(html) {
     const t = document.createElement("template");
     t.innerHTML = html.trim();
@@ -814,16 +825,23 @@
     // the user is looking at (list_view rewrites it on client-side
     // nav). Reading it live means the advanced add form defaults to
     // that day instead of the day the page was originally
-    // server-rendered for. Cal-month's `data-current-date` is a month
-    // anchor (YYYY-MM-01), not a selected day — skip that view so the
-    // 1st doesn't silently become the default for the whole month.
+    // server-rendered for. Cal views need special handling: cal_month's
+    // `data-current-date` is a month anchor (YYYY-MM-01), and cal_week's
+    // is a within-week date that is stale if the tab was open across
+    // 3am — in both cases fall back to fresh "today" rather than the
+    // stale server stamp.
     function selectedDefaultDate() {
       const root = document.querySelector(".agenda-page");
-      if (root && !root.classList.contains("agenda-cal-month-page")) {
-        const iso = root.dataset?.currentDate || "";
-        if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+      const freshToday = window.__agendaLogicalToday?.() || form.dataset.defaultDate;
+      if (!root) return form.dataset.defaultDate;
+      if (root.classList.contains("agenda-cal-month-page")) return freshToday;
+      if (root.classList.contains("agenda-cal-week-page")) {
+        const params = new URLSearchParams(window.location.search);
+        if (!params.has("date")) return freshToday;
       }
-      return form.dataset.defaultDate;
+      const iso = root.dataset?.currentDate || "";
+      if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+      return freshToday;
     }
 
     function resetForm() {
@@ -3054,39 +3072,17 @@
     };
   }
 
-  function applyDateRoll(root, newDateIso) {
-    root.dataset.currentDate = newDateIso;
-    // `data-today` is what list_view.js reads to decide which section
-    // qualifies as "today" + drives carry-over visibility — keep it in
-    // lockstep with currentDate on rollover, otherwise yesterday's
-    // section keeps its "Today" label until next mutation.
-    root.dataset.today = newDateIso;
-    const newDate = new Date(newDateIso + "T12:00:00"); // noon → avoids DST edge
-
-    // Matches the ERB's strftime("%a, %b %-d, %Y").
-    const label = root.querySelector(".date-label");
-    if (label) {
-      label.textContent = newDate.toLocaleDateString(undefined, {
-        weekday: "short", month: "short", day: "numeric", year: "numeric",
-      });
+  // list_view's `__agendaJumpToToday` hook does the full re-stamp (root
+  // dataset, prev/next hrefs, per-section data-date, section headers,
+  // jump-row visibility, then render). Delegating avoids duplicating
+  // that contract here and — crucially — re-stamps week-view's
+  // per-section `data-date` which the old inline body missed. Cal views
+  // never reach here (guarded at the scheduleAutoDateAdvance call site);
+  // they own their own rollover via agenda_cal.js's handleDayRollover.
+  function applyDateRoll(_root, _newDateIso) {
+    if (typeof window.__agendaJumpToToday === "function") {
+      window.__agendaJumpToToday();
     }
-
-    const basePath = root.classList.contains("agenda-week-page") ? "/agenda/week" : "/agenda";
-    const prevIso = isoOffset(newDateIso, -1);
-    const nextIso = isoOffset(newDateIso, +1);
-    const prevLink = root.querySelector(".date-nav.prev");
-    const nextLink = root.querySelector(".date-nav.next");
-    if (prevLink) prevLink.setAttribute("href", `${basePath}?date=${prevIso}`);
-    if (nextLink) nextLink.setAttribute("href", `${basePath}?date=${nextIso}`);
-
-    refreshCurrentView();
-  }
-
-  function isoOffset(iso, days) {
-    const d = new Date(iso + "T12:00:00");
-    d.setDate(d.getDate() + days);
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   }
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -3109,7 +3105,13 @@
       updatePendingBadge();
       updateDroppedBanner();
     });
-    const checkRollover = scheduleAutoDateAdvance(root);
+    // The list-view rollover machinery only knows list DOM (date-label,
+    // section headers, prev/next). Cal views (agenda-cal-*-page) own
+    // their own rollover in agenda_cal.js's scheduleDayRollover — don't
+    // double-schedule here, and don't corrupt their `data-current-date`
+    // (which for cal_month is a YYYY-MM-01 month anchor, not a day).
+    const isListView = root.matches(".agenda-day-page, .agenda-week-page");
+    const checkRollover = isListView ? scheduleAutoDateAdvance(root) : null;
 
     // Foreground re-sync — mobile browsers suspend the ActionCable socket
     // while backgrounded and may miss broadcasts. The mutation queue's

@@ -2819,22 +2819,50 @@
       if (link.target === "_blank" || !link.href) return;
       const url = new URL(link.href, window.location.href);
       if (url.origin !== window.location.origin) return;
-      // Mobile month view: Today button scrolls the today cell into
-      // view rather than navigating. The cell is virtually always in
-      // the stack (server-rendered current month + seeded siblings); if
-      // somehow it isn't, fall through to the normal nav.
-      if (link.classList.contains("cal-today-btn")
-          && root.classList.contains("agenda-cal-month-page")
-          && isMobileMonthView()) {
-        const todayISO = toISO(new Date());
-        if (scrollMonthToDate(root, todayISO)) {
-          e.preventDefault();
+      // Today button: force a client-side re-render for FRESH today,
+      // regardless of URL equivalence. The naive same-URL check below
+      // used to no-op this click when the tab had been open past
+      // midnight — the URL still said "/agenda/grid" but the DOM was
+      // showing yesterday's is-today. Handle Today first so the
+      // same-URL branch can't swallow it.
+      if (link.classList.contains("cal-today-btn")) {
+        e.preventDefault();
+        const dayStart = Number(
+          root.querySelector(".cal-week-grid, .cal-month-grid")?.dataset?.dayStartHour,
+        ) || 3;
+        if (root.classList.contains("agenda-cal-week-page")) {
+          const todayISO = logicalDateISO(new Date(), dayStart);
+          const cleanURL = new URL("/agenda/grid", window.location.origin);
+          if (window.location.pathname + window.location.search !== cleanURL.pathname) {
+            history.pushState(null, "", cleanURL.href);
+          }
+          renderWeekFor(root, todayISO);
+          return;
+        }
+        if (root.classList.contains("agenda-cal-month-page")) {
+          const todayISO = toISO(new Date());
+          const todayMonth = todayMonthISO();
+          const viewingMonth = root.dataset.currentDate?.slice(0, 7);
+          // Mobile, viewing today's month already: smooth-scroll to the
+          // today cell (kept in the seeded stack). Falls through to a
+          // full rebuild if the cell isn't in the DOM window.
+          if (isMobileMonthView() && viewingMonth === todayMonth
+              && scrollMonthToDate(root, todayISO)) {
+            return;
+          }
+          const cleanURL = new URL("/agenda/month", window.location.origin);
+          if (window.location.pathname + window.location.search !== cleanURL.pathname) {
+            history.pushState(null, "", cleanURL.href);
+          }
+          renderMonthFor(root, todayMonth);
           return;
         }
       }
       if (url.pathname === window.location.pathname && url.search === window.location.search) {
         // Same URL — still useful (e.g. "Today" when already on this
-        // week). Treat as a no-op rather than a reload.
+        // week). Treat as a no-op rather than a reload. (Today itself
+        // is handled above so a stale-DOM click can still force a
+        // fresh render.)
         e.preventDefault();
         return;
       }
@@ -3470,30 +3498,39 @@
   }
 
   function handleDayRollover(root, dayStart) {
-    // Only snap back to today if the user was anchored to today when the
-    // page loaded. A deep-link or user-driven navigation away from today
-    // is preserved — they stay on the date they chose; the Today pill
-    // just lights up so they can see they're not on today.
-    const anchored = root.dataset.anchoredToToday === "1";
-    if (anchored && !isViewingToday(root, dayStart)) {
+    // Refresh the root-level "today" stamp so anything reading it (form
+    // defaults, future consumers) sees the new logical date instead of
+    // the day the page was originally server-rendered for.
+    root.dataset.today = logicalDateISO(new Date(), dayStart);
+
+    // Pinned view (?date= / ?month=) stays put — the user explicitly
+    // navigated there and shouldn't be yanked to today. Otherwise, if
+    // today has slid out of the visible window (e.g. week view crossed
+    // into a new week), snap this view forward via a client-side
+    // re-render. Full-page reloads were serving stale HTML from the
+    // pathname-keyed service-worker shell cache.
+    const params = new URLSearchParams(window.location.search);
+    const pinned = params.has("date") || params.has("month");
+
+    if (!pinned && !isViewingToday(root, dayStart)) {
       if (root.classList.contains("agenda-cal-week-page")) {
-        window.location.assign("/agenda/grid");
+        renderWeekFor(root, logicalDateISO(new Date(), dayStart));
+        window.__refreshAgendaCal?.();
         return;
       }
       if (root.classList.contains("agenda-cal-month-page")) {
-        window.location.assign("/agenda/month");
+        renderMonthFor(root, todayMonthISO());
+        window.__refreshAgendaCal?.();
         return;
       }
     }
-    // Same range OR user navigated away on purpose — refresh in place so
-    // today markers + carry-over re-render with the new logical date, and
-    // light up the Today pill if needed. `__refreshAgendaCal` only fetches
-    // deltas + repaints event blocks; the `is-today` CSS class on day
-    // cells is written by renderWeekFor/buildMonthBlockNode, so we have
-    // to sweep it ourselves when rollover happens in-place.
+
+    // Today still in view (or pinned) — refresh markers in place. The
+    // `is-today` CSS class on day cells is stamped by
+    // renderWeekFor/buildMonthBlockNode, so we sweep it ourselves here.
     refreshTodayMarkers(root, dayStart);
     updateTodayBtnState(root, dayStart);
-    window.__refreshAgendaCal();
+    window.__refreshAgendaCal?.();
   }
 
   // Toggle `is-today` on the visible day cells against the current
