@@ -541,7 +541,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
     wrap: false,
     flash: false,
     data: {
-      sound: true,
+      sound: false,
       device_battery: {},
       orders: [],
       garage: { state: "unknown", timestamp: 0 },
