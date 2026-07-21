@@ -563,6 +563,40 @@ RSpec.describe AmazonEmailParser do
     end
   end
 
+  describe "order total (amount)" do
+    it "extracts the order total from the email and stamps it on each item" do
+      parse(50_685, 'Ordered: "Amazon Basics Multipurpose..."')
+      item = AmazonOrder.by_order("111-0453665-0021069").first
+      expect(item.amount).to eq(17.53)
+    end
+
+    it "stamps the same total on every sibling item in a multi-item order" do
+      parse(50_734, 'Ordered: "Litter Genie Easy Roll..." and 2 more items')
+      pet_botanics = AmazonOrder.find("111-4536894-1373807", "B0144BMLFM")
+      bowls        = AmazonOrder.find("111-4536894-1373807", "B0GFLZQHVM")
+      expect(pet_botanics.amount).to eq(34.04)
+      expect(bowls.amount).to eq(34.04)
+    end
+
+    it "keeps the first-seen amount when a later email lacks a Total line" do
+      parse(50_685, 'Ordered: "Amazon Basics Multipurpose..."')
+      item = AmazonOrder.by_order("111-0453665-0021069").first
+      AmazonEmailParser.parse(double(
+        "Email",
+        id:      99_700,
+        to_html: %(<html><body><div class="rio-card">Order # 111-0453665-0021069 <a href="/dp/B01FV0F75G">x</a> Arriving tomorrow</div></body></html>),
+        subject: 'Shipped: "Amazon Basics Multipurpose..."',
+      ))
+      expect(item.amount).to eq(17.53)
+    end
+
+    it "leaves amount nil when the email has no Total line" do
+      parse(50_638, 'Shipped: "GOXAWEE Metal Stand Up Weed..."')
+      item = AmazonOrder.by_order("111-4126442-3377044").first
+      expect(item.amount).to be_nil
+    end
+  end
+
   describe "AmazonOrder#destroy" do
     it "only removes the matching (order_id, item_id) pair" do
       keep    = AmazonOrder.create(order_id: "111-A", item_id: "B000T9YBT8", name: "Sprite in order A")

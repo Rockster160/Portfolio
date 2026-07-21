@@ -45,6 +45,7 @@ class AmazonEmailParser
     # are handled per-asin via asin_card_text / asin_order_id.
     new_status = status_from_subject
     prefetch_names!(email_items)
+    email_total = total_amount_from(order_card_text.presence || whole_email_text)
     email_items.each { |item|
       text = asin_card_text(item.item_id)
       item_delivered = delivered_text?(text)
@@ -58,6 +59,7 @@ class AmazonEmailParser
       item.time_range = arrival_time_from(text)
       item.name ||= safe_name(item)
       item.delivered = true if item_delivered
+      item.amount ||= email_total if email_total
       apply_status(item, new_status)
     }
 
@@ -112,6 +114,7 @@ class AmazonEmailParser
     new_status = status_from_subject
     date = arrival_date_from(text)
     time_range = arrival_time_from(text)
+    email_total = total_amount_from(text)
 
     targets.each { |item|
       item.delivery_date = date.iso8601.encode("UTF-8") if date.present?
@@ -119,6 +122,7 @@ class AmazonEmailParser
       item.delivered = true if delivered
       item.errors = []
       item.email_ids << @email.id unless item.email_ids.include?(@email.id)
+      item.amount ||= email_total if email_total
       apply_status(item, new_status)
       @changed = true
     }
@@ -337,6 +341,22 @@ class AmazonEmailParser
     nil
   rescue StandardError
     nil
+  end
+
+  # "Total: $65.31" / "Order Total: $1,234.56" — Amazon prints the full order
+  # charge (subtotal + tax + shipping) alongside the order card. Returned as a
+  # Float so it can be compared against a Chase transaction amount.
+  def total_amount_from(text)
+    return nil if text.blank?
+
+    match = text.match(/(?:Order\s+)?Total\s*:\s*\$\s*([\d,]+\.\d{2})/i)
+    return nil if match.nil?
+
+    match[1].delete(",").to_f
+  end
+
+  def whole_email_text
+    @whole_email_text ||= @doc.text.to_s.gsub(/\s+/, " ").strip
   end
 
   def arrival_time_from(text)

@@ -12,6 +12,7 @@ class AmazonOrder
     :order_id_confirmed,
     :email_ids,
     :errors,
+    :amount,
     :just_added,
   )
 
@@ -144,6 +145,7 @@ class AmazonOrder
       order_id_confirmed: order_id_confirmed,
       email_ids:          email_ids,
       errors:             errors,
+      amount:             amount,
     }
   end
 end
