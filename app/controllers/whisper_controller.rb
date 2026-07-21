@@ -17,6 +17,7 @@ class WhisperController < ApplicationController
       # TODO: Replace with new task IDs after running prodExec whisper_new_buttons.rb
       311, # Quiet Btn
       312, # Nap Sound Btn
+      413, # Fae Probiotic
       # NOTE! When adding new tasks, ensure they are shared!
     ]
     # chels = User.find(58128)
