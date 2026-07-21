@@ -11,7 +11,7 @@ namespace :emoji do
     raw = src.start_with?("http") ? URI.parse(src).open(&:read) : File.read(src)
     data = JSON.parse(raw)
 
-    index = data.map { |e|
+    index = data.flat_map { |e|
       char    = e["emoji"]
       aliases = Array(e["aliases"])
       tags    = Array(e["tags"])
@@ -24,11 +24,25 @@ namespace :emoji do
       words   = extra + aliases.flat_map { |a| a.split("_") } + tags + desc.split(/\W+/)
       keywords = expand_inflections(words)
 
-      {
+      row = {
         "c" => char,
         "n" => desc,
         "k" => keywords,
       }
+
+      # Text-presentation variant. Chars ending in VARIATION SELECTOR-16
+      # (U+FE0F) have a companion "text presentation" form — the same
+      # base codepoint without VS16, which fonts render as a monochrome
+      # glyph rather than a color emoji. Emit both so the picker offers
+      # ⏱ alongside ⏱️, ☀ alongside ☀️, etc. Same name / keys so a search
+      # for "stopwatch" surfaces both; the emoji form comes first in the
+      # pool (tiebreak) so it stays the default recommendation.
+      variants = [row]
+      if char.end_with?("\u{FE0F}")
+        bare = char.chomp("\u{FE0F}")
+        variants << row.merge("c" => bare) if bare != char
+      end
+      variants
     }.reject { |row| row["c"].to_s.empty? }
 
     File.write(out, JSON.generate(index))

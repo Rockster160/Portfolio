@@ -20,7 +20,14 @@ class PromptsController < ApplicationController
     @prompt.update(response: data)
     jil_trigger(:prompt, @prompt.with_jil_attrs(status: :complete))
 
-    redirect_to jarvis_path
+    remaining = current_user.prompts.unanswered.where.not(id: @prompt.id).order(created_at: :desc)
+    if remaining.none?
+      redirect_to jarvis_path
+    elsif remaining.one?
+      redirect_to remaining.first
+    else
+      redirect_to prompts_path
+    end
   end
 
   def destroy

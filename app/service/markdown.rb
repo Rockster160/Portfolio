@@ -34,6 +34,8 @@ class Markdown
       /~(.*?)~/                                                       => wrap('\1', :del),
       /\[\[\s*([^\]]*?)\s*\]\]\((.*?)\)/                              => color_wrapper,
       /\[\[\s*([^\]]*?)\s*\]\]/                                       => color_wrapper,
+      /\[hicon:(\d+)\]/                                               => hicon_id_wrapper,
+      /\[ticon:(ti-[a-z0-9-]+)\]/                                     => ticon_wrapper,
       /\[hicon (.*?)\]/                                               => hicon_wrapper,
       /!\[(.*?)\]\((.*?)\)/                                           => wrap(nil, :img, src: '\2', alt: '\1'),
       /\[btn (.*?)\]\((.*?)\)/                                        => wrap('\2', :a, href: '\1', class: "btn"),
@@ -173,6 +175,29 @@ class Markdown
 
       wrap(nil, :img, src: icon.image_data, alt: name, class: "hicon")
     }
+  end
+
+  # `[hicon:ID]` — id-scoped variant inserted by the emoji autocomplete /
+  # icon picker. Household-scoped so a stray id from another household
+  # renders ❌ rather than leaking someone else's icon.
+  def hicon_id_wrapper
+    ->(match) {
+      id = match[1]
+      next "❌" if @user.nil?
+
+      household = @user.chore_household
+      icon = household&.icons&.find_by(id: id)
+      next "❌" if icon.nil?
+
+      wrap(nil, :img, src: icon.image_data, alt: icon.name, class: "hicon")
+    }
+  end
+
+  # `[ticon:ti-broom]` — Tabler icon inserted by the emoji autocomplete.
+  # Regex already whitelists the `ti-` prefix + `[a-z0-9-]` so no class
+  # injection.
+  def ticon_wrapper
+    ->(match) { wrap(nil, :i, class: "ti #{match[1]}") }
   end
 
   def color_wrapper

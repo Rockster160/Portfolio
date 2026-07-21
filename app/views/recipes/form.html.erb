@@ -17,7 +17,7 @@
 
       <div class="form-field">
         <%= f.label :description %>
-        <%= f.text_area :description, rows: [@recipe.description.to_s.split("\n").length, 5].max %>
+        <%= f.text_area :description, rows: [@recipe.description.to_s.split("\n").length, 5].max, class: "emoji-autocomplete" %>
       </div>
 
       <div class="form-field">
@@ -44,17 +44,17 @@
 
       <div class="form-field">
         <%= f.label :notes, "Notes (shown on printed card)" %>
-        <%= f.text_area :notes, rows: [@recipe.notes.to_s.split("\n").length, 2].max %>
+        <%= f.text_area :notes, rows: [@recipe.notes.to_s.split("\n").length, 2].max, class: "emoji-autocomplete" %>
       </div>
 
       <div class="form-field">
         <%= f.label :ingredients %>
-        <%= f.text_area :ingredients, rows: [@recipe.ingredients.to_s.split("\n").length, 5].max %>
+        <%= f.text_area :ingredients, rows: [@recipe.ingredients.to_s.split("\n").length, 5].max, class: "emoji-autocomplete" %>
       </div>
 
       <div class="form-field">
         <%= f.label :instructions %>
-        <%= f.text_area :instructions, rows: [@recipe.instructions.to_s.split("\n").length, 10].max %>
+        <%= f.text_area :instructions, rows: [@recipe.instructions.to_s.split("\n").length, 10].max, class: "emoji-autocomplete" %>
       </div>
 
       <div class="form-field">
