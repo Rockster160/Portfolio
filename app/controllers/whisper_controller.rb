@@ -1,10 +1,17 @@
 class WhisperController < ApplicationController
   CHELSEA_ID = 58128
+  EVE_ID = 4
+
+  OWNER_IDS = [1, CHELSEA_ID].freeze
+  CARETAKER_IDS = [EVE_ID].freeze
 
   before_action :authorize_user
-  before_action :authorize_whisper_user, only: :log_vomit
+  before_action :authorize_whisper_viewer, only: :show
+  before_action :authorize_whisper_owner, only: :log_vomit
 
   def show
+    return unless whisper_owner?
+
     @list = current_user.ordered_lists.find(360)
     # @list.users << chels
 
@@ -40,8 +47,20 @@ class WhisperController < ApplicationController
 
   private
 
-  def authorize_whisper_user
-    allowed_ids = [User.me.id, CHELSEA_ID]
-    head :forbidden unless allowed_ids.include?(current_user&.id)
+  def whisper_owner?
+    OWNER_IDS.include?(current_user&.id)
+  end
+  helper_method :whisper_owner?
+
+  def whisper_viewer?
+    whisper_owner? || CARETAKER_IDS.include?(current_user&.id)
+  end
+
+  def authorize_whisper_viewer
+    head :forbidden unless whisper_viewer?
+  end
+
+  def authorize_whisper_owner
+    head :forbidden unless whisper_owner?
   end
 end

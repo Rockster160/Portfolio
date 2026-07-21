@@ -14,43 +14,44 @@
     <span class="mute-icon-on"><%= fa(:volume_high) %></span>
     <span class="mute-icon-off"><%= fa(:volume_xmark) %></span>
   </span>
-  <div class="whisper-menu" data-whisper-menu>
-    <span class="whisper-menu-toggle" title="More actions"><%= fa(:ellipsis_vertical) %></span>
-    <ul class="whisper-menu-items hidden">
-      <li>
-        <button type="button" class="whisper-menu-item" data-trigger="whisper-bath">
-          <%= fa(:bath) %><span>Bath</span>
-        </button>
-      </li>
-      <li>
-        <button type="button" class="whisper-menu-item" data-trigger="whisper-wake-sound">
-          <%= fa(:music) %><span>Play "Wake" Sound</span>
-        </button>
-      </li>
-      <li>
-        <button type="button" class="whisper-menu-item" data-action="play-nap-local">
-          <%= fa(:music) %><span>Play "Nap" Sound Here</span>
-        </button>
-      </li>
-      <li>
-        <button type="button" class="whisper-menu-item" data-trigger="whisper-disable-quiet">
-          <%= fa(:moon) %><span>Disable "Quiet" Mode</span>
-        </button>
-      </li>
-      <li>
-        <button type="button" class="whisper-menu-item" data-trigger="whisper-puppy-music">
-          <%= fa(:music) %><span>Play Puppy Music</span>
-        </button>
-      </li>
-      <li>
-        <button type="button" class="whisper-menu-item" data-action="log-vomit">
-          <%= fa(:medkit) %><span>Log Vomit</span>
-        </button>
-      </li>
-    </ul>
-  </div>
+  <% if whisper_owner? %>
+    <div class="whisper-menu" data-whisper-menu>
+      <span class="whisper-menu-toggle" title="More actions"><%= fa(:ellipsis_vertical) %></span>
+      <ul class="whisper-menu-items hidden">
+        <li>
+          <button type="button" class="whisper-menu-item" data-trigger="whisper-bath">
+            <%= fa(:bath) %><span>Bath</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="whisper-menu-item" data-trigger="whisper-wake-sound">
+            <%= fa(:music) %><span>Play "Wake" Sound</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="whisper-menu-item" data-action="play-nap-local">
+            <%= fa(:music) %><span>Play "Nap" Sound Here</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="whisper-menu-item" data-trigger="whisper-disable-quiet">
+            <%= fa(:moon) %><span>Disable "Quiet" Mode</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="whisper-menu-item" data-trigger="whisper-puppy-music">
+            <%= fa(:music) %><span>Play Puppy Music</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="whisper-menu-item" data-action="log-vomit">
+            <%= fa(:medkit) %><span>Log Vomit</span>
+          </button>
+        </li>
+      </ul>
+    </div>
 
-  <div class="whisper-modal hidden" data-whisper-vomit-modal>
+    <div class="whisper-modal hidden" data-whisper-vomit-modal>
     <div class="whisper-modal-backdrop" data-vomit-dismiss></div>
     <form class="whisper-modal-content basic" data-vomit-form>
       <h3>Log Vomit</h3>
@@ -68,6 +69,7 @@
       </div>
     </form>
   </div>
+  <% end %>
   <div class="whisper-header">
     <span class="whisper-name">Whisper</span>
     <div class="whisper-age-line">
@@ -80,21 +82,23 @@
 
   <div class="whisper-durations"></div>
 
-  <div class="task-trigger-btns whisper-buttons">
-    <% @tasks.each do |task| %>
-      <%= render partial: "jil/tasks/trigger", locals: { task: task } %>
-    <% end %>
-  </div>
+  <% if whisper_owner? %>
+    <div class="task-trigger-btns whisper-buttons">
+      <% @tasks.each do |task| %>
+        <%= render partial: "jil/tasks/trigger", locals: { task: task } %>
+      <% end %>
+    </div>
 
-  <div class="ctr-lists act-show">
-    <div class="skinny-container list-container" data-list-id="<%= @list.id %>" data-list-mode="kiosk" data-list-reset="5m">
-      <div class="list-error hidden">Disconnected...</div>
-      <template id="list-item-template">
-        <%= render template: "list_items/show", locals: { list: @list, template: true }, layout: false %>
-      </template>
-      <div class="list-items" data-update-url="<%= receive_update_list_path(@list) %>">
-        <%= render template: "list_items/index", locals: { list: @list } %>
+    <div class="ctr-lists act-show">
+      <div class="skinny-container list-container" data-list-id="<%= @list.id %>" data-list-mode="kiosk" data-list-reset="5m">
+        <div class="list-error hidden">Disconnected...</div>
+        <template id="list-item-template">
+          <%= render template: "list_items/show", locals: { list: @list, template: true }, layout: false %>
+        </template>
+        <div class="list-items" data-update-url="<%= receive_update_list_path(@list) %>">
+          <%= render template: "list_items/index", locals: { list: @list } %>
+        </div>
       </div>
     </div>
-  </div>
+  <% end %>
 </div>
