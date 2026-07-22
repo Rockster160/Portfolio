@@ -31,7 +31,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const volume = 0.9;
 
   let shouldPlayHappyBirthday = false;
-  let lastWeeks = null;
+  let lastMonths = null;
   let lastStatus = null;
 
   // Mute functionality
@@ -371,11 +371,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const years = Math.floor(totalMonths / 12);
     const months = totalMonths % 12;
 
-    // Set birthday flag when weeks changes
-    if (lastWeeks !== null && weeks > lastWeeks) {
+    // Set birthday flag when totalMonths changes (fires on birth day-of-month)
+    if (lastMonths !== null && totalMonths > lastMonths) {
       shouldPlayHappyBirthday = true;
     }
-    lastWeeks = weeks;
+    lastMonths = totalMonths;
 
     let ageStr;
     if (years < 1) {
