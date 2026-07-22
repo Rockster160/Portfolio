@@ -229,6 +229,15 @@
     // purely user-curated, not derived from show_on_today_view.
     let dailyIds = [];
     let dailyIdSet = new Set();
+    // Per-chore last-applied server timestamp (ms). Guards against
+    // out-of-order /state fetches — two broadcasts back-to-back can
+    // fire two parallel GET /chores/items/:id/state calls and their
+    // responses can arrive in reverse order. Without this guard, an
+    // older snapshot (done=1) would clobber a newer snapshot (done=2),
+    // producing the "second broadcast is ignored until force-quit"
+    // symptom. In-memory only; on cold load the guard resets to open
+    // and the first sync repopulates ground truth.
+    const lastAppliedTs = new Map();
     const subs = new Set();
     function notify(kind, id) { subs.forEach(fn => { try { fn(kind, id); } catch (e) { console.error(e); } }); }
     function rebuildDailySet() { dailyIdSet = new Set(dailyIds.map(n => parseInt(n, 10))); }
@@ -347,7 +356,7 @@
       },
       isDaily(id) { return dailyIdSet.has(parseInt(id, 10)); },
       dailyIds() { return dailyIds.slice(); },
-      upsert(c, { optimistic = false, authoritative = false } = {}) {
+      upsert(c, { optimistic = false, authoritative = false, serverTs = null } = {}) {
         if (!c || !c.id) return false;
         const existing = map.get(c.id);
         // Skip the updated_at guard when the caller declares the
@@ -365,7 +374,18 @@
           // Newer local copy wins; don't overwrite.
           return false;
         }
+        // Out-of-order response guard: reject a payload whose server_ts
+        // is older than one we've already applied for this chore. Only
+        // applies to server-sourced writes that carry a serverTs — an
+        // optimistic patch (no serverTs) is a local write that must
+        // never be blocked here. Authoritative full sync always wins
+        // and also RESETS the guard, since it IS the new baseline.
+        if (serverTs != null && !authoritative) {
+          const last = lastAppliedTs.get(c.id) || 0;
+          if (serverTs < last) return false;
+        }
         map.set(c.id, { ...existing, ...c });
+        if (serverTs != null) lastAppliedTs.set(c.id, serverTs);
         persist();
         notify("upsert", c.id);
         return true;
@@ -1899,7 +1919,10 @@
     const method = wasMarked ? "DELETE" : "POST";
     try {
       const data = await api(url, method, { tab_id: TAB_ID });
-      if (data && data.chore) ChoreStore.upsert(data.chore);
+      if (data && data.chore) {
+        const serverTs = data.server_ts ? new Date(data.server_ts).getTime() : null;
+        ChoreStore.upsert(data.chore, { serverTs });
+      }
       refreshEditModalMarkDue();
     } catch (err) {
       if (isTransientError(err)) {
@@ -2453,10 +2476,13 @@
     // local-click-ts race protection AND ChoreStore.upsert's
     // updated_at guard. POST/PATCH handlers and incremental syncs
     // keep both protections — they may overlap with in-flight taps.
+    // Envelope server_ts drives BOTH the local-click race check AND
+    // the per-chore out-of-order guard. Parse once, reuse below.
+    const envelopeServerMs = data.server_ts ? new Date(data.server_ts).getTime() : null;
     if (data.chore) {
       const id = data.chore.id;
       if (authoritative) {
-        ChoreStore.upsert(data.chore, { authoritative: true });
+        ChoreStore.upsert(data.chore, { authoritative: true, serverTs: envelopeServerMs });
       } else if (isChoreProtected(id)) {
         // Inside the tap-protection window: drop entirely so the
         // in-progress optimistic count survives. The verify timer
@@ -2464,21 +2490,25 @@
         // stops tapping and converge us with server truth then.
       } else {
         const localMs = localClickTs.get(String(id)) || 0;
-        const serverMs = data.server_ts ? new Date(data.server_ts).getTime() : Date.now();
-        if (!localMs || serverMs >= localMs) ChoreStore.upsert(data.chore);
+        const serverMs = envelopeServerMs != null ? envelopeServerMs : Date.now();
+        if (!localMs || serverMs >= localMs) {
+          ChoreStore.upsert(data.chore, { serverTs: envelopeServerMs });
+        }
       }
     }
     if (Array.isArray(data.chores)) {
       data.chores.forEach(c => {
         if (authoritative) {
-          ChoreStore.upsert(c, { authoritative: true });
+          ChoreStore.upsert(c, { authoritative: true, serverTs: envelopeServerMs });
           return;
         }
         if (isChoreProtected(c.id)) return; // see single-chore branch above
         const localMs = localClickTs.get(String(c.id)) || 0;
-        const serverMs = data.server_ts ? new Date(data.server_ts).getTime() :
+        const serverMs = envelopeServerMs != null ? envelopeServerMs :
                          c.updated_at ? new Date(c.updated_at).getTime() : Date.now();
-        if (!localMs || serverMs >= localMs) ChoreStore.upsert(c);
+        if (!localMs || serverMs >= localMs) {
+          ChoreStore.upsert(c, { serverTs: envelopeServerMs });
+        }
       });
     }
     // `active_chore_ids` is the canonical accessible set asserted by
@@ -5220,8 +5250,17 @@
   let queueBlockedReason = null;
   function loadQueue() { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]"); } catch (e) { return []; } }
   function saveQueue(q) { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }
+  // Stable per-queue-item identity, distinct from client_mutation_id
+  // (which may be null on undos and is a server-facing dedup key, not
+  // a local identity). Used by _flushQueueInner to reconcile against
+  // items enqueued DURING the flush without wiping them.
+  function newQueueItemId() {
+    if (window.crypto?.randomUUID) return `q-${window.crypto.randomUUID()}`;
+    return `q-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  }
   function enqueue(item) {
     const q = loadQueue();
+    item._qid = item._qid || newQueueItemId();
     item.queued_at = item.queued_at || new Date().toISOString();
     item.loud = item.loud || !navigator.onLine; // offline at write time → user has a right to know now
     q.push(item);
@@ -5347,16 +5386,24 @@
     queueBlockedReason = null;
     let csrf = queueCsrf;
     let csrfRefreshedThisFlush = false;
+    // Snapshot the queue we started with. Iteration proceeds over this
+    // frozen copy; localStorage may grow behind us as the user keeps
+    // tapping. `processedQids` and `remaining` are both keyed by _qid
+    // so the reconcile step at the end can distinguish "processed",
+    // "still needs retry", and "arrived during flush" cleanly.
+    const snapshot = q;
+    const snapshotQids = new Set(snapshot.map(it => it._qid));
+    const processedQids = new Set();
     const remaining = [];
     let halted = false;
     let hadFailure = false;
-    for (let i = 0; i < q.length; i++) {
-      const item = q[i];
+    for (let i = 0; i < snapshot.length; i++) {
+      const item = snapshot[i];
       if (halted) { remaining.push(item); continue; }
       let res;
       try { res = await postQueueItem(item, csrf); }
       catch (e) {
-        remaining.push(...q.slice(i)); halted = true; hadFailure = true;
+        remaining.push(...snapshot.slice(i)); halted = true; hadFailure = true;
         setConnDot("offline");
         break;
       }
@@ -5368,13 +5415,14 @@
           csrf = fresh;
           try { res = await postQueueItem(item, csrf); action = classify(res); }
           catch (e) {
-            remaining.push(...q.slice(i)); halted = true; hadFailure = true;
+            remaining.push(...snapshot.slice(i)); halted = true; hadFailure = true;
             setConnDot("offline");
             break;
           }
         } else { action = "auth_needed"; }
       }
       if (action === "ok") {
+        processedQids.add(item._qid);
         let data = null;
         try { data = await res.json(); } catch (e) {}
         if (data) {
@@ -5384,7 +5432,7 @@
         continue;
       }
       if (action === "auth_needed") {
-        remaining.push(...q.slice(i));
+        remaining.push(...snapshot.slice(i));
         queueBlockedReason = "needs re-auth";
         halted = true;
         hadFailure = true;
@@ -5401,7 +5449,30 @@
     if (hadFailure && remaining.length) {
       remaining.forEach(it => { it.loud = true; });
     }
-    saveQueue(remaining);
+    // CRITICAL: reconcile against current localStorage, not a blind
+    // overwrite. During this flush the user may have kept tapping —
+    // each enqueue() pushed a new item into localStorage. If we just
+    // saved `remaining` (which only knows about the snapshot), we'd
+    // wipe every tap that landed mid-flush. This is the "spam-click
+    // resets to 1" bug: fixed here.
+    const remainingByQid = new Map(remaining.map(it => [it._qid, it]));
+    const currentQ = loadQueue();
+    const merged = [];
+    currentQ.forEach(it => {
+      if (!snapshotQids.has(it._qid)) {
+        // Enqueued during this flush — carry it forward untouched.
+        merged.push(it);
+        return;
+      }
+      if (processedQids.has(it._qid)) return; // successfully sent — drop
+      const replacement = remainingByQid.get(it._qid);
+      if (replacement) merged.push(replacement); // keep updated (loud=true, etc.)
+      // else: item was collapsed (undo cancel path) or otherwise
+      // removed from localStorage during the flush — respect the drop.
+    });
+    saveQueue(merged);
+    // From here on, `remaining` still drives control flow (retry / setConnDot)
+    // but `merged` is what's actually persisted.
     renderQueueState();
     setConnDot(remaining.length === 0 ? "online" : (queueBlockedReason ? "offline" : "syncing"));
     if (remaining.length === 0) queueBlockedReason = null;
