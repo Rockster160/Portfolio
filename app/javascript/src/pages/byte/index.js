@@ -767,14 +767,60 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (state === "subscribed") notifyBtn.classList.add("subscribed");
     if (state === "denied") notifyBtn.classList.add("denied");
     if (state === "unsupported") notifyBtn.classList.add("unsupported");
+
+    // Tooltip that mirrors the visual state so hover/long-press explains
+    // what tapping will do (or why it won't).
+    const title = {
+      subscribed:   "Notifications on — tap to disable",
+      unsubscribed: "Notifications off — tap to enable",
+      denied:       "Blocked by browser — enable in site settings",
+      unsupported:  "Notifications unavailable in this browser",
+    }[state] || "Toggle notifications";
+    notifyBtn.setAttribute("title", title);
+    notifyBtn.setAttribute("aria-label", title);
+  }
+
+  // Surface the outcome of a subscribe attempt so the user isn't left
+  // guessing whether the tap did anything. Renders as an inbound
+  // system bubble.
+  function surfaceLocal(body, kind = "system") {
+    const stub = {
+      id:           `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      direction:    "inbound",
+      state:        "delivered",
+      body:         body,
+      created_at:   new Date().toISOString(),
+      metadata:     { kind: kind, local: true },
+      attachments:  [],
+    };
+    upsertMessage(stub);
+    if (atBottom) scrollToBottom("smooth");
   }
 
   notifyBtn?.addEventListener("click", async () => {
     const state = await checkByteNotificationStatus();
+
+    if (state === "unsupported") {
+      surfaceLocal("**Notifications unavailable** — this browser doesn't support Web Push.");
+      return;
+    }
+    if (state === "denied") {
+      surfaceLocal(
+        "**Notifications blocked.** Enable them in your browser settings for this site, then tap the bell again.",
+      );
+      return;
+    }
     if (state === "subscribed") {
       await unregisterByteNotifications();
-    } else if (state !== "denied" && state !== "unsupported") {
-      await registerByteNotifications();
+      surfaceLocal("Notifications **disabled**.");
+    } else {
+      const result = await registerByteNotifications();
+      if (result && result.success) {
+        surfaceLocal("Notifications **enabled**. Try `notify \"test\"` from your Mac to verify.");
+      } else {
+        const reason = (result && result.error) || "unknown error";
+        surfaceLocal(`**Couldn't enable notifications:** \`${reason}\``);
+      }
     }
     refreshNotifyBtn();
   });

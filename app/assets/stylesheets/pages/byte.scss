@@ -228,6 +228,14 @@ html.html-ctr-byte body {
     }
   }
 
+  // Notifications toggle — encodes the current subscription state at a
+  // glance:
+  //   default (unsubscribed) → muted bell WITH a diagonal slash overlay
+  //   subscribed             → accent-blue bell, no slash
+  //   denied                 → red bell (browser has permanently blocked
+  //                            notifications), slash overlay, cursor
+  //                            indicates you can't fix this from here
+  //   unsupported            → very faded, not clickable
   .byte-notify-toggle {
     width: 36px;
     height: 36px;
@@ -236,11 +244,42 @@ html.html-ctr-byte body {
     justify-content: center;
     color: var(--bs-muted);
     border-radius: 8px;
+    position: relative;
     transition: background 0.15s, color 0.15s;
 
     &:hover { background: rgba(255, 255, 255, 0.05); color: var(--bs-text); }
-    &.subscribed { color: var(--bs-accent-strong); }
-    &.denied, &.unsupported { opacity: 0.35; cursor: not-allowed; }
+
+    // Slash overlay for non-subscribed states. Drawn as a rotated
+    // solid bar via ::after — currentColor so it matches the icon tint.
+    &::after {
+      content: "";
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      top: 50%;
+      height: 2px;
+      background: currentColor;
+      transform: rotate(-40deg);
+      transform-origin: center;
+      border-radius: 2px;
+      pointer-events: none;
+      box-shadow: 0 -1.5px 0 var(--bs-panel); // subtle "cut through" edge
+    }
+
+    &.subscribed {
+      color: var(--bs-accent-strong);
+      &::after { display: none; }
+    }
+
+    &.denied {
+      color: var(--bs-danger);
+      cursor: help; // hover tooltip explains
+    }
+
+    &.unsupported {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
   }
 }
 

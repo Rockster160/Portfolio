@@ -352,9 +352,15 @@ class WebhooksController < ApplicationController
   private def byte_notify(user, message)
     return unless message.state == "delivered"
 
+    # Shell messages now carry pre-rendered HTML (ANSI-styled <span>s).
+    # Strip tags + collapse whitespace before pushing to the notification
+    # tray — the tray shows plain text, so raw HTML would look garbage.
+    clean = message.body.to_s.gsub(/<[^>]+>/, "").gsub(/\s+/, " ").strip
+    body  = clean.truncate(140).presence || "(attachment)"
+
     WebPushNotifications.send_to_byte(
       title: "Byte",
-      body:  message.body.to_s.truncate(140).presence || "(attachment)",
+      body:  body,
       tag:   "byte-#{message.id}",
       users: [user],
     )
