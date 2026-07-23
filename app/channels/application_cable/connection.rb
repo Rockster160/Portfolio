@@ -15,11 +15,29 @@ module ApplicationCable
       return user if user
       return reject_unauthorized_connection if cookies.nil? # Cookies are undefined in broadcasts
 
-      current_user_id = cookies.signed[:current_user_id].presence || cookies.permanent[:current_user_id].presence || cookies.signed[:user_id].presence
+      current_user_id = (
+        cookies.signed[:current_user_id].presence ||
+        cookies.permanent[:current_user_id].presence ||
+        cookies.signed[:user_id].presence ||
+        user_id_from_session
+      )
 
       return User.find(current_user_id) if current_user_id.present?
 
       reject_unauthorized_connection
+    end
+
+    # Signed cookies default to host-scope, so they don't cross the
+    # subdomain boundary when a page on whisper.ardesian.com connects
+    # to wss://ardesian.com/cable. The session cookie IS domain-scoped
+    # (session_store.rb sets `domain: :all`), so read the user id from
+    # there as a cross-subdomain fallback.
+    def user_id_from_session
+      session_key = Rails.application.config.session_options[:key]
+      session = cookies.encrypted[session_key]
+      session.is_a?(::Hash) ? (session["current_user_id"] || session[:current_user_id]) : nil
+    rescue StandardError
+      nil
     end
 
     # ws://url/cable?Authorization="Bearer <raw_api_key>"

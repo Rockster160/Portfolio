@@ -71,8 +71,12 @@ Rails.application.configure do
 
   # ========================================
   config.action_dispatch.default_headers["X-Frame-Options"] = "ALLOWALL"
-  config.action_cable.url = "ws://localhost:3141/cable"
-  config.web_socket_server_url = "ws://localhost:3141/cable"
+  # Relative URL so ActionCable connects to whatever host the page is on
+  # (localhost:3141, byte.lvh.me:3141, whisper.lvh.me:3141, …). A hardcoded
+  # ws://localhost:3141 sends the WS request to a different origin and the
+  # session cookie doesn't follow, so ActionCable rejects the connection.
+  config.action_cable.url = "/cable"
+  config.web_socket_server_url = "/cable"
   config.action_cable.disable_request_forgery_protection = true
 
   routes.default_url_options = { protocol: "http://", host: "localhost", port: "3141" }
