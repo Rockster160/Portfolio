@@ -485,9 +485,34 @@ document.addEventListener("DOMContentLoaded", async () => {
     drainQueue(drainHooks());
   }
 
+  // Track connection history so we can distinguish "first-ever connect"
+  // (page load) from "reconnect after being disconnected". A reconnect
+  // almost always means the server restarted — that's when we want to
+  // pull a fresh shell + check for a new SW.
+  let hasBeenConnected = false;
+  let wasDisconnected  = false;
+
   Monitor.subscribe(monitorChannel, {
-    connected() { setStatus("connected", "connected"); scheduleDrain(); refetchHistory(); },
-    disconnected() { setStatus("disconnected", "disconnected"); },
+    connected() {
+      setStatus("connected", "connected");
+      scheduleDrain();
+      refetchHistory();
+      // WS reconnect = server likely restarted (deploy, worker restart,
+      // etc.). Kick both a shell revalidate (catches shell content
+      // changes) and a SW file update check (catches new worker code).
+      // Either can raise the "!" indicator via shell_updated /
+      // controllerchange.
+      if (hasBeenConnected && wasDisconnected) {
+        requestShellRefresh();
+        checkForServiceWorkerUpdate();
+      }
+      hasBeenConnected = true;
+      wasDisconnected  = false;
+    },
+    disconnected() {
+      setStatus("disconnected", "disconnected");
+      wasDisconnected = true;
+    },
     received(payload) {
       const data = payload?.data;
       if (!data) return;
@@ -497,6 +522,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     },
   });
+
+  // Long-lived idle sessions won't see visibilitychange or WS reconnect
+  // events, so poll on a slow interval. 5 minutes is cheap and means
+  // the "!" appears within a few minutes of a deploy at worst, even if
+  // the tab has been sitting foregrounded and connected the whole time.
+  setInterval(() => {
+    requestShellRefresh();
+    checkForServiceWorkerUpdate();
+  }, 5 * 60 * 1000);
 
   window.addEventListener("online",  scheduleDrain);
   window.addEventListener("focus",   scheduleDrain);
