@@ -181,6 +181,48 @@ html.html-ctr-byte body {
     }
   }
 
+  // Reload button — quiet by default; when the SW reports a fresh shell
+  // is available, `.has-update` swaps the tint and drops a small "!" badge
+  // in the corner. Tapping always triggers a hard reload regardless of
+  // whether an update is queued (so the user can also self-refresh at
+  // will).
+  .byte-reload-btn {
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--bs-muted);
+    border-radius: 8px;
+    transition: background 0.15s, color 0.15s;
+    position: relative;
+
+    &:hover { background: rgba(255, 255, 255, 0.05); color: var(--bs-text); }
+
+    &.has-update {
+      color: var(--bs-accent-strong);
+
+      &::after {
+        content: "!";
+        position: absolute;
+        top: 0;
+        right: 0;
+        min-width: 14px;
+        height: 14px;
+        padding: 0 4px;
+        background: var(--bs-danger);
+        color: white;
+        font-weight: 700;
+        font-size: 9px;
+        line-height: 14px;
+        text-align: center;
+        border-radius: 999px;
+        border: 2px solid var(--bs-panel);
+        box-sizing: content-box;
+      }
+    }
+  }
+
   .byte-notify-toggle {
     width: 36px;
     height: 36px;
@@ -205,7 +247,14 @@ html.html-ctr-byte body {
   flex-direction: column;
   gap: 6px;
   -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
+  // `contain` traps overscroll rubber-band inside the thread. Without
+  // this, gesturing past the bottom on iOS bubbles up to the page,
+  // which then jitters the visualViewport and pushes the composer up
+  // out of place.
+  overscroll-behavior: contain;
+  // Intentionally NOT `scroll-behavior: smooth` — JS controls animation
+  // per call; adding a CSS-level smooth was making instant scrolls fight
+  // the browser's own scrolling and land a few px off the target.
 
   // Bottom-anchored chat: `margin-top: auto` on the FIRST real message
   // element eats all remaining vertical space, pushing every message down
@@ -238,7 +287,12 @@ html.html-ctr-byte body {
 // off the bottom AND at least one new message has arrived below the fold.
 // The unread count sits inline; the button hides itself again as soon as
 // the user returns to the bottom.
-.byte-jump-btn {
+// Higher specificity than the app-wide `button:active { position: static }`
+// reset (which lives at `.ctr-byte .byte-app button:active`, specificity
+// (0,3,1)). This selector clocks in at (0,4,0/1) so :active can't drop
+// the jump button out of absolute positioning and collapse it into the
+// composer flex row.
+.ctr-byte .byte-app .byte-jump-btn {
   position: absolute;
   right: 16px;
   bottom: calc(72px + env(safe-area-inset-bottom));
@@ -248,8 +302,8 @@ html.html-ctr-byte body {
   gap: 6px;
   padding: 6px 12px 6px 10px;
   border-radius: 999px;
-  background: var(--bs-panel-soft) !important;
-  color: var(--bs-text) !important;
+  background: var(--bs-panel-soft);
+  color: var(--bs-text);
   border: 1px solid var(--bs-border);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
   font-size: 13px;
@@ -258,6 +312,11 @@ html.html-ctr-byte body {
   opacity: 0;
   transform: translateY(8px);
   pointer-events: none;
+
+  &:active {
+    position: absolute;
+    top: auto;
+  }
 
   &.visible {
     opacity: 1;

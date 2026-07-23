@@ -17,18 +17,41 @@ export async function registerServiceWorker() {
   }
 }
 
-// Subscribe to `shell_synced` / `shell_sync_failed` / `sw_version`
-// broadcasts. Returns a teardown function.
+// Subscribe to SW broadcasts. `shell_updated` means the newly-fetched
+// shell actually differs from the previously-cached one — an "update is
+// available" signal for the reload button.
 export function onShellSync(listener) {
   if (!("serviceWorker" in navigator)) return () => {};
   const handler = (evt) => {
     const kind = evt.data?.kind;
-    if (kind === "shell_synced" || kind === "shell_sync_failed" || kind === "sw_version") {
+    if (
+      kind === "shell_synced" ||
+      kind === "shell_sync_failed" ||
+      kind === "shell_updated" ||
+      kind === "sw_version"
+    ) {
       listener(evt.data);
     }
   };
   navigator.serviceWorker.addEventListener("message", handler);
   return () => navigator.serviceWorker.removeEventListener("message", handler);
+}
+
+// Ask the browser to check for a new SW file NOW (rather than waiting
+// for its own periodic check, which can be up to 24h). Called on the
+// visibilitychange → visible path so returning to the app pings the
+// server for a new worker as well as a new shell.
+export async function checkForServiceWorkerUpdate() {
+  const reg = await navigator.serviceWorker?.getRegistration("/");
+  if (!reg) return;
+  try { await reg.update(); } catch (_) {}
+}
+
+// Whether an installed-but-not-yet-active SW is waiting to take over —
+// the reload icon uses this to know a fresh worker is ready.
+export async function hasWaitingServiceWorker() {
+  const reg = await navigator.serviceWorker?.getRegistration("/");
+  return !!reg?.waiting;
 }
 
 export async function requestShellRefresh() {

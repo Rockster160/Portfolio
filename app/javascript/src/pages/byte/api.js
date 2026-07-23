@@ -1,9 +1,12 @@
 // HTTP layer for the Byte page. Wraps outbound POSTs, handles CSRF
-// refresh on 401/422, and drives the strict-FIFO drain of the offline
-// queue. On network / 5xx failures the entry stays in the queue for the
-// next drain trigger.
+// refresh on 401/422, and drives the outbound queue drain.
+//
+// Ordering: each queued entry retries INDEPENDENTLY — a transient
+// failure on one entry does not block later entries. Chat UX prefers
+// "message N gets through" over "strict N-then-M-then-O ordering" when
+// N is misbehaving.
 
-import { enqueue, head, removeByLocalId, markAttempt } from "./queue";
+import { enqueue, all, removeByLocalId, markAttempt } from "./queue";
 
 let SEND_URL = null;
 let CSRF_REFRESH_URL = "/byte/csrf";
@@ -14,6 +17,14 @@ export function configure({ sendUrl, csrfRefreshUrl }) {
   if (sendUrl) SEND_URL = sendUrl;
   if (csrfRefreshUrl) CSRF_REFRESH_URL = csrfRefreshUrl;
 }
+
+// No transient-failure cap. Queue-tracked entries retry indefinitely on
+// network / 5xx / auth-error until they succeed or the server explicitly
+// refuses with a permanent 4xx. This is the right shape for chat: a
+// message the user hit send on in an airport should still deliver when
+// they land, even if that's days later. The `attempts` counter is still
+// incremented (via markAttempt) for eventual exponential-backoff work
+// or debugging visibility, but nothing acts on it.
 
 function csrfMetaToken() {
   return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
@@ -41,10 +52,10 @@ async function safeJson(res) {
   catch (e) { return null; }
 }
 
-// Attempts a single POST for one entry. Returns:
-//   { status: :ok, message }            — server accepted, response body
-//   { status: :transient, reason }      — retry later (network / 5xx / auth)
-//   { status: :permanent, reason, code} — drop from queue (4xx that isn't auth)
+// Try a single POST for one entry. Return:
+//   { status: :ok, message }             — server accepted, response body
+//   { status: :transient, reason }       — retry later (network / 5xx / auth)
+//   { status: :permanent, reason, code}  — drop from queue (4xx that isn't auth)
 async function trySend(entry) {
   const payload = {
     local_id: entry.local_id,
@@ -92,50 +103,61 @@ async function trySend(entry) {
   }
 }
 
-// Enqueue a message and immediately try to flush the queue. Callers
-// pass `hooks` so the UI can reflect state transitions per entry.
-export async function sendMessage(entry, hooks = {}) {
+// Enqueue and kick off a drain. Synchronous — returns immediately.
+// The visual `onEnqueued` fires right away; the network round-trip runs
+// in the background.
+export function sendMessage(entry, hooks = {}) {
   enqueue(entry);
   hooks.onEnqueued?.(entry);
-  await drainQueue(hooks);
+  // Fire the drain without awaiting. Any errors are swallowed inside
+  // drainQueue; callers care about individual message hooks, not a
+  // batch-level rejection.
+  drainQueue(hooks);
 }
 
-// Strict FIFO drain. Stops at the first transient failure so ordering
-// stays intact; drops entries that return permanent failures. Safe to
-// call from multiple triggers — it just processes whatever's left.
+// One drain in flight at a time. If a new send arrives mid-drain, the
+// current drain re-loops after finishing its pass so the new entry is
+// picked up without waiting for the next external trigger.
 let draining = false;
+let redrainNeeded = false;
+
 export async function drainQueue(hooks = {}) {
-  if (draining) return;
-  if (!navigator.onLine && !hooks.forceAttempt) return;
+  if (draining) {
+    // A drain is already processing; ask it to loop once more so any
+    // just-enqueued entry gets a fair shot without waiting 30s.
+    redrainNeeded = true;
+    return;
+  }
+  if (!navigator.onLine) return;
 
   draining = true;
   try {
-    let sent = 0;
-    while (true) {
-      const entry = head();
-      if (!entry) return { sent };
+    do {
+      redrainNeeded = false;
+      const entries = all(); // snapshot at pass start
+      for (const entry of entries) {
+        hooks.onSending?.(entry);
+        const result = await trySend(entry);
 
-      hooks.onSending?.(entry);
-      const result = await trySend(entry);
-
-      if (result.status === "ok") {
-        removeByLocalId(entry.local_id);
-        hooks.onSent?.(entry, result.message);
-        sent += 1;
-        continue;
+        if (result.status === "ok") {
+          removeByLocalId(entry.local_id);
+          hooks.onSent?.(entry, result.message);
+        } else if (result.status === "transient") {
+          // Entry stays in the queue and gets retried on the next drain
+          // trigger (online / focus / setInterval / a new send). We never
+          // drop it just because it's failed a few times — the user hit
+          // send, they want it delivered whenever the network allows.
+          markAttempt(entry.local_id);
+          hooks.onTransientFail?.(entry, result.reason);
+        } else {
+          // Permanent 4xx (not auth): the server explicitly refused this
+          // exact payload. Retrying won't fix it — drop and surface as
+          // failed so the user sees why it didn't go through.
+          removeByLocalId(entry.local_id);
+          hooks.onPermanentFail?.(entry, result.reason, result.code);
+        }
       }
-
-      if (result.status === "transient") {
-        markAttempt(entry.local_id);
-        hooks.onTransientFail?.(entry, result.reason);
-        return { sent, remaining: true };
-      }
-
-      // permanent
-      removeByLocalId(entry.local_id);
-      hooks.onPermanentFail?.(entry, result.reason, result.code);
-      sent += 1;
-    }
+    } while (redrainNeeded);
   } finally {
     draining = false;
   }

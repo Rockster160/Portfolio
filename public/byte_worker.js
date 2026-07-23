@@ -13,7 +13,7 @@
 // Cache name is versioned: bump CACHE on shipping a new shell so old
 // clients re-pull the HTML next time they're online.
 
-const CACHE = "byte-v1";
+const CACHE = "byte-v2";
 
 // Byte only has one shell: the root of byte.<host>. Extending this list
 // later (a settings screen, a per-thread view, etc.) is a matter of
@@ -86,6 +86,13 @@ async function refreshAllShells() {
   await Promise.all(
     SHELL_PATHS.map(async (p) => {
       try {
+        // Read the current cached shell FIRST so we can tell "revalidated
+        // to the same content" (shell_synced) from "revalidated to something
+        // new" (shell_updated). The page uses the latter to light up the
+        // reload indicator.
+        const priorResp = await cache.match(p);
+        const priorHtml = priorResp ? await priorResp.clone().text() : "";
+
         const r = await fetch(p, {
           credentials: "same-origin",
           redirect: "manual",
@@ -107,7 +114,16 @@ async function refreshAllShells() {
           return;
         }
         await cache.put(p, r.clone());
-        await broadcastToClients({ kind: "shell_synced", path: p });
+        // First-ever cache write counts as "synced" (nothing to compare
+        // against). Otherwise: same bytes → synced, different bytes →
+        // updated. Rails' content-hashed asset URLs mean any deploy that
+        // ships new JS/CSS changes the shell's <script>/<link> hrefs, so
+        // this reliably catches deploys the user should reload for.
+        if (priorHtml && priorHtml !== html) {
+          await broadcastToClients({ kind: "shell_updated", path: p });
+        } else {
+          await broadcastToClients({ kind: "shell_synced", path: p });
+        }
       } catch (e) {
         await broadcastToClients({ kind: "shell_sync_failed", path: p });
       }
@@ -224,6 +240,9 @@ self.addEventListener("message", (evt) => {
   if (evt.data?.action === "refresh_shells") {
     evt.waitUntil(refreshAllShells());
   }
+  if (evt.data?.action === "skip_waiting") {
+    self.skipWaiting();
+  }
   if (evt.data?.action === "get_version") {
     evt.waitUntil(broadcastToClients({ kind: "sw_version", cache: CACHE }));
   }
@@ -314,6 +333,7 @@ self.addEventListener("fetch", (evt) => {
 
         const revalidate = (async () => {
           try {
+            const priorHtml = cached ? await cached.clone().text() : "";
             const fresh = await fetch(req, { cache: "no-store" });
             if (!fresh || !fresh.ok || fresh.type === "opaqueredirect") return;
             const clone = fresh.clone();
@@ -328,7 +348,15 @@ self.addEventListener("fetch", (evt) => {
               return;
             }
             await cache.put(url.pathname, fresh.clone());
-            await broadcastToClients({ kind: "shell_synced", path: url.pathname });
+            // Same rationale as refreshAllShells: a genuine content change
+            // means the deployed shell is different from what the user is
+            // running — surface as `shell_updated` so the reload button
+            // can light up its "!" indicator.
+            if (priorHtml && priorHtml !== html) {
+              await broadcastToClients({ kind: "shell_updated", path: url.pathname });
+            } else {
+              await broadcastToClients({ kind: "shell_synced", path: url.pathname });
+            }
           } catch (e) {
             await broadcastToClients({ kind: "shell_sync_failed", path: url.pathname });
           }

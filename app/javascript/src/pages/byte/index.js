@@ -21,6 +21,8 @@ import {
   registerServiceWorker,
   onShellSync,
   requestShellRefresh,
+  checkForServiceWorkerUpdate,
+  hasWaitingServiceWorker,
 } from "./shell_sync";
 import {
   ensureByteServiceWorker,
@@ -40,6 +42,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const input     = app.querySelector("[data-byte-input]");
   const status    = app.querySelector("[data-byte-status]");
   const syncBadge = app.querySelector("[data-byte-sync]");
+  const reloadBtn = app.querySelector("[data-byte-reload]");
   const notifyBtn = app.querySelector("[data-byte-notify]");
   const jumpBtn   = app.querySelector("[data-byte-jump]");
   const jumpCount = app.querySelector("[data-byte-jump-count]");
@@ -217,11 +220,23 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   function scrollToBottom(behavior = "auto") {
-    // scrollTop can slightly overshoot from browser rounding — set to a
-    // large value; the browser clamps it to the max valid position.
-    thread.scrollTo({ top: thread.scrollHeight + 4096, behavior });
-    atBottom = true;
-    clearUnread();
+    // Double rAF: browsers batch layout, so if we JUST appended a message
+    // the first frame commits the DOM change and the second frame has the
+    // updated scrollHeight to scroll to. Without this, a scroll right
+    // after an append lands a message-height short of the true bottom.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (behavior === "smooth") {
+          thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
+        } else {
+          // Direct assignment is the most reliable way to instant-scroll
+          // to bottom; the browser clamps overshoot automatically.
+          thread.scrollTop = thread.scrollHeight;
+        }
+        atBottom = true;
+        clearUnread();
+      });
+    });
   }
 
   function clearUnread() {
@@ -253,9 +268,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     upsertMessage(message);
 
     if (forceScroll || isMine || wasAtBottom) {
-      // Wait one frame for the appended node to lay out so the scroll
-      // target is the new scrollHeight, not the pre-append one.
-      requestAnimationFrame(() => scrollToBottom(wasAtBottom ? "smooth" : "auto"));
+      // scrollToBottom already double-rAFs, so we can call it directly
+      // right after upsertMessage — no need to wrap in another rAF.
+      scrollToBottom(wasAtBottom ? "smooth" : "auto");
     } else {
       unreadCount += 1;
       updateJumpBtn();
@@ -347,11 +362,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // outbound entries. Pin to the bottom on first paint (this is a chat).
   messages.forEach(upsertMessage);
   allQueued().forEach(upsertQueuedMessage);
-  requestAnimationFrame(() => scrollToBottom("auto"));
+  scrollToBottom("auto");
 
   // ---------- send ----------
 
-  async function handleSend(rawBody) {
+  function handleSend(rawBody) {
     const body = rawBody.trim();
     if (!body) return;
 
@@ -364,7 +379,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const entry = { local_id, body, metadata: { source: "web", local_id } };
 
-    await sendMessage(entry, {
+    // Fire-and-forget. `sendMessage` enqueues + kicks a drain synchronously;
+    // the drain itself runs async in the background so the composer never
+    // has to wait on network for the bubble to appear.
+    sendMessage(entry, {
       onEnqueued: (e) => {
         upsertQueuedMessage(e);
         scrollToBottom("smooth"); // user just hit send — always scroll
@@ -403,18 +421,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   input.addEventListener("input", autosize);
   autosize();
 
-  // ---------- keyboard-aware viewport pin ----------
-
-  if (window.visualViewport) {
-    const vv = window.visualViewport;
-    const applyViewport = () => {
-      app.style.height = vv.height + "px";
-      app.style.transform = `translateY(${vv.offsetTop}px)`;
-    };
-    vv.addEventListener("resize", applyViewport);
-    vv.addEventListener("scroll", applyViewport);
-    applyViewport();
-  }
+  // Keyboard behaviour is CSS-only now: `100dvh` shrinks with the visual
+  // viewport on iOS 16.4+ and `interactive-widget=resizes-content` in the
+  // page viewport meta covers Android. The old visualViewport transform
+  // fought Safari's own layout adjustments (URL bar showing/hiding), which
+  // manifested as header jitter, composer displacement, and content
+  // dropping a few pixels off the bottom on focus.
 
   // ---------- realtime + drain triggers ----------
 
@@ -477,7 +489,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         messages = upsertPersisted(messages, m);
         upsertMessage(m);
       });
-      if (wasAtBottom) requestAnimationFrame(() => scrollToBottom("auto"));
+      if (wasAtBottom) scrollToBottom("auto");
     } catch (_) {}
   }
 
@@ -486,6 +498,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     scheduleDrain();
     refetchHistory();
     requestShellRefresh();
+    // Also poke the browser to check for a new SW file. Without this,
+    // the browser's own periodic check can lag by up to 24h and the
+    // update indicator won't surface until then.
+    checkForServiceWorkerUpdate();
   });
 
   // Periodic quiet drain — belt-and-suspenders for the case where the
@@ -501,9 +517,55 @@ document.addEventListener("DOMContentLoaded", async () => {
     syncBadge.dataset.state = state || "";
   }
 
+  // ---------- reload button + update-available signal ----------
+
+  function setUpdateAvailable(v) {
+    if (!reloadBtn) return;
+    reloadBtn.classList.toggle("has-update", !!v);
+    if (v) {
+      reloadBtn.setAttribute("title", "Update ready — tap to reload");
+      reloadBtn.setAttribute("aria-label", "Update ready — tap to reload");
+    } else {
+      reloadBtn.setAttribute("title", "Reload");
+      reloadBtn.setAttribute("aria-label", "Reload");
+    }
+  }
+
+  async function hardReload() {
+    // If a new SW is staged (waiting), tell it to activate now so the
+    // reload lands on the fresh cache instead of the old one.
+    try {
+      const reg = await navigator.serviceWorker?.getRegistration("/");
+      if (reg?.waiting) {
+        reg.waiting.postMessage({ action: "skip_waiting" });
+      }
+    } catch (_) {}
+    location.reload();
+  }
+
+  reloadBtn?.addEventListener("click", hardReload);
+
   onShellSync((data) => {
-    if (data.kind === "shell_synced") setSyncBadge("", "ok");
-    else if (data.kind === "shell_sync_failed") setSyncBadge("sync failed", "failed");
+    if (data.kind === "shell_synced") {
+      setSyncBadge("", "ok");
+    } else if (data.kind === "shell_sync_failed") {
+      setSyncBadge("sync failed", "failed");
+    } else if (data.kind === "shell_updated") {
+      // The SW just replaced the cached shell with genuinely different
+      // content. The page we're LOOKING at is now the outdated one — a
+      // reload will pick up the fresh version.
+      setUpdateAvailable(true);
+    }
+  });
+
+  // If a fresh SW has already been installed and is waiting when we
+  // boot, treat it as an update available immediately.
+  if (await hasWaitingServiceWorker()) setUpdateAvailable(true);
+
+  // A completely new SW taking over the tab is another form of "new
+  // version available" — happens when the SW file itself changed.
+  navigator.serviceWorker?.addEventListener("controllerchange", () => {
+    setUpdateAvailable(true);
   });
 
   await registerServiceWorker();
