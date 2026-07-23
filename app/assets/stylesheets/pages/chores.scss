@@ -325,12 +325,10 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   }
   .hot-strip .chore-circle .title {
     font-size: 10px;
-    min-height: 13px;
+    line-height: 1.15;
     margin-top: 4px;
-    -webkit-line-clamp: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    width: 100%;
+    word-break: break-word;
   }
   .hot-strip .chore-circle .icon {
     font-size: 22px;
