@@ -1,7 +1,6 @@
-// Byte Push Notification Module
-// Mirrors the Whisper push subscription logic — same VAPID key, same
-// /push_notification_subscribe endpoint, distinct `channel: byte`
-// so payloads route to this service worker only.
+// Byte Push Notification module. Mirrors the whisper flow — same VAPID
+// key, same /push_notification_subscribe endpoint, distinct `channel:
+// byte` so payloads route to this SW only.
 
 const VAPID_PUBLIC_KEY =
   "BO7gUf6gNtfyxWRaYVjmL38uqi8TGKZZ9Fw7tEKzxCosTAtTERuv2ohHEiNB21CBs7ue5eOWMe2p4jtZjZTTAFU=";
@@ -15,9 +14,7 @@ function urlBase64ToUint8Array(base64String) {
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
+  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
   return outputArray;
 }
 

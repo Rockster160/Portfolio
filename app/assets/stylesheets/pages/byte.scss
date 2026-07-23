@@ -159,6 +159,28 @@ html.html-ctr-byte body {
     &.disconnected { color: var(--bs-danger); }
   }
 
+  // Small quiet chip in the header for sync/offline signalling. Empty
+  // (no text) hides it entirely — see :empty rule below.
+  .byte-sync-badge {
+    font-size: 11px;
+    color: var(--bs-muted);
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    line-height: 1.2;
+
+    &:empty,
+    &[data-state=""],
+    &[data-state="ok"] { display: none; }
+
+    &[data-state="syncing"] { color: var(--bs-accent-strong); }
+    &[data-state="failed"] {
+      color: var(--bs-danger);
+      border-color: rgba(248, 113, 113, 0.4);
+    }
+  }
+
   .byte-notify-toggle {
     width: 36px;
     height: 36px;
@@ -183,9 +205,81 @@ html.html-ctr-byte body {
   flex-direction: column;
   gap: 6px;
   -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+
+  // Bottom-anchored chat: `margin-top: auto` on the FIRST real message
+  // element eats all remaining vertical space, pushing every message down
+  // toward the composer. With N messages, empty rows collapse above; on
+  // overflow the thread scrolls normally. Pseudo-elements (::before for
+  // the empty state) aren't matched by `*`, so they keep their own
+  // centering.
+  & > article:first-child { margin-top: auto; }
 
   &::-webkit-scrollbar { width: 8px; }
   &::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.06); border-radius: 6px; }
+}
+
+// Subtle "loading older" chip at the very top of the thread while the
+// pagination fetch is in flight. Removed once the older messages are
+// prepended (or after the terminal 'no more' state is reached).
+.byte-thread-loader {
+  align-self: center;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--bs-muted);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+
+  &[hidden] { display: none; }
+}
+
+// Floating "jump to newest" affordance. Shown when the user has scrolled
+// off the bottom AND at least one new message has arrived below the fold.
+// The unread count sits inline; the button hides itself again as soon as
+// the user returns to the bottom.
+.byte-jump-btn {
+  position: absolute;
+  right: 16px;
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 6px 10px;
+  border-radius: 999px;
+  background: var(--bs-panel-soft) !important;
+  color: var(--bs-text) !important;
+  border: 1px solid var(--bs-border);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  font-size: 13px;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s;
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+
+  &.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .byte-jump-arrow {
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .byte-jump-count {
+    background: var(--bs-accent);
+    color: white;
+    font-weight: 600;
+    font-size: 11px;
+    line-height: 1;
+    padding: 3px 7px;
+    border-radius: 999px;
+    &:empty { display: none; }
+  }
 }
 
 .byte-msg {
@@ -218,6 +312,16 @@ html.html-ctr-byte body {
 
   &.byte-msg-pending {
     opacity: 0.7;
+  }
+
+  // Queued = enqueued locally, not yet sent to the server (offline or
+  // send-in-progress). Distinct from :pending so the user can visually
+  // tell offline-queued from server-acknowledged-pending.
+  &.byte-msg-queued {
+    opacity: 0.75;
+    filter: saturate(0.6);
+    outline: 1px dashed rgba(255, 255, 255, 0.18);
+    outline-offset: -3px;
   }
 
   &.byte-msg-failed {

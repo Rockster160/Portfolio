@@ -6,6 +6,10 @@
   <%# viewport when the soft keyboard opens so 100dvh + fixed positioning %>
   <%# both react. iOS Safari 16+ does this on its own via dvh units. %>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <%# Shell validation marker for the service worker. Only pages that %>
+  <%# carry this meta are cached as the Byte shell — a stray error page %>
+  <%# or auth interstitial without it never poisons the SW cache. %>
+  <meta name="byte-shell" content="ok">
 <% end %>
 <%= content_for(:head_before_scripts) do %>
   <script>
@@ -24,7 +28,11 @@
   </script>
 <% end %>
 
-<div class="byte-app" data-monitor-channel="byte" data-messages-url="<%= byte_message_history_path %>" data-send-url="<%= byte_messages_path %>">
+<div class="byte-app"
+     data-monitor-channel="byte"
+     data-messages-url="<%= byte_message_history_path %>"
+     data-send-url="<%= byte_messages_path %>"
+     data-csrf-url="<%= byte_csrf_path %>">
   <header class="byte-header">
     <span class="byte-avatar">
       <%= image_tag "byte_favicon/byte.png", alt: "Byte" %>
@@ -33,6 +41,9 @@
       <span class="byte-name">Byte</span>
       <span class="byte-status" data-byte-status>connecting…</span>
     </span>
+    <%# Quiet syncing / offline badge. Empty when idle; the service %>
+    <%# worker fills it via shell_synced / shell_sync_failed messages. %>
+    <span class="byte-sync-badge" data-byte-sync data-state=""></span>
     <button type="button" class="byte-notify-toggle" data-byte-notify title="Enable notifications" aria-label="Toggle notifications">
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
         <path fill="currentColor" d="M12 22a2.4 2.4 0 0 0 2.4-2.4H9.6A2.4 2.4 0 0 0 12 22Zm6.6-6v-5a6.6 6.6 0 1 0-13.2 0v5L3 18.4V19h18v-.6Z"/>
@@ -40,7 +51,18 @@
     </button>
   </header>
 
-  <main class="byte-thread" data-byte-thread aria-live="polite" aria-relevant="additions"></main>
+  <main class="byte-thread" data-byte-thread aria-live="polite" aria-relevant="additions">
+    <%# Older-history loading indicator. Hidden by default; JS toggles %>
+    <%# when a paginated fetch is in flight or "no more" is confirmed. %>
+    <div class="byte-thread-loader" data-byte-loader hidden>loading…</div>
+  </main>
+
+  <%# Floating jump-to-newest. Visible while user is scrolled off the %>
+  <%# bottom; the count reflects messages received while scrolled up. %>
+  <button type="button" class="byte-jump-btn" data-byte-jump aria-label="Jump to newest">
+    <span class="byte-jump-arrow" aria-hidden="true">↓</span>
+    <span class="byte-jump-count" data-byte-jump-count></span>
+  </button>
 
   <template data-byte-message-tpl>
     <article class="byte-msg">

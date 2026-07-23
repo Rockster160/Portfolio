@@ -46,6 +46,7 @@ Rails.application.routes.draw do
   get "/byte", to: redirect(subdomain: "byte", path: "/")
   get  "/byte/messages" => "byte#messages",       as: :byte_message_history
   post "/byte/messages" => "byte#create_message", as: :byte_messages
+  get  "/byte/csrf"     => "byte#csrf",           as: :byte_csrf
 
   namespace :internal do
     get "auth", to: "auth#check"
