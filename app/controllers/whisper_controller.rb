@@ -1,5 +1,5 @@
 class WhisperController < ApplicationController
-  CHELSEA_ID = 58128
+  CHELSEA_ID = 58_128
   EVE_ID = 4
 
   OWNER_IDS = [1, CHELSEA_ID].freeze
@@ -13,7 +13,7 @@ class WhisperController < ApplicationController
     return unless whisper_owner?
 
     @list = current_user.ordered_lists.find(360)
-    # @list.users << chels
+    # @list.users << chels test
 
     task_ids = [
       220, # Fed
@@ -36,9 +36,9 @@ class WhisperController < ApplicationController
     timestamp = params[:timestamp].presence&.then { |t| ::Time.zone.parse(t) } || ::Time.current
 
     User.me.action_events.create!(
-      name: "Whisper",
-      notes: "Vomit",
-      data: { notes: params[:notes].to_s },
+      name:      "Whisper",
+      notes:     "Vomit",
+      data:      { notes: params[:notes].to_s },
       timestamp: timestamp,
     )
 
