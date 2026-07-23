@@ -19,6 +19,10 @@ Rails.application.routes.draw do
     root "fae#show", as: :fae_root
   end
 
+  constraints subdomain: "byte" do
+    root "byte#show", as: :byte_root
+  end
+
   post "tesla/api/1/vehicles/:vin/command/:command" => "vehicles#command"
   post "tesla/oauth2/v3/token" => "vehicles#token"
   get "tesla/switch" => "tesla_switch#show", as: :tesla_switch
@@ -38,6 +42,10 @@ Rails.application.routes.draw do
   post "/whisper/log_vomit" => "whisper#log_vomit"
 
   get "/fae", to: redirect(subdomain: "fae", path: "/")
+
+  get "/byte", to: redirect(subdomain: "byte", path: "/")
+  get  "/byte/messages" => "byte#messages",       as: :byte_message_history
+  post "/byte/messages" => "byte#create_message", as: :byte_messages
 
   namespace :internal do
     get "auth", to: "auth#check"
@@ -203,6 +211,8 @@ Rails.application.routes.draw do
   post "webhooks/post" => "webhooks#post"
   post "webhooks/email" => "webhooks#email"
   post "webhooks/speak" => "webhooks#speak"
+  post  "webhooks/byte"     => "webhooks#byte_create"
+  patch "webhooks/byte/:id" => "webhooks#byte_update"
 
   get "webhooks/uptime" => "webhooks#uptime"
   post "webhooks/uptime" => "webhooks#uptime"

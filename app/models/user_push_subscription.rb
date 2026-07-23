@@ -16,7 +16,7 @@
 
 # deprecated: sub_auth
 class UserPushSubscription < ApplicationRecord
-  CHANNELS = [:jarvis, :whisper, :agenda, :timers, :chores].freeze
+  CHANNELS = [:jarvis, :whisper, :agenda, :timers, :chores, :byte].freeze
 
   belongs_to :user
 
@@ -28,6 +28,7 @@ class UserPushSubscription < ApplicationRecord
   scope :agenda, -> { for_channel(:agenda) }
   scope :timers, -> { for_channel(:timers) }
   scope :chores, -> { for_channel(:chores) }
+  scope :byte, -> { for_channel(:byte) }
 
   # before_save :set_sub_auth
 

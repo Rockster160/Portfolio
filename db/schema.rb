@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_07_20_112503) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_22_132017) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -365,6 +365,21 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_20_112503) do
     t.index ["param_key"], name: "index_boxes_on_param_key", unique: true
     t.index ["parent_key"], name: "index_boxes_on_parent_key"
     t.index ["user_id"], name: "index_boxes_on_user_id"
+  end
+
+  create_table "byte_messages", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.integer "direction", default: 0, null: false
+    t.integer "state", default: 0, null: false
+    t.text "body"
+    t.string "external_ref"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "delivered_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["external_ref"], name: "index_byte_messages_on_external_ref"
+    t.index ["user_id", "created_at"], name: "index_byte_messages_on_user_id_and_created_at"
+    t.index ["user_id"], name: "index_byte_messages_on_user_id"
   end
 
   create_table "chore_completions", force: :cascade do |t|
@@ -1351,6 +1366,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_20_112503) do
   add_foreign_key "agendas", "google_accounts"
   add_foreign_key "agendas", "users"
   add_foreign_key "boxes", "users"
+  add_foreign_key "byte_messages", "users"
   add_foreign_key "chore_completions", "chores"
   add_foreign_key "chore_completions", "chores", column: "sub_chore_id"
   add_foreign_key "chore_completions", "users"

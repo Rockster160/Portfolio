@@ -1,0 +1,152 @@
+// Byte Push Notification Module
+// Mirrors the Whisper push subscription logic — same VAPID key, same
+// /push_notification_subscribe endpoint, distinct `channel: byte`
+// so payloads route to this service worker only.
+
+const VAPID_PUBLIC_KEY =
+  "BO7gUf6gNtfyxWRaYVjmL38uqi8TGKZZ9Fw7tEKzxCosTAtTERuv2ohHEiNB21CBs7ue5eOWMe2p4jtZjZTTAFU=";
+
+const CHANNEL = "byte";
+const WORKER_URL = "/byte_worker.js";
+const OPT_OUT_KEY = "byte-push-opted-out";
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+async function getRegistration() {
+  if (!("serviceWorker" in navigator)) return null;
+  return navigator.serviceWorker.getRegistration("/");
+}
+
+async function getSubscription() {
+  const registration = await getRegistration();
+  if (!registration) return null;
+  return registration.pushManager.getSubscription();
+}
+
+async function syncSubscription(subscription) {
+  const data = subscription.toJSON();
+  data.channel = CHANNEL;
+
+  return fetch("/push_notification_subscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", JarvisPushVersion: "2" },
+    body: JSON.stringify(data),
+    credentials: "same-origin",
+  });
+}
+
+export async function ensureByteServiceWorker() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return "unsupported";
+  if (Notification.permission === "denied") return "denied";
+
+  try {
+    let registration = await navigator.serviceWorker.getRegistration("/");
+    if (!registration) {
+      registration = await navigator.serviceWorker.register(WORKER_URL, { scope: "/" });
+    }
+
+    let subscription = await registration.pushManager.getSubscription();
+    const userOptedOut = localStorage.getItem(OPT_OUT_KEY) === "true";
+
+    if (!subscription && Notification.permission === "granted" && !userOptedOut) {
+      try {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        });
+      } catch (_) {}
+    }
+
+    if (subscription) {
+      localStorage.removeItem(OPT_OUT_KEY);
+      await syncSubscription(subscription);
+      return "subscribed";
+    }
+    return "unsubscribed";
+  } catch (_) {
+    return "unsubscribed";
+  }
+}
+
+export async function checkByteNotificationStatus() {
+  if (!("serviceWorker" in navigator) || !("Notification" in window)) return "unsupported";
+  if (Notification.permission === "denied") return "denied";
+
+  try {
+    const subscription = await getSubscription();
+    return subscription ? "subscribed" : "unsubscribed";
+  } catch (_) {
+    return "unsubscribed";
+  }
+}
+
+export async function registerByteNotifications() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return { success: false, error: "unsupported" };
+  }
+
+  try {
+    localStorage.removeItem(OPT_OUT_KEY);
+    const registration = await navigator.serviceWorker.register(WORKER_URL, { scope: "/" });
+
+    if (registration.installing || registration.waiting) {
+      await new Promise((resolve) => {
+        const worker = registration.installing || registration.waiting;
+        worker.addEventListener("statechange", () => {
+          if (worker.state === "activated") resolve();
+        });
+        if (registration.active) resolve();
+      });
+    }
+
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") return { success: false, error: "permission_denied" };
+
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+
+    const response = await syncSubscription(subscription);
+    if (response.ok) return { success: true };
+
+    await subscription.unsubscribe();
+    return { success: false, error: "server_error" };
+  } catch (error) {
+    const sub = await getSubscription();
+    if (sub) await sub.unsubscribe();
+    return { success: false, error: error.message };
+  }
+}
+
+export async function unregisterByteNotifications() {
+  try {
+    localStorage.setItem(OPT_OUT_KEY, "true");
+    const subscription = await getSubscription();
+
+    if (subscription) {
+      const data = subscription.toJSON();
+      data.channel = CHANNEL;
+      await fetch("/push_notification_unsubscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "same-origin",
+      }).catch(() => {});
+
+      await subscription.unsubscribe();
+    }
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}

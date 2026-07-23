@@ -102,7 +102,12 @@ Rails.application.configure do
   # ============================================================
 
   config.action_cable.url = "wss://ardesian.com/cable"
-  config.action_cable.allowed_request_origins = ["https://ardesian.com", "https://whisper.ardesian.com", "https://fae.ardesian.com"]
+  config.action_cable.allowed_request_origins = [
+    "https://ardesian.com",
+    "https://whisper.ardesian.com",
+    "https://fae.ardesian.com",
+    "https://byte.ardesian.com",
+  ]
   config.web_socket_server_url = "wss://ardesian.com/cable"
   config.action_cable.disable_request_forgery_protection = true
 

@@ -1,0 +1,75 @@
+<%= meta_title "Byte", include_name: false %>
+<%= meta_description "Direct chat channel to your automations." %>
+<%= content_for(:favicon) { render "byte/favicon" } %>
+<%= content_for(:meta) do %>
+  <%# interactive-widget=resizes-content: Android Chrome shrinks the layout %>
+  <%# viewport when the soft keyboard opens so 100dvh + fixed positioning %>
+  <%# both react. iOS Safari 16+ does this on its own via dvh units. %>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<% end %>
+<%= content_for(:head_before_scripts) do %>
+  <script>
+    // Byte lives on its own subdomain (byte.lvh.me in dev, byte.ardesian.com
+    // in prod). The app-wide ActionCable meta tag points at a fixed dev host
+    // (ws://localhost:3141/cable), so on a subdomain the WS handshake is
+    // cross-origin and the session cookie doesn't travel with it — the
+    // connection fails silently. Rewrite the meta to a same-host URL BEFORE
+    // application.js parses.
+    (function() {
+      var meta = document.querySelector('meta[name="action-cable-url"]');
+      if (!meta) return;
+      var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      meta.setAttribute('content', proto + '//' + location.host + '/cable');
+    })();
+  </script>
+<% end %>
+
+<div class="byte-app" data-monitor-channel="byte" data-messages-url="<%= byte_message_history_path %>" data-send-url="<%= byte_messages_path %>">
+  <header class="byte-header">
+    <span class="byte-avatar">
+      <%= image_tag "byte_favicon/byte.png", alt: "Byte" %>
+    </span>
+    <span class="byte-title">
+      <span class="byte-name">Byte</span>
+      <span class="byte-status" data-byte-status>connecting…</span>
+    </span>
+    <button type="button" class="byte-notify-toggle" data-byte-notify title="Enable notifications" aria-label="Toggle notifications">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+        <path fill="currentColor" d="M12 22a2.4 2.4 0 0 0 2.4-2.4H9.6A2.4 2.4 0 0 0 12 22Zm6.6-6v-5a6.6 6.6 0 1 0-13.2 0v5L3 18.4V19h18v-.6Z"/>
+      </svg>
+    </button>
+  </header>
+
+  <main class="byte-thread" data-byte-thread aria-live="polite" aria-relevant="additions"></main>
+
+  <template data-byte-message-tpl>
+    <article class="byte-msg">
+      <div class="byte-msg-attachments" data-attachments></div>
+      <div class="byte-msg-body" data-body></div>
+      <div class="byte-msg-meta">
+        <time data-time></time>
+        <span class="byte-msg-state" data-state></span>
+      </div>
+    </article>
+  </template>
+
+  <form class="byte-composer" data-byte-composer autocomplete="off">
+    <textarea
+      class="byte-input"
+      data-byte-input
+      rows="1"
+      placeholder="Say something to Byte…"
+      autocapitalize="sentences"
+      spellcheck="true"
+    ></textarea>
+    <button type="submit" class="byte-send" data-byte-send aria-label="Send">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <path fill="currentColor" d="M3.4 20.6 22 12 3.4 3.4l-.1 6.7L17 12 3.3 13.9Z"/>
+      </svg>
+    </button>
+  </form>
+</div>
+
+<script id="byte-bootstrap" type="application/json">
+  <%= raw JSON.generate(messages: @messages.map(&:as_wire)) %>
+</script>

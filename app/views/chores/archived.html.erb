@@ -1,26 +1,39 @@
 <% content_for :title, "Archived Chores" %>
 
 <div class="chores-archived-page" style="max-width: 900px; margin: 20px auto; padding: 0 16px;">
-  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px;">
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px;">
     <h1 style="margin:0;">Archived Chores</h1>
     <%= link_to "← Back to History", chores_history_path, class: "btn ghost" %>
   </div>
 
+  <form method="get" action="<%= chores_archived_path %>" class="basic" style="margin:0 0 14px 0;">
+    <input type="text" name="q" value="<%= @q %>"
+           placeholder="Filter… e.g. plunge, archived_at<2026-07-22, reward>3"
+           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+           style="width:100%; padding:8px 10px;">
+  </form>
+
   <% if @archived_chores.empty? %>
-    <p class="dim">No archived chores.</p>
+    <p class="dim">
+      <% if @q.present? %>
+        No archived chores match <code><%= @q %></code>.
+      <% else %>
+        No archived chores.
+      <% end %>
+    </p>
   <% else %>
-    <p class="dim" style="margin-top:0;">
-      <%= pluralize(@archived_chores.size, "archived chore") %>. Unarchive to bring back to the grid,
-      or edit to fix settings (e.g. flip <code>one_off</code> off for a recurring sub-chore) before restoring.
+    <p class="dim" style="margin:0 0 10px;">
+      <%= @total_count %> archived · page <%= @page %> of <%= @total_pages %>
     </p>
 
     <ul class="archived-list" style="list-style:none; padding:0; margin:0;">
       <% @archived_chores.each do |chore| %>
-        <li style="border:1px solid #2a3350; border-radius:8px; padding:12px 14px; margin-bottom:10px; background:#101527;">
+        <li data-chore-id="<%= chore.id %>" style="border:1px solid #2a3350; border-radius:8px; padding:12px 14px; margin-bottom:10px; background:#101527;">
           <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
             <div style="flex:1; min-width:200px;">
               <div style="font-size:16px; font-weight:600;">
-                <%= chore.icon.presence || "🧹" %> <%= chore.name %>
+                <%= chore_icon_inline(chore) %>
+                <%= chore.name %>
                 <% if chore.short_name.present? && chore.short_name != chore.name %>
                   <span class="dim" style="font-weight:normal;">(<%= chore.short_name %>)</span>
                 <% end %>
@@ -32,7 +45,7 @@
                 <% if chore.parent_chore_id %>
                   sub-chore of <strong><%= chore.parent_chore&.name || "?" %></strong> ·
                 <% end %>
-                archived <%= chore.archived_at.strftime("%b %-d, %Y %l:%M%P").squeeze(" ") %>
+                archived <%= chore.archived_at.strftime("%b %-d, %Y %l:%M%P %Z").squeeze(" ") %>
               </div>
             </div>
             <%= form_with url: chore_routes_unarchive_path(chore), method: :post, local: true, class: "basic", data: { turbo: false } do %>
@@ -54,14 +67,8 @@
                 </div>
 
                 <label>Parent chore</label>
-                <select name="chore[parent_chore_id]">
+                <select name="chore[parent_chore_id]" data-parent-select data-current="<%= chore.parent_chore_id %>">
                   <option value="">— none (top-level) —</option>
-                  <% @possible_parents.each do |p| %>
-                    <% next if p.id == chore.id %>
-                    <option value="<%= p.id %>" <%= 'selected' if chore.parent_chore_id == p.id %>>
-                      <%= p.name %>
-                    </option>
-                  <% end %>
                 </select>
 
                 <label>Reward</label>
@@ -75,5 +82,47 @@
         </li>
       <% end %>
     </ul>
+
+    <% if @total_pages > 1 %>
+      <nav style="display:flex; gap:8px; align-items:center; justify-content:center; margin:16px 0;">
+        <% if @page > 1 %>
+          <%= link_to "‹ Prev", chores_archived_path(page: @page - 1, q: @q.presence), class: "btn ghost" %>
+        <% end %>
+        <span class="dim">Page <%= @page %> / <%= @total_pages %></span>
+        <% if @page < @total_pages %>
+          <%= link_to "Next ›", chores_archived_path(page: @page + 1, q: @q.presence), class: "btn ghost" %>
+        <% end %>
+      </nav>
+    <% end %>
   <% end %>
 </div>
+
+<%# Parent list emitted ONCE; a small script populates each row's select on
+    page load, avoiding N×M option-tag duplication as archived rows grow. %>
+<script id="archived-parent-options" type="application/json">
+  <%= raw @possible_parents.map { |p|
+    { id: p.id, name: p.name.to_s }
+  }.to_json %>
+</script>
+
+<script>
+  (function () {
+    var raw = document.getElementById("archived-parent-options");
+    if (!raw) return;
+    var options;
+    try { options = JSON.parse(raw.textContent); } catch (e) { return; }
+
+    document.querySelectorAll("select[data-parent-select]").forEach(function (sel) {
+      var current = sel.dataset.current || "";
+      var choreId = sel.closest("li")?.dataset.choreId || "";
+      options.forEach(function (opt) {
+        if (String(opt.id) === choreId) return; // never self as parent
+        var el = document.createElement("option");
+        el.value = String(opt.id);
+        el.textContent = opt.name;
+        if (String(opt.id) === current) el.selected = true;
+        sel.appendChild(el);
+      });
+    });
+  })();
+</script>

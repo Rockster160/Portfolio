@@ -125,4 +125,24 @@ module WebPushNotifications
       .where.not(user_push_subscriptions: { registered_at: nil })
       .distinct
   end
+
+  # Convenience method for Byte notifications — sends to all subscribers
+  # by default; pass `users:` to scope down.
+  def send_to_byte(payload={})
+    payload = { title: payload } if payload.is_a?(::String)
+    payload = payload.deep_symbolize_keys
+    payload[:icon] ||= "/byte_favicon/byte-detail.png"
+    payload[:data] ||= {}
+    payload[:data][:url] ||= "/byte"
+
+    users = payload.delete(:users) || all_byte_subscribers
+    broadcast_to_channel(users, payload, channel: :byte)
+  end
+
+  def all_byte_subscribers
+    User.joins(:push_subs)
+      .where(user_push_subscriptions: { channel: :byte })
+      .where.not(user_push_subscriptions: { registered_at: nil })
+      .distinct
+  end
 end

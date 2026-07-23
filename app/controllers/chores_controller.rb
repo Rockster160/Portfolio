@@ -475,11 +475,24 @@ class ChoresController < ApplicationController
   # loads fresh. Actions still flow through the standard controller
   # paths so ChoreBroadcaster fanout reaches connected PWA clients.
   def archived
-    @archived_chores = current_user.accessible_chores
+    @page = [params[:page].to_i, 1].max
+    @per = 25
+    @q = params[:q].to_s
+
+    scope = current_user.accessible_chores
       .unscope(where: :archived_at)
       .where.not(archived_at: nil)
       .includes(:parent_chore)
+    scope = safe_query(scope, @q) if @q.present?
+
+    @total_count = scope.count
+    @total_pages = [(@total_count.to_f / @per).ceil, 1].max
+    @archived_chores = scope
       .order(archived_at: :desc)
+      .offset((@page - 1) * @per)
+      .limit(@per)
+      .to_a
+
     @possible_parents = current_user.accessible_chores
       .where(parent_chore_id: nil, one_off: false)
       .order(:name)

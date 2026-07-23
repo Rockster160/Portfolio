@@ -243,6 +243,124 @@ class WebhooksController < ApplicationController
     SmsWorker.perform_async("3852599640", params[:text])
   end
 
+  # Callback from the local Mac Byte server. Two entry points; both
+  # authenticate via X-Byte-Secret and accept either JSON or
+  # multipart/form-data (files[] for attachments).
+  #
+  # POST /webhooks/byte         — create a new inbound message
+  # PATCH /webhooks/byte/:id    — update an existing message
+  #                                     (streaming chunks, late attachments,
+  #                                     terminal state transitions)
+  #
+  # Simple JSON POST still works exactly as before:
+  #   { "user_id": 1, "body": "hi" }
+  #
+  # Multipart adds files:
+  #   files[]=@chart.png, files[]=@log.txt
+  #
+  # Update accepts a subset of fields; metadata merges (never replaces).
+  def byte_create
+    return head :unauthorized unless byte_authorized?
+
+    user_id = params[:user_id].presence || User.me.id
+    user = User.find_by(id: user_id)
+    return head :not_found if user.blank?
+
+    body     = params[:body].to_s
+    files    = Array(params[:files]).compact_blank
+    metadata = byte_metadata(params)
+    metadata[:in_reply_to] = params[:in_reply_to] if params[:in_reply_to].present?
+
+    return head :bad_request if body.empty? && files.empty?
+
+    state = (params[:state].presence || :delivered).to_sym
+    state = :delivered unless ByteMessage.states.key?(state.to_s)
+
+    message = user.byte_messages.create!(
+      direction:    :inbound,
+      state:        state,
+      body:         body,
+      metadata:     metadata,
+      delivered_at: (state == :delivered ? Time.current : nil),
+    )
+    message.files.attach(files) if files.any?
+
+    byte_broadcast(user, message)
+    byte_notify(user, message)
+
+    render json: message.as_wire, status: :ok
+  end
+
+  def byte_update
+    return head :unauthorized unless byte_authorized?
+
+    message = ByteMessage.find_by(id: params[:id])
+    return head :not_found if message.blank?
+
+    if params.key?(:body)
+      message.body = params[:body].to_s
+    end
+
+    if params[:state].present?
+      new_state = params[:state].to_sym
+      if ByteMessage.states.key?(new_state.to_s)
+        message.state = new_state
+        message.delivered_at = Time.current if new_state == :delivered && message.delivered_at.blank?
+      end
+    end
+
+    if params[:metadata].present?
+      # Merge, don't replace — other writers' fields must survive.
+      incoming = byte_metadata(params)
+      message.metadata = (message.metadata || {}).merge(incoming.stringify_keys)
+    end
+
+    message.save!
+
+    if params[:files].present?
+      message.files.attach(Array(params[:files]).compact_blank)
+    end
+
+    byte_broadcast(message.user, message)
+    byte_notify(message.user, message) if message.state == "delivered" && message.saved_change_to_state?
+
+    render json: message.as_wire, status: :ok
+  end
+
+  private def byte_authorized?
+    ByteLocal.valid_secret?(request.headers["X-Byte-Secret"])
+  end
+
+  private def byte_metadata(params)
+    raw = params[:metadata]
+    return {} if raw.blank?
+    return raw.to_unsafe_h if raw.respond_to?(:to_unsafe_h)
+    return raw if raw.is_a?(Hash)
+
+    JSON.parse(raw.to_s) rescue {}
+  end
+
+  private def byte_broadcast(user, message)
+    MonitorChannel.broadcast_to(user, {
+      id:      :byte,
+      channel: :byte,
+      data:    { kind: :message, message: message.as_wire },
+    })
+  end
+
+  # Push notifications only fire on terminal states — silent while streaming.
+  private def byte_notify(user, message)
+    return unless message.state == "delivered"
+
+    WebPushNotifications.send_to_byte(
+      title: "Byte",
+      body:  message.body.to_s.truncate(140).presence || "(attachment)",
+      tag:   "byte-#{message.id}",
+      users: [user],
+    )
+  end
+
+
   def push_notification_subscribe
     Rails.logger.info("Received subscription request! [#{current_user&.username}] (#{request.headers["JarvisPushVersion"].inspect})")
     return head :ok unless request.headers["JarvisPushVersion"].to_s == "2"

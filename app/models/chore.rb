@@ -135,6 +135,15 @@ class Chore < ApplicationRecord
   has_many :chore_streaks, dependent: :destroy
   has_many :chore_dailies, dependent: :destroy
 
+  # Query syntax accepted by ApplicationRecord.query_by_node — same shape
+  # as chore_completion (see there for examples). Bare keywords match
+  # name / short_name / notes / notes_template / icon.
+  search_terms :name, :short_name, :notes, :notes_template, :icon,
+    reward:      :reward_pebbles,
+    archived_at: :archived_at,
+    created_at:  :created_at,
+    updated_at:  :updated_at
+
   validates :name, presence: true
   validates :reward_pebbles, numericality: { greater_than_or_equal_to: 0 }
   validates :target_count, numericality: { only_integer: true, greater_than_or_equal_to: 1, less_than_or_equal_to: 99 }

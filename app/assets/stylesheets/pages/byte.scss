@@ -1,0 +1,376 @@
+// Byte chat PWA — dedicated subdomain surface. Kept fully namespaced
+// under `.byte-*` and paired with a scoped reset so app-wide button/
+// form cascades (see `forms.scss`) don't leak in and clobber the layout.
+
+html.html-ctr-byte,
+html.html-ctr-byte body {
+  height: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  background: #0E1930;
+  color: #E8ECF6;
+  overscroll-behavior: none;
+}
+
+// Hard reset — app-wide `forms.scss` gradients + blue-card form background
+// would obliterate this layout otherwise. Same trick chores.scss uses.
+.ctr-byte {
+  .byte-app,
+  .byte-app * {
+    box-sizing: border-box;
+  }
+
+  .byte-app {
+    button,
+    input[type="button"],
+    input[type="submit"],
+    input[type="reset"] {
+      background: transparent;
+      background-color: transparent;
+      color: inherit !important;
+      text-shadow: none;
+      box-shadow: none;
+      font-family: inherit;
+      font-size: inherit;
+      font-weight: inherit;
+      border-radius: 6px;
+      padding: 0;
+      margin: 0;
+      border: 1px solid transparent;
+      cursor: pointer;
+
+      // The global button:active { position: relative; top: 1px } cascade
+      // would shove absolutely-positioned buttons out of place — pin.
+      &:active { position: static; top: auto; }
+    }
+
+    form,
+    form.basic {
+      background: transparent;
+      padding: 0;
+      margin: 0;
+      border: none;
+      box-shadow: none;
+    }
+
+    textarea,
+    input[type="text"] {
+      background: transparent;
+      color: inherit;
+      border: none;
+      outline: none;
+      font: inherit;
+      padding: 0;
+      margin: 0;
+      box-shadow: none;
+    }
+  }
+}
+
+.byte-app {
+  --bs-bg: #0E1930;
+  --bs-panel: #16233F;
+  --bs-panel-soft: #1F3053;
+  --bs-border: #24345B;
+  --bs-text: #E8ECF6;
+  --bs-muted: #8FA3C8;
+  --bs-accent: #3FA0FF;
+  --bs-accent-strong: #62B3FF;
+  --bs-me-bg: linear-gradient(135deg, #2563EB 0%, #3FA0FF 100%);
+  --bs-them-bg: #2A3B5F; // bumped for readable contrast against the page bg
+  --bs-danger: #F87171;
+  --bs-pending: #94A3B8;
+
+  // `dvh` = dynamic viewport height. Shrinks when the soft keyboard opens
+  // on iOS Safari 16+ / Chrome 108+, so the composer stays visible above
+  // the keyboard instead of being covered by it. `100vh` (the fallback)
+  // stays constant and would leave the composer behind the keyboard.
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  height: 100dvh;
+  // Non-prod env banner is fixed at top:0 h:10px z:1001 — shift the app down.
+  body:has(.env-banner) & { top: 10px; height: calc(100dvh - 10px); }
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: radial-gradient(1200px 700px at 20% -10%, #14284F 0%, transparent 60%),
+              radial-gradient(1000px 800px at 100% 100%, #0B2B4E 0%, transparent 55%),
+              var(--bs-bg);
+  color: var(--bs-text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.byte-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: calc(env(safe-area-inset-top) + 12px) 16px 12px;
+  border-bottom: 1px solid var(--bs-border);
+  background: linear-gradient(180deg, rgba(22, 35, 63, 0.9), rgba(22, 35, 63, 0.7));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  position: relative;
+  z-index: 2;
+
+  .byte-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: radial-gradient(circle at 30% 20%, #62B3FF, #1E3B7A);
+    box-shadow: 0 0 0 1px var(--bs-border), 0 4px 14px rgba(63, 160, 255, 0.25);
+    flex-shrink: 0;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+  }
+
+  .byte-title {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .byte-name {
+    font-weight: 600;
+    font-size: 16px;
+  }
+
+  .byte-status {
+    font-size: 12px;
+    color: var(--bs-muted);
+
+    &.connected { color: #86EFAC; }
+    &.disconnected { color: var(--bs-danger); }
+  }
+
+  .byte-notify-toggle {
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--bs-muted);
+    border-radius: 8px;
+    transition: background 0.15s, color 0.15s;
+
+    &:hover { background: rgba(255, 255, 255, 0.05); color: var(--bs-text); }
+    &.subscribed { color: var(--bs-accent-strong); }
+    &.denied, &.unsupported { opacity: 0.35; cursor: not-allowed; }
+  }
+}
+
+.byte-thread {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 12px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  -webkit-overflow-scrolling: touch;
+
+  &::-webkit-scrollbar { width: 8px; }
+  &::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.06); border-radius: 6px; }
+}
+
+.byte-msg {
+  max-width: 78%;
+  @media (min-width: 720px) {
+    max-width: 560px;
+  }
+  padding: 8px 12px 6px;
+  border-radius: 16px;
+  background: var(--bs-them-bg);
+  color: var(--bs-text);
+  align-self: flex-start;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  position: relative;
+  font-size: 15px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+
+  &.byte-msg-outbound {
+    align-self: flex-end;
+    background: var(--bs-me-bg);
+    color: white;
+    border-bottom-right-radius: 4px;
+  }
+
+  &.byte-msg-inbound {
+    border-bottom-left-radius: 4px;
+  }
+
+  &.byte-msg-pending {
+    opacity: 0.7;
+  }
+
+  &.byte-msg-failed {
+    background: rgba(248, 113, 113, 0.18);
+    border: 1px solid rgba(248, 113, 113, 0.5);
+    color: #FCA5A5;
+  }
+
+  // Streaming state — subtle blinking cursor at the end of the body so the
+  // user can see the handler is still writing.
+  &.byte-msg-streaming {
+    .byte-msg-body::after {
+      content: "▍";
+      display: inline-block;
+      margin-left: 2px;
+      animation: byte-cursor 1s steps(1) infinite;
+      opacity: 0.7;
+    }
+  }
+
+  .byte-msg-body { white-space: pre-wrap; }
+
+  .byte-msg-attachments {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    &:empty { display: none; }
+
+    .byte-attachment {
+      display: block;
+      border-radius: 12px;
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.25);
+      max-width: 100%;
+
+      img, video {
+        display: block;
+        max-width: 100%;
+        max-height: 480px;
+        height: auto;
+      }
+
+      audio {
+        display: block;
+        width: 100%;
+        min-width: 220px;
+      }
+
+      a {
+        display: inline-block;
+        padding: 8px 12px;
+        color: inherit;
+        text-decoration: underline;
+        text-decoration-color: rgba(255, 255, 255, 0.35);
+        text-underline-offset: 3px;
+        word-break: break-all;
+      }
+    }
+  }
+
+  .byte-msg-meta {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    font-size: 10.5px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: 2px;
+
+    time {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .byte-msg-state {
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+  }
+}
+
+// Scoped under `.byte-app` so `.byte-app .byte-composer .byte-input` (0,3,0)
+// beats the app-wide reset selector `.ctr-byte .byte-app textarea` (0,2,1)
+// on textarea styling. Without this scope, the reset's transparent background
+// would win and the input would look see-through.
+.byte-app .byte-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  // Bumped horizontal padding + safe-area-aware left/right so the pill
+  // isn't kissing the screen edges on notch/rounded-corner devices.
+  padding:
+    10px
+    calc(env(safe-area-inset-right) + 16px)
+    calc(10px + env(safe-area-inset-bottom))
+    calc(env(safe-area-inset-left) + 16px);
+  border-top: 1px solid var(--bs-border);
+  background: linear-gradient(180deg, rgba(22, 35, 63, 0.8), rgba(22, 35, 63, 0.95));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+
+  .byte-input {
+    flex: 1;
+    background: var(--bs-panel-soft);
+    color: var(--bs-text);
+    border: 1px solid var(--bs-border);
+    border-radius: 22px;
+    padding: 10px 16px;
+    // Grow with content, no visible scrollbar / resize gripper at any size.
+    resize: none;
+    field-sizing: content;
+    min-height: 42px;
+    max-height: 30vh;
+    overflow-y: auto;
+    scrollbar-width: none;              // Firefox
+    &::-webkit-scrollbar { display: none; } // Chrome / Safari
+
+    font-size: 15px;
+    line-height: 1.35;
+    box-shadow: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+
+    &::placeholder { color: var(--bs-muted); }
+    &:focus {
+      // Subtle focus — the previous bright cyan ring was fighting the composer.
+      border-color: rgba(63, 160, 255, 0.55);
+      box-shadow: 0 0 0 2px rgba(63, 160, 255, 0.10);
+    }
+  }
+
+  .byte-send {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bs-me-bg) !important;
+    color: white !important;
+    flex-shrink: 0;
+    transition: transform 0.1s, filter 0.1s;
+
+    &:hover:not(:disabled) { filter: brightness(1.08); }
+    &:active:not(:disabled) { transform: scale(0.95); }
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
+}
+
+// Empty state
+.byte-thread:empty::before {
+  content: "No messages yet. Say hello.";
+  color: var(--bs-muted);
+  font-size: 14px;
+  text-align: center;
+  margin: auto;
+  padding: 40px 16px;
+}
+
+@keyframes byte-cursor {
+  0%, 50%   { opacity: 0.7; }
+  51%, 100% { opacity: 0; }
+}
