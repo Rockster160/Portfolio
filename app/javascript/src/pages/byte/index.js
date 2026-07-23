@@ -121,13 +121,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       kind ? `byte-msg-kind-${kind}` : null,
     ].filter(Boolean).join(" ");
     const bodyEl = node.querySelector("[data-body]");
-    // Markdown-lite (fenced code, inline code, bold, italic) applies
-    // to messages produced by the handler that need formatting: Claude
-    // replies AND meta command responses (/help, /sessions, /pwd,
-    // /switch acknowledgements). Everything else stays textContent so
-    // shell output and user sends never accidentally interpret chars.
+    // Rendering strategy by kind:
+    //   claude / system → markdown-lite (fenced code, inline code, bold, italic)
+    //   shell           → server pre-rendered HTML (ANSI colours already
+    //                     converted to <span> by AnsiHtml.convert)
+    //   default         → textContent (user sends, unclassified inbound)
     if (kind === "claude" || kind === "system") {
       bodyEl.innerHTML = renderMarkdown(message.body || "");
+    } else if (kind === "shell") {
+      bodyEl.innerHTML = message.body || "";
     } else {
       bodyEl.textContent = message.body || "";
     }
@@ -458,6 +460,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     input.value = "";
     autosize();
 
+    // Client-side meta commands — intercepted before the message ever
+    // hits the server. Use these to fix client-side state without
+    // round-tripping (nuking stale queue entries from the pre-fix era,
+    // dumping cached messages that keep re-appearing, etc.).
+    if (body === "/clear" || body === "/clear-local") {
+      clearLocalState();
+      return;
+    }
+
     const local_id = (typeof crypto !== "undefined" && crypto.randomUUID)
       ? crypto.randomUUID()
       : `l-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -491,6 +502,26 @@ document.addEventListener("DOMContentLoaded", async () => {
       },
       onPermanentFail: (e, reason) => markQueuedFailed(e.local_id, reason),
     });
+  }
+
+  // Wipe local UI + storage. Used by the /clear meta command to break
+  // out of a stuck state where an old outbound queue entry keeps
+  // resending on every drain trigger, or where the cached message
+  // history keeps resurrecting messages that were manually deleted
+  // server-side. Server-side messages are NOT touched — a refetch
+  // repopulates the thread from the server on the next opportunity.
+  function clearLocalState() {
+    try {
+      localStorage.removeItem("byte:outbound_queue:v1");
+      localStorage.removeItem("byte:messages:v1");
+    } catch (_) {}
+    messages = [];
+    Array.from(thread.querySelectorAll("[data-message-id], [data-local-id]")).forEach((n) => n.remove());
+    unreadCount = 0;
+    updateJumpBtn();
+    // Repopulate from server so the thread doesn't stay empty.
+    refetchHistory();
+    scrollToBottom("auto");
   }
 
   composer.addEventListener("submit", (e) => {
