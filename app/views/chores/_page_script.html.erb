@@ -2971,14 +2971,7 @@
     const idEl = editForm?.querySelector('[data-field="parent_chore_id"]');
     const oneOffCb = editForm?.querySelector('[data-field="one_off"]');
     if (!idEl || !oneOffCb) return;
-    const hasParent = !!idEl.value;
-    if (hasParent) {
-      oneOffCb.checked = true;
-      oneOffCb.disabled = true;
-      syncSingleTask();
-    } else {
-      oneOffCb.disabled = false;
-    }
+    if (idEl.value) syncSingleTask();
   }
   function isSingleTask() { return editForm.querySelector('[data-field="one_off"]')?.checked === true; }
   function syncSingleTask() {

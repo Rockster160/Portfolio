@@ -197,10 +197,16 @@
 
     <div class="section-heading">
       <h3>History</h3>
-      <button type="button" class="section-reload" data-history-reload
-              title="Reload history" aria-label="Reload history">
-        <i class="fa fa-refresh" aria-hidden="true"></i>
-      </button>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <%= link_to chores_archived_path, class: "btn ghost", style: "font-size:12px; padding:4px 10px;",
+                    title: "View archived chores" do %>
+          <i class="fa fa-archive" aria-hidden="true"></i> Archived
+        <% end %>
+        <button type="button" class="section-reload" data-history-reload
+                title="Reload history" aria-label="Reload history">
+          <i class="fa fa-refresh" aria-hidden="true"></i>
+        </button>
+      </div>
     </div>
 
     <div class="history-summary" data-history-summary hidden>

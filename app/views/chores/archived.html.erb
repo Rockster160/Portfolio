@@ -1,0 +1,79 @@
+<% content_for :title, "Archived Chores" %>
+
+<div class="chores-archived-page" style="max-width: 900px; margin: 20px auto; padding: 0 16px;">
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px;">
+    <h1 style="margin:0;">Archived Chores</h1>
+    <%= link_to "← Back to History", chores_history_path, class: "btn ghost" %>
+  </div>
+
+  <% if @archived_chores.empty? %>
+    <p class="dim">No archived chores.</p>
+  <% else %>
+    <p class="dim" style="margin-top:0;">
+      <%= pluralize(@archived_chores.size, "archived chore") %>. Unarchive to bring back to the grid,
+      or edit to fix settings (e.g. flip <code>one_off</code> off for a recurring sub-chore) before restoring.
+    </p>
+
+    <ul class="archived-list" style="list-style:none; padding:0; margin:0;">
+      <% @archived_chores.each do |chore| %>
+        <li style="border:1px solid #2a3350; border-radius:8px; padding:12px 14px; margin-bottom:10px; background:#101527;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:200px;">
+              <div style="font-size:16px; font-weight:600;">
+                <%= chore.icon.presence || "🧹" %> <%= chore.name %>
+                <% if chore.short_name.present? && chore.short_name != chore.name %>
+                  <span class="dim" style="font-weight:normal;">(<%= chore.short_name %>)</span>
+                <% end %>
+              </div>
+              <div class="dim" style="font-size:12px; margin-top:4px;">
+                #<%= chore.id %> ·
+                <%= chore.one_off? ? "one-off" : "recurring" %> ·
+                <%= chore.reward_pebbles %>p ·
+                <% if chore.parent_chore_id %>
+                  sub-chore of <strong><%= chore.parent_chore&.name || "?" %></strong> ·
+                <% end %>
+                archived <%= chore.archived_at.strftime("%b %-d, %Y %l:%M%P").squeeze(" ") %>
+              </div>
+            </div>
+            <%= form_with url: chore_routes_unarchive_path(chore), method: :post, local: true, class: "basic", data: { turbo: false } do %>
+              <button type="submit" class="primary">Unarchive</button>
+            <% end %>
+          </div>
+
+          <details style="margin-top:10px;">
+            <summary style="cursor:pointer; color:#8FB4FF;">Edit</summary>
+            <%= form_with url: chore_routes_item_path(chore), method: :patch, local: true, class: "basic", data: { turbo: false } do |f| %>
+              <div style="display:grid; grid-template-columns: max-content 1fr; gap:8px 12px; margin-top:10px; align-items:center;">
+                <label>Name</label>
+                <%= f.text_field :name, value: chore.name, name: "chore[name]" %>
+
+                <label>One-off</label>
+                <div>
+                  <%= f.check_box :one_off, { checked: chore.one_off?, name: "chore[one_off]" }, "1", "0" %>
+                  <span class="dim" style="font-size:12px;">Uncheck to make this a recurring chore (or recurring sub-chore).</span>
+                </div>
+
+                <label>Parent chore</label>
+                <select name="chore[parent_chore_id]">
+                  <option value="">— none (top-level) —</option>
+                  <% @possible_parents.each do |p| %>
+                    <% next if p.id == chore.id %>
+                    <option value="<%= p.id %>" <%= 'selected' if chore.parent_chore_id == p.id %>>
+                      <%= p.name %>
+                    </option>
+                  <% end %>
+                </select>
+
+                <label>Reward</label>
+                <%= f.number_field :reward_pebbles, value: chore.reward_pebbles, min: 0, name: "chore[reward_pebbles]", style: "max-width:100px;" %>
+              </div>
+              <div style="margin-top:10px; text-align:right;">
+                <button type="submit" class="primary">Save</button>
+              </div>
+            <% end %>
+          </details>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+</div>

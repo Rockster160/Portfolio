@@ -1,8 +1,8 @@
 class ChoresController < ApplicationController
   before_action :authorize_user_or_guest
   before_action :ensure_chore_household!, only: [:new, :create]
-  before_action :set_chore, only: [:show, :edit, :update, :destroy]
-  before_action :require_chore_manager!, only: [:create, :update, :destroy]
+  before_action :set_chore, only: [:show, :edit, :update, :destroy, :unarchive]
+  before_action :require_chore_manager!, only: [:create, :update, :destroy, :unarchive]
   before_action :assignable_users, only: [:index, :today, :balance, :history, :new]
   helper_method :assignable_users
 
@@ -450,7 +450,7 @@ class ChoresController < ApplicationController
         ChoreNotifier.chore_assigned!(@chore, actor: current_user)
       end
       respond_to do |format|
-        format.html { redirect_to chores_path }
+        format.html { redirect_back(fallback_location: chores_path) }
         format.json { render json: chore_response_payload(@chore) }
       end
     else
@@ -467,6 +467,27 @@ class ChoresController < ApplicationController
       format.html { redirect_to chores_path }
       format.json { render json: { archived_chore_id: @chore.id, server_ts: Time.current.iso8601(3) } }
     end
+  end
+
+  # Server-rendered admin view: list archived chores so they can be
+  # unarchived or edited. Intentionally NOT part of the PWA shell — no
+  # websockets, no cache, no service-worker registration; each visit
+  # loads fresh. Actions still flow through the standard controller
+  # paths so ChoreBroadcaster fanout reaches connected PWA clients.
+  def archived
+    @archived_chores = current_user.accessible_chores
+      .unscope(where: :archived_at)
+      .where.not(archived_at: nil)
+      .includes(:parent_chore)
+      .order(archived_at: :desc)
+    @possible_parents = current_user.accessible_chores
+      .where(parent_chore_id: nil, one_off: false)
+      .order(:name)
+  end
+
+  def unarchive
+    @chore.update!(archived_at: nil)
+    redirect_to chores_archived_path, notice: "Unarchived #{@chore.name}"
   end
 
   private
@@ -797,14 +818,9 @@ class ChoresController < ApplicationController
       permitted[:aliases] = csv.to_s.split(",").map(&:strip).compact_blank
     end
 
-    # Sub-chores must be one-offs (the model enforces it). When the user
-    # picks a Parent Chore in the Advanced section without flipping the
-    # One-off select, coerce here so the save succeeds. Empty/blank
-    # parent_chore_id means "not a sub-chore" — leave one_off alone.
     if permitted.key?(:parent_chore_id)
       raw_parent = permitted[:parent_chore_id].to_s.strip
       permitted[:parent_chore_id] = raw_parent.presence
-      permitted[:one_off] = true if permitted[:parent_chore_id].present?
     end
 
     if (hours = params.dig(:chore, :threshold_hours)).present?

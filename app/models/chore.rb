@@ -458,8 +458,6 @@ class Chore < ApplicationRecord
       return
     end
 
-    errors.add(:one_off, "sub-chores must be one-offs") unless one_off
-
     parent = parent_chore || Chore.find_by(id: parent_chore_id)
     if parent.nil?
       errors.add(:parent_chore_id, "does not exist")

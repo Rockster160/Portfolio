@@ -5,10 +5,9 @@ RSpec.describe "SubChore behavior" do
   let(:parent) { create(:chore, created_by_user: user, name: "Projects", reward_pebbles: 5, one_off: false) }
 
   describe "validations" do
-    it "requires one_off=true on sub-chores" do
+    it "allows one_off=false on sub-chores (recurring sub-checklist item)" do
       sub = build(:chore, created_by_user: user, parent_chore: parent, one_off: false)
-      expect(sub).not_to be_valid
-      expect(sub.errors[:one_off]).to be_present
+      expect(sub).to be_valid
     end
 
     it "rejects a parent that is itself a sub-chore (no chains)" do
