@@ -2,6 +2,10 @@
 // under `.byte-*` and paired with a scoped reset so app-wide button/
 // form cascades (see `forms.scss`) don't leak in and clobber the layout.
 
+// html/body lock down so iOS Safari can't scroll the document out from
+// under our fixed `.byte-app` when the keyboard opens (that's what makes
+// the header vanish above the visible viewport). All scrolling happens
+// inside `.byte-thread`, which is bounded by the app grid.
 html.html-ctr-byte,
 html.html-ctr-byte body {
   height: 100%;
@@ -10,6 +14,7 @@ html.html-ctr-byte body {
   padding: 0;
   background: #0E1930;
   color: #E8ECF6;
+  overflow: hidden;
   overscroll-behavior: none;
 }
 
@@ -329,7 +334,9 @@ html.html-ctr-byte body {
     scrollbar-width: none;              // Firefox
     &::-webkit-scrollbar { display: none; } // Chrome / Safari
 
-    font-size: 15px;
+    // iOS Safari zooms the whole page in when any focused input has a
+    // font-size < 16px. 16px is the minimum to prevent that zoom.
+    font-size: 16px;
     line-height: 1.35;
     box-shadow: none;
     transition: border-color 0.15s, box-shadow 0.15s;

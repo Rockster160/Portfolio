@@ -196,6 +196,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   input.addEventListener("input", autosize);
   autosize();
 
+  // iOS Safari < 17.4 doesn't honour `interactive-widget=resizes-content`,
+  // so 100dvh stays constant when the keyboard opens and the app slides
+  // behind it. visualViewport reports the real visible area — pin the app
+  // height to it and shove it up by the visual offset when needed.
+  if (window.visualViewport) {
+    const vv = window.visualViewport;
+    const applyViewport = () => {
+      app.style.height = vv.height + "px";
+      app.style.transform = `translateY(${vv.offsetTop}px)`;
+    };
+    vv.addEventListener("resize", applyViewport);
+    vv.addEventListener("scroll", applyViewport);
+    applyViewport();
+  }
+
   // ---------- realtime (MonitorChannel) ----------
 
   function setStatus(text, cls) {
