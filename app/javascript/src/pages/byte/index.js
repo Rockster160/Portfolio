@@ -121,10 +121,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       kind ? `byte-msg-kind-${kind}` : null,
     ].filter(Boolean).join(" ");
     const bodyEl = node.querySelector("[data-body]");
-    // Claude replies get markdown-lite rendering (fenced code, inline
-    // code, bold, italic). Everything else stays textContent so shell
-    // output / user sends never accidentally interpret characters.
-    if (kind === "claude") {
+    // Markdown-lite (fenced code, inline code, bold, italic) applies
+    // to messages produced by the handler that need formatting: Claude
+    // replies AND meta command responses (/help, /sessions, /pwd,
+    // /switch acknowledgements). Everything else stays textContent so
+    // shell output and user sends never accidentally interpret chars.
+    if (kind === "claude" || kind === "system") {
       bodyEl.innerHTML = renderMarkdown(message.body || "");
     } else {
       bodyEl.textContent = message.body || "";

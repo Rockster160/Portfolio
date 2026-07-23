@@ -427,22 +427,22 @@ html.html-ctr-byte body {
     .byte-msg-meta { color: rgba(199, 213, 238, 0.4); }
   }
 
-  // Claude replies — same shape as a normal inbound bubble, just a
-  // subtle accent on the left edge so it's visually distinguishable
-  // from human-sent inbound messages (there aren't any today, but the
-  // affordance is there for when there are). Also enables markdown-lite
-  // rendering inside the body (fenced code, inline code, bold, italic).
-  &.byte-msg-kind-claude {
-    border-left: 2px solid var(--bs-accent);
-    max-width: 92%; // give code blocks room
+  // Markdown-lite rendering container. Both Claude replies and system
+  // meta messages (/help, /sessions) render via renderMarkdown, so
+  // they share the same code-block + inline-code styling. Only
+  // difference: the accent border on Claude vs. subtle bg on system.
+  &.byte-msg-kind-claude,
+  &.byte-msg-kind-system {
+    max-width: 92%;
 
     .byte-msg-body {
-      // Body is now innerHTML — preserve author-intended line breaks
-      // via the <br> tags renderMarkdown inserts.
+      // Body is innerHTML — preserve author-intended line breaks via
+      // the <br> tags renderMarkdown inserts.
       white-space: normal;
     }
 
-    // Fenced code block — horizontally scrollable, monospace, distinct bg.
+    // Fenced code block — horizontally scrollable, monospace,
+    // distinct bg. Critical for /help + /sessions alignment.
     .byte-md-code {
       margin: 6px 0;
       padding: 8px 10px;
@@ -474,6 +474,12 @@ html.html-ctr-byte body {
       border-radius: 4px;
       word-break: break-all;
     }
+  }
+
+  // Claude gets a subtle left-edge accent to differentiate from system
+  // messages (which are just plain inbound bubbles otherwise).
+  &.byte-msg-kind-claude {
+    border-left: 2px solid var(--bs-accent);
   }
 
   .byte-msg-attachments {
