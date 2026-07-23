@@ -109,15 +109,87 @@ document.addEventListener("DOMContentLoaded", async () => {
   function paintMessageNode(node, message) {
     node.dataset.messageId = String(message.id);
     if (message?.metadata?.local_id) node.dataset.localId = String(message.metadata.local_id);
+    // `metadata.kind` lets the handler tag messages so the client can
+    // render them differently: shell output monospace, Claude replies
+    // normal, errors highlighted, etc. Unknown/absent kinds render
+    // with the default bubble style.
+    const kind = message?.metadata?.kind;
     node.className = [
       "byte-msg",
       `byte-msg-${message.direction}`,
       `byte-msg-${message.state}`,
-    ].join(" ");
-    node.querySelector("[data-body]").textContent = message.body || "";
+      kind ? `byte-msg-kind-${kind}` : null,
+    ].filter(Boolean).join(" ");
+    const bodyEl = node.querySelector("[data-body]");
+    // Claude replies get markdown-lite rendering (fenced code, inline
+    // code, bold, italic). Everything else stays textContent so shell
+    // output / user sends never accidentally interpret characters.
+    if (kind === "claude") {
+      bodyEl.innerHTML = renderMarkdown(message.body || "");
+    } else {
+      bodyEl.textContent = message.body || "";
+    }
     node.querySelector("[data-time]").textContent = formatTime(message.created_at);
     renderAttachments(node.querySelector("[data-attachments]"), message.attachments);
     node.querySelector("[data-state]").textContent = renderState(message);
+  }
+
+  // Minimal markdown → HTML for Claude replies. Handles the shapes that
+  // actually show up in chat: fenced code blocks (with optional lang),
+  // inline code, bold, italic, and line breaks. NO other constructs
+  // (links, images, headings, lists) — keeps the surface XSS-safe and
+  // the code small. If markdown grows unwieldy, swap in the `marked`
+  // library.
+  //
+  // Order matters: extract code first with sentinel placeholders so
+  // markdown patterns don't run against code content, then re-inject
+  // after HTML-escaping the code so `<`, `>`, `&` in code stays literal.
+  function renderMarkdown(raw) {
+    const stash = [];
+    let t = raw;
+
+    // Fenced code blocks ```lang\n...\n```
+    t = t.replace(/```([^\n`]*)\n?([\s\S]*?)```/g, (_m, lang, code) => {
+      const i = stash.push({ kind: "fence", lang: (lang || "").trim(), code }) - 1;
+      return `@FENCE@${i}@FENCE@`;
+    });
+    // Inline code `foo`
+    t = t.replace(/`([^`\n]+)`/g, (_m, code) => {
+      const i = stash.push({ kind: "inline", code }) - 1;
+      return `@INLINE@${i}@INLINE@`;
+    });
+
+    // Escape everything else
+    t = t
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    // Bold **text**
+    t = t.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+    // Italic *text* (must not be part of **)
+    t = t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+    // Line breaks
+    t = t.replace(/\n/g, "<br>");
+
+    // Reinject code stashes, escaping their contents
+    t = t.replace(/@FENCE@(\d+)@FENCE@/g, (_m, i) => {
+      const b = stash[Number(i)];
+      return `<pre class="byte-md-code"><code>${escapeHtml(b.code)}</code></pre>`;
+    });
+    t = t.replace(/@INLINE@(\d+)@INLINE@/g, (_m, i) => {
+      const b = stash[Number(i)];
+      return `<code class="byte-md-inline">${escapeHtml(b.code)}</code>`;
+    });
+
+    return t;
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
   }
 
   // Upsert a server-persisted message. Uses append-at-end for new nodes
