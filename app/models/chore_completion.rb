@@ -76,18 +76,20 @@ class ChoreCompletion < ApplicationRecord
   # didn't move) without re-querying the DB.
   def jil_attrs(action:, changes: nil)
     base = {
-      id:             id,
-      action:         action,
-      chore_id:       chore_id,
-      chore_name:     chore&.name,
-      sub_chore_id:   sub_chore_id,
-      sub_chore_name: sub_chore&.name,
-      paid_pebbles:   paid_pebbles,
-      payout_skipped: payout_skipped,
-      skipped_reason: skipped_reason,
-      day_key:        day_key&.iso8601,
-      completed_at:   completed_at&.iso8601(3),
-      metadata:       metadata || {},
+      id:                    id,
+      action:                action,
+      chore_id:              chore_id,
+      chore_name:            chore&.name,
+      sub_chore_id:          sub_chore_id,
+      sub_chore_name:        sub_chore&.name,
+      paid_pebbles:          paid_pebbles,
+      payout_skipped:        payout_skipped,
+      skipped_reason:        skipped_reason,
+      day_key:               day_key&.iso8601,
+      completed_at:          completed_at&.iso8601(3),
+      completed_by_user_id:  user_id,
+      completed_by_username: user&.username,
+      metadata:              metadata || {},
     }
     base[:changes] = changes if changes.present?
     base
@@ -98,7 +100,7 @@ class ChoreCompletion < ApplicationRecord
   def fire_jil_create_trigger
     return if anonymous
 
-    ::Jil.trigger(user, :chore_completion, with_jil_attrs(jil_attrs(action: :completed)))
+    fan_out_trigger(jil_attrs(action: :completed))
   end
 
   def fire_jil_update_trigger
@@ -108,13 +110,31 @@ class ChoreCompletion < ApplicationRecord
     return if saved_changes.blank?
     return if anonymous
 
-    ::Jil.trigger(user, :chore_completion, with_jil_attrs(jil_attrs(action: :edited, changes: saved_changes)))
+    fan_out_trigger(jil_attrs(action: :edited, changes: saved_changes))
   end
 
   def fire_jil_destroy_trigger
     return if anonymous
 
-    ::Jil.trigger(user, :chore_completion, with_jil_attrs(jil_attrs(action: :uncompleted)))
+    fan_out_trigger(jil_attrs(action: :uncompleted))
+  end
+
+  # Household-shared chores fire the trigger against every household
+  # member so listener tasks owned by any member fire — otherwise a
+  # completion by one member silently no-ops another member's
+  # automations (e.g. "remove list item on completion"). Personal
+  # chores stay scoped to the completing user.
+  def fan_out_trigger(attrs)
+    payload = with_jil_attrs(attrs)
+    trigger_target_users.each do |target|
+      ::Jil.trigger(target, :chore_completion, payload)
+    end
+  end
+
+  def trigger_target_users
+    return [user] unless chore.share_household?
+
+    User.where(chore_household_id: chore.chore_household_id).to_a
   end
 
 end
