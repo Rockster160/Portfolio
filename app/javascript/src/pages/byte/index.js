@@ -131,6 +131,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     paintMessageNode(node, message);
   }
 
+  // Bubble goes straight to the "in-progress" (pending) state — we
+  // fire the network POST immediately on send, so there's no benefit
+  // to a distinct queued visual. Merging them removes an intermediate
+  // state that made sends feel sluggish even though the transition
+  // itself was instant.
   function upsertQueuedMessage(entry) {
     let node = thread.querySelector(selectorForLocal(entry.local_id));
     if (!node) {
@@ -139,20 +144,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     node.dataset.localId = String(entry.local_id);
     node.removeAttribute("data-message-id");
-    node.className = "byte-msg byte-msg-outbound byte-msg-queued";
+    node.className = "byte-msg byte-msg-outbound byte-msg-pending";
     node.querySelector("[data-body]").textContent = entry.body || "";
-    node.querySelector("[data-time]").textContent = formatTime(new Date(entry.queued_at).toISOString());
+    node.querySelector("[data-time]").textContent = formatTime(new Date(entry.client_ts || entry.queued_at || Date.now()).toISOString());
     renderAttachments(node.querySelector("[data-attachments]"), []);
-    node.querySelector("[data-state]").textContent = "queued";
-  }
-
-  function markQueuedSending(local_id) {
-    const node = thread.querySelector(selectorForLocal(local_id));
-    if (!node) return;
-    node.classList.remove("byte-msg-queued", "byte-msg-failed");
-    node.classList.add("byte-msg-pending");
     node.querySelector("[data-state]").textContent = "…";
   }
+
+  // No-op now — the bubble already renders in pending state via
+  // upsertQueuedMessage. Kept as the hook target so api.js doesn't
+  // need to change its interface.
+  function markQueuedSending(_local_id) {}
 
   function markQueuedFailed(local_id, reason) {
     const node = thread.querySelector(selectorForLocal(local_id));
@@ -269,7 +271,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // haven't scrolled up). New inbound arrivals while scrolled up
   // increment the unread badge instead of forcing scroll.
   function receiveMessage(message) {
-    const wasAtBottom = atBottom;
+    // Measure atBottom FRESH — the cached flag lags scroll events by a
+    // frame, so a user gesture immediately before a message arrival
+    // could still be treated as "was at bottom" and force-scroll them.
+    const wasAtBottom = measureAtBottom();
     const isNew = !nodeForServerMessage(message);
     upsertMessage(message);
 
@@ -444,34 +449,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   // `height`. Only `resize` and `scroll` trigger updates, and both are
   // debounced to a single rAF so we never do more work per frame than
   // the compositor asked for.
-  if (window.visualViewport) {
-    const vv = window.visualViewport;
-    let raf = 0;
-    const apply = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        // --byte-vv-top is always applied; iOS may scroll the layout
-        // viewport up to bring the focused input into view.
-        document.documentElement.style.setProperty("--byte-vv-top", `${vv.offsetTop}px`);
-        // Only override height when the KEYBOARD is actually open.
-        // Otherwise vv.height reports a hair less than the true
-        // viewport (iOS reserves some pixels for system UI even when
-        // there's nothing to show), which leaves a big dead band under
-        // the composer. When the keyboard's closed, CSS 100dvh is
-        // exactly what we want.
-        const keyboardOpen = vv.height < window.innerHeight - 100;
-        if (keyboardOpen) {
-          document.documentElement.style.setProperty("--byte-vv-height", `${vv.height}px`);
-        } else {
-          document.documentElement.style.removeProperty("--byte-vv-height");
-        }
-      });
-    };
-    vv.addEventListener("resize", apply, { passive: true });
-    vv.addEventListener("scroll", apply, { passive: true });
-    apply();
-  }
+  // Keyboard behaviour: pure CSS via `100dvh` + `interactive-widget=
+  // resizes-content` in the viewport meta. iOS Safari 16.4+ shrinks
+  // both the layout viewport and dvh when the keyboard opens, so
+  // `position: fixed` at `top: 0` with `height: 100dvh` stays pinned
+  // to the visible area and the internal scroll continues to work.
+  //
+  // No JS visualViewport handler here — every attempt to compensate
+  // for iOS's keyboard timing has jittered the layout and blocked
+  // internal scroll. iOS < 16.4 users get a slightly imperfect
+  // keyboard experience; everyone else gets working scroll.
 
   // ---------- realtime + drain triggers ----------
 

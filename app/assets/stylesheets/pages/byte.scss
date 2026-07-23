@@ -87,23 +87,20 @@ html.html-ctr-byte body {
   --bs-danger: #F87171;
   --bs-pending: #94A3B8;
 
-  // App is pinned to the *visual* viewport via CSS custom properties fed
-  // by a visualViewport listener in JS (see byte/index.js). This is the
-  // only reliable way to keep iOS Safari's soft keyboard from dragging
-  // the header above the fold or leaving dead space below the composer.
-  //   --byte-vv-top   = viewport top offset (0 unless iOS scrolled us up)
-  //   --byte-vv-height = visible viewport height (shrinks when keyboard
-  //                      opens, minus any URL bar / safe area on top)
-  // Fallback to 100dvh keeps the CSS-only path working before JS runs.
+  // Pure CSS keyboard handling: iOS Safari 16.4+ shrinks `100dvh` when
+  // the soft keyboard opens (paired with `interactive-widget=resizes-
+  // content` in the viewport meta). Any JS-side compensation we've
+  // tried has caused jitter or blocked internal scroll — trusting the
+  // browser is the reliable path.
   position: fixed;
-  top: var(--byte-vv-top, 0);
+  top: 0;
   left: 0;
   right: 0;
-  height: var(--byte-vv-height, 100dvh);
-  // Non-prod env banner is fixed at top:0 h:10px z:1001 — shift the app down.
+  height: 100vh;
+  height: 100dvh;
   body:has(.env-banner) & {
-    top: calc(var(--byte-vv-top, 0px) + 10px);
-    height: calc(var(--byte-vv-height, 100dvh) - 10px);
+    top: 10px;
+    height: calc(100dvh - 10px);
   }
   display: grid;
   grid-template-rows: auto 1fr auto;
@@ -381,15 +378,10 @@ html.html-ctr-byte body {
     opacity: 0.7;
   }
 
-  // Queued = enqueued locally, not yet sent to the server (offline or
-  // send-in-progress). Distinct from :pending so the user can visually
-  // tell offline-queued from server-acknowledged-pending.
-  &.byte-msg-queued {
-    opacity: 0.75;
-    filter: saturate(0.6);
-    outline: 1px dashed rgba(255, 255, 255, 0.18);
-    outline-offset: -3px;
-  }
+  // Queued state kept as an alias of pending — the JS no longer sets it
+  // (bubbles go straight to pending on send), but any old cached DOM /
+  // localStorage entries still carrying the class render identically.
+  &.byte-msg-queued { opacity: 0.7; }
 
   &.byte-msg-failed {
     background: rgba(248, 113, 113, 0.18);

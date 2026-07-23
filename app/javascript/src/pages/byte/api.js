@@ -72,6 +72,12 @@ async function trySend(entry) {
   const doFetch = (token) => fetchWithTimeout(SEND_URL, {
     method: "POST",
     credentials: "same-origin",
+    // `keepalive` tells iOS Safari the request must complete even
+    // during touch/scroll activity or navigation. Without it, Safari
+    // will de-prioritise background fetches during active gestures —
+    // that's what caused the "20 messages sitting until you stopped
+    // sending" behaviour.
+    keepalive: true,
     headers: {
       "Content-Type": "application/json",
       Accept:         "application/json",

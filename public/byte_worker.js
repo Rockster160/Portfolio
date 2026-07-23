@@ -13,7 +13,7 @@
 // Cache name is versioned: bump CACHE on shipping a new shell so old
 // clients re-pull the HTML next time they're online.
 
-const CACHE = "byte-v3";
+const CACHE = "byte-v4";
 
 // Byte only has one shell: the root of byte.<host>. Extending this list
 // later (a settings screen, a per-thread view, etc.) is a matter of
