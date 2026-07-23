@@ -43,12 +43,23 @@
     // `.agenda-page` as the specific day the user is looking at, and
     // list_view rewrites it on client-side date nav. Reading it live
     // means a quick add without an explicit date lands on that day
-    // instead of today. Cal-month's `data-current-date` is a month
-    // anchor (YYYY-MM-01), not a selected day — skip that view so the
-    // 1st doesn't silently become the fallback for the whole month.
+    // instead of today. Two views need to be skipped:
+    //   * cal_month — `data-current-date` is a month anchor (YYYY-MM-01),
+    //     not a selected day; the 1st shouldn't silently become the
+    //     fallback for the whole month.
+    //   * cal_week (unpinned) — the stamp is a within-week anchor that
+    //     goes stale when the tab sits open across the 3am boundary. On
+    //     an unpinned view (`/agenda/grid`, no `?date=`), fall through
+    //     to `null` so the parser uses its own `now`. When pinned
+    //     (`?date=…`), the user explicitly picked that week, so honor it.
     function currentSelectedDateISO() {
       const root = document.querySelector(".agenda-page");
-      if (!root || root.classList.contains("agenda-cal-month-page")) return null;
+      if (!root) return null;
+      if (root.classList.contains("agenda-cal-month-page")) return null;
+      if (root.classList.contains("agenda-cal-week-page")) {
+        const params = new URLSearchParams(window.location.search);
+        if (!params.has("date")) return null;
+      }
       const iso = root.dataset?.currentDate || "";
       return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : null;
     }
