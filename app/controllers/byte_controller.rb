@@ -32,11 +32,18 @@ class ByteController < ApplicationController
     incoming_meta = (params[:metadata] || {}).to_unsafe_h rescue {}
     metadata.merge!(incoming_meta.symbolize_keys.except(:source, :local_id))
 
+    # Prefer the client-typed timestamp for `created_at` so a burst of
+    # rapid sends stays in the user's typing order even when the network
+    # delivers them to the server out of order. Fallback to Time.current
+    # for callers that don't send one (or garbage).
+    created = client_ts_from(params[:client_ts]) || Time.current
+
     message = current_user.byte_messages.create!(
-      direction: :outbound,
-      state:     :pending,
-      body:      body,
-      metadata:  metadata,
+      direction:  :outbound,
+      state:      :pending,
+      body:       body,
+      metadata:   metadata,
+      created_at: created,
     )
 
     broadcast(message)
@@ -99,6 +106,21 @@ class ByteController < ApplicationController
 
   def authorize_owner
     head :forbidden unless current_user&.me?
+  end
+
+  # Client sends `client_ts` as JS `Date.now()` — a millisecond epoch.
+  # Clamp to a sane range (within a day of now) so a bad clock or
+  # tampered client can't push messages far into the past or future.
+  def client_ts_from(raw)
+    ts = raw.to_i
+    return nil if ts <= 0
+
+    seconds = ts / 1000.0
+    parsed = Time.zone.at(seconds) rescue nil
+    return nil if parsed.nil?
+    return nil if parsed < 1.day.ago || parsed > 1.day.from_now
+
+    parsed
   end
 
   def broadcast(message)

@@ -10,6 +10,12 @@
   <%# carry this meta are cached as the Byte shell — a stray error page %>
   <%# or auth interstitial without it never poisons the SW cache. %>
   <meta name="byte-shell" content="ok">
+  <%# Deploy version. Changes only on server revisions, unlike the shell %>
+  <%# HTML itself which fluctuates every request via the dynamic bootstrap %>
+  <%# JSON. The SW compares THIS across revalidates to decide whether an %>
+  <%# update is genuinely available — otherwise the reload "!" would %>
+  <%# retrigger on every stale-while-revalidate cycle. %>
+  <meta name="byte-version" content="<%= COMMIT_SHA %>">
 <% end %>
 <%= content_for(:head_before_scripts) do %>
   <script>

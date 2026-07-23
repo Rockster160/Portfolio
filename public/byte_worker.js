@@ -13,7 +13,7 @@
 // Cache name is versioned: bump CACHE on shipping a new shell so old
 // clients re-pull the HTML next time they're online.
 
-const CACHE = "byte-v2";
+const CACHE = "byte-v3";
 
 // Byte only has one shell: the root of byte.<host>. Extending this list
 // later (a settings screen, a per-thread view, etc.) is a matter of
@@ -29,6 +29,18 @@ const SHELL_PATHS = ["/"];
 const SHELL_MARKER = '<meta name="byte-shell" content="ok">';
 function isValidShellBody(html) {
   return typeof html === "string" && html.indexOf(SHELL_MARKER) !== -1;
+}
+
+// Extract the deploy version stamped in every server-rendered shell:
+//   <meta name="byte-version" content="<COMMIT_SHA>">
+// Two versions that DIFFER = a real deploy landed and this cached page
+// is now outdated. Two versions that MATCH = server render is the same
+// build, even if the surrounding HTML differs (bootstrap JSON, timestamps).
+const VERSION_RE = /<meta\s+name=["']byte-version["']\s+content=["']([^"']+)["']/i;
+function extractShellVersion(html) {
+  if (typeof html !== "string") return null;
+  const m = html.match(VERSION_RE);
+  return m ? m[1] : null;
 }
 
 // Same-origin, precachable assets: built bundles, our own icons/manifest.
@@ -87,11 +99,10 @@ async function refreshAllShells() {
     SHELL_PATHS.map(async (p) => {
       try {
         // Read the current cached shell FIRST so we can tell "revalidated
-        // to the same content" (shell_synced) from "revalidated to something
-        // new" (shell_updated). The page uses the latter to light up the
-        // reload indicator.
+        // to the same build" (shell_synced) from "revalidated to a new
+        // deploy" (shell_updated).
         const priorResp = await cache.match(p);
-        const priorHtml = priorResp ? await priorResp.clone().text() : "";
+        const priorVersion = priorResp ? extractShellVersion(await priorResp.clone().text()) : null;
 
         const r = await fetch(p, {
           credentials: "same-origin",
@@ -114,12 +125,11 @@ async function refreshAllShells() {
           return;
         }
         await cache.put(p, r.clone());
-        // First-ever cache write counts as "synced" (nothing to compare
-        // against). Otherwise: same bytes → synced, different bytes →
-        // updated. Rails' content-hashed asset URLs mean any deploy that
-        // ships new JS/CSS changes the shell's <script>/<link> hrefs, so
-        // this reliably catches deploys the user should reload for.
-        if (priorHtml && priorHtml !== html) {
+        // Compare deploy versions, not raw HTML. The bootstrap JSON in
+        // the shell changes on every request; comparing versions makes
+        // shell_updated fire ONLY when a real deploy has landed.
+        const newVersion = extractShellVersion(html);
+        if (priorVersion && newVersion && priorVersion !== newVersion) {
           await broadcastToClients({ kind: "shell_updated", path: p });
         } else {
           await broadcastToClients({ kind: "shell_synced", path: p });
@@ -333,7 +343,11 @@ self.addEventListener("fetch", (evt) => {
 
         const revalidate = (async () => {
           try {
-            const priorHtml = cached ? await cached.clone().text() : "";
+            // Re-read the current cache entry at the top of revalidate so
+            // we compare against whatever's already in cache (which may
+            // have been updated by a prior in-flight revalidate).
+            const currentCached = await cache.match(url.pathname);
+            const priorVersion = currentCached ? extractShellVersion(await currentCached.clone().text()) : null;
             const fresh = await fetch(req, { cache: "no-store" });
             if (!fresh || !fresh.ok || fresh.type === "opaqueredirect") return;
             const clone = fresh.clone();
@@ -348,11 +362,8 @@ self.addEventListener("fetch", (evt) => {
               return;
             }
             await cache.put(url.pathname, fresh.clone());
-            // Same rationale as refreshAllShells: a genuine content change
-            // means the deployed shell is different from what the user is
-            // running — surface as `shell_updated` so the reload button
-            // can light up its "!" indicator.
-            if (priorHtml && priorHtml !== html) {
+            const newVersion = extractShellVersion(html);
+            if (priorVersion && newVersion && priorVersion !== newVersion) {
               await broadcastToClients({ kind: "shell_updated", path: url.pathname });
             } else {
               await broadcastToClients({ kind: "shell_synced", path: url.pathname });

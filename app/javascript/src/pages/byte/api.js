@@ -1,22 +1,25 @@
-// HTTP layer for the Byte page. Wraps outbound POSTs, handles CSRF
-// refresh on 401/422, and drives the outbound queue drain.
+// HTTP layer for the Byte page.
 //
-// Ordering: each queued entry retries INDEPENDENTLY — a transient
-// failure on one entry does not block later entries. Chat UX prefers
-// "message N gets through" over "strict N-then-M-then-O ordering" when
-// N is misbehaving.
+// Design: NO drain lock, NO ordering constraint. Every entry is fired
+// the moment it's added; each entry's own attempt tracks itself via
+// the `inFlight` Set to prevent duplicate POSTs. Simpler and lower
+// latency than the previous queue-lock architecture — the queue is
+// still there purely for OFFLINE durability (so nothing is lost across
+// reloads), not for coordinating in-flight work.
 
 import { enqueue, all, removeByLocalId, markAttempt } from "./queue";
 
 let SEND_URL = null;
 let CSRF_REFRESH_URL = "/byte/csrf";
 
-// Cap individual fetches so a hung request can't hold the `draining`
-// lock and block every subsequent send. This is the root cause of the
-// "pending for 20-30 seconds" the user was seeing: without a timeout,
-// fetch waits on the browser's default socket idle (often ~30s on iOS),
-// and every new send while a prior one is stuck sees `draining = true`
-// and no-ops until that timeout resolves.
+export function configure({ sendUrl, csrfRefreshUrl }) {
+  if (sendUrl) SEND_URL = sendUrl;
+  if (csrfRefreshUrl) CSRF_REFRESH_URL = csrfRefreshUrl;
+}
+
+// Bounded so a hung request can never wedge things. Every fetch aborts
+// at this deadline and surfaces as a transient failure — the entry
+// stays queued for the next drain trigger.
 const SEND_TIMEOUT_MS = 8000;
 const CSRF_TIMEOUT_MS = 4000;
 
@@ -26,21 +29,6 @@ function fetchWithTimeout(url, options = {}, timeoutMs = SEND_TIMEOUT_MS) {
   return fetch(url, { ...options, signal: controller.signal })
     .finally(() => clearTimeout(timer));
 }
-
-// Called once from index.js so we can resolve URLs from data-attributes
-// on the .byte-app element instead of hard-coding paths.
-export function configure({ sendUrl, csrfRefreshUrl }) {
-  if (sendUrl) SEND_URL = sendUrl;
-  if (csrfRefreshUrl) CSRF_REFRESH_URL = csrfRefreshUrl;
-}
-
-// No transient-failure cap. Queue-tracked entries retry indefinitely on
-// network / 5xx / auth-error until they succeed or the server explicitly
-// refuses with a permanent 4xx. This is the right shape for chat: a
-// message the user hit send on in an airport should still deliver when
-// they land, even if that's days later. The `attempts` counter is still
-// incremented (via markAttempt) for eventual exponential-backoff work
-// or debugging visibility, but nothing acts on it.
 
 function csrfMetaToken() {
   return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
@@ -68,14 +56,15 @@ async function safeJson(res) {
   catch (e) { return null; }
 }
 
-// Try a single POST for one entry. Return:
-//   { status: :ok, message }             — server accepted, response body
-//   { status: :transient, reason }       — retry later (network / 5xx / auth)
-//   { status: :permanent, reason, code}  — drop from queue (4xx that isn't auth)
 async function trySend(entry) {
   const payload = {
     local_id: entry.local_id,
     body:     entry.body,
+    // Client-side timestamp travels with the payload so the server can
+    // use it as the message's created_at. That way rapid sends stay in
+    // client-typed order even when the network delivers them to the
+    // server out of order.
+    client_ts: entry.client_ts,
     source:   entry.metadata?.source || "web",
     metadata: entry.metadata || {},
   };
@@ -100,31 +89,21 @@ async function trySend(entry) {
       if (fresh) res = await doFetch(fresh);
     }
 
-    if (res.ok) {
-      const message = await safeJson(res);
-      return { status: "ok", message };
-    }
-
-    if (res.status >= 500) {
-      return { status: "transient", reason: `http_${res.status}` };
-    }
-
-    if (res.status === 401 || res.status === 403) {
-      return { status: "transient", reason: "auth" };
-    }
-
+    if (res.ok) return { status: "ok", message: await safeJson(res) };
+    if (res.status >= 500) return { status: "transient", reason: `http_${res.status}` };
+    if (res.status === 401 || res.status === 403) return { status: "transient", reason: "auth" };
     return { status: "permanent", reason: `http_${res.status}`, code: res.status };
   } catch (e) {
     return { status: "transient", reason: "network" };
   }
 }
 
-// Which entries are currently in flight (either a fresh send or a
-// drainQueue attempt). `drainQueue` skips anything in this set so a
-// direct send + concurrent drain sweep can't double-POST the same entry.
+// Per-entry in-flight guard. Same entry can't have two concurrent POSTs
+// even if both `sendMessage` (direct-fire) and `drainQueue` (sweep) call
+// `attempt` on it at roughly the same time.
 const inFlight = new Set();
 
-async function processEntry(entry, hooks) {
+async function attempt(entry, hooks) {
   if (inFlight.has(entry.local_id)) return;
   inFlight.add(entry.local_id);
   try {
@@ -135,14 +114,10 @@ async function processEntry(entry, hooks) {
       removeByLocalId(entry.local_id);
       hooks.onSent?.(entry, result.message);
     } else if (result.status === "transient") {
-      // Entry stays in the queue and gets retried on the next drain
-      // trigger. Never dropped — the user hit send, they want it
-      // delivered whenever the network allows.
       markAttempt(entry.local_id);
       hooks.onTransientFail?.(entry, result.reason);
+      // Entry stays in queue; retried on next drainQueue trigger.
     } else {
-      // Permanent 4xx (not auth): the server explicitly refused this
-      // exact payload. Retrying won't fix it.
       removeByLocalId(entry.local_id);
       hooks.onPermanentFail?.(entry, result.reason, result.code);
     }
@@ -151,43 +126,20 @@ async function processEntry(entry, hooks) {
   }
 }
 
-// Enqueue for durability + fire IMMEDIATELY. The direct call skips the
-// drainQueue lock so the user's send never waits behind an older stuck
-// entry — that was the source of the 20-30s "pending" the user was
-// seeing. drainQueue still runs in parallel to sweep any older queued
-// items; the `inFlight` guard prevents double-POST.
+// Enqueue for offline durability + fire immediately. No lock, no wait.
+// The queue is there so a lost connection / closed tab preserves the
+// message, not to serialise sends.
 export function sendMessage(entry, hooks = {}) {
   enqueue(entry);
   hooks.onEnqueued?.(entry);
-  processEntry(entry, hooks);
-  drainQueue(hooks);
+  attempt(entry, hooks);
 }
 
-// One drain sweep in flight at a time. If a new send arrives mid-sweep,
-// the current sweep re-loops after finishing so nothing else stagnates
-// waiting for an external trigger.
-let draining = false;
-let redrainNeeded = false;
-
-export async function drainQueue(hooks = {}) {
-  if (draining) {
-    redrainNeeded = true;
-    return;
-  }
+// Sweep the queue — fires an `attempt` for each entry that isn't
+// already in flight. All attempts run in parallel. Called on `online`,
+// visibilitychange, MonitorChannel `connected`, and setInterval.
+export function drainQueue(hooks = {}) {
   if (!navigator.onLine) return;
-
-  draining = true;
-  try {
-    do {
-      redrainNeeded = false;
-      const entries = all();
-      for (const entry of entries) {
-        // Skip anything the direct-send path is already handling.
-        if (inFlight.has(entry.local_id)) continue;
-        await processEntry(entry, hooks);
-      }
-    } while (redrainNeeded);
-  } finally {
-    draining = false;
-  }
+  const entries = all();
+  for (const entry of entries) attempt(entry, hooks);
 }

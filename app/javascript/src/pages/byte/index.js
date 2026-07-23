@@ -259,18 +259,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (thread.scrollTop < LOAD_TRIGGER_PX) maybeLoadOlder();
   });
 
-  // Route incoming (server-broadcast) messages: outbound-user-sent from
-  // this device always scrolls; anything else respects atBottom.
-  function receiveMessage(message, { forceScroll = false } = {}) {
+  // Server-broadcast message arrived. Two scenarios:
+  //   (a) NEW node in the thread (a message we hadn't seen yet)
+  //   (b) UPDATE to an existing node (state change: pending → sent, etc.)
+  //
+  // Never scroll on updates — the message is already in place, moving
+  // the viewport would just yank the user around. Only scroll on new
+  // nodes AND only when the user is already at the bottom (i.e., they
+  // haven't scrolled up). New inbound arrivals while scrolled up
+  // increment the unread badge instead of forcing scroll.
+  function receiveMessage(message) {
     const wasAtBottom = atBottom;
-    const isMine = message.direction === "outbound";
+    const isNew = !nodeForServerMessage(message);
     upsertMessage(message);
 
-    if (forceScroll || isMine || wasAtBottom) {
-      // scrollToBottom already double-rAFs, so we can call it directly
-      // right after upsertMessage — no need to wrap in another rAF.
-      scrollToBottom(wasAtBottom ? "smooth" : "auto");
-    } else {
+    if (!isNew) return;
+
+    if (wasAtBottom) {
+      scrollToBottom("smooth");
+    } else if (message.direction === "inbound") {
       unreadCount += 1;
       updateJumpBtn();
     }
@@ -376,15 +383,21 @@ document.addEventListener("DOMContentLoaded", async () => {
       ? crypto.randomUUID()
       : `l-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-    const entry = { local_id, body, metadata: { source: "web", local_id } };
+    // Client-side timestamp travels with the message to the server as
+    // `created_at`. That's what preserves user-typed order even when
+    // rapid sends hit the server out of order due to network jitter.
+    const client_ts = Date.now();
 
-    // Fire-and-forget. `sendMessage` enqueues + kicks a drain synchronously;
-    // the drain itself runs async in the background so the composer never
-    // has to wait on network for the bubble to appear.
+    const entry = { local_id, body, client_ts, metadata: { source: "web", local_id, client_ts } };
+
+    // Fire-and-forget. `sendMessage` enqueues + fires the fetch
+    // synchronously so the bubble appears immediately.
     sendMessage(entry, {
       onEnqueued: (e) => {
         upsertQueuedMessage(e);
-        scrollToBottom("smooth"); // user just hit send — always scroll
+        // Instant scroll on user's own send — smooth stacks awkwardly
+        // when rapid sends fire multiple times per animation frame.
+        scrollToBottom("auto");
       },
       onSending: (e) => markQueuedSending(e.local_id),
       onSent: (e, message) => {
@@ -438,8 +451,21 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
-        document.documentElement.style.setProperty("--byte-vv-top",    `${vv.offsetTop}px`);
-        document.documentElement.style.setProperty("--byte-vv-height", `${vv.height}px`);
+        // --byte-vv-top is always applied; iOS may scroll the layout
+        // viewport up to bring the focused input into view.
+        document.documentElement.style.setProperty("--byte-vv-top", `${vv.offsetTop}px`);
+        // Only override height when the KEYBOARD is actually open.
+        // Otherwise vv.height reports a hair less than the true
+        // viewport (iOS reserves some pixels for system UI even when
+        // there's nothing to show), which leaves a big dead band under
+        // the composer. When the keyboard's closed, CSS 100dvh is
+        // exactly what we want.
+        const keyboardOpen = vv.height < window.innerHeight - 100;
+        if (keyboardOpen) {
+          document.documentElement.style.setProperty("--byte-vv-height", `${vv.height}px`);
+        } else {
+          document.documentElement.style.removeProperty("--byte-vv-height");
+        }
       });
     };
     vv.addEventListener("resize", apply, { passive: true });
@@ -551,12 +577,25 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function hardReload() {
-    // If a new SW is staged (waiting), tell it to activate now so the
-    // reload lands on the fresh cache instead of the old one.
+    // "Hard" in a PWA context = force-refresh from the network, not just
+    // reload the cached shell. Sequence:
+    //   1. If a new SW is staged, activate it now so the post-reload page
+    //      lands on the newer worker.
+    //   2. Purge every byte-* SW cache so the next request has to hit
+    //      the network (SW's fetch handler falls through to fetch on miss).
+    //   3. location.reload() — safe now that the cache is empty.
+    // Cache purge is skipped when offline: an offline user hitting reload
+    // with an empty cache would get a blank/503 page.
     try {
       const reg = await navigator.serviceWorker?.getRegistration("/");
       if (reg?.waiting) {
         reg.waiting.postMessage({ action: "skip_waiting" });
+      }
+      if (navigator.onLine && "caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(
+          keys.filter((k) => k.startsWith("byte-")).map((k) => caches.delete(k)),
+        );
       }
     } catch (_) {}
     location.reload();
