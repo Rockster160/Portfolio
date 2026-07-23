@@ -22,7 +22,6 @@ import {
   onShellSync,
   requestShellRefresh,
   checkForServiceWorkerUpdate,
-  hasWaitingServiceWorker,
 } from "./shell_sync";
 import {
   ensureByteServiceWorker,
@@ -421,12 +420,32 @@ document.addEventListener("DOMContentLoaded", async () => {
   input.addEventListener("input", autosize);
   autosize();
 
-  // Keyboard behaviour is CSS-only now: `100dvh` shrinks with the visual
-  // viewport on iOS 16.4+ and `interactive-widget=resizes-content` in the
-  // page viewport meta covers Android. The old visualViewport transform
-  // fought Safari's own layout adjustments (URL bar showing/hiding), which
-  // manifested as header jitter, composer displacement, and content
-  // dropping a few pixels off the bottom on focus.
+  // Viewport pin via CSS custom properties.
+  //
+  // iOS Safari's `100dvh` alone doesn't fully solve the keyboard case:
+  // when the layout viewport gets scrolled to bring the focused input
+  // into view, a `position: fixed; top: 0` element ends up above the
+  // visible area — that's what dragged the header off-screen. The old
+  // JS approach used `transform` which caused visible jitter; this one
+  // sets two CSS custom properties bound in the SCSS to `top` and
+  // `height`. Only `resize` and `scroll` trigger updates, and both are
+  // debounced to a single rAF so we never do more work per frame than
+  // the compositor asked for.
+  if (window.visualViewport) {
+    const vv = window.visualViewport;
+    let raf = 0;
+    const apply = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        document.documentElement.style.setProperty("--byte-vv-top",    `${vv.offsetTop}px`);
+        document.documentElement.style.setProperty("--byte-vv-height", `${vv.height}px`);
+      });
+    };
+    vv.addEventListener("resize", apply, { passive: true });
+    vv.addEventListener("scroll", apply, { passive: true });
+    apply();
+  }
 
   // ---------- realtime + drain triggers ----------
 
@@ -558,13 +577,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // If a fresh SW has already been installed and is waiting when we
-  // boot, treat it as an update available immediately.
-  if (await hasWaitingServiceWorker()) setUpdateAvailable(true);
-
-  // A completely new SW taking over the tab is another form of "new
-  // version available" — happens when the SW file itself changed.
+  // controllerchange fires on the FIRST-EVER SW registration too
+  // (null → new controller). That's not an "update", it's the initial
+  // claim. Track whether we already had a controller at page load and
+  // only surface subsequent controller swaps as updates.
+  let hadInitialController = !!navigator.serviceWorker?.controller;
   navigator.serviceWorker?.addEventListener("controllerchange", () => {
+    if (!hadInitialController) {
+      hadInitialController = true;
+      return;
+    }
     setUpdateAvailable(true);
   });
 

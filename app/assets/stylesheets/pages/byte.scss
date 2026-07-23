@@ -87,18 +87,24 @@ html.html-ctr-byte body {
   --bs-danger: #F87171;
   --bs-pending: #94A3B8;
 
-  // `dvh` = dynamic viewport height. Shrinks when the soft keyboard opens
-  // on iOS Safari 16+ / Chrome 108+, so the composer stays visible above
-  // the keyboard instead of being covered by it. `100vh` (the fallback)
-  // stays constant and would leave the composer behind the keyboard.
+  // App is pinned to the *visual* viewport via CSS custom properties fed
+  // by a visualViewport listener in JS (see byte/index.js). This is the
+  // only reliable way to keep iOS Safari's soft keyboard from dragging
+  // the header above the fold or leaving dead space below the composer.
+  //   --byte-vv-top   = viewport top offset (0 unless iOS scrolled us up)
+  //   --byte-vv-height = visible viewport height (shrinks when keyboard
+  //                      opens, minus any URL bar / safe area on top)
+  // Fallback to 100dvh keeps the CSS-only path working before JS runs.
   position: fixed;
-  top: 0;
+  top: var(--byte-vv-top, 0);
   left: 0;
   right: 0;
-  height: 100vh;
-  height: 100dvh;
+  height: var(--byte-vv-height, 100dvh);
   // Non-prod env banner is fixed at top:0 h:10px z:1001 — shift the app down.
-  body:has(.env-banner) & { top: 10px; height: calc(100dvh - 10px); }
+  body:has(.env-banner) & {
+    top: calc(var(--byte-vv-top, 0px) + 10px);
+    height: calc(var(--byte-vv-height, 100dvh) - 10px);
+  }
   display: grid;
   grid-template-rows: auto 1fr auto;
   background: radial-gradient(1200px 700px at 20% -10%, #14284F 0%, transparent 60%),
@@ -106,7 +112,8 @@ html.html-ctr-byte body {
               var(--bs-bg);
   color: var(--bs-text);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
-  padding-bottom: env(safe-area-inset-bottom);
+  // Bottom safe-area lives on the composer only — putting it here too
+  // stacks the inset twice, leaving a big dark strip under the composer.
 }
 
 .byte-header {
@@ -199,26 +206,27 @@ html.html-ctr-byte body {
 
     &:hover { background: rgba(255, 255, 255, 0.05); color: var(--bs-text); }
 
+    // Update-available state: red tint on the icon itself + a small "!"
+    // in the corner. No background pill / border — the icon has to stay
+    // recognisably a reload icon.
     &.has-update {
-      color: var(--bs-accent-strong);
+      color: var(--bs-danger);
 
       &::after {
         content: "!";
         position: absolute;
-        top: 0;
-        right: 0;
-        min-width: 14px;
-        height: 14px;
-        padding: 0 4px;
-        background: var(--bs-danger);
-        color: white;
-        font-weight: 700;
-        font-size: 9px;
-        line-height: 14px;
-        text-align: center;
-        border-radius: 999px;
-        border: 2px solid var(--bs-panel);
-        box-sizing: content-box;
+        top: 2px;
+        right: 6px;
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1;
+        color: var(--bs-danger);
+        pointer-events: none;
+        // Subtle halo so the "!" reads against the icon's own strokes.
+        text-shadow:
+          0 0 3px var(--bs-panel),
+          0 0 3px var(--bs-panel),
+          0 0 3px var(--bs-panel);
       }
     }
   }
