@@ -1,7 +1,7 @@
 class Users::SessionsController < ApplicationController
   skip_before_action :verify_authenticity_token
   skip_before_action :show_guest_banner
-  before_action :unauthorize_user, :set_invitation_token, except: [:destroy],
+  before_action :unauthorize_user, :set_invitation_token, except: [:destroy, :become],
     unless: :guest_account?
   before_action :authorize_user_or_guest, only: [:destroy]
 
@@ -27,6 +27,14 @@ class Users::SessionsController < ApplicationController
   def destroy
     sign_out
     redirect_to login_path
+  end
+
+  def become
+    return head(:forbidden) unless current_user&.admin?
+
+    target = User.find(params[:id])
+    sign_in(target)
+    redirect_to(params[:return_to].presence || root_path, notice: "Now viewing as #{target.username || target.id}")
   end
 
   private

@@ -41,4 +41,31 @@ RSpec.describe MonitorChannel, type: :channel do
       end
     end
   end
+
+  describe "whisper page auto-refresh on subscribe" do
+    let(:eve) { FactoryBot.create(:user) }
+
+    it "kicks a whisper-durations refresh when the client subscribes from /whisper" do
+      stub_connection(current_user: eve)
+      allow(::Jil).to receive(:trigger)
+
+      subscribe(page: "/whisper")
+
+      expect(::Jil).to have_received(:trigger).with(
+        User.me,
+        :monitor,
+        hash_including(channel: "whisper-durations", refresh: true),
+        hash_including(auth: :userpass, auth_id: eve.id)
+      )
+    end
+
+    it "does not kick a whisper refresh when the page is not /whisper" do
+      stub_connection(current_user: eve)
+      allow(::Jil).to receive(:trigger)
+
+      subscribe(page: "/lists")
+
+      expect(::Jil).not_to have_received(:trigger)
+    end
+  end
 end

@@ -11,6 +11,8 @@ class MonitorChannel < ApplicationCable::Channel
   def subscribed
     stream_for current_user
 
+    kick_whisper_refresh if params[:page].to_s.start_with?("/whisper")
+
     return unless current_user.me?
 
     last_sha = ::DataStorage[:last_sha]
@@ -52,6 +54,14 @@ class MonitorChannel < ApplicationCable::Channel
   end
 
   private
+
+  def kick_whisper_refresh
+    ::Jil.trigger(
+      User.me, :monitor,
+      { channel: "whisper-durations", refresh: true },
+      auth: :userpass, auth_id: current_user.id
+    )
+  end
 
   # Quick-actions widgets only know their `id`; the Task listener fast-path
   # for `monitor::<name>` matches on `trigger_data[:channel]`. Default it

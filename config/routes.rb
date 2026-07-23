@@ -91,6 +91,7 @@ Rails.application.routes.draw do
     post :login,        controller: :sessions,      action: :create
     get :logout,        controller: :sessions,      action: :destroy
     delete :logout,     controller: :sessions,      action: :destroy
+    get "become/:id",   controller: :sessions,      action: :become, as: :become_user
     get :register,      controller: :registrations, action: :new
     post :register,     controller: :registrations, action: :create
     patch :register,    controller: :registrations, action: :create
@@ -108,6 +109,7 @@ Rails.application.routes.draw do
   get  "/chores/balance"        => "chores#balance",        as: :chores_balance
   get  "/chores/balance_data"   => "chores#balance_data",   as: :chores_balance_data
   get  "/chores/history"        => "chores#history",        as: :chores_history
+  get  "/chores/archived"       => "chores#archived",       as: :chores_archived
   get  "/chores/recent_history" => "chores#recent_history", as: :chores_recent_history
   get  "/chores/csrf"           => "chores#csrf",           as: :chores_csrf
   get  "/chores/sync"    => "chores#sync",    as: :chores_sync
@@ -122,6 +124,7 @@ Rails.application.routes.draw do
     patch  "/items/:id"  => "chores#update",         as: :item
     put    "/items/:id"  => "chores#update"
     delete "/items/:id"  => "chores#destroy"
+    post   "/items/:id/unarchive" => "chores#unarchive", as: :unarchive
     post   "/items/:chore_id/completion" => "chore_completions#create", as: :complete_item
     delete "/items/:chore_id/completion" => "chore_completions#destroy"
     post   "/items/:chore_id/anonymous_completion" => "chore_completions#anonymous_completion", as: :anonymous_complete_item
