@@ -46,7 +46,7 @@ const resyncData = JSON.stringify({ action: "resync", id: channelId, channel: ch
 let baseline = null;
 let attempt = 0;
 let ws = null;
-let reconnectTicker = null;
+let reconnectAt = null;
 const startedAt = Date.now();
 
 // First few retries use a fixed short delay — a dropped socket almost
@@ -94,7 +94,13 @@ function status(dot, text) {
 
 function redraw() {
   if (!isTTY) return;
-  process.stderr.write(`\r\x1b[2K${currentStatus.dot} ${currentStatus.text}`);
+  let { dot, text } = currentStatus;
+  if (reconnectAt !== null) {
+    const remaining = Math.max(1, Math.ceil((reconnectAt - Date.now()) / 1000));
+    text = greyText(`Reconnecting in ${remaining}s...`);
+  }
+  const elapsed = greyText(` (${formatElapsed(Date.now() - startedAt)})`);
+  process.stderr.write(`\r\x1b[2K${dot} ${text}${elapsed}`);
 }
 
 function finalize(dot, text) {
@@ -110,32 +116,18 @@ function scheduleReconnect() {
   );
   log(`reconnecting in ${delay}ms (attempt ${attempt})`);
 
-  let remaining = Math.ceil(delay / 1000);
-  const tick = () => {
-    status(c.red + "●" + c.reset, greyText(`Reconnecting in ${remaining}s...`));
-  };
-  tick();
-  clearInterval(reconnectTicker);
-  reconnectTicker = setInterval(() => {
-    remaining--;
-    if (remaining <= 0) {
-      clearInterval(reconnectTicker);
-      reconnectTicker = null;
-      return;
-    }
-    tick();
-  }, 1000);
+  reconnectAt = Date.now() + delay;
+  currentStatus = { dot: c.red + "●" + c.reset, text: "" };
+  redraw();
 
   setTimeout(() => {
-    clearInterval(reconnectTicker);
-    reconnectTicker = null;
+    reconnectAt = null;
     connect();
   }, delay);
 }
 
 function terminal(kind, data) {
   log(`${kind} sha=${data.sha || "?"} ${data.message || ""}`);
-  clearInterval(reconnectTicker);
   try { ws.close(); } catch {}
   const elapsed = greyText(` (${formatElapsed(Date.now() - startedAt)})`);
   if (kind === "success") {
@@ -207,6 +199,7 @@ function connect() {
 }
 
 redraw();
+setInterval(redraw, 1000).unref();
 
 process.on("SIGINT",  () => process.exit(130));
 process.on("SIGTERM", () => process.exit(143));
