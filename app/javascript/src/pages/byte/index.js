@@ -166,6 +166,28 @@ document.addEventListener("DOMContentLoaded", async () => {
     return tpl.content.firstElementChild.cloneNode(true);
   }
 
+  // Per-node timers that expire the "live" class after a period of no
+  // updates. If a wait/stream goes silent for >15s, we assume it's
+  // stalled and stop the animation — a fresh WS event will re-arm it.
+  // Declared BEFORE paintMessageNode so a hydrate-time call doesn't hit
+  // a TDZ error on the const.
+  const liveExpireTimers = new WeakMap();
+  const LIVE_EXPIRE_MS   = 15000;
+  function markLive(node) {
+    node.classList.add("byte-msg-live");
+    const prev = liveExpireTimers.get(node);
+    if (prev) clearTimeout(prev);
+    liveExpireTimers.set(node, setTimeout(() => {
+      node.classList.remove("byte-msg-live");
+      liveExpireTimers.delete(node);
+    }, LIVE_EXPIRE_MS));
+  }
+  function unmarkLive(node) {
+    node.classList.remove("byte-msg-live");
+    const t = liveExpireTimers.get(node);
+    if (t) { clearTimeout(t); liveExpireTimers.delete(node); }
+  }
+
   function paintMessageNode(node, message, opts = {}) {
     const live = opts.live === true;
     node.dataset.messageId = String(message.id);
@@ -642,26 +664,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     paintMessageNode(node, message, opts);
     reorderActiveTail();
-  }
-
-  // Per-node timers that expire the "live" class after a period of no
-  // updates. If a wait/stream goes silent for >15s, we assume it's
-  // stalled and stop the animation — a fresh WS event will re-arm it.
-  const liveExpireTimers = new WeakMap();
-  const LIVE_EXPIRE_MS   = 15000;
-  function markLive(node) {
-    node.classList.add("byte-msg-live");
-    const prev = liveExpireTimers.get(node);
-    if (prev) clearTimeout(prev);
-    liveExpireTimers.set(node, setTimeout(() => {
-      node.classList.remove("byte-msg-live");
-      liveExpireTimers.delete(node);
-    }, LIVE_EXPIRE_MS));
-  }
-  function unmarkLive(node) {
-    node.classList.remove("byte-msg-live");
-    const t = liveExpireTimers.get(node);
-    if (t) { clearTimeout(t); liveExpireTimers.delete(node); }
   }
 
   // Reorder the thread so that any "active" message (streaming response
