@@ -166,16 +166,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     return tpl.content.firstElementChild.cloneNode(true);
   }
 
-  function paintMessageNode(node, message) {
+  function paintMessageNode(node, message, opts = {}) {
+    const live = opts.live === true;
     node.dataset.messageId = String(message.id);
     if (message?.metadata?.local_id) node.dataset.localId = String(message.metadata.local_id);
     const kind = message?.metadata?.kind;
+    // Preserve the byte-msg-live class across className rewrite — CSS
+    // gates the cursor / pulse animations on it, and losing it here
+    // would visually stop the animation for one paint cycle every WS
+    // update on a live-streaming bubble.
+    const wasLive = node.classList.contains("byte-msg-live");
     node.className = [
       "byte-msg",
       `byte-msg-${message.direction}`,
       `byte-msg-${message.state}`,
       kind ? `byte-msg-kind-${kind}` : null,
     ].filter(Boolean).join(" ");
+    if (wasLive) node.classList.add("byte-msg-live");
     const bodyEl = node.querySelector("[data-body]");
 
     // Kind-dispatch for body content rendering.
@@ -249,6 +256,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else {
       delete node.dataset.activeKind;
     }
+
+    // Liveness gate for the cursor / pulse animations. Only paints that
+    // came from an actual fresh WS event mark the node live (with a
+    // 15s auto-expiry). Hydrate/history paints intentionally UNmark it
+    // so a stale state:"streaming" from a crashed process doesn't spin
+    // forever after a reload.
+    if (message.state === "streaming" && live) {
+      markLive(node);
+    } else if (message.state !== "streaming") {
+      unmarkLive(node);
+    }
+    // Intentional gap: if state === "streaming" and !live, we do NOT
+    // call unmarkLive — we just don't refresh the timer. If the node
+    // WAS live from a prior WS update, it stays live until the timer
+    // expires naturally.
   }
 
   function renderThoughts(container, thoughts, state) {
@@ -606,14 +628,40 @@ document.addEventListener("DOMContentLoaded", async () => {
       .replace(/>/g, "&gt;");
   }
 
-  function upsertMessage(message) {
+  // `live` distinguishes a paint driven by a fresh WS event (true) from
+  // one driven by cache/history hydration (false). Only live paints get
+  // to run the "actively streaming" cursor/pulse animations — on reload,
+  // a message that the server says is state:"streaming" might be a
+  // months-old orphan from a crashed process, and forcing it to spin
+  // forever is the runaway-thinking-process bug the user hit.
+  function upsertMessage(message, opts = {}) {
     let node = nodeForServerMessage(message);
     if (!node) {
       node = newMessageNode();
       thread.appendChild(node);
     }
-    paintMessageNode(node, message);
+    paintMessageNode(node, message, opts);
     reorderActiveTail();
+  }
+
+  // Per-node timers that expire the "live" class after a period of no
+  // updates. If a wait/stream goes silent for >15s, we assume it's
+  // stalled and stop the animation — a fresh WS event will re-arm it.
+  const liveExpireTimers = new WeakMap();
+  const LIVE_EXPIRE_MS   = 15000;
+  function markLive(node) {
+    node.classList.add("byte-msg-live");
+    const prev = liveExpireTimers.get(node);
+    if (prev) clearTimeout(prev);
+    liveExpireTimers.set(node, setTimeout(() => {
+      node.classList.remove("byte-msg-live");
+      liveExpireTimers.delete(node);
+    }, LIVE_EXPIRE_MS));
+  }
+  function unmarkLive(node) {
+    node.classList.remove("byte-msg-live");
+    const t = liveExpireTimers.get(node);
+    if (t) { clearTimeout(t); liveExpireTimers.delete(node); }
   }
 
   // Reorder the thread so that any "active" message (streaming response
@@ -844,7 +892,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   function receiveMessage(message) {
     const wasAtBottom = measureAtBottom();
     const isNew = !nodeForServerMessage(message);
-    upsertMessage(message);
+    upsertMessage(message, { live: true });
     if (!isNew) return;
     if (wasAtBottom) {
       scrollToBottom("smooth");
@@ -1028,7 +1076,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         messages = targetConv === currentConversationId
           ? upsertPersisted(currentConversationId, messages, message)
           : upsertPersisted(targetConv, loadMessages(targetConv), message);
-        if (targetConv === currentConversationId) upsertMessage(message);
+        if (targetConv === currentConversationId) upsertMessage(message, { live: true });
         convoManager.bumpActivity(targetConv, message.created_at);
       },
       onTransientFail: () => {},
@@ -1168,7 +1216,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const targetConv = e.conversation_id || currentConversationId;
         if (targetConv === currentConversationId) {
           messages = upsertPersisted(currentConversationId, messages, message);
-          upsertMessage(message);
+          upsertMessage(message, { live: true });
         } else {
           upsertPersisted(targetConv, loadMessages(targetConv), message);
         }

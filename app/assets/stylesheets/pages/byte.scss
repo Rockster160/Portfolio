@@ -477,8 +477,11 @@ html.html-ctr-byte body {
   }
 
   // Streaming state — subtle blinking cursor at the end of the body so the
-  // user can see the handler is still writing.
-  &.byte-msg-streaming {
+  // user can see the handler is still writing. GATED on .byte-msg-live so
+  // stale streaming placeholders from crashed / disconnected sessions
+  // don't spin forever after a reload — the animation only runs while
+  // fresh WS updates are actually arriving (see markLive/unmarkLive JS).
+  &.byte-msg-streaming.byte-msg-live {
     .byte-msg-body::after {
       content: "▍";
       display: inline-block;
@@ -491,11 +494,11 @@ html.html-ctr-byte body {
   // Watch-in-progress bubble — the response-cursor above is too
   // "typing-y" for a long-running background task (deploy, spec suite,
   // etc.). Swap for a slower pulsing dot so it reads as "still going"
-  // without pretending words are being typed. The rule below WINS over
-  // the streaming rule via more-specific selector (.byte-msg-watching).
+  // without pretending words are being typed. Also gated on
+  // .byte-msg-live — a reload shouldn't restart a phantom pulse.
   &.byte-msg-watching {
     background: linear-gradient(135deg, #223655 0%, #2A3B5F 100%);
-    .byte-msg-body::after {
+    &.byte-msg-live .byte-msg-body::after {
       content: "";
       display: inline-block;
       width: 6px;
