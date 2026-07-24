@@ -915,26 +915,29 @@ document.addEventListener("DOMContentLoaded", async () => {
   input.addEventListener("input", autosize);
   autosize();
 
-  // Viewport pin — the definitive source of "what's visible" is
-  // `visualViewport.height` on every resize. Both problem modes we've
-  // seen:
-  //   (a) composer sitting too high with a black strip below — CSS var
-  //       stuck at a stale-shrunk value from an earlier keyboard event
-  //   (b) composer hidden behind the keyboard on focus — the fallback
-  //       `100dvh` reporting more than what iOS actually shows
-  // …are cured by ALWAYS binding `--byte-vv-height` to `vv.height`
-  // unconditionally, with no heuristics. `resize` fires on keyboard
-  // open/close, URL bar toggle, and orientation change; `scroll` covers
-  // iOS's layout-viewport-scroll when it drags a focused input into view.
+  // Viewport pin — height is handled ENTIRELY by CSS `100dvh` plus the
+  // `interactive-widget=resizes-content` viewport meta. iOS Safari
+  // standalone PWAs shrink `dvh` natively when the software keyboard
+  // opens; Android does the same. Every previous attempt to JS-set the
+  // height from `visualViewport.height` produced a stale/undersized
+  // pin in some environment (URL bar false-positive, standalone PWA
+  // misreport, PostMessage timing race). Trust the platform.
+  //
+  // Belt-and-suspenders: actively CLEAR any lingering `--byte-vv-height`
+  // that a stale service-worker-cached bundle might have set previously.
+  document.documentElement.style.removeProperty("--byte-vv-height");
+
   if (window.visualViewport) {
     const vv = window.visualViewport;
     let rafId = 0;
 
-    const apply = () => {
+    // Keep the layout-viewport-scroll compensator only — this pushes the
+    // fixed app back into view when iOS scrolls up to reveal a focused
+    // input near the bottom. No height side-effect.
+    const applyTop = () => {
       if (rafId) return;
       rafId = requestAnimationFrame(() => {
         rafId = 0;
-        document.documentElement.style.setProperty("--byte-vv-height", `${vv.height}px`);
         if (vv.offsetTop > 0) {
           document.documentElement.style.setProperty("--byte-vv-top", `${vv.offsetTop}px`);
         } else {
@@ -943,9 +946,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       });
     };
 
-    vv.addEventListener("resize", apply, { passive: true });
-    vv.addEventListener("scroll", apply, { passive: true });
-    apply();
+    vv.addEventListener("resize", applyTop, { passive: true });
+    vv.addEventListener("scroll", applyTop, { passive: true });
+    applyTop();
   }
 
   // ---------- realtime + drain triggers ----------

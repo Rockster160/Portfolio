@@ -105,23 +105,26 @@ html.html-ctr-byte body {
   // CSS custom properties inherited from .ctr-byte so drawer/modals
   // outside .byte-app also resolve them.
 
-  // Two additional CSS custom properties fed by a visualViewport listener in
-  // byte/index.js:
-  //   --byte-vv-top     iOS layout-viewport-scroll offset (usually 0;
-  //                     becomes positive when iOS scrolls up to bring
-  //                     the focused input into view)
-  //   --byte-vv-height  visible viewport height when the keyboard is
-  //                     open (fallback: 100dvh, which iOS 16.4+ shrinks
-  //                     natively via interactive-widget=resizes-content)
+  // Height is `100dvh` — no JS involvement. iOS 16.4+ and Android both
+  // shrink dvh natively when the software keyboard opens (paired with
+  // `interactive-widget=resizes-content` in the viewport meta), so we
+  // never need to compute the keyboard-open height in Ruby-like JS.
+  // Previous JS-based `--byte-vv-height` overrides all produced some
+  // undersized-pin regression (URL bar false-positive, standalone PWA
+  // misreport, etc.) — this is the version that works everywhere.
+  //
+  // `--byte-vv-top` still comes from JS: it compensates for iOS's
+  // layout-viewport SCROLL (which shoves fixed elements above the
+  // visible area when an input near the bottom is focused).
   position: fixed;
   top: var(--byte-vv-top, 0);
   left: 0;
   right: 0;
   height: 100vh;
-  height: var(--byte-vv-height, 100dvh);
+  height: 100dvh;
   body:has(.env-banner) & {
     top: calc(var(--byte-vv-top, 0px) + 10px);
-    height: calc(var(--byte-vv-height, 100dvh) - 10px);
+    height: calc(100dvh - 10px);
   }
   display: grid;
   // header · pwd-bar · thread · composer.
