@@ -568,6 +568,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       thread.appendChild(node);
     }
     paintMessageNode(node, message);
+    // A message that's currently STREAMING (Claude typing / shell output
+    // rolling in) should always render at the bottom of the thread —
+    // otherwise it's easily out-drawn by an action-request card that
+    // spawned mid-turn. Move to end on every paint. Once the message
+    // finalises (state != streaming), the server bumps its created_at
+    // to now (touch_created_at) so it stays at the bottom naturally,
+    // and we stop forcibly moving it.
+    if (message.state === "streaming" && node.parentElement === thread && node !== thread.lastElementChild) {
+      thread.appendChild(node);
+    }
   }
 
   function upsertQueuedMessage(entry) {
