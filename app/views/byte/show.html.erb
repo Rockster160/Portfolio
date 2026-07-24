@@ -153,6 +153,17 @@
     </div>
     <button type="button" class="byte-new-convo" data-byte-new-convo>+ New conversation</button>
     <ul class="byte-convo-list" data-byte-convo-list></ul>
+    <%# Build fingerprint pinned to the bottom of the drawer so you can %>
+    <%# eyeball whether a "hard reload" actually landed a fresh shell. %>
+    <%# `shell` = COMMIT_SHA of the deployed HTML at page-render time; %>
+    <%# `sw` = version reported by the currently-active service worker %>
+    <%# (may lag behind if the SW cached an older shell). Both should %>
+    <%# match on a real fresh load. %>
+    <footer class="byte-drawer-version" data-byte-version-footer>
+      <div><span class="k">shell</span> <span class="v" data-byte-version-shell><%= COMMIT_SHA[0, 7] %></span></div>
+      <div><span class="k">sw</span> <span class="v" data-byte-version-sw>…</span></div>
+      <div><span class="k">built</span> <span class="v"><%= File.exist?(Rails.root.join("app/assets/builds/index.js")) ? File.mtime(Rails.root.join("app/assets/builds/index.js")).strftime("%m-%d %H:%M") : "?" %></span></div>
+    </footer>
   </aside>
   <div class="byte-drawer-backdrop" data-byte-drawer-backdrop aria-hidden="true"></div>
 

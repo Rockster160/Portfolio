@@ -1153,6 +1153,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   reloadBtn?.addEventListener("click", hardReload);
 
+  // Populate the "sw" version footer in the drawer. Asks the active
+  // service worker for its version; the SW replies via a broadcast
+  // (kind: "sw_version") which lands in the onShellSync handler below.
+  async function requestSwVersion() {
+    try {
+      const reg = await navigator.serviceWorker?.getRegistration("/");
+      const sw  = reg?.active;
+      const el  = document.querySelector("[data-byte-version-sw]");
+      if (!sw) { if (el) el.textContent = "(none)"; return; }
+      sw.postMessage({ action: "get_version" });
+    } catch (_) {}
+  }
+  requestSwVersion();
+
   onShellSync((data) => {
     if (data.kind === "shell_synced") {
       setSyncBadge("", "ok");
@@ -1160,6 +1174,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       setSyncBadge("sync failed", "failed");
     } else if (data.kind === "shell_updated") {
       setUpdateAvailable(true);
+    } else if (data.kind === "sw_version") {
+      const el = document.querySelector("[data-byte-version-sw]");
+      if (el) el.textContent = (data.cache || "?").replace(/^byte-/, "");
     }
   });
 

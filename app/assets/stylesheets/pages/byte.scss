@@ -116,15 +116,23 @@ html.html-ctr-byte body {
   // `--byte-vv-top` still comes from JS: it compensates for iOS's
   // layout-viewport SCROLL (which shoves fixed elements above the
   // visible area when an input near the bottom is focused).
+  // Fill the fixed containing block with `top:0; bottom:0` instead of
+  // computing a height. This has to work across:
+  //   * iOS Safari (standalone PWA + in-browser)
+  //   * Android Chrome
+  //   * Desktop Safari/Chrome/Firefox
+  // and `100dvh` misreports on some iOS configurations, leaving the app
+  // shorter than the viewport (composer floats mid-screen). Using the
+  // `bottom` edge means the browser sizes us to whatever the viewport
+  // actually is right now — no unit conversion, no calc, no vh/dvh/svh
+  // guesswork.
   position: fixed;
   top: var(--byte-vv-top, 0);
   left: 0;
   right: 0;
-  height: 100vh;
-  height: 100dvh;
+  bottom: 0;
   body:has(.env-banner) & {
     top: calc(var(--byte-vv-top, 0px) + 10px);
-    height: calc(100dvh - 10px);
   }
   display: grid;
   // header · pwd-bar · thread · composer.
@@ -1507,4 +1515,36 @@ dialog.byte-modal {
 .byte-action-question-options .byte-action-btn {
   min-width: 0;
   flex: 0 1 auto;
+}
+
+// Version fingerprint pinned to the bottom of the drawer. Shows
+// server-rendered shell SHA + active SW cache tag so a hard reload can
+// be verified visually.
+.byte-drawer-version {
+  margin-top: auto;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--bs-border);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  color: var(--bs-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  line-height: 1.4;
+
+  .k { display: inline-block; width: 40px; opacity: 0.55; }
+  .v { color: var(--bs-text); }
+}
+
+// Modal dialog needs to stay INSIDE the visible viewport on iOS. The
+// default centering + max-height:85vh works on desktop but iOS PWA can
+// place the dialog behind the keyboard area or clip it at the safe-
+// area top. Fix: cap max-height to a smaller value AND respect safe
+// areas top/bottom.
+.ctr-byte dialog.byte-modal {
+  // SassC can't `max()` across unit types; fall back to plain calcs. env()
+  // is 0 on non-safe-area devices, so `+40px` gives a min margin either way.
+  max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 40px);
+  margin-top:    calc(env(safe-area-inset-top) + 20px);
+  margin-bottom: calc(env(safe-area-inset-bottom) + 20px);
 }
