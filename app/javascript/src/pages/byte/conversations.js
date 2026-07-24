@@ -301,6 +301,24 @@ export class ConversationManager {
           sessionWrap.hidden = true;
         }
       }
+
+      // "watching N" chip when the Mac has active WatchStreamer streams
+      // for this conversation. Silent when zero.
+      let watchChip = document.querySelector("[data-byte-pwd-watching]");
+      if (!watchChip) {
+        watchChip = document.createElement("span");
+        watchChip.className = "byte-pwd-watching";
+        watchChip.setAttribute("data-byte-pwd-watching", "");
+        watchChip.hidden = true;
+        this.pwdBar.appendChild(watchChip);
+      }
+      const watching = Number(convo.metadata && convo.metadata.watching_count) || 0;
+      if (watching > 0) {
+        watchChip.textContent = `👁 watching ${watching}`;
+        watchChip.hidden = false;
+      } else {
+        watchChip.hidden = true;
+      }
     }
 
     if (!this.list) return;

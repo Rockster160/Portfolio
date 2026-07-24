@@ -120,6 +120,10 @@
     </article>
   </template>
 
+  <%# Slash-command autocomplete popover. Positioned above the composer, %>
+  <%# shown when the input's first char is `/`. JS fills / hides it. %>
+  <div class="byte-slash-popover" data-byte-slash-popover hidden role="listbox" aria-label="Slash commands"></div>
+
   <form class="byte-composer" data-byte-composer autocomplete="off" data-mode="<%= @conversation.mode %>">
     <%# Single mode-adaptive avatar to the left of the input: %>
     <%#   Claude  → Byte image %>

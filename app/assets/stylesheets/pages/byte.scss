@@ -488,6 +488,26 @@ html.html-ctr-byte body {
     }
   }
 
+  // Watch-in-progress bubble — the response-cursor above is too
+  // "typing-y" for a long-running background task (deploy, spec suite,
+  // etc.). Swap for a slower pulsing dot so it reads as "still going"
+  // without pretending words are being typed. The rule below WINS over
+  // the streaming rule via more-specific selector (.byte-msg-watching).
+  &.byte-msg-watching {
+    background: linear-gradient(135deg, #223655 0%, #2A3B5F 100%);
+    .byte-msg-body::after {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      margin-left: 8px;
+      border-radius: 50%;
+      background: var(--bs-accent);
+      vertical-align: middle;
+      animation: byte-watch-pulse 1.4s ease-in-out infinite;
+    }
+  }
+
   .byte-msg-body { white-space: pre-wrap; }
 
   // Shell command output — flip the whole bubble to monospace with
@@ -719,6 +739,74 @@ html.html-ctr-byte body {
 // beats the app-wide reset selector `.ctr-byte .byte-app textarea` (0,2,1)
 // on textarea styling. Without this scope, the reset's transparent background
 // would win and the input would look see-through.
+// Slash-command autocomplete popover. Sits above the composer as its own
+// flex item so it doesn't have to worry about z-index / overlap with the
+// keyboard on iOS. Max-height + scroll so the full command list fits on
+// short screens without pushing the composer up.
+.byte-app .byte-slash-popover {
+  flex: 0 0 auto;
+  max-height: 40vh;
+  overflow-y: auto;
+  background: rgba(11, 21, 36, 0.96);
+  border-top: 1px solid var(--bs-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 6px 0;
+  &[hidden] { display: none; }
+
+  .byte-slash-empty {
+    padding: 12px 16px;
+    color: var(--bs-muted);
+    font-size: 13px;
+    font-style: italic;
+  }
+
+  .byte-slash-row {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    align-items: baseline;
+    gap: 10px;
+    width: 100%;
+    padding: 8px calc(env(safe-area-inset-right) + 16px) 8px calc(env(safe-area-inset-left) + 16px);
+    background: transparent !important;
+    border: none !important;
+    color: var(--bs-text) !important;
+    text-align: left;
+    cursor: pointer;
+    font-size: 14px !important;
+    font-weight: 400 !important;
+    font-family: inherit;
+    // Neutralise the global button cascade's :active { top: 1px } and its
+    // gradient background — we handle both explicitly here.
+    &:active { position: static !important; top: auto !important; }
+    &:hover { background: rgba(255, 255, 255, 0.04) !important; }
+
+    .byte-slash-name {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--bs-accent);
+    }
+    .byte-slash-args {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--bs-muted);
+      font-size: 12px;
+    }
+    .byte-slash-desc {
+      color: var(--bs-muted);
+      font-size: 12px;
+      justify-self: end;
+      text-align: right;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .byte-slash-row-active {
+    background: rgba(63, 160, 255, 0.14) !important;
+    box-shadow: inset 2px 0 0 var(--bs-accent);
+  }
+}
+
 .byte-app .byte-composer {
   flex: 0 0 auto;
   display: flex;
@@ -798,6 +886,11 @@ html.html-ctr-byte body {
 @keyframes byte-cursor {
   0%, 50%   { opacity: 0.7; }
   51%, 100% { opacity: 0; }
+}
+
+@keyframes byte-watch-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.1); }
 }
 
 // ---------------------------------------------------------------------------
@@ -1326,6 +1419,21 @@ dialog.byte-modal {
     &[hidden] { display: none; }
   }
   .byte-pwd-sep { color: var(--bs-muted); opacity: 0.5; }
+
+  .byte-pwd-watching {
+    display: inline-flex;
+    align-items: center;
+    margin-left: auto;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: rgba(63, 160, 255, 0.14);
+    color: var(--bs-accent);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    flex: 0 0 auto;
+    &[hidden] { display: none; }
+  }
 }
 
 // ---------------------------------------------------------------------------

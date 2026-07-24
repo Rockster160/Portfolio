@@ -43,6 +43,7 @@ import {
   unregisterByteNotifications,
 } from "./push";
 import { ConversationManager } from "./conversations";
+import { setupSlashAutocomplete } from "./slash_commands";
 
 document.addEventListener("DOMContentLoaded", async () => {
   const app = document.querySelector(".byte-app");
@@ -199,8 +200,22 @@ document.addEventListener("DOMContentLoaded", async () => {
       bodyEl.textContent = message.body || "";
     } else if (kind === "action-request") {
       renderActionRequest(bodyEl, message);
+    } else if (kind === "watch") {
+      // Watch bubbles carry a `wait_label` while running, then a plain
+      // markdown completion body once done. Render markdown either way.
+      bodyEl.innerHTML = renderMarkdown(message.body || "");
     } else {
       bodyEl.textContent = message.body || "";
+    }
+
+    // Watch messages that are still running get a subtle animated dot
+    // next to their label so the user can see the task is live, not
+    // stuck. Once state flips to delivered/failed, the class comes off.
+    const waitLabel = message?.metadata?.wait_label;
+    if (kind === "watch" && message.state === "streaming" && waitLabel) {
+      node.classList.add("byte-msg-watching");
+    } else {
+      node.classList.remove("byte-msg-watching");
     }
 
     // Time / attachments / state apply to every kind — used to live inside
@@ -1041,6 +1056,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     refetchHistory();
     scrollToBottom("auto");
   }
+
+  // Slash autocomplete has to bind BEFORE the composer's Enter-to-send
+  // listener so it can `stopImmediatePropagation` when it consumes Enter
+  // to complete a command (otherwise the completed verb gets sent as a
+  // message before the user has typed the args).
+  setupSlashAutocomplete({
+    input,
+    popover: app.querySelector("[data-byte-slash-popover]"),
+    autosize: () => autosize(),
+  });
 
   composer.addEventListener("submit", (e) => {
     e.preventDefault();
