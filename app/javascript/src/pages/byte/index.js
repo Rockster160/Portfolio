@@ -1122,8 +1122,33 @@ document.addEventListener("DOMContentLoaded", async () => {
     handleSend(input.value);
   });
 
+  // Two-part Enter → send. Historically the single keydown handler used
+  // `!e.isComposing` as an IME guard, but iOS's predictive-text state
+  // marks compositions inconsistently — sometimes an Enter press comes
+  // through with isComposing:true and our handler no-ops, letting the
+  // textarea insert a newline instead of sending. Result: intermittent
+  // "sometimes it sends, sometimes it makes a new line" experience.
+  //
+  // Fix: keep the keydown handler (fast path for physical keyboards
+  // where Shift+Enter should insert a newline), AND add a `beforeinput`
+  // backstop that catches the iOS software-keyboard case where keydown
+  // Enter didn't reach us. `insertLineBreak` is fired reliably on all
+  // platforms for the "user pressed the Return key" intent — intercept
+  // that and submit instead.
   input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend(input.value);
+    }
+  });
+
+  input.addEventListener("beforeinput", (e) => {
+    // Only care about the Return key. `insertLineBreak` fires for
+    // Enter presses on iOS software keyboards (where keydown Enter
+    // sometimes doesn't reach us cleanly) and desktop with
+    // enterkeyhint="send". If a genuine multi-line paste happens,
+    // inputType is "insertFromPaste" — untouched.
+    if (e.inputType === "insertLineBreak") {
       e.preventDefault();
       handleSend(input.value);
     }

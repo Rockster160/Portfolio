@@ -31,6 +31,9 @@ const COMMANDS = [
   { name: "wait",     description: "Kick off a background task; ping when done",       args: "<preset|cmd>" },
   { name: "waits",    description: "List running waits" },
 
+  // Buddy mode
+  { name: "tools",    description: "Buddy tool access (on default | off | list)",     args: "[spec]" },
+
   // Conversation
   { name: "rename",   description: "Rename this conversation",                         args: "<new name>" },
   { name: "archive",  description: "Archive this conversation" },
