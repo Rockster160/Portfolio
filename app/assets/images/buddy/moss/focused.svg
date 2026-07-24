@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="200" height="200">
+  <defs>
+    <radialGradient id="body_moss_focused" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#4FCF7C" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#1A3A2A" stop-opacity="1"/>
+    </radialGradient>
+  </defs>
+  <circle cx="50" cy="55" r="40" fill="url(#body_moss_focused)" stroke="#1A3A2A" stroke-width="1.5"/>
+  <circle cx="40" cy="45" r="3" fill="#fff"/>
+  <circle cx="60" cy="45" r="3" fill="#fff"/>
+  <path d="M42,62 L58,62" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/>
+</svg>

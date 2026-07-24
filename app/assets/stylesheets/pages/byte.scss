@@ -1804,3 +1804,134 @@ dialog.byte-modal {
   transition: opacity 140ms ease;
 }
 .byte-toast.byte-toast-visible { opacity: 1; }
+
+// -------- Buddy hero + Buddy proposal checklist ---------------------------
+// Hero is the "Tamagotchi" area that only appears on :buddy conversations.
+// Character up top with expression + a slim row of quick-action chips.
+// Shrinks when the composer has focus so the message list + character
+// both stay visible when the keyboard opens.
+
+.byte-buddy-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 12px 8px;
+  min-height: 33vh;
+  max-height: 50vh;
+  transition: min-height 220ms ease, max-height 220ms ease, padding 220ms ease;
+
+  --buddy-primary: #0F2C5C;
+  --buddy-accent:  #3FA0FF;
+  --buddy-danger:  #F26B6B;
+
+  &[data-buddy-theme="moss"] {
+    --buddy-primary: #1A3A2A;
+    --buddy-accent:  #4FCF7C;
+    --buddy-danger:  #E88A5C;
+  }
+
+  &[hidden] { display: none; }
+}
+
+// Shrink on composer focus (keyboard open on mobile). :has isn't in the
+// oldest safaris, but every iOS 16.4+ / Chrome 105+ supports it. The
+// non-:has fallback is that the hero stays big and the messages just
+// scroll — acceptable.
+.byte-app:has([data-byte-input]:focus) .byte-buddy-hero {
+  min-height: 16vh;
+  max-height: 20vh;
+  padding: 6px 12px 4px;
+}
+
+.byte-buddy-char {
+  width: 42%;
+  aspect-ratio: 1;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  animation: buddy-idle 4.2s ease-in-out infinite;
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.35));
+}
+
+// Character asset selection per theme + expression. Placeholder SVG per
+// slot for v1; swap in illustrated art without touching the layout.
+$expressions: happy thinking focused encouraging celebrating;
+@each $expr in $expressions {
+  .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$expr}"] .byte-buddy-char {
+    background-image: image-url("buddy/byte/#{$expr}.svg");
+  }
+  .byte-buddy-hero[data-buddy-theme="moss"][data-buddy-expression="#{$expr}"] .byte-buddy-char {
+    background-image: image-url("buddy/moss/#{$expr}.svg");
+  }
+}
+
+@keyframes buddy-idle {
+  0%, 100% { transform: translateY(0)    scale(1); }
+  50%      { transform: translateY(-4px) scale(1.01); }
+}
+
+.byte-buddy-quick-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+
+  button {
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--buddy-accent);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 100ms ease;
+
+    &:hover  { background: rgba(255, 255, 255, 0.14); }
+    &:active { background: rgba(255, 255, 255, 0.20); position: static !important; top: 0 !important; }
+  }
+}
+
+// -------- Generic multi-select action rows (used by Buddy proposals) -----
+.byte-msg-multi-select {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.byte-msg-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 13.5px;
+  cursor: pointer;
+
+  input[type="checkbox"] { flex-shrink: 0; }
+
+  .byte-msg-action-label { flex: 1; }
+  .byte-msg-action-glyph { opacity: 0.7; }
+  .byte-msg-action-error { font-size: 11.5px; color: #F26B6B; }
+
+  &[data-status="executed"]  { opacity: 0.7; }
+  &[data-status="cancelled"] { opacity: 0.4; text-decoration: line-through; }
+  &[data-status="failed"]    { color: #F26B6B; }
+  &[data-status="partial"]   { color: #E8A85C; }
+}
+.byte-msg-multi-select-submit {
+  align-self: flex-end;
+  margin-top: 4px;
+  padding: 5px 12px;
+  background: rgba(63, 160, 255, 0.15);
+  color: #E7EEFB;
+  border: 1px solid rgba(63, 160, 255, 0.35);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+
+  &:disabled { opacity: 0.5; cursor: default; }
+}

@@ -288,10 +288,28 @@ class WebhooksController < ApplicationController
     )
     message.files.attach(files) if files.any?
 
+    buddy_process_reply(user, conversation, message) if conversation.buddy?
+
     byte_broadcast(user, message)
     byte_notify(user, message)
 
     render json: message.as_wire, status: :ok
+  end
+
+  # For :buddy-mode conversations, extract [[propose: ...]] markers from
+  # the reply body, strip them from what the user sees, and attach a
+  # ByteAction (multi_select: true) with one row per proposal. All done
+  # in-place on the same message so the checklist renders under Buddy's
+  # words rather than as a separate bubble.
+  private def buddy_process_reply(user, _conversation, message)
+    parsed = Buddy::MarkerParser.extract(message.body)
+    return if parsed[:markers].empty?
+
+    message.update!(body: parsed[:display_text]) if parsed[:display_text] != message.body
+    Buddy::ProposalBuilder.create(user: user, byte_message: message, markers: parsed[:markers])
+    Buddy::ExpressionState.transition!(user, :proposals_awaiting)
+  rescue => e
+    Rails.logger.warn("[Buddy] reply-processing failed: #{e.class}: #{e.message}")
   end
 
   def byte_update

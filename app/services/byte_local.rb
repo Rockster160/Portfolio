@@ -46,14 +46,26 @@ module ByteLocal
   def deliver(message, conversation: nil)
     uri = URI.join(base_url, "/byte/incoming")
     req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
-    req.body = JSON.generate({
+
+    payload = {
       message_id:      message.id,
       user_id:         message.user_id,
       body:            message.body,
       metadata:        message.metadata,
       conversation_id: conversation&.id || message.byte_conversation_id,
       conversation:    conversation ? conversation_payload(conversation) : nil,
-    })
+    }
+
+    # Buddy-mode turns need Portfolio-side persona + tool descriptions +
+    # today's context. Persona/tools regenerate each turn so a new tool
+    # file is usable without redeploying the Mac.
+    if conversation&.buddy? && defined?(Buddy::Personality)
+      context = Buddy::Context.build(message.user)
+      payload[:buddy_context] = context
+      payload[:buddy_system_prompt_extras] = Buddy::Personality.for(message.user, context_block: context)
+    end
+
+    req.body = JSON.generate(payload)
 
     Net::HTTP.start(uri.hostname, uri.port,
       use_ssl: uri.scheme == "https", open_timeout: TIMEOUT_SECONDS, read_timeout: TIMEOUT_SECONDS,

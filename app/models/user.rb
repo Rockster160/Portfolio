@@ -3,6 +3,8 @@
 # Table name: users
 #
 #  id                 :integer          not null, primary key
+#  buddy_expression   :string           default("happy"), not null
+#  buddy_theme        :string           default("byte"), not null
 #  chore_notify_prefs :jsonb            not null
 #  dark_mode          :boolean
 #  email              :string

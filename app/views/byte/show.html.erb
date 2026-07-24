@@ -77,6 +77,26 @@
     </button>
   </header>
 
+  <%# Buddy hero — only visible when the active conversation is mode=:buddy. %>
+  <%# Character up top with expression state + a small row of quick-prompt %>
+  <%# chips that just pre-fill the composer with a Buddy-directed message. %>
+  <%# Shrinks via CSS when the composer has focus so the keyboard doesn't %>
+  <%# eat both the messages AND the character. %>
+  <section class="byte-buddy-hero"
+           data-buddy-hero
+           data-buddy-theme="<%= current_user.buddy_theme %>"
+           data-buddy-expression="<%= current_user.buddy_expression %>"
+           data-buddy-active="<%= @conversation.mode == 'buddy' ? 'true' : 'false' %>"
+           <%= (@conversation.mode == 'buddy' ? '' : 'hidden').html_safe %>>
+    <div class="byte-buddy-char" aria-label="<%= current_user.buddy_theme == 'moss' ? 'Moss' : 'Byte' %>"></div>
+    <nav class="byte-buddy-quick-actions" data-buddy-quick-actions>
+      <button type="button" data-buddy-quickfill="What's on for me today?">Today</button>
+      <button type="button" data-buddy-quickfill="Can we check in? How are things?">Check-in</button>
+      <button type="button" data-buddy-quickfill="Log this: ">Log</button>
+      <button type="button" data-buddy-quickfill="What chores are up right now?">Chores</button>
+    </nav>
+  </section>
+
   <%# Slim strip glued to the bottom of the header showing the effective %>
   <%# cwd (defaults to Portfolio) and the currently-adopted Claude session %>
   <%# name, if any. Visually part of the header block — subtle secondary %>

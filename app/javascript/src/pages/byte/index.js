@@ -44,6 +44,8 @@ import {
 } from "./push";
 import { ConversationManager } from "./conversations";
 import { setupSlashAutocomplete } from "./slash_commands";
+import { renderMultiSelect } from "./message_actions/multi_select";
+import { initBuddyHero } from "./buddy/hero";
 
 document.addEventListener("DOMContentLoaded", async () => {
   const app = document.querySelector(".byte-app");
@@ -82,6 +84,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   const notifyBtn = app.querySelector("[data-byte-notify]");
   const jumpBtn   = app.querySelector("[data-byte-jump]");
   const jumpCount = app.querySelector("[data-byte-jump-count]");
+  const heroEl    = app.querySelector("[data-buddy-hero]");
+  // Assigned right after handleSend is defined (below) — declared here so
+  // handleSwitch (which can fire before the hero is mounted on the first
+  // render) doesn't hit a TDZ error.
+  let buddyHero = null;
   const tpl       = app.querySelector("[data-byte-message-tpl]");
 
   const sendUrl           = app.dataset.sendUrl;
@@ -229,6 +236,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       bodyEl.textContent = message.body || "";
     } else if (kind === "action-request") {
       renderActionRequest(bodyEl, message);
+    } else if (kind === "buddy_reply") {
+      // Buddy's spoken reply is markdown-rendered above the proposal
+      // checklist. renderBuddyChecklist is called below (unconditional
+      // check on metadata.tool_name) so it works for both fresh and
+      // decided states.
+      bodyEl.innerHTML = renderMarkdown(message.body || "");
     } else if (kind === "watch") {
       // Watch bubbles carry a `wait_label` while running, then a plain
       // markdown completion body once done. Render markdown either way.
@@ -245,6 +258,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       node.classList.add("byte-msg-watching");
     } else {
       node.classList.remove("byte-msg-watching");
+    }
+
+    // If this message carries a Buddy proposal checklist, mount (or
+    // re-mount) the multi-select renderer below the body. Idempotent —
+    // each paint clears the container and re-renders from message.metadata.
+    if (message?.metadata?.tool_name === "buddy_proposals") {
+      let checklistEl = node.querySelector("[data-buddy-checklist]");
+      if (!checklistEl) {
+        checklistEl = document.createElement("div");
+        checklistEl.setAttribute("data-buddy-checklist", "");
+        bodyEl.parentNode.insertBefore(checklistEl, bodyEl.nextSibling);
+      }
+      renderMultiSelect(checklistEl, message);
     }
 
     // Time / attachments / state apply to every kind — used to live inside
@@ -933,6 +959,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (nextId === currentConversationId) return;
     currentConversationId = nextId;
     hydrateForConversation(nextId, []);
+    // Notify the Buddy hero so it shows/hides based on new mode.
+    const convo = convoManager.currentConversation();
+    buddyHero?.onModeChange(convo?.mode);
   }
 
   function migrateLegacy(defaultConvId) {
@@ -1095,6 +1124,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     autosize();
     sendMessageTo(currentConversationId, body);
   }
+
+  // Mount the Buddy hero once the composer + input handles exist. The
+  // hero only shows itself on :buddy conversations; its quick-action
+  // chips pre-fill the composer and (for complete prompts) submit.
+  buddyHero = initBuddyHero({
+    hero:        heroEl,
+    input:       input,
+    sendHandler: handleSend,
+  });
+  // Sync initial visibility to the currently-active conversation.
+  buddyHero?.onModeChange(convoManager.currentConversation()?.mode);
 
   function clearLocalState() {
     clearAllPersisted();
@@ -1285,6 +1325,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!data) return;
       if (data.kind === "conversation") {
         convoManager.applyBroadcast(data);
+        return;
+      }
+      if (data.kind === "buddy_expression") {
+        buddyHero?.setExpression(data.expression);
         return;
       }
       if (data.kind === "message" && data.message) {

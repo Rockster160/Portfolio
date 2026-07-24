@@ -185,6 +185,12 @@ class ByteController < ApplicationController
       })
     end
 
+    # Buddy's checkbox actions are grouped proposals; hand off to the
+    # executor which runs each checked tool and posts a receipt bubble.
+    if action.tool_name == "buddy_proposals"
+      Buddy::ProposalExecutorJob.perform_later(action.id)
+    end
+
     # Fire-and-forget notification to the Mac so a blocked hook can
     # unblock. Silent on failure — the hook will time out and deny.
     Thread.new {

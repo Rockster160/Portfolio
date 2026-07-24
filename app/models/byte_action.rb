@@ -19,20 +19,6 @@
 #  request_id           :string           not null
 #  user_id              :bigint           not null
 #
-# Structured request/response record for Byte's interactive prompts.
-# Backs three UX flows through a single record shape:
-#
-#   * permission — Claude Code PreToolUse hook is asking "may I run this
-#                  Bash/Write/Edit?"; buttons: Allow, Deny.
-#   * plan       — Claude's ExitPlanMode tool; buttons: Approve, Deny;
-#                  tool_input carries the plan body for prominent render.
-#   * question   — AskUserQuestion (SDK / interactive tool); buttons list
-#                  the options; multi_select flags multi-answer questions.
-#   * jarvis     — Jarvis wants a clarification ("which room?"); buttons
-#                  are the choices; tap fires a new Jarvis command.
-#
-# The lifecycle is uniform across all four: `pending` → `decided` (user
-# tapped) OR `expired` (timeout) OR `aborted` (system killed it).
 class ByteAction < ApplicationRecord
   belongs_to :user
   belongs_to :byte_conversation
