@@ -330,6 +330,34 @@ class WebhooksController < ApplicationController
     render json: message.as_wire, status: :ok
   end
 
+  # Mac → Rails conversation metadata update (e.g. cwd changed after cd,
+  # claude_session_id changed after /adopt). Secret-auth like the other
+  # byte webhooks; performs a MERGE (not replace) so multi-writer keys
+  # coexist.
+  def byte_update_conversation
+    return head :unauthorized unless byte_authorized?
+
+    convo = ByteConversation.find_by(id: params[:id])
+    return head :not_found if convo.nil?
+
+    if params[:metadata].present?
+      incoming = byte_metadata(params).stringify_keys
+      convo.update!(metadata: (convo.metadata || {}).merge(incoming))
+    end
+
+    if params[:name].present?
+      convo.update!(name: params[:name].to_s.strip)
+    end
+
+    MonitorChannel.broadcast_to(convo.user, {
+      id:      :byte,
+      channel: :byte,
+      data:    { kind: :conversation, event: :updated, conversation: convo.as_wire },
+    })
+
+    render json: convo.as_wire
+  end
+
   private def byte_authorized?
     ByteLocal.valid_secret?(request.headers["X-Byte-Secret"])
   end
@@ -374,18 +402,40 @@ class WebhooksController < ApplicationController
   private def byte_notify(user, message)
     return unless message.state == "delivered"
 
-    # Shell messages now carry pre-rendered HTML (ANSI-styled <span>s).
-    # Strip tags + collapse whitespace before pushing to the notification
-    # tray — the tray shows plain text, so raw HTML would look garbage.
-    clean = message.body.to_s.gsub(/<[^>]+>/, "").gsub(/\s+/, " ").strip
-    body  = clean.truncate(140).presence || "(attachment)"
+    # Shell responses are always in-app reactions to a user-typed `!cmd`.
+    # The user is looking at Byte when they get one, so pushing a system
+    # notification would double-alert them for zero benefit.
+    return if message.metadata.is_a?(Hash) && message.metadata["kind"] == "shell"
+
+    # Title: the conversation's own display name so you know which thread
+    # pinged you at a glance. Falls back to "Byte" for orphaned messages.
+    convo = message.byte_conversation
+    title = (convo&.display_name.presence || "Byte")
+
+    body = clean_byte_body(message.body).truncate(160).presence || "(attachment)"
 
     WebPushNotifications.send_to_byte(
-      title: "Byte",
+      title: title,
       body:  body,
       tag:   "byte-#{message.id}",
       users: [user],
     )
+  end
+
+  # Push tray shows plain text — strip everything that would look garbage:
+  # HTML tags (shell bubbles carry ANSI-styled <span>s), fenced/inline
+  # markdown code, bold/italic delimiters, ANSI escapes (if any leaked),
+  # blockquote markers, and any residual whitespace.
+  private def clean_byte_body(raw)
+    text = raw.to_s
+    text = text.gsub(/```[a-z]*\n?/i, "").gsub(/```/, "")     # fenced code delimiters
+    text = text.gsub(/`([^`]+)`/, '\1')                       # inline code
+    text = text.gsub(/\*\*([^*]+)\*\*/, '\1')                 # bold
+    text = text.gsub(/(?<!\*)\*(?!\*)([^*]+)(?<!\*)\*(?!\*)/, '\1') # italic
+    text = text.gsub(/<[^>]+>/, "")                           # HTML tags (from shell)
+    text = text.gsub(/\e\[[0-9;?=<>]*[a-zA-Z]/, "")           # ANSI escapes
+    text = text.gsub(/^>\s?/, "")                             # blockquote
+    text.gsub(/\s+/, " ").strip
   end
 
 

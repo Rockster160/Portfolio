@@ -102,6 +102,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     initialConversationId,
     initialConversations: bootstrap.conversations || [],
     onSwitch: (id) => handleSwitch(id),
+    // Menu actions push a slash-command draft into the composer instead
+    // of using window.prompt/confirm. Focus lands the user in the input
+    // ready to append (e.g. the new name after `/rename `).
+    prefillComposer: (text, opts = {}) => {
+      input.value = text;
+      autosize();
+      if (opts.focus !== false) {
+        input.focus();
+        try {
+          const end = input.value.length;
+          input.setSelectionRange(end, end);
+        } catch (_) {}
+      }
+    },
+    // Drawer paints a per-row unread badge from this counter. Cleared
+    // when the user switches to the conversation (inside handleSwitch).
+    unreadFor: (id) => drawerUnread.get(id) || 0,
   });
 
   // ---------- one-time legacy migration ----------
@@ -417,6 +434,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     hasMore = true;
     unreadCount = 0;
     drawerUnread.delete(convId);
+    // Repaint the drawer so its badge for this row clears immediately.
+    convoManager?.render();
     updateJumpBtn();
 
     messages.forEach(upsertMessage);

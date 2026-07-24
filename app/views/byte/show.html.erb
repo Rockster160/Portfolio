@@ -77,6 +77,14 @@
     </button>
   </header>
 
+  <%# Slim strip under the header showing the effective cwd for the %>
+  <%# current conversation. Blank when unknown; the Mac fills it in on %>
+  <%# the first `cd` or shell run and pushes updates via broadcast. %>
+  <div class="byte-pwd-bar" data-byte-pwd data-visible="<%= @conversation.metadata['cwd'].present? %>">
+    <span class="byte-pwd-icon" aria-hidden="true">›</span>
+    <span class="byte-pwd-path" data-byte-pwd-path><%= short_home(@conversation.metadata['cwd']) %></span>
+  </div>
+
   <main class="byte-thread" data-byte-thread aria-live="polite" aria-relevant="additions">
     <%# Older-history loading indicator. Hidden by default; JS toggles %>
     <%# when a paginated fetch is in flight or "no more" is confirmed. %>
@@ -107,7 +115,15 @@
     </article>
   </template>
 
-  <form class="byte-composer" data-byte-composer autocomplete="off">
+  <form class="byte-composer" data-byte-composer autocomplete="off" data-mode="<%= @conversation.mode %>">
+    <%# Mode-adaptive leading slot: Byte for claude, favicon for jarvis, %>
+    <%# `$` for bash. Kept small — this is a visual mode-indicator, not %>
+    <%# an action target. %>
+    <span class="byte-composer-avatar" data-byte-composer-avatar>
+      <img class="byte-composer-avatar-img" data-byte-composer-avatar-img
+           src="<%= asset_path('byte_favicon/byte.png') %>" alt="">
+      <span class="byte-composer-avatar-text" data-byte-composer-avatar-text>$</span>
+    </span>
     <textarea
       class="byte-input"
       data-byte-input

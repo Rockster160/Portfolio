@@ -62,10 +62,19 @@ export class ConversationManager {
     initialConversationId,
     initialConversations,
     onSwitch,
+    prefillComposer,
+    unreadFor,
   }) {
     this.conversationsUrl   = conversationsUrl;
     this.claudeSessionsUrl  = claudeSessionsUrl;
     this.onSwitch           = onSwitch;
+    // Prefill hook so drawer menu actions can drop `/rename `, `/adopt `,
+    // etc. straight into the composer with the caret positioned at the
+    // end — replaces window.prompt/confirm entirely.
+    this.prefillComposer    = prefillComposer || (() => {});
+    // Read-only accessor for the current unread count per conversation
+    // (Map-backed in index.js). Rendered as a badge on each row.
+    this.unreadFor          = unreadFor || (() => 0);
     this.conversations      = initialConversations && initialConversations.length
       ? initialConversations
       : loadCachedList();
@@ -94,6 +103,18 @@ export class ConversationManager {
     this.list       = document.querySelector("[data-byte-convo-list]");
     this.nameEl     = document.querySelector("[data-byte-convo-name]");
     this.modeEl     = document.querySelector("[data-byte-mode-chip]");
+    this.composer   = document.querySelector("[data-byte-composer]");
+    this.avatarImg  = document.querySelector("[data-byte-composer-avatar-img]");
+    this.pwdBar     = document.querySelector("[data-byte-pwd]");
+    this.pwdPath    = document.querySelector("[data-byte-pwd-path]");
+    // Composer avatar images per mode. Site favicon is the closest
+    // Ardesian brand mark we have for Jarvis; if a dedicated logo lands
+    // later, swap this src.
+    this.avatarImgSrc = {
+      claude: this.avatarImg?.getAttribute("src") || "",
+      jarvis: "/favicon/apple-touch-icon.png",
+      bash:   this.avatarImg?.getAttribute("src") || "",
+    };
     this.newModal   = document.querySelector("[data-byte-new-modal]");
     this.newForm    = document.querySelector("[data-byte-new-form]");
     this.menuModal  = document.querySelector("[data-byte-convo-menu]");
@@ -224,6 +245,26 @@ export class ConversationManager {
       this.modeEl.textContent = convo.mode;
       this.modeEl.dataset.mode = convo.mode;
     }
+    // Composer mode marker drives colour + avatar swap via CSS
+    // ([data-mode="bash"] etc). Also swap the avatar image for Jarvis.
+    if (this.composer && convo) {
+      this.composer.dataset.mode = convo.mode;
+      if (this.avatarImg && this.avatarImgSrc[convo.mode]) {
+        this.avatarImg.setAttribute("src", this.avatarImgSrc[convo.mode]);
+      }
+    }
+    // Pwd bar shows the effective working directory for the current
+    // conversation. Hidden entirely when unknown so we don't display a
+    // stale/generic path.
+    if (this.pwdBar && this.pwdPath && convo) {
+      const cwd = convo.metadata && convo.metadata.cwd;
+      if (cwd) {
+        this.pwdPath.textContent = shortHome(cwd);
+        this.pwdBar.dataset.visible = "true";
+      } else {
+        this.pwdBar.dataset.visible = "false";
+      }
+    }
 
     if (!this.list) return;
     this.list.innerHTML = "";
@@ -235,13 +276,18 @@ export class ConversationManager {
     li.className = "byte-convo-row" + (convo.id === this.currentId ? " active" : "");
     li.dataset.conversationId = String(convo.id);
 
+    const unread = this.unreadFor(convo.id);
+    const unreadHtml = unread > 0
+      ? `<span class="byte-convo-unread">${unread > 99 ? "99+" : unread}</span>`
+      : "";
+
     const pick = document.createElement("button");
     pick.type = "button";
     pick.className = "byte-convo-pick";
     pick.innerHTML = `
       <span class="byte-convo-mode" data-mode="${escapeAttr(convo.mode)}">${escapeAttr(convo.mode)}</span>
       <span class="byte-convo-name">${escapeHtml(convo.name || "Byte")}</span>
-      <span class="byte-convo-time">${relativeTime(convo.last_message_at)}</span>
+      <span class="byte-convo-time">${relativeTime(convo.last_message_at)}${unreadHtml}</span>
     `;
     pick.addEventListener("click", () => {
       this.switchTo(convo.id);
@@ -311,34 +357,43 @@ export class ConversationManager {
     else this.menuModal.setAttribute("open", "");
   }
 
-  async handleRename() {
+  // Menu actions no longer use window.prompt/confirm. Every mutation is a
+  // slash command — tapping a menu row switches to the target conversation
+  // (so the command lands on the right thread), closes the drawer/menu,
+  // and drops the pre-typed command into the composer for the user to
+  // edit or submit. Rename waits for their new-name text; archive is
+  // ready-to-send.
+  handleRename() {
+    if (this.menuTargetId == null) return;
     const target = this.conversations.find((c) => c.id === this.menuTargetId);
     if (!target) return;
-    const next = prompt("Rename conversation", target.name || "");
-    if (next == null) return;
     this.menuModal?.close();
-    try { await this.updateConversation(target.id, { name: next.trim() }); }
-    catch (e) { alert(`Rename failed: ${e.message}`); }
+    this.closeDrawer();
+    this.switchTo(target.id);
+    this.prefillComposer("/rename ", { focus: true });
   }
 
-  async handleArchive() {
-    const target = this.conversations.find((c) => c.id === this.menuTargetId);
-    if (!target) return;
-    if (!confirm(`Archive "${target.name || "Byte"}"?`)) return;
+  handleArchive() {
+    if (this.menuTargetId == null) return;
     this.menuModal?.close();
-    try { await this.archiveConversation(target.id); }
-    catch (e) { alert(`Archive failed: ${e.message}`); }
+    this.closeDrawer();
+    this.switchTo(this.menuTargetId);
+    this.prefillComposer("/archive", { focus: true, selectAll: false });
   }
 
+  // Adopt opens a compact chooser modal (read-only from Mac's session
+  // dir). Tapping a row prefills the composer with `/adopt <name>` so the
+  // command shows up in the thread as a real bubble — no silent mutation.
   async handleAdoptOpen() {
     this.menuModal?.close();
     if (!this.adoptModal || !this.claudeSessionsUrl) return;
+    const targetId = this.menuTargetId;
     if (this.adoptList) this.adoptList.innerHTML = "";
     if (this.adoptHint) this.adoptHint.textContent = "Loading sessions from your Mac…";
     if (typeof this.adoptModal.showModal === "function") this.adoptModal.showModal();
     else this.adoptModal.setAttribute("open", "");
 
-    const url = `${this.claudeSessionsUrl}?conversation_id=${this.menuTargetId}`;
+    const url = `${this.claudeSessionsUrl}?conversation_id=${targetId}`;
     try {
       const data = await apiCall(url, "GET");
       const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
@@ -349,26 +404,24 @@ export class ConversationManager {
         return;
       }
       if (this.adoptHint) {
-        this.adoptHint.textContent = "Tap a session to attach this conversation to it.";
+        this.adoptHint.textContent = "Pick a session — I'll prefill `/adopt <name>` so you can send it.";
       }
-      const targetId = this.menuTargetId;
       sessions.forEach((s) => {
         const li = document.createElement("li");
         li.className = "byte-adopt-row";
+        const displayName = s.name || s.id.slice(0, 8) + "…";
         li.innerHTML = `
-          <div class="byte-adopt-name">${escapeHtml(s.name || s.id.slice(0, 8) + "…")}</div>
+          <div class="byte-adopt-name">${escapeHtml(displayName)}</div>
           <div class="byte-adopt-meta">${relativeTime(s.mtime)} · ${escapeHtml(s.id.slice(0, 8))}</div>
           <div class="byte-adopt-preview">${escapeHtml(truncate(s.preview || "", 120))}</div>
         `;
-        li.addEventListener("click", async () => {
-          try {
-            await this.updateConversation(targetId, {
-              metadata: { claude_session_id: s.id, adopted_at: new Date().toISOString() },
-            });
-            this.adoptModal?.close();
-          } catch (e) {
-            alert(`Couldn't adopt session: ${e.message}`);
-          }
+        li.addEventListener("click", () => {
+          this.adoptModal?.close();
+          this.closeDrawer();
+          this.switchTo(targetId);
+          // Fall back to id prefix if the session has no user-friendly name.
+          const arg = s.name && s.name.trim() ? s.name : s.id.slice(0, 8);
+          this.prefillComposer(`/adopt ${arg}`, { focus: true });
         });
         this.adoptList?.appendChild(li);
       });
@@ -405,6 +458,14 @@ function escapeAttr(s) { return escapeHtml(s).replace(/"/g, "&quot;"); }
 function truncate(s, n) {
   const str = String(s ?? "");
   return str.length > n ? str.slice(0, n) + "…" : str;
+}
+
+// Absolute path → `~/…` when it starts with the current user's home.
+// Best-effort — the browser doesn't have HOME, so we assume `/Users/<X>`.
+function shortHome(path) {
+  if (!path) return "";
+  const m = path.match(/^\/Users\/[^\/]+/);
+  return m ? path.replace(m[0], "~") : path;
 }
 
 // "just now", "3m", "2h", "5d". Nothing longer — the drawer sorts by

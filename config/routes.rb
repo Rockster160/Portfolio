@@ -217,8 +217,9 @@ Rails.application.routes.draw do
   post "webhooks/post" => "webhooks#post"
   post "webhooks/email" => "webhooks#email"
   post "webhooks/speak" => "webhooks#speak"
-  post  "webhooks/byte"     => "webhooks#byte_create"
-  patch "webhooks/byte/:id" => "webhooks#byte_update"
+  post  "webhooks/byte"                  => "webhooks#byte_create"
+  patch "webhooks/byte/:id"              => "webhooks#byte_update"
+  patch "webhooks/byte/conversation/:id" => "webhooks#byte_update_conversation"
 
   get "webhooks/uptime" => "webhooks#uptime"
   post "webhooks/uptime" => "webhooks#uptime"

@@ -19,14 +19,40 @@ html.html-ctr-byte body {
 }
 
 // Hard reset — app-wide `forms.scss` gradients + blue-card form background
-// would obliterate this layout otherwise. Same trick chores.scss uses.
+// would obliterate this layout otherwise. Applies to .byte-app AND every
+// surface outside it that shares the same design system (drawer, modals,
+// dialogs). Same trick chores.scss uses.
+//
+// CSS custom properties live at .ctr-byte scope (not .byte-app) so surfaces
+// living OUTSIDE .byte-app (the drawer, the dialogs) can still resolve
+// var(--bs-panel) etc. — otherwise they render transparent.
 .ctr-byte {
+  --bs-bg: #0E1930;
+  --bs-panel: #16233F;
+  --bs-panel-soft: #1F3053;
+  --bs-border: #24345B;
+  --bs-text: #E8ECF6;
+  --bs-muted: #8FA3C8;
+  --bs-accent: #3FA0FF;
+  --bs-accent-strong: #62B3FF;
+  --bs-me-bg: linear-gradient(135deg, #2563EB 0%, #3FA0FF 100%);
+  --bs-them-bg: #2A3B5F;
+  --bs-danger: #F87171;
+  --bs-pending: #94A3B8;
+
   .byte-app,
-  .byte-app * {
+  .byte-app *,
+  .byte-drawer,
+  .byte-drawer *,
+  .byte-drawer-backdrop,
+  .byte-modal,
+  .byte-modal * {
     box-sizing: border-box;
   }
 
-  .byte-app {
+  .byte-app,
+  .byte-drawer,
+  .byte-modal {
     button,
     input[type="button"],
     input[type="submit"],
@@ -60,7 +86,9 @@ html.html-ctr-byte body {
     }
 
     textarea,
-    input[type="text"] {
+    input[type="text"],
+    input[type="search"],
+    select {
       background: transparent;
       color: inherit;
       border: none;
@@ -74,20 +102,10 @@ html.html-ctr-byte body {
 }
 
 .byte-app {
-  --bs-bg: #0E1930;
-  --bs-panel: #16233F;
-  --bs-panel-soft: #1F3053;
-  --bs-border: #24345B;
-  --bs-text: #E8ECF6;
-  --bs-muted: #8FA3C8;
-  --bs-accent: #3FA0FF;
-  --bs-accent-strong: #62B3FF;
-  --bs-me-bg: linear-gradient(135deg, #2563EB 0%, #3FA0FF 100%);
-  --bs-them-bg: #2A3B5F; // bumped for readable contrast against the page bg
-  --bs-danger: #F87171;
-  --bs-pending: #94A3B8;
+  // CSS custom properties inherited from .ctr-byte so drawer/modals
+  // outside .byte-app also resolve them.
 
-  // Two CSS custom properties fed by a visualViewport listener in
+  // Two additional CSS custom properties fed by a visualViewport listener in
   // byte/index.js:
   //   --byte-vv-top     iOS layout-viewport-scroll offset (usually 0;
   //                     becomes positive when iOS scrolls up to bring
@@ -467,6 +485,21 @@ html.html-ctr-byte body {
     }
 
     .byte-msg-meta { color: rgba(199, 213, 238, 0.4); }
+
+    // Red exit-code chip, appended only for non-zero exits. Successful
+    // commands (exit 0) render without any exit marker — the presence
+    // of this chip IS the failure signal.
+    .byte-shell-exit {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 1px 8px;
+      border-radius: 4px;
+      background: rgba(248, 113, 113, 0.15);
+      color: var(--bs-danger);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11.5px;
+      font-weight: 600;
+    }
   }
 
   // Markdown-lite rendering container. Both Claude replies and system
@@ -746,6 +779,13 @@ html.html-ctr-byte body {
 // styles inside modals stay clean.
 // ---------------------------------------------------------------------------
 
+// All drawer/modal buttons need explicit rules because they live OUTSIDE
+// .byte-app in the DOM and would otherwise fall through to forms.scss.
+.ctr-byte .byte-drawer,
+.ctr-byte .byte-modal {
+  color: var(--bs-text);
+}
+
 // Small hamburger button leading the header. Keeps to the left; the drawer
 // slides in from the same side.
 .ctr-byte .byte-app .byte-drawer-toggle {
@@ -984,14 +1024,20 @@ html.html-ctr-byte body {
 }
 
 .ctr-byte .byte-app .byte-modal-input,
-.byte-modal .byte-modal-input {
+.byte-modal .byte-modal-input,
+.ctr-byte .byte-modal .byte-modal-input {
   background: var(--bs-panel-soft) !important;
   color: var(--bs-text) !important;
   border: 1px solid var(--bs-border) !important;
   border-radius: 8px !important;
   padding: 10px 12px !important;
-  font-size: 14px !important;
+  // 16px minimum — iOS Safari zooms the layout viewport for any focused
+  // input rendered smaller than that. Anything below reads as "user needs
+  // help seeing this" and triggers the zoom.
+  font-size: 16px !important;
   width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .byte-modal-actions {
@@ -1002,22 +1048,26 @@ html.html-ctr-byte body {
 }
 
 .ctr-byte .byte-app .byte-modal-btn,
+.ctr-byte .byte-modal .byte-modal-btn,
 .byte-modal .byte-modal-btn {
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--bs-border);
-  background: var(--bs-panel-soft);
-  color: var(--bs-text);
-  font-size: 13px;
-  font-weight: 500;
+  padding: 9px 16px !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--bs-border) !important;
+  background: var(--bs-panel-soft) !important;
+  color: var(--bs-text) !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
   cursor: pointer;
+  min-width: 90px;
+  text-align: center;
+  line-height: 1.2;
 
-  &:hover { background: var(--bs-border); }
+  &:hover { background: var(--bs-border) !important; }
 
   &.byte-modal-btn-primary {
-    background: var(--bs-me-bg);
-    border-color: transparent;
-    color: #fff;
+    background: linear-gradient(135deg, #2563EB 0%, #3FA0FF 100%) !important;
+    border-color: transparent !important;
+    color: #fff !important;
   }
 }
 
@@ -1088,5 +1138,110 @@ html.html-ctr-byte body {
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
+  }
+}
+
+// Unread badge inside the drawer conversation row — tiny pill sitting
+// where the relative-time normally is. Only rendered when count > 0.
+.byte-convo-time .byte-convo-unread {
+  display: inline-block;
+  margin-left: 6px;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--bs-accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+// ---------------------------------------------------------------------------
+// PWD bar — subtle strip beneath the header showing the effective working
+// directory for the current conversation. Empty state hides completely.
+// ---------------------------------------------------------------------------
+.byte-pwd-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(0, 0, 0, 0.12);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--bs-muted);
+  line-height: 1.3;
+
+  &[data-visible="false"] { display: none; }
+
+  .byte-pwd-icon { color: var(--bs-accent); opacity: 0.7; }
+  .byte-pwd-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+// ---------------------------------------------------------------------------
+// Composer — mode-adaptive avatar + input treatment. Each mode gets a
+// visually distinct leading marker so a glance at the composer confirms
+// what will happen when you hit send.
+// ---------------------------------------------------------------------------
+.byte-composer[data-mode] {
+  align-items: center;
+  gap: 10px;
+}
+
+.byte-composer-avatar {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+
+  .byte-composer-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .byte-composer-avatar-text {
+    display: none;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 15px;
+    font-weight: 700;
+    color: #86EFAC;
+  }
+}
+
+// Bash mode: swap the avatar image for a lime `$` and switch the input
+// to monospace + tinted green. The prompt-terminal feel is the whole
+// point — matches the shell bubble treatment further up the thread.
+.byte-composer[data-mode="bash"] {
+  .byte-composer-avatar {
+    background: rgba(134, 239, 172, 0.08);
+    border: 1px solid rgba(134, 239, 172, 0.28);
+
+    .byte-composer-avatar-img  { display: none; }
+    .byte-composer-avatar-text { display: inline; }
+  }
+  .byte-input {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
+    color: #86EFAC !important;
+  }
+  .byte-input::placeholder { color: rgba(134, 239, 172, 0.45); }
+}
+
+// Jarvis mode: reuse the Ardesian favicon as the mark. We don't have a
+// dedicated Jarvis logo asset, and the site favicon is already the
+// closest brand mark — JS swaps the src on switch.
+.byte-composer[data-mode="jarvis"] {
+  .byte-composer-avatar {
+    background: rgba(251, 191, 36, 0.08);
+    border: 1px solid rgba(251, 191, 36, 0.3);
   }
 }

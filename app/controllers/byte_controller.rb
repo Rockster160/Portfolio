@@ -22,6 +22,15 @@ class ByteController < ApplicationController
     conversation = resolve_conversation
     return head(:not_found) if conversation.nil?
 
+    # Slash commands that mutate the *conversation itself* (rename, archive)
+    # never leave Rails — no user outbound bubble is created, and the
+    # response is a system-kind inbound acknowledgement. Everything else
+    # (/sessions, /switch, /adopt, /watch, /pwd, ...) falls through to
+    # the Mac via the normal message pipeline.
+    if body.start_with?("/") && (handled = handle_rails_slash_command(conversation, body))
+      return render(json: handled.as_wire, status: :ok)
+    end
+
     metadata = {
       source: params[:source].to_s.presence || "web",
     }
@@ -213,6 +222,50 @@ class ByteController < ApplicationController
       channel: MONITOR_CHANNEL,
       data:    { kind: :conversation, event: kind, conversation: convo.as_wire },
     })
+  end
+
+  # Slash commands whose scope is the Byte conversation record itself.
+  # Returns a persisted acknowledgement message (system kind, inbound) or
+  # nil if the command isn't ours to handle — caller falls through to the
+  # normal Mac pipeline.
+  def handle_rails_slash_command(conversation, body)
+    verb, arg = body[1..].to_s.strip.split(/\s+/, 2)
+    verb = verb.to_s.downcase
+    arg  = arg.to_s.strip
+
+    case verb
+    when "rename"
+      return ack(conversation, "usage: `/rename NEW NAME`") if arg.empty?
+      old_name = conversation.display_name
+      conversation.update!(name: arg)
+      broadcast_convo_change(conversation, :updated)
+      ack(conversation, "Renamed **#{old_name}** → **#{arg}**")
+    when "archive"
+      conversation.update!(archived: true)
+      broadcast_convo_change(conversation, :archived)
+      ack(conversation, "Archived **#{conversation.display_name}**")
+    when "mode"
+      new_mode = normalized_mode(arg)
+      return ack(conversation, "usage: `/mode claude|bash|jarvis`") if arg.empty?
+      conversation.update!(mode: new_mode)
+      broadcast_convo_change(conversation, :updated)
+      ack(conversation, "Mode set to **#{new_mode}** for this conversation.")
+    end
+  end
+
+  # Persist + broadcast a system-kind acknowledgement bubble that stays
+  # in the same conversation. Used for every Rails-owned slash reply.
+  def ack(conversation, body)
+    message = conversation.byte_messages.create!(
+      user:         current_user,
+      direction:    :inbound,
+      state:        :delivered,
+      body:         body,
+      metadata:     { kind: :system, source: :slash },
+      delivered_at: Time.current,
+    )
+    broadcast(message)
+    message
   end
 
   # Route the outbound message according to its conversation's mode:
