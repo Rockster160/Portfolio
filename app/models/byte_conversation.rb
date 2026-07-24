@@ -17,7 +17,7 @@ class ByteConversation < ApplicationRecord
 
   has_many :byte_messages, dependent: :destroy
 
-  enum :mode, { claude: 0, bash: 1, jarvis: 2 }
+  enum :mode, { claude: 0, bash: 1, jarvis: 2, buddy: 3 }
 
   scope :active,  -> { where(archived: false) }
   scope :ordered, -> { order(Arel.sql("last_message_at DESC NULLS LAST, id DESC")) }
@@ -56,6 +56,7 @@ class ByteConversation < ApplicationRecord
     case mode.to_sym
     when :bash   then "Terminal"
     when :jarvis then "Jarvis"
+    when :buddy  then "Buddy"
     else "Byte"
     end
   end

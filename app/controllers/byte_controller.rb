@@ -328,7 +328,7 @@ class ByteController < ApplicationController
       ack(conversation, "Archived **#{conversation.display_name}**")
     when "mode"
       new_mode = normalized_mode(arg)
-      return ack(conversation, "usage: `/mode claude|bash|jarvis`") if arg.empty?
+      return ack(conversation, "usage: `/mode claude|bash|jarvis|buddy`") if arg.empty?
       conversation.update!(mode: new_mode)
       broadcast_convo_change(conversation, :updated)
       ack(conversation, "Mode set to **#{new_mode}** for this conversation.")

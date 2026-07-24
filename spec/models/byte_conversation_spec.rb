@@ -46,4 +46,11 @@ RSpec.describe ByteConversation, type: :model do
     convo = user.byte_conversations.create!(mode: :bash)
     expect(convo.display_name).to eq("Terminal")
   end
+
+  it "supports the buddy mode with a Buddy display name" do
+    convo = user.byte_conversations.create!(mode: :buddy)
+    expect(convo.mode).to eq("buddy")
+    expect(convo.buddy?).to eq(true)
+    expect(convo.display_name).to eq("Buddy")
+  end
 end

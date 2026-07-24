@@ -834,6 +834,7 @@ html.html-ctr-byte body {
 
   &[data-mode="bash"]   { background: rgba(134, 239, 172, 0.12); color: #86EFAC; border-color: rgba(134, 239, 172, 0.3); }
   &[data-mode="jarvis"] { background: rgba(251, 191, 36, 0.12); color: #FBBF24; border-color: rgba(251, 191, 36, 0.3); }
+  &[data-mode="buddy"]  { background: rgba(196, 141, 255, 0.12); color: #C48DFF; border-color: rgba(196, 141, 255, 0.3); }
 }
 
 // Drawer + backdrop. `position: fixed` so they overlay the .byte-app grid
@@ -952,6 +953,7 @@ html.html-ctr-byte body {
 
     &[data-mode="bash"]   { background: rgba(134, 239, 172, 0.12); color: #86EFAC; }
     &[data-mode="jarvis"] { background: rgba(251, 191, 36, 0.12); color: #FBBF24; }
+    &[data-mode="buddy"]  { background: rgba(196, 141, 255, 0.12); color: #C48DFF; }
   }
 
   .byte-convo-name {
@@ -1275,6 +1277,12 @@ dialog.byte-modal {
     line-height: 1;
     color: #86EFAC;
   }
+
+  .byte-composer-avatar-buddy {
+    display: none;
+    font-size: 16px;
+    line-height: 1;
+  }
 }
 
 // Claude → Byte image (default when data-mode is missing OR "claude").
@@ -1307,6 +1315,15 @@ dialog.byte-modal {
     color: #86EFAC !important;
   }
   .byte-input::placeholder { color: rgba(134, 239, 172, 0.45); }
+}
+
+// Buddy → speech-bubble glyph, violet accent frame.
+.byte-composer[data-mode="buddy"] {
+  .byte-composer-avatar {
+    background: rgba(196, 141, 255, 0.12);
+    box-shadow: 0 0 0 1px rgba(196, 141, 255, 0.35);
+  }
+  .byte-composer-avatar-buddy { display: inline; }
 }
 
 // ---------------------------------------------------------------------------

@@ -120,6 +120,7 @@
     <%#   Claude  → Byte image %>
     <%#   Jarvis  → Ardesian favicon (proxy for the Jarvis mark) %>
     <%#   Bash    → `$` in lime monospace %>
+    <%#   Buddy   → speech-bubble glyph in violet %>
     <%# CSS on `.byte-composer[data-mode="…"]` toggles which child is visible. %>
     <span class="byte-composer-avatar" data-byte-composer-avatar>
       <img class="byte-composer-avatar-img byte-composer-avatar-claude"
@@ -127,6 +128,7 @@
       <img class="byte-composer-avatar-img byte-composer-avatar-jarvis"
            data-byte-composer-avatar-jarvis src="" alt="Jarvis">
       <span class="byte-composer-avatar-bash">$</span>
+      <span class="byte-composer-avatar-buddy">💬</span>
     </span>
     <textarea
       class="byte-input"
@@ -184,6 +186,7 @@
           <option value="claude" selected>Claude — AI conversation</option>
           <option value="bash">Bash — shell commands, no prefix</option>
           <option value="jarvis">Jarvis — automation commands</option>
+          <option value="buddy">Buddy — conversational LLM chat</option>
         </select>
       </label>
       <div class="byte-modal-actions">
