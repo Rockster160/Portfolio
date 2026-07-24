@@ -124,7 +124,11 @@ html.html-ctr-byte body {
     height: calc(var(--byte-vv-height, 100dvh) - 10px);
   }
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  // header · pwd-bar · thread · composer.
+  // pwd-bar is an auto row (collapses when empty via `[data-visible="false"] {display:none}`).
+  // Without the extra `auto`, adding the pwd bar shoved the composer past
+  // the visible viewport when the keyboard opened.
+  grid-template-rows: auto auto 1fr auto;
   background: radial-gradient(1200px 700px at 20% -10%, #14284F 0%, transparent 60%),
               radial-gradient(1000px 800px at 100% 100%, #0B2B4E 0%, transparent 55%),
               var(--bs-bg);
@@ -972,18 +976,28 @@ html.html-ctr-byte body {
 
 // Dialogs (new/menu/adopt). Native <dialog> centred on the viewport with
 // a backdrop from ::backdrop.
-.byte-modal {
-  border: none;
-  background: transparent;
-  padding: 0;
-  color: var(--bs-text);
-  // SassC can't `min(px, vw)` — split with a max-width media query fallback.
+// Dialog element itself — max specificity + !important to defeat forms.scss
+// cascade and the sass-computed `.basic` form background from earlier in
+// this file. Panel colour lives on the DIALOG, not the inner form, so
+// there's exactly one solid background to worry about.
+.ctr-byte .byte-modal,
+dialog.byte-modal {
+  border: none !important;
+  background: var(--bs-panel) !important;
+  color: var(--bs-text) !important;
+  padding: 20px !important;
+  border-radius: 14px !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
   width: 420px;
   max-width: 92vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 
-  &::backdrop { background: rgba(0, 0, 0, 0.55); }
+  &::backdrop { background: rgba(0, 0, 0, 0.6); }
 
-  &[open] { display: block; }
+  &[open]      { display: block; }
   &:not([open]) { display: none; }
 
   &.byte-modal-wide {
@@ -992,15 +1006,19 @@ html.html-ctr-byte body {
   }
 }
 
-.byte-modal-form {
-  background: var(--bs-panel);
-  border: 1px solid var(--bs-border);
-  border-radius: 14px;
-  padding: 20px;
+// Inner form / body container — flex column layout, transparent so the
+// dialog's own background shows through. `.basic` in the class list would
+// otherwise steal a blue-card background from forms.scss.
+.ctr-byte .byte-modal .byte-modal-form,
+.ctr-byte .byte-modal form.byte-modal-form.basic {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-shadow: none !important;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
 
 .byte-modal-title {
@@ -1023,21 +1041,31 @@ html.html-ctr-byte body {
   color: var(--bs-muted);
 }
 
-.ctr-byte .byte-app .byte-modal-input,
-.byte-modal .byte-modal-input,
-.ctr-byte .byte-modal .byte-modal-input {
+.ctr-byte .byte-modal .byte-modal-input,
+.ctr-byte .byte-modal select.byte-modal-input {
   background: var(--bs-panel-soft) !important;
   color: var(--bs-text) !important;
   border: 1px solid var(--bs-border) !important;
   border-radius: 8px !important;
   padding: 10px 12px !important;
   // 16px minimum — iOS Safari zooms the layout viewport for any focused
-  // input rendered smaller than that. Anything below reads as "user needs
-  // help seeing this" and triggers the zoom.
+  // input (or select!) rendered smaller than that.
   font-size: 16px !important;
+  line-height: 1.3 !important;
   width: 100%;
   appearance: none;
   -webkit-appearance: none;
+  // Fallback caret since we killed the browser's native select styling.
+  background-image: linear-gradient(45deg, transparent 50%, var(--bs-muted) 50%),
+                    linear-gradient(135deg, var(--bs-muted) 50%, transparent 50%);
+  background-position: calc(100% - 20px) center, calc(100% - 15px) center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+// Inputs (not selects) don't want the caret arrows.
+.ctr-byte .byte-modal input.byte-modal-input {
+  background-image: none !important;
 }
 
 .byte-modal-actions {
@@ -1188,19 +1216,22 @@ html.html-ctr-byte body {
 // ---------------------------------------------------------------------------
 .byte-composer[data-mode] {
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
+// Byte identity marker — always visible, never changes. This is what
+// signals "you're in Byte" regardless of which mode this thread runs.
 .byte-composer-avatar {
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
+  border-radius: 50%;
   overflow: hidden;
+  background: radial-gradient(circle at 30% 20%, #62B3FF, #1E3B7A);
+  box-shadow: 0 0 0 1px var(--bs-border);
 
   .byte-composer-avatar-img {
     width: 100%;
@@ -1208,26 +1239,37 @@ html.html-ctr-byte body {
     object-fit: cover;
     display: block;
   }
+}
 
-  .byte-composer-avatar-text {
+// Mode indicator — small chip sitting between Byte and the input. Hidden
+// for Claude mode (no need — Byte covers the AI identity). Bash shows
+// a lime `$`; Jarvis shows the Ardesian favicon.
+.byte-composer-mode-chip {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+
+  .byte-composer-mode-img  { display: none; width: 100%; height: 100%; object-fit: cover; }
+  .byte-composer-mode-text {
     display: none;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 700;
-    color: #86EFAC;
+    line-height: 1;
   }
 }
 
-// Bash mode: swap the avatar image for a lime `$` and switch the input
-// to monospace + tinted green. The prompt-terminal feel is the whole
-// point — matches the shell bubble treatment further up the thread.
 .byte-composer[data-mode="bash"] {
-  .byte-composer-avatar {
+  .byte-composer-mode-chip {
+    display: inline-flex;
     background: rgba(134, 239, 172, 0.08);
     border: 1px solid rgba(134, 239, 172, 0.28);
 
-    .byte-composer-avatar-img  { display: none; }
-    .byte-composer-avatar-text { display: inline; }
+    .byte-composer-mode-text { display: inline; color: #86EFAC; }
   }
   .byte-input {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
@@ -1236,12 +1278,13 @@ html.html-ctr-byte body {
   .byte-input::placeholder { color: rgba(134, 239, 172, 0.45); }
 }
 
-// Jarvis mode: reuse the Ardesian favicon as the mark. We don't have a
-// dedicated Jarvis logo asset, and the site favicon is already the
-// closest brand mark — JS swaps the src on switch.
 .byte-composer[data-mode="jarvis"] {
-  .byte-composer-avatar {
+  .byte-composer-mode-chip {
+    display: inline-flex;
     background: rgba(251, 191, 36, 0.08);
     border: 1px solid rgba(251, 191, 36, 0.3);
+    overflow: hidden;
+
+    .byte-composer-mode-img { display: block; }
   }
 }

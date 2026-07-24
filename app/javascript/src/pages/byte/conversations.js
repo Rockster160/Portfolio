@@ -104,16 +104,14 @@ export class ConversationManager {
     this.nameEl     = document.querySelector("[data-byte-convo-name]");
     this.modeEl     = document.querySelector("[data-byte-mode-chip]");
     this.composer   = document.querySelector("[data-byte-composer]");
-    this.avatarImg  = document.querySelector("[data-byte-composer-avatar-img]");
+    this.modeImg    = document.querySelector("[data-byte-composer-mode-img]");
     this.pwdBar     = document.querySelector("[data-byte-pwd]");
     this.pwdPath    = document.querySelector("[data-byte-pwd-path]");
-    // Composer avatar images per mode. Site favicon is the closest
-    // Ardesian brand mark we have for Jarvis; if a dedicated logo lands
-    // later, swap this src.
-    this.avatarImgSrc = {
-      claude: this.avatarImg?.getAttribute("src") || "",
+    // Mode-indicator chip src per mode. Bash uses a text glyph via CSS
+    // (no img). Jarvis falls back to the site favicon — the closest
+    // Ardesian brand mark we have; swap once a dedicated logo lands.
+    this.modeChipSrc = {
       jarvis: "/favicon/apple-touch-icon.png",
-      bash:   this.avatarImg?.getAttribute("src") || "",
     };
     this.newModal   = document.querySelector("[data-byte-new-modal]");
     this.newForm    = document.querySelector("[data-byte-new-form]");
@@ -245,12 +243,15 @@ export class ConversationManager {
       this.modeEl.textContent = convo.mode;
       this.modeEl.dataset.mode = convo.mode;
     }
-    // Composer mode marker drives colour + avatar swap via CSS
-    // ([data-mode="bash"] etc). Also swap the avatar image for Jarvis.
+    // Composer mode marker drives colour + chip toggling via CSS
+    // ([data-mode="bash"] etc). Set the chip image src for modes that
+    // use an image (Jarvis). The Byte avatar to the left never changes.
     if (this.composer && convo) {
       this.composer.dataset.mode = convo.mode;
-      if (this.avatarImg && this.avatarImgSrc[convo.mode]) {
-        this.avatarImg.setAttribute("src", this.avatarImgSrc[convo.mode]);
+      if (this.modeImg) {
+        const src = this.modeChipSrc[convo.mode];
+        if (src) this.modeImg.setAttribute("src", src);
+        else this.modeImg.removeAttribute("src");
       }
     }
     // Pwd bar shows the effective working directory for the current

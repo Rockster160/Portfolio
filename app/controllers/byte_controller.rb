@@ -250,7 +250,29 @@ class ByteController < ApplicationController
       conversation.update!(mode: new_mode)
       broadcast_convo_change(conversation, :updated)
       ack(conversation, "Mode set to **#{new_mode}** for this conversation.")
+    when "fork", "continue"
+      # Spin up a brand-new conversation with the same mode + same cwd.
+      # Useful when the old shell died and left corrupt state, or the
+      # Claude session hit a dead end and the user wants a clean slate
+      # in the same directory.
+      fork_conversation(conversation, arg.presence)
     end
+  end
+
+  def fork_conversation(source, custom_name)
+    cwd = source.metadata.is_a?(Hash) ? source.metadata["cwd"] : nil
+    new_name = custom_name.presence || "#{source.display_name} (continued)"
+
+    forked = current_user.byte_conversations.create!(
+      name:            new_name,
+      mode:            source.mode,
+      metadata:        cwd ? { cwd: cwd, forked_from: source.id } : { forked_from: source.id },
+      last_message_at: Time.current,
+    )
+    broadcast_convo_change(forked, :created)
+
+    body = "Forked → **#{forked.display_name}** (mode: #{forked.mode}#{cwd ? ", cwd: #{cwd}" : ""})"
+    ack(source, body)
   end
 
   # Persist + broadcast a system-kind acknowledgement bubble that stays

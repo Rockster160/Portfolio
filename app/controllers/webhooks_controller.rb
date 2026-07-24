@@ -398,14 +398,13 @@ class WebhooksController < ApplicationController
     })
   end
 
-  # Push notifications only fire on terminal states — silent while streaming.
+  # Push notifications only fire on terminal states — silent while
+  # streaming. Every kind (shell / claude / jarvis / system) gets a push;
+  # the service worker suppresses the OS-level banner when the app is
+  # currently visible — so if you're already looking at Byte, no
+  # double-alert; if you've walked away, you get pinged.
   private def byte_notify(user, message)
     return unless message.state == "delivered"
-
-    # Shell responses are always in-app reactions to a user-typed `!cmd`.
-    # The user is looking at Byte when they get one, so pushing a system
-    # notification would double-alert them for zero benefit.
-    return if message.metadata.is_a?(Hash) && message.metadata["kind"] == "shell"
 
     # Title: the conversation's own display name so you know which thread
     # pinged you at a glance. Falls back to "Byte" for orphaned messages.

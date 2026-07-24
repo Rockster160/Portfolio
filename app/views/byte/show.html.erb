@@ -116,13 +116,17 @@
   </template>
 
   <form class="byte-composer" data-byte-composer autocomplete="off" data-mode="<%= @conversation.mode %>">
-    <%# Mode-adaptive leading slot: Byte for claude, favicon for jarvis, %>
-    <%# `$` for bash. Kept small — this is a visual mode-indicator, not %>
-    <%# an action target. %>
-    <span class="byte-composer-avatar" data-byte-composer-avatar>
-      <img class="byte-composer-avatar-img" data-byte-composer-avatar-img
-           src="<%= asset_path('byte_favicon/byte.png') %>" alt="">
-      <span class="byte-composer-avatar-text" data-byte-composer-avatar-text>$</span>
+    <%# Byte identity — always shown, never changes. This is "you're in Byte". %>
+    <span class="byte-composer-avatar">
+      <%= image_tag "byte_favicon/byte.png", class: "byte-composer-avatar-img", alt: "Byte" %>
+    </span>
+    <%# Mode indicator — sits between the Byte avatar and the text input. %>
+    <%# `$` for bash (lime monospace), Jarvis favicon for jarvis, hidden %>
+    <%# for claude (Byte already covers the AI identity). Toggle via CSS %>
+    <%# on the form's data-mode. %>
+    <span class="byte-composer-mode-chip" data-byte-mode-icon>
+      <img class="byte-composer-mode-img" data-byte-composer-mode-img src="" alt="">
+      <span class="byte-composer-mode-text">$</span>
     </span>
     <textarea
       class="byte-input"
