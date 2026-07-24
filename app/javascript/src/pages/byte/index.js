@@ -931,15 +931,33 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (rafH) return;
     rafH = requestAnimationFrame(() => {
       rafH = 0;
-      document.documentElement.style.setProperty("--byte-app-h", `${window.innerHeight}px`);
+      const wh  = window.innerHeight;
+      const vvh = window.visualViewport ? Math.round(window.visualViewport.height) : null;
+      // Prefer visualViewport.height when available — it always matches
+      // the visible viewport (excludes keyboard). window.innerHeight can
+      // report the LAYOUT viewport on some iOS PWA configurations,
+      // which is bigger than what's visible when the keyboard is up.
+      const h = vvh || wh;
+      document.documentElement.style.setProperty("--byte-app-h", `${h}px`);
+      // Debug: publish to the drawer footer so misreports are visible.
+      const setV = (sel, val) => {
+        const el = document.querySelector(sel);
+        if (el) el.textContent = val;
+      };
+      setV("[data-byte-version-apph]", `${h}`);
+      setV("[data-byte-version-vvh]",  vvh != null ? `${vvh}` : "n/a");
+      setV("[data-byte-version-winh]", `${wh}`);
     });
   };
   setAppHeight();
   window.addEventListener("resize", setAppHeight);
   window.addEventListener("orientationchange", setAppHeight);
-  // visualViewport.resize catches keyboard open/close on iOS before
-  // window.resize sometimes fires; hook both.
   window.visualViewport?.addEventListener("resize", setAppHeight);
+  // Also re-measure on scroll and focus/blur — iOS fires visualViewport
+  // scroll BEFORE resize in some keyboard transitions.
+  window.visualViewport?.addEventListener("scroll", setAppHeight);
+  window.addEventListener("focusin",  setAppHeight);
+  window.addEventListener("focusout", setAppHeight);
 
   // Layout-viewport-scroll compensator (unchanged) — no height side-effect.
   if (window.visualViewport) {

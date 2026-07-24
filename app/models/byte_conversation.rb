@@ -12,10 +12,6 @@
 #  updated_at      :datetime         not null
 #  user_id         :bigint           not null
 #
-# A single Byte thread. One user has many; the drawer lists them ordered
-# by `last_message_at`. Each conversation carries its own dispatch mode
-# (claude/bash/jarvis) and its own private state on the Mac (bash cwd,
-# claude session id) stored in `metadata`.
 class ByteConversation < ApplicationRecord
   belongs_to :user
 

@@ -105,39 +105,27 @@ html.html-ctr-byte body {
   // CSS custom properties inherited from .ctr-byte so drawer/modals
   // outside .byte-app also resolve them.
 
-  // Height source of truth is JS-set `--byte-app-h` (from
-  // window.innerHeight in byte/index.js). Rationale: on iOS Safari
-  // standalone PWA, `100dvh`, `100vh`, AND `position: fixed; bottom: 0`
-  // all report different values depending on keyboard state, URL bar
-  // state, and iOS version — sometimes shorter than the visible viewport
-  // (composer floats mid-page), sometimes longer (composer pushed off
-  // the bottom). window.innerHeight is the only value that ALWAYS
-  // matches what the user actually sees.
+  // Flexbox column layout. Grid was showing thread as content-height
+  // (composer floated / disappeared depending on message count) — most
+  // likely a Safari grid rendering quirk. Flexbox with `flex: 1 1 0` +
+  // `min-height: 0` on the thread is the well-tested equivalent and
+  // works consistently across iOS Safari, Android Chrome, and desktop.
   //
-  // 100vh + 100dvh remain as fallbacks in the cascade so a JS-less boot
-  // still lands somewhere sensible (a small mis-size beats an unusable
-  // app).
+  // Height source of truth is JS-set `--byte-app-h` (window.innerHeight),
+  // clamped via `max-height`. Falls back to 100dvh / 100vh if JS doesn't
+  // run. `inset: 0` fills the fixed containing block regardless.
   position: fixed;
+  inset: 0;
   top: var(--byte-vv-top, 0);
-  left: 0;
-  right: 0;
   height: 100vh;
   height: 100dvh;
-  height: var(--byte-app-h, 100dvh);
+  max-height: var(--byte-app-h, 100dvh);
   body:has(.env-banner) & {
     top: calc(var(--byte-vv-top, 0px) + 10px);
-    height: calc(var(--byte-app-h, 100dvh) - 10px);
   }
-  display: grid;
-  // header · pwd-bar · thread · composer.
-  // `minmax(0, 1fr)` is critical: plain `1fr` respects the child's
-  // min-content size, so with few messages the thread row COLLAPSED to
-  // content-height (composer floated to mid-page) and with many messages
-  // it GREW past the viewport (composer pushed off the bottom). Using
-  // `minmax(0, 1fr)` locks the thread row to strictly-available space;
-  // its own overflow-y: auto handles internal scroll. Composer always
-  // sits at the bottom.
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: radial-gradient(1200px 700px at 20% -10%, #14284F 0%, transparent 60%),
               radial-gradient(1000px 800px at 100% 100%, #0B2B4E 0%, transparent 55%),
               var(--bs-bg);
@@ -148,6 +136,7 @@ html.html-ctr-byte body {
 }
 
 .byte-header {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -318,6 +307,14 @@ html.html-ctr-byte body {
 }
 
 .byte-thread {
+  // flex: 1 1 0 + min-height: 0 makes this the flexible middle track
+  // that soaks up all remaining vertical space between the fixed-size
+  // header/pwd-bar (above) and composer (below). `min-height: 0` is
+  // critical — without it, the child's intrinsic content height sets
+  // the min size and the composer gets shoved off-screen when the
+  // thread has many messages.
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 16px 12px 24px;
@@ -706,6 +703,7 @@ html.html-ctr-byte body {
 // on textarea styling. Without this scope, the reset's transparent background
 // would win and the input would look see-through.
 .byte-app .byte-composer {
+  flex: 0 0 auto;
   display: flex;
   align-items: flex-end;
   gap: 10px;
@@ -1207,6 +1205,7 @@ dialog.byte-modal {
 // directory for the current conversation. Empty state hides completely.
 // ---------------------------------------------------------------------------
 .byte-pwd-bar {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 6px;

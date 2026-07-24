@@ -162,7 +162,9 @@
     <footer class="byte-drawer-version" data-byte-version-footer>
       <div><span class="k">shell</span> <span class="v" data-byte-version-shell><%= COMMIT_SHA[0, 7] %></span></div>
       <div><span class="k">sw</span> <span class="v" data-byte-version-sw>…</span></div>
-      <div><span class="k">built</span> <span class="v"><%= File.exist?(Rails.root.join("app/assets/builds/index.js")) ? File.mtime(Rails.root.join("app/assets/builds/index.js")).strftime("%m-%d %H:%M") : "?" %></span></div>
+      <div><span class="k">app-h</span> <span class="v" data-byte-version-apph>…</span></div>
+      <div><span class="k">vv-h</span> <span class="v" data-byte-version-vvh>…</span></div>
+      <div><span class="k">win-h</span> <span class="v" data-byte-version-winh>…</span></div>
     </footer>
   </aside>
   <div class="byte-drawer-backdrop" data-byte-drawer-backdrop aria-hidden="true"></div>

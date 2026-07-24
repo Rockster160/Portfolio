@@ -1,3 +1,24 @@
+# == Schema Information
+#
+# Table name: byte_actions
+#
+#  id                   :bigint           not null, primary key
+#  buttons              :jsonb            not null
+#  decided_at           :datetime
+#  decision             :jsonb            not null
+#  expires_at           :datetime
+#  kind                 :integer          default("permission"), not null
+#  multi_select         :boolean          default(FALSE), not null
+#  state                :integer          default("pending"), not null
+#  tool_input           :jsonb            not null
+#  tool_name            :string
+#  created_at           :datetime         not null
+#  updated_at           :datetime         not null
+#  byte_conversation_id :bigint           not null
+#  byte_message_id      :bigint
+#  request_id           :string           not null
+#  user_id              :bigint           not null
+#
 # Structured request/response record for Byte's interactive prompts.
 # Backs three UX flows through a single record shape:
 #
