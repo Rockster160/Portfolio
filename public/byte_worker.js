@@ -13,7 +13,7 @@
 // Cache name is versioned: bump CACHE on shipping a new shell so old
 // clients re-pull the HTML next time they're online.
 
-const CACHE = "byte-v4";
+const CACHE = "byte-v5";
 
 // Byte only has one shell: the root of byte.<host>. Extending this list
 // later (a settings screen, a per-thread view, etc.) is a matter of
@@ -226,16 +226,20 @@ self.addEventListener("push", (evt) => {
 
   if (data.title || data.body) {
     evt.waitUntil((async () => {
-      // Suppress OS notification when the PWA is already open and
-      // visible — the in-app UI already shows the message via the
-      // WebSocket broadcast, so a system-level notification just
-      // double-alerts. Badge still updates so it's not silent.
-      const clients = await self.clients.matchAll({
-        type: "window",
-        includeUncontrolled: true,
-      });
-      const isVisible = clients.some((c) => c.visibilityState === "visible");
-      if (isVisible) return;
+      // Suppress OS notification when the PWA is already open — the
+      // in-app UI already renders the message via WebSocket broadcast,
+      // so a system banner just double-alerts.
+      //
+      // Broader match: no `type` filter (iOS standalone PWA sometimes
+      // isn't matched as "window"), no `includeUncontrolled` gating
+      // (installed PWA sessions can slip past the controller check on
+      // the first push after install). `focused` covers the case where
+      // iOS hasn't updated visibilityState yet during the push handoff.
+      const clients = await self.clients.matchAll({ includeUncontrolled: true });
+      const inForeground = clients.some((c) =>
+        c.visibilityState === "visible" || c.focused === true
+      );
+      if (inForeground) return;
       await self.registration.showNotification(data.title || "Byte", data);
     })());
   }
