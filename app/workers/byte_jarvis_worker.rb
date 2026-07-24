@@ -25,7 +25,32 @@ class ByteJarvisWorker
 
     response = ::Jarvis.command(user, body)
     text     = response.is_a?(Array) ? response.first.to_s : response.to_s
-    text     = "(no response)" if text.strip.empty?
+    data     = response.is_a?(Array) ? (response.last || {}) : {}
+
+    # If Jarvis emitted structured button data alongside its reply, render
+    # an action-request bubble with tap targets instead of (or in addition
+    # to) plain text. Format: `[reply_text, { byte_buttons: [...], multi_select: bool, title: "" }]`.
+    button_list = (data.is_a?(Hash) ? (data["byte_buttons"] || data[:byte_buttons]) : nil)
+    if button_list.is_a?(Array) && button_list.any?
+      buttons  = button_list
+      multi    = data["multi_select"] || data[:multi_select]
+      title    = data["title"] || data[:title] || "Jarvis"
+      subtitle = text.to_s.presence || "Choose an option"
+
+      ByteAction.create_request!(
+        user:         user,
+        conversation: conversation,
+        kind:         :jarvis,
+        title:        title,
+        subtitle:     subtitle,
+        buttons:      buttons.map { |b| b.is_a?(Hash) ? b : { "label" => b.to_s, "value" => b.to_s } },
+        multi_select: !!multi,
+      )
+      broadcast(user, message.reload)
+      return
+    end
+
+    text = "(no response)" if text.strip.empty?
 
     reply = conversation.byte_messages.create!(
       user:         user,

@@ -192,6 +192,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       bodyEl.innerHTML = message.body || "";
     } else if (kind === "jarvis") {
       bodyEl.textContent = message.body || "";
+    } else if (kind === "action-request") {
+      renderActionRequest(bodyEl, message);
     } else {
       bodyEl.textContent = message.body || "";
     }
@@ -243,6 +245,156 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else {
       container.open = false;
     }
+  }
+
+  // Action-request rendering (permission / plan / question / jarvis).
+  // Reads state + button config out of message.metadata, paints the
+  // header/subtitle/body/buttons, wires up tap handlers that POST the
+  // user's choice to the server. Idempotent — every re-render (state
+  // change, refetch, etc.) rebuilds the whole block cleanly.
+  function renderActionRequest(container, message) {
+    const meta       = message.metadata || {};
+    const requestId  = meta.action_request_id;
+    const actionKind = meta.action_kind || "permission";
+    const actionState = meta.action_state || "pending";
+    const buttons    = Array.isArray(meta.buttons) ? meta.buttons : [];
+    const multi      = !!meta.multi_select;
+    const title      = meta.title || meta.tool_name || "Action";
+    const subtitle   = meta.subtitle || "";
+    const body       = message.body || "";
+    const decision   = meta.action_decision || {};
+
+    const kindClass  = `byte-action-kind-${actionKind}`;
+    const stateClass = `byte-action-state-${actionState}`;
+
+    container.innerHTML = `
+      <div class="byte-action ${kindClass} ${stateClass}" data-request-id="${escapeAttr(requestId)}">
+        <div class="byte-action-head">
+          <span class="byte-action-icon" aria-hidden="true">${escapeHtml(iconForKind(actionKind))}</span>
+          <span class="byte-action-title">${escapeHtml(title)}</span>
+        </div>
+        ${subtitle ? `<div class="byte-action-subtitle">${escapeHtml(subtitle)}</div>` : ""}
+        ${body ? `<div class="byte-action-body">${renderMarkdown(body)}</div>` : ""}
+        <div class="byte-action-buttons" role="group">
+          ${renderButtons(buttons, multi, actionState, decision)}
+        </div>
+        ${multi && actionState === "pending" ? `
+          <button type="button" class="byte-action-submit" data-byte-action-submit>Submit</button>
+        ` : ""}
+        ${actionState === "decided" ? `
+          <div class="byte-action-decided">✓ decided${decision.value ? ` — ${escapeHtml(formatDecision(decision.value))}` : ""}</div>
+        ` : ""}
+      </div>
+    `;
+
+    wireActionHandlers(container, requestId, multi, actionState);
+  }
+
+  function iconForKind(kind) {
+    switch (kind) {
+      case "plan":     return "📋";
+      case "question": return "?";
+      case "jarvis":   return "🎩";
+      default:         return "⚡";
+    }
+  }
+
+  function renderButtons(buttons, multi, state, decision) {
+    const disabled = state !== "pending";
+    const chosenSet = new Set(Array.isArray(decision.value) ? decision.value.map(String) : (decision.value != null ? [String(decision.value)] : []));
+
+    return buttons.map((b) => {
+      const value       = b.value ?? b.label;
+      const isChosen    = chosenSet.has(String(value));
+      const variant     = b.variant || "default";
+      const classes     = [
+        "byte-action-btn",
+        `byte-action-btn-${variant}`,
+        isChosen ? "chosen" : "",
+        disabled ? "disabled" : "",
+      ].filter(Boolean).join(" ");
+      const description = b.description ? `<span class="byte-action-btn-desc">${escapeHtml(b.description)}</span>` : "";
+      return `
+        <button type="button" class="${classes}" data-byte-action-value="${escapeAttr(String(value))}" ${disabled ? "disabled" : ""}>
+          <span class="byte-action-btn-label">${escapeHtml(b.label ?? value)}</span>
+          ${description}
+        </button>
+      `;
+    }).join("");
+  }
+
+  function formatDecision(v) {
+    if (Array.isArray(v)) return v.join(", ");
+    return String(v);
+  }
+
+  function wireActionHandlers(container, requestId, multi, actionState) {
+    if (actionState !== "pending" || !requestId) return;
+
+    const btns   = Array.from(container.querySelectorAll("[data-byte-action-value]"));
+    const submit = container.querySelector("[data-byte-action-submit]");
+    const selected = new Set();
+
+    btns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (btn.disabled) return;
+        const value = btn.dataset.byteActionValue;
+        if (multi) {
+          if (selected.has(value)) { selected.delete(value); btn.classList.remove("selected"); }
+          else                     { selected.add(value);    btn.classList.add("selected"); }
+        } else {
+          // Optimistic: dim all, mark chosen, disable further taps until the
+          // server confirms (or throws).
+          btns.forEach((b) => { b.disabled = true; b.classList.add("disabled"); });
+          btn.classList.add("chosen");
+          submitAction(requestId, value, container);
+        }
+      });
+    });
+
+    submit?.addEventListener("click", () => {
+      if (submit.disabled) return;
+      if (selected.size === 0) return;
+      submit.disabled = true;
+      submit.textContent = "…";
+      btns.forEach((b) => { b.disabled = true; b.classList.add("disabled"); });
+      submitAction(requestId, Array.from(selected), container);
+    });
+  }
+
+  async function submitAction(requestId, value, container) {
+    try {
+      const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+      const res  = await fetch(`/byte/actions/${encodeURIComponent(requestId)}/respond`, {
+        method:      "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept":       "application/json",
+          "X-CSRF-Token": csrf,
+        },
+        body: JSON.stringify({ value: value }),
+      });
+      if (!res.ok) throw new Error(`http_${res.status}`);
+      // The broadcast that follows will repaint the bubble with
+      // action_state=decided — nothing to do here.
+    } catch (e) {
+      // Roll back optimistic state so the user can retry.
+      Array.from(container.querySelectorAll("[data-byte-action-value]")).forEach((b) => {
+        b.disabled = false;
+        b.classList.remove("chosen", "disabled");
+      });
+      const sub = container.querySelector("[data-byte-action-submit]");
+      if (sub) { sub.disabled = false; sub.textContent = "Submit"; }
+      const err = document.createElement("div");
+      err.className = "byte-action-error";
+      err.textContent = `Couldn't send: ${e.message}. Tap again.`;
+      container.appendChild(err);
+    }
+  }
+
+  function escapeAttr(s) {
+    return escapeHtml(String(s ?? "")).replace(/"/g, "&quot;");
   }
 
   function renderMarkdown(raw) {
@@ -635,7 +787,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   input.addEventListener("input", autosize);
   autosize();
 
-  // Viewport pin via CSS custom properties.
+  // Viewport pin: only compensate for iOS's layout-viewport SCROLL (which
+  // pushes `position:fixed` elements above the visible area when an input
+  // is focused). Height is handled entirely by `100dvh` + the
+  // `interactive-widget=resizes-content` viewport meta — those together
+  // shrink `dvh` when the keyboard opens on iOS 16.4+ / Android.
+  //
+  // Earlier iterations of this handler tried to set --byte-vv-height from
+  // `visualViewport.height` too, but iOS Safari reports `vv.height` as
+  // the smaller "safe" area (excluding the URL bar) at page load, while
+  // `window.innerHeight` reports the full page height. The `vv.height <
+  // innerHeight - 100` check fired falsely, pinning the app to the
+  // smaller value and leaving a big empty strip below the composer —
+  // exactly what the user just reported. Removing the height override
+  // fixes that; the composer sits flush with the bottom via dvh.
   if (window.visualViewport) {
     const vv = window.visualViewport;
     let rafTop = 0;
@@ -650,18 +815,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       });
     };
-    const applyHeight = () => {
-      const keyboardOpen = vv.height < window.innerHeight - 100;
-      if (keyboardOpen) {
-        document.documentElement.style.setProperty("--byte-vv-height", `${vv.height}px`);
-      } else {
-        document.documentElement.style.removeProperty("--byte-vv-height");
-      }
-    };
     vv.addEventListener("scroll", applyTop, { passive: true });
-    vv.addEventListener("resize", () => { applyTop(); applyHeight(); }, { passive: true });
+    vv.addEventListener("resize", applyTop, { passive: true });
     applyTop();
-    applyHeight();
+    // Ensure any lingering height override from a previous session (e.g.
+    // an older bundle that set it) is cleared on load.
+    document.documentElement.style.removeProperty("--byte-vv-height");
   }
 
   // ---------- realtime + drain triggers ----------

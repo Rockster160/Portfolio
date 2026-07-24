@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_07_23_181802) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_23_201346) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -365,6 +365,29 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_23_181802) do
     t.index ["param_key"], name: "index_boxes_on_param_key", unique: true
     t.index ["parent_key"], name: "index_boxes_on_parent_key"
     t.index ["user_id"], name: "index_boxes_on_user_id"
+  end
+
+  create_table "byte_actions", force: :cascade do |t|
+    t.string "request_id", null: false
+    t.integer "kind", default: 0, null: false
+    t.integer "state", default: 0, null: false
+    t.bigint "user_id", null: false
+    t.bigint "byte_conversation_id", null: false
+    t.bigint "byte_message_id"
+    t.string "tool_name"
+    t.jsonb "tool_input", default: {}, null: false
+    t.jsonb "buttons", default: [], null: false
+    t.boolean "multi_select", default: false, null: false
+    t.jsonb "decision", default: {}, null: false
+    t.datetime "expires_at"
+    t.datetime "decided_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["byte_conversation_id"], name: "index_byte_actions_on_byte_conversation_id"
+    t.index ["byte_message_id"], name: "index_byte_actions_on_byte_message_id"
+    t.index ["request_id"], name: "index_byte_actions_on_request_id", unique: true
+    t.index ["state", "expires_at"], name: "index_byte_actions_on_state_and_expires_at"
+    t.index ["user_id"], name: "index_byte_actions_on_user_id"
   end
 
   create_table "byte_conversations", force: :cascade do |t|
@@ -1381,6 +1404,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_23_181802) do
   add_foreign_key "agendas", "google_accounts"
   add_foreign_key "agendas", "users"
   add_foreign_key "boxes", "users"
+  add_foreign_key "byte_actions", "byte_conversations"
+  add_foreign_key "byte_actions", "byte_messages"
+  add_foreign_key "byte_actions", "users"
   add_foreign_key "byte_conversations", "users"
   add_foreign_key "byte_messages", "byte_conversations"
   add_foreign_key "byte_messages", "users"

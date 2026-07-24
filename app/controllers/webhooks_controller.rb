@@ -330,6 +330,95 @@ class WebhooksController < ApplicationController
     render json: message.as_wire, status: :ok
   end
 
+  # Mac (or any other originator) creates a Byte action-request. Persists
+  # the ByteAction record, creates the accompanying action-request message
+  # in the target conversation, broadcasts it, and returns the wire form
+  # so the caller can correlate its blocking wait with the request_id.
+  def byte_create_action
+    return head :unauthorized unless byte_authorized?
+
+    user_id = params[:user_id].presence || User.me.id
+    user    = User.find_by(id: user_id)
+    return head :not_found if user.blank?
+
+    convo = byte_resolve_conversation(user)
+    return head :not_found if convo.nil?
+
+    incoming    = byte_metadata(params)
+    request_id  = params[:request_id].presence || SecureRandom.uuid
+    kind        = normalized_action_kind(params[:kind])
+    tool_name   = params[:tool_name].to_s.presence
+    tool_input  = byte_json_field(params[:tool_input]) || {}
+    buttons     = byte_json_field(params[:buttons]) || []
+    multi       = ActiveModel::Type::Boolean.new.cast(params[:multi_select])
+    expires_at  = parse_expiry(params[:expires_in], params[:expires_at])
+
+    action = ByteAction.create!(
+      user:              user,
+      byte_conversation: convo,
+      request_id:        request_id,
+      kind:              kind,
+      tool_name:         tool_name,
+      tool_input:        tool_input,
+      buttons:           buttons,
+      multi_select:      !!multi,
+      expires_at:        expires_at,
+    )
+
+    message = convo.byte_messages.create!(
+      user:         user,
+      direction:    :inbound,
+      state:        :delivered,
+      body:         params[:body].to_s,
+      metadata:     {
+        kind:               :"action-request",
+        action_request_id:  request_id,
+        action_kind:        kind.to_s,
+        action_state:       :pending,
+        tool_name:          tool_name,
+        tool_input:         tool_input,
+        buttons:            buttons,
+        multi_select:       !!multi,
+        title:              params[:title].to_s.presence,
+        subtitle:           params[:subtitle].to_s.presence,
+        expires_at:         expires_at&.iso8601(3),
+      }.merge(incoming.symbolize_keys.except(:action_state)),
+      delivered_at: Time.current,
+    )
+    action.update!(byte_message_id: message.id)
+
+    MonitorChannel.broadcast_to(user, {
+      id:      :byte,
+      channel: :byte,
+      data:    { kind: :message, message: message.as_wire },
+    })
+
+    render json: {
+      request_id: action.request_id,
+      message_id: message.id,
+      action:     action.as_wire,
+    }, status: :created
+  end
+
+  private def normalized_action_kind(raw)
+    sym = raw.to_s.downcase.to_sym
+    ByteAction.kinds.key?(sym.to_s) ? sym : :permission
+  end
+
+  private def byte_json_field(raw)
+    return raw if raw.is_a?(Array) || raw.is_a?(Hash)
+    return raw.to_unsafe_h if raw.respond_to?(:to_unsafe_h)
+    JSON.parse(raw.to_s) rescue nil
+  end
+
+  private def parse_expiry(expires_in, expires_at)
+    if expires_at.present?
+      Time.parse(expires_at.to_s) rescue nil
+    elsif expires_in.present?
+      expires_in.to_i.seconds.from_now
+    end
+  end
+
   # Mac → Rails conversation metadata update (e.g. cwd changed after cd,
   # claude_session_id changed after /adopt). Secret-auth like the other
   # byte webhooks; performs a MERGE (not replace) so multi-writer keys

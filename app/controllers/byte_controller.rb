@@ -162,6 +162,59 @@ class ByteController < ApplicationController
     render json: { sessions: result || [] }
   end
 
+  # PWA button tap → records the decision on ByteAction, updates the
+  # message state, broadcasts the update, and pings the Mac's decision
+  # hook so any waiting Claude Code PreToolUse hook wakes up.
+  def respond_action
+    action = current_user.byte_actions.find_by(request_id: params[:request_id])
+    return head(:not_found) if action.nil?
+    return head(:conflict)  unless action.pending?
+
+    value = params[:value]
+    if action.multi_select
+      value = Array(value).map(&:to_s)
+    end
+
+    action.apply_decision!(value: value, source: :user)
+
+    if action.byte_message
+      MonitorChannel.broadcast_to(current_user, {
+        id:      MONITOR_CHANNEL,
+        channel: MONITOR_CHANNEL,
+        data:    { kind: :message, message: action.byte_message.reload.as_wire },
+      })
+    end
+
+    # Fire-and-forget notification to the Mac so a blocked hook can
+    # unblock. Silent on failure — the hook will time out and deny.
+    Thread.new {
+      begin
+        ByteLocal.notify_action_decision(action)
+      rescue => e
+        Rails.logger.warn("[Byte] action decision notify failed: #{e.class}: #{e.message}")
+      end
+    }
+
+    # For Jarvis-mode clarifications, the tap ALSO fires the chosen
+    # value as a fresh Jarvis command in the same conversation.
+    if action.jarvis?
+      chosen = Array(value).first.to_s
+      if chosen.present?
+        followup = action.byte_conversation.byte_messages.create!(
+          user:       current_user,
+          direction:  :outbound,
+          state:      :sent,
+          body:       chosen,
+          metadata:   { source: :button, action_request_id: action.request_id },
+        )
+        broadcast(followup)
+        ByteJarvisWorker.perform_async(followup.id)
+      end
+    end
+
+    render json: action.as_wire
+  end
+
   # Long-lived PWAs eventually outlive the CSRF token baked into the
   # initial shell.
   def csrf

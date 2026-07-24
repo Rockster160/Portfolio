@@ -52,6 +52,7 @@ Rails.application.routes.draw do
   patch  "/byte/conversations/:id" => "byte#update_conversation",  as: :byte_conversation
   delete "/byte/conversations/:id" => "byte#archive_conversation"
   get    "/byte/claude_sessions"   => "byte#claude_sessions",      as: :byte_claude_sessions
+  post   "/byte/actions/:request_id/respond" => "byte#respond_action", as: :byte_action_respond
 
   namespace :internal do
     get "auth", to: "auth#check"
@@ -220,6 +221,7 @@ Rails.application.routes.draw do
   post  "webhooks/byte"                  => "webhooks#byte_create"
   patch "webhooks/byte/:id"              => "webhooks#byte_update"
   patch "webhooks/byte/conversation/:id" => "webhooks#byte_update_conversation"
+  post  "webhooks/byte/action"           => "webhooks#byte_create_action"
 
   get "webhooks/uptime" => "webhooks#uptime"
   post "webhooks/uptime" => "webhooks#uptime"

@@ -92,6 +92,27 @@ module ByteLocal
     }
   end
 
+  # Rails → Mac: user has decided on an action-request. Mac wakes any
+  # PreToolUse hook blocking on that request_id so Claude Code proceeds.
+  def notify_action_decision(action)
+    uri = URI.join(base_url, "/byte/action_decision")
+    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
+    req.body = JSON.generate({
+      request_id: action.request_id,
+      decision:   action.decision,
+      state:      action.state,
+      kind:       action.kind,
+      tool_name:  action.tool_name,
+    })
+
+    Net::HTTP.start(uri.hostname, uri.port,
+      use_ssl: uri.scheme == "https", open_timeout: TIMEOUT_SECONDS, read_timeout: TIMEOUT_SECONDS,
+    ) { |http| http.request(req) }
+  rescue => e
+    Rails.logger.warn("[Byte] notify_action_decision failed: #{e.class}: #{e.message}")
+    nil
+  end
+
   def valid_secret?(header_value)
     expected = secret
     return true if expected.empty? && Rails.env.development?

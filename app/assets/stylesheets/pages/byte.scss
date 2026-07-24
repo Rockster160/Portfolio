@@ -1288,3 +1288,169 @@ dialog.byte-modal {
     .byte-composer-mode-img { display: block; }
   }
 }
+
+// ---------------------------------------------------------------------------
+// Action-request bubbles (permission / plan / question / jarvis). Reusable
+// primitive: header + optional subtitle + optional body + button row. Kind-
+// specific accents live on `.byte-action-kind-*` for a subtle visual cue.
+// ---------------------------------------------------------------------------
+.byte-msg.byte-msg-kind-action-request {
+  max-width: 94%;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.byte-action {
+  background: var(--bs-panel);
+  border: 1px solid var(--bs-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+
+  &.byte-action-kind-permission { border-left: 3px solid var(--bs-accent-strong); }
+  &.byte-action-kind-plan       { border-left: 3px solid #FBBF24; background: rgba(251, 191, 36, 0.05); }
+  &.byte-action-kind-question   { border-left: 3px solid #A78BFA; }
+  &.byte-action-kind-jarvis     { border-left: 3px solid #86EFAC; }
+
+  &.byte-action-state-decided {
+    opacity: 0.85;
+  }
+}
+
+.byte-action-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.byte-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.byte-action-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--bs-text);
+}
+
+.byte-action-subtitle {
+  color: var(--bs-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  word-break: break-all;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+}
+
+.byte-action-body {
+  color: var(--bs-text);
+  font-size: 13px;
+  line-height: 1.45;
+  padding: 6px 4px;
+  max-height: 40vh;
+  overflow-y: auto;
+
+  pre {
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 6px;
+    padding: 8px 10px;
+    overflow-x: auto;
+    font-size: 12px;
+  }
+}
+
+.byte-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.ctr-byte .byte-app .byte-action-btn {
+  flex: 1 1 auto;
+  min-width: 90px;
+  padding: 10px 14px !important;
+  border-radius: 8px !important;
+  background: var(--bs-panel-soft) !important;
+  border: 1px solid var(--bs-border) !important;
+  color: var(--bs-text) !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  text-align: center;
+  cursor: pointer;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: background 0.12s, border-color 0.12s, transform 0.08s;
+
+  .byte-action-btn-label { font-size: 14px; }
+  .byte-action-btn-desc  { font-size: 11px; color: var(--bs-muted); font-weight: 400; }
+
+  &:hover:not(.disabled)  { background: var(--bs-border) !important; }
+  &:active:not(.disabled) { transform: scale(0.98); }
+
+  &.byte-action-btn-primary {
+    background: linear-gradient(135deg, #2563EB 0%, #3FA0FF 100%) !important;
+    border-color: transparent !important;
+    color: #fff !important;
+  }
+  &.byte-action-btn-danger {
+    background: rgba(248, 113, 113, 0.12) !important;
+    border-color: rgba(248, 113, 113, 0.35) !important;
+    color: var(--bs-danger) !important;
+  }
+  &.selected {
+    background: rgba(63, 160, 255, 0.18) !important;
+    border-color: rgba(63, 160, 255, 0.6) !important;
+    color: var(--bs-accent-strong) !important;
+  }
+  &.chosen {
+    outline: 2px solid rgba(134, 239, 172, 0.7);
+    outline-offset: -2px;
+  }
+  &.disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.ctr-byte .byte-app .byte-action-submit {
+  align-self: flex-end;
+  padding: 8px 16px !important;
+  border-radius: 8px !important;
+  background: linear-gradient(135deg, #2563EB 0%, #3FA0FF 100%) !important;
+  border: none !important;
+  color: #fff !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+.byte-action-decided {
+  font-size: 12px;
+  color: #86EFAC;
+  font-weight: 500;
+}
+
+.byte-action-error {
+  font-size: 12px;
+  color: var(--bs-danger);
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(248, 113, 113, 0.08);
+}
