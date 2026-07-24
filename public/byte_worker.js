@@ -225,7 +225,19 @@ self.addEventListener("push", (evt) => {
   }
 
   if (data.title || data.body) {
-    evt.waitUntil(self.registration.showNotification(data.title || "Byte", data));
+    evt.waitUntil((async () => {
+      // Suppress OS notification when the PWA is already open and
+      // visible — the in-app UI already shows the message via the
+      // WebSocket broadcast, so a system-level notification just
+      // double-alerts. Badge still updates so it's not silent.
+      const clients = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      const isVisible = clients.some((c) => c.visibilityState === "visible");
+      if (isVisible) return;
+      await self.registration.showNotification(data.title || "Byte", data);
+    })());
   }
 });
 

@@ -122,16 +122,76 @@ document.addEventListener("DOMContentLoaded", async () => {
     ].filter(Boolean).join(" ");
     const bodyEl = node.querySelector("[data-body]");
     // Rendering strategy by kind:
-    //   claude / system → markdown-lite (fenced code, inline code, bold, italic)
+    //   claude          → thoughts collapsible + markdown-lite final body
+    //   system          → markdown-lite (fenced code, inline code, bold, italic)
     //   shell           → server pre-rendered HTML (ANSI colours already
     //                     converted to <span> by AnsiHtml.convert)
     //   default         → textContent (user sends, unclassified inbound)
-    if (kind === "claude" || kind === "system") {
+    if (kind === "claude") {
+      renderThoughts(
+        node.querySelector("[data-thoughts]"),
+        message.metadata && message.metadata.thoughts,
+        message.state,
+      );
+      bodyEl.innerHTML = renderMarkdown(message.body || "");
+    } else if (kind === "system") {
       bodyEl.innerHTML = renderMarkdown(message.body || "");
     } else if (kind === "shell") {
       bodyEl.innerHTML = message.body || "";
     } else {
       bodyEl.textContent = message.body || "";
+    }
+  }
+
+  // Populates the collapsible "Thinking (N steps)" section on a Claude
+  // message. While the turn is still streaming: open + auto-scroll to
+  // bottom on each update so the user sees new tool uses arrive without
+  // manual scrolling. Once delivered: collapse so the final response
+  // stays the visible focus.
+  function renderThoughts(container, thoughts, state) {
+    if (!container) return;
+    const list = Array.isArray(thoughts) ? thoughts : [];
+    if (list.length === 0) {
+      container.hidden = true;
+      container.open = false;
+      return;
+    }
+    container.hidden = false;
+
+    const summary = container.querySelector("[data-thoughts-summary]");
+    const body    = container.querySelector("[data-thoughts-body]");
+    if (!summary || !body) return;
+
+    summary.textContent =
+      state === "streaming"
+        ? `Thinking (${list.length} step${list.length === 1 ? "" : "s"})…`
+        : `Thinking (${list.length} step${list.length === 1 ? "" : "s"})`;
+
+    // Preserve auto-scroll if the user was already tracking the bottom
+    // of the thoughts pane (which is the natural spot during streaming).
+    const wasAtBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 40;
+
+    body.innerHTML = list.map((t) => {
+      const type = t && t.type;
+      const value = (t && t.value) || "";
+      if (type === "tool_use") {
+        return `<div class="byte-thought byte-thought-tool">🔧 ${escapeHtml(value)}</div>`;
+      }
+      if (type === "tool_result") {
+        return `<div class="byte-thought byte-thought-result">${escapeHtml(value)}</div>`;
+      }
+      // Text (intermediate reasoning) — render with markdown-lite so
+      // fenced code / inline code inside a "let me check…" note look right.
+      return `<div class="byte-thought byte-thought-text">${renderMarkdown(value)}</div>`;
+    }).join("");
+
+    if (state === "streaming") {
+      container.open = true;
+      if (wasAtBottom) body.scrollTop = body.scrollHeight;
+    } else {
+      // Auto-collapse when the turn's done — keep the final response
+      // in view. User can still tap to expand and re-read the trail.
+      container.open = false;
     }
     node.querySelector("[data-time]").textContent = formatTime(message.created_at);
     renderAttachments(node.querySelector("[data-attachments]"), message.attachments);

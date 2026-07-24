@@ -386,10 +386,11 @@ html.html-ctr-byte body {
 }
 
 .byte-msg {
-  max-width: 78%;
+  max-width: 82%;
   @media (min-width: 720px) {
-    max-width: 560px;
+    max-width: 620px;
   }
+  font-size: 14px;
   padding: 8px 12px 6px;
   border-radius: 16px;
   background: var(--bs-them-bg);
@@ -397,7 +398,6 @@ html.html-ctr-byte body {
   align-self: flex-start;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
   position: relative;
-  font-size: 15px;
   line-height: 1.35;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -447,7 +447,7 @@ html.html-ctr-byte body {
   // frames don't wrap awkwardly, and horizontal scroll for lines that
   // would overflow anyway (long `ls -la` rows, etc.).
   &.byte-msg-kind-shell {
-    max-width: 92%;
+    max-width: 94%;
     background: #0B1524;
     border: 1px solid var(--bs-border);
     color: #C7D5EE;
@@ -472,7 +472,7 @@ html.html-ctr-byte body {
   // difference: the accent border on Claude vs. subtle bg on system.
   &.byte-msg-kind-claude,
   &.byte-msg-kind-system {
-    max-width: 92%;
+    max-width: 94%;
 
     .byte-msg-body {
       // Body is innerHTML — preserve author-intended line breaks via
@@ -519,6 +519,79 @@ html.html-ctr-byte body {
   // messages (which are just plain inbound bubbles otherwise).
   &.byte-msg-kind-claude {
     border-left: 2px solid var(--bs-accent);
+  }
+
+  // Collapsible "Thinking (N steps)" panel for Claude replies.
+  // Open + auto-scrolls to bottom while the turn is streaming;
+  // auto-collapses on delivery so the final response is the visible
+  // focus. Contents include intermediate reasoning text + tool uses
+  // (both wrapped in a monospace code-block feel for readability).
+  .byte-msg-thoughts {
+    margin: 4px 0 8px;
+    background: rgba(0, 0, 0, 0.28);
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 11.5px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+
+    &[hidden] { display: none; }
+
+    summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 4px 0;
+      color: var(--bs-muted);
+      user-select: none;
+      &::-webkit-details-marker { display: none; }
+      &::before {
+        content: "▶";
+        display: inline-block;
+        margin-right: 6px;
+        font-size: 9px;
+        transition: transform 0.15s;
+      }
+    }
+    &[open] summary::before {
+      transform: rotate(90deg);
+    }
+
+    .byte-msg-thoughts-body {
+      margin-top: 6px;
+      max-height: 260px;
+      overflow-y: auto;
+      overflow-x: auto;
+      padding-right: 4px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .byte-thought {
+      margin-bottom: 5px;
+      &:last-child { margin-bottom: 0; }
+
+      &.byte-thought-tool {
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        color: var(--bs-accent-strong);
+        font-size: 11.5px;
+        white-space: pre;
+        word-break: normal;
+      }
+      &.byte-thought-result {
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        color: var(--bs-muted);
+        font-size: 10.5px;
+        padding-left: 20px;
+        white-space: pre;
+        word-break: normal;
+      }
+      &.byte-thought-text {
+        color: var(--bs-text);
+        opacity: 0.85;
+        font-size: 12px;
+        line-height: 1.4;
+
+        .byte-md-code { font-size: 11px; margin: 4px 0; }
+      }
+    }
   }
 
   .byte-msg-attachments {

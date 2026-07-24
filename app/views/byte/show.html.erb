@@ -80,6 +80,12 @@
   <template data-byte-message-tpl>
     <article class="byte-msg">
       <div class="byte-msg-attachments" data-attachments></div>
+      <%# Collapsible thoughts (Claude's intermediate reasoning + tool %>
+      <%# uses). Hidden entirely for non-Claude messages. %>
+      <details class="byte-msg-thoughts" data-thoughts hidden>
+        <summary data-thoughts-summary>Thinking</summary>
+        <div class="byte-msg-thoughts-body" data-thoughts-body></div>
+      </details>
       <div class="byte-msg-body" data-body></div>
       <div class="byte-msg-meta">
         <time data-time></time>
