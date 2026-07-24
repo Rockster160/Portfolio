@@ -63,15 +63,19 @@ export class ConversationManager {
     initialConversations,
     onSwitch,
     prefillComposer,
+    sendCommand,
     unreadFor,
   }) {
     this.conversationsUrl   = conversationsUrl;
     this.claudeSessionsUrl  = claudeSessionsUrl;
     this.onSwitch           = onSwitch;
-    // Prefill hook so drawer menu actions can drop `/rename `, `/adopt `,
-    // etc. straight into the composer with the caret positioned at the
-    // end — replaces window.prompt/confirm entirely.
+    // Prefill hook so drawer menu actions like `/rename ` can drop a
+    // partial command into the composer for the user to complete.
     this.prefillComposer    = prefillComposer || (() => {});
+    // Programmatic send — auto-fires slash commands like `/adopt <name>`
+    // straight at a target conversation so the user doesn't have to
+    // pick, then confirm, then hit send. Optimistic by design.
+    this.sendCommand        = sendCommand || (() => {});
     // Read-only accessor for the current unread count per conversation
     // (Map-backed in index.js). Rendered as a badge on each row.
     this.unreadFor          = unreadFor || (() => 0);
@@ -178,19 +182,43 @@ export class ConversationManager {
     return updated;
   }
 
+  // Optimistic archive: strip the conversation from the local list + jump
+  // to a survivor immediately, then fire the DELETE. If the server rejects,
+  // put it back and re-render. Matches the "assume it will work" pattern —
+  // the drawer feels instant instead of stalling on a network round-trip.
   async archiveConversation(id) {
-    const url = this.conversationsUrl.replace(/\/?$/, "") + "/" + id;
-    await apiCall(url, "DELETE");
+    const idx = this.conversations.findIndex((c) => c.id === id);
+    if (idx < 0) return;
+    const removed = this.conversations[idx];
+    const wasCurrent = this.currentId === id;
+
+    // Optimistic removal + jump.
     this.conversations = this.conversations.filter((c) => c.id !== id);
     saveCachedList(this.conversations);
-    // If we archived the current, jump to the newest survivor (or trigger
-    // refresh which will land on the server default).
-    if (this.currentId === id) {
+    if (wasCurrent) {
       const next = this.conversations[0]?.id;
       if (next) this.switchTo(next);
-      else await this.refresh();
+      else this.render();
     } else {
       this.render();
+    }
+
+    // Confirm with the server; roll back on failure so the user doesn't
+    // silently think it archived when the API rejected them.
+    const url = this.conversationsUrl.replace(/\/?$/, "") + "/" + id;
+    try {
+      await apiCall(url, "DELETE");
+      // If we ended up with an empty list AND we were on the archived
+      // conversation, refresh so the server can default us somewhere.
+      if (wasCurrent && this.conversations.length === 0) {
+        await this.refresh();
+      }
+    } catch (err) {
+      this.conversations.splice(idx, 0, removed);
+      saveCachedList(this.conversations);
+      if (wasCurrent) this.switchTo(id);
+      else this.render();
+      alert(`Archive failed: ${err.message || err}`);
     }
   }
 
@@ -253,16 +281,25 @@ export class ConversationManager {
         else this.modeImg.removeAttribute("src");
       }
     }
-    // Pwd bar shows the effective working directory for the current
-    // conversation. Hidden entirely when unknown so we don't display a
-    // stale/generic path.
+    // Header subtitle: cwd (defaults to Portfolio) + adopted Claude
+    // session name (if any). The Mac pushes both into
+    // conversation.metadata; when neither is known yet we still show the
+    // Portfolio default so the header block never feels empty.
     if (this.pwdBar && this.pwdPath && convo) {
-      const cwd = convo.metadata && convo.metadata.cwd;
-      if (cwd) {
-        this.pwdPath.textContent = shortHome(cwd);
-        this.pwdBar.dataset.visible = "true";
-      } else {
-        this.pwdBar.dataset.visible = "false";
+      const cwd = (convo.metadata && convo.metadata.cwd) || "~/code/Portfolio";
+      this.pwdPath.textContent = shortHome(cwd);
+      this.pwdBar.dataset.visible = "true";
+
+      const sessionWrap = document.querySelector("[data-byte-pwd-session]");
+      const sessionName = document.querySelector("[data-byte-pwd-session-name]");
+      const name        = convo.metadata && convo.metadata.claude_session_name;
+      if (sessionWrap && sessionName) {
+        if (name && String(name).trim()) {
+          sessionName.textContent = name;
+          sessionWrap.hidden = false;
+        } else {
+          sessionWrap.hidden = true;
+        }
       }
     }
 
@@ -375,10 +412,13 @@ export class ConversationManager {
 
   handleArchive() {
     if (this.menuTargetId == null) return;
+    const targetId = this.menuTargetId;
     this.menuModal?.close();
-    this.closeDrawer();
-    this.switchTo(this.menuTargetId);
-    this.prefillComposer("/archive", { focus: true, selectAll: false });
+    // Fire-and-forget — archiveConversation is optimistic (list update
+    // + switch happen before the API call resolves), so the drawer
+    // feels instant. Don't close the drawer: the user tapped a menu
+    // in the drawer; showing the row disappear is the visual receipt.
+    this.archiveConversation(targetId);
   }
 
   // Adopt opens a compact chooser modal (read-only from Mac's session
@@ -421,7 +461,10 @@ export class ConversationManager {
           this.switchTo(targetId);
           // Fall back to id prefix if the session has no user-friendly name.
           const arg = s.name && s.name.trim() ? s.name : s.id.slice(0, 8);
-          this.prefillComposer(`/adopt ${arg}`, { focus: true });
+          // Auto-send. `/adopt <name>` posts as a real bubble in the
+          // thread (so there's a receipt), and the Mac's switch_session
+          // will follow up with a confirmation + last-context bubble.
+          this.sendCommand(targetId, `/adopt ${arg}`);
         });
         this.adoptList?.appendChild(li);
       });

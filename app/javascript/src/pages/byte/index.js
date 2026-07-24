@@ -113,6 +113,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch (_) {}
       }
     },
+    // Drawer actions that auto-send (e.g. adopt) route through the same
+    // sendMessage pipeline the composer uses, but target an explicit
+    // conversation id so the command lands in the right thread even if
+    // the user is currently viewing a different one.
+    sendCommand: (convId, body) => sendMessageTo(convId, body),
     unreadFor: (id) => drawerUnread.get(id) || 0,
   });
 
@@ -745,6 +750,82 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (thread.scrollTop < LOAD_TRIGGER_PX) maybeLoadOlder();
   });
 
+  setupLongPressCopy();
+
+  // Long-press on the bubble (but NOT on the actual text content) copies
+  // the whole message body to the clipboard. iOS's native selection
+  // callout still fires inside [data-body] / [data-thoughts] /
+  // [data-attachments] so per-word selection keeps working — those areas
+  // get `-webkit-user-select: text` in the SCSS. The rest of `.byte-msg`
+  // is `user-select: none` + `-webkit-touch-callout: none` so this
+  // handler owns the long-press.
+  function setupLongPressCopy() {
+    let timer = null, startX = 0, startY = 0;
+    const MOVE_TOLERANCE = 8;
+    const HOLD_MS        = 500;
+
+    const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+
+    thread.addEventListener("pointerdown", (e) => {
+      if (e.button != null && e.button !== 0) return; // primary only
+      const msg = e.target.closest?.(".byte-msg");
+      if (!msg) return;
+      // Text-selection zones — let native behaviour handle these.
+      if (e.target.closest?.("[data-body], [data-thoughts], [data-attachments]")) return;
+
+      startX = e.clientX;
+      startY = e.clientY;
+      timer = setTimeout(() => {
+        timer = null;
+        const text = (msg.querySelector("[data-body]")?.textContent || "").trim();
+        if (!text) return;
+        copyText(text).then((ok) => flashToast(ok ? "Copied" : "Copy failed"));
+      }, HOLD_MS);
+    }, { passive: true });
+
+    thread.addEventListener("pointermove", (e) => {
+      if (!timer) return;
+      if (Math.abs(e.clientX - startX) > MOVE_TOLERANCE ||
+          Math.abs(e.clientY - startY) > MOVE_TOLERANCE) cancel();
+    }, { passive: true });
+
+    thread.addEventListener("pointerup",     cancel, { passive: true });
+    thread.addEventListener("pointercancel", cancel, { passive: true });
+    thread.addEventListener("scroll",        cancel, { passive: true });
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard?.writeText) {
+      return navigator.clipboard.writeText(text).then(() => true).catch(() => false);
+    }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return Promise.resolve(ok);
+    } catch {
+      return Promise.resolve(false);
+    }
+  }
+
+  let toastNode = null, toastTimer = null;
+  function flashToast(text) {
+    if (!toastNode) {
+      toastNode = document.createElement("div");
+      toastNode.className = "byte-toast";
+      document.body.appendChild(toastNode);
+    }
+    toastNode.textContent = text;
+    toastNode.classList.add("byte-toast-visible");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastNode?.classList.remove("byte-toast-visible"), 1200);
+  }
+
   function receiveMessage(message) {
     const wasAtBottom = measureAtBottom();
     const isNew = !nodeForServerMessage(message);
@@ -888,12 +969,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ---------- send ----------
 
-  function handleSend(rawBody) {
-    const body = rawBody.trim();
-    if (!body) return;
-
-    input.value = "";
-    autosize();
+  // Fire a message at a specific conversation without needing the
+  // composer. Used by drawer actions (e.g. adopting a Claude session)
+  // that want to auto-send a slash command straight at the target
+  // thread instead of prefilling the composer for the user to submit.
+  function sendMessageTo(convId, body) {
+    if (!body || !convId) return;
 
     if (body === "/clear" || body === "/clear-local") {
       clearLocalState();
@@ -905,7 +986,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       : `l-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     const client_ts = Date.now();
-    const convId    = currentConversationId;
 
     const entry = {
       local_id,
@@ -941,6 +1021,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (e.conversation_id === currentConversationId) markQueuedFailed(e.local_id, reason);
       },
     });
+  }
+
+  function handleSend(rawBody) {
+    const body = rawBody.trim();
+    if (!body) return;
+    input.value = "";
+    autosize();
+    sendMessageTo(currentConversationId, body);
   }
 
   function clearLocalState() {

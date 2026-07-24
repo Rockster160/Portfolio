@@ -433,6 +433,23 @@ html.html-ctr-byte body {
   overflow-wrap: anywhere;
   word-break: break-word;
 
+  // Long-press on the bubble padding / meta area copies the full body
+  // (JS: setupLongPressCopy). Suppress iOS's native selection callout
+  // there so the two gestures don't fight. Text zones re-enable native
+  // selection so per-word copy still works — see the [data-body] etc.
+  // rule just below.
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+
+  [data-body],
+  [data-thoughts],
+  [data-attachments] {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+  }
+
   &.byte-msg-outbound {
     align-self: flex-end;
     background: var(--bs-me-bg);
@@ -1289,11 +1306,26 @@ dialog.byte-modal {
   font-size: 11px;
   color: var(--bs-muted);
   line-height: 1.3;
+  min-width: 0;  // let overflow: hidden on children actually clip
 
   &[data-visible="false"] { display: none; }
 
-  .byte-pwd-icon { color: var(--bs-accent); opacity: 0.7; }
-  .byte-pwd-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .byte-pwd-icon    { color: var(--bs-accent); opacity: 0.7; flex: 0 0 auto; }
+  .byte-pwd-path    { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
+  .byte-pwd-session {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--bs-text);
+    opacity: 0.75;
+    &[hidden] { display: none; }
+  }
+  .byte-pwd-sep { color: var(--bs-muted); opacity: 0.5; }
 }
 
 // ---------------------------------------------------------------------------
@@ -1639,3 +1671,25 @@ dialog.byte-modal {
   margin-top:    calc(env(safe-area-inset-top) + 20px);
   margin-bottom: calc(env(safe-area-inset-bottom) + 20px);
 }
+
+// Transient "Copied" toast — fired by the long-press-copy handler.
+// Fixed to the bottom-center, above the composer, safe-area aware.
+// Opacity-only transition so it doesn't jump the layout.
+.byte-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 96px);
+  transform: translateX(-50%);
+  z-index: 10000;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(15, 25, 48, 0.92);
+  color: #E8ECF6;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+.byte-toast.byte-toast-visible { opacity: 1; }

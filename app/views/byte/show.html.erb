@@ -77,12 +77,17 @@
     </button>
   </header>
 
-  <%# Slim strip under the header showing the effective cwd for the %>
-  <%# current conversation. Blank when unknown; the Mac fills it in on %>
-  <%# the first `cd` or shell run and pushes updates via broadcast. %>
-  <div class="byte-pwd-bar" data-byte-pwd data-visible="<%= @conversation.metadata['cwd'].present? %>">
+  <%# Slim strip glued to the bottom of the header showing the effective %>
+  <%# cwd (defaults to Portfolio) and the currently-adopted Claude session %>
+  <%# name, if any. Visually part of the header block — subtle secondary %>
+  <%# context, not a separate section. %>
+  <div class="byte-pwd-bar" data-byte-pwd data-visible="true">
     <span class="byte-pwd-icon" aria-hidden="true">›</span>
-    <span class="byte-pwd-path" data-byte-pwd-path><%= short_home(@conversation.metadata['cwd']) %></span>
+    <span class="byte-pwd-path" data-byte-pwd-path><%= short_home(@conversation.metadata['cwd'] || "~/code/Portfolio") %></span>
+    <span class="byte-pwd-session" data-byte-pwd-session<%= " hidden" if @conversation.metadata['claude_session_name'].blank? %>>
+      <span class="byte-pwd-sep" aria-hidden="true">·</span>
+      <span data-byte-pwd-session-name><%= @conversation.metadata['claude_session_name'] %></span>
+    </span>
   </div>
 
   <main class="byte-thread" data-byte-thread aria-live="polite" aria-relevant="additions">
