@@ -406,6 +406,13 @@ class WebhooksController < ApplicationController
       data:    { kind: :message, message: message.as_wire },
     })
 
+    # Action requests (permission, plan, question) are TIME-SENSITIVE —
+    # Claude is blocked waiting for the user's tap. If the user has
+    # walked away from Byte, push a notification so they know to come
+    # back. byte_notify itself checks presence and skips when the user
+    # is currently in-app.
+    byte_notify(user, message)
+
     render json: {
       request_id: action.request_id,
       message_id: message.id,
@@ -515,7 +522,25 @@ class WebhooksController < ApplicationController
     convo = message.byte_conversation
     title = (convo&.display_name.presence || "Byte")
 
-    body = clean_byte_body(message.body).truncate(160).presence || "(attachment)"
+    meta = message.metadata.is_a?(Hash) ? message.metadata : {}
+
+    # Permission / plan / question requests deserve a distinct, louder
+    # framing so they're not lost in the stream of normal messages —
+    # Claude is BLOCKED until you answer. Prefix the tool name so the
+    # notification reads: "Claude wants: Bash · rm -rf /tmp/foo".
+    body =
+      if meta["kind"] == "action-request"
+        tool = meta["tool_name"].to_s
+        sub  = meta["subtitle"].to_s
+        prefix = case meta["action_kind"]
+        when "plan"     then "📋 Plan approval"
+        when "question" then "❓ Question"
+        else                 "⚡ Approve #{tool}"
+        end
+        [prefix, sub].reject(&:empty?).join(" · ").truncate(160)
+      else
+        clean_byte_body(message.body).truncate(160).presence || "(attachment)"
+      end
 
     WebPushNotifications.send_to_byte(
       title: title,
