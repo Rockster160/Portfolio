@@ -614,16 +614,55 @@ document.addEventListener("DOMContentLoaded", async () => {
   // `height`. Only `resize` and `scroll` trigger updates, and both are
   // debounced to a single rAF so we never do more work per frame than
   // the compositor asked for.
-  // Keyboard behaviour: pure CSS via `100dvh` + `interactive-widget=
-  // resizes-content` in the viewport meta. iOS Safari 16.4+ shrinks
-  // both the layout viewport and dvh when the keyboard opens, so
-  // `position: fixed` at `top: 0` with `height: 100dvh` stays pinned
-  // to the visible area and the internal scroll continues to work.
+  // Keyboard + focus behaviour on iOS. Two things we're compensating for:
   //
-  // No JS visualViewport handler here — every attempt to compensate
-  // for iOS's keyboard timing has jittered the layout and blocked
-  // internal scroll. iOS < 16.4 users get a slightly imperfect
-  // keyboard experience; everyone else gets working scroll.
+  // 1. iOS scrolls the layout viewport upward to bring a focused input
+  //    into view. `position: fixed; top: 0` then ends up ABOVE the
+  //    visible viewport — that's what pushed the header off-screen when
+  //    you focused the composer. Fix: update `--byte-vv-top` from
+  //    `vv.offsetTop` on scroll events (cheap, no layout reflow).
+  //
+  // 2. On iOS < 16.4 (or when `interactive-widget=resizes-content` is
+  //    ignored), `100dvh` doesn't shrink when the keyboard opens, so
+  //    the composer ends up behind it. Fix: override `--byte-vv-height`
+  //    from `vv.height` — but ONLY on resize events, never on scroll.
+  //    Updating height mid-scroll invalidates layout and jams internal
+  //    thread scroll (previous iteration's regression).
+  if (window.visualViewport) {
+    const vv = window.visualViewport;
+    let rafTop = 0;
+
+    const applyTop = () => {
+      if (rafTop) return;
+      rafTop = requestAnimationFrame(() => {
+        rafTop = 0;
+        if (vv.offsetTop > 0) {
+          document.documentElement.style.setProperty("--byte-vv-top", `${vv.offsetTop}px`);
+        } else {
+          document.documentElement.style.removeProperty("--byte-vv-top");
+        }
+      });
+    };
+
+    const applyHeight = () => {
+      // Only override when a keyboard is clearly present. Otherwise
+      // leave the CSS var unset so the `100dvh` fallback wins.
+      const keyboardOpen = vv.height < window.innerHeight - 100;
+      if (keyboardOpen) {
+        document.documentElement.style.setProperty("--byte-vv-height", `${vv.height}px`);
+      } else {
+        document.documentElement.style.removeProperty("--byte-vv-height");
+      }
+    };
+
+    // scroll → top only (mid-scroll layout changes cause jam)
+    vv.addEventListener("scroll", applyTop, { passive: true });
+    // resize → both (keyboard open/close, URL bar toggle)
+    vv.addEventListener("resize", () => { applyTop(); applyHeight(); }, { passive: true });
+
+    applyTop();
+    applyHeight();
+  }
 
   // ---------- realtime + drain triggers ----------
 

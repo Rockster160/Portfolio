@@ -87,20 +87,23 @@ html.html-ctr-byte body {
   --bs-danger: #F87171;
   --bs-pending: #94A3B8;
 
-  // Pure CSS keyboard handling: iOS Safari 16.4+ shrinks `100dvh` when
-  // the soft keyboard opens (paired with `interactive-widget=resizes-
-  // content` in the viewport meta). Any JS-side compensation we've
-  // tried has caused jitter or blocked internal scroll — trusting the
-  // browser is the reliable path.
+  // Two CSS custom properties fed by a visualViewport listener in
+  // byte/index.js:
+  //   --byte-vv-top     iOS layout-viewport-scroll offset (usually 0;
+  //                     becomes positive when iOS scrolls up to bring
+  //                     the focused input into view)
+  //   --byte-vv-height  visible viewport height when the keyboard is
+  //                     open (fallback: 100dvh, which iOS 16.4+ shrinks
+  //                     natively via interactive-widget=resizes-content)
   position: fixed;
-  top: 0;
+  top: var(--byte-vv-top, 0);
   left: 0;
   right: 0;
   height: 100vh;
-  height: 100dvh;
+  height: var(--byte-vv-height, 100dvh);
   body:has(.env-banner) & {
-    top: 10px;
-    height: calc(100dvh - 10px);
+    top: calc(var(--byte-vv-top, 0px) + 10px);
+    height: calc(var(--byte-vv-height, 100dvh) - 10px);
   }
   display: grid;
   grid-template-rows: auto 1fr auto;
