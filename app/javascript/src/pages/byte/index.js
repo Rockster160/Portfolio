@@ -1099,12 +1099,52 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch (_) {}
   }
 
+  // Presence heartbeat. Tells Rails "user is looking at Byte right now"
+  // so the webhook can skip firing a push notification. iOS would render
+  // the push as an OS banner even if the SW tried to suppress it (Web
+  // Push spec's userVisibleOnly forces a notification), so the ONLY
+  // reliable way to avoid double-alerts is to not send the push at all.
+  let presenceInterval = 0;
+  const sendPresence = (state) => {
+    try {
+      const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+      fetch("/byte/presence", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept":       "application/json",
+          "X-CSRF-Token": csrf,
+        },
+        body: JSON.stringify({ state: state }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch (_) {}
+  };
+  const startPresence = () => {
+    sendPresence("visible");
+    if (presenceInterval) clearInterval(presenceInterval);
+    // 15s < 30s TTL server-side, so a missed heartbeat still falls off
+    // within one interval and pushes resume when we're actually gone.
+    presenceInterval = setInterval(() => sendPresence("visible"), 15_000);
+  };
+  const stopPresence = () => {
+    sendPresence("hidden");
+    if (presenceInterval) { clearInterval(presenceInterval); presenceInterval = 0; }
+  };
+  if (document.visibilityState === "visible") startPresence();
+  window.addEventListener("pagehide", stopPresence);
+
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState !== "visible") return;
-    scheduleDrain();
-    refetchHistory();
-    requestShellRefresh();
-    checkForServiceWorkerUpdate();
+    if (document.visibilityState === "visible") {
+      startPresence();
+      scheduleDrain();
+      refetchHistory();
+      requestShellRefresh();
+      checkForServiceWorkerUpdate();
+    } else {
+      stopPresence();
+    }
   });
 
   setInterval(scheduleDrain, 30_000);

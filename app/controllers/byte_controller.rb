@@ -215,6 +215,35 @@ class ByteController < ApplicationController
     render json: action.as_wire
   end
 
+  # Heartbeat from the client while the PWA is foreground. Records a
+  # short-lived "user is looking at Byte right now" fact in Rails.cache.
+  # `byte_notify` (webhooks_controller.rb) consults this to skip pushing
+  # a system-level notification for a message the user is about to see
+  # in-app via the WebSocket broadcast anyway.
+  #
+  # Client pings on visibilitychange → visible, and on a 15s interval
+  # while it stays visible. TTL is 30s so a missed heartbeat still
+  # falls off within one interval.
+  def presence
+    return head(:forbidden) unless current_user&.me?
+
+    state = params[:state].to_s
+    if state == "visible"
+      Rails.cache.write(presence_key(current_user), Time.current.to_i, expires_in: 30.seconds)
+    elsif state == "hidden"
+      Rails.cache.delete(presence_key(current_user))
+    end
+    head :no_content
+  end
+
+  def self.presence_key(user)
+    "byte:presence:#{user.id}"
+  end
+
+  def presence_key(user)
+    self.class.presence_key(user)
+  end
+
   # Long-lived PWAs eventually outlive the CSRF token baked into the
   # initial shell.
   def csrf

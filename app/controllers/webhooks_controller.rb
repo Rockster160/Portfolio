@@ -493,12 +493,14 @@ class WebhooksController < ApplicationController
   end
 
   # Push notifications only fire on terminal states — silent while
-  # streaming. Every kind (shell / claude / jarvis / system) gets a push;
-  # the service worker suppresses the OS-level banner when the app is
-  # currently visible — so if you're already looking at Byte, no
-  # double-alert; if you've walked away, you get pinged.
+  # streaming. Every kind (shell / claude / jarvis / system) gets a push
+  # UNLESS the user's PWA is currently foreground (server-side presence
+  # heartbeat via `ByteController#presence`). This is server-side so we
+  # never hand a push to iOS to potentially fall-back-render — SW-side
+  # suppression can't beat iOS's `userVisibleOnly` enforcement.
   private def byte_notify(user, message)
     return unless message.state == "delivered"
+    return if byte_user_present?(user)
 
     # Title: the conversation's own display name so you know which thread
     # pinged you at a glance. Falls back to "Byte" for orphaned messages.
@@ -513,6 +515,12 @@ class WebhooksController < ApplicationController
       tag:   "byte-#{message.id}",
       users: [user],
     )
+  end
+
+  # Is this user's Byte PWA foreground right now? Populated by the
+  # `/byte/presence` heartbeat while the tab/window is visible.
+  private def byte_user_present?(user)
+    Rails.cache.read(ByteController.presence_key(user)).present?
   end
 
   # Push tray shows plain text — strip everything that would look garbage:

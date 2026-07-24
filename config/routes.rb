@@ -47,6 +47,7 @@ Rails.application.routes.draw do
   get  "/byte/messages" => "byte#messages",       as: :byte_message_history
   post "/byte/messages" => "byte#create_message", as: :byte_messages
   get  "/byte/csrf"     => "byte#csrf",           as: :byte_csrf
+  post "/byte/presence" => "byte#presence",       as: :byte_presence
   get    "/byte/conversations"     => "byte#list_conversations",   as: :byte_conversations
   post   "/byte/conversations"     => "byte#create_conversation",  as: :byte_create_conversation
   patch  "/byte/conversations/:id" => "byte#update_conversation",  as: :byte_conversation
