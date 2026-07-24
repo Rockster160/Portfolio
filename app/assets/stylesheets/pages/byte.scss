@@ -136,10 +136,14 @@ html.html-ctr-byte body {
   }
   display: grid;
   // header · pwd-bar · thread · composer.
-  // pwd-bar is an auto row (collapses when empty via `[data-visible="false"] {display:none}`).
-  // Without the extra `auto`, adding the pwd bar shoved the composer past
-  // the visible viewport when the keyboard opened.
-  grid-template-rows: auto auto 1fr auto;
+  // `minmax(0, 1fr)` is critical: plain `1fr` respects the child's
+  // min-content size, so with few messages the thread row COLLAPSED to
+  // content-height (composer floated to mid-page) and with many messages
+  // it GREW past the viewport (composer pushed off the bottom). Using
+  // `minmax(0, 1fr)` locks the thread row to strictly-available space;
+  // its own overflow-y: auto handles internal scroll. Composer always
+  // sits at the bottom.
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   background: radial-gradient(1200px 700px at 20% -10%, #14284F 0%, transparent 60%),
               radial-gradient(1000px 800px at 100% 100%, #0B2B4E 0%, transparent 55%),
               var(--bs-bg);
@@ -987,28 +991,27 @@ html.html-ctr-byte body {
 
 // Dialogs (new/menu/adopt). Native <dialog> centred on the viewport with
 // a backdrop from ::backdrop.
-// Dialog element itself — max specificity + !important to defeat forms.scss
-// cascade and the sass-computed `.basic` form background from earlier in
-// this file. Panel colour lives on the DIALOG, not the inner form, so
-// there's exactly one solid background to worry about.
+// Dialog element itself. `padding: 0` + flex column so the inner form
+// can be the SCROLL container; that way when the keyboard shrinks the
+// viewport, the form scrolls inside a bounded dialog and every field
+// stays reachable. Without this, the dialog itself sets overflow-y but
+// its content has no bounded height, so nothing actually scrolls and
+// the Mode select gets clipped off-screen.
 .ctr-byte .byte-modal,
 dialog.byte-modal {
   border: none !important;
   background: var(--bs-panel) !important;
   color: var(--bs-text) !important;
-  padding: 20px !important;
+  padding: 0 !important;
   border-radius: 14px !important;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
   width: 420px;
   max-width: 92vw;
-  max-height: 85vh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+  overflow: hidden !important;
 
   &::backdrop { background: rgba(0, 0, 0, 0.6); }
 
-  &[open]      { display: block; }
+  &[open]      { display: flex; flex-direction: column; }
   &:not([open]) { display: none; }
 
   &.byte-modal-wide {
@@ -1017,19 +1020,26 @@ dialog.byte-modal {
   }
 }
 
-// Inner form / body container — flex column layout, transparent so the
-// dialog's own background shows through. `.basic` in the class list would
-// otherwise steal a blue-card background from forms.scss.
+// Inner form / body container — the actual scroll surface. Flex column
+// with min-height: 0 (required in a flex parent so the child can shrink
+// below its intrinsic size, enabling scrollbar rather than expansion).
+// Padding lives here (not on the dialog) so scroll boundaries are inside
+// the padded area.
 .ctr-byte .byte-modal .byte-modal-form,
 .ctr-byte .byte-modal form.byte-modal-form.basic {
   background: transparent !important;
   border: none !important;
-  padding: 0 !important;
+  padding: 20px !important;
   margin: 0 !important;
   box-shadow: none !important;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .byte-modal-title {
