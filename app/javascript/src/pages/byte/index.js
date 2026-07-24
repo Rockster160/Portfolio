@@ -915,25 +915,36 @@ document.addEventListener("DOMContentLoaded", async () => {
   input.addEventListener("input", autosize);
   autosize();
 
-  // Viewport pin — height is handled ENTIRELY by CSS `100dvh` plus the
-  // `interactive-widget=resizes-content` viewport meta. iOS Safari
-  // standalone PWAs shrink `dvh` natively when the software keyboard
-  // opens; Android does the same. Every previous attempt to JS-set the
-  // height from `visualViewport.height` produced a stale/undersized
-  // pin in some environment (URL bar false-positive, standalone PWA
-  // misreport, PostMessage timing race). Trust the platform.
+  // Height source of truth: `window.innerHeight`. This is the ONE
+  // measurement that iOS Safari standalone PWA reports accurately in
+  // every keyboard / URL-bar state. `100dvh`, `visualViewport.height`,
+  // and `position: fixed; bottom: 0` have all misbehaved on user's
+  // device (composer floating mid-screen with few messages, disappearing
+  // off-bottom with many messages, pushed below the keyboard on focus).
   //
-  // Belt-and-suspenders: actively CLEAR any lingering `--byte-vv-height`
-  // that a stale service-worker-cached bundle might have set previously.
+  // Pump into `--byte-app-h`, then let CSS bind `.byte-app` height to it.
+  // Clear any lingering `--byte-vv-height` from earlier bundles.
   document.documentElement.style.removeProperty("--byte-vv-height");
 
+  let rafH = 0;
+  const setAppHeight = () => {
+    if (rafH) return;
+    rafH = requestAnimationFrame(() => {
+      rafH = 0;
+      document.documentElement.style.setProperty("--byte-app-h", `${window.innerHeight}px`);
+    });
+  };
+  setAppHeight();
+  window.addEventListener("resize", setAppHeight);
+  window.addEventListener("orientationchange", setAppHeight);
+  // visualViewport.resize catches keyboard open/close on iOS before
+  // window.resize sometimes fires; hook both.
+  window.visualViewport?.addEventListener("resize", setAppHeight);
+
+  // Layout-viewport-scroll compensator (unchanged) — no height side-effect.
   if (window.visualViewport) {
     const vv = window.visualViewport;
     let rafId = 0;
-
-    // Keep the layout-viewport-scroll compensator only — this pushes the
-    // fixed app back into view when iOS scrolls up to reveal a focused
-    // input near the bottom. No height side-effect.
     const applyTop = () => {
       if (rafId) return;
       rafId = requestAnimationFrame(() => {
@@ -945,7 +956,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       });
     };
-
     vv.addEventListener("resize", applyTop, { passive: true });
     vv.addEventListener("scroll", applyTop, { passive: true });
     applyTop();

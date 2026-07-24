@@ -105,34 +105,28 @@ html.html-ctr-byte body {
   // CSS custom properties inherited from .ctr-byte so drawer/modals
   // outside .byte-app also resolve them.
 
-  // Height is `100dvh` — no JS involvement. iOS 16.4+ and Android both
-  // shrink dvh natively when the software keyboard opens (paired with
-  // `interactive-widget=resizes-content` in the viewport meta), so we
-  // never need to compute the keyboard-open height in Ruby-like JS.
-  // Previous JS-based `--byte-vv-height` overrides all produced some
-  // undersized-pin regression (URL bar false-positive, standalone PWA
-  // misreport, etc.) — this is the version that works everywhere.
+  // Height source of truth is JS-set `--byte-app-h` (from
+  // window.innerHeight in byte/index.js). Rationale: on iOS Safari
+  // standalone PWA, `100dvh`, `100vh`, AND `position: fixed; bottom: 0`
+  // all report different values depending on keyboard state, URL bar
+  // state, and iOS version — sometimes shorter than the visible viewport
+  // (composer floats mid-page), sometimes longer (composer pushed off
+  // the bottom). window.innerHeight is the only value that ALWAYS
+  // matches what the user actually sees.
   //
-  // `--byte-vv-top` still comes from JS: it compensates for iOS's
-  // layout-viewport SCROLL (which shoves fixed elements above the
-  // visible area when an input near the bottom is focused).
-  // Fill the fixed containing block with `top:0; bottom:0` instead of
-  // computing a height. This has to work across:
-  //   * iOS Safari (standalone PWA + in-browser)
-  //   * Android Chrome
-  //   * Desktop Safari/Chrome/Firefox
-  // and `100dvh` misreports on some iOS configurations, leaving the app
-  // shorter than the viewport (composer floats mid-screen). Using the
-  // `bottom` edge means the browser sizes us to whatever the viewport
-  // actually is right now — no unit conversion, no calc, no vh/dvh/svh
-  // guesswork.
+  // 100vh + 100dvh remain as fallbacks in the cascade so a JS-less boot
+  // still lands somewhere sensible (a small mis-size beats an unusable
+  // app).
   position: fixed;
   top: var(--byte-vv-top, 0);
   left: 0;
   right: 0;
-  bottom: 0;
+  height: 100vh;
+  height: 100dvh;
+  height: var(--byte-app-h, 100dvh);
   body:has(.env-banner) & {
     top: calc(var(--byte-vv-top, 0px) + 10px);
+    height: calc(var(--byte-app-h, 100dvh) - 10px);
   }
   display: grid;
   // header · pwd-bar · thread · composer.
