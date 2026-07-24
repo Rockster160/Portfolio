@@ -1101,20 +1101,54 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
+  // Actually-hard reload. The naive version (`caches.delete` + `location.reload`)
+  // still lets the SW serve the OLD assets on the reloaded page — because
+  //   (a) we never asked the browser to re-fetch the SW file itself, so
+  //       an updated SW that's been deployed has never been installed;
+  //   (b) we told any waiting SW to `skipWaiting` but didn't wait for it
+  //       to activate, so the reload could beat the swap;
+  //   (c) `location.reload()` on iOS PWA standalone doesn't always bypass
+  //       HTTP-layer caches — a URL cache-buster param does.
   async function hardReload() {
     try {
       const reg = await navigator.serviceWorker?.getRegistration("/");
-      if (reg?.waiting) {
-        reg.waiting.postMessage({ action: "skip_waiting" });
+
+      if (reg) {
+        // (a) Ask the browser to re-fetch the SW script and, if it's
+        // different, install it. This is what actually pulls in a newer
+        // SW file after a deploy.
+        try { await reg.update(); } catch (_) {}
+
+        // (b) Any waiting SW: activate it and wait for the swap to land.
+        if (reg.waiting) {
+          const waited = new Promise((resolve) => {
+            const w = reg.waiting;
+            if (!w) return resolve();
+            const done = () => {
+              if (w.state === "activated" || w.state === "redundant") resolve();
+            };
+            w.addEventListener("statechange", done);
+            w.postMessage({ action: "skip_waiting" });
+            // Belt-and-suspenders: don't hang forever if statechange never fires.
+            setTimeout(resolve, 2500);
+          });
+          await waited;
+        }
       }
-      if (navigator.onLine && "caches" in window) {
+
+      // Nuke ALL caches, not just byte-*. Some future feature might
+      // introduce a new cache namespace we forget to whitelist here.
+      if ("caches" in window) {
         const keys = await caches.keys();
-        await Promise.all(
-          keys.filter((k) => k.startsWith("byte-")).map((k) => caches.delete(k)),
-        );
+        await Promise.all(keys.map((k) => caches.delete(k)));
       }
     } catch (_) {}
-    location.reload();
+
+    // (c) Cache-buster forces the navigation itself past any HTTP cache.
+    // Uses `replace` so the buster URL doesn't clutter back-history.
+    const url = new URL(location.href);
+    url.searchParams.set("_bust", Date.now().toString(36));
+    location.replace(url.toString());
   }
 
   reloadBtn?.addEventListener("click", hardReload);
