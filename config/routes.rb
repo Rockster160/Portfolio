@@ -223,6 +223,8 @@ Rails.application.routes.draw do
   patch "webhooks/byte/:id"              => "webhooks#byte_update"
   patch "webhooks/byte/conversation/:id" => "webhooks#byte_update_conversation"
   post  "webhooks/byte/action"           => "webhooks#byte_create_action"
+  get   "webhooks/byte/agenda"           => "webhooks#byte_agenda"
+  get   "webhooks/byte/weather"          => "webhooks#byte_weather"
 
   get "webhooks/uptime" => "webhooks#uptime"
   post "webhooks/uptime" => "webhooks#uptime"

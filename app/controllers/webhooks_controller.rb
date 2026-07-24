@@ -467,6 +467,116 @@ class WebhooksController < ApplicationController
     render json: convo.as_wire
   end
 
+  # Read-only agenda lookup for Buddy. Accepts either a symbolic `range`
+  # (today / tomorrow / weekend / week / upcoming) or a free-form `q`
+  # (mirrors AgendaItem search syntax). Returns a compact text summary
+  # that the LLM can drop straight into a reply — pre-formatted in the
+  # user's timezone as 12h AM/PM so we don't rely on the model to do
+  # timezone math (it gets it wrong).
+  def byte_agenda
+    return head :unauthorized unless byte_authorized?
+
+    user = User.find_by(id: params[:user_id].presence || User.me.id)
+    return head :not_found if user.blank?
+
+    scope = AgendaItem.where(agenda_id: user.accessible_agendas.select(:id))
+    label = byte_agenda_scope(scope, user, params[:range], params[:q])
+    return render json: { error: :"unknown range" }, status: :bad_request if label.nil?
+
+    items = label[:scope].order(:start_at).limit(50)
+    lines = items.map { |it| byte_format_agenda_line(it, user) }
+    body  = lines.empty? ? "no items in that range." : lines.join("\n")
+
+    render json: { range: label[:name], count: items.length, body: body }
+  end
+
+  # Weather passthrough for Buddy — server holds WEATHER_APIKEY.
+  # No location param support yet: uses the home coords the dashboard
+  # already uses. Returns a compact one-liner suitable for chat.
+  def byte_weather
+    return head :unauthorized unless byte_authorized?
+
+    key = ENV["WEATHER_APIKEY"].to_s
+    return render json: { error: :"WEATHER_APIKEY not set" }, status: :service_unavailable if key.empty?
+
+    uri = URI("https://api.openweathermap.org/data/3.0/onecall")
+    uri.query = URI.encode_www_form(
+      lat:     40.4805,
+      lon:     -111.9982,
+      units:   :imperial,
+      exclude: "minutely,hourly,alerts",
+      lang:    :en,
+      appid:   key,
+    )
+    res = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http|
+      http.get(uri.request_uri)
+    }
+    return render json: { error: "openweather #{res.code}" }, status: :bad_gateway unless res.is_a?(Net::HTTPSuccess)
+
+    payload = JSON.parse(res.body)
+    body    = byte_format_weather(payload)
+    render json: { body: body }
+  end
+
+  private def byte_agenda_scope(base, user, range, query)
+    q = query.to_s.strip
+    return { name: q, scope: AgendaItem.query(q).where(id: base.select(:id)) } if q.present?
+
+    now       = Time.current
+    tz        = user.timezone
+    zone_now  = now.in_time_zone(tz)
+    case range.to_s.downcase.presence || "upcoming"
+    when "today"
+      { name: :today, scope: base.where(start_at: zone_now.all_day) }
+    when "tomorrow"
+      day = zone_now.tomorrow
+      { name: :tomorrow, scope: base.where(start_at: day.all_day) }
+    when "weekend"
+      # This coming Sat/Sun in the user's TZ. If today is Sat, "weekend"
+      # means today + tomorrow; if Sun, just today.
+      sat   = zone_now.next_occurring(:saturday)
+      sat   = zone_now.beginning_of_day if [6, 0].include?(zone_now.wday)
+      sun   = sat + 1.day
+      start = [zone_now, sat.beginning_of_day].max
+      finish = sun.end_of_day
+      { name: :weekend, scope: base.where(start_at: start..finish) }
+    when "week"
+      finish = (zone_now + 7.days).end_of_day
+      { name: :week, scope: base.where(start_at: zone_now..finish) }
+    when "upcoming"
+      { name: :upcoming, scope: base.upcoming.where("start_at < ?", zone_now + 14.days) }
+    else
+      nil
+    end
+  end
+
+  private def byte_format_agenda_line(item, user)
+    tz    = user.timezone
+    start = item.start_at&.in_time_zone(tz)
+    return "- #{item.name} (no time)" if start.nil?
+
+    stamp = start.strftime("%a %-m/%-d %-I:%M %p")
+    parts = ["#{stamp}  #{item.name}"]
+    parts << "@ #{item.location}" if item.location.present?
+    "- #{parts.join("  ")}"
+  end
+
+  private def byte_format_weather(payload)
+    cur   = payload["current"] || {}
+    today = (payload["daily"] || []).first || {}
+    cond  = (cur.dig("weather", 0, "description") || "").to_s
+    temp  = cur["temp"].to_f.round
+    feels = cur["feels_like"].to_f.round
+    hi    = today.dig("temp", "max").to_f.round
+    lo    = today.dig("temp", "min").to_f.round
+    rain  = (today["pop"].to_f * 100).round
+    parts = ["currently #{temp}°F#{cond.empty? ? "" : ", #{cond}"}"]
+    parts << "feels like #{feels}°F" if (feels - temp).abs >= 3
+    parts << "today high #{hi}°F / low #{lo}°F"
+    parts << "chance of rain #{rain}%" if rain > 0
+    parts.join(". ") + "."
+  end
+
   private def byte_authorized?
     ByteLocal.valid_secret?(request.headers["X-Byte-Secret"])
   end

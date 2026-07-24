@@ -2,8 +2,10 @@ require "rails_helper"
 
 # Load the Mac-side scripts directly; they don't depend on Rails so
 # this is a very lightweight isolation test. Verifies routing by mode
-# without spinning up the full server.
-require Rails.root.join("_scripts/byte/handler")
+# without spinning up the full server. The Byte tree was extracted from
+# Portfolio to its own ~/code/Byte directory since it's a deployable-
+# alone service.
+require File.expand_path("~/code/Byte/handler")
 
 RSpec.describe Handler do
   before do

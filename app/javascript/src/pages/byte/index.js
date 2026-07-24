@@ -202,8 +202,33 @@ document.addEventListener("DOMContentLoaded", async () => {
     // renderThoughts by mistake, which meant non-claude messages had blank
     // times and unpainted attachments.
     node.querySelector("[data-time]").textContent = formatTime(message.created_at);
+    // Raw ISO stamp so reorderActiveTail can sort settled messages by
+    // effective "sent" time. Claude responses have their created_at
+    // bumped on finalisation (touch_created_at); action-requests keep
+    // their original — so a decided action ends up ABOVE the response
+    // even when the response finished streaming first.
+    if (message.created_at) node.dataset.createdAt = message.created_at;
     renderAttachments(node.querySelector("[data-attachments]"), message.attachments);
     node.querySelector("[data-state]").textContent = renderState(message);
+
+    // Tag the node with its "active" role so the tail-reorder pass can
+    // float in-flight items to the bottom. A message is active while it's
+    // still being produced or is waiting on the user:
+    //   * streaming = a response mid-write (Claude typing, shell rolling)
+    //   * pending   = an action-request awaiting the user's tap
+    // Once it settles (response delivered, action decided), the tag is
+    // dropped and the node takes its natural created_at position — which,
+    // for finalised Claude responses, is bumped via touch_created_at so
+    // the answered action-request ends up sitting ABOVE the response
+    // (as if it had "sent" earlier, which is when it actually happened).
+    const actionState = kind === "action-request" ? (message?.metadata?.action_state || "pending") : null;
+    if (message.state === "streaming" && kind !== "action-request") {
+      node.dataset.activeKind = "streaming";
+    } else if (kind === "action-request" && actionState === "pending") {
+      node.dataset.activeKind = "pending";
+    } else {
+      delete node.dataset.activeKind;
+    }
   }
 
   function renderThoughts(container, thoughts, state) {
@@ -568,15 +593,38 @@ document.addEventListener("DOMContentLoaded", async () => {
       thread.appendChild(node);
     }
     paintMessageNode(node, message);
-    // A message that's currently STREAMING (Claude typing / shell output
-    // rolling in) should always render at the bottom of the thread —
-    // otherwise it's easily out-drawn by an action-request card that
-    // spawned mid-turn. Move to end on every paint. Once the message
-    // finalises (state != streaming), the server bumps its created_at
-    // to now (touch_created_at) so it stays at the bottom naturally,
-    // and we stop forcibly moving it.
-    if (message.state === "streaming" && node.parentElement === thread && node !== thread.lastElementChild) {
-      thread.appendChild(node);
+    reorderActiveTail();
+  }
+
+  // Reorder the thread so that any "active" message (streaming response
+  // or pending action-request) floats to the bottom, with streaming
+  // responses above pending action-requests. Settled messages sort by
+  // created_at — which, thanks to touch_created_at on finalised Claude
+  // responses, places an already-answered action-request ABOVE the
+  // response even when the response finished streaming first. Only
+  // touches nodes from the first point of divergence onward so scroll
+  // position and focus are preserved.
+  function reorderActiveTail() {
+    const children = Array.from(thread.children);
+    const settled = [];
+    const streaming = [];
+    const pending = [];
+    for (const n of children) {
+      const kind = n.dataset.activeKind;
+      if (kind === "streaming") streaming.push(n);
+      else if (kind === "pending") pending.push(n);
+      else settled.push(n);
+    }
+    settled.sort((a, b) => {
+      const at = Date.parse(a.dataset.createdAt || "") || 0;
+      const bt = Date.parse(b.dataset.createdAt || "") || 0;
+      return at - bt;
+    });
+    const desired = [...settled, ...streaming, ...pending];
+    let i = 0;
+    while (i < children.length && children[i] === desired[i]) i++;
+    for (; i < desired.length; i++) {
+      thread.appendChild(desired[i]);
     }
   }
 

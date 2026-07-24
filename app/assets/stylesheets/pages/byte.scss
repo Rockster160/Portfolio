@@ -1129,23 +1129,82 @@ dialog.byte-modal {
 .byte-menu-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
+// Menu-item buttons in the per-conversation actions modal. Every rule
+// carries !important because the global `button` cascade in
+// components/forms.scss:180 sets color/font-weight/padding + a nasty
+// `:active { position: relative; top: 1px }` translate that on a full-
+// width list button looks like the button "jumped" on tap. We reset the
+// whole visual language here — soft-panel resting state, distinct
+// pressed state (scale + darker fill, no translate), and an intentional
+// focus ring instead of the default UA blue outline that iOS Safari
+// paints when a dialog auto-focuses the first tabbable child.
 .ctr-byte .byte-app .byte-menu-btn,
 .byte-modal .byte-menu-btn {
-  text-align: left;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--bs-text);
-  border: 1px solid transparent;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  width: 100% !important;
+  text-align: left !important;
+  padding: 12px 14px !important;
+  border-radius: 10px !important;
+  background: var(--bs-panel-soft) !important;
+  color: var(--bs-text) !important;
+  border: 1px solid var(--bs-border) !important;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 15px !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+  margin: 0 !important;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 60ms ease;
 
-  &:hover { background: var(--bs-panel-soft); border-color: var(--bs-border); }
+  // Chevron affordance for items that open something else (rename input,
+  // adopt picker). Ends in `…` in the label — content-selectors on ::after
+  // aren't a thing, so we use the trailing char as the cue and attach the
+  // chevron to any button that isn't explicitly a destructive one.
+  &::after {
+    content: "›";
+    font-size: 18px;
+    color: var(--bs-muted);
+    line-height: 1;
+    margin-left: auto;
+  }
 
-  &.byte-menu-btn-danger { color: var(--bs-danger); }
+  &:hover {
+    background: var(--bs-panel) !important;
+    border-color: var(--bs-accent, #3FA0FF) !important;
+  }
+
+  // The global `:active { position: relative; top: 1px }` from forms.scss
+  // would shove the button down 1px on tap, which reads as a layout jitter
+  // on wide list buttons. Neutralise it and use a scale-down instead.
+  &:active {
+    position: static !important;
+    top: auto !important;
+    background: var(--bs-panel) !important;
+    transform: scale(0.985);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bs-accent, #3FA0FF) !important;
+    outline-offset: 2px !important;
+  }
+  &:focus:not(:focus-visible) { outline: none !important; }
+
+  &.byte-menu-btn-danger {
+    color: var(--bs-danger) !important;
+    border-color: rgba(255, 92, 92, 0.35) !important;
+    background: rgba(255, 92, 92, 0.08) !important;
+
+    // No chevron on Archive — it's a terminal action, not a navigation.
+    &::after { content: none; }
+
+    &:hover  { background: rgba(255, 92, 92, 0.16) !important; border-color: rgba(255, 92, 92, 0.6) !important; }
+    &:active { background: rgba(255, 92, 92, 0.22) !important; }
+  }
 }
 
 .byte-adopt-list {

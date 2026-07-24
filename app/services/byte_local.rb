@@ -231,7 +231,7 @@ module ByteLocal
     else
       case note
       when /ECONNREFUSED/
-        "TCP-level rejection: server isn't listening on that port. Confirm `ruby _scripts/byte/server.rb` is running on the Mac and bound to 0.0.0.0 (check `lsof -iTCP:#{DEFAULT_PORT} -sTCP:LISTEN`)."
+        "TCP-level rejection: server isn't listening on that port. Confirm `ruby ~/code/Byte/server.rb` is running on the Mac and bound to 0.0.0.0 (check `lsof -iTCP:#{DEFAULT_PORT} -sTCP:LISTEN`)."
       when /OpenTimeout|ETIMEDOUT|EHOSTUNREACH/
         "Route blocked between prod and the Mac. Verify: (a) router forward for #{DEFAULT_PORT} → LAN IP:#{DEFAULT_PORT}, (b) router source-IP ACL matches prod's egress IP, (c) macOS Application Firewall isn't blocking the ruby process."
       when /getaddrinfo|SocketError/
