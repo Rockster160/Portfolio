@@ -1216,15 +1216,15 @@ dialog.byte-modal {
 // ---------------------------------------------------------------------------
 .byte-composer[data-mode] {
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
-// Byte identity marker — always visible, never changes. This is what
-// signals "you're in Byte" regardless of which mode this thread runs.
+// Single mode-adaptive avatar sitting to the left of the input. Exactly
+// one child is visible at a time, selected by the composer's data-mode.
 .byte-composer-avatar {
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1232,61 +1232,55 @@ dialog.byte-modal {
   overflow: hidden;
   background: radial-gradient(circle at 30% 20%, #62B3FF, #1E3B7A);
   box-shadow: 0 0 0 1px var(--bs-border);
+  position: relative;
 
   .byte-composer-avatar-img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    display: block;
+    display: none;
   }
-}
 
-// Mode indicator — small chip sitting between Byte and the input. Hidden
-// for Claude mode (no need — Byte covers the AI identity). Bash shows
-// a lime `$`; Jarvis shows the Ardesian favicon.
-.byte-composer-mode-chip {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  border-radius: 5px;
-
-  .byte-composer-mode-img  { display: none; width: 100%; height: 100%; object-fit: cover; }
-  .byte-composer-mode-text {
+  .byte-composer-avatar-bash {
     display: none;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 14px;
+    font-size: 17px;
     font-weight: 700;
     line-height: 1;
+    color: #86EFAC;
   }
 }
 
-.byte-composer[data-mode="bash"] {
-  .byte-composer-mode-chip {
-    display: inline-flex;
-    background: rgba(134, 239, 172, 0.08);
-    border: 1px solid rgba(134, 239, 172, 0.28);
+// Claude → Byte image (default when data-mode is missing OR "claude").
+.byte-composer[data-mode="claude"] .byte-composer-avatar-claude,
+.byte-composer:not([data-mode]) .byte-composer-avatar-claude {
+  display: block;
+}
 
-    .byte-composer-mode-text { display: inline; color: #86EFAC; }
+// Jarvis → the Ardesian favicon (proxy Jarvis mark) + amber accent frame.
+.byte-composer[data-mode="jarvis"] {
+  .byte-composer-avatar {
+    background: rgba(251, 191, 36, 0.12);
+    box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.35);
   }
+  .byte-composer-avatar-jarvis { display: block; }
+}
+
+// Bash → `$` glyph, lime accent, square-ish tile so it reads as
+// terminal-prompt-ish rather than avatar-round.
+.byte-composer[data-mode="bash"] {
+  .byte-composer-avatar {
+    background: rgba(134, 239, 172, 0.10);
+    box-shadow: 0 0 0 1px rgba(134, 239, 172, 0.30);
+    border-radius: 6px;
+  }
+  .byte-composer-avatar-bash { display: inline; }
+
   .byte-input {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
     color: #86EFAC !important;
   }
   .byte-input::placeholder { color: rgba(134, 239, 172, 0.45); }
-}
-
-.byte-composer[data-mode="jarvis"] {
-  .byte-composer-mode-chip {
-    display: inline-flex;
-    background: rgba(251, 191, 36, 0.08);
-    border: 1px solid rgba(251, 191, 36, 0.3);
-    overflow: hidden;
-
-    .byte-composer-mode-img { display: block; }
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1453,4 +1447,61 @@ dialog.byte-modal {
   padding: 6px 8px;
   border-radius: 6px;
   background: rgba(248, 113, 113, 0.08);
+}
+
+// Multi-question layout inside an action-request bubble. One section per
+// question; each has its own header + question text + option button grid.
+.byte-action-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.byte-action-question {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 10px 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--bs-border);
+}
+
+.byte-action-question-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.byte-action-question-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--bs-accent-strong);
+}
+
+.byte-action-question-hint {
+  font-size: 10px;
+  color: var(--bs-muted);
+  font-style: italic;
+}
+
+.byte-action-question-text {
+  font-size: 14px;
+  color: var(--bs-text);
+  line-height: 1.35;
+  padding: 2px 0 4px;
+}
+
+.byte-action-question-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.byte-action-question-options .byte-action-btn {
+  min-width: 0;
+  flex: 0 1 auto;
 }

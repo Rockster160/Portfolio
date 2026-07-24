@@ -103,16 +103,15 @@ export class ConversationManager {
     this.list       = document.querySelector("[data-byte-convo-list]");
     this.nameEl     = document.querySelector("[data-byte-convo-name]");
     this.modeEl     = document.querySelector("[data-byte-mode-chip]");
-    this.composer   = document.querySelector("[data-byte-composer]");
-    this.modeImg    = document.querySelector("[data-byte-composer-mode-img]");
-    this.pwdBar     = document.querySelector("[data-byte-pwd]");
-    this.pwdPath    = document.querySelector("[data-byte-pwd-path]");
-    // Mode-indicator chip src per mode. Bash uses a text glyph via CSS
-    // (no img). Jarvis falls back to the site favicon — the closest
-    // Ardesian brand mark we have; swap once a dedicated logo lands.
-    this.modeChipSrc = {
-      jarvis: "/favicon/apple-touch-icon.png",
-    };
+    this.composer      = document.querySelector("[data-byte-composer]");
+    this.jarvisImg     = document.querySelector("[data-byte-composer-avatar-jarvis]");
+    this.pwdBar        = document.querySelector("[data-byte-pwd]");
+    this.pwdPath       = document.querySelector("[data-byte-pwd-path]");
+    // Only Jarvis needs a runtime image src; Claude and Bash are set
+    // statically by the template (Byte image + `$` text respectively).
+    if (this.jarvisImg && !this.jarvisImg.getAttribute("src")) {
+      this.jarvisImg.setAttribute("src", "/favicon/apple-touch-icon.png");
+    }
     this.newModal   = document.querySelector("[data-byte-new-modal]");
     this.newForm    = document.querySelector("[data-byte-new-form]");
     this.menuModal  = document.querySelector("[data-byte-convo-menu]");

@@ -116,17 +116,17 @@
   </template>
 
   <form class="byte-composer" data-byte-composer autocomplete="off" data-mode="<%= @conversation.mode %>">
-    <%# Byte identity — always shown, never changes. This is "you're in Byte". %>
-    <span class="byte-composer-avatar">
-      <%= image_tag "byte_favicon/byte.png", class: "byte-composer-avatar-img", alt: "Byte" %>
-    </span>
-    <%# Mode indicator — sits between the Byte avatar and the text input. %>
-    <%# `$` for bash (lime monospace), Jarvis favicon for jarvis, hidden %>
-    <%# for claude (Byte already covers the AI identity). Toggle via CSS %>
-    <%# on the form's data-mode. %>
-    <span class="byte-composer-mode-chip" data-byte-mode-icon>
-      <img class="byte-composer-mode-img" data-byte-composer-mode-img src="" alt="">
-      <span class="byte-composer-mode-text">$</span>
+    <%# Single mode-adaptive avatar to the left of the input: %>
+    <%#   Claude  → Byte image %>
+    <%#   Jarvis  → Ardesian favicon (proxy for the Jarvis mark) %>
+    <%#   Bash    → `$` in lime monospace %>
+    <%# CSS on `.byte-composer[data-mode="…"]` toggles which child is visible. %>
+    <span class="byte-composer-avatar" data-byte-composer-avatar>
+      <img class="byte-composer-avatar-img byte-composer-avatar-claude"
+           src="<%= asset_path('byte_favicon/byte.png') %>" alt="Byte">
+      <img class="byte-composer-avatar-img byte-composer-avatar-jarvis"
+           data-byte-composer-avatar-jarvis src="" alt="Jarvis">
+      <span class="byte-composer-avatar-bash">$</span>
     </span>
     <textarea
       class="byte-input"

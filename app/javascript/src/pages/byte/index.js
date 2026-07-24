@@ -102,9 +102,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     initialConversationId,
     initialConversations: bootstrap.conversations || [],
     onSwitch: (id) => handleSwitch(id),
-    // Menu actions push a slash-command draft into the composer instead
-    // of using window.prompt/confirm. Focus lands the user in the input
-    // ready to append (e.g. the new name after `/rename `).
     prefillComposer: (text, opts = {}) => {
       input.value = text;
       autosize();
@@ -116,20 +113,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch (_) {}
       }
     },
-    // Drawer paints a per-row unread badge from this counter. Cleared
-    // when the user switches to the conversation (inside handleSwitch).
     unreadFor: (id) => drawerUnread.get(id) || 0,
   });
 
-  // ---------- one-time legacy migration ----------
-  //
-  // v1 store/queue were flat. On first load after upgrade, attribute any
-  // leftover cached messages / queued outbound entries to the primary
-  // conversation and clear the legacy keys.
+  // ConversationManager may pick a different currentId from localStorage
+  // (user's last-viewed conversation) than the server-rendered bootstrap
+  // one (which is the user's most-recently-active). Sync `currentConversationId`
+  // to the manager's decision, and only seed with bootstrap messages when
+  // they actually belong to that conversation — otherwise we'd seed the
+  // active thread with a stale sibling's messages.
+  currentConversationId = convoManager.currentId ?? initialConversationId;
+  const bootstrapMessages = (bootstrap.conversation && bootstrap.conversation.id === currentConversationId)
+    ? (bootstrap.messages || [])
+    : [];
+
   migrateLegacy(initialConversationId);
 
-  // Hydrate initial view.
-  hydrateForConversation(currentConversationId, bootstrap.messages || []);
+  hydrateForConversation(currentConversationId, bootstrapMessages);
 
   // ---------- rendering primitives ----------
 
@@ -252,20 +252,26 @@ document.addEventListener("DOMContentLoaded", async () => {
   // header/subtitle/body/buttons, wires up tap handlers that POST the
   // user's choice to the server. Idempotent — every re-render (state
   // change, refetch, etc.) rebuilds the whole block cleanly.
+  //
+  // If metadata.questions is a non-empty array, we render one stacked
+  // section per question (AskUserQuestion path). Otherwise we render the
+  // flat button row (permission / plan / jarvis / single question).
   function renderActionRequest(container, message) {
-    const meta       = message.metadata || {};
-    const requestId  = meta.action_request_id;
-    const actionKind = meta.action_kind || "permission";
+    const meta        = message.metadata || {};
+    const requestId   = meta.action_request_id;
+    const actionKind  = meta.action_kind || "permission";
     const actionState = meta.action_state || "pending";
-    const buttons    = Array.isArray(meta.buttons) ? meta.buttons : [];
-    const multi      = !!meta.multi_select;
-    const title      = meta.title || meta.tool_name || "Action";
-    const subtitle   = meta.subtitle || "";
-    const body       = message.body || "";
-    const decision   = meta.action_decision || {};
+    const buttons     = Array.isArray(meta.buttons) ? meta.buttons : [];
+    const questions   = Array.isArray(meta.questions) ? meta.questions : [];
+    const multi       = !!meta.multi_select;
+    const title       = meta.title || meta.tool_name || "Action";
+    const subtitle    = meta.subtitle || "";
+    const body        = message.body || "";
+    const decision    = meta.action_decision || {};
 
     const kindClass  = `byte-action-kind-${actionKind}`;
     const stateClass = `byte-action-state-${actionState}`;
+    const useQuestions = questions.length > 0;
 
     container.innerHTML = `
       <div class="byte-action ${kindClass} ${stateClass}" data-request-id="${escapeAttr(requestId)}">
@@ -273,12 +279,12 @@ document.addEventListener("DOMContentLoaded", async () => {
           <span class="byte-action-icon" aria-hidden="true">${escapeHtml(iconForKind(actionKind))}</span>
           <span class="byte-action-title">${escapeHtml(title)}</span>
         </div>
-        ${subtitle ? `<div class="byte-action-subtitle">${escapeHtml(subtitle)}</div>` : ""}
+        ${subtitle && !useQuestions ? `<div class="byte-action-subtitle">${escapeHtml(subtitle)}</div>` : ""}
         ${body ? `<div class="byte-action-body">${renderMarkdown(body)}</div>` : ""}
-        <div class="byte-action-buttons" role="group">
-          ${renderButtons(buttons, multi, actionState, decision)}
-        </div>
-        ${multi && actionState === "pending" ? `
+        ${useQuestions
+          ? renderQuestionSections(questions, actionState, decision)
+          : `<div class="byte-action-buttons" role="group">${renderButtons(buttons, multi, actionState, decision)}</div>`}
+        ${((useQuestions || multi) && actionState === "pending") ? `
           <button type="button" class="byte-action-submit" data-byte-action-submit>Submit</button>
         ` : ""}
         ${actionState === "decided" ? `
@@ -287,7 +293,122 @@ document.addEventListener("DOMContentLoaded", async () => {
       </div>
     `;
 
-    wireActionHandlers(container, requestId, multi, actionState);
+    if (useQuestions) {
+      wireQuestionHandlers(container, requestId, questions, actionState);
+    } else {
+      wireActionHandlers(container, requestId, multi, actionState);
+    }
+  }
+
+  // Multi-question layout: one panel per question, each with a header,
+  // the question text, and its own button group. multiSelect toggles
+  // between "tap one" and "tap many + submit".
+  function renderQuestionSections(questions, state, decision) {
+    const disabled = state !== "pending";
+    // Look up previously-decided answers per header so a re-render after
+    // decision paints the chosen options.
+    const decidedByHeader = new Map();
+    if (Array.isArray(decision.value)) {
+      decision.value.forEach((ans) => {
+        if (ans && ans.header) decidedByHeader.set(ans.header, Array.isArray(ans.answers) ? ans.answers : [ans.answers]);
+      });
+    }
+
+    return `<div class="byte-action-questions">
+      ${questions.map((q, idx) => {
+        const chosen = decidedByHeader.get(q.header) || [];
+        const chosenSet = new Set(chosen.map(String));
+        const opts = Array.isArray(q.options) ? q.options : [];
+        return `
+          <section class="byte-action-question" data-q-index="${idx}" data-multi-select="${!!q.multiSelect}">
+            <div class="byte-action-question-head">
+              <span class="byte-action-question-header">${escapeHtml(q.header || "Q" + (idx + 1))}</span>
+              ${q.multiSelect ? `<span class="byte-action-question-hint">select any</span>` : ""}
+            </div>
+            <div class="byte-action-question-text">${escapeHtml(q.question || "")}</div>
+            <div class="byte-action-question-options">
+              ${opts.map((o) => {
+                const label = o.label ?? "";
+                const isChosen = chosenSet.has(String(label));
+                const classes = [
+                  "byte-action-btn",
+                  "byte-action-btn-default",
+                  isChosen ? "chosen" : "",
+                  disabled ? "disabled" : "",
+                ].filter(Boolean).join(" ");
+                return `
+                  <button type="button" class="${classes}"
+                          data-byte-question-option="${escapeAttr(label)}"
+                          ${disabled ? "disabled" : ""}>
+                    <span class="byte-action-btn-label">${escapeHtml(label)}</span>
+                    ${o.description ? `<span class="byte-action-btn-desc">${escapeHtml(o.description)}</span>` : ""}
+                  </button>
+                `;
+              }).join("")}
+            </div>
+          </section>
+        `;
+      }).join("")}
+    </div>`;
+  }
+
+  // For multi-question, track per-question selection and only enable
+  // Submit when every question has ≥1 answer.
+  function wireQuestionHandlers(container, requestId, questions, actionState) {
+    if (actionState !== "pending" || !requestId) return;
+
+    // selections[i] is a Set of chosen labels for question i.
+    const selections = questions.map(() => new Set());
+
+    const sections = Array.from(container.querySelectorAll(".byte-action-question"));
+    const submit   = container.querySelector("[data-byte-action-submit]");
+
+    const updateSubmit = () => {
+      const allAnswered = selections.every((s) => s.size > 0);
+      if (submit) submit.disabled = !allAnswered;
+    };
+    if (submit) submit.disabled = true; // start off, until every question answered
+
+    sections.forEach((section, i) => {
+      const isMulti = section.dataset.multiSelect === "true";
+      const optionBtns = Array.from(section.querySelectorAll("[data-byte-question-option]"));
+
+      optionBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          if (btn.disabled) return;
+          const value = btn.dataset.byteQuestionOption;
+          if (isMulti) {
+            if (selections[i].has(value)) { selections[i].delete(value); btn.classList.remove("selected"); }
+            else                          { selections[i].add(value);    btn.classList.add("selected"); }
+          } else {
+            selections[i].clear();
+            selections[i].add(value);
+            optionBtns.forEach((b) => b.classList.remove("selected"));
+            btn.classList.add("selected");
+          }
+          updateSubmit();
+        });
+      });
+    });
+
+    submit?.addEventListener("click", () => {
+      if (submit.disabled) return;
+      submit.disabled = true;
+      submit.textContent = "…";
+      sections.forEach((s) => {
+        Array.from(s.querySelectorAll("[data-byte-question-option]")).forEach((b) => {
+          b.disabled = true;
+          b.classList.add("disabled");
+        });
+      });
+      // Wire shape matches Claude Code's AskUserQuestion output format:
+      // [{ header, answers: [...] }, ...] — indexed to match questions order.
+      const payload = questions.map((q, i) => ({
+        header:  q.header,
+        answers: Array.from(selections[i]),
+      }));
+      submitAction(requestId, payload, container);
+    });
   }
 
   function iconForKind(kind) {
@@ -324,8 +445,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   function formatDecision(v) {
-    if (Array.isArray(v)) return v.join(", ");
-    return String(v);
+    if (Array.isArray(v)) {
+      // Multi-question shape: [{header, answers}, ...]
+      if (v.length && v[0] && typeof v[0] === "object" && "header" in v[0]) {
+        return v.map((ans) => `${ans.header}: ${Array.isArray(ans.answers) ? ans.answers.join(", ") : ans.answers}`).join(" · ");
+      }
+      // Flat multi-select array
+      return v.join(", ");
+    }
+    return String(v ?? "");
   }
 
   function wireActionHandlers(container, requestId, multi, actionState) {
@@ -787,27 +915,26 @@ document.addEventListener("DOMContentLoaded", async () => {
   input.addEventListener("input", autosize);
   autosize();
 
-  // Viewport pin: only compensate for iOS's layout-viewport SCROLL (which
-  // pushes `position:fixed` elements above the visible area when an input
-  // is focused). Height is handled entirely by `100dvh` + the
-  // `interactive-widget=resizes-content` viewport meta — those together
-  // shrink `dvh` when the keyboard opens on iOS 16.4+ / Android.
-  //
-  // Earlier iterations of this handler tried to set --byte-vv-height from
-  // `visualViewport.height` too, but iOS Safari reports `vv.height` as
-  // the smaller "safe" area (excluding the URL bar) at page load, while
-  // `window.innerHeight` reports the full page height. The `vv.height <
-  // innerHeight - 100` check fired falsely, pinning the app to the
-  // smaller value and leaving a big empty strip below the composer —
-  // exactly what the user just reported. Removing the height override
-  // fixes that; the composer sits flush with the bottom via dvh.
+  // Viewport pin — the definitive source of "what's visible" is
+  // `visualViewport.height` on every resize. Both problem modes we've
+  // seen:
+  //   (a) composer sitting too high with a black strip below — CSS var
+  //       stuck at a stale-shrunk value from an earlier keyboard event
+  //   (b) composer hidden behind the keyboard on focus — the fallback
+  //       `100dvh` reporting more than what iOS actually shows
+  // …are cured by ALWAYS binding `--byte-vv-height` to `vv.height`
+  // unconditionally, with no heuristics. `resize` fires on keyboard
+  // open/close, URL bar toggle, and orientation change; `scroll` covers
+  // iOS's layout-viewport-scroll when it drags a focused input into view.
   if (window.visualViewport) {
     const vv = window.visualViewport;
-    let rafTop = 0;
-    const applyTop = () => {
-      if (rafTop) return;
-      rafTop = requestAnimationFrame(() => {
-        rafTop = 0;
+    let rafId = 0;
+
+    const apply = () => {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = 0;
+        document.documentElement.style.setProperty("--byte-vv-height", `${vv.height}px`);
         if (vv.offsetTop > 0) {
           document.documentElement.style.setProperty("--byte-vv-top", `${vv.offsetTop}px`);
         } else {
@@ -815,12 +942,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       });
     };
-    vv.addEventListener("scroll", applyTop, { passive: true });
-    vv.addEventListener("resize", applyTop, { passive: true });
-    applyTop();
-    // Ensure any lingering height override from a previous session (e.g.
-    // an older bundle that set it) is cleared on load.
-    document.documentElement.style.removeProperty("--byte-vv-height");
+
+    vv.addEventListener("resize", apply, { passive: true });
+    vv.addEventListener("scroll", apply, { passive: true });
+    apply();
   }
 
   // ---------- realtime + drain triggers ----------

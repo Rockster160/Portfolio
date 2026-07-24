@@ -350,6 +350,10 @@ class WebhooksController < ApplicationController
     tool_name   = params[:tool_name].to_s.presence
     tool_input  = byte_json_field(params[:tool_input]) || {}
     buttons     = byte_json_field(params[:buttons]) || []
+    # For AskUserQuestion, the hook forwards a structured `questions`
+    # array so the client can render stacked sections (one per question).
+    # Falls back to nil when the action is a plain permission/plan.
+    questions   = byte_json_field(params[:questions])
     multi       = ActiveModel::Type::Boolean.new.cast(params[:multi_select])
     expires_at  = parse_expiry(params[:expires_in], params[:expires_at])
 
@@ -378,11 +382,12 @@ class WebhooksController < ApplicationController
         tool_name:          tool_name,
         tool_input:         tool_input,
         buttons:            buttons,
+        questions:          questions,
         multi_select:       !!multi,
         title:              params[:title].to_s.presence,
         subtitle:           params[:subtitle].to_s.presence,
         expires_at:         expires_at&.iso8601(3),
-      }.merge(incoming.symbolize_keys.except(:action_state)),
+      }.compact.merge(incoming.symbolize_keys.except(:action_state)),
       delivered_at: Time.current,
     )
     action.update!(byte_message_id: message.id)
