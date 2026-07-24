@@ -276,7 +276,10 @@ class WebhooksController < ApplicationController
     state = (params[:state].presence || :delivered).to_sym
     state = :delivered unless ByteMessage.states.key?(state.to_s)
 
-    message = user.byte_messages.create!(
+    conversation = byte_resolve_conversation(user)
+
+    message = conversation.byte_messages.create!(
+      user:         user,
       direction:    :inbound,
       state:        state,
       body:         body,
@@ -329,6 +332,25 @@ class WebhooksController < ApplicationController
 
   private def byte_authorized?
     ByteLocal.valid_secret?(request.headers["X-Byte-Secret"])
+  end
+
+  # Prefer an explicit conversation_id (Mac echoes back what we passed
+  # forward). If absent, look up an in_reply_to → find that message's
+  # conversation. Absolute fallback: the user's default conversation.
+  private def byte_resolve_conversation(user)
+    convo_id = params[:conversation_id].presence
+    if convo_id
+      convo = user.byte_conversations.find_by(id: convo_id)
+      return convo if convo
+    end
+
+    reply_id = params[:in_reply_to].presence
+    if reply_id
+      parent = user.byte_messages.find_by(id: reply_id)
+      return parent.byte_conversation if parent&.byte_conversation
+    end
+
+    ByteConversation.default_for(user)
   end
 
   private def byte_metadata(params)

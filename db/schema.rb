@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_07_22_132017) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_23_181802) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -367,6 +367,19 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_22_132017) do
     t.index ["user_id"], name: "index_boxes_on_user_id"
   end
 
+  create_table "byte_conversations", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "name"
+    t.integer "mode", default: 0, null: false
+    t.boolean "archived", default: false, null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "last_message_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "archived", "last_message_at"], name: "index_byte_conversations_on_user_bucket_activity"
+    t.index ["user_id"], name: "index_byte_conversations_on_user_id"
+  end
+
   create_table "byte_messages", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.integer "direction", default: 0, null: false
@@ -377,6 +390,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_22_132017) do
     t.datetime "delivered_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "byte_conversation_id", null: false
+    t.index ["byte_conversation_id"], name: "index_byte_messages_on_byte_conversation_id"
     t.index ["external_ref"], name: "index_byte_messages_on_external_ref"
     t.index ["user_id", "created_at"], name: "index_byte_messages_on_user_id_and_created_at"
     t.index ["user_id"], name: "index_byte_messages_on_user_id"
@@ -1366,6 +1381,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_22_132017) do
   add_foreign_key "agendas", "google_accounts"
   add_foreign_key "agendas", "users"
   add_foreign_key "boxes", "users"
+  add_foreign_key "byte_conversations", "users"
+  add_foreign_key "byte_messages", "byte_conversations"
   add_foreign_key "byte_messages", "users"
   add_foreign_key "chore_completions", "chores"
   add_foreign_key "chore_completions", "chores", column: "sub_chore_id"

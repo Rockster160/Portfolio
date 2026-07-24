@@ -51,6 +51,7 @@ class User < ApplicationRecord
   has_many :push_subs, class_name: "UserPushSubscription", dependent: :destroy
   has_many :timers, dependent: :destroy
   has_many :byte_messages, dependent: :destroy
+  has_many :byte_conversations, dependent: :destroy
   has_many :timer_pages, dependent: :destroy
   has_many :timer_quick_buttons, dependent: :destroy
   has_many :timer_share_tokens, dependent: :destroy

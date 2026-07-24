@@ -1,17 +1,19 @@
-// localStorage-backed outbound queue for Byte messages. Every send is
-// queued FIRST (state: :queued) and drained by api.drainQueue on the
-// nearest opportunity — page load, `online` event, tab focus, or a
-// Monitor reconnect. Strict FIFO: on any transient failure the drainer
-// stops so message N is never sent before message N-1.
+// localStorage-backed outbound queue for Byte messages. One shared queue
+// across conversations — each entry carries its own `conversation_id`
+// so drain can dispatch to the right thread.
 //
-// Each entry carries a client-generated `local_id` (UUID) so:
+// Each entry has a client-generated `local_id` (UUID) so:
 //   * the UI can render the queued bubble before the server has assigned
 //     an id, then swap the bubble to the server's id once the response
 //     lands;
 //   * if the drainer retries mid-round-trip, the server can (later) treat
 //     a repeat with the same local_id as idempotent.
 
-const KEY = "byte:outbound_queue:v1";
+const KEY = "byte:outbound_queue:v2";
+// v1 was a flat array without conversation_id. Read once at boot; the
+// caller migrates entries into v2 attributed to the primary conversation
+// and clears v1 to prevent double-processing.
+const LEGACY_KEY = "byte:outbound_queue:v1";
 
 function read() {
   try {
@@ -27,20 +29,43 @@ function write(q) {
   catch (e) {}
 }
 
+export function readLegacyQueue() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LEGACY_KEY) || "[]");
+    return Array.isArray(raw) ? raw : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function clearLegacyQueue() {
+  try { localStorage.removeItem(LEGACY_KEY); } catch (e) {}
+}
+
 export function enqueue(entry) {
   const q = read();
   q.push({
-    local_id:  entry.local_id,
-    body:      entry.body,
-    metadata:  entry.metadata || {},
-    queued_at: Date.now(),
-    attempts:  0,
+    local_id:        entry.local_id,
+    conversation_id: entry.conversation_id,
+    body:            entry.body,
+    metadata:        entry.metadata || {},
+    client_ts:       entry.client_ts,
+    queued_at:       Date.now(),
+    attempts:        0,
   });
   write(q);
 }
 
+// Entire queue across every conversation (used by drainQueue).
 export function all() {
   return read();
+}
+
+// Only entries belonging to a specific conversation (used for hydrating
+// the visible thread on load).
+export function forConversation(convId) {
+  if (convId == null) return [];
+  return read().filter((e) => String(e.conversation_id) === String(convId));
 }
 
 export function head() {
@@ -61,4 +86,9 @@ export function markAttempt(local_id) {
 
 export function length() {
   return read().length;
+}
+
+export function clearAll() {
+  write([]);
+  clearLegacyQueue();
 }

@@ -39,14 +39,20 @@ module ByteLocal
   # Kick off downstream handling for a user-sent message. Non-blocking as
   # far as the caller cares: the local server is expected to accept the
   # request quickly and stream a response back via /webhooks/byte.
-  def deliver(message)
+  #
+  # `conversation:` carries the per-thread dispatch mode + persisted
+  # metadata (bash cwd, claude session id, adopted-session hint) so the
+  # Mac can route without a Rails round-trip.
+  def deliver(message, conversation: nil)
     uri = URI.join(base_url, "/byte/incoming")
     req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
     req.body = JSON.generate({
-      message_id: message.id,
-      user_id:    message.user_id,
-      body:       message.body,
-      metadata:   message.metadata,
+      message_id:      message.id,
+      user_id:         message.user_id,
+      body:            message.body,
+      metadata:        message.metadata,
+      conversation_id: conversation&.id || message.byte_conversation_id,
+      conversation:    conversation ? conversation_payload(conversation) : nil,
     })
 
     Net::HTTP.start(uri.hostname, uri.port,
@@ -57,6 +63,33 @@ module ByteLocal
   rescue => e
     Rails.logger.warn("[Byte] local deliver failed: #{e.class}: #{e.message}")
     nil
+  end
+
+  # Ask the Mac to enumerate the Claude Code sessions on disk for a given
+  # conversation's cwd. Returns the parsed JSON array, or nil if the Mac
+  # is unreachable.
+  def list_claude_sessions(conversation_id:)
+    uri = URI.join(base_url, "/byte/claude_sessions?conversation_id=#{conversation_id.to_i}")
+    req = Net::HTTP::Get.new(uri, "X-Byte-Secret" => secret)
+
+    res = Net::HTTP.start(uri.hostname, uri.port,
+      use_ssl: uri.scheme == "https", open_timeout: TIMEOUT_SECONDS, read_timeout: TIMEOUT_SECONDS,
+    ) { |http| http.request(req) }
+
+    return nil unless res.is_a?(Net::HTTPSuccess)
+    JSON.parse(res.body)["sessions"]
+  rescue => e
+    Rails.logger.warn("[Byte] list_claude_sessions failed: #{e.class}: #{e.message}")
+    nil
+  end
+
+  def conversation_payload(conversation)
+    {
+      id:       conversation.id,
+      mode:     conversation.mode,
+      name:     conversation.display_name,
+      metadata: conversation.metadata,
+    }
   end
 
   def valid_secret?(header_value)

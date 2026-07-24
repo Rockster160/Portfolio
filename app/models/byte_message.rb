@@ -2,16 +2,17 @@
 #
 # Table name: byte_messages
 #
-#  id           :bigint           not null, primary key
-#  body         :text
-#  delivered_at :datetime
-#  direction    :integer          default("outbound"), not null
-#  external_ref :string
-#  metadata     :jsonb            not null
-#  state        :integer          default("pending"), not null
-#  created_at   :datetime         not null
-#  updated_at   :datetime         not null
-#  user_id      :bigint           not null
+#  id                   :bigint           not null, primary key
+#  body                 :text
+#  delivered_at         :datetime
+#  direction            :integer          default("outbound"), not null
+#  external_ref         :string
+#  metadata             :jsonb            not null
+#  state                :integer          default("pending"), not null
+#  created_at           :datetime         not null
+#  updated_at           :datetime         not null
+#  byte_conversation_id :bigint           not null
+#  user_id              :bigint           not null
 #
 class ByteMessage < ApplicationRecord
   # A message in the Byte chat surface.
@@ -21,6 +22,7 @@ class ByteMessage < ApplicationRecord
   # `metadata` is the open-ended jsonb envelope; `files` carries attachments
   # via ActiveStorage.
   belongs_to :user
+  belongs_to :byte_conversation
 
   has_many_attached :files
 
@@ -31,21 +33,40 @@ class ByteMessage < ApplicationRecord
   scope :recent,        -> { order(created_at: :desc) }
   scope :chronological, -> { order(created_at: :asc) }
 
+  # Fallback so callers that create messages via `user.byte_messages.create!`
+  # (without an explicit conversation) still work — attaches to the user's
+  # default conversation. Production callers always pass one explicitly.
+  before_validation :assign_default_conversation, on: :create
+
+  after_commit :bump_conversation_activity, on: [:create, :update]
+
   def as_wire
     {
-      id:            id,
-      direction:     direction,
-      state:         state,
-      body:          body,
-      external_ref:  external_ref,
-      metadata:      metadata,
-      attachments:   attachments_wire,
-      created_at:    created_at.iso8601(3),
-      delivered_at:  delivered_at&.iso8601(3),
+      id:              id,
+      conversation_id: byte_conversation_id,
+      direction:       direction,
+      state:           state,
+      body:            body,
+      external_ref:    external_ref,
+      metadata:        metadata,
+      attachments:     attachments_wire,
+      created_at:      created_at.iso8601(3),
+      delivered_at:    delivered_at&.iso8601(3),
     }
   end
 
   private
+
+  def assign_default_conversation
+    return if byte_conversation_id.present? || byte_conversation.present?
+    return if user.nil?
+
+    self.byte_conversation = ByteConversation.default_for(user)
+  end
+
+  def bump_conversation_activity
+    byte_conversation&.touch_activity(created_at)
+  end
 
   def attachments_wire
     return [] unless files.attached?

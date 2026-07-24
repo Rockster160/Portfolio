@@ -1,21 +1,34 @@
 // Byte chat page. Ties together:
-//   * The offline outbound queue (queue.js + api.js) so sends work even
-//     with no reception and drain FIFO when it comes back.
+//   * Multi-conversation UI (drawer, mode chip, per-thread state) via
+//     ConversationManager
+//   * Per-conversation offline outbound queue (queue.js + api.js) so
+//     sends work even with no reception and drain FIFO when it comes back
 //   * localStorage-cached message history (store.js) so cold-open /
-//     no-network still renders the last conversation.
+//     no-network still renders the last conversation
 //   * Realtime updates via MonitorChannel — same rail used by chores,
-//     agenda, timers.
+//     agenda, timers
 //   * The byte service worker (shell_sync.js) — shell caching and a
-//     "syncing" badge in the header.
-//   * Push notifications (push.js).
+//     "syncing" badge in the header
+//   * Push notifications (push.js)
 //
 // Never redraws the whole thread — every update is a granular upsert
 // keyed by message id (or `local_id` for pre-server queued sends), per
 // the no-DOM-redraw-on-sync rule.
 
 import { Monitor } from "../dashboard/cells/monitor";
-import { loadMessages, upsertPersisted } from "./store";
-import { all as allQueued } from "./queue";
+import {
+  loadMessages,
+  upsertPersisted,
+  readLegacyCache,
+  clearLegacyCache,
+  clearAllPersisted,
+} from "./store";
+import {
+  forConversation as queuedForConversation,
+  readLegacyQueue,
+  clearLegacyQueue,
+  clearAll as clearQueue,
+} from "./queue";
 import { configure as configureApi, sendMessage, drainQueue } from "./api";
 import {
   registerServiceWorker,
@@ -29,6 +42,7 @@ import {
   registerByteNotifications,
   unregisterByteNotifications,
 } from "./push";
+import { ConversationManager } from "./conversations";
 
 document.addEventListener("DOMContentLoaded", async () => {
   const app = document.querySelector(".byte-app");
@@ -47,32 +61,58 @@ document.addEventListener("DOMContentLoaded", async () => {
   const jumpCount = app.querySelector("[data-byte-jump-count]");
   const tpl       = app.querySelector("[data-byte-message-tpl]");
 
-  const sendUrl        = app.dataset.sendUrl;
-  const messagesUrl    = app.dataset.messagesUrl;
-  const csrfUrl        = app.dataset.csrfUrl || "/byte/csrf";
-  const monitorChannel = app.dataset.monitorChannel;
+  const sendUrl           = app.dataset.sendUrl;
+  const messagesUrl       = app.dataset.messagesUrl;
+  const csrfUrl           = app.dataset.csrfUrl || "/byte/csrf";
+  const conversationsUrl  = app.dataset.conversationsUrl;
+  const claudeSessionsUrl = app.dataset.claudeSessionsUrl;
+  const monitorChannel    = app.dataset.monitorChannel;
 
   configureApi({ sendUrl, csrfRefreshUrl: csrfUrl });
 
-  // ---------- state ----------
-  let messages = loadMessages(); // instant offline render source
+  // ---------- bootstrap ----------
+  const bootstrap = loadBootstrap();
+  const initialConversationId = bootstrap.conversation?.id
+    ?? Number(app.dataset.initialConversationId || 0)
+    ?? null;
 
-  // Fold in the server-rendered bootstrap (fresh at page-load time).
-  loadBootstrap().forEach((m) => {
-    messages = upsertPersisted(messages, m);
-  });
-
-  // Scroll / unread bookkeeping. `atBottom` starts true — a fresh open
-  // wants to land pinned at newest. `hasMore` is optimistically true so
-  // the first scroll-to-top triggers a fetch; the server flips it to
-  // false once we've reached the head of the archive.
-  const NEAR_BOTTOM_PX = 60;
-  const LOAD_TRIGGER_PX = 200;
+  // ---------- conversation manager ----------
+  //
+  // ConversationManager owns the drawer + name/mode chip + create/rename/
+  // archive/adopt flows. When the user switches, `handleSwitch` rebuilds
+  // the visible thread from the new conversation's cache + refetches
+  // history from the server. Everything else in this file works against
+  // whatever `currentConversationId` currently is.
+  let currentConversationId = initialConversationId;
+  let messages = [];
   let atBottom      = true;
   let unreadCount   = 0;
   let hasMore       = true;
   let loadingOlder  = false;
-  let oldestLoadedId = messages[0]?.id ?? null;
+  let oldestLoadedId = null;
+
+  // Per-conversation unread-in-drawer counters. Only tracks conversations
+  // OTHER than the currently visible one — the visible one uses
+  // `unreadCount` (bottom-of-thread jump button) instead.
+  const drawerUnread = new Map();
+
+  const convoManager = new ConversationManager({
+    conversationsUrl,
+    claudeSessionsUrl,
+    initialConversationId,
+    initialConversations: bootstrap.conversations || [],
+    onSwitch: (id) => handleSwitch(id),
+  });
+
+  // ---------- one-time legacy migration ----------
+  //
+  // v1 store/queue were flat. On first load after upgrade, attribute any
+  // leftover cached messages / queued outbound entries to the primary
+  // conversation and clear the legacy keys.
+  migrateLegacy(initialConversationId);
+
+  // Hydrate initial view.
+  hydrateForConversation(currentConversationId, bootstrap.messages || []);
 
   // ---------- rendering primitives ----------
 
@@ -91,9 +131,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   function selectorForLocal(local)  { return `[data-local-id="${cssEscape(String(local))}"]`; }
 
   function nodeForServerMessage(message) {
-    // Server response for a queued send carries our client-assigned
-    // metadata.local_id, so we upgrade the queued bubble in place instead
-    // of appending a duplicate.
     const localId = message?.metadata?.local_id;
     if (localId) {
       const local = thread.querySelector(selectorForLocal(localId));
@@ -109,10 +146,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   function paintMessageNode(node, message) {
     node.dataset.messageId = String(message.id);
     if (message?.metadata?.local_id) node.dataset.localId = String(message.metadata.local_id);
-    // `metadata.kind` lets the handler tag messages so the client can
-    // render them differently: shell output monospace, Claude replies
-    // normal, errors highlighted, etc. Unknown/absent kinds render
-    // with the default bubble style.
     const kind = message?.metadata?.kind;
     node.className = [
       "byte-msg",
@@ -121,11 +154,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       kind ? `byte-msg-kind-${kind}` : null,
     ].filter(Boolean).join(" ");
     const bodyEl = node.querySelector("[data-body]");
-    // Rendering strategy by kind:
+
+    // Kind-dispatch for body content rendering.
     //   claude          → thoughts collapsible + markdown-lite final body
     //   system          → markdown-lite (fenced code, inline code, bold, italic)
     //   shell           → server pre-rendered HTML (ANSI colours already
     //                     converted to <span> by AnsiHtml.convert)
+    //   jarvis          → plain text (Jarvis responses are pre-shaped)
     //   default         → textContent (user sends, unclassified inbound)
     if (kind === "claude") {
       renderThoughts(
@@ -138,16 +173,20 @@ document.addEventListener("DOMContentLoaded", async () => {
       bodyEl.innerHTML = renderMarkdown(message.body || "");
     } else if (kind === "shell") {
       bodyEl.innerHTML = message.body || "";
+    } else if (kind === "jarvis") {
+      bodyEl.textContent = message.body || "";
     } else {
       bodyEl.textContent = message.body || "";
     }
+
+    // Time / attachments / state apply to every kind — used to live inside
+    // renderThoughts by mistake, which meant non-claude messages had blank
+    // times and unpainted attachments.
+    node.querySelector("[data-time]").textContent = formatTime(message.created_at);
+    renderAttachments(node.querySelector("[data-attachments]"), message.attachments);
+    node.querySelector("[data-state]").textContent = renderState(message);
   }
 
-  // Populates the collapsible "Thinking (N steps)" section on a Claude
-  // message. While the turn is still streaming: open + auto-scroll to
-  // bottom on each update so the user sees new tool uses arrive without
-  // manual scrolling. Once delivered: collapse so the final response
-  // stays the visible focus.
   function renderThoughts(container, thoughts, state) {
     if (!container) return;
     const list = Array.isArray(thoughts) ? thoughts : [];
@@ -167,8 +206,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         ? `Thinking (${list.length} step${list.length === 1 ? "" : "s"})…`
         : `Thinking (${list.length} step${list.length === 1 ? "" : "s"})`;
 
-    // Preserve auto-scroll if the user was already tracking the bottom
-    // of the thoughts pane (which is the natural spot during streaming).
     const wasAtBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 40;
 
     body.innerHTML = list.map((t) => {
@@ -180,8 +217,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (type === "tool_result") {
         return `<div class="byte-thought byte-thought-result">${escapeHtml(value)}</div>`;
       }
-      // Text (intermediate reasoning) — render with markdown-lite so
-      // fenced code / inline code inside a "let me check…" note look right.
       return `<div class="byte-thought byte-thought-text">${renderMarkdown(value)}</div>`;
     }).join("");
 
@@ -189,54 +224,28 @@ document.addEventListener("DOMContentLoaded", async () => {
       container.open = true;
       if (wasAtBottom) body.scrollTop = body.scrollHeight;
     } else {
-      // Auto-collapse when the turn's done — keep the final response
-      // in view. User can still tap to expand and re-read the trail.
       container.open = false;
     }
-    node.querySelector("[data-time]").textContent = formatTime(message.created_at);
-    renderAttachments(node.querySelector("[data-attachments]"), message.attachments);
-    node.querySelector("[data-state]").textContent = renderState(message);
   }
 
-  // Minimal markdown → HTML for Claude replies. Handles the shapes that
-  // actually show up in chat: fenced code blocks (with optional lang),
-  // inline code, bold, italic, and line breaks. NO other constructs
-  // (links, images, headings, lists) — keeps the surface XSS-safe and
-  // the code small. If markdown grows unwieldy, swap in the `marked`
-  // library.
-  //
-  // Order matters: extract code first with sentinel placeholders so
-  // markdown patterns don't run against code content, then re-inject
-  // after HTML-escaping the code so `<`, `>`, `&` in code stays literal.
   function renderMarkdown(raw) {
     const stash = [];
     let t = raw;
-
-    // Fenced code blocks ```lang\n...\n```
     t = t.replace(/```([^\n`]*)\n?([\s\S]*?)```/g, (_m, lang, code) => {
       const i = stash.push({ kind: "fence", lang: (lang || "").trim(), code }) - 1;
       return `@FENCE@${i}@FENCE@`;
     });
-    // Inline code `foo`
     t = t.replace(/`([^`\n]+)`/g, (_m, code) => {
       const i = stash.push({ kind: "inline", code }) - 1;
       return `@INLINE@${i}@INLINE@`;
     });
-
-    // Escape everything else
     t = t
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
-
-    // Bold **text**
     t = t.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
-    // Italic *text* (must not be part of **)
     t = t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
-    // Line breaks
     t = t.replace(/\n/g, "<br>");
-
-    // Reinject code stashes, escaping their contents
     t = t.replace(/@FENCE@(\d+)@FENCE@/g, (_m, i) => {
       const b = stash[Number(i)];
       return `<pre class="byte-md-code"><code>${escapeHtml(b.code)}</code></pre>`;
@@ -245,7 +254,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       const b = stash[Number(i)];
       return `<code class="byte-md-inline">${escapeHtml(b.code)}</code>`;
     });
-
     return t;
   }
 
@@ -256,8 +264,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       .replace(/>/g, "&gt;");
   }
 
-  // Upsert a server-persisted message. Uses append-at-end for new nodes
-  // (bottom-anchored layout keeps them visually beneath the last one).
   function upsertMessage(message) {
     let node = nodeForServerMessage(message);
     if (!node) {
@@ -267,11 +273,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     paintMessageNode(node, message);
   }
 
-  // Bubble goes straight to the "in-progress" (pending) state — we
-  // fire the network POST immediately on send, so there's no benefit
-  // to a distinct queued visual. Merging them removes an intermediate
-  // state that made sends feel sluggish even though the transition
-  // itself was instant.
   function upsertQueuedMessage(entry) {
     let node = thread.querySelector(selectorForLocal(entry.local_id));
     if (!node) {
@@ -287,9 +288,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     node.querySelector("[data-state]").textContent = "…";
   }
 
-  // No-op now — the bubble already renders in pending state via
-  // upsertQueuedMessage. Kept as the hook target so api.js doesn't
-  // need to change its interface.
   function markQueuedSending(_local_id) {}
 
   function markQueuedFailed(local_id, reason) {
@@ -306,7 +304,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const currentIds = Array.from(container.children).map((el) => el.dataset.attachmentId);
     const nextIds = list.map((a) => String(a.id));
     if (currentIds.join(",") === nextIds.join(",")) return;
-
     container.innerHTML = "";
     list.forEach((a) => container.appendChild(buildAttachment(a)));
   }
@@ -316,7 +313,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     wrap.className = "byte-attachment";
     wrap.dataset.attachmentId = String(a.id);
     wrap.dataset.contentType = a.content_type || "";
-
     const type = (a.content_type || "").split("/")[0];
     if (type === "image") {
       const img = document.createElement("img");
@@ -351,23 +347,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ---------- scroll / jump-button / atBottom bookkeeping ----------
 
+  const NEAR_BOTTOM_PX = 60;
+  const LOAD_TRIGGER_PX = 200;
+
   function measureAtBottom() {
     const gap = thread.scrollHeight - thread.scrollTop - thread.clientHeight;
     return gap < NEAR_BOTTOM_PX;
   }
 
   function scrollToBottom(behavior = "auto") {
-    // Double rAF: browsers batch layout, so if we JUST appended a message
-    // the first frame commits the DOM change and the second frame has the
-    // updated scrollHeight to scroll to. Without this, a scroll right
-    // after an append lands a message-height short of the true bottom.
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (behavior === "smooth") {
           thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
         } else {
-          // Direct assignment is the most reliable way to instant-scroll
-          // to bottom; the browser clamps overshoot automatically.
           thread.scrollTop = thread.scrollHeight;
         }
         atBottom = true;
@@ -397,31 +390,64 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (thread.scrollTop < LOAD_TRIGGER_PX) maybeLoadOlder();
   });
 
-  // Server-broadcast message arrived. Two scenarios:
-  //   (a) NEW node in the thread (a message we hadn't seen yet)
-  //   (b) UPDATE to an existing node (state change: pending → sent, etc.)
-  //
-  // Never scroll on updates — the message is already in place, moving
-  // the viewport would just yank the user around. Only scroll on new
-  // nodes AND only when the user is already at the bottom (i.e., they
-  // haven't scrolled up). New inbound arrivals while scrolled up
-  // increment the unread badge instead of forcing scroll.
   function receiveMessage(message) {
-    // Measure atBottom FRESH — the cached flag lags scroll events by a
-    // frame, so a user gesture immediately before a message arrival
-    // could still be treated as "was at bottom" and force-scroll them.
     const wasAtBottom = measureAtBottom();
     const isNew = !nodeForServerMessage(message);
     upsertMessage(message);
-
     if (!isNew) return;
-
     if (wasAtBottom) {
       scrollToBottom("smooth");
     } else if (message.direction === "inbound") {
       unreadCount += 1;
       updateJumpBtn();
     }
+  }
+
+  // ---------- conversation switch / hydrate ----------
+
+  // Bootstrap-time & post-switch fill. Clears the DOM, loads cached
+  // messages for the target conversation, wires up ordering fields, and
+  // kicks a background refetch to pull in anything more recent than the
+  // cache. No focus/scroll gymnastics beyond pinning to bottom.
+  function hydrateForConversation(convId, seedMessages) {
+    Array.from(thread.querySelectorAll("[data-message-id], [data-local-id]")).forEach((n) => n.remove());
+    messages = loadMessages(convId);
+    (seedMessages || []).forEach((m) => { messages = upsertPersisted(convId, messages, m); });
+    oldestLoadedId = messages[0]?.id ?? null;
+    hasMore = true;
+    unreadCount = 0;
+    drawerUnread.delete(convId);
+    updateJumpBtn();
+
+    messages.forEach(upsertMessage);
+    queuedForConversation(convId).forEach(upsertQueuedMessage);
+    scrollToBottom("auto");
+
+    refetchHistory();
+  }
+
+  function handleSwitch(nextId) {
+    if (nextId === currentConversationId) return;
+    currentConversationId = nextId;
+    hydrateForConversation(nextId, []);
+  }
+
+  function migrateLegacy(defaultConvId) {
+    if (defaultConvId == null) return;
+
+    const legacyMsgs = readLegacyCache();
+    if (legacyMsgs.length) {
+      const existing = loadMessages(defaultConvId);
+      legacyMsgs.forEach((m) => upsertPersisted(defaultConvId, existing, m));
+      clearLegacyCache();
+    }
+
+    // Legacy queue entries lose their conversation attribution — safest
+    // action is to drop them. The user was on a single conversation
+    // before, so any un-drained sends are inconsequential in the
+    // multi-conversation world.
+    const legacyQueue = readLegacyQueue();
+    if (legacyQueue.length) clearLegacyQueue();
   }
 
   // ---------- pagination (scroll-to-top loads older) ----------
@@ -442,25 +468,30 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function maybeLoadOlder() {
     if (loadingOlder || !hasMore || !messagesUrl) return;
-    if (!oldestLoadedId) return; // no anchor yet — server bootstrap will set it
+    if (!oldestLoadedId) return;
     if (!navigator.onLine) return;
 
     loadingOlder = true;
     setLoader("loading");
 
-    // Preserve visual position: after prepending, we'll set scrollTop so
-    // the same message the user was looking at stays put.
     const prevHeight = thread.scrollHeight;
     const prevScroll = thread.scrollTop;
+    const convIdAtStart = currentConversationId;
 
     try {
       const url = new URL(messagesUrl, location.href);
       url.searchParams.set("before", String(oldestLoadedId));
+      url.searchParams.set("conversation_id", String(currentConversationId));
       const res = await fetch(url.toString(), {
         credentials: "same-origin",
         headers: { Accept: "application/json" },
       });
       if (!res.ok) return;
+      // If the user switched conversations while we were awaiting the
+      // response, discard the payload — appending it now would corrupt
+      // the newly-shown thread.
+      if (convIdAtStart !== currentConversationId) return;
+
       const payload = await res.json();
       const older = Array.isArray(payload.messages) ? payload.messages : [];
       hasMore = !!payload.has_more;
@@ -470,8 +501,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
       }
 
-      // Server returns chronologically (oldest → newest). Prepend as a
-      // single fragment so DOM order remains chronological.
       const frag = document.createDocumentFragment();
       older.forEach((m) => {
         const node = newMessageNode();
@@ -482,34 +511,23 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       oldestLoadedId = older[0]?.id ?? oldestLoadedId;
 
-      // Restore visual position — the added content pushed everything
-      // down by (newHeight - prevHeight); scrollTop needs the same shift.
       const newHeight = thread.scrollHeight;
       thread.scrollTop = prevScroll + (newHeight - prevHeight);
 
       setLoader(hasMore ? "" : "end");
     } catch (_) {
-      // Silent — the loader hides itself in `finally`.
     } finally {
       loadingOlder = false;
       if (hasMore) setLoader("");
     }
   }
 
-  // ---------- bootstrap ----------
-
   function loadBootstrap() {
     const raw = document.getElementById("byte-bootstrap")?.textContent;
-    if (!raw) return [];
-    try { return (JSON.parse(raw).messages || []); }
-    catch { return []; }
+    if (!raw) return {};
+    try { return JSON.parse(raw); }
+    catch { return {}; }
   }
-
-  // Initial paint: cached + bootstrap messages, then any still-queued
-  // outbound entries. Pin to the bottom on first paint (this is a chat).
-  messages.forEach(upsertMessage);
-  allQueued().forEach(upsertQueuedMessage);
-  scrollToBottom("auto");
 
   // ---------- send ----------
 
@@ -520,10 +538,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     input.value = "";
     autosize();
 
-    // Client-side meta commands — intercepted before the message ever
-    // hits the server. Use these to fix client-side state without
-    // round-tripping (nuking stale queue entries from the pre-fix era,
-    // dumping cached messages that keep re-appearing, etc.).
     if (body === "/clear" || body === "/clear-local") {
       clearLocalState();
       return;
@@ -533,53 +547,52 @@ document.addEventListener("DOMContentLoaded", async () => {
       ? crypto.randomUUID()
       : `l-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-    // Client-side timestamp travels with the message to the server as
-    // `created_at`. That's what preserves user-typed order even when
-    // rapid sends hit the server out of order due to network jitter.
     const client_ts = Date.now();
+    const convId    = currentConversationId;
 
-    const entry = { local_id, body, client_ts, metadata: { source: "web", local_id, client_ts } };
+    const entry = {
+      local_id,
+      conversation_id: convId,
+      body,
+      client_ts,
+      metadata: { source: "web", local_id, client_ts, conversation_id: convId },
+    };
 
-    // Fire-and-forget. `sendMessage` enqueues + fires the fetch
-    // synchronously so the bubble appears immediately.
     sendMessage(entry, {
       onEnqueued: (e) => {
+        if (e.conversation_id !== currentConversationId) return;
         upsertQueuedMessage(e);
-        // Instant scroll on user's own send — smooth stacks awkwardly
-        // when rapid sends fire multiple times per animation frame.
         scrollToBottom("auto");
       },
-      onSending: (e) => markQueuedSending(e.local_id),
+      onSending: (e) => {
+        if (e.conversation_id === currentConversationId) markQueuedSending(e.local_id);
+      },
       onSent: (e, message) => {
-        // Defensive: attach local_id even if server didn't echo it, so
-        // the visual upgrade hits the queued node in place.
         message.metadata = { ...(message.metadata || {}), local_id: e.local_id };
-        upsertMessage(message);
-        messages = upsertPersisted(messages, message);
+        // Even for background conversations, persist the resolved message
+        // so its cache stays fresh; only paint into the DOM for the
+        // currently-visible thread.
+        const targetConv = e.conversation_id || currentConversationId;
+        messages = targetConv === currentConversationId
+          ? upsertPersisted(currentConversationId, messages, message)
+          : upsertPersisted(targetConv, loadMessages(targetConv), message);
+        if (targetConv === currentConversationId) upsertMessage(message);
+        convoManager.bumpActivity(targetConv, message.created_at);
       },
-      onTransientFail: () => {
-        // Queued node stays visible; will retry on next drain trigger.
+      onTransientFail: () => {},
+      onPermanentFail: (e, reason) => {
+        if (e.conversation_id === currentConversationId) markQueuedFailed(e.local_id, reason);
       },
-      onPermanentFail: (e, reason) => markQueuedFailed(e.local_id, reason),
     });
   }
 
-  // Wipe local UI + storage. Used by the /clear meta command to break
-  // out of a stuck state where an old outbound queue entry keeps
-  // resending on every drain trigger, or where the cached message
-  // history keeps resurrecting messages that were manually deleted
-  // server-side. Server-side messages are NOT touched — a refetch
-  // repopulates the thread from the server on the next opportunity.
   function clearLocalState() {
-    try {
-      localStorage.removeItem("byte:outbound_queue:v1");
-      localStorage.removeItem("byte:messages:v1");
-    } catch (_) {}
+    clearAllPersisted();
+    clearQueue();
     messages = [];
     Array.from(thread.querySelectorAll("[data-message-id], [data-local-id]")).forEach((n) => n.remove());
     unreadCount = 0;
     updateJumpBtn();
-    // Repopulate from server so the thread doesn't stay empty.
     refetchHistory();
     scrollToBottom("auto");
   }
@@ -604,34 +617,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   autosize();
 
   // Viewport pin via CSS custom properties.
-  //
-  // iOS Safari's `100dvh` alone doesn't fully solve the keyboard case:
-  // when the layout viewport gets scrolled to bring the focused input
-  // into view, a `position: fixed; top: 0` element ends up above the
-  // visible area — that's what dragged the header off-screen. The old
-  // JS approach used `transform` which caused visible jitter; this one
-  // sets two CSS custom properties bound in the SCSS to `top` and
-  // `height`. Only `resize` and `scroll` trigger updates, and both are
-  // debounced to a single rAF so we never do more work per frame than
-  // the compositor asked for.
-  // Keyboard + focus behaviour on iOS. Two things we're compensating for:
-  //
-  // 1. iOS scrolls the layout viewport upward to bring a focused input
-  //    into view. `position: fixed; top: 0` then ends up ABOVE the
-  //    visible viewport — that's what pushed the header off-screen when
-  //    you focused the composer. Fix: update `--byte-vv-top` from
-  //    `vv.offsetTop` on scroll events (cheap, no layout reflow).
-  //
-  // 2. On iOS < 16.4 (or when `interactive-widget=resizes-content` is
-  //    ignored), `100dvh` doesn't shrink when the keyboard opens, so
-  //    the composer ends up behind it. Fix: override `--byte-vv-height`
-  //    from `vv.height` — but ONLY on resize events, never on scroll.
-  //    Updating height mid-scroll invalidates layout and jams internal
-  //    thread scroll (previous iteration's regression).
   if (window.visualViewport) {
     const vv = window.visualViewport;
     let rafTop = 0;
-
     const applyTop = () => {
       if (rafTop) return;
       rafTop = requestAnimationFrame(() => {
@@ -643,10 +631,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       });
     };
-
     const applyHeight = () => {
-      // Only override when a keyboard is clearly present. Otherwise
-      // leave the CSS var unset so the `100dvh` fallback wins.
       const keyboardOpen = vv.height < window.innerHeight - 100;
       if (keyboardOpen) {
         document.documentElement.style.setProperty("--byte-vv-height", `${vv.height}px`);
@@ -654,12 +639,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.documentElement.style.removeProperty("--byte-vv-height");
       }
     };
-
-    // scroll → top only (mid-scroll layout changes cause jam)
     vv.addEventListener("scroll", applyTop, { passive: true });
-    // resize → both (keyboard open/close, URL bar toggle)
     vv.addEventListener("resize", () => { applyTop(); applyHeight(); }, { passive: true });
-
     applyTop();
     applyHeight();
   }
@@ -674,13 +655,23 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function drainHooks() {
     return {
-      onSending: (e) => markQueuedSending(e.local_id),
+      onSending: (e) => {
+        if (e.conversation_id === currentConversationId) markQueuedSending(e.local_id);
+      },
       onSent: (e, message) => {
         message.metadata = { ...(message.metadata || {}), local_id: e.local_id };
-        upsertMessage(message);
-        messages = upsertPersisted(messages, message);
+        const targetConv = e.conversation_id || currentConversationId;
+        if (targetConv === currentConversationId) {
+          messages = upsertPersisted(currentConversationId, messages, message);
+          upsertMessage(message);
+        } else {
+          upsertPersisted(targetConv, loadMessages(targetConv), message);
+        }
+        convoManager.bumpActivity(targetConv, message.created_at);
       },
-      onPermanentFail: (e, reason) => markQueuedFailed(e.local_id, reason),
+      onPermanentFail: (e, reason) => {
+        if (e.conversation_id === currentConversationId) markQueuedFailed(e.local_id, reason);
+      },
     };
   }
 
@@ -689,10 +680,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     drainQueue(drainHooks());
   }
 
-  // Track connection history so we can distinguish "first-ever connect"
-  // (page load) from "reconnect after being disconnected". A reconnect
-  // almost always means the server restarted — that's when we want to
-  // pull a fresh shell + check for a new SW.
   let hasBeenConnected = false;
   let wasDisconnected  = false;
 
@@ -701,11 +688,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       setStatus("connected", "connected");
       scheduleDrain();
       refetchHistory();
-      // WS reconnect = server likely restarted (deploy, worker restart,
-      // etc.). Kick both a shell revalidate (catches shell content
-      // changes) and a SW file update check (catches new worker code).
-      // Either can raise the "!" indicator via shell_updated /
-      // controllerchange.
+      convoManager.refresh().catch(() => {});
       if (hasBeenConnected && wasDisconnected) {
         requestShellRefresh();
         checkForServiceWorkerUpdate();
@@ -720,17 +703,34 @@ document.addEventListener("DOMContentLoaded", async () => {
     received(payload) {
       const data = payload?.data;
       if (!data) return;
+      if (data.kind === "conversation") {
+        convoManager.applyBroadcast(data);
+        return;
+      }
       if (data.kind === "message" && data.message) {
-        messages = upsertPersisted(messages, data.message);
-        receiveMessage(data.message);
+        const msg = data.message;
+        const convId = msg.conversation_id;
+        // Persist to the message's conversation cache regardless of what's
+        // currently visible — a background thread might get updated while
+        // the user is looking at another one.
+        if (convId != null) {
+          const targetList = convId === currentConversationId
+            ? messages
+            : loadMessages(convId);
+          const updated = upsertPersisted(convId, targetList, msg);
+          if (convId === currentConversationId) messages = updated;
+        }
+        if (convId === currentConversationId) {
+          receiveMessage(msg);
+        } else if (msg.direction === "inbound") {
+          const prev = drawerUnread.get(convId) || 0;
+          drawerUnread.set(convId, prev + 1);
+        }
+        if (msg.created_at) convoManager.bumpActivity(convId, msg.created_at);
       }
     },
   });
 
-  // Long-lived idle sessions won't see visibilitychange or WS reconnect
-  // events, so poll on a slow interval. 5 minutes is cheap and means
-  // the "!" appears within a few minutes of a deploy at worst, even if
-  // the tab has been sitting foregrounded and connected the whole time.
   setInterval(() => {
     requestShellRefresh();
     checkForServiceWorkerUpdate();
@@ -741,22 +741,24 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function refetchHistory() {
     if (!navigator.onLine || !messagesUrl) return;
+    const convIdAtStart = currentConversationId;
+    if (convIdAtStart == null) return;
     try {
-      const res = await fetch(messagesUrl, {
+      const url = new URL(messagesUrl, location.href);
+      url.searchParams.set("conversation_id", String(convIdAtStart));
+      const res = await fetch(url.toString(), {
         credentials: "same-origin",
         headers: { Accept: "application/json" },
       });
       if (!res.ok) return;
+      if (convIdAtStart !== currentConversationId) return;
       const payload = await res.json();
       const latest = Array.isArray(payload.messages) ? payload.messages : [];
       if (typeof payload.has_more === "boolean") hasMore = payload.has_more;
-      // Only anchor oldestLoadedId if we didn't already have one — a
-      // scroll-back paginated fetch has already anchored an older id.
       if (!oldestLoadedId && latest[0]) oldestLoadedId = latest[0].id;
-
       const wasAtBottom = atBottom;
       latest.forEach((m) => {
-        messages = upsertPersisted(messages, m);
+        messages = upsertPersisted(currentConversationId, messages, m);
         upsertMessage(m);
       });
       if (wasAtBottom) scrollToBottom("auto");
@@ -768,15 +770,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     scheduleDrain();
     refetchHistory();
     requestShellRefresh();
-    // Also poke the browser to check for a new SW file. Without this,
-    // the browser's own periodic check can lag by up to 24h and the
-    // update indicator won't surface until then.
     checkForServiceWorkerUpdate();
   });
 
-  // Periodic quiet drain — belt-and-suspenders for the case where the
-  // page is open, online events don't fire (some mobile browsers), and
-  // MonitorChannel `connected` already fired before a send failed.
   setInterval(scheduleDrain, 30_000);
 
   // ---------- service worker + shell sync ----------
@@ -786,8 +782,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     syncBadge.textContent = text;
     syncBadge.dataset.state = state || "";
   }
-
-  // ---------- reload button + update-available signal ----------
 
   function setUpdateAvailable(v) {
     if (!reloadBtn) return;
@@ -802,15 +796,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function hardReload() {
-    // "Hard" in a PWA context = force-refresh from the network, not just
-    // reload the cached shell. Sequence:
-    //   1. If a new SW is staged, activate it now so the post-reload page
-    //      lands on the newer worker.
-    //   2. Purge every byte-* SW cache so the next request has to hit
-    //      the network (SW's fetch handler falls through to fetch on miss).
-    //   3. location.reload() — safe now that the cache is empty.
-    // Cache purge is skipped when offline: an offline user hitting reload
-    // with an empty cache would get a blank/503 page.
     try {
       const reg = await navigator.serviceWorker?.getRegistration("/");
       if (reg?.waiting) {
@@ -834,17 +819,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else if (data.kind === "shell_sync_failed") {
       setSyncBadge("sync failed", "failed");
     } else if (data.kind === "shell_updated") {
-      // The SW just replaced the cached shell with genuinely different
-      // content. The page we're LOOKING at is now the outdated one — a
-      // reload will pick up the fresh version.
       setUpdateAvailable(true);
     }
   });
 
-  // controllerchange fires on the FIRST-EVER SW registration too
-  // (null → new controller). That's not an "update", it's the initial
-  // claim. Track whether we already had a controller at page load and
-  // only surface subsequent controller swaps as updates.
   let hadInitialController = !!navigator.serviceWorker?.controller;
   navigator.serviceWorker?.addEventListener("controllerchange", () => {
     if (!hadInitialController) {
@@ -855,7 +833,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   await registerServiceWorker();
-  await ensureByteServiceWorker(); // push registration + sub sync
+  await ensureByteServiceWorker();
 
   // ---------- notifications button ----------
 
@@ -866,9 +844,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (state === "subscribed") notifyBtn.classList.add("subscribed");
     if (state === "denied") notifyBtn.classList.add("denied");
     if (state === "unsupported") notifyBtn.classList.add("unsupported");
-
-    // Tooltip that mirrors the visual state so hover/long-press explains
-    // what tapping will do (or why it won't).
     const title = {
       subscribed:   "Notifications on — tap to disable",
       unsubscribed: "Notifications off — tap to enable",
@@ -879,18 +854,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     notifyBtn.setAttribute("aria-label", title);
   }
 
-  // Surface the outcome of a subscribe attempt so the user isn't left
-  // guessing whether the tap did anything. Renders as an inbound
-  // system bubble.
   function surfaceLocal(body, kind = "system") {
     const stub = {
-      id:           `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      direction:    "inbound",
-      state:        "delivered",
-      body:         body,
-      created_at:   new Date().toISOString(),
-      metadata:     { kind: kind, local: true },
-      attachments:  [],
+      id:              `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      conversation_id: currentConversationId,
+      direction:       "inbound",
+      state:           "delivered",
+      body:            body,
+      created_at:      new Date().toISOString(),
+      metadata:        { kind: kind, local: true },
+      attachments:     [],
     };
     upsertMessage(stub);
     if (atBottom) scrollToBottom("smooth");
@@ -898,7 +871,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   notifyBtn?.addEventListener("click", async () => {
     const state = await checkByteNotificationStatus();
-
     if (state === "unsupported") {
       surfaceLocal("**Notifications unavailable** — this browser doesn't support Web Push.");
       return;
@@ -915,7 +887,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else {
       const result = await registerByteNotifications();
       if (result && result.success) {
-        surfaceLocal("Notifications **enabled**. Try `notify \"test\"` from your Mac to verify.");
+        surfaceLocal("Notifications **enabled**. Try `byte \"test\"` from your Mac to verify.");
       } else {
         const reason = (result && result.error) || "unknown error";
         surfaceLocal(`**Couldn't enable notifications:** \`${reason}\``);
@@ -926,11 +898,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   refreshNotifyBtn();
 
-  // Initial online-drain in case we opened after being offline.
   scheduleDrain();
 
-  // Optional: if the badge starts as 'syncing', clear after a short
-  // grace period so it doesn't linger when there's nothing to sync.
   setTimeout(() => {
     if (syncBadge?.dataset.state === "syncing") setSyncBadge("", "");
   }, 4000);

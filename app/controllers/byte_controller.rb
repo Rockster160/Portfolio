@@ -10,14 +10,17 @@ class ByteController < ApplicationController
   MAX_LIMIT     = 200
 
   def show
-    # Server-render bootstrap holds a single page so the first paint is
-    # instant. Older history hydrates via ?before= as the user scrolls.
-    @messages = current_user.byte_messages.chronological.last(HISTORY_LIMIT)
+    @conversations = current_user.byte_conversations.active.ordered.to_a
+    @conversation  = @conversations.first || ByteConversation.default_for(current_user)
+    @messages      = @conversation.byte_messages.chronological.last(HISTORY_LIMIT)
   end
 
   def create_message
     body = params[:body].to_s.strip
     return head(:bad_request) if body.empty?
+
+    conversation = resolve_conversation
+    return head(:not_found) if conversation.nil?
 
     metadata = {
       source: params[:source].to_s.presence || "web",
@@ -38,7 +41,8 @@ class ByteController < ApplicationController
     # for callers that don't send one (or garbage).
     created = client_ts_from(params[:client_ts]) || Time.current
 
-    message = current_user.byte_messages.create!(
+    message = conversation.byte_messages.create!(
+      user:       current_user,
       direction:  :outbound,
       state:      :pending,
       body:       body,
@@ -47,55 +51,110 @@ class ByteController < ApplicationController
     )
 
     broadcast(message)
-
-    # Fire-and-forget to the local Mac server. If it fails, the message
-    # sits in :pending / :failed — surfaced in the UI so the user can retry.
-    Thread.new {
-      begin
-        response = ByteLocal.deliver(message)
-        message.update!(state: response&.is_a?(Net::HTTPSuccess) ? :sent : :failed)
-        broadcast(message.reload)
-      rescue => e
-        Rails.logger.warn("[Byte] deliver thread crashed: #{e.class}: #{e.message}")
-        message.update!(state: :failed)
-        broadcast(message.reload)
-      end
-    }
+    dispatch_message(conversation, message)
 
     render json: message.as_wire, status: :created
   end
 
   # Paginated history.
-  #   (no params)   → latest HISTORY_LIMIT messages (chronological)
-  #   ?before=<id>  → previous HISTORY_LIMIT messages older than <id>
-  #   ?limit=<n>    → override page size, capped at MAX_LIMIT
-  #
-  # Response also carries `has_more` so the client stops requesting
-  # once it hits the head of the archive.
+  #   (no params)               → latest HISTORY_LIMIT messages (chronological)
+  #   ?conversation_id=<n>      → filter to a single conversation (default: primary)
+  #   ?before=<id>              → previous HISTORY_LIMIT messages older than <id>
+  #   ?limit=<n>                → override page size, capped at MAX_LIMIT
   def messages
+    conversation = resolve_conversation(missing_ok: true)
+    return render(json: { messages: [], has_more: false }) if conversation.nil?
+
     before = params[:before].to_i if params[:before].present?
     limit  = params[:limit].to_i
     limit  = HISTORY_LIMIT if limit <= 0
     limit  = [limit, MAX_LIMIT].min
 
-    scope = current_user.byte_messages
+    scope = conversation.byte_messages
     scope = scope.where("id < ?", before) if before && before > 0
 
     page = scope.chronological.last(limit)
     oldest_id = page.first&.id
-    has_more  = oldest_id ? current_user.byte_messages.where("id < ?", oldest_id).exists? : false
+    has_more  = oldest_id ? conversation.byte_messages.where("id < ?", oldest_id).exists? : false
 
     render json: {
-      messages:  page.map(&:as_wire),
-      has_more:  has_more,
-      oldest_id: oldest_id,
+      conversation_id: conversation.id,
+      messages:        page.map(&:as_wire),
+      has_more:        has_more,
+      oldest_id:       oldest_id,
     }
   end
 
+  # ---------- conversation management ----------
+
+  def list_conversations
+    convos = current_user.byte_conversations.active.ordered
+    render json: {
+      conversations: convos.map(&:as_wire),
+      default_id:    (convos.first || ByteConversation.default_for(current_user)).id,
+    }
+  end
+
+  def create_conversation
+    mode = normalized_mode(params[:mode])
+    name = params[:name].to_s.strip.presence
+
+    convo = current_user.byte_conversations.create!(
+      name:            name,
+      mode:            mode,
+      last_message_at: Time.current,
+    )
+    broadcast_convo_change(convo, :created)
+    render json: convo.as_wire, status: :created
+  end
+
+  def update_conversation
+    convo = current_user.byte_conversations.find_by(id: params[:id])
+    return head(:not_found) if convo.nil?
+
+    attrs = {}
+    attrs[:name]     = params[:name].to_s.strip.presence if params.key?(:name)
+    attrs[:archived] = ActiveModel::Type::Boolean.new.cast(params[:archived]) if params.key?(:archived)
+    if params.key?(:mode)
+      new_mode = normalized_mode(params[:mode])
+      attrs[:mode] = new_mode if new_mode
+    end
+    # Metadata merges (never replaces) so other writers' fields survive —
+    # e.g. bash cwd stays put when Claude session id is stashed.
+    if params.key?(:metadata)
+      incoming = (params[:metadata].to_unsafe_h rescue {}).stringify_keys
+      attrs[:metadata] = (convo.metadata || {}).merge(incoming)
+    end
+    convo.update!(attrs) if attrs.any?
+
+    broadcast_convo_change(convo, :updated)
+    render json: convo.as_wire
+  end
+
+  def archive_conversation
+    convo = current_user.byte_conversations.find_by(id: params[:id])
+    return head(:not_found) if convo.nil?
+
+    convo.update!(archived: true)
+    broadcast_convo_change(convo, :archived)
+    head :no_content
+  end
+
+  # List the Mac's Claude Code sessions for the current conversation's cwd.
+  # Powers the "adopt existing session" picker so the user can wire a Byte
+  # conversation to an already-running session by name.
+  def claude_sessions
+    return head(:not_found) unless ByteLocal.respond_to?(:list_claude_sessions)
+
+    convo = resolve_conversation
+    return head(:not_found) if convo.nil?
+
+    result = ByteLocal.list_claude_sessions(conversation_id: convo.id)
+    render json: { sessions: result || [] }
+  end
+
   # Long-lived PWAs eventually outlive the CSRF token baked into the
-  # initial shell. The client hits this endpoint on a 401/422 (or
-  # proactively before draining a stale queue) to swap for a fresh token
-  # without a full page reload.
+  # initial shell.
   def csrf
     return head :forbidden unless current_user&.me?
 
@@ -108,9 +167,26 @@ class ByteController < ApplicationController
     head :forbidden unless current_user&.me?
   end
 
+  # Resolve the target conversation for this request. Falls back to the
+  # user's default (creating one if absent) when no id is passed — that
+  # keeps legacy clients working while migration is in flight.
+  def resolve_conversation(missing_ok: false)
+    id = params[:conversation_id].presence
+    if id.present?
+      convo = current_user.byte_conversations.find_by(id: id)
+      return nil if convo.nil? && missing_ok
+      return convo if convo
+    end
+
+    ByteConversation.default_for(current_user)
+  end
+
+  def normalized_mode(raw)
+    sym = raw.to_s.downcase.to_sym
+    ByteConversation.modes.key?(sym.to_s) ? sym : :claude
+  end
+
   # Client sends `client_ts` as JS `Date.now()` — a millisecond epoch.
-  # Clamp to a sane range (within a day of now) so a bad clock or
-  # tampered client can't push messages far into the past or future.
   def client_ts_from(raw)
     ts = raw.to_i
     return nil if ts <= 0
@@ -129,5 +205,37 @@ class ByteController < ApplicationController
       channel: MONITOR_CHANNEL,
       data:    { kind: :message, message: message.as_wire },
     })
+  end
+
+  def broadcast_convo_change(convo, kind)
+    MonitorChannel.broadcast_to(current_user, {
+      id:      MONITOR_CHANNEL,
+      channel: MONITOR_CHANNEL,
+      data:    { kind: :conversation, event: kind, conversation: convo.as_wire },
+    })
+  end
+
+  # Route the outbound message according to its conversation's mode:
+  # * jarvis → in-process worker; skips the Mac entirely
+  # * claude / bash → hand off to the Mac via ByteLocal
+  def dispatch_message(conversation, message)
+    if conversation.jarvis?
+      ByteJarvisWorker.perform_async(message.id)
+      return
+    end
+
+    # Fire-and-forget to the local Mac server. If it fails, the message
+    # sits in :pending / :failed — surfaced in the UI so the user can retry.
+    Thread.new {
+      begin
+        response = ByteLocal.deliver(message, conversation: conversation)
+        message.update!(state: response&.is_a?(Net::HTTPSuccess) ? :sent : :failed)
+        broadcast(message.reload)
+      rescue => e
+        Rails.logger.warn("[Byte] deliver thread crashed: #{e.class}: #{e.message}")
+        message.update!(state: :failed)
+        broadcast(message.reload)
+      end
+    }
   end
 end

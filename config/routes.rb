@@ -47,6 +47,11 @@ Rails.application.routes.draw do
   get  "/byte/messages" => "byte#messages",       as: :byte_message_history
   post "/byte/messages" => "byte#create_message", as: :byte_messages
   get  "/byte/csrf"     => "byte#csrf",           as: :byte_csrf
+  get    "/byte/conversations"     => "byte#list_conversations",   as: :byte_conversations
+  post   "/byte/conversations"     => "byte#create_conversation",  as: :byte_create_conversation
+  patch  "/byte/conversations/:id" => "byte#update_conversation",  as: :byte_conversation
+  delete "/byte/conversations/:id" => "byte#archive_conversation"
+  get    "/byte/claude_sessions"   => "byte#claude_sessions",      as: :byte_claude_sessions
 
   namespace :internal do
     get "auth", to: "auth#check"

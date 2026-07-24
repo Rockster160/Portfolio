@@ -58,15 +58,16 @@ async function safeJson(res) {
 
 async function trySend(entry) {
   const payload = {
-    local_id: entry.local_id,
-    body:     entry.body,
+    local_id:        entry.local_id,
+    conversation_id: entry.conversation_id,
+    body:            entry.body,
     // Client-side timestamp travels with the payload so the server can
     // use it as the message's created_at. That way rapid sends stay in
     // client-typed order even when the network delivers them to the
     // server out of order.
-    client_ts: entry.client_ts,
-    source:   entry.metadata?.source || "web",
-    metadata: entry.metadata || {},
+    client_ts:       entry.client_ts,
+    source:          entry.metadata?.source || "web",
+    metadata:        entry.metadata || {},
   };
 
   const doFetch = (token) => fetchWithTimeout(SEND_URL, {

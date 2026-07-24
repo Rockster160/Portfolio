@@ -38,13 +38,26 @@
      data-monitor-channel="byte"
      data-messages-url="<%= byte_message_history_path %>"
      data-send-url="<%= byte_messages_path %>"
-     data-csrf-url="<%= byte_csrf_path %>">
+     data-csrf-url="<%= byte_csrf_path %>"
+     data-conversations-url="<%= byte_conversations_path %>"
+     data-claude-sessions-url="<%= byte_claude_sessions_path %>"
+     data-initial-conversation-id="<%= @conversation.id %>">
   <header class="byte-header">
+    <%# Drawer trigger — sits before the avatar so it lands in the natural %>
+    <%# top-left slot the user's thumb reaches for. %>
+    <button type="button" class="byte-drawer-toggle" data-byte-drawer-toggle title="Conversations" aria-label="Open conversations">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/>
+      </svg>
+    </button>
     <span class="byte-avatar">
       <%= image_tag "byte_favicon/byte.png", alt: "Byte" %>
     </span>
     <span class="byte-title">
-      <span class="byte-name">Byte</span>
+      <span class="byte-title-row">
+        <span class="byte-name" data-byte-convo-name><%= @conversation.display_name %></span>
+        <span class="byte-mode-chip" data-byte-mode-chip data-mode="<%= @conversation.mode %>"><%= @conversation.mode %></span>
+      </span>
       <span class="byte-status" data-byte-status>connecting…</span>
     </span>
     <%# Quiet syncing / offline badge. Empty when idle; the service %>
@@ -111,6 +124,73 @@
   </form>
 </div>
 
+  <%# Slide-in conversations drawer + backdrop. Hidden by default; %>
+  <%# .open on both elements when active. %>
+  <aside class="byte-drawer" data-byte-drawer aria-hidden="true">
+    <div class="byte-drawer-header">
+      <span class="byte-drawer-title">Conversations</span>
+      <button type="button" class="byte-drawer-close" data-byte-drawer-close aria-label="Close">×</button>
+    </div>
+    <button type="button" class="byte-new-convo" data-byte-new-convo>+ New conversation</button>
+    <ul class="byte-convo-list" data-byte-convo-list></ul>
+  </aside>
+  <div class="byte-drawer-backdrop" data-byte-drawer-backdrop aria-hidden="true"></div>
+
+  <%# New-conversation dialog. Native <dialog> for accessibility + %>
+  <%# built-in dismiss behaviour. %>
+  <dialog class="byte-modal" data-byte-new-modal>
+    <form class="byte-modal-form basic" data-byte-new-form method="dialog" autocomplete="off">
+      <h3 class="byte-modal-title">New conversation</h3>
+      <label class="byte-modal-label">
+        Name
+        <input type="text" class="byte-modal-input" name="name" placeholder="Optional (defaults to mode name)">
+      </label>
+      <label class="byte-modal-label">
+        Mode
+        <select class="byte-modal-input" name="mode">
+          <option value="claude" selected>Claude — AI conversation</option>
+          <option value="bash">Bash — shell commands, no prefix</option>
+          <option value="jarvis">Jarvis — automation commands</option>
+        </select>
+      </label>
+      <div class="byte-modal-actions">
+        <button type="button" class="byte-modal-btn" data-byte-new-cancel>Cancel</button>
+        <button type="submit" class="byte-modal-btn byte-modal-btn-primary">Create</button>
+      </div>
+    </form>
+  </dialog>
+
+  <%# Per-conversation menu (rename/archive/adopt Claude session). %>
+  <dialog class="byte-modal" data-byte-convo-menu>
+    <div class="byte-modal-form basic">
+      <h3 class="byte-modal-title" data-byte-menu-title>Conversation</h3>
+      <div class="byte-menu-list">
+        <button type="button" class="byte-menu-btn" data-byte-menu-rename>Rename…</button>
+        <button type="button" class="byte-menu-btn" data-byte-menu-adopt>Adopt Claude session…</button>
+        <button type="button" class="byte-menu-btn byte-menu-btn-danger" data-byte-menu-archive>Archive</button>
+      </div>
+      <div class="byte-modal-actions">
+        <button type="button" class="byte-modal-btn" data-byte-menu-close>Close</button>
+      </div>
+    </div>
+  </dialog>
+
+  <%# Adopt-session picker. Populated from the Mac's /byte/claude_sessions. %>
+  <dialog class="byte-modal byte-modal-wide" data-byte-adopt-modal>
+    <div class="byte-modal-form basic">
+      <h3 class="byte-modal-title">Adopt Claude session</h3>
+      <p class="byte-modal-hint" data-byte-adopt-hint>Loading…</p>
+      <ul class="byte-adopt-list" data-byte-adopt-list></ul>
+      <div class="byte-modal-actions">
+        <button type="button" class="byte-modal-btn" data-byte-adopt-close>Close</button>
+      </div>
+    </div>
+  </dialog>
+
 <script id="byte-bootstrap" type="application/json">
-  <%= raw JSON.generate(messages: @messages.map(&:as_wire)) %>
+  <%= raw JSON.generate(
+    conversation:  @conversation.as_wire,
+    conversations: @conversations.map(&:as_wire),
+    messages:      @messages.map(&:as_wire),
+  ) %>
 </script>
