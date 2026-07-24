@@ -24,6 +24,13 @@ module Portfolio
 
     config.autoload_paths += ["#{config.root}/app/service"]
 
+    # Buddy tool files under app/service/buddy/tools/ don't define constants —
+    # they only call `Buddy::Tools.register(...)` at load time. Zeitwerk would
+    # otherwise raise Zeitwerk::NameError on eager_load looking for e.g.
+    # Buddy::Tools::AddAgendaItem. The buddy_tools initializer explicitly
+    # `load`s each file after boot.
+    Rails.autoloaders.main.ignore("#{config.root}/app/service/buddy/tools")
+
     config.after_initialize do
       require "#{config.root}/app/service/colorize.rb"
       require "#{config.root}/app/service/better_json.rb"
