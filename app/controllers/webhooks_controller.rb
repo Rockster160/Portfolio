@@ -324,6 +324,14 @@ class WebhooksController < ApplicationController
       message.files.attach(Array(params[:files]).compact_blank)
     end
 
+    # Optional re-timestamp: Claude turns that spawned action-request cards
+    # (permission / plan / question) get created BEFORE those cards, so
+    # they sort above them in the thread. Bumping `created_at` on finalize
+    # slots the response after everything that happened during the turn.
+    if params[:touch_created_at].present?
+      message.update_column(:created_at, Time.current)
+    end
+
     byte_broadcast(message.user, message)
     byte_notify(message.user, message) if message.state == "delivered" && message.saved_change_to_state?
 
