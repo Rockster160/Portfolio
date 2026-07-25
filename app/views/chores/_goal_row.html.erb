@@ -16,13 +16,20 @@
        chore_id:        goal.chore_id,
      }.to_json %>">
   <%# image_url is the canonical "icon" value — same convention as
-    Chore#icon: emoji / inline <svg…> / http(s) URL / data:image URL. %>
-  <% raw_icon = goal.image_url.to_s.strip %>
+    Chore#icon: emoji / inline <svg…> / http(s) URL / data:image URL /
+    `hicon:<id>` household-icon ref / `ti-…` Tabler class. %>
+  <% raw_icon = goal.image_url.to_s.strip
+     if raw_icon.start_with?("hicon:")
+       hicon = HouseholdIcon.find_by(id: raw_icon.delete_prefix("hicon:").to_i)
+       raw_icon = hicon&.image_data.to_s
+     end %>
   <div class="goal-image">
     <% if raw_icon.start_with?("http://", "https://", "data:image/") %>
       <img src="<%= raw_icon %>" alt="" loading="lazy" referrerpolicy="no-referrer">
     <% elsif raw_icon.start_with?("<svg") %>
       <%= raw_icon.html_safe %>
+    <% elsif raw_icon.start_with?("ti-") %>
+      <i class="ti <%= raw_icon %>" aria-hidden="true"></i>
     <% elsif raw_icon.present? %>
       <span class="goal-image-emoji"><%= raw_icon %></span>
     <% else %>

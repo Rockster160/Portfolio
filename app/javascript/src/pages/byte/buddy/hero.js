@@ -50,19 +50,23 @@ export function initBuddyHero({ hero, conversationIdFn }) {
 
   // Fire any zero-arg quick action directly. Today / Affirmation /
   // What-now all just POST { kind: <action> } — the Rails-side handler
-  // knows what prompt to send Buddy.
+  // knows what prompt to send Buddy. Optimistic pet-to-thinking flip
+  // gives immediate feedback since the outbound trigger bubble is
+  // hidden by design.
   const dispatchAction = async (kind) => {
     const cid = currentConversationId();
     if (cid == null) return;
+    setExpression("thinking");
     try {
       await postQuickAction({ kind: kind, conversation_id: cid });
-    } catch (_) { /* server logs the reason */ }
+    } catch (_) { /* server logs the reason; expression rebroadcasts on reply */ }
   };
 
   const dispatchCheckin = async (mood) => {
     const cid = currentConversationId();
     if (cid == null) return;
     closeMood();
+    setExpression("thinking");
     try {
       await postQuickAction({ kind: "checkin", mood: mood, conversation_id: cid });
     } catch (_) { /* server logs the reason */ }

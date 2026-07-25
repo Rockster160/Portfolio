@@ -557,7 +557,10 @@ html.html-ctr-byte body {
   // they share the same code-block + inline-code styling. Only
   // difference: the accent border on Claude vs. subtle bg on system.
   &.byte-msg-kind-claude,
-  &.byte-msg-kind-system {
+  &.byte-msg-kind-system,
+  &.byte-msg-kind-buddy,
+  &.byte-msg-kind-buddy_reply,
+  &.byte-msg-kind-buddy_receipt {
     max-width: 94%;
 
     .byte-msg-body {

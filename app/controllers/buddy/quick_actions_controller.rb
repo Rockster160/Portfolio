@@ -55,7 +55,7 @@ module Buddy
 
         Keep it under ~8 short lines. Use bullet lists where it helps. Reference specific chores / events by name from the context block — don't invent.
       PROMPT
-      dispatch(conversation, body, buddy_action: "today")
+      dispatch_trigger(conversation, body, buddy_action: "today")
     end
 
     def trigger_checkin(conversation, mood)
@@ -73,7 +73,7 @@ module Buddy
 
         Reflect that back to me warmly. Keep it short (1-3 sentences). Match the energy — don't force cheer if I said "low" or "rough". You can offer one small suggestion appropriate to how I'm feeling (rest, a quick easy win, one specific chore that might feel good, etc.), but only if it fits — no lectures.
       PROMPT
-      dispatch(conversation, body, buddy_action: "checkin", buddy_mood: mood)
+      dispatch_trigger(conversation, body, buddy_action: "checkin", buddy_mood: mood)
     end
 
     def trigger_affirmation(conversation)
@@ -84,7 +84,7 @@ module Buddy
 
         Don't make it about productivity ("great job!"). Reflect something real: a pattern you noticed, a thing you appreciate about how the day is going, a quiet observation about me. If nothing feels honest, keep it short and simple — a bad affirmation is worse than a small one.
       PROMPT
-      dispatch(conversation, body, buddy_action: "affirmation")
+      dispatch_trigger(conversation, body, buddy_action: "affirmation")
     end
 
     def trigger_suggest(conversation)
@@ -100,7 +100,7 @@ module Buddy
 
         If picking well depends on knowing my energy or motivation level and you don't have a recent check-in in context, ASK — one short question, then wait for the answer. Otherwise, suggest one specific thing (not a menu) and explain briefly why now is a good fit. Keep it under 4 sentences.
       PROMPT
-      dispatch(conversation, body, buddy_action: "suggest")
+      dispatch_trigger(conversation, body, buddy_action: "suggest")
     end
 
     def log_mood_event(mood)
@@ -124,7 +124,10 @@ module Buddy
       ::Buddy::ExpressionState.set(current_user, expression) if expression
     end
 
-    def dispatch(conversation, body, extras)
+    # Renamed from `dispatch` — that name collides with the private
+    # ActionController::Metal#dispatch. Calling it externally would raise
+    # NoMethodError (private method 'dispatch' called for controller).
+    def dispatch_trigger(conversation, body, extras)
       metadata = {
         kind:         "buddy_trigger",
         hidden:       true,
@@ -138,6 +141,11 @@ module Buddy
         body:      body,
         metadata:  metadata,
       )
+
+      # Flip the pet to thinking immediately — the outbound trigger bubble
+      # is hidden, so without this the user sees zero feedback until the
+      # Mac roundtrip completes several seconds later.
+      ::Buddy::ExpressionState.transition!(current_user, :turn_started)
 
       # Reuse the normal outbound broadcast + dispatch path from ByteController.
       # The PWA subscriber will hide the outbound bubble on receipt because
