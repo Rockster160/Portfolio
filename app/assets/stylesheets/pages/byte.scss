@@ -1976,3 +1976,60 @@ $expressions: happy thinking focused encouraging celebrating;
 
   &:disabled { opacity: 0.5; cursor: default; }
 }
+
+// -------- Buddy check-in mood popover -------------------------------------
+// Inline flyout below the quick-action chips. Rendered small and adjacent
+// so it feels like an extension of the chip rather than a full modal.
+.byte-buddy-mood-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  max-width: 480px;
+  width: 100%;
+
+  &[hidden] { display: none; }
+}
+.byte-buddy-mood-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+}
+.byte-buddy-mood-choices {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+
+  button {
+    flex: 1 1 0;
+    padding: 8px 4px !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: #FFFFFF !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    border-radius: 10px !important;
+    font-size: 12.5px !important;
+    font-weight: 600 !important;
+    cursor: pointer;
+    transition: transform 90ms ease, background 100ms ease;
+
+    &:hover  { background: rgba(255, 255, 255, 0.12) !important; }
+    &:active {
+      transform: translateY(1px);
+      background: rgba(255, 255, 255, 0.18) !important;
+      position: static !important;
+      top: 0 !important;
+    }
+  }
+
+  // Optional mood-tinted borders — subtle affordance for "how loaded is
+  // each choice" without turning it into a mood color wheel.
+  button[data-mood="great"] { border-color: rgba(79, 207, 124, 0.45) !important; }
+  button[data-mood="good"]  { border-color: rgba(63, 160, 255, 0.45) !important; }
+  button[data-mood="okay"]  { border-color: rgba(255, 255, 255, 0.22) !important; }
+  button[data-mood="low"]   { border-color: rgba(232, 168, 92, 0.45) !important; }
+  button[data-mood="rough"] { border-color: rgba(242, 107, 107, 0.45) !important; }
+}

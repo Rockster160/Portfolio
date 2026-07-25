@@ -67,6 +67,14 @@ module ByteLocal
         context = Buddy::Context.build(message.user)
         payload[:buddy_context] = context
         payload[:buddy_system_prompt_extras] = Buddy::Personality.for(message.user, context_block: context)
+        # Portfolio-triggered Buddy turns get READ-ONLY tools: Bash (for
+        # prod-query.sh, prod-emails.sh, ls, cat, grep, tail), Read,
+        # Grep, Glob, WebSearch, WebFetch. NO Write / Edit / NotebookEdit
+        # / Task — those are how Claude Code drifts into "let me create
+        # a prodExec for you" muscle-memory. All mutations go through
+        # the marker system regardless. Persona spells out that Bash is
+        # read-only in practice.
+        payload[:buddy_tools_override] = "Bash,Read,Grep,Glob,WebSearch,WebFetch"
       rescue => e
         Rails.logger.warn("[ByteLocal] buddy extras skipped: #{e.class}: #{e.message}")
       end

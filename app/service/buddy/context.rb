@@ -11,13 +11,19 @@ module Buddy
     def build(user)
       tz = user.timezone
       now = Time.current.in_time_zone(tz)
+      today = user.perceived_today
+
+      chore_buckets = build_chore_buckets(user, today)
 
       {
         now_local:         now.strftime("%a %Y-%m-%d %-I:%M %p %Z"),
         timezone:          tz,
         user_first_name:   user.first_name,
         today_agenda:      today_agenda(user, now),
-        chores_marked_due: chores_marked_due(user),
+        chores_dailies:         chore_buckets[:dailies],         # MOST PROMINENT — the daily rotation
+        chores_scheduled_today: chore_buckets[:scheduled_today], # explicit today scheduling
+        chores_hot_picks:       chore_buckets[:hot_picks],       # attention items
+        chores_overdue_backlog: chore_buckets[:overdue_backlog], # long-term todo, NOT all-must-do-today
         recent_events:     recent_events(user, now),
         active_proposals:  active_proposals(user),
       }
@@ -49,18 +55,64 @@ module Buddy
         []
       end
 
-      def chores_marked_due(user)
-        return [] unless user.respond_to?(:accessible_chores)
+      # Four buckets with distinct meanings — Rocco was explicit that
+      # overdue-scheduled chores are a long-term backlog, NOT today's
+      # must-dos. The buckets let Buddy talk about the day accurately
+      # instead of treating a big overdue count as "you're behind".
+      #
+      #   dailies         — user's daily rotation (ChoreDaily). Most prominent.
+      #   scheduled_today — chores whose schedule matches TODAY. Good to know.
+      #   hot_picks       — flagged for attention today (ChoreHotPick).
+      #   overdue_backlog — marked_due AND not in any of the above. Long-term todo.
+      def build_chore_buckets(user, today)
+        return default_buckets unless user.respond_to?(:accessible_chores) && user.chore_household_id
 
-        user.accessible_chores.select { |c| c.respond_to?(:marked_due?) && c.marked_due? }.first(15).map { |c|
-          {
-            id:   c.id,
-            name: c.name,
-          }
+        chores = user.accessible_chores.to_a
+        by_id  = chores.each_with_object({}) { |c, h| h[c.id] = c }
+
+        daily_ids = ChoreDaily.for_user(user).limit(20).pluck(:chore_id)
+        hot_ids   = ChoreHotPick.for_day(today).where(chore_id: chores.map(&:id)).pluck(:chore_id)
+        scheduled_today_ids = chores.select { |c|
+          c.respond_to?(:matches_day?) && c.scheduled? && (safe_matches_day(c, today, user))
+        }.map(&:id)
+
+        prominent = (daily_ids + hot_ids + scheduled_today_ids).uniq
+        overdue = chores.select { |c|
+          c.respond_to?(:marked_due?) && c.marked_due? && !prominent.include?(c.id)
+        }.map(&:id)
+
+        {
+          dailies:         daily_ids.filter_map { |id| slim_chore(by_id[id]) }.first(15),
+          scheduled_today: scheduled_today_ids.filter_map { |id| slim_chore(by_id[id]) }.first(15),
+          hot_picks:       hot_ids.filter_map { |id| slim_chore(by_id[id]) }.first(15),
+          overdue_backlog: overdue.filter_map { |id| slim_chore(by_id[id]) }.first(20),
         }
       rescue => e
-        Rails.logger.warn("[Buddy::Context] chores_marked_due failed: #{e.class}: #{e.message}")
-        []
+        Rails.logger.warn("[Buddy::Context] chore buckets failed: #{e.class}: #{e.message}")
+        default_buckets
+      end
+
+      def default_buckets
+        { dailies: [], scheduled_today: [], hot_picks: [], overdue_backlog: [] }
+      end
+
+      def slim_chore(chore)
+        return nil if chore.nil?
+
+        out = { id: chore.id, name: chore.name }
+        out[:freq] = chore.freq.to_s if chore.respond_to?(:freq) && chore.freq.present?
+        if chore.respond_to?(:assigned?) && chore.assigned?
+          out[:assigned_to] = chore.assigned_to_user&.first_name
+        end
+        out
+      end
+
+      # `matches_day?` on some chore types raises on malformed recurrence
+      # data; a Buddy context build must never blow up over a single bad chore.
+      def safe_matches_day(chore, day, user)
+        chore.matches_day?(day, user)
+      rescue
+        false
       end
 
       def recent_events(user, now)

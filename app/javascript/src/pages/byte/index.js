@@ -236,11 +236,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       bodyEl.textContent = message.body || "";
     } else if (kind === "action-request") {
       renderActionRequest(bodyEl, message);
-    } else if (kind === "buddy_reply") {
-      // Buddy's spoken reply is markdown-rendered above the proposal
-      // checklist. renderBuddyChecklist is called below (unconditional
-      // check on metadata.tool_name) so it works for both fresh and
-      // decided states.
+    } else if (kind === "buddy_reply" || kind === "buddy" || kind === "buddy_receipt") {
+      // Every Buddy inbound message renders as markdown so **bold**,
+      // bulleted lists, and inline code all look right. `buddy_reply`
+      // is set by ProposalBuilder on replies that carry a checklist;
+      // `buddy` is Mac's default kind for a plain reply; `buddy_receipt`
+      // is the post-execution "Done ✓ ..." summary. All same treatment.
       bodyEl.innerHTML = renderMarkdown(message.body || "");
     } else if (kind === "watch") {
       // Watch bubbles carry a `wait_label` while running, then a plain
@@ -683,6 +684,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   // months-old orphan from a crashed process, and forcing it to spin
   // forever is the runaway-thinking-process bug the user hit.
   function upsertMessage(message, opts = {}) {
+    // Buddy quick-action triggers post an outbound "message" whose only
+    // purpose is to give the Mac a reply anchor. It should never render
+    // as a fake user bubble — the visible thing is the Buddy reply that
+    // comes back. Drop it silently if it's already mounted; skip mount
+    // otherwise.
+    if (message?.metadata?.hidden === true) {
+      const existing = nodeForServerMessage(message);
+      if (existing) existing.remove();
+      return;
+    }
+
     let node = nodeForServerMessage(message);
     if (!node) {
       node = newMessageNode();
@@ -1127,11 +1139,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Mount the Buddy hero once the composer + input handles exist. The
   // hero only shows itself on :buddy conversations; its quick-action
-  // chips pre-fill the composer and (for complete prompts) submit.
+  // chips POST to /buddy/quick_action so the resulting message is
+  // Buddy-authored rather than a fake user-typed sentence.
   buddyHero = initBuddyHero({
-    hero:        heroEl,
-    input:       input,
-    sendHandler: handleSend,
+    hero:             heroEl,
+    conversationIdFn: () => currentConversationId,
   });
   // Sync initial visibility to the currently-active conversation.
   buddyHero?.onModeChange(convoManager.currentConversation()?.mode);

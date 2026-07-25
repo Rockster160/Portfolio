@@ -54,6 +54,7 @@ Rails.application.routes.draw do
   delete "/byte/conversations/:id" => "byte#archive_conversation"
   get    "/byte/claude_sessions"   => "byte#claude_sessions",      as: :byte_claude_sessions
   post   "/byte/actions/:request_id/respond" => "byte#respond_action", as: :byte_action_respond
+  post   "/buddy/quick_action"               => "buddy/quick_actions#create", as: :buddy_quick_action
 
   namespace :internal do
     get "auth", to: "auth#check"

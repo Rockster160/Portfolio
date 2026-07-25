@@ -94,11 +94,21 @@
       <div class="byte-buddy-face" aria-hidden="true"></div>
     </div>
     <nav class="byte-buddy-quick-actions" data-buddy-quick-actions>
-      <button type="button" data-buddy-quickfill="What's on for me today?">Today</button>
-      <button type="button" data-buddy-quickfill="Can we check in? How are things?">Check-in</button>
-      <button type="button" data-buddy-quickfill="Log this: ">Log</button>
-      <button type="button" data-buddy-quickfill="What chores are up right now?">Chores</button>
+      <button type="button" data-buddy-action="today">Today</button>
+      <button type="button" data-buddy-action="suggest">What now?</button>
+      <button type="button" data-buddy-action="checkin">Check-in</button>
+      <button type="button" data-buddy-action="affirmation">Affirmation</button>
     </nav>
+    <div class="byte-buddy-mood-popover" data-buddy-mood-popover hidden>
+      <span class="byte-buddy-mood-label">How are you feeling?</span>
+      <div class="byte-buddy-mood-choices">
+        <button type="button" data-mood="great">Great</button>
+        <button type="button" data-mood="good">Good</button>
+        <button type="button" data-mood="okay">Okay</button>
+        <button type="button" data-mood="low">Low</button>
+        <button type="button" data-mood="rough">Rough</button>
+      </div>
+    </div>
   </section>
 
   <%# Slim strip glued to the bottom of the header showing the effective %>
