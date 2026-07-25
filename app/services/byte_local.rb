@@ -80,11 +80,16 @@ module ByteLocal
     if conversation&.buddy?
       begin
         context = Buddy::Context.build(message.user)
-        # Snapshot context to disk so Buddy can Read it on demand instead
-        # of eating 5-8 KB of every turn's system prompt. Rails and Mac
-        # share a host so this is a direct FS write.
-        snapshot_path = Buddy::ContextSnapshot.write_for(message.user, context)
-        payload[:buddy_context_path] = snapshot_path
+        # Snapshot context so Buddy can Read it on demand instead of
+        # eating 5-8 KB of every turn's system prompt. Rails runs on
+        # prod Linux; Buddy runs on the Mac. We ship the payload inline
+        # in the /byte/incoming envelope and Mac's Handler writes it
+        # to Mac-local disk before invoking Buddy. The path we advertise
+        # in the system prompt is the Mac-local path.
+        snapshot_payload = Buddy::ContextSnapshot.build_for(message.user, context)
+        snapshot_path    = Buddy::ContextSnapshot.mac_path_for(message.user)
+        payload[:buddy_context_snapshot] = snapshot_payload
+        payload[:buddy_context_path]     = snapshot_path
         # Tiny (~100 byte) summary of always-needed fields so Buddy can
         # track mood + decide whether to Read the file without a round-
         # trip on chat-only turns.

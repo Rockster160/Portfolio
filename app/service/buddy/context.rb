@@ -124,7 +124,7 @@ module Buddy
           overdue_backlog: overdue.filter_map     { |id| slim_chore(by_id[id]) }.first(20),
         }
       rescue => e
-        Rails.logger.warn("[Buddy::Context] chore buckets failed: #{e.class}: #{e.message}")
+        Rails.logger.warn("[Buddy::Context] chore buckets failed: #{e.class}: #{e.message}\n  #{Array(e.backtrace).first(8).join("\n  ")}")
         default_buckets
       end
 
