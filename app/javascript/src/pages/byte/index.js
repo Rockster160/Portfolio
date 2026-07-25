@@ -236,6 +236,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       bodyEl.textContent = message.body || "";
     } else if (kind === "action-request") {
       renderActionRequest(bodyEl, message);
+    } else if (kind === "action_chip") {
+      // Small centered status pill (e.g. "Check-in: Good", "What now?")
+      // marking a quick-action tap. Not a real message from either side;
+      // CSS gives it a distinct centered chip look.
+      bodyEl.textContent = message.body || "";
     } else if (kind === "buddy_reply" || kind === "buddy" || kind === "buddy_receipt") {
       // Every Buddy inbound message renders as markdown so **bold**,
       // bulleted lists, and inline code all look right. `buddy_reply`

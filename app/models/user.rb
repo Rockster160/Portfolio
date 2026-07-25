@@ -3,7 +3,7 @@
 # Table name: users
 #
 #  id                 :integer          not null, primary key
-#  buddy_expression   :string           default("happy"), not null
+#  buddy_expression   :string           default("neutral"), not null
 #  buddy_theme        :string           default("byte"), not null
 #  chore_notify_prefs :jsonb            not null
 #  dark_mode          :boolean
@@ -126,6 +126,18 @@ class User < ApplicationRecord
   def me? = id == 1
   def chelsea? = id == 58_128
   def eve? = id == 4
+
+  # Friendly display name for personalized greetings (Buddy, notifications,
+  # etc.). No first_name column exists on this table, so this is a simple
+  # id-map fallback to `username`. Add a column later if the map grows.
+  def first_name
+    case id
+    when 1       then "Rocco"
+    when 58_128  then "Chelsea"
+    when 4       then "Eve"
+    else username.presence || "friend"
+    end
+  end
 
   alias mom? eve?
 

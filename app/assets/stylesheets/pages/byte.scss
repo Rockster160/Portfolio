@@ -2177,7 +2177,7 @@ dialog.byte-modal {
 }
 
 // Face per theme + expression.
-$expressions: happy thinking focused encouraging celebrating;
+$expressions: neutral happy thinking focused encouraging celebrating;
 @each $expr in $expressions {
   .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$expr}"]
     .byte-buddy-face {
@@ -2289,27 +2289,89 @@ $expressions: happy thinking focused encouraging celebrating;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 .byte-msg-action-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  font-size: 13.5px;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 14px;
   cursor: pointer;
+  transition: background 100ms ease, border-color 100ms ease;
 
+  &:hover:not([data-status="executed"]):not([data-status="cancelled"]) {
+    background: rgba(255, 255, 255, 0.09);
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+
+  // Custom checkbox - the browser default is jarring against the dark
+  // bubble and reads as a UI glitch. Restyled as a rounded blue-accent
+  // square that visibly checks/unchecks.
   input[type="checkbox"] {
+    -webkit-appearance: none;
+    appearance: none;
     flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    border: 1.5px solid rgba(255, 255, 255, 0.35);
+    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    position: relative;
+    transition: background 90ms ease, border-color 90ms ease;
+
+    &:hover  { border-color: rgba(63, 160, 255, 0.6); }
+    &:checked {
+      background: #3FA0FF;
+      border-color: #3FA0FF;
+    }
+    &:checked::after {
+      content: "";
+      position: absolute;
+      left: 6px;
+      top: 2px;
+      width: 5px;
+      height: 10px;
+      border: solid #fff;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+    }
+    &:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+  }
+
+  // Action-kind chip — small colored badge that tells the user what the
+  // checkbox will actually DO ("Complete", "Log", "Add to list", etc.)
+  .byte-msg-action-kind {
+    flex-shrink: 0;
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(63, 160, 255, 0.15);
+    color: #A8CFFF;
+    border: 1px solid rgba(63, 160, 255, 0.28);
+    white-space: nowrap;
   }
 
   .byte-msg-action-label {
     flex: 1;
+    line-height: 1.35;
   }
   .byte-msg-action-glyph {
     opacity: 0.7;
+    font-size: 15px;
   }
   .byte-msg-action-error {
     font-size: 11.5px;
@@ -2317,33 +2379,82 @@ $expressions: happy thinking focused encouraging celebrating;
   }
 
   &[data-status="executed"] {
-    opacity: 0.7;
+    opacity: 0.65;
+    .byte-msg-action-kind { opacity: 0.6; }
   }
   &[data-status="cancelled"] {
     opacity: 0.4;
     text-decoration: line-through;
+    .byte-msg-action-kind { opacity: 0.5; }
   }
   &[data-status="failed"] {
     color: #F26B6B;
+    border-color: rgba(242, 107, 107, 0.4);
+    .byte-msg-action-kind {
+      background: rgba(242, 107, 107, 0.15);
+      color: #F26B6B;
+      border-color: rgba(242, 107, 107, 0.35);
+    }
   }
   &[data-status="partial"] {
     color: #E8A85C;
   }
+
+  // Per-kind color hints on the chip so scanning the list is fast.
+  &[data-tool-name="complete_chore"] .byte-msg-action-kind,
+  &[data-tool-name="undo_chore_completion"] .byte-msg-action-kind {
+    background: rgba(79, 207, 124, 0.15);
+    color: #A9E9C1;
+    border-color: rgba(79, 207, 124, 0.28);
+  }
+  &[data-tool-name="log_event"] .byte-msg-action-kind,
+  &[data-tool-name="edit_event"] .byte-msg-action-kind,
+  &[data-tool-name="delete_event"] .byte-msg-action-kind {
+    background: rgba(232, 168, 92, 0.15);
+    color: #F0C88A;
+    border-color: rgba(232, 168, 92, 0.28);
+  }
+  &[data-tool-name="add_list_item"] .byte-msg-action-kind,
+  &[data-tool-name="edit_list_item"] .byte-msg-action-kind,
+  &[data-tool-name="remove_list_item"] .byte-msg-action-kind {
+    background: rgba(182, 139, 255, 0.15);
+    color: #D6C3FF;
+    border-color: rgba(182, 139, 255, 0.28);
+  }
 }
 .byte-msg-multi-select-submit {
-  align-self: flex-end;
-  margin-top: 4px;
-  padding: 5px 12px;
-  background: rgba(63, 160, 255, 0.15);
-  color: #E7EEFB;
-  border: 1px solid rgba(63, 160, 255, 0.35);
-  border-radius: 6px;
+  // Solid button - subtle-gradient version read too text-like. Big
+  // filled tap target that unambiguously invites a click.
+  align-self: stretch;
+  margin-top: 8px;
+  padding: 12px 18px;
+  background: #3FA0FF;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 10px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-align: center;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3), 0 4px 10px rgba(63, 160, 255, 0.25);
+  transition: transform 90ms ease, background 100ms ease, box-shadow 100ms ease;
+
+  &:hover  {
+    background: #5AB0FF;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3), 0 4px 14px rgba(63, 160, 255, 0.4);
+  }
+  &:active {
+    transform: translateY(2px);
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0.3), 0 1px 4px rgba(63, 160, 255, 0.2);
+  }
 
   &:disabled {
     opacity: 0.5;
     cursor: default;
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: none;
   }
 }
 
@@ -2417,5 +2528,42 @@ $expressions: happy thinking focused encouraging celebrating;
   }
   button[data-mood="rough"] {
     border-color: rgba(242, 107, 107, 0.45) !important;
+  }
+}
+
+// -------- Action chip (quick-action tap marker) ---------------------------
+// Small centered pill shown when the user taps Today / What now? / Check-in
+// / Affirmation. Not a real message from either party - a visible status
+// marker so the person can see their tap landed and later scroll back to
+// see what triggered a given reply.
+.byte-msg.byte-msg-kind-action_chip {
+  align-self: center;
+  max-width: none;
+  width: auto;
+  margin: 6px 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+
+  // Kill the usual message metadata slots (avatar, time, state badge)
+  // so it reads as a bare chip, not a partial bubble.
+  .byte-msg-meta,
+  .byte-msg-attachments,
+  .byte-msg-thoughts,
+  .byte-msg-actions { display: none; }
+
+  [data-body] {
+    display: inline-block;
+    padding: 3px 12px;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    color: rgba(231, 238, 251, 0.65);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 999px;
+    text-align: center;
+    white-space: nowrap;
   }
 }

@@ -3,7 +3,7 @@ Buddy::Tools.register(
   description: <<~TXT,
     Add an item to one of the user's lists. Use for grocery items, todos,
     anything they want tracked as a list entry. If the list doesn't exist,
-    tell the user which lists ARE available — don't invent one.
+    tell the user which lists ARE available - don't invent one.
   TXT
   args: {
     list: { type: :string, required: true, description: "Fuzzy list name" },

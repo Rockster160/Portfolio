@@ -24,12 +24,27 @@ module ByteLocal
   #    #{DEFAULT_PORT} forwarded on the router to the Mac's LAN IP)
   # 3. `localhost:8788` — dev fallback (Rails and the Mac server share a host)
   def base_url
-    return ENV["BYTE_LOCAL_URL"] if ENV["BYTE_LOCAL_URL"].present?
+    env_val = clean_url(ENV["BYTE_LOCAL_URL"])
+    return env_val if env_val.present?
 
     ip = ::DataStorage[:local_ip]
     return "http://#{ip}:#{DEFAULT_PORT}" if ip.present?
 
     DEFAULT_URL
+  end
+
+  # Defensive: strips wrapping quotes and inline `# comments` that
+  # sometimes leak in via poorly-parsed .env lines. Without this,
+  # `BYTE_LOCAL_URL='http://localhost:8788' # LOCAL ONLY` becomes an
+  # invalid URI that fails every message with URI::InvalidURIError.
+  def clean_url(raw)
+    return nil if raw.nil?
+
+    raw.to_s
+       .sub(/\s+#.*\z/, "")     # strip trailing " # comment"
+       .strip
+       .gsub(/\A['"]|['"]\z/, "")  # strip wrapping quotes
+       .strip
   end
 
   def secret
@@ -77,7 +92,13 @@ module ByteLocal
         # escaping — same idea, no free-form shell.
         payload[:buddy_tools_override] = "Read,Grep,Glob,WebSearch,WebFetch"
       rescue => e
-        Rails.logger.warn("[ByteLocal] buddy extras skipped: #{e.class}: #{e.message}")
+        # LOUD failure in dev - silent rescue here cost hours debugging
+        # phantom "why doesn't Buddy see chores / follow marker rules"
+        # behavior when the real cause was a class-loading race on
+        # user.first_name. In dev we re-raise so it surfaces immediately;
+        # in prod we log + swallow so a bug can't kill delivery to Mac.
+        Rails.logger.warn("[ByteLocal] buddy extras skipped: #{e.class}: #{e.message}\n  #{Array(e.backtrace).first(3).join("\n  ")}")
+        raise if Rails.env.development?
       end
     end
 

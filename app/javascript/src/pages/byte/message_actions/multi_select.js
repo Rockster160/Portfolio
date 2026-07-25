@@ -38,6 +38,26 @@ const STATUS_GLYPHS = {
   partial:   "~",
 };
 
+// Per-tool action-verb prefix so each checkbox row makes it clear WHAT
+// tapping the box will do. Without this the label is just "Water 24oz"
+// and the user can't tell if it'll log an event, complete a chore, or
+// add to a list. Short + colored to read as metadata, not part of the
+// item name.
+const ACTION_KIND_LABELS = {
+  complete_chore:        "Complete",
+  create_chore:          "Add chore",
+  edit_chore:            "Edit chore",
+  undo_chore_completion: "Undo",
+  add_agenda_item:       "Schedule",
+  edit_agenda_item:      "Edit event",
+  add_list_item:         "Add to list",
+  edit_list_item:        "Edit item",
+  remove_list_item:      "Remove",
+  log_event:             "Log",
+  edit_event:            "Edit log",
+  delete_event:          "Delete log",
+};
+
 // Render (or re-render) into a container element. Container is expected
 // to sit inside the message bubble, cleared each call so per-row state
 // updates don't leave stale nodes.
@@ -58,12 +78,25 @@ export function renderMultiSelect(container, message) {
     row.className = "byte-msg-action-row";
     row.dataset.status = btn.status || "pending";
     row.dataset.buttonId = btn.id;
+    row.dataset.toolName = btn.tool_name || "";
 
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.value = btn.id;
     cb.disabled = isDecided;
     row.appendChild(cb);
+
+    // Action-kind prefix: small colored chip that tells the user WHAT
+    // this row does (Complete, Log, Add to list, Schedule, etc.) so
+    // they don't have to guess whether the checkbox will fire a chore
+    // completion or an event log.
+    const kindLabel = ACTION_KIND_LABELS[btn.tool_name];
+    if (kindLabel) {
+      const kind = document.createElement("span");
+      kind.className = "byte-msg-action-kind";
+      kind.textContent = kindLabel;
+      row.appendChild(kind);
+    }
 
     const label = document.createElement("span");
     label.className = "byte-msg-action-label";
@@ -92,7 +125,7 @@ export function renderMultiSelect(container, message) {
     const submit = document.createElement("button");
     submit.type = "button";
     submit.className = "byte-msg-multi-select-submit";
-    submit.textContent = "Do the checked ones";
+    submit.textContent = "Confirm";
     submit.addEventListener("click", () => submitDecision(container, requestId, submit));
     container.appendChild(submit);
   }

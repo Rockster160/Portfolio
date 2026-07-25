@@ -24,8 +24,24 @@ module Buddy
 
     COUNT_ARG = :count
 
+    # Lazy loader guards against Rails dev-mode module reload wiping
+    # the in-memory registry hash. Zeitwerk clears Buddy::Tools when
+    # any file it depends on changes; @registry starts empty on the
+    # next reference, and the boot-time initializer isn't going to
+    # re-fire. Loading here means the registry is always populated by
+    # the time anyone queries it. Idempotent - re-loading tool files
+    # just re-registers the same entries into the hash.
     def registry
       @registry ||= {}
+      load_tool_files! if @registry.empty? && !@loading_tools
+      @registry
+    end
+
+    def load_tool_files!
+      @loading_tools = true
+      Dir[Rails.root.join("app/service/buddy/tools/*.rb")].sort.each { |f| load f }
+    ensure
+      @loading_tools = false
     end
 
     def register(name:, description:, args:, confirm:, label:, execute:, receipt:, merge_key: nil, merge_label: nil)

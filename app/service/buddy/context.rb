@@ -30,6 +30,20 @@ module Buddy
       }
     end
 
+    # Publicly-callable helper. Both this module (for emotional_state)
+    # and Buddy::QuickActionsController (for the check-in prompt) call
+    # it - keep them in sync by owning the map in one place.
+    def mood_vibe_for(mood)
+      case mood.to_s
+      when "great" then "energized, in a solid headspace, up-and-forward."
+      when "good"  then "steady, no complaints and no big highs."
+      when "okay"  then "middling, neither up nor down."
+      when "low"   then "worn down, tired in a way sleep may not fix."
+      when "rough" then "genuinely having a hard time. Heavy."
+      else              "somewhere in the middle."
+      end
+    end
+
     class << self
       private
 
@@ -71,6 +85,16 @@ module Buddy
         chores = user.accessible_chores.to_a
         by_id  = chores.each_with_object({}) { |c, h| h[c.id] = c }
 
+        # Completion status per chore for today - critical signal so Buddy
+        # can say "you've done Water, still pending: Wordle, Teeth" instead
+        # of vaguely gesturing at "your dailies". Without this every bucket
+        # item looks identical and Buddy can't recommend specifics.
+        household_user_ids = user.chore_household&.user_ids || [user.id]
+        done_today_ids = ChoreCompletion
+          .where(user_id: household_user_ids, day_key: today)
+          .pluck(:chore_id)
+          .to_set
+
         daily_ids = ChoreDaily.for_user(user).limit(20).pluck(:chore_id)
         hot_ids   = ChoreHotPick.for_day(today).where(chore_id: chores.map(&:id)).pluck(:chore_id)
         scheduled_today_ids = chores.select { |c|
@@ -83,10 +107,10 @@ module Buddy
         }.map(&:id)
 
         {
-          dailies:         daily_ids.filter_map { |id| slim_chore(by_id[id]) }.first(15),
-          scheduled_today: scheduled_today_ids.filter_map { |id| slim_chore(by_id[id]) }.first(15),
-          hot_picks:       hot_ids.filter_map { |id| slim_chore(by_id[id]) }.first(15),
-          overdue_backlog: overdue.filter_map { |id| slim_chore(by_id[id]) }.first(20),
+          dailies:         daily_ids.filter_map { |id| slim_chore(by_id[id], done_today_ids) }.first(15),
+          scheduled_today: scheduled_today_ids.filter_map { |id| slim_chore(by_id[id], done_today_ids) }.first(15),
+          hot_picks:       hot_ids.filter_map { |id| slim_chore(by_id[id], done_today_ids) }.first(15),
+          overdue_backlog: overdue.filter_map { |id| slim_chore(by_id[id], done_today_ids) }.first(20),
         }
       rescue => e
         Rails.logger.warn("[Buddy::Context] chore buckets failed: #{e.class}: #{e.message}")
@@ -105,9 +129,14 @@ module Buddy
           .limit(1)
           .first
         check_in_summary = if latest_check_in
+          # Ship a natural-language vibe description INSTEAD of the raw
+          # label word ("good", "low", etc). If the label appears here
+          # Buddy pattern-matches and echoes it ("you checked in good") -
+          # feels like variable interpolation. The vibe gives the same
+          # signal without the specific word to grab.
+          mood = latest_check_in.data.is_a?(Hash) ? latest_check_in.data["mood"] : nil
           {
-            level:     (latest_check_in.data.is_a?(Hash) ? latest_check_in.data["mood"] : nil),
-            at:        latest_check_in.timestamp.in_time_zone(user.timezone).strftime("%-I:%M %p"),
+            vibe:      Buddy::Context.mood_vibe_for(mood),
             hours_ago: ((now - latest_check_in.timestamp) / 1.hour).round(1),
           }
         end
@@ -118,14 +147,19 @@ module Buddy
         }
       end
 
+
       def default_buckets
         { dailies: [], scheduled_today: [], hot_picks: [], overdue_backlog: [] }
       end
 
-      def slim_chore(chore)
+      def slim_chore(chore, done_today_ids = Set.new)
         return nil if chore.nil?
 
-        out = { id: chore.id, name: chore.name }
+        out = {
+          id:         chore.id,
+          name:       chore.name,
+          done_today: done_today_ids.include?(chore.id),
+        }
         out[:freq] = chore.freq.to_s if chore.respond_to?(:freq) && chore.freq.present?
         if chore.respond_to?(:assigned?) && chore.assigned?
           out[:assigned_to] = chore.assigned_to_user&.first_name

@@ -1,7 +1,7 @@
 Buddy::Tools.register(
   name:        :log_event,
   description: <<~TXT,
-    Log an ActionEvent — meals, drinks, workouts, water intake, feelings,
+    Log an ActionEvent - meals, drinks, workouts, water intake, feelings,
     check-ins, whatever the user wants tracked. `name` is what happened
     (short label). `notes` are optional. Use `count=N` when the same
     thing repeats (e.g. 5 glasses of water, 20 push-ups).
@@ -15,7 +15,7 @@ Buddy::Tools.register(
   },
   label: ->(payload, _ctx) {
     if payload[:notes].present? && payload[:notes].length < 40
-      "#{payload[:name]} — #{payload[:notes]}"
+      "#{payload[:name]} - #{payload[:notes]}"
     else
       payload[:name].to_s
     end

@@ -1,7 +1,7 @@
 Buddy::Tools.register(
   name:        :edit_agenda_item,
   description: <<~TXT,
-    Edit an existing agenda item — change title, time, duration, or cancel
+    Edit an existing agenda item - change title, time, duration, or cancel
     it. Only include the fields that are changing. Use `cancelled=true` to
     cancel an event without deleting it. For v1, only edits local (non-
     Google-synced) items.

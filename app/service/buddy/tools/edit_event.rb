@@ -1,7 +1,7 @@
 Buddy::Tools.register(
   name:        :edit_event,
   description: <<~TXT,
-    Edit a recently-logged event — change name, notes, or timestamp.
+    Edit a recently-logged event - change name, notes, or timestamp.
     `event` is a fuzzy name; `when` narrows it (today, yesterday, this
     morning, last). Only include the fields that are changing.
   TXT

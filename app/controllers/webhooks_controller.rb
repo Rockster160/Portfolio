@@ -288,8 +288,9 @@ class WebhooksController < ApplicationController
     )
     message.files.attach(files) if files.any?
 
-    buddy_process_reply(user, conversation, message) if conversation.buddy?
-
+    # NOTE: Buddy processing lives in byte_update, not here — this endpoint
+    # fires on the initial "..." streaming placeholder before the reply
+    # exists. Processing here would flip the pet expression too early.
     byte_broadcast(user, message)
     byte_notify(user, message)
 
@@ -372,6 +373,15 @@ class WebhooksController < ApplicationController
     # slots the response after everything that happened during the turn.
     if params[:touch_created_at].present?
       message.update_column(:created_at, Time.current)
+    end
+
+    # Buddy marker/mood/expression processing runs HERE (on finalize), not
+    # in byte_create — the initial byte_create fires with body "..." from
+    # the streaming placeholder, which would prematurely flip the pet to
+    # :neutral before Buddy has even replied. Only fire when the message
+    # settles to :delivered and belongs to a buddy conversation.
+    if message.state == "delivered" && message.saved_change_to_state? && message.byte_conversation&.buddy?
+      buddy_process_reply(message.user, message.byte_conversation, message)
     end
 
     byte_broadcast(message.user, message)

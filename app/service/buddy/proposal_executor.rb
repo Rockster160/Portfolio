@@ -118,7 +118,7 @@ module Buddy
         parts << "Partial: #{partial.map { |b| b['label'] }.join(', ')}" if partial.any?
         parts << "Skipped: #{cancelled.map { |b| b['label'] }.join(', ')}" if cancelled.any?
         if failed.any?
-          fails = failed.map { |b| "#{b['label']} — #{b['error_message']}" }
+          fails = failed.map { |b| "#{b['label']} - #{b['error_message']}" }
           parts << "Failed: #{fails.join('; ')}"
         end
         parts.join("\n")

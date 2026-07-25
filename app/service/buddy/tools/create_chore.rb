@@ -3,7 +3,7 @@ Buddy::Tools.register(
   description: <<~TXT,
     Create a NEW chore in the user's household. Use when the user wants a
     task they haven't been tracking yet to become a repeating (or one-off)
-    chore. Do NOT use to just complete something they already did — that's
+    chore. Do NOT use to just complete something they already did - that's
     `complete_chore`.
   TXT
   args: {

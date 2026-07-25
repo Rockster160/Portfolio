@@ -1,7 +1,7 @@
 Buddy::Tools.register(
   name:        :edit_list_item,
   description: <<~TXT,
-    Edit a list item — rename it, flag it important, mark it permanent, or
+    Edit a list item - rename it, flag it important, mark it permanent, or
     change its category. Only include the fields that are changing.
   TXT
   args: {

@@ -1,7 +1,7 @@
 Buddy::Tools.register(
   name:        :remove_list_item,
   description: <<~TXT,
-    Remove an item from a list (soft-delete — matches the app's "check off"
+    Remove an item from a list (soft-delete - matches the app's "check off"
     behavior). Use when the user says they finished something on a list or
     wants it gone.
   TXT

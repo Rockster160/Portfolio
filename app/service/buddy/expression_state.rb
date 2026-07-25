@@ -6,7 +6,7 @@ module Buddy
   module ExpressionState
     module_function
 
-    EXPRESSIONS = %i[happy thinking focused encouraging celebrating].freeze
+    EXPRESSIONS = %i[neutral happy thinking focused encouraging celebrating].freeze
 
     def transition!(user, event, **_opts)
       return if user.nil?
@@ -32,12 +32,12 @@ module Buddy
       def expression_for(event)
         case event.to_sym
         when :turn_started        then :thinking
-        when :turn_ended_clean    then :happy
+        when :turn_ended_clean    then :neutral   # resting default, not "cheesy grin happy"
         when :proposals_awaiting  then :focused
         when :proposals_executed  then :celebrating
-        when :proposals_cancelled then :happy
+        when :proposals_cancelled then :neutral
         when :tool_failed         then :focused
-        when :idle_long           then :happy
+        when :idle_long           then :neutral
         end
       end
 
@@ -45,7 +45,7 @@ module Buddy
         return unless event.to_sym == :proposals_executed
 
         Buddy::ExpressionCyclerJob.set(wait: 2.seconds).perform_later(user.id, "encouraging")
-        Buddy::ExpressionCyclerJob.set(wait: 5.seconds).perform_later(user.id, "happy")
+        Buddy::ExpressionCyclerJob.set(wait: 5.seconds).perform_later(user.id, "neutral")
       end
 
       def broadcast(user, expression)

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"
+  viewBox="0 0 512 512">
+  <title>Face Neutral</title>
+  <g id="face_neutral">
+<g id="eyes_neutral">
+<defs>
+  <radialGradient id="eyeHighlight" cx="35%" cy="30%" r="70%">
+    <stop offset="0" stop-color="#FFFFFF"/>
+    <stop offset="1" stop-color="#DDF8FF"/>
+  </radialGradient>
+</defs>
+    <ellipse cx="188" cy="250" rx="34" ry="40" fill="#090B22"/>
+    <circle cx="178" cy="237" r="11" fill="url(#eyeHighlight)"/>
+    <circle cx="170" cy="254" r="4" fill="#FFFFFF"/>
+    <ellipse cx="324" cy="250" rx="34" ry="40" fill="#090B22"/>
+    <circle cx="314" cy="237" r="11" fill="url(#eyeHighlight)"/>
+    <circle cx="306" cy="254" r="4" fill="#FFFFFF"/>
+  </g>
+<g id="mouth_neutral">
+    <path d="M228 318 Q256 342 284 318" fill="none"
+      stroke="#11111D" stroke-width="10" stroke-linecap="round"/>
+  </g>
+<g id="extra_blush">
+    <ellipse cx="154" cy="300" rx="18" ry="11"
+      fill="#B68BFF" opacity="0.35"/>
+    <ellipse cx="358" cy="300" rx="18" ry="11"
+      fill="#B68BFF" opacity="0.35"/>
+  </g>
+  </g>
+</svg>
