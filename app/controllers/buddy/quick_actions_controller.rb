@@ -91,14 +91,26 @@ module Buddy
       body = <<~PROMPT.strip
         [quick action: Suggest]
 
-        Suggest ONE thing I could do right now. Consider:
-        - Local time and how much of the day is left
-        - What's on today's agenda (upcoming events / windows of free time)
-        - Dailies that aren't done yet
-        - Chores scheduled today
-        - Recent events (am I already deep in something?)
+        This is a "what should I do right now?" ask. Guide me — don't just present options and ask what I want. Pull together everything you know:
 
-        If picking well depends on knowing my energy or motivation level and you don't have a recent check-in in context, ASK — one short question, then wait for the answer. Otherwise, suggest one specific thing (not a menu) and explain briefly why now is a good fit. Keep it under 4 sentences.
+        - **Current time of day** (from the RIGHT NOW block). Late night ≠ morning ≠ afternoon; the answer changes.
+        - **What's already done today** (recent events, chore completions in context).
+        - **What's still ahead today** (upcoming agenda, dailies not done, chores scheduled_today).
+        - **My current emotional state** (emotional_state block: pet expression + last check-in mood / hours ago).
+
+        Time-of-day playbook, so you don't have to guess:
+        - **10pm–2am:** wind-down territory — water, small dailies-check, tidying, or genuinely "go to bed" if the day looks handled.
+        - **2am–6am:** rest is the honest answer.
+        - **6am–11am:** priority = dailies → scheduled_today → prep for upcoming agenda.
+        - **11am–3pm:** focus on scheduled_today + agenda; call out heavy vs light day.
+        - **3pm–7pm:** progress checks, remaining chores, dinner window.
+        - **7pm–10pm:** wrap-up, one small win, then wind down.
+
+        HOW to reply:
+        - **Guide, don't survey.** Pick a specific thing and recommend it. If needed, one short conversational question about what I'm in the middle of or how I'm feeling is fine — but only if it genuinely changes your recommendation. Not "so I can suggest better", not clinical.
+        - **Reference specific items by name** from the context block (a named chore, event, daily) — never generic "a chore".
+        - **Match my emotional state.** If I checked in as "low" or "rough" recently, suggest something gentle. If "great" or "good", something with momentum is fine. If no recent check-in and things look busy, err toward rest.
+        - Keep it warm and under 4 short sentences.
       PROMPT
       dispatch_trigger(conversation, body, buddy_action: "suggest")
     end

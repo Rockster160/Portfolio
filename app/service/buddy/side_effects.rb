@@ -24,12 +24,13 @@ module Buddy
     end
 
     # `[[mood: <one of the five expressions>]]` — shifts the pet's face
-    # immediately and broadcasts. Bounded to the valid expression set;
-    # anything else is silently ignored so a hallucinated marker can't
-    # put the pet in a broken state.
+    # and broadcasts. The pet expression IS the mood state; the field
+    # (users.buddy_expression) persists across turns and rides in every
+    # context block, so no shadow log or event trail is needed.
     def apply_mood(user, body)
       expression = body.to_s.downcase.strip.to_sym
       return unless Buddy::ExpressionState::EXPRESSIONS.include?(expression)
+      return if user.buddy_expression == expression.to_s  # no-op if unchanged
 
       Buddy::ExpressionState.set(user, expression)
     end

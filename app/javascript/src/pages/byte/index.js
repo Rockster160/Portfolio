@@ -863,36 +863,55 @@ document.addEventListener("DOMContentLoaded", async () => {
   // is `user-select: none` + `-webkit-touch-callout: none` so this
   // handler owns the long-press.
   function setupLongPressCopy() {
-    let timer = null, startX = 0, startY = 0;
+    // Safari / iOS PWA rejects navigator.clipboard.writeText outside a
+    // user-activation window. A setTimeout callback loses that window,
+    // which is why "Copy failed" started showing. Restructured: hold
+    // duration is tracked, and the actual copy fires inside `pointerup`
+    // — that's still an active user gesture, so clipboard permission
+    // stays open. Visual feedback ("ready to copy") still fires at
+    // HOLD_MS via a small timer, but it doesn't do the work.
+    let armed = false, holdTimer = null, activeMsg = null, startX = 0, startY = 0;
     const MOVE_TOLERANCE = 8;
     const HOLD_MS        = 500;
 
-    const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    const cancel = () => {
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      armed = false;
+      activeMsg = null;
+    };
 
     thread.addEventListener("pointerdown", (e) => {
-      if (e.button != null && e.button !== 0) return; // primary only
+      if (e.button != null && e.button !== 0) return;
       const msg = e.target.closest?.(".byte-msg");
       if (!msg) return;
-      // Text-selection zones — let native behaviour handle these.
       if (e.target.closest?.("[data-body], [data-thoughts], [data-attachments]")) return;
 
-      startX = e.clientX;
-      startY = e.clientY;
-      timer = setTimeout(() => {
-        timer = null;
-        const text = (msg.querySelector("[data-body]")?.textContent || "").trim();
-        if (!text) return;
-        copyText(text).then((ok) => flashToast(ok ? "Copied" : "Copy failed"));
-      }, HOLD_MS);
+      startX = e.clientX; startY = e.clientY;
+      activeMsg = msg;
+      armed = false;
+      holdTimer = setTimeout(() => { armed = true; }, HOLD_MS);
     }, { passive: true });
 
     thread.addEventListener("pointermove", (e) => {
-      if (!timer) return;
+      if (!activeMsg) return;
       if (Math.abs(e.clientX - startX) > MOVE_TOLERANCE ||
           Math.abs(e.clientY - startY) > MOVE_TOLERANCE) cancel();
     }, { passive: true });
 
-    thread.addEventListener("pointerup",     cancel, { passive: true });
+    thread.addEventListener("pointerup", () => {
+      if (!activeMsg) return;
+      const msg = activeMsg;
+      const wasArmed = armed;
+      cancel();
+      if (!wasArmed) return;
+
+      // We're still inside the pointerup gesture — clipboard call
+      // here has user activation and Safari will honour it.
+      const text = (msg.querySelector("[data-body]")?.textContent || "").trim();
+      if (!text) return;
+      copyText(text).then((ok) => flashToast(ok ? "Copied" : "Copy failed"));
+    }, { passive: true });
+
     thread.addEventListener("pointercancel", cancel, { passive: true });
     thread.addEventListener("scroll",        cancel, { passive: true });
   }

@@ -306,8 +306,6 @@ class WebhooksController < ApplicationController
   # reply.
   private def buddy_process_reply(user, _conversation, message)
     parsed = Buddy::MarkerParser.extract(message.body)
-    has_markers = parsed[:markers].any? || parsed[:side_effects].any?
-    return unless has_markers
 
     if parsed[:display_text] != message.body
       message.update!(body: parsed[:display_text])
@@ -317,12 +315,25 @@ class WebhooksController < ApplicationController
     # renders (feels more coherent — pet reacts, then presents options).
     Buddy::SideEffects.apply(user, parsed[:side_effects]) if parsed[:side_effects].any?
 
+    # Expression transition is UNCONDITIONAL — every Buddy reply resolves
+    # whatever transient state (usually :thinking from turn start) into
+    # the appropriate resting state. Priority order:
+    #
+    #   1. Proposals present → :focused (checkbox awaiting user)
+    #   2. Mood side-effect set an expression → respect it, don't overwrite
+    #   3. Plain reply → :turn_ended_clean (:happy — back to resting)
     if parsed[:markers].any?
       Buddy::ProposalBuilder.create(user: user, byte_message: message, markers: parsed[:markers])
       Buddy::ExpressionState.transition!(user, :proposals_awaiting)
+    elsif parsed[:side_effects].any? { |e| e[:verb] == :mood }
+      # [[mood: X]] already updated expression via SideEffects — leave it
+    else
+      Buddy::ExpressionState.transition!(user, :turn_ended_clean)
     end
   rescue => e
     Rails.logger.warn("[Buddy] reply-processing failed: #{e.class}: #{e.message}")
+    # Even on error, don't leave the pet frozen thinking forever.
+    Buddy::ExpressionState.transition!(user, :turn_ended_clean) rescue nil
   end
 
   def byte_update

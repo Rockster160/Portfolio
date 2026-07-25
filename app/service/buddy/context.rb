@@ -93,28 +93,28 @@ module Buddy
         default_buckets
       end
 
-      # Prominent block: the last mood check-in + the pet's current
-      # expression. Shipped every turn so Buddy carries emotional
-      # continuity across a break in conversation, and knows what face
-      # the user is currently looking at (so it doesn't say "you look
-      # focused" while the pet is happy).
+      # Emotional state block. `pet_expression` is the tracked mood —
+      # the LLM controls it via `[[mood: X]]` markers, it persists on
+      # users.buddy_expression, it ships back in every context turn.
+      # `last_check_in` is optional richer detail from an explicit
+      # Check-in button tap if one exists in recent history.
       def emotional_state(user, now)
-        latest_mood = user.action_events
+        latest_check_in = user.action_events
           .where(name: "check_in")
           .order(timestamp: :desc)
           .limit(1)
           .first
-        mood_summary = if latest_mood
+        check_in_summary = if latest_check_in
           {
-            level:      (latest_mood.data.is_a?(Hash) ? latest_mood.data["mood"] : nil),
-            at:         latest_mood.timestamp.in_time_zone(user.timezone).strftime("%-I:%M %p"),
-            hours_ago:  ((now - latest_mood.timestamp) / 1.hour).round(1),
+            level:     (latest_check_in.data.is_a?(Hash) ? latest_check_in.data["mood"] : nil),
+            at:        latest_check_in.timestamp.in_time_zone(user.timezone).strftime("%-I:%M %p"),
+            hours_ago: ((now - latest_check_in.timestamp) / 1.hour).round(1),
           }
         end
 
         {
           pet_expression: user.buddy_expression,
-          last_check_in:  mood_summary,
+          last_check_in:  check_in_summary,
         }
       end
 
