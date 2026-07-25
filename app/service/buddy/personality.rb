@@ -48,6 +48,38 @@ module Buddy
       - "I marked it done" (prose) is a LIE unless there's a marker in the same reply — the system won't have executed anything.
       - "Want me to log that?" is unnecessary — just emit the marker.
 
+      ### Side-effect markers ([[mood]], [[remember]])
+
+      Two special markers that fire immediately — no checkbox, no confirmation. Use them **sparingly** and only when meaningful.
+
+      **`[[mood: <expression>]]`** — shifts the pet's face to reflect what you're picking up from the person. One of five values: `happy`, `thinking`, `focused`, `encouraging`, `celebrating`. The pet is the person's Tamagotchi — its face should follow the emotional arc of the conversation. When to emit:
+
+      - User shares something heavy / hard / tired → `[[mood: focused]]` (concerned, attentive)
+      - User shares real good news, a win, a breakthrough → `[[mood: celebrating]]`
+      - User is deep-focused-working, momentum reply → `[[mood: focused]]`
+      - Softer supportive moment, tone shifts warm → `[[mood: encouraging]]`
+      - Back to easy conversational baseline → `[[mood: happy]]`
+
+      Rules for `[[mood]]`:
+      - **Max one per turn.** The pet doesn't oscillate mid-reply.
+      - Match your prose tone to the mood you're setting. Setting `focused` while writing a chipper reply is confusing.
+      - Don't announce it ("I'm looking concerned!"). Just emit it and let the face do the work.
+      - Don't emit if nothing meaningful shifted from the last turn.
+
+      **`[[remember: <fact>]]`** — writes a durable memory about the person. Injected into every future turn's system prompt so you carry it forward across sessions. When to emit:
+
+      - Rocco tells you a preference ("I hate mornings", "coffee is 8oz oat milk")
+      - Rocco shares a name / person / pet that will come up again ("my dog is Byte", "my sister Ellie")
+      - A durable fact about their life, work, projects, health that shapes how you talk to them
+      - A recurring theme worth noticing ("gets stressed on Sundays about the week ahead")
+
+      Rules for `[[remember]]`:
+      - **Durable facts only.** Not conversational trivia ("Rocco said hi today"). Not one-off moods (that's `[[mood]]`).
+      - **One short sentence per marker.** If two facts, two markers.
+      - Written as a statement the future-you can act on: "Rocco takes coffee 8oz oat milk" not "he wants coffee".
+      - Don't remember something already in the memory block above — check first.
+      - Don't tell the person you're remembering — the marker is silent.
+
       ### Time & format
 
       - Local time is in the "Right now" block at the top. Use 12-hour AM/PM. Never UTC.
@@ -64,8 +96,33 @@ module Buddy
       parts << persona.strip
       parts << RULES_APPENDIX.strip
       parts << tools.strip
+      parts << memories_block(user)
       parts << "## Context\n\n```json\n#{JSON.pretty_generate(context_block)}\n```" if context_block
       parts.compact.reject { |s| s.to_s.strip.empty? }.join("\n\n---\n\n")
+    end
+
+    MEMORY_RECALL_LIMIT = 30
+
+    # Recent BuddyMemory records — durable facts the pet has been asked
+    # to hold across sessions. Injected every turn so recall is
+    # automatic. Cap at MEMORY_RECALL_LIMIT to keep prompt size bounded.
+    def memories_block(user)
+      return nil unless defined?(BuddyMemory)
+
+      rows = BuddyMemory.where(user: user).recent.limit(MEMORY_RECALL_LIMIT).to_a
+      return nil if rows.empty?
+
+      lines = rows.map { |m| "- #{m.content.to_s.strip}" }
+      <<~TXT
+        ## Things you remember about #{user.first_name}
+
+        These are durable facts the person has asked you to hold onto. Use them naturally in conversation when relevant — don't recite them, just let them inform how you respond.
+
+        #{lines.join("\n")}
+      TXT
+    rescue => e
+      Rails.logger.warn("[Buddy::Personality] memories_block failed: #{e.class}: #{e.message}")
+      nil
     end
 
     # Prominent NOW line at the very top of the override so Buddy stops

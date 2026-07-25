@@ -19,6 +19,7 @@ module Buddy
         now_local:         now.strftime("%a %Y-%m-%d %-I:%M %p %Z"),
         timezone:          tz,
         user_first_name:   user.first_name,
+        emotional_state:   emotional_state(user, now),          # current mood + pet expression
         today_agenda:      today_agenda(user, now),
         chores_dailies:         chore_buckets[:dailies],         # MOST PROMINENT — the daily rotation
         chores_scheduled_today: chore_buckets[:scheduled_today], # explicit today scheduling
@@ -90,6 +91,31 @@ module Buddy
       rescue => e
         Rails.logger.warn("[Buddy::Context] chore buckets failed: #{e.class}: #{e.message}")
         default_buckets
+      end
+
+      # Prominent block: the last mood check-in + the pet's current
+      # expression. Shipped every turn so Buddy carries emotional
+      # continuity across a break in conversation, and knows what face
+      # the user is currently looking at (so it doesn't say "you look
+      # focused" while the pet is happy).
+      def emotional_state(user, now)
+        latest_mood = user.action_events
+          .where(name: "check_in")
+          .order(timestamp: :desc)
+          .limit(1)
+          .first
+        mood_summary = if latest_mood
+          {
+            level:      (latest_mood.data.is_a?(Hash) ? latest_mood.data["mood"] : nil),
+            at:         latest_mood.timestamp.in_time_zone(user.timezone).strftime("%-I:%M %p"),
+            hours_ago:  ((now - latest_mood.timestamp) / 1.hour).round(1),
+          }
+        end
+
+        {
+          pet_expression: user.buddy_expression,
+          last_check_in:  mood_summary,
+        }
       end
 
       def default_buckets

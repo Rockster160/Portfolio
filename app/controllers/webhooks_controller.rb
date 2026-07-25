@@ -296,18 +296,31 @@ class WebhooksController < ApplicationController
     render json: message.as_wire, status: :ok
   end
 
-  # For :buddy-mode conversations, extract [[propose: ...]] markers from
-  # the reply body, strip them from what the user sees, and attach a
-  # ByteAction (multi_select: true) with one row per proposal. All done
-  # in-place on the same message so the checklist renders under Buddy's
-  # words rather than as a separate bubble.
+  # For :buddy-mode conversations, extract markers from the reply body:
+  #   * [[propose: ...]]   — build checkbox action, gate execution on tap
+  #   * [[mood: ...]]      — shift pet expression immediately
+  #   * [[remember: ...]]  — write a durable BuddyMemory row
+  #
+  # All marker types are stripped from the visible body. Proposals and
+  # side-effects are independent — Buddy can emit either or both in one
+  # reply.
   private def buddy_process_reply(user, _conversation, message)
     parsed = Buddy::MarkerParser.extract(message.body)
-    return if parsed[:markers].empty?
+    has_markers = parsed[:markers].any? || parsed[:side_effects].any?
+    return unless has_markers
 
-    message.update!(body: parsed[:display_text]) if parsed[:display_text] != message.body
-    Buddy::ProposalBuilder.create(user: user, byte_message: message, markers: parsed[:markers])
-    Buddy::ExpressionState.transition!(user, :proposals_awaiting)
+    if parsed[:display_text] != message.body
+      message.update!(body: parsed[:display_text])
+    end
+
+    # Side effects fire first so a mood shift lands before the checklist
+    # renders (feels more coherent — pet reacts, then presents options).
+    Buddy::SideEffects.apply(user, parsed[:side_effects]) if parsed[:side_effects].any?
+
+    if parsed[:markers].any?
+      Buddy::ProposalBuilder.create(user: user, byte_message: message, markers: parsed[:markers])
+      Buddy::ExpressionState.transition!(user, :proposals_awaiting)
+    end
   rescue => e
     Rails.logger.warn("[Buddy] reply-processing failed: #{e.class}: #{e.message}")
   end

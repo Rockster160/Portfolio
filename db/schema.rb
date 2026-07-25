@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_07_24_162940) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_24_193341) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -365,6 +365,18 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_24_162940) do
     t.index ["param_key"], name: "index_boxes_on_param_key", unique: true
     t.index ["parent_key"], name: "index_boxes_on_parent_key"
     t.index ["user_id"], name: "index_boxes_on_user_id"
+  end
+
+  create_table "buddy_memories", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.text "content", null: false
+    t.integer "priority", default: 0, null: false
+    t.jsonb "tags", default: [], null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "created_at"], name: "index_buddy_memories_on_user_id_and_created_at"
+    t.index ["user_id"], name: "index_buddy_memories_on_user_id"
   end
 
   create_table "byte_actions", force: :cascade do |t|
@@ -1406,6 +1418,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_24_162940) do
   add_foreign_key "agendas", "google_accounts"
   add_foreign_key "agendas", "users"
   add_foreign_key "boxes", "users"
+  add_foreign_key "buddy_memories", "users"
   add_foreign_key "byte_actions", "byte_conversations"
   add_foreign_key "byte_actions", "byte_messages"
   add_foreign_key "byte_actions", "users"

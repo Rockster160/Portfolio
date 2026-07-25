@@ -1,0 +1,49 @@
+module Buddy
+  # Applies the non-checkbox markers Buddy can emit ([[mood: X]],
+  # [[remember: X]]). Unlike proposals, these fire immediately — no
+  # user confirmation — so the vocabulary is deliberately small and
+  # non-destructive.
+  #
+  # Adding a new side-effect verb:
+  #   1. Add it to Buddy::MarkerParser::SIDE_EFFECT_RX (alternation).
+  #   2. Add a `when :verb` branch here.
+  #   3. Teach it in the persona's Rules of the House.
+  module SideEffects
+    module_function
+
+    def apply(user, side_effects)
+      Array(side_effects).each do |eff|
+        case eff[:verb]
+        when :mood     then apply_mood(user, eff[:body])
+        when :remember then apply_remember(user, eff[:body])
+        end
+      rescue => e
+        Rails.logger.warn("[Buddy::SideEffects] #{eff[:verb]} failed: #{e.class}: #{e.message}")
+      end
+    end
+
+    # `[[mood: <one of the five expressions>]]` — shifts the pet's face
+    # immediately and broadcasts. Bounded to the valid expression set;
+    # anything else is silently ignored so a hallucinated marker can't
+    # put the pet in a broken state.
+    def apply_mood(user, body)
+      expression = body.to_s.downcase.strip.to_sym
+      return unless Buddy::ExpressionState::EXPRESSIONS.include?(expression)
+
+      Buddy::ExpressionState.set(user, expression)
+    end
+
+    # `[[remember: <fact>]]` — writes a durable BuddyMemory row. Bounded
+    # to 500 chars (matches the model validation) so an accidental
+    # paragraph-length marker doesn't create a giant row.
+    def apply_remember(user, body)
+      fact = body.to_s.strip
+      return if fact.empty?
+
+      BuddyMemory.create!(
+        user:    user,
+        content: fact.first(500),
+      )
+    end
+  end
+end

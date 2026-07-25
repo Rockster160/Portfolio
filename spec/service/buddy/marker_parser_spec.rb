@@ -36,7 +36,35 @@ RSpec.describe Buddy::MarkerParser do
   end
 
   it "returns empty markers on blank input" do
-    expect(described_class.extract("")).to eq(markers: [], display_text: "")
-    expect(described_class.extract(nil)).to eq(markers: [], display_text: "")
+    expect(described_class.extract("")).to eq(markers: [], side_effects: [], display_text: "")
+    expect(described_class.extract(nil)).to eq(markers: [], side_effects: [], display_text: "")
+  end
+
+  it "extracts [[mood: X]] side effects and strips them from display text" do
+    text  = "I'm here for it. [[mood: focused]] Tell me more."
+    parsed = described_class.extract(text)
+
+    expect(parsed[:markers]).to be_empty
+    expect(parsed[:side_effects]).to eq([
+      { verb: :mood, body: "focused", span: parsed[:side_effects].first[:span] },
+    ])
+    expect(parsed[:display_text]).to eq("I'm here for it. Tell me more.")
+  end
+
+  it "extracts [[remember: fact]] side effects" do
+    text = "Got it. [[remember: Rocco takes coffee 8oz oat milk]]"
+    parsed = described_class.extract(text)
+
+    expect(parsed[:side_effects].first).to include(verb: :remember, body: "Rocco takes coffee 8oz oat milk")
+    expect(parsed[:display_text]).to eq("Got it.")
+  end
+
+  it "handles proposals + side effects together in one reply" do
+    text = %([[propose: log_event name="Coffee"]] [[mood: encouraging]] warm words)
+    parsed = described_class.extract(text)
+
+    expect(parsed[:markers].map { |m| m[:tool_name] }).to eq([:log_event])
+    expect(parsed[:side_effects].map { |e| e[:verb] }).to eq([:mood])
+    expect(parsed[:display_text]).to eq("warm words")
   end
 end

@@ -1,19 +1,33 @@
 module Buddy
-  # Extracts [[propose: <tool> arg="value" arg=value count=N]] markers
-  # from a Buddy reply. Generic — the tool name is echoed as a string;
-  # validating it against the registry happens in ProposalBuilder.
+  # Extracts two flavors of markers from a Buddy reply:
+  #   * PROPOSAL markers  — [[propose: <tool> k=v ...]]   → checkbox-gated
+  #   * SIDE-EFFECT markers — [[<verb>: <body>]]           → immediate
+  #
+  # Currently supported side-effect verbs (see Buddy::SideEffects):
+  #   [[mood: <expression>]]     — shift pet expression
+  #   [[remember: <fact>]]       — write a durable BuddyMemory row
+  #
+  # Both marker types are STRIPPED from the display text so the user
+  # never sees them. The verb-vs-tool split keeps the two systems
+  # independent: adding a new proposal tool is a Buddy::Tools registry
+  # add; adding a new side-effect verb is a Buddy::SideEffects add.
   module MarkerParser
     module_function
 
-    MARKER_RX = /\[\[\s*propose:\s*(?<name>[a-z][a-z0-9_]*)(?<argstr>[^\]]*)\]\]/i
-    ARG_RX    = /(?<key>[a-z][a-z0-9_]*)\s*=\s*(?:"(?<qval>(?:[^"\\]|\\.)*)"|(?<uval>\S+))/i
+    PROPOSE_RX      = /\[\[\s*propose:\s*(?<name>[a-z][a-z0-9_]*)(?<argstr>[^\]]*)\]\]/i
+    SIDE_EFFECT_RX  = /\[\[\s*(?<verb>mood|remember)\s*:\s*(?<body>[^\]]+?)\s*\]\]/i
+    ARG_RX          = /(?<key>[a-z][a-z0-9_]*)\s*=\s*(?:"(?<qval>(?:[^"\\]|\\.)*)"|(?<uval>\S+))/i
 
-    # Returns { markers: [ { tool_name:, payload:, span: [start, end] } ], display_text: }
+    # Returns {
+    #   markers:      [{ tool_name:, payload:, span: }],
+    #   side_effects: [{ verb:, body:, span: }],
+    #   display_text: "..."
+    # }
     def extract(text)
-      return { markers: [], display_text: text.to_s } if text.to_s.empty?
+      return { markers: [], side_effects: [], display_text: text.to_s } if text.to_s.empty?
 
-      matches = text.to_s.enum_for(:scan, MARKER_RX).map { Regexp.last_match }
-      markers = matches.map { |m|
+      propose_matches = text.to_s.enum_for(:scan, PROPOSE_RX).map { Regexp.last_match }
+      markers = propose_matches.map { |m|
         {
           tool_name: m[:name].to_sym,
           payload:   parse_args(m[:argstr]),
@@ -21,10 +35,24 @@ module Buddy
         }
       }
 
-      # Strip markers from display text; collapse whitespace runs left behind.
-      display = text.to_s.gsub(MARKER_RX, "").gsub(/[ \t]{2,}/, " ").gsub(/\n{3,}/, "\n\n").strip
+      side_matches = text.to_s.enum_for(:scan, SIDE_EFFECT_RX).map { Regexp.last_match }
+      side_effects = side_matches.map { |m|
+        {
+          verb: m[:verb].downcase.to_sym,
+          body: m[:body].to_s.strip,
+          span: m.offset(0),
+        }
+      }
 
-      { markers: markers, display_text: display }
+      # Strip BOTH marker types from display text; collapse whitespace runs.
+      display = text.to_s
+        .gsub(PROPOSE_RX, "")
+        .gsub(SIDE_EFFECT_RX, "")
+        .gsub(/[ \t]{2,}/, " ")
+        .gsub(/\n{3,}/, "\n\n")
+        .strip
+
+      { markers: markers, side_effects: side_effects, display_text: display }
     end
 
     def parse_args(argstr)
