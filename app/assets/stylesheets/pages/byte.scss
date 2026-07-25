@@ -1845,54 +1845,95 @@ dialog.byte-modal {
   padding: 6px 12px 4px;
 }
 
+// Character is two layered SVG images: a shared body (always the same
+// idle blob) plus a face that swaps per expression. Layered so a new
+// expression is one face SVG — the body doesn't have to be re-drawn.
 .byte-buddy-char {
-  width: 42%;
+  position: relative;
+  width: 55%;
+  max-width: 260px;
   aspect-ratio: 1;
+  animation: buddy-idle 4.2s ease-in-out infinite;
+  filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.4));
+}
+.byte-buddy-body,
+.byte-buddy-face {
+  position: absolute;
+  inset: 0;
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-  animation: buddy-idle 4.2s ease-in-out infinite;
-  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.35));
+  pointer-events: none;
 }
+.byte-buddy-face { transition: opacity 180ms ease; }
 
-// Character asset selection per theme + expression. Placeholder SVG per
-// slot for v1; swap in illustrated art without touching the layout.
+// Body — theme-scoped (Moss reuses byte body until a Moss body ships).
+.byte-buddy-hero[data-buddy-theme="byte"] .byte-buddy-body { background-image: image-url("buddy/byte/body.svg"); }
+.byte-buddy-hero[data-buddy-theme="moss"] .byte-buddy-body { background-image: image-url("buddy/moss/body.svg"); }
+
+// Face per theme + expression.
 $expressions: happy thinking focused encouraging celebrating;
 @each $expr in $expressions {
-  .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$expr}"] .byte-buddy-char {
-    background-image: image-url("buddy/byte/#{$expr}.svg");
+  .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$expr}"] .byte-buddy-face {
+    background-image: image-url("buddy/byte/face_#{$expr}.svg");
   }
-  .byte-buddy-hero[data-buddy-theme="moss"][data-buddy-expression="#{$expr}"] .byte-buddy-char {
-    background-image: image-url("buddy/moss/#{$expr}.svg");
+  .byte-buddy-hero[data-buddy-theme="moss"][data-buddy-expression="#{$expr}"] .byte-buddy-face {
+    background-image: image-url("buddy/moss/face_#{$expr}.svg");
   }
 }
 
 @keyframes buddy-idle {
   0%, 100% { transform: translateY(0)    scale(1); }
-  50%      { transform: translateY(-4px) scale(1.01); }
+  50%      { transform: translateY(-6px) scale(1.015); }
 }
 
+// Quick actions — real button feel. Beat the forms.scss button cascade
+// with !important on the fields it targets so we get the pill look.
 .byte-buddy-quick-actions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
+  width: 100%;
+  max-width: 480px;
 
   button {
-    padding: 4px 10px;
-    background: rgba(255, 255, 255, 0.08);
-    color: var(--buddy-accent);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 999px;
-    font-size: 12.5px;
-    font-weight: 500;
+    flex: 1 1 auto;
+    min-width: 72px;
+    padding: 9px 14px !important;
+    background: linear-gradient(180deg, rgba(63, 160, 255, 0.24), rgba(63, 160, 255, 0.12)) !important;
+    color: #FFFFFF !important;
+    border: 1px solid rgba(63, 160, 255, 0.5) !important;
+    border-radius: 12px !important;
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.01em;
     cursor: pointer;
-    transition: background 100ms ease;
+    transition: transform 90ms ease, background 100ms ease, box-shadow 100ms ease;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 2px 6px rgba(0, 0, 0, 0.25);
 
-    &:hover  { background: rgba(255, 255, 255, 0.14); }
-    &:active { background: rgba(255, 255, 255, 0.20); position: static !important; top: 0 !important; }
+    &:hover  { background: linear-gradient(180deg, rgba(63, 160, 255, 0.34), rgba(63, 160, 255, 0.18)) !important; }
+    &:active {
+      transform: translateY(1px);
+      background: linear-gradient(180deg, rgba(63, 160, 255, 0.20), rgba(63, 160, 255, 0.10)) !important;
+      position: static !important;
+      top: 0 !important;
+    }
   }
 }
+
+// Moss palette override for buttons.
+.byte-buddy-hero[data-buddy-theme="moss"] .byte-buddy-quick-actions button {
+  background: linear-gradient(180deg, rgba(79, 207, 124, 0.28), rgba(79, 207, 124, 0.14)) !important;
+  border-color: rgba(79, 207, 124, 0.5) !important;
+
+  &:hover  { background: linear-gradient(180deg, rgba(79, 207, 124, 0.38), rgba(79, 207, 124, 0.20)) !important; }
+  &:active { background: linear-gradient(180deg, rgba(79, 207, 124, 0.22), rgba(79, 207, 124, 0.12)) !important; }
+}
+
+// Hide the pwd/session banner on Buddy conversations — it's a
+// Claude/bash concern that's just noise here.
+.byte-app[data-active-mode="buddy"] .byte-pwd-bar { display: none; }
 
 // -------- Generic multi-select action rows (used by Buddy proposals) -----
 .byte-msg-multi-select {

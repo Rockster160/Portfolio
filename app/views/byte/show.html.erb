@@ -41,7 +41,8 @@
      data-csrf-url="<%= byte_csrf_path %>"
      data-conversations-url="<%= byte_conversations_path %>"
      data-claude-sessions-url="<%= byte_claude_sessions_path %>"
-     data-initial-conversation-id="<%= @conversation.id %>">
+     data-initial-conversation-id="<%= @conversation.id %>"
+     data-active-mode="<%= @conversation.mode %>">
   <header class="byte-header">
     <%# Drawer trigger — sits before the avatar so it lands in the natural %>
     <%# top-left slot the user's thumb reaches for. %>
@@ -88,7 +89,10 @@
            data-buddy-expression="<%= current_user.buddy_expression %>"
            data-buddy-active="<%= @conversation.mode == 'buddy' ? 'true' : 'false' %>"
            <%= (@conversation.mode == 'buddy' ? '' : 'hidden').html_safe %>>
-    <div class="byte-buddy-char" aria-label="<%= current_user.buddy_theme == 'moss' ? 'Moss' : 'Byte' %>"></div>
+    <div class="byte-buddy-char" aria-label="<%= current_user.buddy_theme == 'moss' ? 'Moss' : 'Byte' %>">
+      <div class="byte-buddy-body" aria-hidden="true"></div>
+      <div class="byte-buddy-face" aria-hidden="true"></div>
+    </div>
     <nav class="byte-buddy-quick-actions" data-buddy-quick-actions>
       <button type="button" data-buddy-quickfill="What's on for me today?">Today</button>
       <button type="button" data-buddy-quickfill="Can we check in? How are things?">Check-in</button>

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"
+  viewBox="0 0 512 512">
+  <title>Face Celebrating</title>
+  <g id="face_celebrating">
+<g id="eyes_star">
+    <polygon points="188,216 197,240 222,240 202,256 210,281 188,266 166,281 174,256 154,240 179,240" fill="#090B22"/>
+    <circle cx="180" cy="238" r="6" fill="#FFFFFF"/>
+    <circle cx="198" cy="254" r="3" fill="#FFFFFF"/>
+    <polygon points="324,216 333,240 358,240 338,256 346,281 324,266 302,281 310,256 290,240 315,240" fill="#090B22"/>
+    <circle cx="316" cy="238" r="6" fill="#FFFFFF"/>
+    <circle cx="334" cy="254" r="3" fill="#FFFFFF"/>
+  </g>
+<g id="mouth_smile">
+    <path d="M218 312 Q256 354 294 312" fill="#171221"
+      stroke="#11111D" stroke-width="8" stroke-linejoin="round"/>
+    <path d="M235 334 Q256 347 277 334" fill="none"
+      stroke="#FF7FCB" stroke-width="8" stroke-linecap="round"/>
+  </g>
+<g id="extra_sparkles">
+    <path d="M138 210 L144 225 L159 231 L144 237 L138 252
+      L132 237 L117 231 L132 225Z" fill="#FFE06B"/>
+    <path d="M373 205 L379 220 L394 226 L379 232 L373 247
+      L367 232 L352 226 L367 220Z" fill="#FF9FE9"/>
+    <circle cx="121" cy="272" r="5" fill="#43E0FF"/>
+    <circle cx="393" cy="274" r="5" fill="#8A6BFF"/>
+  </g>
+  </g>
+</svg>

@@ -58,11 +58,18 @@ module ByteLocal
 
     # Buddy-mode turns need Portfolio-side persona + tool descriptions +
     # today's context. Persona/tools regenerate each turn so a new tool
-    # file is usable without redeploying the Mac.
-    if conversation&.buddy? && defined?(Buddy::Personality)
-      context = Buddy::Context.build(message.user)
-      payload[:buddy_context] = context
-      payload[:buddy_system_prompt_extras] = Buddy::Personality.for(message.user, context_block: context)
+    # file is usable without redeploying the Mac. Wrapped so a Buddy-side
+    # bug (missing tool file on disk, resolver blowing up on stale user
+    # data, etc.) can NEVER kill outbound message delivery — the message
+    # still lands on Mac, just without the extras.
+    if conversation&.buddy?
+      begin
+        context = Buddy::Context.build(message.user)
+        payload[:buddy_context] = context
+        payload[:buddy_system_prompt_extras] = Buddy::Personality.for(message.user, context_block: context)
+      rescue => e
+        Rails.logger.warn("[ByteLocal] buddy extras skipped: #{e.class}: #{e.message}")
+      end
     end
 
     req.body = JSON.generate(payload)

@@ -270,6 +270,10 @@ export class ConversationManager {
       this.modeEl.textContent = convo.mode;
       this.modeEl.dataset.mode = convo.mode;
     }
+    // Top-level active-mode marker so page-wide CSS can gate on it
+    // (e.g. hide the pwd/session banner when we're chatting with Buddy).
+    const app = document.querySelector(".byte-app");
+    if (app && convo) app.dataset.activeMode = convo.mode;
     // Composer mode marker drives colour + chip toggling via CSS
     // ([data-mode="bash"] etc). Set the chip image src for modes that
     // use an image (Jarvis). The Byte avatar to the left never changes.
