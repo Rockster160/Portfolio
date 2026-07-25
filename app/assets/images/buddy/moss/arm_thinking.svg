@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"
+  viewBox="0 0 512 512">
+  <title>Arm Thinking</title>
+<defs>
+  <linearGradient id="slimeFill" x1="0.12" y1="0.08" x2="0.88" y2="0.92">
+    <stop offset="0" stop-color="#43E0FF" stop-opacity="0.98"/>
+    <stop offset="0.28" stop-color="#168EFF" stop-opacity="0.98"/>
+    <stop offset="0.68" stop-color="#0160FF" stop-opacity="0.98"/>
+    <stop offset="1" stop-color="#0034C9" stop-opacity="0.98"/>
+  </linearGradient>
+
+  <linearGradient id="slimeRim" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#D7FDFF" stop-opacity="0.95"/>
+    <stop offset="0.42" stop-color="#43E0FF" stop-opacity="0.62"/>
+    <stop offset="1" stop-color="#8A6BFF" stop-opacity="0.36"/>
+  </linearGradient>
+
+  <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#E9EEF8"/>
+    <stop offset="0.45" stop-color="#AEB9CB"/>
+    <stop offset="1" stop-color="#596579"/>
+  </linearGradient>
+
+  <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur stdDeviation="3" result="blur"/>
+    <feMerge>
+      <feMergeNode in="blur"/>
+      <feMergeNode in="SourceGraphic"/>
+    </feMerge>
+  </filter>
+</defs>
+  <g id="arm_thinking">
+    <path d="M376 306 C392 291 404 276 409 258 C413 244 424 237 436 242 C448 247 452 260 446 272 C439 286 427 298 421 311 C414 326 404 337 391 338 C381 338 373 328 376 306 Z" fill="url(#slimeFill)" stroke="url(#slimeRim)"
+      stroke-width="6" stroke-linejoin="round" stroke-linecap="round" />
+    <path d="M398 307 C408 290 420 273 428 258" fill="none" stroke="#D8FCFF"
+      stroke-width="5" stroke-linecap="round" opacity="0.55"/>
+  </g>
+</svg>

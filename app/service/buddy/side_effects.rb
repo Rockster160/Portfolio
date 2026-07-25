@@ -16,6 +16,7 @@ module Buddy
         case eff[:verb]
         when :mood     then apply_mood(user, eff[:body])
         when :remember then apply_remember(user, eff[:body])
+        when :forget   then apply_forget(user, eff[:body])
         end
       rescue => e
         Rails.logger.warn("[Buddy::SideEffects] #{eff[:verb]} failed: #{e.class}: #{e.message}")
@@ -44,6 +45,24 @@ module Buddy
         user:    user,
         content: fact.first(500),
       )
+    end
+
+    # `[[forget: <substring or id>]]` — prunes matching memory rows. If
+    # the body is a bare integer, deletes by id; otherwise deletes rows
+    # whose content contains the substring (case-insensitive). Cap the
+    # damage at 5 rows per marker so a stray "forget everything" can't
+    # nuke the whole history.
+    def apply_forget(user, body)
+      needle = body.to_s.strip
+      return if needle.empty?
+
+      scope = user.buddy_memories rescue BuddyMemory.where(user: user)
+      matches = if needle.match?(/\A\d+\z/)
+        scope.where(id: needle.to_i)
+      else
+        scope.where("LOWER(content) LIKE ?", "%#{needle.downcase}%")
+      end
+      matches.order(created_at: :desc).limit(5).destroy_all
     end
   end
 end

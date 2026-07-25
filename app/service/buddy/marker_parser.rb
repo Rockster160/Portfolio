@@ -15,7 +15,7 @@ module Buddy
     module_function
 
     PROPOSE_RX      = /\[\[\s*propose:\s*(?<name>[a-z][a-z0-9_]*)(?<argstr>[^\]]*)\]\]/i
-    SIDE_EFFECT_RX  = /\[\[\s*(?<verb>mood|remember)\s*:\s*(?<body>[^\]]+?)\s*\]\]/i
+    SIDE_EFFECT_RX  = /\[\[\s*(?<verb>mood|remember|forget)\s*:\s*(?<body>[^\]]+?)\s*\]\]/i
     ARG_RX          = /(?<key>[a-z][a-z0-9_]*)\s*=\s*(?:"(?<qval>(?:[^"\\]|\\.)*)"|(?<uval>\S+))/i
 
     # Returns {

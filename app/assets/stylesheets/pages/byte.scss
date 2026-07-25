@@ -73,7 +73,10 @@ html.html-ctr-byte body {
 
       // The global button:active { position: relative; top: 1px } cascade
       // would shove absolutely-positioned buttons out of place — pin.
-      &:active { position: static; top: auto; }
+      &:active {
+        position: static;
+        top: auto;
+      }
     }
 
     form,
@@ -126,11 +129,14 @@ html.html-ctr-byte body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: radial-gradient(1200px 700px at 20% -10%, #14284F 0%, transparent 60%),
-              radial-gradient(1000px 800px at 100% 100%, #0B2B4E 0%, transparent 55%),
-              var(--bs-bg);
+  background:
+    radial-gradient(1200px 700px at 20% -10%, #14284F 0%, transparent 60%),
+    radial-gradient(1000px 800px at 100% 100%, #0B2B4E 0%, transparent 55%),
+    var(--bs-bg);
   color: var(--bs-text);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto,
+    sans-serif;
   // Bottom safe-area lives on the composer only — putting it here too
   // stacks the inset twice, leaving a big dark strip under the composer.
 }
@@ -142,7 +148,11 @@ html.html-ctr-byte body {
   gap: 12px;
   padding: calc(env(safe-area-inset-top) + 12px) 16px 12px;
   border-bottom: 1px solid var(--bs-border);
-  background: linear-gradient(180deg, rgba(22, 35, 63, 0.9), rgba(22, 35, 63, 0.7));
+  background: linear-gradient(
+    180deg,
+    rgba(22, 35, 63, 0.9),
+    rgba(22, 35, 63, 0.7)
+  );
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   position: relative;
@@ -154,7 +164,9 @@ html.html-ctr-byte body {
     border-radius: 50%;
     overflow: hidden;
     background: radial-gradient(circle at 30% 20%, #62B3FF, #1E3B7A);
-    box-shadow: 0 0 0 1px var(--bs-border), 0 4px 14px rgba(63, 160, 255, 0.25);
+    box-shadow:
+      0 0 0 1px var(--bs-border),
+      0 4px 14px rgba(63, 160, 255, 0.25);
     flex-shrink: 0;
 
     img {
@@ -182,8 +194,12 @@ html.html-ctr-byte body {
     font-size: 12px;
     color: var(--bs-muted);
 
-    &.connected { color: #86EFAC; }
-    &.disconnected { color: var(--bs-danger); }
+    &.connected {
+      color: #86EFAC;
+    }
+    &.disconnected {
+      color: var(--bs-danger);
+    }
   }
 
   // Small quiet chip in the header for sync/offline signalling. Empty
@@ -199,9 +215,13 @@ html.html-ctr-byte body {
 
     &:empty,
     &[data-state=""],
-    &[data-state="ok"] { display: none; }
+    &[data-state="ok"] {
+      display: none;
+    }
 
-    &[data-state="syncing"] { color: var(--bs-accent-strong); }
+    &[data-state="syncing"] {
+      color: var(--bs-accent-strong);
+    }
     &[data-state="failed"] {
       color: var(--bs-danger);
       border-color: rgba(248, 113, 113, 0.4);
@@ -221,10 +241,15 @@ html.html-ctr-byte body {
     justify-content: center;
     color: var(--bs-muted);
     border-radius: 8px;
-    transition: background 0.15s, color 0.15s;
+    transition:
+      background 0.15s,
+      color 0.15s;
     position: relative;
 
-    &:hover { background: rgba(255, 255, 255, 0.05); color: var(--bs-text); }
+    &:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--bs-text);
+    }
 
     // Update-available state: red tint on the icon itself + a small "!"
     // in the corner. No background pill / border — the icon has to stay
@@ -268,9 +293,14 @@ html.html-ctr-byte body {
     color: var(--bs-muted);
     border-radius: 8px;
     position: relative;
-    transition: background 0.15s, color 0.15s;
+    transition:
+      background 0.15s,
+      color 0.15s;
 
-    &:hover { background: rgba(255, 255, 255, 0.05); color: var(--bs-text); }
+    &:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--bs-text);
+    }
 
     // Slash overlay for non-subscribed states. Drawn as a rotated
     // solid bar via ::after — currentColor so it matches the icon tint.
@@ -291,7 +321,9 @@ html.html-ctr-byte body {
 
     &.subscribed {
       color: var(--bs-accent-strong);
-      &::after { display: none; }
+      &::after {
+        display: none;
+      }
     }
 
     &.denied {
@@ -337,10 +369,17 @@ html.html-ctr-byte body {
   // overflow the thread scrolls normally. Pseudo-elements (::before for
   // the empty state) aren't matched by `*`, so they keep their own
   // centering.
-  & > article:first-child { margin-top: auto; }
+  & > article:first-child {
+    margin-top: auto;
+  }
 
-  &::-webkit-scrollbar { width: 8px; }
-  &::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.06); border-radius: 6px; }
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+  }
 }
 
 // Subtle "loading older" chip at the very top of the thread while the
@@ -355,7 +394,9 @@ html.html-ctr-byte body {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.06);
 
-  &[hidden] { display: none; }
+  &[hidden] {
+    display: none;
+  }
 }
 
 // Floating "jump to newest" affordance. Shown when the user has scrolled
@@ -383,7 +424,9 @@ html.html-ctr-byte body {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
   font-size: 13px;
   cursor: pointer;
-  transition: opacity 0.15s, transform 0.15s;
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
   opacity: 0;
   transform: translateY(8px);
   pointer-events: none;
@@ -412,7 +455,9 @@ html.html-ctr-byte body {
     line-height: 1;
     padding: 3px 7px;
     border-radius: 999px;
-    &:empty { display: none; }
+    &:empty {
+      display: none;
+    }
   }
 }
 
@@ -468,7 +513,9 @@ html.html-ctr-byte body {
   // Queued state kept as an alias of pending — the JS no longer sets it
   // (bubbles go straight to pending on send), but any old cached DOM /
   // localStorage entries still carrying the class render identically.
-  &.byte-msg-queued { opacity: 0.7; }
+  &.byte-msg-queued {
+    opacity: 0.7;
+  }
 
   &.byte-msg-failed {
     background: rgba(248, 113, 113, 0.18);
@@ -511,7 +558,9 @@ html.html-ctr-byte body {
     }
   }
 
-  .byte-msg-body { white-space: pre-wrap; }
+  .byte-msg-body {
+    white-space: pre-wrap;
+  }
 
   // Shell command output — flip the whole bubble to monospace with
   // code-block aesthetics. Wider max-width so file paths and stack
@@ -534,7 +583,9 @@ html.html-ctr-byte body {
       -webkit-overflow-scrolling: touch;
     }
 
-    .byte-msg-meta { color: rgba(199, 213, 238, 0.4); }
+    .byte-msg-meta {
+      color: rgba(199, 213, 238, 0.4);
+    }
 
     // Red exit-code chip, appended only for non-zero exits. Successful
     // commands (exit 0) render without any exit marker — the presence
@@ -623,7 +674,9 @@ html.html-ctr-byte body {
     font-size: 11.5px;
     border: 1px solid rgba(255, 255, 255, 0.05);
 
-    &[hidden] { display: none; }
+    &[hidden] {
+      display: none;
+    }
 
     summary {
       cursor: pointer;
@@ -631,7 +684,9 @@ html.html-ctr-byte body {
       padding: 4px 0;
       color: var(--bs-muted);
       user-select: none;
-      &::-webkit-details-marker { display: none; }
+      &::-webkit-details-marker {
+        display: none;
+      }
       &::before {
         content: "▶";
         display: inline-block;
@@ -655,7 +710,9 @@ html.html-ctr-byte body {
 
     .byte-thought {
       margin-bottom: 5px;
-      &:last-child { margin-bottom: 0; }
+      &:last-child {
+        margin-bottom: 0;
+      }
 
       &.byte-thought-tool {
         font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -678,7 +735,10 @@ html.html-ctr-byte body {
         font-size: 12px;
         line-height: 1.4;
 
-        .byte-md-code { font-size: 11px; margin: 4px 0; }
+        .byte-md-code {
+          font-size: 11px;
+          margin: 4px 0;
+        }
       }
     }
   }
@@ -688,7 +748,9 @@ html.html-ctr-byte body {
     flex-direction: column;
     gap: 6px;
 
-    &:empty { display: none; }
+    &:empty {
+      display: none;
+    }
 
     .byte-attachment {
       display: block;
@@ -697,7 +759,8 @@ html.html-ctr-byte body {
       background: rgba(0, 0, 0, 0.25);
       max-width: 100%;
 
-      img, video {
+      img,
+      video {
         display: block;
         max-width: 100%;
         max-height: 480px;
@@ -758,7 +821,9 @@ html.html-ctr-byte body {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   padding: 6px 0;
-  &[hidden] { display: none; }
+  &[hidden] {
+    display: none;
+  }
 
   .byte-slash-empty {
     padding: 12px 16px;
@@ -773,7 +838,8 @@ html.html-ctr-byte body {
     align-items: baseline;
     gap: 10px;
     width: 100%;
-    padding: 8px calc(env(safe-area-inset-right) + 16px) 8px calc(env(safe-area-inset-left) + 16px);
+    padding: 8px calc(env(safe-area-inset-right) + 16px) 8px
+      calc(env(safe-area-inset-left) + 16px);
     background: transparent !important;
     border: none !important;
     color: var(--bs-text) !important;
@@ -784,8 +850,13 @@ html.html-ctr-byte body {
     font-family: inherit;
     // Neutralise the global button cascade's :active { top: 1px } and its
     // gradient background — we handle both explicitly here.
-    &:active { position: static !important; top: auto !important; }
-    &:hover { background: rgba(255, 255, 255, 0.04) !important; }
+    &:active {
+      position: static !important;
+      top: auto !important;
+    }
+    &:hover {
+      background: rgba(255, 255, 255, 0.04) !important;
+    }
 
     .byte-slash-name {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -820,13 +891,15 @@ html.html-ctr-byte body {
   gap: 10px;
   // Bumped horizontal padding + safe-area-aware left/right so the pill
   // isn't kissing the screen edges on notch/rounded-corner devices.
-  padding:
-    10px
-    calc(env(safe-area-inset-right) + 16px)
+  padding: 10px calc(env(safe-area-inset-right) + 16px)
     calc(10px + env(safe-area-inset-bottom))
     calc(env(safe-area-inset-left) + 16px);
   border-top: 1px solid var(--bs-border);
-  background: linear-gradient(180deg, rgba(22, 35, 63, 0.8), rgba(22, 35, 63, 0.95));
+  background: linear-gradient(
+    180deg,
+    rgba(22, 35, 63, 0.8),
+    rgba(22, 35, 63, 0.95)
+  );
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 
@@ -843,21 +916,27 @@ html.html-ctr-byte body {
     min-height: 42px;
     max-height: 30vh;
     overflow-y: auto;
-    scrollbar-width: none;              // Firefox
-    &::-webkit-scrollbar { display: none; } // Chrome / Safari
+    scrollbar-width: none; // Firefox
+    &::-webkit-scrollbar {
+      display: none;
+    } // Chrome / Safari
 
     // iOS Safari zooms the whole page in when any focused input has a
     // font-size < 16px. 16px is the minimum to prevent that zoom.
     font-size: 16px;
     line-height: 1.35;
     box-shadow: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
 
-    &::placeholder { color: var(--bs-muted); }
+    &::placeholder {
+      color: var(--bs-muted);
+    }
     &:focus {
       // Subtle focus — the previous bright cyan ring was fighting the composer.
       border-color: rgba(63, 160, 255, 0.55);
-      box-shadow: 0 0 0 2px rgba(63, 160, 255, 0.10);
+      box-shadow: 0 0 0 2px rgba(63, 160, 255, 0.1);
     }
   }
 
@@ -871,11 +950,20 @@ html.html-ctr-byte body {
     background: var(--bs-me-bg) !important;
     color: white !important;
     flex-shrink: 0;
-    transition: transform 0.1s, filter 0.1s;
+    transition:
+      transform 0.1s,
+      filter 0.1s;
 
-    &:hover:not(:disabled) { filter: brightness(1.08); }
-    &:active:not(:disabled) { transform: scale(0.95); }
-    &:disabled { opacity: 0.5; cursor: not-allowed; }
+    &:hover:not(:disabled) {
+      filter: brightness(1.08);
+    }
+    &:active:not(:disabled) {
+      transform: scale(0.95);
+    }
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
   }
 }
 
@@ -890,13 +978,26 @@ html.html-ctr-byte body {
 }
 
 @keyframes byte-cursor {
-  0%, 50%   { opacity: 0.7; }
-  51%, 100% { opacity: 0; }
+  0%,
+  50% {
+    opacity: 0.7;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
 }
 
 @keyframes byte-watch-pulse {
-  0%, 100% { opacity: 0.35; transform: scale(0.85); }
-  50%      { opacity: 1;    transform: scale(1.1); }
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -923,9 +1024,14 @@ html.html-ctr-byte body {
   justify-content: center;
   color: var(--bs-muted);
   border-radius: 8px;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 
-  &:hover { background: rgba(255, 255, 255, 0.05); color: var(--bs-text); }
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--bs-text);
+  }
 }
 
 // Header title row: name + mode chip on one line, status underneath.
@@ -948,9 +1054,21 @@ html.html-ctr-byte body {
   border: 1px solid rgba(63, 160, 255, 0.3);
   line-height: 1;
 
-  &[data-mode="bash"]   { background: rgba(134, 239, 172, 0.12); color: #86EFAC; border-color: rgba(134, 239, 172, 0.3); }
-  &[data-mode="jarvis"] { background: rgba(251, 191, 36, 0.12); color: #FBBF24; border-color: rgba(251, 191, 36, 0.3); }
-  &[data-mode="buddy"]  { background: rgba(196, 141, 255, 0.12); color: #C48DFF; border-color: rgba(196, 141, 255, 0.3); }
+  &[data-mode="bash"] {
+    background: rgba(134, 239, 172, 0.12);
+    color: #86EFAC;
+    border-color: rgba(134, 239, 172, 0.3);
+  }
+  &[data-mode="jarvis"] {
+    background: rgba(251, 191, 36, 0.12);
+    color: #FBBF24;
+    border-color: rgba(251, 191, 36, 0.3);
+  }
+  &[data-mode="buddy"] {
+    background: rgba(196, 141, 255, 0.12);
+    color: #C48DFF;
+    border-color: rgba(196, 141, 255, 0.3);
+  }
 }
 
 // Drawer + backdrop. `position: fixed` so they overlay the .byte-app grid
@@ -973,7 +1091,9 @@ html.html-ctr-byte body {
   flex-direction: column;
   padding-top: env(safe-area-inset-top);
 
-  &.open { transform: translateX(0); }
+  &.open {
+    transform: translateX(0);
+  }
 }
 
 .byte-drawer-backdrop {
@@ -985,7 +1105,10 @@ html.html-ctr-byte body {
   pointer-events: none;
   transition: opacity 0.18s ease;
 
-  &.open { opacity: 1; pointer-events: auto; }
+  &.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .byte-drawer-header {
@@ -995,7 +1118,10 @@ html.html-ctr-byte body {
   padding: 14px 16px;
   border-bottom: 1px solid var(--bs-border);
 
-  .byte-drawer-title { font-weight: 600; font-size: 15px; }
+  .byte-drawer-title {
+    font-weight: 600;
+    font-size: 15px;
+  }
 }
 
 .ctr-byte .byte-app .byte-drawer-close,
@@ -1007,7 +1133,10 @@ html.html-ctr-byte body {
   line-height: 1;
   border-radius: 6px;
 
-  &:hover { background: rgba(255, 255, 255, 0.06); color: var(--bs-text); }
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--bs-text);
+  }
 }
 
 .byte-drawer .byte-new-convo {
@@ -1021,7 +1150,9 @@ html.html-ctr-byte body {
   cursor: pointer;
   text-align: left;
 
-  &:hover { background: rgba(63, 160, 255, 0.2); }
+  &:hover {
+    background: rgba(63, 160, 255, 0.2);
+  }
 }
 
 .byte-convo-list {
@@ -1038,7 +1169,9 @@ html.html-ctr-byte body {
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   padding: 0 8px 0 0;
 
-  &.active { background: rgba(63, 160, 255, 0.08); }
+  &.active {
+    background: rgba(63, 160, 255, 0.08);
+  }
 }
 
 .ctr-byte .byte-app .byte-convo-pick,
@@ -1067,9 +1200,18 @@ html.html-ctr-byte body {
     color: var(--bs-accent-strong);
     line-height: 1;
 
-    &[data-mode="bash"]   { background: rgba(134, 239, 172, 0.12); color: #86EFAC; }
-    &[data-mode="jarvis"] { background: rgba(251, 191, 36, 0.12); color: #FBBF24; }
-    &[data-mode="buddy"]  { background: rgba(196, 141, 255, 0.12); color: #C48DFF; }
+    &[data-mode="bash"] {
+      background: rgba(134, 239, 172, 0.12);
+      color: #86EFAC;
+    }
+    &[data-mode="jarvis"] {
+      background: rgba(251, 191, 36, 0.12);
+      color: #FBBF24;
+    }
+    &[data-mode="buddy"] {
+      background: rgba(196, 141, 255, 0.12);
+      color: #C48DFF;
+    }
   }
 
   .byte-convo-name {
@@ -1096,7 +1238,10 @@ html.html-ctr-byte body {
   line-height: 1;
   border-radius: 6px;
 
-  &:hover { background: rgba(255, 255, 255, 0.06); color: var(--bs-text); }
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--bs-text);
+  }
 }
 
 // Dialogs (new/menu/adopt). Native <dialog> centred on the viewport with
@@ -1119,10 +1264,17 @@ dialog.byte-modal {
   max-width: 92vw;
   overflow: hidden !important;
 
-  &::backdrop { background: rgba(0, 0, 0, 0.6); }
+  &::backdrop {
+    background: rgba(0, 0, 0, 0.6);
+  }
 
-  &[open]      { display: flex; flex-direction: column; }
-  &:not([open]) { display: none; }
+  &[open] {
+    display: flex;
+    flex-direction: column;
+  }
+  &:not([open]) {
+    display: none;
+  }
 
   &.byte-modal-wide {
     width: 560px;
@@ -1207,7 +1359,9 @@ dialog.byte-modal {
   background-position:
     calc(100% - 20px) center,
     calc(100% - 15px) center !important;
-  background-size: 5px 5px, 5px 5px !important;
+  background-size:
+    5px 5px,
+    5px 5px !important;
   background-repeat: no-repeat, no-repeat !important;
 }
 
@@ -1233,12 +1387,14 @@ dialog.byte-modal {
   text-align: center;
   line-height: 1.2;
 
-  &:hover { background: var(--bs-border) !important; }
+  &:hover {
+    background: var(--bs-border) !important;
+  }
 
   &.byte-modal-btn-primary {
     background: linear-gradient(135deg, #2563EB 0%, #3FA0FF 100%) !important;
     border-color: transparent !important;
-    color: #fff !important;
+    color: #FFF !important;
   }
 }
 
@@ -1275,7 +1431,10 @@ dialog.byte-modal {
   font-weight: 500 !important;
   line-height: 1.2 !important;
   margin: 0 !important;
-  transition: background-color 120ms ease, border-color 120ms ease, transform 60ms ease;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    transform 60ms ease;
 
   // Chevron affordance for items that open something else (rename input,
   // adopt picker). Ends in `…` in the label — content-selectors on ::after
@@ -1308,7 +1467,9 @@ dialog.byte-modal {
     outline: 2px solid var(--bs-accent, #3FA0FF) !important;
     outline-offset: 2px !important;
   }
-  &:focus:not(:focus-visible) { outline: none !important; }
+  &:focus:not(:focus-visible) {
+    outline: none !important;
+  }
 
   &.byte-menu-btn-danger {
     color: var(--bs-danger) !important;
@@ -1316,10 +1477,17 @@ dialog.byte-modal {
     background: rgba(255, 92, 92, 0.08) !important;
 
     // No chevron on Archive — it's a terminal action, not a navigation.
-    &::after { content: none; }
+    &::after {
+      content: none;
+    }
 
-    &:hover  { background: rgba(255, 92, 92, 0.16) !important; border-color: rgba(255, 92, 92, 0.6) !important; }
-    &:active { background: rgba(255, 92, 92, 0.22) !important; }
+    &:hover {
+      background: rgba(255, 92, 92, 0.16) !important;
+      border-color: rgba(255, 92, 92, 0.6) !important;
+    }
+    &:active {
+      background: rgba(255, 92, 92, 0.22) !important;
+    }
   }
 }
 
@@ -1342,7 +1510,9 @@ dialog.byte-modal {
   cursor: pointer;
   transition: background 0.12s;
 
-  &:hover { background: var(--bs-border); }
+  &:hover {
+    background: var(--bs-border);
+  }
 
   .byte-adopt-name {
     font-size: 14px;
@@ -1381,7 +1551,7 @@ dialog.byte-modal {
   padding: 0 5px;
   border-radius: 999px;
   background: var(--bs-accent);
-  color: #fff;
+  color: #FFF;
   font-size: 10px;
   font-weight: 700;
   line-height: 16px;
@@ -1405,12 +1575,23 @@ dialog.byte-modal {
   font-size: 11px;
   color: var(--bs-muted);
   line-height: 1.3;
-  min-width: 0;  // let overflow: hidden on children actually clip
+  min-width: 0; // let overflow: hidden on children actually clip
 
-  &[data-visible="false"] { display: none; }
+  &[data-visible="false"] {
+    display: none;
+  }
 
-  .byte-pwd-icon    { color: var(--bs-accent); opacity: 0.7; flex: 0 0 auto; }
-  .byte-pwd-path    { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
+  .byte-pwd-icon {
+    color: var(--bs-accent);
+    opacity: 0.7;
+    flex: 0 0 auto;
+  }
+  .byte-pwd-path {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 0 1 auto;
+  }
   .byte-pwd-session {
     display: inline-flex;
     align-items: center;
@@ -1422,9 +1603,14 @@ dialog.byte-modal {
     white-space: nowrap;
     color: var(--bs-text);
     opacity: 0.75;
-    &[hidden] { display: none; }
+    &[hidden] {
+      display: none;
+    }
   }
-  .byte-pwd-sep { color: var(--bs-muted); opacity: 0.5; }
+  .byte-pwd-sep {
+    color: var(--bs-muted);
+    opacity: 0.5;
+  }
 
   .byte-pwd-watching {
     display: inline-flex;
@@ -1438,7 +1624,9 @@ dialog.byte-modal {
     font-weight: 500;
     letter-spacing: 0.02em;
     flex: 0 0 auto;
-    &[hidden] { display: none; }
+    &[hidden] {
+      display: none;
+    }
   }
 }
 
@@ -1502,24 +1690,30 @@ dialog.byte-modal {
     background: rgba(251, 191, 36, 0.12);
     box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.35);
   }
-  .byte-composer-avatar-jarvis { display: block; }
+  .byte-composer-avatar-jarvis {
+    display: block;
+  }
 }
 
 // Bash → `$` glyph, lime accent, square-ish tile so it reads as
 // terminal-prompt-ish rather than avatar-round.
 .byte-composer[data-mode="bash"] {
   .byte-composer-avatar {
-    background: rgba(134, 239, 172, 0.10);
-    box-shadow: 0 0 0 1px rgba(134, 239, 172, 0.30);
+    background: rgba(134, 239, 172, 0.1);
+    box-shadow: 0 0 0 1px rgba(134, 239, 172, 0.3);
     border-radius: 6px;
   }
-  .byte-composer-avatar-bash { display: inline; }
+  .byte-composer-avatar-bash {
+    display: inline;
+  }
 
   .byte-input {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
     color: #86EFAC !important;
   }
-  .byte-input::placeholder { color: rgba(134, 239, 172, 0.45); }
+  .byte-input::placeholder {
+    color: rgba(134, 239, 172, 0.45);
+  }
 }
 
 // Buddy → speech-bubble glyph, violet accent frame.
@@ -1528,7 +1722,9 @@ dialog.byte-modal {
     background: rgba(196, 141, 255, 0.12);
     box-shadow: 0 0 0 1px rgba(196, 141, 255, 0.35);
   }
-  .byte-composer-avatar-buddy { display: inline; }
+  .byte-composer-avatar-buddy {
+    display: inline;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1553,10 +1749,19 @@ dialog.byte-modal {
   gap: 8px;
   font-size: 13px;
 
-  &.byte-action-kind-permission { border-left: 3px solid var(--bs-accent-strong); }
-  &.byte-action-kind-plan       { border-left: 3px solid #FBBF24; background: rgba(251, 191, 36, 0.05); }
-  &.byte-action-kind-question   { border-left: 3px solid #A78BFA; }
-  &.byte-action-kind-jarvis     { border-left: 3px solid #86EFAC; }
+  &.byte-action-kind-permission {
+    border-left: 3px solid var(--bs-accent-strong);
+  }
+  &.byte-action-kind-plan {
+    border-left: 3px solid #FBBF24;
+    background: rgba(251, 191, 36, 0.05);
+  }
+  &.byte-action-kind-question {
+    border-left: 3px solid #A78BFA;
+  }
+  &.byte-action-kind-jarvis {
+    border-left: 3px solid #86EFAC;
+  }
 
   &.byte-action-state-decided {
     opacity: 0.85;
@@ -1636,18 +1841,31 @@ dialog.byte-modal {
   display: inline-flex;
   flex-direction: column;
   gap: 2px;
-  transition: background 0.12s, border-color 0.12s, transform 0.08s;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    transform 0.08s;
 
-  .byte-action-btn-label { font-size: 14px; }
-  .byte-action-btn-desc  { font-size: 11px; color: var(--bs-muted); font-weight: 400; }
+  .byte-action-btn-label {
+    font-size: 14px;
+  }
+  .byte-action-btn-desc {
+    font-size: 11px;
+    color: var(--bs-muted);
+    font-weight: 400;
+  }
 
-  &:hover:not(.disabled)  { background: var(--bs-border) !important; }
-  &:active:not(.disabled) { transform: scale(0.98); }
+  &:hover:not(.disabled) {
+    background: var(--bs-border) !important;
+  }
+  &:active:not(.disabled) {
+    transform: scale(0.98);
+  }
 
   &.byte-action-btn-primary {
     background: linear-gradient(135deg, #2563EB 0%, #3FA0FF 100%) !important;
     border-color: transparent !important;
-    color: #fff !important;
+    color: #FFF !important;
   }
   &.byte-action-btn-danger {
     background: rgba(248, 113, 113, 0.12) !important;
@@ -1675,12 +1893,15 @@ dialog.byte-modal {
   border-radius: 8px !important;
   background: linear-gradient(135deg, #2563EB 0%, #3FA0FF 100%) !important;
   border: none !important;
-  color: #fff !important;
+  color: #FFF !important;
   font-size: 13px !important;
   font-weight: 600 !important;
   cursor: pointer;
 
-  &:disabled { opacity: 0.6; cursor: not-allowed; }
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 }
 
 .byte-action-decided {
@@ -1769,8 +1990,14 @@ dialog.byte-modal {
   gap: 3px;
   line-height: 1.4;
 
-  .k { display: inline-block; width: 40px; opacity: 0.55; }
-  .v { color: var(--bs-text); }
+  .k {
+    display: inline-block;
+    width: 40px;
+    opacity: 0.55;
+  }
+  .v {
+    color: var(--bs-text);
+  }
 }
 
 // Modal dialog needs to stay INSIDE the visible viewport on iOS. The
@@ -1781,8 +2008,10 @@ dialog.byte-modal {
 .ctr-byte dialog.byte-modal {
   // SassC can't `max()` across unit types; fall back to plain calcs. env()
   // is 0 on non-safe-area devices, so `+40px` gives a min margin either way.
-  max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 40px);
-  margin-top:    calc(env(safe-area-inset-top) + 20px);
+  max-height: calc(
+    100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 40px
+  );
+  margin-top: calc(env(safe-area-inset-top) + 20px);
   margin-bottom: calc(env(safe-area-inset-bottom) + 20px);
 }
 
@@ -1806,7 +2035,9 @@ dialog.byte-modal {
   opacity: 0;
   transition: opacity 140ms ease;
 }
-.byte-toast.byte-toast-visible { opacity: 1; }
+.byte-toast.byte-toast-visible {
+  opacity: 1;
+}
 
 // -------- Buddy hero + Buddy proposal checklist ---------------------------
 // Hero is the "Tamagotchi" area that only appears on :buddy conversations.
@@ -1823,19 +2054,24 @@ dialog.byte-modal {
   padding: 12px 12px 8px;
   min-height: 33vh;
   max-height: 50vh;
-  transition: min-height 220ms ease, max-height 220ms ease, padding 220ms ease;
+  transition:
+    min-height 220ms ease,
+    max-height 220ms ease,
+    padding 220ms ease;
 
   --buddy-primary: #0F2C5C;
-  --buddy-accent:  #3FA0FF;
-  --buddy-danger:  #F26B6B;
+  --buddy-accent: #3FA0FF;
+  --buddy-danger: #F26B6B;
 
   &[data-buddy-theme="moss"] {
     --buddy-primary: #1A3A2A;
-    --buddy-accent:  #4FCF7C;
-    --buddy-danger:  #E88A5C;
+    --buddy-accent: #4FCF7C;
+    --buddy-danger: #E88A5C;
   }
 
-  &[hidden] { display: none; }
+  &[hidden] {
+    display: none;
+  }
 }
 
 // Shrink on composer focus (keyboard open on mobile). :has isn't in the
@@ -1860,7 +2096,8 @@ dialog.byte-modal {
   filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.4));
 }
 .byte-buddy-body,
-.byte-buddy-face {
+.byte-buddy-face,
+.byte-buddy-arm {
   position: absolute;
   inset: 0;
   background-size: contain;
@@ -1868,26 +2105,98 @@ dialog.byte-modal {
   background-position: center;
   pointer-events: none;
 }
-.byte-buddy-face { transition: opacity 180ms ease; }
+.byte-buddy-face {
+  transition: opacity 180ms ease;
+}
+.byte-buddy-arm {
+  opacity: 0;
+  transition: opacity 220ms ease;
+  pointer-events: none;
+}
+
+// Thinking pose: arm layer visible + slow head-tilt on the whole char.
+// Two cues stack to make the state unmistakable at a glance.
+.byte-buddy-hero[data-buddy-expression="thinking"] .byte-buddy-arm {
+  opacity: 1;
+  // Asset draws on the right; shift the whole layer left so the same
+  // pose lands on the character's face side. Translation lives inside
+  // the keyframes so the animation doesn't clobber it.
+  animation: buddy-thinking-tap-shifted 1.6s ease-in-out infinite;
+}
+.byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="thinking"]
+  .byte-buddy-arm {
+  background-image: image-url("buddy/byte/arm_thinking.svg");
+}
+.byte-buddy-hero[data-buddy-theme="moss"][data-buddy-expression="thinking"]
+  .byte-buddy-arm {
+  background-image: image-url("buddy/moss/arm_thinking.svg");
+}
+.byte-buddy-hero[data-buddy-expression="thinking"] .byte-buddy-char {
+  animation: buddy-thinking-tilt 2.4s ease-in-out infinite;
+}
+@keyframes buddy-thinking-tap {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-1px) rotate(-2deg);
+  }
+}
+// Shifted variant for the arm — translateX moves the layer from screen
+// right to screen left without flipping the pose. -60% of the char
+// width lands the asset roughly opposite where it was drawn.
+@keyframes buddy-thinking-tap-shifted {
+  0%,
+  100% {
+    transform: translate(-35%, 15%) rotate(0deg);
+  }
+  50% {
+    transform: translate(-35%, calc(15% - 1px)) rotate(-2deg);
+  }
+}
+@keyframes buddy-thinking-tilt {
+  0%,
+  100% {
+    transform: rotate(0deg) translateY(0);
+  }
+  30% {
+    transform: rotate(-3deg) translateY(-2px);
+  }
+  70% {
+    transform: rotate(3deg) translateY(-1px);
+  }
+}
 
 // Body — theme-scoped (Moss reuses byte body until a Moss body ships).
-.byte-buddy-hero[data-buddy-theme="byte"] .byte-buddy-body { background-image: image-url("buddy/byte/body.svg"); }
-.byte-buddy-hero[data-buddy-theme="moss"] .byte-buddy-body { background-image: image-url("buddy/moss/body.svg"); }
+.byte-buddy-hero[data-buddy-theme="byte"] .byte-buddy-body {
+  background-image: image-url("buddy/byte/body.svg");
+}
+.byte-buddy-hero[data-buddy-theme="moss"] .byte-buddy-body {
+  background-image: image-url("buddy/moss/body.svg");
+}
 
 // Face per theme + expression.
 $expressions: happy thinking focused encouraging celebrating;
 @each $expr in $expressions {
-  .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$expr}"] .byte-buddy-face {
+  .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$expr}"]
+    .byte-buddy-face {
     background-image: image-url("buddy/byte/face_#{$expr}.svg");
   }
-  .byte-buddy-hero[data-buddy-theme="moss"][data-buddy-expression="#{$expr}"] .byte-buddy-face {
+  .byte-buddy-hero[data-buddy-theme="moss"][data-buddy-expression="#{$expr}"]
+    .byte-buddy-face {
     background-image: image-url("buddy/moss/face_#{$expr}.svg");
   }
 }
 
 @keyframes buddy-idle {
-  0%, 100% { transform: translateY(0)    scale(1); }
-  50%      { transform: translateY(-6px) scale(1.015); }
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-6px) scale(1.015);
+  }
 }
 
 // Quick actions — real button feel. Beat the forms.scss button cascade
@@ -1904,7 +2213,11 @@ $expressions: happy thinking focused encouraging celebrating;
     flex: 1 1 auto;
     min-width: 72px;
     padding: 9px 14px !important;
-    background: linear-gradient(180deg, rgba(63, 160, 255, 0.24), rgba(63, 160, 255, 0.12)) !important;
+    background: linear-gradient(
+      180deg,
+      rgba(63, 160, 255, 0.24),
+      rgba(63, 160, 255, 0.12)
+    ) !important;
     color: #FFFFFF !important;
     border: 1px solid rgba(63, 160, 255, 0.5) !important;
     border-radius: 12px !important;
@@ -1912,13 +2225,28 @@ $expressions: happy thinking focused encouraging celebrating;
     font-weight: 600 !important;
     letter-spacing: 0.01em;
     cursor: pointer;
-    transition: transform 90ms ease, background 100ms ease, box-shadow 100ms ease;
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 2px 6px rgba(0, 0, 0, 0.25);
+    transition:
+      transform 90ms ease,
+      background 100ms ease,
+      box-shadow 100ms ease;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.08) inset,
+      0 2px 6px rgba(0, 0, 0, 0.25);
 
-    &:hover  { background: linear-gradient(180deg, rgba(63, 160, 255, 0.34), rgba(63, 160, 255, 0.18)) !important; }
+    &:hover {
+      background: linear-gradient(
+        180deg,
+        rgba(63, 160, 255, 0.34),
+        rgba(63, 160, 255, 0.18)
+      ) !important;
+    }
     &:active {
       transform: translateY(1px);
-      background: linear-gradient(180deg, rgba(63, 160, 255, 0.20), rgba(63, 160, 255, 0.10)) !important;
+      background: linear-gradient(
+        180deg,
+        rgba(63, 160, 255, 0.2),
+        rgba(63, 160, 255, 0.1)
+      ) !important;
       position: static !important;
       top: 0 !important;
     }
@@ -1927,16 +2255,34 @@ $expressions: happy thinking focused encouraging celebrating;
 
 // Moss palette override for buttons.
 .byte-buddy-hero[data-buddy-theme="moss"] .byte-buddy-quick-actions button {
-  background: linear-gradient(180deg, rgba(79, 207, 124, 0.28), rgba(79, 207, 124, 0.14)) !important;
+  background: linear-gradient(
+    180deg,
+    rgba(79, 207, 124, 0.28),
+    rgba(79, 207, 124, 0.14)
+  ) !important;
   border-color: rgba(79, 207, 124, 0.5) !important;
 
-  &:hover  { background: linear-gradient(180deg, rgba(79, 207, 124, 0.38), rgba(79, 207, 124, 0.20)) !important; }
-  &:active { background: linear-gradient(180deg, rgba(79, 207, 124, 0.22), rgba(79, 207, 124, 0.12)) !important; }
+  &:hover {
+    background: linear-gradient(
+      180deg,
+      rgba(79, 207, 124, 0.38),
+      rgba(79, 207, 124, 0.2)
+    ) !important;
+  }
+  &:active {
+    background: linear-gradient(
+      180deg,
+      rgba(79, 207, 124, 0.22),
+      rgba(79, 207, 124, 0.12)
+    ) !important;
+  }
 }
 
 // Hide the pwd/session banner on Buddy conversations — it's a
 // Claude/bash concern that's just noise here.
-.byte-app[data-active-mode="buddy"] .byte-pwd-bar { display: none; }
+.byte-app[data-active-mode="buddy"] .byte-pwd-bar {
+  display: none;
+}
 
 // -------- Generic multi-select action rows (used by Buddy proposals) -----
 .byte-msg-multi-select {
@@ -1955,16 +2301,34 @@ $expressions: happy thinking focused encouraging celebrating;
   font-size: 13.5px;
   cursor: pointer;
 
-  input[type="checkbox"] { flex-shrink: 0; }
+  input[type="checkbox"] {
+    flex-shrink: 0;
+  }
 
-  .byte-msg-action-label { flex: 1; }
-  .byte-msg-action-glyph { opacity: 0.7; }
-  .byte-msg-action-error { font-size: 11.5px; color: #F26B6B; }
+  .byte-msg-action-label {
+    flex: 1;
+  }
+  .byte-msg-action-glyph {
+    opacity: 0.7;
+  }
+  .byte-msg-action-error {
+    font-size: 11.5px;
+    color: #F26B6B;
+  }
 
-  &[data-status="executed"]  { opacity: 0.7; }
-  &[data-status="cancelled"] { opacity: 0.4; text-decoration: line-through; }
-  &[data-status="failed"]    { color: #F26B6B; }
-  &[data-status="partial"]   { color: #E8A85C; }
+  &[data-status="executed"] {
+    opacity: 0.7;
+  }
+  &[data-status="cancelled"] {
+    opacity: 0.4;
+    text-decoration: line-through;
+  }
+  &[data-status="failed"] {
+    color: #F26B6B;
+  }
+  &[data-status="partial"] {
+    color: #E8A85C;
+  }
 }
 .byte-msg-multi-select-submit {
   align-self: flex-end;
@@ -1977,7 +2341,10 @@ $expressions: happy thinking focused encouraging celebrating;
   cursor: pointer;
   font-size: 13px;
 
-  &:disabled { opacity: 0.5; cursor: default; }
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
 }
 
 // -------- Buddy check-in mood popover -------------------------------------
@@ -1995,7 +2362,9 @@ $expressions: happy thinking focused encouraging celebrating;
   max-width: 480px;
   width: 100%;
 
-  &[hidden] { display: none; }
+  &[hidden] {
+    display: none;
+  }
 }
 .byte-buddy-mood-label {
   font-size: 12px;
@@ -2017,9 +2386,13 @@ $expressions: happy thinking focused encouraging celebrating;
     font-size: 12.5px !important;
     font-weight: 600 !important;
     cursor: pointer;
-    transition: transform 90ms ease, background 100ms ease;
+    transition:
+      transform 90ms ease,
+      background 100ms ease;
 
-    &:hover  { background: rgba(255, 255, 255, 0.12) !important; }
+    &:hover {
+      background: rgba(255, 255, 255, 0.12) !important;
+    }
     &:active {
       transform: translateY(1px);
       background: rgba(255, 255, 255, 0.18) !important;
@@ -2030,9 +2403,19 @@ $expressions: happy thinking focused encouraging celebrating;
 
   // Optional mood-tinted borders — subtle affordance for "how loaded is
   // each choice" without turning it into a mood color wheel.
-  button[data-mood="great"] { border-color: rgba(79, 207, 124, 0.45) !important; }
-  button[data-mood="good"]  { border-color: rgba(63, 160, 255, 0.45) !important; }
-  button[data-mood="okay"]  { border-color: rgba(255, 255, 255, 0.22) !important; }
-  button[data-mood="low"]   { border-color: rgba(232, 168, 92, 0.45) !important; }
-  button[data-mood="rough"] { border-color: rgba(242, 107, 107, 0.45) !important; }
+  button[data-mood="great"] {
+    border-color: rgba(79, 207, 124, 0.45) !important;
+  }
+  button[data-mood="good"] {
+    border-color: rgba(63, 160, 255, 0.45) !important;
+  }
+  button[data-mood="okay"] {
+    border-color: rgba(255, 255, 255, 0.22) !important;
+  }
+  button[data-mood="low"] {
+    border-color: rgba(232, 168, 92, 0.45) !important;
+  }
+  button[data-mood="rough"] {
+    border-color: rgba(242, 107, 107, 0.45) !important;
+  }
 }

@@ -1,3 +1,16 @@
+# == Schema Information
+#
+# Table name: buddy_memories
+#
+#  id         :bigint           not null, primary key
+#  content    :text             not null
+#  metadata   :jsonb            not null
+#  priority   :integer          default(0), not null
+#  tags       :jsonb            not null
+#  created_at :datetime         not null
+#  updated_at :datetime         not null
+#  user_id    :bigint           not null
+#
 # A persistent thing Buddy remembers about the user across conversations.
 # Written by the `[[remember: <fact>]]` side-effect marker; read into
 # Buddy's system prompt on every turn so recall is automatic.
