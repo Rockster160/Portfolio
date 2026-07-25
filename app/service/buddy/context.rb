@@ -21,9 +21,13 @@ module Buddy
         user_first_name:   user.first_name,
         emotional_state:   emotional_state(user, now),          # current mood + pet expression
         today_agenda:      today_agenda(user, now),
-        chores_dailies:         chore_buckets[:dailies],         # MOST PROMINENT — the daily rotation
-        chores_scheduled_today: chore_buckets[:scheduled_today], # explicit today scheduling
-        chores_hot_picks:       chore_buckets[:hot_picks],       # attention items
+        # Two explicit lists per bucket - PENDING and DONE_TODAY - so
+        # Buddy can never confuse "what's left" with "what's finished".
+        # The previous mixed-list-with-done_today-flag was getting
+        # glossed over (LLM reads the list, ignores the flag).
+        chores_pending_today: chore_buckets[:pending_today],
+        chores_done_today:    chore_buckets[:done_today],
+        chores_hot_picks:     chore_buckets[:hot_picks],       # attention items
         chores_overdue_backlog: chore_buckets[:overdue_backlog], # long-term todo, NOT all-must-do-today
         recent_events:     recent_events(user, now),
         active_proposals:  active_proposals(user),
@@ -101,16 +105,22 @@ module Buddy
           c.respond_to?(:matches_day?) && c.scheduled? && (safe_matches_day(c, today, user))
         }.map(&:id)
 
-        prominent = (daily_ids + hot_ids + scheduled_today_ids).uniq
+        # Anything that should get attention today (dailies + scheduled +
+        # hot picks). Split explicitly into PENDING vs DONE so Buddy
+        # can't conflate "your dailies" as one blob.
+        prominent_ids = (daily_ids + hot_ids + scheduled_today_ids).uniq
+        pending_ids   = prominent_ids.reject { |id| done_today_ids.include?(id) }
+        done_ids      = prominent_ids.select { |id| done_today_ids.include?(id) }
+
         overdue = chores.select { |c|
-          c.respond_to?(:marked_due?) && c.marked_due? && !prominent.include?(c.id)
+          c.respond_to?(:marked_due?) && c.marked_due? && !prominent_ids.include?(c.id)
         }.map(&:id)
 
         {
-          dailies:         daily_ids.filter_map { |id| slim_chore(by_id[id], done_today_ids) }.first(15),
-          scheduled_today: scheduled_today_ids.filter_map { |id| slim_chore(by_id[id], done_today_ids) }.first(15),
-          hot_picks:       hot_ids.filter_map { |id| slim_chore(by_id[id], done_today_ids) }.first(15),
-          overdue_backlog: overdue.filter_map { |id| slim_chore(by_id[id], done_today_ids) }.first(20),
+          pending_today:   pending_ids.filter_map { |id| slim_chore(by_id[id]) }.first(20),
+          done_today:      done_ids.filter_map    { |id| slim_chore(by_id[id]) }.first(20),
+          hot_picks:       hot_ids.filter_map     { |id| slim_chore(by_id[id]) }.first(15),
+          overdue_backlog: overdue.filter_map     { |id| slim_chore(by_id[id]) }.first(20),
         }
       rescue => e
         Rails.logger.warn("[Buddy::Context] chore buckets failed: #{e.class}: #{e.message}")
@@ -149,16 +159,15 @@ module Buddy
 
 
       def default_buckets
-        { dailies: [], scheduled_today: [], hot_picks: [], overdue_backlog: [] }
+        { pending_today: [], done_today: [], hot_picks: [], overdue_backlog: [] }
       end
 
-      def slim_chore(chore, done_today_ids = Set.new)
+      def slim_chore(chore, _done_today_ids = nil)
         return nil if chore.nil?
 
         out = {
           id:         chore.id,
           name:       chore.name,
-          done_today: done_today_ids.include?(chore.id),
         }
         out[:freq] = chore.freq.to_s if chore.respond_to?(:freq) && chore.freq.present?
         if chore.respond_to?(:assigned?) && chore.assigned?
