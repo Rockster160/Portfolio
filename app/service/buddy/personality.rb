@@ -165,19 +165,67 @@ module Buddy
       - You can use Markdown - the PWA renders it. Use it sparingly.
     RULES
 
-    def for(user, tools_appendix: nil, context_block: nil)
+    def for(user, tools_appendix: nil, context_path: nil, at_glance: nil, recap: nil)
       theme = user.buddy_theme.presence || "byte"
       persona = load_persona(theme)
       tools   = tools_appendix || Buddy::Tools.system_prompt_appendix
 
       parts = []
-      parts << time_preamble(user, context_block)  # first & impossible to miss
+      parts << time_preamble(user)  # first & impossible to miss
       parts << persona.strip
       parts << RULES_APPENDIX.strip
       parts << tools.strip
       parts << memories_block(user)
-      parts << "## Context\n\n```json\n#{JSON.pretty_generate(context_block)}\n```" if context_block
+      parts << recap_block(recap) if recap.to_s.strip.length > 0
+      parts << context_pointer_block(context_path, at_glance) if context_path
       parts.compact.reject { |s| s.to_s.strip.empty? }.join("\n\n---\n\n")
+    end
+
+    # After a compact, the prior session's assistant/user messages are
+    # gone from Buddy's view. The recap replaces them - short summary
+    # of what mattered so Buddy can pick the thread back up without
+    # feeling amnesiac to the person.
+    def recap_block(recap)
+      <<~TXT
+        ## Recent conversation recap
+
+        You just picked this conversation back up after a natural compact. Here is what mattered from the prior stretch:
+
+        #{recap.to_s.strip}
+
+        Don't announce the compact or reference it. Just continue as if you remember. If the person asks about something specific from before that isn't in the recap, gently acknowledge you don't recall the detail and ask them to remind you - never fabricate.
+      TXT
+    end
+
+    # Instead of shipping 5-8 KB of chores/agenda/events JSON in every
+    # system prompt, tell Buddy where the live snapshot file is and let
+    # it Read on demand. The file is written fresh by Rails on every
+    # dispatch, so it's always current at read time. Buddy has the
+    # Read tool granted; no new tool declaration needed.
+    #
+    # The at-a-glance block is a ~100-byte summary of the tiny always-
+    # needed fields (pet_expression, counts). Buddy needs pet_expression
+    # every turn for mood tracking, so pulling it inline avoids forcing
+    # a Read on chat-only turns. Chore/agenda specifics live in the file.
+    def context_pointer_block(path, at_glance)
+      glance_lines = if at_glance.is_a?(Hash)
+        at_glance.map { |k, v| "- **#{k}:** #{v}" }.join("\n")
+      end
+
+      <<~TXT
+        ## Live context (Read on demand)
+
+        At-a-glance right now:
+        #{glance_lines || "- (no snapshot summary available)"}
+
+        Everything else - chore lists (pending / done today / overdue), today's agenda, recent events, upcoming reminders, active proposals - lives in a JSON file at:
+
+        `#{path}`
+
+        **This file is authoritative and always fresh** (Rails rewrites it before every one of your turns). When the person asks about ANY of those topics, use your `Read` tool to fetch the file first, then answer from what you see. Do NOT guess. Do NOT say "I don't know / I can't see" - Read the file.
+
+        Skip the Read when the person's message is pure chit-chat that doesn't touch these topics. Reading on every turn is wasteful; reading only when needed is the whole point of the file.
+      TXT
     end
 
     MEMORY_RECALL_LIMIT = 30
@@ -205,13 +253,11 @@ module Buddy
     end
 
     # Prominent NOW line at the very top of the override so Buddy stops
-    # defaulting to UTC / training-data time. Wrapping the JSON context
-    # in more prose helped only a little - this is the shortest possible
+    # defaulting to UTC / training-data time. Shortest possible
     # unambiguous statement of local time.
-    def time_preamble(user, context_block)
+    def time_preamble(user)
       tz  = user.timezone.presence || "America/Denver"
-      now = context_block && context_block[:now_local]
-      now ||= Time.current.in_time_zone(tz).strftime("%a %Y-%m-%d %-I:%M %p %Z")
+      now = Time.current.in_time_zone(tz).strftime("%a %Y-%m-%d %-I:%M %p %Z")
       <<~TXT.strip
         ## Right now
 

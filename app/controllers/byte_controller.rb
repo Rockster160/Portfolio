@@ -413,6 +413,13 @@ class ByteController < ApplicationController
     # sits in :pending / :failed - surfaced in the UI so the user can retry.
     Thread.new {
       begin
+        # Compact BEFORE dispatch when the conversation is getting
+        # heavy. Failure to compact is non-fatal; the turn still ships.
+        if conversation.buddy?
+          reason = ::Buddy::Compactor.should_compact?(conversation)
+          ::Buddy::Compactor.compact!(conversation) if reason
+        end
+
         response = ByteLocal.deliver(message, conversation: conversation)
         message.update!(state: response&.is_a?(Net::HTTPSuccess) ? :sent : :failed)
         broadcast(message.reload)

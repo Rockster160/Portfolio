@@ -80,8 +80,31 @@ module ByteLocal
     if conversation&.buddy?
       begin
         context = Buddy::Context.build(message.user)
-        payload[:buddy_context] = context
-        payload[:buddy_system_prompt_extras] = Buddy::Personality.for(message.user, context_block: context)
+        # Snapshot context to disk so Buddy can Read it on demand instead
+        # of eating 5-8 KB of every turn's system prompt. Rails and Mac
+        # share a host so this is a direct FS write.
+        snapshot_path = Buddy::ContextSnapshot.write_for(message.user, context)
+        payload[:buddy_context_path] = snapshot_path
+        # Tiny (~100 byte) summary of always-needed fields so Buddy can
+        # track mood + decide whether to Read the file without a round-
+        # trip on chat-only turns.
+        at_glance = {
+          user:                 message.user.first_name,
+          pet_expression:       context.dig(:emotional_state, :pet_expression) || "neutral",
+          pending_chores_today: context[:chores_pending_today].to_a.length,
+          done_chores_today:    context[:chores_done_today].to_a.length,
+          agenda_today:         context[:today_agenda].to_a.length,
+          recent_events:        context[:recent_events].to_a.length,
+          upcoming_reminders:   context[:upcoming_reminders].to_a.length,
+          active_proposals:     context[:active_proposals].to_a.length,
+        }
+        recap = conversation.metadata.is_a?(Hash) ? conversation.metadata["buddy_recap"] : nil
+        payload[:buddy_system_prompt_extras] = Buddy::Personality.for(
+          message.user,
+          context_path: snapshot_path,
+          at_glance:    at_glance,
+          recap:        recap,
+        )
         # Portfolio-triggered Buddy turns get NO Bash — even with strong
         # persona rules and read-only-role prod-query, Claude Code's
         # training pulls hard toward "let me run a script for you" the
@@ -139,6 +162,27 @@ module ByteLocal
       name:     conversation.display_name,
       metadata: conversation.metadata,
     }
+  end
+
+  # Rails → Mac: ask Mac to run a Haiku summary against the current
+  # Buddy session for `conversation_id`, then clear the session so the
+  # next turn starts fresh. Blocking; returns the parsed JSON `{ "summary":
+  # "..." }` on success, nil on failure. Timeout longer than default
+  # because Haiku call can take a few seconds.
+  def compact_buddy_session(conversation_id:)
+    uri = URI.join(base_url, "/byte/buddy/compact")
+    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
+    req.body = JSON.generate({ conversation_id: conversation_id })
+
+    res = Net::HTTP.start(uri.hostname, uri.port,
+      use_ssl: uri.scheme == "https", open_timeout: TIMEOUT_SECONDS, read_timeout: 30,
+    ) { |http| http.request(req) }
+
+    return nil unless res.is_a?(Net::HTTPSuccess)
+    JSON.parse(res.body)
+  rescue => e
+    Rails.logger.warn("[Byte] compact_buddy_session failed: #{e.class}: #{e.message}")
+    nil
   end
 
   # Rails → Mac: user has decided on an action-request. Mac wakes any
