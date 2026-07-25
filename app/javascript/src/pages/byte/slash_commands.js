@@ -86,9 +86,16 @@ export function setupSlashAutocomplete({ input, popover, autosize }) {
   };
 
   const show = () => {
-    if (visible) return;
-    popover.hidden = false;
-    visible = true;
+    // Always render on show(). The old `if (visible) return` guard
+    // meant the DOM was only populated on the first / keystroke; every
+    // subsequent character updated `filtered` in memory but skipped
+    // render(), so the popover kept showing the initial full list even
+    // as the user narrowed the query. Idempotent on the flip; render()
+    // is a single innerHTML replace, cheap.
+    if (!visible) {
+      popover.hidden = false;
+      visible = true;
+    }
     render();
   };
 

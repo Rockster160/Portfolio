@@ -2054,6 +2054,11 @@ dialog.byte-modal {
   padding: 12px 12px 8px;
   min-height: 26vh;
   max-height: 38vh;
+  // Safety net: without this, if content ever exceeds max-height (as it
+  // did on the shrunk-focus state before we hid the quick actions), the
+  // overflow paints upward into the header's visual space and clips
+  // through the status bar.
+  overflow: hidden;
   transition:
     min-height 220ms ease,
     max-height 220ms ease,
@@ -2082,15 +2087,18 @@ dialog.byte-modal {
   min-height: 9vh;
   max-height: 11vh;
   padding: 4px 12px 2px;
-  gap: 4px;
+  gap: 0;
 
   .byte-buddy-char {
     width: 26%;
     max-width: 90px;
   }
-  .byte-buddy-quick-actions button {
-    padding: 4px 10px !important;
-    font-size: 11.5px !important;
+  // Quick actions are for prompting Buddy; while typing, they're just
+  // consuming vertical space the character needs. Hiding them saves
+  // ~34px which is what was pushing the character's top out of the
+  // shrunk hero and into the header above.
+  .byte-buddy-quick-actions {
+    display: none;
   }
 }
 
