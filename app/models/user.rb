@@ -4,6 +4,7 @@
 #
 #  id                 :integer          not null, primary key
 #  buddy_expression   :string           default("neutral"), not null
+#  buddy_sleep_until  :datetime
 #  buddy_theme        :string           default("byte"), not null
 #  chore_notify_prefs :jsonb            not null
 #  dark_mode          :boolean

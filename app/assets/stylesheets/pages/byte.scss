@@ -2052,8 +2052,8 @@ dialog.byte-modal {
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 12px 8px;
-  min-height: 33vh;
-  max-height: 50vh;
+  min-height: 26vh;
+  max-height: 38vh;
   transition:
     min-height 220ms ease,
     max-height 220ms ease,
@@ -2079,9 +2079,19 @@ dialog.byte-modal {
 // non-:has fallback is that the hero stays big and the messages just
 // scroll — acceptable.
 .byte-app:has([data-byte-input]:focus) .byte-buddy-hero {
-  min-height: 16vh;
-  max-height: 20vh;
-  padding: 6px 12px 4px;
+  min-height: 9vh;
+  max-height: 11vh;
+  padding: 4px 12px 2px;
+  gap: 4px;
+
+  .byte-buddy-char {
+    width: 26%;
+    max-width: 90px;
+  }
+  .byte-buddy-quick-actions button {
+    padding: 4px 10px !important;
+    font-size: 11.5px !important;
+  }
 }
 
 // Character is two layered SVG images: a shared body (always the same
@@ -2177,7 +2187,7 @@ dialog.byte-modal {
 }
 
 // Face per theme + expression.
-$expressions: neutral happy thinking focused encouraging celebrating;
+$expressions: neutral happy thinking focused encouraging celebrating sleeping;
 @each $expr in $expressions {
   .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$expr}"]
     .byte-buddy-face {
@@ -2297,7 +2307,7 @@ $expressions: neutral happy thinking focused encouraging celebrating;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
+  padding: 8px 10px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -2308,6 +2318,15 @@ $expressions: neutral happy thinking focused encouraging celebrating;
   &:hover:not([data-status="executed"]):not([data-status="cancelled"]) {
     background: rgba(255, 255, 255, 0.09);
     border-color: rgba(255, 255, 255, 0.14);
+  }
+
+  .byte-msg-action-body {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    flex: 1;
+    min-width: 0;
   }
 
   // Custom checkbox - the browser default is jarring against the dark
@@ -2349,25 +2368,26 @@ $expressions: neutral happy thinking focused encouraging celebrating;
     }
   }
 
-  // Action-kind chip — small colored badge that tells the user what the
-  // checkbox will actually DO ("Complete", "Log", "Add to list", etc.)
+  // Action-kind chip - tiny badge ABOVE the label. Secondary metadata,
+  // not primary content, so it stays small and unobtrusive.
   .byte-msg-action-kind {
-    flex-shrink: 0;
-    font-size: 10.5px;
-    font-weight: 600;
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 2px 7px;
-    border-radius: 4px;
+    letter-spacing: 0.06em;
+    padding: 1px 5px;
+    border-radius: 3px;
     background: rgba(63, 160, 255, 0.15);
     color: #A8CFFF;
     border: 1px solid rgba(63, 160, 255, 0.28);
     white-space: nowrap;
+    line-height: 1.3;
   }
 
   .byte-msg-action-label {
-    flex: 1;
     line-height: 1.35;
+    word-break: break-word;
   }
   .byte-msg-action-glyph {
     opacity: 0.7;
@@ -2423,38 +2443,56 @@ $expressions: neutral happy thinking focused encouraging celebrating;
   }
 }
 .byte-msg-multi-select-submit {
-  // Solid button - subtle-gradient version read too text-like. Big
-  // filled tap target that unambiguously invites a click.
-  align-self: stretch;
-  margin-top: 8px;
-  padding: 12px 18px;
-  background: #3FA0FF;
-  color: #FFFFFF;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  text-align: center;
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3), 0 4px 10px rgba(63, 160, 255, 0.25);
-  transition: transform 90ms ease, background 100ms ease, box-shadow 100ms ease;
+  // !important on every field because the app-wide `button` cascade
+  // in forms.scss (padding, gradient bg, border) otherwise flattens
+  // this into looking like plain text. Layered with heavy shadows
+  // + solid fill so it unambiguously reads as a physical button.
+  align-self: stretch !important;
+  display: block !important;
+  width: 100% !important;
+  margin-top: 8px !important;
+  padding: 14px 18px !important;
+  background: #3FA0FF !important;
+  background-image: linear-gradient(180deg, #4FB0FF, #2E90F0) !important;
+  color: #FFFFFF !important;
+  border: 1px solid #2A85E0 !important;
+  border-radius: 10px !important;
+  cursor: pointer !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+  text-align: center !important;
+  text-transform: none !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 3px 0 rgba(0, 0, 0, 0.35),
+    0 6px 14px rgba(63, 160, 255, 0.35) !important;
+  transition: transform 90ms ease, background-image 100ms ease, box-shadow 100ms ease !important;
+  position: static !important;
+  top: 0 !important;
 
   &:hover  {
-    background: #5AB0FF;
-    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3), 0 4px 14px rgba(63, 160, 255, 0.4);
+    background-image: linear-gradient(180deg, #6BBEFF, #3F9FF5) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.28),
+      0 3px 0 rgba(0, 0, 0, 0.35),
+      0 6px 18px rgba(63, 160, 255, 0.5) !important;
   }
   &:active {
-    transform: translateY(2px);
-    box-shadow: 0 0 0 rgba(0, 0, 0, 0.3), 0 1px 4px rgba(63, 160, 255, 0.2);
+    transform: translateY(3px) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      0 0 0 rgba(0, 0, 0, 0.35),
+      0 1px 4px rgba(63, 160, 255, 0.2) !important;
   }
 
   &:disabled {
-    opacity: 0.5;
-    cursor: default;
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.1);
-    box-shadow: none;
+    opacity: 0.5 !important;
+    cursor: default !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    background-image: none !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    box-shadow: none !important;
   }
 }
 

@@ -387,8 +387,30 @@ class ByteController < ApplicationController
       return
     end
 
+    # If Buddy is currently asleep (Anthropic usage cap), don't try to
+    # dispatch - post an in-character "sleeping until X" reply directly
+    # and let the wake time tick down. Only applies to :buddy mode;
+    # Claude / bash still dispatch as normal.
+    if conversation.buddy? && ::Buddy::SleepGuard.sleeping?(current_user)
+      message.update!(state: :sent)
+      reply = conversation.byte_messages.create!(
+        user:         current_user,
+        direction:    :inbound,
+        state:        :delivered,
+        body:         ::Buddy::SleepGuard.sleeping_reply_body(current_user),
+        metadata:     { kind: "buddy", source: "sleep_guard" },
+        delivered_at: Time.current,
+      )
+      broadcast(message.reload)
+      broadcast(reply)
+      return
+    end
+
+    # Auto-wake if the sleep window has passed.
+    ::Buddy::SleepGuard.maybe_wake!(current_user) if conversation.buddy?
+
     # Fire-and-forget to the local Mac server. If it fails, the message
-    # sits in :pending / :failed — surfaced in the UI so the user can retry.
+    # sits in :pending / :failed - surfaced in the UI so the user can retry.
     Thread.new {
       begin
         response = ByteLocal.deliver(message, conversation: conversation)

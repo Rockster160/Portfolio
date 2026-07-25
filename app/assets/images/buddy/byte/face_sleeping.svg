@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"
+  viewBox="0 0 512 512">
+  <title>Face Sleeping</title>
+  <g id="face_sleeping">
+<g id="eyes_sleepy">
+<path d="M158 252 Q188 266 218 252" fill="none" stroke="#090B22"
+  stroke-width="10" stroke-linecap="round"/>
+<path d="M294 252 Q324 266 354 252" fill="none" stroke="#090B22"
+  stroke-width="10" stroke-linecap="round"/>
+
+  </g>
+<g id="mouth_sleepy">
+    <ellipse cx="256" cy="323" rx="10" ry="7" fill="#171221"/>
+  </g>
+<g id="extra_zzz">
+    <text x="350" y="205" font-family="Arial, sans-serif"
+      font-size="42" font-weight="700" fill="#0160FF">Z</text>
+    <text x="385" y="170" font-family="Arial, sans-serif"
+      font-size="32" font-weight="700" fill="#43E0FF">Z</text>
+  </g>
+  </g>
+</svg>

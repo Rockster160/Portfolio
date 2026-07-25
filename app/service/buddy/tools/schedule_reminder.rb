@@ -1,0 +1,96 @@
+Buddy::Tools.register(
+  name:        :schedule_reminder,
+  description: <<~TXT,
+    Schedule a nudge to fire at a future local time. Use when the person
+    says "remind me to X at Y", "at 3pm ping me about the vet appt",
+    "in an hour tell me to check the oven", etc.
+
+    ONE-SHOT: pass `at` (ISO-8601 datetime with timezone offset).
+    Convert natural-language times ("in 30 min", "3pm", "tomorrow
+    morning") into ISO using the local time in RIGHT NOW block.
+
+    RECURRING: pass `repeat` to fire the reminder on a schedule instead
+    of just once. Use for "check in with me every day at 9", "remind me
+    to take the trash out every Wednesday night", etc. `repeat` accepts:
+      "daily:HH:MM"                 - every day at HH:MM
+      "weekdays:HH:MM"              - Mon-Fri at HH:MM
+      "weekly:<weekday>:HH:MM"      - e.g. "weekly:wednesday:20:00"
+      "monthly:<day-of-month>:HH:MM" - e.g. "monthly:1:09:00"
+    When `repeat` is set, `at` is optional (the first fire computes
+    from the recurrence). If both are set, `at` is the first fire and
+    the recurrence takes over from then on.
+
+    `kind` controls what happens at fire time:
+      "reminder" (default) - plain text nudge + push notification.
+      "prompt" - fresh Buddy turn triggered with `text` as the seed.
+        Use for "check in with me every day at 9" where you want Buddy
+        to compose a fresh check-in each time, not repeat the exact
+        same words.
+  TXT
+  args: {
+    text:   { type: :string, required: true,  description: "What to remind them of / prompt about" },
+    at:     { type: :string, required: false, description: "First fire time (ISO datetime). Required for one-shot." },
+    repeat: { type: :string, required: false, description: "Recurrence spec: daily:HH:MM / weekdays:HH:MM / weekly:<day>:HH:MM / monthly:<dom>:HH:MM" },
+    kind:   { type: :enum,   required: false, default: :reminder, values: %i[reminder prompt] },
+  },
+  confirm: ->(payload, ctx) {
+    # Parse recurrence spec (colon-separated) into the hash BuddyReminder
+    # understands. Deliberately narrow, extend by adding another `when`.
+    recurrence_hash = nil
+    if payload[:repeat].to_s.strip.length > 0
+      parts = payload[:repeat].to_s.strip.downcase.split(":")
+      recurrence_hash = case parts.first
+      when "daily"     then { "kind" => "daily",    "at" => "#{parts[1]}:#{parts[2]}" }
+      when "weekdays"  then { "kind" => "weekdays", "at" => "#{parts[1]}:#{parts[2]}" }
+      when "weekly"    then { "kind" => "weekly", "weekday" => parts[1], "at" => "#{parts[2]}:#{parts[3]}" }
+      when "monthly"   then { "kind" => "monthly", "day" => parts[1].to_i, "at" => "#{parts[2]}:#{parts[3]}" }
+      end
+      raise "unknown repeat spec #{payload[:repeat].inspect}" if recurrence_hash.nil?
+    end
+
+    fire_at = ctx.resolve_time(payload[:at]) if payload[:at].to_s.strip.length > 0
+    # If recurring and no explicit `at`, compute the first fire from the
+    # recurrence spec.
+    if fire_at.nil? && recurrence_hash
+      dummy = BuddyReminder.new(user: ctx.user, recurrence: recurrence_hash)
+      fire_at = dummy.next_fire_at(from: Time.current)
+    end
+    raise "couldn't determine a fire time" if fire_at.nil?
+    raise "fire time is in the past" if fire_at < Time.current
+
+    when_str = fire_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p")
+    summary = if recurrence_hash
+      "Repeating reminder starting #{when_str}?"
+    else
+      "Remind you at #{when_str}?"
+    end
+    { summary: summary, resolved: { fire_at_iso: fire_at.iso8601, recurrence: recurrence_hash } }
+  },
+  label: ->(payload, ctx) {
+    fire_at = Time.zone.parse(payload[:fire_at_iso].to_s) rescue nil
+    when_str = fire_at ? fire_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p") : payload[:at].to_s
+    prefix = payload[:recurrence] ? "Repeating (#{payload[:repeat] || payload.dig(:recurrence, 'kind')}): " : "#{when_str}: "
+    "#{prefix}#{payload[:text].to_s.truncate(50)}"
+  },
+  execute: ->(payload, ctx) {
+    fire_at = Time.zone.parse(payload[:fire_at_iso].to_s) || ctx.resolve_time(payload[:at])
+    conversation = ctx.user.byte_conversations.where(mode: :buddy).order(last_message_at: :desc).first ||
+                   ctx.user.byte_conversations.order(last_message_at: :desc).first
+    raise "no conversation to fire into" if conversation.nil?
+
+    reminder = BuddyReminder.create!(
+      user:              ctx.user,
+      byte_conversation: conversation,
+      kind:              (payload[:kind] || :reminder).to_s,
+      body:              payload[:text].to_s.first(500),
+      fire_at:           fire_at,
+      recurrence:        payload[:recurrence],
+    )
+    { reminder_id: reminder.id, fire_at: fire_at.iso8601 }
+  },
+  receipt: ->(_result, ctx) {
+    when_iso = ctx.proposal["payload"]&.dig("fire_at_iso")
+    when_str = when_iso ? Time.zone.parse(when_iso).in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p") : "later"
+    "Reminder set for #{when_str} ✓"
+  },
+)

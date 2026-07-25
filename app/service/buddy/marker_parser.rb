@@ -44,11 +44,13 @@ module Buddy
         }
       }
 
-      # Strip BOTH marker types from display text; collapse whitespace runs.
+      # Strip BOTH marker types from display text. Only collapse triple+
+      # newlines - DO NOT collapse horizontal whitespace runs since that
+      # flattens indentation inside ``` fenced code blocks and turns a
+      # multi-line code block into unreadable single-line prose.
       display = text.to_s
         .gsub(PROPOSE_RX, "")
         .gsub(SIDE_EFFECT_RX, "")
-        .gsub(/[ \t]{2,}/, " ")
         .gsub(/\n{3,}/, "\n\n")
         .strip
 

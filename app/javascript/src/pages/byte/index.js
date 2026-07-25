@@ -1211,20 +1211,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Enter didn't reach us. `insertLineBreak` is fired reliably on all
   // platforms for the "user pressed the Return key" intent — intercept
   // that and submit instead.
+  // Consistent Enter behavior across devices, WITH newline support:
+  //
+  //   Desktop keyboard:
+  //     Enter        → submit
+  //     Shift+Enter  → newline (default browser behavior; we don't touch it)
+  //
+  //   Mobile / iOS software keyboard:
+  //     Return       → newline (no forced-submit hijack; textarea default)
+  //     Send button  → submit (tap the .byte-send button in the composer)
+  //
+  // Previous version forcibly submitted on `insertLineBreak` beforeinput,
+  // which blocked all newline insertion on iOS (where that event fires for
+  // every Return press). Removed. Physical keyboards still get the fast
+  // Enter=submit path via keydown; mobile users tap the Send button.
   input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend(input.value);
-    }
-  });
-
-  input.addEventListener("beforeinput", (e) => {
-    // Only care about the Return key. `insertLineBreak` fires for
-    // Enter presses on iOS software keyboards (where keydown Enter
-    // sometimes doesn't reach us cleanly) and desktop with
-    // enterkeyhint="send". If a genuine multi-line paste happens,
-    // inputType is "insertFromPaste" — untouched.
-    if (e.inputType === "insertLineBreak") {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       handleSend(input.value);
     }

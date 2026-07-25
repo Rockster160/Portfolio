@@ -56,6 +56,8 @@ const ACTION_KIND_LABELS = {
   log_event:             "Log",
   edit_event:            "Edit log",
   delete_event:          "Delete log",
+  schedule_reminder:     "Remind",
+  cancel_reminder:       "Cancel reminder",
 };
 
 // Render (or re-render) into a container element. Container is expected
@@ -86,22 +88,24 @@ export function renderMultiSelect(container, message) {
     cb.disabled = isDecided;
     row.appendChild(cb);
 
-    // Action-kind prefix: small colored chip that tells the user WHAT
-    // this row does (Complete, Log, Add to list, Schedule, etc.) so
-    // they don't have to guess whether the checkbox will fire a chore
-    // completion or an event log.
+    // Body wraps [tiny-chip-on-top, label-below] so the action-kind
+    // sits ABOVE the item text instead of eating horizontal space
+    // beside it. The chip is intentionally tiny (~9px) since it's
+    // secondary metadata, not the primary content.
+    const body = document.createElement("span");
+    body.className = "byte-msg-action-body";
     const kindLabel = ACTION_KIND_LABELS[btn.tool_name];
     if (kindLabel) {
       const kind = document.createElement("span");
       kind.className = "byte-msg-action-kind";
       kind.textContent = kindLabel;
-      row.appendChild(kind);
+      body.appendChild(kind);
     }
-
     const label = document.createElement("span");
     label.className = "byte-msg-action-label";
     label.textContent = btn.label || `#${btn.id}`;
-    row.appendChild(label);
+    body.appendChild(label);
+    row.appendChild(body);
 
     const glyph = STATUS_GLYPHS[btn.status || "pending"];
     if (glyph) {

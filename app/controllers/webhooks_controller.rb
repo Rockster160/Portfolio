@@ -384,6 +384,23 @@ class WebhooksController < ApplicationController
       buddy_process_reply(message.user, message.byte_conversation, message)
     end
 
+    # Detect Anthropic usage-cap errors coming back through the failed-
+    # message path. Mac's error text includes "out of usage / resets X".
+    # If we can parse a reset time, flip the user to sleeping and rewrite
+    # the body to the friendly in-character sleeping reply so the user
+    # sees "Byte is sleeping" instead of the raw error.
+    if message.byte_conversation&.buddy? && %w[failed delivered].include?(message.state)
+      reset_at = ::Buddy::SleepGuard.parse_reset_time(message.body, default_tz: message.user.timezone)
+      if reset_at
+        ::Buddy::SleepGuard.sleep_until!(message.user, reset_at)
+        message.update!(
+          body:     ::Buddy::SleepGuard.sleeping_reply_body(message.user),
+          state:    :delivered,
+          metadata: (message.metadata || {}).merge("kind" => "buddy", "source" => "sleep_guard"),
+        )
+      end
+    end
+
     byte_broadcast(message.user, message)
     byte_notify(message.user, message) if message.state == "delivered" && message.saved_change_to_state?
 
@@ -677,21 +694,36 @@ class WebhooksController < ApplicationController
   # suppression can't beat iOS's `userVisibleOnly` enforcement.
   private def byte_notify(user, message)
     return unless message.state == "delivered"
-    return if byte_user_present?(user)
+
+    meta = message.metadata.is_a?(Hash) ? message.metadata : {}
+
+    # Buddy replies that carry a proposal checklist are a WAITING ASK -
+    # the user needs to tap boxes for anything to happen. These should
+    # NOT be suppressed by presence (the PWA might be "present" but
+    # backgrounded on a phone lock screen, or the presence heartbeat
+    # might be stale). Force-notify with a distinct framing.
+    has_proposals = meta["tool_name"] == "buddy_proposals" ||
+                    (meta["buttons"].is_a?(Array) && meta["buttons"].any?)
+
+    # Suppress the usual "you're present so skip" gate ONLY for high-
+    # priority asks. Normal chatter still respects presence.
+    return if !has_proposals && meta["kind"] != "action-request" && byte_user_present?(user)
 
     # Title: the conversation's own display name so you know which thread
     # pinged you at a glance. Falls back to "Byte" for orphaned messages.
     convo = message.byte_conversation
     title = (convo&.display_name.presence || "Byte")
 
-    meta = message.metadata.is_a?(Hash) ? message.metadata : {}
-
-    # Permission / plan / question requests deserve a distinct, louder
-    # framing so they're not lost in the stream of normal messages —
-    # Claude is BLOCKED until you answer. Prefix the tool name so the
-    # notification reads: "Claude wants: Bash · rm -rf /tmp/foo".
     body =
-      if meta["kind"] == "action-request"
+      if has_proposals
+        # Loud framing so a Buddy ask reads at a glance even in the
+        # notification tray. Count the pending buttons so we don't
+        # under-sell a "5 things to confirm" moment.
+        n_pending = Array(meta["buttons"]).count { |b| (b["status"] || "pending") == "pending" }
+        prefix = n_pending > 1 ? "☐ #{n_pending} to confirm" : "☐ Tap to confirm"
+        preview = clean_byte_body(message.body).truncate(120)
+        [prefix, preview].reject(&:empty?).join(" · ").truncate(160)
+      elsif meta["kind"] == "action-request"
         tool = meta["tool_name"].to_s
         sub  = meta["subtitle"].to_s
         prefix = case meta["action_kind"]

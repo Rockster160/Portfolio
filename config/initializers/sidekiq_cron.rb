@@ -41,6 +41,11 @@ cron_jobs = [
     cron:  every_minute,
   },
   {
+    name:  "Fire Due Buddy Reminders",
+    class: "BuddyReminderWorker",
+    cron:  every_minute,
+  },
+  {
     name:  "Google Calendar Sync Fallback",
     class: "GoogleCalendarSyncWorker",
     cron:  every_5_minutes,

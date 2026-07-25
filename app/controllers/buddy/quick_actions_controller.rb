@@ -47,31 +47,33 @@ module Buddy
 
     def trigger_today(conversation)
       body = <<~PROMPT.strip
-        Give a real read on today. Look at the actual state in context, don't wave at "the day" generically.
+        What's on for TODAY, forward-looking. This is a briefing about the day ahead, NOT a recap of yesterday or a review of what's already done.
 
-        WHERE TO LOOK:
-        - `chores_pending_today` - what's STILL OPEN for today. Reference these by name.
-        - `chores_done_today` - what's already been finished today.
-        - `today_agenda` - upcoming items with times.
-        - `recent_events` - what I've been up to today.
+        LEAD WITH what still needs to happen today:
+        - `chores_pending_today` - the primary answer. Name them.
+        - `today_agenda` - upcoming events / meetings with times.
         - `chores_hot_picks` - flagged for attention today.
-        - `emotional_state.pet_expression` + `last_check_in` - the current vibe.
 
-        If `chores_pending_today` has items, those are the real answer to "what's ahead". If it's empty, THEN it's a light night.
+        SECONDARY (mention only if genuinely relevant):
+        - `chores_done_today` - only if I've clearly gotten a lot done and it's worth acknowledging. Never lead with it. Never make it the point.
+
+        DO NOT USE:
+        - `recent_events` for anything with a timestamp older than this morning. Those are yesterday. This ask is about today, not a diary of the last 24 hours.
+        - "Yesterday you..." framing at all. Yesterday is done. Today is what I'm asking about.
+        - Motivational spin like "you crushed it yesterday, keep it up today". That's a review, not a briefing.
 
         HOW TO ANSWER:
-        - Two short sections is a fine shape: what's done, what's still open. Or a short list of pending items. Lists are OK when they're specific and short.
-        - Reference actual chores/events by name. "Wordle and Water are still open" beats "you've got some dailies left".
-        - One brief take on the shape (busy tail-end, mostly clear, one thing to prep for), grounded in the actual items, not vibes.
+        - Lead with pending / upcoming. Names, not vague gestures. "Wordle and Water are still open, and you've got a 2pm vet appt" beats "some dailies and a thing this afternoon".
+        - Short list OK when it helps skim ("Still pending: X, Y, Z"). One or two lines of prose for shape ("light morning, busier afternoon around the vet appt").
+        - If the day looks empty AND there are no dailies or scheduled items, keep it short and warm - a "not much on deck today, what are you thinking?" not a recap of yesterday.
 
-        HARD NO on filler / dismissive phrasing:
-        - "Quiet Friday" / "not a bad thing" / "you can just be done" / "tomorrow's got catching up" / "in the bag" - all off limits. They're meaningless when there are pending items sitting there.
-        - Do NOT push rest just because it's late. I frequently knock out dailies between 9 and 11 PM. If pending items exist, mention them; don't tell me to skip.
+        HARD NO:
+        - Never recap yesterday.
         - Never invent chores/events not in context.
+        - No filler like "quiet day", "not a bad thing", "in the bag".
+        - No "based on what I have" / "your context shows" / any scaffolding-talk.
 
-        IF CONTEXT IS EMPTY (no pending dailies, no agenda, no recent events beyond check-ins): do NOT announce that. Do not say "your context is empty", "nothing showing", "might want to refresh", "based on what I have". Instead give a warm short check-in reply like a friend hearing "what's up today?" would when there's nothing specific going on. One or two sentences, no scaffolding-talk.
-
-        Aim for maybe 4-6 short lines total when there IS data. Shorter when there isn't. Skimmable either way.
+        Aim for 3-5 short lines. Skimmable.
 
         #{TONE_REMINDER}
       PROMPT

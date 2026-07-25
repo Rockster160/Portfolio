@@ -101,14 +101,16 @@ export function setupSlashAutocomplete({ input, popover, autosize }) {
 
   // Given the current input value, decide whether to show the popover
   // and rebuild the filtered list. Only fires when the text STARTS with
-  // "/" — a slash mid-message isn't a command, it's punctuation.
+  // "/" AND the user is still typing the verb (no whitespace yet). Once
+  // they type a space they've moved into argument territory, at which
+  // point the popover is just noise blocking the actual composer view.
   const refresh = () => {
     const v = input.value || "";
     if (!v.startsWith("/")) { hide(); return; }
-    // Strip leading "/" and take only up to the first space (args don't
-    // filter the command list once the user has moved past the verb).
-    const rest = v.slice(1).split(/\s/, 1)[0].toLowerCase();
-    filtered = filter(rest);
+    const rest = v.slice(1);
+    // Past the verb (whitespace present) → hide. User is typing args now.
+    if (/\s/.test(rest)) { hide(); return; }
+    filtered = filter(rest.toLowerCase());
     highlight = 0;
     show();
   };
@@ -193,19 +195,17 @@ export function setupSlashAutocomplete({ input, popover, autosize }) {
   });
 }
 
-// Priority sort:
-//   prefix match on command name → 100
-//   substring match on command name → 50
-//   substring match on description → 10
-// Anything with a score of 0 is filtered out (unless the query is empty).
+// Name-only match. Description-substring matching was so permissive
+// that typing a common letter (like "t") barely narrowed the list -
+// almost every command had "t" somewhere in its description, so the
+// popover felt unresponsive. Prefix match ranks above substring match.
 function filter(query) {
   if (!query) return COMMANDS.slice();
   return COMMANDS
     .map((c) => {
       let score = 0;
-      if (c.name.startsWith(query)) score += 100;
-      else if (c.name.includes(query)) score += 50;
-      if (c.description.toLowerCase().includes(query)) score += 10;
+      if (c.name.startsWith(query))     score = 100;
+      else if (c.name.includes(query))  score = 50;
       return { c, score };
     })
     .filter((x) => x.score > 0)

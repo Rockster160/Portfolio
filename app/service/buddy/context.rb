@@ -29,8 +29,9 @@ module Buddy
         chores_done_today:    chore_buckets[:done_today],
         chores_hot_picks:     chore_buckets[:hot_picks],       # attention items
         chores_overdue_backlog: chore_buckets[:overdue_backlog], # long-term todo, NOT all-must-do-today
-        recent_events:     recent_events(user, now),
-        active_proposals:  active_proposals(user),
+        recent_events:       recent_events(user, now),
+        active_proposals:    active_proposals(user),
+        upcoming_reminders:  upcoming_reminders(user, now),
       }
     end
 
@@ -184,11 +185,17 @@ module Buddy
         false
       end
 
+      # Only TODAY's events. Previously used a rolling 24h window, which
+      # in the morning meant "mostly yesterday" - Buddy would then recap
+      # yesterday when asked about today. Anchoring to perceived_today's
+      # beginning-of-day matches how the Chores app groups completions
+      # and keeps Buddy focused on the current day.
       def recent_events(user, now)
         return [] unless user.respond_to?(:action_events)
 
+        start_of_today = user.perceived_today.beginning_of_day
         user.action_events
-          .where("timestamp >= ?", now - RECENT_EVENT_WINDOW)
+          .where("timestamp >= ?", start_of_today)
           .order(timestamp: :desc)
           .limit(15)
           .map { |e|
@@ -201,6 +208,25 @@ module Buddy
           }
       rescue => e
         Rails.logger.warn("[Buddy::Context] recent_events failed: #{e.class}: #{e.message}")
+        []
+      end
+
+      # Pending BuddyReminders scheduled in the next 48 hours. Lets Buddy
+      # notice existing reminders when the user asks something related,
+      # and see recently-scheduled ones to avoid double-booking.
+      def upcoming_reminders(user, now)
+        return [] unless defined?(BuddyReminder)
+
+        BuddyReminder.upcoming(now, 48).where(user_id: user.id).limit(15).map { |r|
+          {
+            id:      r.id,
+            fire_at: r.fire_at.in_time_zone(user.timezone).strftime("%a %-I:%M %p"),
+            kind:    r.kind,
+            body:    r.body.to_s.first(120),
+          }
+        }
+      rescue => e
+        Rails.logger.warn("[Buddy::Context] upcoming_reminders failed: #{e.class}: #{e.message}")
         []
       end
 

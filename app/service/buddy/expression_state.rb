@@ -6,7 +6,7 @@ module Buddy
   module ExpressionState
     module_function
 
-    EXPRESSIONS = %i[neutral happy thinking focused encouraging celebrating].freeze
+    EXPRESSIONS = %i[neutral happy thinking focused encouraging celebrating sleeping].freeze
 
     def transition!(user, event, **_opts)
       return if user.nil?

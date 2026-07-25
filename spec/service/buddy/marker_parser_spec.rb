@@ -10,7 +10,7 @@ RSpec.describe Buddy::MarkerParser do
         payload:   { name: "Coffee", notes: "oat milk" },
         span:      result[:markers].first[:span] },
     ])
-    expect(result[:display_text]).to eq("Sure — done")
+    expect(result[:display_text]).to eq("Sure —  done")
   end
 
   it "extracts multiple markers with mixed arg quoting" do
@@ -48,7 +48,7 @@ RSpec.describe Buddy::MarkerParser do
     expect(parsed[:side_effects]).to eq([
       { verb: :mood, body: "focused", span: parsed[:side_effects].first[:span] },
     ])
-    expect(parsed[:display_text]).to eq("I'm here for it. Tell me more.")
+    expect(parsed[:display_text]).to eq("I'm here for it.  Tell me more.")
   end
 
   it "extracts [[remember: fact]] side effects" do
