@@ -120,13 +120,13 @@ module ByteLocal
         # escaping — same idea, no free-form shell.
         payload[:buddy_tools_override] = "Read,Grep,Glob,WebSearch,WebFetch"
       rescue => e
-        # LOUD failure in dev - silent rescue here cost hours debugging
-        # phantom "why doesn't Buddy see chores / follow marker rules"
-        # behavior when the real cause was a class-loading race on
-        # user.first_name. In dev we re-raise so it surfaces immediately;
-        # in prod we log + swallow so a bug can't kill delivery to Mac.
-        Rails.logger.warn("[ByteLocal] buddy extras skipped: #{e.class}: #{e.message}\n  #{Array(e.backtrace).first(3).join("\n  ")}")
-        raise if Rails.env.development?
+        # LOUD failure in dev + slack ping in prod - silent rescue here
+        # cost hours debugging phantom "why doesn't Buddy see chores /
+        # follow marker rules" behavior when the real cause was a
+        # class-loading race on user.first_name. Errors.report re-raises
+        # in dev, pings Slack + logs at ERROR in prod, so this rescue
+        # cannot hide a bug in the buddy extras pipeline again.
+        Buddy::Errors.report(section: "byte_local.buddy_extras", exception: e, user: message.user)
       end
     end
 

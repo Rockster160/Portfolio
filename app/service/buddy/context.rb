@@ -71,7 +71,7 @@ module Buddy
             }
           }
       rescue => e
-        Rails.logger.warn("[Buddy::Context] today_agenda failed: #{e.class}: #{e.message}")
+        Buddy::Errors.report(section: "context.today_agenda", exception: e, user: user)
         []
       end
 
@@ -94,7 +94,7 @@ module Buddy
         # can say "you've done Water, still pending: Wordle, Teeth" instead
         # of vaguely gesturing at "your dailies". Without this every bucket
         # item looks identical and Buddy can't recommend specifics.
-        household_user_ids = user.chore_household&.user_ids || [user.id]
+        household_user_ids = user.chore_household&.member_user_ids || [user.id]
         done_today_ids = ChoreCompletion
           .where(user_id: household_user_ids, day_key: today)
           .pluck(:chore_id)
@@ -124,7 +124,7 @@ module Buddy
           overdue_backlog: overdue.filter_map     { |id| slim_chore(by_id[id]) }.first(20),
         }
       rescue => e
-        Rails.logger.warn("[Buddy::Context] chore buckets failed: #{e.class}: #{e.message}\n  #{Array(e.backtrace).first(8).join("\n  ")}")
+        Buddy::Errors.report(section: "context.chore_buckets", exception: e, user: user)
         default_buckets
       end
 
@@ -207,7 +207,7 @@ module Buddy
             }
           }
       rescue => e
-        Rails.logger.warn("[Buddy::Context] recent_events failed: #{e.class}: #{e.message}")
+        Buddy::Errors.report(section: "context.recent_events", exception: e, user: user)
         []
       end
 
@@ -226,7 +226,7 @@ module Buddy
           }
         }
       rescue => e
-        Rails.logger.warn("[Buddy::Context] upcoming_reminders failed: #{e.class}: #{e.message}")
+        Buddy::Errors.report(section: "context.upcoming_reminders", exception: e, user: user)
         []
       end
 
@@ -244,7 +244,7 @@ module Buddy
             }
           }
       rescue => e
-        Rails.logger.warn("[Buddy::Context] active_proposals failed: #{e.class}: #{e.message}")
+        Buddy::Errors.report(section: "context.active_proposals", exception: e, user: user)
         []
       end
     end

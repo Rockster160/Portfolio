@@ -97,7 +97,7 @@ module Buddy
       return user if name.to_s.downcase.in?(%w[me myself i])
       return nil if user.chore_household_id.nil?
 
-      candidates = User.where(id: user.chore_household&.user_ids || [])
+      candidates = User.where(id: user.chore_household&.member_user_ids || [])
       candidates.find { |u| u.first_name.to_s.downcase == name.to_s.downcase } ||
         candidates.find { |u| u.name.to_s.downcase.include?(name.to_s.downcase) }
     end

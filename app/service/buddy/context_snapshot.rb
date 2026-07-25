@@ -28,7 +28,7 @@ module Buddy
         context:    context,
       }
     rescue => e
-      Rails.logger.warn("[Buddy::ContextSnapshot] build failed: #{e.class}: #{e.message}")
+      Buddy::Errors.report(section: "context_snapshot.build", exception: e, user: user)
       nil
     end
   end

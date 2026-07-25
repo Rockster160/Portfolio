@@ -34,7 +34,17 @@ module Buddy
         reminder.update!(fired_at: Time.current)
       end
     rescue => e
-      Rails.logger.warn("[BuddyReminder] fire failed reminder=#{reminder.id}: #{e.class}: #{e.message}")
+      # Firing a reminder failing is a data-integrity event: the user
+      # asked to be reminded of something at a specific time and the
+      # nudge did not fire. Route through Buddy::Errors so it shows up
+      # in Slack immediately - a missed reminder in silent-log-only
+      # would go unnoticed for hours.
+      Buddy::Errors.report(
+        section:   "reminder_firer.fire",
+        exception: e,
+        user:      reminder.user,
+        extra:     { reminder_id: reminder.id, kind: reminder.kind },
+      )
     end
 
     class << self

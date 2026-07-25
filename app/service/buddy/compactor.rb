@@ -53,7 +53,12 @@ module Buddy
       conversation.update!(metadata: merged)
       recap
     rescue => e
-      Rails.logger.warn("[Buddy::Compactor] compact failed conv=#{conversation.id}: #{e.class}: #{e.message}")
+      Buddy::Errors.report(
+        section:   "compactor.compact",
+        exception: e,
+        user:      conversation.user,
+        extra:     { conversation_id: conversation.id },
+      )
       nil
     end
   end

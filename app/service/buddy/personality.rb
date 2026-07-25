@@ -264,7 +264,7 @@ module Buddy
         #{lines.join("\n")}
       TXT
     rescue => e
-      Rails.logger.warn("[Buddy::Personality] memories_block failed: #{e.class}: #{e.message}")
+      Buddy::Errors.report(section: "personality.memories_block", exception: e, user: user)
       nil
     end
 
