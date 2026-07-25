@@ -68,7 +68,7 @@ export function setupSlashAutocomplete({ input, popover, autosize }) {
       const args = c.args ? `<span class="byte-slash-args">${escapeHtml(c.args)}</span>` : "";
       return `
         <button type="button" class="byte-slash-row${active}" data-byte-slash-name="${escapeAttr(c.name)}" data-byte-slash-args="${escapeAttr(c.args || "")}" role="option">
-          <span class="byte-slash-name">/${escapeHtml(c.name)}</span>
+          <span class="byte-slash-name">${activePrefix}${escapeHtml(c.name)}</span>
           ${args}
           <span class="byte-slash-desc">${escapeHtml(c.description)}</span>
         </button>
@@ -106,14 +106,29 @@ export function setupSlashAutocomplete({ input, popover, autosize }) {
     highlight = 0;
   };
 
+  // Which prefix the user is currently typing (either "/" or "."). Both
+  // trigger the popover and dispatch identically server-side; we remember
+  // which one to preserve on insert so a `.new` completion doesn't
+  // silently flip to `/new` mid-type.
+  let activePrefix = "/";
+
+  const prefixOf = (v) => {
+    if (v.startsWith("/")) return "/";
+    if (v.startsWith(".")) return ".";
+    return null;
+  };
+
   // Given the current input value, decide whether to show the popover
   // and rebuild the filtered list. Only fires when the text STARTS with
-  // "/" AND the user is still typing the verb (no whitespace yet). Once
-  // they type a space they've moved into argument territory, at which
-  // point the popover is just noise blocking the actual composer view.
+  // a slash-command prefix ("/" or ".") AND the user is still typing the
+  // verb (no whitespace yet). Once they type a space they've moved into
+  // argument territory, at which point the popover is just noise blocking
+  // the actual composer view.
   const refresh = () => {
     const v = input.value || "";
-    if (!v.startsWith("/")) { hide(); return; }
+    const p = prefixOf(v);
+    if (!p) { hide(); return; }
+    activePrefix = p;
     const rest = v.slice(1);
     // Past the verb (whitespace present) → hide. User is typing args now.
     if (/\s/.test(rest)) { hide(); return; }
@@ -124,8 +139,9 @@ export function setupSlashAutocomplete({ input, popover, autosize }) {
 
   // Insert a command into the composer. Cursor lands after the command
   // (before any args) so the user can immediately type the argument.
+  // Uses whichever prefix the user was typing.
   const insert = (cmd) => {
-    const val = `/${cmd.name}${cmd.args ? " " : ""}`;
+    const val = `${activePrefix}${cmd.name}${cmd.args ? " " : ""}`;
     input.value = val;
     autosize?.();
     try {

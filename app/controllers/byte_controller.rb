@@ -27,7 +27,10 @@ class ByteController < ApplicationController
     # response is a system-kind inbound acknowledgement. Everything else
     # (/sessions, /switch, /adopt, /watch, /pwd, ...) falls through to
     # the Mac via the normal message pipeline.
-    if body.start_with?("/") && (handled = handle_rails_slash_command(conversation, body))
+    # Accept either "/" or "." as the slash-command prefix. Both feel
+    # natural on mobile (period is closer to the space bar than slash);
+    # the dispatcher strips whichever one was used.
+    if (body.start_with?("/") || body.start_with?(".")) && (handled = handle_rails_slash_command(conversation, body))
       return render(json: handled.as_wire, status: :ok)
     end
 
