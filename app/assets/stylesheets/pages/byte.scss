@@ -2347,7 +2347,7 @@ $expressions: neutral happy thinking focused encouraging celebrating sleeping;
   cursor: pointer;
   transition: background 100ms ease, border-color 100ms ease;
 
-  &:hover:not([data-status="executed"]):not([data-status="cancelled"]) {
+  &:hover:not([data-status="executed"]):not([data-status="cancelled"]):not([data-status="working"]) {
     background: rgba(255, 255, 255, 0.09);
     border-color: rgba(255, 255, 255, 0.14);
   }
@@ -2461,6 +2461,13 @@ $expressions: neutral happy thinking focused encouraging celebrating sleeping;
   &[data-status="partial"] {
     color: #E8A85C;
   }
+  // Optimistic in-flight state between the tap and the server's ✓ broadcast.
+  // The "…" glyph (from STATUS_GLYPHS) shows it's running; row is dimmed and
+  // its checkbox is already locked checked so a double-tap can't re-fire.
+  &[data-status="working"] {
+    opacity: 0.8;
+    .byte-msg-action-glyph { opacity: 0.9; }
+  }
 
   // Per-kind color hints on the chip so scanning the list is fast.
   &[data-tool-name="complete_chore"] .byte-msg-action-kind,
@@ -2484,59 +2491,9 @@ $expressions: neutral happy thinking focused encouraging celebrating sleeping;
     border-color: rgba(182, 139, 255, 0.28);
   }
 }
-.byte-msg-multi-select-submit {
-  // !important on every field because the app-wide `button` cascade
-  // in forms.scss (padding, gradient bg, border) otherwise flattens
-  // this into looking like plain text. Layered with heavy shadows
-  // + solid fill so it unambiguously reads as a physical button.
-  align-self: stretch !important;
-  display: block !important;
-  width: 100% !important;
-  margin-top: 8px !important;
-  padding: 14px 18px !important;
-  background: #3FA0FF !important;
-  background-image: linear-gradient(180deg, #4FB0FF, #2E90F0) !important;
-  color: #FFFFFF !important;
-  border: 1px solid #2A85E0 !important;
-  border-radius: 10px !important;
-  cursor: pointer !important;
-  font-size: 16px !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.02em !important;
-  text-align: center !important;
-  text-transform: none !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.25),
-    0 3px 0 rgba(0, 0, 0, 0.35),
-    0 6px 14px rgba(63, 160, 255, 0.35) !important;
-  transition: transform 90ms ease, background-image 100ms ease, box-shadow 100ms ease !important;
-  position: static !important;
-  top: 0 !important;
-
-  &:hover  {
-    background-image: linear-gradient(180deg, #6BBEFF, #3F9FF5) !important;
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.28),
-      0 3px 0 rgba(0, 0, 0, 0.35),
-      0 6px 18px rgba(63, 160, 255, 0.5) !important;
-  }
-  &:active {
-    transform: translateY(3px) !important;
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.2),
-      0 0 0 rgba(0, 0, 0, 0.35),
-      0 1px 4px rgba(63, 160, 255, 0.2) !important;
-  }
-
-  &:disabled {
-    opacity: 0.5 !important;
-    cursor: default !important;
-    background: rgba(255, 255, 255, 0.05) !important;
-    background-image: none !important;
-    border-color: rgba(255, 255, 255, 0.1) !important;
-    box-shadow: none !important;
-  }
-}
+// (The old .byte-msg-multi-select-submit "Confirm" button was removed —
+// Buddy proposals now trigger per-checkbox the moment they're tapped, so
+// there's no batch submit control to style.)
 
 // -------- Buddy check-in mood popover -------------------------------------
 // Inline flyout below the quick-action chips. Rendered small and adjacent

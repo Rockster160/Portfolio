@@ -58,7 +58,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   // hit a TDZ error on `liveExpireTimers`. See index.js's earlier
   // reload-clears-cursor work for the semantics.
   const liveExpireTimers = new WeakMap();
-  const LIVE_EXPIRE_MS   = 15000;
+  // Fallback window before a live bubble's cursor is dropped when NO further
+  // updates arrive. A tool call or a stretch of thinking legitimately runs
+  // longer than 15s with no intermediate stream, and the old 15s window made
+  // the cursor vanish mid-turn so the reply looked stuck/abandoned. 45s keeps
+  // the cursor alive across a normal tool call; a genuinely dead stream still
+  // clears within one window. (Buddy also emits a "Hang on, I'll look into
+  // it..." interim line before slow tool calls, which resets this timer.)
+  const LIVE_EXPIRE_MS   = 45000;
   function markLive(node) {
     node.classList.add("byte-msg-live");
     const prev = liveExpireTimers.get(node);
@@ -824,18 +831,40 @@ document.addEventListener("DOMContentLoaded", async () => {
     return gap < NEAR_BOTTOM_PX;
   }
 
+  // Pin to the bottom of the thread. "auto" runs a short settle loop that
+  // re-pins over the next several frames, so late layout shifts can't
+  // strand the newest content below the fold: a just-appended sent message,
+  // a proposal checklist rendering in, the composer autosizing back down,
+  // the mobile keyboard resizing the thread. A single double-rAF (the old
+  // approach) fired once and missed anything that grew a frame later —
+  // which is exactly why sending a message kept landing above the fold.
+  //
+  // The loop self-cancels the instant a real user scroll-up flips `atBottom`
+  // false (the thread scroll listener recomputes it), so it never fights an
+  // intentional scroll away from the bottom.
+  let stickRaf = 0;
   function scrollToBottom(behavior = "auto") {
-    requestAnimationFrame(() => {
+    atBottom = true;
+    clearUnread();
+    if (stickRaf) { cancelAnimationFrame(stickRaf); stickRaf = 0; }
+
+    if (behavior === "smooth") {
       requestAnimationFrame(() => {
-        if (behavior === "smooth") {
-          thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
-        } else {
-          thread.scrollTop = thread.scrollHeight;
-        }
-        atBottom = true;
-        clearUnread();
+        requestAnimationFrame(() => {
+          if (atBottom) thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
+        });
       });
-    });
+      return;
+    }
+
+    let frames = 0;
+    const step = () => {
+      if (!atBottom) { stickRaf = 0; return; }  // user scrolled up — stop fighting
+      thread.scrollTop = thread.scrollHeight;
+      frames += 1;
+      stickRaf = frames < 8 ? requestAnimationFrame(step) : 0;
+    };
+    stickRaf = requestAnimationFrame(step);
   }
 
   function clearUnread() {
@@ -1291,6 +1320,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       setV("[data-byte-version-apph]", `${h}`);
       setV("[data-byte-version-vvh]",  vvh != null ? `${vvh}` : "n/a");
       setV("[data-byte-version-winh]", `${wh}`);
+
+      // The thread's height is bound to --byte-app-h, so this resize just
+      // shrank/grew the scroll viewport (keyboard opening/closing, URL bar,
+      // rotation). If we were pinned to the bottom, re-pin — otherwise the
+      // keyboard opening leaves you scrolled a couple messages up from the
+      // newest one. iOS fires these visualViewport events repeatedly across
+      // the keyboard animation, so each one re-pins and the bottom tracks
+      // the shrink smoothly. Gated on atBottom so a scrolled-up reader is
+      // left where they are.
+      if (atBottom) scrollToBottom("auto");
     });
   };
   setAppHeight();

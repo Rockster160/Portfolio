@@ -1,74 +1,119 @@
 module Buddy
-  # Runs after the user submits their checkbox choices. Walks each button
-  # in the ByteAction; for checked ones (id in action.decision.value),
-  # dispatches through the tool; for unchecked ones, marks cancelled.
-  # Mutates buttons in-place with per-row status/result/error, persists
-  # the updated action, then posts a single receipt message summarizing.
+  # Executes checkbox proposals on a ByteAction. There are two shapes:
+  #
+  #   Incremental (Buddy checklists, the live path): `execute_ids` names the
+  #   specific rows the user just checked. Each is run; every OTHER row is
+  #   left pending and still tappable. The action only flips to :decided once
+  #   nothing is left pending. This is what lets a checkbox trigger the moment
+  #   it's tapped without cancelling the rows the user hasn't gotten to yet.
+  #
+  #   One-shot (legacy / non-Buddy multi-selects): `execute_ids` is nil, so
+  #   the checked set is read from the recorded decision and every UNchecked
+  #   row is a decline -> cancelled. The whole action decides in one pass.
+  #
+  # Rows already resolved (executed/partial/failed) are never re-run, so
+  # repeated taps and overlapping jobs are idempotent. The read-execute-write
+  # runs under `with_lock` so concurrent taps can't clobber the buttons JSON.
   module ProposalExecutor
     module_function
 
-    def perform(byte_action_id)
+    def perform(byte_action_id, execute_ids=nil)
       action = ByteAction.find(byte_action_id)
       user = action.user
-      checked = Array(action.decision.is_a?(Hash) ? action.decision["value"] : action.decision).map(&:to_i).to_set
+      incremental = !execute_ids.nil?
 
-      buttons = (action.buttons || []).map(&:deep_dup)
-      receipts = []
+      just_done = []
+      just_partial = []
+      just_failed = []
+      buttons = nil
 
-      buttons.each do |btn|
-        id = btn["id"].to_i
-        tool = Buddy::Tools[btn["tool_name"].to_sym]
-        if tool.nil?
-          btn["status"] = "failed"
-          btn["error_message"] = "unknown tool #{btn['tool_name']}"
-          next
-        end
+      action.with_lock do
+        # Re-read inside the lock so an earlier overlapping tap's writes are
+        # visible — that's what makes "skip already-resolved" actually skip.
+        buttons = (action.buttons || []).map(&:deep_dup)
 
-        unless checked.include?(id)
-          btn["status"] = "cancelled"
-          next
-        end
-
-        # Rehydrate a proposal-shaped hash so tool receipt/label procs can
-        # read from ctx.proposal["payload"] uniformly.
-        proposal_shape = { "id" => id, "payload" => btn["payload"], "tool_name" => btn["tool_name"] }
-        ctx = Buddy::ToolContext.new(user, proposal: proposal_shape)
-
-        count = (btn["count"] || 1).to_i
-        outcomes = []
-        count.times {
-          outcomes << Buddy::Tools.dispatch(tool, symbolize_payload(btn["payload"]), ctx)
-        }
-
-        if outcomes.all? { |o| o[:ok] }
-          btn["status"] = "executed"
-          btn["result"] = outcomes.first[:data]
-          receipts << safe_receipt(tool, outcomes.first[:data], ctx)
-        elsif outcomes.any? { |o| o[:ok] }
-          btn["status"] = "partial"
-          btn["result"] = outcomes.map { |o| o[:data] }
-          btn["error_message"] = outcomes.reject { |o| o[:ok] }.map { |o| o[:error] }.first
-          receipts << "Partial: #{btn['label']}"
+        requested = if incremental
+          Array(execute_ids).map(&:to_i).to_set
         else
-          btn["status"] = "failed"
-          btn["error_message"] = outcomes.first[:error]
+          Array(action.decision.is_a?(Hash) ? action.decision["value"] : action.decision).map(&:to_i).to_set
         end
+
+        buttons.each do |btn|
+          id = btn["id"].to_i
+          # Already acted on — never re-run (idempotent across repeat taps).
+          next if RESOLVED.include?(btn["status"].to_s)
+
+          unless requested.include?(id)
+            # Incremental leaves untouched rows pending (still tappable); the
+            # one-shot path treats an unchecked row as a decline.
+            btn["status"] = "cancelled" unless incremental
+            next
+          end
+
+          tool = Buddy::Tools[btn["tool_name"].to_sym]
+          if tool.nil?
+            btn["status"] = "failed"
+            btn["error_message"] = "unknown tool #{btn['tool_name']}"
+            just_failed << btn
+            next
+          end
+
+          # Rehydrate a proposal-shaped hash so tool receipt/label procs can
+          # read from ctx.proposal["payload"] uniformly.
+          proposal_shape = { "id" => id, "payload" => btn["payload"], "tool_name" => btn["tool_name"] }
+          ctx = Buddy::ToolContext.new(user, proposal: proposal_shape)
+
+          count = (btn["count"] || 1).to_i
+          outcomes = []
+          count.times {
+            outcomes << Buddy::Tools.dispatch(tool, symbolize_payload(btn["payload"]), ctx)
+          }
+
+          if outcomes.all? { |o| o[:ok] }
+            btn["status"] = "executed"
+            btn["result"] = outcomes.first[:data]
+            btn["receipt"] = safe_receipt(tool, outcomes.first[:data], ctx)
+            just_done << btn
+          elsif outcomes.any? { |o| o[:ok] }
+            btn["status"] = "partial"
+            btn["result"] = outcomes.map { |o| o[:data] }
+            btn["error_message"] = outcomes.reject { |o| o[:ok] }.map { |o| o[:error] }.first
+            just_partial << btn
+          else
+            btn["status"] = "failed"
+            btn["error_message"] = outcomes.first[:error]
+            just_failed << btn
+          end
+        end
+
+        # The action is done only when no row is still awaiting a tap.
+        all_resolved = buttons.none? { |b| b["status"].to_s == "pending" }
+        executed_ids = buttons.select { |b| RESOLVED.include?(b["status"].to_s) }.map { |b| b["id"] }
+
+        action.buttons  = buttons
+        action.decision = { "value" => executed_ids, "source" => "user" }
+        if all_resolved && action.pending?
+          action.state      = :decided
+          action.decided_at = Time.current
+        end
+        action.save!
       end
 
-      # Persist mutated buttons back onto both the action and its message.
-      action.update!(buttons: buttons)
+      # Broadcast the re-rendered checklist. Incremental stays "pending" while
+      # rows remain so the client keeps the untouched checkboxes live.
       msg = action.byte_message
       if msg
         new_meta = (msg.metadata || {}).merge(
-          "action_state" => "decided",
+          "action_state" => action.decided? ? "decided" : "pending",
           "buttons"      => buttons,
         )
         msg.update!(metadata: new_meta)
         broadcast(user, msg)
       end
 
-      # Emit one summary receipt message.
-      summary = compose_summary(buttons)
+      # Receipt covers ONLY what ran this pass — incremental must not re-list
+      # the whole checklist on every tap.
+      summary = compose_summary(just_done, just_partial, just_failed, incremental ? [] : buttons.select { |b| b["status"] == "cancelled" })
       unless summary.blank?
         receipt = action.byte_conversation.byte_messages.create!(
           user:         user,
@@ -81,17 +126,19 @@ module Buddy
         broadcast(user, receipt)
       end
 
-      # Expression cycle.
-      if buttons.any? { |b| b["status"] == "executed" || b["status"] == "partial" }
+      # Expression cycle — only shift when something actually happened this pass.
+      if just_done.any? || just_partial.any?
         Buddy::ExpressionState.transition!(user, :proposals_executed)
-      elsif buttons.all? { |b| b["status"] == "cancelled" }
-        Buddy::ExpressionState.transition!(user, :proposals_cancelled)
-      else
+      elsif just_failed.any?
         Buddy::ExpressionState.transition!(user, :tool_failed)
+      elsif !incremental && buttons.all? { |b| b["status"] == "cancelled" }
+        Buddy::ExpressionState.transition!(user, :proposals_cancelled)
       end
 
       action
     end
+
+    RESOLVED = %w[executed partial failed].freeze
 
     class << self
       private
@@ -107,12 +154,10 @@ module Buddy
         nil
       end
 
-      def compose_summary(buttons)
-        done      = buttons.select { |b| b["status"] == "executed" }
-        cancelled = buttons.select { |b| b["status"] == "cancelled" }
-        failed    = buttons.select { |b| b["status"] == "failed" }
-        partial   = buttons.select { |b| b["status"] == "partial" }
-
+      # Receipt is built from the rows that transitioned THIS pass (plus, for
+      # the one-shot path, the rows it just cancelled) — never the whole
+      # checklist, so an incremental tap only ever reports its own row.
+      def compose_summary(done, partial, failed, cancelled)
         parts = []
         parts << "Done: #{done.map { |b| b['label'] }.join(', ')} ✓" if done.any?
         parts << "Partial: #{partial.map { |b| b['label'] }.join(', ')}" if partial.any?

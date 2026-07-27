@@ -69,5 +69,43 @@ RSpec.describe ByteController, type: :controller do
       # The synthesised outbound message with body="kitchen" should be there.
       expect(jarvis_convo.byte_messages.outbound.last.body).to eq("kitchen")
     end
+
+    context "with a buddy_proposals action (incremental checkbox taps)" do
+      let(:buddy_convo) { user.byte_conversations.create!(name: "b", mode: :buddy) }
+
+      def proposal_action
+        ByteAction.create_request!(
+          user: user, conversation: buddy_convo, kind: :custom,
+          tool_name: "buddy_proposals", multi_select: true,
+          buttons: [
+            { "id" => 1, "label" => "A", "tool_name" => "spec_x", "payload" => {}, "status" => "pending" },
+            { "id" => 2, "label" => "B", "tool_name" => "spec_x", "payload" => {}, "status" => "pending" },
+          ],
+        )
+      end
+
+      it "enqueues the executor with the tapped ids and leaves the action pending" do
+        action = proposal_action
+
+        expect(Buddy::ProposalExecutorJob).to receive(:perform_later).with(action.id, [1])
+
+        post :respond_action, params: { request_id: action.request_id, value: [1] }
+
+        expect(response).to be_successful
+        # Incremental — the action is NOT decided by the tap itself; the
+        # executor decides it only once every row is resolved.
+        expect(action.reload).to be_pending
+      end
+
+      it "does not notify the Mac decision hook (no blocked hook waits on these)" do
+        action = proposal_action
+        allow(Buddy::ProposalExecutorJob).to receive(:perform_later)
+
+        expect(ByteLocal).not_to receive(:notify_action_decision)
+
+        post :respond_action, params: { request_id: action.request_id, value: [1] }
+        expect(response).to be_successful
+      end
+    end
   end
 end

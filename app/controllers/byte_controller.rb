@@ -171,7 +171,15 @@ class ByteController < ApplicationController
   def respond_action
     action = current_user.byte_actions.find_by(request_id: params[:request_id])
     return head(:not_found) if action.nil?
-    return head(:conflict)  unless action.pending?
+
+    # Buddy proposal checklists are incremental: each checkbox tap executes
+    # that one proposal and leaves the rest live, so the action stays pending
+    # across taps instead of being a single all-or-nothing decision. Its own
+    # path below; the standard apply_decision! flow (decide once -> decided,
+    # cancel the unchecked) is the wrong shape for it.
+    return respond_buddy_proposals(action) if action.tool_name == "buddy_proposals"
+
+    return head(:conflict) unless action.pending?
 
     value = params[:value]
     if action.multi_select
@@ -224,6 +232,21 @@ class ByteController < ApplicationController
         ByteJarvisWorker.perform_async(followup.id)
       end
     end
+
+    render json: action.as_wire
+  end
+
+  # Incremental checkbox tap on a Buddy proposal checklist. `value` is the id
+  # (or ids) the user just checked; the executor runs those and leaves every
+  # other row pending. No Mac decision-notify (no blocked hook waits on these)
+  # and no destructive apply_decision! — the action stays live until all rows
+  # are resolved or it expires. Repeat/overlapping taps are idempotent.
+  def respond_buddy_proposals(action)
+    return head(:conflict) unless action.pending? &&
+                                  (action.expires_at.nil? || action.expires_at.future?)
+
+    ids = Array(params[:value]).map(&:to_i).reject(&:zero?)
+    Buddy::ProposalExecutorJob.perform_later(action.id, ids) if ids.any?
 
     render json: action.as_wire
   end
