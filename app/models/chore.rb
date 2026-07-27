@@ -123,13 +123,16 @@ class Chore < ApplicationRecord
     foreign_key: :parent_chore_id,
     inverse_of: :parent_chore,
     dependent: :destroy
+  # Sub-chore taps now record `chore_id = self.id` directly (with
+  # `parent_chore_id` denormalized for parent-aggregate queries), so a
+  # sub-chore's `chore_completions` IS the complete history.
   has_many :chore_completions, dependent: :destroy
-  # Completions tapped against this chore acting as a sub-chore — their
-  # `chore_id` points at the parent, `sub_chore_id` at this row.
+  # Every completion under this chore acting as a PARENT — i.e. the
+  # completion's `chore_id` is one of this chore's sub-chores.
   has_many :sub_chore_completions,
     class_name: "ChoreCompletion",
-    foreign_key: :sub_chore_id,
-    inverse_of: :sub_chore,
+    foreign_key: :parent_chore_id,
+    inverse_of: :parent_chore,
     dependent: :nullify
   has_many :chore_hot_picks, dependent: :destroy
   has_many :chore_streaks, dependent: :destroy

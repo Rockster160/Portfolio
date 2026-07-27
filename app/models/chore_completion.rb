@@ -19,7 +19,7 @@
 #  updated_at                :datetime         not null
 #  chore_id                  :bigint           not null
 #  client_mutation_id        :string
-#  sub_chore_id              :bigint
+#  parent_chore_id           :bigint
 #  user_id                   :bigint           not null
 #
 class ChoreCompletion < ApplicationRecord
@@ -27,11 +27,14 @@ class ChoreCompletion < ApplicationRecord
 
   belongs_to :chore
   belongs_to :user
-  # When the user tapped a SubChore, `chore` is the parent (credited)
-  # and `sub_chore` records which sub-chore was actually tapped — so
-  # the sub-chore's card can show its own ring and the history view can
-  # render "Parent — SubChore" without losing the parent's payout.
-  belongs_to :sub_chore, class_name: "Chore", optional: true
+  # `chore_id` is the ACTUAL chore that was tapped. When the tapped chore
+  # is a sub-chore, `parent_chore_id` denormalizes `chore.parent_chore_id`
+  # so parent-level aggregations (the parent card's "done today across all
+  # sub-chores", threshold windows shared across siblings) are a single
+  # `WHERE parent_chore_id = X` away instead of a JOIN.
+  belongs_to :parent_chore, class_name: "Chore", optional: true
+
+  before_validation :sync_parent_chore_id
 
   # Fan out lifecycle as Jil triggers so users can wire automations
   # against chore completion + undo (e.g. log an ActionEvent, post to
@@ -80,8 +83,8 @@ class ChoreCompletion < ApplicationRecord
       action:                action,
       chore_id:              chore_id,
       chore_name:            chore&.name,
-      sub_chore_id:          sub_chore_id,
-      sub_chore_name:        sub_chore&.name,
+      parent_chore_id:       parent_chore_id,
+      parent_chore_name:     parent_chore&.name,
       paid_pebbles:          paid_pebbles,
       payout_skipped:        payout_skipped,
       skipped_reason:        skipped_reason,
@@ -96,6 +99,13 @@ class ChoreCompletion < ApplicationRecord
   end
 
   private
+
+  # Denormalized so sibling / parent-aggregate queries don't need a JOIN.
+  # Refreshed on every save — a completion moved to a different chore
+  # (History-page reassignment) picks up the new chore's parent.
+  def sync_parent_chore_id
+    self.parent_chore_id = chore&.parent_chore_id
+  end
 
   def fire_jil_create_trigger
     return if anonymous

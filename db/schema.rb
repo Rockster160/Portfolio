@@ -467,11 +467,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_27_164136) do
     t.text "note"
     t.float "streak_multiplier", default: 1.0, null: false
     t.boolean "anonymous", default: false, null: false
-    t.bigint "sub_chore_id"
     t.string "client_mutation_id"
+    t.bigint "parent_chore_id"
     t.index ["chore_id", "user_id", "day_key"], name: "index_chore_completions_on_chore_id_and_user_id_and_day_key"
     t.index ["chore_id"], name: "index_chore_completions_on_chore_id"
-    t.index ["sub_chore_id"], name: "index_chore_completions_on_sub_chore_id"
+    t.index ["parent_chore_id"], name: "index_chore_completions_on_parent_chore_id"
     t.index ["user_id", "client_mutation_id"], name: "index_chore_completions_on_user_and_mutation_id", unique: true, where: "(client_mutation_id IS NOT NULL)"
     t.index ["user_id", "completed_at"], name: "index_chore_completions_on_user_id_and_completed_at"
     t.index ["user_id", "day_key"], name: "index_chore_completions_on_user_id_and_day_key"
@@ -1450,7 +1450,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_27_164136) do
   add_foreign_key "byte_messages", "byte_conversations"
   add_foreign_key "byte_messages", "users"
   add_foreign_key "chore_completions", "chores"
-  add_foreign_key "chore_completions", "chores", column: "sub_chore_id"
+  add_foreign_key "chore_completions", "chores", column: "parent_chore_id"
   add_foreign_key "chore_completions", "users"
   add_foreign_key "chore_dailies", "chores", on_delete: :cascade
   add_foreign_key "chore_dailies", "users", on_delete: :cascade

@@ -75,7 +75,7 @@ RSpec.describe ChoreDailyResetWorker do
       parent = create(:chore, created_by_user: user, marked_due_at: 6.hours.ago, recurrence: { freq: :never })
       sub = create(:chore, created_by_user: user, parent_chore: parent, one_off: true)
       create(
-        :chore_completion, user: user, chore: parent, sub_chore: sub,
+        :chore_completion, user: user, chore: sub,
         completed_at: 1.hour.ago
       )
 
@@ -89,7 +89,7 @@ RSpec.describe ChoreDailyResetWorker do
       sub = create(:chore, created_by_user: user, parent_chore: parent, one_off: true,
         marked_due_at: 6.hours.ago)
       create(
-        :chore_completion, user: user, chore: parent, sub_chore: sub,
+        :chore_completion, user: user, chore: sub,
         completed_at: 1.hour.ago
       )
 

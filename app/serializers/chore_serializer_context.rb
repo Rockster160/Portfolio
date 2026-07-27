@@ -4,6 +4,14 @@
 #
 # `for_user` is the high-level entry point — give it the viewer, get
 # back a context preloaded for all of that user's accessible chores.
+#
+# Family-aware lookups: every by-chore hash answers "what's the state of
+# THIS chore" where "this chore" means either its own row (for leaves +
+# sub-chores) OR its own row PLUS every sub-chore tap under it (for
+# parents). Concretely, the SQL condition `chore_id = X OR parent_chore_id
+# = X` unifies both cases — a leaf/sub matches only via `chore_id`, a
+# parent matches via `chore_id` AND `parent_chore_id`. In Ruby we index
+# each completion into every accessible chore.id it belongs to.
 class ChoreSerializerContext
   attr_reader :viewer, :day, :hot_picks,
     :completions_today, :last_completion_by_chore,
@@ -12,15 +20,7 @@ class ChoreSerializerContext
     :completion_days_before_today_by_chore,
     :anchor_last_day_by_chore,
     :household_user_ids, :daily_chore_ids,
-    :household_icons_by_id,
-    # Sub-chore parallels: keyed by sub_chore_id rather than chore_id.
-    # Sub-chore cards must look at completions WHERE sub_chore_id =
-    # sub.id (the parent's chore_id rollup would include every other
-    # sibling's work).
-    :last_completion_by_sub_chore,
-    :last_completion_before_today_by_sub_chore,
-    :completion_actor_by_sub_chore,
-    :completions_today_by_sub_chore
+    :household_icons_by_id
 
   def self.for_user(viewer, day: nil)
     new(viewer: viewer, day: day || ChoreDay.current(viewer))
@@ -35,9 +35,12 @@ class ChoreSerializerContext
     chores = viewer.accessible_chores.includes(:parent_chore).to_a
     @chores_by_id = chores.index_by(&:id)
     @chore_ids = chores.map(&:id)
-    @household_chore_ids = chores.select(&:share_household?).map(&:id)
-    @personal_chore_ids  = @chore_ids - @household_chore_ids
-    @sub_chore_ids = chores.select(&:sub_chore?).map(&:id)
+    # Effective sharing mode follows the parent for sub-chores — the
+    # sub-chore's completions live under the parent's user scope
+    # (household-shared parents pull in every household member's taps).
+    @household_chore_ids, @personal_chore_ids = chores.partition { |c|
+      (c.parent_chore || c).share_household?
+    }.map { |set| set.map(&:id) }
     preload!
   end
 
@@ -85,14 +88,9 @@ class ChoreSerializerContext
     # outside the household", count here so the card reads as done.
     # The grey-ring treatment (last_actor_anonymous) is what tells
     # the user nobody in the household got credit.
-    @completions_today = ChoreCompletion
-      .where(day_key: day, chore_id: @personal_chore_ids, user_id: viewer.id)
-      .group(:chore_id).count
-      .merge(
-        ChoreCompletion
-          .where(day_key: day, chore_id: @household_chore_ids, user_id: household_user_ids)
-          .group(:chore_id).count,
-      )
+    @completions_today = bulk_completions_today(@personal_chore_ids, [viewer.id])
+      .merge(bulk_completions_today(@household_chore_ids, household_user_ids))
+
     # Carryover input for today_visible?: was the chore completed
     # since its last scheduled day? Household chores answer
     # household-wide; personal chores stay scoped to the viewer.
@@ -114,66 +112,33 @@ class ChoreSerializerContext
     # B's cooldown user scope, in one IN(...) GROUP BY. Keyed by B's
     # id so the serializer can look it up O(1).
     @anchor_last_day_by_chore = bulk_anchor_last_days
-
-    # Sub-chore preloads — same shape as the chore_id versions, but
-    # keyed by sub_chore_id. Cooldown user scope follows the PARENT's
-    # sharing mode (sub-chores credit the parent), so we look up the
-    # parent's scope, not the sub-chore's own column.
-    preload_sub_chore_lookups!
   end
 
-  def preload_sub_chore_lookups!
-    if @sub_chore_ids.empty?
-      @last_completion_by_sub_chore = {}
-      @last_completion_before_today_by_sub_chore = {}
-      @completion_actor_by_sub_chore = {}
-      @completions_today_by_sub_chore = {}
-      return
-    end
-
-    sub_personal, sub_household = @sub_chore_ids.partition { |id|
-      parent = @chores_by_id[id]&.parent_chore
-      parent && parent.share_personal?
-    }
-
-    @last_completion_by_sub_chore =
-      bulk_last_completion_for_sub(sub_personal, [viewer.id])
-        .merge(bulk_last_completion_for_sub(sub_household, household_user_ids))
-
-    @last_completion_before_today_by_sub_chore =
-      bulk_last_completion_before_day_for_sub(sub_personal, [viewer.id])
-        .merge(bulk_last_completion_before_day_for_sub(sub_household, household_user_ids))
-
-    @completion_actor_by_sub_chore = bulk_last_actor_for_sub(sub_household, household_user_ids)
-
-    personal_today = ChoreCompletion
-      .where(day_key: day, sub_chore_id: sub_personal, user_id: viewer.id)
-      .group(:sub_chore_id).count
-    household_today = ChoreCompletion
-      .where(day_key: day, sub_chore_id: sub_household, user_id: household_user_ids)
-      .group(:sub_chore_id).count
-    @completions_today_by_sub_chore = personal_today.merge(household_today)
-  end
-
+  # Every row is fanned into up to two hash entries: one keyed by
+  # `chore_id` (the leaf / sub-chore's own answer) and one keyed by
+  # `parent_chore_id` when set (the parent's aggregated answer). We
+  # only index keys that live in `chore_ids` — completions under a
+  # different pool (personal vs household) are ignored.
   def bulk_last_completion(chore_ids, user_ids)
     return {} if chore_ids.empty? || user_ids.empty?
 
-    ChoreCompletion
-      .where(user_id: user_ids, chore_id: chore_ids)
-      .select("DISTINCT ON (chore_id) chore_id, user_id, completed_at, payout_skipped, day_key, anonymous")
-      .order(:chore_id, completed_at: :desc)
-      .index_by(&:chore_id)
+    rows = ChoreCompletion
+      .where(user_id: user_ids)
+      .where("chore_id IN (:ids) OR parent_chore_id IN (:ids)", ids: chore_ids)
+      .select(:id, :chore_id, :parent_chore_id, :user_id, :completed_at, :payout_skipped, :day_key, :anonymous)
+      .order(completed_at: :desc)
+    fan_out_first(rows, chore_ids)
   end
 
   def bulk_last_completion_before_day(chore_ids, user_ids)
     return {} if chore_ids.empty? || user_ids.empty?
 
-    ChoreCompletion
-      .where(user_id: user_ids, chore_id: chore_ids)
-      .where(day_key: ...day)
-      .select("DISTINCT ON (chore_id) chore_id, user_id, completed_at, payout_skipped, day_key, anonymous")
-      .order(:chore_id, completed_at: :desc)
-      .index_by(&:chore_id)
+    rows = ChoreCompletion
+      .where(user_id: user_ids, day_key: ...day)
+      .where("chore_id IN (:ids) OR parent_chore_id IN (:ids)", ids: chore_ids)
+      .select(:id, :chore_id, :parent_chore_id, :user_id, :completed_at, :payout_skipped, :day_key, :anonymous)
+      .order(completed_at: :desc)
+    fan_out_first(rows, chore_ids)
   end
 
   def bulk_last_actor(chore_ids, user_ids)
@@ -183,55 +148,57 @@ class ChoreSerializerContext
     # so the ring color / "completed by" label only reflects the most
     # recent *credited* completion.
     rows = ChoreCompletion.credited
-      .where(user_id: user_ids, chore_id: chore_ids)
-      .select("DISTINCT ON (chore_id) chore_id, user_id")
-      .order(:chore_id, completed_at: :desc)
-    actor_user_ids = rows.map(&:user_id).uniq
-    actors = User.where(id: actor_user_ids).index_by(&:id)
-    rows.each_with_object({}) { |r, h| h[r.chore_id] = actors[r.user_id] }
+      .where(user_id: user_ids)
+      .where("chore_id IN (:ids) OR parent_chore_id IN (:ids)", ids: chore_ids)
+      .select(:id, :chore_id, :parent_chore_id, :user_id, :completed_at)
+      .order(completed_at: :desc)
+    picks = fan_out_first(rows, chore_ids)
+    actor_ids = picks.values.map(&:user_id).uniq
+    actors = User.where(id: actor_ids).index_by(&:id)
+    picks.transform_values { |c| actors[c.user_id] }
   end
 
-  def bulk_last_completion_for_sub(sub_ids, user_ids)
-    return {} if sub_ids.empty? || user_ids.empty?
+  def bulk_completions_today(chore_ids, user_ids)
+    return {} if chore_ids.empty? || user_ids.empty?
 
+    target = chore_ids.to_set
+    counts = Hash.new(0)
     ChoreCompletion
-      .where(user_id: user_ids, sub_chore_id: sub_ids)
-      .select("DISTINCT ON (sub_chore_id) sub_chore_id, chore_id, user_id, completed_at, payout_skipped, day_key, anonymous")
-      .order(:sub_chore_id, completed_at: :desc)
-      .index_by(&:sub_chore_id)
-  end
-
-  def bulk_last_completion_before_day_for_sub(sub_ids, user_ids)
-    return {} if sub_ids.empty? || user_ids.empty?
-
-    ChoreCompletion
-      .where(user_id: user_ids, sub_chore_id: sub_ids)
-      .where(day_key: ...day)
-      .select("DISTINCT ON (sub_chore_id) sub_chore_id, chore_id, user_id, completed_at, payout_skipped, day_key, anonymous")
-      .order(:sub_chore_id, completed_at: :desc)
-      .index_by(&:sub_chore_id)
-  end
-
-  def bulk_last_actor_for_sub(sub_ids, user_ids)
-    return {} if sub_ids.empty? || user_ids.empty?
-
-    rows = ChoreCompletion.credited
-      .where(user_id: user_ids, sub_chore_id: sub_ids)
-      .select("DISTINCT ON (sub_chore_id) sub_chore_id, user_id")
-      .order(:sub_chore_id, completed_at: :desc)
-    actor_user_ids = rows.map(&:user_id).uniq
-    actors = User.where(id: actor_user_ids).index_by(&:id)
-    rows.each_with_object({}) { |r, h| h[r.sub_chore_id] = actors[r.user_id] }
+      .where(day_key: day, user_id: user_ids)
+      .where("chore_id IN (:ids) OR parent_chore_id IN (:ids)", ids: chore_ids)
+      .pluck(:chore_id, :parent_chore_id).each do |cid, pid|
+        counts[cid] += 1 if target.include?(cid)
+        counts[pid] += 1 if pid && target.include?(pid)
+      end
+    counts
   end
 
   def bulk_completion_days(chore_ids, user_ids)
     return {} if chore_ids.empty? || user_ids.empty?
 
+    target = chore_ids.to_set
+    out = Hash.new { |h, k| h[k] = Set.new }
     ChoreCompletion
-      .where(user_id: user_ids, chore_id: chore_ids, day_key: (day - 14)..day)
-      .distinct.pluck(:chore_id, :day_key)
-      .group_by(&:first)
-      .transform_values { |entries| entries.to_set(&:last) }
+      .where(user_id: user_ids, day_key: (day - 14)..day)
+      .where("chore_id IN (:ids) OR parent_chore_id IN (:ids)", ids: chore_ids)
+      .pluck(:chore_id, :parent_chore_id, :day_key).each do |cid, pid, dk|
+        out[cid] << dk if target.include?(cid)
+        out[pid] << dk if pid && target.include?(pid)
+      end
+    out
+  end
+
+  # Walk `rows` (already ordered by completed_at DESC) and take the
+  # first row that lands on each accessible chore id. Each row can hit
+  # up to two entries: its own chore_id and its parent_chore_id.
+  def fan_out_first(rows, chore_ids)
+    target = chore_ids.to_set
+    out = {}
+    rows.each do |r|
+      out[r.chore_id] ||= r if target.include?(r.chore_id)
+      out[r.parent_chore_id] ||= r if r.parent_chore_id && target.include?(r.parent_chore_id)
+    end
+    out
   end
 
   # Build the {B.id => A's max credited day_key} hash.
@@ -254,9 +221,20 @@ class ChoreSerializerContext
 
       anchor_ids = group.map(&:anchor_chore_id).uniq
       user_ids = scope == :household ? household_user_ids : [viewer.id]
+      # Anchor completions can be sub-chore taps too — a parent-anchored
+      # follower fires when ANY sub-chore of the parent is credited.
+      # Same family-aware OR as the other lookups.
       last_days = ChoreCompletion.credited
-        .where(chore_id: anchor_ids, user_id: user_ids)
-        .group(:chore_id).maximum(:day_key)
+        .where(user_id: user_ids)
+        .where("chore_id IN (:ids) OR parent_chore_id IN (:ids)", ids: anchor_ids)
+        .pluck(:chore_id, :parent_chore_id, :day_key)
+        .each_with_object({}) { |(cid, pid, dk), h|
+          [cid, pid].each { |k|
+            next if k.nil? || !anchor_ids.include?(k)
+
+            h[k] = dk if h[k].nil? || dk > h[k]
+          }
+        }
 
       group.each { |c| out[c.id] = last_days[c.anchor_chore_id] }
     }

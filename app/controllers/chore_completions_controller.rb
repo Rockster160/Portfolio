@@ -24,8 +24,8 @@ class ChoreCompletionsController < ApplicationController
       # broadcast to the recorder so their device refreshes (household
       # channels are per-user, and the recorder may not be the actor).
       if credit_user.id != current_user.id
-        related_sub = (tapped if tapped.id != result.completion.chore_id)
-        ChoreBroadcaster.broadcast_changes!(current_user, result.completion.chore, related: related_sub, actor_tab_id: params[:tab_id])
+        related = (tapped.parent_chore if tapped.sub_chore?)
+        ChoreBroadcaster.broadcast_changes!(current_user, tapped, related: related, actor_tab_id: params[:tab_id])
       end
       render json: response_payload(tapped, result.completion).merge(
         skipped:        result.skipped?,
@@ -36,14 +36,12 @@ class ChoreCompletionsController < ApplicationController
       return
     end
 
-    # Sub-chore taps credit the parent the same way ChoreCompleter does
-    # — anonymous or not, the chore_id column always points at the
-    # creditable row. Without this, the parent's schedule + cooldown
-    # would silently ignore an anonymous tap of a sub-chore.
-    credit = tapped.parent_chore || tapped
+    # Anonymous sub-chore taps record chore_id = leaf just like a
+    # credited tap; parent_chore_id auto-syncs from chore.parent_chore_id
+    # so the parent's shared cooldown / carryover queries still see the
+    # tap.
     completion = ChoreCompletion.create!(
-      chore:          credit,
-      sub_chore_id:   (tapped.id if tapped.id != credit.id),
+      chore:          tapped,
       user:           current_user,
       completed_at:   completed_at,
       day_key:        ChoreDay.current(current_user, at: completed_at),
@@ -52,8 +50,8 @@ class ChoreCompletionsController < ApplicationController
       anonymous:      true,
       note:           params[:note].to_s,
     )
-    related_sub = (tapped if tapped.id != credit.id)
-    ChoreBroadcaster.broadcast_changes!(current_user, credit, related: related_sub, actor_tab_id: params[:tab_id])
+    related = (tapped.parent_chore if tapped.sub_chore?)
+    ChoreBroadcaster.broadcast_changes!(current_user, tapped, related: related, actor_tab_id: params[:tab_id])
     render json: response_payload(tapped, completion).merge(anonymous: true), status: :created
   end
 
@@ -176,12 +174,12 @@ class ChoreCompletionsController < ApplicationController
         return
       end
 
-      credit_chore = completion.chore
+      leaf = completion.chore
       day_at_delete = completion.day_key
       completion.destroy!
-      rebuild_streak(credit_chore, day_at_delete)
-      related_sub = (tapped if tapped.id != credit_chore.id)
-      ChoreBroadcaster.broadcast_changes!(current_user, credit_chore, related: related_sub, actor_tab_id: params[:tab_id])
+      rebuild_streak(leaf, day_at_delete)
+      related = (leaf.parent_chore if leaf.sub_chore?)
+      ChoreBroadcaster.broadcast_changes!(current_user, leaf, related: related, actor_tab_id: params[:tab_id])
       render json: response_payload(tapped, nil)
       return
     end
@@ -191,20 +189,16 @@ class ChoreCompletionsController < ApplicationController
     # completion (their record is theirs to undo). Anonymous
     # completions are administrative audits — the tap-undo gesture
     # never targets them; they're only edited via the History page.
-    # Sub-chore card undo: find by sub_chore_id (not chore_id — that
-    # would catch any sibling sub-chore's parent-credited row).
-    column, value = tapped.sub_chore? ? [:sub_chore_id, tapped.id] : [:chore_id, tapped.id]
     completion = current_user.chore_completions
       .credited
-      .where(column => value, day_key: day)
+      .where(chore_id: tapped.id, day_key: day)
       .order(completed_at: :desc).first
 
     if completion
-      credit_chore = completion.chore
       completion.destroy!
-      rebuild_streak(credit_chore, day)
-      related_sub = (tapped if tapped.id != credit_chore.id)
-      ChoreBroadcaster.broadcast_changes!(current_user, credit_chore, related: related_sub, actor_tab_id: params[:tab_id])
+      rebuild_streak(tapped, day)
+      related = (tapped.parent_chore if tapped.sub_chore?)
+      ChoreBroadcaster.broadcast_changes!(current_user, tapped, related: related, actor_tab_id: params[:tab_id])
       render json: response_payload(tapped, nil)
     else
       render json: { error: "no completion to undo" }, status: :not_found
@@ -309,13 +303,18 @@ class ChoreCompletionsController < ApplicationController
 
   # After a destroy, recompute the streak from scratch using the most
   # recent paid completion. A user undoing today's completion shouldn't
-  # leave a phantom-incremented streak behind.
+  # leave a phantom-incremented streak behind. Streaks are keyed on the
+  # parent (sub-chore taps advance the parent's streak), so both the
+  # streak lookup and the completion history sweep the whole family.
   def rebuild_streak(chore, _day)
-    streak = ChoreStreak.find_by(user_id: current_user.id, chore_id: chore.id)
+    credit_id = chore.parent_chore_id || chore.id
+    streak = ChoreStreak.find_by(user_id: current_user.id, chore_id: credit_id)
     return if streak.blank?
 
-    last_paid = current_user.chore_completions
-      .where(chore_id: chore.id, payout_skipped: false, anonymous: false)
+    family_scope = current_user.chore_completions
+      .where("chore_id = :id OR parent_chore_id = :id", id: credit_id)
+    last_paid = family_scope
+      .where(payout_skipped: false, anonymous: false)
       .order(completed_at: :desc).first
 
     if last_paid.nil?
@@ -324,12 +323,13 @@ class ChoreCompletionsController < ApplicationController
     end
 
     # Walk backward day-by-day from the last paid completion; count
-    # consecutive days with at least one paid (non-anonymous) completion.
+    # consecutive days with at least one paid (non-anonymous) completion
+    # anywhere in the family.
     cursor = last_paid.day_key
     count = 0
     loop do
-      had = current_user.chore_completions
-        .exists?(chore_id: chore.id, day_key: cursor, payout_skipped: false, anonymous: false)
+      had = family_scope
+        .exists?(day_key: cursor, payout_skipped: false, anonymous: false)
       break unless had
 
       count += 1

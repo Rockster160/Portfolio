@@ -79,13 +79,12 @@ class ChoreDailyResetWorker
 
   # One-off chores stay visible the day they're completed; the next-day
   # reset archives anything that was completed at least once (by anyone).
-  # COALESCE so sub-chore completions (chore_id = parent, sub_chore_id =
-  # sub) archive the SUB, not the parent — and the `one_off: true`
-  # filter naturally excludes the persistent parent if it appears in
-  # the same completion's chore_id.
+  # `chore_id` is the tapped leaf (sub-chores record their own id here),
+  # and the `one_off: true` filter naturally excludes any persistent
+  # parent that appears in the same day's completions.
   def archive_completed_one_offs!(day)
     completed_ids = ChoreCompletion.where(day_key: day - 1)
-      .pluck(Arel.sql("DISTINCT COALESCE(sub_chore_id, chore_id)"))
+      .distinct.pluck(:chore_id)
     Chore.active.where(one_off: true).where(id: completed_ids).update_all(archived_at: Time.current)
   end
 
@@ -93,19 +92,21 @@ class ChoreDailyResetWorker
   # postdates the mark. Held until rollover (instead of clearing in a
   # ChoreCompletion callback) so today_visible? and scheduled_due_on
   # stay stable across same-day completions — the Today tab's contents
-  # only change at the chore-day boundary.
+  # only change at the chore-day boundary. Sub-chore taps also clear
+  # the parent's mark — a Supplements mark stays satisfied by any
+  # Cymbalta / Focus completion under it.
   def clear_completed_marked_due!
-    parent_ids = ChoreCompletion
+    direct_ids = ChoreCompletion
       .joins("INNER JOIN chores ON chores.id = chore_completions.chore_id")
       .where.not(chores: { marked_due_at: nil })
       .where("chore_completions.completed_at > chores.marked_due_at")
       .distinct.pluck("chores.id")
-    sub_ids = ChoreCompletion
-      .joins("INNER JOIN chores ON chores.id = chore_completions.sub_chore_id")
+    parent_ids = ChoreCompletion
+      .joins("INNER JOIN chores ON chores.id = chore_completions.parent_chore_id")
       .where.not(chores: { marked_due_at: nil })
       .where("chore_completions.completed_at > chores.marked_due_at")
       .distinct.pluck("chores.id")
-    ids = (parent_ids + sub_ids).uniq
+    ids = (direct_ids + parent_ids).uniq
     return if ids.empty?
 
     Chore.where(id: ids).update_all(marked_due_at: nil, updated_at: Time.current)
@@ -229,11 +230,7 @@ class ChoreDailyResetWorker
     overdue_ids = Set.new
     return [today_ids, overdue_ids] if prior_only.empty?
 
-    completion_days = ChoreCompletion
-      .where(chore_id: prior_only.map(&:id), day_key: (day - HOT_OVERDUE_WINDOW)..day)
-      .distinct.pluck(:chore_id, :day_key)
-      .group_by(&:first)
-      .transform_values { |entries| entries.to_set(&:last) }
+    completion_days = family_completion_days(prior_only.map(&:id), (day - HOT_OVERDUE_WINDOW)..day)
 
     prior_only.each { |c|
       last_scheduled = ((day - HOT_OVERDUE_WINDOW)..(day - 1)).reverse_each.find { |d| c.matches_day?(d) }
@@ -268,11 +265,7 @@ class ChoreDailyResetWorker
     # Bulk-load every completion day in the look-back window in one query
     # — avoids per-chore .exists? lookups in the carryover branch.
     candidates = future_only
-    completion_days = ChoreCompletion
-      .where(chore_id: candidates.map(&:id), day_key: (day - HOT_OVERDUE_WINDOW)..day)
-      .distinct.pluck(:chore_id, :day_key)
-      .group_by(&:first)
-      .transform_values { |entries| entries.to_set(&:last) }
+    completion_days = family_completion_days(candidates.map(&:id), (day - HOT_OVERDUE_WINDOW)..day)
 
     overdue = candidates.select { |c|
       last_scheduled = ((day - HOT_OVERDUE_WINDOW)..(day - 1)).reverse_each.find { |d| c.matches_day?(d) }
@@ -307,14 +300,24 @@ class ChoreDailyResetWorker
     fixed_window = fixed_thresholds.max || 0
 
     lookup_ids = threshold_chores.map { |c| effective_cooldown_id(c) }.uniq
+    # Family-aware: sub-chore taps record chore_id = leaf, so match
+    # `parent_chore_id IN lookup_ids` too. Then index each row under
+    # whichever id lands in `lookup_ids` — the credit / parent side.
     rows = ChoreCompletion
-      .where(chore_id: lookup_ids, payout_skipped: false)
+      .where(payout_skipped: false)
+      .where("chore_id IN (:ids) OR parent_chore_id IN (:ids)", ids: lookup_ids)
       .where("completed_at >= :ts OR day_key = :day", ts: now - fixed_window.seconds, day: day)
       .order(completed_at: :desc)
-      .pluck(:chore_id, :completed_at, :day_key)
+      .pluck(:chore_id, :parent_chore_id, :completed_at, :day_key)
 
+    lookup_set = lookup_ids.to_set
     last_by_chore = {}
-    rows.each { |chore_id, ts, dk| last_by_chore[chore_id] ||= [ts, dk] }
+    rows.each { |cid, pid, ts, dk|
+      key = if lookup_set.include?(pid) then pid
+      elsif lookup_set.include?(cid) then cid
+      end
+      last_by_chore[key] ||= [ts, dk] if key
+    }
 
     chores.reject { |chore|
       threshold = effective_threshold(chore, parents).to_i
@@ -330,6 +333,26 @@ class ChoreDailyResetWorker
         (ts + threshold.seconds) > now
       end
     }
+  end
+
+  # Family-aware `{chore_id => Set<day_key>}` — for each id in `ids`,
+  # include days when the chore itself was tapped (`chore_id` match) OR
+  # when any of its sub-chores was tapped (`parent_chore_id` match). A
+  # sub-chore's own row is keyed only under its leaf id; a parent's row
+  # aggregates all sub-chore taps under its id.
+  def family_completion_days(ids, day_range)
+    return {} if ids.empty?
+
+    target = ids.to_set
+    out = Hash.new { |h, k| h[k] = Set.new }
+    ChoreCompletion
+      .where(day_key: day_range)
+      .where("chore_id IN (:ids) OR parent_chore_id IN (:ids)", ids: ids)
+      .distinct.pluck(:chore_id, :parent_chore_id, :day_key).each do |cid, pid, dk|
+        out[cid] << dk if target.include?(cid)
+        out[pid] << dk if pid && target.include?(pid)
+      end
+    out
   end
 
   # Single IN-query lookup of every parent chore referenced by `chores`.

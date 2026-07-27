@@ -47,11 +47,11 @@ RSpec.describe "SubChore behavior" do
   describe ChoreCompleter, "with sub-chores" do
     let(:sub) { create(:chore, created_by_user: user, parent_chore: parent, one_off: true, reward_pebbles: 3, icon: "🛠️") }
 
-    it "credits the parent and stamps sub_chore_id" do
+    it "records the leaf as chore_id and denormalizes the parent" do
       result = described_class.new(sub, user).call
       completion = result.completion
-      expect(completion.chore_id).to eq(parent.id)
-      expect(completion.sub_chore_id).to eq(sub.id)
+      expect(completion.chore_id).to eq(sub.id)
+      expect(completion.parent_chore_id).to eq(parent.id)
       expect(completion.paid_pebbles).to eq(3) # sub's reward, not parent's
     end
 
@@ -102,7 +102,7 @@ RSpec.describe "SubChore behavior" do
   describe ChoreSerializer, "for sub-chores" do
     let(:sub) { create(:chore, created_by_user: user, parent_chore: parent, one_off: true, reward_pebbles: 3) }
 
-    it "done_count_today is keyed by sub_chore_id, not chore_id" do
+    it "each sub-chore's count is scoped to its own taps; parent rolls up across siblings" do
       sibling = create(:chore, created_by_user: user, parent_chore: parent, one_off: true, reward_pebbles: 3)
       ChoreCompleter.new(sibling, user).call
 
@@ -136,12 +136,11 @@ RSpec.describe "SubChore behavior" do
       expect(ChoreHotPick.where(day_key: day, chore_id: one_off.id)).to exist
     end
 
-    it "archive_completed_one_offs! archives sub-chores via sub_chore_id" do
+    it "archive_completed_one_offs! archives the tapped sub-chore, not the parent" do
       sub = create(:chore, created_by_user: user, parent_chore: parent, one_off: true, reward_pebbles: 3)
       yesterday = ChoreDay.current(user) - 1
       ChoreCompletion.create!(
-        chore: parent,
-        sub_chore_id: sub.id,
+        chore: sub,
         user: user,
         completed_at: yesterday.to_time + 12.hours,
         day_key: yesterday,

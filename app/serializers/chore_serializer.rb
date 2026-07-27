@@ -185,33 +185,26 @@ class ChoreSerializer
   end
 
   def done_count_today
-    if ctx
-      return ctx.completions_today_by_sub_chore.fetch(chore.id, 0) if chore.sub_chore?
-
-      return ctx.completions_today.fetch(chore.id, 0)
-    end
+    return ctx.completions_today.fetch(chore.id, 0) if ctx
 
     # All completions count — including ones recorded as "done by
     # someone outside the household" — so the card visually reads as
     # done. The ring color (set via last_actor_anonymous? below) is
-    # what distinguishes who, if anyone, gets credit. Sub-chores look
-    # up by sub_chore_id so each sibling's card tracks its own taps.
-    column, value = chore.sub_chore? ? [:sub_chore_id, chore.id] : [:chore_id, chore.id]
+    # what distinguishes who, if anyone, gets credit. Parent chores
+    # roll up their sub-chore taps via the parent_chore_id OR branch;
+    # sub-chores + standalone chores only match their own chore_id.
     @done_count_today ||= ChoreCompletion
-      .where(column => value, user_id: cooldown_scope_user_ids, day_key: day)
+      .where(user_id: cooldown_scope_user_ids, day_key: day)
+      .where("chore_id = :id OR parent_chore_id = :id", id: chore.id)
       .count
   end
 
   def last_completion
-    if ctx
-      return ctx.last_completion_by_sub_chore[chore.id] if chore.sub_chore?
+    return ctx.last_completion_by_chore[chore.id] if ctx
 
-      return ctx.last_completion_by_chore[chore.id]
-    end
-
-    column, value = chore.sub_chore? ? [:sub_chore_id, chore.id] : [:chore_id, chore.id]
     @last_completion ||= ChoreCompletion
-      .where(column => value, user_id: cooldown_scope_user_ids)
+      .where(user_id: cooldown_scope_user_ids)
+      .where("chore_id = :id OR parent_chore_id = :id", id: chore.id)
       .order(completed_at: :desc).first
   end
 
@@ -223,16 +216,11 @@ class ChoreSerializer
   # visibility input — a skipped completion and a paid completion
   # both represent the user acting on the chore.
   def last_completion_before_today
-    if ctx
-      return ctx.last_completion_before_today_by_sub_chore[chore.id] if chore.sub_chore?
+    return ctx.last_completion_before_today_by_chore[chore.id] if ctx
 
-      return ctx.last_completion_before_today_by_chore[chore.id]
-    end
-
-    column, value = chore.sub_chore? ? [:sub_chore_id, chore.id] : [:chore_id, chore.id]
     @last_completion_before_today ||= ChoreCompletion
-      .where(column => value, user_id: cooldown_scope_user_ids)
-      .where(day_key: ...day)
+      .where(user_id: cooldown_scope_user_ids, day_key: ...day)
+      .where("chore_id = :id OR parent_chore_id = :id", id: chore.id)
       .order(completed_at: :desc).first
   end
 
@@ -247,9 +235,9 @@ class ChoreSerializer
     # Fallback when no preloaded context — single lookup. Anonymous
     # completions never get an actor, so the credited filter is fine
     # here too.
-    column, value = chore.sub_chore? ? [:sub_chore_id, chore.id] : [:chore_id, chore.id]
     last = ChoreCompletion.credited
-      .where(column => value, user_id: cooldown_scope_user_ids)
+      .where(user_id: cooldown_scope_user_ids)
+      .where("chore_id = :id OR parent_chore_id = :id", id: chore.id)
       .order(completed_at: :desc).first
     return nil if last.nil? || last.user_id == viewer.id
 
@@ -265,9 +253,9 @@ class ChoreSerializer
     actor = actor_from_ctx
     return actor.username if actor
 
-    column, value = chore.sub_chore? ? [:sub_chore_id, chore.id] : [:chore_id, chore.id]
     last = ChoreCompletion.credited
-      .where(column => value, user_id: cooldown_scope_user_ids)
+      .where(user_id: cooldown_scope_user_ids)
+      .where("chore_id = :id OR parent_chore_id = :id", id: chore.id)
       .order(completed_at: :desc).first
     return nil if last.nil?
     return viewer.username if last.user_id == viewer.id
@@ -278,7 +266,7 @@ class ChoreSerializer
   def actor_from_ctx
     return nil unless ctx
 
-    chore.sub_chore? ? ctx.completion_actor_by_sub_chore[chore.id] : ctx.completion_actor_by_chore[chore.id]
+    ctx.completion_actor_by_chore[chore.id]
   end
 
   # True when the most recent completion of this chore — across the
@@ -452,7 +440,8 @@ class ChoreSerializer
       done_set.none? { |d| d >= last_scheduled_day && d < day }
     else
       ChoreCompletion
-        .where(user_id: viewer.id, chore_id: chore.id, day_key: last_scheduled_day..(day - 1))
+        .where(user_id: viewer.id, day_key: last_scheduled_day..(day - 1))
+        .where("chore_id = :id OR parent_chore_id = :id", id: chore.id)
         .none?
     end
   end

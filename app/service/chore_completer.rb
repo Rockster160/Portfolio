@@ -12,12 +12,13 @@ class ChoreCompleter
   }
 
   def initialize(chore, user, at: Time.current, note: nil)
-    # `tapped` is the chore the user actually tapped. For a sub-chore,
-    # the completion record credits the parent (`credit`), but the
-    # reward amount comes off the tapped sub-chore — sub-chores carry
-    # their own `reward_pebbles` (copied from parent at create, editable).
+    # `tapped` is the actual chore (leaf) — recorded on the completion's
+    # `chore_id`. `credit` is the parent for a sub-chore tap, else tapped
+    # itself; streak / cooldown / threshold semantics stay shared across
+    # a parent's sub-chore family so tapping any Supplement puts them all
+    # on cooldown and advances the one Supplements streak.
     @tapped = chore
-    @chore = chore.parent_chore || chore
+    @credit = chore.parent_chore || chore
     @user = user
     @at = at
     @note = note
@@ -45,16 +46,11 @@ class ChoreCompleter
 
   private
 
-  attr_reader :chore, :tapped, :user, :at, :note, :day
-
-  def sub_chore_id
-    tapped.id == chore.id ? nil : tapped.id
-  end
+  attr_reader :credit, :tapped, :user, :at, :note, :day
 
   def build_completion
     ChoreCompletion.new(
-      chore:             chore,
-      sub_chore_id:      sub_chore_id,
+      chore:             tapped,
       user:              user,
       completed_at:      at,
       day_key:           day,
@@ -74,16 +70,20 @@ class ChoreCompleter
   # The timer never resets — we look back from `at` to find the last
   # PAID completion among the relevant user(s).
   def apply_threshold!(record)
-    return if chore.threshold_seconds.blank? || chore.threshold_seconds.to_i.zero?
+    return if credit.threshold_seconds.blank? || credit.threshold_seconds.to_i.zero?
 
-    scope_user_ids = chore.cooldown_scope_user_ids(user)
+    scope_user_ids = credit.cooldown_scope_user_ids(user)
+    # Cooldown is shared across every sub-chore under the same parent —
+    # `where(chore_id = credit.id OR parent_chore_id = credit.id)` sweeps
+    # up both a direct tap on the parent and any sibling sub-chore tap.
     last_paid = ChoreCompletion
-      .where(user_id: scope_user_ids, chore_id: chore.id, payout_skipped: false)
+      .where(user_id: scope_user_ids, payout_skipped: false)
+      .where("chore_id = :id OR parent_chore_id = :id", id: credit.id)
       .where(completed_at: ...at)
       .order(completed_at: :desc).first
     return if last_paid.blank?
 
-    if chore.cooldown_until_day_reset?
+    if credit.cooldown_until_day_reset?
       # Day-reset cooldown: blocked only if a paid completion already
       # exists in the same ChoreDay window. Once we cross 4am (or
       # whatever ChoreDay::CUTOFF_HOURS is), the cooldown is gone.
@@ -94,7 +94,7 @@ class ChoreCompleter
       return
     end
 
-    window_end = last_paid.completed_at + chore.threshold_seconds.seconds
+    window_end = last_paid.completed_at + credit.threshold_seconds.seconds
     return unless at < window_end
 
     record.payout_skipped = true
@@ -107,9 +107,9 @@ class ChoreCompleter
     # sub-chore can be hot-picked independently), fall back to the
     # parent's. This is how completing "Refactor X" satisfies the
     # Projects hot pick — and how a sub-chore's own hot multiplier
-    # "bubbles up" into the parent-credited completion record.
+    # bubbles up into a sub-chore tap.
     hot = ChoreHotPick.find_by(day_key: day, chore_id: tapped.id)
-    hot ||= ChoreHotPick.find_by(day_key: day, chore_id: chore.id) if tapped.id != chore.id
+    hot ||= ChoreHotPick.find_by(day_key: day, chore_id: credit.id) if tapped.id != credit.id
     hot_multiplier = hot&.multiplier || 1.0
 
     streak_count = current_streak_count + 1 # this completion advances it
@@ -136,10 +136,10 @@ class ChoreCompleter
   # multiplicative integers (capped at 5x); bonuses are additive (uncapped).
   # Pebble-threshold kinds use chore_id IS NULL — they apply to any chore.
   def combined_streak_payout(streak_count)
-    household_id = user.chore_household_id || chore.chore_household_id
+    household_id = user.chore_household_id || credit.chore_household_id
     bonuses = ChoreStreakBonus.active
       .where(chore_household_id: household_id)
-      .applicable_to(chore.id)
+      .applicable_to(credit.id)
     return [1, 0, []] if bonuses.empty?
 
     breakdown = bonuses.map { |b|
@@ -157,7 +157,7 @@ class ChoreCompleter
   end
 
   def current_streak_count
-    streak = ChoreStreak.find_by(user_id: user.id, chore_id: chore.id)
+    streak = ChoreStreak.find_by(user_id: user.id, chore_id: credit.id)
     return 0 if streak.blank? || streak.last_completed_day.blank?
     return streak.current_streak if streak.last_completed_day == day
     return streak.current_streak if streak.last_completed_day == day - 1
@@ -166,7 +166,7 @@ class ChoreCompleter
   end
 
   def sync_streak!(_record)
-    streak = ChoreStreak.find_or_initialize_by(user_id: user.id, chore_id: chore.id)
+    streak = ChoreStreak.find_or_initialize_by(user_id: user.id, chore_id: credit.id)
     last = streak.last_completed_day
     if last.nil? || last < day - 1
       streak.current_streak = 1
@@ -179,11 +179,11 @@ class ChoreCompleter
   end
 
   def broadcast!
-    # Sub-chore taps ride along in the same broadcast via `related:` —
-    # the receiver refreshes state for both ids from one signal instead
-    # of firing two separate fan-outs.
-    related = (tapped if tapped.id != chore.id)
-    ChoreBroadcaster.broadcast_changes!(user, chore, related: related)
+    # Sub-chore taps refresh both the leaf (tapped) and its parent in one
+    # broadcast — parent card's aggregate count changes when a sub-chore
+    # is completed, so the receiver has to redraw both.
+    related = (credit if credit.id != tapped.id)
+    ChoreBroadcaster.broadcast_changes!(user, tapped, related: related)
   end
 
   # Two-unit, integer-only duration formatter. NEVER produces decimals.
