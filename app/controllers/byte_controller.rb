@@ -10,8 +10,10 @@ class ByteController < ApplicationController
   MAX_LIMIT     = 200
 
   def show
-    @conversations = current_user.byte_conversations.active.ordered.to_a
-    @conversation  = @conversations.first || ByteConversation.default_for(current_user)
+    scope = current_user.byte_conversations.active.ordered
+    scope = scope.buddy if buddy_only?
+    @conversations = scope.to_a
+    @conversation  = @conversations.first || default_conversation
     @messages      = @conversation.byte_messages.chronological.last(HISTORY_LIMIT)
   end
 
@@ -108,7 +110,8 @@ class ByteController < ApplicationController
   end
 
   def create_conversation
-    mode = normalized_mode(params[:mode])
+    # Buddy-only members can never spin up a claude/bash/jarvis thread.
+    mode = buddy_only? ? :buddy : normalized_mode(params[:mode])
     name = params[:name].to_s.strip.presence
 
     convo = current_user.byte_conversations.create!(
@@ -283,7 +286,7 @@ class ByteController < ApplicationController
   # Long-lived PWAs eventually outlive the CSRF token baked into the
   # initial shell.
   def csrf
-    return head :forbidden unless current_user&.me?
+    return head :forbidden unless byte_accessible?
 
     render json: { token: form_authenticity_token }
   end
@@ -291,7 +294,31 @@ class ByteController < ApplicationController
   private
 
   def authorize_owner
-    head :forbidden unless current_user&.me?
+    head :forbidden unless byte_accessible?
+  end
+
+  # Who may open Byte at all: the owner (Rocco) and Chelsea. No one else —
+  # the page dispatches Bash/Claude to the owner's Mac, so it is
+  # deliberately not a general-user surface.
+  def byte_accessible?
+    current_user&.me? || current_user&.chelsea?
+  end
+
+  # Non-owner household members get Buddy ONLY. claude/bash/jarvis modes
+  # hand off to the owner's Mac, so they stay owner-exclusive; everyone
+  # else is pinned to :buddy for both new conversations and dispatch.
+  def buddy_only?
+    !current_user&.me?
+  end
+
+  # First-open conversation. Owners get the normal claude default; buddy-only
+  # members get a Buddy conversation so the page has something to show.
+  def default_conversation
+    if buddy_only?
+      current_user.byte_conversations.create!(name: :Buddy, mode: :buddy)
+    else
+      ByteConversation.default_for(current_user)
+    end
   end
 
   # Resolve the target conversation for this request. Falls back to the
@@ -363,6 +390,7 @@ class ByteController < ApplicationController
       broadcast_convo_change(conversation, :archived)
       ack(conversation, "Archived **#{conversation.display_name}**")
     when "mode"
+      return ack(conversation, "Buddy is the only mode available to you.") if buddy_only?
       new_mode = normalized_mode(arg)
       return ack(conversation, "usage: `/mode claude|bash|jarvis|buddy`") if arg.empty?
       conversation.update!(mode: new_mode)
@@ -412,6 +440,11 @@ class ByteController < ApplicationController
   # * jarvis → in-process worker; skips the Mac entirely
   # * claude / bash → hand off to the Mac via ByteLocal
   def dispatch_message(conversation, message)
+    # Safety net: a buddy-only member must never reach the owner's Mac via a
+    # claude/bash/jarvis conversation. Creation + /mode are already locked,
+    # so this only fires on an unexpected legacy state — refuse the handoff.
+    return if buddy_only? && !conversation.buddy?
+
     if conversation.jarvis?
       ByteJarvisWorker.perform_async(message.id)
       return

@@ -2046,7 +2046,12 @@ dialog.byte-modal {
 // both stay visible when the keyboard opens.
 
 .byte-buddy-hero {
-  display: flex;
+  // Hidden by default — the hero belongs ONLY to Buddy conversations. Its
+  // visibility is driven by the ambient `data-active-mode` on .byte-app
+  // (server-rendered and kept in sync on every switch), NOT by a JS
+  // `hidden` toggle, which raced conversation switches and leaked the hero
+  // into claude/bash/jarvis threads.
+  display: none;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
@@ -2077,6 +2082,12 @@ dialog.byte-modal {
   &[hidden] {
     display: none;
   }
+}
+// Only Buddy conversations get the hero. This ambient gate is authoritative
+// (higher specificity than the base rule), so no JS visibility toggle is
+// needed or trusted.
+.byte-app[data-active-mode="buddy"] .byte-buddy-hero {
+  display: flex;
 }
 
 // Shrink on composer focus (keyboard open on mobile). :has isn't in the

@@ -157,7 +157,7 @@ module Buddy
 
       Words the household uses. Understand them on the way IN (match them to the right chore/person/thing) and speak them naturally on the way OUT.
 
-      - **"Dailies"** = the person's daily/Goals chores - their `chores_pending_today` rotation. "How are my dailies looking?" is "what's left on my today list".
+      - **"Dailies"** = basic chores meant to be done every day - the person's daily/Goals chores, their `chores_pending_today` rotation. "How are my dailies looking?" is "what's left on my today list".
       - **Muti** = medicine. "Took my muti" = they took their medicine.
       - **Boot** = the car's trunk. (British-ism, not footwear.)
       - **Whisper** = their dog. Also called **"puppy"** or **"the dog"**. All three mean Whisper.

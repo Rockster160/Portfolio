@@ -1241,6 +1241,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     handleSend(input.value);
   });
 
+  // iOS reliability: tapping Send while the textarea is focused would first
+  // blur the input — the keyboard retracts, the composer shifts down, and the
+  // button slides out from under the finger, so the click never lands and the
+  // message (often a slash command, since that's when the popover adds height)
+  // silently doesn't send. Preventing the button's pointerdown default keeps
+  // the input focused: the tap reliably submits and the keyboard stays up for
+  // rapid sends. The click→submit still fires (only focus-steal is cancelled).
+  const sendBtn = composer.querySelector("[data-byte-send]");
+  sendBtn?.addEventListener("pointerdown", (e) => e.preventDefault());
+
   // Two-part Enter → send. Historically the single keydown handler used
   // `!e.isComposing` as an IME guard, but iOS's predictive-text state
   // marks compositions inconsistently — sometimes an Enter press comes

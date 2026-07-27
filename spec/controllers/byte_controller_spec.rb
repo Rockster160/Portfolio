@@ -25,6 +25,43 @@ RSpec.describe ByteController, type: :controller do
 
       expect(response).to have_http_status(:forbidden)
     end
+
+    it "lets Chelsea in, scoped to a Buddy conversation" do
+      chelsea = create(:user, id: 58_128)
+      sign_in chelsea
+
+      get :show
+
+      expect(response).to be_successful
+      expect(chelsea.byte_conversations.reload.map(&:mode)).to all(eq("buddy"))
+    end
+  end
+
+  describe "Chelsea is buddy-only" do
+    let(:chelsea) { create(:user, id: 58_128) }
+
+    before { sign_in chelsea }
+
+    it "forces new conversations to buddy mode regardless of params" do
+      post :create_conversation, params: { name: "shell", mode: "bash" }
+
+      expect(chelsea.byte_conversations.order(:id).last.mode).to eq("buddy")
+    end
+
+    it "refuses /mode switches" do
+      convo = chelsea.byte_conversations.create!(name: :Buddy, mode: :buddy)
+
+      post :create_message, params: { conversation_id: convo.id, body: "/mode bash" }
+
+      expect(convo.reload.mode).to eq("buddy")
+    end
+
+    it "never dispatches a non-buddy conversation to the Mac" do
+      convo = chelsea.byte_conversations.create!(name: :Legacy, mode: :claude)
+      expect(ByteLocal).not_to receive(:deliver)
+
+      post :create_message, params: { conversation_id: convo.id, body: "hi" }
+    end
   end
 
   describe "POST #create_message" do
