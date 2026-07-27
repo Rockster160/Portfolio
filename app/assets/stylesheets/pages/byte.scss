@@ -510,11 +510,40 @@ html.html-ctr-byte body {
     opacity: 0.7;
   }
 
-  // Queued state kept as an alias of pending — the JS no longer sets it
-  // (bubbles go straight to pending on send), but any old cached DOM /
-  // localStorage entries still carrying the class render identically.
+  // Queued = held because Buddy is asleep / the channel is down. Slightly
+  // more present than pending (it's deliberately waiting, not mid-flight)
+  // and paired with the cancel ✕.
   &.byte-msg-queued {
-    opacity: 0.7;
+    opacity: 0.82;
+  }
+
+  // Cancel ✕ — sits just left of the (right-aligned) outbound bubble. Hidden
+  // by default; JS reveals it only while the message is still cancellable.
+  // Position is pinned on every state to defeat the global `button:active`
+  // position trap that would otherwise jump it on tap.
+  .byte-msg-cancel {
+    position: absolute;
+    left: -30px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    margin: 0;
+    border: none;
+    border-radius: 50%;
+    line-height: 22px;
+    font-size: 12px;
+    text-align: center;
+    background: rgba(248, 113, 113, 0.18);
+    color: #FCA5A5;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+
+    &:hover  { background: rgba(248, 113, 113, 0.30); }
+    &:active { position: absolute; top: 50%; transform: translateY(-50%); }
+    &[hidden] { display: none; }
   }
 
   &.byte-msg-failed {
@@ -882,6 +911,37 @@ html.html-ctr-byte body {
     background: rgba(63, 160, 255, 0.14) !important;
     box-shadow: inset 2px 0 0 var(--bs-accent);
   }
+}
+
+// Persistent sleeping chip, pinned just above the composer while Buddy is
+// asleep. Small and quiet (it's ambient status, not an alert) but always
+// visible until Byte wakes.
+.byte-sleep-chip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 auto 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bs-subtle, #9fb2c8);
+  background: rgba(63, 160, 255, 0.10);
+  border: 1px solid rgba(63, 160, 255, 0.22);
+
+  &[hidden] { display: none; }
+
+  .byte-sleep-chip-dot {
+    font-size: 13px;
+    line-height: 1;
+    animation: byte-sleep-pulse 2.6s ease-in-out infinite;
+  }
+}
+@keyframes byte-sleep-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
 }
 
 .byte-app .byte-composer {
@@ -2176,13 +2236,9 @@ dialog.byte-modal {
   // the keyframes so the animation doesn't clobber it.
   animation: buddy-thinking-tap-shifted 1.6s ease-in-out infinite;
 }
-// Byte's new raster thinking face carries its own thought-cloud, so the
-// separate arm-tap layer is gone for Byte (asset removed). Moss keeps its
-// SVG arm.
-.byte-buddy-hero[data-buddy-theme="moss"][data-buddy-expression="thinking"]
-  .byte-buddy-arm {
-  background-image: image-url("buddy/moss/arm_thinking.svg");
-}
+// Both themes' raster thinking faces carry their own cue (Byte a
+// thought-cloud, Moss a "?" + pondering hand), so the separate arm-tap
+// layer is gone for both — no arm asset referenced.
 .byte-buddy-hero[data-buddy-expression="thinking"] .byte-buddy-char {
   animation: buddy-thinking-tilt 2.4s ease-in-out infinite;
 }
@@ -2220,21 +2276,22 @@ dialog.byte-modal {
   }
 }
 
-// Body — Byte now ships hand-illustrated raster art (PNG); Moss stays on
-// its SVG kit until a Moss raster set exists.
+// Body layer. Byte ships a faceless slime body (the face is a transparent
+// overlay). Moss's expressions are each a COMPLETE ball (the face art is the
+// whole character), so Moss has no separate body — the face layer is
+// everything and the body layer stays empty.
 .byte-buddy-hero[data-buddy-theme="byte"] .byte-buddy-body {
   background-image: image-url("buddy/byte/body.png");
 }
 .byte-buddy-hero[data-buddy-theme="moss"] .byte-buddy-body {
-  background-image: image-url("buddy/moss/body.svg");
+  background-image: none;
 }
 
-// Face per theme + expression. Byte ships the full raster set (PNG) — every
-// face in the folder is wired so the debug picker can switch to any of them.
-// Moss only has its original 7 SVGs, so it gets its own shorter list;
-// referencing a missing moss SVG would fail asset precompile.
+// Face per theme + expression. Both themes now ship a full raster set (PNG);
+// every face in the folder is wired so the debug picker can switch to any of
+// them. Each entry must have a matching face_#{name}.png or precompile fails.
 $byte_expressions: neutral neutral_blush happy uwu encouraging annoyed sad crying thinking nerd sleeping sleeping_frown;
-$moss_expressions: neutral happy thinking focused encouraging celebrating sleeping;
+$moss_expressions: neutral happy grin star loving wink sad crying surprised shocked angry frustrated content queasy sleeping unamused thinking dizzy;
 @each $expr in $byte_expressions {
   .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$expr}"]
     .byte-buddy-face {
@@ -2255,7 +2312,18 @@ $byte_expr_aliases: ("focused": "annoyed", "celebrating": "uwu");
 @each $expr in $moss_expressions {
   .byte-buddy-hero[data-buddy-theme="moss"][data-buddy-expression="#{$expr}"]
     .byte-buddy-face {
-    background-image: image-url("buddy/moss/face_#{$expr}.svg");
+    background-image: image-url("buddy/moss/face_#{$expr}.png");
+  }
+}
+// Server-driven moods that Moss has no identically-named art for, aliased to
+// the closest expression: encouraging→grin (warm beam), celebrating→star
+// (starry-eyed), focused→surprised (alert/careful). neutral/happy/thinking/
+// sleeping map directly to same-named faces above.
+$moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "surprised");
+@each $mood, $face in $moss_expr_aliases {
+  .byte-buddy-hero[data-buddy-theme="moss"][data-buddy-expression="#{$mood}"]
+    .byte-buddy-face {
+    background-image: image-url("buddy/moss/face_#{$face}.png");
   }
 }
 

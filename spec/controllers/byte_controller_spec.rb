@@ -37,6 +37,42 @@ RSpec.describe ByteController, type: :controller do
     end
   end
 
+  describe "DELETE #delete_message" do
+    before { sign_in rocco }
+
+    let(:convo) { rocco.byte_conversations.create!(name: :Buddy, mode: :buddy) }
+
+    it "cancels a queued message" do
+      msg = convo.byte_messages.create!(user: rocco, direction: :outbound, body: "held", state: :queued)
+
+      expect {
+        delete :delete_message, params: { id: msg.id }
+      }.to change { ByteMessage.exists?(msg.id) }.from(true).to(false)
+
+      expect(response).to have_http_status(:no_content)
+    end
+
+    it "refuses to cancel a message that already dispatched" do
+      msg = convo.byte_messages.create!(user: rocco, direction: :outbound, body: "sent", state: :sent)
+
+      delete :delete_message, params: { id: msg.id }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(ByteMessage.exists?(msg.id)).to be(true)
+    end
+
+    it "won't touch another user's message" do
+      other = create(:user)
+      convo2 = other.byte_conversations.create!(name: :Buddy, mode: :buddy)
+      msg = convo2.byte_messages.create!(user: other, direction: :outbound, body: "held", state: :queued)
+
+      delete :delete_message, params: { id: msg.id }
+
+      expect(response).to have_http_status(:not_found)
+      expect(ByteMessage.exists?(msg.id)).to be(true)
+    end
+  end
+
   describe "Chelsea is buddy-only" do
     let(:chelsea) { create(:user, id: 58_128) }
 

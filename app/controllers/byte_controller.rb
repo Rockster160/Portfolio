@@ -99,6 +99,24 @@ class ByteController < ApplicationController
     }
   end
 
+  # Cancel a message the user queued while Buddy was asleep, before it
+  # drains. Only :queued messages are cancellable — anything already
+  # dispatched (sent/delivered) is out of the user's hands.
+  def delete_message
+    message = current_user.byte_messages.find_by(id: params[:id])
+    return head(:not_found) if message.nil?
+    return head(:unprocessable_entity) unless message.queued?
+
+    conversation_id = message.byte_conversation_id
+    message.destroy!
+    MonitorChannel.broadcast_to(current_user, {
+      id:      MONITOR_CHANNEL,
+      channel: MONITOR_CHANNEL,
+      data:    { kind: :message_deleted, message_id: params[:id].to_i, byte_conversation_id: conversation_id },
+    })
+    head :no_content
+  end
+
   # ---------- conversation management ----------
 
   def list_conversations
@@ -450,29 +468,19 @@ class ByteController < ApplicationController
       return
     end
 
-    # If Buddy is currently asleep (Anthropic usage cap), don't try to
-    # dispatch - post an in-character "sleeping until X" reply directly
-    # and let the wake time tick down. Only applies to :buddy mode;
-    # Claude / bash still dispatch as normal.
+    # If Buddy is currently asleep (Anthropic usage cap), HOLD the message
+    # in the queue rather than dispatching or bouncing a canned reply. The
+    # persistent sleeping chip on the client communicates the state, and
+    # BuddyWakeWorker drains these in order when the wake window passes.
+    # Only applies to :buddy mode; claude / bash still dispatch as normal.
     if conversation.buddy? && ::Buddy::SleepGuard.sleeping?(current_user)
-      message.update!(state: :sent)
-      reply = conversation.byte_messages.create!(
-        user:         current_user,
-        direction:    :inbound,
-        state:        :delivered,
-        body:         ::Buddy::SleepGuard.sleeping_reply_body(current_user),
-        metadata:     { kind: "buddy", source: "sleep_guard" },
-        delivered_at: Time.current,
-      )
+      message.update!(state: :queued)
       broadcast(message.reload)
-      broadcast(reply)
       return
     end
 
     # Auto-wake if the sleep window has passed.
     ::Buddy::SleepGuard.maybe_wake!(current_user) if conversation.buddy?
-
-    user = current_user  # capture for the thread (current_user is request-scoped)
 
     # Fire-and-forget to the local Mac server. If it fails, the message
     # sits in :pending / :failed - surfaced in the UI so the user can retry.
@@ -486,43 +494,28 @@ class ByteController < ApplicationController
     # touch DB from a manually-spawned thread.
     Thread.new {
       Rails.application.executor.wrap do
-        begin
-          # Compact BEFORE dispatch when the conversation is getting
-          # heavy. Failure to compact is non-fatal; the turn still ships.
-          if conversation.buddy?
-            reason = ::Buddy::Compactor.should_compact?(conversation)
-            ::Buddy::Compactor.compact!(conversation) if reason
-          end
-
-          response = ByteLocal.deliver(message, conversation: conversation)
-          ok       = response.is_a?(Net::HTTPSuccess)
-          message.update!(state: ok ? :sent : :failed)
-          broadcast(message.reload)
-
-          # Mac unreachable / non-success on a Buddy turn: sleep Buddy so
-          # subsequent messages short-circuit at the top of dispatch
-          # instead of spawning more failing threads that hold DB
-          # connections. Sleep is short (3 min) so recovery is quick
-          # once Mac is back; the SleepGuard.maybe_wake! at the top of
-          # the next dispatch clears it automatically.
-          if conversation.buddy? && !ok && !::Buddy::SleepGuard.sleeping?(user)
-            ::Buddy::SleepGuard.sleep_until!(user, 3.minutes.from_now)
-            offline = conversation.byte_messages.create!(
-              user:         user,
-              direction:    :inbound,
-              state:        :delivered,
-              body:         ::Buddy::SleepGuard.sleeping_reply_body(user),
-              metadata:     { kind: "buddy", source: "sleep_guard_offline" },
-              delivered_at: Time.current,
-            )
-            broadcast(offline)
-          end
-        rescue => e
-          Rails.logger.warn("[Byte] deliver thread crashed: #{e.class}: #{e.message}")
-          message.update!(state: :failed) rescue nil
-          broadcast(message.reload) rescue nil
+        # For :buddy turns this shares the exact delivery path used by the
+        # wake-drain (compaction, state, broadcast, sleep-on-failure). For
+        # claude / bash it's a plain Mac handoff.
+        if conversation.buddy?
+          ::Buddy::TurnDispatcher.deliver!(message)
+        else
+          deliver_plain(message, conversation)
         end
       end
     }
+  end
+
+  # Non-buddy (claude / bash) delivery: fire at the Mac, reflect success in
+  # the message state, and broadcast. No sleep semantics.
+  def deliver_plain(message, conversation)
+    response = ByteLocal.deliver(message, conversation: conversation)
+    ok       = response.is_a?(Net::HTTPSuccess)
+    message.update!(state: ok ? :sent : :failed)
+    broadcast(message.reload)
+  rescue => e
+    Rails.logger.warn("[Byte] deliver thread crashed: #{e.class}: #{e.message}")
+    message.update!(state: :failed) rescue nil
+    broadcast(message.reload) rescue nil
   end
 end

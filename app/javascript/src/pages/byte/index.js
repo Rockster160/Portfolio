@@ -29,6 +29,7 @@ import {
   readLegacyQueue,
   clearLegacyQueue,
   clearAll as clearQueue,
+  removeByLocalId as removeQueued,
 } from "./queue";
 import { configure as configureApi, sendMessage, drainQueue } from "./api";
 import {
@@ -93,6 +94,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const jumpBtn   = app.querySelector("[data-byte-jump]");
   const jumpCount = app.querySelector("[data-byte-jump-count]");
   const heroEl    = app.querySelector("[data-buddy-hero]");
+  const sleepChip = app.querySelector("[data-byte-sleep-chip]");
+  const sleepText = app.querySelector("[data-byte-sleep-text]");
   // Assigned right after handleSend is defined (below) — declared here so
   // handleSwitch (which can fire before the hero is mounted on the first
   // render) doesn't hit a TDZ error.
@@ -131,6 +134,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // runs during init BEFORE the scroll section and calls scrollToBottom, which
   // reads stickRaf — a `let` down there would be in its TDZ and throw.
   let stickRaf      = 0;
+  // Sleep/queue state — declared early for the same TDZ reason (hydrate and
+  // conversation switches can read them before the sleep section runs).
+  let channelConnected = false;
+  let sleepUntil = bootstrap.buddy_sleep?.sleep_until || null;   // ISO string or null
+  let sleepWake  = bootstrap.buddy_sleep?.wake_string || null;   // "8:00 AM" or null
   let oldestLoadedId = null;
 
   // Per-conversation unread-in-drawer counters. Only tracks conversations
@@ -224,6 +232,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       kind ? `byte-msg-kind-${kind}` : null,
     ].filter(Boolean).join(" ");
     if (wasLive) node.classList.add("byte-msg-live");
+    // Cancel ✕ only on messages still held server-side (Buddy asleep). Once
+    // it dispatches (sent/delivered) it's out of the user's hands.
+    const cancelBtn = node.querySelector("[data-msg-cancel]");
+    if (cancelBtn) cancelBtn.hidden = !(message.direction === "outbound" && message.state === "queued");
     const bodyEl = node.querySelector("[data-body]");
 
     // Kind-dispatch for body content rendering.
@@ -761,11 +773,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     node.dataset.localId = String(entry.local_id);
     node.removeAttribute("data-message-id");
-    node.className = "byte-msg byte-msg-outbound byte-msg-pending";
+    // Held client-side (offline / channel down) → render as queued, not just
+    // "pending", and expose the cancel ✕ so it can be dropped before it fires.
+    const held = entry.held === true;
+    node.className = `byte-msg byte-msg-outbound ${held ? "byte-msg-queued" : "byte-msg-pending"}`;
     node.querySelector("[data-body]").textContent = entry.body || "";
     node.querySelector("[data-time]").textContent = formatTime(new Date(entry.client_ts || entry.queued_at || Date.now()).toISOString());
     renderAttachments(node.querySelector("[data-attachments]"), []);
-    node.querySelector("[data-state]").textContent = "…";
+    node.querySelector("[data-state]").textContent = held ? "queued" : "…";
+    const cancelBtn = node.querySelector("[data-msg-cancel]");
+    if (cancelBtn) cancelBtn.hidden = !held;
   }
 
   function markQueuedSending(_local_id) {}
@@ -1031,6 +1048,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Notify the Buddy hero so it shows/hides based on new mode.
     const convo = convoManager.currentConversation();
     buddyHero?.onModeChange(convo?.mode);
+    updateSleepChip();
   }
 
   function migrateLegacy(defaultConvId) {
@@ -1150,11 +1168,18 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const client_ts = Date.now();
 
+    // Hold Buddy sends while the realtime channel is down: they sit in the
+    // queue (visibly, with a cancel ✕) and drain on reconnect, rather than
+    // firing into a channel Byte can't hear. Non-buddy modes keep the old
+    // fire-immediately behaviour (offline durability still applies).
+    const held = conversationMode(convId) === "buddy" && !channelConnected;
+
     const entry = {
       local_id,
       conversation_id: convId,
       body,
       client_ts,
+      held,
       metadata: { source: "web", local_id, client_ts, conversation_id: convId },
     };
 
@@ -1183,7 +1208,45 @@ document.addEventListener("DOMContentLoaded", async () => {
       onPermanentFail: (e, reason) => {
         if (e.conversation_id === currentConversationId) markQueuedFailed(e.local_id, reason);
       },
-    });
+    }, { hold: held });
+  }
+
+  // Mode for a conversation id — from the manager's list, falling back to the
+  // active-mode marker for the currently-visible thread.
+  function conversationMode(convId) {
+    const c = convoManager.conversations?.find((x) => x.id === convId);
+    if (c) return c.mode;
+    return convId === currentConversationId ? app.dataset.activeMode : null;
+  }
+
+  // Cancel ✕ on a held message. Server-queued (real id, Buddy asleep) → ask
+  // the server to drop it before the wake-drain; client-held (local only,
+  // channel down) → pull it straight out of the local queue.
+  thread.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-msg-cancel]");
+    if (!btn) return;
+    const node = btn.closest(".byte-msg");
+    if (!node) return;
+    const msgId   = node.dataset.messageId;
+    const localId = node.dataset.localId;
+    node.remove();
+    if (msgId) {
+      messages = removePersisted(currentConversationId, messages, Number(msgId));
+      cancelServerMessage(msgId);
+    } else if (localId) {
+      removeQueued(localId);
+    }
+  });
+
+  async function cancelServerMessage(msgId) {
+    try {
+      const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+      await fetch(`/byte/messages/${encodeURIComponent(msgId)}`, {
+        method:      "DELETE",
+        credentials: "same-origin",
+        headers:     { "X-CSRF-Token": csrf, Accept: "application/json" },
+      });
+    } catch (_) { /* optimistically removed already; server broadcast reconciles */ }
   }
 
   function handleSend(rawBody) {
@@ -1214,6 +1277,33 @@ document.addEventListener("DOMContentLoaded", async () => {
   let buddyWakeExpr = heroEl?.dataset.buddyAwakeExpression || "happy";
   const buddyWake  = () => buddyHero?.setExpression(buddyWakeExpr);
   const buddySleep = () => buddyHero?.setExpression("sleeping");
+
+  // ---------- sleeping chip + queue-while-asleep ----------
+  //
+  // Two ways Buddy is "asleep": a server usage-cap (buddy_sleep broadcast /
+  // bootstrap, carries a wake time) or the realtime channel being down
+  // (channelConnected=false, no wake time). Either raises a persistent chip
+  // above the composer and holds new Buddy sends in the queue with a cancel
+  // ✕, until Byte wakes. (channelConnected / sleepUntil / sleepWake are
+  // declared in the early-state block above to avoid a TDZ.)
+  const usageCapped = () => sleepUntil != null && new Date(sleepUntil).getTime() > Date.now();
+  const onBuddyConversation = () => (convoManager.currentConversation()?.mode || app.dataset.activeMode) === "buddy";
+  // Buddy can't hear you when the channel is down OR it's usage-capped.
+  const buddyAsleep = () => !channelConnected || usageCapped();
+
+  function updateSleepChip() {
+    if (!sleepChip) return;
+    // The chip is a Buddy concept; never show it on claude/bash/jarvis.
+    const show = onBuddyConversation() && buddyAsleep();
+    sleepChip.hidden = !show;
+    if (!show) return;
+    if (usageCapped()) {
+      sleepText.textContent = sleepWake ? `Byte's asleep until ${sleepWake}` : "Byte's asleep";
+    } else {
+      sleepText.textContent = "Byte's asleep — reconnecting…";
+    }
+  }
+  updateSleepChip();
 
   function clearLocalState() {
     clearAllPersisted();
@@ -1426,7 +1516,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   Monitor.subscribe(monitorChannel, {
     connected() {
       setStatus("connected", "connected");
+      channelConnected = true;
       buddyWake();
+      updateSleepChip();
+      // Reconnected: drain anything held while the channel was down.
       scheduleDrain();
       refetchHistory();
       convoManager.refresh().catch(() => {});
@@ -1439,7 +1532,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     },
     disconnected() {
       setStatus("disconnected", "disconnected");
+      channelConnected = false;
       buddySleep();
+      updateSleepChip();
       wasDisconnected = true;
     },
     received(payload) {
@@ -1447,6 +1542,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!data) return;
       if (data.kind === "conversation") {
         convoManager.applyBroadcast(data);
+        updateSleepChip();  // mode may have changed under the active thread
         return;
       }
       if (data.kind === "buddy_expression") {
@@ -1454,6 +1550,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         // face rather than a stale one.
         buddyWakeExpr = data.expression;
         buddyHero?.setExpression(data.expression);
+        return;
+      }
+      if (data.kind === "buddy_sleep") {
+        // Usage-cap sleep began (or extended). Raise the chip with the wake
+        // time; new Buddy sends will queue server-side from here.
+        sleepUntil = data.sleep_until || null;
+        sleepWake  = data.wake_string || null;
+        updateSleepChip();
+        return;
+      }
+      if (data.kind === "buddy_wake") {
+        // Byte woke — drop the chip. Queued turns re-broadcast as they
+        // dispatch (queued → sent), so their bubbles resolve on their own.
+        sleepUntil = null;
+        sleepWake  = null;
+        updateSleepChip();
         return;
       }
       if (data.kind === "message_deleted") {

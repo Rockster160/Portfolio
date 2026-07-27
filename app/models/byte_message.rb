@@ -28,7 +28,9 @@ class ByteMessage < ApplicationRecord
 
   enum :direction, { outbound: 0, inbound: 1 }
   # NOTE: never reassign existing integers — enum order is persisted.
-  enum :state,     { pending: 0, sent: 1, delivered: 2, failed: 3, streaming: 4 }
+  # :queued = held because Buddy is asleep (usage cap). Not yet dispatched;
+  # cancellable by the user, drained in order when Buddy wakes.
+  enum :state,     { pending: 0, sent: 1, delivered: 2, failed: 3, streaming: 4, queued: 5 }
 
   scope :recent,        -> { order(created_at: :desc) }
   scope :chronological, -> { order(created_at: :asc) }

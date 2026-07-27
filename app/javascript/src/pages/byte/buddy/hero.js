@@ -62,13 +62,18 @@ export function initBuddyHero({ hero, conversationIdFn }) {
     syncFaceStates();
   };
 
-  // Reflect the live theme + expression back onto the picker buttons.
+  // Reflect the live theme + expression back onto the picker buttons, and
+  // show only the face grid for the live theme (each theme has a different
+  // face set, so the picker must never offer faces the theme lacks).
   function syncFaceStates() {
     if (!facePopover) return;
     const theme = hero.dataset.buddyTheme;
     const expr  = hero.dataset.buddyExpression;
     facePopover.querySelectorAll("[data-buddy-theme-set]").forEach((b) => {
       b.setAttribute("aria-pressed", String(b.dataset.buddyThemeSet === theme));
+    });
+    facePopover.querySelectorAll("[data-buddy-face-choices]").forEach((grid) => {
+      grid.hidden = grid.dataset.faceTheme !== theme;
     });
     facePopover.querySelectorAll("[data-face]").forEach((b) => {
       b.setAttribute("aria-pressed", String(b.dataset.face === expr));

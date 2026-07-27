@@ -136,10 +136,14 @@ async function attempt(entry, hooks) {
 // Enqueue for offline durability + fire immediately. No lock, no wait.
 // The queue is there so a lost connection / closed tab preserves the
 // message, not to serialise sends.
-export function sendMessage(entry, hooks = {}) {
+//
+// `opts.hold` enqueues WITHOUT firing — used when Buddy is asleep (channel
+// down): the message waits in the queue, visibly, until `drainQueue` runs on
+// reconnect. Cancel removes it before that happens.
+export function sendMessage(entry, hooks = {}, opts = {}) {
   enqueue(entry);
   hooks.onEnqueued?.(entry);
-  attempt(entry, hooks);
+  if (!opts.hold) attempt(entry, hooks);
 }
 
 // Sweep the queue — fires an `attempt` for each entry that isn't
