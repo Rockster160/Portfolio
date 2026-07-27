@@ -44,8 +44,9 @@ Rails.application.routes.draw do
   get "/fae", to: redirect(subdomain: "fae", path: "/")
 
   get "/byte", to: redirect(subdomain: "byte", path: "/")
-  get  "/byte/messages" => "byte#messages",       as: :byte_message_history
-  post "/byte/messages" => "byte#create_message", as: :byte_messages
+  get    "/byte/messages"     => "byte#messages",       as: :byte_message_history
+  post   "/byte/messages"     => "byte#create_message", as: :byte_messages
+  delete "/byte/messages/:id" => "byte#delete_message", as: :byte_message
   get  "/byte/csrf"     => "byte#csrf",           as: :byte_csrf
   post "/byte/presence" => "byte#presence",       as: :byte_presence
   get    "/byte/conversations"     => "byte#list_conversations",   as: :byte_conversations

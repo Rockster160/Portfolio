@@ -2150,6 +2150,18 @@ dialog.byte-modal {
   display: flex;
 }
 
+// Off-screen face preloader — kept in-flow-but-invisible (NOT display:none,
+// which can defer the fetch) so every expression is cached before its first
+// swap. Zero visual/interaction footprint.
+.byte-buddy-preload {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
 // Shrink on composer focus (keyboard open on mobile). :has isn't in the
 // oldest safaris, but every iOS 16.4+ / Chrome 105+ supports it. The
 // non-:has fallback is that the hero stays big and the messages just
@@ -2298,11 +2310,11 @@ $moss_expressions: neutral happy grin star loving wink sad crying surprised shoc
     background-image: image-url("buddy/byte/face_#{$expr}.png");
   }
 }
-// The server still drives the :focused and :celebrating moods (proposal
-// states, check-in). Byte has no distinct art for them — they're visual
-// dups — so alias them to the surviving faces: focused→annoyed, celebrating
-// →uwu. Moss keeps its own dedicated SVGs for these, above.
-$byte_expr_aliases: ("focused": "annoyed", "celebrating": "uwu");
+// Byte has no `focused`/`celebrating` faces of its own, but the server + a
+// stale stored expression can still ask for them. Map them to the closest
+// Byte face that reads right: focused→thinking (attentive, NOT the angry
+// annoyed face), celebrating→happy. Moss keeps its own dedicated SVGs above.
+$byte_expr_aliases: ("focused": "thinking", "celebrating": "happy");
 @each $mood, $face in $byte_expr_aliases {
   .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$mood}"]
     .byte-buddy-face {
@@ -2640,6 +2652,17 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 5px;
+  // Cap height so a large set (Moss has 18) scrolls inside the popover
+  // instead of pushing it off-screen.
+  max-height: 46vh;
+  overflow-y: auto;
+
+  // Only one theme's grid shows at a time. Without this, `display: grid`
+  // overrides the `hidden` attribute (JS + server both toggle it), so both
+  // Byte's and Moss's faces render stacked.
+  &[hidden] {
+    display: none;
+  }
 
   button {
     padding: 7px 4px !important;

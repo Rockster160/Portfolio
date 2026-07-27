@@ -6,7 +6,13 @@ module Buddy
   module ExpressionState
     module_function
 
-    EXPRESSIONS = %i[neutral happy thinking focused encouraging celebrating sleeping].freeze
+    # Union of every face across themes (Byte + Moss). Validation only — the
+    # per-theme prompt (Personality.mood_block) is what constrains which of
+    # these Buddy actually picks, so it never emits one its theme can't render.
+    EXPRESSIONS = %i[
+      neutral neutral_blush happy uwu encouraging annoyed sad crying thinking
+      nerd focused celebrating sleeping sleeping_frown
+    ].freeze
 
     def transition!(user, event, **_opts)
       return if user.nil?
@@ -33,10 +39,13 @@ module Buddy
         case event.to_sym
         when :turn_started        then :thinking
         when :turn_ended_clean    then :neutral   # resting default, not "cheesy grin happy"
-        when :proposals_awaiting  then :focused
-        when :proposals_executed  then :celebrating
+        # Server-driven events use faces BOTH themes have (Byte lacks
+        # focused/celebrating; Moss lacks annoyed/nerd) so they render for
+        # either pet.
+        when :proposals_awaiting  then :thinking
+        when :proposals_executed  then :happy
         when :proposals_cancelled then :neutral
-        when :tool_failed         then :focused
+        when :tool_failed         then :thinking
         when :idle_long           then :neutral
         end
       end

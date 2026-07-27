@@ -1,7 +1,17 @@
-<link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path 'byte_favicon/apple-touch-icon.png' %>">
-<link rel="icon" type="image/png" href="<%= asset_path 'byte_favicon/favicon-96x96.png' %>" sizes="96x96">
-<link rel="manifest" href="/byte.webmanifest">
-<meta name="theme-color" content="#0E1930">
-<meta name="apple-mobile-web-app-title" content="Byte">
+<%# Buddy's identity follows the user's theme: Moss (green) for moss users,
+    Byte (navy) otherwise — icon, PWA title, manifest, and chrome theme-color. %>
+<% if current_user.buddy_theme == "moss" %>
+  <link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path 'moss_favicon/moss-apple-touch-icon.png' %>">
+  <link rel="icon" type="image/png" href="<%= asset_path 'moss_favicon/moss-favicon-96x96.png' %>" sizes="96x96">
+  <link rel="manifest" href="/moss.webmanifest">
+  <meta name="theme-color" content="#14231A">
+  <meta name="apple-mobile-web-app-title" content="Moss">
+<% else %>
+  <link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path 'byte_favicon/apple-touch-icon.png' %>">
+  <link rel="icon" type="image/png" href="<%= asset_path 'byte_favicon/favicon-96x96.png' %>" sizes="96x96">
+  <link rel="manifest" href="/byte.webmanifest">
+  <meta name="theme-color" content="#0E1930">
+  <meta name="apple-mobile-web-app-title" content="Byte">
+<% end %>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

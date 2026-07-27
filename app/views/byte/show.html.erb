@@ -52,7 +52,11 @@
       </svg>
     </button>
     <span class="byte-avatar">
-      <%= image_tag "byte_favicon/byte.png", alt: "Byte" %>
+      <% if current_user.buddy_theme == "moss" %>
+        <%= image_tag "moss_favicon/moss.png", alt: "Moss" %>
+      <% else %>
+        <%= image_tag "byte_favicon/byte.png", alt: "Byte" %>
+      <% end %>
     </span>
     <span class="byte-title">
       <span class="byte-title-row">
@@ -117,19 +121,25 @@
     </div>
     <%# Debug-only picker: switch theme (Byte/Moss) and preview any face,
         including ones not wired into the mood system. Remove once done. %>
-    <% buddy_faces = Dir[Rails.root.join("app/assets/images/buddy/byte/face_*.png")]
-                       .map { |p| File.basename(p, ".png").delete_prefix("face_") }.sort %>
+    <% face_names = ->(theme) {
+         Dir[Rails.root.join("app/assets/images/buddy/#{theme}/face_*.png")]
+           .map { |p| File.basename(p, ".png").delete_prefix("face_") }.sort
+       } %>
     <div class="byte-buddy-face-popover" data-buddy-face-popover hidden>
       <span class="byte-buddy-mood-label">Debug: theme + face</span>
       <div class="byte-buddy-face-themes" data-buddy-face-themes>
         <button type="button" data-buddy-theme-set="byte">Byte</button>
         <button type="button" data-buddy-theme-set="moss">Moss</button>
       </div>
-      <div class="byte-buddy-face-choices" data-buddy-face-choices>
-        <% buddy_faces.each do |f| %>
-          <button type="button" data-face="<%= f %>"><%= f.tr('_', ' ') %></button>
-        <% end %>
-      </div>
+      <%# One grid per theme; JS shows the one matching the live theme so the
+          picker only ever offers faces that theme actually has. %>
+      <% %w[byte moss].each do |theme| %>
+        <div class="byte-buddy-face-choices" data-buddy-face-choices data-face-theme="<%= theme %>"<%= " hidden".html_safe unless @conversation && current_user.buddy_theme == theme %>>
+          <% face_names.call(theme).each do |f| %>
+            <button type="button" data-face="<%= f %>"><%= f.tr('_', ' ') %></button>
+          <% end %>
+        </div>
+      <% end %>
     </div>
   </section>
 
@@ -144,6 +154,18 @@
       <span class="byte-pwd-sep" aria-hidden="true">·</span>
       <span data-byte-pwd-session-name><%= @conversation.metadata['claude_session_name'] %></span>
     </span>
+  </div>
+
+  <%# Preload every face for the active theme so an expression change never %>
+  <%# flashes blank while the PNG/SVG fetches — they land in the browser %>
+  <%# cache up front, so the CSS background swap is instant. Off-screen (not %>
+  <%# display:none) to guarantee the fetch. %>
+  <% buddy_theme = current_user.buddy_theme.presence || "byte" %>
+  <% face_ext = buddy_theme == "moss" ? "svg" : "png" %>
+  <div class="byte-buddy-preload" aria-hidden="true">
+    <% Dir[Rails.root.join("app/assets/images/buddy/#{buddy_theme}/face_*.#{face_ext}")].sort.each do |p| %>
+      <img src="<%= image_path("buddy/#{buddy_theme}/#{File.basename(p)}") %>" alt="" width="1" height="1" decoding="async">
+    <% end %>
   </div>
 
   <main class="byte-thread" data-byte-thread aria-live="polite" aria-relevant="additions">
@@ -161,6 +183,10 @@
 
   <template data-byte-message-tpl>
     <article class="byte-msg">
+      <%# Cancel affordance — only revealed for messages still held in the %>
+      <%# queue (Buddy asleep / offline). JS shows it; tapping drops the %>
+      <%# message before it dispatches. %>
+      <button type="button" class="byte-msg-cancel" data-msg-cancel aria-label="Cancel message" hidden>✕</button>
       <div class="byte-msg-attachments" data-attachments></div>
       <%# Collapsible thoughts (Claude's intermediate reasoning + tool %>
       <%# uses). Hidden entirely for non-Claude messages. %>
@@ -175,6 +201,14 @@
       </div>
     </article>
   </template>
+
+  <%# Persistent sleeping chip — pinned above the composer while Buddy is %>
+  <%# asleep (usage cap) or the realtime channel is down. Stays until Byte %>
+  <%# wakes; messages sent meanwhile queue below it with a cancel ✕. %>
+  <div class="byte-sleep-chip" data-byte-sleep-chip hidden>
+    <span class="byte-sleep-chip-dot" aria-hidden="true">💤</span>
+    <span class="byte-sleep-chip-text" data-byte-sleep-text></span>
+  </div>
 
   <%# Slash-command autocomplete popover. Positioned above the composer, %>
   <%# shown when the input's first char is `/`. JS fills / hides it. %>
@@ -294,5 +328,9 @@
     conversation:  @conversation.as_wire,
     conversations: @conversations.map(&:as_wire),
     messages:      @messages.map(&:as_wire),
+    buddy_sleep: {
+      sleep_until: current_user.buddy_sleep_until&.iso8601,
+      wake_string: (::Buddy::SleepGuard.wake_string(current_user) if ::Buddy::SleepGuard.sleeping?(current_user)),
+    },
   ) %>
 </script>
