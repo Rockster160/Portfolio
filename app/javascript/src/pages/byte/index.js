@@ -1226,12 +1226,31 @@ document.addEventListener("DOMContentLoaded", async () => {
   // which blocked all newline insertion on iOS (where that event fires for
   // every Return press). Removed. Physical keyboards still get the fast
   // Enter=submit path via keydown; mobile users tap the Send button.
+  // Enter-to-send is a terminal (bash) affordance only — it's a REPL, so
+  // Return runs the command. Every other mode (claude, jarvis, buddy) treats
+  // Return as a newline and sends via the Send button; Shift+Enter is always
+  // a newline. Keyed off mode, not device, so it's consistent across desktop
+  // and the mobile PWA. `composer.dataset.mode` is kept current on every
+  // conversation switch (conversations.js) for the avatar/CSS, so it's a
+  // reliable live source here too.
   input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing && composer.dataset.mode === "bash") {
       e.preventDefault();
       handleSend(input.value);
     }
   });
+
+  // The Buddy hero grows/shrinks over a 220ms CSS transition when the
+  // composer gains/loses focus (the mobile keyboard opening/closing). That
+  // resizes the thread AFTER any immediate scrollToBottom already ran,
+  // stranding the newest message off-screen. Re-pin to the bottom when the
+  // transition settles, and directly on focus/blur.
+  const repinIfAtBottom = () => { if (atBottom) scrollToBottom("auto"); };
+  heroEl?.addEventListener("transitionend", (e) => {
+    if (e.propertyName === "min-height" || e.propertyName === "max-height") repinIfAtBottom();
+  });
+  input.addEventListener("focus", repinIfAtBottom);
+  input.addEventListener("blur", repinIfAtBottom);
 
   function autosize() {
     input.style.height = "auto";

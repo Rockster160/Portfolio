@@ -44,17 +44,22 @@ module Buddy
       @loading_tools = false
     end
 
-    def register(name:, description:, args:, confirm:, label:, execute:, receipt:, merge_key: nil, merge_label: nil)
+    def register(name:, description:, args:, confirm:, label:, execute:, receipt:, merge_key: nil, merge_label: nil, passthrough_args: false)
       spec = {
-        name:        name.to_sym,
-        description: description.to_s,
-        args:        normalize_args(args),
-        confirm:     confirm,
-        label:       label,
-        execute:     validate_executor!(execute),
-        receipt:     receipt,
-        merge_key:   merge_key || ->(payload) { "#{name}:#{SecureRandom.uuid}" },
-        merge_label: merge_label,
+        name:             name.to_sym,
+        description:      description.to_s,
+        args:            normalize_args(args),
+        confirm:         confirm,
+        label:           label,
+        execute:         validate_executor!(execute),
+        receipt:         receipt,
+        merge_key:       merge_key || ->(payload) { "#{name}:#{SecureRandom.uuid}" },
+        merge_label:     merge_label,
+        # Tools whose real arg set is dynamic (e.g. call_jil_function, whose
+        # params vary per target task) declare only `name` in :args and set
+        # this so validate_payload keeps every OTHER k=v the marker carried
+        # instead of dropping the undeclared ones on the floor.
+        passthrough_args: passthrough_args,
       }
       registry[name.to_sym] = spec
     end
@@ -154,6 +159,18 @@ module Buddy
       if raw_payload.key?(COUNT_ARG)
         count = raw_payload[COUNT_ARG].to_i
         normalized[COUNT_ARG] = count if count > 0
+      end
+
+      # Pass-through tools (call_jil_function) keep every undeclared k=v as a
+      # raw string — the downstream Jil function coerces per its signature.
+      # Preserve marker order so positional Keyword.Item() reads line up.
+      if tool[:passthrough_args]
+        declared = tool[:args].keys
+        raw_payload.each do |k, v|
+          next if declared.include?(k) || k == COUNT_ARG
+          next if v.nil? || v.to_s.empty?
+          normalized[k] = v
+        end
       end
 
       [normalized, errors]

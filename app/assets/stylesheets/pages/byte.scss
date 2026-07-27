@@ -2084,21 +2084,45 @@ dialog.byte-modal {
 // non-:has fallback is that the hero stays big and the messages just
 // scroll — acceptable.
 .byte-app:has([data-byte-input]:focus) .byte-buddy-hero {
-  min-height: 9vh;
-  max-height: 11vh;
-  padding: 4px 12px 2px;
-  gap: 0;
+  // Keyboard is up: lay Buddy and his quick actions side-by-side (~50/50)
+  // and shrink both, rather than stacking. A small Buddy doesn't need a
+  // full row, and the actions stay reachable while typing.
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 14vh;
+  max-height: 19vh;
+  padding: 8px 14px;
+  // Buddy now sits right on top of the message thread — give him his own
+  // zone: a filled panel with a hard bottom edge so the two read as
+  // separate surfaces instead of bleeding together.
+  background: linear-gradient(180deg, rgba(20, 40, 79, 0.6), rgba(11, 43, 78, 0.32));
+  border-bottom: 1px solid var(--bs-border);
 
   .byte-buddy-char {
-    width: 26%;
-    max-width: 90px;
+    width: 44%;
+    max-width: 92px;
+    margin: 0;
+    flex: 0 0 auto;
   }
-  // Quick actions are for prompting Buddy; while typing, they're just
-  // consuming vertical space the character needs. Hiding them saves
-  // ~34px which is what was pushing the character's top out of the
-  // shrunk hero and into the header above.
+  // Compact 2×2 grid filling the other half — smaller chips instead of the
+  // full-width stacked row, and NOT hidden.
   .byte-buddy-quick-actions {
-    display: none;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 52%;
+    width: auto;
+
+    button {
+      flex: 0 1 auto;
+      min-width: 0;
+      padding: 7px 6px !important;
+      font-size: 12px !important;
+    }
   }
 }
 

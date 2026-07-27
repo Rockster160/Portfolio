@@ -43,6 +43,33 @@ RSpec.describe Buddy::Tools do
       expect(errors).to be_empty
       expect(normalized[:count]).to eq(5)
     end
+
+    it "drops undeclared args by default" do
+      minimal = { args: { name: { type: :string, required: true } } }
+      normalized, _ = described_class.validate_payload(minimal, { name: "HASS Light", action: "on", target: "mud_room" })
+      expect(normalized).to eq(name: "HASS Light")
+    end
+
+    it "keeps undeclared args (in order) when passthrough_args is set" do
+      dynamic = { args: { name: { type: :string, required: true } }, passthrough_args: true }
+      normalized, errors = described_class.validate_payload(
+        dynamic, { name: "HASS Light", action: "on", target: "mud_room" }
+      )
+      expect(errors).to be_empty
+      expect(normalized).to eq(name: "HASS Light", action: "on", target: "mud_room")
+      expect(normalized.keys).to eq(%i[name action target])
+    end
+
+    it "the real call_jil_function tool passes function args through" do
+      tool = described_class[:call_jil_function]
+      normalized, errors = described_class.validate_payload(
+        tool, { name: "HASS Light", action: "on", target: "mud_room", brightness: "40" }
+      )
+      expect(errors).to be_empty
+      expect(normalized.slice(:action, :target, :brightness)).to eq(
+        action: "on", target: "mud_room", brightness: "40"
+      )
+    end
   end
 
   describe ".system_prompt_appendix" do

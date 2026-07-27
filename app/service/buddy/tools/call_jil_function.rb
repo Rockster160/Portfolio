@@ -35,8 +35,10 @@ Buddy::Tools.register(
   TXT
   args: {
     name: { type: :string, required: true, description: "Fuzzy function-task name to call" },
-    # All other k=v marker args pass through as function params.
+    # All other k=v marker args pass through as function params. Only `name`
+    # is declared; passthrough_args keeps the rest through validate_payload.
   },
+  passthrough_args: true,
   confirm: ->(payload, ctx) {
     q = payload[:name].to_s.downcase.strip
     scope = ctx.user.accessible_tasks.buddy_visible.functions
