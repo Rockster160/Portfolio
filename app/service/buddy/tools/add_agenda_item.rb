@@ -22,7 +22,7 @@ Buddy::Tools.register(
   },
   label: ->(payload, ctx) {
     time = payload[:at].respond_to?(:strftime) ? payload[:at].in_time_zone(ctx.user.timezone).strftime("%a %b %-d, %-I:%M %p") : payload[:at].to_s
-    "#{payload[:title]} · #{time} (#{payload[:duration]}m)"
+    { title: payload[:title].to_s, sub: "#{time} (#{payload[:duration]}m)" }
   },
   execute: ->(payload, ctx) {
     agenda = Agenda.find(payload[:agenda_id])

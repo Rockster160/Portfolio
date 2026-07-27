@@ -43,10 +43,15 @@ module Buddy
           first.merge(count: total_count)
         }
 
-      # Build button hashes.
+      # Build button hashes. Tool label procs may return either a plain
+      # String (title only) or a Hash `{ title:, sub: }` — the second form
+      # renders the `sub` value as small text beneath the title so
+      # non-default details (a past completion time, an assignee that isn't
+      # the current user, extra function args being passed) don't have to
+      # crowd the title line.
       buttons = merged.each_with_index.map { |p, i|
         ctx = Buddy::ToolContext.new(user)
-        label = safely {
+        raw = safely {
           if p[:count] > 1 && p[:tool][:merge_label]
             p[:tool][:merge_label].call(p[:payload], p[:count])
           else
@@ -54,9 +59,12 @@ module Buddy
           end
         } || p[:tool][:name].to_s
 
+        title, sub = extract_title_sub(raw)
+
         {
           "id"        => i + 1,
-          "label"     => label.to_s,
+          "label"     => title,
+          "sublabel"  => sub,
           "tool_name" => p[:tool][:name].to_s,
           "payload"   => stringify(p[:payload]),
           "count"     => p[:count],
@@ -98,6 +106,16 @@ module Buddy
 
     class << self
       private
+
+      def extract_title_sub(raw)
+        if raw.is_a?(Hash)
+          title = (raw[:title] || raw["title"]).to_s
+          sub   = (raw[:sub] || raw["sub"]).to_s.presence
+          [title, sub]
+        else
+          [raw.to_s, nil]
+        end
+      end
 
       def stringify(hash)
         hash.each_with_object({}) { |(k, v), out|

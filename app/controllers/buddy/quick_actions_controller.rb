@@ -234,18 +234,21 @@ module Buddy
         data:    { kind: :message, message: message.as_wire },
       })
 
+      user = current_user  # capture; current_user is request-scoped
       Thread.new {
-        begin
-          response = ByteLocal.deliver(message, conversation: conversation)
-          message.update!(state: response&.is_a?(Net::HTTPSuccess) ? :sent : :failed)
-          MonitorChannel.broadcast_to(current_user, {
-            id:      :byte,
-            channel: :byte,
-            data:    { kind: :message, message: message.reload.as_wire },
-          })
-        rescue => e
-          Rails.logger.warn("[Buddy::QuickActions] deliver failed: #{e.class}: #{e.message}")
-          message.update!(state: :failed)
+        Rails.application.executor.wrap do
+          begin
+            response = ByteLocal.deliver(message, conversation: conversation)
+            message.update!(state: response&.is_a?(Net::HTTPSuccess) ? :sent : :failed)
+            MonitorChannel.broadcast_to(user, {
+              id:      :byte,
+              channel: :byte,
+              data:    { kind: :message, message: message.reload.as_wire },
+            })
+          rescue => e
+            Rails.logger.warn("[Buddy::QuickActions] deliver failed: #{e.class}: #{e.message}")
+            message.update!(state: :failed) rescue nil
+          end
         end
       }
 

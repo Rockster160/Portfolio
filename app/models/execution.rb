@@ -41,6 +41,10 @@ class Execution < ApplicationRecord
     cron:     8,  # nil - task self-fired via its own cron schedule
     words:    9,  # nil - voice/text command processed via Jarvis (always the owner)
     agenda:   10, # + agenda_item id - fired by an AgendaItem with kind=trigger
+    buddy:    11, # + acting user id - Buddy fired it on that person's behalf.
+                  #   Differs from execution.user_id whenever the task was
+                  #   shared: the task runs as its owner, the actor is whoever
+                  #   was talking to Buddy. See BuddyTaskRun for the full audit.
   }
 
   enum :status, {

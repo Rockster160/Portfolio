@@ -94,14 +94,15 @@ module ByteLocal
         # track mood + decide whether to Read the file without a round-
         # trip on chat-only turns.
         at_glance = {
-          user:                 message.user.first_name,
-          pet_expression:       context.dig(:emotional_state, :pet_expression) || "neutral",
-          pending_chores_today: context[:chores_pending_today].to_a.length,
-          done_chores_today:    context[:chores_done_today].to_a.length,
-          agenda_today:         context[:today_agenda].to_a.length,
-          recent_events:        context[:recent_events].to_a.length,
-          upcoming_reminders:   context[:upcoming_reminders].to_a.length,
-          active_proposals:     context[:active_proposals].to_a.length,
+          user:                   message.user.first_name,
+          pet_expression:         context.dig(:emotional_state, :pet_expression) || "neutral",
+          pending_chores_today:   context[:chores_pending_today].to_a.length,
+          done_chores_today:      context[:chores_done_today].to_a.length,
+          scheduled_chores_today: context[:chores_scheduled_today].to_a.length,
+          agenda_today:           context[:today_agenda].to_a.length,
+          recent_events:          context[:recent_events].to_a.length,
+          upcoming_reminders:     context[:upcoming_reminders].to_a.length,
+          active_proposals:       context[:active_proposals].to_a.length,
         }
         recap = conversation.metadata.is_a?(Hash) ? conversation.metadata["buddy_recap"] : nil
         payload[:buddy_system_prompt_extras] = Buddy::Personality.for(

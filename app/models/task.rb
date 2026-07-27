@@ -4,8 +4,10 @@
 #
 #  id              :bigint           not null, primary key
 #  archived_at     :datetime
+#  buddy_enabled   :boolean          default(FALSE), not null
 #  code            :text
 #  cron            :text
+#  description     :text
 #  enabled         :boolean          default(TRUE)
 #  last_status     :integer
 #  last_trigger_at :datetime
@@ -45,6 +47,20 @@ class Task < ApplicationRecord
   scope :functions, -> {
     where("listener ~* '(^|\\s)function\\('")
   }
+  # Listener is a single bare scope token - no `:` data filters, no regex,
+  # not a function signature. These are the only tasks that can be fired
+  # by name alone (`Jil.trigger(user, scope, {})`) without constructing a
+  # payload, which is what Buddy's trigger tool does.
+  scope :plain_scopes, -> {
+    where("listener ~ ?", '^[a-zA-Z][a-zA-Z0-9_-]*$')
+  }
+  # Owner opted this task in to assistant invocation. Independent of
+  # shared_tasks - that governs which humans can see/run it, this governs
+  # whether Buddy may fire it for whoever it IS visible to.
+  scope :buddy_visible, -> {
+    enabled.active.buddy_enabled.where("name IS NOT NULL AND name != ''")
+  }
+  scope :buddy_enabled, -> { where(buddy_enabled: true) }
   scope :by_method_name, ->(name) {
     where("REPLACE(REGEXP_REPLACE(name, '\\W+', '', 'g'), ' ', '_') = ?", name)
   }
@@ -334,6 +350,29 @@ class Task < ApplicationRecord
     return false unless user
 
     user_id == user.id || shared_users.exists?(user.id)
+  end
+
+  # Which Buddy index this task lands in, if any. `:unsupported` means there
+  # is no listener at all (cron-only, or nothing wired) - there is no scope to
+  # fire and no signature to call, so `buddy_enabled` would do nothing. The
+  # config modal warns on that.
+  #
+  # Everything with a listener is a `:trigger`: Buddy fires the scope and
+  # supplies matching data, exactly like `trigger <scope>:<key>:<value>`. That
+  # covers filtered listeners (`event:add name::X`) as well as bare scopes.
+  def buddy_kind
+    return :unsupported if listener.blank?
+    return :function if listener.to_s.match?(/(^|\s)function\(/i)
+
+    :trigger
+  end
+
+  # Leading token of the listener - the scope `Jil.trigger` matches on.
+  # `event:add name::Transaction` -> "event"; `monitor::deploy` -> "monitor".
+  def trigger_scope
+    return nil unless buddy_kind == :trigger
+
+    listener.to_s.strip.split(":").first.presence
   end
 
   def archived?

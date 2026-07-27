@@ -16,17 +16,6 @@
 #  byte_conversation_id :bigint           not null
 #  user_id              :bigint           not null
 #
-# A scheduled thing Buddy will surface to the user at fire_at.
-#
-# kind:
-#   "reminder"  - plain text nudge. Body is delivered as an inbound
-#                 buddy message + push notification.
-#   "prompt"    - a fresh turn is triggered with `body` as the user's
-#                 synthetic input (like the quick-action buttons do)
-#                 so Buddy composes a contextual reply at fire_at.
-#
-# Cancellation: set cancelled_at. The sweep worker skips anything
-# with cancelled_at OR fired_at present.
 class BuddyReminder < ApplicationRecord
   belongs_to :user
   belongs_to :byte_conversation

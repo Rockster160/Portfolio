@@ -259,6 +259,15 @@
 
     .badge-disabled { background-color: #6C757D; color: white; }
     .badge-shared { background-color: #5B21B6; color: #DDD6FE; }
+    .badge-buddy { background-color: #0E7490; color: #CFFAFE; }
+
+    .task-description {
+      margin-top: 3px;
+      color: #8A96A6;
+      font-size: 12px;
+      font-weight: normal;
+      line-height: 1.35;
+    }
 
     /* Folder styles */
     .folder-row {
@@ -658,7 +667,11 @@
           if (name.indexOf(query) !== -1) nameScore = Math.max(nameScore, 100 + (query.length / Math.max(name.length, 1)) * 20);
           var listenerScore = fuzzyScore(query, listener);
           if (listener.indexOf(query) !== -1) listenerScore = Math.max(listenerScore, 100 + (query.length / Math.max(listener.length, 1)) * 20);
-          return Math.max(nameScore, listenerScore - 1); // slight name preference on ties
+          // Description matches substring-only. Fuzzy over a whole sentence
+          // matches nearly everything, so it would drown out real hits.
+          var description = el.dataset.description || "";
+          var descScore = description.indexOf(query) !== -1 ? 90 : -Infinity;
+          return Math.max(nameScore, listenerScore - 1, descScore); // slight name preference on ties
         }
 
         searchInput.addEventListener("input", function() {

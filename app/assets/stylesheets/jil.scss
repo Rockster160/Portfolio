@@ -1137,3 +1137,48 @@ input.text-security {
     }
   }
 }
+
+// Assistant-access controls. `buddy_enabled` is a separate axis from the
+// shared-users list above it: sharing decides which PEOPLE see the task,
+// this decides whether Buddy may fire it for them.
+.buddy-section {
+  .buddy-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--syntax-base);
+    font-size: 14px;
+  }
+
+  .buddy-desc-label {
+    display: block;
+    margin-top: 10px;
+    margin-bottom: 4px;
+    color: var(--syntax-base);
+    font-size: 14px;
+  }
+
+  .buddy-hint {
+    opacity: 0.6;
+    font-weight: normal;
+    font-size: 12px;
+  }
+
+  .buddy-warning {
+    margin: 6px 0 0;
+    border-left: 3px solid #F0C040;
+    padding: 4px 0 4px 8px;
+    color: #F0C040;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .buddy-description {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    resize: vertical;
+    font-family: inherit;
+    font-size: 13px;
+  }
+}

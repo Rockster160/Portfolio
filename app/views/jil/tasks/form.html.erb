@@ -20,6 +20,27 @@
           <% end %>
           </br>
           </br>
+          <div class="buddy-section">
+            <label class="buddy-label">
+              Buddy can run this:
+              <%= f.label :buddy_enabled, class: :switch do %>
+                <%= f.check_box :buddy_enabled %>
+                <span class="slider"></span>
+              <% end %>
+            </label>
+            <% if @task.buddy_kind == :unsupported %>
+              <p class="buddy-warning">
+                This task has no listener, so there's no scope for Buddy to fire and
+                no signature to call. Give it a listener — a scope, a filtered scope,
+                or a function(…) — before turning this on.
+              </p>
+            <% end %>
+            <label class="buddy-desc-label" for="task_description">
+              Description <span class="buddy-hint">— what this does, in plain language. Buddy reads this to decide when it's relevant.</span>
+            </label>
+            <%= f.text_area :description, rows: 3, class: "buddy-description", placeholder: "Sets the great room fan to off, low, mid, or high" %>
+          </div>
+          </br>
           <% if @task.persisted? %>
             <div class="btns text-right">
               <%= link_to "Duplicate", duplicate_jil_task_path(@task), class: :btn, method: :post %>

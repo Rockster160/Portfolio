@@ -149,6 +149,8 @@ class Jil::TasksController < ApplicationController
       :listener,
       :code,
       :enabled,
+      :description,
+      :buddy_enabled,
     )
   end
 end

@@ -63,6 +63,17 @@ export function clearPersisted(convId) {
   try { localStorage.removeItem(keyFor(convId)); } catch (e) {}
 }
 
+// Remove a single message from the in-memory list + re-persist.
+// Used when the server deletes a bubble (e.g. Buddy replied with only
+// a side-effect marker and no visible prose). Returns the mutated list.
+export function removePersisted(convId, list, messageId) {
+  const idx = list.findIndex((m) => String(m.id) === String(messageId));
+  if (idx < 0) return list;
+  list.splice(idx, 1);
+  persistMessages(convId, list);
+  return list;
+}
+
 // Wipe every per-conversation cache (used by /clear meta command).
 export function clearAllPersisted() {
   try {

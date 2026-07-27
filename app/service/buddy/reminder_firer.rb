@@ -83,13 +83,17 @@ module Buddy
         )
 
         # Reuse the same delivery-to-Mac path everything else uses.
+        # Executor.wrap so the thread returns its AR connection to the
+        # pool cleanly even when Mac hangs.
         Thread.new {
-          begin
-            response = ByteLocal.deliver(outbound, conversation: conversation)
-            outbound.update!(state: response&.is_a?(Net::HTTPSuccess) ? :sent : :failed)
-          rescue => e
-            Rails.logger.warn("[BuddyReminder] deliver failed: #{e.class}: #{e.message}")
-            outbound.update!(state: :failed)
+          Rails.application.executor.wrap do
+            begin
+              response = ByteLocal.deliver(outbound, conversation: conversation)
+              outbound.update!(state: response&.is_a?(Net::HTTPSuccess) ? :sent : :failed)
+            rescue => e
+              Rails.logger.warn("[BuddyReminder] deliver failed: #{e.class}: #{e.message}")
+              outbound.update!(state: :failed) rescue nil
+            end
           end
         }
       end

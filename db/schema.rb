@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_07_25_120420) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_27_164136) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1235,6 +1235,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_25_120420) do
     t.bigint "task_folder_id"
     t.integer "tree_order"
     t.datetime "archived_at"
+    t.text "description"
+    t.boolean "buddy_enabled", default: false, null: false
+    t.index ["buddy_enabled"], name: "index_tasks_on_buddy_enabled", where: "buddy_enabled"
     t.index ["task_folder_id"], name: "index_tasks_on_task_folder_id"
     t.index ["user_id"], name: "index_tasks_on_user_id"
   end

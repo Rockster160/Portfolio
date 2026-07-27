@@ -17,13 +17,12 @@ Buddy::Tools.register(
     { summary: "Add new chore: #{payload[:name]}?", resolved: { assigned_to_user_id: assignee&.id } }
   },
   label: ->(payload, ctx) {
-    parts = [payload[:name].to_s]
-    parts << "· #{payload[:schedule]}" if payload[:schedule].present?
+    subs = []
+    subs << payload[:schedule].to_s if payload[:schedule].present?
     if payload[:assigned_to_user_id].present? && payload[:assigned_to_user_id] != ctx.user.id
-      parts << "· for #{User.find_by(id: payload[:assigned_to_user_id])&.first_name}"
+      subs << "for #{User.find_by(id: payload[:assigned_to_user_id])&.first_name}"
     end
-    parts << "(new)"
-    parts.join(" ")
+    { title: payload[:name].to_s, sub: subs.join(" · ").presence }
   },
   execute: ->(payload, ctx) {
     household = ctx.user.chore_household

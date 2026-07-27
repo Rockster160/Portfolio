@@ -196,11 +196,15 @@ class ByteController < ApplicationController
 
     # Fire-and-forget notification to the Mac so a blocked hook can
     # unblock. Silent on failure — the hook will time out and deny.
+    # Executor.wrap ensures the checked-out AR connection is released
+    # even if the HTTP call to Mac hangs.
     Thread.new {
-      begin
-        ByteLocal.notify_action_decision(action)
-      rescue => e
-        Rails.logger.warn("[Byte] action decision notify failed: #{e.class}: #{e.message}")
+      Rails.application.executor.wrap do
+        begin
+          ByteLocal.notify_action_decision(action)
+        rescue => e
+          Rails.logger.warn("[Byte] action decision notify failed: #{e.class}: #{e.message}")
+        end
       end
     }
 
@@ -412,24 +416,56 @@ class ByteController < ApplicationController
     # Auto-wake if the sleep window has passed.
     ::Buddy::SleepGuard.maybe_wake!(current_user) if conversation.buddy?
 
+    user = current_user  # capture for the thread (current_user is request-scoped)
+
     # Fire-and-forget to the local Mac server. If it fails, the message
     # sits in :pending / :failed - surfaced in the UI so the user can retry.
+    #
+    # Rails.application.executor.wrap MUST wrap any DB access inside a
+    # bare Thread.new: without it the thread's checked-out AR connection
+    # is not returned to the pool until the thread dies AND Rails does
+    # its housekeeping, which can starve the pool under load (especially
+    # when the HTTP call to Mac is slow or times out). The wrapper also
+    # handles Zeitwerk reload and error reporting - the idiomatic way to
+    # touch DB from a manually-spawned thread.
     Thread.new {
-      begin
-        # Compact BEFORE dispatch when the conversation is getting
-        # heavy. Failure to compact is non-fatal; the turn still ships.
-        if conversation.buddy?
-          reason = ::Buddy::Compactor.should_compact?(conversation)
-          ::Buddy::Compactor.compact!(conversation) if reason
-        end
+      Rails.application.executor.wrap do
+        begin
+          # Compact BEFORE dispatch when the conversation is getting
+          # heavy. Failure to compact is non-fatal; the turn still ships.
+          if conversation.buddy?
+            reason = ::Buddy::Compactor.should_compact?(conversation)
+            ::Buddy::Compactor.compact!(conversation) if reason
+          end
 
-        response = ByteLocal.deliver(message, conversation: conversation)
-        message.update!(state: response&.is_a?(Net::HTTPSuccess) ? :sent : :failed)
-        broadcast(message.reload)
-      rescue => e
-        Rails.logger.warn("[Byte] deliver thread crashed: #{e.class}: #{e.message}")
-        message.update!(state: :failed)
-        broadcast(message.reload)
+          response = ByteLocal.deliver(message, conversation: conversation)
+          ok       = response.is_a?(Net::HTTPSuccess)
+          message.update!(state: ok ? :sent : :failed)
+          broadcast(message.reload)
+
+          # Mac unreachable / non-success on a Buddy turn: sleep Buddy so
+          # subsequent messages short-circuit at the top of dispatch
+          # instead of spawning more failing threads that hold DB
+          # connections. Sleep is short (3 min) so recovery is quick
+          # once Mac is back; the SleepGuard.maybe_wake! at the top of
+          # the next dispatch clears it automatically.
+          if conversation.buddy? && !ok && !::Buddy::SleepGuard.sleeping?(user)
+            ::Buddy::SleepGuard.sleep_until!(user, 3.minutes.from_now)
+            offline = conversation.byte_messages.create!(
+              user:         user,
+              direction:    :inbound,
+              state:        :delivered,
+              body:         ::Buddy::SleepGuard.sleeping_reply_body(user),
+              metadata:     { kind: "buddy", source: "sleep_guard_offline" },
+              delivered_at: Time.current,
+            )
+            broadcast(offline)
+          end
+        rescue => e
+          Rails.logger.warn("[Byte] deliver thread crashed: #{e.class}: #{e.message}")
+          message.update!(state: :failed) rescue nil
+          broadcast(message.reload) rescue nil
+        end
       end
     }
   end

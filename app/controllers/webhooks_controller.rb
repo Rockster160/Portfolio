@@ -308,6 +308,25 @@ class WebhooksController < ApplicationController
   private def buddy_process_reply(user, _conversation, message)
     parsed = Buddy::MarkerParser.extract(message.body)
 
+    # Side-effect-only reply (e.g. Buddy emitted just `[[mood: happy]]`
+    # with no prose and no proposals). Stripping the marker leaves the
+    # body empty; setting body="" would render a completely blank bubble.
+    # The side-effect already fires below - the visible message has no
+    # reason to exist. Destroy it so the client sees it disappear rather
+    # than seeing an empty ghost bubble.
+    side_effect_only = parsed[:display_text].to_s.strip.empty? && parsed[:markers].empty?
+    if side_effect_only
+      Buddy::SideEffects.apply(user, parsed[:side_effects]) if parsed[:side_effects].any?
+      MonitorChannel.broadcast_to(user, {
+        id:      :byte,
+        channel: :byte,
+        data:    { kind: :message_deleted, message_id: message.id, byte_conversation_id: message.byte_conversation_id },
+      })
+      message.destroy!
+      Buddy::ExpressionState.transition!(user, :turn_ended_clean) unless parsed[:side_effects].any? { |e| e[:verb] == :mood }
+      return
+    end
+
     if parsed[:display_text] != message.body
       message.update!(body: parsed[:display_text])
     end

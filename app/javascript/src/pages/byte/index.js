@@ -19,6 +19,7 @@ import { Monitor } from "../dashboard/cells/monitor";
 import {
   loadMessages,
   upsertPersisted,
+  removePersisted,
   readLegacyCache,
   clearLegacyCache,
   clearAllPersisted,
@@ -1367,6 +1368,25 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       if (data.kind === "buddy_expression") {
         buddyHero?.setExpression(data.expression);
+        return;
+      }
+      if (data.kind === "message_deleted") {
+        // Server deleted a message (e.g. Buddy side-effect-only reply
+        // with no prose - the bubble had nothing to show). Remove
+        // from cache + DOM so the user doesn't see a ghost.
+        const convId = data.byte_conversation_id;
+        const msgId  = data.message_id;
+        if (convId != null && msgId != null) {
+          const targetList = convId === currentConversationId
+            ? messages
+            : loadMessages(convId);
+          const updated = removePersisted(convId, targetList, msgId);
+          if (convId === currentConversationId) {
+            messages = updated;
+            const node = thread.querySelector(selectorForId(msgId));
+            node?.remove();
+          }
+        }
         return;
       }
       if (data.kind === "message" && data.message) {

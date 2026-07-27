@@ -105,6 +105,12 @@ export function renderMultiSelect(container, message) {
     label.className = "byte-msg-action-label";
     label.textContent = btn.label || `#${btn.id}`;
     body.appendChild(label);
+    if (btn.sublabel) {
+      const sub = document.createElement("span");
+      sub.className = "byte-msg-action-sublabel";
+      sub.textContent = btn.sublabel;
+      body.appendChild(sub);
+    }
     row.appendChild(body);
 
     const glyph = STATUS_GLYPHS[btn.status || "pending"];
