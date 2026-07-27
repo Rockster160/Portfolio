@@ -30,21 +30,50 @@ export function initBuddyHero({ hero, conversationIdFn }) {
   const charEl        = hero.querySelector(".byte-buddy-char");
   const quickActions  = hero.querySelector("[data-buddy-quick-actions]");
   const moodPopover   = hero.querySelector("[data-buddy-mood-popover]");
+  const facePopover   = hero.querySelector("[data-buddy-face-popover]");
 
   const setActive = (isBuddy) => {
     hero.dataset.buddyActive = isBuddy ? "true" : "false";
     hero.hidden = !isBuddy;
     if (!isBuddy && moodPopover) moodPopover.hidden = true;
+    if (!isBuddy && facePopover) facePopover.hidden = true;
   };
 
   const setExpression = (expression) => {
     if (!expression) return;
     hero.dataset.buddyExpression = String(expression);
     if (charEl) charEl.dataset.buddyExpression = String(expression);
+    syncFaceStates();
   };
 
   const openMood  = () => { if (moodPopover) moodPopover.hidden = false; };
   const closeMood = () => { if (moodPopover) moodPopover.hidden = true;  };
+
+  // ---- Debug face/theme picker (temporary) ----
+  const openFace  = () => { if (facePopover) { facePopover.hidden = false; syncFaceStates(); } };
+  const closeFace = () => { if (facePopover) facePopover.hidden = true; };
+
+  // Theme swap is purely client-side here — it just flips the hero's
+  // data-buddy-theme, which the CSS keys palette + body + faces off of, so
+  // Moss can be previewed without touching the persisted user theme.
+  const setTheme = (theme) => {
+    if (!theme) return;
+    hero.dataset.buddyTheme = String(theme);
+    syncFaceStates();
+  };
+
+  // Reflect the live theme + expression back onto the picker buttons.
+  function syncFaceStates() {
+    if (!facePopover) return;
+    const theme = hero.dataset.buddyTheme;
+    const expr  = hero.dataset.buddyExpression;
+    facePopover.querySelectorAll("[data-buddy-theme-set]").forEach((b) => {
+      b.setAttribute("aria-pressed", String(b.dataset.buddyThemeSet === theme));
+    });
+    facePopover.querySelectorAll("[data-face]").forEach((b) => {
+      b.setAttribute("aria-pressed", String(b.dataset.face === expr));
+    });
+  }
 
   const currentConversationId = () => (conversationIdFn ? conversationIdFn() : null);
 
@@ -79,7 +108,8 @@ export function initBuddyHero({ hero, conversationIdFn }) {
       const btn = e.target.closest("[data-buddy-action]");
       if (!btn) return;
       const action = btn.dataset.buddyAction;
-      if (action === "checkin") { openMood(); return; }
+      if (action === "checkin") { closeFace(); openMood(); return; }
+      if (action === "facepick") { closeMood(); openFace(); return; }
       dispatchAction(action);
     });
   }
@@ -99,6 +129,26 @@ export function initBuddyHero({ hero, conversationIdFn }) {
       if (moodPopover.contains(e.target)) return;
       if (e.target.closest('[data-buddy-action="checkin"]')) return;
       closeMood();
+    });
+  }
+
+  // Debug face/theme picker — sets expression/theme locally, stays open so
+  // several can be tried in a row.
+  if (facePopover) {
+    facePopover.addEventListener("click", (e) => {
+      // Close on any pick — the popover covers Byte, so you can't see the
+      // result while it's open. Re-tap "Faces" to try another.
+      const themeBtn = e.target.closest("[data-buddy-theme-set]");
+      if (themeBtn) { setTheme(themeBtn.dataset.buddyThemeSet); closeFace(); return; }
+      const faceBtn = e.target.closest("[data-face]");
+      if (faceBtn) { setExpression(faceBtn.dataset.face); closeFace(); }
+    });
+
+    document.addEventListener("click", (e) => {
+      if (facePopover.hidden) return;
+      if (facePopover.contains(e.target)) return;
+      if (e.target.closest('[data-buddy-action="facepick"]')) return;
+      closeFace();
     });
   }
 

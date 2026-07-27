@@ -127,6 +127,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   let unreadCount   = 0;
   let hasMore       = true;
   let loadingOlder  = false;
+  // Declared up here (not next to scrollToBottom) because hydrateForConversation
+  // runs during init BEFORE the scroll section and calls scrollToBottom, which
+  // reads stickRaf — a `let` down there would be in its TDZ and throw.
+  let stickRaf      = 0;
   let oldestLoadedId = null;
 
   // Per-conversation unread-in-drawer counters. Only tracks conversations
@@ -842,7 +846,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   // The loop self-cancels the instant a real user scroll-up flips `atBottom`
   // false (the thread scroll listener recomputes it), so it never fights an
   // intentional scroll away from the bottom.
-  let stickRaf = 0;
   function scrollToBottom(behavior = "auto") {
     atBottom = true;
     clearUnread();
@@ -1202,6 +1205,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Sync initial visibility to the currently-active conversation.
   buddyHero?.onModeChange(convoManager.currentConversation()?.mode);
 
+  // Buddy naps while the realtime channel is down. The hero renders
+  // `sleeping` by default (server-side), so a broken/absent JS bundle
+  // leaves Byte honestly asleep instead of fake-awake. Once the Monitor
+  // channel connects we wake it to its stored mood; a drop puts it back
+  // to sleep. `buddyWakeExpr` tracks the latest real (non-connection)
+  // expression so a reconnect restores the right face.
+  let buddyWakeExpr = heroEl?.dataset.buddyAwakeExpression || "happy";
+  const buddyWake  = () => buddyHero?.setExpression(buddyWakeExpr);
+  const buddySleep = () => buddyHero?.setExpression("sleeping");
+
   function clearLocalState() {
     clearAllPersisted();
     clearQueue();
@@ -1403,6 +1416,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   Monitor.subscribe(monitorChannel, {
     connected() {
       setStatus("connected", "connected");
+      buddyWake();
       scheduleDrain();
       refetchHistory();
       convoManager.refresh().catch(() => {});
@@ -1415,6 +1429,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     },
     disconnected() {
       setStatus("disconnected", "disconnected");
+      buddySleep();
       wasDisconnected = true;
     },
     received(payload) {
@@ -1425,6 +1440,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
       }
       if (data.kind === "buddy_expression") {
+        // Remember it as the wake target so a later reconnect restores this
+        // face rather than a stale one.
+        buddyWakeExpr = data.expression;
         buddyHero?.setExpression(data.expression);
         return;
       }

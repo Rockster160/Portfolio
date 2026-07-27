@@ -86,7 +86,11 @@
   <section class="byte-buddy-hero"
            data-buddy-hero
            data-buddy-theme="<%= current_user.buddy_theme %>"
-           data-buddy-expression="<%= current_user.buddy_expression %>"
+           <%# Static default is `sleeping`: with no/broken JS, Byte honestly %>
+           <%# looks asleep rather than fake-awake. JS wakes it to the stored %>
+           <%# mood (data-buddy-awake-expression) once the channel connects. %>
+           data-buddy-expression="sleeping"
+           data-buddy-awake-expression="<%= current_user.buddy_expression %>"
            data-buddy-active="<%= @conversation.mode == 'buddy' ? 'true' : 'false' %>"
            <%= (@conversation.mode == 'buddy' ? '' : 'hidden').html_safe %>>
     <div class="byte-buddy-char" aria-label="<%= current_user.buddy_theme == 'moss' ? 'Moss' : 'Byte' %>">
@@ -99,6 +103,7 @@
       <button type="button" data-buddy-action="suggest">What now?</button>
       <button type="button" data-buddy-action="checkin">Check-in</button>
       <button type="button" data-buddy-action="affirmation">Affirmation</button>
+      <button type="button" data-buddy-action="facepick">Faces</button>
     </nav>
     <div class="byte-buddy-mood-popover" data-buddy-mood-popover hidden>
       <span class="byte-buddy-mood-label">How are you feeling?</span>
@@ -108,6 +113,22 @@
         <button type="button" data-mood="okay">Okay</button>
         <button type="button" data-mood="low">Low</button>
         <button type="button" data-mood="rough">Rough</button>
+      </div>
+    </div>
+    <%# Debug-only picker: switch theme (Byte/Moss) and preview any face,
+        including ones not wired into the mood system. Remove once done. %>
+    <% buddy_faces = Dir[Rails.root.join("app/assets/images/buddy/byte/face_*.png")]
+                       .map { |p| File.basename(p, ".png").delete_prefix("face_") }.sort %>
+    <div class="byte-buddy-face-popover" data-buddy-face-popover hidden>
+      <span class="byte-buddy-mood-label">Debug: theme + face</span>
+      <div class="byte-buddy-face-themes" data-buddy-face-themes>
+        <button type="button" data-buddy-theme-set="byte">Byte</button>
+        <button type="button" data-buddy-theme-set="moss">Moss</button>
+      </div>
+      <div class="byte-buddy-face-choices" data-buddy-face-choices>
+        <% buddy_faces.each do |f| %>
+          <button type="button" data-face="<%= f %>"><%= f.tr('_', ' ') %></button>
+        <% end %>
       </div>
     </div>
   </section>

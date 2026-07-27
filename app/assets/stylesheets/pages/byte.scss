@@ -2165,10 +2165,9 @@ dialog.byte-modal {
   // the keyframes so the animation doesn't clobber it.
   animation: buddy-thinking-tap-shifted 1.6s ease-in-out infinite;
 }
-.byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="thinking"]
-  .byte-buddy-arm {
-  background-image: image-url("buddy/byte/arm_thinking.svg");
-}
+// Byte's new raster thinking face carries its own thought-cloud, so the
+// separate arm-tap layer is gone for Byte (asset removed). Moss keeps its
+// SVG arm.
 .byte-buddy-hero[data-buddy-theme="moss"][data-buddy-expression="thinking"]
   .byte-buddy-arm {
   background-image: image-url("buddy/moss/arm_thinking.svg");
@@ -2210,21 +2209,39 @@ dialog.byte-modal {
   }
 }
 
-// Body — theme-scoped (Moss reuses byte body until a Moss body ships).
+// Body — Byte now ships hand-illustrated raster art (PNG); Moss stays on
+// its SVG kit until a Moss raster set exists.
 .byte-buddy-hero[data-buddy-theme="byte"] .byte-buddy-body {
-  background-image: image-url("buddy/byte/body.svg");
+  background-image: image-url("buddy/byte/body.png");
 }
 .byte-buddy-hero[data-buddy-theme="moss"] .byte-buddy-body {
   background-image: image-url("buddy/moss/body.svg");
 }
 
-// Face per theme + expression.
-$expressions: neutral happy thinking focused encouraging celebrating sleeping;
-@each $expr in $expressions {
+// Face per theme + expression. Byte ships the full raster set (PNG) — every
+// face in the folder is wired so the debug picker can switch to any of them.
+// Moss only has its original 7 SVGs, so it gets its own shorter list;
+// referencing a missing moss SVG would fail asset precompile.
+$byte_expressions: neutral neutral_blush happy uwu encouraging annoyed sad crying thinking nerd sleeping sleeping_frown;
+$moss_expressions: neutral happy thinking focused encouraging celebrating sleeping;
+@each $expr in $byte_expressions {
   .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$expr}"]
     .byte-buddy-face {
-    background-image: image-url("buddy/byte/face_#{$expr}.svg");
+    background-image: image-url("buddy/byte/face_#{$expr}.png");
   }
+}
+// The server still drives the :focused and :celebrating moods (proposal
+// states, check-in). Byte has no distinct art for them — they're visual
+// dups — so alias them to the surviving faces: focused→annoyed, celebrating
+// →uwu. Moss keeps its own dedicated SVGs for these, above.
+$byte_expr_aliases: ("focused": "annoyed", "celebrating": "uwu");
+@each $mood, $face in $byte_expr_aliases {
+  .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$mood}"]
+    .byte-buddy-face {
+    background-image: image-url("buddy/byte/face_#{$face}.png");
+  }
+}
+@each $expr in $moss_expressions {
   .byte-buddy-hero[data-buddy-theme="moss"][data-buddy-expression="#{$expr}"]
     .byte-buddy-face {
     background-image: image-url("buddy/moss/face_#{$expr}.svg");
@@ -2498,7 +2515,8 @@ $expressions: neutral happy thinking focused encouraging celebrating sleeping;
 // -------- Buddy check-in mood popover -------------------------------------
 // Inline flyout below the quick-action chips. Rendered small and adjacent
 // so it feels like an extension of the chip rather than a full modal.
-.byte-buddy-mood-popover {
+.byte-buddy-mood-popover,
+.byte-buddy-face-popover {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -2512,6 +2530,57 @@ $expressions: neutral happy thinking focused encouraging celebrating sleeping;
 
   &[hidden] {
     display: none;
+  }
+}
+
+// Debug-only face/theme picker. Theme toggle on top, then a wrapping grid of
+// every available face so any one can be previewed. Temporary — removed once
+// the expression set is finalized.
+.byte-buddy-face-themes {
+  display: flex;
+  gap: 6px;
+
+  button {
+    flex: 1 1 0;
+    padding: 7px 4px !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: #FFFFFF !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    border-radius: 10px !important;
+    font-size: 12.5px !important;
+    font-weight: 700 !important;
+    cursor: pointer;
+
+    &[aria-pressed="true"] {
+      background: rgba(63, 160, 255, 0.28) !important;
+      border-color: rgba(63, 160, 255, 0.6) !important;
+    }
+  }
+}
+.byte-buddy-face-choices {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+
+  button {
+    padding: 7px 4px !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: #FFFFFF !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    border-radius: 9px !important;
+    font-size: 11.5px !important;
+    font-weight: 600 !important;
+    cursor: pointer;
+    text-transform: capitalize;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    &:hover  { background: rgba(255, 255, 255, 0.12) !important; }
+    &[aria-pressed="true"] {
+      background: rgba(63, 160, 255, 0.28) !important;
+      border-color: rgba(63, 160, 255, 0.6) !important;
+    }
   }
 }
 .byte-buddy-mood-label {
