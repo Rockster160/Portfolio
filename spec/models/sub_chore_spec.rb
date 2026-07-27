@@ -70,15 +70,33 @@ RSpec.describe "SubChore behavior" do
       expect(result.completion.paid_pebbles).to eq(6) # sub.reward (3) * parent's 2.0
     end
 
-    it "uses the PARENT's cooldown — a sub tap inside the cooldown window skips payout" do
+    it "inherits the parent's threshold VALUE but keeps the timer per-leaf" do
       parent.update!(threshold_seconds: 6 * 3600)
       base = Time.current
       sub_a = create(:chore, created_by_user: user, parent_chore: parent, one_off: true, reward_pebbles: 3)
       sub_b = create(:chore, created_by_user: user, parent_chore: parent, one_off: true, reward_pebbles: 3)
       travel_to(base) { described_class.new(sub_a, user).call }
       travel_to(base + 3.hours) {
+        # Tapping sub_a again inside its 6h window skips — its own timer.
+        expect(described_class.new(sub_a, user).call).to be_skipped
+        # But sub_b is a different leaf — its own timer hasn't started, so it pays.
         result = described_class.new(sub_b, user).call
-        expect(result).to be_skipped
+        expect(result).not_to be_skipped
+        expect(result.completion.paid_pebbles).to eq(3)
+      }
+    end
+
+    it "day-reset cooldown (parent threshold=-1) applies per leaf" do
+      parent.update!(threshold_seconds: Chore::THRESHOLD_DAY_RESET)
+      base = Time.current
+      sub_a = create(:chore, created_by_user: user, parent_chore: parent, one_off: true, reward_pebbles: 3)
+      sub_b = create(:chore, created_by_user: user, parent_chore: parent, one_off: true, reward_pebbles: 3)
+      travel_to(base) { described_class.new(sub_a, user).call }
+      travel_to(base + 3.hours) {
+        # Second sub_a tap same day → skipped by its own day-reset cooldown.
+        expect(described_class.new(sub_a, user).call).to be_skipped
+        # sub_b is untapped today — day-reset is per-leaf, so it still pays.
+        expect(described_class.new(sub_b, user).call).not_to be_skipped
       }
     end
 

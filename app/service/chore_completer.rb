@@ -62,28 +62,26 @@ class ChoreCompleter
     )
   end
 
-  # Threshold check: if the chore has a threshold and SOMEBODY has been
-  # PAID within that window, skip payout for this tap. Scope:
+  # Threshold check: cooldown is per-LEAF. Each sub-chore has its own
+  # timer — tapping Focus doesn't block Cymbalta, even though they share
+  # the Supplements parent. The threshold *value* still inherits from
+  # the parent when the sub doesn't override it (Cymbalta with a NULL
+  # threshold uses Supplements' -1). Scope:
   #   :household — looks across everyone in the share group
   #   :personal  — this user only
   #   :assigned  — assignee only (same as :personal in practice)
-  # The timer never resets — we look back from `at` to find the last
-  # PAID completion among the relevant user(s).
   def apply_threshold!(record)
-    return if credit.threshold_seconds.blank? || credit.threshold_seconds.to_i.zero?
+    threshold = tapped.threshold_seconds.presence || credit.threshold_seconds
+    return if threshold.blank? || threshold.to_i.zero?
 
     scope_user_ids = credit.cooldown_scope_user_ids(user)
-    # Cooldown is shared across every sub-chore under the same parent —
-    # `where(chore_id = credit.id OR parent_chore_id = credit.id)` sweeps
-    # up both a direct tap on the parent and any sibling sub-chore tap.
     last_paid = ChoreCompletion
-      .where(user_id: scope_user_ids, payout_skipped: false)
-      .where("chore_id = :id OR parent_chore_id = :id", id: credit.id)
+      .where(user_id: scope_user_ids, chore_id: tapped.id, payout_skipped: false)
       .where(completed_at: ...at)
       .order(completed_at: :desc).first
     return if last_paid.blank?
 
-    if credit.cooldown_until_day_reset?
+    if threshold.to_i == Chore::THRESHOLD_DAY_RESET
       # Day-reset cooldown: blocked only if a paid completion already
       # exists in the same ChoreDay window. Once we cross 4am (or
       # whatever ChoreDay::CUTOFF_HOURS is), the cooldown is gone.
@@ -94,7 +92,7 @@ class ChoreCompleter
       return
     end
 
-    window_end = last_paid.completed_at + credit.threshold_seconds.seconds
+    window_end = last_paid.completed_at + threshold.to_i.seconds
     return unless at < window_end
 
     record.payout_skipped = true
