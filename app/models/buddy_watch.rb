@@ -23,13 +23,16 @@ class BuddyWatch < ApplicationRecord
 
   belongs_to :user
   belongs_to :byte_conversation
+  # When present, the watch delivers to this person's companion instead of the
+  # owner's ("whenever I add to our Agenda, let Rocco know"). Same household.
+  belongs_to :notify_user, class_name: "User", optional: true
 
   KINDS = %w[reminder prompt].freeze
 
   # The Jil trigger scopes a watch can listen on. Kept in lockstep with
   # Buddy::WatchMatcher::WATCHABLE_SCOPES - anything not here can't be
   # matched, so the tool must never store it.
-  SCOPES = %w[travel chore_completion event deploy].freeze
+  SCOPES = %w[travel chore_completion event deploy agenda_item].freeze
 
   # `active` = not terminally fired, not cancelled, not expired. One-shot
   # watches set `fired_at` after firing (terminal); repeating watches only

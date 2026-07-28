@@ -338,7 +338,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     // If this message carries a Buddy proposal checklist, mount (or
     // re-mount) the multi-select renderer below the body. Idempotent —
     // each paint clears the container and re-renders from message.metadata.
-    if (message?.metadata?.tool_name === "buddy_proposals") {
+    if (
+      message?.metadata?.tool_name === "buddy_proposals" ||
+      message?.metadata?.tool_name === "buddy_relay_answer"
+    ) {
       let checklistEl = node.querySelector("[data-buddy-checklist]");
       if (!checklistEl) {
         checklistEl = document.createElement("div");

@@ -225,9 +225,10 @@ module Buddy
       return user if name.to_s.downcase.in?(%w[me myself i])
       return nil if user.chore_household_id.nil?
 
+      wanted     = name.to_s.downcase.strip
       candidates = User.where(id: user.chore_household&.member_user_ids || [])
-      candidates.find { |u| u.first_name.to_s.downcase == name.to_s.downcase } ||
-        candidates.find { |u| u.name.to_s.downcase.include?(name.to_s.downcase) }
+      candidates.find { |u| u.first_name.to_s.downcase == wanted } ||
+        candidates.find { |u| u.username.to_s.downcase.include?(wanted) }
     end
 
     private

@@ -2805,9 +2805,25 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
     border-color: rgba(182, 139, 255, 0.28);
   }
 }
-// (The old .byte-msg-multi-select-submit "Confirm" button was removed —
-// Buddy proposals now trigger per-checkbox the moment they're tapped, so
-// there's no batch submit control to style.)
+// Buddy proposals trigger per-checkbox on tap, so they need no submit control.
+// A relayed select-all question (ask_partner_multi) is the exception: the
+// recipient picks several options, then taps one Send button to answer.
+.byte-msg-multi-select-submit {
+  align-self: flex-end;
+  margin-top: 2px;
+  padding: 7px 18px;
+  border-radius: 10px;
+  border: 1px solid rgba(63, 160, 255, 0.4);
+  background: rgba(63, 160, 255, 0.16);
+  color: #CFE6FF;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 100ms ease, opacity 100ms ease;
+
+  &:hover:not(:disabled) { background: rgba(63, 160, 255, 0.26); }
+  &:disabled { opacity: 0.5; cursor: default; }
+}
 
 // -------- Buddy check-in mood popover -------------------------------------
 // Inline flyout below the quick-action chips. Rendered small and adjacent

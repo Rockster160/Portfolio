@@ -83,6 +83,9 @@ export function renderMultiSelect(container, message) {
   if (buttons.length === 0) return false;
 
   const requestId = meta.action_request_id;
+  // "confirm" = pick-any with a Send button (a relayed select-all question);
+  // otherwise each check fires immediately (Buddy proposals, pick-one).
+  const confirmMode = meta.select_mode === "confirm";
 
   container.innerHTML = "";
   container.classList.add("byte-msg-multi-select");
@@ -107,7 +110,9 @@ export function renderMultiSelect(container, message) {
     cb.checked = resolved;      // retain the check for anything already acted on
     cb.disabled = resolved;     // can't un-do a completed row from here
     // Checking a pending row IS the confirmation — fire it immediately.
-    if (!resolved) {
+    // Exception: confirm mode collects a set and submits once via the Send
+    // button below, so checking a box there only toggles local state.
+    if (!resolved && !confirmMode) {
       cb.addEventListener("change", () => {
         if (cb.checked) triggerChecked(container, requestId, cb);
       });
@@ -157,7 +162,59 @@ export function renderMultiSelect(container, message) {
     container.appendChild(row);
   });
 
+  // Confirm mode: one Send button submits the whole checked set at once, so
+  // the recipient can pick several options before answering. Only shown while
+  // rows remain live.
+  if (confirmMode) {
+    const anyLive = buttons.some(
+      (b) => !RESOLVED_STATUSES.has(b.status || "pending"),
+    );
+    if (anyLive) {
+      const submit = document.createElement("button");
+      submit.type = "button";
+      submit.className = "byte-msg-multi-select-submit basic";
+      submit.textContent = "Send";
+      submit.addEventListener("click", () =>
+        submitChecked(container, requestId, submit),
+      );
+      container.appendChild(submit);
+    }
+  }
+
   return true;
+}
+
+// Confirm-mode submit: send every checked row's id in one POST. The server
+// records the full set as the answer, marks the rows executed/cancelled, and
+// broadcasts the settled checklist back. Optimistically locks the controls so
+// a double-tap can't double-submit; rolls back on failure.
+async function submitChecked(container, requestId, button) {
+  const checkedIds = Array.from(
+    container.querySelectorAll('input[type="checkbox"]:checked'),
+  ).map((cb) => Number(cb.value));
+  if (checkedIds.length === 0) return;
+
+  button.disabled = true;
+  const boxes = container.querySelectorAll('input[type="checkbox"]');
+  boxes.forEach((cb) => {
+    cb.disabled = true;
+  });
+
+  try {
+    await apiCall(
+      `/byte/actions/${encodeURIComponent(requestId)}/respond`,
+      "POST",
+      { value: checkedIds },
+    );
+    // Server broadcast re-renders the settled rows; nothing to touch here.
+  } catch (e) {
+    button.disabled = false;
+    boxes.forEach((cb) => {
+      const row = cb.closest(".byte-msg-action-row");
+      if (!row || !RESOLVED_STATUSES.has(row.dataset.status)) cb.disabled = false;
+    });
+    console.warn("[byte] relay answer submit failed", e);
+  }
 }
 
 // Fire the currently-checked rows. Sends the FULL checked set every time

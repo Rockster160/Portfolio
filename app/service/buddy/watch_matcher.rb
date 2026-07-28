@@ -20,7 +20,7 @@ module Buddy
       return if watches.empty?
 
       payload = normalize_payload(raw_data)
-      watches.each { |watch| fire!(watch) if watch.matches?(payload) }
+      watches.each { |watch| fire!(watch, payload) if watch.matches?(payload) }
     rescue => e
       # A watch failing to match must never take down the trigger it's
       # riding on (a chore completion, an arrival). Report and move on.
@@ -49,7 +49,31 @@ module Buddy
       base.merge(raw.execution_attrs || {})
     end
 
-    def fire!(watch)
+    def fire!(watch, payload={})
+      if watch.notify_user_id
+        fire_cross_user!(watch, payload)
+      else
+        fire_self!(watch)
+      end
+
+      # One-shot watches go terminal (fired_at) so `active` drops them and
+      # they never re-fire. Repeating watches only stamp last_fired_at and
+      # stay active for the next occurrence.
+      if watch.one_shot
+        watch.update!(fired_at: Time.current, last_fired_at: Time.current)
+      else
+        watch.update!(last_fired_at: Time.current)
+      end
+    rescue => e
+      Buddy::Errors.report(
+        section:   "watch_matcher.fire",
+        exception: e,
+        user:      watch.user,
+        extra:     { watch_id: watch.id },
+      )
+    end
+
+    def fire_self!(watch)
       conversation = watch.byte_conversation
       user         = watch.user
 
@@ -70,22 +94,28 @@ module Buddy
           push_title:   watch.body,
         )
       end
+    end
 
-      # One-shot watches go terminal (fired_at) so `active` drops them and
-      # they never re-fire. Repeating watches only stamp last_fired_at and
-      # stay active for the next occurrence.
-      if watch.one_shot
-        watch.update!(fired_at: Time.current, last_fired_at: Time.current)
-      else
-        watch.update!(last_fired_at: Time.current)
-      end
-    rescue => e
-      Buddy::Errors.report(
-        section:   "watch_matcher.fire",
-        exception: e,
-        user:      watch.user,
-        extra:     { watch_id: watch.id },
+    # A cross-user watch ("whenever I add to our Agenda, let Rocco know")
+    # delivers to notify_user's companion, framed as coming from the owner.
+    def fire_cross_user!(watch, payload)
+      notify_user  = watch.notify_user
+      conversation = Buddy::CompanionRelay.conversation_for(notify_user)
+
+      Buddy::CompanionDelivery.deliver_prompt(
+        user:         notify_user,
+        conversation: conversation,
+        seed:         cross_user_seed(watch, payload),
+        metadata:     { kind: "buddy_trigger", hidden: true, source: "watch_relay", watch_id: watch.id },
       )
+    end
+
+    def cross_user_seed(watch, payload)
+      owner  = watch.user.first_name
+      detail = payload.is_a?(Hash) ? payload[:name].to_s.strip.presence : nil
+      base   = "#{owner} asked me to give #{watch.notify_user.first_name} a heads-up: #{watch.body}."
+      base   = "#{base} (What changed: \"#{detail}\".)" if detail
+      "#{base} Say it warmly, in your own voice - you're passing it along for #{owner}."
     end
   end
 end

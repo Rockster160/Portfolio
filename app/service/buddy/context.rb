@@ -38,6 +38,7 @@ module Buddy
         active_proposals:    active_proposals(user),
         upcoming_reminders:  upcoming_reminders(user, now),
         active_watches:      active_watches(user),
+        pending_relays:      pending_relays(user),                # open questions from a partner, awaiting THIS user's answer
         jil_triggers:        jil_triggers(user),
         jil_functions:       jil_functions(user),
       }
@@ -543,6 +544,20 @@ module Buddy
           }
       rescue => e
         Buddy::Errors.report(section: "context.active_proposals", exception: e, user: user)
+        []
+      end
+
+      # Open questions a partner's companion has relayed to THIS user, still
+      # waiting on their answer. Surfaced so that when the user answers in
+      # conversation ("tell them tacos", or just "tacos"), Buddy knows to pass
+      # it back via relay_answer. Pick-one/pick-any questions also show tappable
+      # buttons; relay_answer still works if the user answers in words instead.
+      def pending_relays(user)
+        BuddyRelay.open_questions_for(user).map { |r|
+          { id: r.id, from: r.from_user.first_name, question: r.body, kind: r.kind }
+        }
+      rescue => e
+        Buddy::Errors.report(section: "context.pending_relays", exception: e, user: user)
         []
       end
     end

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_07_28_122316) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_28_144135) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -382,6 +382,29 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_28_122316) do
     t.index ["user_id"], name: "index_buddy_memories_on_user_id"
   end
 
+  create_table "buddy_relays", force: :cascade do |t|
+    t.bigint "from_user_id", null: false
+    t.bigint "to_user_id", null: false
+    t.bigint "from_conversation_id"
+    t.bigint "to_conversation_id"
+    t.bigint "to_byte_action_id"
+    t.integer "kind", default: 0, null: false
+    t.integer "status", default: 0, null: false
+    t.text "body", null: false
+    t.jsonb "options", default: [], null: false
+    t.jsonb "answer"
+    t.datetime "delivered_at"
+    t.datetime "answered_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["from_conversation_id"], name: "index_buddy_relays_on_from_conversation_id"
+    t.index ["from_user_id"], name: "index_buddy_relays_on_from_user_id"
+    t.index ["to_byte_action_id"], name: "index_buddy_relays_on_to_byte_action_id"
+    t.index ["to_conversation_id"], name: "index_buddy_relays_on_to_conversation_id"
+    t.index ["to_user_id", "status"], name: "index_buddy_relays_on_to_user_id_and_status"
+    t.index ["to_user_id"], name: "index_buddy_relays_on_to_user_id"
+  end
+
   create_table "buddy_reminders", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.bigint "byte_conversation_id", null: false
@@ -415,7 +438,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_28_122316) do
     t.jsonb "metadata", default: {}, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "notify_user_id"
     t.index ["byte_conversation_id"], name: "index_buddy_watches_on_byte_conversation_id"
+    t.index ["notify_user_id"], name: "index_buddy_watches_on_notify_user_id"
     t.index ["user_id", "trigger_scope"], name: "index_buddy_watches_on_user_id_and_trigger_scope"
     t.index ["user_id"], name: "index_buddy_watches_on_user_id"
   end
@@ -1464,10 +1489,16 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_28_122316) do
   add_foreign_key "agendas", "users"
   add_foreign_key "boxes", "users"
   add_foreign_key "buddy_memories", "users"
+  add_foreign_key "buddy_relays", "byte_actions", column: "to_byte_action_id"
+  add_foreign_key "buddy_relays", "byte_conversations", column: "from_conversation_id"
+  add_foreign_key "buddy_relays", "byte_conversations", column: "to_conversation_id"
+  add_foreign_key "buddy_relays", "users", column: "from_user_id"
+  add_foreign_key "buddy_relays", "users", column: "to_user_id"
   add_foreign_key "buddy_reminders", "byte_conversations"
   add_foreign_key "buddy_reminders", "users"
   add_foreign_key "buddy_watches", "byte_conversations"
   add_foreign_key "buddy_watches", "users"
+  add_foreign_key "buddy_watches", "users", column: "notify_user_id"
   add_foreign_key "byte_actions", "byte_conversations"
   add_foreign_key "byte_actions", "byte_messages"
   add_foreign_key "byte_actions", "users"

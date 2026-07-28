@@ -200,6 +200,10 @@ class ByteController < ApplicationController
     # cancel the unchecked) is the wrong shape for it.
     return respond_buddy_proposals(action) if action.tool_name == "buddy_proposals"
 
+    # A relayed cross-user question. The tapped option(s) are the recipient's
+    # answer; record it and hand it back to the asker's companion.
+    return respond_buddy_relay(action) if action.tool_name == "buddy_relay_answer"
+
     return head(:conflict) unless action.pending?
 
     value = params[:value]
@@ -268,6 +272,19 @@ class ByteController < ApplicationController
 
     ids = Array(params[:value]).map(&:to_i).reject(&:zero?)
     Buddy::ProposalExecutorJob.perform_later(action.id, ids) if ids.any?
+
+    render json: action.as_wire
+  end
+
+  # The recipient tapped an answer on a relayed cross-user question. Map the
+  # checked option(s) to the answer, record it, and relay it back to whoever
+  # asked. Idempotent: a question already answered just re-renders.
+  def respond_buddy_relay(action)
+    return head(:conflict) unless action.pending? &&
+                                  (action.expires_at.nil? || action.expires_at.future?)
+
+    ids = Array(params[:value]).map(&:to_i).reject(&:zero?)
+    Buddy::CompanionRelay.answer_from_action(action, ids) if ids.any?
 
     render json: action.as_wire
   end
