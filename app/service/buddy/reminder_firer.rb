@@ -53,68 +53,29 @@ module Buddy
       # A simple text message from Buddy. Delivered as inbound so the
       # standard notify path fires (push notification, presence-aware).
       def deliver_plain_reminder(user, conversation, reminder)
-        message = conversation.byte_messages.create!(
+        Buddy::CompanionDelivery.deliver_plain(
           user:         user,
-          direction:    :inbound,
-          state:        :delivered,
-          body:         "⏰ Reminder: #{reminder.body}",
+          conversation: conversation,
+          text:         "⏰ Reminder: #{reminder.body}",
           metadata:     { kind: "buddy", source: "reminder", reminder_id: reminder.id },
-          delivered_at: Time.current,
+          push_title:   reminder.body,
         )
-        broadcast(user, message)
-        notify_direct(user, message)
       end
 
       # Trigger a Buddy turn as if the user tapped a quick action - the
       # reminder body becomes the synthetic prompt. Same hidden-message
       # pattern as Buddy::QuickActionsController.
       def deliver_prompted_reminder(user, conversation, reminder)
-        outbound = conversation.byte_messages.create!(
-          user:      user,
-          direction: :outbound,
-          state:     :pending,
-          body:      "[scheduled prompt] #{reminder.body}",
-          metadata:  {
-            kind:         "buddy_trigger",
-            hidden:       true,
-            source:       "reminder",
-            reminder_id:  reminder.id,
+        Buddy::CompanionDelivery.deliver_prompt(
+          user:         user,
+          conversation: conversation,
+          seed:         reminder.body,
+          metadata:     {
+            kind:        "buddy_trigger",
+            hidden:      true,
+            source:      "reminder",
+            reminder_id: reminder.id,
           },
-        )
-
-        # Reuse the same delivery-to-Mac path everything else uses.
-        # Executor.wrap so the thread returns its AR connection to the
-        # pool cleanly even when Mac hangs.
-        Thread.new {
-          Rails.application.executor.wrap do
-            begin
-              response = ByteLocal.deliver(outbound, conversation: conversation)
-              outbound.update!(state: response&.is_a?(Net::HTTPSuccess) ? :sent : :failed)
-            rescue => e
-              Rails.logger.warn("[BuddyReminder] deliver failed: #{e.class}: #{e.message}")
-              outbound.update!(state: :failed) rescue nil
-            end
-          end
-        }
-      end
-
-      def broadcast(user, message)
-        MonitorChannel.broadcast_to(user, {
-          id:      :byte,
-          channel: :byte,
-          data:    { kind: :message, message: message.as_wire },
-        })
-      end
-
-      # Reminder pushes ignore presence - a scheduled nudge fires when
-      # it fires, regardless of whether the PWA thinks the user is
-      # currently looking. Same shape used for proposal notifications.
-      def notify_direct(user, message)
-        # OS shows the app name (Byte); the title is the reminder itself.
-        WebPushNotifications.send_to_byte(
-          title: "⏰ #{message.body.to_s.sub(/\A⏰ Reminder: /, '').truncate(160)}",
-          tag:   "byte-#{message.id}",
-          users: [user],
         )
       end
     end

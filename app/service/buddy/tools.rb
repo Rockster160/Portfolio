@@ -202,6 +202,7 @@ module Buddy
         when :string       then value.to_s
         when :integer      then Integer(value.to_s) rescue nil
         when :enum         then value.to_s.to_sym
+        when :boolean      then ActiveModel::Type::Boolean.new.cast(value)
         when :iso_time     then Time.zone.parse(value.to_s) rescue nil
         when :duration_min then Integer(value.to_s) rescue nil
         else value

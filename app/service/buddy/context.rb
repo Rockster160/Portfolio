@@ -38,6 +38,7 @@ module Buddy
         recent_events:       recent_events(user, now),
         active_proposals:    active_proposals(user),
         upcoming_reminders:  upcoming_reminders(user, now),
+        active_watches:      active_watches(user),
         jil_triggers:        jil_triggers(user),
         jil_functions:       jil_functions(user),
       }
@@ -419,6 +420,25 @@ module Buddy
         }
       rescue => e
         Buddy::Errors.report(section: "context.upcoming_reminders", exception: e, user: user)
+        []
+      end
+
+      # Condition-based reminders (BuddyWatch) still waiting for their
+      # signal - "remind me next time I'm at Costco", "when I brush my
+      # teeth". Lets Buddy see what it's already watching so it doesn't
+      # set a duplicate, and can reference/cancel them by id.
+      def active_watches(user)
+        return [] unless defined?(BuddyWatch)
+
+        BuddyWatch.active.where(user_id: user.id).order(:created_at).limit(15).map { |w|
+          {
+            id:   w.id,
+            when: (w.metadata.is_a?(Hash) ? w.metadata["human_when"].to_s.presence : nil) || w.trigger_scope,
+            body: w.body.to_s.first(120),
+          }
+        }
+      rescue => e
+        Buddy::Errors.report(section: "context.active_watches", exception: e, user: user)
         []
       end
 

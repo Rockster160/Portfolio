@@ -106,9 +106,13 @@ module Buddy
       body = <<~PROMPT.strip
         I just checked in with you. Where I'm at right now: #{mood_vibe(mood)}
 
-        Respond the way a real friend would if I said this in person. Small observation about the day, a soft check-back, or literally just "hey, glad you told me" energy. Match the state honestly. If it's a hard one, don't try to fix it or offer suggestions.
+        Respond the way a real friend would if I said this in person. Match the state honestly. If it's a hard one, don't try to fix it or pitch suggestions.
 
-        Any state words can appear naturally in the reply if they fit the sentence. What you're avoiding is echoing my label back in a template shape (like "X is a solid place to land" or "ending it X"), which reads as variable interpolation.
+        VARY IT - this is important. Do NOT open with a stock line like "hey, thanks for telling me" or "glad you told me". Said once it's fine; said every check-in it's a template and reads like a robot. Find a fresh way in each time.
+
+        Often (not every time) leave the door open to keep talking. Reading the mood: on a good day you might ask, lightly, whether something in particular went well; on a rough one, whether something specific is weighing on it; or just invite me to say more if I want. Sometimes a warm reflection with no question at all is the right call. Mix the shape up so it never feels like the same script twice.
+
+        Don't echo my mood label back in a template shape ("X is a solid place to land", "ending it X") - that reads like variable interpolation.
 
         #{TONE_REMINDER}
       PROMPT
@@ -124,7 +128,9 @@ module Buddy
 
     def trigger_affirmation(conversation)
       body = <<~PROMPT.strip
-        Give me one warm affirmation. 1 or 2 sentences. Something real, not "great job". If nothing honest comes to mind, keep it small.
+        Give me one warm affirmation. 1 or 2 sentences. Something real and specific to ME, not a greeting-card line.
+
+        Do NOT fall back on the stock "you showed up today and that's enough" shape - if every affirmation sounds the same it stops meaning anything. Vary the angle each time: something concrete from the day, a trait of mine, effort I've been putting in, or just a genuinely kind thing said a new way. When something real from context fits, use it. If nothing honest comes to mind, keep it small and plain rather than reaching for a platitude.
 
         #{TONE_REMINDER}
       PROMPT

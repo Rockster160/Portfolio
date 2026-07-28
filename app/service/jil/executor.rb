@@ -39,6 +39,11 @@ class Jil::Executor
 
     trigger_data = ::Tokenizing::TriggerData.parse(raw_trigger_data, as: user)
 
+    # Buddy conditional reminders ride the same event bus as Jil tasks.
+    # Bails in one hash lookup for any non-watchable scope, so this is
+    # free on the hot path.
+    ::Buddy::WatchMatcher.dispatch(user, trigger, raw_trigger_data)
+
     user_tasks = user.accessible_tasks.active.enabled.ordered
     stopped = false
     user_tasks.by_listener(trigger).filter_map { |task|

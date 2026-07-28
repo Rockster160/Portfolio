@@ -37,4 +37,17 @@ RSpec.describe Buddy::Personality do
       expect(prompt).to include("your face should MOVE")
     end
   end
+
+  describe ".for tone floor" do
+    it "warns against reply-as-receipt and templated warmth" do
+      prompt = described_class.for(User.me, tools_appendix: "", context_path: nil)
+      expect(prompt).to include("Don't just confirm and close")
+      expect(prompt).to include("Vary your warmth")
+    end
+
+    it "teaches remind_when as the condition-based reminder tool in the doctrine" do
+      prompt = described_class.for(User.me, tools_appendix: "", context_path: nil)
+      expect(prompt).to include("remind_when")
+    end
+  end
 end

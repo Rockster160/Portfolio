@@ -83,6 +83,18 @@ module Buddy
       scope.order(start_at: :asc).first
     end
 
+    # ---- places ----
+
+    # Resolve a spoken place ("costco", "the gym") to its canonical known
+    # name via the user's AddressBook, so a location watch matches the
+    # name the arrival trigger actually carries (contact name, e.g.
+    # "Costco"). Falls back to the raw name when there's no known place.
+    def resolve_place(name)
+      return nil if name.blank?
+
+      user.address_book.match_contact(name)&.name || name.to_s.strip
+    end
+
     # ---- times ----
 
     def resolve_time(iso)

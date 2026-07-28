@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_07_27_164136) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_28_004755) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -395,6 +395,26 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_27_164136) do
     t.index ["byte_conversation_id"], name: "index_buddy_reminders_on_byte_conversation_id"
     t.index ["fire_at"], name: "idx_buddy_reminders_pending", where: "((fired_at IS NULL) AND (cancelled_at IS NULL))"
     t.index ["user_id"], name: "index_buddy_reminders_on_user_id"
+  end
+
+  create_table "buddy_watches", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "byte_conversation_id", null: false
+    t.text "body", null: false
+    t.string "kind", default: "prompt", null: false
+    t.string "trigger_scope", null: false
+    t.jsonb "match", default: {}, null: false
+    t.boolean "one_shot", default: true, null: false
+    t.datetime "fired_at"
+    t.datetime "last_fired_at"
+    t.datetime "cancelled_at"
+    t.datetime "expires_at"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["byte_conversation_id"], name: "index_buddy_watches_on_byte_conversation_id"
+    t.index ["user_id", "trigger_scope"], name: "index_buddy_watches_on_user_id_and_trigger_scope"
+    t.index ["user_id"], name: "index_buddy_watches_on_user_id"
   end
 
   create_table "byte_actions", force: :cascade do |t|
@@ -1443,6 +1463,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_27_164136) do
   add_foreign_key "buddy_memories", "users"
   add_foreign_key "buddy_reminders", "byte_conversations"
   add_foreign_key "buddy_reminders", "users"
+  add_foreign_key "buddy_watches", "byte_conversations"
+  add_foreign_key "buddy_watches", "users"
   add_foreign_key "byte_actions", "byte_conversations"
   add_foreign_key "byte_actions", "byte_messages"
   add_foreign_key "byte_actions", "users"

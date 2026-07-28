@@ -67,6 +67,12 @@ jobs:
         ssh-add /home/runner/.ssh/github_actions
         bundle exec cap production deploy
 
+    - name: Finish Deploy
+      run: |
+        curl -X POST -H "Authorization: Bearer ${{ secrets.PORTFOLIO_ACCESS_KEY }}" \
+        -d "id=deploy&deploy=finished&merge=${{ steps.commit_info.outputs.merge }}&sha=${{ steps.commit_info.outputs.sha }}&author=${{ steps.commit_info.outputs.author }}&message=${{ steps.commit_info.outputs.message }}" \
+        https://ardesian.com/jil/trigger/deploy
+
     - name: Handle Deploy Failure
       if: failure()
       run: |
