@@ -29,7 +29,10 @@ module Buddy
     # context block, so no shadow log or event trail is needed.
     def apply_mood(user, body)
       expression = body.to_s.downcase.strip
-      valid = Buddy::Faces.valid?(user.buddy_theme, expression)
+      # `selectable?` not `valid?` — a delivered mood may never be a
+      # system/transitional face (e.g. `thinking`), even if the model emits
+      # one off-list. Those would leave the pet resting on a non-mood face.
+      valid = Buddy::Faces.selectable?(user.buddy_theme, expression)
       # Observability: mood markers are otherwise trail-less (stripped from the
       # body, set via update_column). This line is how we can actually answer
       # "is Buddy using expressions?" — grep prod for `[Buddy::mood]`.

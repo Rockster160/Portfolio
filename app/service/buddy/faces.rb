@@ -8,6 +8,13 @@ module Buddy
     # Driven by connection / usage-cap state, not moods Buddy chooses.
     SYSTEM = %i[sleeping sleeping_frown].freeze
 
+    # Transitional-only: the face shown WHILE a reply is being generated.
+    # It's the pet's "working on it" state, not a delivered expression — by
+    # the time words land, the thinking is done. Never offered as a [[mood:]]
+    # (Buddy would otherwise rest on it), but still renderable so the server
+    # can set it during a turn.
+    TRANSITIONAL = %i[thinking].freeze
+
     def dir(theme)
       Rails.root.join("app/assets/images/buddy/#{theme.to_s.presence || 'byte'}")
     end
@@ -19,9 +26,17 @@ module Buddy
         .uniq
     end
 
-    # Faces Buddy may pick as a [[mood:]] — excludes the system faces.
+    # Faces Buddy may pick as a [[mood:]] — excludes the system faces and
+    # the transitional "thinking" face (which is server-driven, never a
+    # delivered mood).
     def selectable(theme)
-      (all(theme) - SYSTEM).sort
+      (all(theme) - SYSTEM - TRANSITIONAL).sort
+    end
+
+    # A face Buddy is actually allowed to deliver as its mood. Tighter than
+    # `valid?` — blocks system/transitional faces even if the model emits one.
+    def selectable?(theme, expression)
+      selectable(theme).include?(expression.to_s.to_sym)
     end
 
     # Faces every theme can render — safe for SERVER-driven expression sets

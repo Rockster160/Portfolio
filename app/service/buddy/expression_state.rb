@@ -32,15 +32,18 @@ module Buddy
 
       def expression_for(event)
         case event.to_sym
+        # `thinking` is transitional ONLY — the "working on your reply" face,
+        # shown until the reply lands (turn_ended / a mood marker replaces it).
+        # No settled state ever rests on it, or the pet looks stuck mid-thought.
         when :turn_started        then :thinking
         when :turn_ended_clean    then :neutral   # resting default, not "cheesy grin happy"
         # Server-driven events use faces BOTH themes have (Byte lacks
         # focused/celebrating; Moss lacks annoyed/nerd) so they render for
         # either pet.
-        when :proposals_awaiting  then :thinking
+        when :proposals_awaiting  then :neutral   # waiting on the user — a settled rest, not mid-thought
         when :proposals_executed  then :happy
         when :proposals_cancelled then :neutral
-        when :tool_failed         then :thinking
+        when :tool_failed         then :sad       # something didn't go through — settled concern, not stuck thinking
         when :idle_long           then :neutral
         end
       end
