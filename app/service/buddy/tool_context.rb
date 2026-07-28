@@ -95,6 +95,34 @@ module Buddy
       user.address_book.match_contact(name)&.name || name.to_s.strip
     end
 
+    # Resolve a spoken place to { "name" =>, "loc" => [lat,lng] } for a
+    # location watch. `loc` is the whole point: matching is coordinate-based,
+    # so the watch fires no matter which NAME the arrival trigger resolves to
+    # (one physical spot carries several names - "TMS" and "Ketamine" both
+    # happen at "Serenity"). Local-first cascade:
+    #   1. a contact with this name -> its address coordinates
+    #   2. an agenda item with this name -> resolve ITS location to coordinates
+    #      (that location is often a different contact or a street for the same
+    #      spot - this is how "TMS" reaches Serenity's coords)
+    #   3. name only, no coords (matching falls back to name equality)
+    def resolve_place_location(name)
+      name = name.to_s.strip
+      return { "name" => "" } if name.blank?
+
+      contact = user.address_book.match_contact(name)
+      addr    = contact&.primary_address
+      loc     = addr&.loc
+      return place_hash(contact.name, addr&.street, loc) if valid_loc?(loc)
+
+      location = agenda_location_for(name)
+      if location.present?
+        via = coords_for_location(location)
+        return place_hash(name, location, via) if valid_loc?(via)
+      end
+
+      place_hash(name, nil, nil)
+    end
+
     # ---- times ----
 
     def resolve_time(iso)
@@ -143,6 +171,52 @@ module Buddy
     end
 
     private
+
+    # A watch's stored place: coordinates are what matching uses; name is for
+    # display; address is kept for legibility and as a human-readable record of
+    # which spot the coords point at. Blank fields are dropped so the hash stays
+    # tidy for name-only fallbacks.
+    def place_hash(name, address, loc)
+      place = { "name" => name.to_s.strip }
+      place["address"] = address.to_s.strip if address.to_s.strip.present?
+      place["loc"] = loc if valid_loc?(loc)
+      place
+    end
+
+    def valid_loc?(loc)
+      loc.is_a?(Array) && loc.compact.length == 2 && loc.all? { |v| v.to_f.nonzero? }
+    end
+
+    # The location string of the agenda item whose name matches `name`, picking
+    # the occurrence closest to now (past or future) so a recurring appointment
+    # resolves to its usual spot. This is the "TMS -> Serenity" bridge: the
+    # person books these as calendar events, and the event carries the address.
+    def agenda_location_for(name)
+      agenda_ids = Agenda.where(user_id: user.id).pluck(:id)
+      return nil if agenda_ids.empty?
+
+      AgendaItem.where(agenda_id: agenda_ids)
+        .where("name ILIKE ?", name.to_s.strip)
+        .where.not(location: [nil, ""])
+        .order(Arel.sql("ABS(EXTRACT(EPOCH FROM (start_at - now())))"))
+        .limit(1)
+        .pick(:location)
+    end
+
+    # Turn an agenda location string into coordinates, local-first: it may be a
+    # contact name ("Serenity") or a street ("3300 N Triumph Blvd ..."). Only
+    # falls back to a (cached) geocode when neither is on file.
+    def coords_for_location(location)
+      ab = user.address_book
+      loc = ab.match_contact(location)&.primary_address&.loc
+      return loc if valid_loc?(loc)
+
+      loc = user.addresses.where("street ILIKE ?", location.to_s.strip).first&.loc
+      return loc if valid_loc?(loc)
+
+      geo = ab.geocode(location)
+      geo if valid_loc?(geo)
+    end
 
     def levenshtein(a, b)
       m, n = a.length, b.length

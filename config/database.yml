@@ -3,7 +3,10 @@ default: &default
   encoding: unicode
   # For details on connection pooling, see rails configuration guide
   # http://guides.rubyonrails.org/configuring.html#database-pooling
-  pool: 10
+  # Kept safely above Puma's web thread count (RAILS_MAX_THREADS, default
+  # 10) so background threads that briefly need a connection can't starve
+  # web requests. Also covers Sidekiq (concurrency 5) in its own process.
+  pool: 22
   host: localhost
   password: <%= ENV['PORTFOLIO_DB_PASS'] %>
 

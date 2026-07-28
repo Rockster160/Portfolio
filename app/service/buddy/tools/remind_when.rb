@@ -35,13 +35,13 @@ Buddy::Tools.register(
 
     scope, match, human = case trigger
     when "arrive"
-      place = ctx.resolve_place(target)
-      raise "arrive needs a place (target)" if place.blank?
-      ["travel", { "action" => "arrived", "location" => place }, "when you get to #{place}"]
+      place = ctx.resolve_place_location(target)
+      raise "arrive needs a place (target)" if place["name"].blank?
+      ["travel", { "action" => "arrived", "place" => place }, "when you get to #{place["name"]}"]
     when "depart"
-      place = ctx.resolve_place(target)
-      raise "depart needs a place (target)" if place.blank?
-      ["travel", { "action" => "departed", "location" => place }, "when you leave #{place}"]
+      place = ctx.resolve_place_location(target)
+      raise "depart needs a place (target)" if place["name"].blank?
+      ["travel", { "action" => "departed", "place" => place }, "when you leave #{place["name"]}"]
     when "chore"
       raise "chore needs a chore name (target)" if target.blank?
       name = ctx.resolve_chore(target)&.name || target

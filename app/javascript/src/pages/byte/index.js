@@ -47,6 +47,7 @@ import {
 import { ConversationManager } from "./conversations";
 import { setupSlashAutocomplete } from "./slash_commands";
 import { renderMultiSelect } from "./message_actions/multi_select";
+import { initMessageContextMenu } from "./message_actions/context_menu";
 import { initBuddyHero } from "./buddy/hero";
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -141,6 +142,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // runs during init BEFORE the scroll section and calls scrollToBottom, which
   // reads stickRaf — a `let` down there would be in its TDZ and throw.
   let stickRaf = 0;
+  // Coalesces the growth-observer's re-pins into one write per frame (see the
+  // MutationObserver in the scroll section). Declared here for the same TDZ
+  // reason as stickRaf.
+  let pinRaf = 0;
   // Sleep/queue state — declared early for the same TDZ reason (hydrate and
   // conversation switches can read them before the sleep section runs).
   let channelConnected = false;
@@ -240,6 +245,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   function paintMessageNode(node, message, opts = {}) {
     const live = opts.live === true;
     node.dataset.messageId = String(message.id);
+    // Raw body stashed for the long-press "Copy full message" action — the
+    // rendered bubble is markdown-HTML, so this preserves the exact source.
+    node.dataset.fullBody = message.body || "";
     if (message?.metadata?.local_id)
       node.dataset.localId = String(message.metadata.local_id);
     const kind = message?.metadata?.kind;
@@ -942,6 +950,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       img.src = a.url;
       img.alt = a.filename || "";
       img.loading = "lazy";
+      // An image finishing load grows the bubble with no DOM mutation, so the
+      // growth observer can't see it — re-pin explicitly. Listener dies with
+      // the node; no leak.
+      img.addEventListener("load", pinToBottomSoon);
       wrap.appendChild(img);
     } else if (type === "audio") {
       const audio = document.createElement("audio");
@@ -1047,6 +1059,34 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateJumpBtn();
     if (thread.scrollTop < LOAD_TRIGGER_PX) maybeLoadOlder();
   });
+
+  // Pin one frame from now, once, whenever thread content grows AFTER an
+  // explicit scrollToBottom already ran. scrollToBottom only settles for ~8
+  // frames; growth that lands later strands below the fold. Two cases the
+  // user hit: (1) a multiline message we just sent finishes layout a frame or
+  // two late; (2) a streaming inbound Buddy reply arrives as "…" and then
+  // expands into a full multi-part message over SECONDS. Gated by `atBottom`,
+  // so it never fights an intentional scroll-up. Coalesced via pinRaf so a
+  // burst of streaming mutations is one scroll write per frame.
+  function pinToBottomSoon() {
+    if (!atBottom || pinRaf) return;
+    pinRaf = requestAnimationFrame(() => {
+      pinRaf = 0;
+      if (atBottom) thread.scrollTop = thread.scrollHeight;
+    });
+  }
+
+  // One observer on the persistent thread node (no per-message bookkeeping,
+  // no leak). childList catches appended bubbles; characterData + subtree
+  // catch a streaming body growing in place. Setting scrollTop mutates no
+  // DOM, so this can't loop on itself.
+  if (typeof MutationObserver !== "undefined") {
+    new MutationObserver(pinToBottomSoon).observe(thread, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+  }
 
   setupLongPressCopy();
 
@@ -1539,6 +1579,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     popover: app.querySelector("[data-byte-slash-popover]"),
     autosize: () => autosize(),
   });
+
+  // Long-press / right-click a message bubble → Copy ID / Copy full message.
+  initMessageContextMenu(thread, app);
 
   composer.addEventListener("submit", (e) => {
     e.preventDefault();

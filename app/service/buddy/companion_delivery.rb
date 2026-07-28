@@ -36,19 +36,12 @@ module Buddy
           metadata:  metadata,
         )
 
-        # Executor.wrap so the thread returns its AR connection to the
-        # pool cleanly even when Mac hangs.
-        Thread.new {
-          Rails.application.executor.wrap do
-            begin
-              response = ByteLocal.deliver(outbound, conversation: conversation)
-              outbound.update!(state: response&.is_a?(Net::HTTPSuccess) ? :sent : :failed)
-            rescue => e
-              Rails.logger.warn("[Buddy::CompanionDelivery] deliver failed: #{e.class}: #{e.message}")
-              outbound.update!(state: :failed) rescue nil
-            end
-          end
-        }
+        # Deliver off the web threads via Sidekiq. `outbound` is a buddy
+        # conversation message, so BuddyDeliverWorker routes it through
+        # TurnDispatcher.deliver! — same Mac round-trip, but no web-pool AR
+        # connection held across it. Firing paths (WatchMatcher / ReminderFirer)
+        # ride web requests and cron jobs; neither should block on the Mac.
+        BuddyDeliverWorker.perform_async(outbound.id)
         outbound
       end
 

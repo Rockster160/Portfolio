@@ -597,25 +597,9 @@ class WebhooksController < ApplicationController
   def byte_weather
     return head :unauthorized unless byte_authorized?
 
-    key = ENV["WEATHER_APIKEY"].to_s
-    return render json: { error: :"WEATHER_APIKEY not set" }, status: :service_unavailable if key.empty?
+    body = WeatherService.summary
+    return render json: { error: :"weather unavailable" }, status: :service_unavailable if body.blank?
 
-    uri = URI("https://api.openweathermap.org/data/3.0/onecall")
-    uri.query = URI.encode_www_form(
-      lat:     40.4805,
-      lon:     -111.9982,
-      units:   :imperial,
-      exclude: "minutely,hourly,alerts",
-      lang:    :en,
-      appid:   key,
-    )
-    res = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http|
-      http.get(uri.request_uri)
-    }
-    return render json: { error: "openweather #{res.code}" }, status: :bad_gateway unless res.is_a?(Net::HTTPSuccess)
-
-    payload = JSON.parse(res.body)
-    body    = byte_format_weather(payload)
     render json: { body: body }
   end
 
@@ -660,22 +644,6 @@ class WebhooksController < ApplicationController
     parts = ["#{stamp}  #{item.name}"]
     parts << "@ #{item.location}" if item.location.present?
     "- #{parts.join("  ")}"
-  end
-
-  private def byte_format_weather(payload)
-    cur   = payload["current"] || {}
-    today = (payload["daily"] || []).first || {}
-    cond  = (cur.dig("weather", 0, "description") || "").to_s
-    temp  = cur["temp"].to_f.round
-    feels = cur["feels_like"].to_f.round
-    hi    = today.dig("temp", "max").to_f.round
-    lo    = today.dig("temp", "min").to_f.round
-    rain  = (today["pop"].to_f * 100).round
-    parts = ["currently #{temp}°F#{cond.empty? ? "" : ", #{cond}"}"]
-    parts << "feels like #{feels}°F" if (feels - temp).abs >= 3
-    parts << "today high #{hi}°F / low #{lo}°F"
-    parts << "chance of rain #{rain}%" if rain > 0
-    parts.join(". ") + "."
   end
 
   private def byte_authorized?

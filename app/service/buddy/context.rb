@@ -22,6 +22,7 @@ module Buddy
         now_local:         now.strftime("%a %Y-%m-%d %-I:%M %p %Z"),
         timezone:          tz,
         user_first_name:   user.first_name,
+        weather:           WeatherService.summary,              # cached ~15m; nil when unavailable
         emotional_state:   emotional_state(user, now),          # current mood + pet expression
         today_agenda:      today_agenda(user, now),
         upcoming_agenda:   upcoming_agenda(user, now),          # rest-of-week, unusual-first

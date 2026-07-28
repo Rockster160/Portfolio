@@ -42,6 +42,40 @@ RSpec.describe Buddy::WatchMatcher do
       w = make_watch(trigger_scope: "deploy", match: {})
       expect(w.matches?("sha" => "abc123")).to be(true)
     end
+
+    context "place (travel) matching" do
+      let(:watch) do
+        make_watch(
+          trigger_scope: "travel",
+          match: { "action" => "arrived", "place" => { "name" => "Serenity", "loc" => [40.5, -111.9] } },
+        )
+      end
+
+      it "matches by coordinate proximity even when the location NAME differs" do
+        # Same physical spot, different contact name (Ketamine vs TMS at Serenity).
+        payload = { "action" => "arrived", "location" => "Serenity Ketamine", "lat" => 40.5001, "lng" => -111.9002 }
+        expect(watch.matches?(payload)).to be(true)
+      end
+
+      it "does not match a genuinely different place" do
+        payload = { "action" => "arrived", "location" => "Costco", "lat" => 40.7, "lng" => -111.7 }
+        expect(watch.matches?(payload)).to be(false)
+      end
+
+      it "still requires the action to line up" do
+        payload = { "action" => "departed", "location" => "Serenity", "lat" => 40.5, "lng" => -111.9 }
+        expect(watch.matches?(payload)).to be(false)
+      end
+
+      it "falls back to name equality when the trigger carries no coordinates" do
+        name_watch = make_watch(
+          trigger_scope: "travel",
+          match: { "action" => "arrived", "place" => { "name" => "Costco" } },
+        )
+        expect(name_watch.matches?("action" => "arrived", "location" => "costco")).to be(true)
+        expect(name_watch.matches?("action" => "arrived", "location" => "Target")).to be(false)
+      end
+    end
   end
 
   describe ".dispatch" do
@@ -76,6 +110,24 @@ RSpec.describe Buddy::WatchMatcher do
       make_watch
       expect(BuddyWatch).not_to receive(:active)
       described_class.dispatch(user, "monitor", { "channel" => "uptime" })
+    end
+
+    # The real bug: chore/event triggers arrive as the RECORD itself
+    # (with_jil_attrs returns self, TriggerData passes ApplicationRecords
+    # through). The old `raw.is_a?(Hash) ? raw : {}` flattened every such
+    # payload to {}, so NO chore/event watch ever matched — silently.
+    it "matches a record-shaped payload (chore completion, not a Hash)" do
+      w = make_watch
+      # Faithful stand-in for a Jilable record: DB columns via #attributes,
+      # derived jil attrs via #execution_attrs (chore_name lives only here).
+      record = Struct.new(:attributes, :execution_attrs).new(
+        { "chore_id" => 42 },
+        { action: :completed, chore_name: "Brush Teeth" },
+      )
+      described_class.dispatch(user, "chore_completion", record)
+
+      expect(w.reload.fired_at).to be_present
+      expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt)
     end
   end
 

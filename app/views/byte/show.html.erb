@@ -155,6 +155,15 @@
       <span class="byte-pwd-sep" aria-hidden="true">·</span>
       <span data-byte-pwd-session-name><%= @conversation.metadata['claude_session_name'] %></span>
     </span>
+    <%# Permission mode toggle — Claude-mode only. "auto" = the Mac approves %>
+    <%# tool calls without prompting (for long unattended features). %>
+    <% perm_mode = @conversation.metadata['permission_mode'] == 'auto' ? 'auto' : 'ask' %>
+    <button type="button" class="byte-pwd-mode" data-byte-pwd-mode data-mode="<%= perm_mode %>"
+            title="Permission mode — tap to toggle auto-approve"
+            <%= 'hidden'.html_safe unless @conversation.mode == 'claude' %>>
+      <span class="byte-pwd-mode-dot" aria-hidden="true"></span>
+      <span data-byte-pwd-mode-label><%= perm_mode %></span>
+    </button>
   </div>
 
   <%# Preload every face for the active theme so an expression change never %>

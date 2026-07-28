@@ -37,7 +37,40 @@ RSpec.describe "remind_when tool" do
     w = BuddyWatch.last
     expect(w.trigger_scope).to eq("travel")
     expect(w.match["action"]).to eq("arrived")
-    expect(w.match["location"]).to eq("costco")
+    # No known contact for "costco" here → name-only place, no coords.
+    expect(w.match["place"]).to eq("name" => "costco")
+  end
+
+  it "captures a known place's coordinates so matching survives a rename" do
+    contact = user.contacts.create!(name: "Serenity")
+    contact.addresses.create!(user: user, street: "123 Calm Way", lat: 40.5, lng: -111.9, primary: true)
+
+    run(text: "grab my RX", trigger: "arrive", target: "serenity")
+    w = BuddyWatch.last
+    expect(w.match["place"]["name"]).to eq("Serenity")
+    expect(w.match["place"]["address"]).to eq("123 Calm Way")
+    expect(w.match["place"]["loc"]).to eq([40.5, -111.9])
+  end
+
+  it "cross-matches a place name via the agenda (TMS -> Serenity's coords)" do
+    # "TMS" is not a contact - it's how the appointment shows on the calendar,
+    # and that calendar event carries the real address (contact Serenity's).
+    # Stub geocode: AgendaItem.create! fires the agenda-travel chain (which
+    # geocodes), and it's the resolver's last-resort fallback too.
+    allow_any_instance_of(AddressBook).to receive(:geocode).and_return([40.43, -111.88])
+    contact = user.contacts.create!(name: "Serenity")
+    contact.addresses.create!(user: user, street: "3300 N Triumph Blvd", lat: 40.43, lng: -111.88, primary: true)
+    agenda = Agenda.create!(user: user, name: "Cal")
+    AgendaItem.create!(
+      agenda: agenda, name: "TMS", kind: :event, location: "3300 N Triumph Blvd",
+      start_at: 1.hour.from_now, end_at: 2.hours.from_now,
+    )
+
+    run(text: "grab your Loops", trigger: "arrive", target: "TMS")
+    w = BuddyWatch.last
+    expect(w.match["place"]["name"]).to eq("TMS")
+    expect(w.match["place"]["address"]).to eq("3300 N Triumph Blvd")
+    expect(w.match["place"]["loc"]).to eq([40.43, -111.88])
   end
 
   it "builds a deploy watch with an empty match" do

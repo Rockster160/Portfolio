@@ -258,23 +258,11 @@ module Buddy
         data:    { kind: :message, message: message.as_wire },
       })
 
-      user = current_user  # capture; current_user is request-scoped
-      Thread.new {
-        Rails.application.executor.wrap do
-          begin
-            response = ByteLocal.deliver(message, conversation: conversation)
-            message.update!(state: response&.is_a?(Net::HTTPSuccess) ? :sent : :failed)
-            MonitorChannel.broadcast_to(user, {
-              id:      :byte,
-              channel: :byte,
-              data:    { kind: :message, message: message.reload.as_wire },
-            })
-          rescue => e
-            Rails.logger.warn("[Buddy::QuickActions] deliver failed: #{e.class}: #{e.message}")
-            message.update!(state: :failed) rescue nil
-          end
-        end
-      }
+      # Deliver off the web threads via Sidekiq. This is a buddy turn, so
+      # BuddyDeliverWorker routes it through TurnDispatcher.deliver!
+      # (delivery + state + broadcast) — no web-pool AR connection held
+      # across the Mac round-trip.
+      BuddyDeliverWorker.perform_async(message.id)
 
       render json: message.as_wire, status: :created
     end

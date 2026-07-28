@@ -487,40 +487,12 @@ class ByteController < ApplicationController
     # this). The reply resolves it back to a mood / neutral on arrival.
     ::Buddy::ExpressionState.transition!(current_user, :turn_started) if conversation.buddy?
 
-    # Fire-and-forget to the local Mac server. If it fails, the message
-    # sits in :pending / :failed - surfaced in the UI so the user can retry.
-    #
-    # Rails.application.executor.wrap MUST wrap any DB access inside a
-    # bare Thread.new: without it the thread's checked-out AR connection
-    # is not returned to the pool until the thread dies AND Rails does
-    # its housekeeping, which can starve the pool under load (especially
-    # when the HTTP call to Mac is slow or times out). The wrapper also
-    # handles Zeitwerk reload and error reporting - the idiomatic way to
-    # touch DB from a manually-spawned thread.
-    Thread.new {
-      Rails.application.executor.wrap do
-        # For :buddy turns this shares the exact delivery path used by the
-        # wake-drain (compaction, state, broadcast, sleep-on-failure). For
-        # claude / bash it's a plain Mac handoff.
-        if conversation.buddy?
-          ::Buddy::TurnDispatcher.deliver!(message)
-        else
-          deliver_plain(message, conversation)
-        end
-      end
-    }
-  end
-
-  # Non-buddy (claude / bash) delivery: fire at the Mac, reflect success in
-  # the message state, and broadcast. No sleep semantics.
-  def deliver_plain(message, conversation)
-    response = ByteLocal.deliver(message, conversation: conversation)
-    ok       = response.is_a?(Net::HTTPSuccess)
-    message.update!(state: ok ? :sent : :failed)
-    broadcast(message.reload)
-  rescue => e
-    Rails.logger.warn("[Byte] deliver thread crashed: #{e.class}: #{e.message}")
-    message.update!(state: :failed) rescue nil
-    broadcast(message.reload) rescue nil
+    # Hand the Mac round-trip to Sidekiq. It used to run inline in a bare
+    # Thread.new wrapped in executor.wrap, which held one of the web-sized
+    # AR connections for the ENTIRE 5-30s Mac HTTP round-trip and starved
+    # the pool — unrelated web requests hit ConnectionTimeoutError. The
+    # worker routes :buddy through TurnDispatcher.deliver! (compaction,
+    # state, broadcast, sleep-on-failure) and claude/bash to a plain handoff.
+    BuddyDeliverWorker.perform_async(message.id)
   end
 end

@@ -111,6 +111,7 @@ export class ConversationManager {
     this.jarvisImg     = document.querySelector("[data-byte-composer-avatar-jarvis]");
     this.pwdBar        = document.querySelector("[data-byte-pwd]");
     this.pwdPath       = document.querySelector("[data-byte-pwd-path]");
+    this.pwdMode       = document.querySelector("[data-byte-pwd-mode]");
     // Only Jarvis needs a runtime image src; Claude and Bash are set
     // statically by the template (Byte image + `$` text respectively).
     if (this.jarvisImg && !this.jarvisImg.getAttribute("src")) {
@@ -132,6 +133,7 @@ export class ConversationManager {
     this.newForm?.addEventListener("submit", (e) => this.handleCreateSubmit(e));
 
     document.querySelector("[data-byte-menu-close]")?.addEventListener("click", () => this.menuModal?.close());
+    this.pwdMode?.addEventListener("click", () => this.togglePermissionMode());
     document.querySelector("[data-byte-menu-rename]")?.addEventListener("click", () => this.handleRename());
     document.querySelector("[data-byte-menu-archive]")?.addEventListener("click", () => this.handleArchive());
     document.querySelector("[data-byte-menu-adopt]")?.addEventListener("click", () => this.handleAdoptOpen());
@@ -323,11 +325,51 @@ export class ConversationManager {
       } else {
         watchChip.hidden = true;
       }
+
+      // Permission-mode chip — only meaningful for Claude mode (the one whose
+      // tool calls route through the Mac's approval hook).
+      if (this.pwdMode) {
+        const isClaude = convo.mode === "claude";
+        this.pwdMode.hidden = !isClaude;
+        if (isClaude) this.setPwdModeUI(this.permissionModeFor(convo));
+      }
     }
 
     if (!this.list) return;
     this.list.innerHTML = "";
     this.conversations.forEach((c) => this.list.appendChild(this.renderConvoRow(c)));
+  }
+
+  permissionModeFor(convo) {
+    return convo && convo.metadata && convo.metadata.permission_mode === "auto" ? "auto" : "ask";
+  }
+
+  setPwdModeUI(mode, pending = false) {
+    if (!this.pwdMode) return;
+    this.pwdMode.dataset.mode = mode;
+    this.pwdMode.dataset.pending = pending ? "true" : "false";
+    const label = this.pwdMode.querySelector("[data-byte-pwd-mode-label]");
+    if (label) label.textContent = mode;
+  }
+
+  // Flip the current Claude conversation between "ask" (prompt per tool) and
+  // "auto" (Mac approves tool calls without prompting). Shows the target state
+  // with a pending hint until the server confirms, then rolls back on error.
+  async togglePermissionMode() {
+    const convo = this.conversations.find((c) => c.id === this.currentId);
+    if (!convo || convo.mode !== "claude") return;
+
+    const prev = this.permissionModeFor(convo);
+    const next = prev === "auto" ? "ask" : "auto";
+    this.setPwdModeUI(next, true);
+    try {
+      await apiCall(`/byte/conversations/${convo.id}`, "PATCH", { metadata: { permission_mode: next } });
+      convo.metadata = Object.assign({}, convo.metadata, { permission_mode: next });
+      saveCachedList(this.conversations);
+      this.setPwdModeUI(next, false);
+    } catch (e) {
+      this.setPwdModeUI(prev, false); // server rejected — revert the chip
+    }
   }
 
   renderConvoRow(convo) {

@@ -859,6 +859,90 @@ html.html-ctr-byte body {
 // beats the app-wide reset selector `.ctr-byte .byte-app textarea` (0,2,1)
 // on textarea styling. Without this scope, the reset's transparent background
 // would win and the input would look see-through.
+// Long-press / right-click message menu (Copy ID / Copy full message). One
+// reusable node, positioned at the press point by JS. Suppress the iOS
+// long-press callout on bubbles so our own menu is what appears.
+.byte-app .byte-msg {
+  -webkit-touch-callout: none;
+}
+.byte-app .byte-msg-menu {
+  position: fixed;
+  z-index: 50;
+  min-width: 190px;
+  // Single value on purpose — SassC can't evaluate mixed-unit min(); the JS
+  // clamps the menu inside the viewport, and 280px fits every real phone.
+  max-width: 280px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--bs-panel);
+  border: 1px solid var(--bs-border);
+  border-radius: 12px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5);
+  &[hidden] {
+    display: none;
+  }
+
+  .byte-msg-menu-id {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px 10px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--bs-border);
+  }
+  .byte-msg-menu-id-label {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--bs-muted);
+  }
+  // Shown verbatim and hand-selectable as a fallback when the clipboard
+  // write is blocked (non-secure context, denied permission).
+  .byte-msg-menu-id-value {
+    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    color: var(--bs-text);
+    word-break: break-all;
+    user-select: all;
+    -webkit-user-select: all;
+  }
+
+  // Explicit styling + neutralised global button cascade (the app's
+  // `button` reset paints a gradient bg and nudges `top:1px` on :active,
+  // which would break a fixed-positioned menu row).
+  .byte-msg-menu-item {
+    appearance: none;
+    width: 100%;
+    padding: 10px 10px !important;
+    text-align: left !important;
+    font-family: inherit;
+    font-size: 14px !important;
+    font-weight: 400 !important;
+    color: var(--bs-text) !important;
+    background: none !important;
+    border: none !important;
+    border-radius: 8px !important;
+    cursor: pointer;
+    &:hover,
+    &:focus-visible {
+      background: var(--bs-panel-soft) !important;
+    }
+    &:active {
+      position: static !important;
+      top: auto !important;
+      background: var(--bs-panel-soft) !important;
+    }
+    &.is-ok {
+      color: var(--bs-accent-strong) !important;
+    }
+    &.is-err {
+      color: var(--bs-danger) !important;
+    }
+  }
+}
+
 // Slash-command autocomplete popover. Sits above the composer as its own
 // flex item so it doesn't have to worry about z-index / overlap with the
 // keyboard on iOS. Max-height + scroll so the full command list fits on
@@ -1708,6 +1792,54 @@ dialog.byte-modal {
     flex: 0 0 auto;
     &[hidden] {
       display: none;
+    }
+  }
+
+  // Permission-mode toggle chip (Claude mode). Two classes deep so it wins
+  // over the global `button` cascade (forms.scss) without !important.
+  .byte-pwd-mode {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+    padding: 1px 9px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--bs-muted);
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: lowercase;
+    cursor: pointer;
+    appearance: none;
+    flex: 0 0 auto;
+    transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+
+    &[hidden] {
+      display: none;
+    }
+
+    .byte-pwd-mode-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      opacity: 0.85;
+    }
+
+    // auto = guardrails off: accent-tinted so the "it'll just run" state reads
+    // at a glance.
+    &[data-mode="auto"] {
+      background: rgba(63, 160, 255, 0.16);
+      color: var(--bs-accent);
+      border-color: rgba(63, 160, 255, 0.35);
+    }
+
+    // In flight until the server confirms the flip.
+    &[data-pending="true"] {
+      opacity: 0.5;
     }
   }
 }

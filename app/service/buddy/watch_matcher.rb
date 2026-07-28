@@ -19,7 +19,7 @@ module Buddy
       watches = BuddyWatch.active.where(user_id: user.id, trigger_scope: scope).to_a
       return if watches.empty?
 
-      payload = raw_data.is_a?(Hash) ? raw_data : {}
+      payload = normalize_payload(raw_data)
       watches.each { |watch| fire!(watch) if watch.matches?(payload) }
     rescue => e
       # A watch failing to match must never take down the trigger it's
@@ -30,6 +30,23 @@ module Buddy
         user:      user,
         extra:     { scope: scope },
       )
+    end
+
+    # Trigger payloads reach us in two shapes. Jil-built triggers (travel,
+    # deploy) arrive as a plain Hash. But model-sourced triggers (chore
+    # completions, events) arrive as the RECORD itself: `with_jil_attrs`
+    # returns `self` with the real attrs stashed in `@execution_attrs`, and
+    # `TriggerData.parse` passes ApplicationRecords through untouched. Flatten
+    # both to one plain hash so `matches?` can read `action`/`chore_name`/
+    # `name` uniformly. For a record we overlay execution_attrs (which carry
+    # derived fields like `chore_name` and the `action` verb) on top of the
+    # DB columns (which carry `name`), so either source of a key is visible.
+    def normalize_payload(raw)
+      return raw if raw.is_a?(Hash)
+      return {} unless raw.respond_to?(:execution_attrs)
+
+      base = raw.respond_to?(:attributes) ? raw.attributes.symbolize_keys : {}
+      base.merge(raw.execution_attrs || {})
     end
 
     def fire!(watch)
