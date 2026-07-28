@@ -36,9 +36,31 @@ html.html-ctr-byte body {
   --bs-accent: #3FA0FF;
   --bs-accent-strong: #62B3FF;
   --bs-me-bg: linear-gradient(135deg, #2563EB 0%, #3FA0FF 100%);
+  --bs-accent-grad: linear-gradient(135deg, #2563EB 0%, #3FA0FF 100%);
   --bs-them-bg: #2A3B5F;
   --bs-danger: #F87171;
   --bs-pending: #94A3B8;
+
+  // Moss theme (Chelsea) — retint the ENTIRE surface (page, drawer, modals)
+  // to Moss's calm forest palette. `:has` on the themed .byte-app overrides
+  // the vars at the .ctr-byte root, so everything downstream inherits it.
+  // Her own (outbound) messages are Chelsea's purple; Moss's replies are a
+  // soft green.
+  &:has(.byte-app[data-buddy-theme="moss"]) {
+    --bs-bg: #0C1710;
+    --bs-panel: #15241A;
+    --bs-panel-soft: #1E3325;
+    --bs-border: #2E4A36;
+    --bs-text: #E8F1E2;
+    --bs-muted: #94B48D;
+    --bs-accent: #86C765;
+    --bs-accent-strong: #A6E082;
+    --bs-me-bg: linear-gradient(135deg, #8A6FCB 0%, #A082D9 100%);  // Chelsea purple
+    --bs-accent-grad: linear-gradient(135deg, #6FAE5A 0%, #86C765 100%);  // green buttons
+    --bs-them-bg: #22381F;
+    --bs-danger: #E88A5C;
+    --bs-pending: #8CA886;
+  }
 
   .byte-app,
   .byte-app *,
@@ -1007,7 +1029,7 @@ html.html-ctr-byte body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: var(--bs-me-bg) !important;
+    background: var(--bs-accent-grad) !important;
     color: white !important;
     flex-shrink: 0;
     transition:
@@ -1452,7 +1474,7 @@ dialog.byte-modal {
   }
 
   &.byte-modal-btn-primary {
-    background: linear-gradient(135deg, #2563EB 0%, #3FA0FF 100%) !important;
+    background: var(--bs-accent-grad) !important;
     border-color: transparent !important;
     color: #FFF !important;
   }
@@ -1923,7 +1945,7 @@ dialog.byte-modal {
   }
 
   &.byte-action-btn-primary {
-    background: linear-gradient(135deg, #2563EB 0%, #3FA0FF 100%) !important;
+    background: var(--bs-accent-grad) !important;
     border-color: transparent !important;
     color: #FFF !important;
   }
@@ -1951,7 +1973,7 @@ dialog.byte-modal {
   align-self: flex-end;
   padding: 8px 16px !important;
   border-radius: 8px !important;
-  background: linear-gradient(135deg, #2563EB 0%, #3FA0FF 100%) !important;
+  background: var(--bs-accent-grad) !important;
   border: none !important;
   color: #FFF !important;
   font-size: 13px !important;
@@ -2220,6 +2242,21 @@ dialog.byte-modal {
   animation: buddy-idle 4.2s ease-in-out infinite;
   filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.4));
 }
+// Moss's art is a full 500×500 square with the sprout at the very TOP of the
+// frame. At the shared char size that square runs taller than the hero's
+// 26–38vh window, so overflow:hidden shears off the sprout and pins Moss to
+// the top edge. Cap Moss by height so the whole square — sprout included —
+// always fits, and add a little sky above so it sits clear of the header
+// instead of jammed against it. (max-height only clamps: the tiny 92px
+// keyboard-focus size stays well under the cap, so that state is untouched.)
+.byte-buddy-hero[data-buddy-theme="moss"] {
+  padding-top: 4vh;
+}
+.byte-buddy-hero[data-buddy-theme="moss"] .byte-buddy-char {
+  // Interpolated so SassC emits a literal CSS min() (browser-evaluated)
+  // instead of trying to compute px-vs-vh at compile time and erroring.
+  max-height: #{"min(24vh, 200px)"};
+}
 .byte-buddy-body,
 .byte-buddy-face,
 .byte-buddy-arm {
@@ -2289,14 +2326,14 @@ dialog.byte-modal {
 }
 
 // Body layer. Byte uses a faceless slime body with the face as a transparent
-// overlay. Moss's expressions are each a COMPLETE ball (mossy sphere + sprout
-// + face, at the art's own large-face proportion), so Moss needs no separate
-// body — the whole character lives in the face layer.
+// overlay. Each Moss expression is a COMPLETE character — the mossy ball, its
+// expression, AND the sprout leaf (composited behind the ball) all baked into
+// the face image — so Moss needs no separate body layer.
 .byte-buddy-hero[data-buddy-theme="byte"] .byte-buddy-body {
   background-image: image-url("buddy/byte/body.png");
 }
 .byte-buddy-hero[data-buddy-theme="moss"] .byte-buddy-body {
-  background-image: image-url("buddy/moss/body.png");
+  background-image: none;
 }
 
 // Face per theme + expression. Both themes now ship a full raster set (PNG);
@@ -2488,8 +2525,8 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
 
     &:hover  { border-color: rgba(63, 160, 255, 0.6); }
     &:checked {
-      background: #3FA0FF;
-      border-color: #3FA0FF;
+      background: var(--bs-accent);
+      border-color: var(--bs-accent);
     }
     &:checked::after {
       content: "";

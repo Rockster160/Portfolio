@@ -75,7 +75,7 @@ module Buddy
       needle = title.to_s.downcase.strip
       agendas = Agenda.where(user_id: user.id).pluck(:id)
       scope = AgendaItem.where(agenda_id: agendas)
-      scope = scope.where("LOWER(title) LIKE ?", "%#{needle}%")
+      scope = scope.where("LOWER(name) LIKE ?", "%#{needle}%")
       if hint_date.present?
         day = (Time.zone.parse(hint_date.to_s) rescue nil)
         scope = scope.where("start_at >= ? AND start_at < ?", day.beginning_of_day, day.end_of_day) if day

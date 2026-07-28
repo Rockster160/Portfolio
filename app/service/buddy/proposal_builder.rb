@@ -127,8 +127,12 @@ module Buddy
         name = user.buddy_theme.to_s == "moss" ? "Moss" : "Byte"
 
         autos.each do |p|
-          ctx    = Buddy::ToolContext.new(user)
-          result = Buddy::Tools.dispatch(p[:tool], p[:payload], ctx)
+          ctx = Buddy::ToolContext.new(user)
+          # Feed execute the SAME payload shape the confirm path produces (top-
+          # level symbol keys, values JSON-flattened so Times are ISO strings),
+          # so a tool behaves identically whether it's auto or confirmed.
+          payload = stringify(p[:payload]).symbolize_keys
+          result  = Buddy::Tools.dispatch(p[:tool], payload, ctx)
           text   =
             if result[:ok]
               safely { p[:tool][:receipt].call(result[:data], ctx) }.presence || "Done"

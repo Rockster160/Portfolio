@@ -41,7 +41,7 @@ RSpec.describe Buddy::Context, ".build agenda" do
 
   it "builds a proximity-labelled rest-of-week view" do
     item(name: "Dentist",  start_at: Time.current + 3.days)                              # one-off, upcoming
-    item(name: "Today thing", start_at: Time.current + 2.hours)                          # today → NOT in upcoming
+    item(name: "Today thing", start_at: Time.current)                                    # right now → today, NOT in upcoming
 
     upcoming = described_class.build(user)[:upcoming_agenda]
     titles = upcoming.map { |i| i[:title] }

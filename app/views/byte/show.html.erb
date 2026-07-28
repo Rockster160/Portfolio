@@ -42,6 +42,7 @@
      data-conversations-url="<%= byte_conversations_path %>"
      data-claude-sessions-url="<%= byte_claude_sessions_path %>"
      data-initial-conversation-id="<%= @conversation.id %>"
+     data-buddy-theme="<%= current_user.buddy_theme %>"
      data-active-mode="<%= @conversation.mode %>">
   <header class="byte-header">
     <%# Drawer trigger — sits before the avatar so it lands in the natural %>
@@ -232,7 +233,7 @@
       class="byte-input"
       data-byte-input
       rows="1"
-      placeholder="Say something to Byte…"
+      placeholder="Say something to <%= current_user.buddy_theme == 'moss' ? 'Moss' : 'Byte' %>…"
       autocapitalize="sentences"
       spellcheck="true"
       enterkeyhint="enter"

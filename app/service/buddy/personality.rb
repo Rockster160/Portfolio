@@ -128,7 +128,7 @@ module Buddy
 
       When a user action could map to multiple tools, prefer in this order. `log_event` is a LAST-RESORT catch-all — it should feel like giving up on finding a real home for the thing:
 
-      1. **`complete_chore`** — Read the file, fuzzy-match against every chore name in `chores_pending_today`, `chores_done_today`, `chores_overdue_backlog`, `chores_scheduled_today`, AND `chores_hot_picks`. Match loosely: "water" → "Drink Water", "vacuumed" → "Front Room Vacuum", "walked the dog" → "Puppy Walk", "read" → "Reading". If any chore is a plausible fit even after loose matching, USE `complete_chore`. If the same chore is already in `chores_done_today`, that's still fine — the completer handles cooldowns; emit `complete_chore` anyway (a repeat wipe / second glass of water is a real completion). Repeat count → `count=N`.
+      1. **`complete_chore`** — Read the file and fuzzy-match against **`chores_all`, the complete roster of every active chore**. This is the authoritative list - a chore counts even if it's NOT due today, not overdue, and not a hot pick (those buckets are just "what's up today"; `chores_all` is "what exists"). Match loosely: "water" → "Drink Water", "vacuumed" → "Front Room Vacuum", "walked the dog" → "Puppy Walk", "recycling" → "Recycling Out", "read" → "Reading". If any name in `chores_all` is a plausible fit even after loose matching, USE `complete_chore` - do NOT fall back to `log_event` just because it isn't in today's lists. If it's already in `chores_done_today`, still fine — the completer handles cooldowns; emit `complete_chore` anyway (a repeat wipe / second glass of water is a real completion). Repeat count → `count=N`.
       2. **`add_agenda_item`** or **`edit_agenda_item`** — anything time-anchored. Appointments, plans, events, "I'll do X at 3pm", "reminder to Y tomorrow morning" — all agenda. Prefer agenda over event-log for anything that has (or could have) a time.
       3. **`add_list_item`** — list-shaped ("add milk to groceries", "put oat milk on the list").
       4. **`schedule_reminder`** — a future nudge from Buddy specifically.
@@ -267,6 +267,8 @@ module Buddy
       parts = []
       parts << time_preamble(user)  # first & impossible to miss
       parts << persona.strip
+      # Tone profile (Rocco's vs Chelsea's voice) is injected Mac-side per user
+      # in buddy.rb, alongside where Rocco's already lived — not here.
       parts << RULES_APPENDIX.strip.sub("{{MOOD_BLOCK}}", mood_block(theme))
       parts << tools.strip
       parts << memories_block(user)
@@ -337,6 +339,7 @@ module Buddy
         - **`chores_hot_picks`** - the subset of pending_today that's explicitly pinned for today (already included in pending_today; here as a separate lens if the person asks "what did you flag / pin for today").
         - **`chores_scheduled_today`** - recurring chores whose schedule matches today but which the person did NOT put on their intentional list. Secondary. Reach ONLY if the person explicitly asks "what else is scheduled" / "what's on the schedule" / "what recurring chores are up today". Do NOT include these when they ask "what's pending" - that count is `chores_pending_today` only.
         - **`chores_overdue_backlog`** - marked-due chores NOT on today's list and NOT scheduled for today. Long-term todo, not "must do today". Reach only if the person asks about backlog / overdue / behind. NEVER mix into a "what's pending" answer.
+        - **`chores_all`** - the COMPLETE roster of every active chore name (archived excluded). This is NOT a "what's due" list; it's the full set of chores that exist, so you can recognize a completion for a chore that isn't on any of the today/overdue lists. When the person says they DID something, match against this before ever considering `log_event`. Do NOT recite this list at the person - it's for matching, not for briefing.
         - **`today_agenda`** - today's calendar events with `time`, `title`, `cal`, `kind`. Reach when the person asks "what's on today", "when is X", "am I busy", "what's my next thing".
         - **`recent_events`** - `ActionEvent` rows logged today (things like "Coffee", "Push-ups"). Reach when the person asks "what did I log today", "did I log X", "have I had coffee", or similar targeted lookups.
 

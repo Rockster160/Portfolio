@@ -34,6 +34,7 @@ module Buddy
         chores_hot_picks:        chore_buckets[:hot_picks],       # attention items
         chores_scheduled_today:  chore_buckets[:scheduled_today], # recurring chores landing today but NOT in the user's intentional list
         chores_overdue_backlog:  chore_buckets[:overdue_backlog], # long-term todo, NOT all-must-do-today
+        chores_all:              chore_buckets[:all_names],       # EVERY active chore name - the match roster for complete_chore
         recent_events:       recent_events(user, now),
         active_proposals:    active_proposals(user),
         upcoming_reminders:  upcoming_reminders(user, now),
@@ -242,6 +243,11 @@ module Buddy
           hot_picks:       hot_ids.filter_map       { |id| slim_chore(by_id[id], typical_hours[id], due_ids) }.first(15),
           scheduled_today: scheduled_ids.filter_map { |id| slim_chore(by_id[id], typical_hours[id], due_ids) }.first(20),
           overdue_backlog: overdue.filter_map       { |id| slim_chore(by_id[id], nil, due_ids) }.first(20),
+          # The FULL roster of every active (non-archived) chore, names only.
+          # This is what `complete_chore` matches against so a chore that
+          # isn't due today, isn't overdue, and isn't a hot pick can STILL be
+          # recognized as a real chore instead of getting logged as an event.
+          all_names:       chores.map(&:name).uniq.sort.first(120),
         }
       rescue => e
         Buddy::Errors.report(section: "context.chore_buckets", exception: e, user: user)
@@ -280,7 +286,7 @@ module Buddy
 
 
       def default_buckets
-        { pending_today: [], done_today: [], hot_picks: [], scheduled_today: [], overdue_backlog: [] }
+        { pending_today: [], done_today: [], hot_picks: [], scheduled_today: [], overdue_backlog: [], all_names: [] }
       end
 
       def slim_chore(chore, typical_hour = nil, due_ids = nil)
