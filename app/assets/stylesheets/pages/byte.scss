@@ -2253,9 +2253,11 @@ dialog.byte-modal {
   padding-top: 4vh;
 }
 .byte-buddy-hero[data-buddy-theme="moss"] .byte-buddy-char {
-  // Interpolated so SassC emits a literal CSS min() (browser-evaluated)
-  // instead of trying to compute px-vs-vh at compile time and erroring.
-  max-height: #{"min(24vh, 200px)"};
+  // Cap Moss's height so the full square (sprout included) fits the hero.
+  // Single-unit on purpose: SassC chokes on mixed-unit min() (see the
+  // .byte-drawer note above), and the char's own max-width:260px already
+  // bounds the absolute size, so a plain vh cap is all that's needed.
+  max-height: 24vh;
 }
 .byte-buddy-body,
 .byte-buddy-face,
