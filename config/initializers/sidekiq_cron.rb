@@ -46,6 +46,11 @@ cron_jobs = [
     cron:  every_minute,
   },
   {
+    name:  "Prune Expired Buddy Memories",
+    class: "BuddyMemoryPruneWorker",
+    cron:  daily_4am,
+  },
+  {
     name:  "Google Calendar Sync Fallback",
     class: "GoogleCalendarSyncWorker",
     cron:  every_5_minutes,

@@ -46,17 +46,70 @@ module Buddy
       Buddy::ExpressionState.set(user, expression)
     end
 
-    # `[[remember: <fact>]]` — writes a durable BuddyMemory row. Bounded
-    # to 500 chars (matches the model validation) so an accidental
-    # paragraph-length marker doesn't create a giant row.
+    # `[[remember: <fact>]]` — writes a durable BuddyMemory row. Bounded to 500
+    # chars (matches the model validation) so an accidental paragraph-length
+    # marker doesn't create a giant row.
+    #
+    # Two optional refinements:
+    #   * Short-term: `[[remember: <fact> | <duration>]]` (e.g. "| 2 weeks",
+    #     "| 3 days", "| today") sets an expiry so the fact self-prunes. No
+    #     pipe = a durable fact that never expires.
+    #   * Reinforcement: if we already hold this fact (near-duplicate), bump it
+    #     instead of storing a copy, so re-mentions keep it fresh + high.
     def apply_remember(user, body)
-      fact = body.to_s.strip
+      fact, ttl = split_memory_ttl(body)
       return if fact.empty?
 
+      existing = find_similar_memory(user, fact)
+      if existing
+        existing.reinforce!
+        existing.update_columns(expires_at: ttl, updated_at: Time.current) if ttl
+        return
+      end
+
       BuddyMemory.create!(
-        user:    user,
-        content: fact.first(500),
+        user:         user,
+        content:      fact.first(500),
+        expires_at:   ttl,
+        last_used_at: Time.current,
       )
+    end
+
+    # Split an optional trailing `| <duration>` off a remember body and turn it
+    # into an absolute expiry. Pipe is regex-safe inside the marker (the marker
+    # body just can't contain `]`). Unparseable duration → treated as durable.
+    def split_memory_ttl(body)
+      raw = body.to_s.strip
+      return [raw, nil] unless raw.include?("|")
+
+      fact, _sep, dur = raw.rpartition("|")
+      [fact.strip, parse_duration(dur)]
+    rescue StandardError
+      [raw, nil]
+    end
+
+    def parse_duration(text)
+      t = text.to_s.strip.downcase
+      return Time.current.end_of_day if t == "today"
+      return Time.current.tomorrow.end_of_day if t == "tomorrow"
+
+      m = t.match(/\A(\d+)\s*(day|week|month|year|hour)s?\z/)
+      return nil unless m
+
+      Time.current + m[1].to_i.public_send("#{m[2]}s")
+    end
+
+    # An active memory that's effectively the same fact - exact (normalized)
+    # match, or one clearly contains the other. Conservative on purpose: only
+    # obvious re-mentions reinforce; anything novel becomes its own row.
+    def find_similar_memory(user, fact)
+      norm = fact.to_s.downcase.gsub(/\s+/, " ").strip
+      return nil if norm.length < 8
+
+      BuddyMemory.where(user: user).active.find { |m|
+        other = m.content.to_s.downcase.gsub(/\s+/, " ").strip
+        other == norm || other.include?(norm) || norm.include?(other)
+      }
     end
 
     # `[[forget: <substring or id>]]` — prunes matching memory rows. If

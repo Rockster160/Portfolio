@@ -37,15 +37,19 @@ class AgendaItemsController < ApplicationController
 
     base_attrs = item_params.except(:agenda_id)
     base_attrs[:client_mutation_id] = mutation_id if mutation_id.present?
-    # The add-modal prefills `arrive_early_minutes` to a sensible default
-    # for events with a physical location to travel to. When the location
-    # is blank or non-travelable (a Zoom/Meet/Teams URL, "online",
-    # "tbd", a phone number, etc.) "be there 5 minutes early" is
-    # nonsense — zero it out so the pre-event travel band doesn't show
-    # up on every Zoom call.
-    if base_attrs[:arrive_early_minutes].present? && ::AddressBook.non_travelable?(base_attrs[:location])
-      base_attrs[:arrive_early_minutes] = 0
-    end
+    # The add-modal prefills `arrive_early_minutes` to a sensible default (5).
+    # Zero it ONLY for a NON-BLANK non-travelable location (a Zoom/Meet/Teams
+    # URL, "online", "tbd", a phone number, etc.) — "be there 5 minutes early"
+    # is nonsense there, and we don't want a phantom pre-travel band on every
+    # Zoom call. A BLANK location keeps the default: the user may add a place
+    # later, and the 5-minute buffer should persist unless they change it.
+    location = base_attrs[:location].to_s.strip
+    zero_arrive_early = (
+      base_attrs[:arrive_early_minutes].present? &&
+      location.present? &&
+      ::AddressBook.non_travelable?(location)
+    )
+    base_attrs[:arrive_early_minutes] = 0 if zero_arrive_early
     with_agenda_write_lock(target) {
       if target.managed_externally?
         # Mirror to Google FIRST. If it fails, we never touch the local

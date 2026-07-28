@@ -295,7 +295,7 @@ RSpec.describe AgendaItemsController, type: :controller do
       expect(created.arrive_early_minutes).to eq(0)
     end
 
-    it "zeroes arrive_early_minutes on create when the location is blank" do
+    it "keeps the arrive_early_minutes default when the location is blank" do
       post :create, params: {
         agenda_item: {
           agenda_id:            agenda.id,
@@ -306,7 +306,7 @@ RSpec.describe AgendaItemsController, type: :controller do
         },
       }, format: :json
       created = AgendaItem.order(created_at: :desc).first
-      expect(created.arrive_early_minutes).to eq(0)
+      expect(created.arrive_early_minutes).to eq(5)
     end
   end
 

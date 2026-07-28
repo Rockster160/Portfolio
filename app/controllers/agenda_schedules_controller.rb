@@ -15,14 +15,19 @@ class AgendaSchedulesController < ApplicationController
     return if performed?
 
     attrs = schedule_params.except(:agenda_id)
-    # Same rule as agenda_items#create: zero the arrive-early prefill
-    # when there's nothing physical to travel to (blank, Zoom URLs,
-    # "online", phone numbers — anything AddressBook.non_travelable?
-    # catches). Otherwise every recurring Zoom standup would carry a
-    # 5-minute phantom pre-travel band on every materialised row.
-    if attrs[:arrive_early_minutes].present? && ::AddressBook.non_travelable?(attrs[:location])
-      attrs[:arrive_early_minutes] = 0
-    end
+    # Same rule as agenda_items#create: zero the arrive-early prefill only
+    # for a NON-BLANK non-travelable location (Zoom URLs, "online", phone
+    # numbers — anything AddressBook.non_travelable? catches). Otherwise every
+    # recurring Zoom standup would carry a 5-minute phantom pre-travel band.
+    # A blank location keeps the 5-minute default so it persists if the user
+    # adds a place later.
+    location = attrs[:location].to_s.strip
+    zero_arrive_early = (
+      attrs[:arrive_early_minutes].present? &&
+      location.present? &&
+      ::AddressBook.non_travelable?(location)
+    )
+    attrs[:arrive_early_minutes] = 0 if zero_arrive_early
     @schedule = target.agenda_schedules.new(attrs)
 
     if @schedule.save

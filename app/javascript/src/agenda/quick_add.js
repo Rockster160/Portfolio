@@ -173,7 +173,10 @@
         all_day:             !!lastParse.allDay,
         location:            lastParse.location || "",
         notes:               "",
-        arrive_early_minutes: 0,
+        // Match the add-modal default (5). The server zeroes it only for a
+        // non-blank non-travelable location (Zoom/online), so a plain
+        // quick-add keeps the 5-minute buffer.
+        arrive_early_minutes: 5,
         agenda_id:           agendaId,
         agenda_name:         meta.name,
         agenda_color:        meta.color,

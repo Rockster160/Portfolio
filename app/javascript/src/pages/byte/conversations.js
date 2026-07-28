@@ -286,6 +286,16 @@ export class ConversationManager {
         if (src) this.modeImg.setAttribute("src", src);
         else this.modeImg.removeAttribute("src");
       }
+      // Bash is a shell REPL — kill auto-capitalize/correct/spellcheck so
+      // commands, flags, and paths aren't mangled; restore the prose assists
+      // for every other mode. (Server-renders the same for the initial mode.)
+      const inputEl = this.composer.querySelector("[data-byte-input]");
+      if (inputEl) {
+        const bash = convo.mode === "bash";
+        inputEl.setAttribute("autocapitalize", bash ? "none" : "sentences");
+        inputEl.setAttribute("autocorrect", bash ? "off" : "on");
+        inputEl.setAttribute("spellcheck", bash ? "false" : "true");
+      }
     }
     // Header subtitle: cwd (defaults to Portfolio) + adopted Claude
     // session name (if any). The Mac pushes both into

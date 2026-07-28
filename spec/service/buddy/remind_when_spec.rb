@@ -32,13 +32,26 @@ RSpec.describe "remind_when tool" do
     expect(chip.body).to match(/will remind you next time you finish Brush Teeth/)
   end
 
-  it "builds a location watch (arrive), falling back to the raw place name" do
-    run(text: "grab my RX", trigger: "arrive", target: "costco")
+  it "refuses to set a location watch for a place it can't resolve, and asks instead" do
+    # Not a contact, not on the calendar, and geocoding finds nothing → we
+    # genuinely don't know where this is, so no name-only watch is created.
+    allow_any_instance_of(AddressBook).to receive(:geocode).and_return(nil)
+
+    expect { run(text: "grab my RX", trigger: "arrive", target: "the blorp") }
+      .not_to change { BuddyWatch.count }
+
+    chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
+    expect(chip.body).to match(/Not sure where the blorp is/)
+  end
+
+  it "resolves a general place by geocoding it (known → watch with coords)" do
+    allow_any_instance_of(AddressBook).to receive(:geocode).and_return([40.45, -111.77])
+
+    expect { run(text: "grab my RX", trigger: "arrive", target: "the Plunge in Alpine") }
+      .to change { BuddyWatch.count }.by(1)
     w = BuddyWatch.last
-    expect(w.trigger_scope).to eq("travel")
     expect(w.match["action"]).to eq("arrived")
-    # No known contact for "costco" here → name-only place, no coords.
-    expect(w.match["place"]).to eq("name" => "costco")
+    expect(w.match["place"]).to eq("name" => "the Plunge in Alpine", "loc" => [40.45, -111.77])
   end
 
   it "captures a known place's coordinates so matching survives a rename" do

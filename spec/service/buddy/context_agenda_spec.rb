@@ -51,6 +51,43 @@ RSpec.describe Buddy::Context, ".build agenda" do
     expect(upcoming.find { |i| i[:title] == "Dentist" }[:day]).to be_present
   end
 
+  it "does NOT put a tomorrow all-day event in today (the birthday-shows-today bug)" do
+    # An all-day event is stored at the LOCAL midnight of its date. The old
+    # today window (`now .. now+24h`) reached into tomorrow, so a tomorrow
+    # birthday landed in today. It belongs to the week view as "tomorrow".
+    tz = user.timezone
+    tomorrow_midnight = Time.current.in_time_zone(tz).beginning_of_day + 1.day
+    item(name: "Andrew's Bday", all_day: true, start_at: tomorrow_midnight, end_at: tomorrow_midnight + 1.day)
+
+    built = described_class.build(user)
+    expect(built[:today_agenda].map { |i| i[:title] }).not_to include("Andrew's Bday")
+
+    tomorrow = built[:upcoming_agenda].find { |i| i[:title] == "Andrew's Bday" }
+    expect(tomorrow).to be_present
+    expect(tomorrow[:day]).to eq("tomorrow")
+    expect(tomorrow[:time]).to eq("all day")
+  end
+
+  it "tags a partner's shared PERSONAL item as not-mine, but treats an owned item as mine" do
+    partner = create(:user)  # first_name falls back to username for a non-mapped id
+
+    # Partner's personal calendar, shared TO this user → awareness-only.
+    hers = create(:agenda, user: partner)
+    AgendaShare.create!(agenda: hers, user: user, permission: :viewer)
+    create(:agenda_item, agenda: hers, name: "Partner Ortho", start_at: Time.current + 2.hours)
+
+    # The user's own event on their own calendar → theirs.
+    item(name: "My Standup", start_at: Time.current + 1.hour)
+
+    today = described_class.build(user)[:today_agenda]
+    hers_row = today.find { |i| i[:title] == "Partner Ortho" }
+    mine_row = today.find { |i| i[:title] == "My Standup" }
+
+    expect(hers_row[:mine]).to be(false)
+    expect(hers_row[:owner]).to eq(partner.first_name)
+    expect(mine_row).not_to have_key(:mine)   # owned → no ownership tag
+  end
+
   it "keeps a cancelled ROUTINE (heads-up) but drops a cancelled one-off (noise)" do
     item(name: "No standup", start_at: Time.current + 1.day, agenda_schedule: schedule, status: :cancelled)
     item(name: "Dropped",    start_at: Time.current + 2.days, status: :cancelled)

@@ -43,17 +43,49 @@ module Buddy
     # Prompts are DELIBERATELY tiny. Long structural instructions turn
     # Buddy into a checklist-reciter. Trust the tone profile + persona;
     # only supply the intent + hard constraints.
-    TONE_REMINDER = "Warm, short, human. No em dashes (use commas or short sentences). No emoji. Don't list what I did in bullet form. Don't call out exact times like '8:19'. Don't recite chores by name unless one specific one is your recommendation."
+    TONE_REMINDER = "Warm, short, human. No em dashes (use commas or short sentences). Don't list what I did in bullet form. Don't call out exact times like '8:19'. Don't recite chores by name unless one specific one is your recommendation.".freeze
+
+    # Comfort bands mirror the dashboard weather cell's colour scale
+    # (vars.js temp_scale: 64°F green = the comfortable centre, 78°F yellow =
+    # warm, 96°F red = hot, 32°F = freezing). Encoded here so the Today
+    # briefing frames the weather the way we read it at a glance.
+    def weather_briefing_block
+      summary = WeatherService.summary
+      return "" if summary.blank?
+
+      week  = WeatherService.week_outlook
+      lines = [
+        "",
+        "WEATHER (weave it in naturally, don't recite a forecast):",
+        "Today: #{summary}",
+      ]
+      # Any day this week with extra weather (rain/wind/snow) is worth a quick
+      # heads-up, even when today itself is unremarkable.
+      lines << "This week to flag: #{week}. Give a short heads-up for any day with rain / wind / snow." if week.present?
+      lines += [
+        "Comfort read on today's high:",
+        "- ~62-75°F is the comfortable sweet spot - no need to fuss.",
+        "- upper 70s is warm; mid-80s and up is hot - flag it, suggest light layers / water.",
+        "- 50s is cool, 40s and below is cold; freezing or under, say to grab a coat.",
+        "- real rain chance today? mention an umbrella.",
+        "Skip the today-comfort line if it's unremarkable, but still flag any notable day this week.",
+      ]
+      lines.join("\n")
+    end
 
     def trigger_today(conversation)
       body = <<~PROMPT.strip
         What's on for TODAY, forward-looking. This is a briefing about the day ahead, NOT a recap of yesterday or a review of what's already done.
 
-        OPEN with a warm time-of-day greeting when it fits the hour ("Morning!" / "Afternoon!" / "Evening!") - read `now_local` for the time. Skip it if it'd feel repetitive (we just talked) or the hour is odd.
+        OPEN with a warm time-of-day greeting when it fits - read `now_local` for the hour. Either the short form ("Morning!" / "Afternoon!" / "Evening!") or the full "Good morning" / "Good afternoon" / "Good evening" works; pick whatever feels natural. LEAN INTO the greeting when it genuinely lands: the first check of the day, or when we haven't talked in a while (look at the conversation - if the last exchange was hours ago or it's a fresh start, a proper "Good morning" is exactly right). SKIP it only when we just talked a moment ago (back-to-back) or the hour is genuinely odd - don't greet twice in one thread.
+        #{weather_briefing_block}
 
         LEAD WITH what still needs to happen today:
         - `chores_pending_today` - the primary answer. Name them.
+        - Give extra weight to items explicitly DUE today that AREN'T daily (a `due_today: true` chore whose `freq` is weekly/monthly/less, or a hot pick). Those are the easy-to-forget ones and the most useful to surface - daily habits I know cold.
+        - BATCH related items: if several due chores are obviously one errand or theme (all the trash / recycling / bins, or all the plant watering), say it once as the theme ("it's trash day", "watering day") rather than listing each one.
         - `today_agenda` - today's events / meetings with times. But see UNUSUAL-ONLY below: don't recite the daily-recurring stuff.
+        - Agenda items tagged `mine: false` (with an `owner`, e.g. Chelsea) are on a partner's PERSONAL calendar shared with me - awareness only. They are NOT my tasks. Don't list them as mine; usually don't mention them at all. Only bring one up if it actually affects me (a conflict, a hand-off, something I'm part of), and attribute it ("Chelsea's got a thing at 3").
         - `chores_hot_picks` - flagged for attention today.
 
         WEIGHT BY HOW ROUTINE IT IS (the `cadence` tag):
@@ -97,7 +129,7 @@ module Buddy
 
     def trigger_checkin(conversation, mood)
       unless MOODS.include?(mood)
-        return render(json: { error: "mood must be one of #{MOODS.join('/')}" }, status: :bad_request)
+        return render(json: { error: "mood must be one of #{MOODS.join("/")}" }, status: :bad_request)
       end
 
       log_mood_event(mood)
@@ -174,7 +206,7 @@ module Buddy
         timestamp: Time.current,
         data:      { mood: mood, source: "buddy" },
       )
-    rescue => e
+    rescue StandardError => e
       Rails.logger.warn("[Buddy::QuickActions] mood event failed: #{e.class}: #{e.message}")
     end
 
@@ -183,10 +215,10 @@ module Buddy
       # focused exist on neither now). Check-in reflects the person's mood
       # back through Buddy's face.
       expression = case mood
-                   when "great"        then :happy
-                   when "good", "okay" then :happy
-                   when "low", "rough" then :sad
-                   end
+      when "great"        then :happy
+      when "good", "okay" then :happy
+      when "low", "rough" then :sad
+      end
       ::Buddy::ExpressionState.set(current_user, expression) if expression
     end
 
@@ -208,9 +240,9 @@ module Buddy
 
     def dispatch_trigger(conversation, body, extras)
       metadata = {
-        kind:         "buddy_trigger",
-        hidden:       true,
-        source:       "quick_action",
+        kind:   "buddy_trigger",
+        hidden: true,
+        source: "quick_action",
       }.merge(extras.transform_keys(&:to_s))
 
       message = conversation.byte_messages.create!(
@@ -232,9 +264,9 @@ module Buddy
         state:        :delivered,
         body:         action_chip_label(extras),
         metadata:     {
-          kind:          "action_chip",
-          buddy_action:  extras[:buddy_action],
-          buddy_mood:    extras[:buddy_mood],
+          kind:         "action_chip",
+          buddy_action: extras[:buddy_action],
+          buddy_mood:   extras[:buddy_mood],
         }.compact,
         delivered_at: Time.current,
       )

@@ -40,7 +40,7 @@ Buddy::Tools.register(
     duration = 30 if duration <= 0
     end_at   = start_at + duration.minutes
 
-    item = agenda.agenda_items.create!(
+    attrs = {
       name:     payload[:title],
       location: payload[:location].presence,
       start_at: start_at,
@@ -48,7 +48,13 @@ Buddy::Tools.register(
       all_day:  payload[:all_day].to_s == "true",
       kind:     payload[:kind] || :event,
       status:   :confirmed,
-    )
+    }
+    # Arrive 5 minutes early for anything with a place to be, so the travel /
+    # leave-by chain builds in a small buffer. No location → leave the column's
+    # default (0) alone (it's NOT NULL).
+    attrs[:arrive_early_minutes] = 5 if payload[:location].present?
+
+    item = agenda.agenda_items.create!(attrs)
     { agenda_item_id: item.id }
   },
   receipt: ->(result, _ctx) {

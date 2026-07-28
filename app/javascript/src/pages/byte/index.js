@@ -1632,13 +1632,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   // and the mobile PWA. `composer.dataset.mode` is kept current on every
   // conversation switch (conversations.js) for the avatar/CSS, so it's a
   // reliable live source here too.
+  // Enter-to-send. Bash (a REPL) submits on Enter in every environment.
+  // Otherwise:
+  //   * Desktop (a fine pointer ≈ a physical keyboard): Enter submits,
+  //     Shift+Enter inserts a newline.
+  //   * Mobile / touch: Enter is ALWAYS a newline — users send via the Send
+  //     button — so we never hijack it and the software keyboard / its return
+  //     key (enterkeyhint) are left exactly as they were.
+  // `(pointer: fine)` is the desktop signal, read live so it tracks the
+  // environment (e.g. an iPad that gains a trackpad keyboard). isComposing
+  // guards IME / predictive-text Enters.
+  const hasFinePointer = () =>
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(pointer: fine)").matches;
   input.addEventListener("keydown", (e) => {
-    if (
-      e.key === "Enter" &&
-      !e.shiftKey &&
-      !e.isComposing &&
-      composer.dataset.mode === "bash"
-    ) {
+    if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+    if (composer.dataset.mode === "bash" || hasFinePointer()) {
       e.preventDefault();
       handleSend(input.value);
     }

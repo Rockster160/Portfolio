@@ -238,13 +238,18 @@
       <span class="byte-composer-avatar-bash">$</span>
       <span class="byte-composer-avatar-buddy">💬</span>
     </span>
+    <%# Bash is a shell REPL — auto-capitalize/correct/spellcheck mangle %>
+    <%# commands, flags, and paths, so they're off in that mode. JS keeps %>
+    <%# these in sync on conversation switch (conversations.js). %>
+    <% bash_mode = @conversation.mode.to_s == "bash" %>
     <textarea
       class="byte-input"
       data-byte-input
       rows="1"
       placeholder="Say something to <%= current_user.buddy_theme == 'moss' ? 'Moss' : 'Byte' %>…"
-      autocapitalize="sentences"
-      spellcheck="true"
+      autocapitalize="<%= bash_mode ? 'none' : 'sentences' %>"
+      autocorrect="<%= bash_mode ? 'off' : 'on' %>"
+      spellcheck="<%= bash_mode ? 'false' : 'true' %>"
       enterkeyhint="enter"
     ></textarea>
     <button type="submit" class="byte-send" data-byte-send aria-label="Send">

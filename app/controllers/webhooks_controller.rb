@@ -342,24 +342,27 @@ class WebhooksController < ApplicationController
     # renders (feels more coherent — pet reacts, then presents options).
     Buddy::SideEffects.apply(user, parsed[:side_effects]) if parsed[:side_effects].any?
 
-    # Expression transition is UNCONDITIONAL — every Buddy reply resolves
-    # whatever transient state (usually :thinking from turn start) into
-    # the appropriate resting state. Priority order:
+    # Proposals must ALWAYS build (they create the checklist / run auto tools),
+    # independent of the expression decision below.
+    result = parsed[:markers].any? ? Buddy::ProposalBuilder.create(user: user, byte_message: message, markers: parsed[:markers]) : nil
+
+    # Expression transition resolves the transient :thinking (from turn start)
+    # into a resting state. Priority order — a mood Buddy CHOSE is the most
+    # expressive signal, so it wins even when the same reply also proposed
+    # something (the old code let the proposal state clobber the mood, which is
+    # why moods almost never showed — nearly every doing-something reply has a
+    # proposal):
     #
-    #   1. Proposals present → :focused (checkbox awaiting user)
-    #   2. Mood side-effect set an expression → respect it, don't overwrite
-    #   3. Plain reply → :turn_ended_clean (:happy — back to resting)
-    if parsed[:markers].any?
-      result = Buddy::ProposalBuilder.create(user: user, byte_message: message, markers: parsed[:markers])
-      if result[:action]
-        Buddy::ExpressionState.transition!(user, :proposals_awaiting)  # checklist awaiting a tap
-      elsif result[:auto_ran]
-        Buddy::ExpressionState.transition!(user, :proposals_executed)  # ran on its own, already done
-      else
-        Buddy::ExpressionState.transition!(user, :turn_ended_clean)
-      end
-    elsif parsed[:side_effects].any? { |e| e[:verb] == :mood }
-      # [[mood: X]] already updated expression via SideEffects — leave it
+    #   1. Mood side-effect set an expression → respect it, don't overwrite.
+    #   2. Proposal awaiting a tap → :proposals_awaiting.
+    #   3. Auto-tool ran on its own → :proposals_executed.
+    #   4. Plain reply → :turn_ended_clean (back to resting).
+    if parsed[:side_effects].any? { |e| e[:verb] == :mood }
+      # [[mood: X]] already updated the expression via SideEffects — leave it.
+    elsif result&.dig(:action)
+      Buddy::ExpressionState.transition!(user, :proposals_awaiting)
+    elsif result&.dig(:auto_ran)
+      Buddy::ExpressionState.transition!(user, :proposals_executed)
     else
       Buddy::ExpressionState.transition!(user, :turn_ended_clean)
     end

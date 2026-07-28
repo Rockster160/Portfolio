@@ -27,4 +27,33 @@ RSpec.describe WeatherService do
       expect(described_class.summary).to be_nil
     end
   end
+
+  describe ".format_week_outlook" do
+    it "flags notable days, grouped and ordered by severity, skipping calm days" do
+      base = 1_700_000_000  # fixed so day names are deterministic-ish; \w{3} matches any
+      payload = {
+        "timezone_offset" => 0,
+        "daily" => [
+          { "dt" => base,             "weather" => [{ "main" => "Clear" }],  "pop" => 0.0 },                    # today → skipped
+          { "dt" => base + 1 * 86400, "weather" => [{ "main" => "Rain" }],   "pop" => 0.6 },                    # rain
+          { "dt" => base + 2 * 86400, "weather" => [{ "main" => "Clear" }],  "pop" => 0.05, "wind_speed" => 5 }, # calm → skip
+          { "dt" => base + 3 * 86400, "weather" => [{ "main" => "Snow" }],   "pop" => 0.8 },                    # snow
+          { "dt" => base + 4 * 86400, "weather" => [{ "main" => "Clear" }],  "pop" => 0.1, "wind_gust" => 35 }, # windy
+        ],
+      }
+
+      expect(described_class.format_week_outlook(payload)).to match(/\Asnow \w{3}, rain \w{3}, windy \w{3}\z/)
+    end
+
+    it "returns nil for an unremarkable week" do
+      payload = {
+        "timezone_offset" => 0,
+        "daily" => [
+          { "dt" => 1,     "weather" => [{ "main" => "Clear" }],  "pop" => 0.0 },
+          { "dt" => 86400, "weather" => [{ "main" => "Clouds" }], "pop" => 0.1, "wind_speed" => 6 },
+        ],
+      }
+      expect(described_class.format_week_outlook(payload)).to be_nil
+    end
+  end
 end

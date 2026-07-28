@@ -27,7 +27,7 @@ RSpec.describe "agenda tools (execute-time string payloads)" do
     expect(item.end_at).to   be_within(1.second).of(Time.zone.parse(at) + 30.minutes)
   end
 
-  it "add_agenda_item captures a separate location (\"at Lucky Ones\")" do
+  it "add_agenda_item captures a separate location + defaults to a 5-min early arrival" do
     tool = Buddy::Tools[:add_agenda_item]
     at   = 2.hours.from_now.change(sec: 0).iso8601
     payload = { agenda_id: agenda.id, title: "Coffee", at: at, duration: 30, location: "Lucky Ones", kind: "event" }
@@ -37,6 +37,16 @@ RSpec.describe "agenda tools (execute-time string payloads)" do
 
     expect(item.name).to eq("Coffee")
     expect(item.location).to eq("Lucky Ones")
+    expect(item.arrive_early_minutes).to eq(5)
+  end
+
+  it "add_agenda_item leaves the arrival buffer at the default (0) when there's no location" do
+    tool = Buddy::Tools[:add_agenda_item]
+    at   = 2.hours.from_now.change(sec: 0).iso8601
+    payload = { agenda_id: agenda.id, title: "Dentist", at: at, duration: 30, kind: "event" }
+
+    result = tool[:execute].call(payload, ctx)
+    expect(AgendaItem.find(result[:agenda_item_id]).arrive_early_minutes).to eq(0)
   end
 
   it "edit_agenda_item retitles + reschedules + resizes from string payload" do

@@ -107,20 +107,52 @@ module Buddy
     #   3. name only, no coords (matching falls back to name equality)
     def resolve_place_location(name)
       name = name.to_s.strip
-      return { "name" => "" } if name.blank?
+      return { "name" => "", "known" => false } if name.blank?
 
+      # 1. A known contact - its coordinates if it has them; still "known" by
+      #    name if it doesn't (the arrival trigger resolves to the same contact
+      #    name, so name-equality matching still fires).
       contact = user.address_book.match_contact(name)
-      addr    = contact&.primary_address
-      loc     = addr&.loc
-      return place_hash(contact.name, addr&.street, loc) if valid_loc?(loc)
+      if contact
+        addr = contact.primary_address
+        return place_hash(contact.name, addr&.street, addr&.loc, known: true)
+      end
 
+      # 2. The person's calendar - an event with this name carries the address
+      #    for the spot (this is the "TMS -> Serenity" bridge).
       location = agenda_location_for(name)
       if location.present?
         via = coords_for_location(location)
-        return place_hash(name, location, via) if valid_loc?(via)
+        return place_hash(name, location, via, known: valid_loc?(via))
       end
 
-      place_hash(name, nil, nil)
+      # 3. A general place we can geocode (a real spot, not a private nickname).
+      geo = user.address_book.geocode(name)
+      return place_hash(name, nil, geo, known: true) if valid_loc?(geo)
+
+      # 4. Nothing resolved - we genuinely don't know where this is.
+      place_hash(name, nil, nil, known: false)
+    end
+
+    # Resolve a place for a WEATHER lookup to { label, lat, lng }. Blank →
+    # home. Otherwise reuse the place cascade (contact → agenda), then fall
+    # back to geocoding the raw string so general places / cities that aren't
+    # saved anywhere ("the Plunge in Alpine", "Moab") still resolve. Returns
+    # just { label } (no coords) when nothing resolves — the tool reports that
+    # it couldn't find the spot rather than guessing.
+    def resolve_weather_place(name)
+      name = name.to_s.strip
+      if name.blank?
+        return { "label" => "home", "lat" => WeatherService::HOME_LAT, "lng" => WeatherService::HOME_LNG }
+      end
+
+      # resolve_place_location already cascades contact → agenda → geocode.
+      place = resolve_place_location(name)
+      label = place["name"].presence || name
+      loc   = place["loc"]
+      return { "label" => label } unless valid_loc?(loc)
+
+      { "label" => label, "lat" => loc[0], "lng" => loc[1] }
     end
 
     # ---- times ----
@@ -176,8 +208,8 @@ module Buddy
     # display; address is kept for legibility and as a human-readable record of
     # which spot the coords point at. Blank fields are dropped so the hash stays
     # tidy for name-only fallbacks.
-    def place_hash(name, address, loc)
-      place = { "name" => name.to_s.strip }
+    def place_hash(name, address, loc, known: true)
+      place = { "name" => name.to_s.strip, "known" => known }
       place["address"] = address.to_s.strip if address.to_s.strip.present?
       place["loc"] = loc if valid_loc?(loc)
       place

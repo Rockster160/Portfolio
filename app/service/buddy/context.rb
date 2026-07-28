@@ -6,7 +6,6 @@ module Buddy
     module_function
 
     RECENT_EVENT_WINDOW = 24.hours
-    UPCOMING_AGENDA_WINDOW = 24.hours
     # Rest-of-week lookahead (past today). 8 days so "exactly a week from now"
     # still lands in the window.
     UPCOMING_WEEK_WINDOW = 8.days
@@ -22,7 +21,6 @@ module Buddy
         now_local:         now.strftime("%a %Y-%m-%d %-I:%M %p %Z"),
         timezone:          tz,
         user_first_name:   user.first_name,
-        weather:           WeatherService.summary,              # cached ~15m; nil when unavailable
         emotional_state:   emotional_state(user, now),          # current mood + pet expression
         today_agenda:      today_agenda(user, now),
         upcoming_agenda:   upcoming_agenda(user, now),          # rest-of-week, unusual-first
@@ -62,18 +60,52 @@ module Buddy
     class << self
       private
 
-      def today_agenda(user, now)
-        agenda_ids = Agenda.where(user_id: user.id).pluck(:id)
-        return [] if agenda_ids.empty?
+      # Agendas the person can see, mapped to whether they're the person's OWN
+      # (their events + agendas they own, like a jointly-run "Ours" calendar) vs
+      # merely SHARED to them by someone else (a partner's PERSONAL calendar).
+      # Both are worth being aware of, but a partner's personal items are NOT
+      # the person's own tasks — they get tagged so Buddy treats them as
+      # awareness-only, not "your agenda".
+      def agenda_source_map(user)
+        map = {}
+        Agenda.where(user_id: user.id).pluck(:id).each { |id| map[id] = { mine: true } }
+        user.shared_agendas.includes(:user).each { |ag|
+          next if map.key?(ag.id)  # if they own it too, owned wins
 
-        AgendaItem.where(agenda_id: agenda_ids)
+          map[ag.id] = { mine: false, owner: ag.user&.first_name.presence || "someone" }
+        }
+        map
+      rescue => e
+        Buddy::Errors.report(section: "context.agenda_source_map", exception: e, user: user)
+        Agenda.where(user_id: user.id).pluck(:id).index_with { { mine: true } }
+      end
+
+      # Tag an item hash with ownership. Owned items carry no marker (the
+      # default is "mine"); a shared-in item is stamped mine:false + owner so
+      # the briefing can hold it at arm's length.
+      def tag_ownership(hash, source)
+        return hash if source.nil? || source[:mine] != false
+
+        hash.merge(mine: false, owner: source[:owner])
+      end
+
+      def today_agenda(user, now)
+        sources = agenda_source_map(user)
+        return [] if sources.empty?
+
+        # TODAY only: [local midnight today, local midnight tomorrow). The old
+        # `now + 24h` upper bound was a rolling window that, in the evening,
+        # reached into tomorrow — so a tomorrow all-day event (stored at local
+        # midnight, e.g. a birthday) fell into "today". Bound on the local day,
+        # not a fixed offset from now.
+        AgendaItem.where(agenda_id: sources.keys)
           .where.not(status: :cancelled)
-          .where("start_at >= ? AND start_at < ?", now.beginning_of_day.utc, (now + UPCOMING_AGENDA_WINDOW).utc)
+          .where("start_at >= ? AND start_at < ?", now.beginning_of_day.utc, (now.beginning_of_day + 1.day).utc)
           .includes(:agenda, :agenda_schedule)
           .order(:start_at)
           .limit(20)
           .map { |i|
-            {
+            tag_ownership({
               id:        i.id,
               time:      (i.all_day ? "all day" : i.start_at.in_time_zone(user.timezone).strftime("%-I:%M %p")),
               title:     i.name,
@@ -81,7 +113,7 @@ module Buddy
               kind:      i.kind,
               cadence:   schedule_cadence(i),  # nil = one-off; "every weekday" / "monthly" / ...
               drive_min: drive_minutes(i),     # known travel time, for a soon "leave by" nudge
-            }.compact
+            }.compact, sources[i.agenda_id])
           }
       rescue => e
         Buddy::Errors.report(section: "context.today_agenda", exception: e, user: user)
@@ -95,13 +127,13 @@ module Buddy
       # Cancelled ONE-OFFs are dropped (noise); cancelled RECURRING are kept
       # (a normally-happening thing not happening is worth a mention).
       def upcoming_agenda(user, now)
-        agenda_ids = Agenda.where(user_id: user.id).pluck(:id)
-        return [] if agenda_ids.empty?
+        sources = agenda_source_map(user)
+        return [] if sources.empty?
 
         start_from = (now.beginning_of_day + 1.day)
         cancelled  = AgendaItem.statuses[:cancelled]
 
-        AgendaItem.where(agenda_id: agenda_ids)
+        AgendaItem.where(agenda_id: sources.keys)
           .where("start_at >= ? AND start_at < ?", start_from.utc, (now.beginning_of_day + UPCOMING_WEEK_WINDOW).utc)
           .where("status != ? OR agenda_schedule_id IS NOT NULL", cancelled)
           .includes(:agenda, :agenda_schedule)
@@ -109,14 +141,14 @@ module Buddy
           .limit(25)
           .map { |i|
             local = i.start_at.in_time_zone(user.timezone)
-            {
+            tag_ownership({
               day:       day_label(local, now),
               time:      (i.all_day ? "all day" : local.strftime("%-I:%M %p")),
               title:     i.name,
               cadence:   schedule_cadence(i),  # nil = one-off
               cancelled: i.cancelled?,
               cal:       i.agenda&.name,
-            }.compact
+            }.compact, sources[i.agenda_id])
           }
       rescue => e
         Buddy::Errors.report(section: "context.upcoming_agenda", exception: e, user: user)

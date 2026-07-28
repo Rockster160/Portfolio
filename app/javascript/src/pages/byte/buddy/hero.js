@@ -106,6 +106,21 @@ export function initBuddyHero({ hero, conversationIdFn }) {
     } catch (_) { /* server logs the reason */ }
   };
 
+  // iOS reliability (mirrors the composer's Send-button fix): with the
+  // keyboard up, tapping a hero button would first blur the textarea — the
+  // keyboard retracts, the hero shrinks out of its focused side-by-side
+  // layout, and the button slides out from under the finger, so the click
+  // never lands. Cancelling the button's pointerdown default keeps the input
+  // focused; the click still fires and the keyboard stays up. Applied to the
+  // quick chips and the mood popover (Check-in) buttons they open.
+  const keepFocusOnButtonTap = (el) => {
+    el?.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("button")) e.preventDefault();
+    });
+  };
+  keepFocusOnButtonTap(quickActions);
+  keepFocusOnButtonTap(moodPopover);
+
   // Quick action chips. Zero-arg actions fire directly. Check-in opens
   // the mood popover so we can attach the picked mood to the server call.
   if (quickActions) {

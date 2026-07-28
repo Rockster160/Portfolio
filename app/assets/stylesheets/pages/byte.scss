@@ -2271,8 +2271,11 @@ dialog.byte-modal {
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 12px 8px;
-  min-height: 26vh;
-  max-height: 38vh;
+  // Buddy (the flex-fill char below) takes whatever height is left after the
+  // quick-action row, so this range sets how prominent he is. Tall enough to
+  // read as the focal "Tamagotchi", capped so he never eats the thread.
+  min-height: 30vh;
+  max-height: 40vh;
   // Safety net: without this, if content ever exceeds max-height (as it
   // did on the shrunk-focus state before we hid the quick actions), the
   // overflow paints upward into the header's visual space and clips
@@ -2316,32 +2319,34 @@ dialog.byte-modal {
   pointer-events: none;
 }
 
-// Shrink on composer focus (keyboard open on mobile). :has isn't in the
-// oldest safaris, but every iOS 16.4+ / Chrome 105+ supports it. The
-// non-:has fallback is that the hero stays big and the messages just
-// scroll — acceptable.
-.byte-app:has([data-byte-input]:focus) .byte-buddy-hero {
-  // Keyboard is up: lay Buddy and his quick actions side-by-side (~50/50)
-  // and shrink both, rather than stacking. A small Buddy doesn't need a
-  // full row, and the actions stay reachable while typing.
+// Compact layout — Buddy + quick actions side-by-side, both small. Reused
+// for TWO triggers: the composer has focus (mobile keyboard up), OR the
+// viewport is simply too short to stack them (a shrunk desktop window,
+// landscape phone). A mixin so both share one definition instead of drifting.
+@mixin buddy-hero-compact {
   flex-direction: row;
   align-items: center;
   justify-content: center;
   gap: 12px;
   min-height: 14vh;
-  max-height: 19vh;
+  max-height: 20vh;
   padding: 8px 14px;
-  // Buddy now sits right on top of the message thread — give him his own
-  // zone: a filled panel with a hard bottom edge so the two read as
-  // separate surfaces instead of bleeding together.
+  // Buddy sits right on top of the message thread — give him his own zone:
+  // a filled panel with a hard bottom edge so the two read as separate
+  // surfaces instead of bleeding together.
   background: linear-gradient(180deg, rgba(20, 40, 79, 0.6), rgba(11, 43, 78, 0.32));
   border-bottom: 1px solid var(--bs-border);
+  padding-top: 8px; // override the Moss sky-padding in the compact row
 
   .byte-buddy-char {
-    width: 44%;
-    max-width: 92px;
-    margin: 0;
+    // Height-driven + capped so it fits even a very short compact bar.
     flex: 0 0 auto;
+    width: auto;
+    height: 12vh;
+    max-height: 84px;
+    min-height: 0;
+    aspect-ratio: 1;
+    margin: 0;
   }
   // Compact 2×2 grid filling the other half — smaller chips instead of the
   // full-width stacked row, and NOT hidden.
@@ -2357,39 +2362,69 @@ dialog.byte-modal {
     button {
       flex: 0 1 auto;
       min-width: 0;
-      padding: 7px 6px !important;
-      font-size: 12px !important;
+      padding: 6px 8px !important;
+      font-size: 11.5px !important;
+      border-radius: 9px !important;
+      letter-spacing: 0 !important;
     }
   }
 }
 
-// Character is two layered SVG images: a shared body (always the same
-// idle blob) plus a face that swaps per expression. Layered so a new
-// expression is one face SVG — the body doesn't have to be re-drawn.
+// Keyboard up (mobile). :has isn't in the oldest safaris, but every
+// iOS 16.4+ / Chrome 105+ supports it; the fallback is the hero stays big
+// and the messages just scroll — acceptable.
+.byte-app:has([data-byte-input]:focus) .byte-buddy-hero {
+  @include buddy-hero-compact;
+}
+// Short viewport (shrunk desktop window, landscape phone) — collapse to the
+// same compact side-by-side layout so Buddy fits instead of being clipped.
+@media (max-height: 560px) {
+  .byte-app[data-active-mode="buddy"] .byte-buddy-hero {
+    @include buddy-hero-compact;
+  }
+}
+// Narrow viewport — the wrapping flex row overflows (a couple chips get
+// clipped off the right) on small phones, so switch to a tidy 2-column grid
+// and shrink the chips. Deterministic: all five always fit.
+@media (max-width: 480px) {
+  .byte-app .byte-buddy-quick-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .byte-app .byte-buddy-quick-actions button {
+    min-width: 0;
+    padding: 8px 10px !important;
+    font-size: 12.5px !important;
+  }
+}
+
+// Character is layered images (shared body + per-expression face). Auto-sized
+// to the hero's available HEIGHT: `flex: 1` makes it fill whatever vertical
+// space is left after the quick-action row, and `aspect-ratio` derives the
+// width to keep it square. So Buddy shrinks to fit on short windows instead of
+// overflowing the hero and getting clipped — responsive by construction, no
+// per-breakpoint tuning. max-width/height cap the absolute size on large
+// displays; `min-height: 0` lets it shrink below the intrinsic image size.
 .byte-buddy-char {
   position: relative;
-  width: 55%;
-  max-width: 260px;
+  flex: 1 1 0;
+  min-height: 0;
+  width: auto;
   aspect-ratio: 1;
+  max-width: 240px;
+  max-height: 240px;
+  align-self: center;
   animation: buddy-idle 4.2s ease-in-out infinite;
   filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.4));
 }
-// Moss's art is a full 500×500 square with the sprout at the very TOP of the
-// frame. At the shared char size that square runs taller than the hero's
-// 26–38vh window, so overflow:hidden shears off the sprout and pins Moss to
-// the top edge. Cap Moss by height so the whole square — sprout included —
-// always fits, and add a little sky above so it sits clear of the header
-// instead of jammed against it. (max-height only clamps: the tiny 92px
-// keyboard-focus size stays well under the cap, so that state is untouched.)
+// Moss's art bakes the sprout into the TOP of the 500×500 frame. The
+// height-driven sizing above already fits the whole square (sprout included)
+// within the hero, so no special height cap is needed anymore — just a little
+// sky above so the sprout sits clear of the header rather than jammed against
+// it. (The compact layout overrides this padding back to 8px.)
 .byte-buddy-hero[data-buddy-theme="moss"] {
-  padding-top: 4vh;
-}
-.byte-buddy-hero[data-buddy-theme="moss"] .byte-buddy-char {
-  // Cap Moss's height so the full square (sprout included) fits the hero.
-  // Single-unit on purpose: SassC chokes on mixed-unit min() (see the
-  // .byte-drawer note above), and the char's own max-width:260px already
-  // bounds the absolute size, so a plain vh cap is all that's needed.
-  max-height: 24vh;
+  padding-top: 3vh;
 }
 .byte-buddy-body,
 .byte-buddy-face,
