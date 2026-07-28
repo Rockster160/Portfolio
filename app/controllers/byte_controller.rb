@@ -482,6 +482,11 @@ class ByteController < ApplicationController
     # Auto-wake if the sleep window has passed.
     ::Buddy::SleepGuard.maybe_wake!(current_user) if conversation.buddy?
 
+    # Flip the pet to `thinking` the moment a message is sent so there's
+    # always visible life on a normal turn (quick-action chips already do
+    # this). The reply resolves it back to a mood / neutral on arrival.
+    ::Buddy::ExpressionState.transition!(current_user, :turn_started) if conversation.buddy?
+
     # Fire-and-forget to the local Mac server. If it fails, the message
     # sits in :pending / :failed - surfaced in the UI so the user can retry.
     #

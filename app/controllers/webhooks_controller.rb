@@ -308,6 +308,13 @@ class WebhooksController < ApplicationController
   private def buddy_process_reply(user, _conversation, message)
     parsed = Buddy::MarkerParser.extract(message.body)
 
+    # Observability for "is Buddy using expressions?": logs every reply's
+    # marker/side-effect shape so a `mood` verb (or its absence) is visible.
+    Rails.logger.info(
+      "[Buddy::reply] user=#{user.id} proposals=#{parsed[:markers].size} " \
+      "side_effects=#{parsed[:side_effects].map { |e| e[:verb] }.inspect}"
+    )
+
     # Side-effect-only reply (e.g. Buddy emitted just `[[mood: happy]]`
     # with no prose and no proposals). Stripping the marker leaves the
     # body empty; setting body="" would render a completely blank bubble.

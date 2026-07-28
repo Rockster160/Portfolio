@@ -29,8 +29,15 @@ module Buddy
     # context block, so no shadow log or event trail is needed.
     def apply_mood(user, body)
       expression = body.to_s.downcase.strip
-      # Validate against the user's theme faces (Byte vs Moss differ).
-      return unless Buddy::Faces.valid?(user.buddy_theme, expression)
+      valid = Buddy::Faces.valid?(user.buddy_theme, expression)
+      # Observability: mood markers are otherwise trail-less (stripped from the
+      # body, set via update_column). This line is how we can actually answer
+      # "is Buddy using expressions?" — grep prod for `[Buddy::mood]`.
+      Rails.logger.info(
+        "[Buddy::mood] user=#{user.id} theme=#{user.buddy_theme} requested=#{expression.inspect} " \
+        "valid=#{valid} current=#{user.buddy_expression.inspect}"
+      )
+      return unless valid
       return if user.buddy_expression == expression  # no-op if unchanged
 
       Buddy::ExpressionState.set(user, expression)

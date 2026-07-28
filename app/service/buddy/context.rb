@@ -191,11 +191,22 @@ module Buddy
         # can say "you've done Water, still pending: Wordle, Teeth" instead
         # of vaguely gesturing at "your dailies". Without this every bucket
         # item looks identical and Buddy can't recommend specifics.
+        #
+        # Attribution respects `sharing_mode`: a HOUSEHOLD chore (feed the
+        # animals, dishes) is "done" for THIS user if ANYONE in the household
+        # did it; a PERSONAL chore (brush teeth) is "done" only if THIS user
+        # did it. Without the split, Chelsea brushing her teeth would show as
+        # Rocco's teeth already done.
         household_user_ids = user.chore_household&.member_user_ids || [user.id]
-        done_today_ids = ChoreCompletion
+        completions = ChoreCompletion
           .where(user_id: household_user_ids, day_key: today)
-          .pluck(:chore_id)
-          .to_set
+          .pluck(:chore_id, :user_id)
+        done_by_anyone = completions.map { |cid, _uid| cid }.to_set
+        done_by_me     = completions.filter_map { |cid, uid| cid if uid == user.id }.to_set
+        done_today_ids = chores.each_with_object(Set.new) { |c, set|
+          shared = c.respond_to?(:share_household?) && c.share_household?
+          set << c.id if (shared ? done_by_anyone : done_by_me).include?(c.id)
+        }
 
         daily_ids = ChoreDaily.for_user(user).limit(20).pluck(:chore_id)
         hot_ids   = ChoreHotPick.for_day(today).where(chore_id: chores.map(&:id)).pluck(:chore_id)

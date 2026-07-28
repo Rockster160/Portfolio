@@ -31,9 +31,10 @@ RSpec.describe Buddy::Personality do
       expect(prompt).not_to include("`sleeping`")
     end
 
-    it "keeps neutral as the weighted baseline instruction" do
+    it "keeps neutral as the resting default while pushing the face to move" do
       prompt = described_class.for(User.me, tools_appendix: "", context_path: nil)
-      expect(prompt).to include("baseline")
+      expect(prompt).to include("resting default")
+      expect(prompt).to include("your face should MOVE")
     end
   end
 end
