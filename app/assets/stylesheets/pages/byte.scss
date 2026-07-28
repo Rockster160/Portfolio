@@ -2288,15 +2288,15 @@ dialog.byte-modal {
   }
 }
 
-// Body layer. Byte ships a faceless slime body (the face is a transparent
-// overlay). Moss's expressions are each a COMPLETE ball (the face art is the
-// whole character), so Moss has no separate body — the face layer is
-// everything and the body layer stays empty.
+// Body layer. Byte uses a faceless slime body with the face as a transparent
+// overlay. Moss's expressions are each a COMPLETE ball (mossy sphere + sprout
+// + face, at the art's own large-face proportion), so Moss needs no separate
+// body — the whole character lives in the face layer.
 .byte-buddy-hero[data-buddy-theme="byte"] .byte-buddy-body {
   background-image: image-url("buddy/byte/body.png");
 }
 .byte-buddy-hero[data-buddy-theme="moss"] .byte-buddy-body {
-  background-image: none;
+  background-image: image-url("buddy/moss/body.png");
 }
 
 // Face per theme + expression. Both themes now ship a full raster set (PNG);
@@ -2773,5 +2773,44 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
     border-radius: 999px;
     text-align: center;
     white-space: nowrap;
+  }
+}
+
+// Activity receipt — a trusted tool ran with no confirmation needed. Shares
+// the centered-pill shape of an action_chip but reads as "Buddy did a thing":
+// a soft accent tint and a leading ✓ set it apart from both messages and the
+// user's own tap chips.
+.byte-msg.byte-msg-kind-buddy_activity {
+  align-self: center;
+  max-width: none;
+  width: auto;
+  margin: 6px 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+
+  .byte-msg-meta,
+  .byte-msg-attachments,
+  .byte-msg-thoughts,
+  .byte-msg-actions { display: none; }
+
+  [data-body] {
+    display: inline-block;
+    padding: 3px 12px;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    color: var(--buddy-accent, #3FA0FF);
+    background: rgba(63, 160, 255, 0.10);
+    border: 1px solid rgba(63, 160, 255, 0.24);
+    border-radius: 999px;
+    text-align: center;
+    white-space: nowrap;
+
+    &::before {
+      content: "✓ ";
+      opacity: 0.85;
+    }
   }
 }

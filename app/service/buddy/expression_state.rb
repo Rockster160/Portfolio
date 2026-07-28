@@ -6,14 +6,6 @@ module Buddy
   module ExpressionState
     module_function
 
-    # Union of every face across themes (Byte + Moss). Validation only — the
-    # per-theme prompt (Personality.mood_block) is what constrains which of
-    # these Buddy actually picks, so it never emits one its theme can't render.
-    EXPRESSIONS = %i[
-      neutral neutral_blush happy uwu encouraging annoyed sad crying thinking
-      nerd focused celebrating sleeping sleeping_frown
-    ].freeze
-
     def transition!(user, event, **_opts)
       return if user.nil?
 
@@ -26,7 +18,10 @@ module Buddy
 
     def set(user, expression)
       expression = expression.to_s
-      return unless EXPRESSIONS.include?(expression.to_sym)
+      # Validate against the faces THIS user's theme actually renders — Byte
+      # and Moss have different sets, so a single hardcoded list would either
+      # reject valid faces or accept ones that render blank.
+      return unless Buddy::Faces.valid?(user.buddy_theme, expression)
 
       user.update_column(:buddy_expression, expression)
       broadcast(user, expression)
@@ -53,8 +48,10 @@ module Buddy
       def schedule_followups(user, event)
         return unless event.to_sym == :proposals_executed
 
-        Buddy::ExpressionCyclerJob.set(wait: 2.seconds).perform_later(user.id, "encouraging")
-        Buddy::ExpressionCyclerJob.set(wait: 5.seconds).perform_later(user.id, "neutral")
+        # Wind down to the resting baseline. `happy` (set now) and `neutral`
+        # are the only faces both themes share for a server-driven step —
+        # `encouraging` would render blank on Moss.
+        Buddy::ExpressionCyclerJob.set(wait: 4.seconds).perform_later(user.id, "neutral")
       end
 
       def broadcast(user, expression)

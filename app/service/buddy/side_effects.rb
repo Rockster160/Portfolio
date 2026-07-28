@@ -28,9 +28,10 @@ module Buddy
     # (users.buddy_expression) persists across turns and rides in every
     # context block, so no shadow log or event trail is needed.
     def apply_mood(user, body)
-      expression = body.to_s.downcase.strip.to_sym
-      return unless Buddy::ExpressionState::EXPRESSIONS.include?(expression)
-      return if user.buddy_expression == expression.to_s  # no-op if unchanged
+      expression = body.to_s.downcase.strip
+      # Validate against the user's theme faces (Byte vs Moss differ).
+      return unless Buddy::Faces.valid?(user.buddy_theme, expression)
+      return if user.buddy_expression == expression  # no-op if unchanged
 
       Buddy::ExpressionState.set(user, expression)
     end

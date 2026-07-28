@@ -8,8 +8,11 @@ module Buddy
   module ProposalBuilder
     module_function
 
+    # Returns { action: <ByteAction or nil>, auto_ran: <bool> } so the caller
+    # can pick the right expression: something to confirm (action present) vs
+    # something already done (auto_ran) vs nothing.
     def create(user:, byte_message:, markers:)
-      return nil if markers.blank?
+      return { action: nil, auto_ran: false } if markers.blank?
 
       # Build validated per-marker proposals.
       raw = markers.filter_map { |m|
@@ -32,7 +35,7 @@ module Buddy
         }
       }
 
-      return nil if raw.empty?
+      return { action: nil, auto_ran: false } if raw.empty?
 
       # Merge duplicates by merge_key. Count sums; payload takes the first.
       merged = raw
@@ -43,13 +46,20 @@ module Buddy
           first.merge(count: total_count)
         }
 
+      # Trusted, no-confirm tools execute immediately and drop an activity
+      # receipt; everything else becomes a checkbox row awaiting confirmation.
+      auto, confirm = merged.partition { |p| p[:tool][:auto] }
+      auto_ran = run_auto(user, byte_message, auto)
+
+      return { action: nil, auto_ran: auto_ran } if confirm.empty?
+
       # Build button hashes. Tool label procs may return either a plain
       # String (title only) or a Hash `{ title:, sub: }` — the second form
       # renders the `sub` value as small text beneath the title so
       # non-default details (a past completion time, an assignee that isn't
       # the current user, extra function args being passed) don't have to
       # crowd the title line.
-      buttons = merged.each_with_index.map { |p, i|
+      buttons = confirm.each_with_index.map { |p, i|
         ctx = Buddy::ToolContext.new(user)
         raw = safely {
           if p[:count] > 1 && p[:tool][:merge_label]
@@ -101,11 +111,48 @@ module Buddy
       )
       byte_message.update!(metadata: new_meta)
 
-      action
+      { action: action, auto_ran: auto_ran }
     end
 
     class << self
       private
+
+      # Execute each auto (no-confirm) tool now and post a distinct activity
+      # receipt chip for it. Returns true if any ran. Failures degrade to a
+      # short "couldn't" chip rather than blowing up the whole reply.
+      def run_auto(user, byte_message, autos)
+        return false if autos.empty?
+
+        conversation = byte_message.byte_conversation
+        name = user.buddy_theme.to_s == "moss" ? "Moss" : "Byte"
+
+        autos.each do |p|
+          ctx    = Buddy::ToolContext.new(user)
+          result = Buddy::Tools.dispatch(p[:tool], p[:payload], ctx)
+          text   =
+            if result[:ok]
+              safely { p[:tool][:receipt].call(result[:data], ctx) }.presence || "Done"
+            else
+              Rails.logger.warn("[Buddy::ProposalBuilder] auto tool #{p[:tool][:name]} failed: #{result[:error]}")
+              "#{name} couldn't do that one"
+            end
+
+          chip = conversation.byte_messages.create!(
+            user:         user,
+            direction:    :inbound,
+            state:        :delivered,
+            body:         text,
+            metadata:     { "kind" => "buddy_activity", "tool_name" => p[:tool][:name].to_s, "ok" => result[:ok] },
+            delivered_at: Time.current,
+          )
+          MonitorChannel.broadcast_to(user, {
+            id:      :byte,
+            channel: :byte,
+            data:    { kind: :message, message: chip.as_wire },
+          })
+        end
+        true
+      end
 
       def extract_title_sub(raw)
         if raw.is_a?(Hash)

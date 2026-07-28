@@ -86,11 +86,29 @@ Buddy::Tools.register(
       fire_at:           fire_at,
       recurrence:        payload[:recurrence],
     )
-    { reminder_id: reminder.id, fire_at: fire_at.iso8601 }
+    { reminder_id: reminder.id, fire_at: fire_at.iso8601, recurrence: payload[:recurrence] }
   },
-  receipt: ->(_result, ctx) {
-    when_iso = ctx.proposal["payload"]&.dig("fire_at_iso")
-    when_str = when_iso ? Time.zone.parse(when_iso).in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p") : "later"
-    "Reminder set for #{when_str} ✓"
+  # Scheduling a reminder is safe + reversible, so it runs WITHOUT a
+  # confirmation checkbox and drops an activity receipt instead.
+  auto:    true,
+  receipt: ->(result, ctx) {
+    name    = ctx.user.buddy_theme.to_s == "moss" ? "Moss" : "Byte"
+    fire_at = (Time.zone.parse(result[:fire_at].to_s) rescue nil)
+    rec     = result[:recurrence]
+
+    if rec.is_a?(Hash)
+      hhmm  = (Time.zone.parse(rec["at"].to_s) rescue nil)
+      tstr  = hhmm ? hhmm.strftime("%-I:%M%P").sub(":00", "") : rec["at"].to_s
+      every = case rec["kind"]
+      when "daily"    then "every day"
+      when "weekdays" then "every weekday"
+      when "weekly"   then "every #{rec["weekday"].to_s.capitalize}"
+      when "monthly"  then "on day #{rec["day"]} each month"
+      else                 "on a schedule"
+      end
+      "#{name} will remind you #{every} at #{tstr}"
+    else
+      "#{name} will send you a reminder #{ctx.friendly_future(fire_at)}"
+    end
   },
 )

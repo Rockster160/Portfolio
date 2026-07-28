@@ -343,8 +343,14 @@ class WebhooksController < ApplicationController
     #   2. Mood side-effect set an expression → respect it, don't overwrite
     #   3. Plain reply → :turn_ended_clean (:happy — back to resting)
     if parsed[:markers].any?
-      Buddy::ProposalBuilder.create(user: user, byte_message: message, markers: parsed[:markers])
-      Buddy::ExpressionState.transition!(user, :proposals_awaiting)
+      result = Buddy::ProposalBuilder.create(user: user, byte_message: message, markers: parsed[:markers])
+      if result[:action]
+        Buddy::ExpressionState.transition!(user, :proposals_awaiting)  # checklist awaiting a tap
+      elsif result[:auto_ran]
+        Buddy::ExpressionState.transition!(user, :proposals_executed)  # ran on its own, already done
+      else
+        Buddy::ExpressionState.transition!(user, :turn_ended_clean)
+      end
     elsif parsed[:side_effects].any? { |e| e[:verb] == :mood }
       # [[mood: X]] already updated expression via SideEffects — leave it
     else
@@ -728,31 +734,28 @@ class WebhooksController < ApplicationController
     # priority asks. Normal chatter still respects presence.
     return if !has_proposals && meta["kind"] != "action-request" && byte_user_present?(user)
 
-    # Title: the conversation's own display name so you know which thread
-    # pinged you at a glance. Falls back to "Byte" for orphaned messages.
-    convo = message.byte_conversation
-    title = (convo&.display_name.presence || "Byte")
+    # The OS already stamps the app name (Byte) on the notification, so the
+    # TITLE is the message itself - not the thread name ("Buddy"). Any
+    # actionable framing (a confirm cue, an approval prompt) rides in the body.
+    preview = clean_byte_body(message.body).truncate(160).presence
 
-    body =
+    title, body =
       if has_proposals
-        # Loud framing so a Buddy ask reads at a glance even in the
-        # notification tray. Count the pending buttons so we don't
-        # under-sell a "5 things to confirm" moment.
+        # Count pending buttons so we don't under-sell a "5 things to confirm".
         n_pending = Array(meta["buttons"]).count { |b| (b["status"] || "pending") == "pending" }
-        prefix = n_pending > 1 ? "☐ #{n_pending} to confirm" : "☐ Tap to confirm"
-        preview = clean_byte_body(message.body).truncate(120)
-        [prefix, preview].reject(&:empty?).join(" · ").truncate(160)
+        cue = n_pending > 1 ? "☐ #{n_pending} to confirm" : "☐ Tap to confirm"
+        [preview || cue, (preview ? cue : nil)]
       elsif meta["kind"] == "action-request"
         tool = meta["tool_name"].to_s
-        sub  = meta["subtitle"].to_s
-        prefix = case meta["action_kind"]
+        sub  = meta["subtitle"].to_s.presence
+        cue  = case meta["action_kind"]
         when "plan"     then "📋 Plan approval"
         when "question" then "❓ Question"
         else                 "⚡ Approve #{tool}"
         end
-        [prefix, sub].reject(&:empty?).join(" · ").truncate(160)
+        preview ? [preview, [cue, sub].compact.join(" · ")] : [sub || cue, (sub ? cue : nil)]
       else
-        clean_byte_body(message.body).truncate(160).presence || "(attachment)"
+        [preview || "(attachment)", nil]
       end
 
     WebPushNotifications.send_to_byte(

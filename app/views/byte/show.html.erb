@@ -161,9 +161,8 @@
   <%# cache up front, so the CSS background swap is instant. Off-screen (not %>
   <%# display:none) to guarantee the fetch. %>
   <% buddy_theme = current_user.buddy_theme.presence || "byte" %>
-  <% face_ext = buddy_theme == "moss" ? "svg" : "png" %>
   <div class="byte-buddy-preload" aria-hidden="true">
-    <% Dir[Rails.root.join("app/assets/images/buddy/#{buddy_theme}/face_*.#{face_ext}")].sort.each do |p| %>
+    <% Dir[Rails.root.join("app/assets/images/buddy/#{buddy_theme}/face_*.{png,svg}")].sort.each do |p| %>
       <img src="<%= image_path("buddy/#{buddy_theme}/#{File.basename(p)}") %>" alt="" width="1" height="1" decoding="async">
     <% end %>
   </div>

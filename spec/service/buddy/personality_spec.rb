@@ -14,14 +14,21 @@ RSpec.describe Buddy::Personality do
       expect(prompt).not_to include("`celebrating`")
     end
 
-    it "injects Moss's face set for a Moss user" do
+    it "injects Moss's own (larger) face set for a Moss user" do
       user = create(:user, buddy_theme: "moss")
 
       prompt = described_class.for(user, tools_appendix: "", context_path: nil)
 
-      expect(prompt).to include("`focused`", "`celebrating`")
-      expect(prompt).not_to include("`nerd`")
+      # Moss's distinctive faces are offered...
+      expect(prompt).to include("`loving`", "`star`", "`wink`", "`dizzy`")
+      # ...and Byte-only faces are not.
+      expect(prompt).not_to include("`nerd`", "`uwu`")
       expect(prompt).not_to include("{{MOOD_BLOCK}}")
+    end
+
+    it "does not offer sleeping as a selectable mood" do
+      prompt = described_class.for(User.me, tools_appendix: "", context_path: nil)
+      expect(prompt).not_to include("`sleeping`")
     end
 
     it "keeps neutral as the weighted baseline instruction" do

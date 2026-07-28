@@ -44,7 +44,7 @@ module Buddy
       @loading_tools = false
     end
 
-    def register(name:, description:, args:, confirm:, label:, execute:, receipt:, merge_key: nil, merge_label: nil, passthrough_args: false)
+    def register(name:, description:, args:, confirm:, label:, execute:, receipt:, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false)
       spec = {
         name:             name.to_sym,
         description:      description.to_s,
@@ -55,6 +55,11 @@ module Buddy
         receipt:         receipt,
         merge_key:       merge_key || ->(payload) { "#{name}:#{SecureRandom.uuid}" },
         merge_label:     merge_label,
+        # Trusted tools run WITHOUT a confirmation checkbox: the marker
+        # executes immediately and drops a distinct "activity" receipt chip
+        # instead of a pending checklist row. As confidence in a tool grows,
+        # flip it to `auto: true` and it stops needing approval.
+        auto:            auto,
         # Tools whose real arg set is dynamic (e.g. call_jil_function, whose
         # params vary per target task) declare only `name` in :args and set
         # this so validate_payload keeps every OTHER k=v the marker carried

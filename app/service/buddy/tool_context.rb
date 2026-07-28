@@ -91,6 +91,34 @@ module Buddy
       nil
     end
 
+    # Friendly future phrasing for a receipt/confirmation, in the user's zone:
+    #   today            → "at 6:01pm"
+    #   tomorrow         → "tomorrow at 6:01pm"
+    #   within this week → "this Wednesday at 6:01pm"
+    #   next week        → "next Wednesday at 6:01pm"
+    #   further out      → "on Jul 15 at 6:01pm"
+    # On-the-hour times drop the minutes ("6pm"). all_day drops the time.
+    def friendly_future(time, all_day: false)
+      return "later" if time.nil?
+
+      local = time.in_time_zone(user.timezone)
+      today = Time.current.in_time_zone(user.timezone).to_date
+      days  = (local.to_date - today).to_i
+
+      day_prefix = case days
+      when 0     then ""
+      when 1     then "tomorrow "
+      when 2..6  then "this #{local.strftime("%A")} "
+      when 7..13 then "next #{local.strftime("%A")} "
+      else            "on #{local.strftime("%b %-d")} "
+      end
+
+      return "#{day_prefix.strip.presence || 'today'}".strip if all_day
+
+      time_str = local.strftime("%-I:%M%P").sub(":00", "")  # "6:01pm" / "6pm"
+      "#{day_prefix}at #{time_str}"
+    end
+
     # ---- household ----
 
     def resolve_household_user(name)

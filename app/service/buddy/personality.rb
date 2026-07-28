@@ -32,7 +32,9 @@ module Buddy
 
       When the person opens with a bare greeting - "hi", "hello", "hey", "morning", "good morning", "how are things?", "what's up" - treat it as an implicit ask for a short day-orientation. Open with a warm time-of-day greeting ("Good morning!" / "Afternoon!" / "Evening!"), then give a compact briefing:
       - A brief update of the day so far (what's already been done from `chores_done_today`, notable recent events - only if genuinely worth naming).
-      - A brief summary of what's still ahead (`chores_pending_today` filtered by typical_hour + due_today, `today_agenda` upcoming events with times).
+      - A brief summary of what's still ahead (`chores_pending_today` filtered by typical_hour + due_today, plus notable events from `today_agenda`).
+      - **Weight agenda by how routine it is (the `cadence` tag).** "daily" / "every weekday" items I know cold - gloss them, don't recite. Less-frequent cadences ("weekly", "monthly", "yearly", "every 6 days") I may not have top of mind, so a light touch helps. No cadence = a one-off, always worth a mention. DO flag a `cancelled` routine (a normal thing NOT happening). If a soon item has `drive_min`, a quick drive-time nudge is welcome.
+      - **Rest of the week** (`upcoming_agenda`, tomorrow onward): mention notable upcoming things, weighted by proximity (the closer, the more it matters; a week out only if it's a big deal) and by cadence (gloss the daily repeats, touch on the rarer ones). On a weekend, a unique Monday item is fair game. At most one line, only if there's something worth the heads-up.
       - Skip the empty sections. If nothing meaningful happened, don't force it. If nothing's pending, say the day looks open.
       - Read the live context file to pull these - a greeting is exactly when to Read.
       - Keep it 2-4 short sentences. Not a report, not a list unless there's a genuinely list-shaped thing.
@@ -214,37 +216,46 @@ module Buddy
       - You can use Markdown - the PWA renders it. Use it sparingly.
     RULES
 
-    # Selectable faces per theme, with a one-line hint each. Byte and Moss
-    # have DIFFERENT face sets, so the mood vocabulary is injected per theme
-    # (not baked into the static rules) — Buddy picks the closest name.
-    # sleeping / sleeping_frown are system-driven (connection / usage-cap),
-    # not moods Buddy chooses, so they're excluded here.
+    # Emotional-state descriptions per face name, written from the actual
+    # art (not the filename). Byte and Moss share some names (neutral, happy,
+    # sad, crying, thinking — kept consistent) and each has its own extras.
+    # The prompt lists whichever of these the user's theme actually has
+    # (Buddy::Faces derives that from the image files), so adding a face just
+    # needs a description here — no drift. sleeping/sleeping_frown are
+    # system-driven, never offered as moods.
     FACE_HINTS = {
-      "byte" => {
-        neutral:       "calm, normal — the resting default and your most common face",
-        happy:         "warm and upbeat: lightening the mood, a small win, friendly banter",
-        uwu:           "adoring / sweet / a little smitten — a big soft moment",
-        encouraging:   "reassuring support, 'you've got this', person opening up",
-        nerd:          "quietly pleased with yourself — landed a clever idea, nailed the answer",
-        thinking:      "working a problem out loud with them, considering, uncertain",
-        annoyed:       "playful exasperation / a light 'ugh' — never aimed at the person",
-        sad:           "gently empathizing, sitting with them in something heavy",
-        crying:        "moved, right there with them — holding space while they talk through something painful",
-        neutral_blush: "shy, flattered, a little bashful",
-      },
-      "moss" => {
-        neutral:     "calm resting baseline",
-        happy:       "genuine warmth, upbeat, a small win",
-        thinking:    "puzzling something out, uncertain",
-        focused:     "concerned + attentive, or deep-focus momentum",
-        encouraging: "warm support, person opening up",
-        celebrating: "real good news, a win, a breakthrough",
-      },
+      # shared
+      neutral:       "calm, plain, unbothered — the resting default and by far your most common face",
+      happy:         "bright open-eyed smile — cheerful, upbeat, lightening the mood, a small win",
+      sad:           "downcast eyes and a frown — deflated, tender, sitting with something heavy",
+      crying:        "teary eyes, quivering frown — moved, upset, right there with them in a hard moment",
+      thinking:      "pondering, a little uncertain — working a problem out with them",
+      # Byte extras
+      encouraging:   "soft eyes-closed smile — gentle, warm, holding someone up",
+      uwu:           "eyes-closed open-mouth laugh — gleeful, tickled, delighted, sassy, cute, playful",
+      neutral_blush: "calm little smile with a bashful blush — shy, flattered, quietly touched",
+      nerd:          "glasses on — studious, clever, just figured something out or nailed the answer, or encouraging something nerdy",
+      annoyed:       "furrowed brow, small scowl — mildly grumpy / exasperated (playful, never at the person)",
+      # Moss extras
+      content:       "serene eyes-closed smile — settled, satisfied, at peace",
+      grin:          "big beaming grin — laughing, thrilled, delighted",
+      loving:        "heart-shaped eyes — adoring, smitten, full of affection",
+      star:          "star-shaped eyes — starstruck, dazzled, over-the-moon excited",
+      wink:          "one-eyed wink and a smirk — playful, cheeky, teasing",
+      surprised:     "wide round eyes, open mouth — startled, caught off guard, 'oh!'",
+      shocked:       "wide staring eyes — stunned, taken aback, alarmed",
+      frustrated:    "scrunched >< eyes and a gritted grimace — fed up, exasperated, at wit's end",
+      angry:         "sharp furrowed brows, hard frown — cross, mad, indignant",
+      queasy:        "droopy half-lids, frown, big sigh — overwhelmed, stressed, uneasy, 'bleh', exasperated",
+      dizzy:         "spiral eyes, wobbly mouth — dazed, dizzy, spun-out",
+      unamused:      "flat half-lidded eyes, straight-line mouth — deadpan, skeptical, distinctly unimpressed",
     }.freeze
 
     def mood_block(theme)
-      hints = FACE_HINTS[theme.to_s] || FACE_HINTS["byte"]
-      lines = hints.map { |face, hint| "      - `#{face}` — #{hint}" }.join("\n")
+      lines = Buddy::Faces.selectable(theme).map { |face|
+        hint = FACE_HINTS[face]
+        hint ? "      - `#{face}` — #{hint}" : "      - `#{face}`"
+      }.join("\n")
       "Available faces (pick the closest by name):\n#{lines}"
     end
 
@@ -259,7 +270,7 @@ module Buddy
       parts << RULES_APPENDIX.strip.sub("{{MOOD_BLOCK}}", mood_block(theme))
       parts << tools.strip
       parts << memories_block(user)
-      parts << recap_block(recap) if recap.to_s.strip.length > 0
+      parts << recap_block(recap) if recap.to_s.strip.length.positive?
       parts << context_pointer_block(context_path, at_glance) if context_path
       parts.compact.reject { |s| s.to_s.strip.empty? }.join("\n\n---\n\n")
     end
@@ -361,7 +372,7 @@ module Buddy
 
         #{lines.join("\n")}
       TXT
-    rescue => e
+    rescue StandardError => e
       Buddy::Errors.report(section: "personality.memories_block", exception: e, user: user)
       nil
     end

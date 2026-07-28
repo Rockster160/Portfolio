@@ -49,10 +49,24 @@ module Buddy
       body = <<~PROMPT.strip
         What's on for TODAY, forward-looking. This is a briefing about the day ahead, NOT a recap of yesterday or a review of what's already done.
 
+        OPEN with a warm time-of-day greeting when it fits the hour ("Morning!" / "Afternoon!" / "Evening!") - read `now_local` for the time. Skip it if it'd feel repetitive (we just talked) or the hour is odd.
+
         LEAD WITH what still needs to happen today:
         - `chores_pending_today` - the primary answer. Name them.
-        - `today_agenda` - upcoming events / meetings with times.
+        - `today_agenda` - today's events / meetings with times. But see UNUSUAL-ONLY below: don't recite the daily-recurring stuff.
         - `chores_hot_picks` - flagged for attention today.
+
+        WEIGHT BY HOW ROUTINE IT IS (the `cadence` tag):
+        - `cadence` of "daily" / "every weekday" = something I know cold. Don't recite it as news. A quick gloss is fine ("usual morning stuff, then...") but never a line-by-line of my standing schedule.
+        - Less-frequent cadences ("weekly", "monthly", "yearly", "every 6 days") I may NOT have top of mind - a light touch is genuinely helpful ("your monthly 1:1 with Eric is this afternoon"). Touch on it, don't dive into details.
+        - No `cadence` at all = a one-off (vet appt, dinner). Always worth surfacing.
+        - DO call out a routine that's NOT happening: a `cancelled` item, especially a recurring one, is a real heads-up ("no standup tomorrow"). A normal thing missing beats a normal thing present.
+        - If a soon item has `drive_min`, you can work in the drive ("~25 min drive, so leave-ish soon"). Only when it's close enough to matter.
+
+        REST OF THE WEEK (`upcoming_agenda`, tomorrow onward):
+        - Weight by proximity - the closer, the more worth mentioning. Tomorrow's oddity matters more than something 6 days out; only genuinely notable things a week away earn a mention.
+        - Same cadence weighting: gloss/skip the daily-and-weekday repeats, lightly flag the less-common recurrences and one-offs, call out cancelled routines. On a weekend, a unique Monday thing is fair game ("heads up, dentist Monday morning").
+        - At most a line. If nothing worth noting is coming, say nothing about the week.
 
         SECONDARY (mention only if genuinely relevant):
         - `chores_done_today` - only if I've clearly gotten a lot done and it's worth acknowledging. Never lead with it. Never make it the point.
@@ -63,13 +77,14 @@ module Buddy
         - Motivational spin like "you crushed it yesterday, keep it up today". That's a review, not a briefing.
 
         HOW TO ANSWER:
-        - Lead with pending / upcoming. Names, not vague gestures. "Wordle and Water are still open, and you've got a 2pm vet appt" beats "some dailies and a thing this afternoon".
+        - Lead with pending / unusual-upcoming. Names, not vague gestures. "Wordle and Water are still open, and you've got a 2pm vet appt" beats "some dailies and a thing this afternoon".
         - Short list OK when it helps skim ("Still pending: X, Y, Z"). One or two lines of prose for shape ("light morning, busier afternoon around the vet appt").
         - If the day looks empty AND there are no dailies or scheduled items, keep it short and warm - a "not much on deck today, what are you thinking?" not a recap of yesterday.
 
         HARD NO:
         - Never recap yesterday.
         - Never invent chores/events not in context.
+        - Don't recite my daily / every-weekday repeats line by line ("your 9:30 is still on"). Gloss those. Less-frequent recurrences and one-offs are fair to mention.
         - No filler like "quiet day", "not a bad thing", "in the bag".
         - No "based on what I have" / "your context shows" / any scaffolding-talk.
 
@@ -158,10 +173,13 @@ module Buddy
     end
 
     def update_expression_for_mood(mood)
+      # Use only faces both themes render (Byte and Moss differ; celebrating/
+      # focused exist on neither now). Check-in reflects the person's mood
+      # back through Buddy's face.
       expression = case mood
-                   when "great"        then :celebrating
+                   when "great"        then :happy
                    when "good", "okay" then :happy
-                   when "low", "rough" then :focused
+                   when "low", "rough" then :sad
                    end
       ::Buddy::ExpressionState.set(current_user, expression) if expression
     end

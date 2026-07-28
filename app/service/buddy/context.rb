@@ -7,6 +7,9 @@ module Buddy
 
     RECENT_EVENT_WINDOW = 24.hours
     UPCOMING_AGENDA_WINDOW = 24.hours
+    # Rest-of-week lookahead (past today). 8 days so "exactly a week from now"
+    # still lands in the window.
+    UPCOMING_WEEK_WINDOW = 8.days
 
     def build(user)
       tz = user.timezone
@@ -21,6 +24,7 @@ module Buddy
         user_first_name:   user.first_name,
         emotional_state:   emotional_state(user, now),          # current mood + pet expression
         today_agenda:      today_agenda(user, now),
+        upcoming_agenda:   upcoming_agenda(user, now),          # rest-of-week, unusual-first
         # Two explicit lists per bucket - PENDING and DONE_TODAY - so
         # Buddy can never confuse "what's left" with "what's finished".
         # The previous mixed-list-with-done_today-flag was getting
@@ -60,22 +64,107 @@ module Buddy
         return [] if agenda_ids.empty?
 
         AgendaItem.where(agenda_id: agenda_ids)
-          .where(status: [nil, "confirmed", "tentative"])
+          .where.not(status: :cancelled)
           .where("start_at >= ? AND start_at < ?", now.beginning_of_day.utc, (now + UPCOMING_AGENDA_WINDOW).utc)
+          .includes(:agenda, :agenda_schedule)
           .order(:start_at)
           .limit(20)
           .map { |i|
             {
-              id:      i.id,
-              time:    (i.all_day ? "all day" : i.start_at.in_time_zone(user.timezone).strftime("%-I:%M %p")),
-              title:   i.title,
-              cal:     i.agenda&.name,
-              kind:    i.kind,
-            }
+              id:        i.id,
+              time:      (i.all_day ? "all day" : i.start_at.in_time_zone(user.timezone).strftime("%-I:%M %p")),
+              title:     i.name,
+              cal:       i.agenda&.name,
+              kind:      i.kind,
+              cadence:   schedule_cadence(i),  # nil = one-off; "every weekday" / "monthly" / ...
+              drive_min: drive_minutes(i),     # known travel time, for a soon "leave by" nudge
+            }.compact
           }
       rescue => e
         Buddy::Errors.report(section: "context.today_agenda", exception: e, user: user)
         []
+      end
+
+      # The rest of the week (tomorrow through ~a week out). Skews to what's
+      # UNUSUAL: each item is tagged `recurring` (routine repeat) vs one-off,
+      # and `status` so a cancelled routine ("your standup is off Thursday")
+      # can be called out. Day labels are relative so proximity is obvious.
+      # Cancelled ONE-OFFs are dropped (noise); cancelled RECURRING are kept
+      # (a normally-happening thing not happening is worth a mention).
+      def upcoming_agenda(user, now)
+        agenda_ids = Agenda.where(user_id: user.id).pluck(:id)
+        return [] if agenda_ids.empty?
+
+        start_from = (now.beginning_of_day + 1.day)
+        cancelled  = AgendaItem.statuses[:cancelled]
+
+        AgendaItem.where(agenda_id: agenda_ids)
+          .where("start_at >= ? AND start_at < ?", start_from.utc, (now.beginning_of_day + UPCOMING_WEEK_WINDOW).utc)
+          .where("status != ? OR agenda_schedule_id IS NOT NULL", cancelled)
+          .includes(:agenda, :agenda_schedule)
+          .order(:start_at)
+          .limit(25)
+          .map { |i|
+            local = i.start_at.in_time_zone(user.timezone)
+            {
+              day:       day_label(local, now),
+              time:      (i.all_day ? "all day" : local.strftime("%-I:%M %p")),
+              title:     i.name,
+              cadence:   schedule_cadence(i),  # nil = one-off
+              cancelled: i.cancelled?,
+              cal:       i.agenda&.name,
+            }.compact
+          }
+      rescue => e
+        Buddy::Errors.report(section: "context.upcoming_agenda", exception: e, user: user)
+        []
+      end
+
+      # Relative day label so proximity is obvious at a glance.
+      def day_label(local, now)
+        days = (local.to_date - now.to_date).to_i
+        case days
+        when 0    then "today"
+        when 1    then "tomorrow"
+        when 2..6 then local.strftime("%A")           # Mon, Tue, ...
+        when 7    then "next #{local.strftime("%A")}"  # a week out
+        else           local.strftime("%a %-m/%-d")
+        end
+      end
+
+      # Human cadence label for a recurring item, nil for a one-off. Lets the
+      # briefing tell the "every weekday" stuff it knows cold (gloss it) from
+      # a monthly/yearly/every-few-days repeat it may NOT have top of mind
+      # (worth a light touch).
+      def schedule_cadence(item)
+        sched = item.agenda_schedule
+        return nil unless sched
+
+        data = (sched.recurrence || {}).with_indifferent_access
+        case (data[:freq].to_s.presence || "daily")
+        when "daily"    then "daily"
+        when "weekdays" then "every weekday"
+        when "weekly"
+          days = Array(data[:by_day]).map { |d| d.to_s[0, 3].capitalize }
+          days.any? ? "weekly (#{days.join(", ")})" : "weekly"
+        when "monthly"  then "monthly"
+        when "yearly"   then "yearly"
+        when "custom"
+          iv   = data[:interval].to_i
+          unit = data[:unit].to_s.presence || "day"
+          iv > 1 ? "every #{iv} #{unit}s" : "#{unit}ly"
+        else "recurring"
+        end
+      rescue
+        "recurring"
+      end
+
+      # Known drive time (minutes) from the travel-chain sync, for a soon
+      # "leave by" nudge. nil when there's no computed travel.
+      def drive_minutes(item)
+        travel = item.metadata.is_a?(Hash) ? item.metadata["travel"] : nil
+        mins   = travel.is_a?(Hash) ? travel["travel_minutes"].to_i : 0
+        mins.positive? ? mins : nil
       end
 
       # Five buckets with sharply distinct meanings. The primary "what's

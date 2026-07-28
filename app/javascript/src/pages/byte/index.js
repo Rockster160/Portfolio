@@ -66,56 +66,63 @@ document.addEventListener("DOMContentLoaded", async () => {
   // the cursor alive across a normal tool call; a genuinely dead stream still
   // clears within one window. (Buddy also emits a "Hang on, I'll look into
   // it..." interim line before slow tool calls, which resets this timer.)
-  const LIVE_EXPIRE_MS   = 45000;
+  const LIVE_EXPIRE_MS = 45000;
   function markLive(node) {
     node.classList.add("byte-msg-live");
     const prev = liveExpireTimers.get(node);
     if (prev) clearTimeout(prev);
-    liveExpireTimers.set(node, setTimeout(() => {
-      node.classList.remove("byte-msg-live");
-      liveExpireTimers.delete(node);
-    }, LIVE_EXPIRE_MS));
+    liveExpireTimers.set(
+      node,
+      setTimeout(() => {
+        node.classList.remove("byte-msg-live");
+        liveExpireTimers.delete(node);
+      }, LIVE_EXPIRE_MS),
+    );
   }
   function unmarkLive(node) {
     node.classList.remove("byte-msg-live");
     const t = liveExpireTimers.get(node);
-    if (t) { clearTimeout(t); liveExpireTimers.delete(node); }
+    if (t) {
+      clearTimeout(t);
+      liveExpireTimers.delete(node);
+    }
   }
 
   // ---------- DOM refs ----------
-  const thread    = app.querySelector("[data-byte-thread]");
-  const loader    = app.querySelector("[data-byte-loader]");
-  const composer  = app.querySelector("[data-byte-composer]");
-  const input     = app.querySelector("[data-byte-input]");
-  const status    = app.querySelector("[data-byte-status]");
+  const thread = app.querySelector("[data-byte-thread]");
+  const loader = app.querySelector("[data-byte-loader]");
+  const composer = app.querySelector("[data-byte-composer]");
+  const input = app.querySelector("[data-byte-input]");
+  const status = app.querySelector("[data-byte-status]");
   const syncBadge = app.querySelector("[data-byte-sync]");
   const reloadBtn = app.querySelector("[data-byte-reload]");
   const notifyBtn = app.querySelector("[data-byte-notify]");
-  const jumpBtn   = app.querySelector("[data-byte-jump]");
+  const jumpBtn = app.querySelector("[data-byte-jump]");
   const jumpCount = app.querySelector("[data-byte-jump-count]");
-  const heroEl    = app.querySelector("[data-buddy-hero]");
+  const heroEl = app.querySelector("[data-buddy-hero]");
   const sleepChip = app.querySelector("[data-byte-sleep-chip]");
   const sleepText = app.querySelector("[data-byte-sleep-text]");
   // Assigned right after handleSend is defined (below) — declared here so
   // handleSwitch (which can fire before the hero is mounted on the first
   // render) doesn't hit a TDZ error.
   let buddyHero = null;
-  const tpl       = app.querySelector("[data-byte-message-tpl]");
+  const tpl = app.querySelector("[data-byte-message-tpl]");
 
-  const sendUrl           = app.dataset.sendUrl;
-  const messagesUrl       = app.dataset.messagesUrl;
-  const csrfUrl           = app.dataset.csrfUrl || "/byte/csrf";
-  const conversationsUrl  = app.dataset.conversationsUrl;
+  const sendUrl = app.dataset.sendUrl;
+  const messagesUrl = app.dataset.messagesUrl;
+  const csrfUrl = app.dataset.csrfUrl || "/byte/csrf";
+  const conversationsUrl = app.dataset.conversationsUrl;
   const claudeSessionsUrl = app.dataset.claudeSessionsUrl;
-  const monitorChannel    = app.dataset.monitorChannel;
+  const monitorChannel = app.dataset.monitorChannel;
 
   configureApi({ sendUrl, csrfRefreshUrl: csrfUrl });
 
   // ---------- bootstrap ----------
   const bootstrap = loadBootstrap();
-  const initialConversationId = bootstrap.conversation?.id
-    ?? Number(app.dataset.initialConversationId || 0)
-    ?? null;
+  const initialConversationId =
+    bootstrap.conversation?.id ??
+    Number(app.dataset.initialConversationId || 0) ??
+    null;
 
   // ---------- conversation manager ----------
   //
@@ -126,19 +133,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   // whatever `currentConversationId` currently is.
   let currentConversationId = initialConversationId;
   let messages = [];
-  let atBottom      = true;
-  let unreadCount   = 0;
-  let hasMore       = true;
-  let loadingOlder  = false;
+  let atBottom = true;
+  let unreadCount = 0;
+  let hasMore = true;
+  let loadingOlder = false;
   // Declared up here (not next to scrollToBottom) because hydrateForConversation
   // runs during init BEFORE the scroll section and calls scrollToBottom, which
   // reads stickRaf — a `let` down there would be in its TDZ and throw.
-  let stickRaf      = 0;
+  let stickRaf = 0;
   // Sleep/queue state — declared early for the same TDZ reason (hydrate and
   // conversation switches can read them before the sleep section runs).
   let channelConnected = false;
-  let sleepUntil = bootstrap.buddy_sleep?.sleep_until || null;   // ISO string or null
-  let sleepWake  = bootstrap.buddy_sleep?.wake_string || null;   // "8:00 AM" or null
+  let sleepUntil = bootstrap.buddy_sleep?.sleep_until || null; // ISO string or null
+  let sleepWake = bootstrap.buddy_sleep?.wake_string || null; // "8:00 AM" or null
   let oldestLoadedId = null;
 
   // Per-conversation unread-in-drawer counters. Only tracks conversations
@@ -178,9 +185,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // they actually belong to that conversation — otherwise we'd seed the
   // active thread with a stale sibling's messages.
   currentConversationId = convoManager.currentId ?? initialConversationId;
-  const bootstrapMessages = (bootstrap.conversation && bootstrap.conversation.id === currentConversationId)
-    ? (bootstrap.messages || [])
-    : [];
+  const bootstrapMessages =
+    bootstrap.conversation &&
+    bootstrap.conversation.id === currentConversationId
+      ? bootstrap.messages || []
+      : [];
 
   migrateLegacy(initialConversationId);
 
@@ -188,19 +197,32 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ---------- rendering primitives ----------
 
-  const timeFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+  const timeFmt = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
 
   function formatTime(iso) {
     if (!iso) return "";
-    try { return timeFmt.format(new Date(iso)); } catch { return ""; }
+    try {
+      return timeFmt.format(new Date(iso));
+    } catch {
+      return "";
+    }
   }
 
   function cssEscape(s) {
-    return (typeof CSS !== "undefined" && CSS.escape) ? CSS.escape(s) : s.replace(/"/g, '\\"');
+    return typeof CSS !== "undefined" && CSS.escape
+      ? CSS.escape(s)
+      : s.replace(/"/g, '\\"');
   }
 
-  function selectorForId(id)        { return `[data-message-id="${cssEscape(String(id))}"]`; }
-  function selectorForLocal(local)  { return `[data-local-id="${cssEscape(String(local))}"]`; }
+  function selectorForId(id) {
+    return `[data-message-id="${cssEscape(String(id))}"]`;
+  }
+  function selectorForLocal(local) {
+    return `[data-local-id="${cssEscape(String(local))}"]`;
+  }
 
   function nodeForServerMessage(message) {
     const localId = message?.metadata?.local_id;
@@ -218,7 +240,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   function paintMessageNode(node, message, opts = {}) {
     const live = opts.live === true;
     node.dataset.messageId = String(message.id);
-    if (message?.metadata?.local_id) node.dataset.localId = String(message.metadata.local_id);
+    if (message?.metadata?.local_id)
+      node.dataset.localId = String(message.metadata.local_id);
     const kind = message?.metadata?.kind;
     // Preserve the byte-msg-live class across className rewrite — CSS
     // gates the cursor / pulse animations on it, and losing it here
@@ -230,12 +253,17 @@ document.addEventListener("DOMContentLoaded", async () => {
       `byte-msg-${message.direction}`,
       `byte-msg-${message.state}`,
       kind ? `byte-msg-kind-${kind}` : null,
-    ].filter(Boolean).join(" ");
+    ]
+      .filter(Boolean)
+      .join(" ");
     if (wasLive) node.classList.add("byte-msg-live");
     // Cancel ✕ only on messages still held server-side (Buddy asleep). Once
     // it dispatches (sent/delivered) it's out of the user's hands.
     const cancelBtn = node.querySelector("[data-msg-cancel]");
-    if (cancelBtn) cancelBtn.hidden = !(message.direction === "outbound" && message.state === "queued");
+    if (cancelBtn)
+      cancelBtn.hidden = !(
+        message.direction === "outbound" && message.state === "queued"
+      );
     const bodyEl = node.querySelector("[data-body]");
 
     // Kind-dispatch for body content rendering.
@@ -265,7 +293,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       // marking a quick-action tap. Not a real message from either side;
       // CSS gives it a distinct centered chip look.
       bodyEl.textContent = message.body || "";
-    } else if (kind === "buddy_reply" || kind === "buddy" || kind === "buddy_receipt") {
+    } else if (kind === "buddy_activity") {
+      // A trusted tool ran WITHOUT a confirmation checkbox (e.g. a reminder
+      // was scheduled). Reads as an activity receipt - a centered pill,
+      // clearly not a message - via CSS.
+      bodyEl.textContent = message.body || "";
+    } else if (
+      kind === "buddy_reply" ||
+      kind === "buddy" ||
+      kind === "buddy_receipt"
+    ) {
       // Every Buddy inbound message renders as markdown so **bold**,
       // bulleted lists, and inline code all look right. `buddy_reply`
       // is set by ProposalBuilder on replies that carry a checklist;
@@ -306,14 +343,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Time / attachments / state apply to every kind — used to live inside
     // renderThoughts by mistake, which meant non-claude messages had blank
     // times and unpainted attachments.
-    node.querySelector("[data-time]").textContent = formatTime(message.created_at);
+    node.querySelector("[data-time]").textContent = formatTime(
+      message.created_at,
+    );
     // Raw ISO stamp so reorderActiveTail can sort settled messages by
     // effective "sent" time. Claude responses have their created_at
     // bumped on finalisation (touch_created_at); action-requests keep
     // their original — so a decided action ends up ABOVE the response
     // even when the response finished streaming first.
     if (message.created_at) node.dataset.createdAt = message.created_at;
-    renderAttachments(node.querySelector("[data-attachments]"), message.attachments);
+    renderAttachments(
+      node.querySelector("[data-attachments]"),
+      message.attachments,
+    );
     node.querySelector("[data-state]").textContent = renderState(message);
 
     // Tag the node with its "active" role so the tail-reorder pass can
@@ -326,7 +368,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     // for finalised Claude responses, is bumped via touch_created_at so
     // the answered action-request ends up sitting ABOVE the response
     // (as if it had "sent" earlier, which is when it actually happened).
-    const actionState = kind === "action-request" ? (message?.metadata?.action_state || "pending") : null;
+    const actionState =
+      kind === "action-request"
+        ? message?.metadata?.action_state || "pending"
+        : null;
     if (message.state === "streaming" && kind !== "action-request") {
       node.dataset.activeKind = "streaming";
     } else if (kind === "action-request" && actionState === "pending") {
@@ -362,7 +407,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     container.hidden = false;
 
     const summary = container.querySelector("[data-thoughts-summary]");
-    const body    = container.querySelector("[data-thoughts-body]");
+    const body = container.querySelector("[data-thoughts-body]");
     if (!summary || !body) return;
 
     summary.textContent =
@@ -370,19 +415,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         ? `Thinking (${list.length} step${list.length === 1 ? "" : "s"})…`
         : `Thinking (${list.length} step${list.length === 1 ? "" : "s"})`;
 
-    const wasAtBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 40;
+    const wasAtBottom =
+      body.scrollHeight - body.scrollTop - body.clientHeight < 40;
 
-    body.innerHTML = list.map((t) => {
-      const type = t && t.type;
-      const value = (t && t.value) || "";
-      if (type === "tool_use") {
-        return `<div class="byte-thought byte-thought-tool">🔧 ${escapeHtml(value)}</div>`;
-      }
-      if (type === "tool_result") {
-        return `<div class="byte-thought byte-thought-result">${escapeHtml(value)}</div>`;
-      }
-      return `<div class="byte-thought byte-thought-text">${renderMarkdown(value)}</div>`;
-    }).join("");
+    body.innerHTML = list
+      .map((t) => {
+        const type = t && t.type;
+        const value = (t && t.value) || "";
+        if (type === "tool_use") {
+          return `<div class="byte-thought byte-thought-tool">🔧 ${escapeHtml(value)}</div>`;
+        }
+        if (type === "tool_result") {
+          return `<div class="byte-thought byte-thought-result">${escapeHtml(value)}</div>`;
+        }
+        return `<div class="byte-thought byte-thought-text">${renderMarkdown(value)}</div>`;
+      })
+      .join("");
 
     if (state === "streaming") {
       container.open = true;
@@ -402,19 +450,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   // section per question (AskUserQuestion path). Otherwise we render the
   // flat button row (permission / plan / jarvis / single question).
   function renderActionRequest(container, message) {
-    const meta        = message.metadata || {};
-    const requestId   = meta.action_request_id;
-    const actionKind  = meta.action_kind || "permission";
+    const meta = message.metadata || {};
+    const requestId = meta.action_request_id;
+    const actionKind = meta.action_kind || "permission";
     const actionState = meta.action_state || "pending";
-    const buttons     = Array.isArray(meta.buttons) ? meta.buttons : [];
-    const questions   = Array.isArray(meta.questions) ? meta.questions : [];
-    const multi       = !!meta.multi_select;
-    const title       = meta.title || meta.tool_name || "Action";
-    const subtitle    = meta.subtitle || "";
-    const body        = message.body || "";
-    const decision    = meta.action_decision || {};
+    const buttons = Array.isArray(meta.buttons) ? meta.buttons : [];
+    const questions = Array.isArray(meta.questions) ? meta.questions : [];
+    const multi = !!meta.multi_select;
+    const title = meta.title || meta.tool_name || "Action";
+    const subtitle = meta.subtitle || "";
+    const body = message.body || "";
+    const decision = meta.action_decision || {};
 
-    const kindClass  = `byte-action-kind-${actionKind}`;
+    const kindClass = `byte-action-kind-${actionKind}`;
     const stateClass = `byte-action-state-${actionState}`;
     const useQuestions = questions.length > 0;
 
@@ -426,15 +474,25 @@ document.addEventListener("DOMContentLoaded", async () => {
         </div>
         ${subtitle && !useQuestions ? `<div class="byte-action-subtitle">${escapeHtml(subtitle)}</div>` : ""}
         ${body ? `<div class="byte-action-body">${renderMarkdown(body)}</div>` : ""}
-        ${useQuestions
-          ? renderQuestionSections(questions, actionState, decision)
-          : `<div class="byte-action-buttons" role="group">${renderButtons(buttons, multi, actionState, decision)}</div>`}
-        ${((useQuestions || multi) && actionState === "pending") ? `
+        ${
+          useQuestions
+            ? renderQuestionSections(questions, actionState, decision)
+            : `<div class="byte-action-buttons" role="group">${renderButtons(buttons, multi, actionState, decision)}</div>`
+        }
+        ${
+          (useQuestions || multi) && actionState === "pending"
+            ? `
           <button type="button" class="byte-action-submit" data-byte-action-submit>Submit</button>
-        ` : ""}
-        ${actionState === "decided" ? `
+        `
+            : ""
+        }
+        ${
+          actionState === "decided"
+            ? `
           <div class="byte-action-decided">✓ decided${decision.value ? ` — ${escapeHtml(formatDecision(decision.value))}` : ""}</div>
-        ` : ""}
+        `
+            : ""
+        }
       </div>
     `;
 
@@ -455,16 +513,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     const decidedByHeader = new Map();
     if (Array.isArray(decision.value)) {
       decision.value.forEach((ans) => {
-        if (ans && ans.header) decidedByHeader.set(ans.header, Array.isArray(ans.answers) ? ans.answers : [ans.answers]);
+        if (ans && ans.header)
+          decidedByHeader.set(
+            ans.header,
+            Array.isArray(ans.answers) ? ans.answers : [ans.answers],
+          );
       });
     }
 
     return `<div class="byte-action-questions">
-      ${questions.map((q, idx) => {
-        const chosen = decidedByHeader.get(q.header) || [];
-        const chosenSet = new Set(chosen.map(String));
-        const opts = Array.isArray(q.options) ? q.options : [];
-        return `
+      ${questions
+        .map((q, idx) => {
+          const chosen = decidedByHeader.get(q.header) || [];
+          const chosenSet = new Set(chosen.map(String));
+          const opts = Array.isArray(q.options) ? q.options : [];
+          return `
           <section class="byte-action-question" data-q-index="${idx}" data-multi-select="${!!q.multiSelect}">
             <div class="byte-action-question-head">
               <span class="byte-action-question-header">${escapeHtml(q.header || "Q" + (idx + 1))}</span>
@@ -472,16 +535,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             </div>
             <div class="byte-action-question-text">${escapeHtml(q.question || "")}</div>
             <div class="byte-action-question-options">
-              ${opts.map((o) => {
-                const label = o.label ?? "";
-                const isChosen = chosenSet.has(String(label));
-                const classes = [
-                  "byte-action-btn",
-                  "byte-action-btn-default",
-                  isChosen ? "chosen" : "",
-                  disabled ? "disabled" : "",
-                ].filter(Boolean).join(" ");
-                return `
+              ${opts
+                .map((o) => {
+                  const label = o.label ?? "";
+                  const isChosen = chosenSet.has(String(label));
+                  const classes = [
+                    "byte-action-btn",
+                    "byte-action-btn-default",
+                    isChosen ? "chosen" : "",
+                    disabled ? "disabled" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+                  return `
                   <button type="button" class="${classes}"
                           data-byte-question-option="${escapeAttr(label)}"
                           ${disabled ? "disabled" : ""}>
@@ -489,11 +555,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                     ${o.description ? `<span class="byte-action-btn-desc">${escapeHtml(o.description)}</span>` : ""}
                   </button>
                 `;
-              }).join("")}
+                })
+                .join("")}
             </div>
           </section>
         `;
-      }).join("")}
+        })
+        .join("")}
     </div>`;
   }
 
@@ -505,8 +573,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     // selections[i] is a Set of chosen labels for question i.
     const selections = questions.map(() => new Set());
 
-    const sections = Array.from(container.querySelectorAll(".byte-action-question"));
-    const submit   = container.querySelector("[data-byte-action-submit]");
+    const sections = Array.from(
+      container.querySelectorAll(".byte-action-question"),
+    );
+    const submit = container.querySelector("[data-byte-action-submit]");
 
     const updateSubmit = () => {
       const allAnswered = selections.every((s) => s.size > 0);
@@ -516,15 +586,22 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     sections.forEach((section, i) => {
       const isMulti = section.dataset.multiSelect === "true";
-      const optionBtns = Array.from(section.querySelectorAll("[data-byte-question-option]"));
+      const optionBtns = Array.from(
+        section.querySelectorAll("[data-byte-question-option]"),
+      );
 
       optionBtns.forEach((btn) => {
         btn.addEventListener("click", () => {
           if (btn.disabled) return;
           const value = btn.dataset.byteQuestionOption;
           if (isMulti) {
-            if (selections[i].has(value)) { selections[i].delete(value); btn.classList.remove("selected"); }
-            else                          { selections[i].add(value);    btn.classList.add("selected"); }
+            if (selections[i].has(value)) {
+              selections[i].delete(value);
+              btn.classList.remove("selected");
+            } else {
+              selections[i].add(value);
+              btn.classList.add("selected");
+            }
           } else {
             selections[i].clear();
             selections[i].add(value);
@@ -541,15 +618,17 @@ document.addEventListener("DOMContentLoaded", async () => {
       submit.disabled = true;
       submit.textContent = "…";
       sections.forEach((s) => {
-        Array.from(s.querySelectorAll("[data-byte-question-option]")).forEach((b) => {
-          b.disabled = true;
-          b.classList.add("disabled");
-        });
+        Array.from(s.querySelectorAll("[data-byte-question-option]")).forEach(
+          (b) => {
+            b.disabled = true;
+            b.classList.add("disabled");
+          },
+        );
       });
       // Wire shape matches Claude Code's AskUserQuestion output format:
       // [{ header, answers: [...] }, ...] — indexed to match questions order.
       const payload = questions.map((q, i) => ({
-        header:  q.header,
+        header: q.header,
         answers: Array.from(selections[i]),
       }));
       submitAction(requestId, payload, container);
@@ -558,42 +637,63 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function iconForKind(kind) {
     switch (kind) {
-      case "plan":     return "📋";
-      case "question": return "?";
-      case "jarvis":   return "🎩";
-      default:         return "⚡";
+      case "plan":
+        return "📋";
+      case "question":
+        return "?";
+      case "jarvis":
+        return "🎩";
+      default:
+        return "⚡";
     }
   }
 
   function renderButtons(buttons, multi, state, decision) {
     const disabled = state !== "pending";
-    const chosenSet = new Set(Array.isArray(decision.value) ? decision.value.map(String) : (decision.value != null ? [String(decision.value)] : []));
+    const chosenSet = new Set(
+      Array.isArray(decision.value)
+        ? decision.value.map(String)
+        : decision.value != null
+          ? [String(decision.value)]
+          : [],
+    );
 
-    return buttons.map((b) => {
-      const value       = b.value ?? b.label;
-      const isChosen    = chosenSet.has(String(value));
-      const variant     = b.variant || "default";
-      const classes     = [
-        "byte-action-btn",
-        `byte-action-btn-${variant}`,
-        isChosen ? "chosen" : "",
-        disabled ? "disabled" : "",
-      ].filter(Boolean).join(" ");
-      const description = b.description ? `<span class="byte-action-btn-desc">${escapeHtml(b.description)}</span>` : "";
-      return `
+    return buttons
+      .map((b) => {
+        const value = b.value ?? b.label;
+        const isChosen = chosenSet.has(String(value));
+        const variant = b.variant || "default";
+        const classes = [
+          "byte-action-btn",
+          `byte-action-btn-${variant}`,
+          isChosen ? "chosen" : "",
+          disabled ? "disabled" : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+        const description = b.description
+          ? `<span class="byte-action-btn-desc">${escapeHtml(b.description)}</span>`
+          : "";
+        return `
         <button type="button" class="${classes}" data-byte-action-value="${escapeAttr(String(value))}" ${disabled ? "disabled" : ""}>
           <span class="byte-action-btn-label">${escapeHtml(b.label ?? value)}</span>
           ${description}
         </button>
       `;
-    }).join("");
+      })
+      .join("");
   }
 
   function formatDecision(v) {
     if (Array.isArray(v)) {
       // Multi-question shape: [{header, answers}, ...]
       if (v.length && v[0] && typeof v[0] === "object" && "header" in v[0]) {
-        return v.map((ans) => `${ans.header}: ${Array.isArray(ans.answers) ? ans.answers.join(", ") : ans.answers}`).join(" · ");
+        return v
+          .map(
+            (ans) =>
+              `${ans.header}: ${Array.isArray(ans.answers) ? ans.answers.join(", ") : ans.answers}`,
+          )
+          .join(" · ");
       }
       // Flat multi-select array
       return v.join(", ");
@@ -604,7 +704,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   function wireActionHandlers(container, requestId, multi, actionState) {
     if (actionState !== "pending" || !requestId) return;
 
-    const btns   = Array.from(container.querySelectorAll("[data-byte-action-value]"));
+    const btns = Array.from(
+      container.querySelectorAll("[data-byte-action-value]"),
+    );
     const submit = container.querySelector("[data-byte-action-submit]");
     const selected = new Set();
 
@@ -613,12 +715,20 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (btn.disabled) return;
         const value = btn.dataset.byteActionValue;
         if (multi) {
-          if (selected.has(value)) { selected.delete(value); btn.classList.remove("selected"); }
-          else                     { selected.add(value);    btn.classList.add("selected"); }
+          if (selected.has(value)) {
+            selected.delete(value);
+            btn.classList.remove("selected");
+          } else {
+            selected.add(value);
+            btn.classList.add("selected");
+          }
         } else {
           // Optimistic: dim all, mark chosen, disable further taps until the
           // server confirms (or throws).
-          btns.forEach((b) => { b.disabled = true; b.classList.add("disabled"); });
+          btns.forEach((b) => {
+            b.disabled = true;
+            b.classList.add("disabled");
+          });
           btn.classList.add("chosen");
           submitAction(requestId, value, container);
         }
@@ -630,35 +740,49 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (selected.size === 0) return;
       submit.disabled = true;
       submit.textContent = "…";
-      btns.forEach((b) => { b.disabled = true; b.classList.add("disabled"); });
+      btns.forEach((b) => {
+        b.disabled = true;
+        b.classList.add("disabled");
+      });
       submitAction(requestId, Array.from(selected), container);
     });
   }
 
   async function submitAction(requestId, value, container) {
     try {
-      const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
-      const res  = await fetch(`/byte/actions/${encodeURIComponent(requestId)}/respond`, {
-        method:      "POST",
-        credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept":       "application/json",
-          "X-CSRF-Token": csrf,
+      const csrf =
+        document
+          .querySelector('meta[name="csrf-token"]')
+          ?.getAttribute("content") || "";
+      const res = await fetch(
+        `/byte/actions/${encodeURIComponent(requestId)}/respond`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-CSRF-Token": csrf,
+          },
+          body: JSON.stringify({ value: value }),
         },
-        body: JSON.stringify({ value: value }),
-      });
+      );
       if (!res.ok) throw new Error(`http_${res.status}`);
       // The broadcast that follows will repaint the bubble with
       // action_state=decided — nothing to do here.
     } catch (e) {
       // Roll back optimistic state so the user can retry.
-      Array.from(container.querySelectorAll("[data-byte-action-value]")).forEach((b) => {
+      Array.from(
+        container.querySelectorAll("[data-byte-action-value]"),
+      ).forEach((b) => {
         b.disabled = false;
         b.classList.remove("chosen", "disabled");
       });
       const sub = container.querySelector("[data-byte-action-submit]");
-      if (sub) { sub.disabled = false; sub.textContent = "Submit"; }
+      if (sub) {
+        sub.disabled = false;
+        sub.textContent = "Submit";
+      }
       const err = document.createElement("div");
       err.className = "byte-action-error";
       err.textContent = `Couldn't send: ${e.message}. Tap again.`;
@@ -674,17 +798,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     const stash = [];
     let t = raw;
     t = t.replace(/```([^\n`]*)\n?([\s\S]*?)```/g, (_m, lang, code) => {
-      const i = stash.push({ kind: "fence", lang: (lang || "").trim(), code }) - 1;
+      const i =
+        stash.push({ kind: "fence", lang: (lang || "").trim(), code }) - 1;
       return `@FENCE@${i}@FENCE@`;
     });
     t = t.replace(/`([^`\n]+)`/g, (_m, code) => {
       const i = stash.push({ kind: "inline", code }) - 1;
       return `@INLINE@${i}@INLINE@`;
     });
-    t = t
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+    t = t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     t = t.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
     t = t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
     t = t.replace(/\n/g, "<br>");
@@ -778,7 +900,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const held = entry.held === true;
     node.className = `byte-msg byte-msg-outbound ${held ? "byte-msg-queued" : "byte-msg-pending"}`;
     node.querySelector("[data-body]").textContent = entry.body || "";
-    node.querySelector("[data-time]").textContent = formatTime(new Date(entry.client_ts || entry.queued_at || Date.now()).toISOString());
+    node.querySelector("[data-time]").textContent = formatTime(
+      new Date(entry.client_ts || entry.queued_at || Date.now()).toISOString(),
+    );
     renderAttachments(node.querySelector("[data-attachments]"), []);
     node.querySelector("[data-state]").textContent = held ? "queued" : "…";
     const cancelBtn = node.querySelector("[data-msg-cancel]");
@@ -798,7 +922,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   function renderAttachments(container, attachments) {
     if (!container) return;
     const list = Array.isArray(attachments) ? attachments : [];
-    const currentIds = Array.from(container.children).map((el) => el.dataset.attachmentId);
+    const currentIds = Array.from(container.children).map(
+      (el) => el.dataset.attachmentId,
+    );
     const nextIds = list.map((a) => String(a.id));
     if (currentIds.join(",") === nextIds.join(",")) return;
     container.innerHTML = "";
@@ -813,22 +939,28 @@ document.addEventListener("DOMContentLoaded", async () => {
     const type = (a.content_type || "").split("/")[0];
     if (type === "image") {
       const img = document.createElement("img");
-      img.src = a.url; img.alt = a.filename || ""; img.loading = "lazy";
+      img.src = a.url;
+      img.alt = a.filename || "";
+      img.loading = "lazy";
       wrap.appendChild(img);
     } else if (type === "audio") {
       const audio = document.createElement("audio");
-      audio.src = a.url; audio.controls = true;
+      audio.src = a.url;
+      audio.controls = true;
       wrap.appendChild(audio);
     } else if (type === "video") {
       const video = document.createElement("video");
-      video.src = a.url; video.controls = true; video.playsInline = true;
+      video.src = a.url;
+      video.controls = true;
+      video.playsInline = true;
       wrap.appendChild(video);
     } else {
       const link = document.createElement("a");
       link.href = a.url;
       link.textContent = a.filename || "file";
       link.download = a.filename || "";
-      link.rel = "noopener"; link.target = "_blank";
+      link.rel = "noopener";
+      link.target = "_blank";
       wrap.appendChild(link);
     }
     return wrap;
@@ -866,12 +998,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   function scrollToBottom(behavior = "auto") {
     atBottom = true;
     clearUnread();
-    if (stickRaf) { cancelAnimationFrame(stickRaf); stickRaf = 0; }
+    if (stickRaf) {
+      cancelAnimationFrame(stickRaf);
+      stickRaf = 0;
+    }
 
     if (behavior === "smooth") {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          if (atBottom) thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
+          if (atBottom)
+            thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
         });
       });
       return;
@@ -879,7 +1015,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     let frames = 0;
     const step = () => {
-      if (!atBottom) { stickRaf = 0; return; }  // user scrolled up — stop fighting
+      if (!atBottom) {
+        stickRaf = 0;
+        return;
+      } // user scrolled up — stop fighting
       thread.scrollTop = thread.scrollHeight;
       frames += 1;
       stickRaf = frames < 8 ? requestAnimationFrame(step) : 0;
@@ -896,7 +1035,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!jumpBtn) return;
     const shouldShow = !atBottom;
     jumpBtn.classList.toggle("visible", shouldShow);
-    if (jumpCount) jumpCount.textContent = unreadCount > 0 ? String(unreadCount) : "";
+    if (jumpCount)
+      jumpCount.textContent = unreadCount > 0 ? String(unreadCount) : "";
   }
 
   jumpBtn?.addEventListener("click", () => scrollToBottom("smooth"));
@@ -925,55 +1065,88 @@ document.addEventListener("DOMContentLoaded", async () => {
     // — that's still an active user gesture, so clipboard permission
     // stays open. Visual feedback ("ready to copy") still fires at
     // HOLD_MS via a small timer, but it doesn't do the work.
-    let armed = false, holdTimer = null, activeMsg = null, startX = 0, startY = 0;
+    let armed = false,
+      holdTimer = null,
+      activeMsg = null,
+      startX = 0,
+      startY = 0;
     const MOVE_TOLERANCE = 8;
-    const HOLD_MS        = 500;
+    const HOLD_MS = 500;
 
     const cancel = () => {
-      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
       armed = false;
       activeMsg = null;
     };
 
-    thread.addEventListener("pointerdown", (e) => {
-      if (e.button != null && e.button !== 0) return;
-      const msg = e.target.closest?.(".byte-msg");
-      if (!msg) return;
-      if (e.target.closest?.("[data-body], [data-thoughts], [data-attachments]")) return;
+    thread.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (e.button != null && e.button !== 0) return;
+        const msg = e.target.closest?.(".byte-msg");
+        if (!msg) return;
+        if (
+          e.target.closest?.("[data-body], [data-thoughts], [data-attachments]")
+        )
+          return;
 
-      startX = e.clientX; startY = e.clientY;
-      activeMsg = msg;
-      armed = false;
-      holdTimer = setTimeout(() => { armed = true; }, HOLD_MS);
-    }, { passive: true });
+        startX = e.clientX;
+        startY = e.clientY;
+        activeMsg = msg;
+        armed = false;
+        holdTimer = setTimeout(() => {
+          armed = true;
+        }, HOLD_MS);
+      },
+      { passive: true },
+    );
 
-    thread.addEventListener("pointermove", (e) => {
-      if (!activeMsg) return;
-      if (Math.abs(e.clientX - startX) > MOVE_TOLERANCE ||
-          Math.abs(e.clientY - startY) > MOVE_TOLERANCE) cancel();
-    }, { passive: true });
+    thread.addEventListener(
+      "pointermove",
+      (e) => {
+        if (!activeMsg) return;
+        if (
+          Math.abs(e.clientX - startX) > MOVE_TOLERANCE ||
+          Math.abs(e.clientY - startY) > MOVE_TOLERANCE
+        )
+          cancel();
+      },
+      { passive: true },
+    );
 
-    thread.addEventListener("pointerup", () => {
-      if (!activeMsg) return;
-      const msg = activeMsg;
-      const wasArmed = armed;
-      cancel();
-      if (!wasArmed) return;
+    thread.addEventListener(
+      "pointerup",
+      () => {
+        if (!activeMsg) return;
+        const msg = activeMsg;
+        const wasArmed = armed;
+        cancel();
+        if (!wasArmed) return;
 
-      // We're still inside the pointerup gesture — clipboard call
-      // here has user activation and Safari will honour it.
-      const text = (msg.querySelector("[data-body]")?.textContent || "").trim();
-      if (!text) return;
-      copyText(text).then((ok) => flashToast(ok ? "Copied" : "Copy failed"));
-    }, { passive: true });
+        // We're still inside the pointerup gesture — clipboard call
+        // here has user activation and Safari will honour it.
+        const text = (
+          msg.querySelector("[data-body]")?.textContent || ""
+        ).trim();
+        if (!text) return;
+        copyText(text).then((ok) => flashToast(ok ? "Copied" : "Copy failed"));
+      },
+      { passive: true },
+    );
 
     thread.addEventListener("pointercancel", cancel, { passive: true });
-    thread.addEventListener("scroll",        cancel, { passive: true });
+    thread.addEventListener("scroll", cancel, { passive: true });
   }
 
   function copyText(text) {
     if (navigator.clipboard?.writeText) {
-      return navigator.clipboard.writeText(text).then(() => true).catch(() => false);
+      return navigator.clipboard
+        .writeText(text)
+        .then(() => true)
+        .catch(() => false);
     }
     try {
       const ta = document.createElement("textarea");
@@ -990,7 +1163,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  let toastNode = null, toastTimer = null;
+  let toastNode = null,
+    toastTimer = null;
   function flashToast(text) {
     if (!toastNode) {
       toastNode = document.createElement("div");
@@ -1000,7 +1174,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     toastNode.textContent = text;
     toastNode.classList.add("byte-toast-visible");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toastNode?.classList.remove("byte-toast-visible"), 1200);
+    toastTimer = setTimeout(
+      () => toastNode?.classList.remove("byte-toast-visible"),
+      1200,
+    );
   }
 
   function receiveMessage(message) {
@@ -1023,9 +1200,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   // kicks a background refetch to pull in anything more recent than the
   // cache. No focus/scroll gymnastics beyond pinning to bottom.
   function hydrateForConversation(convId, seedMessages) {
-    Array.from(thread.querySelectorAll("[data-message-id], [data-local-id]")).forEach((n) => n.remove());
+    Array.from(
+      thread.querySelectorAll("[data-message-id], [data-local-id]"),
+    ).forEach((n) => n.remove());
     messages = loadMessages(convId);
-    (seedMessages || []).forEach((m) => { messages = upsertPersisted(convId, messages, m); });
+    (seedMessages || []).forEach((m) => {
+      messages = upsertPersisted(convId, messages, m);
+    });
     oldestLoadedId = messages[0]?.id ?? null;
     hasMore = true;
     unreadCount = 0;
@@ -1079,7 +1260,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else if (state === "end") {
       loader.hidden = false;
       loader.textContent = "no more messages";
-      setTimeout(() => { loader.hidden = true; }, 1500);
+      setTimeout(() => {
+        loader.hidden = true;
+      }, 1500);
     } else {
       loader.hidden = true;
     }
@@ -1144,8 +1327,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   function loadBootstrap() {
     const raw = document.getElementById("byte-bootstrap")?.textContent;
     if (!raw) return {};
-    try { return JSON.parse(raw); }
-    catch { return {}; }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
   }
 
   // ---------- send ----------
@@ -1162,9 +1348,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    const local_id = (typeof crypto !== "undefined" && crypto.randomUUID)
-      ? crypto.randomUUID()
-      : `l-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const local_id =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `l-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     const client_ts = Date.now();
 
@@ -1183,32 +1370,43 @@ document.addEventListener("DOMContentLoaded", async () => {
       metadata: { source: "web", local_id, client_ts, conversation_id: convId },
     };
 
-    sendMessage(entry, {
-      onEnqueued: (e) => {
-        if (e.conversation_id !== currentConversationId) return;
-        upsertQueuedMessage(e);
-        scrollToBottom("auto");
+    sendMessage(
+      entry,
+      {
+        onEnqueued: (e) => {
+          if (e.conversation_id !== currentConversationId) return;
+          upsertQueuedMessage(e);
+          scrollToBottom("auto");
+        },
+        onSending: (e) => {
+          if (e.conversation_id === currentConversationId)
+            markQueuedSending(e.local_id);
+        },
+        onSent: (e, message) => {
+          message.metadata = {
+            ...(message.metadata || {}),
+            local_id: e.local_id,
+          };
+          // Even for background conversations, persist the resolved message
+          // so its cache stays fresh; only paint into the DOM for the
+          // currently-visible thread.
+          const targetConv = e.conversation_id || currentConversationId;
+          messages =
+            targetConv === currentConversationId
+              ? upsertPersisted(currentConversationId, messages, message)
+              : upsertPersisted(targetConv, loadMessages(targetConv), message);
+          if (targetConv === currentConversationId)
+            upsertMessage(message, { live: true });
+          convoManager.bumpActivity(targetConv, message.created_at);
+        },
+        onTransientFail: () => {},
+        onPermanentFail: (e, reason) => {
+          if (e.conversation_id === currentConversationId)
+            markQueuedFailed(e.local_id, reason);
+        },
       },
-      onSending: (e) => {
-        if (e.conversation_id === currentConversationId) markQueuedSending(e.local_id);
-      },
-      onSent: (e, message) => {
-        message.metadata = { ...(message.metadata || {}), local_id: e.local_id };
-        // Even for background conversations, persist the resolved message
-        // so its cache stays fresh; only paint into the DOM for the
-        // currently-visible thread.
-        const targetConv = e.conversation_id || currentConversationId;
-        messages = targetConv === currentConversationId
-          ? upsertPersisted(currentConversationId, messages, message)
-          : upsertPersisted(targetConv, loadMessages(targetConv), message);
-        if (targetConv === currentConversationId) upsertMessage(message, { live: true });
-        convoManager.bumpActivity(targetConv, message.created_at);
-      },
-      onTransientFail: () => {},
-      onPermanentFail: (e, reason) => {
-        if (e.conversation_id === currentConversationId) markQueuedFailed(e.local_id, reason);
-      },
-    }, { hold: held });
+      { hold: held },
+    );
   }
 
   // Mode for a conversation id — from the manager's list, falling back to the
@@ -1227,11 +1425,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!btn) return;
     const node = btn.closest(".byte-msg");
     if (!node) return;
-    const msgId   = node.dataset.messageId;
+    const msgId = node.dataset.messageId;
     const localId = node.dataset.localId;
     node.remove();
     if (msgId) {
-      messages = removePersisted(currentConversationId, messages, Number(msgId));
+      messages = removePersisted(
+        currentConversationId,
+        messages,
+        Number(msgId),
+      );
       cancelServerMessage(msgId);
     } else if (localId) {
       removeQueued(localId);
@@ -1240,13 +1442,18 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function cancelServerMessage(msgId) {
     try {
-      const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+      const csrf =
+        document
+          .querySelector('meta[name="csrf-token"]')
+          ?.getAttribute("content") || "";
       await fetch(`/byte/messages/${encodeURIComponent(msgId)}`, {
-        method:      "DELETE",
+        method: "DELETE",
         credentials: "same-origin",
-        headers:     { "X-CSRF-Token": csrf, Accept: "application/json" },
+        headers: { "X-CSRF-Token": csrf, Accept: "application/json" },
       });
-    } catch (_) { /* optimistically removed already; server broadcast reconciles */ }
+    } catch (_) {
+      /* optimistically removed already; server broadcast reconciles */
+    }
   }
 
   function handleSend(rawBody) {
@@ -1262,7 +1469,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // chips POST to /buddy/quick_action so the resulting message is
   // Buddy-authored rather than a fake user-typed sentence.
   buddyHero = initBuddyHero({
-    hero:             heroEl,
+    hero: heroEl,
     conversationIdFn: () => currentConversationId,
   });
   // Sync initial visibility to the currently-active conversation.
@@ -1275,7 +1482,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // to sleep. `buddyWakeExpr` tracks the latest real (non-connection)
   // expression so a reconnect restores the right face.
   let buddyWakeExpr = heroEl?.dataset.buddyAwakeExpression || "happy";
-  const buddyWake  = () => buddyHero?.setExpression(buddyWakeExpr);
+  const buddyWake = () => buddyHero?.setExpression(buddyWakeExpr);
   const buddySleep = () => buddyHero?.setExpression("sleeping");
 
   // ---------- sleeping chip + queue-while-asleep ----------
@@ -1286,8 +1493,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // above the composer and holds new Buddy sends in the queue with a cancel
   // ✕, until Byte wakes. (channelConnected / sleepUntil / sleepWake are
   // declared in the early-state block above to avoid a TDZ.)
-  const usageCapped = () => sleepUntil != null && new Date(sleepUntil).getTime() > Date.now();
-  const onBuddyConversation = () => (convoManager.currentConversation()?.mode || app.dataset.activeMode) === "buddy";
+  const usageCapped = () =>
+    sleepUntil != null && new Date(sleepUntil).getTime() > Date.now();
+  const onBuddyConversation = () =>
+    (convoManager.currentConversation()?.mode || app.dataset.activeMode) ===
+    "buddy";
   // Buddy can't hear you when the channel is down OR it's usage-capped.
   const buddyAsleep = () => !channelConnected || usageCapped();
 
@@ -1298,7 +1508,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     sleepChip.hidden = !show;
     if (!show) return;
     if (usageCapped()) {
-      sleepText.textContent = sleepWake ? `Byte's asleep until ${sleepWake}` : "Byte's asleep";
+      sleepText.textContent = sleepWake
+        ? `Byte's asleep until ${sleepWake}`
+        : "Byte's asleep";
     } else {
       sleepText.textContent = "Byte's asleep — reconnecting…";
     }
@@ -1309,7 +1521,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     clearAllPersisted();
     clearQueue();
     messages = [];
-    Array.from(thread.querySelectorAll("[data-message-id], [data-local-id]")).forEach((n) => n.remove());
+    Array.from(
+      thread.querySelectorAll("[data-message-id], [data-local-id]"),
+    ).forEach((n) => n.remove());
     unreadCount = 0;
     updateJumpBtn();
     refetchHistory();
@@ -1376,7 +1590,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   // conversation switch (conversations.js) for the avatar/CSS, so it's a
   // reliable live source here too.
   input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.isComposing && composer.dataset.mode === "bash") {
+    if (
+      e.key === "Enter" &&
+      !e.shiftKey &&
+      !e.isComposing &&
+      composer.dataset.mode === "bash"
+    ) {
       e.preventDefault();
       handleSend(input.value);
     }
@@ -1387,16 +1606,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   // resizes the thread AFTER any immediate scrollToBottom already ran,
   // stranding the newest message off-screen. Re-pin to the bottom when the
   // transition settles, and directly on focus/blur.
-  const repinIfAtBottom = () => { if (atBottom) scrollToBottom("auto"); };
+  const repinIfAtBottom = () => {
+    if (atBottom) scrollToBottom("auto");
+  };
   heroEl?.addEventListener("transitionend", (e) => {
-    if (e.propertyName === "min-height" || e.propertyName === "max-height") repinIfAtBottom();
+    if (e.propertyName === "min-height" || e.propertyName === "max-height")
+      repinIfAtBottom();
   });
   input.addEventListener("focus", repinIfAtBottom);
   input.addEventListener("blur", repinIfAtBottom);
 
   function autosize() {
     input.style.height = "auto";
-    input.style.height = Math.min(input.scrollHeight, window.innerHeight * 0.3) + "px";
+    input.style.height =
+      Math.min(input.scrollHeight, window.innerHeight * 0.3) + "px";
   }
   input.addEventListener("input", autosize);
   autosize();
@@ -1417,8 +1640,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (rafH) return;
     rafH = requestAnimationFrame(() => {
       rafH = 0;
-      const wh  = window.innerHeight;
-      const vvh = window.visualViewport ? Math.round(window.visualViewport.height) : null;
+      const wh = window.innerHeight;
+      const vvh = window.visualViewport
+        ? Math.round(window.visualViewport.height)
+        : null;
       // Prefer visualViewport.height when available — it always matches
       // the visible viewport (excludes keyboard). window.innerHeight can
       // report the LAYOUT viewport on some iOS PWA configurations,
@@ -1431,7 +1656,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (el) el.textContent = val;
       };
       setV("[data-byte-version-apph]", `${h}`);
-      setV("[data-byte-version-vvh]",  vvh != null ? `${vvh}` : "n/a");
+      setV("[data-byte-version-vvh]", vvh != null ? `${vvh}` : "n/a");
       setV("[data-byte-version-winh]", `${wh}`);
 
       // The thread's height is bound to --byte-app-h, so this resize just
@@ -1452,7 +1677,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Also re-measure on scroll and focus/blur — iOS fires visualViewport
   // scroll BEFORE resize in some keyboard transitions.
   window.visualViewport?.addEventListener("scroll", setAppHeight);
-  window.addEventListener("focusin",  setAppHeight);
+  window.addEventListener("focusin", setAppHeight);
   window.addEventListener("focusout", setAppHeight);
 
   // Layout-viewport-scroll compensator (unchanged) — no height side-effect.
@@ -1464,7 +1689,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       rafId = requestAnimationFrame(() => {
         rafId = 0;
         if (vv.offsetTop > 0) {
-          document.documentElement.style.setProperty("--byte-vv-top", `${vv.offsetTop}px`);
+          document.documentElement.style.setProperty(
+            "--byte-vv-top",
+            `${vv.offsetTop}px`,
+          );
         } else {
           document.documentElement.style.removeProperty("--byte-vv-top");
         }
@@ -1486,10 +1714,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   function drainHooks() {
     return {
       onSending: (e) => {
-        if (e.conversation_id === currentConversationId) markQueuedSending(e.local_id);
+        if (e.conversation_id === currentConversationId)
+          markQueuedSending(e.local_id);
       },
       onSent: (e, message) => {
-        message.metadata = { ...(message.metadata || {}), local_id: e.local_id };
+        message.metadata = {
+          ...(message.metadata || {}),
+          local_id: e.local_id,
+        };
         const targetConv = e.conversation_id || currentConversationId;
         if (targetConv === currentConversationId) {
           messages = upsertPersisted(currentConversationId, messages, message);
@@ -1500,7 +1732,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         convoManager.bumpActivity(targetConv, message.created_at);
       },
       onPermanentFail: (e, reason) => {
-        if (e.conversation_id === currentConversationId) markQueuedFailed(e.local_id, reason);
+        if (e.conversation_id === currentConversationId)
+          markQueuedFailed(e.local_id, reason);
       },
     };
   }
@@ -1511,7 +1744,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   let hasBeenConnected = false;
-  let wasDisconnected  = false;
+  let wasDisconnected = false;
 
   Monitor.subscribe(monitorChannel, {
     connected() {
@@ -1528,7 +1761,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         checkForServiceWorkerUpdate();
       }
       hasBeenConnected = true;
-      wasDisconnected  = false;
+      wasDisconnected = false;
     },
     disconnected() {
       setStatus("disconnected", "disconnected");
@@ -1542,7 +1775,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!data) return;
       if (data.kind === "conversation") {
         convoManager.applyBroadcast(data);
-        updateSleepChip();  // mode may have changed under the active thread
+        updateSleepChip(); // mode may have changed under the active thread
         return;
       }
       if (data.kind === "buddy_expression") {
@@ -1556,7 +1789,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Usage-cap sleep began (or extended). Raise the chip with the wake
         // time; new Buddy sends will queue server-side from here.
         sleepUntil = data.sleep_until || null;
-        sleepWake  = data.wake_string || null;
+        sleepWake = data.wake_string || null;
         updateSleepChip();
         return;
       }
@@ -1564,7 +1797,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Byte woke — drop the chip. Queued turns re-broadcast as they
         // dispatch (queued → sent), so their bubbles resolve on their own.
         sleepUntil = null;
-        sleepWake  = null;
+        sleepWake = null;
         updateSleepChip();
         return;
       }
@@ -1573,11 +1806,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         // with no prose - the bubble had nothing to show). Remove
         // from cache + DOM so the user doesn't see a ghost.
         const convId = data.byte_conversation_id;
-        const msgId  = data.message_id;
+        const msgId = data.message_id;
         if (convId != null && msgId != null) {
-          const targetList = convId === currentConversationId
-            ? messages
-            : loadMessages(convId);
+          const targetList =
+            convId === currentConversationId ? messages : loadMessages(convId);
           const updated = removePersisted(convId, targetList, msgId);
           if (convId === currentConversationId) {
             messages = updated;
@@ -1594,9 +1826,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         // currently visible — a background thread might get updated while
         // the user is looking at another one.
         if (convId != null) {
-          const targetList = convId === currentConversationId
-            ? messages
-            : loadMessages(convId);
+          const targetList =
+            convId === currentConversationId ? messages : loadMessages(convId);
           const updated = upsertPersisted(convId, targetList, msg);
           if (convId === currentConversationId) messages = updated;
         }
@@ -1611,13 +1842,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     },
   });
 
-  setInterval(() => {
-    requestShellRefresh();
-    checkForServiceWorkerUpdate();
-  }, 5 * 60 * 1000);
+  setInterval(
+    () => {
+      requestShellRefresh();
+      checkForServiceWorkerUpdate();
+    },
+    5 * 60 * 1000,
+  );
 
-  window.addEventListener("online",  scheduleDrain);
-  window.addEventListener("focus",   scheduleDrain);
+  window.addEventListener("online", scheduleDrain);
+  window.addEventListener("focus", scheduleDrain);
 
   async function refetchHistory() {
     if (!navigator.onLine || !messagesUrl) return;
@@ -1653,13 +1887,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   let presenceInterval = 0;
   const sendPresence = (state) => {
     try {
-      const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+      const csrf =
+        document
+          .querySelector('meta[name="csrf-token"]')
+          ?.getAttribute("content") || "";
       fetch("/byte/presence", {
         method: "POST",
         credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
-          "Accept":       "application/json",
+          Accept: "application/json",
           "X-CSRF-Token": csrf,
         },
         body: JSON.stringify({ state: state }),
@@ -1676,7 +1913,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   };
   const stopPresence = () => {
     sendPresence("hidden");
-    if (presenceInterval) { clearInterval(presenceInterval); presenceInterval = 0; }
+    if (presenceInterval) {
+      clearInterval(presenceInterval);
+      presenceInterval = 0;
+    }
   };
   if (document.visibilityState === "visible") startPresence();
   window.addEventListener("pagehide", stopPresence);
@@ -1731,7 +1971,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         // (a) Ask the browser to re-fetch the SW script and, if it's
         // different, install it. This is what actually pulls in a newer
         // SW file after a deploy.
-        try { await reg.update(); } catch (_) {}
+        try {
+          await reg.update();
+        } catch (_) {}
 
         // (b) Any waiting SW: activate it and wait for the swap to land.
         if (reg.waiting) {
@@ -1773,9 +2015,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   async function requestSwVersion() {
     try {
       const reg = await navigator.serviceWorker?.getRegistration("/");
-      const sw  = reg?.active;
-      const el  = document.querySelector("[data-byte-version-sw]");
-      if (!sw) { if (el) el.textContent = "(none)"; return; }
+      const sw = reg?.active;
+      const el = document.querySelector("[data-byte-version-sw]");
+      if (!sw) {
+        if (el) el.textContent = "(none)";
+        return;
+      }
       sw.postMessage({ action: "get_version" });
     } catch (_) {}
   }
@@ -1815,26 +2060,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (state === "subscribed") notifyBtn.classList.add("subscribed");
     if (state === "denied") notifyBtn.classList.add("denied");
     if (state === "unsupported") notifyBtn.classList.add("unsupported");
-    const title = {
-      subscribed:   "Notifications on — tap to disable",
-      unsubscribed: "Notifications off — tap to enable",
-      denied:       "Blocked by browser — enable in site settings",
-      unsupported:  "Notifications unavailable in this browser",
-    }[state] || "Toggle notifications";
+    const title =
+      {
+        subscribed: "Notifications on — tap to disable",
+        unsubscribed: "Notifications off — tap to enable",
+        denied: "Blocked by browser — enable in site settings",
+        unsupported: "Notifications unavailable in this browser",
+      }[state] || "Toggle notifications";
     notifyBtn.setAttribute("title", title);
     notifyBtn.setAttribute("aria-label", title);
   }
 
   function surfaceLocal(body, kind = "system") {
     const stub = {
-      id:              `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      id: `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       conversation_id: currentConversationId,
-      direction:       "inbound",
-      state:           "delivered",
-      body:            body,
-      created_at:      new Date().toISOString(),
-      metadata:        { kind: kind, local: true },
-      attachments:     [],
+      direction: "inbound",
+      state: "delivered",
+      body: body,
+      created_at: new Date().toISOString(),
+      metadata: { kind: kind, local: true },
+      attachments: [],
     };
     upsertMessage(stub);
     if (atBottom) scrollToBottom("smooth");
@@ -1843,7 +2089,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   notifyBtn?.addEventListener("click", async () => {
     const state = await checkByteNotificationStatus();
     if (state === "unsupported") {
-      surfaceLocal("**Notifications unavailable** — this browser doesn't support Web Push.");
+      surfaceLocal(
+        "**Notifications unavailable** — this browser doesn't support Web Push.",
+      );
       return;
     }
     if (state === "denied") {
@@ -1858,7 +2106,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else {
       const result = await registerByteNotifications();
       if (result && result.success) {
-        surfaceLocal("Notifications **enabled**. Try `byte \"test\"` from your Mac to verify.");
+        surfaceLocal("Notifications **enabled**.");
       } else {
         const reason = (result && result.error) || "unknown error";
         surfaceLocal(`**Couldn't enable notifications:** \`${reason}\``);

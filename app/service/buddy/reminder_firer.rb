@@ -110,9 +110,9 @@ module Buddy
       # it fires, regardless of whether the PWA thinks the user is
       # currently looking. Same shape used for proposal notifications.
       def notify_direct(user, message)
+        # OS shows the app name (Byte); the title is the reminder itself.
         WebPushNotifications.send_to_byte(
-          title: message.byte_conversation&.display_name.presence || "Buddy",
-          body:  "⏰ #{message.body.to_s.sub(/\A⏰ Reminder: /, '').truncate(160)}",
+          title: "⏰ #{message.body.to_s.sub(/\A⏰ Reminder: /, '').truncate(160)}",
           tag:   "byte-#{message.id}",
           users: [user],
         )

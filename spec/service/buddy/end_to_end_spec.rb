@@ -40,7 +40,7 @@ RSpec.describe "Buddy end-to-end" do
     # 2. The webhooks_controller hook: parse + strip + build proposals.
     parsed = Buddy::MarkerParser.extract(msg.body)
     msg.update!(body: parsed[:display_text])
-    action = Buddy::ProposalBuilder.create(user: user, byte_message: msg, markers: parsed[:markers])
+    action = Buddy::ProposalBuilder.create(user: user, byte_message: msg, markers: parsed[:markers])[:action]
 
     # Two Coffee markers merged, one Walk stays independent → 2 rows.
     expect(action.buttons.length).to eq(2)

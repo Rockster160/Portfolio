@@ -111,6 +111,16 @@ RSpec.describe WebhooksController, type: :controller do
       expect(message.delivered_at).to be_present
     end
 
+    it "titles the push with the message itself, not the thread name" do
+      captured = nil
+      allow(WebPushNotifications).to receive(:send_to_byte) { |payload| captured = payload }
+
+      patch :byte_update, params: { id: message.id, body: "It's a good time for dishes", state: "delivered" }
+
+      expect(captured[:title]).to eq("It's a good time for dishes")
+      expect(captured[:body]).to be_nil
+    end
+
     it "attaches files on update" do
       allow(MonitorChannel).to receive(:broadcast_to)
       image = Rack::Test::UploadedFile.new(StringIO.new("bytes"), "image/png", original_filename: "late.png")
