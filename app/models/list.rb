@@ -157,6 +157,10 @@ class List < ApplicationRecord
     user_lists.find_by(is_owner: true).try(:user)
   end
 
+  def owners
+    users.where(user_lists: { is_owner: true })
+  end
+
   def owned_by_user?(user)
     !!user_lists.where(user_id: user.try(:id)).first.try(:is_owner?)
   end

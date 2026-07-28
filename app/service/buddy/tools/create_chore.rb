@@ -22,7 +22,7 @@ Buddy::Tools.register(
     if payload[:assigned_to_user_id].present? && payload[:assigned_to_user_id] != ctx.user.id
       subs << "for #{User.find_by(id: payload[:assigned_to_user_id])&.first_name}"
     end
-    { title: payload[:name].to_s, sub: subs.join(" · ").presence }
+    { title: payload[:name].to_s, sub: subs.join("\n").presence }
   },
   execute: ->(payload, ctx) {
     household = ctx.user.chore_household

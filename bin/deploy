@@ -11,6 +11,26 @@ fi
 
 source ~/.zshrc
 
+# Split args: existing files are prodExec scripts (run after deploy), anything
+# else is treated as words/sentences for a `gam` commit (run before the push).
+# Order doesn't matter — paths and message words can be interleaved freely.
+scripts=()
+message=()
+for arg in "$@"; do
+  if [[ -f "$arg" ]]; then
+    scripts+=("$arg")
+  elif [[ "$arg" == */* || "$arg" == *.rb ]]; then
+    print -P "%F{red}deploy: '$arg' looks like a script path but no such file exists.%f"
+    exit 1
+  else
+    message+=("$arg")
+  fi
+done
+
+if (( ${#message[@]} > 0 )); then
+  gam "${message[@]}" || exit $?
+fi
+
 push_output=$(gpo 2>&1)
 push_status=$?
 print -r -- "$push_output"
@@ -24,10 +44,10 @@ fi
 
 "$(dirname "$0")/wait_for_deploy" deploy || exit $?
 
-if (( $# == 0 )); then
+if (( ${#scripts[@]} == 0 )); then
   # No-op- gets hit if there are no scripts to run after the deploy.
 else
-  for script in "$@"; do
+  for script in "${scripts[@]}"; do
     prodExec "$script" || exit $?
   done
 fi

@@ -14,11 +14,8 @@ Buddy::Tools.register(
     { summary: "Log #{payload[:name]}?", resolved: {} }
   },
   label: ->(payload, _ctx) {
-    if payload[:notes].present? && payload[:notes].length < 40
-      "#{payload[:name]} - #{payload[:notes]}"
-    else
-      payload[:name].to_s
-    end
+    notes = payload[:notes].to_s
+    { title: payload[:name].to_s, sub: (notes if notes.present? && notes.length < 60) }
   },
   merge_key: ->(payload) { "log_event:#{payload[:name].to_s.downcase.strip}" },
   merge_label: ->(payload, count) { "#{count}× #{payload[:name]}" },
@@ -30,7 +27,10 @@ Buddy::Tools.register(
       timestamp: Time.current,
       data:      { source: "buddy" },
     )
-    { action_event_id: event.id }
+    {
+      action_event_id: event.id,
+      revert: { op: "created", model: "ActionEvent", id: event.id, summary: "removed the #{event.name} log" },
+    }
   },
   receipt: ->(result, _ctx) {
     event = ActionEvent.find_by(id: result[:action_event_id])

@@ -65,7 +65,7 @@ Buddy::Tools.register(
   label: ->(payload, _ctx) {
     title = (payload[:task_name] || payload[:name]).to_s
     args = payload[:fn_args] || {}
-    sub = args.map { |k, v| "#{k}: #{v}" }.join(" · ").presence
+    sub = args.map { |k, v| "#{k}: #{v}" }.join("\n").presence
     { title: title, sub: sub }
   },
   execute: ->(payload, ctx) {

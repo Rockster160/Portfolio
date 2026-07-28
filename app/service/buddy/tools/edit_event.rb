@@ -25,7 +25,7 @@ Buddy::Tools.register(
     diffs << "name → #{payload[:name]}" if payload[:name].present?
     diffs << "notes → #{payload[:notes].to_s.first(30)}" if payload[:notes].present?
     diffs << "time → #{payload[:at].strftime('%-I:%M %p')}" if payload[:at].respond_to?(:strftime)
-    "#{base}: #{diffs.join(', ')}"
+    { title: base, sub: diffs.join("\n").presence }
   },
   execute: ->(payload, _ctx) {
     event = ActionEvent.find(payload[:action_event_id])
@@ -33,8 +33,12 @@ Buddy::Tools.register(
     attrs[:name]      = payload[:name]  if payload[:name].present?
     attrs[:notes]     = payload[:notes] if payload[:notes].present?
     attrs[:timestamp] = payload[:at]    if payload[:at].respond_to?(:strftime)
+    before = attrs.keys.index_with { |k| event.public_send(k) }  # old values, for undo
     event.update!(attrs) unless attrs.empty?
-    { action_event_id: event.id }
+    {
+      action_event_id: event.id,
+      revert: { op: "updated", model: "ActionEvent", id: event.id, before: before, summary: "reverted the #{event.name} edit" },
+    }
   },
   receipt: ->(result, _ctx) {
     event = ActionEvent.find_by(id: result[:action_event_id])

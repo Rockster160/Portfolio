@@ -50,7 +50,7 @@ Buddy::Tools.register(
   },
   label: ->(payload, _ctx) {
     record = payload[:record_type].to_s == "watch" ? BuddyWatch.find_by(id: payload[:record_id]) : BuddyReminder.find_by(id: payload[:record_id])
-    record ? "Cancel: #{record.body.truncate(50)}" : "Cancel reminder"
+    record ? "Cancel #{record.body.to_s.truncate(55)}" : "Cancel reminder"
   },
   execute: ->(payload, _ctx) {
     record = payload[:record_type].to_s == "watch" ? BuddyWatch.find(payload[:record_id]) : BuddyReminder.find(payload[:record_id])

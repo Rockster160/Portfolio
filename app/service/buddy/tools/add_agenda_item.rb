@@ -2,32 +2,70 @@ Buddy::Tools.register(
   name:        :add_agenda_item,
   description: <<~TXT,
     Add a new item to the user's calendar/agenda. Use for appointments,
-    events, or tasks tied to a specific time. `at` is an ISO datetime.
-    `duration` is in minutes. `kind` is one of: event, task, trigger.
+    events, or tasks. `at` is an ISO datetime. `duration` is in minutes.
+    `kind` is one of: event, task, trigger - use `event` for anything that
+    happens over a span of time (a hike, a dinner, an appointment); `task`
+    only for a to-do with no real duration.
+
     Pull the PLACE into `location`, not the title: "coffee at Lucky Ones"
     → title "Coffee", location "Lucky Ones". "dentist" with no place →
-    no location. For v1, only writes to the user's primary local agenda
-    (Google-synced calendars require the app's normal add flow).
+    no location.
+
+    `duration`: set it to the activity's actual length - don't leave the 30m
+    default on something clearly longer. If your memory or the person tells
+    you how long a thing runs (e.g. "the plunge is ~2 hours"), use that.
+
+    `calendar`: which calendar to add to, by name ("Ours", "Tasks", etc.).
+    Matches the person's own + shared-editable LOCAL calendars. Omit for
+    their default. (Google-synced calendars still need the app's add flow.)
   TXT
   args: {
     title:    { type: :string,       required: true,  description: "What is it (the activity, WITHOUT the place)" },
     at:       { type: :iso_time,     required: true,  description: "ISO datetime with timezone offset" },
-    duration: { type: :duration_min, required: false, default: 30, description: "Minutes" },
+    duration: { type: :duration_min, required: false, default: 30, description: "Minutes - the activity's real length, not always 30" },
     location: { type: :string,       required: false, description: "Place/venue/address, if one was mentioned" },
     kind:     { type: :enum,         required: false, default: :event, values: %i[event task trigger] },
     all_day:  { type: :string,       required: false, description: "'true' for all-day" },
+    calendar: { type: :string,       required: false, description: "Which calendar/agenda to add to, by name (e.g. 'Ours'); omit for default" },
   },
   confirm: ->(payload, ctx) {
-    agenda = Agenda.where(user_id: ctx.user.id).reject(&:managed_externally?).first
-    raise "no local agenda available" if agenda.nil?
+    agenda = ctx.resolve_writable_agenda(payload[:calendar])
+    raise "no writable calendar available" if agenda.nil?
 
-    { summary: "Add #{payload[:title]} to your calendar?", resolved: { agenda_id: agenda.id } }
+    is_default = agenda.id == ctx.writable_agendas.first&.id
+    {
+      summary:  "Add #{payload[:title]} to #{agenda.name}?",
+      resolved: { agenda_id: agenda.id, agenda_name: agenda.name, agenda_default: is_default },
+    }
   },
+  # The confirm card is for a HUMAN to review, so favour readability: one
+  # non-default detail per line, no word-labels where a symbol or the value
+  # itself already says what it is. Default calendar / no location just don't
+  # get a line.
   label: ->(payload, ctx) {
-    time = payload[:at].respond_to?(:strftime) ? payload[:at].in_time_zone(ctx.user.timezone).strftime("%a %b %-d, %-I:%M %p") : payload[:at].to_s
-    bits = ["#{time} (#{payload[:duration]}m)"]
-    bits << "@ #{payload[:location]}" if payload[:location].present?
-    { title: payload[:title].to_s, sub: bits.join(" · ") }
+    start   = payload[:at].respond_to?(:in_time_zone) ? payload[:at].in_time_zone(ctx.user.timezone) : nil
+    all_day = payload[:all_day].to_s == "true"
+
+    # When — one temporal line, a start–end range so the duration is self-evident.
+    when_line =
+      if start.nil?
+        payload[:at].to_s
+      elsif all_day
+        start.strftime("%a %b %-d, all day")
+      else
+        dur    = payload[:duration].to_i
+        dur    = 30 if dur <= 0
+        finish = start + dur.minutes
+        "#{start.strftime("%a %b %-d")}, #{start.strftime("%-I:%M %p")}–#{finish.strftime("%-I:%M %p")}"
+      end
+
+    lines = [when_line]
+    lines << "@ #{payload[:location]}" if payload[:location].present?  # place — @ says it's a location
+    # Calendar — only when it's NOT the default (a non-default detail worth
+    # calling out); 📅 marks it as a calendar without a word-label.
+    lines << "📅 #{payload[:agenda_name]}" if payload[:agenda_name].present? && !payload[:agenda_default]
+
+    { title: payload[:title].to_s, sub: lines.join("\n") }
   },
   execute: ->(payload, ctx) {
     agenda = Agenda.find(payload[:agenda_id])
@@ -55,10 +93,14 @@ Buddy::Tools.register(
     attrs[:arrive_early_minutes] = 5 if payload[:location].present?
 
     item = agenda.agenda_items.create!(attrs)
-    { agenda_item_id: item.id }
+    {
+      agenda_item_id: item.id,
+      revert: { op: "created", model: "AgendaItem", id: item.id, summary: "removed #{item.name}" },
+    }
   },
   receipt: ->(result, _ctx) {
     item = AgendaItem.find_by(id: result[:agenda_item_id])
-    "Added #{item&.name || 'that'} to your calendar ✓"
+    where = item&.agenda&.name.presence
+    "Added #{item&.name || 'that'} to #{where || 'your calendar'} ✓"
   },
 )

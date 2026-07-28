@@ -40,6 +40,59 @@ RSpec.describe "agenda tools (execute-time string payloads)" do
     expect(item.arrive_early_minutes).to eq(5)
   end
 
+  it "add_agenda_item targets a named calendar (fuzzy 'our' -> 'Ours'), defaulting otherwise" do
+    ours = create(:agenda, user: user, name: "Ours 💕")
+
+    expect(ctx.resolve_writable_agenda("our schedule")).to eq(ours)
+    expect(ctx.resolve_writable_agenda("ours")).to eq(ours)
+    # Blank → the primary local agenda (lowest id among writable), not "Ours".
+    primary = user.editable_agendas.reject(&:managed_externally?).min_by(&:id)
+    expect(ctx.resolve_writable_agenda(nil)).to eq(primary)
+    expect(ctx.resolve_writable_agenda(nil)).not_to eq(ours)
+
+    tool   = Buddy::Tools[:add_agenda_item]
+    result = tool[:confirm].call({ title: "Plunge", calendar: "our" }, ctx)
+    expect(result[:resolved][:agenda_id]).to eq(ours.id)
+    expect(result[:summary]).to include("Ours")
+  end
+
+  it "add_agenda_item label: one non-default detail per line, symbols not word-labels" do
+    tool = Buddy::Tools[:add_agenda_item]
+    payload = {
+      title: "Plunge", at: 2.hours.from_now, duration: 120,
+      location: "Horsetail Falls, Alpine, UT", agenda_name: "Ours 💕", agenda_default: false,
+    }
+
+    out   = tool[:label].call(payload, ctx)
+    lines = out[:sub].split("\n")
+
+    expect(out[:title]).to eq("Plunge")
+    expect(lines[0]).to match(/\d{1,2}:\d\d [AP]M–\d{1,2}:\d\d [AP]M/)  # when, as a range
+    expect(lines).to include("@ Horsetail Falls, Alpine, UT")          # location, own line
+    expect(lines).to include("📅 Ours 💕")                             # non-default calendar, own line
+  end
+
+  it "add_agenda_item label omits the calendar line when it's the default, and skips absent details" do
+    tool = Buddy::Tools[:add_agenda_item]
+    payload = { title: "Dentist", at: 2.hours.from_now, duration: 30, agenda_name: "Rockster160", agenda_default: true }
+
+    out = tool[:label].call(payload, ctx)
+
+    expect(out[:sub]).not_to include("Rockster160")  # default calendar → no line
+    expect(out[:sub]).not_to include("@")            # no location → no @ line
+  end
+
+  it "add_agenda_item honors a passed duration (e.g. a 2-hour plunge, not 30m)" do
+    tool = Buddy::Tools[:add_agenda_item]
+    at   = 2.hours.from_now.change(sec: 0).iso8601
+    payload = { agenda_id: agenda.id, title: "Plunge", at: at, duration: 120, kind: "event" }
+
+    result = tool[:execute].call(payload, ctx)
+    item = AgendaItem.find(result[:agenda_item_id])
+    expect(item.kind).to eq("event")
+    expect(item.end_at).to be_within(1.second).of(Time.zone.parse(at) + 120.minutes)
+  end
+
   it "add_agenda_item leaves the arrival buffer at the default (0) when there's no location" do
     tool = Buddy::Tools[:add_agenda_item]
     at   = 2.hours.from_now.change(sec: 0).iso8601

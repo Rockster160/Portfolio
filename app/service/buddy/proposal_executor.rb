@@ -61,7 +61,7 @@ module Buddy
           # Rehydrate a proposal-shaped hash so tool receipt/label procs can
           # read from ctx.proposal["payload"] uniformly.
           proposal_shape = { "id" => id, "payload" => btn["payload"], "tool_name" => btn["tool_name"] }
-          ctx = Buddy::ToolContext.new(user, proposal: proposal_shape)
+          ctx = Buddy::ToolContext.new(user, proposal: proposal_shape, conversation: action.byte_conversation)
 
           count = (btn["count"] || 1).to_i
           outcomes = []

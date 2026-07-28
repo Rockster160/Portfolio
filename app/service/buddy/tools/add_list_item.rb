@@ -15,9 +15,9 @@ Buddy::Tools.register(
 
     { summary: "Add #{payload[:item]} to #{list.name}?", resolved: { list_id: list.id, list_name: list.name } }
   },
-  label: ->(payload, _ctx) { "#{payload[:item]} → #{payload[:list_name]}" },
+  label: ->(payload, _ctx) { { title: payload[:item].to_s, sub: "📋 #{payload[:list_name]}" } },
   merge_key: ->(payload) { "add_list_item:#{payload[:list_id]}:#{payload[:item].to_s.downcase.strip}" },
-  merge_label: ->(payload, count) { "#{count}× #{payload[:item]} → #{payload[:list_name]}" },
+  merge_label: ->(payload, count) { { title: "#{count}× #{payload[:item]}", sub: "📋 #{payload[:list_name]}" } },
   execute: ->(payload, _ctx) {
     list = List.find(payload[:list_id])
     item = list.list_items.add(payload[:item])

@@ -43,9 +43,9 @@ class ListItem < ApplicationRecord
 
     if old_item.present?
       old_item.update(params.merge(deleted_at: nil, sort_order: nil))
-      old_item
+      old_item.notify_jil(:added)
     else
-      create(params)
+      create(params).notify_jil(:added)
     end
   end
 
@@ -76,28 +76,31 @@ class ListItem < ApplicationRecord
     if old_item.present?
       old_item.update(name: item_name, deleted_at: nil, sort_order: nil) if old_item.name != item_name || old_item.deleted_at? || old_item.sort_order != old_item.list.max_order
       old_item.update(section: section) if old_item.section != section && section.present?
-      old_item
+      old_item.notify_jil(:added)
     else
-      create(name: item_name, section: section)
+      create(name: item_name, section: section).notify_jil(:added)
     end
   end
 
   def self.remove(item_name)
     old_item = by_data(item_name, deleted: false) || by_data(item_name)
+    return if old_item.nil?
 
-    old_item&.soft_destroy
+    old_item.notify_jil(:removed) if old_item.soft_destroy
+    old_item
   end
 
   def self.toggle(item_name)
     old_item = by_data(item_name)
 
     if old_item.present? && !old_item.deleted?
-      old_item&.soft_destroy
+      old_item.soft_destroy
+      old_item.notify_jil(:removed)
     elsif old_item.present?
       old_item.update({ name: item_name }.merge(deleted_at: nil, sort_order: nil))
-      old_item
+      old_item.notify_jil(:added)
     else
-      create(name: item_name)
+      create(name: item_name).notify_jil(:added)
     end
   end
 
@@ -118,6 +121,21 @@ class ListItem < ApplicationRecord
 
   def jil_serialize(additional={})
     serialize(include: { list: { only: [:id, :name, :description] } }).merge(additional)
+  end
+
+  # Fire the same Jil `:item` trigger the list controllers fire, so items
+  # created or removed through model paths (Jil `List.add`/`toggle`/`remove`,
+  # SMS, recipes, webhooks, list builders) drive the same automations as
+  # UI/API adds. Fires once per list owner (a list can be co-owned), so every
+  # owner's tasks run regardless of who created the item. No-op when the item
+  # never persisted or the list has no owner. Returns self so callers chain.
+  def notify_jil(action)
+    return self unless persisted?
+
+    list&.owners&.each { |owner|
+      ::Jil.trigger(owner, :item, jil_serialize(action: action), auth: :trigger)
+    }
+    self
   end
 
   def self.with_deleted

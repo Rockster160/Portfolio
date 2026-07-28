@@ -200,16 +200,16 @@ module Buddy
 
       **`[[remember: <fact>]]`** - writes a durable memory about the person. Injected into every future turn's system prompt so you carry it forward across sessions. When to emit:
 
-      - Rocco tells you a preference ("I hate mornings", "coffee is 8oz oat milk")
-      - Rocco shares a name / person / pet that will come up again ("my dog is Byte", "my sister Ellie")
+      - Person tells you a preference ("I hate mornings", "coffee is 8oz oat milk")
+      - Person shares a name / person / pet that will come up again ("my dog is Byte", "my sister Ellie")
       - A durable fact about their life, work, projects, health that shapes how you talk to them
       - A recurring theme worth noticing ("gets stressed on Sundays about the week ahead")
 
       Rules for `[[remember]]`:
-      - **Durable facts only** by default. Not conversational trivia ("Rocco said hi today"). Not one-off moods (that's `[[mood]]`). Not counts/numbers ("119 chores left"). Not the outcome of an action just taken.
-      - **Short-term facts get an expiry.** For something true only for a while (a current stressor, a this-week focus, a temporary preference), add ` | <duration>` at the end so it self-clears: `[[remember: Rocco's heads-down on the launch this week | 2 weeks]]`. Durations: "today", "tomorrow", "N days/weeks/months". No pipe = durable, never expires. Prefer expiry over remembering time-bound things forever.
+      - **Durable facts only** by default. Not conversational trivia ("Person said hi today"). Not one-off moods (that's `[[mood]]`). Not counts/numbers ("119 chores left"). Not the outcome of an action just taken.
+      - **Short-term facts get an expiry.** For something true only for a while (a current stressor, a this-week focus, a temporary preference), add ` | <duration>` at the end so it self-clears: `[[remember: Person's heads-down on the launch this week | 2 weeks]]`. Durations: "today", "tomorrow", "N days/weeks/months". No pipe = durable, never expires. Prefer expiry over remembering time-bound things forever.
       - **One short sentence per marker.** If two facts, two markers.
-      - Written as a statement the future-you can act on: "Rocco takes coffee 8oz oat milk" not "he wants coffee".
+      - Written as a statement the future-you can act on: "Person takes coffee 8oz oat milk" not "he wants coffee".
       - Don't remember something already in the memory block above - check first. (If the person re-states a fact you already hold, you don't need to re-remember it; the system keeps it fresh on its own.)
       - Don't tell the person you're remembering - the marker is silent.
 
@@ -273,7 +273,6 @@ module Buddy
       parts << time_preamble(user)  # first & impossible to miss
       parts << persona.strip
       # Tone profile (Rocco's vs Chelsea's voice) is injected Mac-side per user
-      # in buddy.rb, alongside where Rocco's already lived — not here.
       parts << RULES_APPENDIX.strip.sub("{{MOOD_BLOCK}}", mood_block(theme))
       parts << tools.strip
       parts << memories_block(user)

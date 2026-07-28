@@ -6,11 +6,12 @@ module Buddy
   # Resolvers return the top candidate silently; ambiguity is the persona's
   # problem (it should ask the user via a follow-up message).
   class ToolContext
-    attr_reader :user, :proposal
+    attr_reader :user, :proposal, :conversation
 
-    def initialize(user, proposal: nil)
-      @user     = user
-      @proposal = proposal
+    def initialize(user, proposal: nil, conversation: nil)
+      @user         = user
+      @proposal     = proposal
+      @conversation = conversation
     end
 
     # ---- chores ----
@@ -93,6 +94,33 @@ module Buddy
       return nil if name.blank?
 
       user.address_book.match_contact(name)&.name || name.to_s.strip
+    end
+
+    # ---- agendas / calendars ----
+
+    # Pick which calendar an agenda item lands on. Considers every LOCAL agenda
+    # the person can write to (their own + editor-shared, e.g. a jointly-run
+    # "Ours"). Google-synced agendas are excluded here - those need the app's
+    # mirror-first add flow, which this tool doesn't do. Blank name → the
+    # primary local agenda (lowest id). A named calendar fuzzy-matches so
+    # "our" / "ours" / "our schedule" all reach "Ours 💕"; no match falls back
+    # to the primary (and the confirm card shows the name so it's catchable).
+    def writable_agendas
+      user.editable_agendas.reject(&:managed_externally?).sort_by(&:id)
+    end
+
+    def resolve_writable_agenda(name)
+      agendas = writable_agendas
+      return nil if agendas.empty?
+
+      default = agendas.first
+      q = normalize_calendar(name)
+      return default if q.blank?
+
+      agendas.find { |a| normalize_calendar(a.name) == q } ||
+        agendas.find { |a| normalize_calendar(a.name).include?(q) || q.include?(normalize_calendar(a.name)) } ||
+        agendas.find { |a| calendar_token_match?(normalize_calendar(a.name), q) } ||
+        default
     end
 
     # Resolve a spoken place to { "name" =>, "loc" => [lat,lng] } for a
@@ -217,6 +245,19 @@ module Buddy
 
     def valid_loc?(loc)
       loc.is_a?(Array) && loc.compact.length == 2 && loc.all? { |v| v.to_f.nonzero? }
+    end
+
+    # Strip emoji/punctuation so "Ours 💕" → "ours".
+    def normalize_calendar(str)
+      str.to_s.downcase.gsub(/[^a-z0-9 ]+/, " ").squeeze(" ").strip
+    end
+
+    # Loose token match so "our"/"our schedule" hits "Ours": any word (3+ chars)
+    # on one side is a prefix of a word on the other ("our" ⟂ "ours").
+    def calendar_token_match?(agenda_name, query)
+      aw = agenda_name.split.select { |w| w.length >= 3 }
+      qw = query.split.select { |w| w.length >= 3 }
+      aw.any? { |x| qw.any? { |y| x.start_with?(y) || y.start_with?(x) } }
     end
 
     # The location string of the agenda item whose name matches `name`, picking

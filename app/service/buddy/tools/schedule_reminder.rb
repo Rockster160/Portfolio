@@ -67,10 +67,10 @@ Buddy::Tools.register(
     { summary: summary, resolved: { fire_at_iso: fire_at.iso8601, recurrence: recurrence_hash } }
   },
   label: ->(payload, ctx) {
-    fire_at = Time.zone.parse(payload[:fire_at_iso].to_s) rescue nil
+    fire_at  = Time.zone.parse(payload[:fire_at_iso].to_s) rescue nil
     when_str = fire_at ? fire_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p") : payload[:at].to_s
-    prefix = payload[:recurrence] ? "Repeating (#{payload[:repeat] || payload.dig(:recurrence, 'kind')}): " : "#{when_str}: "
-    "#{prefix}#{payload[:text].to_s.truncate(50)}"
+    sub      = payload[:recurrence] ? "repeats #{payload[:repeat] || payload.dig(:recurrence, 'kind')}" : when_str
+    { title: payload[:text].to_s.truncate(60), sub: sub.presence }
   },
   execute: ->(payload, ctx) {
     fire_at = Time.zone.parse(payload[:fire_at_iso].to_s) || ctx.resolve_time(payload[:at])

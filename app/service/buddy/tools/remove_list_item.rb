@@ -15,9 +15,9 @@ Buddy::Tools.register(
 
     { summary: "Remove #{payload[:item]} from #{list.name}?", resolved: { list_id: list.id, list_name: list.name } }
   },
-  label: ->(payload, _ctx) { "Remove #{payload[:item]} from #{payload[:list_name]}" },
+  label: ->(payload, _ctx) { { title: "Remove #{payload[:item]}", sub: "📋 #{payload[:list_name]}" } },
   merge_key: ->(payload) { "remove_list_item:#{payload[:list_id]}:#{payload[:item].to_s.downcase.strip}" },
-  merge_label: ->(payload, count) { "#{count}× remove #{payload[:item]} from #{payload[:list_name]}" },
+  merge_label: ->(payload, count) { { title: "Remove #{count}× #{payload[:item]}", sub: "📋 #{payload[:list_name]}" } },
   execute: ->(payload, _ctx) {
     list = List.find(payload[:list_id])
     list.list_items.remove(payload[:item])

@@ -44,7 +44,7 @@ Buddy::Tools.register(
       subs << "at #{Buddy::TimeParser.friendly(payload[:completed_at], user: ctx.user)}"
     end
 
-    { title: title, sub: subs.join(" · ").presence }
+    { title: title, sub: subs.join("\n").presence }
   },
   merge_key: ->(payload) { "complete_chore:#{payload[:chore_id]}:#{payload[:completed_at]}" },
   merge_label: ->(payload, count) {

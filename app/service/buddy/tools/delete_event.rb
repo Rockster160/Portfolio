@@ -16,13 +16,19 @@ Buddy::Tools.register(
   },
   label: ->(payload, _ctx) {
     event = ActionEvent.find_by(id: payload[:action_event_id])
-    "Delete: #{event&.name || payload[:event]} (#{event&.timestamp&.strftime('%-I:%M %p')})"
+    { title: "Delete #{event&.name || payload[:event]}", sub: event&.timestamp&.strftime("%-I:%M %p") }
   },
   execute: ->(payload, _ctx) {
     event = ActionEvent.find(payload[:action_event_id])
-    name = event.name
+    name  = event.name
+    # Snapshot enough to rebuild it, so `undo` can bring it back (ActionEvent
+    # hard-deletes — no soft-delete to unarchive).
+    attrs = { user_id: event.user_id, name: event.name, notes: event.notes, timestamp: event.timestamp, data: event.data }
     event.destroy!
-    { deleted_name: name }
+    {
+      deleted_name: name,
+      revert: { op: "recreated", model: "ActionEvent", attrs: attrs, summary: "brought back #{name}" },
+    }
   },
   receipt: ->(result, _ctx) { "Deleted #{result[:deleted_name]} ✓" },
 )

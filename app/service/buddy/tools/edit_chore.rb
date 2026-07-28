@@ -27,7 +27,7 @@ Buddy::Tools.register(
     diffs << "schedule → #{payload[:schedule]}" if payload[:schedule].present?
     diffs << "assign → #{User.find_by(id: payload[:assignee_id])&.first_name}" if payload[:assignee_id]
     diffs << (payload[:disabled] == "true" ? "archive" : "unarchive") if payload.key?(:disabled)
-    "#{base}: #{diffs.join(', ')}"
+    { title: base, sub: diffs.join("\n").presence }
   },
   execute: ->(payload, _ctx) {
     chore = Chore.find(payload[:chore_id])

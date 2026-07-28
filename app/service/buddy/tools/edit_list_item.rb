@@ -24,7 +24,7 @@ Buddy::Tools.register(
     diffs << "important #{payload[:important]}" if payload.key?(:important)
     diffs << "permanent #{payload[:permanent]}" if payload.key?(:permanent)
     diffs << "cat #{payload[:category]}" if payload[:category].present?
-    "#{payload[:item]} #{diffs.join(', ')}"
+    { title: payload[:item].to_s, sub: diffs.join("\n").presence }
   },
   execute: ->(payload, _ctx) {
     item = ListItem.find(payload[:list_item_id])

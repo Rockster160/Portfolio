@@ -87,7 +87,7 @@ Buddy::Tools.register(
     title = (payload[:task_name] || payload[:name]).to_s
     subs = ["scope: #{payload[:scope] || '?'}"]
     subs << "data: #{payload[:data]}" if payload[:data].present?
-    { title: title, sub: subs.join(" · ") }
+    { title: title, sub: subs.join("\n") }
   },
   execute: ->(payload, ctx) {
     # Same shape as the `trigger <scope>:<key>:<value>` command - scope plus

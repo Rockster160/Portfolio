@@ -53,21 +53,24 @@ const RESOLVED_STATUSES = new Set(["executed", "partial", "failed"]);
 // and the user can't tell if it'll log an event, complete a chore, or
 // add to a list. Short + colored to read as metadata, not part of the
 // item name.
+// Verb + what it acts on, so a generic "Add" / "Edit" / "Remove" never
+// stands alone. "Log" and "Complete" are specific enough as-is.
 const ACTION_KIND_LABELS = {
   complete_chore:        "Complete",
-  create_chore:          "Add chore",
-  edit_chore:            "Edit chore",
+  create_chore:          "Add Chore",
+  edit_chore:            "Edit Chore",
   undo_chore_completion: "Undo",
-  add_agenda_item:       "Schedule",
-  edit_agenda_item:      "Edit event",
-  add_list_item:         "Add to list",
-  edit_list_item:        "Edit item",
-  remove_list_item:      "Remove",
+  undo:                  "Undo",
+  add_agenda_item:       "Add Event",
+  edit_agenda_item:      "Edit Event",
+  add_list_item:         "Add to List",
+  edit_list_item:        "Edit List Item",
+  remove_list_item:      "Remove from List",
   log_event:             "Log",
-  edit_event:            "Edit log",
-  delete_event:          "Delete log",
+  edit_event:            "Edit Log",
+  delete_event:          "Delete Log",
   schedule_reminder:     "Remind",
-  cancel_reminder:       "Cancel reminder",
+  cancel_reminder:       "Cancel Reminder",
 };
 
 // Render (or re-render) into a container element. Container is expected

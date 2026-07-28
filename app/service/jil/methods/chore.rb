@@ -250,13 +250,18 @@ class Jil::Methods::Chore < Jil::Methods::Base
 
   # Chore.mark_due("Vitamins") → stamp the chore as "needs to get
   # done" so it surfaces on Today (or in Scheduled/overdue across
-  # days) until any ChoreCompletion clears it. Idempotent re-mark
-  # refreshes the timestamp. Returns the Chore (or nil if no match).
+  # days) until any ChoreCompletion clears it. Returns the Chore (or
+  # nil if no match).
+  #
+  # Idempotent: a chore that is already marked due is left untouched,
+  # so no second `chore:marked_due` trigger fires. This is what keeps
+  # the item→chore (mark_due) and chore→item (add-list-item) tasks from
+  # ping-ponging now that model-level list adds emit `item` triggers.
   def mark_due(name_or_chore)
     chore = load_chore(name_or_chore)
     return nil if chore.nil?
 
-    chore.update!(marked_due_at: Time.current)
+    chore.update!(marked_due_at: Time.current) unless chore.marked_due?
     chore
   end
 

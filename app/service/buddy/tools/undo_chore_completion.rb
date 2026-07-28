@@ -17,9 +17,9 @@ Buddy::Tools.register(
   },
   label: ->(payload, _ctx) {
     completion = ChoreCompletion.find_by(id: payload[:completion_id])
-    return "undo #{payload[:chore]}" if completion.nil?
+    return "Undo #{payload[:chore]}" if completion.nil?
 
-    "Undo: #{completion.chore.name} (#{completion.completed_at.in_time_zone(Time.zone).strftime('%-I:%M %p, %a')})"
+    { title: "Undo #{completion.chore.name}", sub: completion.completed_at.in_time_zone(Time.zone).strftime("%-I:%M %p, %a") }
   },
   execute: ->(payload, _ctx) {
     completion = ChoreCompletion.find(payload[:completion_id])

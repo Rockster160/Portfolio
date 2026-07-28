@@ -31,7 +31,7 @@ Buddy::Tools.register(
     diffs << "duration → #{payload[:duration]}m" if payload[:duration].present?
     diffs << "@ #{payload[:location]}" if payload[:location].present?
     diffs << "cancel" if payload[:cancelled] == "true"
-    "#{base}: #{diffs.join(', ')}"
+    { title: base, sub: diffs.join("\n").presence }
   },
   execute: ->(payload, ctx) {
     item = AgendaItem.find(payload[:agenda_item_id])
@@ -46,8 +46,14 @@ Buddy::Tools.register(
       attrs[:end_at] = base_start + payload[:duration].to_i.minutes
     end
     attrs[:status] = :cancelled if payload[:cancelled] == "true"
+    prior_name = item.name
+    before     = attrs.keys.index_with { |k| item.public_send(k) }  # old values, for undo
     item.update!(attrs) unless attrs.empty?
-    { agenda_item_id: item.id, updated_fields: attrs.keys }
+    {
+      agenda_item_id: item.id,
+      updated_fields: attrs.keys,
+      revert: { op: "updated", model: "AgendaItem", id: item.id, before: before, summary: "reverted #{prior_name}" },
+    }
   },
   receipt: ->(result, _ctx) {
     item = AgendaItem.find_by(id: result[:agenda_item_id])

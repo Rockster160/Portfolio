@@ -22,7 +22,7 @@ module Buddy
         payload, errors = Buddy::Tools.validate_payload(tool, m[:payload])
         next nil if errors.any?
 
-        ctx = Buddy::ToolContext.new(user)
+        ctx = Buddy::ToolContext.new(user, conversation: byte_message.byte_conversation)
         confirm = safely { tool[:confirm].call(payload, ctx) }
         next nil if confirm.nil?
 
@@ -127,7 +127,7 @@ module Buddy
         name = user.buddy_theme.to_s == "moss" ? "Moss" : "Byte"
 
         autos.each do |p|
-          ctx = Buddy::ToolContext.new(user)
+          ctx = Buddy::ToolContext.new(user, conversation: conversation)
           # Feed execute the SAME payload shape the confirm path produces (top-
           # level symbol keys, values JSON-flattened so Times are ISO strings),
           # so a tool behaves identically whether it's auto or confirmed.
