@@ -2765,6 +2765,11 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
     font-size: 11.5px;
     color: #F26B6B;
   }
+  .byte-msg-action-expired {
+    font-size: 11px;
+    opacity: 0.6;
+    font-style: italic;
+  }
 
   &[data-status="executed"] {
     opacity: 0.65;
@@ -2798,6 +2803,23 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
   &[data-status="working"] {
     opacity: 0.8;
     .byte-msg-action-glyph { opacity: 0.9; }
+  }
+
+  // Expired: the checklist went stale. Greyed to read as inactive, but still
+  // CLICKABLE — tapping reissues it as a fresh checklist (see the JS note
+  // "tap to redo"). So it's a redo affordance, not a dead end.
+  &[data-status="expired"] {
+    opacity: 0.5;
+    cursor: pointer;
+    input[type="checkbox"] { cursor: pointer; }
+    .byte-msg-action-kind { opacity: 0.5; }
+    &:hover { opacity: 0.7; }
+  }
+
+  // A transient tap failure that's still retriable — red highlight, and the
+  // full error rides in a title tooltip over the row.
+  &[data-error="true"] {
+    border-color: rgba(242, 107, 107, 0.5);
   }
 
   // Per-kind color hints on the chip so scanning the list is fast.
@@ -3036,20 +3058,34 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
 
   [data-body] {
     display: inline-block;
-    padding: 3px 12px;
+    // Long receipts (a weather summary) must WRAP inside a capped width, not
+    // run off the side of the screen. Short ones still read as a pill. (Plain
+    // % only — libsass chokes on the CSS min() function.)
+    max-width: 90%;
+    padding: 4px 14px;
     font-size: 11.5px;
     font-weight: 500;
     letter-spacing: 0.03em;
+    line-height: 1.4;
     color: var(--buddy-accent, #3FA0FF);
     background: rgba(63, 160, 255, 0.10);
     border: 1px solid rgba(63, 160, 255, 0.24);
-    border-radius: 999px;
+    border-radius: 14px;
     text-align: center;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
 
     &::before {
       content: "✓ ";
       opacity: 0.85;
     }
   }
+}
+
+// A Buddy reply whose prose came back empty (it emitted only a marker) still
+// hosts its checklist, but the empty text line must not render as a hollow
+// bubble. Collapse the padding/background to nothing so only the checklist
+// shows. :has() lets us detect an empty body slot.
+.byte-msg.byte-msg-inbound:has([data-body]:empty) {
+  [data-body] { display: none; }
 }

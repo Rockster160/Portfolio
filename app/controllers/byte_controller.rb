@@ -289,6 +289,15 @@ class ByteController < ApplicationController
       return render json: action.reload.as_wire
     end
 
+    # Tapping an EXPIRED row: reissue it as a fresh checklist so the person
+    # doesn't have to re-type the request. Allowed regardless of expiry (that's
+    # the whole point).
+    if params[:redo].present?
+      btn = Array(action.buttons).find { |b| b["id"].to_i == params[:redo].to_i }
+      Buddy::ProposalBuilder.reissue(user: current_user, conversation: action.byte_conversation, button: btn) if btn
+      return render json: action.as_wire
+    end
+
     return head(:conflict) unless action.pending? &&
       (action.expires_at.nil? || action.expires_at.future?)
 
@@ -372,7 +381,7 @@ class ByteController < ApplicationController
   # members get a Buddy conversation so the page has something to show.
   def default_conversation
     if buddy_only?
-      current_user.byte_conversations.create!(name: :Buddy, mode: :buddy)
+      current_user.byte_conversations.create!(mode: :buddy)
     else
       ByteConversation.default_for(current_user)
     end

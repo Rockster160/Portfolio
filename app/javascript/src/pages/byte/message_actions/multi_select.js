@@ -43,6 +43,7 @@ const STATUS_GLYPHS = {
   failed:    "✗",
   partial:   "~",
   undone:    "↩",
+  expired:   "⌛",
 };
 
 // Statuses that mean the row has been acted on — checkbox stays checked
@@ -87,6 +88,11 @@ export function renderMultiSelect(container, message) {
   // "confirm" = pick-any with a Send button (a relayed select-all question);
   // otherwise each check fires immediately (Buddy proposals, pick-one).
   const confirmMode = meta.select_mode === "confirm";
+  // A stale checklist can't run — the server rejects the tap. Detect expiry
+  // here so we render those rows disabled instead of letting the person tap
+  // into a silent nothing.
+  const expiresAt = meta.action_expires_at ? Date.parse(meta.action_expires_at) : NaN;
+  const expired = Number.isFinite(expiresAt) && Date.now() > expiresAt;
 
   container.innerHTML = "";
   container.classList.add("byte-msg-multi-select");
@@ -103,22 +109,31 @@ export function renderMultiSelect(container, message) {
     // action back. Everything else that's resolved stays locked.
     const undoable = status === "executed" && !!btn.undoable;
     const undone = status === "undone";
+    // A still-pending row on an expired action can't be run.
+    const rowExpired = expired && status === "pending";
+    const effectiveStatus = rowExpired ? "expired" : status;
 
     const row = document.createElement("label");
     row.className = "byte-msg-action-row";
-    row.dataset.status = status;
+    row.dataset.status = effectiveStatus;
     row.dataset.buttonId = btn.id;
     row.dataset.toolName = btn.tool_name || "";
 
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.value = btn.id;
-    // executed/partial read as "on"; failed + undone read as "off".
+    // executed/partial read as "on"; failed + undone + expired read as "off".
     cb.checked = resolved && status !== "failed";
-    // Undoable rows must stay toggleable so the person can uncheck to undo;
-    // every other resolved/undone row is locked.
+    // Resolved/undone rows are locked; only a still-live pending row (or an
+    // undoable executed one) stays toggleable. An expired row stays tappable —
+    // but tapping REISSUES it (see below) rather than trying to run the stale one.
     cb.disabled = (resolved || undone) && !undoable;
-    if (undoable) {
+    if (rowExpired) {
+      // Tapping a stale row reissues it as a fresh checklist — no re-typing.
+      cb.addEventListener("change", () => {
+        if (cb.checked) redoExpired(container, requestId, cb);
+      });
+    } else if (undoable) {
       // Unchecking a pre-checked Level-2 row undoes it.
       cb.addEventListener("change", () => {
         if (!cb.checked) undoRow(container, requestId, cb);
@@ -158,7 +173,7 @@ export function renderMultiSelect(container, message) {
     }
     row.appendChild(body);
 
-    const glyph = STATUS_GLYPHS[btn.status || "pending"];
+    const glyph = STATUS_GLYPHS[effectiveStatus];
     if (glyph) {
       const g = document.createElement("span");
       g.className = "byte-msg-action-glyph";
@@ -166,11 +181,23 @@ export function renderMultiSelect(container, message) {
       row.appendChild(g);
     }
 
+    // A failed row is highlighted red (CSS) with the error inline AND as a
+    // hover tooltip over the whole row.
     if (btn.error_message) {
+      row.title = btn.error_message;
       const err = document.createElement("span");
       err.className = "byte-msg-action-error";
       err.textContent = btn.error_message;
       row.appendChild(err);
+    }
+
+    // Expired: say so, and that tapping brings it back fresh.
+    if (rowExpired) {
+      row.title = "This expired — tap to get a fresh one.";
+      const note = document.createElement("span");
+      note.className = "byte-msg-action-expired";
+      note.textContent = "Expired — tap to redo.";
+      row.appendChild(note);
     }
 
     container.appendChild(row);
@@ -231,6 +258,28 @@ async function submitChecked(container, requestId, button) {
   }
 }
 
+// Tapping an EXPIRED row reissues it. POSTs { redo: id }; the server rebuilds
+// the proposal as a fresh, tappable checklist on a NEW message. This stale row
+// stays put (its checkbox just acts as the button), so we roll it back.
+async function redoExpired(container, requestId, cb) {
+  const id = Number(cb.value);
+  cb.disabled = true;
+  const row = cb.closest(".byte-msg-action-row");
+  if (row) row.dataset.status = "working";
+  try {
+    await apiCall(`/byte/actions/${encodeURIComponent(requestId)}/respond`, "POST", {
+      redo: id,
+    });
+    // Fresh checklist arrives as its own message; leave this one marked expired.
+  } catch (e) {
+    console.warn("[byte] proposal reissue failed", e);
+  } finally {
+    cb.checked = false;
+    cb.disabled = false;
+    if (row) row.dataset.status = "expired";
+  }
+}
+
 // Undo a pre-checked Level-2 row (the person unchecked it). POSTs { undo: id };
 // the server reverses the action, marks the row "undone", and broadcasts the
 // re-rendered checklist. Optimistically lock the box; roll back on failure.
@@ -273,10 +322,24 @@ async function triggerChecked(container, requestId, changedCb) {
     // Server broadcast re-renders each row with its executed/failed status,
     // so we don't touch the DOM here — no double-application.
   } catch (e) {
-    // Roll back the optimistic lock so the user can retry.
+    // Roll back the optimistic lock so the user can retry — but SAY so. A bare
+    // silent uncheck reads like nothing happened (or a bug); a short note tells
+    // them it didn't go through and re-tapping retries.
     changedCb.checked = false;
     changedCb.disabled = false;
-    if (row) row.dataset.status = "pending";
+    if (row) {
+      row.dataset.status = "pending";
+      const msg = `Couldn't do that just now${e?.message ? ` (${e.message})` : ""} — tap to try again.`;
+      row.title = msg; // tooltip over the row
+      row.dataset.error = "true"; // red highlight (CSS), still tappable
+      let err = row.querySelector(".byte-msg-action-error");
+      if (!err) {
+        err = document.createElement("span");
+        err.className = "byte-msg-action-error";
+        row.appendChild(err);
+      }
+      err.textContent = "Couldn't do that just now — tap to try again.";
+    }
     console.warn("[byte] proposal trigger failed", e);
   }
 }

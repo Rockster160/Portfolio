@@ -45,6 +45,23 @@ RSpec.describe ByteController, type: :controller do
       post :create_conversation, params: { name: "?", mode: "quantum" }
       expect(JSON.parse(response.body)["mode"]).to eq("claude")
     end
+
+    it "names a blank buddy conversation after the Buddy (Byte theme)" do
+      rocco.update!(buddy_theme: "byte")
+      post :create_conversation, params: { mode: "buddy" }
+      expect(JSON.parse(response.body)["name"]).to eq("Byte")
+    end
+
+    it "uses the Moss name when the user's Buddy theme is moss" do
+      rocco.update!(buddy_theme: "moss")
+      post :create_conversation, params: { mode: "buddy" }
+      expect(JSON.parse(response.body)["name"]).to eq("Moss")
+    end
+
+    it "keeps an explicit name on a buddy conversation" do
+      post :create_conversation, params: { name: "Groceries", mode: "buddy" }
+      expect(JSON.parse(response.body)["name"]).to eq("Groceries")
+    end
   end
 
   describe "PATCH #update_conversation" do

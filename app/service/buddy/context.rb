@@ -96,11 +96,13 @@ module Buddy
         sources = agenda_source_map(user)
         return [] if sources.empty?
 
-        # TODAY only, bounded on the PERCEIVED day (3am→3am), NOT calendar
-        # midnight — so between midnight and 3am "today" still means the day the
-        # user (and the Dailies) still consider today, and a 1am event reads as
-        # tonight, not tomorrow. See Buddy::Day.
-        day_start, day_end = Buddy::Day.range(user, now: now)
+        # Bounded on the PERCEIVED day: the 3am rollover picks WHICH date is
+        # "today" (so it matches the Dailies overnight), and the window is that
+        # date's midnight→midnight. Midnight bounds keep timed + all-day events
+        # consistent and keep a tomorrow all-day event (a birthday, stored at
+        # local midnight) out of today. See Buddy::Day.
+        day_start = Buddy::Day.at(user, hour: 0, now: now)
+        day_end   = day_start + 1.day
         AgendaItem.where(agenda_id: sources.keys)
           .where.not(status: :cancelled)
           .where(start_at: day_start.utc...day_end.utc)
@@ -138,13 +140,13 @@ module Buddy
         sources = agenda_source_map(user)
         return [] if sources.empty?
 
-        # Rest of the week starts at the END of the perceived today (its 3am
-        # rollover), so tomorrow's items don't leak into "today" overnight.
-        day_start, day_end = Buddy::Day.range(user, now: now)
+        # Rest of the week starts at the end of the perceived today (its
+        # midnight), so tomorrow's items don't leak into "today" overnight.
+        day_start = Buddy::Day.at(user, hour: 0, now: now)
         cancelled = AgendaItem.statuses[:cancelled]
 
         AgendaItem.where(agenda_id: sources.keys)
-          .where(start_at: day_end.utc...(day_start + UPCOMING_WEEK_WINDOW).utc)
+          .where(start_at: (day_start + 1.day).utc...(day_start + UPCOMING_WEEK_WINDOW).utc)
           .where("status != ? OR agenda_schedule_id IS NOT NULL", cancelled)
           .includes(:agenda, :agenda_schedule)
           .order(:start_at)
@@ -167,11 +169,11 @@ module Buddy
         []
       end
 
-      # Relative day label so proximity is obvious at a glance. Both the event
-      # and "today" use the PERCEIVED date (3am rollover) so an after-midnight
-      # event reads as tonight, and labels line up with the Dailies.
+      # Relative day label so proximity is obvious at a glance. "today" is the
+      # perceived date (3am rollover) so labels line up with the Dailies and the
+      # midnight-bounded agenda windows above.
       def day_label(local, user, now)
-        days = (Buddy::Day.perceived_date(local) - Buddy::Day.today(user, now: now)).to_i
+        days = (local.to_date - Buddy::Day.today(user, now: now)).to_i
         case days
         when 0    then "today"
         when 1    then "tomorrow"

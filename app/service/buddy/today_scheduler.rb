@@ -36,16 +36,20 @@ module Buddy
       Buddy::TodayBriefing.deliver!(user, conversation, scheduled: true)
     end
 
-    # The local Time today when this user's briefing should fire.
+    # The local Time today when this user's briefing should fire: 30 minutes
+    # before DEPARTURE for the first event (start − known drive time − 30), so a
+    # 9am meeting with a 25-min drive briefs at ~8:05, not 8:30. Falls back to
+    # start − 30 when there's no known drive, and to 8:30am with no early event.
     def target_time(user, now)
       first = first_event_before_cutoff(user, now)
+      return Buddy::Day.at(user, hour: FALLBACK[:hour], min: FALLBACK[:min], now: now) if first.nil?
 
-      first ? (first - 30.minutes) : Buddy::Day.at(user, hour: FALLBACK[:hour], min: FALLBACK[:min], now: now)
+      first.start_at - (drive_minutes(first) + 30).minutes
     end
 
-    # The start_at of the perceived day's earliest OWNED, non-cancelled, timed
-    # event before 10am local — nil if none. Perceived-day bounded (3am rollover)
-    # so the scheduler agrees with the rest of Buddy.
+    # The perceived day's earliest OWNED, non-cancelled, timed event before 10am
+    # local — nil if none. Perceived-day bounded (3am rollover) so the scheduler
+    # agrees with the rest of Buddy.
     def first_event_before_cutoff(user, now)
       agenda_ids = Agenda.where(user_id: user.id).pluck(:id)
       return nil if agenda_ids.empty?
@@ -58,8 +62,15 @@ module Buddy
         .where(all_day: [false, nil])
         .where(start_at: day_start.utc...cutoff.utc)
         .order(:start_at)
-        .limit(1)
-        .pick(:start_at)
+        .first
+    end
+
+    # Known drive time (minutes) from the travel-chain sync on the item's
+    # metadata; 0 when there's none.
+    def drive_minutes(item)
+      travel = item.metadata.is_a?(Hash) ? item.metadata["travel"] : nil
+      mins   = travel.is_a?(Hash) ? travel["travel_minutes"].to_i : 0
+      mins.positive? ? mins : 0
     end
 
     def delivered_today?(user, conversation, now)

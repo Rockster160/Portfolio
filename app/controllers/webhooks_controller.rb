@@ -623,6 +623,15 @@ class WebhooksController < ApplicationController
     # independent of the expression decision below.
     result = parsed[:markers].any? ? Buddy::ProposalBuilder.create(user: user, byte_message: message, markers: parsed[:markers]) : nil
 
+    # Never leave a BLANK bubble. If the reply came back with nothing to show —
+    # empty prose, no checklist, no auto receipt — the person is staring at an
+    # empty message with no idea what happened. This is the "Buddy sent only a
+    # marker and it got discarded (couldn't resolve what to act on)" case. Give
+    # it an honest, warm fallback so there's always feedback.
+    if message.body.to_s.strip.empty? && result&.dig(:action).nil? && !result&.dig(:auto_ran)
+      message.update!(body: "Hmm, I couldn't quite line that one up - can you give me a little more to go on?")
+    end
+
     # Resolve the transient "thinking" overlay from turn-start. If Buddy chose
     # a mood this turn, SideEffects already persisted + broadcast it (which
     # clears thinking on the client). Otherwise just settle: re-assert the

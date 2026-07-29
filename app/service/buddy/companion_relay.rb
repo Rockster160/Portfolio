@@ -20,7 +20,7 @@ module Buddy
 
       def conversation_for(user)
         user.byte_conversations.where(mode: :buddy).order(last_message_at: :desc).first ||
-          user.byte_conversations.create!(name: :Buddy, mode: :buddy)
+          user.byte_conversations.create!(mode: :buddy)
       end
 
       # ---- delivering a relay to the recipient ----

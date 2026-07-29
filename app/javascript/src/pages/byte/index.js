@@ -2021,13 +2021,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (document.visibilityState === "visible") startPresence();
   window.addEventListener("pagehide", stopPresence);
 
-  document.addEventListener("visibilitychange", () => {
+  document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState === "visible") {
       startPresence();
       scheduleDrain();
       refetchHistory();
       requestShellRefresh();
       checkForServiceWorkerUpdate();
+      // Re-validate push on every return-to-app (mirrors whisper.js): recovers
+      // a subscription iOS silently dropped while backgrounded, re-syncs the
+      // (possibly rotated) endpoint to the server, and repaints the bell from
+      // the true current state instead of trusting the stale load-time paint.
+      const notifyState = await ensureByteServiceWorker();
+      refreshNotifyBtn(notifyState);
     } else {
       stopPresence();
     }
@@ -2149,13 +2155,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   await registerServiceWorker();
-  await ensureByteServiceWorker();
+  const initialNotifyState = await ensureByteServiceWorker();
 
   // ---------- notifications button ----------
 
-  async function refreshNotifyBtn() {
+  async function refreshNotifyBtn(knownState) {
     if (!notifyBtn) return;
-    const state = await checkByteNotificationStatus();
+    const state = knownState || (await checkByteNotificationStatus());
     notifyBtn.classList.remove("subscribed", "denied", "unsupported");
     if (state === "subscribed") notifyBtn.classList.add("subscribed");
     if (state === "denied") notifyBtn.classList.add("denied");
@@ -2215,7 +2221,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     refreshNotifyBtn();
   });
 
-  refreshNotifyBtn();
+  refreshNotifyBtn(initialNotifyState);
 
   scheduleDrain();
 

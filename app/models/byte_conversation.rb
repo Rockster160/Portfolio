@@ -56,7 +56,7 @@ class ByteConversation < ApplicationRecord
     case mode.to_sym
     when :bash   then "Terminal"
     when :jarvis then "Jarvis"
-    when :buddy  then "Buddy"
+    when :buddy  then user.buddy_theme.to_s == "moss" ? "Moss" : "Byte"
     else "Byte"
     end
   end

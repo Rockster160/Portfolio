@@ -8,6 +8,10 @@ module Buddy
   module ProposalBuilder
     module_function
 
+    # How long a proposal checklist stays tappable. Long, because it lives in
+    # the thread — the person may confirm it minutes or hours later.
+    PROPOSAL_TTL = 3.days
+
     # Returns { action: <ByteAction or nil>, auto_ran: <bool> } so the caller
     # can pick the right expression: something to confirm (action present) vs
     # something already done (auto_ran) vs nothing.
@@ -85,6 +89,11 @@ module Buddy
         multi_select:      true,
         buttons:           buttons,
         tool_input:        {},
+        # A Buddy checklist is part of the conversation, not a fleeting prompt —
+        # the default 10-minute TTL made a chore-confirm checkbox silently 409 on
+        # tap (the check just vanished) once the person came back to it. Give it
+        # a generous window so tapping later still works.
+        expires_at:        PROPOSAL_TTL.from_now,
       )
 
       # Mirror the action into the message metadata so the client picks it
@@ -96,6 +105,7 @@ module Buddy
         "action_request_id" => action.request_id,
         "action_kind"       => "custom",
         "action_state"      => "pending",
+        "action_expires_at" => action.expires_at&.iso8601,  # so the client can grey out stale rows
         "multi_select"      => true,
         "buttons"           => buttons,
       )
@@ -104,8 +114,43 @@ module Buddy
       { action: action, auto_ran: auto_ran }
     end
 
+    # Re-materialize a proposal from an EXPIRED row so the person doesn't have to
+    # re-type the request — tapping the stale checkbox reissues it as a fresh,
+    # tappable checklist on a new message. Rebuilds through the normal `create`
+    # path (re-validates + re-confirms), so the resolved data is refreshed and a
+    # target that's since vanished degrades to an honest note.
+    def reissue(user:, conversation:, button:)
+      msg = conversation.byte_messages.create!(
+        user:         user,
+        direction:    :inbound,
+        state:        :delivered,
+        body:         "Here you go again:",
+        metadata:     { "kind" => "buddy_reply", "source" => "reissue" },
+        delivered_at: Time.current,
+      )
+
+      tool_name = button["tool_name"].to_s
+      payload   = (button["payload"] || {}).symbolize_keys
+      result    = create(user: user, byte_message: msg, markers: [{ tool_name: tool_name.to_sym, payload: payload }])
+
+      if result[:action].nil? && !result[:auto_ran]
+        msg.update!(body: "Hmm, I couldn't set that back up - what it pointed at might be gone now. Just ask me again?")
+      end
+
+      broadcast_message(user, msg.reload)
+      result
+    end
+
     class << self
       private
+
+      def broadcast_message(user, message)
+        MonitorChannel.broadcast_to(user, {
+          id:      :byte,
+          channel: :byte,
+          data:    { kind: :message, message: message.as_wire },
+        })
+      end
 
       # Execute each auto (no-confirm) tool now and post a distinct activity
       # receipt chip for it. Returns true if any ran. Failures degrade to a
@@ -125,7 +170,14 @@ module Buddy
           result  = Buddy::Tools.dispatch(p[:tool], payload, ctx)
           text =
             if result[:ok]
-              safely { p[:tool][:receipt].call(result[:data], ctx) }.presence || "Done"
+              # A blank receipt is a deliberate opt-out: the tool relayed its own
+              # result via a follow-up Buddy turn (e.g. check_weather), so there's
+              # no chip to post. Only fall back to "Done" when a receipt genuinely
+              # returned nothing but the tool didn't opt out.
+              rc = safely { p[:tool][:receipt].call(result[:data], ctx) }
+              next if rc.nil? # opted out — no activity chip
+
+              rc.presence || "Done"
             else
               Rails.logger.warn("[Buddy::ProposalBuilder] auto tool #{p[:tool][:name]} failed: #{result[:error]}")
               "#{name} couldn't do that one"
@@ -162,6 +214,10 @@ module Buddy
         } || p[:tool][:name].to_s
 
         title, sub = extract_title_sub(raw)
+        # A label proc can return a blank title (e.g. a name resolved to ""),
+        # which renders as an unreadable empty checkbox row. Never allow that —
+        # fall back to a humanized tool name so every row says SOMETHING.
+        title = p[:tool][:name].to_s.tr("_", " ") if title.to_s.strip.empty?
         {
           "id"        => id,
           "label"     => title,

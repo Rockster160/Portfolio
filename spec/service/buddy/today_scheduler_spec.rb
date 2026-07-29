@@ -31,6 +31,20 @@ RSpec.describe Buddy::TodayScheduler do
       expect(target.in_time_zone(tz).strftime("%H:%M")).to eq("08:45") # 9:15 - 30min
     end
 
+    it "briefs 30 min before DEPARTURE when the drive time is known" do
+      agenda = Agenda.create!(user: user, name: "Mine")
+      item = AgendaItem.create!(
+        agenda: agenda, name: "Offsite", kind: :event,
+        start_at: tz.parse("2026-07-28 09:15"), end_at: tz.parse("2026-07-28 10:00"), all_day: false
+      )
+      # Travel metadata is set by the travel-chain sync in prod; write it
+      # directly here (create resets metadata via that callback).
+      item.update_column(:metadata, { "travel" => { "travel_minutes" => 25 } })
+
+      target = described_class.target_time(user, tz.parse("2026-07-28 07:00"))
+      expect(target.in_time_zone(tz).strftime("%H:%M")).to eq("08:20") # 9:15 - 25 drive - 30
+    end
+
     it "ignores events at/after 10am (falls back to 8:30)" do
       agenda = Agenda.create!(user: user, name: "Mine")
       AgendaItem.create!(agenda: agenda, name: "Late", start_at: tz.parse("2026-07-28 11:00"), end_at: tz.parse("2026-07-28 12:00"), all_day: false, kind: :event)
