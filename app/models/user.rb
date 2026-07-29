@@ -128,6 +128,12 @@ class User < ApplicationRecord
   def chelsea? = id == 58_128
   def eve? = id == 4
 
+  # Trusted household members who should never be IP-banned. They share the
+  # home IP, so a burst of legit requests from the house can trip the
+  # spam/stale-CSRF heuristics and ban everyone behind it.
+  PERMA_SAFE_IDS = [1, 4, 58_128].freeze
+  def perma_safe? = id.in?(PERMA_SAFE_IDS)
+
   # Friendly display name for personalized greetings (Buddy, notifications,
   # etc.). No first_name column exists on this table, so this is a simple
   # id-map fallback to `username`. Add a column later if the map grows.

@@ -76,7 +76,7 @@ class ApplicationController < ActionController::Base
   end
 
   def ip_whitelisted?
-    BannedIp.where(ip: current_ip, whitelisted: true).any?
+    current_user&.perma_safe? || BannedIp.where(ip: current_ip, whitelisted: true).any?
   end
 
   def ban_spam_ip(exception)
@@ -142,6 +142,8 @@ class ApplicationController < ActionController::Base
   end
 
   def block_banned_ip
+    return if current_user&.perma_safe?
+
     head :unauthorized if BannedIp.where(ip: current_ip, whitelisted: false).any?
   end
 
