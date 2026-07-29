@@ -265,12 +265,22 @@ export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
     setActive,
     setExpression,
     clearThinking,
-    // Set the mood from a reply's leading [[mood:]] marker the instant text
-    // starts streaming — so the face is right as Buddy starts talking, not a
-    // beat later at turn-end. Falls back to just clearing the thinking overlay
-    // when the reply carries no mood marker.
-    onReplyStreaming(body) {
-      const m = String(body || "").match(/\[\[\s*mood:\s*([a-z_]+)\s*\]\]/i);
+    // Drive the face off Buddy's ACTUAL reply as its text starts streaming:
+    // drop "thinking", and if the reply opens with a [[mood:]], wear that face.
+    // Deliberately ignores everything that ISN'T the reply bubble streaming
+    // real words, so the pet keeps thinking until then:
+    //   * non-reply messages (the "Today"/check-in action chip, stash/activity
+    //     chips, receipts, hidden triggers) — only kind buddy/buddy_reply count;
+    //   * the "…"/"..." streaming placeholder — that IS "still thinking".
+    onReplyStreaming(message) {
+      const kind = message && message.metadata && message.metadata.kind;
+      if (kind !== "buddy" && kind !== "buddy_reply") return;
+
+      const text = String((message && message.body) || "");
+      const stripped = text.replace(/\[\[[^\]]*\]\]/g, "").trim();
+      if (!stripped || /^[.…]+$/.test(stripped)) return; // placeholder / no words yet
+
+      const m = text.match(/\[\[\s*mood:\s*([a-z_]+)\s*\]\]/i);
       if (m) setExpression(m[1].toLowerCase());
       else clearThinking();
     },

@@ -38,35 +38,34 @@ module Buddy
 
     # The local Time today when this user's briefing should fire.
     def target_time(user, now)
-      tz    = user.timezone.presence || "America/Denver"
-      local = now.in_time_zone(tz)
-      first = first_event_before_cutoff(user, local)
+      first = first_event_before_cutoff(user, now)
 
-      first ? (first - 30.minutes) : local.change(hour: FALLBACK[:hour], min: FALLBACK[:min], sec: 0)
+      first ? (first - 30.minutes) : Buddy::Day.at(user, hour: FALLBACK[:hour], min: FALLBACK[:min], now: now)
     end
 
-    # The start_at of today's earliest OWNED, non-cancelled, timed event that
-    # begins before 10am local — nil if there isn't one.
-    def first_event_before_cutoff(user, local)
+    # The start_at of the perceived day's earliest OWNED, non-cancelled, timed
+    # event before 10am local — nil if none. Perceived-day bounded (3am rollover)
+    # so the scheduler agrees with the rest of Buddy.
+    def first_event_before_cutoff(user, now)
       agenda_ids = Agenda.where(user_id: user.id).pluck(:id)
       return nil if agenda_ids.empty?
 
-      bod    = local.beginning_of_day
-      cutoff = local.change(hour: CUTOFF_HR, min: 0, sec: 0)
+      day_start, = Buddy::Day.range(user, now: now)
+      cutoff     = Buddy::Day.at(user, hour: CUTOFF_HR, now: now)
 
       AgendaItem.where(agenda_id: agenda_ids)
         .where.not(status: :cancelled)
         .where(all_day: [false, nil])
-        .where(start_at: bod.utc...cutoff.utc)
+        .where(start_at: day_start.utc...cutoff.utc)
         .order(:start_at)
         .limit(1)
         .pick(:start_at)
     end
 
     def delivered_today?(user, conversation, now)
-      bod = now.in_time_zone(user.timezone.presence || "America/Denver").beginning_of_day
+      day_start, = Buddy::Day.range(user, now: now)
       conversation.byte_messages
-        .where(created_at: bod..)
+        .where(created_at: day_start..)
         .exists?(["metadata->>'source' = ?", "today_scheduled"])
     end
   end

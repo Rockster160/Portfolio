@@ -45,7 +45,7 @@ RSpec.describe Buddy::PlungeAdvisor do
     expect(block).to include("Good plunge window")
   end
 
-  it "does NOT call it a good plunge day when the agenda conflicts" do
+  it "says NOTHING about the plunge (no negative claim) when the agenda conflicts" do
     agenda = Agenda.create!(user: user, name: "Mine")
     AgendaItem.create!(
       agenda: agenda, name: "Meeting", kind: :event,
@@ -54,7 +54,8 @@ RSpec.describe Buddy::PlungeAdvisor do
     allow(WeatherService).to receive(:data).and_return(payload(day: "2026-07-28", rain_hours: [12, 13]))
 
     block = described_class.briefing_block(user, now: tz.parse("2026-07-28 07:00"))
-    expect(block).to include("Not really a plunge day")
+    expect(block).to include("Rain in the forecast") # still reports the rain
+    expect(block).not_to include("plunge")           # but no plunge editorializing
   end
 
   it "flags heavy dark clouds even without rain" do

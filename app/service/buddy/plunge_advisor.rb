@@ -35,10 +35,12 @@ module Buddy
       lines = ["", "ALPINE WEATHER (only surfaced because there's something to note - otherwise stay quiet on weather):"]
       lines << "- #{a[:headline]}"
       lines << "- Rain windows today (give these times): #{a[:rain_windows].join(", ")}" if a[:rain_windows].any?
+      # ONLY speak up about the plunge when it's genuinely a good window. If it's
+      # not, say NOTHING about plunging - don't editorialize about why not (a
+      # "you're too busy" claim reads as presumptuous when the day's actually
+      # clear). Just report the rain and move on.
       if a[:plunge]
-        lines << "- Good plunge window: #{a[:plunge_reason]}. Float the plunge lightly (don't oversell it)."
-      elsif a[:rain_windows].any?
-        lines << "- Not really a plunge day (#{a[:plunge_reason] || "timing/drive not ideal"}), so don't push it."
+        lines << "- Good plunge window: #{a[:plunge_reason]}. Float the plunge lightly (don't oversell it), and DON'T claim they're busy or the day's packed."
       end
       lines.join("\n")
     end
@@ -47,7 +49,7 @@ module Buddy
 
     def analyze(data, user, tz, now)
       local_now = now.in_time_zone(tz)
-      today     = local_now.to_date
+      today     = Buddy::Day.today(user, now: now) # perceived day (3am rollover)
 
       hours = today_hours(data["hourly"], tz, today)
       rain  = hours.select { |h| rainy?(h) }
@@ -72,7 +74,7 @@ module Buddy
 
     def today_hours(hourly, tz, today)
       Array(hourly).select { |h|
-        (Time.at(h["dt"].to_i).in_time_zone(tz).to_date == today) rescue false
+        (Buddy::Day.perceived_date(Time.at(h["dt"].to_i).in_time_zone(tz)) == today) rescue false
       }
     end
 
@@ -115,7 +117,7 @@ module Buddy
     end
 
     def sun_times(data, tz, today)
-      day = Array(data["daily"]).find { |d| (Time.at(d["dt"].to_i).in_time_zone(tz).to_date == today) rescue false }
+      day = Array(data["daily"]).find { |d| (Buddy::Day.perceived_date(Time.at(d["dt"].to_i).in_time_zone(tz)) == today) rescue false }
       day ||= data["current"] || {}
       {
         sunrise: (Time.at(day["sunrise"].to_i).in_time_zone(tz) if day["sunrise"]),
@@ -125,35 +127,34 @@ module Buddy
 
     # ---- plunge decision ----
 
+    # Returns [true, reason] only when a future rain window genuinely lines up:
+    # a down-time band, agenda clear then, drive dodges rush hour + glare. When
+    # nothing qualifies we return [false, nil] and say nothing about the plunge -
+    # no negative editorializing (see briefing_block).
     def assess_plunge(windows, user, tz, today, local_now, sun)
       weekend = today.saturday? || today.sunday?
 
       windows.each do |win|
         next if win[1] <= local_now # already past
         next unless downtime?(win, weekend)
+        next unless agenda_clear?(user, tz, win)
+        next unless drive_windows_ok?(win, sun)
 
-        clear    = agenda_clear?(user, tz, win)
-        drive_ok = drive_windows_ok?(win, sun)
-
-        if clear && drive_ok
-          reason = "rain lands #{format_window(win)}, a #{weekend ? "weekend" : "weekday"} down-time, your agenda's clear, and the drive dodges rush hour and sun glare"
-          return [true, reason]
-        end
+        reason = "rain lands #{format_window(win)}, a #{weekend ? "weekend" : "weekday"} down-time, your day's clear then, and the drive dodges rush hour and sun glare"
+        return [true, reason]
       end
 
-      # A downtime rain window existed but something disqualified it.
-      bad = windows.find { |w| downtime?(w, weekend) && w[1] > local_now }
-      return [false, "the drive would hit traffic or low-sun glare, or you've got something on the calendar"] if bad
-
-      [false, "the rain isn't during a good down-time window"]
+      [false, nil]
     end
 
-    # Any hour of the window falls in a down-time band.
+    # Any hour of the window falls in a down-time band: late morning / early
+    # afternoon (11am-3pm) or early evening (6-8pm) on a weekday; any hour on a
+    # weekend.
     def downtime?(win, weekend)
       hours = (win[0].hour..(win[1] - 1).hour)
       return true if weekend
 
-      hours.any? { |h| (11..13).cover?(h) || (18..19).cover?(h) }
+      hours.any? { |h| (11..14).cover?(h) || (18..19).cover?(h) }
     end
 
     def agenda_clear?(user, _tz, win)

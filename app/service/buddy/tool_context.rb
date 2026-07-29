@@ -34,7 +34,7 @@ module Buddy
 
       scope = ChoreCompletion.where(chore_id: chore.id, user_id: user.id)
       case hint.to_sym
-      when :today     then scope.where("completed_at >= ?", user.perceived_today.beginning_of_day).order(completed_at: :desc).first
+      when :today     then scope.where(completed_at: user.perceived_today.beginning_of_day..).order(completed_at: :desc).first
       when :yesterday then scope.where(completed_at: (user.perceived_today - 1.day).all_day).order(completed_at: :desc).first
       else                 scope.order(completed_at: :desc).first
       end
@@ -60,7 +60,7 @@ module Buddy
 
       scope = user.action_events.where("LOWER(name) LIKE ?", "%#{name.to_s.downcase}%")
       case hint.to_s
-      when "today"        then scope.where("timestamp >= ?", user.perceived_today.beginning_of_day).order(timestamp: :desc).first
+      when "today"        then scope.where(timestamp: user.perceived_today.beginning_of_day..).order(timestamp: :desc).first
       when "yesterday"    then scope.where(timestamp: (user.perceived_today - 1.day).all_day).order(timestamp: :desc).first
       when "this morning" then scope.where(timestamp: user.perceived_today.beginning_of_day..user.perceived_today.change(hour: 12)).order(timestamp: :desc).first
       when /^\d+$/        then scope.find_by(id: hint.to_i)
@@ -79,7 +79,7 @@ module Buddy
       scope = scope.where("LOWER(name) LIKE ?", "%#{needle}%")
       if hint_date.present?
         day = (Time.zone.parse(hint_date.to_s) rescue nil)
-        scope = scope.where("start_at >= ? AND start_at < ?", day.beginning_of_day, day.end_of_day) if day
+        scope = scope.where(start_at: day.beginning_of_day...day.end_of_day) if day
       end
       scope.order(start_at: :asc).first
     end
@@ -202,6 +202,9 @@ module Buddy
       return "later" if time.nil?
 
       local = time.in_time_zone(user.timezone)
+      # Calendar-relative here (NOT the 3am perceived rollover the agenda uses):
+      # this phrases a reminder's CLOCK time, so a 6pm reminder set at 1am should
+      # read "at 6pm" (later today), never "tomorrow".
       today = Time.current.in_time_zone(user.timezone).to_date
       days  = (local.to_date - today).to_i
 
@@ -213,7 +216,7 @@ module Buddy
       else            "on #{local.strftime("%b %-d")} "
       end
 
-      return "#{day_prefix.strip.presence || 'today'}".strip if all_day
+      return (day_prefix.strip.presence || "today").to_s.strip if all_day
 
       time_str = local.strftime("%-I:%M%P").sub(":00", "")  # "6:01pm" / "6pm"
       "#{day_prefix}at #{time_str}"

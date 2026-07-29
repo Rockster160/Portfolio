@@ -1928,11 +1928,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (convId === currentConversationId) {
           receiveMessage(msg);
           // Buddy's reply text just started (or grew): drop the "thinking"
-          // overlay right away and, if the reply opens with a [[mood:]], wear
-          // that face as the words begin — not a beat later at turn-end.
-          if (msg.direction === "inbound" && (msg.body || "").trim()) {
-            buddyHero?.onReplyStreaming(msg.body);
-          }
+          // overlay and, if the reply opens with a [[mood:]], wear that face as
+          // the words begin. onReplyStreaming filters out the "…" placeholder
+          // and non-reply chips, so the pet keeps thinking until REAL words
+          // stream — not the moment a placeholder/chip lands.
+          if (msg.direction === "inbound") buddyHero?.onReplyStreaming(msg);
         } else if (msg.direction === "inbound") {
           const prev = drawerUnread.get(convId) || 0;
           drawerUnread.set(convId, prev + 1);
