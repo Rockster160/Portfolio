@@ -14,6 +14,11 @@ class AgendaItemsController < ApplicationController
 
   rescue_from GoogleSyncFailed, with: :render_google_sync_failed
 
+  # Defer the "Notify others" fan-out a beat so the async travel-chain sync
+  # can stamp metadata["travel"] first — the briefing includes travel time
+  # when it's there.
+  NOTIFY_OTHERS_DELAY = 20.seconds
+
   def create
     target = resolve_target_agenda(params.dig(:agenda_item, :agenda_id))
     return render json: { errors: ["Agenda not found"] }, status: :not_found if target.blank?
@@ -68,6 +73,7 @@ class AgendaItemsController < ApplicationController
 
       if @item.save
         target.broadcast!
+        notify_others!(@item, target, :created)
         render json: @item.serialize
       else
         render json: { errors: @item.errors.full_messages }, status: :unprocessable_entity
@@ -122,6 +128,7 @@ class AgendaItemsController < ApplicationController
       # detached row is replaced by the tail series; the FE store is
       # upsert-only and needs the explicit display_id list to prune.
       @item.agenda.broadcast!(destroyed_item_ids: Array(@destroyed_item_ids)) unless moved
+      notify_others!(@item, @item.agenda, :updated)
       render json: @item.serialize
     }
   end
@@ -1088,6 +1095,21 @@ class AgendaItemsController < ApplicationController
   rescue ::RestClient::Exception => e
     ::Rails.logger.warn("[GoogleCalendar] series truncate failed agenda=#{agenda.id} #{e.class}: #{e.message}")
     raise GoogleSyncFailed, google_error_message(e, "truncate the series")
+  end
+
+  # Fan a Buddy heads-up out to the other people on a shared agenda when the
+  # actor opted in via the "Notify others" checkbox. No-op unless the flag is
+  # set AND the agenda actually has other members.
+  def notify_others!(item, agenda, action)
+    return unless notify_others_requested?
+    return unless item&.persisted?
+    return unless agenda&.shared_with_others?(current_user)
+
+    AgendaNotifyOthersWorker.perform_in(NOTIFY_OTHERS_DELAY, "AgendaItem", item.id, current_user.id, action.to_s)
+  end
+
+  def notify_others_requested?
+    ActiveModel::Type::Boolean.new.cast(params.dig(:agenda_item, :notify_others))
   end
 
   def item_params

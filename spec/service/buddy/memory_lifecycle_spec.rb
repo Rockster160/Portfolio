@@ -6,8 +6,8 @@ require "rails_helper"
 RSpec.describe "BuddyMemory lifecycle" do
   let(:user) { create(:user) }
 
-  def remember(body)
-    Buddy::SideEffects.apply_remember(user, body)
+  def remember(fact, expires_in: nil)
+    Buddy::SideEffects.apply_remember(user, fact, expires_in)
   end
 
   describe "BuddyMemory scopes" do
@@ -30,11 +30,16 @@ RSpec.describe "BuddyMemory lifecycle" do
       expect(m.last_used_at).to be_present
     end
 
-    it "sets an expiry for a short-term fact (`| 2 weeks`)" do
-      remember("Rocco is heads-down on the launch | 2 weeks")
+    it "sets an expiry for a short-term fact via expires_in" do
+      remember("Rocco is heads-down on the launch", expires_in: "2 weeks")
       m = BuddyMemory.last
       expect(m.content).to eq("Rocco is heads-down on the launch")
       expect(m.expires_at).to be_within(1.day).of(2.weeks.from_now)
+    end
+
+    it "treats an unparseable expires_in as durable rather than guessing" do
+      remember("Rocco likes oat milk", expires_in: "for a bit")
+      expect(BuddyMemory.last.expires_at).to be_nil
     end
 
     it "reinforces an existing fact instead of duplicating it" do

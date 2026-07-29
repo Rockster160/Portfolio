@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_07_29_123711) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_29_220000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -435,6 +435,25 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_29_123711) do
     t.index ["byte_conversation_id"], name: "index_buddy_reminders_on_byte_conversation_id"
     t.index ["fire_at"], name: "idx_buddy_reminders_pending", where: "((fired_at IS NULL) AND (cancelled_at IS NULL))"
     t.index ["user_id"], name: "index_buddy_reminders_on_user_id"
+  end
+
+  create_table "buddy_usages", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "byte_conversation_id"
+    t.bigint "byte_message_id"
+    t.integer "kind", default: 0, null: false
+    t.string "model", null: false
+    t.integer "input_tokens", default: 0, null: false
+    t.integer "cached_input_tokens", default: 0, null: false
+    t.integer "output_tokens", default: 0, null: false
+    t.integer "reasoning_tokens", default: 0, null: false
+    t.bigint "cost_micros", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["byte_conversation_id"], name: "index_buddy_usages_on_byte_conversation_id"
+    t.index ["byte_message_id"], name: "index_buddy_usages_on_byte_message_id"
+    t.index ["user_id", "created_at"], name: "index_buddy_usages_on_user_id_and_created_at"
+    t.index ["user_id"], name: "index_buddy_usages_on_user_id"
   end
 
   create_table "buddy_watches", force: :cascade do |t|
@@ -1512,6 +1531,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_29_123711) do
   add_foreign_key "buddy_relays", "users", column: "to_user_id"
   add_foreign_key "buddy_reminders", "byte_conversations"
   add_foreign_key "buddy_reminders", "users"
+  add_foreign_key "buddy_usages", "byte_conversations"
+  add_foreign_key "buddy_usages", "byte_messages"
+  add_foreign_key "buddy_usages", "users"
   add_foreign_key "buddy_watches", "byte_conversations"
   add_foreign_key "buddy_watches", "users"
   add_foreign_key "buddy_watches", "users", column: "notify_user_id"

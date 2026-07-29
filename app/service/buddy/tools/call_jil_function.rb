@@ -20,13 +20,13 @@ Buddy::Tools.register(
     (those run under the owner's account, with the owner's devices
     and credentials).
 
-    Pass args via extra k=v pairs on the marker, one per signature
-    arg, using LOWERCASE_SNAKE_CASE of the arg name. Emit them IN
-    SIGNATURE ORDER - some tasks read their args by position, so the
-    order you write them in matters. Example:
+    Pass args in the `args` object, one key per signature arg, using
+    LOWERCASE_SNAKE_CASE of the arg name. Order them IN SIGNATURE
+    ORDER - some tasks read their args by position, so key order
+    matters. Example:
 
       Signature: function("Temp" TAB Numeric BR "Dest" TAB String)
-      Marker: [[propose: call_jil_function name="Tesla Start" temp=72 dest="Home"]]
+      Call: name="Tesla Start", args={"temp": 72, "dest": "Home"}
 
     If required args are missing or ambiguous ("start the car" with
     no temp), ask the person a short follow-up. Don't guess numeric

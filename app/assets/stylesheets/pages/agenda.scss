@@ -2281,6 +2281,31 @@ body.ctr-agendas {
   background: rgba(0, 0, 0, 0.15);
 }
 
+// "Notify others" opt-in — compact, right-aligned, sits just above the
+// submit row. Revealed by agenda.js only when the picked agenda is shared.
+// .hidden (display:none !important) wins over this display when toggled off.
+.notify-others-field {
+  display: flex;
+  justify-content: flex-end;
+  margin: 6px 0 -2px;
+
+  .notify-others-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    user-select: none;
+    opacity: 0.85;
+  }
+
+  .notify-others-input {
+    width: auto;
+    margin: 0;
+    cursor: pointer;
+  }
+}
+
 // The global button cascade in components/forms.scss applies a blue
 // background, blue-tinted box-shadow, and dark text-shadow to every
 // <button>. The af-btn family resets all of those — `box-shadow: none`

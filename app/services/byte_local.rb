@@ -58,6 +58,11 @@ module ByteLocal
   # `conversation:` carries the per-thread dispatch mode + persisted
   # metadata (bash cwd, claude session id, adopted-session hint) so the
   # Mac can route without a Rails round-trip.
+  #
+  # NOTE: this is the claude / terminal path ONLY. Buddy used to come through
+  # here too, carrying a context snapshot and tool override for the Mac to hand
+  # to `claude -p`; it now runs entirely in Rails (Buddy::GPT::Turn) and never
+  # reaches the Mac. Do not reintroduce Buddy-specific payload here.
   def deliver(message, conversation: nil)
     uri = URI.join(base_url, "/byte/incoming")
     req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
@@ -70,67 +75,6 @@ module ByteLocal
       conversation_id: conversation&.id || message.byte_conversation_id,
       conversation:    conversation ? conversation_payload(conversation) : nil,
     }
-
-    # Buddy-mode turns need Portfolio-side persona + tool descriptions +
-    # today's context. Persona/tools regenerate each turn so a new tool
-    # file is usable without redeploying the Mac. Wrapped so a Buddy-side
-    # bug (missing tool file on disk, resolver blowing up on stale user
-    # data, etc.) can NEVER kill outbound message delivery — the message
-    # still lands on Mac, just without the extras.
-    if conversation&.buddy?
-      begin
-        context = Buddy::Context.build(message.user, conversation)
-        # Snapshot context so Buddy can Read it on demand instead of
-        # eating 5-8 KB of every turn's system prompt. Rails runs on
-        # prod Linux; Buddy runs on the Mac. We ship the payload inline
-        # in the /byte/incoming envelope and Mac's Handler writes it
-        # to Mac-local disk before invoking Buddy. The path we advertise
-        # in the system prompt is the Mac-local path.
-        snapshot_payload = Buddy::ContextSnapshot.build_for(message.user, conversation, context)
-        snapshot_path    = Buddy::ContextSnapshot.mac_path_for(message.user)
-        payload[:buddy_context_snapshot] = snapshot_payload
-        payload[:buddy_context_path]     = snapshot_path
-        # Tiny (~100 byte) summary of always-needed fields so Buddy can
-        # track mood + decide whether to Read the file without a round-
-        # trip on chat-only turns.
-        at_glance = {
-          user:                   message.user.first_name,
-          pet_expression:         context.dig(:emotional_state, :pet_expression) || "neutral",
-          pending_chores_today:   context[:chores_pending_today].to_a.length,
-          done_chores_today:      context[:chores_done_today].to_a.length,
-          scheduled_chores_today: context[:chores_scheduled_today].to_a.length,
-          agenda_today:           context[:today_agenda].to_a.length,
-          recent_events:          context[:recent_events].to_a.length,
-          upcoming_reminders:     context[:upcoming_reminders].to_a.length,
-          active_proposals:       context[:active_proposals].to_a.length,
-        }
-        recap = conversation.metadata.is_a?(Hash) ? conversation.metadata["buddy_recap"] : nil
-        payload[:buddy_system_prompt_extras] = Buddy::Personality.for(
-          message.user,
-          conversation: conversation,
-          context_path: snapshot_path,
-          at_glance:    at_glance,
-          recap:        recap,
-        )
-        # Portfolio-triggered Buddy turns get NO Bash — even with strong
-        # persona rules and read-only-role prod-query, Claude Code's
-        # training pulls hard toward "let me run a script for you" the
-        # moment shell is available. Buddy has Read / Grep / Glob / Web
-        # only; every action goes through the marker system. Prod query
-        # and email reading come back later as *marker-based* tools that
-        # wrap prod-query.sh / prod-emails.sh Rails-side with fixed shell
-        # escaping — same idea, no free-form shell.
-        payload[:buddy_tools_override] = "Read,Grep,Glob,WebSearch,WebFetch"
-      rescue => e
-        # LOUD failure in dev + slack ping in prod - silent rescue here
-        # cost hours debugging phantom "why doesn't Buddy see chores /
-        # follow marker rules" behavior when the real cause was a
-        # class-loading race on user.first_name. Errors.report re-raises
-        # in dev, pings Slack + logs at ERROR in prod, so this rescue
-        # cannot hide a bug in the buddy extras pipeline again.
-        Buddy::Errors.report(section: "byte_local.buddy_extras", exception: e, user: message.user)
-      end
-    end
 
     req.body = JSON.generate(payload)
 
@@ -169,27 +113,6 @@ module ByteLocal
       name:     conversation.display_name,
       metadata: conversation.metadata,
     }
-  end
-
-  # Rails → Mac: ask Mac to run a Haiku summary against the current
-  # Buddy session for `conversation_id`, then clear the session so the
-  # next turn starts fresh. Blocking; returns the parsed JSON `{ "summary":
-  # "..." }` on success, nil on failure. Timeout longer than default
-  # because Haiku call can take a few seconds.
-  def compact_buddy_session(conversation_id:)
-    uri = URI.join(base_url, "/byte/buddy/compact")
-    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
-    req.body = JSON.generate({ conversation_id: conversation_id })
-
-    res = Net::HTTP.start(uri.hostname, uri.port,
-      use_ssl: uri.scheme == "https", open_timeout: TIMEOUT_SECONDS, read_timeout: 30,
-    ) { |http| http.request(req) }
-
-    return nil unless res.is_a?(Net::HTTPSuccess)
-    JSON.parse(res.body)
-  rescue => e
-    Rails.logger.warn("[Byte] compact_buddy_session failed: #{e.class}: #{e.message}")
-    nil
   end
 
   # Rails → Mac: user has decided on an action-request. Mac wakes any

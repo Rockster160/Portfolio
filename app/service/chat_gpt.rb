@@ -10,7 +10,7 @@ module ChatGPT
   end
 
   def ask(str)
-    raise "DO NOT CALL!"
+    # raise "DO NOT CALL!"
     @last_ask = str
     response = client.chat(
       parameters: {
@@ -23,13 +23,13 @@ module ChatGPT
   end
 
   def generate_image(prompt)
-    raise "DO NOT CALL!"
-    puts " > Generating icon for '#{item}'..."
+    # raise "DO NOT CALL!"
+    puts " > Generating icon for '#{prompt}'..."
     begin
       resp = client.images.generate(
         parameters: {
           model:  "dall-e-3",
-          prompt: "#{prompt}\n\n#{item}",
+          prompt: prompt.to_s,
           n:      1, # number of images to generate
           size:   "1024x1024",
         },
@@ -55,16 +55,16 @@ module ChatGPT
     numbered = titles.each_with_index.map { |t, i| "#{i + 1}. #{t}" }.join("\n")
     prompt = (
       "I've placed an online order with multiple items. For each title below, " \
-      "return a short item name (max 20 characters). Remove all brand information, " \
-      "sizing data, pack counts, colors, and any other modifiers - keep just the " \
-      "essential item name, since I already know what I ordered. " \
-      "Return ONE NAME PER LINE in the same order as the inputs below, with no " \
-      "numbering, no quotes, and no commentary.\n\n#{numbered}"
+        "return a short item name (max 20 characters). Remove all brand information, " \
+        "sizing data, pack counts, colors, and any other modifiers - keep just the " \
+        "essential item name, since I already know what I ordered. " \
+        "Return ONE NAME PER LINE in the same order as the inputs below, with no " \
+        "numbering, no quotes, and no commentary.\n\n#{numbered}"
     )
 
     response = ask(prompt).to_s
     cleaned = response.split("\n").filter_map { |line|
-      stripped = line.sub(/\A\s*\d+[\.\)]\s*/, "").strip
+      stripped = line.sub(/\A\s*\d+[.)]\s*/, "").strip
       stripped.empty? ? nil : stripped.gsub(/\bfilament\b/i, "Ink").squish
     }
 

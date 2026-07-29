@@ -1,39 +1,68 @@
 module Buddy
-  # Single delivery path for a Buddy outbound turn → the Mac. Shared by the
-  # live send (ByteController#dispatch_message, wrapped in a thread) and the
-  # wake-drain (BuddyWakeWorker, already on Sidekiq). Keeping it in one place
-  # means the queued-then-woken path behaves exactly like a fresh send:
-  # compaction, state transition, broadcast, and sleep-on-Mac-failure.
+  # Single delivery path for a Buddy outbound turn. Shared by the live send
+  # (ByteController#dispatch_message via BuddyDeliverWorker) and the wake-drain
+  # (BuddyWakeWorker), so a queued-then-woken turn behaves exactly like a fresh
+  # send: compaction, then the model turn, then state and broadcast.
+  #
+  # Buddy runs IN RAILS now (Buddy::GPT::Turn against the OpenAI Responses API).
+  # It no longer touches the Mac, which is why Buddy keeps working while the Mac
+  # is asleep. Byte's claude and terminal modes still hand off to the Mac — see
+  # BuddyDeliverWorker#deliver_plain, which is untouched by this.
   module TurnDispatcher
     module_function
 
-    # Deliver `message` synchronously. Returns true on a Mac success.
+    # How long a queued turn waits for the one ahead of it. Comfortably past the
+    # client's own 120s request timeout, so a legitimately slow predecessor gets
+    # waited out rather than abandoned.
+    LOCK_WAIT_SECONDS = 150
+
+    # Run `message`'s turn synchronously. Returns true on success.
+    #
+    # Turns are serialized per conversation. The Mac used to guarantee this with a
+    # per-conversation mutex in its handler; moving Buddy into Rails put every
+    # turn in its own Sidekiq job, so the guarantee has to be re-established here.
+    # It matters for two real cases: a person firing off two messages in quick
+    # succession, and the read tools (check_weather, search_events,
+    # chore_progress) that finish by seeding a FOLLOW-UP turn in the same
+    # conversation. Unserialized, two turns build history concurrently and the
+    # second can miss the first's reply entirely.
     def deliver!(message)
       conversation = message.byte_conversation
       user         = conversation.user
 
-      if conversation.buddy? && Buddy::Compactor.should_compact?(conversation)
-        Buddy::Compactor.compact!(conversation)
-      end
+      attempt = ByteConversation.with_advisory_lock_result(
+        lock_name(conversation), timeout_seconds: LOCK_WAIT_SECONDS
+      ) { run_turn!(message, conversation, user) }
 
-      response = ByteLocal.deliver(message, conversation: conversation)
-      ok       = response.is_a?(Net::HTTPSuccess)
-      message.update!(state: ok ? :sent : :failed)
-      broadcast_message(user, message.reload)
+      return attempt.result if attempt.lock_was_acquired?
 
-      # Mac unreachable on a Buddy turn: put Buddy to sleep so later turns
-      # hold in the queue instead of spawning more failing deliveries. No
-      # canned reply — the persistent sleeping chip communicates the state.
-      if conversation.buddy? && !ok && !Buddy::SleepGuard.sleeping?(user)
-        Buddy::SleepGuard.sleep_until!(user, 3.minutes.from_now)
-      end
-
-      ok
-    rescue => e
+      # Waited the full window, so the holder is wedged rather than working.
+      # Proceeding risks an out-of-order reply; dropping the turn loses the
+      # person's message outright. Take the cosmetic problem over the silent one.
+      Rails.logger.warn(
+        "[Buddy] turn lock timeout on conversation=#{conversation.id}; running unserialized",
+      )
+      run_turn!(message, conversation, user)
+    rescue StandardError => e
       Rails.logger.warn("[Buddy] deliver failed: #{e.class}: #{e.message}")
       message.update!(state: :failed) rescue nil
       broadcast_message(user, message.reload) rescue nil
       false
+    end
+
+    def lock_name(conversation)
+      "buddy_turn:#{conversation.id}"
+    end
+
+    def run_turn!(message, conversation, user)
+      Buddy::Compactor.compact!(conversation) if Buddy::Compactor.should_compact?(conversation)
+
+      # The inbound message is "sent" as soon as we accept it for a turn; the
+      # reply is its own record, created and streamed by the Turn.
+      message.update!(state: :sent)
+      broadcast_message(user, message.reload)
+
+      Buddy::GPT::Turn.run!(message)
     end
 
     def broadcast_message(user, message)
@@ -42,7 +71,7 @@ module Buddy
         channel: :byte,
         data:    { kind: :message, message: message.as_wire },
       })
-    rescue => e
+    rescue StandardError => e
       Rails.logger.warn("[Buddy] message broadcast failed: #{e.class}: #{e.message}")
     end
   end

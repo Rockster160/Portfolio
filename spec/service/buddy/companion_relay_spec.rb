@@ -15,10 +15,16 @@ RSpec.describe "Buddy companion relay" do
     rocco.update!(chore_household_id: household.id)
     chelsea.update!(chore_household_id: household.id)
 
-    # Delivery re-runs a Buddy turn (Sidekiq + Mac round-trip) and web push -
-    # capture both so specs stay in-process.
-    allow(Buddy::CompanionDelivery).to receive(:deliver_prompt)
+    # Relays now post direct bridged messages (broadcast + push), no recompose.
+    allow(MonitorChannel).to receive(:broadcast_to)
     allow(WebPushNotifications).to receive(:send_to_byte)
+    # Random test users aren't in MOSS_USER_IDS, so differentiate the two
+    # households' themes explicitly for the attribution assertions.
+    allow(ByteConversation).to receive(:default_theme_for) { |u| u == chelsea ? "moss" : "byte" }
+  end
+
+  def source(conversation, src)
+    conversation.byte_messages.where("metadata->>'source' = ?", src).order(:created_at).last
   end
 
   def run(tool_name, payload, user: rocco, conversation: convo)
@@ -31,13 +37,21 @@ RSpec.describe "Buddy companion relay" do
   # ---- sending: notify + the three ask kinds ----
 
   describe "message_partner (notify)" do
-    it "creates a one-way relay and delivers a seed to the partner" do
+    it "bridges the message to the partner and drops an attributed copy for the sender" do
       run(:message_partner, { to: her, message: "he fed the dog" })
 
       relay = BuddyRelay.last
       expect(relay).to have_attributes(from_user: rocco, to_user: chelsea, kind: "notify", status: "delivered")
-      expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt)
-        .with(hash_including(user: chelsea))
+
+      # Chelsea sees it attributed to Rocco's Buddy (Byte).
+      to_msg = source(relay.to_conversation, "relay")
+      expect(to_msg.body).to eq("he fed the dog")
+      expect(to_msg.metadata.dig("relay_peer", "name")).to eq("Byte")
+
+      # Rocco's own thread gets a copy attributed to Chelsea's Buddy (Moss).
+      copy = source(convo, "relay_copy")
+      expect(copy.body).to eq("he fed the dog")
+      expect(copy.metadata.dig("relay_peer", "name")).to eq("Moss")
     end
 
     it "refuses a name that isn't in the household" do
@@ -98,7 +112,11 @@ RSpec.describe "Buddy companion relay" do
       expect(relay.reload).to have_attributes(answer: "mop", status: "relayed")
       expect(action.reload.buttons.find { |b| b["id"] == 2 }["status"]).to eq("executed")
       expect(action.buttons.find { |b| b["id"] == 1 }["status"]).to eq("cancelled")
-      expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt).with(hash_including(user: rocco))
+
+      # The answer is bridged back to Rocco, attributed to Chelsea's Buddy (Moss).
+      answer_msg = source(convo, "relay")
+      expect(answer_msg.body).to eq("mop")
+      expect(answer_msg.metadata.dig("relay_peer", "name")).to eq("Moss")
     end
 
     it "records a multi answer as the full set of picked labels" do

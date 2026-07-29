@@ -38,9 +38,10 @@ module Buddy
 
         # Deliver off the web threads via Sidekiq. `outbound` is a buddy
         # conversation message, so BuddyDeliverWorker routes it through
-        # TurnDispatcher.deliver! — same Mac round-trip, but no web-pool AR
-        # connection held across it. Firing paths (WatchMatcher / ReminderFirer)
-        # ride web requests and cron jobs; neither should block on the Mac.
+        # TurnDispatcher.deliver! and on to Buddy::GPT::Turn, without holding a
+        # web-pool AR connection for the whole model call. Firing paths
+        # (WatchMatcher / ReminderFirer) ride web requests and cron jobs;
+        # neither should block on a streaming turn.
         BuddyDeliverWorker.perform_async(outbound.id)
         outbound
       end

@@ -7,6 +7,10 @@ class AgendaSchedulesController < ApplicationController
   before_action :authorize_schedule_edit!, only: [:update, :destroy]
   before_action -> { refuse_external_write!(@schedule&.agenda) }, only: [:update, :destroy]
 
+  # Match AgendaItemsController's deferral so a shared-agenda briefing stays
+  # off the request thread (schedules carry no travel metadata of their own).
+  NOTIFY_OTHERS_DELAY = 20.seconds
+
   def create
     target = resolve_target_agenda(params.dig(:agenda_schedule, :agenda_id))
     return render json: { errors: ["Agenda not found"] }, status: :not_found if target.blank?
@@ -32,6 +36,7 @@ class AgendaSchedulesController < ApplicationController
 
     if @schedule.save
       target.broadcast!
+      notify_others!(@schedule, target)
       render json: { id: @schedule.id }
     else
       render json: { errors: @schedule.errors.full_messages }, status: :unprocessable_entity
@@ -94,6 +99,16 @@ class AgendaSchedulesController < ApplicationController
 
     scope = current_user.editable_agendas
     scope.find_by(id: agenda_id_or_slug) || scope.by_param(agenda_id_or_slug).first
+  end
+
+  # Mirror of AgendaItemsController#notify_others! for a freshly-created
+  # recurring event.
+  def notify_others!(schedule, agenda)
+    return unless ActiveModel::Type::Boolean.new.cast(params.dig(:agenda_schedule, :notify_others))
+    return unless schedule&.persisted?
+    return unless agenda&.shared_with_others?(current_user)
+
+    AgendaNotifyOthersWorker.perform_in(NOTIFY_OTHERS_DELAY, "AgendaSchedule", schedule.id, current_user.id, "created")
   end
 
   def schedule_params

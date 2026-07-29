@@ -1,32 +1,117 @@
 module Buddy
-  # Applies the non-checkbox markers Buddy can emit ([[mood: X]],
-  # [[remember: X]]). Unlike proposals, these fire immediately — no
-  # user confirmation — so the vocabulary is deliberately small and
-  # non-destructive.
+  # The immediate, non-checkbox actions Buddy can take. Unlike proposals these
+  # fire the moment the model calls them — no user confirmation — so the
+  # vocabulary is deliberately small and non-destructive.
   #
-  # Adding a new side-effect verb:
-  #   1. Add it to Buddy::MarkerParser::SIDE_EFFECT_RX (alternation).
-  #   2. Add a `when :verb` branch here.
-  #   3. Teach it in the persona's Rules of the House.
+  # These live OUTSIDE the Buddy::Tools registry on purpose: that registry is
+  # the proposal/checkbox surface (ProposalBuilder iterates it), and none of
+  # these produce a row. They are exposed to the model as their own function
+  # schemas via `function_schemas` below.
+  #
+  # Adding a new side effect:
+  #   1. Add a SCHEMAS entry (name, description, args).
+  #   2. Add a `when :name` branch in `call`.
+  #   3. Teach it in the persona's Rules of the House if it needs nuance.
   module SideEffects
     module_function
 
-    # `conversation` is the thread the reply landed in. Per-conversation verbs
-    # (mood, note) act on it; user-global verbs (remember, forget, stash) act on
-    # `conversation.user`.
-    def apply(conversation, side_effects)
+    # Function names the model can call. Kept as a flat list so Turn can ask
+    # `SideEffects.handles?(name)` to route a tool call without a registry hit.
+    NAMES = %i[set_mood add_note remember forget sort_stash].freeze
+
+    def handles?(name)
+      NAMES.include?(name.to_sym)
+    end
+
+    # Dispatch one structured tool call. Failures are logged and swallowed: a
+    # bad side effect must never cost the person the rest of a good reply.
+    def call(conversation, name, args)
       user = conversation.user
-      Array(side_effects).each do |eff|
-        case eff[:verb]
-        when :mood     then apply_mood(conversation, eff[:body])
-        when :note     then apply_note(conversation, eff[:body])
-        when :remember then apply_remember(user, eff[:body])
-        when :forget   then apply_forget(user, eff[:body])
-        when :stash    then apply_stash(user, eff[:body])
-        end
-      rescue StandardError => e
-        Rails.logger.warn("[Buddy::SideEffects] #{eff[:verb]} failed: #{e.class}: #{e.message}")
+      args = (args || {}).transform_keys(&:to_sym)
+
+      case name.to_sym
+      when :set_mood   then apply_mood(conversation, args[:expression])
+      when :add_note   then apply_note(conversation, args[:fact])
+      when :remember   then apply_remember(user, args[:fact], args[:expires_in])
+      when :forget     then apply_forget(user, args[:match])
+      when :sort_stash then Buddy::Stash.apply_sort(user, args)
       end
+      true
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::SideEffects] #{name} failed: #{e.class}: #{e.message}")
+      false
+    end
+
+    # Flat Responses-API function tools, same shape Buddy::Tools produces. All
+    # of these are strict, so optional args are nullable and every property is
+    # listed in `required`.
+    #
+    # `theme` scopes set_mood's enum to the faces that theme actually has, which
+    # makes an unrenderable face structurally impossible rather than something
+    # apply_mood has to detect and discard.
+    def function_schemas(theme: :byte)
+      [
+        schema(
+          :set_mood,
+          "Set the pet's face to match the expression YOU are wearing as you deliver THIS reply - " \
+          "your own tone, not a readout of the user's mood. Call this whenever the face should " \
+          "change from its current value. At most once per reply. Silent: never mention it in prose.",
+          {
+            expression: {
+              type:        :enum,
+              required:    true,
+              values:      Buddy::Faces.selectable(theme),
+              description: "The face you're wearing as you say this",
+            },
+          },
+        ),
+        schema(
+          :add_note,
+          "Record a note about THIS conversation only (how the person wants this thread to work, " \
+          "or a detail that matters here but not globally). Scoped to this thread. Silent.",
+          { fact: { type: :string, required: true, description: "One short line" } },
+        ),
+        schema(
+          :remember,
+          "Write a durable fact about the person, carried into every future conversation. " \
+          "Durable facts only - preferences, names, routines, ongoing projects. Not conversational " \
+          "trivia, not moods, not counts. One fact per call. Silent.",
+          {
+            fact:       { type: :string, required: true, description: "A statement future-you can act on" },
+            expires_in: {
+              type:        :string,
+              required:    false,
+              description: "Set for a fact that's only true for a while, so it self-clears: " \
+                           "\"today\", \"tomorrow\", or \"N days/weeks/months\". Null means it never expires",
+            },
+          },
+        ),
+        schema(
+          :forget,
+          "Prune a memory when the person says it's wrong or asks you to drop it. Silent.",
+          { match: { type: :string, required: true, description: "Short substring of the memory, or its numeric id" } },
+        ),
+        schema(
+          :sort_stash,
+          "File or refine a brain-dumped idea. Pass category when first sorting it; pass summary " \
+          "alone to sharpen an existing note as the idea gets clearer. Silent.",
+          {
+            id:       { type: :integer, required: true,  description: "Idea id from stashed_ideas" },
+            category: { type: :enum,    required: false, values: %i[me home work], description: "Which bucket it belongs in" },
+            summary:  { type: :string,  required: false, description: "Short summary of the idea" },
+          },
+        ),
+      ]
+    end
+
+    # Reuses Buddy::Tools' property builder so side-effect schemas and proposal
+    # schemas can never drift in how they express types, enums, or nullability.
+    def schema(name, description, args)
+      Buddy::Tools.function_schema({
+        name:        name,
+        description: description,
+        args:        args.transform_values { |v| v.transform_keys(&:to_sym) },
+      })
     end
 
     # `[[mood: <one of the expressions>]]` — shifts this thread's pet face
@@ -62,27 +147,19 @@ module Buddy
       Buddy::ConversationNotes.append(conversation, body)
     end
 
-    # `[[stash: id=N category=work summary=...]]` — records Buddy's sort of a
-    # brain-dump idea (category + summary). Fires silently; the friendly "filed
-    # under X" line is Buddy's prose, not this marker.
-    def apply_stash(user, body)
-      args = Buddy::MarkerParser.parse_args(body)
-      Buddy::Stash.apply_sort(user, args)
-    end
-
-    # `[[remember: <fact>]]` — writes a durable BuddyMemory row. Bounded to 500
-    # chars (matches the model validation) so an accidental paragraph-length
-    # marker doesn't create a giant row.
+    # Writes a durable BuddyMemory row. Bounded to 500 chars (matches the model
+    # validation) so an accidental paragraph-length fact can't create a giant
+    # row.
     #
-    # Two optional refinements:
-    #   * Short-term: `[[remember: <fact> | <duration>]]` (e.g. "| 2 weeks",
-    #     "| 3 days", "| today") sets an expiry so the fact self-prunes. No
-    #     pipe = a durable fact that never expires.
-    #   * Reinforcement: if we already hold this fact (near-duplicate), bump it
-    #     instead of storing a copy, so re-mentions keep it fresh + high.
-    def apply_remember(user, body)
-      fact, ttl = split_memory_ttl(body)
+    # `expires_in` is an optional duration phrase ("today", "2 weeks") for a
+    # fact that's only true for a while, so it self-prunes. Nil means durable.
+    # Reinforcement: if we already hold this fact (near-duplicate), bump it
+    # instead of storing a copy, so re-mentions keep it fresh and high.
+    def apply_remember(user, fact, expires_in=nil)
+      fact = fact.to_s.strip
       return if fact.empty?
+
+      ttl = parse_duration(expires_in)
 
       existing = find_similar_memory(user, fact)
       if existing
@@ -99,21 +176,12 @@ module Buddy
       )
     end
 
-    # Split an optional trailing `| <duration>` off a remember body and turn it
-    # into an absolute expiry. Pipe is regex-safe inside the marker (the marker
-    # body just can't contain `]`). Unparseable duration → treated as durable.
-    def split_memory_ttl(body)
-      raw = body.to_s.strip
-      return [raw, nil] unless raw.include?("|")
-
-      fact, _sep, dur = raw.rpartition("|")
-      [fact.strip, parse_duration(dur)]
-    rescue StandardError
-      [raw, nil]
-    end
-
+    # Duration phrase to an absolute expiry. Unparseable (or nil) is treated as
+    # durable rather than guessed at — a fact that outlives its usefulness is a
+    # smaller problem than one that vanishes early.
     def parse_duration(text)
       t = text.to_s.strip.downcase
+      return nil if t.empty?
       return Time.current.end_of_day if t == "today"
       return Time.current.tomorrow.end_of_day if t == "tomorrow"
 
@@ -121,6 +189,8 @@ module Buddy
       return nil unless m
 
       Time.current + m[1].to_i.public_send("#{m[2]}s")
+    rescue StandardError
+      nil
     end
 
     # An active memory that's effectively the same fact - exact (normalized)

@@ -10,6 +10,12 @@
 <% default_agenda_id ||= local_assigns[:default_agenda_id] || agendas.first&.id %>
 <% default_color = (agendas.find { |a| a.id == default_agenda_id } || agendas.first)&.color || Agenda::DEFAULT_COLOR %>
 
+<%# An agenda counts as "shared" (worth offering "Notify others") when it's
+    either shared TO the current user by someone else, or the user owns it and
+    has shared it out. One batched query for the whole picker, no per-row N+1. %>
+<% shared_out_ids = AgendaShare.where(agenda_id: agendas.map(&:id)).distinct.pluck(:agenda_id).to_set %>
+<% agenda_shared = ->(a) { a.user_id != current_user.id || shared_out_ids.include?(a.id) } %>
+
 <% if mode == :edit %>
   <input type="hidden" class="add-item-id">
 <% end %>
@@ -29,6 +35,7 @@
           data-color="<%= a.color %>"
           data-name="<%= a.name %>"
           data-source="<%= a.source %>"
+          data-shared="<%= agenda_shared.call(a) %>"
           style="--option-color: <%= a.color %>;"
           <%= "aria-selected='true' class='selected'" if a.id == picked&.id %>>
         <span class="agenda-pick-dot" aria-hidden="true"></span>
@@ -139,3 +146,13 @@
 <% end %>
 
 <%= render "agenda_items/schedule_fields", scope_name: "month-mode" %>
+
+<%# Shared-agenda only, revealed by agenda.js when the picked calendar has
+    other members. ALWAYS defaults off — checked, it briefs everyone else on
+    the agenda through their own Buddy after the save lands. %>
+<div class="ff notify-others-field hidden">
+  <label class="notify-others-toggle">
+    <input type="checkbox" class="notify-others-input">
+    <span>Notify others</span>
+  </label>
+</div>

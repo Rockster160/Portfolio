@@ -67,6 +67,13 @@ class Agenda < ApplicationRecord
     User.where(id: ([user_id] + shared_users.pluck(:id)).uniq)
   end
 
+  # True when anyone other than `other_user` can see this agenda — i.e. it's
+  # genuinely shared. Drives the "Notify others" affordance: no point offering
+  # to brief anyone on a solo calendar.
+  def shared_with_others?(other_user)
+    access_users.where.not(id: other_user&.id).exists?
+  end
+
   # Can add/edit/complete items + schedules. Owners are implicitly editors.
   def editable_by?(other_user)
     return false if other_user.blank?

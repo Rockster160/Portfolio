@@ -1,43 +1,53 @@
 module Buddy
-  # Rough token estimate for a Buddy conversation, used only to decide
-  # when to compact. We do NOT need exact tokenizer output - a coarse
-  # char/4 heuristic on message bodies plus a fixed system-prompt
-  # baseline is enough to hit 10% / 20% thresholds reliably.
+  # Rough token estimate of a Buddy conversation's HISTORY, used only to decide
+  # when to compact. Exact tokenizer output isn't needed - a coarse char/4
+  # heuristic on message bodies is enough to hit the thresholds reliably.
   #
-  # Post-compact the "history" is just the recap + messages after the
-  # compact timestamp, so the same estimator naturally shrinks after a
-  # rotation.
+  # Deliberately history-ONLY. The system prompt and tool schemas are a large
+  # fixed cost (see FIXED_OVERHEAD) that compaction cannot reduce, so folding
+  # them into the number being thresholded would mean every conversation looks
+  # near-limit from its first message. History is the only thing compaction
+  # shrinks, so history is what we measure. Buddy::Compactor compares this
+  # against the window left over after the fixed cost.
+  #
+  # Post-compact the history is just the messages after `buddy_recap_at` plus
+  # the recap, so the same estimator naturally shrinks after a rotation.
   module TokenEstimator
     module_function
 
-    CHARS_PER_TOKEN     = 4
+    CHARS_PER_TOKEN      = 4
     PER_MESSAGE_OVERHEAD = 20   # role tags, framing tokens
 
-    # Static system prompt cost. Rough breakdown at time of writing:
-    #   time_preamble          ~120  tokens
-    #   persona (byte.md)      ~600
-    #   RULES_APPENDIX        ~1750
-    #   tools appendix         ~450
-    #   memories block         ~800
-    #   context pointer       ~200
-    #   Total fresh session   ~3900
-    # First-turn adds tone_profile_buddy (~2200), so ~6100 fresh, ~3900
-    # continuing. Use the continuing value as baseline; the delta only
-    # matters on the very first turn and is not the threshold-crossing
-    # case.
-    SYSTEM_PROMPT_BASELINE = 3900
+    # Fixed per-turn cost of everything that is not conversation history.
+    # Measured 2026-07-29 against User.me with the byte theme:
+    #
+    #   time_preamble        ~60 tokens
+    #   persona (byte.md)  ~1,270
+    #   tone profile       ~2,540
+    #   RULES_APPENDIX     ~7,810
+    #   context guide      ~1,900
+    #   ---------------------------
+    #   prompt total      ~13,650
+    #   tool schemas       ~9,620   (33 proposal tools + 5 silent + get_context)
+    #   ===========================
+    #   TOTAL             ~23,300
+    #
+    # Re-measure if the rules, tone profile, or tool count change materially:
+    #   Buddy::Personality.for(...).bytesize / 4
+    #   JSON.generate(tool_schemas).bytesize / 4
+    FIXED_OVERHEAD = 23_300
 
     def estimate_for(conversation)
       compact_at   = compact_timestamp(conversation)
       scope        = conversation.byte_messages
       scope        = scope.where("created_at > ?", compact_at) if compact_at
       body_tokens  = scope.pluck(:body).sum { |b| body_cost(b) }
-      recap_tokens = recap_cost(conversation)
-      SYSTEM_PROMPT_BASELINE + body_tokens + recap_tokens
+      body_tokens + recap_cost(conversation)
     end
 
     def body_cost(body)
       return 0 if body.blank?
+
       (body.length / CHARS_PER_TOKEN) + PER_MESSAGE_OVERHEAD
     end
 
@@ -46,7 +56,7 @@ module Buddy
       return nil if ts.blank?
 
       Time.zone.parse(ts.to_s)
-    rescue
+    rescue StandardError
       nil
     end
 

@@ -1,5 +1,6 @@
 module Buddy
-  # Takes the raw markers from Buddy::MarkerParser, validates them against
+  # Takes the model's proposal tool calls (see Buddy::GPT::Turn, which maps each
+  # `function_call` to `{ tool_name:, payload: }`), validates them against
   # the tool registry, dedups/merges by tool.merge_key, and attaches ONE
   # ByteAction (multi_select: true) to the given Buddy reply message.
   # Each button row in the action carries { id, label, tool_name, payload,

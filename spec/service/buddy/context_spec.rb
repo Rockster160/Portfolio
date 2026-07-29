@@ -63,8 +63,7 @@ RSpec.describe Buddy::Context do
     # Buddy::Errors.report. This spec asserts .report is never called
     # during a healthy build - catches the WHOLE class of bug (typos,
     # renamed methods, API drift) at commit time. Includes rescues in
-    # Context, ContextSnapshot, and any other builder called during
-    # Context.build.
+    # Context and any other builder called during Context.build.
     it "never invokes Buddy::Errors.report during a healthy build" do
       allow(Buddy::Errors).to receive(:report).and_call_original
 

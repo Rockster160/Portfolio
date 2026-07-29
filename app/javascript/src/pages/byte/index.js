@@ -283,6 +283,26 @@ document.addEventListener("DOMContentLoaded", async () => {
       );
     const bodyEl = node.querySelector("[data-body]");
 
+    // Cross-user relay attribution: a bridged message carries `relay_peer`
+    // (the OTHER household's Buddy — name/theme/icon). Show an avatar+name
+    // header and tag the bubble with the peer theme so CSS paints it in that
+    // household's accent color instead of the default inbound tint.
+    const peer = message?.metadata?.relay_peer;
+    const peerEl = node.querySelector("[data-peer]");
+    if (peerEl) {
+      if (peer && (peer.name || peer.icon)) {
+        peerEl.hidden = false;
+        const iconEl = peerEl.querySelector("[data-peer-icon]");
+        if (iconEl) iconEl.src = peer.icon || "";
+        const nameEl = peerEl.querySelector("[data-peer-name]");
+        if (nameEl) nameEl.textContent = peer.name || "";
+        node.dataset.peerTheme = peer.theme || "";
+      } else {
+        peerEl.hidden = true;
+        node.removeAttribute("data-peer-theme");
+      }
+    }
+
     // Kind-dispatch for body content rendering.
     //   claude          → thoughts collapsible + markdown-lite final body
     //   system          → markdown-lite (fenced code, inline code, bold, italic)
@@ -318,7 +338,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else if (
       kind === "buddy_reply" ||
       kind === "buddy" ||
-      kind === "buddy_receipt"
+      kind === "buddy_receipt" ||
+      kind === "buddy_relay"
     ) {
       // Every Buddy inbound message renders as markdown so **bold**,
       // bulleted lists, and inline code all look right. `buddy_reply`

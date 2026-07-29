@@ -34,13 +34,13 @@ Buddy::Tools.register(
     Worked examples:
 
       listener: `event:add name::Transaction`
-      marker:   [[propose: trigger_jil_task name="Transaction Categorize Prompt" data="action:add name:Transaction"]]
+      call:     name="Transaction Categorize Prompt", data="action:add name:Transaction"
 
       listener: `hass-button:device_name::"Laundry Button"`
-      marker:   [[propose: trigger_jil_task name="Laundry Button" data="device_name:Laundry Button"]]
+      call:     name="Laundry Button", data="device_name:Laundry Button"
 
       listener: `fan-high`
-      marker:   [[propose: trigger_jil_task name="Fan High"]]
+      call:     name="Fan High"
 
     If a value itself contains spaces or colons, send `data` as a JSON
     object instead - that is accepted too:

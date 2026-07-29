@@ -43,16 +43,20 @@ RSpec.describe "Buddy brain-dump (stash)" do
       expect(BuddyDeliverWorker).to have_received(:perform_async)
     end
 
-    it "applies Buddy's sort from a [[stash:]] side-effect" do
+    it "applies Buddy's sort from a sort_stash call" do
       idea = BuddyIdea.create!(user: user, body: "garage shelves", status: :active)
-      Buddy::SideEffects.apply(convo, [{ verb: :stash, body: %(id=#{idea.id} category=home summary="build garage shelves") }])
+      Buddy::SideEffects.call(convo, :sort_stash, {
+        "id" => idea.id, "category" => "home", "summary" => "build garage shelves",
+      })
 
       expect(idea.reload).to have_attributes(category: "home", summary: "build garage shelves")
     end
 
-    it "refines just the summary from a talk-through (summary-only side-effect)" do
+    it "refines just the summary from a talk-through (summary-only call)" do
       idea = BuddyIdea.create!(user: user, category: :home, summary: "shelves", body: "garage shelves", status: :active)
-      Buddy::SideEffects.apply(convo, [{ verb: :stash, body: %(id=#{idea.id} summary="floating oak shelves over the bench") }])
+      Buddy::SideEffects.call(convo, :sort_stash, {
+        "id" => idea.id, "summary" => "floating oak shelves over the bench",
+      })
 
       expect(idea.reload).to have_attributes(category: "home", summary: "floating oak shelves over the bench")
     end

@@ -459,6 +459,38 @@
     };
   }
 
+  // ---------- "Notify others" opt-in ----------
+  // The field only makes sense on a shared agenda, so it's revealed based on
+  // the currently-picked option's data-shared flag. setValue() is programmatic
+  // (no onChange), so callers that switch agendas that way must call sync
+  // themselves (openModal / prefill).
+  function syncNotifyField(form) {
+    const field = form.querySelector(".notify-others-field");
+    if (!field) return;
+    const selected = form.querySelector(".agenda-pick-menu li.selected");
+    const shared = selected?.dataset.shared === "true";
+    field.classList.toggle("hidden", !shared);
+    // A hidden field must never smuggle a stale "checked" into the payload.
+    if (!shared) {
+      const box = field.querySelector(".notify-others-input");
+      if (box) box.checked = false;
+    }
+  }
+
+  // Called on every modal open: the box ALWAYS defaults off, then visibility
+  // syncs to the picked agenda.
+  function resetNotifyField(form) {
+    const box = form.querySelector(".notify-others-input");
+    if (box) box.checked = false;
+    syncNotifyField(form);
+  }
+
+  function notifyOthersChecked(form) {
+    const field = form.querySelector(".notify-others-field");
+    if (!field || field.classList.contains("hidden")) return false;
+    return !!field.querySelector(".notify-others-input")?.checked;
+  }
+
   // ---------- shared schedule fields ----------
   // Recurrence/days/until/count UI shared between the add and edit modals.
   // Returns helpers for prefill, payload build, and clear.
@@ -792,6 +824,7 @@
         b.classList.toggle("locked", lock);
         b.title = lock ? "Only events can be added to a Google calendar" : "";
       });
+      syncNotifyField(form);
     }
     const agendaPicker = bindAgendaPicker(form, applyAgendaChange);
 
@@ -923,6 +956,7 @@
           applyDefaultStartTime();
         }
         suppressDefaultTime = false;
+        resetNotifyField(form);
         nameInput.focus();
       });
     }
@@ -999,6 +1033,7 @@
 
       const agendaId = agendaPicker?.value() ? parseInt(agendaPicker.value(), 10) : null;
       if (!agendaId) { toast("Pick an agenda", "error"); return; }
+      const notifyOthers = notifyOthersChecked(form);
 
       const agendaMeta = (() => { // for the optimistic placeholder
         const sel = $(".add-agenda-id", form);
@@ -1022,6 +1057,7 @@
             arrive_early_minutes: arriveEarlyMinutes,
             notes,
             trigger_expression: triggerExpression,
+            notify_others:      notifyOthers,
           },
         };
 
@@ -1082,6 +1118,7 @@
       schedulePayload.location = location;
       schedulePayload.arrive_early_minutes = arriveEarlyMinutes;
       schedulePayload.notes = notes;
+      schedulePayload.notify_others = notifyOthers;
       const scheduleMid = window.AgendaMutationQueue.newMutationId();
       schedulePayload.client_mutation_id = scheduleMid;
       const scheduleBody = { agenda_schedule: schedulePayload };
@@ -1277,6 +1314,7 @@
         b.classList.toggle("locked", lock);
         b.title = lock ? "Only events can be added to a Google calendar" : "";
       });
+      syncNotifyField(form);
     });
 
     // Click model on each agenda-item row:
@@ -1451,6 +1489,9 @@
       form.dataset.itemUrl = d.itemUrl;
       updateDeleteLabel();
       updateSaveLabel();
+      // setValue() above is programmatic (no onChange), so sync the notify
+      // field to the item's agenda here. Always reopens defaulted off.
+      resetNotifyField(form);
       if (window.showModal) window.showModal("#agenda-item-edit");
     }
 
@@ -1578,6 +1619,7 @@
           arrive_early_minutes: parseInt($(".add-arrive-early", form)?.value, 10) || 0,
           notes:              $(".add-notes", form).value,
           trigger_expression: triggerExpression,
+          notify_others:      notifyOthersChecked(form),
         },
       };
 

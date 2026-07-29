@@ -4,9 +4,9 @@ Buddy::Tools.register(
     Relay a message to the user's partner (or another household member)
     THROUGH their companion. Use whenever the user wants to tell / let / pass
     something along to someone else: "let Chelsea know I fed the dog", "tell
-    Rocco I'm running late", "pass along that dinner's ready". Their companion
-    delivers it in its own voice, so keep `message` about the intent, not the
-    exact words.
+    Rocco I'm running late", "pass along that dinner's ready". The message is
+    delivered VERBATIM as a bridged message from you, so phrase `message` as the
+    actual, natural note you're sending (in your voice) - not a terse instruction.
 
     `to` is who it's for (a first name like "Chelsea", or "my wife"/"Rocco").
     It must be someone in the user's household - if you don't recognize the

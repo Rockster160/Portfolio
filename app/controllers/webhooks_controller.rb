@@ -571,77 +571,21 @@ class WebhooksController < ApplicationController
 
   private
 
-  # For :buddy-mode conversations, extract markers from the reply body:
-  #   * [[propose: ...]]   — build checkbox action, gate execution on tap
-  #   * [[mood: ...]]      — shift pet expression immediately
-  #   * [[remember: ...]]  — write a durable BuddyMemory row
+  # Buddy replies no longer arrive through this controller — they are built,
+  # streamed, and finalized in-process by Buddy::GPT::Turn, which owns tool
+  # dispatch, proposal building, and expression settling.
   #
-  # All marker types are stripped from the visible body. Proposals and
-  # side-effects are independent — Buddy can emit either or both in one
-  # reply.
-  def buddy_process_reply(user, _conversation, message)
-    parsed = Buddy::MarkerParser.extract(message.body)
+  # This remains only as a safety net for a Buddy-conversation message that
+  # somehow lands via the Mac webhook (a stale Mac process still holding a
+  # message id from before the cutover). It settles the pet so the thinking
+  # overlay can't stick, and says so loudly in the log.
+  def buddy_process_reply(_user, _conversation, message)
     conversation = message.byte_conversation
-
-    # Observability for "is Buddy using expressions?": logs every reply's
-    # marker/side-effect shape so a `mood` verb (or its absence) is visible.
-    Rails.logger.info(
-      "[Buddy::reply] user=#{user.id} proposals=#{parsed[:markers].size} " \
-      "side_effects=#{parsed[:side_effects].pluck(:verb).inspect}",
+    Rails.logger.warn(
+      "[Buddy] reply arrived via the Mac webhook for conversation=#{conversation.id} " \
+      "message=#{message.id}. Buddy runs in Rails now; this path should be dead.",
     )
-
-    # Side-effect-only reply (e.g. Buddy emitted just `[[mood: happy]]`
-    # with no prose and no proposals). Stripping the marker leaves the
-    # body empty; setting body="" would render a completely blank bubble.
-    # The side-effect already fires below - the visible message has no
-    # reason to exist. Destroy it so the client sees it disappear rather
-    # than seeing an empty ghost bubble.
-    side_effect_only = parsed[:display_text].to_s.strip.empty? && parsed[:markers].empty?
-    if side_effect_only
-      Buddy::SideEffects.apply(conversation, parsed[:side_effects]) if parsed[:side_effects].any?
-      MonitorChannel.broadcast_to(user, {
-        id:      :byte,
-        channel: :byte,
-        data:    { kind: :message_deleted, message_id: message.id, byte_conversation_id: message.byte_conversation_id },
-      })
-      message.destroy!
-      # Drop the "thinking" overlay. A mood marker (applied above) already
-      # broadcast the new mood; otherwise re-assert the stored one. Either way
-      # the mood itself is untouched — it only moves when Buddy says so.
-      Buddy::ExpressionState.settle!(conversation) unless parsed[:side_effects].any? { |e| e[:verb] == :mood }
-      return
-    end
-
-    if parsed[:display_text] != message.body
-      message.update!(body: parsed[:display_text])
-    end
-
-    # Side effects fire first so a mood shift lands before the checklist
-    # renders (feels more coherent — pet reacts, then presents options).
-    Buddy::SideEffects.apply(conversation, parsed[:side_effects]) if parsed[:side_effects].any?
-
-    # Proposals must ALWAYS build (they create the checklist / run auto tools),
-    # independent of the expression decision below.
-    result = parsed[:markers].any? ? Buddy::ProposalBuilder.create(user: user, byte_message: message, markers: parsed[:markers]) : nil
-
-    # Never leave a BLANK bubble. If the reply came back with nothing to show —
-    # empty prose, no checklist, no auto receipt — the person is staring at an
-    # empty message with no idea what happened. This is the "Buddy sent only a
-    # marker and it got discarded (couldn't resolve what to act on)" case. Give
-    # it an honest, warm fallback so there's always feedback.
-    if message.body.to_s.strip.empty? && result&.dig(:action).nil? && !result&.dig(:auto_ran)
-      message.update!(body: "Hmm, I couldn't quite line that one up - can you give me a little more to go on?")
-    end
-
-    # Resolve the transient "thinking" overlay from turn-start. If Buddy chose
-    # a mood this turn, SideEffects already persisted + broadcast it (which
-    # clears thinking on the client). Otherwise just settle: re-assert the
-    # STORED mood so the overlay drops without the mood changing. Proposals no
-    # longer move the face at all — the mood persists until Buddy sets it, which
-    # is exactly "keep the mood as-is until something changes it".
-    unless parsed[:side_effects].any? { |e| e[:verb] == :mood }
-      Buddy::ExpressionState.settle!(conversation)
-    end
+    Buddy::ExpressionState.settle!(conversation)
   rescue StandardError => e
     Rails.logger.warn("[Buddy] reply-processing failed: #{e.class}: #{e.message}")
     # Even on error, don't leave the pet frozen thinking forever.
@@ -749,85 +693,10 @@ class WebhooksController < ApplicationController
     })
   end
 
-  # Push notifications only fire on terminal states — silent while
-  # streaming. Every kind (shell / claude / jarvis / system) gets a push
-  # UNLESS the user's PWA is currently foreground (server-side presence
-  # heartbeat via `ByteController#presence`). This is server-side so we
-  # never hand a push to iOS to potentially fall-back-render — SW-side
-  # suppression can't beat iOS's `userVisibleOnly` enforcement.
+  # Extracted to ByteNotifier so the in-Rails Buddy turn — which never routes
+  # through this controller — pushes with identical framing and presence rules.
   def byte_notify(user, message)
-    return unless message.state == "delivered"
-
-    meta = message.metadata.is_a?(Hash) ? message.metadata : {}
-
-    # Buddy replies that carry a proposal checklist are a WAITING ASK -
-    # the user needs to tap boxes for anything to happen. These should
-    # NOT be suppressed by presence (the PWA might be "present" but
-    # backgrounded on a phone lock screen, or the presence heartbeat
-    # might be stale). Force-notify with a distinct framing.
-    has_proposals = meta["tool_name"] == "buddy_proposals" ||
-      (meta["buttons"].is_a?(Array) && meta["buttons"].any?)
-
-    # Suppress the usual "you're present so skip" gate ONLY for high-
-    # priority asks. Normal chatter still respects presence.
-    return if !has_proposals && meta["kind"] != "action-request" && byte_user_present?(user)
-
-    # The OS already stamps the app name (Byte) on the notification, so the
-    # TITLE is the message itself - not the thread name ("Buddy"). Any
-    # actionable framing (a confirm cue, an approval prompt) rides in the body.
-    preview = clean_byte_body(message.body).truncate(160).presence
-
-    title, body =
-      if has_proposals
-        # Count pending buttons so we don't under-sell a "5 things to confirm".
-        n_pending = Array(meta["buttons"]).count { |b| (b["status"] || "pending") == "pending" }
-        cue = n_pending > 1 ? "☐ #{n_pending} to confirm" : "☐ Tap to confirm"
-        [preview || cue, (preview ? cue : nil)]
-      elsif meta["kind"] == "action-request"
-        tool = meta["tool_name"].to_s
-        sub  = meta["subtitle"].to_s.presence
-        cue  = case meta["action_kind"]
-        when "plan"     then "📋 Plan approval"
-        when "question" then "❓ Question"
-        else                 "⚡ Approve #{tool}"
-        end
-        if preview
-          [preview, [cue, sub].compact.join(" · ")]
-        else
-          [sub || cue, (sub ? cue : nil)]
-        end
-      else
-        [preview || "(attachment)", nil]
-      end
-
-    WebPushNotifications.send_to_byte(
-      title: title,
-      body:  body,
-      tag:   "byte-#{message.id}",
-      users: [user],
-    )
-  end
-
-  # Is this user's Byte PWA foreground right now? Populated by the
-  # `/byte/presence` heartbeat while the tab/window is visible.
-  def byte_user_present?(user)
-    Rails.cache.read(ByteController.presence_key(user)).present?
-  end
-
-  # Push tray shows plain text — strip everything that would look garbage:
-  # HTML tags (shell bubbles carry ANSI-styled <span>s), fenced/inline
-  # markdown code, bold/italic delimiters, ANSI escapes (if any leaked),
-  # blockquote markers, and any residual whitespace.
-  def clean_byte_body(raw)
-    text = raw.to_s
-    text = text.gsub(/```[a-z]*\n?/i, "").gsub(/```/, "")     # fenced code delimiters
-    text = text.gsub(/`([^`]+)`/, '\1')                       # inline code
-    text = text.gsub(/\*\*([^*]+)\*\*/, '\1')                 # bold
-    text = text.gsub(/(?<!\*)\*(?!\*)([^*]+)(?<!\*)\*(?!\*)/, '\1') # italic
-    text = text.gsub(/<[^>]+>/, "")                           # HTML tags (from shell)
-    text = text.gsub(/\e\[[0-9;?=<>]*[a-zA-Z]/, "")           # ANSI escapes
-    text = text.gsub(/^>\s?/, "")                             # blockquote
-    text.gsub(/\s+/, " ").strip
+    ByteNotifier.notify(user, message)
   end
 
   def json_params

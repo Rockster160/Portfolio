@@ -41,7 +41,7 @@ RSpec.describe "Buddy sleep queue", type: :model do
       # Force the wake window into the past, then run the worker.
       conversation.update_column(:buddy_sleep_until, 1.minute.ago)
       delivered = []
-      allow(ByteLocal).to receive(:deliver) { |m, **| delivered << m.body; http_ok }
+      allow(Buddy::GPT::Turn).to receive(:run!) { |m| delivered << m.body; true }
       allow(Buddy::Compactor).to receive(:should_compact?).and_return(false)
 
       BuddyWakeWorker.new.perform(user.id)

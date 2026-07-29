@@ -93,22 +93,77 @@ module Buddy
       registry.key?(name.to_sym)
     end
 
-    # Rendered into the system prompt every turn so the persona has fresh,
-    # deterministic tool docs. Kept short — one line per tool + arg list.
-    def system_prompt_appendix
-      lines = ["## Available tools", ""]
-      lines << "Emit markers like `[[propose: <tool> arg=\"value\" arg=value count=N]]`. Each marker becomes a checkbox row for the user to confirm. Use `count=N` when the same action repeats."
-      lines << ""
-      all.each do |tool|
-        arg_bits = tool[:args].map { |k, spec|
-          req = spec[:required] ? "" : "?"
-          type = spec[:type]
-          "#{k}#{req}:#{type}"
-        }.join(" ")
-        lines << "- **#{tool[:name]}** — #{tool[:description].strip.gsub(/\s+/, " ")}"
-        lines << "  args: #{arg_bits}" if arg_bits.present?
-      end
-      lines.join("\n")
+    # ---- OpenAI function-calling schemas -----------------------------------
+    #
+    # The Responses API takes function tools FLAT — `type`, `name`,
+    # `description`, `parameters`, `strict` all at the top level. (Chat
+    # Completions nests them under a `function` key; that shape 400s here.)
+    #
+    # Strict mode demands `additionalProperties: false` and EVERY property
+    # listed in `required`, so an arg that's optional to US is expressed as a
+    # nullable union rather than being left out of `required`. That's safe
+    # because validate_payload already treats nil as absent and applies
+    # `default:` — while still rejecting a null on an arg we marked required.
+    JSON_TYPES = {
+      string:       :string,
+      integer:      :integer,
+      enum:         :string,
+      boolean:      :boolean,
+      iso_time:     :string,
+      duration_min: :integer,
+    }.freeze
+
+    # The bare JSON type loses information the registry type carried, so hand
+    # the model the format expectation in prose instead.
+    TYPE_HINTS = {
+      iso_time:     "ISO8601 datetime with timezone offset",
+      duration_min: "Whole minutes",
+    }.freeze
+
+    def function_schemas
+      all.map { |tool| function_schema(tool) }
+    end
+
+    def function_schema(tool)
+      properties = {}
+      tool[:args].each { |key, spec| properties[key] = json_property(spec) }
+      # `count` is a registry-wide convention rather than a declared arg (see
+      # validate_payload). Only advertise it on tools defining merge_label,
+      # since that proc exists precisely to render a collapsed "5x Drink
+      # Water" row — the other tools have no repeat semantics.
+      properties[COUNT_ARG] = count_property if tool[:merge_label]
+      # Pass-through tools (call_jil_function) carry args that vary per target
+      # task, so they take one freeform object instead of a fixed schema.
+      # A freeform object can't satisfy strict mode, hence `strict: false`.
+      properties[:args] = passthrough_property if tool[:passthrough_args]
+
+      {
+        type:        :function,
+        name:        tool[:name],
+        description: tool[:description].strip.gsub(/\s+/, " "),
+        strict:      !tool[:passthrough_args],
+        parameters:  {
+          type:                 :object,
+          properties:           properties,
+          required:             properties.keys,
+          additionalProperties: false,
+        },
+      }
+    end
+
+    # Inverse of the passthrough schema: fold the nested `args` object back
+    # into a flat payload so a tool's confirm/execute procs see exactly the
+    # shape they saw under the old marker protocol. Called before
+    # validate_payload, which then keeps the undeclared keys via
+    # :passthrough_args.
+    def normalize_function_arguments(tool, parsed)
+      args = (parsed || {}).transform_keys(&:to_sym)
+      return args unless tool[:passthrough_args]
+
+      nested = args.delete(:args)
+      return args unless nested.is_a?(Hash)
+
+      nested.transform_keys(&:to_sym).merge(args)
     end
 
     # Substitutes {{key}} placeholders with shell-escaped payload values.
@@ -196,6 +251,45 @@ module Buddy
 
     class << self
       private
+
+      # One JSON Schema property from one registry arg spec. Optional args
+      # become a nullable union so strict mode can still list them all in
+      # `required`; the model passes null to mean "not supplied".
+      def json_property(spec)
+        base = JSON_TYPES[spec[:type]] || :string
+        prop = { type: spec[:required] ? base : [base, :null] }
+
+        if spec[:type] == :enum
+          values = Array(spec[:values])
+          # A nullable enum has to admit null in the enum list too, or strict
+          # mode rejects the null the model is otherwise obliged to send.
+          prop[:enum] = spec[:required] ? values : values + [nil]
+        end
+
+        desc = [
+          spec[:description].presence,
+          TYPE_HINTS[spec[:type]],
+          spec.key?(:default) ? "Defaults to #{spec[:default]} when null" : nil,
+        ].compact.join(". ")
+        prop[:description] = desc if desc.present?
+        prop
+      end
+
+      def count_property
+        {
+          type:        [:integer, :null],
+          description: "How many times this repeats. Null or 1 for a single occurrence",
+        }
+      end
+
+      def passthrough_property
+        {
+          type:                 :object,
+          description:          "Function arguments as key/value pairs, keys in lowercase_snake_case " \
+                                "of the signature arg names, in signature order",
+          additionalProperties: true,
+        }
+      end
 
       def normalize_args(args)
         (args || {}).transform_keys(&:to_sym).transform_values { |v|

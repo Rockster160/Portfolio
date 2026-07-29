@@ -6,7 +6,7 @@ RSpec.describe Buddy::Tools do
       cmd = described_class.bash_template("echo {{name}}", { name: '"; rm -rf ~' })
       # Every metachar gets a leading backslash — the shell will see one
       # literal argument, not a chained command or a tilde expansion.
-      expect(cmd).to eq(%q{echo \"\;\ rm\ -rf\ \~})
+      expect(cmd).to eq(%q(echo \"\;\ rm\ -rf\ \~))
       expect(cmd).to include('\;')  # metachars escaped, not stripped
     end
 
@@ -46,7 +46,7 @@ RSpec.describe Buddy::Tools do
 
     it "drops undeclared args by default" do
       minimal = { args: { name: { type: :string, required: true } } }
-      normalized, _ = described_class.validate_payload(minimal, { name: "HASS Light", action: "on", target: "mud_room" })
+      normalized, = described_class.validate_payload(minimal, { name: "HASS Light", action: "on", target: "mud_room" })
       expect(normalized).to eq(name: "HASS Light")
     end
 
@@ -67,19 +67,93 @@ RSpec.describe Buddy::Tools do
       )
       expect(errors).to be_empty
       expect(normalized.slice(:action, :target, :brightness)).to eq(
-        action: "on", target: "mud_room", brightness: "40"
+        action: "on", target: "mud_room", brightness: "40",
       )
     end
   end
 
-  describe ".system_prompt_appendix" do
-    it "renders every registered tool with its arg list" do
-      # Load real tool files so we're testing the actual registry state.
-      Dir[Rails.root.join("app/service/buddy/tools/*.rb")].sort.each { |f| load f }
-      out = described_class.system_prompt_appendix
-      expect(out).to include("complete_chore")
-      expect(out).to include("add_agenda_item")
-      expect(out).to include("[[propose:")
+  describe ".function_schemas" do
+    # Load real tool files so we're testing the actual registry state.
+    before { Rails.root.glob("app/service/buddy/tools/*.rb").each { |f| load f } }
+
+    let(:schemas) { described_class.function_schemas }
+
+    def schema_for(name)
+      schemas.find { |s| s[:name] == name }
+    end
+
+    it "emits one flat Responses-API function tool per registered tool" do
+      expect(schema_for(:complete_chore)).to include(type: :function, name: :complete_chore)
+      expect(schema_for(:add_agenda_item)).to be_present
+      # Flat, not nested under a :function key — the nested shape is Chat
+      # Completions and gets rejected by /responses.
+      expect(schema_for(:complete_chore)).not_to have_key(:function)
+    end
+
+    it "satisfies strict mode: every property required, no additional properties" do
+      schemas.each do |schema|
+        params = schema[:parameters]
+        expect(params[:additionalProperties]).to be(false), "#{schema[:name]} allows extra properties"
+        expect(params[:required]).to match_array(params[:properties].keys),
+          "#{schema[:name]} has properties missing from required"
+      end
+    end
+
+    it "expresses an optional arg as a nullable union so strict mode still lists it" do
+      props = schema_for(:complete_chore)[:parameters][:properties]
+      expect(props[:chore][:type]).to eq(:string)            # required
+      expect(props[:note][:type]).to eq([:string, :null])    # optional
+    end
+
+    it "maps registry types onto JSON Schema types" do
+      remind = schema_for(:remind_when)[:parameters][:properties]
+      expect(remind[:trigger]).to include(type: :string, enum: %i[arrive depart chore event agenda deploy])
+      expect(remind[:repeat][:type]).to eq([:boolean, :null])
+
+      agenda = schema_for(:add_agenda_item)[:parameters][:properties]
+      expect(agenda[:duration][:type]).to eq([:integer, :null])   # :duration_min
+      expect(agenda[:at][:type]).to eq(:string)                   # :iso_time
+      expect(agenda[:at][:description]).to include("ISO8601")
+    end
+
+    it "admits null in a nullable enum's value list" do
+      kind = schema_for(:schedule_reminder)[:parameters][:properties][:kind]
+      expect(kind[:type]).to eq([:string, :null])
+      expect(kind[:enum]).to include(nil)
+      expect(kind[:description]).to include("Defaults to reminder")
+    end
+
+    it "advertises count only on tools that can actually collapse repeats" do
+      expect(schema_for(:complete_chore)[:parameters][:properties]).to have_key(:count)
+      expect(schema_for(:create_chore)[:parameters][:properties]).not_to have_key(:count)
+    end
+
+    it "gives the pass-through tool a freeform args object and opts out of strict" do
+      jil = schema_for(:call_jil_function)
+      expect(jil[:strict]).to be(false)
+      expect(jil[:parameters][:properties][:args]).to include(type: :object, additionalProperties: true)
+    end
+  end
+
+  describe ".normalize_function_arguments" do
+    before { Rails.root.glob("app/service/buddy/tools/*.rb").each { |f| load f } }
+
+    it "flattens a pass-through tool's nested args so tool procs see the old shape" do
+      tool = described_class[:call_jil_function]
+
+      out = described_class.normalize_function_arguments(tool, {
+        "name" => "Tesla Start", "args" => { "temp" => 72, "dest" => "Home" }
+      })
+
+      expect(out).to eq(name: "Tesla Start", temp: 72, dest: "Home")
+    end
+
+    it "leaves an ordinary tool's arguments alone apart from symbolizing keys" do
+      tool = described_class[:complete_chore]
+
+      out = described_class.normalize_function_arguments(tool, { "chore" => "dishes", "count" => 2 })
+
+      expect(out).to eq(chore: "dishes", count: 2)
     end
   end
 end
