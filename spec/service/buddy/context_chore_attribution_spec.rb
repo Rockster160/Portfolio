@@ -7,6 +7,7 @@ RSpec.describe Buddy::Context, ".build chore attribution" do
   let(:household) { create(:chore_household) }
   let(:rocco)     { create(:user) }
   let(:chelsea)   { create(:user) }
+  let(:conversation) { rocco.byte_conversations.create!(mode: :buddy) }
 
   before do
     ChoreHouseholdMembership.create!(chore_household: household, user: rocco,   role: :manager)
@@ -25,7 +26,7 @@ RSpec.describe Buddy::Context, ".build chore attribution" do
     create(:chore_completion, chore: teeth, user: chelsea, day_key: rocco.perceived_today)
     create(:chore_completion, chore: feed,  user: chelsea, day_key: rocco.perceived_today)
 
-    ctx     = described_class.build(rocco)
+    ctx     = described_class.build(rocco, conversation)
     pending = ctx[:chores_pending_today].map { |c| c[:name] }
     done    = ctx[:chores_done_today].map { |c| c[:name] }
 
@@ -39,7 +40,7 @@ RSpec.describe Buddy::Context, ".build chore attribution" do
     ChoreDaily.create!(user: rocco, chore: teeth)
     create(:chore_completion, chore: teeth, user: rocco, day_key: rocco.perceived_today)
 
-    ctx = described_class.build(rocco)
+    ctx = described_class.build(rocco, conversation)
     expect(ctx[:chores_done_today].map { |c| c[:name] }).to include("Brush Teeth")
   end
 end

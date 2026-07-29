@@ -60,12 +60,18 @@ module Buddy
     end
 
     # Undo a create → remove what was just added (soft where the model allows).
+    # Event mutations fire the :event trigger + broadcast (ActionEvent has no
+    # model callback for it), the SAME as an in-app change.
     def remove(r)
       rec = find!(r)
       case r[:model].to_s
-      when "ActionEvent"     then rec.destroy!
+      when "ActionEvent"
+        rec.destroy!
+        ActionEventNotifier.notify(rec.user, rec, :removed, auth: :buddy, auth_id: rec.user_id)
       when "AgendaItem"      then rec.update!(status: :cancelled, cancelled_at: Time.current)
-      when "ChoreCompletion" then rec.destroy!   # fires the :uncompleted Jil trigger
+      # Go through the shared undoer so the streak rebuilds AND the Chores app
+      # gets the broadcast — not just a silent destroy.
+      when "ChoreCompletion" then ChoreCompletionUndoer.call(rec.user, rec)
       when "ListItem"        then rec.soft_destroy
       end
     end
@@ -75,7 +81,11 @@ module Buddy
       before = (r[:before] || {}).to_h
       raise "no prior values recorded" if before.empty?
 
-      find!(r).update!(before)
+      rec = find!(r)
+      rec.update!(before)
+      # AgendaItem re-broadcasts via its own model callbacks; ActionEvent needs
+      # the explicit notify.
+      ActionEventNotifier.notify(rec.user, rec, :changed, auth: :buddy, auth_id: rec.user_id) if r[:model].to_s == "ActionEvent"
     end
 
     # Undo a hard delete → recreate from the stored attributes. A removed list
@@ -90,7 +100,11 @@ module Buddy
         return list.list_items.add(attrs["name"] || attrs[:name])
       end
 
-      klass(r[:model]).create!(attrs)
+      rec = klass(r[:model]).create!(attrs)
+      # Re-adding a deleted event fires the :event trigger + broadcast, same as
+      # a fresh log.
+      ActionEventNotifier.notify(rec.user, rec, :added, auth: :buddy, auth_id: rec.user_id) if r[:model].to_s == "ActionEvent"
+      rec
     end
 
     # ---- finding + performing the most-recent undo (for the `undo` tool) ----

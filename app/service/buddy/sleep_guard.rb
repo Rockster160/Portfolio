@@ -1,9 +1,11 @@
 module Buddy
   # "Buddy is sleeping" state, driven by Anthropic API usage-cap errors
   # that come back through the Mac. When Mac's claude -p reports "out
-  # of extra usage / resets HH:MMam", Rails records the reset time on
-  # users.buddy_sleep_until and Buddy stops trying to dispatch turns
-  # until that time passes. Incoming messages while asleep get an
+  # of extra usage / resets HH:MMam", Rails records the reset time on the
+  # user's Buddy conversations (byte_conversations.buddy_sleep_until) and
+  # Buddy stops trying to dispatch turns until that time passes. Sleep is
+  # account-wide (the Mac is out of usage for every thread), so it fans out
+  # across all the user's Buddy threads. Incoming messages while asleep get an
   # immediate in-character "sleeping until X" reply instead of a
   # dispatch-and-fail.
   module SleepGuard
@@ -35,30 +37,48 @@ module Buddy
       end
     end
 
+    # Sleep is account-wide (the Mac is out of usage for every thread), so it
+    # fans out across all the user's Buddy conversations — but the sleep state
+    # itself now lives per-conversation. Each thread stashes the face it was
+    # resting on so `wake!` can restore it rather than flattening everyone to
+    # neutral.
+    def buddy_conversations(user)
+      user.byte_conversations.buddy
+    end
+
     # Mark the user asleep until `until_time`, broadcast the sleep state (so
-    # the client raises the persistent sleeping chip), shift the face to
-    # sleeping, and schedule the wake-drain for when the window passes.
+    # the client raises the persistent sleeping chip), shift every thread's face
+    # to sleeping, and schedule the wake-drain for when the window passes.
     def sleep_until!(user, until_time)
       return if until_time.nil? || until_time < Time.current
 
-      user.update!(buddy_sleep_until: until_time)
-      Buddy::ExpressionState.set(user, :sleeping)
-      broadcast_sleep(user)
+      buddy_conversations(user).find_each do |convo|
+        # Don't clobber a stashed prior face if we're just extending sleep.
+        unless convo.buddy_expression == "sleeping"
+          convo.update_column(:metadata, convo.metadata.merge("pre_sleep_expression" => convo.buddy_expression))
+        end
+        convo.update_column(:buddy_sleep_until, until_time)
+        Buddy::ExpressionState.set(convo, :sleeping)
+      end
+      broadcast_sleep(user, until_time)
       BuddyWakeWorker.perform_at(until_time, user.id)
     end
 
     def sleeping?(user)
-      user.buddy_sleep_until.present? && user.buddy_sleep_until > Time.current
+      buddy_conversations(user).where("buddy_sleep_until > ?", Time.current).exists?
     end
 
-    # Clear the sleep state, drop the face back to neutral, and tell the
-    # client to lower the sleeping chip. Idempotent — safe to call when the
-    # user is already awake. Draining the held queue is the caller's job
-    # (BuddyWakeWorker) so it never blocks a request thread.
+    # Clear the sleep state across every thread, restore each one's pre-sleep
+    # face, and tell the client to lower the sleeping chip. Idempotent — safe to
+    # call when the user is already awake. Draining the held queue is the
+    # caller's job (BuddyWakeWorker) so it never blocks a request thread.
     def wake!(user)
-      was_asleep = user.buddy_sleep_until.present?
-      user.update!(buddy_sleep_until: nil) if was_asleep
-      Buddy::ExpressionState.set(user, :neutral) if was_asleep
+      buddy_conversations(user).where.not(buddy_sleep_until: nil).find_each do |convo|
+        prior = convo.metadata["pre_sleep_expression"].presence || "neutral"
+        convo.update_column(:buddy_sleep_until, nil)
+        convo.update_column(:metadata, convo.metadata.except("pre_sleep_expression"))
+        Buddy::ExpressionState.set(convo, prior)
+      end
       broadcast_wake(user)
     end
 
@@ -66,8 +86,10 @@ module Buddy
     # the wake worker (clears state + drains the queue) without blocking the
     # request on Mac delivery.
     def maybe_wake!(user)
-      return unless user.buddy_sleep_until.present?
-      return if user.buddy_sleep_until > Time.current
+      return unless buddy_conversations(user)
+        .where.not(buddy_sleep_until: nil)
+        .where("buddy_sleep_until <= ?", Time.current)
+        .exists?
 
       BuddyWakeWorker.perform_async(user.id)
     end
@@ -81,13 +103,13 @@ module Buddy
         .chronological
     end
 
-    def broadcast_sleep(user)
+    def broadcast_sleep(user, until_time)
       MonitorChannel.broadcast_to(user, {
         id:      :byte,
         channel: :byte,
         data:    {
           kind:        :buddy_sleep,
-          sleep_until: user.buddy_sleep_until&.iso8601,
+          sleep_until: until_time&.iso8601,
           wake_string: wake_string(user),
         },
       })
@@ -105,18 +127,20 @@ module Buddy
       Rails.logger.warn("[Buddy] wake broadcast failed: #{e.class}: #{e.message}")
     end
 
-    # Friendly wake-time string for the sleeping reply.
+    # Friendly wake-time string for the sleeping reply. Sleep is set across all
+    # threads at once, so the latest window is the wake time.
     def wake_string(user)
-      return "later" if user.buddy_sleep_until.nil?
+      until_time = buddy_conversations(user).maximum(:buddy_sleep_until)
+      return "later" if until_time.nil?
 
-      user.buddy_sleep_until
+      until_time
         .in_time_zone(user.timezone)
         .strftime("%-I:%M %p")
     end
 
     # Buddy's in-character reply while asleep. Personalized to the theme.
     def sleeping_reply_body(user)
-      name = user.buddy_theme.to_s == "moss" ? "Moss" : "Byte"
+      name = ByteConversation.default_theme_for(user) == "moss" ? "Moss" : "Byte"
       "💤 #{name} is sleeping right now. They'll be back up at #{wake_string(user)}."
     end
   end

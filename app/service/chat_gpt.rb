@@ -10,6 +10,7 @@ module ChatGPT
   end
 
   def ask(str)
+    raise "DO NOT CALL!"
     @last_ask = str
     response = client.chat(
       parameters: {
@@ -22,6 +23,7 @@ module ChatGPT
   end
 
   def generate_image(prompt)
+    raise "DO NOT CALL!"
     puts " > Generating icon for '#{item}'..."
     begin
       resp = client.images.generate(

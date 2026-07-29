@@ -4,7 +4,9 @@ require "rails_helper"
 # (state :queued), cancellable, and drained in order when Buddy wakes.
 RSpec.describe "Buddy sleep queue", type: :model do
   let(:user) { User.me }
-  let(:conversation) { user.byte_conversations.create!(name: :Buddy, mode: :buddy) }
+  # Eager: SleepGuard fans out only across buddy conversations that already
+  # exist, so the thread must be present before sleep_until! runs.
+  let!(:conversation) { user.byte_conversations.create!(name: :Buddy, mode: :buddy) }
 
   def http_ok
     Net::HTTPOK.new("1.1", "200", "OK")
@@ -37,14 +39,14 @@ RSpec.describe "Buddy sleep queue", type: :model do
       second = conversation.byte_messages.create!(user: user, direction: :outbound, body: "two", state: :queued)
 
       # Force the wake window into the past, then run the worker.
-      user.update_column(:buddy_sleep_until, 1.minute.ago)
+      conversation.update_column(:buddy_sleep_until, 1.minute.ago)
       delivered = []
       allow(ByteLocal).to receive(:deliver) { |m, **| delivered << m.body; http_ok }
       allow(Buddy::Compactor).to receive(:should_compact?).and_return(false)
 
       BuddyWakeWorker.new.perform(user.id)
 
-      expect(user.reload.buddy_sleep_until).to be_nil
+      expect(conversation.reload.buddy_sleep_until).to be_nil
       expect(delivered).to eq(%w[one two])
       expect(first.reload).to be_sent
       expect(second.reload).to be_sent
@@ -61,13 +63,13 @@ RSpec.describe "Buddy sleep queue", type: :model do
 
   describe "maybe_wake!" do
     it "kicks the wake worker once the window has passed" do
-      user.update_column(:buddy_sleep_until, 1.minute.ago)
+      conversation.update_column(:buddy_sleep_until, 1.minute.ago)
       expect(BuddyWakeWorker).to receive(:perform_async).with(user.id)
       Buddy::SleepGuard.maybe_wake!(user)
     end
 
     it "leaves a still-asleep user alone" do
-      user.update_column(:buddy_sleep_until, 1.hour.from_now)
+      conversation.update_column(:buddy_sleep_until, 1.hour.from_now)
       expect(BuddyWakeWorker).not_to receive(:perform_async)
       Buddy::SleepGuard.maybe_wake!(user)
     end

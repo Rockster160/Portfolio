@@ -20,8 +20,8 @@ module Buddy
       File.join(MAC_DIR, "#{user.id}.json")
     end
 
-    def build_for(user, context = nil)
-      context ||= Buddy::Context.build(user)
+    def build_for(user, conversation, context = nil)
+      context ||= Buddy::Context.build(user, conversation)
       {
         written_at: Time.current.iso8601(6),
         user_id:    user.id,

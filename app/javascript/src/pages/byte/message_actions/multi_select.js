@@ -84,6 +84,11 @@ export function renderMultiSelect(container, message) {
   const buttons = Array.isArray(meta.buttons) ? meta.buttons : [];
   if (buttons.length === 0) return false;
 
+  // "manage" = a live management list (the reminders list): each row is an
+  // existing thing with a trailing × to remove it (not a checkbox to run a
+  // proposed action). Separate layout so the two never blur together.
+  if (meta.select_mode === "manage") return renderManageList(container, message);
+
   const requestId = meta.action_request_id;
   // "confirm" = pick-any with a Send button (a relayed select-all question);
   // otherwise each check fires immediately (Buddy proposals, pick-one).
@@ -298,6 +303,93 @@ async function undoRow(container, requestId, cb) {
     cb.disabled = false;
     if (row) row.dataset.status = "executed";
     console.warn("[byte] proposal undo failed", e);
+  }
+}
+
+// Management-list layout (the reminders list). Each row shows a glyph + label
+// + when, with a trailing × to remove it. A removed row strikes through and
+// swaps the × for an Undo. Removal/restore POST to the SAME respond endpoint
+// with { cancel: id } / { undo: id }; the server re-broadcasts the list, which
+// re-renders this whole block, so success needs no local DOM patching.
+function renderManageList(container, message) {
+  const meta = message?.metadata || {};
+  const buttons = Array.isArray(meta.buttons) ? meta.buttons : [];
+  const requestId = meta.action_request_id;
+
+  container.innerHTML = "";
+  container.classList.add("byte-msg-manage-list");
+
+  buttons.forEach((btn) => {
+    const status = btn.status || "active";
+    const cancelled = status === "cancelled";
+    const working = status === "working";
+
+    const row = document.createElement("div");
+    row.className = "byte-msg-manage-row";
+    row.dataset.status = status;
+    row.dataset.buttonId = btn.id;
+
+    if (btn.glyph) {
+      const g = document.createElement("span");
+      g.className = "byte-msg-manage-glyph";
+      g.textContent = btn.glyph;
+      row.appendChild(g);
+    }
+
+    const body = document.createElement("span");
+    body.className = "byte-msg-manage-body";
+    const label = document.createElement("span");
+    label.className = "byte-msg-manage-label";
+    label.textContent = btn.label || `#${btn.id}`;
+    body.appendChild(label);
+    if (btn.sublabel) {
+      const sub = document.createElement("span");
+      sub.className = "byte-msg-manage-sublabel";
+      sub.textContent = btn.sublabel;
+      body.appendChild(sub);
+    }
+    row.appendChild(body);
+
+    const ctrl = document.createElement("button");
+    ctrl.type = "button";
+    ctrl.className = "byte-msg-manage-ctrl";
+    ctrl.disabled = working;
+    if (cancelled) {
+      ctrl.classList.add("is-undo");
+      ctrl.textContent = "Undo";
+      ctrl.setAttribute("aria-label", `Restore ${btn.label || "reminder"}`);
+      ctrl.addEventListener("click", () => manageAction(container, requestId, btn.id, "undo", ctrl));
+    } else {
+      ctrl.classList.add("is-remove");
+      ctrl.textContent = "×";
+      ctrl.setAttribute("aria-label", `Remove ${btn.label || "reminder"}`);
+      ctrl.addEventListener("click", () => manageAction(container, requestId, btn.id, "cancel", ctrl));
+    }
+    row.appendChild(ctrl);
+
+    container.appendChild(row);
+  });
+
+  return true;
+}
+
+// Remove (cancel) or restore (undo) one management-list row. Optimistically
+// marks the row "working"; the server broadcast re-renders the settled list.
+// On failure, roll the row back to its prior state so the control is live again.
+async function manageAction(container, requestId, id, kind, ctrl) {
+  const row = ctrl.closest(".byte-msg-manage-row");
+  const prevStatus = row ? row.dataset.status : null;
+  ctrl.disabled = true;
+  if (row) row.dataset.status = "working";
+  try {
+    await apiCall(`/byte/actions/${encodeURIComponent(requestId)}/respond`, "POST", {
+      [kind]: Number(id),
+    });
+    // Broadcast re-renders the list; nothing to touch here.
+  } catch (e) {
+    ctrl.disabled = false;
+    if (row && prevStatus) row.dataset.status = prevStatus;
+    console.warn("[byte] reminder manage failed", e);
   }
 }
 

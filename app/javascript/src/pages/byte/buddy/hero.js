@@ -69,6 +69,11 @@ export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
     if (hero.dataset.buddyExpression === "thinking") paint(restingExpression);
   };
 
+  // Force the face back to the remembered mood, whatever it's currently
+  // showing. Used to end a transient takeover (e.g. the timer-alarm face loop)
+  // that left a non-"thinking" face on screen, which clearThinking won't undo.
+  const restExpression = () => paint(restingExpression);
+
   const openMood  = () => { if (moodPopover) moodPopover.hidden = false; };
   const closeMood = () => { if (moodPopover) moodPopover.hidden = true;  };
 
@@ -264,7 +269,9 @@ export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
   return {
     setActive,
     setExpression,
+    setTheme,
     clearThinking,
+    restExpression,
     // Drive the face off Buddy's ACTUAL reply as its text starts streaming:
     // drop "thinking", and if the reply opens with a [[mood:]], wear that face.
     // Deliberately ignores everything that ISN'T the reply bubble streaming

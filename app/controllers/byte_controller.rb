@@ -221,6 +221,10 @@ class ByteController < ApplicationController
     # answer; record it and hand it back to the asker's companion.
     return respond_buddy_relay(action) if action.tool_name == "buddy_relay_answer"
 
+    # The reminders management list: tapping × cancels a row's reminder/watch,
+    # Undo restores it. Not a decision-recording flow — its own tiny path.
+    return respond_buddy_reminders(action) if action.tool_name == Buddy::ReminderList::TOOL_NAME
+
     return head(:conflict) unless action.pending?
 
     value = params[:value]
@@ -305,6 +309,19 @@ class ByteController < ApplicationController
     Buddy::ProposalExecutorJob.perform_later(action.id, ids) if ids.any?
 
     render json: action.as_wire
+  end
+
+  # A tap on the reminders management list. `cancel` takes a row off (cancels
+  # its reminder/watch), `undo` restores one. Row lookups + record edits happen
+  # in Buddy::ReminderList, which re-broadcasts the updated list.
+  def respond_buddy_reminders(action)
+    if params[:undo].present?
+      Buddy::ReminderList.restore!(action, params[:undo].to_i)
+    elsif params[:cancel].present?
+      Buddy::ReminderList.cancel!(action, params[:cancel].to_i)
+    end
+
+    render json: action.reload.as_wire
   end
 
   # The recipient tapped an answer on a relayed cross-user question. Map the
@@ -536,7 +553,7 @@ class ByteController < ApplicationController
     # Flip the pet to `thinking` the moment a message is sent so there's
     # always visible life on a normal turn (quick-action chips already do
     # this). The reply resolves it back to a mood / neutral on arrival.
-    ::Buddy::ExpressionState.transition!(current_user, :turn_started) if conversation.buddy?
+    ::Buddy::ExpressionState.transition!(conversation, :turn_started) if conversation.buddy?
 
     # Hand the Mac round-trip to Sidekiq. It used to run inline in a bare
     # Thread.new wrapped in executor.wrap, which held one of the web-sized

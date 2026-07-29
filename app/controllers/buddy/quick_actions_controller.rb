@@ -57,7 +57,7 @@ module Buddy
       end
 
       log_mood_event(mood)
-      update_expression_for_mood(mood)
+      update_expression_for_mood(conversation, mood)
 
       body = <<~PROMPT.strip
         I just checked in with you. Where I'm at right now: #{mood_vibe(mood)}
@@ -166,7 +166,7 @@ module Buddy
       Rails.logger.warn("[Buddy::QuickActions] mood event failed: #{e.class}: #{e.message}")
     end
 
-    def update_expression_for_mood(mood)
+    def update_expression_for_mood(conversation, mood)
       # Use only faces both themes render (Byte and Moss differ; celebrating/
       # focused exist on neither now). Check-in reflects the person's mood
       # back through Buddy's face.
@@ -175,7 +175,7 @@ module Buddy
       when "good", "okay" then :happy
       when "low", "rough" then :sad
       end
-      ::Buddy::ExpressionState.set(current_user, expression) if expression
+      ::Buddy::ExpressionState.set(conversation, expression) if expression
     end
 
     # Renamed from `dispatch` - that name collides with the private
@@ -235,7 +235,7 @@ module Buddy
       # Flip the pet to thinking immediately - the outbound trigger bubble
       # is hidden, so without this the user sees zero feedback until the
       # Mac roundtrip completes several seconds later.
-      ::Buddy::ExpressionState.transition!(current_user, :turn_started)
+      ::Buddy::ExpressionState.transition!(conversation, :turn_started)
 
       # Reuse the normal outbound broadcast + dispatch path from ByteController.
       # The PWA subscriber will hide the outbound bubble on receipt because

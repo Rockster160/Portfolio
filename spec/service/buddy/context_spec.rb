@@ -17,6 +17,7 @@ RSpec.describe Buddy::Context do
     }
   }
   let(:user) { owner.reload }
+  let(:conversation) { user.byte_conversations.create!(mode: :buddy) }
   let(:today) { user.perceived_today }
 
   # Two chores: one still-pending, one done today. Both dailies so
@@ -39,7 +40,7 @@ RSpec.describe Buddy::Context do
 
   describe ".build (populated fixtures - end to end)" do
     it "returns pending and done chores split into their own buckets" do
-      ctx = described_class.build(user)
+      ctx = described_class.build(user, conversation)
 
       pending_names = ctx[:chores_pending_today].map { |c| c[:name] }
       done_names    = ctx[:chores_done_today].map { |c| c[:name] }
@@ -51,7 +52,7 @@ RSpec.describe Buddy::Context do
     end
 
     it "populates the identity + time fields" do
-      ctx = described_class.build(user)
+      ctx = described_class.build(user, conversation)
 
       expect(ctx[:user_first_name]).to be_present
       expect(ctx[:timezone]).to eq("America/Denver")
@@ -67,7 +68,7 @@ RSpec.describe Buddy::Context do
     it "never invokes Buddy::Errors.report during a healthy build" do
       allow(Buddy::Errors).to receive(:report).and_call_original
 
-      described_class.build(user)
+      described_class.build(user, conversation)
 
       expect(Buddy::Errors).not_to have_received(:report)
     end

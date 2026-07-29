@@ -79,14 +79,14 @@ module ByteLocal
     # still lands on Mac, just without the extras.
     if conversation&.buddy?
       begin
-        context = Buddy::Context.build(message.user)
+        context = Buddy::Context.build(message.user, conversation)
         # Snapshot context so Buddy can Read it on demand instead of
         # eating 5-8 KB of every turn's system prompt. Rails runs on
         # prod Linux; Buddy runs on the Mac. We ship the payload inline
         # in the /byte/incoming envelope and Mac's Handler writes it
         # to Mac-local disk before invoking Buddy. The path we advertise
         # in the system prompt is the Mac-local path.
-        snapshot_payload = Buddy::ContextSnapshot.build_for(message.user, context)
+        snapshot_payload = Buddy::ContextSnapshot.build_for(message.user, conversation, context)
         snapshot_path    = Buddy::ContextSnapshot.mac_path_for(message.user)
         payload[:buddy_context_snapshot] = snapshot_payload
         payload[:buddy_context_path]     = snapshot_path
@@ -107,6 +107,7 @@ module ByteLocal
         recap = conversation.metadata.is_a?(Hash) ? conversation.metadata["buddy_recap"] : nil
         payload[:buddy_system_prompt_extras] = Buddy::Personality.for(
           message.user,
+          conversation: conversation,
           context_path: snapshot_path,
           at_glance:    at_glance,
           recap:        recap,

@@ -10,7 +10,7 @@ module Buddy
     # still lands in the window.
     UPCOMING_WEEK_WINDOW = 8.days
 
-    def build(user)
+    def build(user, conversation)
       tz = user.timezone
       now = Time.current.in_time_zone(tz)
       today = user.perceived_today
@@ -21,7 +21,7 @@ module Buddy
         now_local:              now.strftime("%a %Y-%m-%d %-I:%M %p %Z"),
         timezone:               tz,
         user_first_name:        user.first_name,
-        emotional_state:        emotional_state(user, now),          # current mood + pet expression
+        emotional_state:        emotional_state(conversation, now),  # current mood + pet expression
         today_agenda:           today_agenda(user, now),
         upcoming_agenda:        upcoming_agenda(user, now),          # rest-of-week, unusual-first
         # Two explicit lists per bucket - PENDING and DONE_TODAY - so
@@ -35,9 +35,10 @@ module Buddy
         chores_overdue_backlog: chore_buckets[:overdue_backlog], # long-term todo, NOT all-must-do-today
         chores_all:             chore_buckets[:all_names],       # EVERY active chore name - the match roster for complete_chore
         recent_events:          recent_events(user, now),
-        active_proposals:       active_proposals(user),
-        upcoming_reminders:     upcoming_reminders(user, now),
-        active_watches:         active_watches(user),
+        active_proposals:       active_proposals(conversation),
+        upcoming_reminders:     upcoming_reminders(conversation, now),
+        active_watches:         active_watches(conversation),
+        conversation_notes:     conversation.buddy_memories,         # this thread's own notes ("keep this strictly work")
         pending_relays:         pending_relays(user),                # open questions from a partner, awaiting THIS user's answer
         pending_prompts:        pending_prompts(user),               # app surveys/questions Buddy can answer or skip on demand
         stashed_ideas:          stashed_ideas(user),                 # brain-dump ideas to occasionally resurface
@@ -316,11 +317,12 @@ module Buddy
       end
 
       # Emotional state block. `pet_expression` is the tracked mood —
-      # the LLM controls it via `[[mood: X]]` markers, it persists on
-      # users.buddy_expression, it ships back in every context turn.
-      # `last_check_in` is optional richer detail from an explicit
-      # Check-in button tap if one exists in recent history.
-      def emotional_state(user, now)
+      # the LLM controls it via `[[mood: X]]` markers, it persists per
+      # conversation on byte_conversations.buddy_expression, it ships back in
+      # every context turn. `last_check_in` is optional richer detail from an
+      # explicit Check-in button tap if one exists in recent history.
+      def emotional_state(conversation, now)
+        user = conversation.user
         latest_check_in = user.action_events
           .where(name: "check_in")
           .order(timestamp: :desc)
@@ -340,7 +342,7 @@ module Buddy
         end
 
         {
-          pet_expression: user.buddy_expression,
+          pet_expression: conversation.buddy_expression,
           last_check_in:  check_in_summary,
         }
       end
@@ -454,22 +456,24 @@ module Buddy
         "much earlier today"
       end
 
-      # Pending BuddyReminders scheduled in the next 48 hours. Lets Buddy
-      # notice existing reminders when the user asks something related,
-      # and see recently-scheduled ones to avoid double-booking.
-      def upcoming_reminders(user, now)
+      # Pending BuddyReminders scheduled in the next 48 hours, scoped to THIS
+      # conversation. Lets Buddy notice existing reminders when the user asks
+      # something related, and see recently-scheduled ones to avoid
+      # double-booking.
+      def upcoming_reminders(conversation, now)
         return [] unless defined?(BuddyReminder)
 
-        BuddyReminder.upcoming(now, 48).where(user_id: user.id).limit(15).map { |r|
+        tz = conversation.user.timezone
+        BuddyReminder.upcoming(now, 48).where(byte_conversation_id: conversation.id).limit(15).map { |r|
           {
             id:      r.id,
-            fire_at: r.fire_at.in_time_zone(user.timezone).strftime("%a %-I:%M %p"),
+            fire_at: r.fire_at.in_time_zone(tz).strftime("%a %-I:%M %p"),
             kind:    r.kind,
             body:    r.body.to_s.first(120),
           }
         }
       rescue StandardError => e
-        Buddy::Errors.report(section: "context.upcoming_reminders", exception: e, user: user)
+        Buddy::Errors.report(section: "context.upcoming_reminders", exception: e, user: conversation.user)
         []
       end
 
@@ -477,10 +481,10 @@ module Buddy
       # signal - "remind me next time I'm at Costco", "when I brush my
       # teeth". Lets Buddy see what it's already watching so it doesn't
       # set a duplicate, and can reference/cancel them by id.
-      def active_watches(user)
+      def active_watches(conversation)
         return [] unless defined?(BuddyWatch)
 
-        BuddyWatch.active.where(user_id: user.id).order(:created_at).limit(15).map { |w|
+        BuddyWatch.active.where(byte_conversation_id: conversation.id).order(:created_at).limit(15).map { |w|
           {
             id:   w.id,
             when: (w.metadata.is_a?(Hash) ? w.metadata["human_when"].to_s.presence : nil) || w.trigger_scope,
@@ -488,7 +492,7 @@ module Buddy
           }
         }
       rescue StandardError => e
-        Buddy::Errors.report(section: "context.active_watches", exception: e, user: user)
+        Buddy::Errors.report(section: "context.active_watches", exception: e, user: conversation.user)
         []
       end
 
@@ -560,9 +564,9 @@ module Buddy
         []
       end
 
-      def active_proposals(user)
+      def active_proposals(conversation)
         ByteAction.active
-          .where(user_id: user.id, tool_name: "buddy_proposals")
+          .where(byte_conversation_id: conversation.id, tool_name: "buddy_proposals")
           .limit(5)
           .flat_map { |a|
             Array(a.buttons).map { |b|
@@ -574,7 +578,7 @@ module Buddy
             }
           }
       rescue StandardError => e
-        Buddy::Errors.report(section: "context.active_proposals", exception: e, user: user)
+        Buddy::Errors.report(section: "context.active_proposals", exception: e, user: conversation.user)
         []
       end
 

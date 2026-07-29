@@ -5,6 +5,7 @@ require "rails_helper"
 # Buddy never saw the agenda at all.
 RSpec.describe Buddy::Context, ".build agenda" do
   let(:user)   { create(:user) }
+  let(:conversation) { user.byte_conversations.create!(mode: :buddy) }
   let(:agenda) { create(:agenda, user: user) }
   let(:schedule) { create(:agenda_schedule, agenda: agenda) }
 
@@ -16,7 +17,7 @@ RSpec.describe Buddy::Context, ".build agenda" do
     item(name: "Vet appt",  start_at: Time.current + 3.hours)                            # one-off
     item(name: "Standup",   start_at: Time.current + 2.hours, agenda_schedule: schedule) # daily routine
 
-    today = described_class.build(user)[:today_agenda]
+    today = described_class.build(user, conversation)[:today_agenda]
 
     expect(today.map { |i| i[:title] }).to include("Vet appt", "Standup")
     # one-off → no cadence key (glossing is only for the daily repeats)
@@ -28,14 +29,14 @@ RSpec.describe Buddy::Context, ".build agenda" do
     monthly = create(:agenda_schedule, agenda: agenda, recurrence: { "freq" => "monthly" })
     item(name: "1:1 with Eric", start_at: Time.current + 2.hours, agenda_schedule: monthly)
 
-    today = described_class.build(user)[:today_agenda]
+    today = described_class.build(user, conversation)[:today_agenda]
     expect(today.find { |i| i[:title] == "1:1 with Eric" }[:cadence]).to eq("monthly")
   end
 
   it "includes known drive time for a soon item" do
     item(name: "Offsite", start_at: Time.current + 3.hours, metadata: { "travel" => { "travel_minutes" => 25 } })
 
-    today = described_class.build(user)[:today_agenda]
+    today = described_class.build(user, conversation)[:today_agenda]
     expect(today.find { |i| i[:title] == "Offsite" }[:drive_min]).to eq(25)
   end
 
@@ -43,7 +44,7 @@ RSpec.describe Buddy::Context, ".build agenda" do
     item(name: "Dentist",  start_at: Time.current + 3.days)                              # one-off, upcoming
     item(name: "Today thing", start_at: Time.current)                                    # right now → today, NOT in upcoming
 
-    upcoming = described_class.build(user)[:upcoming_agenda]
+    upcoming = described_class.build(user, conversation)[:upcoming_agenda]
     titles = upcoming.map { |i| i[:title] }
 
     expect(titles).to include("Dentist")
@@ -59,7 +60,7 @@ RSpec.describe Buddy::Context, ".build agenda" do
     tomorrow_midnight = Time.current.in_time_zone(tz).beginning_of_day + 1.day
     item(name: "Andrew's Bday", all_day: true, start_at: tomorrow_midnight, end_at: tomorrow_midnight + 1.day)
 
-    built = described_class.build(user)
+    built = described_class.build(user, conversation)
     expect(built[:today_agenda].map { |i| i[:title] }).not_to include("Andrew's Bday")
 
     tomorrow = built[:upcoming_agenda].find { |i| i[:title] == "Andrew's Bday" }
@@ -79,7 +80,7 @@ RSpec.describe Buddy::Context, ".build agenda" do
     # The user's own event on their own calendar → theirs.
     item(name: "My Standup", start_at: Time.current + 1.hour)
 
-    today = described_class.build(user)[:today_agenda]
+    today = described_class.build(user, conversation)[:today_agenda]
     hers_row = today.find { |i| i[:title] == "Partner Ortho" }
     mine_row = today.find { |i| i[:title] == "My Standup" }
 
@@ -92,7 +93,7 @@ RSpec.describe Buddy::Context, ".build agenda" do
     item(name: "No standup", start_at: Time.current + 1.day, agenda_schedule: schedule, status: :cancelled)
     item(name: "Dropped",    start_at: Time.current + 2.days, status: :cancelled)
 
-    upcoming = described_class.build(user)[:upcoming_agenda]
+    upcoming = described_class.build(user, conversation)[:upcoming_agenda]
     titles = upcoming.map { |i| i[:title] }
 
     expect(titles).to include("No standup")

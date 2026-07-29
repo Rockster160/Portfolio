@@ -94,7 +94,7 @@ module Buddy
           metadata:  { "kind" => "buddy_trigger", "hidden" => true, "source" => "stash_response" },
         )
         MonitorChannel.broadcast_to(user, { id: :byte, channel: :byte, data: { kind: :message, message: msg.as_wire } })
-        Buddy::ExpressionState.thinking!(user)
+        Buddy::ExpressionState.thinking!(conversation)
         BuddyDeliverWorker.perform_async(msg.id)
       end
 

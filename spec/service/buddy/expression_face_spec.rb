@@ -3,10 +3,17 @@ require "rails_helper"
 RSpec.describe Buddy::ExpressionState do
   before { allow(MonitorChannel).to receive(:broadcast_to) }
 
-  it "accepts only faces the user's theme actually has" do
-    byte = User.me
-    byte.update_column(:buddy_theme, "byte")
-    moss = create(:user, buddy_theme: "moss")
+  # Pet state (theme + expression) now lives on the buddy-mode conversation,
+  # not the user — so every case runs against a buddy conversation.
+  def buddy_convo(user, theme)
+    convo = user.byte_conversations.create!(mode: :buddy)
+    convo.update!(buddy_theme: theme)
+    convo
+  end
+
+  it "accepts only faces the conversation's theme actually has" do
+    byte = buddy_convo(User.me, "byte")
+    moss = buddy_convo(create(:user), "moss")
 
     described_class.set(byte, "nerd")            # Byte has nerd
     expect(byte.reload.buddy_expression).to eq("nerd")
@@ -22,38 +29,37 @@ RSpec.describe Buddy::ExpressionState do
   end
 
   it "shows 'thinking' as a transient overlay without persisting it as the mood" do
-    user = create(:user, buddy_theme: "byte")
-    user.update_column(:buddy_expression, "happy")
+    convo = buddy_convo(create(:user), "byte")
+    convo.update_column(:buddy_expression, "happy")
 
     # turn_started broadcasts a transient overlay but must NOT write the column
     # (the persistent mood stays put underneath the thinking face).
-    described_class.transition!(user, :turn_started)
-    expect(user.reload.buddy_expression).to eq("happy")
+    described_class.transition!(convo, :turn_started)
+    expect(convo.reload.buddy_expression).to eq("happy")
     expect(MonitorChannel).to have_received(:broadcast_to).with(
-      user, hash_including(data: hash_including(expression: "thinking", transient: true))
+      convo.user, hash_including(data: hash_including(expression: "thinking", transient: true))
     )
   end
 
   it "keeps the mood put on settle — no drifting back to a default" do
-    user = create(:user, buddy_theme: "byte")
-    user.update_column(:buddy_expression, "nerd")
+    convo = buddy_convo(create(:user), "byte")
+    convo.update_column(:buddy_expression, "nerd")
 
     # Every non-turn-start event just settles: re-broadcasts the STORED mood
     # (clearing any thinking overlay) without changing it. This is the fix for
     # "the face changed for a second then reverted".
     %i[turn_ended_clean proposals_awaiting proposals_executed proposals_cancelled tool_failed idle_long].each do |event|
-      described_class.transition!(user, event)
-      expect(user.reload.buddy_expression).to eq("nerd"), "#{event} moved the mood"
+      described_class.transition!(convo, event)
+      expect(convo.reload.buddy_expression).to eq("nerd"), "#{event} moved the mood"
     end
   end
 
   it "refuses a delivered [[mood: thinking]] — thinking is not a selectable face" do
-    user = User.me
-    user.update_column(:buddy_theme, "byte")
-    user.update_column(:buddy_expression, "happy")
+    convo = buddy_convo(User.me, "byte")
+    convo.update_column(:buddy_expression, "happy")
 
-    Buddy::SideEffects.apply_mood(user, "thinking")
+    Buddy::SideEffects.apply_mood(convo, "thinking")
 
-    expect(user.reload.buddy_expression).to eq("happy")   # unchanged — rejected
+    expect(convo.reload.buddy_expression).to eq("happy")   # unchanged — rejected
   end
 end

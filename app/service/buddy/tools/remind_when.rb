@@ -149,7 +149,7 @@ Buddy::Tools.register(
   # runs WITHOUT a confirmation checkbox and drops an activity receipt.
   auto:    true,
   receipt: ->(result, ctx) {
-    name = ctx.user.buddy_theme.to_s == "moss" ? "Moss" : "Byte"
+    name = ctx.buddy_name
     if result[:unknown_place]
       where = result[:place_name].to_s.strip
       "Not sure where #{where.presence || "that"} is - what's the address, or is it on your calendar?"

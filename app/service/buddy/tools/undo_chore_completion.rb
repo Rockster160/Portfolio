@@ -24,9 +24,10 @@ Buddy::Tools.register(
     when_str = completion.completed_at.in_time_zone(ctx.user.timezone).strftime("%a %b %-d, %-I:%M %p")
     { title: "Undo #{completion.chore.name}", sub: when_str }
   },
-  execute:     ->(payload, _ctx) {
+  execute:     ->(payload, ctx) {
     completion = ChoreCompletion.find(payload[:completion_id])
-    completion.destroy!
+    # Shared undo path: destroy + rebuild streak + broadcast to the Chores app.
+    ChoreCompletionUndoer.call(ctx.user, completion)
     { chore_id: payload[:chore_id] }
   },
   receipt:     ->(result, _ctx) {

@@ -58,7 +58,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
     return false if event.nil?
     return true if query.to_s.blank?
 
-    @jil.user.action_events.query(query.to_s).where(id: event.id).exists?
+    @jil.user.action_events.query(query.to_s).exists?(id: event.id)
   end
 
   def update!(event_data, details)
@@ -100,22 +100,7 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
 
   def destroy(event_data)
     event = load_event(event_data)
-    event.destroy.tap { |bool|
-      if bool
-        event_callbacks(event, :removed) { |removed_event|
-          # Reset following event streak info
-          matching_events = ActionEvent
-            .where(user_id: removed_event.user_id)
-            .ilike(name: removed_event.name)
-            .where.not(id: removed_event.id)
-          following = matching_events.where(
-            "timestamp > ?",
-            removed_event.timestamp,
-          ).order(:timestamp).first
-          UpdateActionStreak.perform_async(following.id) if following.present?
-        }
-      end
-    }
+    event.destroy.tap { |bool| event_callbacks(event, :removed) if bool }
   end
 
   def name(text)
@@ -138,15 +123,14 @@ class Jil::Methods::ActionEvent < Jil::Methods::Base
 
   private
 
-  def event_callbacks(event, action, update_streak=true, &callback)
-    attrs = { action: action }
-    attrs[:changes] = event.saved_changes if action == :changed && event.saved_changes.present?
-    ::Jil.trigger(
-      @jil.user, :event, event.with_jil_attrs(attrs),
-      auth: :trigger, auth_id: @jil.task&.id
+  # Fire the `:event` trigger + live broadcast (and, on removal, re-anchor the
+  # following event's streak). Lives in ActionEventNotifier so Buddy's event
+  # tools do the exact same thing — see that class.
+  def event_callbacks(event, action, update_streak=true)
+    ActionEventNotifier.notify(
+      @jil.user, event, action,
+      update_streak: update_streak, auth: :trigger, auth_id: @jil.task&.id
     )
-    callback&.call(event)
-    ActionEventBroadcastWorker.perform_async(event.id, update_streak)
   end
 
   def params(details)

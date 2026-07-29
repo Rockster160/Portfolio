@@ -100,7 +100,7 @@ RSpec.describe "remind_when tool" do
 
   it "surfaces active watches in Buddy::Context" do
     run(text: "floss", trigger: "chore", target: "Brush Teeth")
-    ctx = Buddy::Context.build(user)
+    ctx = Buddy::Context.build(user, convo)
     expect(ctx[:active_watches].map { |w| w[:body] }).to include("floss")
     expect(ctx[:active_watches].first[:when]).to include("Brush Teeth")
   end

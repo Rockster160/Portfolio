@@ -16,5 +16,10 @@ class TimerFireWorker
     end
 
     timer.fire_and_maybe_repeat!
+
+    # Let Buddy speak up when one of ITS timers fires (no-op for every other
+    # timer). Kept out of the model so the generic Timer stack stays Buddy-
+    # agnostic; on_fired guards + rescues internally.
+    Buddy::Timers.on_fired(timer)
   end
 end

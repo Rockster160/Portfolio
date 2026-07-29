@@ -92,7 +92,7 @@ Buddy::Tools.register(
   # confirmation checkbox and drops an activity receipt instead.
   auto:    true,
   receipt: ->(result, ctx) {
-    name    = ctx.user.buddy_theme.to_s == "moss" ? "Moss" : "Byte"
+    name    = ctx.buddy_name
     fire_at = (Time.zone.parse(result[:fire_at].to_s) rescue nil)
     rec     = result[:recurrence]
 

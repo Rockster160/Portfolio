@@ -2,10 +2,11 @@ module Buddy
   # Central point for the pet's expression. Two distinct concepts live here,
   # and keeping them separate is the whole point:
   #
-  #   * The MOOD — `users.buddy_expression`. A persistent face that stays put
-  #     until something DELIBERATELY changes it: a `[[mood: X]]` marker, an
-  #     explicit check-in, or sleep/wake. It does NOT drift back to a default
-  #     on its own. `set` is the only path that writes the column.
+  #   * The MOOD — `byte_conversations.buddy_expression`. A persistent face that
+  #     stays put until something DELIBERATELY changes it: a `[[mood: X]]`
+  #     marker, an explicit check-in, or sleep/wake. It does NOT drift back to a
+  #     default on its own. `set` is the only path that writes the column. Mood
+  #     is per-conversation — each Buddy thread rests on its own face.
   #
   #   * "thinking" — a TRANSIENT overlay shown while a turn is in flight. It is
   #     never written to the column (so it can't clobber the stored mood) and
@@ -16,36 +17,40 @@ module Buddy
   # Broadcasts carry `transient:` so the client knows which concept it's being
   # told about: `transient: true` → overlay only (don't touch stored mood);
   # `transient: false` → a real mood the client should remember and rest on.
+  # They also carry `conversation_id` so the client only paints the face when
+  # that thread is the one on screen.
   module ExpressionState
     module_function
 
     # Turn starting: show the "thinking" overlay without touching the mood.
-    def thinking!(user)
-      return if user.nil?
+    def thinking!(conversation)
+      return if conversation.nil?
 
-      broadcast(user, :thinking, transient: true)
+      broadcast(conversation, :thinking, transient: true)
     end
 
     # Turn ended (or any point we want the pet off "thinking"): re-assert the
     # stored mood so the client drops the overlay. The mood itself is unchanged
     # — this never picks a default, it just echoes what's already persisted.
-    def settle!(user)
-      return if user.nil?
+    def settle!(conversation)
+      return if conversation.nil?
 
-      broadcast(user, user.buddy_expression, transient: false)
+      broadcast(conversation, conversation.buddy_expression, transient: false)
     end
 
     # Persist + broadcast a real mood change. The ONLY writer of the column.
     # Used by `[[mood:]]` markers, check-ins, and sleep/wake.
-    def set(user, expression)
-      expression = expression.to_s
-      # Validate against the faces THIS user's theme actually renders — Byte
-      # and Moss have different sets, so a single hardcoded list would either
-      # reject valid faces or accept ones that render blank.
-      return unless Buddy::Faces.valid?(user.buddy_theme, expression)
+    def set(conversation, expression)
+      return if conversation.nil?
 
-      user.update_column(:buddy_expression, expression)
-      broadcast(user, expression, transient: false)
+      expression = expression.to_s
+      # Validate against the faces THIS conversation's theme actually renders —
+      # Byte and Moss have different sets, so a single hardcoded list would
+      # either reject valid faces or accept ones that render blank.
+      return unless Buddy::Faces.valid?(conversation.buddy_theme, expression)
+
+      conversation.update_column(:buddy_expression, expression)
+      broadcast(conversation, expression, transient: false)
     end
 
     # Back-compat shim for the old event-based callers. Turn start shows the
@@ -53,20 +58,25 @@ module Buddy
     # stored mood. No event forces a mood any more — the mood persists until
     # a marker / check-in / sleep explicitly moves it. (This is the fix for
     # "the face changed for a second then reverted": nothing reverts it now.)
-    def transition!(user, event, **_opts)
-      return if user.nil?
+    def transition!(conversation, event, **_opts)
+      return if conversation.nil?
 
-      event.to_sym == :turn_started ? thinking!(user) : settle!(user)
+      event.to_sym == :turn_started ? thinking!(conversation) : settle!(conversation)
     end
 
     class << self
       private
 
-      def broadcast(user, expression, transient:)
-        MonitorChannel.broadcast_to(user, {
+      def broadcast(conversation, expression, transient:)
+        MonitorChannel.broadcast_to(conversation.user, {
           id:      :byte,
           channel: :byte,
-          data:    { kind: :buddy_expression, expression: expression.to_s, transient: transient },
+          data:    {
+            kind:            :buddy_expression,
+            conversation_id: conversation.id,
+            expression:      expression.to_s,
+            transient:       transient,
+          },
         })
       rescue StandardError => e
         Rails.logger.warn("[Buddy] expression broadcast failed: #{e.class}: #{e.message}")

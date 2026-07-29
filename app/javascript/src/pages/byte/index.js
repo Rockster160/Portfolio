@@ -49,6 +49,8 @@ import { setupSlashAutocomplete } from "./slash_commands";
 import { renderMultiSelect } from "./message_actions/multi_select";
 import { initMessageContextMenu } from "./message_actions/context_menu";
 import { initBuddyHero } from "./buddy/hero";
+import { initBuddyTimers } from "./buddy/timers";
+import { toggleBuddyMuted, isBuddyMuted } from "./buddy/alarm";
 
 document.addEventListener("DOMContentLoaded", async () => {
   const app = document.querySelector(".byte-app");
@@ -347,7 +349,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // each paint clears the container and re-renders from message.metadata.
     if (
       message?.metadata?.tool_name === "buddy_proposals" ||
-      message?.metadata?.tool_name === "buddy_relay_answer"
+      message?.metadata?.tool_name === "buddy_relay_answer" ||
+      message?.metadata?.tool_name === "buddy_reminders_manage"
     ) {
       let checklistEl = node.querySelector("[data-buddy-checklist]");
       if (!checklistEl) {
@@ -895,7 +898,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const pending = [];
     for (const n of children) {
       const kind = n.dataset.activeKind;
-      if (kind === "streaming") streaming.push(n);
+      // A streaming node only floats to the bottom while it's actually LIVE
+      // (byte-msg-live, refreshed by fresh WS updates with a ~15s expiry). An
+      // orphaned placeholder — a "…" the Mac started streaming but never
+      // finalized because the turn errored — loses that class and must fall
+      // back to its chronological slot, not stay pinned below newer replies.
+      if (kind === "streaming" && n.classList.contains("byte-msg-live")) streaming.push(n);
       else if (kind === "pending") pending.push(n);
       else settled.push(n);
     }
@@ -1289,6 +1297,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Notify the Buddy hero so it shows/hides based on new mode.
     const convo = convoManager.currentConversation();
     buddyHero?.onModeChange(convo?.mode);
+    buddyTimers?.setActive();
+    // Mood + theme are per-conversation — repaint the pet for the thread we
+    // just switched to so it wears ITS face, not the previous thread's.
+    if (convo?.mode === "buddy") {
+      if (convo.buddy_theme) buddyHero?.setTheme(convo.buddy_theme);
+      const expr = convo.buddy_expression;
+      if (expr && expr !== "sleeping") {
+        buddyWakeExpr = expr; // rest/reconnect target for this thread
+        if (!sleepUntil) buddyHero?.setExpression(expr);
+      }
+    }
     updateSleepChip();
   }
 
@@ -1523,6 +1542,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Clear any brain-dump capture hint once the idea (or any message) is sent.
     if (originalPlaceholder != null) input.placeholder = originalPlaceholder;
     autosize();
+    armIdleFaceReset(); // sending is activity
     sendMessageTo(currentConversationId, body);
   }
 
@@ -1547,6 +1567,38 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Sync initial visibility to the currently-active conversation.
   buddyHero?.onModeChange(convoManager.currentConversation()?.mode);
 
+  // Buddy timer chips (top-left under the nav). Server-authoritative countdowns
+  // that ride the existing Timer stack; this just renders + reconciles them.
+  const buddyTimers = initBuddyTimers({
+    container: app.querySelector("[data-buddy-timers]"),
+    hero: buddyHero,
+    isBuddyActiveFn: () => convoManager.currentConversation()?.mode === "buddy",
+  });
+
+  // Timer broadcasts carry `id: :timers`, and the Monitor dispatcher routes
+  // envelopes by their id — so they arrive on a DEDICATED subscription, not the
+  // byte one above. Mirrors how the Timers app subscribes. Hydrate on (re)connect
+  // so a timer set while we were away shows up.
+  Monitor.subscribe("timers", {
+    connected() { buddyTimers?.hydrate(); },
+    received(payload) { buddyTimers?.applyBroadcast(payload); },
+  });
+
+  // Header sound toggle (Buddy's own mute, matching Whisper's control). Paints
+  // the button state and silences a ringing alarm on mute.
+  const muteBtn = app.querySelector("[data-byte-mute]");
+  const paintMute = () => {
+    muteBtn?.classList.toggle("muted", isBuddyMuted());
+    if (muteBtn) {
+      muteBtn.title = isBuddyMuted() ? "Sound off — tap to enable" : "Sound on — tap to mute";
+    }
+  };
+  muteBtn?.addEventListener("click", () => {
+    toggleBuddyMuted();
+    paintMute();
+  });
+  paintMute();
+
   // Buddy naps while the realtime channel is down. The hero renders
   // `sleeping` by default (server-side), so a broken/absent JS bundle
   // leaves Byte honestly asleep instead of fake-awake. Once the Monitor
@@ -1554,8 +1606,39 @@ document.addEventListener("DOMContentLoaded", async () => {
   // to sleep. `buddyWakeExpr` tracks the latest real (non-connection)
   // expression so a reconnect restores the right face.
   let buddyWakeExpr = heroEl?.dataset.buddyAwakeExpression || "happy";
-  const buddyWake = () => buddyHero?.setExpression(buddyWakeExpr);
+
+  // Idle face reset: after 10 minutes of no activity, let Buddy's face settle
+  // back to its neutral resting default (a mood shouldn't linger forever with
+  // nothing happening). Re-armed on every message, expression change, or
+  // interaction; firing also updates buddyWakeExpr so a reconnect doesn't
+  // restore the stale mood.
+  const IDLE_FACE_MS = 10 * 60 * 1000;
+  let idleFaceTimer = 0;
+  const armIdleFaceReset = () => {
+    if (idleFaceTimer) clearTimeout(idleFaceTimer);
+    idleFaceTimer = window.setTimeout(() => {
+      buddyWakeExpr = "neutral";
+      buddyHero?.setExpression("neutral");
+    }, IDLE_FACE_MS);
+  };
+
+  const buddyWake = () => {
+    // Don't wake the face while Buddy is still usage-capped — a channel
+    // reconnect shouldn't flip the pet from sleeping back to its mood when
+    // it's actually still asleep. (usageCapped is defined below; resolved at
+    // call time.)
+    if (usageCapped()) {
+      buddySleep();
+      return;
+    }
+    buddyHero?.setExpression(buddyWakeExpr);
+    armIdleFaceReset();
+  };
+  // Sleeping repaints the pet, which also drops any transient "thinking"
+  // overlay — so a turn that fails (Mac unreachable) doesn't leave Byte stuck
+  // mid-thought. The stored mood lives in buddyWakeExpr and is restored on wake.
   const buddySleep = () => buddyHero?.setExpression("sleeping");
+  armIdleFaceReset(); // start the idle clock on load
 
   // ---------- sleeping chip + queue-while-asleep ----------
   //
@@ -1685,6 +1768,39 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  // Type-anywhere: if the composer ISN'T focused and the person starts typing a
+  // real character (no ctrl/meta/alt, not Enter/arrows/etc.), route it into the
+  // composer and focus — so keystrokes land where they expect instead of
+  // vanishing. Ignored while another field/editable is focused.
+  const isEditableTarget = (el) =>
+    el &&
+    (el.tagName === "INPUT" ||
+      el.tagName === "TEXTAREA" ||
+      el.tagName === "SELECT" ||
+      el.isContentEditable);
+  document.addEventListener("keydown", (e) => {
+    if (e.defaultPrevented) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key == null || e.key.length !== 1) return; // printable single chars only
+    if (document.activeElement === input) return;
+    if (isEditableTarget(document.activeElement)) return;
+    e.preventDefault();
+    input.value += e.key;
+    input.focus();
+    autosize();
+  });
+
+  // Click-anywhere-to-focus (mouse only — a mobile TAP shouldn't pop the
+  // keyboard unexpectedly). Clicking empty space in the thread focuses the
+  // composer; interactive elements and active text selections are left alone.
+  thread.addEventListener("click", (e) => {
+    if (!hasFinePointer()) return;
+    if (e.target.closest("button, a, input, textarea, label, [role='button']")) return;
+    const sel = window.getSelection && window.getSelection();
+    if (sel && sel.toString().length > 0) return; // don't steal focus mid-selection
+    input.focus();
+  });
+
   // The Buddy hero grows/shrinks over a 220ms CSS transition when the
   // composer gains/loses focus (the mobile keyboard opening/closing). That
   // resizes the thread AFTER any immediate scrollToBottom already ran,
@@ -1699,7 +1815,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   // Focusing the composer (keyboard opening) always snaps to the bottom, no
   // matter where the reader was — that's the whole point of tapping to type.
-  input.addEventListener("focus", () => scrollToBottom("auto"));
+  input.addEventListener("focus", () => {
+    scrollToBottom("auto");
+    armIdleFaceReset(); // interacting with the composer is activity
+  });
   input.addEventListener("blur", repinIfAtBottom);
 
   function autosize() {
@@ -1867,6 +1986,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
       }
       if (data.kind === "buddy_expression") {
+        // Mood is per-conversation now. Ignore a face broadcast for a thread
+        // that isn't the one on screen — otherwise conversation A's mood would
+        // paint over conversation B's pet.
+        if (data.conversation_id != null && data.conversation_id !== currentConversationId) return;
         if (data.transient) {
           // A transient overlay (e.g. "thinking"). Show it, but DON'T remember
           // it as the mood — when it clears we fall back to the real face.
@@ -1877,22 +2000,29 @@ document.addEventListener("DOMContentLoaded", async () => {
           buddyWakeExpr = data.expression;
           buddyHero?.setExpression(data.expression);
         }
+        armIdleFaceReset(); // a face change is activity — restart the idle clock
         return;
       }
       if (data.kind === "buddy_sleep") {
-        // Usage-cap sleep began (or extended). Raise the chip with the wake
-        // time; new Buddy sends will queue server-side from here.
+        // Buddy went to sleep — either a usage cap OR the Mac being unreachable
+        // (TurnDispatcher sleeps on a failed deliver). Raise the chip AND put
+        // the pet visibly to sleep: that clears the optimistic "thinking" face
+        // the send set, so a failed turn reads as "asleep / can't reach me"
+        // instead of leaving Byte stuck mid-thought.
         sleepUntil = data.sleep_until || null;
         sleepWake = data.wake_string || null;
         updateSleepChip();
+        buddySleep();
         return;
       }
       if (data.kind === "buddy_wake") {
-        // Byte woke — drop the chip. Queued turns re-broadcast as they
-        // dispatch (queued → sent), so their bubbles resolve on their own.
+        // Byte woke — drop the chip and bring the face back to its mood.
+        // Queued turns re-broadcast as they dispatch (queued → sent), so their
+        // bubbles resolve on their own.
         sleepUntil = null;
         sleepWake = null;
         updateSleepChip();
+        buddyWake();
         return;
       }
       if (data.kind === "message_deleted") {
@@ -1933,6 +2063,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           // and non-reply chips, so the pet keeps thinking until REAL words
           // stream — not the moment a placeholder/chip lands.
           if (msg.direction === "inbound") buddyHero?.onReplyStreaming(msg);
+          armIdleFaceReset(); // a new message is activity
         } else if (msg.direction === "inbound") {
           const prev = drawerUnread.get(convId) || 0;
           drawerUnread.set(convId, prev + 1);

@@ -159,7 +159,7 @@ module Buddy
         return false if autos.empty?
 
         conversation = byte_message.byte_conversation
-        name = user.buddy_theme.to_s == "moss" ? "Moss" : "Byte"
+        name = conversation.buddy_name
 
         autos.each do |p|
           ctx = Buddy::ToolContext.new(user, conversation: conversation)

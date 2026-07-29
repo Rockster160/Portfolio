@@ -18,9 +18,6 @@
 #  to_conversation_id   :bigint
 #  to_user_id           :bigint           not null
 #
-# One companion-to-companion message: user A's Buddy relaying something to
-# user B (household partner). A `notify` is one-way; the three `ask_*` kinds
-# carry a question whose answer travels back to `from_user` once B responds.
 class BuddyRelay < ApplicationRecord
   belongs_to :from_user, class_name: "User"
   belongs_to :to_user,   class_name: "User"

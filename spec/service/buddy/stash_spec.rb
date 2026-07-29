@@ -45,14 +45,14 @@ RSpec.describe "Buddy brain-dump (stash)" do
 
     it "applies Buddy's sort from a [[stash:]] side-effect" do
       idea = BuddyIdea.create!(user: user, body: "garage shelves", status: :active)
-      Buddy::SideEffects.apply(user, [{ verb: :stash, body: %(id=#{idea.id} category=home summary="build garage shelves") }])
+      Buddy::SideEffects.apply(convo, [{ verb: :stash, body: %(id=#{idea.id} category=home summary="build garage shelves") }])
 
       expect(idea.reload).to have_attributes(category: "home", summary: "build garage shelves")
     end
 
     it "refines just the summary from a talk-through (summary-only side-effect)" do
       idea = BuddyIdea.create!(user: user, category: :home, summary: "shelves", body: "garage shelves", status: :active)
-      Buddy::SideEffects.apply(user, [{ verb: :stash, body: %(id=#{idea.id} summary="floating oak shelves over the bench") }])
+      Buddy::SideEffects.apply(convo, [{ verb: :stash, body: %(id=#{idea.id} summary="floating oak shelves over the bench") }])
 
       expect(idea.reload).to have_attributes(category: "home", summary: "floating oak shelves over the bench")
     end

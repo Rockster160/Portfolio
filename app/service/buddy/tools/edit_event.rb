@@ -28,14 +28,16 @@ Buddy::Tools.register(
     diffs << "time → #{payload[:at].strftime("%-I:%M %p")}" if payload[:at].respond_to?(:strftime)
     { title: base, sub: diffs.join("\n").presence }
   },
-  execute:     ->(payload, _ctx) {
+  execute:     ->(payload, ctx) {
     event = ActionEvent.find(payload[:action_event_id])
     attrs = {}
     attrs[:name]      = payload[:name]  if payload[:name].present?
     attrs[:notes]     = payload[:notes] if payload[:notes].present?
     attrs[:timestamp] = payload[:at]    if payload[:at].respond_to?(:strftime)
     before = attrs.keys.index_with { |k| event.public_send(k) }  # old values, for undo
-    event.update!(attrs) unless attrs.empty?
+    if attrs.any? && event.update!(attrs)
+      ActionEventNotifier.notify(ctx.user, event, :changed, auth: :buddy, auth_id: ctx.user.id)
+    end
     {
       action_event_id: event.id,
       revert:          { op: "updated", model: "ActionEvent", id: event.id, before: before, summary: "reverted the #{event.name} edit" },

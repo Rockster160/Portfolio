@@ -1,6 +1,6 @@
 <%# Buddy's identity follows the user's theme: Moss (green) for moss users,
     Byte (navy) otherwise — icon, PWA title, manifest, and chrome theme-color. %>
-<% if current_user.buddy_theme == "moss" %>
+<% if ByteConversation.default_theme_for(current_user) == "moss" %>
   <link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path 'moss_favicon/moss-apple-touch-icon.png' %>">
   <link rel="icon" type="image/png" href="<%= asset_path 'moss_favicon/moss-favicon-96x96.png' %>" sizes="96x96">
   <link rel="manifest" href="/moss.webmanifest">

@@ -29,6 +29,59 @@
     <small>System:</small> Connections
   </div>
 
+  <%
+    pool_size    = @pool_stat[:size].to_i
+    pool_busy    = @pool_stat[:busy].to_i
+    pool_idle    = @pool_stat[:idle].to_i
+    pool_waiting = @pool_stat[:waiting].to_i
+    pool_open    = @pool_stat[:connections].to_i
+    pool_timeout = @pool_stat[:checkout_timeout]
+    pool_saturated = pool_size.positive? && pool_busy >= pool_size
+    pool_warm      = pool_size.positive? && pool_busy >= (pool_size * 0.8)
+    busy_color = pool_saturated ? "#DC3545" : (pool_warm ? "#FFC107" : "#28A745")
+    wait_color = pool_waiting.positive? ? "#DC3545" : "#6C757D"
+  %>
+
+  <div class="dashboard-section">
+    <div class="dashboard-section-title">
+      Connection pool
+      <small>(this web worker — pid <code><%= @ws_worker_pid %></code>)</small>
+    </div>
+    <div class="muted scope-note">
+      ActiveRecord's pool for this Puma process. <code>waiting</code> above zero
+      means threads are blocked waiting for a connection — the direct precursor
+      to ConnectionTimeoutError. Sidekiq runs its own pool in a separate process
+      and is not shown here.
+    </div>
+
+    <div class="state-summary" style="margin-top: 12px;">
+      <div class="state-card" style="border-color: #6C757D">
+        <div class="state-name">Pool size</div>
+        <div class="state-count"><%= pool_size %></div>
+      </div>
+      <div class="state-card" style="border-color: <%= busy_color %>">
+        <div class="state-name">Busy</div>
+        <div class="state-count"><%= pool_busy %></div>
+      </div>
+      <div class="state-card" style="border-color: #6C757D">
+        <div class="state-name">Idle</div>
+        <div class="state-count"><%= pool_idle %></div>
+      </div>
+      <div class="state-card" style="border-color: <%= wait_color %>">
+        <div class="state-name">Waiting</div>
+        <div class="state-count" style="<%= "color: #DC3545;" if pool_waiting.positive? %>"><%= pool_waiting %></div>
+      </div>
+      <div class="state-card" style="border-color: #6C757D">
+        <div class="state-name">Open conns</div>
+        <div class="state-count"><%= pool_open %></div>
+      </div>
+      <div class="state-card" style="border-color: #6C757D">
+        <div class="state-name">Checkout timeout</div>
+        <div class="state-count"><%= pool_timeout ? "#{pool_timeout.to_f.round(1)}s" : "—" %></div>
+      </div>
+    </div>
+  </div>
+
   <div class="dashboard-section">
     <div class="dashboard-section-title">
       Database connections

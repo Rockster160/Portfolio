@@ -56,6 +56,11 @@ Rails.application.routes.draw do
   get    "/byte/claude_sessions"   => "byte#claude_sessions",      as: :byte_claude_sessions
   post   "/byte/actions/:request_id/respond" => "byte#respond_action", as: :byte_action_respond
   post   "/buddy/quick_action"               => "buddy/quick_actions#create", as: :buddy_quick_action
+  get    "/buddy/timers"            => "buddy/timers#index",   as: :buddy_timers
+  post   "/buddy/timers/:id/pause"  => "buddy/timers#pause",   as: :buddy_timer_pause
+  post   "/buddy/timers/:id/resume" => "buddy/timers#resume",  as: :buddy_timer_resume
+  post   "/buddy/timers/:id/confirm" => "buddy/timers#confirm", as: :buddy_timer_confirm
+  delete "/buddy/timers/:id"        => "buddy/timers#destroy", as: :buddy_timer
 
   namespace :internal do
     get "auth", to: "auth#check"

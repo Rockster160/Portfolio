@@ -215,7 +215,7 @@ module Buddy
 
       If you're about to Read the context file, search, or otherwise take a moment before you can answer, say so like a person would - a short "Hang on, I'll look into it..." or "One sec, let me check." Never leave a bare "..." as the whole reply; that reads like you froze. Give them the warm placeholder, then come back with the answer.
 
-      ### Side-effect markers ([[mood]], [[remember]])
+      ### Side-effect markers ([[mood]], [[remember]], [[note]])
 
       Two special markers that fire immediately - no checkbox, no confirmation. Use them **sparingly** and only when meaningful.
 
@@ -250,6 +250,8 @@ module Buddy
       - Don't tell the person you're remembering - the marker is silent.
 
       **`[[forget: <substring or id>]]`** - prunes a memory. Emit when the person says "that's wrong", "forget that", "you can drop that memory about X", or similar. Body is either a short substring of the memory to match (case-insensitive) or the numeric id (if you can see it). Silent - don't announce the prune; the person will notice you stop bringing it up.
+
+      **`[[note: <fact>]]`** - a note about THIS conversation only. Unlike `[[remember]]` (durable, global, carried into every conversation), a note is scoped to this one thread and shows up only here. Emit when the person sets how they want THIS thread to work - "keep this one strictly work", "this is my journaling space", "no chore nudges in here" - or when a detail matters to this thread but not your others. Kept small and self-trimming, so favor a short line. Silent - don't announce it.
 
       ### Time & format
 
@@ -301,8 +303,8 @@ module Buddy
       "Available faces (pick the closest by name):\n#{lines}"
     end
 
-    def for(user, tools_appendix: nil, context_path: nil, at_glance: nil, recap: nil)
-      theme = user.buddy_theme.presence || "byte"
+    def for(user, conversation:, tools_appendix: nil, context_path: nil, at_glance: nil, recap: nil)
+      theme = conversation.buddy_theme.presence || "byte"
       persona = load_persona(theme)
       tools   = tools_appendix || Buddy::Tools.system_prompt_appendix
 
@@ -313,6 +315,7 @@ module Buddy
       parts << RULES_APPENDIX.strip.sub("{{MOOD_BLOCK}}", mood_block(theme))
       parts << tools.strip
       parts << memories_block(user)
+      parts << conversation_notes_block(conversation)
       parts << recap_block(recap) if recap.to_s.strip.length.positive?
       parts << context_pointer_block(context_path, at_glance) if context_path
       parts.compact.reject { |s| s.to_s.strip.empty? }.join("\n\n---\n\n")
@@ -421,6 +424,25 @@ module Buddy
       TXT
     rescue StandardError => e
       Buddy::Errors.report(section: "personality.memories_block", exception: e, user: user)
+      nil
+    end
+
+    # This conversation's own small notes block, self-managed via `[[note:]]`.
+    # Thread-scoped context/preferences ("keep this convo strictly work") — NOT
+    # durable global facts, which come through memories_block above.
+    def conversation_notes_block(conversation)
+      notes = conversation.buddy_memories.to_s.strip
+      return nil if notes.empty?
+
+      <<~TXT
+        ## Notes for this conversation
+
+        These are notes you're keeping about THIS thread specifically (not global facts). Honor them here; they don't carry to your other conversations.
+
+        #{notes}
+      TXT
+    rescue StandardError => e
+      Buddy::Errors.report(section: "personality.conversation_notes_block", exception: e, user: conversation.user)
       nil
     end
 

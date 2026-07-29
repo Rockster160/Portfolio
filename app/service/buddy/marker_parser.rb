@@ -5,6 +5,7 @@ module Buddy
   #
   # Currently supported side-effect verbs (see Buddy::SideEffects):
   #   [[mood: <expression>]]     — shift pet expression
+  #   [[note: <fact>]]           — append to this conversation's notes block
   #   [[remember: <fact>]]       — write a durable BuddyMemory row
   #   [[stash: id=N category=X summary=...]] — file a brain-dump idea
   #
@@ -16,7 +17,7 @@ module Buddy
     module_function
 
     PROPOSE_RX      = /\[\[\s*propose:\s*(?<name>[a-z][a-z0-9_]*)(?<argstr>[^\]]*)\]\]/i
-    SIDE_EFFECT_RX  = /\[\[\s*(?<verb>mood|remember|forget|stash)\s*:\s*(?<body>[^\]]+?)\s*\]\]/i
+    SIDE_EFFECT_RX  = /\[\[\s*(?<verb>mood|note|remember|forget|stash)\s*:\s*(?<body>[^\]]+?)\s*\]\]/i
     ARG_RX          = /(?<key>[a-z][a-z0-9_]*)\s*=\s*(?:"(?<qval>(?:[^"\\]|\\.)*)"|(?<uval>\S+))/i
 
     # Returns {

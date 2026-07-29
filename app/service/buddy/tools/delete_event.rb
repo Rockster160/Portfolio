@@ -32,13 +32,15 @@ Buddy::Tools.register(
     end
     { title: "Delete #{event&.name || payload[:event]}", sub: subs.join(" · ").presence }
   },
-  execute:     ->(payload, _ctx) {
+  execute:     ->(payload, ctx) {
     event = ActionEvent.find(payload[:action_event_id])
     name  = event.name
     # Snapshot enough to rebuild it, so `undo` can bring it back (ActionEvent
     # hard-deletes — no soft-delete to unarchive).
     attrs = { user_id: event.user_id, name: event.name, notes: event.notes, timestamp: event.timestamp, data: event.data }
     event.destroy!
+    # Same side effects as an in-app delete: :event trigger + broadcast.
+    ActionEventNotifier.notify(ctx.user, event, :removed, auth: :buddy, auth_id: ctx.user.id)
     {
       deleted_name: name,
       revert:       { op: "recreated", model: "ActionEvent", attrs: attrs, summary: "brought back #{name}" },

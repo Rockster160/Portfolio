@@ -109,6 +109,19 @@ RSpec.describe SystemController, type: :controller do
         get :connections
         expect(controller.instance_variable_get(:@ws_worker_pid)).to eq(Process.pid)
       end
+
+      it "loads the ActiveRecord pool stat for this process" do
+        get :connections
+        stat = controller.instance_variable_get(:@pool_stat)
+        expect(stat).to include(:size, :busy, :idle, :waiting)
+        expect(stat[:size]).to be_positive
+      end
+
+      it "renders the connection pool panel with the waiting metric" do
+        get :connections
+        expect(response.body).to include("Connection pool")
+        expect(response.body).to include("Waiting")
+      end
     end
   end
 end

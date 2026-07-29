@@ -1,3 +1,18 @@
+# == Schema Information
+#
+# Table name: buddy_ideas
+#
+#  id           :bigint           not null, primary key
+#  body         :text             not null
+#  category     :integer
+#  remind_after :datetime
+#  status       :integer          default("active"), not null
+#  summary      :text
+#  surfaced_at  :datetime
+#  created_at   :datetime         not null
+#  updated_at   :datetime         not null
+#  user_id      :bigint           not null
+#
 class BuddyIdea < ApplicationRecord
   belongs_to :user
 

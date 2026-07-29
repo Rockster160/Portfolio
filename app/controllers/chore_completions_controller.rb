@@ -18,7 +18,7 @@ class ChoreCompletionsController < ApplicationController
       result = ChoreCompleter.new(
         tapped, credit_user,
         at:   completed_at,
-        note: params[:note].presence,
+        note: params[:note].presence
       ).call
       # ChoreCompleter already broadcasts against the credited user; also
       # broadcast to the recorder so their device refreshes (household
@@ -113,7 +113,7 @@ class ChoreCompletionsController < ApplicationController
       # from scratch like the destroy paths do. Without this, the streak
       # could keep counting yesterday's day_key as today's.
       if completion.day_key != prev_day_key || completion.payout_skipped != prev_payout_skipped
-        rebuild_streak(completion.chore, prev_day_key)
+        ChoreStreak.rebuild_for!(current_user, completion.chore)
       end
       ChoreBroadcaster.broadcast_changes!(current_user, completion.chore)
       render json: response_payload(completion.chore, completion).merge(balance: current_user.chore_balance)
@@ -177,7 +177,7 @@ class ChoreCompletionsController < ApplicationController
       leaf = completion.chore
       day_at_delete = completion.day_key
       completion.destroy!
-      rebuild_streak(leaf, day_at_delete)
+      ChoreStreak.rebuild_for!(current_user, leaf)
       related = (leaf.parent_chore if leaf.sub_chore?)
       ChoreBroadcaster.broadcast_changes!(current_user, leaf, related: related, actor_tab_id: params[:tab_id])
       render json: response_payload(tapped, nil)
@@ -196,7 +196,7 @@ class ChoreCompletionsController < ApplicationController
 
     if completion
       completion.destroy!
-      rebuild_streak(tapped, day)
+      ChoreStreak.rebuild_for!(current_user, tapped)
       related = (tapped.parent_chore if tapped.sub_chore?)
       ChoreBroadcaster.broadcast_changes!(current_user, tapped, related: related, actor_tab_id: params[:tab_id])
       render json: response_payload(tapped, nil)
@@ -210,7 +210,7 @@ class ChoreCompletionsController < ApplicationController
     chore = completion.chore
     day = completion.day_key
     completion.destroy!
-    rebuild_streak(chore, day)
+    ChoreStreak.rebuild_for!(current_user, chore)
     ChoreBroadcaster.broadcast_changes!(current_user, chore, actor_tab_id: params[:tab_id])
     # today_earnings is the canonical value behind the header pill on
     # every page. Always emit it — even on deletes where today's
@@ -301,47 +301,8 @@ class ChoreCompletionsController < ApplicationController
     nil
   end
 
-  # After a destroy, recompute the streak from scratch using the most
-  # recent paid completion. A user undoing today's completion shouldn't
-  # leave a phantom-incremented streak behind. Streaks are keyed on the
-  # parent (sub-chore taps advance the parent's streak), so both the
-  # streak lookup and the completion history sweep the whole family.
-  def rebuild_streak(chore, _day)
-    credit_id = chore.parent_chore_id || chore.id
-    streak = ChoreStreak.find_by(user_id: current_user.id, chore_id: credit_id)
-    return if streak.blank?
-
-    family_scope = current_user.chore_completions
-      .where("chore_id = :id OR parent_chore_id = :id", id: credit_id)
-    last_paid = family_scope
-      .where(payout_skipped: false, anonymous: false)
-      .order(completed_at: :desc).first
-
-    if last_paid.nil?
-      streak.destroy
-      return
-    end
-
-    # Walk backward day-by-day from the last paid completion; count
-    # consecutive days with at least one paid (non-anonymous) completion
-    # anywhere in the family.
-    cursor = last_paid.day_key
-    count = 0
-    loop do
-      had = family_scope
-        .exists?(day_key: cursor, payout_skipped: false, anonymous: false)
-      break unless had
-
-      count += 1
-      cursor -= 1
-    end
-
-    streak.update!(
-      current_streak:     count,
-      last_completed_day: last_paid.day_key,
-      longest_streak:     [streak.longest_streak, count].max,
-    )
-  end
+  # Streak rebuild after a destroy now lives on ChoreStreak.rebuild_for! so the
+  # app's tap-undo and Buddy's undo share ONE implementation.
 
   # Unified payload — every mutation returns the canonical Chore JSON
   # (the same shape used by /sync, /state, page bootstrap). The client

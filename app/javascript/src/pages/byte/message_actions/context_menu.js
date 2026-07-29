@@ -1,7 +1,7 @@
 // Long-press (touch) / right-click (desktop) context menu on a message
-// bubble. Two actions — Copy ID, Copy full message — plus the id shown
-// verbatim so it can be read or hand-selected if the clipboard write is
-// blocked (non-secure context, denied permission, etc.).
+// bubble. Two actions — Copy ID, Copy full message — plus a header showing
+// the message's id (verbatim + hand-selectable if the clipboard write is
+// blocked in a non-secure context or on denied permission) and its send time.
 //
 // One reusable menu node is mounted lazily and repositioned per open; the
 // target's id + raw body are read off the bubble's dataset (paintMessageNode
@@ -38,6 +38,21 @@ async function writeClipboard(text) {
   }
 }
 
+// The bubble stamps its send time as an ISO string in `data-created-at`
+// (see paintMessageNode). Render it in the viewer's own locale + timezone on
+// a 12-hour clock — same convention as the bubble's time label, but with the
+// date included since a right-click can land on a message from any day.
+const sentFmt = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "medium", // "medium" includes seconds (1:37:23 PM); "short" omits them
+});
+function formatSent(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return sentFmt.format(d);
+}
+
 export function initMessageContextMenu(thread, root) {
   if (!thread || !root) return;
 
@@ -59,9 +74,20 @@ export function initMessageContextMenu(thread, root) {
     el.innerHTML = `
       <div class="byte-msg-menu-id">
         <span class="byte-msg-menu-id-label">Message ID</span>
-        <code class="byte-msg-menu-id-value" data-menu-id>—</code>
+        <div class="byte-msg-menu-id-row">
+          <code class="byte-msg-menu-id-value" data-menu-id>—</code>
+          <button type="button" class="byte-msg-menu-copy" data-menu-copy-id
+                  aria-label="Copy message ID" title="Copy ID">
+            <svg class="icon-copy" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+              <path fill="currentColor" d="M16 1H4a2 2 0 0 0-2 2v12h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z"/>
+            </svg>
+            <svg class="icon-check" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+              <path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+            </svg>
+          </button>
+        </div>
+        <span class="byte-msg-menu-sent" data-menu-sent hidden></span>
       </div>
-      <button type="button" class="byte-msg-menu-item" data-menu-copy-id>Copy ID</button>
       <button type="button" class="byte-msg-menu-item" data-menu-copy-full>Copy full message</button>
     `;
     root.appendChild(el);
@@ -72,12 +98,27 @@ export function initMessageContextMenu(thread, root) {
     el.addEventListener("click", (e) => e.stopPropagation());
 
     el.querySelector("[data-menu-copy-id]").addEventListener("click", (e) => {
-      runCopy(e.currentTarget, menu.dataset.msgId || "");
+      runIconCopy(e.currentTarget, menu.dataset.msgId || "");
     });
     el.querySelector("[data-menu-copy-full]").addEventListener("click", (e) => {
       runCopy(e.currentTarget, menu.dataset.msgFull || "");
     });
     return el;
+  }
+
+  // Icon-button copy (the id): swap the copy glyph for a check on success via
+  // a state class — the button has no text label to flip like runCopy does.
+  async function runIconCopy(btn, text) {
+    const ok = await writeClipboard(text);
+    btn.classList.toggle("is-ok", ok);
+    btn.classList.toggle("is-err", !ok);
+    if (ok) {
+      setTimeout(closeMenu, 650);
+    } else {
+      // Leave the menu open so the id above stays hand-selectable; clear the
+      // error tint after a beat.
+      setTimeout(() => btn.classList.remove("is-err"), 2200);
+    }
   }
 
   async function runCopy(btn, text) {
@@ -127,11 +168,16 @@ export function initMessageContextMenu(thread, root) {
     menu.dataset.msgFull = full;
     menu.querySelector("[data-menu-id]").textContent = id || "—";
 
+    const sent = formatSent(node.dataset.createdAt);
+    const sentEl = menu.querySelector("[data-menu-sent]");
+    sentEl.textContent = sent ? `Sent ${sent}` : "";
+    sentEl.hidden = !sent;
+
     // Reset button labels/state from any prior open.
     menu.querySelectorAll(".byte-msg-menu-item").forEach((b) => {
       b.classList.remove("is-ok", "is-err");
     });
-    menu.querySelector("[data-menu-copy-id]").textContent = "Copy ID";
+    menu.querySelector("[data-menu-copy-id]").classList.remove("is-ok", "is-err");
     menu.querySelector("[data-menu-copy-full]").textContent = "Copy full message";
 
     menu.hidden = false;

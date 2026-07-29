@@ -2,14 +2,16 @@
 #
 # Table name: buddy_memories
 #
-#  id         :bigint           not null, primary key
-#  content    :text             not null
-#  metadata   :jsonb            not null
-#  priority   :integer          default(0), not null
-#  tags       :jsonb            not null
-#  created_at :datetime         not null
-#  updated_at :datetime         not null
-#  user_id    :bigint           not null
+#  id           :bigint           not null, primary key
+#  content      :text             not null
+#  expires_at   :datetime
+#  last_used_at :datetime
+#  metadata     :jsonb            not null
+#  priority     :integer          default(0), not null
+#  tags         :jsonb            not null
+#  created_at   :datetime         not null
+#  updated_at   :datetime         not null
+#  user_id      :bigint           not null
 #
 class BuddyMemory < ApplicationRecord
   belongs_to :user

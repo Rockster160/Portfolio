@@ -29,6 +29,10 @@ Buddy::Tools.register(
       timestamp: Time.current,
       data:      { source: "buddy" },
     )
+    # Same side effects as an in-app log: fire the :event trigger (so watches +
+    # automations react) and broadcast to open views. ActionEvent has no model
+    # callback for this on purpose (backfills skip it), so we call it here.
+    ActionEventNotifier.notify(ctx.user, event, :added, auth: :buddy, auth_id: ctx.user.id)
     {
       action_event_id: event.id,
       revert:          { op: "created", model: "ActionEvent", id: event.id, summary: "removed the #{event.name} log" },

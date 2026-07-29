@@ -47,13 +47,14 @@ RSpec.describe ByteController, type: :controller do
     end
 
     it "names a blank buddy conversation after the Buddy (Byte theme)" do
-      rocco.update!(buddy_theme: "byte")
+      # A new buddy thread seeds its theme from ByteConversation.default_theme_for.
+      allow(ByteConversation).to receive(:default_theme_for).and_return("byte")
       post :create_conversation, params: { mode: "buddy" }
       expect(JSON.parse(response.body)["name"]).to eq("Byte")
     end
 
-    it "uses the Moss name when the user's Buddy theme is moss" do
-      rocco.update!(buddy_theme: "moss")
+    it "uses the Moss name when the user's Buddy default is moss" do
+      allow(ByteConversation).to receive(:default_theme_for).and_return("moss")
       post :create_conversation, params: { mode: "buddy" }
       expect(JSON.parse(response.body)["name"]).to eq("Moss")
     end

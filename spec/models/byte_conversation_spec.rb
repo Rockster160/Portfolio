@@ -51,10 +51,10 @@ RSpec.describe ByteConversation, type: :model do
     convo = user.byte_conversations.create!(mode: :buddy)
     expect(convo.buddy?).to eq(true)
 
-    user.update!(buddy_theme: "byte")
+    convo.update!(buddy_theme: "byte")
     expect(convo.display_name).to eq("Byte")
 
-    user.update!(buddy_theme: "moss")
+    convo.update!(buddy_theme: "moss")
     expect(convo.display_name).to eq("Moss")
   end
 end

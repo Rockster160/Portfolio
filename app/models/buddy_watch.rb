@@ -16,6 +16,7 @@
 #  created_at           :datetime         not null
 #  updated_at           :datetime         not null
 #  byte_conversation_id :bigint           not null
+#  notify_user_id       :bigint
 #  user_id              :bigint           not null
 #
 class BuddyWatch < ApplicationRecord

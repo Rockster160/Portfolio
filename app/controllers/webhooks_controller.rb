@@ -581,6 +581,7 @@ class WebhooksController < ApplicationController
   # reply.
   def buddy_process_reply(user, _conversation, message)
     parsed = Buddy::MarkerParser.extract(message.body)
+    conversation = message.byte_conversation
 
     # Observability for "is Buddy using expressions?": logs every reply's
     # marker/side-effect shape so a `mood` verb (or its absence) is visible.
@@ -597,7 +598,7 @@ class WebhooksController < ApplicationController
     # than seeing an empty ghost bubble.
     side_effect_only = parsed[:display_text].to_s.strip.empty? && parsed[:markers].empty?
     if side_effect_only
-      Buddy::SideEffects.apply(user, parsed[:side_effects]) if parsed[:side_effects].any?
+      Buddy::SideEffects.apply(conversation, parsed[:side_effects]) if parsed[:side_effects].any?
       MonitorChannel.broadcast_to(user, {
         id:      :byte,
         channel: :byte,
@@ -607,7 +608,7 @@ class WebhooksController < ApplicationController
       # Drop the "thinking" overlay. A mood marker (applied above) already
       # broadcast the new mood; otherwise re-assert the stored one. Either way
       # the mood itself is untouched — it only moves when Buddy says so.
-      Buddy::ExpressionState.settle!(user) unless parsed[:side_effects].any? { |e| e[:verb] == :mood }
+      Buddy::ExpressionState.settle!(conversation) unless parsed[:side_effects].any? { |e| e[:verb] == :mood }
       return
     end
 
@@ -617,7 +618,7 @@ class WebhooksController < ApplicationController
 
     # Side effects fire first so a mood shift lands before the checklist
     # renders (feels more coherent — pet reacts, then presents options).
-    Buddy::SideEffects.apply(user, parsed[:side_effects]) if parsed[:side_effects].any?
+    Buddy::SideEffects.apply(conversation, parsed[:side_effects]) if parsed[:side_effects].any?
 
     # Proposals must ALWAYS build (they create the checklist / run auto tools),
     # independent of the expression decision below.
@@ -639,12 +640,12 @@ class WebhooksController < ApplicationController
     # longer move the face at all — the mood persists until Buddy sets it, which
     # is exactly "keep the mood as-is until something changes it".
     unless parsed[:side_effects].any? { |e| e[:verb] == :mood }
-      Buddy::ExpressionState.settle!(user)
+      Buddy::ExpressionState.settle!(conversation)
     end
   rescue StandardError => e
     Rails.logger.warn("[Buddy] reply-processing failed: #{e.class}: #{e.message}")
     # Even on error, don't leave the pet frozen thinking forever.
-    Buddy::ExpressionState.settle!(user) rescue nil
+    Buddy::ExpressionState.settle!(message.byte_conversation) rescue nil
   end
 
   def normalized_action_kind(raw)

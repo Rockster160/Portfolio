@@ -22,7 +22,8 @@ RSpec.describe "Buddy Today forward-looking" do
           start_at: tz.parse("2026-07-28 18:00"), end_at: tz.parse("2026-07-28 18:30")
         )
 
-        today = Buddy::Context.build(user)[:today_agenda]
+        conversation = user.byte_conversations.create!(mode: :buddy)
+        today = Buddy::Context.build(user, conversation)[:today_agenda]
         passed = today.find { |i| i[:title] == "Morning standup" }
         ahead  = today.find { |i| i[:title] == "Evening call" }
 

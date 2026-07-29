@@ -4,6 +4,7 @@ class SystemController < ApplicationController
   def index; end
 
   def connections
+    @pool_stat = load_pool_stat
     @db_connections = load_db_connections
     @db_summary = @db_connections.group_by { |row| row["state"] || "unknown" }.transform_values(&:count)
     @ws_connections = load_ws_connections
@@ -11,6 +12,19 @@ class SystemController < ApplicationController
   end
 
   private
+
+  # ActiveRecord's own view of THIS process's pool: how many connections are
+  # checked out (busy) vs waiting threads blocked for one. `waiting` climbing
+  # above zero is the direct precursor to ConnectionTimeoutError — something
+  # pg_stat_activity can't show, since a connection held by Ruby during a
+  # non-DB call (e.g. a Mac round-trip) reads as `idle` there while still
+  # being `busy` here.
+  def load_pool_stat
+    ActiveRecord::Base.connection_pool.stat
+  rescue StandardError => e
+    Rails.logger.warn("[/system/connections] pool stat failed: #{e.message}")
+    {}
+  end
 
   def require_me
     head :not_found unless current_user&.me?

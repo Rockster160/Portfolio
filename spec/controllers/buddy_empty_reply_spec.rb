@@ -17,7 +17,7 @@ RSpec.describe WebhooksController, type: :controller do
     request.env["HTTP_X_BYTE_SECRET"] = secret
     allow(MonitorChannel).to receive(:broadcast_to)
     allow(WebPushNotifications).to receive(:send_to_byte)
-    user.update_column(:buddy_theme, "byte")
+    convo.update_column(:buddy_theme, "byte")
   end
 
   it "fills a fallback body when the only marker is discarded (no blank bubble)" do

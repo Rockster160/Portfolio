@@ -11,10 +11,15 @@ module Buddy
   module SideEffects
     module_function
 
-    def apply(user, side_effects)
+    # `conversation` is the thread the reply landed in. Per-conversation verbs
+    # (mood, note) act on it; user-global verbs (remember, forget, stash) act on
+    # `conversation.user`.
+    def apply(conversation, side_effects)
+      user = conversation.user
       Array(side_effects).each do |eff|
         case eff[:verb]
-        when :mood     then apply_mood(user, eff[:body])
+        when :mood     then apply_mood(conversation, eff[:body])
+        when :note     then apply_note(conversation, eff[:body])
         when :remember then apply_remember(user, eff[:body])
         when :forget   then apply_forget(user, eff[:body])
         when :stash    then apply_stash(user, eff[:body])
@@ -24,27 +29,37 @@ module Buddy
       end
     end
 
-    # `[[mood: <one of the five expressions>]]` — shifts the pet's face
+    # `[[mood: <one of the expressions>]]` — shifts this thread's pet face
     # and broadcasts. The pet expression IS the mood state; the field
-    # (users.buddy_expression) persists across turns and rides in every
-    # context block, so no shadow log or event trail is needed.
-    def apply_mood(user, body)
+    # (byte_conversations.buddy_expression) persists across turns and rides in
+    # every context block, so no shadow log or event trail is needed.
+    def apply_mood(conversation, body)
       expression = body.to_s.downcase.strip
+      theme = conversation.buddy_theme
       # `selectable?` not `valid?` — a delivered mood may never be a
       # system/transitional face (e.g. `thinking`), even if the model emits
       # one off-list. Those would leave the pet resting on a non-mood face.
-      valid = Buddy::Faces.selectable?(user.buddy_theme, expression)
+      valid = Buddy::Faces.selectable?(theme, expression)
       # Observability: mood markers are otherwise trail-less (stripped from the
       # body, set via update_column). This line is how we can actually answer
       # "is Buddy using expressions?" — grep prod for `[Buddy::mood]`.
       Rails.logger.info(
-        "[Buddy::mood] user=#{user.id} theme=#{user.buddy_theme} requested=#{expression.inspect} " \
-        "valid=#{valid} current=#{user.buddy_expression.inspect}",
+        "[Buddy::mood] user=#{conversation.user_id} conversation=#{conversation.id} " \
+        "theme=#{theme} requested=#{expression.inspect} " \
+        "valid=#{valid} current=#{conversation.buddy_expression.inspect}",
       )
       return unless valid
-      return if user.buddy_expression == expression  # no-op if unchanged
+      return if conversation.buddy_expression == expression  # no-op if unchanged
 
-      Buddy::ExpressionState.set(user, expression)
+      Buddy::ExpressionState.set(conversation, expression)
+    end
+
+    # `[[note: <fact>]]` — appends a line to this conversation's small notes
+    # block (byte_conversations.buddy_memories). Per-conversation and
+    # short-lived by nature ("keep this thread strictly work"); durable global
+    # facts go through `[[remember:]]` instead. Fires silently.
+    def apply_note(conversation, body)
+      Buddy::ConversationNotes.append(conversation, body)
     end
 
     # `[[stash: id=N category=work summary=...]]` — records Buddy's sort of a

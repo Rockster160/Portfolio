@@ -34,6 +34,11 @@
   </script>
 <% end %>
 
+<%# Pet identity is per-conversation now. The hero follows the active thread's
+    theme/expression; app chrome (avatar, favicon) uses the user's default pet so
+    the branding stays stable when a non-buddy thread is open. %>
+<% buddy_page_theme = @conversation.buddy? ? @conversation.buddy_theme : ByteConversation.default_theme_for(current_user) %>
+<% app_pet_theme = ByteConversation.default_theme_for(current_user) %>
 <div class="byte-app"
      data-monitor-channel="byte"
      data-messages-url="<%= byte_message_history_path %>"
@@ -42,7 +47,7 @@
      data-conversations-url="<%= byte_conversations_path %>"
      data-claude-sessions-url="<%= byte_claude_sessions_path %>"
      data-initial-conversation-id="<%= @conversation.id %>"
-     data-buddy-theme="<%= current_user.buddy_theme %>"
+     data-buddy-theme="<%= buddy_page_theme %>"
      data-active-mode="<%= @conversation.mode %>">
   <header class="byte-header">
     <%# Drawer trigger — sits before the avatar so it lands in the natural %>
@@ -53,7 +58,7 @@
       </svg>
     </button>
     <span class="byte-avatar">
-      <% if current_user.buddy_theme == "moss" %>
+      <% if app_pet_theme == "moss" %>
         <%= image_tag "moss_favicon/moss.png", alt: "Moss" %>
       <% else %>
         <%= image_tag "byte_favicon/byte.png", alt: "Byte" %>
@@ -81,6 +86,16 @@
         <path fill="currentColor" d="M12 22a2.4 2.4 0 0 0 2.4-2.4H9.6A2.4 2.4 0 0 0 12 22Zm6.6-6v-5a6.6 6.6 0 1 0-13.2 0v5L3 18.4V19h18v-.6Z"/>
       </svg>
     </button>
+    <%# Buddy sound toggle — matches Whisper's mute control. Silences the timer %>
+    <%# alarm when off. The `muted` class swaps the icon via CSS. %>
+    <button type="button" class="byte-mute-toggle" data-byte-mute title="Toggle sound" aria-label="Toggle sound">
+      <svg class="byte-mute-on" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+        <path fill="currentColor" d="M3 10v4h4l5 5V5L7 10H3Zm13.5 2a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4Zm-2.5-9v2.06a7 7 0 0 1 0 13.88v2.06a9 9 0 0 0 0-18Z"/>
+      </svg>
+      <svg class="byte-mute-off" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+        <path fill="currentColor" d="M3 10v4h4l5 5V5L7 10H3Zm18.3-1.3-1.4-1.4L17 10.2 14.1 7.3l-1.4 1.4L15.6 12l-2.9 2.9 1.4 1.4L17 13.4l2.9 2.9 1.4-1.4L18.4 12l2.9-3.3Z"/>
+      </svg>
+    </button>
   </header>
 
   <%# Buddy hero — only visible when the active conversation is mode=:buddy. %>
@@ -90,15 +105,19 @@
   <%# eat both the messages AND the character. %>
   <section class="byte-buddy-hero"
            data-buddy-hero
-           data-buddy-theme="<%= current_user.buddy_theme %>"
+           data-buddy-theme="<%= buddy_page_theme %>"
            <%# Static default is `sleeping`: with no/broken JS, Byte honestly %>
            <%# looks asleep rather than fake-awake. JS wakes it to the stored %>
            <%# mood (data-buddy-awake-expression) once the channel connects. %>
            data-buddy-expression="sleeping"
-           data-buddy-awake-expression="<%= current_user.buddy_expression %>"
+           data-buddy-awake-expression="<%= @conversation.buddy_expression %>"
            data-buddy-active="<%= @conversation.mode == 'buddy' ? 'true' : 'false' %>"
            <%= (@conversation.mode == 'buddy' ? '' : 'hidden').html_safe %>>
-    <div class="byte-buddy-char" aria-label="<%= current_user.buddy_theme == 'moss' ? 'Moss' : 'Byte' %>">
+    <%# Buddy timer chips — absolutely pinned to the hero's top-left, overlaying %>
+    <%# Buddy's area so they don't push the character down. Rendered by %>
+    <%# buddy/timers.js off the live Timer stack; empty + hidden when none. %>
+    <div class="byte-buddy-timers" data-buddy-timers hidden></div>
+    <div class="byte-buddy-char" aria-label="<%= buddy_page_theme == 'moss' ? 'Moss' : 'Byte' %>">
       <div class="byte-buddy-body" aria-hidden="true"></div>
       <div class="byte-buddy-face" aria-hidden="true"></div>
       <div class="byte-buddy-arm"  aria-hidden="true"></div>
@@ -158,7 +177,7 @@
       <%# One grid per theme; JS shows the one matching the live theme so the
           picker only ever offers faces that theme actually has. %>
       <% %w[byte moss].each do |theme| %>
-        <div class="byte-buddy-face-choices" data-buddy-face-choices data-face-theme="<%= theme %>"<%= " hidden".html_safe unless @conversation && current_user.buddy_theme == theme %>>
+        <div class="byte-buddy-face-choices" data-buddy-face-choices data-face-theme="<%= theme %>"<%= " hidden".html_safe unless buddy_page_theme == theme %>>
           <% face_names.call(theme).each do |f| %>
             <button type="button" data-face="<%= f %>"><%= f.tr('_', ' ') %></button>
           <% end %>
@@ -193,7 +212,7 @@
   <%# flashes blank while the PNG/SVG fetches — they land in the browser %>
   <%# cache up front, so the CSS background swap is instant. Off-screen (not %>
   <%# display:none) to guarantee the fetch. %>
-  <% buddy_theme = current_user.buddy_theme.presence || "byte" %>
+  <% buddy_theme = buddy_page_theme.presence || "byte" %>
   <div class="byte-buddy-preload" aria-hidden="true">
     <% Dir[Rails.root.join("app/assets/images/buddy/#{buddy_theme}/face_*.{png,svg}")].sort.each do |p| %>
       <img src="<%= image_path("buddy/#{buddy_theme}/#{File.basename(p)}") %>" alt="" width="1" height="1" decoding="async">
@@ -269,7 +288,7 @@
       class="byte-input"
       data-byte-input
       rows="1"
-      placeholder="Say something to <%= current_user.buddy_theme == 'moss' ? 'Moss' : 'Byte' %>…"
+      placeholder="Say something to <%= buddy_page_theme == 'moss' ? 'Moss' : 'Byte' %>…"
       autocapitalize="<%= bash_mode ? 'none' : 'sentences' %>"
       autocorrect="<%= bash_mode ? 'off' : 'on' %>"
       spellcheck="<%= bash_mode ? 'false' : 'true' %>"
@@ -366,7 +385,7 @@
     conversations: @conversations.map(&:as_wire),
     messages:      @messages.map(&:as_wire),
     buddy_sleep: {
-      sleep_until: current_user.buddy_sleep_until&.iso8601,
+      sleep_until: (@conversation.buddy_sleep_until&.iso8601 if ::Buddy::SleepGuard.sleeping?(current_user)),
       wake_string: (::Buddy::SleepGuard.wake_string(current_user) if ::Buddy::SleepGuard.sleeping?(current_user)),
     },
   ) %>
