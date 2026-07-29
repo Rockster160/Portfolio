@@ -56,11 +56,15 @@ Buddy::Tools.register(
     include tasks shared with them by someone else (those run under the
     owner's account).
   TXT
-  args: {
+  args:        {
     name: { type: :string, required: true,  description: "Task name to fire, verbatim from the index" },
     data: { type: :string, required: false, description: "Colon-separated key:value data the listener filters on. Omit for bare-scope tasks." },
   },
-  confirm: ->(payload, ctx) {
+  # Level 1: scenes / lights / fans / house automations fire immediately (a
+  # receipt confirms), matching how the person expects "turn on the lights" to
+  # just happen rather than prompt a checkbox.
+  level:       1,
+  confirm:     ->(payload, ctx) {
     q = payload[:name].to_s.downcase.strip
     candidates = ctx.user.accessible_tasks.buddy_visible.where.not(listener: [nil, ""])
       .pluck(:id, :name, :listener)
@@ -83,13 +87,13 @@ Buddy::Tools.register(
     end
     { summary: summary, resolved: { task_id: id, task_name: name, scope: scope, data: data } }
   },
-  label: ->(payload, _ctx) {
+  label:       ->(payload, _ctx) {
     title = (payload[:task_name] || payload[:name]).to_s
-    subs = ["scope: #{payload[:scope] || '?'}"]
+    subs = ["scope: #{payload[:scope] || "?"}"]
     subs << "data: #{payload[:data]}" if payload[:data].present?
     { title: title, sub: subs.join("\n") }
   },
-  execute: ->(payload, ctx) {
+  execute:     ->(payload, ctx) {
     # Same shape as the `trigger <scope>:<key>:<value>` command - scope plus
     # parsed data. Fires the SCOPE, so anything else the person can reach on
     # it and whose filter the data satisfies runs too, exactly like any other
@@ -100,7 +104,7 @@ Buddy::Tools.register(
     ::Jil.trigger(ctx.user, payload[:scope].to_sym, data, auth: :buddy, auth_id: ctx.user.id)
     { fired: true, task_id: payload[:task_id], scope: payload[:scope], data: payload[:data] }
   },
-  receipt: ->(_result, ctx) {
+  receipt:     ->(_result, ctx) {
     name = ctx.proposal["payload"]&.dig("task_name") || "task"
     "Fired **#{name}** ✓"
   },

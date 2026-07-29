@@ -1,21 +1,42 @@
 module Buddy
-  # Central point for buddy_expression writes. All expression changes go
-  # through here so we don't get drift between features. Writes the column
-  # AND broadcasts the change; multi-step transitions (e.g., celebrating →
-  # encouraging → happy over 5s) enqueue delayed follow-up calls.
+  # Central point for the pet's expression. Two distinct concepts live here,
+  # and keeping them separate is the whole point:
+  #
+  #   * The MOOD — `users.buddy_expression`. A persistent face that stays put
+  #     until something DELIBERATELY changes it: a `[[mood: X]]` marker, an
+  #     explicit check-in, or sleep/wake. It does NOT drift back to a default
+  #     on its own. `set` is the only path that writes the column.
+  #
+  #   * "thinking" — a TRANSIENT overlay shown while a turn is in flight. It is
+  #     never written to the column (so it can't clobber the stored mood) and
+  #     never persists: the client drops it the instant reply text starts
+  #     streaming, and `settle!` is a server-side backstop that re-asserts the
+  #     stored mood at turn end.
+  #
+  # Broadcasts carry `transient:` so the client knows which concept it's being
+  # told about: `transient: true` → overlay only (don't touch stored mood);
+  # `transient: false` → a real mood the client should remember and rest on.
   module ExpressionState
     module_function
 
-    def transition!(user, event, **_opts)
+    # Turn starting: show the "thinking" overlay without touching the mood.
+    def thinking!(user)
       return if user.nil?
 
-      next_expression = expression_for(event)
-      return if next_expression.nil?
-
-      set(user, next_expression)
-      schedule_followups(user, event)
+      broadcast(user, :thinking, transient: true)
     end
 
+    # Turn ended (or any point we want the pet off "thinking"): re-assert the
+    # stored mood so the client drops the overlay. The mood itself is unchanged
+    # — this never picks a default, it just echoes what's already persisted.
+    def settle!(user)
+      return if user.nil?
+
+      broadcast(user, user.buddy_expression, transient: false)
+    end
+
+    # Persist + broadcast a real mood change. The ONLY writer of the column.
+    # Used by `[[mood:]]` markers, check-ins, and sleep/wake.
     def set(user, expression)
       expression = expression.to_s
       # Validate against the faces THIS user's theme actually renders — Byte
@@ -24,46 +45,30 @@ module Buddy
       return unless Buddy::Faces.valid?(user.buddy_theme, expression)
 
       user.update_column(:buddy_expression, expression)
-      broadcast(user, expression)
+      broadcast(user, expression, transient: false)
+    end
+
+    # Back-compat shim for the old event-based callers. Turn start shows the
+    # thinking overlay; every other event just settles the pet back onto its
+    # stored mood. No event forces a mood any more — the mood persists until
+    # a marker / check-in / sleep explicitly moves it. (This is the fix for
+    # "the face changed for a second then reverted": nothing reverts it now.)
+    def transition!(user, event, **_opts)
+      return if user.nil?
+
+      event.to_sym == :turn_started ? thinking!(user) : settle!(user)
     end
 
     class << self
       private
 
-      def expression_for(event)
-        case event.to_sym
-        # `thinking` is transitional ONLY — the "working on your reply" face,
-        # shown until the reply lands (turn_ended / a mood marker replaces it).
-        # No settled state ever rests on it, or the pet looks stuck mid-thought.
-        when :turn_started        then :thinking
-        when :turn_ended_clean    then :neutral   # resting default, not "cheesy grin happy"
-        # Server-driven events use faces BOTH themes have (Byte lacks
-        # focused/celebrating; Moss lacks annoyed/nerd) so they render for
-        # either pet.
-        when :proposals_awaiting  then :neutral   # waiting on the user — a settled rest, not mid-thought
-        when :proposals_executed  then :happy
-        when :proposals_cancelled then :neutral
-        when :tool_failed         then :sad       # something didn't go through — settled concern, not stuck thinking
-        when :idle_long           then :neutral
-        end
-      end
-
-      def schedule_followups(user, event)
-        return unless event.to_sym == :proposals_executed
-
-        # Wind down to the resting baseline. `happy` (set now) and `neutral`
-        # are the only faces both themes share for a server-driven step —
-        # `encouraging` would render blank on Moss.
-        Buddy::ExpressionCyclerJob.set(wait: 4.seconds).perform_later(user.id, "neutral")
-      end
-
-      def broadcast(user, expression)
+      def broadcast(user, expression, transient:)
         MonitorChannel.broadcast_to(user, {
           id:      :byte,
           channel: :byte,
-          data:    { kind: :buddy_expression, expression: expression },
+          data:    { kind: :buddy_expression, expression: expression.to_s, transient: transient },
         })
-      rescue => e
+      rescue StandardError => e
         Rails.logger.warn("[Buddy] expression broadcast failed: #{e.class}: #{e.message}")
       end
     end

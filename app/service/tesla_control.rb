@@ -143,7 +143,9 @@ class TeslaControl
   #      AddressBook#match_contact handles possessive/plural normalization
   #      ("Sarah's", "Sarahs", "Sarah's house", "Sarah's place", etc.).
   #   2. Bare "lat,lng" pair (e.g. "40.4804,-111.998")
-  #   3. Anything else passed through as a free-form address string
+  #   3. A fuzzy place name resolved to a real formatted address via Places,
+  #      biased to where we are now.
+  #   4. Anything else passed through as a free-form address string
   # Tesla's share endpoint accepts both addresses and lat,lng — we just
   # hand the text along once we've picked the right form.
   def self.resolve_destination(input)
@@ -154,6 +156,16 @@ class TeslaControl
     return contact_address if contact_address.present?
 
     return text.gsub(/\s/, "") if text.match?(/\A-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\z/)
+
+    # Resolve a fuzzy place ("the plunge in Alpine", "Costco") to a concrete
+    # address near our current location BEFORE handing it to the car. Without
+    # this the raw phrase goes to Tesla's onboard search, which happily grabs
+    # the nearest city with a matching word — that's the bug where "the plunge
+    # in Alpine" navigated to the town of Alpine instead of the actual spot.
+    # Falls through to the raw text when Places can't place it (and off-prod,
+    # where nearest_from_name is a no-op).
+    place = (User.me.address_book.nearest_from_name(text) rescue nil)
+    return place if place.present?
 
     text
   end

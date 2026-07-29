@@ -17,8 +17,9 @@ module Buddy
         when :mood     then apply_mood(user, eff[:body])
         when :remember then apply_remember(user, eff[:body])
         when :forget   then apply_forget(user, eff[:body])
+        when :stash    then apply_stash(user, eff[:body])
         end
-      rescue => e
+      rescue StandardError => e
         Rails.logger.warn("[Buddy::SideEffects] #{eff[:verb]} failed: #{e.class}: #{e.message}")
       end
     end
@@ -38,12 +39,20 @@ module Buddy
       # "is Buddy using expressions?" — grep prod for `[Buddy::mood]`.
       Rails.logger.info(
         "[Buddy::mood] user=#{user.id} theme=#{user.buddy_theme} requested=#{expression.inspect} " \
-        "valid=#{valid} current=#{user.buddy_expression.inspect}"
+        "valid=#{valid} current=#{user.buddy_expression.inspect}",
       )
       return unless valid
       return if user.buddy_expression == expression  # no-op if unchanged
 
       Buddy::ExpressionState.set(user, expression)
+    end
+
+    # `[[stash: id=N category=work summary=...]]` — records Buddy's sort of a
+    # brain-dump idea (category + summary). Fires silently; the friendly "filed
+    # under X" line is Buddy's prose, not this marker.
+    def apply_stash(user, body)
+      args = Buddy::MarkerParser.parse_args(body)
+      Buddy::Stash.apply_sort(user, args)
     end
 
     # `[[remember: <fact>]]` — writes a durable BuddyMemory row. Bounded to 500

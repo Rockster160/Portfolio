@@ -46,40 +46,30 @@ module Buddy
           first.merge(count: total_count)
         }
 
-      # Trusted, no-confirm tools execute immediately and drop an activity
-      # receipt; everything else becomes a checkbox row awaiting confirmation.
-      auto, confirm = merged.partition { |p| p[:tool][:auto] }
-      auto_ran = run_auto(user, byte_message, auto)
+      # Split by confidence level:
+      #   1 → fire now + activity receipt chip (no checkbox).
+      #   2 → fire now, but show up as a PRE-CHECKED checklist row the person
+      #       can uncheck to undo.
+      #   3 → a plain pending checkbox they tap to run.
+      # Level-2 rows lead the checklist so the already-done items sit on top.
+      level1, rest   = merged.partition { |p| p[:tool][:level] == 1 }
+      level2, level3 = rest.partition { |p| p[:tool][:level] == 2 }
+      auto_ran = run_auto(user, byte_message, level1)
 
-      return { action: nil, auto_ran: auto_ran } if confirm.empty?
+      rows = level2 + level3
+      return { action: nil, auto_ran: auto_ran } if rows.empty?
 
       # Build button hashes. Tool label procs may return either a plain
       # String (title only) or a Hash `{ title:, sub: }` — the second form
       # renders the `sub` value as small text beneath the title so
       # non-default details (a past completion time, an assignee that isn't
       # the current user, extra function args being passed) don't have to
-      # crowd the title line.
-      buttons = confirm.each_with_index.map { |p, i|
-        ctx = Buddy::ToolContext.new(user)
-        raw = safely {
-          if p[:count] > 1 && p[:tool][:merge_label]
-            p[:tool][:merge_label].call(p[:payload], p[:count])
-          else
-            p[:tool][:label].call(p[:payload], ctx)
-          end
-        } || p[:tool][:name].to_s
-
-        title, sub = extract_title_sub(raw)
-
-        {
-          "id"        => i + 1,
-          "label"     => title,
-          "sublabel"  => sub,
-          "tool_name" => p[:tool][:name].to_s,
-          "payload"   => stringify(p[:payload]),
-          "count"     => p[:count],
-          "status"    => "pending",
-        }
+      # crowd the title line. Level-2 rows run their tool right here so they
+      # arrive already executed (and undoable); level-3 rows stay pending.
+      conversation = byte_message.byte_conversation
+      buttons = rows.each_with_index.map { |p, i|
+        base = build_button(user, p, i + 1)
+        p[:tool][:level] == 2 ? run_level2_row(user, conversation, p, base) : base.merge("status" => "pending")
       }
 
       # Attach a ByteAction to the reply message in-place. We don't use
@@ -133,7 +123,7 @@ module Buddy
           # so a tool behaves identically whether it's auto or confirmed.
           payload = stringify(p[:payload]).symbolize_keys
           result  = Buddy::Tools.dispatch(p[:tool], payload, ctx)
-          text   =
+          text =
             if result[:ok]
               safely { p[:tool][:receipt].call(result[:data], ctx) }.presence || "Done"
             else
@@ -158,6 +148,60 @@ module Buddy
         true
       end
 
+      # The shared "row shell" both level-2 and level-3 rows start from: id,
+      # label/sublabel (from the tool's label or merge_label proc), tool name,
+      # payload, and count. Status/result get layered on after.
+      def build_button(user, p, id)
+        ctx = Buddy::ToolContext.new(user)
+        raw = safely {
+          if p[:count] > 1 && p[:tool][:merge_label]
+            p[:tool][:merge_label].call(p[:payload], p[:count])
+          else
+            p[:tool][:label].call(p[:payload], ctx)
+          end
+        } || p[:tool][:name].to_s
+
+        title, sub = extract_title_sub(raw)
+        {
+          "id"        => id,
+          "label"     => title,
+          "sublabel"  => sub,
+          "tool_name" => p[:tool][:name].to_s,
+          "payload"   => stringify(p[:payload]),
+          "count"     => p[:count],
+        }
+      end
+
+      # Execute a level-2 row immediately (count times) and return its button
+      # already resolved: `executed` + a revert descriptor makes it `undoable`,
+      # so the client renders it pre-checked and unchecking it walks the action
+      # back. Mirrors the per-row execution in ProposalExecutor, minus the
+      # separate receipt bubble (the pre-checked row IS the receipt).
+      def run_level2_row(user, conversation, p, base)
+        tool = p[:tool]
+        proposal_shape = { "id" => base["id"], "payload" => base["payload"], "tool_name" => base["tool_name"] }
+        ctx = Buddy::ToolContext.new(user, proposal: proposal_shape, conversation: conversation)
+        payload = base["payload"].symbolize_keys
+        count = (base["count"] || 1).to_i
+
+        outcomes = Array.new(count) { Buddy::Tools.dispatch(tool, payload, ctx) }
+
+        if outcomes.all? { |o| o[:ok] }
+          data    = outcomes.first[:data].is_a?(Hash) ? outcomes.first[:data] : {}
+          reverts = outcomes.filter_map { |o| o[:data].is_a?(Hash) ? (o[:data][:revert] || o[:data]["revert"]) : nil }
+          base.merge(
+            "status"   => "executed",
+            "result"   => stringify(data).merge("reverts" => reverts),
+            "receipt"  => safely { tool[:receipt].call(outcomes.first[:data], ctx) }.to_s,
+            "undoable" => reverts.any?,
+          )
+        elsif outcomes.any? { |o| o[:ok] }
+          base.merge("status" => "partial", "error_message" => outcomes.reject { |o| o[:ok] }.pick(:error))
+        else
+          base.merge("status" => "failed", "error_message" => outcomes.first[:error])
+        end
+      end
+
       def extract_title_sub(raw)
         if raw.is_a?(Hash)
           title = (raw[:title] || raw["title"]).to_s
@@ -176,7 +220,7 @@ module Buddy
 
       def safely
         yield
-      rescue => e
+      rescue StandardError => e
         Rails.logger.warn("[Buddy::ProposalBuilder] proc raised: #{e.class}: #{e.message}")
         nil
       end

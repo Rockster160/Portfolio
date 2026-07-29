@@ -28,7 +28,9 @@ module Buddy
       when "affirmation"
         trigger_affirmation(conversation)
       when "suggest"
-        trigger_suggest(conversation)
+        trigger_suggest(conversation, params[:category].to_s)
+      when "stash"
+        arm_stash(conversation, params[:category].to_s)
       else
         render(json: { error: "unknown kind" }, status: :bad_request)
       end
@@ -45,86 +47,8 @@ module Buddy
     # only supply the intent + hard constraints.
     TONE_REMINDER = "Warm, short, human. No em dashes (use commas or short sentences). Don't list what I did in bullet form. Don't call out exact times like '8:19'. Don't recite chores by name unless one specific one is your recommendation.".freeze
 
-    # Comfort bands mirror the dashboard weather cell's colour scale
-    # (vars.js temp_scale: 64°F green = the comfortable centre, 78°F yellow =
-    # warm, 96°F red = hot, 32°F = freezing). Encoded here so the Today
-    # briefing frames the weather the way we read it at a glance.
-    def weather_briefing_block
-      summary = WeatherService.summary
-      return "" if summary.blank?
-
-      week  = WeatherService.week_outlook
-      lines = [
-        "",
-        "WEATHER (weave it in naturally, don't recite a forecast):",
-        "Today: #{summary}",
-      ]
-      # Any day this week with extra weather (rain/wind/snow) is worth a quick
-      # heads-up, even when today itself is unremarkable.
-      lines << "This week to flag: #{week}. Give a short heads-up for any day with rain / wind / snow." if week.present?
-      lines += [
-        "Comfort read on today's high:",
-        "- ~62-75°F is the comfortable sweet spot - no need to fuss.",
-        "- upper 70s is warm; mid-80s and up is hot - flag it, suggest light layers / water.",
-        "- 50s is cool, 40s and below is cold; freezing or under, say to grab a coat.",
-        "- real rain chance today? mention an umbrella.",
-        "Skip the today-comfort line if it's unremarkable, but still flag any notable day this week.",
-      ]
-      lines.join("\n")
-    end
-
     def trigger_today(conversation)
-      body = <<~PROMPT.strip
-        What's on for TODAY, forward-looking. This is a briefing about the day ahead, NOT a recap of yesterday or a review of what's already done.
-
-        OPEN with a warm time-of-day greeting when it fits - read `now_local` for the hour. Either the short form ("Morning!" / "Afternoon!" / "Evening!") or the full "Good morning" / "Good afternoon" / "Good evening" works; pick whatever feels natural. LEAN INTO the greeting when it genuinely lands: the first check of the day, or when we haven't talked in a while (look at the conversation - if the last exchange was hours ago or it's a fresh start, a proper "Good morning" is exactly right). SKIP it only when we just talked a moment ago (back-to-back) or the hour is genuinely odd - don't greet twice in one thread.
-        #{weather_briefing_block}
-
-        LEAD WITH what still needs to happen today:
-        - `chores_pending_today` - the primary answer. Name them.
-        - Give extra weight to items explicitly DUE today that AREN'T daily (a `due_today: true` chore whose `freq` is weekly/monthly/less, or a hot pick). Those are the easy-to-forget ones and the most useful to surface - daily habits I know cold.
-        - BATCH related items: if several due chores are obviously one errand or theme (all the trash / recycling / bins, or all the plant watering), say it once as the theme ("it's trash day", "watering day") rather than listing each one.
-        - `today_agenda` - today's events / meetings with times. But see UNUSUAL-ONLY below: don't recite the daily-recurring stuff.
-        - Agenda items tagged `mine: false` (with an `owner`, e.g. Chelsea) are on a partner's PERSONAL calendar shared with me - awareness only. They are NOT my tasks. Don't list them as mine; usually don't mention them at all. Only bring one up if it actually affects me (a conflict, a hand-off, something I'm part of), and attribute it ("Chelsea's got a thing at 3").
-        - `chores_hot_picks` - flagged for attention today.
-
-        WEIGHT BY HOW ROUTINE IT IS (the `cadence` tag):
-        - `cadence` of "daily" / "every weekday" = something I know cold. Don't recite it as news. A quick gloss is fine ("usual morning stuff, then...") but never a line-by-line of my standing schedule.
-        - Less-frequent cadences ("weekly", "monthly", "yearly", "every 6 days") I may NOT have top of mind - a light touch is genuinely helpful ("your monthly 1:1 with Eric is this afternoon"). Touch on it, don't dive into details.
-        - No `cadence` at all = a one-off (vet appt, dinner). Always worth surfacing.
-        - DO call out a routine that's NOT happening: a `cancelled` item, especially a recurring one, is a real heads-up ("no standup tomorrow"). A normal thing missing beats a normal thing present.
-        - If a soon item has `drive_min`, you can work in the drive ("~25 min drive, so leave-ish soon"). Only when it's close enough to matter.
-
-        REST OF THE WEEK (`upcoming_agenda`, tomorrow onward):
-        - Weight by proximity - the closer, the more worth mentioning. Tomorrow's oddity matters more than something 6 days out; only genuinely notable things a week away earn a mention.
-        - Same cadence weighting: gloss/skip the daily-and-weekday repeats, lightly flag the less-common recurrences and one-offs, call out cancelled routines. On a weekend, a unique Monday thing is fair game ("heads up, dentist Monday morning").
-        - At most a line. If nothing worth noting is coming, say nothing about the week.
-
-        SECONDARY (mention only if genuinely relevant):
-        - `chores_done_today` - only if I've clearly gotten a lot done and it's worth acknowledging. Never lead with it. Never make it the point.
-
-        DO NOT USE:
-        - `recent_events` for anything with a timestamp older than this morning. Those are yesterday. This ask is about today, not a diary of the last 24 hours.
-        - "Yesterday you..." framing at all. Yesterday is done. Today is what I'm asking about.
-        - Motivational spin like "you crushed it yesterday, keep it up today". That's a review, not a briefing.
-
-        HOW TO ANSWER:
-        - Lead with pending / unusual-upcoming. Names, not vague gestures. "Wordle and Water are still open, and you've got a 2pm vet appt" beats "some dailies and a thing this afternoon".
-        - Short list OK when it helps skim ("Still pending: X, Y, Z"). One or two lines of prose for shape ("light morning, busier afternoon around the vet appt").
-        - If the day looks empty AND there are no dailies or scheduled items, keep it short and warm - a "not much on deck today, what are you thinking?" not a recap of yesterday.
-
-        HARD NO:
-        - Never recap yesterday.
-        - Never invent chores/events not in context.
-        - Don't recite my daily / every-weekday repeats line by line ("your 9:30 is still on"). Gloss those. Less-frequent recurrences and one-offs are fair to mention.
-        - No filler like "quiet day", "not a bad thing", "in the bag".
-        - No "based on what I have" / "your context shows" / any scaffolding-talk.
-
-        Aim for 3-5 short lines. Skimmable.
-
-        #{TONE_REMINDER}
-      PROMPT
-      dispatch_trigger(conversation, body, buddy_action: "today")
+      dispatch_trigger(conversation, ::Buddy::TodayBriefing.seed(current_user), buddy_action: "today")
     end
 
     def trigger_checkin(conversation, mood)
@@ -169,9 +93,27 @@ module Buddy
       dispatch_trigger(conversation, body, buddy_action: "affirmation")
     end
 
-    def trigger_suggest(conversation)
+    # Optional bucket focus for "What now?" - the person picked Me / Home / Work
+    # (or Anything = no filter). Steers the suggestion toward that bucket's
+    # stashed ideas + the right kind of chore, with a graceful empty fallback.
+    def suggest_focus_block(category)
+      case category
+      when "me"
+        "FOCUS - the person is asking about their **Me** bucket (personal). Prefer a `stashed_ideas` item with category \"me\"; else a personal / self-care chore from `chores_pending_today`. If nothing fits, keep it light and generic - don't force it."
+      when "home"
+        "FOCUS - the person is asking about their **Home** bucket (household). Prefer a `stashed_ideas` item with category \"home\"; else a household chore from `chores_pending_today`. If nothing fits, keep it light and generic."
+      when "work"
+        "FOCUS - the person is asking about their **Work** bucket. There aren't work chores tracked here, so lean on `stashed_ideas` with category \"work\". If that's empty, just say so warmly and generically (\"nothing work-ish stashed - what's on your plate?\") - don't reach for household chores."
+      else
+        ""
+      end
+    end
+
+    def trigger_suggest(conversation, category=nil)
+      focus = suggest_focus_block(category)
       body = <<~PROMPT.strip
         What should I do right now? Look at the actual state and give a real answer.
+        #{"\n#{focus}\n" if focus.present?}
 
         WHERE TO LOOK (in this order):
         1. `chores_pending_today` in context - these are the chores STILL OPEN for today (already-completed ones are in `chores_done_today` and are OFF the table). Primary candidates. Name them.
@@ -189,13 +131,27 @@ module Buddy
         - "Quiet Friday" / "not a bad thing" / "you can just be done" / "tomorrow's got catching up" - none of that. Meaningless if there are pending items sitting there.
         - Never invent chores/events not in context.
 
-        IF `chores_pending_today` IS EMPTY and there's nothing on the agenda: don't announce the emptiness. Just answer warmly like a friend when nothing specific is up - maybe a gentle non-work suggestion (stretch, water, breath), maybe "not sure, what are you in the mood for?" One sentence. No scaffolding-talk.
+        STASHED IDEAS: if I have `stashed_ideas`, one of them is often a great "what now" answer - "you'd stashed an idea about X, want to take a run at it?" Prefer one that fits the moment (a Work idea during a work lull, a Home one on a weekend). If a bucket I'm clearly asking about is empty, don't force it - fall back to chores (household vs personal) or just answer generically.
+
+        IF `chores_pending_today` IS EMPTY and there's nothing on the agenda: don't announce the emptiness. Just answer warmly like a friend when nothing specific is up - a stashed idea if one fits, else a gentle non-work suggestion (stretch, water, breath), or "not sure, what are you in the mood for?" One sentence. No scaffolding-talk.
 
         Keep the reply short but SPECIFIC when there IS data. Name the actual chores by name.
 
         #{TONE_REMINDER}
       PROMPT
       dispatch_trigger(conversation, body, buddy_action: "suggest")
+    end
+
+    # Brain-dump capture: arm a one-shot latch so the person's NEXT message in
+    # this conversation is filed as an idea (see ByteController#create_message +
+    # Buddy::Stash). No Buddy turn fires here — we're just opening the floor.
+    def arm_stash(conversation, category)
+      unless Buddy::Stash::CATEGORIES.include?(category)
+        return render(json: { error: "category must be one of #{Buddy::Stash::CATEGORIES.join("/")}" }, status: :bad_request)
+      end
+
+      Buddy::Stash.arm!(conversation, category)
+      render json: { armed: true, category: category }, status: :ok
     end
 
     def log_mood_event(mood)

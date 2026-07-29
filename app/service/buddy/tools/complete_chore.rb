@@ -12,12 +12,12 @@ Buddy::Tools.register(
     non-default time gets surfaced on the confirmation row so it's clear
     what will be recorded.
   TXT
-  args: {
+  args:        {
     chore: { type: :string, required: true,  description: "Fuzzy chore name" },
     note:  { type: :string, required: false, description: "Optional note captured on the completion" },
     at:    { type: :string, required: false, description: "When it was actually done - past time expression or ISO timestamp. Omit for 'now'." },
   },
-  confirm: ->(payload, ctx) {
+  confirm:     ->(payload, ctx) {
     chore = ctx.resolve_chore(payload[:chore])
     raise "no chore matching #{payload[:chore].inspect}" if chore.nil?
 
@@ -32,7 +32,7 @@ Buddy::Tools.register(
     when_str = resolved[:completed_at] ? " (at #{Buddy::TimeParser.friendly(resolved[:completed_at], user: ctx.user)})" : ""
     { summary: "Mark #{chore.name} done#{when_str}?", resolved: resolved }
   },
-  label: ->(payload, ctx) {
+  label:       ->(payload, ctx) {
     chore = Chore.find_by(id: payload[:chore_id])
     title = chore&.name || payload[:chore].to_s
 
@@ -46,20 +46,27 @@ Buddy::Tools.register(
 
     { title: title, sub: subs.join("\n").presence }
   },
-  merge_key: ->(payload) { "complete_chore:#{payload[:chore_id]}:#{payload[:completed_at]}" },
+  merge_key:   ->(payload) { "complete_chore:#{payload[:chore_id]}:#{payload[:completed_at]}" },
   merge_label: ->(payload, count) {
     chore = Chore.find_by(id: payload[:chore_id])
     title = "#{count}× #{chore&.name || payload[:chore]}"
     sub = payload[:completed_at].present? ? "at #{Buddy::TimeParser.friendly(payload[:completed_at], user: nil)}" : nil
     { title: title, sub: sub }
   },
-  execute: ->(payload, ctx) {
+  # Level 2: fires immediately as a pre-checked row; unchecking it destroys the
+  # completion (which fires the :uncompleted trigger) via the revert descriptor.
+  level:       2,
+  execute:     ->(payload, ctx) {
     chore = Chore.find(payload[:chore_id])
     at = payload[:completed_at].present? ? (Time.zone.parse(payload[:completed_at].to_s) || Time.current) : Time.current
     result = ChoreCompleter.new(chore, ctx.user, at: at, note: payload[:note]).call
-    { chore_completion_id: result.completion&.id, skipped_reason: result.skipped_reason }
+    out = { chore_completion_id: result.completion&.id, skipped_reason: result.skipped_reason }
+    if result.completion&.id
+      out[:revert] = { op: "created", model: "ChoreCompletion", id: result.completion.id, summary: "unmarked #{chore.name}" }
+    end
+    out
   },
-  receipt: ->(_result, ctx) {
+  receipt:     ->(_result, ctx) {
     chore_id = ctx.proposal["payload"]&.dig("chore_id")
     at = ctx.proposal["payload"]&.dig("completed_at")
     name = Chore.find_by(id: chore_id)&.name || "that chore"

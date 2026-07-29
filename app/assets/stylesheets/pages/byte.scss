@@ -2763,6 +2763,11 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
     text-decoration: line-through;
     .byte-msg-action-kind { opacity: 0.5; }
   }
+  &[data-status="undone"] {
+    opacity: 0.4;
+    text-decoration: line-through;
+    .byte-msg-action-kind { opacity: 0.5; }
+  }
   &[data-status="failed"] {
     color: #F26B6B;
     border-color: rgba(242, 107, 107, 0.4);

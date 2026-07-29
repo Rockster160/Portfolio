@@ -46,6 +46,11 @@ cron_jobs = [
     cron:  every_minute,
   },
   {
+    name:  "Fire Scheduled Buddy Today Briefing",
+    class: "BuddyTodayWorker",
+    cron:  every_minute,
+  },
+  {
     name:  "Prune Expired Buddy Memories",
     class: "BuddyMemoryPruneWorker",
     cron:  daily_4am,

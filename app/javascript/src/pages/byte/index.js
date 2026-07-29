@@ -94,6 +94,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   const loader = app.querySelector("[data-byte-loader]");
   const composer = app.querySelector("[data-byte-composer]");
   const input = app.querySelector("[data-byte-input]");
+  const originalPlaceholder = input?.getAttribute("placeholder") ?? "";
+  // True while the composer has focus (keyboard up / user typing). In that
+  // state we pin to the bottom UNCONDITIONALLY: the user is on the newest
+  // message and the keyboard must never cover it. This bypasses the atBottom
+  // heuristic, which flips false transiently mid-keyboard-animation and was
+  // stranding the thread scrolled up under the keyboard.
+  const composerFocused = () => document.activeElement === input;
   const status = app.querySelector("[data-byte-status]");
   const syncBadge = app.querySelector("[data-byte-sync]");
   const reloadBtn = app.querySelector("[data-byte-reload]");
@@ -817,6 +824,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       const i = stash.push({ kind: "inline", code }) - 1;
       return `@INLINE@${i}@INLINE@`;
     });
+    // Strip Buddy side-effect / proposal markers from prose. They're processed
+    // server-side and must never be visible — including a LEADING [[mood:]]
+    // that would otherwise flash at the very start of a streaming reply. Code
+    // spans are stashed above, so genuine code containing "[[" is protected,
+    // and these four verbs are Buddy-only vocabulary so stripping is safe for
+    // every mode.
+    t = t.replace(/\[\[\s*(?:propose|mood|remember|forget|stash)\s*:[^\]]*\]\]/gi, "");
     t = t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     t = t.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
     t = t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
@@ -1072,10 +1086,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   // so it never fights an intentional scroll-up. Coalesced via pinRaf so a
   // burst of streaming mutations is one scroll write per frame.
   function pinToBottomSoon() {
-    if (!atBottom || pinRaf) return;
+    // While composing, pin even if the atBottom heuristic momentarily reads
+    // false (a long message rendering while the keyboard animates) — otherwise
+    // its tail strands below the fold.
+    if ((!atBottom && !composerFocused()) || pinRaf) return;
     pinRaf = requestAnimationFrame(() => {
       pinRaf = 0;
-      if (atBottom) thread.scrollTop = thread.scrollHeight;
+      if (atBottom || composerFocused()) thread.scrollTop = thread.scrollHeight;
     });
   }
 
@@ -1503,6 +1520,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const body = rawBody.trim();
     if (!body) return;
     input.value = "";
+    // Clear any brain-dump capture hint once the idea (or any message) is sent.
+    if (originalPlaceholder != null) input.placeholder = originalPlaceholder;
     autosize();
     sendMessageTo(currentConversationId, body);
   }
@@ -1514,6 +1533,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   buddyHero = initBuddyHero({
     hero: heroEl,
     conversationIdFn: () => currentConversationId,
+    // Brain-dump: after a bucket is picked, hint in the composer that the next
+    // message is the idea being stashed. Reset on send (see handleSend).
+    onStashArmed: (category) => {
+      const label =
+        { me: "Me", home: "Home", work: "Work", anything: "Buddy to sort" }[
+          category
+        ] || category;
+      input.placeholder = `Dump your idea (→ ${label})…`;
+      input.focus();
+    },
   });
   // Sync initial visibility to the currently-active conversation.
   buddyHero?.onModeChange(convoManager.currentConversation()?.mode);
@@ -1662,13 +1691,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   // stranding the newest message off-screen. Re-pin to the bottom when the
   // transition settles, and directly on focus/blur.
   const repinIfAtBottom = () => {
-    if (atBottom) scrollToBottom("auto");
+    if (atBottom || composerFocused()) scrollToBottom("auto");
   };
   heroEl?.addEventListener("transitionend", (e) => {
     if (e.propertyName === "min-height" || e.propertyName === "max-height")
       repinIfAtBottom();
   });
-  input.addEventListener("focus", repinIfAtBottom);
+  // Focusing the composer (keyboard opening) always snaps to the bottom, no
+  // matter where the reader was — that's the whole point of tapping to type.
+  input.addEventListener("focus", () => scrollToBottom("auto"));
   input.addEventListener("blur", repinIfAtBottom);
 
   function autosize() {
@@ -1721,8 +1752,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       // newest one. iOS fires these visualViewport events repeatedly across
       // the keyboard animation, so each one re-pins and the bottom tracks
       // the shrink smoothly. Gated on atBottom so a scrolled-up reader is
-      // left where they are.
-      if (atBottom) scrollToBottom("auto");
+      // left where they are — EXCEPT while composing, where we force the pin
+      // so the keyboard shrinking the viewport can't strand the thread above
+      // it (the bug: keyboard covering the messages / long message below view).
+      if (atBottom || composerFocused()) scrollToBottom("auto");
     });
   };
   setAppHeight();
@@ -1834,10 +1867,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
       }
       if (data.kind === "buddy_expression") {
-        // Remember it as the wake target so a later reconnect restores this
-        // face rather than a stale one.
-        buddyWakeExpr = data.expression;
-        buddyHero?.setExpression(data.expression);
+        if (data.transient) {
+          // A transient overlay (e.g. "thinking"). Show it, but DON'T remember
+          // it as the mood — when it clears we fall back to the real face.
+          buddyHero?.setExpression(data.expression, { transient: true });
+        } else {
+          // A real mood change. Remember it as the wake/rest target so a later
+          // reconnect restores this face rather than a stale one.
+          buddyWakeExpr = data.expression;
+          buddyHero?.setExpression(data.expression);
+        }
         return;
       }
       if (data.kind === "buddy_sleep") {
@@ -1888,6 +1927,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         if (convId === currentConversationId) {
           receiveMessage(msg);
+          // Buddy's reply text just started (or grew): drop the "thinking"
+          // overlay right away and, if the reply opens with a [[mood:]], wear
+          // that face as the words begin — not a beat later at turn-end.
+          if (msg.direction === "inbound" && (msg.body || "").trim()) {
+            buddyHero?.onReplyStreaming(msg.body);
+          }
         } else if (msg.direction === "inbound") {
           const prev = drawerUnread.get(convId) || 0;
           drawerUnread.set(convId, prev + 1);

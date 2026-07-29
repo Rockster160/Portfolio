@@ -55,6 +55,23 @@ class ByteController < ApplicationController
     # for callers that don't send one (or garbage).
     created = client_ts_from(params[:client_ts]) || Time.current
 
+    # Brain-dump capture: if the person armed a "Stash" bucket, THIS message is
+    # the idea being dumped — file it instead of running a normal Buddy turn.
+    # The message still shows as their bubble; capture! adds the confirmation.
+    if conversation.buddy? && (stash_category = ::Buddy::Stash.armed_category(conversation))
+      message = conversation.byte_messages.create!(
+        user:       current_user,
+        direction:  :outbound,
+        state:      :sent,
+        body:       body,
+        metadata:   metadata,
+        created_at: created,
+      )
+      broadcast(message)
+      ::Buddy::Stash.capture!(current_user, conversation, message, stash_category)
+      return render(json: message.as_wire, status: :created)
+    end
+
     message = conversation.byte_messages.create!(
       user:       current_user,
       direction:  :outbound,
@@ -85,11 +102,11 @@ class ByteController < ApplicationController
     limit  = [limit, MAX_LIMIT].min
 
     scope = conversation.byte_messages
-    scope = scope.where("id < ?", before) if before && before > 0
+    scope = scope.where(id: ...before) if before&.positive?
 
     page = scope.chronological.last(limit)
     oldest_id = page.first&.id
-    has_more  = oldest_id ? conversation.byte_messages.where("id < ?", oldest_id).exists? : false
+    has_more  = oldest_id ? conversation.byte_messages.exists?(["id < ?", oldest_id]) : false
 
     render json: {
       conversation_id: conversation.id,
@@ -233,11 +250,9 @@ class ByteController < ApplicationController
     # even if the HTTP call to Mac hangs.
     Thread.new {
       Rails.application.executor.wrap do
-        begin
-          ByteLocal.notify_action_decision(action)
-        rescue => e
-          Rails.logger.warn("[Byte] action decision notify failed: #{e.class}: #{e.message}")
-        end
+        ByteLocal.notify_action_decision(action)
+      rescue StandardError => e
+        Rails.logger.warn("[Byte] action decision notify failed: #{e.class}: #{e.message}")
       end
     }
 
@@ -247,11 +262,11 @@ class ByteController < ApplicationController
       chosen = Array(value).first.to_s
       if chosen.present?
         followup = action.byte_conversation.byte_messages.create!(
-          user:       current_user,
-          direction:  :outbound,
-          state:      :sent,
-          body:       chosen,
-          metadata:   { source: :button, action_request_id: action.request_id },
+          user:      current_user,
+          direction: :outbound,
+          state:     :sent,
+          body:      chosen,
+          metadata:  { source: :button, action_request_id: action.request_id },
         )
         broadcast(followup)
         ByteJarvisWorker.perform_async(followup.id)
@@ -267,8 +282,15 @@ class ByteController < ApplicationController
   # and no destructive apply_decision! — the action stays live until all rows
   # are resolved or it expires. Repeat/overlapping taps are idempotent.
   def respond_buddy_proposals(action)
+    # Uncheck-to-undo on a Level-2 (already-executed) row. Allowed even once the
+    # action is decided — undoing a done row isn't gated on pending state.
+    if params[:undo].present?
+      Buddy::ProposalExecutor.undo!(action.id, params[:undo].to_i)
+      return render json: action.reload.as_wire
+    end
+
     return head(:conflict) unless action.pending? &&
-                                  (action.expires_at.nil? || action.expires_at.future?)
+      (action.expires_at.nil? || action.expires_at.future?)
 
     ids = Array(params[:value]).map(&:to_i).reject(&:zero?)
     Buddy::ProposalExecutorJob.perform_later(action.id, ids) if ids.any?
@@ -281,7 +303,7 @@ class ByteController < ApplicationController
   # asked. Idempotent: a question already answered just re-renders.
   def respond_buddy_relay(action)
     return head(:conflict) unless action.pending? &&
-                                  (action.expires_at.nil? || action.expires_at.future?)
+      (action.expires_at.nil? || action.expires_at.future?)
 
     ids = Array(params[:value]).map(&:to_i).reject(&:zero?)
     Buddy::CompanionRelay.answer_from_action(action, ids) if ids.any?
@@ -416,6 +438,7 @@ class ByteController < ApplicationController
     case verb
     when "rename"
       return ack(conversation, "usage: `/rename NEW NAME`") if arg.empty?
+
       old_name = conversation.display_name
       conversation.update!(name: arg)
       broadcast_convo_change(conversation, :updated)
@@ -426,8 +449,10 @@ class ByteController < ApplicationController
       ack(conversation, "Archived **#{conversation.display_name}**")
     when "mode"
       return ack(conversation, "Buddy is the only mode available to you.") if buddy_only?
+
       new_mode = normalized_mode(arg)
       return ack(conversation, "usage: `/mode claude|bash|jarvis|buddy`") if arg.empty?
+
       conversation.update!(mode: new_mode)
       broadcast_convo_change(conversation, :updated)
       ack(conversation, "Mode set to **#{new_mode}** for this conversation.")
@@ -452,7 +477,7 @@ class ByteController < ApplicationController
     )
     broadcast_convo_change(forked, :created)
 
-    body = "Forked → **#{forked.display_name}** (mode: #{forked.mode}#{cwd ? ", cwd: #{cwd}" : ""})"
+    body = "Forked → **#{forked.display_name}** (mode: #{forked.mode}#{", cwd: #{cwd}" if cwd})"
     ack(source, body)
   end
 

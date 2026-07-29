@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_07_28_144135) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_28_231448) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -365,6 +365,20 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_28_144135) do
     t.index ["param_key"], name: "index_boxes_on_param_key", unique: true
     t.index ["parent_key"], name: "index_boxes_on_parent_key"
     t.index ["user_id"], name: "index_boxes_on_user_id"
+  end
+
+  create_table "buddy_ideas", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.integer "category"
+    t.text "body", null: false
+    t.text "summary"
+    t.integer "status", default: 0, null: false
+    t.datetime "surfaced_at"
+    t.datetime "remind_after"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "status"], name: "index_buddy_ideas_on_user_id_and_status"
+    t.index ["user_id"], name: "index_buddy_ideas_on_user_id"
   end
 
   create_table "buddy_memories", force: :cascade do |t|
@@ -1488,6 +1502,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_28_144135) do
   add_foreign_key "agendas", "google_accounts"
   add_foreign_key "agendas", "users"
   add_foreign_key "boxes", "users"
+  add_foreign_key "buddy_ideas", "users"
   add_foreign_key "buddy_memories", "users"
   add_foreign_key "buddy_relays", "byte_actions", column: "to_byte_action_id"
   add_foreign_key "buddy_relays", "byte_conversations", column: "from_conversation_id"

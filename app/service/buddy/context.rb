@@ -18,29 +18,31 @@ module Buddy
       chore_buckets = build_chore_buckets(user, today)
 
       {
-        now_local:         now.strftime("%a %Y-%m-%d %-I:%M %p %Z"),
-        timezone:          tz,
-        user_first_name:   user.first_name,
-        emotional_state:   emotional_state(user, now),          # current mood + pet expression
-        today_agenda:      today_agenda(user, now),
-        upcoming_agenda:   upcoming_agenda(user, now),          # rest-of-week, unusual-first
+        now_local:              now.strftime("%a %Y-%m-%d %-I:%M %p %Z"),
+        timezone:               tz,
+        user_first_name:        user.first_name,
+        emotional_state:        emotional_state(user, now),          # current mood + pet expression
+        today_agenda:           today_agenda(user, now),
+        upcoming_agenda:        upcoming_agenda(user, now),          # rest-of-week, unusual-first
         # Two explicit lists per bucket - PENDING and DONE_TODAY - so
         # Buddy can never confuse "what's left" with "what's finished".
         # The previous mixed-list-with-done_today-flag was getting
         # glossed over (LLM reads the list, ignores the flag).
-        chores_pending_today:    chore_buckets[:pending_today],
-        chores_done_today:       chore_buckets[:done_today],
-        chores_hot_picks:        chore_buckets[:hot_picks],       # attention items
-        chores_scheduled_today:  chore_buckets[:scheduled_today], # recurring chores landing today but NOT in the user's intentional list
-        chores_overdue_backlog:  chore_buckets[:overdue_backlog], # long-term todo, NOT all-must-do-today
-        chores_all:              chore_buckets[:all_names],       # EVERY active chore name - the match roster for complete_chore
-        recent_events:       recent_events(user, now),
-        active_proposals:    active_proposals(user),
-        upcoming_reminders:  upcoming_reminders(user, now),
-        active_watches:      active_watches(user),
-        pending_relays:      pending_relays(user),                # open questions from a partner, awaiting THIS user's answer
-        jil_triggers:        jil_triggers(user),
-        jil_functions:       jil_functions(user),
+        chores_pending_today:   chore_buckets[:pending_today],
+        chores_done_today:      chore_buckets[:done_today],
+        chores_hot_picks:       chore_buckets[:hot_picks],       # attention items
+        chores_scheduled_today: chore_buckets[:scheduled_today], # recurring chores landing today but NOT in the user's intentional list
+        chores_overdue_backlog: chore_buckets[:overdue_backlog], # long-term todo, NOT all-must-do-today
+        chores_all:             chore_buckets[:all_names],       # EVERY active chore name - the match roster for complete_chore
+        recent_events:          recent_events(user, now),
+        active_proposals:       active_proposals(user),
+        upcoming_reminders:     upcoming_reminders(user, now),
+        active_watches:         active_watches(user),
+        pending_relays:         pending_relays(user),                # open questions from a partner, awaiting THIS user's answer
+        pending_prompts:        pending_prompts(user),               # app surveys/questions Buddy can answer or skip on demand
+        stashed_ideas:          stashed_ideas(user),                 # brain-dump ideas to occasionally resurface
+        jil_triggers:           jil_triggers(user),
+        jil_functions:          jil_functions(user),
       }
     end
 
@@ -70,13 +72,13 @@ module Buddy
       def agenda_source_map(user)
         map = {}
         Agenda.where(user_id: user.id).pluck(:id).each { |id| map[id] = { mine: true } }
-        user.shared_agendas.includes(:user).each { |ag|
+        user.shared_agendas.includes(:user).find_each { |ag|
           next if map.key?(ag.id)  # if they own it too, owned wins
 
           map[ag.id] = { mine: false, owner: ag.user&.first_name.presence || "someone" }
         }
         map
-      rescue => e
+      rescue StandardError => e
         Buddy::Errors.report(section: "context.agenda_source_map", exception: e, user: user)
         Agenda.where(user_id: user.id).pluck(:id).index_with { { mine: true } }
       end
@@ -101,22 +103,24 @@ module Buddy
         # not a fixed offset from now.
         AgendaItem.where(agenda_id: sources.keys)
           .where.not(status: :cancelled)
-          .where("start_at >= ? AND start_at < ?", now.beginning_of_day.utc, (now.beginning_of_day + 1.day).utc)
+          .where(start_at: now.beginning_of_day.utc...(now.beginning_of_day + 1.day).utc)
           .includes(:agenda, :agenda_schedule)
           .order(:start_at)
           .limit(20)
           .map { |i|
-            tag_ownership({
-              id:        i.id,
-              time:      (i.all_day ? "all day" : i.start_at.in_time_zone(user.timezone).strftime("%-I:%M %p")),
-              title:     i.name,
-              cal:       i.agenda&.name,
-              kind:      i.kind,
-              cadence:   schedule_cadence(i),  # nil = one-off; "every weekday" / "monthly" / ...
-              drive_min: drive_minutes(i),     # known travel time, for a soon "leave by" nudge
-            }.compact, sources[i.agenda_id])
+            tag_ownership(
+              {
+                id:        i.id,
+                time:      (i.all_day ? "all day" : i.start_at.in_time_zone(user.timezone).strftime("%-I:%M %p")),
+                title:     i.name,
+                cal:       i.agenda&.name,
+                kind:      i.kind,
+                cadence:   schedule_cadence(i),  # nil = one-off; "every weekday" / "monthly" / ...
+                drive_min: drive_minutes(i),     # known travel time, for a soon "leave by" nudge
+              }.compact, sources[i.agenda_id]
+            )
           }
-      rescue => e
+      rescue StandardError => e
         Buddy::Errors.report(section: "context.today_agenda", exception: e, user: user)
         []
       end
@@ -135,23 +139,25 @@ module Buddy
         cancelled  = AgendaItem.statuses[:cancelled]
 
         AgendaItem.where(agenda_id: sources.keys)
-          .where("start_at >= ? AND start_at < ?", start_from.utc, (now.beginning_of_day + UPCOMING_WEEK_WINDOW).utc)
+          .where(start_at: start_from.utc...(now.beginning_of_day + UPCOMING_WEEK_WINDOW).utc)
           .where("status != ? OR agenda_schedule_id IS NOT NULL", cancelled)
           .includes(:agenda, :agenda_schedule)
           .order(:start_at)
           .limit(25)
           .map { |i|
             local = i.start_at.in_time_zone(user.timezone)
-            tag_ownership({
-              day:       day_label(local, now),
-              time:      (i.all_day ? "all day" : local.strftime("%-I:%M %p")),
-              title:     i.name,
-              cadence:   schedule_cadence(i),  # nil = one-off
-              cancelled: i.cancelled?,
-              cal:       i.agenda&.name,
-            }.compact, sources[i.agenda_id])
+            tag_ownership(
+              {
+                day:       day_label(local, now),
+                time:      (i.all_day ? "all day" : local.strftime("%-I:%M %p")),
+                title:     i.name,
+                cadence:   schedule_cadence(i),  # nil = one-off
+                cancelled: i.cancelled?,
+                cal:       i.agenda&.name,
+              }.compact, sources[i.agenda_id]
+            )
           }
-      rescue => e
+      rescue StandardError => e
         Buddy::Errors.report(section: "context.upcoming_agenda", exception: e, user: user)
         []
       end
@@ -191,7 +197,7 @@ module Buddy
           iv > 1 ? "every #{iv} #{unit}s" : "#{unit}ly"
         else "recurring"
         end
-      rescue
+      rescue StandardError
         "recurring"
       end
 
@@ -236,7 +242,7 @@ module Buddy
         completions = ChoreCompletion
           .where(user_id: household_user_ids, day_key: today)
           .pluck(:chore_id, :user_id)
-        done_by_anyone = completions.map { |cid, _uid| cid }.to_set
+        done_by_anyone = completions.to_set { |cid, _uid| cid }
         done_by_me     = completions.filter_map { |cid, uid| cid if uid == user.id }.to_set
         done_today_ids = chores.each_with_object(Set.new) { |c, set|
           shared = c.respond_to?(:share_household?) && c.share_household?
@@ -280,7 +286,7 @@ module Buddy
 
         overdue = chores.select { |c|
           c.respond_to?(:marked_due?) && c.marked_due? &&
-            !intentional_ids.include?(c.id) && !matches_today_ids.include?(c.id)
+            intentional_ids.exclude?(c.id) && matches_today_ids.exclude?(c.id)
         }.map(&:id)
 
         {
@@ -295,7 +301,7 @@ module Buddy
           # recognized as a real chore instead of getting logged as an event.
           all_names:       chores.map(&:name).uniq.sort.first(120),
         }
-      rescue => e
+      rescue StandardError => e
         Buddy::Errors.report(section: "context.chore_buckets", exception: e, user: user)
         default_buckets
       end
@@ -330,17 +336,16 @@ module Buddy
         }
       end
 
-
       def default_buckets
         { pending_today: [], done_today: [], hot_picks: [], scheduled_today: [], overdue_backlog: [], all_names: [] }
       end
 
-      def slim_chore(chore, typical_hour = nil, due_ids = nil)
+      def slim_chore(chore, typical_hour=nil, due_ids=nil)
         return nil if chore.nil?
 
         out = {
-          id:         chore.id,
-          name:       chore.name,
+          id:   chore.id,
+          name: chore.name,
         }
         out[:freq] = chore.freq.to_s if chore.respond_to?(:freq) && chore.freq.present?
         if chore.respond_to?(:assigned?) && chore.assigned?
@@ -371,7 +376,7 @@ module Buddy
             # Attach UTC then convert to the user's local tz to get the
             # local hour they typically finish at.
             local = ts.utc.in_time_zone(tz)
-            by_chore[chore_id] << local.hour + (local.min / 60.0)
+            by_chore[chore_id] << (local.hour + (local.min / 60.0))
           }
         by_chore.transform_values { |hours| hours.sum / hours.length }
       end
@@ -395,7 +400,7 @@ module Buddy
       # data; a Buddy context build must never blow up over a single bad chore.
       def safe_matches_day(chore, day, user)
         chore.matches_day?(day, user)
-      rescue
+      rescue StandardError
         false
       end
 
@@ -409,7 +414,7 @@ module Buddy
 
         start_of_today = user.perceived_today.beginning_of_day
         user.action_events
-          .where("timestamp >= ?", start_of_today)
+          .where(timestamp: start_of_today..)
           .order(timestamp: :desc)
           .limit(15)
           .map { |e|
@@ -425,16 +430,18 @@ module Buddy
               notes: e.notes.to_s.first(60),
             }
           }
-      rescue => e
+      rescue StandardError => e
         Buddy::Errors.report(section: "context.recent_events", exception: e, user: user)
         []
       end
 
       def age_label(minutes)
-        return "just now"       if minutes < 2
+        return "just now" if minutes < 2
         return "#{minutes} min ago" if minutes < 60
+
         hours = minutes / 60
-        return "#{hours}h ago"  if hours < 6
+        return "#{hours}h ago" if hours < 6
+
         "much earlier today"
       end
 
@@ -452,7 +459,7 @@ module Buddy
             body:    r.body.to_s.first(120),
           }
         }
-      rescue => e
+      rescue StandardError => e
         Buddy::Errors.report(section: "context.upcoming_reminders", exception: e, user: user)
         []
       end
@@ -471,7 +478,7 @@ module Buddy
             body: w.body.to_s.first(120),
           }
         }
-      rescue => e
+      rescue StandardError => e
         Buddy::Errors.report(section: "context.active_watches", exception: e, user: user)
         []
       end
@@ -505,7 +512,7 @@ module Buddy
               description: desc.to_s.strip.presence,
             }.compact
           }
-      rescue => e
+      rescue StandardError => e
         Buddy::Errors.report(section: "context.jil_triggers", exception: e, user: user)
         []
       end
@@ -524,8 +531,23 @@ module Buddy
           .map { |id, name, listener, desc|
             { id: id, name: name, signature: listener.to_s.strip, description: desc.to_s.strip.presence }.compact
           }
-      rescue => e
+      rescue StandardError => e
         Buddy::Errors.report(section: "context.jil_functions", exception: e, user: user)
+        []
+      end
+
+      # Brain-dump ideas the person stashed, eligible to resurface now (active,
+      # or a defer whose remind_after has passed). Grouped so Today / What now
+      # can pull one from the relevant bucket. Each: { id, category, idea }
+      # where `idea` is the summary if Buddy sorted it, else the raw body.
+      def stashed_ideas(user)
+        return [] unless user.respond_to?(:buddy_ideas)
+
+        user.buddy_ideas.surfaceable.order(surfaced_at: :asc, created_at: :asc).limit(12).map { |i|
+          { id: i.id, category: i.category, idea: i.summary.presence || i.body.to_s.first(140) }
+        }
+      rescue StandardError => e
+        Buddy::Errors.report(section: "context.stashed_ideas", exception: e, user: user)
         []
       end
 
@@ -536,13 +558,13 @@ module Buddy
           .flat_map { |a|
             Array(a.buttons).map { |b|
               {
-                id:   b["id"],
-                tool: b["tool_name"],
+                id:      b["id"],
+                tool:    b["tool_name"],
                 summary: b["label"],
               }
             }
           }
-      rescue => e
+      rescue StandardError => e
         Buddy::Errors.report(section: "context.active_proposals", exception: e, user: user)
         []
       end
@@ -556,8 +578,29 @@ module Buddy
         BuddyRelay.open_questions_for(user).map { |r|
           { id: r.id, from: r.from_user.first_name, question: r.body, kind: r.kind }
         }
-      rescue => e
+      rescue StandardError => e
         Buddy::Errors.report(section: "context.pending_relays", exception: e, user: user)
+        []
+      end
+
+      # The app's own unanswered Prompts (surveys/questions). Deliberately NOT
+      # surfaced in the always-loaded at-a-glance block — Buddy pulls these only
+      # when the person asks about their prompts, so they don't cost tokens
+      # every turn. Each carries enough for Buddy to answer via `answer_prompt`
+      # (or `skip_prompt`): the title plus each visible question's text, type,
+      # and choices. Multi-question prompts still show so Buddy can point the
+      # person at the app.
+      def pending_prompts(user)
+        return [] unless user.respond_to?(:prompts)
+
+        user.prompts.unanswered.order(created_at: :desc).limit(10).map { |p|
+          questions = Array(p.options).map(&:deep_symbolize_keys)
+            .reject { |o| o[:type].to_s == "hidden" }
+            .map { |o| { q: o[:question], type: o[:type], choices: o[:choices] }.compact }
+          { id: p.id, title: p.question, questions: questions }
+        }
+      rescue StandardError => e
+        Buddy::Errors.report(section: "context.pending_prompts", exception: e, user: user)
         []
       end
     end

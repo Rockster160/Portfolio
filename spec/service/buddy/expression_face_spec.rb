@@ -21,25 +21,29 @@ RSpec.describe Buddy::ExpressionState do
     expect(moss.reload.buddy_expression).to eq("grin")
   end
 
-  it "drives server events to faces both themes share" do
-    %i[byte moss].each do |theme|
-      user = create(:user, buddy_theme: theme.to_s)
-      described_class.transition!(user, :proposals_awaiting)
-      expect(Buddy::Faces.valid?(theme, user.reload.buddy_expression)).to be(true)
-    end
+  it "shows 'thinking' as a transient overlay without persisting it as the mood" do
+    user = create(:user, buddy_theme: "byte")
+    user.update_column(:buddy_expression, "happy")
+
+    # turn_started broadcasts a transient overlay but must NOT write the column
+    # (the persistent mood stays put underneath the thinking face).
+    described_class.transition!(user, :turn_started)
+    expect(user.reload.buddy_expression).to eq("happy")
+    expect(MonitorChannel).to have_received(:broadcast_to).with(
+      user, hash_including(data: hash_including(expression: "thinking", transient: true))
+    )
   end
 
-  it "only rests on thinking transitionally (turn_started), never a settled state" do
+  it "keeps the mood put on settle — no drifting back to a default" do
     user = create(:user, buddy_theme: "byte")
+    user.update_column(:buddy_expression, "nerd")
 
-    described_class.transition!(user, :turn_started)
-    expect(user.reload.buddy_expression).to eq("thinking")   # transitional — reply in flight
-
-    # Settled outcomes must move off thinking, so the pet never looks stuck mid-thought.
+    # Every non-turn-start event just settles: re-broadcasts the STORED mood
+    # (clearing any thinking overlay) without changing it. This is the fix for
+    # "the face changed for a second then reverted".
     %i[turn_ended_clean proposals_awaiting proposals_executed proposals_cancelled tool_failed idle_long].each do |event|
-      described_class.set(user, "thinking")
       described_class.transition!(user, event)
-      expect(user.reload.buddy_expression).not_to eq("thinking"), "#{event} left the pet on thinking"
+      expect(user.reload.buddy_expression).to eq("nerd"), "#{event} moved the mood"
     end
   end
 

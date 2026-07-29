@@ -42,6 +42,7 @@ const STATUS_GLYPHS = {
   cancelled: "·",
   failed:    "✗",
   partial:   "~",
+  undone:    "↩",
 };
 
 // Statuses that mean the row has been acted on — checkbox stays checked
@@ -97,6 +98,11 @@ export function renderMultiSelect(container, message) {
     // permanent record, not something that vanishes on execution). Only
     // still-pending rows are live and re-triggerable.
     const resolved = RESOLVED_STATUSES.has(status);
+    // A Level-2 row ran the instant Buddy proposed it, so it arrives already
+    // executed AND undoable: shown pre-checked, and UNchecking it walks the
+    // action back. Everything else that's resolved stays locked.
+    const undoable = status === "executed" && !!btn.undoable;
+    const undone = status === "undone";
 
     const row = document.createElement("label");
     row.className = "byte-msg-action-row";
@@ -107,12 +113,20 @@ export function renderMultiSelect(container, message) {
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.value = btn.id;
-    cb.checked = resolved;      // retain the check for anything already acted on
-    cb.disabled = resolved;     // can't un-do a completed row from here
-    // Checking a pending row IS the confirmation — fire it immediately.
-    // Exception: confirm mode collects a set and submits once via the Send
-    // button below, so checking a box there only toggles local state.
-    if (!resolved && !confirmMode) {
+    // executed/partial read as "on"; failed + undone read as "off".
+    cb.checked = resolved && status !== "failed";
+    // Undoable rows must stay toggleable so the person can uncheck to undo;
+    // every other resolved/undone row is locked.
+    cb.disabled = (resolved || undone) && !undoable;
+    if (undoable) {
+      // Unchecking a pre-checked Level-2 row undoes it.
+      cb.addEventListener("change", () => {
+        if (!cb.checked) undoRow(container, requestId, cb);
+      });
+    } else if (!resolved && !undone && !confirmMode) {
+      // Checking a pending row IS the confirmation — fire it immediately.
+      // Exception: confirm mode collects a set and submits once via the Send
+      // button below, so checking a box there only toggles local state.
       cb.addEventListener("change", () => {
         if (cb.checked) triggerChecked(container, requestId, cb);
       });
@@ -214,6 +228,27 @@ async function submitChecked(container, requestId, button) {
       if (!row || !RESOLVED_STATUSES.has(row.dataset.status)) cb.disabled = false;
     });
     console.warn("[byte] relay answer submit failed", e);
+  }
+}
+
+// Undo a pre-checked Level-2 row (the person unchecked it). POSTs { undo: id };
+// the server reverses the action, marks the row "undone", and broadcasts the
+// re-rendered checklist. Optimistically lock the box; roll back on failure.
+async function undoRow(container, requestId, cb) {
+  const id = Number(cb.value);
+  cb.disabled = true;
+  const row = cb.closest(".byte-msg-action-row");
+  if (row) row.dataset.status = "working";
+  try {
+    await apiCall(`/byte/actions/${encodeURIComponent(requestId)}/respond`, "POST", {
+      undo: id,
+    });
+    // Server broadcast re-renders the row as "undone" — nothing to touch here.
+  } catch (e) {
+    cb.checked = true;
+    cb.disabled = false;
+    if (row) row.dataset.status = "executed";
+    console.warn("[byte] proposal undo failed", e);
   }
 }
 

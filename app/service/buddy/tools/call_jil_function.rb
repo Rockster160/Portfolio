@@ -1,6 +1,6 @@
 Buddy::Tools.register(
-  name:        :call_jil_function,
-  description: <<~TXT,
+  name:             :call_jil_function,
+  description:      <<~TXT,
     Invoke a Jil FUNCTION task with typed args. Use when the person
     asks for something covered by a task in the `jil_functions`
     section of the live context file - anything from turning on
@@ -33,13 +33,18 @@ Buddy::Tools.register(
     values. If nothing on the function list plausibly matches, tell
     them you don't have that wired.
   TXT
-  args: {
+  args:             {
     name: { type: :string, required: true, description: "Fuzzy function-task name to call" },
     # All other k=v marker args pass through as function params. Only `name`
     # is declared; passthrough_args keeps the rest through validate_payload.
   },
   passthrough_args: true,
-  confirm: ->(payload, ctx) {
+  # Level 1: car starts / navigation / house + light commands are highest-
+  # confidence and fire immediately (the person asked for it to happen, not to
+  # be asked again). A receipt confirms it went — so speaking it as done is
+  # accurate here, unlike a confirm-gated proposal.
+  level:            1,
+  confirm:          ->(payload, ctx) {
     q = payload[:name].to_s.downcase.strip
     scope = ctx.user.accessible_tasks.buddy_visible.functions
 
@@ -52,7 +57,7 @@ Buddy::Tools.register(
     # Everything the marker parser handed us EXCEPT :name is treated as
     # a function argument. String-key + string values (marker parser
     # yields strings) - the Jil executor coerces per the signature.
-    fn_args = payload.reject { |k, _| k == :name }.transform_keys(&:to_s)
+    fn_args = payload.except(:name).transform_keys(&:to_s)
 
     summary = if fn_args.empty?
       "Call **#{match.name}**? (no args)"
@@ -62,13 +67,13 @@ Buddy::Tools.register(
     end
     { summary: summary, resolved: { task_id: match.id, task_name: match.name, fn_args: fn_args } }
   },
-  label: ->(payload, _ctx) {
+  label:            ->(payload, _ctx) {
     title = (payload[:task_name] || payload[:name]).to_s
     args = payload[:fn_args] || {}
     sub = args.map { |k, v| "#{k}: #{v}" }.join("\n").presence
     { title: title, sub: sub }
   },
-  execute: ->(payload, ctx) {
+  execute:          ->(payload, ctx) {
     task = Task.find(payload[:task_id])
     fn_args = (payload[:fn_args] || {}).transform_keys(&:to_s)
 
@@ -92,7 +97,7 @@ Buddy::Tools.register(
     )
     { fired: true, task_id: task.id, task_name: task.name }
   },
-  receipt: ->(_result, ctx) {
+  receipt:          ->(_result, ctx) {
     name = ctx.proposal["payload"]&.dig("task_name") || "function"
     "Called **#{name}** ✓"
   },

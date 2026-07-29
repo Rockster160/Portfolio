@@ -1,0 +1,125 @@
+module Buddy
+  # The "Today" morning briefing seed + delivery. Extracted from
+  # QuickActionsController so the SAME prompt can be fired two ways: by tapping
+  # the hero "Today" chip, and by the scheduled morning broadcast
+  # (Buddy::TodayScheduler). Rails owns the prompt text; the Mac just runs it.
+  module TodayBriefing
+    module_function
+
+    TONE = "Warm, short, human. No em dashes (use commas or short sentences). Don't list what I did in bullet form. Don't call out exact times like '8:19'. Don't recite chores by name unless one specific one is your recommendation.".freeze
+
+    # Comfort bands mirror the dashboard weather cell's colour scale. Woven into
+    # the seed so the briefing frames weather the way we read it at a glance.
+    def weather_block
+      summary = WeatherService.summary
+      return "" if summary.blank?
+
+      week  = WeatherService.week_outlook
+      lines = [
+        "",
+        "WEATHER (weave it in naturally, don't recite a forecast):",
+        "Today: #{summary}",
+      ]
+      lines << "This week to flag: #{week}. Give a short heads-up for any day with rain / wind / snow." if week.present?
+      lines += [
+        "Comfort read on today's high:",
+        "- ~62-75°F is the comfortable sweet spot - no need to fuss.",
+        "- upper 70s is warm; mid-80s and up is hot - flag it, suggest light layers / water.",
+        "- 50s is cool, 40s and below is cold; freezing or under, say to grab a coat.",
+        "- real rain chance today? mention an umbrella.",
+        "Skip the today-comfort line if it's unremarkable, but still flag any notable day this week.",
+      ]
+      lines.join("\n")
+    end
+
+    # Alpine plunge / notable-weather block. Only speaks up for rain/snow or
+    # heavy dark clouds, and only when we have a user to localize + check the
+    # agenda against. Empty otherwise (including off-prod).
+    def plunge_block(user)
+      return "" if user.nil?
+
+      Buddy::PlungeAdvisor.briefing_block(user)
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::TodayBriefing] plunge block failed: #{e.class}: #{e.message}")
+      ""
+    end
+
+    def seed(user=nil)
+      <<~PROMPT.strip
+        What's on for TODAY, forward-looking. This is a briefing about the day ahead, NOT a recap of yesterday or a review of what's already done.
+
+        OPEN with a warm time-of-day greeting when it fits - read `now_local` for the hour. Either the short form ("Morning!" / "Afternoon!" / "Evening!") or the full "Good morning" / "Good afternoon" / "Good evening" works; pick whatever feels natural. LEAN INTO the greeting when it genuinely lands: the first check of the day, or when we haven't talked in a while. SKIP it only when we just talked a moment ago (back-to-back) or the hour is genuinely odd - don't greet twice in one thread.
+        #{weather_block}#{plunge_block(user)}
+
+        LEAD WITH what still needs to happen today:
+        - `chores_pending_today` - the primary answer. Name them.
+        - Give extra weight to items explicitly DUE today that AREN'T daily (a `due_today: true` chore whose `freq` is weekly/monthly/less, or a hot pick). Those are the easy-to-forget ones and the most useful to surface - daily habits I know cold.
+        - BATCH related items: if several due chores are obviously one errand or theme (all the trash / recycling / bins, or all the plant watering), say it once as the theme ("it's trash day", "watering day") rather than listing each one.
+        - `today_agenda` - today's events / meetings with times. But see UNUSUAL-ONLY below: don't recite the daily-recurring stuff.
+        - Agenda items tagged `mine: false` (with an `owner`, e.g. Chelsea) are on a partner's PERSONAL calendar shared with me - awareness only. They are NOT my tasks. Don't list them as mine; usually don't mention them at all. Only bring one up if it actually affects me (a conflict, a hand-off, something I'm part of), and attribute it ("Chelsea's got a thing at 3").
+        - `chores_hot_picks` - flagged for attention today.
+
+        WHEN referring to a day: say "tomorrow" for the next day, not the weekday name. Weekday names only for two-plus days out.
+
+        WEIGHT BY HOW ROUTINE IT IS (the `cadence` tag):
+        - `cadence` of "daily" / "every weekday" = something I know cold. Don't recite it as news. A quick gloss is fine ("usual morning stuff, then...") but never a line-by-line of my standing schedule.
+        - Less-frequent cadences ("weekly", "monthly", "yearly", "every 6 days") I may NOT have top of mind - a light touch is genuinely helpful ("your monthly 1:1 with Eric is this afternoon"). Touch on it, don't dive into details.
+        - No `cadence` at all = a one-off (vet appt, dinner). Always worth surfacing.
+        - DO call out a routine that's NOT happening: a `cancelled` item, especially a recurring one, is a real heads-up ("no standup tomorrow"). A normal thing missing beats a normal thing present.
+        - If a soon item has `drive_min`, you can work in the drive ("~25 min drive, so leave-ish soon"). Only when it's close enough to matter.
+
+        REST OF THE WEEK (`upcoming_agenda`, tomorrow onward):
+        - Weight by proximity - the closer, the more worth mentioning. Tomorrow's oddity matters more than something 6 days out; only genuinely notable things a week away earn a mention.
+        - Same cadence weighting: gloss/skip the daily-and-weekday repeats, lightly flag the less-common recurrences and one-offs, call out cancelled routines. On a weekend, a unique Monday thing is fair game ("heads up, dentist Monday morning").
+        - At most a line. If nothing worth noting is coming, say nothing about the week.
+
+        SECONDARY (mention only if genuinely relevant):
+        - `chores_done_today` - only if I've clearly gotten a lot done and it's worth acknowledging. Never lead with it. Never make it the point.
+        - `stashed_ideas` - OCCASIONALLY (not most days) float ONE idea I brain-dumped, if it fits the morning. Light, one at a time, easy to wave off. Skip it entirely most of the time.
+
+        DO NOT USE:
+        - `recent_events` for anything with a timestamp older than this morning. Those are yesterday. This ask is about today, not a diary of the last 24 hours.
+        - "Yesterday you..." framing at all. Yesterday is done. Today is what I'm asking about.
+        - Motivational spin like "you crushed it yesterday, keep it up today". That's a review, not a briefing.
+
+        HOW TO ANSWER:
+        - Lead with pending / unusual-upcoming. Names, not vague gestures.
+        - Short list OK when it helps skim ("Still pending: X, Y, Z"). One or two lines of prose for shape.
+        - If the day looks empty AND there are no dailies or scheduled items, keep it short and warm - a "not much on deck today, what are you thinking?" not a recap of yesterday.
+
+        HARD NO:
+        - Never recap yesterday.
+        - Never invent chores/events not in context.
+        - Don't recite my daily / every-weekday repeats line by line. Gloss those. Less-frequent recurrences and one-offs are fair to mention.
+        - No filler like "quiet day", "not a bad thing", "in the bag".
+        - No "based on what I have" / "your context shows" / any scaffolding-talk.
+
+        Aim for 3-5 short lines. Skimmable.
+
+        #{TONE}
+      PROMPT
+    end
+
+    # Deliver a Today briefing as a hidden Buddy turn into `conversation`. Used
+    # by the scheduled morning broadcast (the tap path goes through
+    # QuickActionsController#dispatch_trigger for its action chip).
+    def deliver!(user, conversation, scheduled: true)
+      msg = conversation.byte_messages.create!(
+        user:      user,
+        direction: :outbound,
+        state:     :pending,
+        body:      seed(user),
+        metadata:  {
+          "kind"         => "buddy_trigger",
+          "hidden"       => true,
+          "source"       => scheduled ? "today_scheduled" : "quick_action",
+          "buddy_action" => "today",
+        },
+      )
+      MonitorChannel.broadcast_to(user, { id: :byte, channel: :byte, data: { kind: :message, message: msg.as_wire } })
+      Buddy::ExpressionState.thinking!(user)
+      BuddyDeliverWorker.perform_async(msg.id)
+      msg
+    end
+  end
+end

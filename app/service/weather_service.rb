@@ -23,7 +23,7 @@ module WeatherService
     Rails.cache.fetch("weather_data(#{lat.round(2)},#{lng.round(2)})", expires_in: CACHE_TTL) {
       fetch(lat, lng, key)
     }
-  rescue => e
+  rescue StandardError => e
     Rails.logger.warn("[WeatherService] #{e.class}: #{e.message}")
     nil
   end
@@ -48,7 +48,10 @@ module WeatherService
       lat:     lat,
       lon:     lng,
       units:   :imperial,
-      exclude: "minutely,hourly,alerts",
+      # Keep `hourly` — Buddy's plunge advisor reads per-hour rain timing +
+      # cloud cover from it (Buddy::PlungeAdvisor). `current` + `daily` still
+      # power summary/week_outlook; hourly is additive.
+      exclude: "minutely,alerts",
       lang:    :en,
       appid:   key,
     )

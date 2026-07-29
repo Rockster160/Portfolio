@@ -39,27 +39,39 @@ module Buddy
 
     def load_tool_files!
       @loading_tools = true
-      Dir[Rails.root.join("app/service/buddy/tools/*.rb")].sort.each { |f| load f }
+      Rails.root.glob("app/service/buddy/tools/*.rb").each { |f| load f }
     ensure
       @loading_tools = false
     end
 
-    def register(name:, description:, args:, confirm:, label:, execute:, receipt:, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false)
+    def register(name:, description:, args:, confirm:, label:, execute:, receipt:, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil)
+      # Confidence level governs how a proposal is presented (see
+      # Buddy::ProposalBuilder):
+      #   1 — highest confidence (reminders, car/house/light commands): fires
+      #       immediately, no checkbox, just an "activity" receipt chip. Same as
+      #       the legacy `auto: true`.
+      #   2 — high confidence WITH undo (list add/remove, chore complete, event
+      #       log): fires immediately AND shows a PRE-CHECKED row; unchecking it
+      #       reverts the action. Requires the execute result to carry a
+      #       `revert:` descriptor (see Buddy::Reverter).
+      #   3 — medium confidence (default): a plain pending checkbox the person
+      #       must tap to run.
+      resolved_level = (level || (auto ? 1 : 3)).to_i
       spec = {
         name:             name.to_sym,
         description:      description.to_s,
-        args:            normalize_args(args),
-        confirm:         confirm,
-        label:           label,
-        execute:         validate_executor!(execute),
-        receipt:         receipt,
-        merge_key:       merge_key || ->(payload) { "#{name}:#{SecureRandom.uuid}" },
-        merge_label:     merge_label,
-        # Trusted tools run WITHOUT a confirmation checkbox: the marker
-        # executes immediately and drops a distinct "activity" receipt chip
-        # instead of a pending checklist row. As confidence in a tool grows,
-        # flip it to `auto: true` and it stops needing approval.
-        auto:            auto,
+        args:             normalize_args(args),
+        confirm:          confirm,
+        label:            label,
+        execute:          validate_executor!(execute),
+        receipt:          receipt,
+        merge_key:        merge_key || ->(_payload) { "#{name}:#{SecureRandom.uuid}" },
+        merge_label:      merge_label,
+        level:            resolved_level,
+        # Level 1 tools run WITHOUT a confirmation checkbox: the marker executes
+        # immediately and drops a distinct "activity" receipt chip instead of a
+        # pending checklist row.
+        auto:             resolved_level == 1,
         # Tools whose real arg set is dynamic (e.g. call_jil_function, whose
         # params vary per target task) declare only `name` in :args and set
         # this so validate_payload keeps every OTHER k=v the marker carried
@@ -119,7 +131,7 @@ module Buddy
       else
         { ok: false, error: "unknown executor shape" }
       end
-    rescue => e
+    rescue StandardError => e
       { ok: false, error: "#{e.class}: #{e.message}" }
     end
 
@@ -147,11 +159,11 @@ module Buddy
           next
         end
 
-        if spec[:type] == :enum && !Array(spec[:values]).map(&:to_sym).include?(cast)
+        if spec[:type] == :enum && Array(spec[:values]).map(&:to_sym).exclude?(cast)
           errors << "arg :#{key} must be one of #{spec[:values]}"
           next
         end
-        if spec[:range] && spec[:range].is_a?(Range) && !spec[:range].cover?(cast)
+        if spec[:range].is_a?(Range) && !spec[:range].cover?(cast)
           errors << "arg :#{key} out of range #{spec[:range]}"
           next
         end
@@ -163,7 +175,7 @@ module Buddy
       # didn't declare it (default 1).
       if raw_payload.key?(COUNT_ARG)
         count = raw_payload[COUNT_ARG].to_i
-        normalized[COUNT_ARG] = count if count > 0
+        normalized[COUNT_ARG] = count if count.positive?
       end
 
       # Pass-through tools (call_jil_function) keep every undeclared k=v as a
@@ -174,6 +186,7 @@ module Buddy
         raw_payload.each do |k, v|
           next if declared.include?(k) || k == COUNT_ARG
           next if v.nil? || v.to_s.empty?
+
           normalized[k] = v
         end
       end
@@ -200,11 +213,11 @@ module Buddy
       def cast_value(value, type)
         case type
         when :string       then value.to_s
-        when :integer      then Integer(value.to_s) rescue nil
+        when :integer      then Integer(value.to_s, exception: false)
         when :enum         then value.to_s.to_sym
         when :boolean      then ActiveModel::Type::Boolean.new.cast(value)
         when :iso_time     then Time.zone.parse(value.to_s) rescue nil
-        when :duration_min then Integer(value.to_s) rescue nil
+        when :duration_min then Integer(value.to_s, exception: false)
         else value
         end
       end
@@ -219,14 +232,14 @@ module Buddy
           Open3.capture3("bash", "-lc", cmd)
         }
         {
-          ok:          status.success?,
-          data:        {
+          ok:    status.success?,
+          data:  {
             stdout_tail: stdout.to_s.lines.last(20).join,
             stderr_tail: stderr.to_s.lines.last(20).join,
             exit_status: status.exitstatus,
             elapsed_ms:  ((Time.current - started) * 1000).round,
           },
-          error:       status.success? ? nil : "exit #{status.exitstatus}: #{stderr.to_s.lines.last}",
+          error: status.success? ? nil : "exit #{status.exitstatus}: #{stderr.to_s.lines.last}",
         }
       rescue Timeout::Error
         { ok: false, error: "timed out after #{exec[:timeout]}s" }

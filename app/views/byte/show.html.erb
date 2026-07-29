@@ -106,10 +106,33 @@
     <nav class="byte-buddy-quick-actions" data-buddy-quick-actions>
       <button type="button" data-buddy-action="today">Today</button>
       <button type="button" data-buddy-action="suggest">What now?</button>
+      <button type="button" data-buddy-action="stash">Stash</button>
       <button type="button" data-buddy-action="checkin">Check-in</button>
       <button type="button" data-buddy-action="affirmation">Affirmation</button>
       <button type="button" data-buddy-action="facepick">Faces</button>
     </nav>
+    <%# What now?: optionally focus the suggestion on a bucket. "Anything" is %>
+    <%# the unfiltered "just tell me what to do" ask. %>
+    <div class="byte-buddy-mood-popover" data-buddy-suggest-popover hidden>
+      <span class="byte-buddy-mood-label">What now — which side?</span>
+      <div class="byte-buddy-mood-choices">
+        <button type="button" data-suggest="me">Me</button>
+        <button type="button" data-suggest="home">Home</button>
+        <button type="button" data-suggest="work">Work</button>
+        <button type="button" data-suggest="anything">Anything</button>
+      </div>
+    </div>
+    <%# Brain-dump: pick a bucket, then the NEXT message you send is filed as %>
+    <%# an idea. "Anything" lets Buddy sort + summarize it for you. %>
+    <div class="byte-buddy-mood-popover" data-buddy-stash-popover hidden>
+      <span class="byte-buddy-mood-label">Stash an idea to…</span>
+      <div class="byte-buddy-mood-choices">
+        <button type="button" data-stash="me">Me</button>
+        <button type="button" data-stash="home">Home</button>
+        <button type="button" data-stash="work">Work</button>
+        <button type="button" data-stash="anything">Anything</button>
+      </div>
+    </div>
     <div class="byte-buddy-mood-popover" data-buddy-mood-popover hidden>
       <span class="byte-buddy-mood-label">How are you feeling?</span>
       <div class="byte-buddy-mood-choices">

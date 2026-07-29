@@ -297,81 +297,6 @@ class WebhooksController < ApplicationController
     render json: message.as_wire, status: :ok
   end
 
-  # For :buddy-mode conversations, extract markers from the reply body:
-  #   * [[propose: ...]]   — build checkbox action, gate execution on tap
-  #   * [[mood: ...]]      — shift pet expression immediately
-  #   * [[remember: ...]]  — write a durable BuddyMemory row
-  #
-  # All marker types are stripped from the visible body. Proposals and
-  # side-effects are independent — Buddy can emit either or both in one
-  # reply.
-  private def buddy_process_reply(user, _conversation, message)
-    parsed = Buddy::MarkerParser.extract(message.body)
-
-    # Observability for "is Buddy using expressions?": logs every reply's
-    # marker/side-effect shape so a `mood` verb (or its absence) is visible.
-    Rails.logger.info(
-      "[Buddy::reply] user=#{user.id} proposals=#{parsed[:markers].size} " \
-      "side_effects=#{parsed[:side_effects].map { |e| e[:verb] }.inspect}"
-    )
-
-    # Side-effect-only reply (e.g. Buddy emitted just `[[mood: happy]]`
-    # with no prose and no proposals). Stripping the marker leaves the
-    # body empty; setting body="" would render a completely blank bubble.
-    # The side-effect already fires below - the visible message has no
-    # reason to exist. Destroy it so the client sees it disappear rather
-    # than seeing an empty ghost bubble.
-    side_effect_only = parsed[:display_text].to_s.strip.empty? && parsed[:markers].empty?
-    if side_effect_only
-      Buddy::SideEffects.apply(user, parsed[:side_effects]) if parsed[:side_effects].any?
-      MonitorChannel.broadcast_to(user, {
-        id:      :byte,
-        channel: :byte,
-        data:    { kind: :message_deleted, message_id: message.id, byte_conversation_id: message.byte_conversation_id },
-      })
-      message.destroy!
-      Buddy::ExpressionState.transition!(user, :turn_ended_clean) unless parsed[:side_effects].any? { |e| e[:verb] == :mood }
-      return
-    end
-
-    if parsed[:display_text] != message.body
-      message.update!(body: parsed[:display_text])
-    end
-
-    # Side effects fire first so a mood shift lands before the checklist
-    # renders (feels more coherent — pet reacts, then presents options).
-    Buddy::SideEffects.apply(user, parsed[:side_effects]) if parsed[:side_effects].any?
-
-    # Proposals must ALWAYS build (they create the checklist / run auto tools),
-    # independent of the expression decision below.
-    result = parsed[:markers].any? ? Buddy::ProposalBuilder.create(user: user, byte_message: message, markers: parsed[:markers]) : nil
-
-    # Expression transition resolves the transient :thinking (from turn start)
-    # into a resting state. Priority order — a mood Buddy CHOSE is the most
-    # expressive signal, so it wins even when the same reply also proposed
-    # something (the old code let the proposal state clobber the mood, which is
-    # why moods almost never showed — nearly every doing-something reply has a
-    # proposal):
-    #
-    #   1. Mood side-effect set an expression → respect it, don't overwrite.
-    #   2. Proposal awaiting a tap → :proposals_awaiting.
-    #   3. Auto-tool ran on its own → :proposals_executed.
-    #   4. Plain reply → :turn_ended_clean (back to resting).
-    if parsed[:side_effects].any? { |e| e[:verb] == :mood }
-      # [[mood: X]] already updated the expression via SideEffects — leave it.
-    elsif result&.dig(:action)
-      Buddy::ExpressionState.transition!(user, :proposals_awaiting)
-    elsif result&.dig(:auto_ran)
-      Buddy::ExpressionState.transition!(user, :proposals_executed)
-    else
-      Buddy::ExpressionState.transition!(user, :turn_ended_clean)
-    end
-  rescue => e
-    Rails.logger.warn("[Buddy] reply-processing failed: #{e.class}: #{e.message}")
-    # Even on error, don't leave the pet frozen thinking forever.
-    Buddy::ExpressionState.transition!(user, :turn_ended_clean) rescue nil
-  end
-
   def byte_update
     return head :unauthorized unless byte_authorized?
 
@@ -487,18 +412,18 @@ class WebhooksController < ApplicationController
       state:        :delivered,
       body:         params[:body].to_s,
       metadata:     {
-        kind:               :"action-request",
-        action_request_id:  request_id,
-        action_kind:        kind.to_s,
-        action_state:       :pending,
-        tool_name:          tool_name,
-        tool_input:         tool_input,
-        buttons:            buttons,
-        questions:          questions,
-        multi_select:       !!multi,
-        title:              params[:title].to_s.presence,
-        subtitle:           params[:subtitle].to_s.presence,
-        expires_at:         expires_at&.iso8601(3),
+        kind:              :"action-request",
+        action_request_id: request_id,
+        action_kind:       kind.to_s,
+        action_state:      :pending,
+        tool_name:         tool_name,
+        tool_input:        tool_input,
+        buttons:           buttons,
+        questions:         questions,
+        multi_select:      !!multi,
+        title:             params[:title].to_s.presence,
+        subtitle:          params[:subtitle].to_s.presence,
+        expires_at:        expires_at&.iso8601(3),
       }.compact.merge(incoming.symbolize_keys.except(:action_state)),
       delivered_at: Time.current,
     )
@@ -522,25 +447,6 @@ class WebhooksController < ApplicationController
       message_id: message.id,
       action:     action.as_wire,
     }, status: :created
-  end
-
-  private def normalized_action_kind(raw)
-    sym = raw.to_s.downcase.to_sym
-    ByteAction.kinds.key?(sym.to_s) ? sym : :permission
-  end
-
-  private def byte_json_field(raw)
-    return raw if raw.is_a?(Array) || raw.is_a?(Hash)
-    return raw.to_unsafe_h if raw.respond_to?(:to_unsafe_h)
-    JSON.parse(raw.to_s) rescue nil
-  end
-
-  private def parse_expiry(expires_in, expires_at)
-    if expires_at.present?
-      Time.parse(expires_at.to_s) rescue nil
-    elsif expires_in.present?
-      expires_in.to_i.seconds.from_now
-    end
   end
 
   # Mac → Rails conversation metadata update (e.g. cwd changed after cd,
@@ -606,167 +512,6 @@ class WebhooksController < ApplicationController
     render json: { body: body }
   end
 
-  private def byte_agenda_scope(base, user, range, query)
-    q = query.to_s.strip
-    return { name: q, scope: AgendaItem.query(q).where(id: base.select(:id)) } if q.present?
-
-    now       = Time.current
-    tz        = user.timezone
-    zone_now  = now.in_time_zone(tz)
-    case range.to_s.downcase.presence || "upcoming"
-    when "today"
-      { name: :today, scope: base.where(start_at: zone_now.all_day) }
-    when "tomorrow"
-      day = zone_now.tomorrow
-      { name: :tomorrow, scope: base.where(start_at: day.all_day) }
-    when "weekend"
-      # This coming Sat/Sun in the user's TZ. If today is Sat, "weekend"
-      # means today + tomorrow; if Sun, just today.
-      sat   = zone_now.next_occurring(:saturday)
-      sat   = zone_now.beginning_of_day if [6, 0].include?(zone_now.wday)
-      sun   = sat + 1.day
-      start = [zone_now, sat.beginning_of_day].max
-      finish = sun.end_of_day
-      { name: :weekend, scope: base.where(start_at: start..finish) }
-    when "week"
-      finish = (zone_now + 7.days).end_of_day
-      { name: :week, scope: base.where(start_at: zone_now..finish) }
-    when "upcoming"
-      { name: :upcoming, scope: base.upcoming.where("start_at < ?", zone_now + 14.days) }
-    else
-      nil
-    end
-  end
-
-  private def byte_format_agenda_line(item, user)
-    tz    = user.timezone
-    start = item.start_at&.in_time_zone(tz)
-    return "- #{item.name} (no time)" if start.nil?
-
-    stamp = start.strftime("%a %-m/%-d %-I:%M %p")
-    parts = ["#{stamp}  #{item.name}"]
-    parts << "@ #{item.location}" if item.location.present?
-    "- #{parts.join("  ")}"
-  end
-
-  private def byte_authorized?
-    ByteLocal.valid_secret?(request.headers["X-Byte-Secret"])
-  end
-
-  # Prefer an explicit conversation_id (Mac echoes back what we passed
-  # forward). If absent, look up an in_reply_to → find that message's
-  # conversation. Absolute fallback: the user's default conversation.
-  private def byte_resolve_conversation(user)
-    convo_id = params[:conversation_id].presence
-    if convo_id
-      convo = user.byte_conversations.find_by(id: convo_id)
-      return convo if convo
-    end
-
-    reply_id = params[:in_reply_to].presence
-    if reply_id
-      parent = user.byte_messages.find_by(id: reply_id)
-      return parent.byte_conversation if parent&.byte_conversation
-    end
-
-    ByteConversation.default_for(user)
-  end
-
-  private def byte_metadata(params)
-    raw = params[:metadata]
-    return {} if raw.blank?
-    return raw.to_unsafe_h if raw.respond_to?(:to_unsafe_h)
-    return raw if raw.is_a?(Hash)
-
-    JSON.parse(raw.to_s) rescue {}
-  end
-
-  private def byte_broadcast(user, message)
-    MonitorChannel.broadcast_to(user, {
-      id:      :byte,
-      channel: :byte,
-      data:    { kind: :message, message: message.as_wire },
-    })
-  end
-
-  # Push notifications only fire on terminal states — silent while
-  # streaming. Every kind (shell / claude / jarvis / system) gets a push
-  # UNLESS the user's PWA is currently foreground (server-side presence
-  # heartbeat via `ByteController#presence`). This is server-side so we
-  # never hand a push to iOS to potentially fall-back-render — SW-side
-  # suppression can't beat iOS's `userVisibleOnly` enforcement.
-  private def byte_notify(user, message)
-    return unless message.state == "delivered"
-
-    meta = message.metadata.is_a?(Hash) ? message.metadata : {}
-
-    # Buddy replies that carry a proposal checklist are a WAITING ASK -
-    # the user needs to tap boxes for anything to happen. These should
-    # NOT be suppressed by presence (the PWA might be "present" but
-    # backgrounded on a phone lock screen, or the presence heartbeat
-    # might be stale). Force-notify with a distinct framing.
-    has_proposals = meta["tool_name"] == "buddy_proposals" ||
-                    (meta["buttons"].is_a?(Array) && meta["buttons"].any?)
-
-    # Suppress the usual "you're present so skip" gate ONLY for high-
-    # priority asks. Normal chatter still respects presence.
-    return if !has_proposals && meta["kind"] != "action-request" && byte_user_present?(user)
-
-    # The OS already stamps the app name (Byte) on the notification, so the
-    # TITLE is the message itself - not the thread name ("Buddy"). Any
-    # actionable framing (a confirm cue, an approval prompt) rides in the body.
-    preview = clean_byte_body(message.body).truncate(160).presence
-
-    title, body =
-      if has_proposals
-        # Count pending buttons so we don't under-sell a "5 things to confirm".
-        n_pending = Array(meta["buttons"]).count { |b| (b["status"] || "pending") == "pending" }
-        cue = n_pending > 1 ? "☐ #{n_pending} to confirm" : "☐ Tap to confirm"
-        [preview || cue, (preview ? cue : nil)]
-      elsif meta["kind"] == "action-request"
-        tool = meta["tool_name"].to_s
-        sub  = meta["subtitle"].to_s.presence
-        cue  = case meta["action_kind"]
-        when "plan"     then "📋 Plan approval"
-        when "question" then "❓ Question"
-        else                 "⚡ Approve #{tool}"
-        end
-        preview ? [preview, [cue, sub].compact.join(" · ")] : [sub || cue, (sub ? cue : nil)]
-      else
-        [preview || "(attachment)", nil]
-      end
-
-    WebPushNotifications.send_to_byte(
-      title: title,
-      body:  body,
-      tag:   "byte-#{message.id}",
-      users: [user],
-    )
-  end
-
-  # Is this user's Byte PWA foreground right now? Populated by the
-  # `/byte/presence` heartbeat while the tab/window is visible.
-  private def byte_user_present?(user)
-    Rails.cache.read(ByteController.presence_key(user)).present?
-  end
-
-  # Push tray shows plain text — strip everything that would look garbage:
-  # HTML tags (shell bubbles carry ANSI-styled <span>s), fenced/inline
-  # markdown code, bold/italic delimiters, ANSI escapes (if any leaked),
-  # blockquote markers, and any residual whitespace.
-  private def clean_byte_body(raw)
-    text = raw.to_s
-    text = text.gsub(/```[a-z]*\n?/i, "").gsub(/```/, "")     # fenced code delimiters
-    text = text.gsub(/`([^`]+)`/, '\1')                       # inline code
-    text = text.gsub(/\*\*([^*]+)\*\*/, '\1')                 # bold
-    text = text.gsub(/(?<!\*)\*(?!\*)([^*]+)(?<!\*)\*(?!\*)/, '\1') # italic
-    text = text.gsub(/<[^>]+>/, "")                           # HTML tags (from shell)
-    text = text.gsub(/\e\[[0-9;?=<>]*[a-zA-Z]/, "")           # ANSI escapes
-    text = text.gsub(/^>\s?/, "")                             # blockquote
-    text.gsub(/\s+/, " ").strip
-  end
-
-
   def push_notification_subscribe
     Rails.logger.info("Received subscription request! [#{current_user&.username}] (#{request.headers["JarvisPushVersion"].inspect})")
     return head :ok unless request.headers["JarvisPushVersion"].to_s == "2"
@@ -825,6 +570,255 @@ class WebhooksController < ApplicationController
   end
 
   private
+
+  # For :buddy-mode conversations, extract markers from the reply body:
+  #   * [[propose: ...]]   — build checkbox action, gate execution on tap
+  #   * [[mood: ...]]      — shift pet expression immediately
+  #   * [[remember: ...]]  — write a durable BuddyMemory row
+  #
+  # All marker types are stripped from the visible body. Proposals and
+  # side-effects are independent — Buddy can emit either or both in one
+  # reply.
+  def buddy_process_reply(user, _conversation, message)
+    parsed = Buddy::MarkerParser.extract(message.body)
+
+    # Observability for "is Buddy using expressions?": logs every reply's
+    # marker/side-effect shape so a `mood` verb (or its absence) is visible.
+    Rails.logger.info(
+      "[Buddy::reply] user=#{user.id} proposals=#{parsed[:markers].size} " \
+      "side_effects=#{parsed[:side_effects].pluck(:verb).inspect}",
+    )
+
+    # Side-effect-only reply (e.g. Buddy emitted just `[[mood: happy]]`
+    # with no prose and no proposals). Stripping the marker leaves the
+    # body empty; setting body="" would render a completely blank bubble.
+    # The side-effect already fires below - the visible message has no
+    # reason to exist. Destroy it so the client sees it disappear rather
+    # than seeing an empty ghost bubble.
+    side_effect_only = parsed[:display_text].to_s.strip.empty? && parsed[:markers].empty?
+    if side_effect_only
+      Buddy::SideEffects.apply(user, parsed[:side_effects]) if parsed[:side_effects].any?
+      MonitorChannel.broadcast_to(user, {
+        id:      :byte,
+        channel: :byte,
+        data:    { kind: :message_deleted, message_id: message.id, byte_conversation_id: message.byte_conversation_id },
+      })
+      message.destroy!
+      # Drop the "thinking" overlay. A mood marker (applied above) already
+      # broadcast the new mood; otherwise re-assert the stored one. Either way
+      # the mood itself is untouched — it only moves when Buddy says so.
+      Buddy::ExpressionState.settle!(user) unless parsed[:side_effects].any? { |e| e[:verb] == :mood }
+      return
+    end
+
+    if parsed[:display_text] != message.body
+      message.update!(body: parsed[:display_text])
+    end
+
+    # Side effects fire first so a mood shift lands before the checklist
+    # renders (feels more coherent — pet reacts, then presents options).
+    Buddy::SideEffects.apply(user, parsed[:side_effects]) if parsed[:side_effects].any?
+
+    # Proposals must ALWAYS build (they create the checklist / run auto tools),
+    # independent of the expression decision below.
+    result = parsed[:markers].any? ? Buddy::ProposalBuilder.create(user: user, byte_message: message, markers: parsed[:markers]) : nil
+
+    # Resolve the transient "thinking" overlay from turn-start. If Buddy chose
+    # a mood this turn, SideEffects already persisted + broadcast it (which
+    # clears thinking on the client). Otherwise just settle: re-assert the
+    # STORED mood so the overlay drops without the mood changing. Proposals no
+    # longer move the face at all — the mood persists until Buddy sets it, which
+    # is exactly "keep the mood as-is until something changes it".
+    unless parsed[:side_effects].any? { |e| e[:verb] == :mood }
+      Buddy::ExpressionState.settle!(user)
+    end
+  rescue StandardError => e
+    Rails.logger.warn("[Buddy] reply-processing failed: #{e.class}: #{e.message}")
+    # Even on error, don't leave the pet frozen thinking forever.
+    Buddy::ExpressionState.settle!(user) rescue nil
+  end
+
+  def normalized_action_kind(raw)
+    sym = raw.to_s.downcase.to_sym
+    ByteAction.kinds.key?(sym.to_s) ? sym : :permission
+  end
+
+  def byte_json_field(raw)
+    return raw if raw.is_a?(Array) || raw.is_a?(Hash)
+    return raw.to_unsafe_h if raw.respond_to?(:to_unsafe_h)
+
+    JSON.parse(raw.to_s) rescue nil
+  end
+
+  def parse_expiry(expires_in, expires_at)
+    if expires_at.present?
+      Time.zone.parse(expires_at.to_s) rescue nil
+    elsif expires_in.present?
+      expires_in.to_i.seconds.from_now
+    end
+  end
+
+  def byte_agenda_scope(base, user, range, query)
+    q = query.to_s.strip
+    return { name: q, scope: AgendaItem.query(q).where(id: base.select(:id)) } if q.present?
+
+    now       = Time.current
+    tz        = user.timezone
+    zone_now  = now.in_time_zone(tz)
+    case range.to_s.downcase.presence || "upcoming"
+    when "today"
+      { name: :today, scope: base.where(start_at: zone_now.all_day) }
+    when "tomorrow"
+      day = zone_now.tomorrow
+      { name: :tomorrow, scope: base.where(start_at: day.all_day) }
+    when "weekend"
+      # This coming Sat/Sun in the user's TZ. If today is Sat, "weekend"
+      # means today + tomorrow; if Sun, just today.
+      sat   = zone_now.next_occurring(:saturday)
+      sat   = zone_now.beginning_of_day if [6, 0].include?(zone_now.wday)
+      sun   = sat + 1.day
+      start = [zone_now, sat.beginning_of_day].max
+      finish = sun.end_of_day
+      { name: :weekend, scope: base.where(start_at: start..finish) }
+    when "week"
+      finish = (zone_now + 7.days).end_of_day
+      { name: :week, scope: base.where(start_at: zone_now..finish) }
+    when "upcoming"
+      { name: :upcoming, scope: base.upcoming.where(start_at: ...(zone_now + 14.days)) }
+    end
+  end
+
+  def byte_format_agenda_line(item, user)
+    tz = user.timezone
+    start = item.start_at&.in_time_zone(tz)
+    return "- #{item.name} (no time)" if start.nil?
+
+    stamp = start.strftime("%a %-m/%-d %-I:%M %p")
+    parts = ["#{stamp}  #{item.name}"]
+    parts << "@ #{item.location}" if item.location.present?
+    "- #{parts.join("  ")}"
+  end
+
+  def byte_authorized?
+    ByteLocal.valid_secret?(request.headers["X-Byte-Secret"])
+  end
+
+  # Prefer an explicit conversation_id (Mac echoes back what we passed
+  # forward). If absent, look up an in_reply_to → find that message's
+  # conversation. Absolute fallback: the user's default conversation.
+  def byte_resolve_conversation(user)
+    convo_id = params[:conversation_id].presence
+    if convo_id
+      convo = user.byte_conversations.find_by(id: convo_id)
+      return convo if convo
+    end
+
+    reply_id = params[:in_reply_to].presence
+    if reply_id
+      parent = user.byte_messages.find_by(id: reply_id)
+      return parent.byte_conversation if parent&.byte_conversation
+    end
+
+    ByteConversation.default_for(user)
+  end
+
+  def byte_metadata(params)
+    raw = params[:metadata]
+    return {} if raw.blank?
+    return raw.to_unsafe_h if raw.respond_to?(:to_unsafe_h)
+    return raw if raw.is_a?(Hash)
+
+    JSON.parse(raw.to_s) rescue {}
+  end
+
+  def byte_broadcast(user, message)
+    MonitorChannel.broadcast_to(user, {
+      id:      :byte,
+      channel: :byte,
+      data:    { kind: :message, message: message.as_wire },
+    })
+  end
+
+  # Push notifications only fire on terminal states — silent while
+  # streaming. Every kind (shell / claude / jarvis / system) gets a push
+  # UNLESS the user's PWA is currently foreground (server-side presence
+  # heartbeat via `ByteController#presence`). This is server-side so we
+  # never hand a push to iOS to potentially fall-back-render — SW-side
+  # suppression can't beat iOS's `userVisibleOnly` enforcement.
+  def byte_notify(user, message)
+    return unless message.state == "delivered"
+
+    meta = message.metadata.is_a?(Hash) ? message.metadata : {}
+
+    # Buddy replies that carry a proposal checklist are a WAITING ASK -
+    # the user needs to tap boxes for anything to happen. These should
+    # NOT be suppressed by presence (the PWA might be "present" but
+    # backgrounded on a phone lock screen, or the presence heartbeat
+    # might be stale). Force-notify with a distinct framing.
+    has_proposals = meta["tool_name"] == "buddy_proposals" ||
+      (meta["buttons"].is_a?(Array) && meta["buttons"].any?)
+
+    # Suppress the usual "you're present so skip" gate ONLY for high-
+    # priority asks. Normal chatter still respects presence.
+    return if !has_proposals && meta["kind"] != "action-request" && byte_user_present?(user)
+
+    # The OS already stamps the app name (Byte) on the notification, so the
+    # TITLE is the message itself - not the thread name ("Buddy"). Any
+    # actionable framing (a confirm cue, an approval prompt) rides in the body.
+    preview = clean_byte_body(message.body).truncate(160).presence
+
+    title, body =
+      if has_proposals
+        # Count pending buttons so we don't under-sell a "5 things to confirm".
+        n_pending = Array(meta["buttons"]).count { |b| (b["status"] || "pending") == "pending" }
+        cue = n_pending > 1 ? "☐ #{n_pending} to confirm" : "☐ Tap to confirm"
+        [preview || cue, (preview ? cue : nil)]
+      elsif meta["kind"] == "action-request"
+        tool = meta["tool_name"].to_s
+        sub  = meta["subtitle"].to_s.presence
+        cue  = case meta["action_kind"]
+        when "plan"     then "📋 Plan approval"
+        when "question" then "❓ Question"
+        else                 "⚡ Approve #{tool}"
+        end
+        if preview
+          [preview, [cue, sub].compact.join(" · ")]
+        else
+          [sub || cue, (sub ? cue : nil)]
+        end
+      else
+        [preview || "(attachment)", nil]
+      end
+
+    WebPushNotifications.send_to_byte(
+      title: title,
+      body:  body,
+      tag:   "byte-#{message.id}",
+      users: [user],
+    )
+  end
+
+  # Is this user's Byte PWA foreground right now? Populated by the
+  # `/byte/presence` heartbeat while the tab/window is visible.
+  def byte_user_present?(user)
+    Rails.cache.read(ByteController.presence_key(user)).present?
+  end
+
+  # Push tray shows plain text — strip everything that would look garbage:
+  # HTML tags (shell bubbles carry ANSI-styled <span>s), fenced/inline
+  # markdown code, bold/italic delimiters, ANSI escapes (if any leaked),
+  # blockquote markers, and any residual whitespace.
+  def clean_byte_body(raw)
+    text = raw.to_s
+    text = text.gsub(/```[a-z]*\n?/i, "").gsub(/```/, "")     # fenced code delimiters
+    text = text.gsub(/`([^`]+)`/, '\1')                       # inline code
+    text = text.gsub(/\*\*([^*]+)\*\*/, '\1')                 # bold
+    text = text.gsub(/(?<!\*)\*(?!\*)([^*]+)(?<!\*)\*(?!\*)/, '\1') # italic
+    text = text.gsub(/<[^>]+>/, "")                           # HTML tags (from shell)
+    text = text.gsub(/\e\[[0-9;?=<>]*[a-zA-Z]/, "")           # ANSI escapes
+    text = text.gsub(/^>\s?/, "")                             # blockquote
+    text.gsub(/\s+/, " ").strip
+  end
 
   def json_params
     return @json_params if defined?(@json_params)

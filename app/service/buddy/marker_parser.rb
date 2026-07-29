@@ -6,6 +6,7 @@ module Buddy
   # Currently supported side-effect verbs (see Buddy::SideEffects):
   #   [[mood: <expression>]]     — shift pet expression
   #   [[remember: <fact>]]       — write a durable BuddyMemory row
+  #   [[stash: id=N category=X summary=...]] — file a brain-dump idea
   #
   # Both marker types are STRIPPED from the display text so the user
   # never sees them. The verb-vs-tool split keeps the two systems
@@ -15,7 +16,7 @@ module Buddy
     module_function
 
     PROPOSE_RX      = /\[\[\s*propose:\s*(?<name>[a-z][a-z0-9_]*)(?<argstr>[^\]]*)\]\]/i
-    SIDE_EFFECT_RX  = /\[\[\s*(?<verb>mood|remember|forget)\s*:\s*(?<body>[^\]]+?)\s*\]\]/i
+    SIDE_EFFECT_RX  = /\[\[\s*(?<verb>mood|remember|forget|stash)\s*:\s*(?<body>[^\]]+?)\s*\]\]/i
     ARG_RX          = /(?<key>[a-z][a-z0-9_]*)\s*=\s*(?:"(?<qval>(?:[^"\\]|\\.)*)"|(?<uval>\S+))/i
 
     # Returns {
@@ -59,14 +60,14 @@ module Buddy
 
     def parse_args(argstr)
       out = {}
-      argstr.to_s.scan(ARG_RX) do
+      argstr.to_s.scan(ARG_RX) {
         m = Regexp.last_match
         key = m[:key].to_sym
         raw = m[:qval] || m[:uval]
         # Unescape backslash-quotes inside quoted strings.
         raw = raw.gsub(/\\(.)/, '\1') if m[:qval]
         out[key] = raw
-      end
+      }
       out
     end
   end

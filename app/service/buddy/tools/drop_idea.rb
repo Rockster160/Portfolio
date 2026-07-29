@@ -1,0 +1,25 @@
+Buddy::Tools.register(
+  name:        :drop_idea,
+  description: <<~TXT,
+    Forget / drop a stashed brain-dump idea. Use when the person says to forget
+    it, drop it, or never mind about one of their `stashed_ideas`. `id` is the
+    idea's id.
+  TXT
+  args:        {
+    id: { type: :integer, required: true, description: "Idea id from stashed_ideas" },
+  },
+  level:       1,
+  confirm:     ->(payload, ctx) {
+    idea = ctx.user.buddy_ideas.live.find_by(id: payload[:id])
+    raise "no stashed idea ##{payload[:id]}" if idea.nil?
+
+    { summary: "Drop this idea?", resolved: {} }
+  },
+  label:       ->(_payload, _ctx) { { title: "Forget this idea", sub: nil } },
+  execute:     ->(payload, ctx) {
+    idea = ctx.user.buddy_ideas.find(payload[:id])
+    idea.update!(status: :dropped)
+    { idea_id: idea.id }
+  },
+  receipt:     ->(_result, _ctx) { "Dropped it ✓" },
+)

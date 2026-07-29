@@ -9,12 +9,19 @@ module Buddy
   #   { op: "updated", model: "AgendaItem",  id: 7,  before: {...}, summary }
   #   { op: "recreated", model: "ActionEvent", attrs: {...}, summary }
   #
-  # Deliberately narrow: only models whose reversal is clean and side-effect
-  # free. Chore completions keep their own dedicated undo tool.
+  # Deliberately narrow: only models whose reversal is clean. These are the
+  # models Level-2 (execute-then-undo) tools create/remove — logging an event,
+  # adding an agenda item, completing a chore, adding/removing a list item —
+  # so unchecking a pre-checked row can cleanly walk it back.
   module Reverter
     module_function
 
-    MODELS = { "ActionEvent" => "ActionEvent", "AgendaItem" => "AgendaItem" }.freeze
+    MODELS = {
+      "ActionEvent"     => "ActionEvent",
+      "AgendaItem"      => "AgendaItem",
+      "ChoreCompletion" => "ChoreCompletion",
+      "ListItem"        => "ListItem",
+    }.freeze
 
     def reversible?(revert)
       r = normalize(revert)
@@ -56,8 +63,10 @@ module Buddy
     def remove(r)
       rec = find!(r)
       case r[:model].to_s
-      when "ActionEvent" then rec.destroy!
-      when "AgendaItem"  then rec.update!(status: :cancelled, cancelled_at: Time.current)
+      when "ActionEvent"     then rec.destroy!
+      when "AgendaItem"      then rec.update!(status: :cancelled, cancelled_at: Time.current)
+      when "ChoreCompletion" then rec.destroy!   # fires the :uncompleted Jil trigger
+      when "ListItem"        then rec.soft_destroy
       end
     end
 
@@ -69,10 +78,17 @@ module Buddy
       find!(r).update!(before)
     end
 
-    # Undo a hard delete → recreate from the stored attributes.
+    # Undo a hard delete → recreate from the stored attributes. A removed list
+    # item goes back through the list's own add path (soft-undelete + resort)
+    # rather than a bare create!, so it lands like the app re-added it.
     def recreate(r)
       attrs = (r[:attrs] || {}).to_h
       raise "nothing to recreate" if attrs.empty?
+
+      if r[:model].to_s == "ListItem"
+        list = List.find(attrs["list_id"] || attrs[:list_id])
+        return list.list_items.add(attrs["name"] || attrs[:name])
+      end
 
       klass(r[:model]).create!(attrs)
     end
@@ -87,7 +103,7 @@ module Buddy
 
       actions = ByteAction.where(byte_conversation_id: conversation.id, tool_name: "buddy_proposals").order(created_at: :desc).limit(25)
       actions.each do |action|
-        Array(action.buttons).reverse_each do |btn|
+        Array(action.buttons).reverse_each { |btn|
           result = btn["result"]
           next unless result.is_a?(Hash)
 
@@ -96,7 +112,7 @@ module Buddy
           next unless reversible?(revert)
 
           return { action_id: action.id, button_id: btn["id"], summary: normalize(revert)[:summary].to_s.presence || "your last change" }
-        end
+        }
       end
       nil
     end

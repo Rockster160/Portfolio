@@ -24,30 +24,83 @@ async function postQuickAction(payload) {
   return res.json().catch(() => ({}));
 }
 
-export function initBuddyHero({ hero, conversationIdFn }) {
+export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
   if (!hero) return null;
 
   const charEl        = hero.querySelector(".byte-buddy-char");
   const quickActions  = hero.querySelector("[data-buddy-quick-actions]");
-  const moodPopover   = hero.querySelector("[data-buddy-mood-popover]");
-  const facePopover   = hero.querySelector("[data-buddy-face-popover]");
+  const moodPopover    = hero.querySelector("[data-buddy-mood-popover]");
+  const facePopover    = hero.querySelector("[data-buddy-face-popover]");
+  const stashPopover   = hero.querySelector("[data-buddy-stash-popover]");
+  const suggestPopover = hero.querySelector("[data-buddy-suggest-popover]");
 
   const setActive = (isBuddy) => {
     hero.dataset.buddyActive = isBuddy ? "true" : "false";
     hero.hidden = !isBuddy;
     if (!isBuddy && moodPopover) moodPopover.hidden = true;
     if (!isBuddy && facePopover) facePopover.hidden = true;
+    if (!isBuddy && stashPopover) stashPopover.hidden = true;
+    if (!isBuddy && suggestPopover) suggestPopover.hidden = true;
   };
 
-  const setExpression = (expression) => {
-    if (!expression) return;
+  // The pet has two layers: a persistent MOOD and a transient "thinking"
+  // overlay shown while a turn is in flight. `restingExpression` remembers the
+  // mood so that when thinking clears we fall back to exactly the face Buddy
+  // was wearing — never a hardcoded default. A transient paint never updates
+  // it; a real one does.
+  let restingExpression = hero.dataset.buddyAwakeExpression || "neutral";
+
+  const paint = (expression) => {
     hero.dataset.buddyExpression = String(expression);
     if (charEl) charEl.dataset.buddyExpression = String(expression);
     syncFaceStates();
   };
 
+  const setExpression = (expression, opts = {}) => {
+    if (!expression) return;
+    if (!opts.transient) restingExpression = String(expression);
+    paint(expression);
+  };
+
+  // Drop the "thinking" overlay and fall back to the remembered mood. No-op
+  // unless the pet is actually mid-thought, so a real mood already showing is
+  // left alone. Called the instant reply text starts streaming.
+  const clearThinking = () => {
+    if (hero.dataset.buddyExpression === "thinking") paint(restingExpression);
+  };
+
   const openMood  = () => { if (moodPopover) moodPopover.hidden = false; };
   const closeMood = () => { if (moodPopover) moodPopover.hidden = true;  };
+
+  const openStash  = () => { if (stashPopover) stashPopover.hidden = false; };
+  const closeStash = () => { if (stashPopover) stashPopover.hidden = true;  };
+
+  const openSuggest  = () => { if (suggestPopover) suggestPopover.hidden = false; };
+  const closeSuggest = () => { if (suggestPopover) suggestPopover.hidden = true;  };
+
+  // "What now?" focused on a bucket (or Anything = unfiltered). Same server
+  // action as the bare tap, just with a category.
+  const dispatchSuggest = async (category) => {
+    const cid = currentConversationId();
+    if (cid == null) return;
+    closeSuggest();
+    setExpression("thinking", { transient: true });
+    try {
+      await postQuickAction({ kind: "suggest", category, conversation_id: cid });
+    } catch (_) { /* server logs the reason */ }
+  };
+
+  // Arm a brain-dump bucket: the person's NEXT message gets filed as an idea
+  // (the server holds the latch). We just tell the composer to hint it.
+  const dispatchStash = async (category) => {
+    const cid = currentConversationId();
+    if (cid == null) return;
+    closeStash();
+    try {
+      await postQuickAction({ kind: "stash", category, conversation_id: cid });
+      if (onStashArmed) onStashArmed(category);
+    } catch (_) { /* server logs the reason */ }
+  };
 
   // ---- Debug face/theme picker (temporary) ----
   const openFace  = () => { if (facePopover) { facePopover.hidden = false; syncFaceStates(); } };
@@ -90,7 +143,7 @@ export function initBuddyHero({ hero, conversationIdFn }) {
   const dispatchAction = async (kind) => {
     const cid = currentConversationId();
     if (cid == null) return;
-    setExpression("thinking");
+    setExpression("thinking", { transient: true });
     try {
       await postQuickAction({ kind: kind, conversation_id: cid });
     } catch (_) { /* server logs the reason; expression rebroadcasts on reply */ }
@@ -100,7 +153,7 @@ export function initBuddyHero({ hero, conversationIdFn }) {
     const cid = currentConversationId();
     if (cid == null) return;
     closeMood();
-    setExpression("thinking");
+    setExpression("thinking", { transient: true });
     try {
       await postQuickAction({ kind: "checkin", mood: mood, conversation_id: cid });
     } catch (_) { /* server logs the reason */ }
@@ -128,9 +181,45 @@ export function initBuddyHero({ hero, conversationIdFn }) {
       const btn = e.target.closest("[data-buddy-action]");
       if (!btn) return;
       const action = btn.dataset.buddyAction;
-      if (action === "checkin") { closeFace(); openMood(); return; }
-      if (action === "facepick") { closeMood(); openFace(); return; }
+      if (action === "checkin") { closeFace(); closeStash(); closeSuggest(); openMood(); return; }
+      if (action === "stash") { closeMood(); closeFace(); closeSuggest(); openStash(); return; }
+      if (action === "suggest") { closeMood(); closeFace(); closeStash(); openSuggest(); return; }
+      if (action === "facepick") { closeMood(); closeStash(); closeSuggest(); openFace(); return; }
       dispatchAction(action);
+    });
+  }
+
+  // "What now?" bucket popover — one tap fires the focused suggestion.
+  if (suggestPopover) {
+    keepFocusOnButtonTap(suggestPopover);
+    suggestPopover.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-suggest]");
+      if (!btn) return;
+      dispatchSuggest(btn.dataset.suggest);
+    });
+
+    document.addEventListener("click", (e) => {
+      if (suggestPopover.hidden) return;
+      if (suggestPopover.contains(e.target)) return;
+      if (e.target.closest('[data-buddy-action="suggest"]')) return;
+      closeSuggest();
+    });
+  }
+
+  // Stash bucket popover — one tap arms the bucket + closes.
+  if (stashPopover) {
+    keepFocusOnButtonTap(stashPopover);
+    stashPopover.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-stash]");
+      if (!btn) return;
+      dispatchStash(btn.dataset.stash);
+    });
+
+    document.addEventListener("click", (e) => {
+      if (stashPopover.hidden) return;
+      if (stashPopover.contains(e.target)) return;
+      if (e.target.closest('[data-buddy-action="stash"]')) return;
+      closeStash();
     });
   }
 
@@ -175,6 +264,16 @@ export function initBuddyHero({ hero, conversationIdFn }) {
   return {
     setActive,
     setExpression,
+    clearThinking,
+    // Set the mood from a reply's leading [[mood:]] marker the instant text
+    // starts streaming — so the face is right as Buddy starts talking, not a
+    // beat later at turn-end. Falls back to just clearing the thinking overlay
+    // when the reply carries no mood marker.
+    onReplyStreaming(body) {
+      const m = String(body || "").match(/\[\[\s*mood:\s*([a-z_]+)\s*\]\]/i);
+      if (m) setExpression(m[1].toLowerCase());
+      else clearThinking();
+    },
     onModeChange(newMode) {
       setActive(newMode === "buddy");
     },
