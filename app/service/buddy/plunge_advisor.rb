@@ -51,7 +51,12 @@ module Buddy
       local_now = now.in_time_zone(tz)
       today     = Buddy::Day.today(user, now: now) # perceived day (3am rollover)
 
-      hours = today_hours(data["hourly"], tz, today)
+      # FUTURE weather only — an hour bucket still counts if it hasn't fully
+      # elapsed. Rain that already fell isn't worth a mention (and keeps the
+      # block from reporting a stale forecast late in the day).
+      hours = today_hours(data["hourly"], tz, today).select { |h|
+        (Time.at(h["dt"].to_i).in_time_zone(tz) + 3600) > local_now
+      }
       rain  = hours.select { |h| rainy?(h) }
       heavy = hours.select { |h| h["clouds"].to_i >= HEAVY_CLOUDS }
 

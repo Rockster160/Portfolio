@@ -10,26 +10,38 @@ module Buddy
 
     # Comfort bands mirror the dashboard weather cell's colour scale. Woven into
     # the seed so the briefing frames weather the way we read it at a glance.
-    def weather_block
-      summary = WeatherService.summary
-      return "" if summary.blank?
+    # Time-aware: past ~4pm the day's high/comfort read is no longer actionable,
+    # so we drop TODAY's weather and keep only the week outlook (upcoming days
+    # still matter). Empty when there's nothing worth saying.
+    def weather_block(user=nil)
+      late = late_in_day?(user)
+      week = WeatherService.week_outlook
+      summary = WeatherService.summary unless late
 
-      week  = WeatherService.week_outlook
-      lines = [
-        "",
-        "WEATHER (weave it in naturally, don't recite a forecast):",
-        "Today: #{summary}",
-      ]
+      return "" if summary.blank? && week.blank?
+
+      lines = ["", "WEATHER (weave it in naturally, don't recite a forecast):"]
+      if summary.present?
+        lines << "Today: #{summary}"
+        lines += [
+          "Comfort read on today's high:",
+          "- ~62-75°F is the comfortable sweet spot - no need to fuss.",
+          "- upper 70s is warm; mid-80s and up is hot - flag it, suggest light layers / water.",
+          "- 50s is cool, 40s and below is cold; freezing or under, say to grab a coat.",
+          "- real rain chance today? mention an umbrella.",
+          "Skip the today-comfort line if it's unremarkable.",
+        ]
+      end
       lines << "This week to flag: #{week}. Give a short heads-up for any day with rain / wind / snow." if week.present?
-      lines += [
-        "Comfort read on today's high:",
-        "- ~62-75°F is the comfortable sweet spot - no need to fuss.",
-        "- upper 70s is warm; mid-80s and up is hot - flag it, suggest light layers / water.",
-        "- 50s is cool, 40s and below is cold; freezing or under, say to grab a coat.",
-        "- real rain chance today? mention an umbrella.",
-        "Skip the today-comfort line if it's unremarkable, but still flag any notable day this week.",
-      ]
       lines.join("\n")
+    end
+
+    # After ~4pm local the day's weather isn't actionable anymore.
+    def late_in_day?(user)
+      return false if user.nil?
+
+      hour = Time.current.in_time_zone(user.timezone.presence || "America/Denver").hour
+      hour >= 16 || hour < 4
     end
 
     # Alpine plunge / notable-weather block. Only speaks up for rain/snow or
@@ -49,7 +61,12 @@ module Buddy
         What's on for TODAY, forward-looking. This is a briefing about the day ahead, NOT a recap of yesterday or a review of what's already done.
 
         OPEN with a warm time-of-day greeting when it fits - read `now_local` for the hour. Either the short form ("Morning!" / "Afternoon!" / "Evening!") or the full "Good morning" / "Good afternoon" / "Good evening" works; pick whatever feels natural. LEAN INTO the greeting when it genuinely lands: the first check of the day, or when we haven't talked in a while. SKIP it only when we just talked a moment ago (back-to-back) or the hour is genuinely odd - don't greet twice in one thread.
-        #{weather_block}#{plunge_block(user)}
+        #{weather_block(user)}#{plunge_block(user)}
+
+        FORWARD-LOOKING ONLY. Only surface what's STILL AHEAD from `now_local`. Anything already over is not news:
+        - Agenda items flagged `passed: true` are DONE for the day - never recite or recap them.
+        - `chores_done_today` is finished business - don't report it as an update.
+        - If it's evening or later and the day is essentially behind them (most items passed, little pending), DON'T force a full rundown. A day that's over doesn't need a briefing - give what's genuinely left tonight (if anything) and a quick nod to tomorrow, then stop. Short is correct here.
 
         LEAD WITH what still needs to happen today:
         - `chores_pending_today` - the primary answer. Name them.

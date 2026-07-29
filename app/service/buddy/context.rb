@@ -117,6 +117,9 @@ module Buddy
                 kind:      i.kind,
                 cadence:   schedule_cadence(i),  # nil = one-off; "every weekday" / "monthly" / ...
                 drive_min: drive_minutes(i),     # known travel time, for a soon "leave by" nudge
+                # Already happened — a forward-looking briefing skips these
+                # instead of recapping a day that's mostly over.
+                passed:    (!i.all_day && i.start_at < now ? true : nil),
               }.compact, sources[i.agenda_id]
             )
           }
