@@ -135,6 +135,45 @@ RSpec.describe Buddy::Tools do
     end
   end
 
+  # The reply field is what keeps an action turn to a single API call: the model
+  # cannot write text alongside a function call, so its words ride on the call.
+  describe "the reply field" do
+    before { Rails.root.glob("app/service/buddy/tools/*.rb").each { |f| load f } }
+
+    it "is offered on every registry tool so any action turn can speak in one call" do
+      described_class.function_schemas.each do |schema|
+        expect(schema[:parameters][:properties]).to have_key(:reply), "#{schema[:name]} has no reply field"
+      end
+    end
+
+    it "is NOT offered on get_context, which cannot speak before it has read" do
+      expect(Buddy::GPT::ContextTool.schema[:parameters][:properties]).not_to have_key(:reply)
+    end
+  end
+
+  describe ".spoken_reply" do
+    it "returns the first non-blank reply across the calls" do
+      calls = [
+        { name: :create_chore,   arguments: { "name" => "Mow" } },
+        { name: :complete_chore, arguments: { "chore" => "Mow", "reply" => "Setting that up." } },
+        { name: :log_event,      arguments: { "name" => "x", "reply" => "Second one." } },
+      ]
+
+      expect(described_class.spoken_reply(calls)).to eq("Setting that up.")
+    end
+
+    it "is nil when nothing carried one" do
+      expect(described_class.spoken_reply([{ name: :log_event, arguments: { "name" => "x" } }])).to be_nil
+      expect(described_class.spoken_reply([])).to be_nil
+    end
+
+    it "ignores a blank reply" do
+      calls = [{ name: :log_event, arguments: { "name" => "x", "reply" => "   " } }]
+
+      expect(described_class.spoken_reply(calls)).to be_nil
+    end
+  end
+
   describe ".normalize_function_arguments" do
     before { Rails.root.glob("app/service/buddy/tools/*.rb").each { |f| load f } }
 
@@ -146,6 +185,16 @@ RSpec.describe Buddy::Tools do
       })
 
       expect(out).to eq(name: "Tesla Start", temp: 72, dest: "Home")
+    end
+
+    it "strips reply so a pass-through tool never forwards prose as a Jil argument" do
+      tool = described_class[:call_jil_function]
+
+      out = described_class.normalize_function_arguments(tool, {
+        "name" => "Tesla Start", "reply" => "Starting the car.", "args" => { "temp" => 72 }
+      })
+
+      expect(out).to eq(name: "Tesla Start", temp: 72)
     end
 
     it "leaves an ordinary tool's arguments alone apart from symbolizing keys" do

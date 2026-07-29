@@ -5,7 +5,7 @@ Buddy::Tools.register(
     you. You'll see any open questions in your context ("Passing along" /
     pending relays), each with an id. When the user has actually answered one -
     in their own words, however they phrase it - use this to pass their answer
-    back. Only use it once they've genuinely answered; if they're still
+    back. Only use it once they have actually answered; if they're still
     thinking or deflecting, keep the conversation going instead.
 
     `id` is the relay id from the pending question. `answer` is what to tell the

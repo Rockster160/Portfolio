@@ -24,6 +24,19 @@ module Buddy
 
     COUNT_ARG = :count
 
+    # Buddy's spoken words for the turn, carried ON the tool call.
+    #
+    # Not a real tool arg — validate_payload strips it before any tool proc sees
+    # it. It exists because emitting a function call ENDS the model's turn: the
+    # model writes no text alongside one, so without this every action turn cost
+    # a second round trip purely to collect the prose. Verified against
+    # gpt-5.4-mini: instructing it to write text alongside a call does nothing
+    # (0/8), while filling a `reply` field works (4/4).
+    #
+    # Deliberately absent from get_context, which genuinely can't speak until it
+    # has read something. That one still round-trips.
+    REPLY_ARG = :reply
+
     # Lazy loader guards against Rails dev-mode module reload wiping
     # the in-memory registry hash. Zeitwerk clears Buddy::Tools when
     # any file it depends on changes; @registry starts empty on the
@@ -136,6 +149,7 @@ module Buddy
       # task, so they take one freeform object instead of a fixed schema.
       # A freeform object can't satisfy strict mode, hence `strict: false`.
       properties[:args] = passthrough_property if tool[:passthrough_args]
+      properties[REPLY_ARG] = reply_property
 
       {
         type:        :function,
@@ -158,12 +172,29 @@ module Buddy
     # :passthrough_args.
     def normalize_function_arguments(tool, parsed)
       args = (parsed || {}).transform_keys(&:to_sym)
+      # REPLY_ARG is prose for the person, never a tool input. Stripping it here
+      # matters most for pass-through tools, which keep every undeclared key —
+      # left in, Buddy's spoken line would be handed to a Jil function as an
+      # argument.
+      args.delete(REPLY_ARG)
       return args unless tool[:passthrough_args]
 
       nested = args.delete(:args)
       return args unless nested.is_a?(Hash)
 
       nested.transform_keys(&:to_sym).merge(args)
+    end
+
+    # The spoken line off a set of tool calls. First non-blank wins: the model is
+    # told to put it on its first call, but a stray duplicate on a second call
+    # shouldn't double up the reply.
+    def spoken_reply(tool_calls)
+      Array(tool_calls).each do |call|
+        args = call[:arguments] || {}
+        value = (args[REPLY_ARG.to_s] || args[REPLY_ARG]).to_s.strip
+        return value if value.present?
+      end
+      nil
     end
 
     # Substitutes {{key}} placeholders with shell-escaped payload values.
@@ -279,6 +310,15 @@ module Buddy
         {
           type:        [:integer, :null],
           description: "How many times this repeats. Null or 1 for a single occurrence",
+        }
+      end
+
+      def reply_property
+        {
+          type:        [:string, :null],
+          description: "What you SAY to the person this turn - the words they will see. " \
+                       "Put it on your FIRST tool call and leave it null on any others. " \
+                       "Never leave it null on every call, or they get an empty message",
         }
       end
 

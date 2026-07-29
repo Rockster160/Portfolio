@@ -219,15 +219,219 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
-  describe "round-trip limit" do
-    it "stops re-reading context after the cap instead of looping" do
-      rounds = Array.new(6) {
+  # A function call ENDS the model's turn — it writes no text alongside one and
+  # expects the tool output back before saying anything. So every call has to be
+  # answered, or an action turn produces an empty bubble. This was the bug that
+  # made 13 of 16 eval scenarios come back with no prose.
+  describe "giving the model a turn to speak after it calls a tool" do
+    it "answers a proposal call and puts the follow-up prose in the reply" do
+      client = run([
+        { text: "", tool_calls: [{ name: :log_event, arguments: { "name" => "Sandwich" } }] },
+        { text: "Nice, that counts." },
+      ])
+
+      expect(client.calls.length).to eq(2)
+      expect(reply.body).to eq("Nice, that counts.")
+    end
+
+    it "answers a silent tool call so a mood-only turn still says something" do
+      # "today was genuinely rough" used to set the face and return an empty
+      # bubble, which is the worst possible moment for one.
+      run([
+        { text: "", tool_calls: [{ name: :set_mood, arguments: { "expression" => "sad" } }] },
+        { text: "Oof. I'm sorry, that sounds like a lot." },
+      ])
+
+      expect(reply.body).to eq("Oof. I'm sorry, that sounds like a lot.")
+      expect(convo.reload.buddy_expression).to eq("sad")
+    end
+
+    it "returns an output for every call in a round, not just the readable ones" do
+      client = run([
+        {
+          text:       "",
+          tool_calls: [
+            { name: :get_context, call_id: "c1", arguments: { "sections" => ["chores_all"] } },
+            { name: :set_mood,    call_id: "c2", arguments: { "expression" => "happy" } },
+            { name: :log_event,   call_id: "c3", arguments: { "name" => "Coffee" } },
+          ],
+        },
+        { text: "All set." },
+      ])
+
+      outputs = client.calls.last.input.select { |i| i[:type] == :function_call_output }
+      expect(outputs.map { |o| o[:call_id] }).to contain_exactly("c1", "c2", "c3")
+    end
+
+    it "tells the model a pending proposal has NOT happened yet" do
+      client = run([
+        { text: "", tool_calls: [{ name: :create_chore, arguments: { "name" => "Mow" } }] },
+        { text: "Want me to set that up?" },
+      ])
+
+      output = client.calls.last.input.find { |i| i[:type] == :function_call_output }
+      expect(JSON.parse(output[:output])).to include("status" => "proposed")
+      expect(output[:output]).to match(/do not say it's done/i)
+    end
+
+    it "tells the model an immediate action already happened" do
+      client = run([
+        { text: "", tool_calls: [{ name: :complete_chore, arguments: { "chore" => "dishes" } }] },
+        { text: "Nice, knocked out." },
+      ])
+
+      output = client.calls.last.input.find { |i| i[:type] == :function_call_output }
+      # complete_chore is level 2: fires now, undoable.
+      expect(JSON.parse(output[:output])).to include("status" => "done_undoable")
+    end
+
+    it "tells the model when it named a tool that does not exist" do
+      client = run([
+        { text: "", tool_calls: [{ name: :not_a_real_tool, arguments: {} }] },
+        { text: "Sorry, I can't do that one." },
+      ])
+
+      output = client.calls.last.input.find { |i| i[:type] == :function_call_output }
+      expect(JSON.parse(output[:output])).to include("ok" => false)
+      expect(reply.body).to eq("Sorry, I can't do that one.")
+    end
+
+    it "only builds one checklist even when proposals arrive across rounds" do
+      run([
+        { text: "", tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
+        { text: "", tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }] },
+        { text: "Done and done." },
+      ])
+
+      expect(ByteAction.where(byte_message_id: reply.id).count).to be <= 1
+      expect(reply.body).to eq("Done and done.")
+    end
+  end
+
+  # The reply field is what keeps an action turn to a single API call. Without it
+  # every log/mood/proposal turn pays for a second round purely to collect prose.
+  describe "prose riding on the tool call" do
+    it "takes the reply off the call and answers in ONE round" do
+      client = run([{
+        tool_calls: [{ name: :log_event, arguments: { "name" => "Sandwich", "reply" => "Nice, sandwich fuel." } }],
+      }])
+
+      expect(client.calls.length).to eq(1)
+      expect(reply.body).to eq("Nice, sandwich fuel.")
+      expect(reply.state).to eq("delivered")
+    end
+
+    it "still builds the checklist from a single-round turn" do
+      run([{
+        tool_calls: [{ name: :create_chore, arguments: { "name" => "Mow the lawn", "reply" => "Sure, here:" } }],
+      }])
+
+      expect(ByteAction.find_by(byte_message_id: reply.id)).to be_present
+      expect(reply.body).to eq("Sure, here:")
+    end
+
+    it "takes the FIRST non-blank reply when several calls carry one" do
+      run([{
+        tool_calls: [
+          { name: :create_chore,   arguments: { "name" => "Spice rack", "reply" => "Setting that up." } },
+          { name: :complete_chore, arguments: { "chore" => "Spice rack", "reply" => "And marking it done." } },
+        ],
+      }])
+
+      expect(reply.body).to eq("Setting that up.")
+    end
+
+    it "skips the reply field entirely on a silent tool and still speaks" do
+      run([{
+        tool_calls: [{ name: :set_mood, arguments: { "expression" => "sad", "reply" => "Oof, I'm sorry." } }],
+      }])
+
+      expect(reply.body).to eq("Oof, I'm sorry.")
+      expect(convo.reload.buddy_expression).to eq("sad")
+    end
+
+    it "never passes reply through to a tool's payload" do
+      captured = nil
+      allow(Buddy::ProposalBuilder).to receive(:create) { |args|
+        captured = args[:markers].first[:payload]
+        { action: nil, auto_ran: true }
+      }
+
+      run([{
+        tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee", "reply" => "Logged it." } }],
+      }])
+
+      expect(captured).not_to have_key(:reply)
+      expect(captured).to include(name: "Coffee")
+    end
+
+    it "still round-trips a read, because it cannot answer before seeing the data" do
+      client = run([
+        { tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
+        { text: "Nothing left on your list." },
+      ])
+
+      expect(client.calls.length).to eq(2)
+      expect(reply.body).to eq("Nothing left on your list.")
+    end
+
+    it "feeds an inline reply back so the model does not repeat itself next round" do
+      # Regression: only output_text was carried forward, so a round-1 inline
+      # reply was invisible to round 2 and the model opened by saying it again.
+      client = run([
+        {
+          tool_calls: [
+            { name: :get_context, arguments: { "sections" => ["recent_events"] } },
+            { name: :set_mood, arguments: { "expression" => "thinking", "reply" => "Oof, let me look." } },
+          ],
+        },
+        { text: "Nothing there now." },
+      ])
+
+      carried = client.calls.last.input.select { |i| i[:role] == :assistant }
+      expect(carried.last[:content]).to include("Oof, let me look.")
+    end
+
+    it "combines a read round's prose with a following action's inline reply" do
+      run([
+        { text: "One sec.", tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
+        { tool_calls: [{ name: :complete_chore, arguments: { "chore" => "dishes", "reply" => "Dishes are done." } }] },
+      ])
+
+      expect(reply.body).to eq("One sec.\n\nDishes are done.")
+    end
+
+    it "falls back to a second round when the model leaves reply null everywhere" do
+      client = run([
+        { tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }] },
+        { text: "Got it." },
+      ])
+
+      expect(client.calls.length).to eq(2)
+      expect(reply.body).to eq("Got it.")
+    end
+  end
+
+  describe "round limit" do
+    it "stops after the cap instead of looping forever" do
+      rounds = Array.new(8) {
         { text: "checking", tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] }
       }
       client = run(rounds)
 
-      expect(client.calls.length).to eq(described_class::MAX_ROUND_TRIPS)
+      expect(client.calls.length).to eq(described_class::MAX_ROUNDS)
       expect(reply.state).to eq("delivered")
+    end
+
+    it "allows look-up, then act, then speak within the cap" do
+      client = run([
+        { text: "", tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
+        { text: "", tool_calls: [{ name: :complete_chore, arguments: { "chore" => "dishes" } }] },
+        { text: "That's the dishes done." },
+      ])
+
+      expect(client.calls.length).to eq(3)
+      expect(reply.body).to eq("That's the dishes done.")
     end
   end
 end

@@ -116,9 +116,16 @@ RSpec.describe "relay bridge and agenda notify over the GPT turn" do
         user: chelsea, direction: :outbound, state: :sent, body: "tacos",
       )
 
-      run_turn(msg, [{ text: "Sent!", tool_calls: [{ name: :relay_answer, arguments: { "id" => relay.id, "answer" => "tacos" } }] }])
+      run_turn(msg, [
+        { text: "", tool_calls: [{ name: :relay_answer, arguments: { "id" => relay.id, "answer" => "tacos" } }] },
+        { text: "Sent!" },
+      ])
 
-      expect(BuddyUsage.where(user: chelsea).count).to eq(1)
+      rows = BuddyUsage.where(user: chelsea)
+      # Two calls: the one that fired relay_answer, and the one that wrote the
+      # reply. Both belong to the same visible message.
+      expect(rows.count).to eq(2)
+      expect(rows.pluck(:byte_message_id).uniq.length).to eq(1)
     end
   end
 

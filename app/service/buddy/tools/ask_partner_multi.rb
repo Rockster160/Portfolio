@@ -3,9 +3,9 @@ Buddy::Tools.register(
   description: <<~TXT,
     Ask the user's partner (or a household member) a SELECT-ALL / pick-any
     question through their companion. Use for "ask which love languages
-    resonate with Chelsea: words, time, touch, service, gifts", "ask Rocco
-    which of these chores he's up for tonight". Their companion shows the
-    options as checkboxes with a Send button, so they can pick several at once;
+    resonate: words, time, touch, service, gifts", "ask which of these
+    chores they're up for tonight". Their companion shows the options as
+    checkboxes with a Send button, so they can pick several at once;
     the full set comes back to you.
 
     `to` is who to ask. `question` is the prompt. `options` is a

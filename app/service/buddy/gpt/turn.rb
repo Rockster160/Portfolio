@@ -17,15 +17,44 @@ module Buddy
     # The `client:` seam is what keeps this testable: specs inject a fake client
     # that yields recorded events, so none of the above needs the network.
     class Turn
-      # A read tool can ask the model to continue with what it learned. Capped
-      # so a model that keeps re-reading can't spin: 1 initial pass plus at most
-      # two follow-ups is plenty for "greet me" -> read -> brief.
-      MAX_ROUND_TRIPS = 3
+      # Every round of tool calls needs a follow-up round for the model to answer
+      # in, so the cap has to allow the deepest legitimate chain: look something
+      # up, act on what it found, then speak. That's three calls plus the closing
+      # one. Beyond that a model is spinning, not working.
+      MAX_ROUNDS = 4
 
-      # Matches the cadence the Mac streamer used, which the client's typing
-      # animation is already tuned against.
-      UPDATE_THROTTLE_MS = 150
+      # What we hand back as a tool's output. The model has to know whether the
+      # thing it called has HAPPENED or is merely waiting on a tap, because the
+      # tense it writes in depends on it (see the three-kinds-of-action section of
+      # the prompt). Levels come straight from the registry, so this can't drift
+      # from how ProposalBuilder actually treats them.
+      #
+      # Level 1 and 2 do run for real, moments later in build_proposals — the same
+      # ordering marker-era Buddy had, where prose was written before Rails
+      # executed anything.
+      def self.ack_for(tool)
+        case tool[:level]
+        when 1
+          { status: "done", note: "Ran immediately. Speak about it as done." }
+        when 2
+          {
+            status: "done_undoable",
+            note:   "Ran immediately and shows as a pre-checked row the person can uncheck to undo. " \
+                    "Speak about it as done.",
+          }
+        else
+          {
+            status: "proposed",
+            note:   "A checkbox row is now waiting for the person to tap. It has NOT happened yet - " \
+                    "do not say it's done, logged, or added.",
+          }
+        end
+      end
 
+      # The bubble minted at turn start, which the client renders as a live pulsing
+      # placeholder — that IS the typing indicator. Its body is replaced once, with
+      # the finished reply. Buddy answers in 1-3 sentences in about a second, so
+      # there's nothing worth animating in between.
       PLACEHOLDER = "…".freeze
 
       FALLBACK_BODY = "Hmm, I couldn't quite line that one up - can you give me a little more to go on?".freeze
@@ -46,7 +75,6 @@ module Buddy
         @user         = @conversation.user
         @client       = client || Client.new
         @context_tool = ContextTool.new(@user, @conversation)
-        @last_push_ms = 0
       end
 
       def run!
@@ -69,61 +97,84 @@ module Buddy
 
       # ---- the model loop ----------------------------------------------------
 
+      # Runs the model until it stops calling tools, accumulating its prose.
+      #
+      # The load-bearing detail: emitting a function call ENDS the model's turn.
+      # It writes no text alongside one, and expects the tool's output back before
+      # it says anything. So every call has to be answered — not just the read
+      # tools — or the person gets an empty bubble on any turn that logs, sets a
+      # mood, or proposes something. That was the whole failure mode of the first
+      # cut of this: 13 of 16 eval scenarios came back with no prose at all.
+      #
+      # Marker-era Buddy didn't have this problem because the marker was embedded
+      # in the text, so words and action arrived together. Structured calls split
+      # them across turns, and this loop is what stitches them back into one reply.
       def converse
         input     = History.build(@conversation, upto: @inbound)
-        text      = String.new(encoding: "UTF-8")
+        spoken    = []
         proposals = []
         rounds    = 0
 
         loop do
           rounds += 1
-          # Prose from a later round is a new paragraph, not a continuation of
-          # the placeholder that preceded the lookup. Without this you get
-          # "One sec.Nothing left on your list." in one run-on line.
-          text << "\n\n" if rounds > 1 && !text.empty? && !text.end_with?("\n")
-
-          result = stream_once(input, text)
-          # Record usage BEFORE the ok check: a failed or truncated response
-          # still consumed tokens and still bills.
+          result = run_round(input)
+          # Record usage BEFORE the ok check: a failed or truncated response still
+          # consumed tokens and still bills.
           record_usage(result)
           return { ok: false, error: result[:error] } unless result[:ok]
 
           calls = result[:tool_calls]
+          # Prose arrives one of two ways: as ordinary output text (when the model
+          # called nothing, or on a follow-up round), or riding on a tool call's
+          # reply field.
+          round_text = result[:text].to_s.strip
+          inline     = Buddy::Tools.spoken_reply(calls)
+          spoken << round_text if round_text.present?
+          spoken << inline if inline.present?
+
+          break if calls.empty?
+
+          # Proposals are collected and built ONCE after the loop, so a turn can
+          # never end up with two checklists attached to one reply.
           proposals.concat(calls.select { |c| proposal?(c[:name]) })
 
+          # Only a READ forces another round: the model can't answer until it sees
+          # what came back. Actions need nothing returned, so if the model already
+          # spoke inline we're done — that's the whole point of the reply field,
+          # and it halves the cost and latency of a logging turn.
           reads = calls.select { |c| c[:name].to_sym == ContextTool::NAME }
-          break if reads.empty? || rounds >= MAX_ROUND_TRIPS
+          break if reads.empty? && spoken.any?
+          break if rounds >= MAX_ROUNDS
 
-          # Carry this round's prose forward. Without it the model doesn't know
-          # it already said "one sec, let me check" and says it again on top of
-          # the answer, in the same bubble.
-          round_text = result[:text].to_s.strip
-          input += [{ role: :assistant, content: round_text }] if round_text.present?
-          # A function_call_output is only accepted alongside the function_call
-          # it answers, so both items go back on the input.
-          input += reads.flat_map { |call| round_trip_items(call) }
+          # Carry forward whatever was spoken this round, from EITHER source. Only
+          # feeding back output_text left the model blind to its own inline reply,
+          # so it opened the next round by saying the same thing again and the
+          # person got "Oof, yeah. I'll pull it out." twice in one bubble.
+          said = [round_text, inline].compact_blank.join("\n\n")
+          input += [{ role: :assistant, content: said }] if said.present?
+          input += calls.flat_map { |call| call_items(call) }
         end
 
-        { ok: true, text: text, proposals: proposals }
+        { ok: true, text: spoken.join("\n\n"), proposals: proposals }
       end
 
-      def stream_once(input, text)
+      # No incremental rendering: Buddy replies are 1-3 sentences and land in
+      # about a second, so the placeholder bubble acts as the typing indicator and
+      # the finished message is written once. Deltas are still consumed (the
+      # client's contract is a complete body), and side effects still fire the
+      # moment they arrive so the face moves before the words appear.
+      def run_round(input)
         @client.stream(instructions: instructions, input: input, tools: tools) { |event|
-          case event[:type]
-          when :text_delta
-            text << event[:text]
-            push_preview(text)
-          when :tool_call
-            # Side effects fire mid-stream so the face moves WITH the words
-            # instead of a beat behind, which the old marker path couldn't do
-            # (Rails only saw markers once the whole body had arrived).
-            Buddy::SideEffects.call(@conversation, event[:name], event[:arguments]) if
-              Buddy::SideEffects.handles?(event[:name])
-          end
+          next unless event[:type] == :tool_call
+          next unless Buddy::SideEffects.handles?(event[:name])
+
+          Buddy::SideEffects.call(@conversation, event[:name], event[:arguments])
         }
       end
 
-      def round_trip_items(call)
+      # A function_call_output is only accepted alongside the function_call it
+      # answers, so both items go back on the input together.
+      def call_items(call)
         [
           {
             type:      :function_call,
@@ -134,9 +185,21 @@ module Buddy
           {
             type:    :function_call_output,
             call_id: call[:call_id],
-            output:  @context_tool.call(call[:arguments]),
+            output:  tool_output(call),
           },
         ]
+      end
+
+      def tool_output(call)
+        name = call[:name].to_sym
+        return @context_tool.call(call[:arguments]) if name == ContextTool::NAME
+        # Silent tools already ran as their call arrived (see run_round).
+        return JSON.generate({ ok: true }) if Buddy::SideEffects.handles?(name)
+
+        tool = Buddy::Tools[name]
+        return JSON.generate({ ok: false, error: "no tool named #{name}" }) if tool.nil?
+
+        JSON.generate(self.class.ack_for(tool))
       end
 
       def proposal?(name)
@@ -229,25 +292,6 @@ module Buddy
         )
         broadcast(msg)
         msg
-      end
-
-      def push_preview(text)
-        now_ms = (Time.current.to_f * 1000).to_i
-        return if now_ms - @last_push_ms < UPDATE_THROTTLE_MS
-
-        preview = text.strip
-        # Skip empty pushes. When the model leads with a tool call, the stripped
-        # preview is still empty, and writing body="" would replace the "…"
-        # placeholder with a blank bubble.
-        return if preview.empty?
-
-        @last_push_ms = now_ms
-        # update_columns on purpose: a streaming reply writes this many times per
-        # second, and going through save would fire bump_conversation_activity
-        # (an after_commit touch on the conversation) on every keystroke-sized
-        # delta. The finalize update is a real save.
-        @reply.update_columns(body: preview, updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
-        broadcast(@reply)
       end
 
       def finalize_success(outcome)

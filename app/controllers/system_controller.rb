@@ -1,7 +1,48 @@
 class SystemController < ApplicationController
   before_action :require_me
 
+  # Buddy usage timestamps are UTC; spend is bucketed by local calendar day so a
+  # late-night turn lands on the day it felt like, not the next UTC one.
+  SPEND_ZONE = "America/Denver".freeze
+  # A window of 1 means "today, hour by hour"; the rest are rolling day windows.
+  SPEND_WINDOWS = [1, 7, 30, 90].freeze
+  SPEND_DEFAULT_DAYS = 30
+  # Dark-theme palette, assigned to models by spend rank.
+  SPEND_PALETTE = %w[
+    #5DADE2 #58D68D #F5B041 #AF7AC5 #EC7063 #48C9B0 #F7DC6F #5499C7
+  ].freeze
+
   def index; end
+
+  def gpt_spending
+    @windows = SPEND_WINDOWS
+    @days = params[:days].to_i
+    @days = SPEND_DEFAULT_DAYS unless SPEND_WINDOWS.include?(@days)
+    @hourly = @days == 1
+
+    scope, grouped, @buckets, @labels = @hourly ? hourly_spend : daily_spend
+
+    @model_totals = grouped.each_with_object(Hash.new(0)) { |((_bucket, model), micros), totals|
+      totals[model] += micros
+    }.sort_by { |_model, micros| -micros }
+    @models = @model_totals.map(&:first)
+
+    @colors = @models.each_with_index.to_h { |model, i| [model, SPEND_PALETTE[i % SPEND_PALETTE.length]] }
+    @datasets = @models.map { |model|
+      {
+        model: model,
+        color: @colors[model],
+        data:  @buckets.map { |bucket| (grouped[[bucket, model]] || 0) / Buddy::GPT::Pricing::MICROS_PER_DOLLAR.to_f },
+      }
+    }
+    @total_micros = grouped.values.sum
+    @call_count = scope.count
+
+    divisor = @hourly ? 24 : @days
+    @avg_micros = divisor.positive? ? @total_micros / divisor : 0
+    @total_label = @hourly ? "Total, today" : "Total, last #{@days} days"
+    @avg_label = @hourly ? "Per hour (avg)" : "Per day (avg)"
+  end
 
   def connections
     @pool_stat = load_pool_stat
@@ -28,6 +69,37 @@ class SystemController < ApplicationController
 
   def require_me
     head :not_found unless current_user&.me?
+  end
+
+  # Each returns [scope, grouped_by_[bucket, model], buckets, labels].
+
+  def daily_spend
+    tz = ActiveSupport::TimeZone[SPEND_ZONE]
+    start_date = tz.today - (@days - 1)
+    scope = BuddyUsage.where(created_at: start_date.in_time_zone(tz).beginning_of_day..)
+    grouped = scope.group(spend_day_sql, :model).sum(:cost_micros)
+    buckets = (start_date..tz.today).to_a
+    [scope, grouped, buckets, buckets.map { |d| d.strftime("%b %-d") }]
+  end
+
+  def hourly_spend
+    tz = ActiveSupport::TimeZone[SPEND_ZONE]
+    day_start = tz.now.beginning_of_day
+    scope = BuddyUsage.where(created_at: day_start...(day_start + 1.day))
+    grouped = scope.group(spend_hour_sql, :model).sum(:cost_micros)
+    grouped = grouped.transform_keys { |(hour, model)| [hour.to_i, model] }
+    buckets = (0..23).to_a
+    [scope, grouped, buckets, buckets.map { |h| Time.zone.local(2000, 1, 1, h).strftime("%-l %p") }]
+  end
+
+  # created_at is `timestamp without time zone` holding UTC, so re-anchor it to
+  # UTC before converting to the local zone, then bucket in that zone.
+  def spend_day_sql
+    Arel.sql("(created_at AT TIME ZONE 'UTC' AT TIME ZONE '#{SPEND_ZONE}')::date")
+  end
+
+  def spend_hour_sql
+    Arel.sql("EXTRACT(HOUR FROM (created_at AT TIME ZONE 'UTC' AT TIME ZONE '#{SPEND_ZONE}'))::int")
   end
 
   def load_db_connections

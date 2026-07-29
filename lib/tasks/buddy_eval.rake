@@ -22,21 +22,45 @@
 
 # The behaviors most worth eyeballing after a prompt or model change. The
 # trailing comment on each is what a PASS looks like.
+#
+# The second half is drawn from real conversations rather than invented, because
+# the invented set missed whole categories: bare-duration timers, undo and
+# correction, retroactive completion, pebble rewards, and history questions that
+# need chore_progress instead of get_context (which only knows about today).
+# For the genuine article, use `rake "buddy:replay[<conversation_id>,30]"`.
 BUDDY_EVAL_SCENARIOS = [
-  "hey",                                              # get_context + short briefing
+  # --- core logging and action ---
+  "hey",                                              # get_context + short briefing, WITH prose
   "morning!",                                         # same, time-of-day aware
-  "just finished a 14oz cup of water",                # complete_chore (or log_event), count-aware
-  "I hung the baskets",                               # complete_chore, fuzzy match
+  "just finished a 14oz cup of water",                # checks chores_all before falling back to log_event
   "took the recycling out twice",                      # complete_chore count=2, NEVER log_event
   "ate a sandwich",                                   # log_event (ingestion)
   "I alphabetized the spice rack",                    # no chore match -> create_chore + complete_chore
   "did 20 pushups",                                   # log_event with count
+  "add oat milk to the groceries",                    # add_list_item
+
+  # --- reminders, timed and conditional ---
   "remind me to call mom at 6",                       # schedule_reminder
   "remind me to grab my rx next time I'm at Costco",  # remind_when, NOT schedule_reminder
-  "add oat milk to the groceries",                    # add_list_item
-  "what's on my agenda today?",                       # get_context -> today_agenda
+  "5m",                                               # bare duration -> set_timer, no interrogation
+  "remind me once Chelsea gets back home to switch the music", # remind_when arrive, target resolves via her car
+
+  # --- correction and undo, which real use is full of ---
+  "I accidentally logged a Strawberry Celsius this morning", # delete_event / undo, not a new log
+  "actually mark that as done about an hour ago",      # complete_chore with a PAST `at`
+  "no, 10p means 10 pebbles as the reward",           # reads Np as reward, doesn't claim it can't set one
+
+  # --- chore setup with household shorthand ---
+  "add a new chore for filling the kitty litter, sub of refill item, for 2p", # create_chore parent + reward 2
+
+  # --- lookups that today's context can't answer ---
+  "does it show that I got a car wash yesterday?",    # chore_progress / search_events, NOT get_context
+  "how's the weather right now? I may take the bike",  # check_weather
+
+  # --- conversation and boundaries ---
+  "what's that detached mini house that butlers usually have called?", # just answers, no tools
   "can you run a script to fix my chores?",           # refuse warmly, no code, no "let me run"
-  "today was genuinely rough",                        # set_mood + warmth, not a receipt
+  "today was genuinely rough",                        # set_mood AND warm prose, never an empty bubble
   "I always drink oat milk lattes",                   # remember
   "what time is it?",                                 # 12-hour local, never UTC
 ].freeze
@@ -49,12 +73,20 @@ namespace :buddy do
     puts summary
   end
 
-  desc "Run Buddy against one message (REAL API CALL)"
-  task :eval_one, [:message] => :environment do |_t, args|
-    abort "usage: rake \"buddy:eval_one[your message]\"" if args[:message].blank?
+  desc "Run Buddy against one message (REAL API CALL). Pass a theme to run as Moss."
+  task :eval_one, [:message, :theme] => :environment do |_t, args|
+    abort "usage: rake \"buddy:eval_one[your message]\" or \"buddy:eval_one[msg,moss]\"" if args[:message].blank?
 
-    puts banner("Buddy eval — single message")
-    evaluate(args[:message])
+    theme = args[:theme].presence || "byte"
+    puts banner("Buddy eval — single message as #{theme}")
+    evaluate(args[:message], theme: theme)
+    puts summary
+  end
+
+  desc "Run the canned scenarios as Moss/Chelsea instead of Byte/Rocco (REAL API CALLS)"
+  task eval_moss: :environment do
+    puts banner("Moss eval — #{BUDDY_EVAL_SCENARIOS.length} scenarios")
+    BUDDY_EVAL_SCENARIOS.each { |text| evaluate(text, theme: "moss") }
     puts summary
   end
 
@@ -161,10 +193,13 @@ namespace :buddy do
       *Buddy::SideEffects.function_schemas(theme: theme),
       *Buddy::Tools.function_schemas,
     ]
+    # Pin the voice profile to the theme so a Moss run gets Chelsea's voice, not
+    # whichever one the acting user resolves to.
     instructions = Buddy::Personality.for(
       user,
       conversation: convo,
       at_glance:    { user: user.first_name, pet_expression: "neutral" },
+      tone:         (theme.to_s == "moss" ? :chelsea : :rocco),
     )
     context_tool = Buddy::GPT::ContextTool.new(user, convo)
 
@@ -173,23 +208,33 @@ namespace :buddy do
     reply   = String.new(encoding: "UTF-8")
     calls   = []
 
-    # Same round-trip loop Buddy::GPT::Turn runs, minus persistence.
-    Buddy::GPT::Turn::MAX_ROUND_TRIPS.times do
+    # Mirrors Buddy::GPT::Turn#converse, minus persistence and side effects. Prose
+    # comes either as output text or on a tool call's `reply` field; only a read
+    # forces another round.
+    spoken = []
+    rounds = 0
+    loop do
+      rounds += 1
       result = client.stream(instructions: instructions, input: input, tools: tools)
       unless result[:ok]
-        reply << "[ERROR: #{result[:error]}]"
+        spoken << "[ERROR: #{result[:error]}]"
         break
       end
 
-      reply << "\n\n" unless reply.empty?
-      reply << result[:text].to_s
+      round_text = result[:text].to_s.strip
+      inline     = Buddy::Tools.spoken_reply(result[:tool_calls])
+      spoken << round_text if round_text.present?
+      spoken << inline if inline.present?
       calls.concat(result[:tool_calls])
 
-      reads = result[:tool_calls].select { |c| c[:name] == Buddy::GPT::ContextTool::NAME }
-      break if reads.empty?
+      break if result[:tool_calls].empty?
 
-      input += [{ role: :assistant, content: result[:text].to_s }] if result[:text].to_s.present?
-      reads.each do |call|
+      reads = result[:tool_calls].select { |c| c[:name] == Buddy::GPT::ContextTool::NAME }
+      break if reads.empty? && spoken.any?
+      break if rounds >= Buddy::GPT::Turn::MAX_ROUNDS
+
+      input += [{ role: :assistant, content: round_text }] if round_text.present?
+      result[:tool_calls].each do |call|
         input += [
           {
             type:      :function_call,
@@ -197,16 +242,36 @@ namespace :buddy do
             name:      call[:name].to_s,
             arguments: JSON.generate(call[:arguments]),
           },
-          { type: :function_call_output, call_id: call[:call_id], output: context_tool.call(call[:arguments]) },
+          {
+            type:    :function_call_output,
+            call_id: call[:call_id],
+            output:  eval_tool_output(call, context_tool),
+          },
         ]
       end
     end
+    reply << spoken.join("\n\n")
 
     elapsed = Time.current - started
     record(calls, elapsed)
     report(text, reply.strip, calls, elapsed)
   rescue StandardError => e
     puts "  \e[31mCRASHED\e[0m #{e.class}: #{e.message}"
+  end
+
+  # What the model gets back for each call. Reads return real context so the
+  # answer is real; everything else returns the same acknowledgement production
+  # sends (Buddy::GPT::Turn.ack_for) WITHOUT running anything, so an eval never
+  # logs a chore or messages a partner for real.
+  def eval_tool_output(call, context_tool)
+    name = call[:name].to_sym
+    return context_tool.call(call[:arguments]) if name == Buddy::GPT::ContextTool::NAME
+    return JSON.generate({ ok: true }) if Buddy::SideEffects.handles?(name)
+
+    tool = Buddy::Tools[name]
+    return JSON.generate({ ok: false, error: "no tool named #{name}" }) if tool.nil?
+
+    JSON.generate(Buddy::GPT::Turn.ack_for(tool))
   end
 
   # Never saved. `new` (not `create!`) so nothing can leak into the real thread
@@ -234,7 +299,12 @@ namespace :buddy do
     puts "  #{reply.presence || "(no prose)"}"
 
     if calls.any?
-      calls.each { |c| puts "  \e[35m→ #{c[:name]}(#{c[:arguments].to_json})\e[0m" }
+      calls.each { |c|
+        # `reply` is already printed above as the spoken line; showing it again in
+        # the args just buries the actual arguments.
+        args = (c[:arguments] || {}).except(Buddy::Tools::REPLY_ARG.to_s)
+        puts "  \e[35m→ #{c[:name]}(#{args.to_json})\e[0m"
+      }
     else
       puts "  \e[90m→ no tool calls\e[0m"
     end

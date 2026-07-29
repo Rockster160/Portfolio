@@ -3,8 +3,8 @@ Buddy::Tools.register(
   description: <<~TXT,
     Ask the user's partner (or a household member) an OPEN-ENDED question
     through their companion, and bring back whatever they say. Use for "ask
-    Chelsea what she wants for dinner", "find out when Rocco's getting home",
-    "ask her how she's feeling". Their companion asks in its own voice, waits
+    them what they want for dinner", "find out when they're getting home",
+    "ask how they're feeling". Their companion asks in its own voice, waits
     for a natural reply, and passes the answer back to you.
 
     `to` is who to ask (household member). `question` is what you want to know,

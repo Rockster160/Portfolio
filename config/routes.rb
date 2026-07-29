@@ -505,6 +505,7 @@ Rails.application.routes.draw do
   constraints MeConstraint.new do
     get "/system" => "system#index", as: :system
     get "/system/connections" => "system#connections", as: :system_connections
+    get "/system/gpt_spending" => "system#gpt_spending", as: :system_gpt_spending
   end
   mount ::ActionCable.server => "/cable"
 end

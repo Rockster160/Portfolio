@@ -10,6 +10,13 @@
 #     { text: "You've got three left." },
 #   ])
 #
+# An action turn is a single round, with the prose riding on the call's `reply`
+# field the way production works:
+#
+#   FakeBuddyClient.new([
+#     { tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee", "reply" => "Nice, logged." } }] },
+#   ])
+#
 # Every request it received is kept on `#calls` so specs can assert on the
 # instructions, input array, and tool schemas that were actually sent.
 class FakeBuddyClient

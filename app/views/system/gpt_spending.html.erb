@@ -1,0 +1,237 @@
+<%= meta_title "GPT Spending", include_name: false %>
+<%= meta_description "GPT API cost per day." %>
+
+<div class="system-page">
+  <div class="lists-title">
+    <small><%= link_to "System", system_path %> / GPT Spending</small>
+  </div>
+
+  <div class="spend-header">
+    <div class="spend-stats">
+      <div class="spend-stat">
+        <div class="spend-stat-value"><%= Buddy::GPT::Pricing.format_micros(@total_micros) %></div>
+        <div class="spend-stat-label"><%= @total_label %></div>
+      </div>
+      <div class="spend-stat">
+        <div class="spend-stat-value"><%= Buddy::GPT::Pricing.format_micros(@avg_micros) %></div>
+        <div class="spend-stat-label"><%= @avg_label %></div>
+      </div>
+      <div class="spend-stat">
+        <div class="spend-stat-value"><%= number_with_delimiter(@call_count) %></div>
+        <div class="spend-stat-label">API calls</div>
+      </div>
+    </div>
+
+    <div class="spend-range">
+      <% @windows.each do |window| %>
+        <%= link_to (window == 1 ? "Today" : "#{window}d"), system_gpt_spending_path(days: window), class: "spend-range-btn#{" active" if window == @days}" %>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="chart-wrapper">
+    <canvas id="spend-chart"></canvas>
+  </div>
+
+  <% if @models.any? %>
+    <div class="spend-legend">
+      <% @model_totals.each do |model, micros| %>
+        <div class="spend-legend-row">
+          <span class="spend-swatch" style="background-color: <%= @colors[model] %>;"></span>
+          <span class="spend-legend-model"><%= model %></span>
+          <span class="spend-legend-total"><%= Buddy::GPT::Pricing.format_micros(micros) %></span>
+        </div>
+      <% end %>
+    </div>
+  <% else %>
+    <p class="spend-empty">No GPT spending recorded in this window.</p>
+  <% end %>
+</div>
+
+<script id="spend-data" type="application/json">
+<%=
+  raw JSON.generate({
+    labels:   @labels,
+    datasets: @datasets.map { |ds| { label: ds[:model], color: ds[:color], data: ds[:data] } },
+  })
+%>
+</script>
+
+<%= content_for :head do %>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+  <style>
+    .system-page .lists-title a {
+      color: #8B949E;
+      text-decoration: none;
+    }
+
+    .system-page .lists-title a:hover {
+      color: #5DADE2;
+    }
+
+    .spend-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    .spend-stats {
+      display: flex;
+      gap: 32px;
+    }
+
+    .spend-stat-value {
+      font-size: 26px;
+      font-weight: bold;
+      color: #5DADE2;
+    }
+
+    .spend-stat-label {
+      font-size: 13px;
+      color: #8B949E;
+      margin-top: 2px;
+    }
+
+    .spend-range {
+      display: flex;
+      gap: 6px;
+    }
+
+    .spend-range-btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background-color: #161B22;
+      color: #C9D1D9;
+      font-size: 14px;
+      text-decoration: none;
+    }
+
+    .spend-range-btn:hover {
+      border-color: #5DADE2;
+    }
+
+    .spend-range-btn.active {
+      background-color: #5DADE2;
+      border-color: #5DADE2;
+      color: #0D1117;
+      font-weight: bold;
+    }
+
+    .chart-wrapper {
+      background-color: #161B22;
+      border-radius: 6px;
+      padding: 16px;
+      height: 340px;
+      position: relative;
+    }
+
+    .spend-legend {
+      margin-top: 20px;
+      background-color: #161B22;
+      border-radius: 6px;
+      padding: 8px 20px;
+    }
+
+    .spend-legend-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .spend-legend-row:last-child {
+      border-bottom: none;
+    }
+
+    .spend-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    .spend-legend-model {
+      color: #C9D1D9;
+      font-size: 14px;
+    }
+
+    .spend-legend-total {
+      margin-left: auto;
+      color: #C9D1D9;
+      font-weight: bold;
+      font-size: 15px;
+    }
+
+    .spend-empty {
+      margin-top: 20px;
+      color: #8B949E;
+    }
+  </style>
+<% end %>
+
+<%= content_for :after_body do %>
+  <script>
+    (function() {
+      var dataEl = document.getElementById("spend-data");
+      if (!dataEl) return;
+      var payload = JSON.parse(dataEl.textContent);
+      var canvas = document.getElementById("spend-chart");
+      if (!canvas || typeof Chart === "undefined") return;
+
+      var datasets = payload.datasets.map(function(ds) {
+        return {
+          label: ds.label,
+          data: ds.data,
+          backgroundColor: ds.color,
+          borderColor: ds.color,
+          borderWidth: 0,
+          stack: "spend",
+        };
+      });
+
+      new Chart(canvas, {
+        type: "bar",
+        data: { labels: payload.labels, datasets: datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          scales: {
+            x: {
+              stacked: true,
+              ticks: { color: "#C9D1D9", maxRotation: 0, autoSkip: true },
+              grid: { color: "rgba(255,255,255,0.05)" },
+            },
+            y: {
+              stacked: true,
+              beginAtZero: true,
+              ticks: {
+                color: "#C9D1D9",
+                callback: function(value) { return "$" + value.toFixed(2); },
+              },
+              grid: { color: "rgba(255,255,255,0.05)" },
+              title: { display: true, text: "USD", color: "#8B949E" },
+            },
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              mode: "index",
+              intersect: false,
+              callbacks: {
+                label: function(ctx) {
+                  return ctx.dataset.label + ": $" + Number(ctx.parsed.y).toFixed(4);
+                },
+              },
+            },
+          },
+        },
+      });
+    })();
+  </script>
+<% end %>

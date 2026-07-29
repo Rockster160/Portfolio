@@ -2,8 +2,8 @@ Buddy::Tools.register(
   name:        :ask_partner_choice,
   description: <<~TXT,
     Ask the user's partner (or a household member) a PICK-ONE question through
-    their companion. Use for "ask Chelsea if she'd rather do dishes or mop",
-    "ask Rocco: pizza, tacos, or thai?". Their companion shows the options as
+    their companion. Use for "ask if they'd rather do dishes or mop",
+    "ask them: pizza, tacos, or thai?". Their companion shows the options as
     tappable buttons; tapping one sends that choice back to you.
 
     `to` is who to ask. `question` is the prompt. `options` is a
