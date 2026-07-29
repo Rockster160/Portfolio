@@ -2606,6 +2606,18 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
   }
 }
 
+// When a popover is open (Check-in mood, Stash bucket, What-now bucket, or the
+// debug face picker) it TAKES THE PLACE of the quick-action chips rather than
+// sitting alongside them. In the compact side-by-side row (keyboard up / short
+// window) an inline popover was squeezing the chip grid down to a single column,
+// so the chips stacked vertically beside it — this hands the row to the popover.
+.byte-buddy-hero:has(
+    .byte-buddy-mood-popover:not([hidden]),
+    .byte-buddy-face-popover:not([hidden])
+  ) .byte-buddy-quick-actions {
+  display: none;
+}
+
 // Moss palette override for buttons.
 .byte-buddy-hero[data-buddy-theme="moss"] .byte-buddy-quick-actions button {
   background: linear-gradient(
