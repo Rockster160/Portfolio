@@ -239,6 +239,58 @@ RSpec.describe Buddy::GPT::Turn do
     # Prod 1146: "Turn the fan to low" came back "Done. Fan's on low now." off a
     # single API call - no tool use, no execution, nothing. The old pattern had
     # no notion of a bare "Done" or a device reported in its new state.
+    # Prod 1151: "Set the fan to high" got a finished-sounding line off a single
+    # call with no tool use. Retracting is honest but leaves the person with a
+    # shrug where they asked for something, so the claim now buys one corrective
+    # round first - the model is likelier to have skipped the call than to have
+    # meant the claim.
+    it "gives the model one more round to actually make the call" do
+      # Claim with nothing behind it, then the nudge, then the call it skipped,
+      # then the round it speaks in.
+      client = run([
+        { text: "Done. Fan's on high now." },
+        { tool_calls: [{ name: :log_event, arguments: { "name" => "Fan high" } }] },
+        { text: "Yep, fan's on high." },
+      ])
+
+      expect(client.calls.length).to eq(3)
+      expect(client.calls[1].input.any? { |i| i[:content].to_s.include?("nothing happened") }).to be(true)
+      expect(reply.body).to eq("Yep, fan's on high.")
+    end
+
+    it "retracts when the corrective round still calls nothing" do
+      client = run([
+        { text: "Done. Fan's on high now." },
+        { text: "Done. Really this time." },
+      ])
+
+      expect(client.calls.length).to eq(2)
+      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.metadata["retracted_claim"]).to be(true)
+    end
+
+    it "only ever spends one corrective round" do
+      client = run(Array.new(5) { { text: "Done. Fan's on high now." } })
+
+      expect(client.calls.length).to eq(2)
+    end
+
+    it "does not spend a round on ordinary conversation" do
+      client = run([{ text: "Not much on my end, how's your night?" }])
+
+      expect(client.calls.length).to eq(1)
+    end
+
+    it "does not spend a round when the claim is already backed by a call" do
+      client = run([
+        { tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }] },
+        { text: "Done, that's logged." },
+      ])
+
+      expect(client.calls.length).to eq(2)
+      expect(reply.body).to eq("Done, that's logged.")
+    end
+
     it "retracts a bare Done with nothing behind it" do
       run([{ text: "Done. Fan's on low now." }])
 
@@ -744,9 +796,11 @@ RSpec.describe Buddy::GPT::Turn do
 
   describe "the turn budget" do
     it "hands every round the same deadline, so round-trips can't multiply it" do
+      # Deliberately not a completion claim - that would earn a corrective round
+      # and a third call, which isn't what this is measuring.
       client = run([
         { text: "", tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
-        { text: "Done." },
+        { text: "You've got three left." },
       ])
 
       deadlines = client.calls.map(&:deadline)

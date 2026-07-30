@@ -80,6 +80,19 @@ module Buddy
       # Nothing is executed and nothing is persisted. Every confirm in the
       # registry is a pure lookup, so ProposalBuilder re-running it later costs
       # a repeated query and nothing else.
+      # The kind of unbacked assertion a body makes, or nil. Shared by the
+      # corrective round, the retraction, and the eval harness, so none of them
+      # can disagree about what counts as a claim. Defined here rather than
+      # inline because the regexes live below `private` and the predicate is a
+      # pure function of the text.
+      def self.unbacked_claim(body)
+        return nil if body.blank?
+        return :claim if body.match?(COMPLETION_CLAIM_RX)
+        return :promise if body.match?(ACTION_PROMISE_RX) && !body.match?(SOLICITS_INFO_RX)
+
+        nil
+      end
+
       def self.resolve_tool(tool, call, user:, conversation:)
         resolve_call(tool, call, user: user, conversation: conversation).first
       end
@@ -198,6 +211,7 @@ module Buddy
         @deadline = Time.current + TURN_BUDGET_SECONDS
         @failed   = Set.new
         @seen     = Set.new
+        nudged    = false
 
         loop do
           rounds += 1
@@ -219,10 +233,23 @@ module Buddy
           # two drafts of the same reply, and only the last one had the outcome.
           spoken = round_text if round_text.present?
 
-          # Nothing to call means the answer is already written, and a second
-          # round would only cost money to re-say it. Pure conversation is a
-          # ONE-call turn and always has been.
-          break if calls.empty?
+          if calls.empty?
+            # Nothing to call usually means the answer is already written, and a
+            # second round would only cost money to re-say it. Pure conversation
+            # is a ONE-call turn and always has been.
+            #
+            # The exception is a reply that CLAIMS an action nothing backs up.
+            # Prod 1151 answered "Set the fan to high" with a finished-sounding
+            # line off a single call, no tools, no reasoning. Retracting that is
+            # honest but useless - the person asked for a thing and got a shrug.
+            # It is far likelier the model skipped the call than that it meant
+            # the claim, so it gets exactly one corrective round to make it.
+            break unless nudge?(proposals, spoken, nudged, rounds)
+
+            nudged = true
+            input += [{ role: :developer, content: RETRY_NUDGE }]
+            next
+          end
 
           # Resolve every call ONCE, here: the output goes back to the model, and
           # resolving is also what tells us whether the call is still viable.
@@ -311,6 +338,32 @@ module Buddy
 
       def proposal?(name)
         Buddy::Tools.known?(name)
+      end
+
+      RETRY_NUDGE = <<~TXT.freeze
+        STOP. The reply you just wrote says you did something, but you called no
+        tool, so nothing happened and there is nothing for the person to tap.
+
+        Do ONE of these now:
+        - If the thing is doable, call the tool. Check `jil_functions` and
+          `jil_triggers` before deciding you can't - a fan, light, scene, or car
+          command usually lives in one of them.
+        - If it genuinely isn't doable, say so plainly and say what you'd need.
+
+        Do not repeat the claim.
+      TXT
+
+      # Worth a corrective round: nothing was proposed, the reply claims an
+      # action anyway, and we haven't already spent the one retry we allow.
+      def nudge?(proposals, spoken, nudged, rounds)
+        return false if nudged || proposals.any?
+        return false if rounds >= MAX_ROUNDS || Time.current > @deadline
+
+        unbacked_claim(spoken.to_s).present?
+      end
+
+      def unbacked_claim(body)
+        self.class.unbacked_claim(body)
       end
 
       # ---- cost accounting ---------------------------------------------------
@@ -538,13 +591,7 @@ module Buddy
       # bug the prompt can own; this is for claims backed by nothing at all.
       def retract_false_claim!(result)
         body = @reply.body.to_s
-        return if body.blank?
-
-        kind = if body.match?(COMPLETION_CLAIM_RX)
-          :claim
-        elsif body.match?(ACTION_PROMISE_RX) && !body.match?(SOLICITS_INFO_RX)
-          :promise
-        end
+        kind = unbacked_claim(body)
         return if kind.nil?
         return if executed_anything?(result)
         return if pending_rows?(result)

@@ -213,6 +213,7 @@ namespace :buddy do
     # the round after. A turn that needs no tool ends in one call.
     spoken = nil
     rounds = 0
+    nudged = false
     seen   = Set.new
     loop do
       rounds += 1
@@ -227,7 +228,16 @@ namespace :buddy do
       spoken = round_text if round_text.present?
       calls.concat(result[:tool_calls])
 
-      break if result[:tool_calls].empty?
+      if result[:tool_calls].empty?
+        # Mirrors Turn: a reply claiming an action nothing backs up buys exactly
+        # one corrective round to go make the call it skipped.
+        break if nudged || calls.any?
+        break if Buddy::GPT::Turn.unbacked_claim(spoken.to_s).nil?
+
+        nudged = true
+        input += [{ role: :developer, content: Buddy::GPT::Turn::RETRY_NUDGE }]
+        next
+      end
       break if rounds >= Buddy::GPT::Turn::MAX_ROUNDS
 
       prior = seen.dup
