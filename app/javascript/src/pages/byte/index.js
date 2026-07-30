@@ -47,6 +47,7 @@ import {
 import { ConversationManager } from "./conversations";
 import { setupSlashAutocomplete } from "./slash_commands";
 import { renderMultiSelect } from "./message_actions/multi_select";
+import { renderForm } from "./message_actions/form";
 import { initMessageContextMenu } from "./message_actions/context_menu";
 import { initBuddyHero } from "./buddy/hero";
 import { initBuddyTimers } from "./buddy/timers";
@@ -405,6 +406,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         bodyEl.parentNode.insertBefore(checklistEl, bodyEl.nextSibling);
       }
       renderMultiSelect(checklistEl, message);
+    }
+
+    // An editable form (Buddy::FormAction). Its own container, since a message
+    // carries one action and this is never mixed with a checklist.
+    if (message?.metadata?.tool_name === "buddy_form") {
+      let formEl = node.querySelector("[data-buddy-form]");
+      if (!formEl) {
+        formEl = document.createElement("div");
+        formEl.setAttribute("data-buddy-form", "");
+        bodyEl.parentNode.insertBefore(formEl, bodyEl.nextSibling);
+      }
+      renderForm(formEl, message);
     }
 
     // Time / attachments / state apply to every kind — used to live inside
@@ -1162,137 +1175,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  setupLongPressCopy();
-
-  // Long-press on the bubble (but NOT on the actual text content) copies
-  // the whole message body to the clipboard. iOS's native selection
-  // callout still fires inside [data-body] / [data-thoughts] /
-  // [data-attachments] so per-word selection keeps working — those areas
-  // get `-webkit-user-select: text` in the SCSS. The rest of `.byte-msg`
-  // is `user-select: none` + `-webkit-touch-callout: none` so this
-  // handler owns the long-press.
-  function setupLongPressCopy() {
-    // Safari / iOS PWA rejects navigator.clipboard.writeText outside a
-    // user-activation window. A setTimeout callback loses that window,
-    // which is why "Copy failed" started showing. Restructured: hold
-    // duration is tracked, and the actual copy fires inside `pointerup`
-    // — that's still an active user gesture, so clipboard permission
-    // stays open. Visual feedback ("ready to copy") still fires at
-    // HOLD_MS via a small timer, but it doesn't do the work.
-    let armed = false,
-      holdTimer = null,
-      activeMsg = null,
-      startX = 0,
-      startY = 0;
-    const MOVE_TOLERANCE = 8;
-    const HOLD_MS = 500;
-
-    const cancel = () => {
-      if (holdTimer) {
-        clearTimeout(holdTimer);
-        holdTimer = null;
-      }
-      armed = false;
-      activeMsg = null;
-    };
-
-    thread.addEventListener(
-      "pointerdown",
-      (e) => {
-        if (e.button != null && e.button !== 0) return;
-        const msg = e.target.closest?.(".byte-msg");
-        if (!msg) return;
-        if (
-          e.target.closest?.("[data-body], [data-thoughts], [data-attachments]")
-        )
-          return;
-
-        startX = e.clientX;
-        startY = e.clientY;
-        activeMsg = msg;
-        armed = false;
-        holdTimer = setTimeout(() => {
-          armed = true;
-        }, HOLD_MS);
-      },
-      { passive: true },
-    );
-
-    thread.addEventListener(
-      "pointermove",
-      (e) => {
-        if (!activeMsg) return;
-        if (
-          Math.abs(e.clientX - startX) > MOVE_TOLERANCE ||
-          Math.abs(e.clientY - startY) > MOVE_TOLERANCE
-        )
-          cancel();
-      },
-      { passive: true },
-    );
-
-    thread.addEventListener(
-      "pointerup",
-      () => {
-        if (!activeMsg) return;
-        const msg = activeMsg;
-        const wasArmed = armed;
-        cancel();
-        if (!wasArmed) return;
-
-        // We're still inside the pointerup gesture — clipboard call
-        // here has user activation and Safari will honour it.
-        const text = (
-          msg.querySelector("[data-body]")?.textContent || ""
-        ).trim();
-        if (!text) return;
-        copyText(text).then((ok) => flashToast(ok ? "Copied" : "Copy failed"));
-      },
-      { passive: true },
-    );
-
-    thread.addEventListener("pointercancel", cancel, { passive: true });
-    thread.addEventListener("scroll", cancel, { passive: true });
-  }
-
-  function copyText(text) {
-    if (navigator.clipboard?.writeText) {
-      return navigator.clipboard
-        .writeText(text)
-        .then(() => true)
-        .catch(() => false);
-    }
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand("copy");
-      document.body.removeChild(ta);
-      return Promise.resolve(ok);
-    } catch {
-      return Promise.resolve(false);
-    }
-  }
-
-  let toastNode = null,
-    toastTimer = null;
-  function flashToast(text) {
-    if (!toastNode) {
-      toastNode = document.createElement("div");
-      toastNode.className = "byte-toast";
-      document.body.appendChild(toastNode);
-    }
-    toastNode.textContent = text;
-    toastNode.classList.add("byte-toast-visible");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(
-      () => toastNode?.classList.remove("byte-toast-visible"),
-      1200,
-    );
-  }
+  // Long-press copy used to live here as its own pointerdown/move/up state
+  // machine. initMessageContextMenu (below) now owns that gesture and offers
+  // Copy full message alongside Copy ID, so both were bound to the same thread
+  // and racing on the same hold. Its clipboard fallback and its own success /
+  // failure feedback came with it, so copyText and flashToast went too.
 
   function receiveMessage(message) {
     const wasAtBottom = measureAtBottom();

@@ -1,6 +1,7 @@
 require "net/http"
 require "json"
 require "socket"
+require "timeout"
 require "uri"
 
 # Rails → local Mac server bridge for Byte. Keeps the HTTP call site
@@ -16,6 +17,33 @@ module ByteLocal
   DEFAULT_URL = "http://localhost:8788".freeze
   DEFAULT_PORT = 8788
   TIMEOUT_SECONDS = 5
+
+  # Named things the Mac can do, and what to tell Buddy each one is for.
+  #
+  # This hash is the WHOLE registry as far as Rails is concerned: it builds the
+  # `mac_command` tool's enum and its description at registration time, so
+  # nothing ever asks the Mac what it can do. Discovering the list over HTTP
+  # would put a network round trip — and a machine that might be asleep — in
+  # front of every turn, including the overwhelming majority that never touch it.
+  #
+  # What actually RUNS lives on the Mac (~/code/Byte/mac_commands.rb), and only
+  # the NAME crosses the wire. That server is port-forwarded from the internet,
+  # so an endpoint taking a shell string would be remote code execution behind a
+  # shared secret. Adding a command means editing both files; a name that exists
+  # on only one side is inert rather than dangerous.
+  MAC_COMMANDS = {
+    dark_monitors: "Put the Mac's displays to sleep - 'dark monitors', 'turn the monitors off', " \
+                   "'kill the screens'. The machine keeps running; only the displays go dark.",
+    mac_ping:      "Check the Mac is awake and can actually run something. Use when they ask " \
+                   "whether it's up, or when they want to test that this tool works. Changes nothing.",
+  }.freeze
+
+  # Hard ceiling on a Mac command, wall clock, including connect. Five seconds
+  # is far longer than any of these need — they're desk actions that finish in
+  # milliseconds — and past that the useful conclusion is "the Mac isn't there",
+  # not "wait longer". Buddy is holding a turn open on this, so a slow answer
+  # costs the person exactly as much as a missing one.
+  COMMAND_TIMEOUT_SECONDS = 5
 
   # Resolution order:
   # 1. `BYTE_LOCAL_URL` — explicit override for staging / tunnels
@@ -86,6 +114,37 @@ module ByteLocal
   rescue => e
     Rails.logger.warn("[Byte] local deliver failed: #{e.class}: #{e.message}")
     nil
+  end
+
+  # Run one of MAC_COMMANDS on the Mac and wait for the result.
+  #
+  # Raises rather than returning nil on every failure path, because the only
+  # caller is a Buddy tool: a raise becomes "couldn't do that one" on the
+  # activity chip, while a nil would read as success and let Buddy tell someone
+  # their monitors are off when the Mac never answered.
+  def run_command(name)
+    raise "#{name} isn't a Mac command I have" unless MAC_COMMANDS.key?(name.to_s.to_sym)
+
+    uri = URI.join(base_url, "/byte/command")
+    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
+    req.body = JSON.generate({ name: name })
+
+    # Net::HTTP's timeouts are per-phase and read_timeout restarts on every
+    # chunk, so a server that trickles can outlive them indefinitely. The outer
+    # bound is what actually guarantees the ceiling.
+    res = Timeout.timeout(COMMAND_TIMEOUT_SECONDS) {
+      Net::HTTP.start(uri.hostname, uri.port,
+        use_ssl: uri.scheme == "https", open_timeout: COMMAND_TIMEOUT_SECONDS, read_timeout: COMMAND_TIMEOUT_SECONDS,
+      ) { |http| http.request(req) }
+    }
+
+    body = JSON.parse(res.body) rescue {}
+    raise(body["error"].presence || "the Mac said no (#{res.code})") unless res.is_a?(Net::HTTPSuccess)
+
+    body.symbolize_keys
+  rescue Timeout::Error, Net::OpenTimeout, Net::ReadTimeout, SystemCallError, SocketError, IOError => e
+    Rails.logger.warn("[Byte] run_command #{name} failed: #{e.class}: #{e.message}")
+    raise "couldn't reach the Mac - it may be asleep"
   end
 
   # Ask the Mac to enumerate the Claude Code sessions on disk for a given

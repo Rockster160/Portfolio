@@ -6,6 +6,7 @@
 #  color              :string
 #  name               :string           not null
 #  parameterized_name :string           not null
+#  read_only          :boolean          default(FALSE), not null
 #  sort_order         :integer
 #  source             :integer          default("user"), not null
 #  sync_reason        :string

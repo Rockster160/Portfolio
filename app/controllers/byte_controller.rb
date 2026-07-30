@@ -160,7 +160,9 @@ class ByteController < ApplicationController
     convos = current_user.byte_conversations.active.ordered
     render json: {
       conversations: convos.map(&:as_wire),
-      default_id:    (convos.first || ByteConversation.default_for(current_user)).id,
+      # An eval thread is listed but never landed on — a `rake buddy:eval` run
+      # leaves it newest, and opening the app into it would be a surprise.
+      default_id:    (convos.detect { |c| !c.eval? } || ByteConversation.default_for(current_user)).id,
     }
   end
 
@@ -245,6 +247,12 @@ class ByteController < ApplicationController
     # Undo restores it. Not a decision-recording flow — its own tiny path.
     return respond_buddy_reminders(action) if action.tool_name == Buddy::ReminderList::TOOL_NAME
 
+    # An editable form. Unlike every other shape here, this posts VALUES rather
+    # than row ids, so it can't lean on the id-lookup safety the others get for
+    # free — Buddy::FormAction rebuilds the field list from the tool and
+    # validates against that, never against what the browser sent back.
+    return respond_buddy_form(action) if action.tool_name == Buddy::FormAction::TOOL_NAME
+
     return head(:conflict) unless action.pending?
 
     value = params[:value]
@@ -305,6 +313,19 @@ class ByteController < ApplicationController
   # other row pending. No Mac decision-notify (no blocked hook waits on these)
   # and no destructive apply_decision! — the action stays live until all rows
   # are resolved or it expires. Repeat/overlapping taps are idempotent.
+  # Submit an editable form. 422 with the reasons rather than a bare 409, because
+  # these render under the fields that caused them and the person still has
+  # everything they typed on screen to fix.
+  def respond_buddy_form(action)
+    values = params[:form]
+    values = values.permit!.to_h if values.respond_to?(:permit!)
+    result = Buddy::FormAction.submit!(action, values: values)
+
+    return render json: action.reload.as_wire if result[:ok]
+
+    render json: { errors: Array(result[:errors]) }, status: :unprocessable_entity
+  end
+
   def respond_buddy_proposals(action)
     # Uncheck-to-undo on a Level-2 (already-executed) row. Allowed even once the
     # action is decided — undoing a done row isn't gated on pending state.

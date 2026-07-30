@@ -81,7 +81,10 @@ module Buddy
       return nil if title.blank?
 
       needle = title.to_s.downcase.strip
-      agendas = Agenda.where(user_id: user.id).pluck(:id)
+      # Editable rather than owned: a jointly-run calendar like "Ours" belongs to
+      # one of the two people, so scoping to ownership meant the other one could
+      # never edit anything on it — including something they'd just moved there.
+      agendas = user.editable_agendas.pluck(:id)
       scope = AgendaItem.where(agenda_id: agendas)
       scope = scope.where("LOWER(name) LIKE ?", "%#{needle}%")
       if hint_date.present?
@@ -89,6 +92,28 @@ module Buddy
         scope = scope.where(start_at: day.beginning_of_day...day.end_of_day) if day
       end
       scope.order(start_at: :asc).first
+    end
+
+    # An item the person already has that looks like the one being added — same
+    # title, same day, starting within the hour. That combination is much more
+    # often a move they phrased as an add than two real things, so add_agenda_item
+    # mentions it rather than quietly making a second copy.
+    def existing_agenda_twin(title, at)
+      return nil if title.blank?
+
+      start = at.respond_to?(:strftime) ? at : resolve_time(at)
+      return nil if start.nil?
+
+      AgendaItem
+        .where(agenda_id: user.editable_agendas.select(:id))
+        .where("LOWER(name) = ?", title.to_s.downcase.strip)
+        .where(start_at: (start - 1.hour)..(start + 1.hour))
+        .where.not(status: :cancelled)
+        .order(:start_at)
+        .first
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::ToolContext] twin lookup failed: #{e.class}: #{e.message}")
+      nil
     end
 
     # ---- places ----
@@ -116,18 +141,40 @@ module Buddy
       user.editable_agendas.reject(&:managed_externally?).sort_by(&:id)
     end
 
-    def resolve_writable_agenda(name)
+    # `strict:` governs what an unmatched NAME does. Adding falls back to the
+    # default and shows the calendar on the confirm card, which is catchable.
+    # Moving can't do that: silently relocating something to the wrong calendar
+    # is worse than refusing, so edit_agenda_item asks for nil instead.
+    def resolve_writable_agenda(name, strict: false)
       agendas = writable_agendas
       return nil if agendas.empty?
 
-      default = agendas.first
+      default = default_agenda(agendas)
       q = normalize_calendar(name)
       return default if q.blank?
 
-      agendas.find { |a| normalize_calendar(a.name) == q } ||
+      match = (
+        agendas.find { |a| normalize_calendar(a.name) == q } ||
         agendas.find { |a| normalize_calendar(a.name).include?(q) || q.include?(normalize_calendar(a.name)) } ||
-        agendas.find { |a| calendar_token_match?(normalize_calendar(a.name), q) } ||
-        default
+        agendas.find { |a| calendar_token_match?(normalize_calendar(a.name), q) }
+      )
+      return match if match
+
+      strict ? nil : default
+    end
+
+    # Where an item goes when nobody names a calendar. The person's own choice
+    # if they've made one (AgendaPreference), otherwise the oldest writable
+    # calendar — which is how "put it on Ours by default" used to be impossible
+    # to honour no matter how many times it was said.
+    def default_agenda(agendas=writable_agendas)
+      return nil if agendas.empty?
+
+      preferred = AgendaPreference.for(user).default_agenda_id
+      agendas.find { |a| a.id == preferred.to_i } || agendas.first
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::ToolContext] default agenda lookup failed: #{e.class}: #{e.message}")
+      agendas.first
     end
 
     # Resolve a spoken place to { "name" =>, "loc" => [lat,lng] } for a

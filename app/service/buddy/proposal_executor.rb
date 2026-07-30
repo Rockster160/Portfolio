@@ -26,6 +26,7 @@ module Buddy
       just_partial = []
       just_failed = []
       buttons = nil
+      deferred = []
 
       action.with_lock do
         # Re-read inside the lock so an earlier overlapping tap's writes are
@@ -95,6 +96,11 @@ module Buddy
         if all_resolved && action.pending?
           action.state      = :decided
           action.decided_at = Time.current
+          # Anything the model queued BEHIND this checklist has been waiting for
+          # exactly this moment. Claimed under the lock so two taps racing can't
+          # both send it; run below, outside the lock, since these post messages
+          # and broadcast.
+          deferred = Buddy::ProposalBuilder.claim_deferred(action)
         end
         action.save!
       end
@@ -124,6 +130,15 @@ module Buddy
           delivered_at: Time.current,
         )
         broadcast(user, receipt)
+      end
+
+      # Last, so it reads in the order it happened: the checklist result, then
+      # whatever was waiting on it. Only runs if something actually executed — a
+      # follow-up announcing a move the person cancelled is the same lie in
+      # slower motion.
+      if deferred.any?
+        ran = buttons.any? { |b| b["status"].to_s == "executed" }
+        Buddy::ProposalBuilder.run_deferred!(action, deferred, executed: ran)
       end
 
       # NOTE: tapping a checkbox no longer moves the pet's face. The mood is a

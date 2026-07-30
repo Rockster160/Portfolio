@@ -4,7 +4,7 @@ class SystemController < ApplicationController
   # Buddy usage timestamps are UTC; spend is bucketed by local calendar day so a
   # late-night turn lands on the day it felt like, not the next UTC one.
   SPEND_ZONE = "America/Denver".freeze
-  # A window of 1 means "today, hour by hour"; the rest are rolling day windows.
+  # A window of 1 means "last 24 hours, hour by hour"; the rest are rolling day windows.
   SPEND_WINDOWS = [1, 7, 30, 90].freeze
   SPEND_DEFAULT_DAYS = 30
   # Dark-theme palette, assigned to models by spend rank.
@@ -40,7 +40,7 @@ class SystemController < ApplicationController
 
     divisor = @hourly ? 24 : @days
     @avg_micros = divisor.positive? ? @total_micros / divisor : 0
-    @total_label = @hourly ? "Total, today" : "Total, last #{@days} days"
+    @total_label = @hourly ? "Total, last 24h" : "Total, last #{@days} days"
     @avg_label = @hourly ? "Per hour (avg)" : "Per day (avg)"
   end
 
@@ -84,11 +84,14 @@ class SystemController < ApplicationController
 
   def hourly_spend
     tz = ActiveSupport::TimeZone[SPEND_ZONE]
-    day_start = tz.now.beginning_of_day
-    scope = BuddyUsage.where(created_at: day_start...(day_start + 1.day))
+    end_hour = tz.now.beginning_of_hour
+    start_hour = end_hour - 23.hours
+    scope = BuddyUsage.where(created_at: start_hour..)
     grouped = scope.group(spend_hour_sql, :model).sum(:cost_micros)
     grouped = grouped.transform_keys { |(hour, model)| [hour.to_i, model] }
-    buckets = (0..23).to_a
+    # Chronological hour-of-day for each of the last 24 hourly slots; each hour
+    # appears exactly once across a 24-hour window, so it doubles as the group key.
+    buckets = (0..23).map { |i| (start_hour + i.hours).hour }
     [scope, grouped, buckets, buckets.map { |h| Time.zone.local(2000, 1, 1, h).strftime("%-l %p") }]
   end
 

@@ -18,11 +18,18 @@ RSpec.describe "agenda_items/_data_attrs" do
       location: "Texas Roadhouse",
       arrive_early_minutes: 10,
       metadata: {
-        "travel_minutes" => 25,
-        "travel"         => { "location_address" => "11593 4000 W, South Jordan, UT 84009, USA" },
+        "travel" => {
+          "travel_minutes"   => 25,
+          "location_address" => "11593 4000 W, South Jordan, UT 84009, USA",
+        },
       },
     )
   end
+
+  # The AgendaItem after_commit enqueues a chain sync that would recompute
+  # (and overwrite) the hand-set travel metadata — stub it so this spec
+  # tests the presentation mapping against exactly the fixture above.
+  before { allow(AgendaTravelChainSyncWorker).to receive(:perform_async).and_return(nil) }
 
   def fragment(html)
     # Wrap the partial output in a synthetic tag so Nokogiri can parse

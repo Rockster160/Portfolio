@@ -15,10 +15,53 @@ RSpec.describe ByteConversation, type: :model do
     expect(a.id).to eq(b.id)
   end
 
+  # The buddy:eval harness writes into its own thread, which leaves it with the
+  # newest last_message_at after every run — so without this, running an eval
+  # would change which thread the app opens into and where a conversation-less
+  # message lands.
+  describe "eval threads" do
+    let!(:real_convo) { user.byte_conversations.create!(name: "Byte", mode: :buddy) }
+    let!(:eval_convo) {
+      user.byte_conversations.create!(name: "Eval · Byte", mode: :buddy, metadata: { "eval" => true })
+    }
+
+    before { eval_convo.touch_activity(1.minute.from_now) }
+
+    it "never becomes the default, even when it is the most recent" do
+      expect(user.byte_conversations.active.ordered.first).to eq(eval_convo)
+      expect(ByteConversation.default_for(user)).to eq(real_convo)
+    end
+
+    it "does not catch a message that arrives without a conversation" do
+      msg = user.byte_messages.create!(body: "hi")
+
+      expect(msg.byte_conversation).to eq(real_convo)
+    end
+
+    it "still counts toward spend reporting — it is the same money" do
+      BuddyUsage.create!(
+        user:          user,
+        kind:          :eval,
+        model:         "gpt-5.4-mini",
+        input_tokens:  100,
+        output_tokens: 10,
+        cost_micros:   500,
+      )
+
+      expect(BuddyUsage.since(1.hour.ago).spend_micros).to eq(500)
+    end
+
+    it "is still listed, since reading the back-and-forth is the point" do
+      expect(user.byte_conversations.active.ordered).to include(eval_convo)
+      expect(eval_convo.eval?).to be(true)
+      expect(real_convo.eval?).to be(false)
+    end
+  end
+
   it "exposes mode as an integer-backed enum" do
     convo = user.byte_conversations.create!(name: "shell fun", mode: :bash)
     expect(convo.mode).to eq("bash")
-    expect(convo.bash?).to eq(true)
+    expect(convo.bash?).to be(true)
   end
 
   it "bumps last_message_at when a message is created" do
@@ -49,7 +92,7 @@ RSpec.describe ByteConversation, type: :model do
 
   it "names an unnamed buddy conversation after the Buddy, per theme" do
     convo = user.byte_conversations.create!(mode: :buddy)
-    expect(convo.buddy?).to eq(true)
+    expect(convo.buddy?).to be(true)
 
     convo.update!(buddy_theme: "byte")
     expect(convo.display_name).to eq("Byte")

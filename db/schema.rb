@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_07_30_111451) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_30_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -141,6 +141,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_30_111451) do
     t.jsonb "hidden_schedule_ids", default: [], null: false
     t.jsonb "hidden_name_patterns", default: [], null: false
     t.jsonb "hidden_item_ids", default: [], null: false
+    t.bigint "default_agenda_id"
     t.index ["user_id"], name: "index_agenda_preferences_on_user_id", unique: true
   end
 
@@ -199,6 +200,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_30_111451) do
     t.datetime "watch_failed_at"
     t.bigint "google_account_id"
     t.string "sync_reason"
+    t.boolean "read_only", default: false, null: false
     t.index ["google_account_id"], name: "index_agendas_on_google_account_id"
     t.index ["user_id", "parameterized_name"], name: "index_agendas_on_user_id_and_parameterized_name", unique: true
     t.index ["user_id", "source", "google_account_id", "external_id"], name: "index_agendas_on_user_source_account_external", unique: true, where: "(source <> 0)"
@@ -1518,6 +1520,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_30_111451) do
   add_foreign_key "agenda_items", "agendas"
   add_foreign_key "agenda_notification_settings", "agendas"
   add_foreign_key "agenda_notification_settings", "users"
+  add_foreign_key "agenda_preferences", "agendas", column: "default_agenda_id", on_delete: :nullify
   add_foreign_key "agenda_preferences", "users"
   add_foreign_key "agenda_schedules", "agendas"
   add_foreign_key "agenda_shares", "agendas"

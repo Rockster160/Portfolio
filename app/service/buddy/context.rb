@@ -620,17 +620,21 @@ module Buddy
       # The app's own unanswered Prompts (surveys/questions). Deliberately NOT
       # surfaced in the always-loaded at-a-glance block — Buddy pulls these only
       # when the person asks about their prompts, so they don't cost tokens
-      # every turn. Each carries enough for Buddy to answer via `answer_prompt`
-      # (or `skip_prompt`): the title plus each visible question's text, type,
-      # and choices. Multi-question prompts still show so Buddy can point the
-      # person at the app.
+      # every turn.
+      #
+      # An INDEX, not the forms themselves: id, title, and the question names as
+      # they sit on the row. That's enough to tell which prompt someone means,
+      # and no more, on purpose — several prompts build their real fields when
+      # opened (see Buddy::PromptForm), so anything richer here would be a
+      # skeleton Buddy could mistake for the finished form. `read_prompt` opens
+      # one for real.
       def pending_prompts(user)
         return [] unless user.respond_to?(:prompts)
 
         user.prompts.unanswered.order(created_at: :desc).limit(10).map { |p|
           questions = Array(p.options).map(&:deep_symbolize_keys)
             .reject { |o| o[:type].to_s == "hidden" }
-            .map { |o| { q: o[:question], type: o[:type], choices: o[:choices] }.compact }
+            .filter_map { |o| o[:question].presence }
           { id: p.id, title: p.question, questions: questions }
         }
       rescue StandardError => e

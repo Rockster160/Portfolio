@@ -212,11 +212,13 @@ class User < ApplicationRecord
     Agenda.where(user_id: id).or(Agenda.where(id: shared_agendas.select(:id)))
   end
 
-  # Owned + editable-shared. Used to gate item/schedule mutations.
+  # Owned + editable-shared, minus read-only calendars (e.g. the synced
+  # Birthdays agenda). Used to gate item/schedule mutations and the FE
+  # editable flag.
   def editable_agendas
     Agenda.where(user_id: id).or(
       Agenda.where(id: agenda_shares.editor.select(:agenda_id)),
-    )
+    ).where.not(read_only: true)
   end
 
   def accessible_agenda_items

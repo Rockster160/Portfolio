@@ -134,10 +134,10 @@ class TripState
       car_lng = car_dest[:lng] || car_dest["lng"]
       return false if car_lat.blank? || car_lng.blank?
 
-      geocoded = user.address_book.geocode(destination.to_s)
-      return false unless geocoded.is_a?(::Array) && geocoded.length == 2 && geocoded.none?(&:blank?)
+      dest = geocode_destination(destination, user)
+      return false if dest.blank?
 
-      distance([car_lat.to_f, car_lng.to_f], geocoded.map(&:to_f)) <= ARRIVAL_THRESHOLD
+      distance([car_lat.to_f, car_lng.to_f], dest) <= ARRIVAL_THRESHOLD
     end
 
     # Geofence check for any address — is the user's car currently within
@@ -148,13 +148,13 @@ class TripState
     def car_at?(destination, user: ::User.me)
       return false if destination.blank?
 
-      geocoded = user.address_book.geocode(destination.to_s)
-      return false unless geocoded.is_a?(::Array) && geocoded.length == 2 && geocoded.none?(&:blank?)
+      dest = geocode_destination(destination, user)
+      return false if dest.blank?
 
       coord = car_coord(user)
-      return false unless coord.is_a?(::Array) && coord.length == 2 && coord.none?(&:blank?)
+      return false unless coord?(coord)
 
-      distance(coord.map(&:to_f), geocoded.map(&:to_f)) <= ARRIVAL_THRESHOLD
+      distance(coord.map(&:to_f), dest) <= ARRIVAL_THRESHOLD
     end
 
     # Geofence cross-check. Returns true when the car's reported coord
@@ -181,6 +181,25 @@ class TripState
     end
 
     private
+
+    # Resolve a destination string to `[lat, lng]`. Mirrors how Tesla
+    # navigation resolves it: a saved contact name ("Home", "Mom",
+    # "Sarah's House") wins over a raw geocode. Without this, `car_at?("Home")`
+    # would geocode the literal word "Home" — which never lands on the user's
+    # actual house — so the "already there" guard failed and the car started
+    # navigating home while already parked at home.
+    def geocode_destination(destination, user)
+      ab = user.address_book
+      contact_loc = ab.match_contact(destination.to_s)&.primary_address&.loc
+      return contact_loc.map(&:to_f) if coord?(contact_loc)
+
+      geo = ab.geocode(destination.to_s)
+      coord?(geo) ? geo.map(&:to_f) : nil
+    end
+
+    def coord?(value)
+      value.is_a?(::Array) && value.length == 2 && value.none?(&:blank?)
+    end
 
     # Forward to ::Jil.trigger with an explicit kwarg so Ruby 3 binds the
     # data hash to the `data=` positional arg (without explicit kwargs,

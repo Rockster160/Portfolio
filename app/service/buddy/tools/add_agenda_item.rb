@@ -18,8 +18,14 @@ Buddy::Tools.register(
     `calendar`: which calendar to add to, by name ("Ours", "Tasks", etc.).
     Matches the person's own + shared-editable LOCAL calendars. Omit for
     their default. (Google-synced calendars still need the app's add flow.)
+
+    ONLY for something that doesn't exist yet. If they're talking about an
+    item that's already on a calendar - moving it, renaming it, changing its
+    time or place - that's `edit_agenda_item`, including when the change is
+    which calendar it lives on. Adding in that situation doesn't move
+    anything; it leaves the original where it was and gives them two.
   TXT
-  args: {
+  args:        {
     title:    { type: :string,       required: true,  description: "What is it (the activity, WITHOUT the place)" },
     at:       { type: :iso_time,     required: true,  description: "ISO datetime with timezone offset" },
     duration: { type: :duration_min, required: false, default: 30, description: "Minutes - the activity's real length, not always 30" },
@@ -28,13 +34,26 @@ Buddy::Tools.register(
     all_day:  { type: :string,       required: false, description: "'true' for all-day" },
     calendar: { type: :string,       required: false, description: "Which calendar/agenda to add to, by name (e.g. 'Ours'); omit for default" },
   },
-  confirm: ->(payload, ctx) {
+  confirm:     ->(payload, ctx) {
     agenda = ctx.resolve_writable_agenda(payload[:calendar])
     raise "no writable calendar available" if agenda.nil?
 
-    is_default = agenda.id == ctx.writable_agendas.first&.id
+    is_default = agenda.id == ctx.default_agenda&.id
+    # Prod 1201: "move it to Ours" produced an ADD, so the same Costco Run now
+    # exists twice at 1:00 PM. The description covers it, but description alone
+    # is what already failed, so look for the item they probably meant to move.
+    #
+    # Deliberately a note rather than a raise: two genuinely separate errands can
+    # collide, and refusing a real add is worse than a duplicate. This runs in
+    # Turn.resolve_call BEFORE the model writes a word, so being told is enough —
+    # it can switch to edit_agenda_item in the same turn.
+    twin = ctx.existing_agenda_twin(payload[:title], payload[:at])
+    warning = twin && "#{twin.name} already exists at that time on #{twin.agenda.name}. " \
+                      "If they meant to MOVE it, use edit_agenda_item with calendar instead - " \
+                      "adding leaves the original in place and makes a second one."
+
     {
-      summary:  "Add #{payload[:title]} to #{agenda.name}?",
+      summary:  ["Add #{payload[:title]} to #{agenda.name}?", warning].compact.join(" "),
       resolved: { agenda_id: agenda.id, agenda_name: agenda.name, agenda_default: is_default },
     }
   },
@@ -42,7 +61,7 @@ Buddy::Tools.register(
   # non-default detail per line, no word-labels where a symbol or the value
   # itself already says what it is. Default calendar / no location just don't
   # get a line.
-  label: ->(payload, ctx) {
+  label:       ->(payload, ctx) {
     start   = payload[:at].respond_to?(:in_time_zone) ? payload[:at].in_time_zone(ctx.user.timezone) : nil
     all_day = payload[:all_day].to_s == "true"
 
@@ -67,7 +86,7 @@ Buddy::Tools.register(
 
     { title: payload[:title].to_s, sub: lines.join("\n") }
   },
-  execute: ->(payload, ctx) {
+  execute:     ->(payload, ctx) {
     agenda = Agenda.find(payload[:agenda_id])
     # `at` arrives here as an ISO STRING (the payload was JSON-serialized onto
     # the ByteAction between build and execute), so parse it back to a Time.
@@ -95,12 +114,12 @@ Buddy::Tools.register(
     item = agenda.agenda_items.create!(attrs)
     {
       agenda_item_id: item.id,
-      revert: { op: "created", model: "AgendaItem", id: item.id, summary: "removed #{item.name}" },
+      revert:         { op: "created", model: "AgendaItem", id: item.id, summary: "removed #{item.name}" },
     }
   },
-  receipt: ->(result, _ctx) {
+  receipt:     ->(result, _ctx) {
     item = AgendaItem.find_by(id: result[:agenda_item_id])
     where = item&.agenda&.name.presence
-    "Added #{item&.name || 'that'} to #{where || 'your calendar'} ✓"
+    "Added #{item&.name || "that"} to #{where || "your calendar"} ✓"
   },
 )

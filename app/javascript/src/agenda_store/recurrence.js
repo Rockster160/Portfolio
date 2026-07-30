@@ -176,7 +176,15 @@ function buildPhantom(schedule, dateISO, { localEpoch, agenda }) {
     "leave-at-epoch":       travel.leave_at || "",
     "post-travel-to":       travel.post_travel_to || "",
     "post-travel-minutes":  Number(travel.post_travel_minutes) || 0,
-    "post-arrive-at-epoch": travel.post_arrive_at || "",
+    // Phantoms inherit only the return-home MINUTES from the schedule
+    // baseline (post_arrive_at is a per-occurrence epoch, deliberately not
+    // mirrored), so derive this occurrence's home-arrival from its own end +
+    // minutes — mirrors how the renderers derive the incoming "leave by" time
+    // from start − travel rather than a stored epoch.
+    "post-arrive-at-epoch": travel.post_arrive_at
+      || (endEpoch && Number(travel.post_travel_minutes)
+            ? endEpoch + (Number(travel.post_travel_minutes) * 60)
+            : ""),
     "before-legs":          travel.before_legs ? JSON.stringify(legPayload(travel.before_legs)) : "",
     "after-legs":           travel.after_legs ? JSON.stringify(legPayload(travel.after_legs)) : "",
     "trigger-expression":   schedule.trigger_expression || "",

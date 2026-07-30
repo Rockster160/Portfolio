@@ -1802,6 +1802,9 @@
       hidden_name_patterns:  [],
       hide_completed:        { task: false, event: false, trigger: false },
       hide_tentative:        false,
+      // Which calendar a new item lands on when nothing names one. null means
+      // "oldest writable", which is what everything did before this existed.
+      default_agenda_id:     null,
     };
   }
   let currentPrefs = (() => {
@@ -1825,6 +1828,7 @@
       hidden_name_patterns:  Array.isArray(prefs.hidden_name_patterns) ? prefs.hidden_name_patterns.slice() : [],
       hide_completed:        Object.assign({ task: false, event: false, trigger: false }, prefs.hide_completed || {}),
       hide_tentative:        !!prefs.hide_tentative,
+      default_agenda_id:     prefs.default_agenda_id == null ? null : String(prefs.default_agenda_id),
     };
     persistPrefsCache();
     syncFilterPanelToPrefs();
@@ -1841,6 +1845,7 @@
         hidden_name_patterns: currentPrefs.hidden_name_patterns || [],
         hide_completed:       currentPrefs.hide_completed,
         hide_tentative:       currentPrefs.hide_tentative,
+        default_agenda_id:    currentPrefs.default_agenda_id || "",
       },
     }).catch(() => {
       // Network drop — keep the local cache; reconnect will fetch authoritative.
@@ -2008,6 +2013,8 @@
     });
     const tentCb = panel.querySelector("input[type=checkbox][data-hide-tentative]");
     if (tentCb) tentCb.checked = currentPrefs.hide_tentative;
+    const defaultSel = panel.querySelector("select[data-default-agenda]");
+    if (defaultSel) defaultSel.value = currentPrefs.default_agenda_id || "";
     renderHiddenScheduleList(panel);
     renderPatternList(panel);
   }
@@ -2134,6 +2141,14 @@
       if (tentCb) {
         currentPrefs.hide_tentative = tentCb.checked;
         applyAgendaVisibility();
+        pushPrefsToServer();
+        return;
+      }
+
+      // Changes where new items land, not what's visible — no visibility pass.
+      const defaultSel = e.target.closest("select[data-default-agenda]");
+      if (defaultSel) {
+        currentPrefs.default_agenda_id = defaultSel.value || null;
         pushPrefsToServer();
       }
     });

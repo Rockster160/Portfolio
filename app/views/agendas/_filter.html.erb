@@ -57,6 +57,18 @@
 
   <div class="agenda-filter-divider" aria-hidden="true"></div>
 
+  <h4>Default calendar</h4>
+  <%# Where a new item lands when nothing names a calendar — the app's add form
+      and Byte both read this. Only calendars you can actually add to. %>
+  <select class="agenda-default-select" data-default-agenda aria-label="Default calendar">
+    <option value="">Oldest calendar</option>
+    <% current_user.editable_agendas.reject(&:managed_externally?).sort_by(&:id).each do |a| %>
+      <option value="<%= a.id %>"><%= a.name %></option>
+    <% end %>
+  </select>
+
+  <div class="agenda-filter-divider" aria-hidden="true"></div>
+
   <h4>Other</h4>
   <ul class="agenda-filter-list">
     <li class="agenda-filter-row">

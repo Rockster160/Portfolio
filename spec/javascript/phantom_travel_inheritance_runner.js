@@ -27,26 +27,11 @@ function localEpoch(dateISO, timeHHMM) {
 const agenda = { id: 1, source: "local", color: "#0160FF", name: "Personal" };
 const cases = [];
 
-// --- Case 1: legacy shape (top-level travel_minutes only) ----------
-// Most older schedules carry this — the resolver wrote travel_minutes
-// in flat form before the nested `travel` hash was introduced.
-{
-  const sched = {
-    id: 112, agenda_id: 1, kind: "event", name: "TMS",
-    start_time: "08:00", duration_minutes: 30, all_day: false,
-    starts_on: "2026-06-22",
-    metadata: { travel_minutes: 23, travel_location: "<addr>" },
-  };
-  const phantom = Recurrence.buildPhantom(sched, "2026-06-26", { localEpoch, agenda });
-  cases.push({
-    name: "legacy_travel_minutes_only",
-    attrs: phantom.presentation_attrs,
-  });
-}
-
-// --- Case 2: full nested travel hash (modern shape) ----------------
+// --- Case 2: full nested travel hash (the only supported shape) ----
 // Schedules that have been through the travel-chain resolver carry the
-// full nested shape. Every nested field must propagate.
+// nested `travel` hash. Every nested field must propagate. (The legacy
+// top-level `metadata.travel_minutes` shape is no longer supported —
+// AgendaTravelChain migrated it into the nested hash.)
 {
   const sched = {
     id: 113, agenda_id: 1, kind: "event", name: "Costco run",
@@ -54,8 +39,8 @@ const cases = [];
     starts_on: "2026-06-22",
     arrive_early_minutes: 5,
     metadata: {
-      travel_minutes: 15,
       travel: {
+        travel_minutes:       15,
         location_address:     "13123 S 5600 W, Herriman, UT 84096",
         travel_from:          "Home St",
         travel_from_kind:     "home",
@@ -71,6 +56,28 @@ const cases = [];
     name: "full_travel_chain",
     attrs: phantom.presentation_attrs,
   });
+}
+
+// --- Case 4: return-home baseline (post_travel_minutes mirrored) ---
+// A solo recurring event whose schedule carries the return-home baseline
+// (minutes + kind) but NOT a per-occurrence post_arrive_at. The phantom
+// must derive its OWN arrival epoch = end + minutes so the return band
+// renders on future occurrences (mirrors how the incoming "leave by" is
+// derived rather than stored).
+{
+  const sched = {
+    id: 115, agenda_id: 1, kind: "event", name: "Yoga",
+    start_time: "17:00", duration_minutes: 60, all_day: false,
+    starts_on: "2026-06-22",
+    metadata: {
+      travel: {
+        travel_from: "Home St", travel_from_kind: "home", travel_minutes: 12,
+        post_travel_to_kind: "home", post_travel_minutes: 12, post_travel_seconds: 720,
+      },
+    },
+  };
+  const phantom = Recurrence.buildPhantom(sched, "2026-06-24", { localEpoch, agenda });
+  cases.push({ name: "return_home_baseline", attrs: phantom.presentation_attrs });
 }
 
 // --- Case 3: schedule with no metadata at all (defaults to zero) ---

@@ -30,6 +30,9 @@ class AgendaPreferencesController < ApplicationController
       allowed_schedule_ids = AgendaSchedule.where(agenda_id: current_user.accessible_agendas.select(:id)).pluck(:id).to_set
       attrs[:hidden_schedule_ids] = Array(attrs[:hidden_schedule_ids]).map(&:to_i).select { |id| allowed_schedule_ids.include?(id) }
     end
+    # Blank clears it back to "oldest writable", which is a real choice and has
+    # to survive the round trip as nil rather than as 0.
+    attrs[:default_agenda_id] = attrs[:default_agenda_id].presence&.to_i if attrs.key?(:default_agenda_id)
     # And for hidden_item_ids — accessible-agenda items only.
     if attrs.key?(:hidden_item_ids)
       allowed_item_ids = current_user.accessible_agenda_items.pluck(:id).to_set
@@ -52,6 +55,7 @@ class AgendaPreferencesController < ApplicationController
       .fetch(:agenda_preference, {})
       .permit(
         :hide_tentative,
+        :default_agenda_id,
         hidden_agenda_ids:    [],
         hidden_schedule_ids:  [],
         hidden_item_ids:      [],

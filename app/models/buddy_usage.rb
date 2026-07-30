@@ -27,7 +27,12 @@ class BuddyUsage < ApplicationRecord
   belongs_to :byte_message, optional: true
 
   # NOTE: never reassign existing integers — enum order is persisted.
-  enum :kind, { turn: 0, compaction: 1 }
+  #
+  # `eval` is the buddy:eval rake harness. It bills exactly like a turn, so it
+  # has to be recorded, but it must stay separable: a few eval runs can dwarf a
+  # day of real use, and folding them into the same total would make the
+  # projected bill meaningless.
+  enum :kind, { turn: 0, compaction: 1, eval: 2 }
 
   scope :chronological, -> { order(created_at: :asc) }
   scope :since,         ->(time) { where(created_at: time...) }

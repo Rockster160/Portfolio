@@ -85,6 +85,16 @@ form:not(.basic) {
       flex: 1;
       box-sizing: border-box;
     }
+
+    // Match the native <select> to the text inputs beside it — the global
+    // select rule renders it shorter with tighter padding.
+    select {
+      height: auto;
+      padding: 8px;
+      font-size: 18px;
+      font-weight: inherit;
+      line-height: normal;
+    }
   }
 
   .flex-fields {

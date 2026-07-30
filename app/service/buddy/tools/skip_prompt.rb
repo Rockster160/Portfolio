@@ -2,10 +2,9 @@ Buddy::Tools.register(
   name:        :skip_prompt,
   description: <<~TXT,
     Skip / dismiss one of the app's pending prompts on the person's behalf.
-    These are the surveys/questions in the `pending_prompts` section of the
-    live context file (Read it when they ask about their prompts). Use when
-    they say to skip, dismiss, or "not now" one of them. `id` is the prompt's
-    id from that list.
+    These are the surveys/questions in the `pending_prompts` section of
+    get_context. Use when they say to skip, dismiss, or "not now" one of them.
+    `id` is the prompt's id from that list.
   TXT
   args:        {
     id: { type: :integer, required: true, description: "Prompt id from pending_prompts" },

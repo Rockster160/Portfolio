@@ -107,5 +107,64 @@ RSpec.describe ByteController, type: :controller do
         expect(response).to be_successful
       end
     end
+
+    # An editable form posts VALUES, not row ids, so it can't lean on the
+    # id-lookup safety the other shapes get incidentally — validation is the
+    # whole job of this branch.
+    context "with a buddy_form action" do
+      let(:buddy_convo) { user.byte_conversations.create!(name: "b", mode: :buddy) }
+      let(:prompt) {
+        Prompt.create!(user: user, answer_type: :single, question: "How many calories?", options: [
+          { "type" => "text", "default" => "shake", "question" => "Notes" },
+          { "type" => "text", "default" => "",      "question" => "Calories" },
+        ])
+      }
+
+      before {
+        allow(MonitorChannel).to receive(:broadcast_to)
+        allow(::Jil).to receive(:trigger).and_return(true)
+        allow(::WebPushNotifications).to receive(:update_count)
+      }
+
+      def form_action(answers = {})
+        Buddy::FormAction.post!(
+          user: user, conversation: buddy_convo,
+          tool: Buddy::Tools[:answer_prompt], payload: { id: prompt.id, answers: answers },
+        )
+      end
+
+      it "submits the values the person sent" do
+        action = form_action("Calories" => "240")
+
+        post :respond_action, params: {
+          request_id: action.request_id, form: { "Notes" => "shake", "Calories" => "180" },
+        }
+
+        expect(response).to be_successful
+        expect(prompt.reload.response).to eq("Notes" => "shake", "Calories" => "180")
+      end
+
+      it "answers a half-filled form with 422 and the reasons, keeping it live" do
+        action = form_action
+
+        post :respond_action, params: {
+          request_id: action.request_id, form: { "Notes" => "shake", "Calories" => "" },
+        }
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(JSON.parse(response.body)["errors"].join).to include("Calories needs a value")
+        expect(action.reload).to be_pending
+      end
+
+      it "can't be submitted by someone else" do
+        action = form_action("Calories" => "240")
+        sign_in create(:user)
+
+        post :respond_action, params: { request_id: action.request_id, form: { "Calories" => "1" } }
+
+        expect(response).to have_http_status(:forbidden).or have_http_status(:not_found)
+        expect(prompt.reload.response).to be_nil
+      end
+    end
   end
 end

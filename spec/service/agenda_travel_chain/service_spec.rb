@@ -515,7 +515,7 @@ RSpec.describe AgendaTravelChain::Service do
         expect(meta["post_travel_minutes"]).to eq(0)
       end
 
-      it "leaves post_travel_* nil when no to: override is set" do
+      it "adds a default return-home leg when there's no to: override (solo tail)" do
         evt = make_event(
           name: "No outbound",
           start_at: Time.zone.parse("2026-06-18 14:00"),
@@ -525,9 +525,60 @@ RSpec.describe AgendaTravelChain::Service do
         described_class.new(user, Date.new(2026, 6, 18)).run
 
         meta = evt.reload.metadata["travel"]
+        # Return trip: Office → Home St (600s = 10m), arriving end_at + 600s.
+        expect(meta["post_travel_to"]).to eq("Home St")
+        expect(meta["post_travel_to_kind"]).to eq("home")
+        expect(meta["post_travel_seconds"]).to eq(600)
+        expect(meta["post_travel_minutes"]).to eq(10)
+        expect(meta["post_arrive_at"]).to eq(evt.end_at.to_i + 600)
+      end
+
+      it "does NOT add a return-home leg when the event chains onward to a successor" do
+        a = make_event(
+          name: "First", start_at: Time.zone.parse("2026-06-18 14:00"),
+          end_at: Time.zone.parse("2026-06-18 15:00"), location: "Office",
+        )
+        b = make_event(
+          name: "Second", start_at: Time.zone.parse("2026-06-18 15:10"),
+          end_at: Time.zone.parse("2026-06-18 16:00"), location: "Gym",
+        )
+        described_class.new(user, Date.new(2026, 6, 18)).run
+
+        a_meta = a.reload.metadata["travel"]
+        b_meta = b.reload.metadata["travel"]
+        # A rolls straight into B → no return-home. B is the tail → returns home.
+        expect(a_meta["chain_successor_id"]).to eq(b.id)
+        expect(a_meta["post_travel_to"]).to be_nil
+        expect(a_meta["post_travel_to_kind"]).to be_nil
+        expect(b_meta["post_travel_to"]).to eq("Home St")
+        expect(b_meta["post_travel_to_kind"]).to eq("home")
+      end
+
+      it "does NOT add a return-home leg when Home is unknown" do
+        allow(address_book).to receive(:home).and_return(nil)
+        evt = make_event(
+          name: "Homeless", start_at: Time.zone.parse("2026-06-18 14:00"),
+          end_at: Time.zone.parse("2026-06-18 15:00"), location: "Office",
+        )
+        described_class.new(user, Date.new(2026, 6, 18)).run
+
+        meta = evt.reload.metadata["travel"]
         expect(meta["post_travel_to"]).to be_nil
+        expect(meta["post_travel_to_kind"]).to be_nil
         expect(meta["post_travel_seconds"]).to be_nil
-        expect(meta["post_arrive_at"]).to be_nil
+      end
+
+      it "leaves the explicit to: outgoing leg untouched (no home leg appended)" do
+        evt = make_event(
+          name: "Explicit", start_at: Time.zone.parse("2026-06-18 14:00"),
+          end_at: Time.zone.parse("2026-06-18 15:00"), location: "Office",
+          notes: "to:Gym",
+        )
+        described_class.new(user, Date.new(2026, 6, 18)).run
+
+        meta = evt.reload.metadata["travel"]
+        expect(meta["post_travel_to"]).to eq("Gym")
+        expect(meta["post_travel_to_kind"]).to eq("override")
       end
 
       it "breaks the travel chain when a successor declares an explicit from:" do
@@ -595,6 +646,13 @@ RSpec.describe AgendaTravelChain::Service do
         expect(sched_travel["travel_minutes"]).to eq(10)
         expect(sched_travel["travel_seconds"]).to eq(600)
         expect(sched_travel["travel_from"]).to eq("Home St")
+        # Return-home baseline mirrors too, so recurring phantoms render the
+        # return band without a per-occurrence Google call. The arrive epoch
+        # and destination address stay per-occurrence and must NOT leak.
+        expect(sched_travel["post_travel_minutes"]).to eq(10)
+        expect(sched_travel["post_travel_to_kind"]).to eq("home")
+        expect(sched_travel).not_to have_key("post_arrive_at")
+        expect(sched_travel).not_to have_key("post_travel_to")
         # Chain pointers and `leave_at` are item-specific — must NOT leak.
         expect(sched_travel).not_to have_key("chain_predecessor_id")
         expect(sched_travel).not_to have_key("leave_at")

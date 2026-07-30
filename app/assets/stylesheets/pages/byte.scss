@@ -2860,6 +2860,197 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
   display: none;
 }
 
+// -------- Editable form inside a bubble (Buddy::FormAction) --------------
+//
+// The app-wide reset at the top of this file strips background, border and
+// padding from every textarea / text input / select inside .byte-app, so a
+// field dropped in a bubble renders invisible. Everything here is fighting
+// that, hence the specificity — same fight documented around line 1002.
+//
+// .byte-msg is `user-select: none` + `-webkit-touch-callout: none` so the
+// context menu owns the long-press; both have to be handed back inside a form
+// or fields can't be selected or edited on touch.
+.ctr-byte .byte-app .byte-msg-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+
+  .byte-msg-form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .byte-msg-form-label {
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
+    opacity: 0.65;
+  }
+
+  .byte-msg-form-hint {
+    font-size: 11px;
+    opacity: 0.5;
+  }
+
+  textarea.byte-msg-form-input,
+  input.byte-msg-form-input,
+  select.byte-msg-form-input {
+    width: 100%;
+    min-width: 0;
+    padding: 7px 9px;
+    font: inherit;
+    font-size: 14px;
+    color: inherit;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    box-shadow: none;
+
+    &:focus {
+      outline: none;
+      border-color: rgba(255, 255, 255, 0.32);
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    &:disabled {
+      opacity: 0.7;
+      border-style: dashed;
+    }
+  }
+
+  textarea.byte-msg-form-input {
+    resize: vertical;
+    min-height: 38px;
+  }
+
+  input.byte-msg-form-input[type="color"] {
+    padding: 2px;
+    height: 34px;
+  }
+
+  .byte-msg-form-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    align-items: center;
+  }
+
+  .byte-msg-form-choice {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13.5px;
+    cursor: pointer;
+  }
+
+  // Same restyled square the checklist rows use — the browser default reads as
+  // a glitch against the dark bubble.
+  input[type="checkbox"] {
+    -webkit-appearance: none;
+    appearance: none;
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    background: rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+    position: relative;
+
+    &:checked {
+      background: var(--byte-accent, #4488ff);
+      border-color: var(--byte-accent, #4488ff);
+
+      &::after {
+        content: "✓";
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        color: #fff;
+      }
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.7;
+    }
+  }
+
+  .byte-msg-form-scale {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .byte-msg-form-scale input[type="range"] {
+    flex: 1;
+    min-width: 0;
+    accent-color: var(--byte-accent, #4488ff);
+  }
+
+  .byte-msg-form-scale-value {
+    flex-shrink: 0;
+    min-width: 2.5ch;
+    text-align: right;
+    font-size: 13px;
+    opacity: 0.8;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .byte-msg-form-errors {
+    font-size: 12.5px;
+    color: #f26b6b;
+  }
+
+  .byte-msg-form-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  .byte-msg-form-receipt {
+    font-size: 12.5px;
+    opacity: 0.7;
+  }
+
+  // The global button cascade in forms.scss still lands gradient + bold on a
+  // bare <button>, so this restates the panel aesthetic outright.
+  button.byte-msg-form-submit {
+    padding: 7px 16px !important;
+    border-radius: 8px !important;
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
+    color: #fff !important;
+    background: var(--byte-accent, #4488ff) !important;
+    border: 1px solid transparent !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+  }
+
+  &[data-status="submitted"],
+  &[data-status="expired"] {
+    .byte-msg-form-label { opacity: 0.5; }
+  }
+}
+
 // -------- Generic multi-select action rows (used by Buddy proposals) -----
 .byte-msg-multi-select {
   display: flex;

@@ -12,13 +12,25 @@
 #   # One ad-hoc message:
 #   rake "buddy:eval_one[I just took the recycling out]"
 #
-#   # Replay real messages from a conversation (read-only; nothing is written):
+#   # Replay real messages from a conversation (source is read-only):
 #   rake "buddy:replay[123,20]"
 #
-# Nothing here persists: each run builds a throwaway in-memory conversation, and
-# the turn is executed through the client directly rather than through
-# Buddy::GPT::Turn, so no ByteMessage rows, proposals, moods, or memories are
-# created.
+#   # Wipe the eval threads and their usage rows when they get noisy:
+#   rake buddy:eval_clear
+#
+# Every run writes into a dedicated per-theme "Eval" conversation so the
+# back-and-forth is readable in the app afterwards, and so the spend is
+# ATTRIBUTED. These are real, billed calls; before this they left no trace, and
+# a few afternoons of tuning could quietly outspend a month of actual use with
+# nothing in `buddy:cost` to show for it. Usage rows are written with
+# `kind: :eval` so they never contaminate the real per-turn numbers.
+#
+# What still does NOT happen: the turn runs through the client directly rather
+# than Buddy::GPT::Turn, so no proposals, moods, memories, or tool EXECUTIONS
+# are created. Tools are resolved (so the model sees real "no chore matches
+# that" errors) and then stopped.
+#
+# Set BUDDY_EVAL_PERSIST=0 to go back to leaving no trace at all.
 
 # The behaviors most worth eyeballing after a prompt or model change. The
 # trailing comment on each is what a PASS looks like.
@@ -115,7 +127,7 @@ namespace :buddy do
     since = days.days.ago
     rows  = BuddyUsage.since(since)
 
-    if rows.count.zero?
+    if rows.none?
       puts "No recorded Buddy usage in the last #{days} days."
       next
     end
@@ -123,7 +135,7 @@ namespace :buddy do
     money = ->(micros) { Buddy::GPT::Pricing.format_micros(micros) }
 
     puts banner("Buddy spend — last #{days} days")
-    puts format("%-10s %6s %12s %12s %10s %10s", "kind", "calls", "input", "cached", "output", "cost")
+    puts "kind        calls        input       cached     output       cost"
     rows.group(:kind).pluck(
       :kind, Arel.sql("COUNT(*)"), Arel.sql("SUM(input_tokens)"),
       Arel.sql("SUM(cached_input_tokens)"), Arel.sql("SUM(output_tokens)"), Arel.sql("SUM(cost_micros)")
@@ -131,6 +143,10 @@ namespace :buddy do
       puts format("%-10s %6d %12d %12d %10d %10s", kind, calls, input, cached, output, money.call(cost))
     }
 
+    # Eval spend counts toward the total like everything else — it's the same
+    # money out the same door. The `kind` breakdown above is where it shows up
+    # on its own; the separation that actually matters is prod vs local, and
+    # evals only ever run locally.
     total  = rows.spend_micros
     input  = rows.sum(:input_tokens)
     cached = rows.sum(:cached_input_tokens)
@@ -179,17 +195,32 @@ namespace :buddy do
     }
   end
 
+  desc "Delete the eval conversations and their usage rows"
+  task eval_clear: :environment do
+    convos = ByteConversation.evals
+    spend  = BuddyUsage.eval.spend_micros
+    rows   = BuddyUsage.eval.count
+    messages = ByteMessage.where(byte_conversation_id: convos.select(:id)).count
+
+    BuddyUsage.eval.delete_all
+    convos.destroy_all # takes their messages with them
+
+    puts "Cleared #{messages} eval messages and #{rows} usage rows " \
+         "(#{Buddy::GPT::Pricing.format_micros(spend)} of recorded spend)."
+  end
+
   # ---- internals -----------------------------------------------------------
 
   def stats
-    @stats ||= { turns: 0, tool_calls: 0, no_tool: 0, elapsed: 0.0, flags: [] }
+    @stats ||= { turns: 0, tool_calls: 0, no_tool: 0, elapsed: 0.0, cost_micros: 0, flags: [] }
   end
 
   def evaluate(text, user: User.me, theme: "byte")
-    convo  = scratch_conversation(user, theme)
+    convo  = eval_conversation(user, theme)
     client = Buddy::GPT::Client.new
     tools  = [
       Buddy::GPT::ContextTool.schema,
+      Buddy::GPT::PromptTool.schema,
       *Buddy::SideEffects.function_schemas(theme: theme),
       *Buddy::Tools.function_schemas,
     ]
@@ -201,7 +232,15 @@ namespace :buddy do
       at_glance:    { user: user.first_name, pet_expression: "neutral" },
       tone:         (theme.to_s == "moss" ? :chelsea : :rocco),
     )
-    context_tool = Buddy::GPT::ContextTool.new(user, convo)
+    readers = {
+      Buddy::GPT::ContextTool::NAME => Buddy::GPT::ContextTool.new(user, convo),
+      Buddy::GPT::PromptTool::NAME  => Buddy::GPT::PromptTool.new(user, convo),
+    }
+
+    # Each scenario is judged on its own, so the model only ever sees this one
+    # message — the persisted thread is a record of the run, not its history.
+    inbound = persist_prompt(convo, user, text)
+    bubble  = persist_reply(convo, user, inbound)
 
     input   = [{ role: :user, content: text }]
     started = Time.current
@@ -218,6 +257,9 @@ namespace :buddy do
     loop do
       rounds += 1
       result = client.stream(instructions: instructions, input: input, tools: tools)
+      # Before the ok check: a failed or truncated response still consumed
+      # tokens and still bills.
+      record_usage(result, user, convo, bubble)
       unless result[:ok]
         spoken = "[ERROR: #{result[:error]}]"
         break
@@ -252,16 +294,17 @@ namespace :buddy do
           {
             type:    :function_call_output,
             call_id: call[:call_id],
-            output:  eval_tool_output(call, context_tool, user, convo, prior, seen),
+            output:  eval_tool_output(call, readers, user, convo, prior, seen),
           },
         ]
       end
     end
     reply << spoken.to_s
+    finish_reply(bubble, reply.strip, calls)
 
     elapsed = Time.current - started
     record(calls, elapsed)
-    report(text, reply.strip, calls, elapsed)
+    report(text, reply.strip, calls, elapsed, bubble)
   rescue StandardError => e
     puts "  \e[31mCRASHED\e[0m #{e.class}: #{e.message}"
   end
@@ -271,9 +314,10 @@ namespace :buddy do
   # (Buddy::GPT::Turn.resolve_tool), so an eval sees the real "no chore matches
   # that" errors. Resolving stops short of executing, so an eval still never
   # logs a chore or messages a partner for real.
-  def eval_tool_output(call, context_tool, user, conversation, prior, seen)
+  def eval_tool_output(call, readers, user, conversation, prior, seen)
     name = call[:name].to_sym
-    return context_tool.call(call[:arguments]) if name == Buddy::GPT::ContextTool::NAME
+    reader = readers[name]
+    return reader.call(call[:arguments]) if reader
     return JSON.generate({ ok: true }) if Buddy::SideEffects.handles?(name)
 
     tool = Buddy::Tools[name]
@@ -288,16 +332,93 @@ namespace :buddy do
     JSON.generate(result)
   end
 
-  # Never saved. `new` (not `create!`) so nothing can leak into the real thread
-  # list even if a callback fires.
+  def persist?
+    ENV["BUDDY_EVAL_PERSIST"] != "0"
+  end
+
+  # One reusable thread per user+theme, so runs accumulate into something you can
+  # scroll rather than scattering. Flagged `eval` in metadata: ByteConversation
+  # keeps these out of `default_for`, so topping the list by recency can't make
+  # an eval run start catching real inbound messages.
+  def eval_conversation(user, theme)
+    return scratch_conversation(user, theme) unless persist?
+
+    @eval_conversations ||= {}
+    @eval_conversations[[user.id, theme.to_s]] ||= (
+      name = "Eval · #{theme.to_s == "moss" ? "Moss" : "Byte"}"
+      user.byte_conversations.evals.find_by(name: name) ||
+        user.byte_conversations.create!(
+          name: name, mode: :buddy, buddy_theme: theme, metadata: { "eval" => true },
+        )
+    )
+  end
+
+  # Used when persistence is off. `new` (not `create!`) so nothing can leak into
+  # the real thread list even if a callback fires.
   def scratch_conversation(user, theme)
     ByteConversation.new(
       user:             user,
       mode:             :buddy,
       buddy_theme:      theme,
       buddy_expression: "neutral",
-      metadata:         {},
+      metadata:         { "eval" => true },
     )
+  end
+
+  # The scenario, as though the person had typed it.
+  def persist_prompt(convo, user, text)
+    return nil unless persist?
+
+    convo.byte_messages.create!(
+      user: user, direction: :outbound, state: :sent, body: text,
+      metadata: { "source" => "eval" }
+    )
+  end
+
+  # Minted before the loop, exactly like Turn does, so per-round usage rows have
+  # a message to hang off and `buddy:cost_top` can rank eval turns too.
+  def persist_reply(convo, user, inbound)
+    return nil unless persist?
+
+    convo.byte_messages.create!(
+      user: user, direction: :inbound, state: :streaming, body: "…",
+      metadata: { "kind" => "buddy", "source" => "eval", "in_reply_to" => inbound&.id }.compact
+    )
+  end
+
+  def finish_reply(reply, spoken, calls)
+    return if reply.nil?
+
+    reply.update!(
+      state:        :delivered,
+      body:         spoken.to_s.presence || "(no prose)",
+      delivered_at: Time.current,
+      metadata:     reply.metadata.merge(
+        "usage"      => BuddyUsage.rollup_for_message(reply),
+        "eval_calls" => calls.map { |c| { "name" => c[:name].to_s, "arguments" => c[:arguments] } },
+      ).compact,
+    )
+    # A quiet second line listing what it reached for. Worded as "would call"
+    # because nothing was executed — an eval that reads like a receipt would be
+    # claiming things happened that didn't.
+    return if calls.empty?
+
+    reply.byte_conversation.byte_messages.create!(
+      user:         reply.user,
+      direction:    :inbound,
+      state:        :delivered,
+      body:         "would call: #{calls.map { |c| "#{c[:name]}(#{(c[:arguments] || {}).to_json})" }.join("  ")}",
+      metadata:     { "kind" => "buddy_receipt", "source" => "eval" },
+      delivered_at: Time.current,
+    )
+  end
+
+  def record_usage(result, user, convo, reply)
+    return unless persist?
+
+    BuddyUsage.record!(result, user: user, kind: :eval, conversation: convo, message: reply)
+  rescue StandardError => e
+    puts "  \e[33m! usage not recorded: #{e.class}: #{e.message}\e[0m"
   end
 
   def record(calls, elapsed)
@@ -307,7 +428,7 @@ namespace :buddy do
     stats[:elapsed]    += elapsed
   end
 
-  def report(prompt, reply, calls, elapsed)
+  def report(prompt, reply, calls, elapsed, bubble=nil)
     puts
     puts "\e[36m▸ #{prompt}\e[0m"
     puts "  #{reply.presence || "(no prose)"}"
@@ -327,7 +448,13 @@ namespace :buddy do
       puts "  \e[33m! #{w}\e[0m"
       stats[:flags] << w
     }
-    puts "  \e[90m#{elapsed.round(2)}s\e[0m"
+
+    # Per-scenario cost, so an expensive one is obvious as it scrolls past
+    # rather than only in the total at the end.
+    cost = bubble && BuddyUsage.where(byte_message_id: bubble.id).spend_micros
+    stats[:cost_micros] += cost.to_i if cost
+    money = cost ? "  #{Buddy::GPT::Pricing.format_micros(cost)}" : ""
+    puts "  \e[90m#{elapsed.round(2)}s#{money}\e[0m"
   end
 
   # Cheap mechanical checks for the tone rules that are actually checkable. The
@@ -349,11 +476,15 @@ namespace :buddy do
   end
 
   def summary
-    avg = stats[:turns].zero? ? 0 : (stats[:elapsed] / stats[:turns])
+    avg   = stats[:turns].zero? ? 0 : (stats[:elapsed] / stats[:turns])
+    spend = stats[:cost_micros]
+    money = Buddy::GPT::Pricing.method(:format_micros)
+    per   = stats[:turns].zero? ? 0 : spend / stats[:turns]
     [
       "\n#{"=" * 60}",
       "turns: #{stats[:turns]}  tool calls: #{stats[:tool_calls]}  " \
       "silent turns: #{stats[:no_tool]}  avg: #{avg.round(2)}s",
+      persist? ? "spend: #{money.call(spend)} this run (#{money.call(per)}/turn) — `rake buddy:cost` for the running total" : "\e[90mnot persisted (BUDDY_EVAL_PERSIST=0)\e[0m",
       stats[:flags].any? ? "\e[33mflags: #{stats[:flags].tally.map { |f, n| "#{f} x#{n}" }.join(", ")}\e[0m" : "\e[32mno mechanical flags\e[0m",
     ].join("\n")
   end

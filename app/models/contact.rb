@@ -41,6 +41,9 @@ class Contact < ApplicationRecord
   validates :apple_contact_id, uniqueness: { allow_nil: true }
 
   after_save :store_primary_address
+  # Keep the derived Birthdays calendar in sync with this contact's birthday.
+  after_commit :sync_birthday_event, on: [:create, :update], if: :birthday_sync_relevant?
+  after_commit :remove_birthday_event, on: :destroy
 
   def self.friends
     joins("LEFT JOIN users AS friends ON friends.id = contacts.friend_id")
@@ -118,6 +121,21 @@ class Contact < ApplicationRecord
 
     base = "#{::Date::ABBR_MONTHNAMES[birth_month]} #{birth_day}"
     birth_year ? "#{base}, #{birth_year}" : base
+  end
+
+  def birthday_sync_relevant?
+    return true if saved_changes.keys.intersect?(%w[birth_month birth_day birth_year])
+
+    # A name change only matters when there's already a birthday event to rename.
+    saved_changes.keys.intersect?(%w[name last_name]) && birth_month.present? && birth_day.present?
+  end
+
+  def sync_birthday_event
+    BirthdaySync.sync_contact(self)
+  end
+
+  def remove_birthday_event
+    BirthdaySync.remove_contact(self)
   end
 
   def primary_address

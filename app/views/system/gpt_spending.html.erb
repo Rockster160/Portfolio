@@ -24,7 +24,7 @@
 
     <div class="spend-range">
       <% @windows.each do |window| %>
-        <%= link_to (window == 1 ? "Today" : "#{window}d"), system_gpt_spending_path(days: window), class: "spend-range-btn#{" active" if window == @days}" %>
+        <%= link_to (window == 1 ? "24h" : "#{window}d"), system_gpt_spending_path(days: window), class: "spend-range-btn#{" active" if window == @days}" %>
       <% end %>
     </div>
   </div>

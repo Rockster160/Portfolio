@@ -11,15 +11,20 @@
 #  hide_tentative       :boolean          default(FALSE), not null
 #  created_at           :datetime         not null
 #  updated_at           :datetime         not null
+#  default_agenda_id    :bigint
 #  user_id              :bigint           not null
 #
 class AgendaPreference < ApplicationRecord
   KIND_KEYS = %w[task event trigger].freeze
 
   belongs_to :user
+  # Where a new item goes when nobody names a calendar. Optional: nil means the
+  # oldest writable one, which is the behaviour that existed before this column.
+  belongs_to :default_agenda, class_name: "Agenda", optional: true
 
   validates :user_id, uniqueness: true
   validate :validate_pattern_compiles
+  validate :validate_default_agenda_writable
 
   def self.for(user)
     find_or_initialize_by(user: user).tap { |pref|
@@ -99,6 +104,7 @@ class AgendaPreference < ApplicationRecord
       binds << p
     end
     return scope.none if conds.empty?
+
     scope.where(conds.join(" OR "), *binds)
   end
 
@@ -111,13 +117,15 @@ class AgendaPreference < ApplicationRecord
     return true if hidden_agenda_ids.include?(item.agenda_id)
     return true if item.agenda_schedule_id && hidden_schedule_ids.include?(item.agenda_schedule_id)
     return true if item.id && hidden_item_ids.include?(item.id)
+
     name = item.name.to_s
-    matched = hidden_name_patterns.any? do |src|
-      Regexp.new(src.to_s, Regexp::IGNORECASE).match?(name)
-    rescue RegexpError
-      false
-    end
-    matched
+    hidden_name_patterns.any? { |src|
+      begin
+        Regexp.new(src.to_s, Regexp::IGNORECASE).match?(name)
+      rescue RegexpError
+        false
+      end
+    }
   end
 
   def serialize_for_client
@@ -130,6 +138,7 @@ class AgendaPreference < ApplicationRecord
       hidden_name_patterns:  hidden_name_patterns,
       hide_completed:        KIND_KEYS.index_with { |k| hide_completed_for?(k) },
       hide_tentative:        !!hide_tentative,
+      default_agenda_id:     default_agenda_id,
     }
   end
 
@@ -152,11 +161,13 @@ class AgendaPreference < ApplicationRecord
   # for schedules whose only items have already been filtered out of view.
   def hidden_schedule_name_map
     return {} if hidden_schedule_ids.blank?
+
     AgendaSchedule.where(id: hidden_schedule_ids).pluck(:id, :name).to_h
   end
 
   def hidden_item_name_map
     return {} if hidden_item_ids.blank?
+
     AgendaItem.where(id: hidden_item_ids).pluck(:id, :name).to_h
   end
 
@@ -166,5 +177,18 @@ class AgendaPreference < ApplicationRecord
     rescue RegexpError => e
       errors.add(:hidden_name_patterns, "invalid regex #{src.inspect}: #{e.message}")
     end
+  end
+
+  # A default nobody can write to is worse than no default: every add would fail
+  # or silently land elsewhere. Google-synced calendars are excluded for the same
+  # reason the add tools exclude them — they need the app's own sync flow.
+  def validate_default_agenda_writable
+    return if default_agenda_id.blank?
+    return if user.nil?
+
+    agenda = user.editable_agendas.find_by(id: default_agenda_id)
+    return if agenda.present? && !agenda.managed_externally?
+
+    errors.add(:default_agenda_id, "must be a calendar you can add to")
   end
 end

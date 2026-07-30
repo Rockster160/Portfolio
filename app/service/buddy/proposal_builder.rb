@@ -17,7 +17,7 @@ module Buddy
     # can pick the right expression: something to confirm (action present) vs
     # something already done (auto_ran) vs nothing.
     def create(user:, byte_message:, markers:)
-      return { action: nil, auto_ran: false } if markers.blank?
+      return { action: nil, auto_ran: false, forms: [] } if markers.blank?
 
       # Build validated per-marker proposals.
       raw = markers.filter_map { |m|
@@ -26,6 +26,14 @@ module Buddy
 
         payload, errors = Buddy::Tools.validate_payload(tool, m[:payload])
         next nil if errors.any?
+
+        # A form tool's confirm is its PRE-SUBMIT gate and runs when the person
+        # sends. Running it here rejects a half-filled form for being half-filled
+        # — which is the entire thing a form exists to let them finish. Its
+        # `fields` proc resolves it instead, inside FormAction.post!.
+        if Buddy::Tools.form?(tool)
+          next { tool: tool, payload: payload, count: 1, merge_key: safely { tool[:merge_key].call(payload) } || SecureRandom.uuid }
+        end
 
         ctx = Buddy::ToolContext.new(user, conversation: byte_message.byte_conversation)
         confirm = safely { tool[:confirm].call(payload, ctx) }
@@ -40,7 +48,7 @@ module Buddy
         }
       }
 
-      return { action: nil, auto_ran: false } if raw.empty?
+      return { action: nil, auto_ran: false, forms: [] } if raw.empty?
 
       # Merge duplicates by merge_key. Count sums; payload takes the first.
       merged = raw
@@ -57,12 +65,37 @@ module Buddy
       #       can uncheck to undo.
       #   3 → a plain pending checkbox they tap to run.
       # Level-2 rows lead the checklist so the already-done items sit on top.
-      level1, rest   = merged.partition { |p| p[:tool][:level] == 1 }
+      # Form tools own their whole message (Buddy::FormAction), so they're taken
+      # out before anything is split into rows — a checkbox that says "submit
+      # these seven values" without showing them is exactly what the form
+      # replaces.
+      forms, merged  = merged.partition { |p| Buddy::Tools.form?(p[:tool]) }
+      _, rest        = merged.partition { |p| p[:tool][:level] == 1 }
       level2, level3 = rest.partition { |p| p[:tool][:level] == 2 }
-      auto_ran = run_auto(user, byte_message, level1)
+
+      # ORDER matters, not just level. Prod 1201: "move it to Ours and let
+      # Chelsea know" produced add_agenda_item (level 3, a checkbox) plus
+      # message_partner (level 1, fires on arrival). Splitting purely on level
+      # ran them backwards — Chelsea was told the event had moved 22 seconds
+      # before the checkbox was tapped, and would have been told even if it
+      # never was.
+      #
+      # So a level-3 row is a GATE: level-1 calls the model made BEFORE it run
+      # now, and ones it made AFTER wait on the tap (see run_deferred!). Level 2
+      # is not a gate — it executes on arrival and leaves a visible row in the
+      # same list, so nothing lands out of order behind it.
+      immediate, deferred = split_on_gate(merged, gated: forms.any?)
+      auto_ran = run_auto(user, byte_message, immediate)
 
       rows = level2 + level3
-      return { action: nil, auto_ran: auto_ran } if rows.empty?
+      # A form is a gate too, so anything held back rides on it when there's no
+      # checklist to carry it. With both, the checklist takes the queue — it's
+      # the one the person meets first.
+      posted = post_forms(user, byte_message, forms, deferred: rows.empty? ? deferred : [])
+
+      if rows.empty?
+        return { action: nil, auto_ran: auto_ran, forms: posted }
+      end
 
       # Build button hashes. Tool label procs may return either a plain
       # String (title only) or a Hash `{ title:, sub: }` — the second form
@@ -89,7 +122,8 @@ module Buddy
         tool_name:         "buddy_proposals",
         multi_select:      true,
         buttons:           buttons,
-        tool_input:        {},
+        # Anything the model queued behind the checkbox, waiting on the tap.
+        tool_input:        deferred.any? ? { "deferred" => serialize_deferred(deferred) } : {},
         # A Buddy checklist is part of the conversation, not a fleeting prompt —
         # the default 10-minute TTL made a chore-confirm checkbox silently 409 on
         # tap (the check just vanished) once the person came back to it. Give it
@@ -112,7 +146,7 @@ module Buddy
       )
       byte_message.update!(metadata: new_meta)
 
-      { action: action, auto_ran: auto_ran }
+      { action: action, auto_ran: auto_ran, forms: posted }
     end
 
     # Re-materialize a proposal from an EXPIRED row so the person doesn't have to
@@ -142,8 +176,124 @@ module Buddy
       result
     end
 
+    # Take the queue off the action so it can only ever run once. Called INSIDE
+    # the caller's `with_lock` (before its `save!`), so two taps racing can't
+    # both claim it; running the tools happens after the lock is released, since
+    # they post messages and broadcast and have no business holding a row lock.
+    def claim_deferred(action)
+      input = action.tool_input.is_a?(Hash) ? action.tool_input : {}
+      queue = Array(input["deferred"])
+      return [] if queue.empty?
+
+      action.tool_input = input.merge("deferred" => [], "deferred_claimed_at" => Time.current.iso8601)
+      queue
+    end
+
+    # Run what was waiting on the tap.
+    #
+    # `executed:` is whether anything on the checklist actually ran. When the
+    # person cancelled it all, the follow-up is about something that never
+    # happened, so it must NOT go out — but silence is how they end up assuming
+    # it did, so say what was held back instead.
+    def run_deferred!(action, queue, executed:)
+      return false if queue.blank?
+
+      message = action.byte_message
+      return false if message.nil?
+
+      unless executed
+        note = "Held off on #{deferred_summary(action.user, queue)} — nothing on that list went through."
+        post_message(action.user, message.byte_conversation, note)
+        return false
+      end
+
+      autos = queue.filter_map { |row| rehydrate_deferred(row) }
+      return false if autos.empty?
+
+      run_auto(action.user, message, autos)
+    end
+
     class << self
       private
+
+      # Level-1 calls, partitioned on where they sit relative to the first
+      # level-3 row. `merged` is in the model's own call order (filter_map then
+      # group_by both preserve it), which is the only dependency signal we get —
+      # and the right one, since "do X and then tell them" is exactly how a
+      # person phrases a sequence.
+      def split_on_gate(merged, gated: false)
+        gate_at   = merged.index { |p| p[:tool][:level] == 3 }
+        immediate = []
+        deferred  = []
+        merged.each_with_index { |p, i|
+          next unless p[:tool][:level] == 1
+
+          # `gated:` covers a form that was already lifted out of `merged` — it
+          # is a gate as much as a checkbox is, so nothing queued alongside it
+          # should fire before it's sent.
+          (gated || (gate_at && i > gate_at) ? deferred : immediate) << p
+        }
+        [immediate, deferred]
+      end
+
+      def post_forms(user, byte_message, forms, deferred: [])
+        return [] if forms.empty?
+
+        conversation = byte_message.byte_conversation
+        forms.each_with_index.filter_map { |p, i|
+          Buddy::FormAction.post!(
+            user:         user,
+            conversation: conversation,
+            tool:         p[:tool],
+            payload:      p[:payload],
+            # Only the first form carries the queue; two forms in one turn is
+            # already unusual and splitting the queue between them would mean
+            # the follow-up fires when either is sent.
+            deferred:     i.zero? ? serialize_deferred(deferred) : [],
+          )
+        }
+      end
+
+      def serialize_deferred(deferred)
+        deferred.map { |p|
+          { "tool_name" => p[:tool][:name].to_s, "payload" => stringify(p[:payload]), "count" => p[:count] || 1 }
+        }
+      end
+
+      def rehydrate_deferred(row)
+        tool = Buddy::Tools[row["tool_name"].to_s.to_sym]
+        return nil if tool.nil?
+
+        { tool: tool, payload: (row["payload"] || {}).symbolize_keys, count: (row["count"] || 1).to_i }
+      end
+
+      # "Message Chelsea", not "message partner" — the tool's own label proc
+      # already renders its payload for a human, so reuse it rather than
+      # humanizing a snake_case name at someone.
+      def deferred_summary(user, queue)
+        ctx = Buddy::ToolContext.new(user)
+        titles = queue.filter_map { |row|
+          p = rehydrate_deferred(row)
+          next nil if p.nil?
+
+          title, = extract_title_sub(safely { p[:tool][:label].call(p[:payload], ctx) })
+          title.presence || p[:tool][:name].to_s.tr("_", " ")
+        }
+        titles.uniq.to_sentence.presence || "the follow-up"
+      end
+
+      def post_message(user, conversation, body)
+        msg = conversation.byte_messages.create!(
+          user:         user,
+          direction:    :inbound,
+          state:        :delivered,
+          body:         body,
+          metadata:     { "kind" => "buddy_reply", "source" => "deferred_skipped" },
+          delivered_at: Time.current,
+        )
+        broadcast_message(user, msg)
+        msg
+      end
 
       def broadcast_message(user, message)
         MonitorChannel.broadcast_to(user, {

@@ -55,7 +55,7 @@ module Buddy
       @loading_tools = false
     end
 
-    def register(name:, description:, args:, confirm:, label:, execute:, receipt:, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil)
+    def register(name:, description:, args:, confirm:, label:, execute:, receipt:, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil)
       # Confidence level governs how a proposal is presented (see
       # Buddy::ProposalBuilder):
       #   1 — highest confidence (reminders, car/house/light commands): fires
@@ -88,8 +88,18 @@ module Buddy
         # this so validate_payload keeps every OTHER k=v the marker carried
         # instead of dropping the undeclared ones on the floor.
         passthrough_args: passthrough_args,
+        # Renders as an editable FORM in the thread instead of a checkbox row
+        # (see Buddy::FormAction). `{ arg:, fields:, title:, submit: }` — the
+        # collected values land on the payload under `arg`, and `fields` doubles
+        # as the resolver, raising when the thing being edited is gone.
+        form:             validate_form!(form, resolved_level),
       }
       registry[name.to_sym] = spec
+    end
+
+    # A tool whose proposal is a form the person fills in.
+    def form?(tool)
+      tool.is_a?(Hash) && tool[:form].present?
     end
 
     def all
@@ -122,6 +132,7 @@ module Buddy
       boolean:      :boolean,
       iso_time:     :string,
       duration_min: :integer,
+      object:       :object,
     }.freeze
 
     # The bare JSON type loses information the registry type carried, so hand
@@ -152,7 +163,7 @@ module Buddy
         type:        :function,
         name:        tool[:name],
         description: tool[:description].strip.gsub(/\s+/, " "),
-        strict:      !tool[:passthrough_args],
+        strict:      strict?(tool),
         parameters:  {
           type:                 :object,
           properties:           properties,
@@ -214,7 +225,7 @@ module Buddy
 
       tool[:args].each do |key, spec|
         value = raw_payload[key]
-        if value.nil? || value.to_s.empty?
+        if blank_arg?(value)
           if spec[:required]
             errors << "missing required arg :#{key}"
           elsif spec.key?(:default)
@@ -267,12 +278,33 @@ module Buddy
     class << self
       private
 
+      # Absent, as far as arg validation is concerned. Nil and "" always
+      # counted; an empty Hash has to as well, or a required object arg the
+      # model sent as `{}` reads as supplied and sails past `required`.
+      def blank_arg?(value)
+        return true if value.nil?
+        return value.empty? if value.respond_to?(:empty?)
+
+        false
+      end
+
       # One JSON Schema property from one registry arg spec. Optional args
       # become a nullable union so strict mode can still list them all in
       # `required`; the model passes null to mean "not supplied".
+      # Strict mode demands a closed schema, which an open-ended object can't
+      # be. Same concession pass-through tools already make, and for the same
+      # reason: some args are a bag of keys we don't know until we look at what
+      # they're for (a prompt's own question texts, a Jil signature's params).
+      def strict?(tool)
+        return false if tool[:passthrough_args]
+
+        tool[:args].values.none? { |spec| spec[:type] == :object }
+      end
+
       def json_property(spec)
         base = JSON_TYPES[spec[:type]] || :string
         prop = { type: spec[:required] ? base : [base, :null] }
+        prop[:additionalProperties] = true if base == :object
 
         if spec[:type] == :enum
           values = Array(spec[:values])
@@ -312,6 +344,17 @@ module Buddy
         }
       end
 
+      # A form exists to be reviewed and sent, so it only makes sense on a tool
+      # that was already waiting on the person. Level 1 and 2 run on arrival —
+      # there'd be nothing left to fill in.
+      def validate_form!(form, level)
+        return nil if form.nil?
+        raise ArgumentError, "form: needs :arg and :fields" if form[:arg].blank? || !form[:fields].respond_to?(:call)
+        raise ArgumentError, "form: only makes sense on a level-3 tool" unless level == 3
+
+        form
+      end
+
       def validate_executor!(exec)
         return exec if exec.respond_to?(:call)
         return exec if exec.is_a?(Hash) && (exec[:bash].is_a?(String) || exec[:jil_trigger].is_a?(Hash))
@@ -327,8 +370,21 @@ module Buddy
         when :boolean      then ActiveModel::Type::Boolean.new.cast(value)
         when :iso_time     then Time.zone.parse(value.to_s) rescue nil
         when :duration_min then Integer(value.to_s, exception: false)
+        when :object       then hashify(value)
         else value
         end
+      end
+
+      # An object arg arrives as a Hash from a parsed function call, but a model
+      # that decides to be helpful sometimes sends the JSON as a string instead.
+      # Keys stay as they came: they're the caller's own vocabulary (a prompt's
+      # question texts), not our symbols.
+      def hashify(value)
+        return value if value.is_a?(Hash)
+        return nil unless value.is_a?(String)
+
+        parsed = JSON.parse(value) rescue nil
+        parsed.is_a?(Hash) ? parsed : nil
       end
 
       def run_bash(exec, payload)

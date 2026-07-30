@@ -7,7 +7,10 @@
 
 <% mode ||= :add %>
 <% default_date_value = local_assigns[:default_date].presence || Date.current.iso8601 %>
-<% default_agenda_id ||= local_assigns[:default_agenda_id] || agendas.first&.id %>
+<%# Falls through to the person's chosen default calendar before the oldest one,
+    so the add form and Byte land new items in the same place. %>
+<% preferred_agenda_id = current_user ? AgendaPreference.for(current_user).default_agenda_id : nil %>
+<% default_agenda_id ||= local_assigns[:default_agenda_id] || preferred_agenda_id || agendas.first&.id %>
 <% default_color = (agendas.find { |a| a.id == default_agenda_id } || agendas.first)&.color || Agenda::DEFAULT_COLOR %>
 
 <%# An agenda counts as "shared" (worth offering "Notify others") when it's

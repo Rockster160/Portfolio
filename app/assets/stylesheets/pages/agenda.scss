@@ -1634,6 +1634,26 @@ body.ctr-agendas {
     }
   }
 
+  // Matches .agenda-pattern-input below — same panel aesthetic, and the same
+  // need to out-weigh the global form cascade that styles bare selects.
+  .agenda-default-select {
+    display: block;
+    width: calc(100% - 8px);
+    margin: 2px 4px 0;
+    padding: 6px 8px;
+    font-size: 13px;
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    border-radius: 4px;
+    color: inherit !important;
+    box-shadow: none !important;
+
+    &:focus {
+      outline: none;
+      border-color: rgba(255, 255, 255, 0.3) !important;
+    }
+  }
+
   .agenda-pattern-form {
     display: flex;
     gap: 6px;

@@ -17,14 +17,14 @@ module Buddy
     # The `client:` seam is what keeps this testable: specs inject a fake client
     # that yields recorded events, so none of the above needs the network.
     class Turn
-      # The deepest legitimate chain is look something up, act on what it found,
-      # then speak. That's three rounds - but the model reliably spends one more
-      # on something incidental (a set_mood, a repeat of the call it just made),
-      # and hitting the cap mid-chain means it never speaks at all and the person
-      # gets a filler line above their checklist. The extra round is only ever
-      # spent on turns that would otherwise have ended silent; the wall-clock
-      # deadline still bounds a model that's genuinely spinning.
-      MAX_ROUNDS = 5
+      # The deepest legitimate chain is a prompt: list what's pending, open the
+      # one they meant, submit it, then speak. That's four rounds - and the model
+      # reliably spends one more on something incidental (a set_mood, a repeat of
+      # the call it just made). Hitting the cap mid-chain means it never speaks
+      # at all and the person gets a filler line above their checklist, so the
+      # spare round is only ever spent on turns that would have ended silent. The
+      # wall-clock deadline still bounds a model that's genuinely spinning.
+      MAX_ROUNDS = 6
 
       # Wall-clock budget for the WHOLE turn, shared across rounds so a
       # round-trip can't multiply it. A normal turn is 1-3s; this only bites on
@@ -49,7 +49,30 @@ module Buddy
       # duplicate.
       AGAIN = "This is recorded for this turn - do NOT call it again. Write your reply now.".freeze
 
-      def self.ack_for(tool)
+      QUEUED_ACK = {
+        status: "queued",
+        note:   "Lined up BEHIND the checkbox above, because you asked for it after something that " \
+                "hasn't happened yet. It has NOT run and will not until they tap. Say it's set to " \
+                "follow once they confirm - never that it's done or that anyone's been told. #{AGAIN}",
+      }.freeze
+
+      # `gated:` — a level-3 row is already waiting on a tap, and this call came
+      # AFTER it, so ProposalBuilder holds it back until that tap lands (see
+      # split_on_gate). Prod 1201 is what this exists for: "moved it to Ours,
+      # and Chelsea's in the loop now" was written about a message that went out
+      # before the move it announced, and a move that hadn't happened yet.
+      FORM_ACK = {
+        status: "form_posted",
+        note:   "A filled-in FORM is now in the thread. They can edit any value and send it. " \
+                "Nothing has been submitted yet - do not say it's answered, logged, or done. " \
+                "Tell them it's ready, and flag any value you were unsure of so they know what to " \
+                "check. #{AGAIN}",
+      }.freeze
+
+      def self.ack_for(tool, gated: false)
+        return QUEUED_ACK if gated && tool[:level] == 1
+        return FORM_ACK if Buddy::Tools.form?(tool)
+
         case tool[:level]
         when 1
           { status: "done", note: "Ran immediately. Speak about it as done. #{AGAIN}" }
@@ -93,24 +116,36 @@ module Buddy
         nil
       end
 
-      def self.resolve_tool(tool, call, user:, conversation:)
-        resolve_call(tool, call, user: user, conversation: conversation).first
+      def self.resolve_tool(tool, call, user:, conversation:, gated: false)
+        resolve_call(tool, call, user: user, conversation: conversation, gated: gated).first
       end
 
       # Returns [output_for_the_model, identity_signature]. The signature is what
       # the call RESOLVED to with the volatile bits dropped, so the same chore
       # asked for twice in one turn is recognisable as a repeat even when the
       # model varies the wording or the timestamp between attempts.
-      def self.resolve_call(tool, call, user:, conversation:)
+      def self.resolve_call(tool, call, user:, conversation:, gated: false)
         args = Buddy::Tools.normalize_function_arguments(tool, call[:arguments])
         payload, errors = Buddy::Tools.validate_payload(tool, args)
         return [resolve_failure(errors.join("; ")), nil] if errors.any?
 
-        confirm  = tool[:confirm].call(payload, Buddy::ToolContext.new(user, conversation: conversation))
+        ctx = Buddy::ToolContext.new(user, conversation: conversation)
+        # A form tool's confirm is its PRE-SUBMIT gate and runs when they send,
+        # so running it here would reject a form for being incomplete — which is
+        # the entire point of showing them one. Its `fields` proc is the resolver
+        # instead: it raises the same way when the thing being edited is gone.
+        if Buddy::Tools.form?(tool)
+          fields = Buddy::FormFields.normalize(tool[:form][:fields].call(payload, ctx))
+          raise "nothing to fill in for that one" if fields.empty?
+
+          return [ack_for(tool), [tool[:name], payload.except(*VOLATILE_ARGS).sort_by { |k, _| k.to_s }]]
+        end
+
+        confirm  = tool[:confirm].call(payload, ctx)
         resolved = payload.merge(confirm[:resolved] || {})
 
         [
-          ack_for(tool).merge(resolved: confirm[:summary].to_s.presence).compact,
+          ack_for(tool, gated: gated).merge(resolved: confirm[:summary].to_s.presence).compact,
           [tool[:name], resolved.except(*VOLATILE_ARGS).sort_by { |k, _| k.to_s }],
         ]
       rescue StandardError => e
@@ -165,7 +200,6 @@ module Buddy
         @conversation = message.byte_conversation
         @user         = @conversation.user
         @client       = client || Client.new
-        @context_tool = ContextTool.new(@user, @conversation)
       end
 
       def run!
@@ -211,6 +245,9 @@ module Buddy
         @deadline = Time.current + TURN_BUDGET_SECONDS
         @failed   = Set.new
         @seen     = Set.new
+        # Flipped once a level-3 row is resolved; everything level-1 after that
+        # point is queued behind it rather than fired on arrival.
+        @gated    = false
         nudged    = false
 
         loop do
@@ -315,16 +352,31 @@ module Buddy
         ]
       end
 
+      # Tools that ANSWER the model instead of acting for the person. Their
+      # output goes back as function_call_output and the loop runs another
+      # round, which is also why they must stay out of Buddy::Tools: proposal?
+      # counts every registry tool as a checklist row, and reading state should
+      # never put a checkbox in front of anyone.
+      def read_tools
+        @read_tools ||= {
+          ContextTool::NAME => ContextTool.new(@user, @conversation),
+          PromptTool::NAME  => PromptTool.new(@user, @conversation),
+        }
+      end
+
       def tool_output(call)
         name = call[:name].to_sym
-        return @context_tool.call(call[:arguments]) if name == ContextTool::NAME
+        reader = read_tools[name]
+        return reader.call(call[:arguments]) if reader
         # Silent tools already ran as their call arrived (see run_round).
         return JSON.generate({ ok: true }) if Buddy::SideEffects.handles?(name)
 
         tool = Buddy::Tools[name]
         return JSON.generate({ ok: false, error: "no tool named #{name}" }) if tool.nil?
 
-        result, signature = self.class.resolve_call(tool, call, user: @user, conversation: @conversation)
+        result, signature = self.class.resolve_call(
+          tool, call, user: @user, conversation: @conversation, gated: @gated,
+        )
 
         if signature && @prior.include?(signature)
           @failed << call[:call_id] # excluded from proposals, same as a resolve failure
@@ -333,6 +385,10 @@ module Buddy
 
         @seen << signature if signature
         @failed << call[:call_id] if result[:status].to_s == "failed"
+        # Set AFTER this call's ack, so the gating call itself isn't described as
+        # queued behind itself. Everything the model asks for from here on waits
+        # on the tap — matching how ProposalBuilder actually splits them.
+        @gated = true if tool[:level] == 3 && result[:status].to_s != "failed"
         JSON.generate(result)
       end
 
@@ -409,6 +465,7 @@ module Buddy
       def tools
         @tools ||= [
           ContextTool.schema,
+          PromptTool.schema,
           *Buddy::SideEffects.function_schemas(theme: @conversation.buddy_theme),
           *Buddy::Tools.function_schemas,
         ]
@@ -479,7 +536,7 @@ module Buddy
 
         proposals = outcome[:proposals]
         result    = build_proposals(proposals)
-        nothing   = result[:action].nil? && !result[:auto_ran]
+        nothing   = result[:action].nil? && !result[:auto_ran] && Array(result[:forms]).empty?
 
         # A tool call that gets discarded (a chore name that resolves to nothing,
         # an arg that fails validation) is silent by design — ProposalBuilder just
@@ -633,7 +690,12 @@ module Buddy
         buttons(result).any? { |b| b["status"].to_s == "executed" }
       end
 
+      # A posted form is a pending row in every sense that matters here: it's
+      # visible, it's waiting on them, and the reply above it is allowed to say
+      # so without being retracted.
       def pending_rows?(result)
+        return true if Array(result[:forms]).any?
+
         buttons(result).any? { |b| b["status"].to_s == "pending" }
       end
 
@@ -642,7 +704,7 @@ module Buddy
       end
 
       def build_proposals(proposals)
-        return { action: nil, auto_ran: false } if proposals.empty?
+        return { action: nil, auto_ran: false, forms: [] } if proposals.empty?
 
         markers = proposals.map { |call|
           tool = Buddy::Tools[call[:name]]

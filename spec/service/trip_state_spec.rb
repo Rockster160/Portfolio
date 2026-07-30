@@ -186,6 +186,19 @@ RSpec.describe TripState do
 
     before do
       allow(user).to receive(:address_book).and_return(address_book)
+      # Default: no saved contact matches — resolution falls through to geocode.
+      allow(address_book).to receive(:match_contact).and_return(nil)
+    end
+
+    it "resolves a saved contact name (e.g. 'Home') to its address, not a raw geocode" do
+      home_addr = instance_double("Address", loc: [40.5, -111.9])
+      home = instance_double("Contact", primary_address: home_addr)
+      allow(address_book).to receive(:match_contact).with("Home").and_return(home)
+      # A contact-resolved destination must NOT hit geocode (geocode("Home")
+      # never lands on the actual house — the bug this guards).
+      expect(address_book).not_to receive(:geocode)
+      user.caches.set(:car_data, { location: { lat: 40.5001, lng: -111.9001 } })
+      expect(described_class.car_at?("Home", user: user)).to be(true)
     end
 
     it "is true when the car's cached coord is within ~500m of the geocoded destination" do
@@ -222,6 +235,7 @@ RSpec.describe TripState do
 
     before do
       allow(user).to receive(:address_book).and_return(address_book)
+      allow(address_book).to receive(:match_contact).and_return(nil)
     end
 
     it "is true when the active trip destination is within ~500m of the candidate" do

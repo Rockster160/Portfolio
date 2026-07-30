@@ -23,9 +23,12 @@ module AgendaTravelChain
   #   chain_successor_id     (int|nil)
   #   chain_head_id          (int)     — self if solo head
   #   leave_at               (int)     — epoch: when the user should start driving for this leg
-  #   post_travel_to         (string)  — `to:` override text — where the user is
-  #                                       headed AFTER the event ends (only
-  #                                       written when the override is set)
+  #   post_travel_to         (string)  — where the user is headed AFTER the
+  #                                       event: the `to:` override text, or
+  #                                       Home for the default return trip
+  #   post_travel_to_kind    (string)  — "override" (explicit `to:`) | "home"
+  #                                       (default return trip) | nil (chained
+  #                                       onward, or Home unknown)
   #   post_travel_seconds    (int)     — drive seconds for the outgoing leg
   #                                       (event.location → post_travel_to)
   #   post_travel_minutes    (int)     — ceil-rounded minutes for the outgoing leg
@@ -327,7 +330,24 @@ module AgendaTravelChain
 
       post_to = overrides_for(evt)[:to].presence
       after_entries = overrides_for(evt)[:after]
-      after_legs = build_outgoing_legs(evt, post_to, after_entries)
+      # Default the post-event destination to Home — the "return trip" — for a
+      # plain event that isn't using outgoing trip-planning overrides (to:/
+      # after:) and doesn't roll straight into a successor event (in which
+      # case they drive on to it, not home). Mirror of the incoming leg, which
+      # defaults its ORIGIN to Home. Skipped in backfill mode: that one-shot
+      # migration only reseeds the incoming from-Home baseline, and the next
+      # normal run fills the return leg without burning a Google call here.
+      returning_home = post_to.blank? && after_entries.empty? && succ_id.nil? &&
+        home_text.present? && !backfill?
+      post_dest = post_to.presence || (returning_home ? home_text : nil)
+      post_dest_kind = (
+        if post_to.present?
+          FROM_KIND_OVERRIDE
+        elsif returning_home
+          FROM_KIND_HOME
+        end
+      )
+      after_legs = build_outgoing_legs(evt, post_dest, after_entries)
       post_drive_secs = (
         if after_legs.empty?
           nil
@@ -359,7 +379,8 @@ module AgendaTravelChain
         # events visually rather than just rendering the drive minutes.
         "chain_prev_end_at"    => (pred&.end_at&.to_i if pred),
         "leave_at"             => leave_at,
-        "post_travel_to"       => post_to,
+        "post_travel_to"       => post_dest,
+        "post_travel_to_kind"  => post_dest_kind,
         "post_travel_seconds"  => post_drive_secs,
         "post_travel_minutes"  => post_drive_mins,
         "post_arrive_at"       => post_arrive_at,
@@ -441,11 +462,12 @@ module AgendaTravelChain
       legs
     end
 
-    # Walks the outgoing chain: event → after[0] → … → post_to. Returns
-    # the same leg shape as build_incoming_legs. Empty array when there's
-    # neither a `to:` override nor any after: waypoints.
-    def build_outgoing_legs(evt, post_to, after_entries)
-      return [] if post_to.blank? && after_entries.empty?
+    # Walks the outgoing chain: event → after[0] → … → post_dest, where
+    # post_dest is the `to:` override OR the default Home return trip (see
+    # persist_event). Returns the same leg shape as build_incoming_legs.
+    # Empty array when there's no destination AND no after: waypoints.
+    def build_outgoing_legs(evt, post_dest, after_entries)
+      return [] if post_dest.blank? && after_entries.empty?
 
       legs = []
       cursor_from = evt.location.to_s
@@ -464,11 +486,11 @@ module AgendaTravelChain
         cursor_from = loc
       end
 
-      if post_to.present?
-        drive_secs = same_place?(cursor_from, post_to) ? 0 : @resolver.travel_seconds(cursor_from, post_to, at: evt.end_at)
+      if post_dest.present?
+        drive_secs = same_place?(cursor_from, post_dest) ? 0 : @resolver.travel_seconds(cursor_from, post_dest, at: evt.end_at)
         legs << {
           "from"          => cursor_from,
-          "to"            => post_to,
+          "to"            => post_dest,
           "drive_seconds" => drive_secs,
           "dwell_seconds" => 0,
         }
@@ -492,7 +514,7 @@ module AgendaTravelChain
         chain:    [travel["chain_predecessor_id"], travel["chain_successor_id"]],
         from:     travel["travel_from"],
         drive:    travel["travel_seconds"],
-        post:     [travel["post_travel_to"], travel["post_travel_seconds"]],
+        post:     [travel["post_travel_to"], travel["post_travel_to_kind"], travel["post_travel_seconds"]],
         home:     home_text,
       }
       ::Digest::SHA256.hexdigest(payload.to_json)
@@ -535,9 +557,13 @@ module AgendaTravelChain
     # from-Home cost, and propagating it would poison every future
     # materialization with that chain's 0/short value.
     #
-    # post_travel_* is deliberately omitted entirely — it depends on the
-    # per-occurrence `to:` / `after:` overrides and isn't a stable schedule
-    # property.
+    # POST keys mirror ONLY the default return-home leg (post_travel_to_kind
+    # == "home", no after: waypoints) — that event→Home cost is a stable
+    # schedule property, so recurring phantoms can render the return band. The
+    # `to:` / `after:` override variants stay per-occurrence and are NOT
+    # mirrored. post_travel_to (address) and post_arrive_at (epoch) are also
+    # per-occurrence and excluded — phantoms recompute the arrive epoch from
+    # their own end + post_travel_minutes.
     STATIC_SCHEDULE_KEYS = %w[
       location_address location_lat location_lng location_fingerprint
     ].freeze
@@ -548,13 +574,19 @@ module AgendaTravelChain
     ].freeze
     private_constant :BASELINE_SCHEDULE_KEYS
 
+    POST_BASELINE_SCHEDULE_KEYS = %w[
+      post_travel_to_kind post_travel_seconds post_travel_minutes
+    ].freeze
+    private_constant :POST_BASELINE_SCHEDULE_KEYS
+
     def propagate_to_schedule(evt, travel_hash)
       schedule = evt.agenda_schedule
       return unless schedule
 
       static = travel_hash.slice(*STATIC_SCHEDULE_KEYS).compact
       baseline = baseline_eligible?(travel_hash) ? travel_hash.slice(*BASELINE_SCHEDULE_KEYS).compact : {}
-      slice = static.merge(baseline)
+      post = post_baseline_eligible?(travel_hash) ? travel_hash.slice(*POST_BASELINE_SCHEDULE_KEYS).compact : {}
+      slice = static.merge(baseline).merge(post)
       return if slice.empty?
 
       current_sched_travel = schedule.metadata["travel"] || {}
@@ -572,6 +604,18 @@ module AgendaTravelChain
     def baseline_eligible?(travel_hash)
       return false unless travel_hash["travel_from_kind"] == FROM_KIND_HOME
       return false if (travel_hash.dig("overrides", "before") || []).any?
+
+      true
+    end
+
+    # True when this occurrence's outgoing leg is the plain return-home
+    # default — the event→Home cost that's stable across every occurrence and
+    # safe to cache on the schedule for phantoms. A `to:` override or any
+    # after: waypoints make the outgoing cost per-occurrence, so we don't
+    # mirror those.
+    def post_baseline_eligible?(travel_hash)
+      return false unless travel_hash["post_travel_to_kind"] == FROM_KIND_HOME
+      return false if (travel_hash.dig("overrides", "after") || []).any?
 
       true
     end

@@ -19,7 +19,7 @@
 class ByteConversation < ApplicationRecord
   # Users whose Buddy is Moss by default. The pet theme is now per-conversation,
   # so this only seeds the default at creation — nothing else keys off the id.
-  MOSS_USER_IDS = [58128].freeze
+  MOSS_USER_IDS = [58_128].freeze
 
   belongs_to :user
 
@@ -29,6 +29,19 @@ class ByteConversation < ApplicationRecord
 
   scope :active,  -> { where(archived: false) }
   scope :ordered, -> { order(Arel.sql("last_message_at DESC NULLS LAST, id DESC")) }
+
+  # Threads the buddy:eval rake task writes into. Visible in the list on purpose
+  # — reading the back-and-forth is half the point of running an eval — but
+  # never the DEFAULT, since an eval run leaves the eval thread with the newest
+  # last_message_at and opening the app into 25 canned scenarios isn't what
+  # anyone wants. (The harness only runs locally, so this is a papercut rather
+  # than anything reaching real traffic.)
+  scope :evals, -> { where("metadata->>'eval' = 'true'") }
+  scope :real,  -> { where("metadata->>'eval' IS DISTINCT FROM 'true'") }
+
+  def eval?
+    metadata.is_a?(Hash) && metadata["eval"].to_s == "true"
+  end
 
   # A new Buddy thread inherits its owner's default pet; the theme then lives on
   # the row and can diverge per conversation. Only buddy convos carry a pet.
@@ -43,7 +56,7 @@ class ByteConversation < ApplicationRecord
   # Fallback used when a message arrives without an explicit conversation
   # (legacy webhook payloads, misconfigured CLI, etc.).
   def self.default_for(user)
-    user.byte_conversations.active.ordered.first ||
+    user.byte_conversations.active.real.ordered.first ||
       user.byte_conversations.create!(name: :Byte, mode: :claude)
   end
 
@@ -55,14 +68,14 @@ class ByteConversation < ApplicationRecord
 
   def as_wire
     {
-      id:              id,
-      name:            display_name,
-      mode:            mode,
-      archived:        archived,
-      last_message_at: last_message_at&.iso8601(3),
-      created_at:      created_at.iso8601(3),
-      metadata:        metadata,
-      buddy_theme:     buddy_theme,
+      id:               id,
+      name:             display_name,
+      mode:             mode,
+      archived:         archived,
+      last_message_at:  last_message_at&.iso8601(3),
+      created_at:       created_at.iso8601(3),
+      metadata:         metadata,
+      buddy_theme:      buddy_theme,
       buddy_expression: buddy_expression,
     }
   end
@@ -71,13 +84,15 @@ class ByteConversation < ApplicationRecord
     name.presence || default_display_name
   end
 
-  def touch_activity(time = Time.current)
+  def touch_activity(time=Time.current)
     return if last_message_at && last_message_at >= time
 
     update_columns(last_message_at: time, updated_at: time)
   end
 
-  private def default_display_name
+  private
+
+  def default_display_name
     case mode.to_sym
     when :bash   then "Terminal"
     when :jarvis then "Jarvis"
