@@ -91,35 +91,42 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
-  # Both regressions came off one real prod message (1041): "Just hung the shelves
-  # for Chelsea" produced "You got it, checking that off." printed twice, with no
-  # checkbox, and no chore completion recorded anywhere.
-  describe "when the model says the same line twice" do
-    it "does not print it twice when it lands in both output text and the reply field" do
-      run([{
-        text:       "You got it, checking that off.",
-        tool_calls: [{ name: :log_event, arguments: { "name" => "Shelves", "reply" => "You got it, checking that off." } }],
-      }])
-
-      expect(reply.body).to eq("You got it, checking that off.")
-    end
-
-    it "ignores punctuation and case drift between the two copies" do
-      run([{
-        text:       "You got it, checking that off.",
-        tool_calls: [{ name: :log_event, arguments: { "name" => "x", "reply" => "You got it — checking that off!" } }],
-      }])
-
-      expect(reply.body.scan(/checking that off/i).length).to eq(1)
-    end
-
-    it "still keeps two lines that actually say different things" do
+  # Prod 1144: "3 more water done tonight." came back as "Yesss, counting three
+  # more waters. Let me match that up." and then, below it, "Yessss, three waters
+  # counted. Nice little hydration blob tonight." Two drafts of one reply. They
+  # share almost no words, so no text comparison catches it - the fix is that
+  # only the round which had the OUTCOME gets to speak.
+  describe "when the model writes a lead-in before it acts" do
+    it "shows only the round that spoke last" do
       run([
+        { text: "Yesss, counting three more waters. Let me match that up.",
+          tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
+        { text: "Yessss, three waters counted." },
+      ])
+
+      expect(reply.body).to eq("Yessss, three waters counted.")
+    end
+
+    it "does not feed the discarded lead-in back, so the answer stands alone" do
+      client = run([
         { text: "One sec.", tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
         { text: "Nothing left on your list." },
       ])
 
-      expect(reply.body).to eq("One sec.\n\nNothing left on your list.")
+      carried = client.calls.last.input.select { |i| i[:role] == :assistant }
+      expect(carried.map { |i| i[:content] }).not_to include("One sec.")
+      expect(reply.body).to eq("Nothing left on your list.")
+    end
+
+    it "keeps the earlier line when the final round says nothing at all" do
+      # Ran the budget out mid-chain. A stale lead-in still beats a blank bubble.
+      run([
+        { text: "Let me take a look.",
+          tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
+        { tool_calls: [{ name: :get_context, arguments: { "sections" => ["lists"] } }] },
+      ])
+
+      expect(reply.body).to eq("Let me take a look.")
     end
   end
 
@@ -594,15 +601,13 @@ RSpec.describe Buddy::GPT::Turn do
       expect(convo.reload.buddy_expression).to eq("sad")
     end
 
-    it "carries what it said into the next round so it does not repeat itself" do
-      client = run([
-        { text: "One sec.", tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
+    it "answers from the round that saw the tool output, not the one before it" do
+      run([
+        { tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
         { text: "Nothing left on your list." },
       ])
 
-      carried = client.calls.last.input.select { |i| i[:role] == :assistant }
-      expect(carried.last[:content]).to include("One sec.")
-      expect(reply.body).to eq("One sec.\n\nNothing left on your list.")
+      expect(reply.body).to eq("Nothing left on your list.")
     end
   end
 

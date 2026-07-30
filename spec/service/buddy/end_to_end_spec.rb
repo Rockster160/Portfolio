@@ -96,7 +96,7 @@ RSpec.describe "Buddy end-to-end" do
     expect(ByteAction.find_by(byte_message_id: reply.id)).to be_nil
   end
 
-  it "reads context and answers in the same reply" do
+  it "reads context and answers from the round that saw it" do
     client = FakeBuddyClient.new([
       { text: "One sec.", tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
       { text: "Nothing left on your list." },
@@ -104,14 +104,16 @@ RSpec.describe "Buddy end-to-end" do
 
     Buddy::GPT::Turn.run!(user_says("what's left today?"), client: client)
 
+    # The lead-in is a first draft, not half the answer - only the round holding
+    # the tool output gets to speak.
     reply = convo.byte_messages.where(direction: :inbound).order(:created_at).last
-    expect(reply.body).to eq("One sec.\n\nNothing left on your list.")
+    expect(reply.body).to eq("Nothing left on your list.")
 
-    # Second round carried the first round's prose plus the call and its output,
-    # or the model would repeat its own placeholder.
+    # The second round still carries the call and its output, which is what it
+    # needed in order to answer at all.
     second = client.calls.last.input
     expect(second.pluck(:type)).to include(:function_call, :function_call_output)
-    expect(second.any? { |i| i[:role] == :assistant && i[:content] == "One sec." }).to be(true)
+    expect(second.any? { |i| i[:role] == :assistant && i[:content] == "One sec." }).to be(false)
   end
 
   it "falls back to an honest body when every tool call is discarded" do

@@ -211,24 +211,26 @@ namespace :buddy do
     # Mirrors Buddy::GPT::Turn#converse, minus persistence and side effects: the
     # model calls a tool and stays quiet, the call is answered, and it speaks on
     # the round after. A turn that needs no tool ends in one call.
-    spoken = []
+    spoken = nil
     rounds = 0
+    seen   = Set.new
     loop do
       rounds += 1
       result = client.stream(instructions: instructions, input: input, tools: tools)
       unless result[:ok]
-        spoken << "[ERROR: #{result[:error]}]"
+        spoken = "[ERROR: #{result[:error]}]"
         break
       end
 
       round_text = result[:text].to_s.strip
-      spoken << round_text if round_text.present?
+      # Last round wins, and a discarded lead-in is not fed back - same as Turn.
+      spoken = round_text if round_text.present?
       calls.concat(result[:tool_calls])
 
       break if result[:tool_calls].empty?
       break if rounds >= Buddy::GPT::Turn::MAX_ROUNDS
 
-      input += [{ role: :assistant, content: round_text }] if round_text.present?
+      prior = seen.dup
       result[:tool_calls].each do |call|
         input += [
           {
@@ -240,12 +242,12 @@ namespace :buddy do
           {
             type:    :function_call_output,
             call_id: call[:call_id],
-            output:  eval_tool_output(call, context_tool, user, convo),
+            output:  eval_tool_output(call, context_tool, user, convo, prior, seen),
           },
         ]
       end
     end
-    reply << spoken.join("\n\n")
+    reply << spoken.to_s
 
     elapsed = Time.current - started
     record(calls, elapsed)
@@ -259,7 +261,7 @@ namespace :buddy do
   # (Buddy::GPT::Turn.resolve_tool), so an eval sees the real "no chore matches
   # that" errors. Resolving stops short of executing, so an eval still never
   # logs a chore or messages a partner for real.
-  def eval_tool_output(call, context_tool, user, conversation)
+  def eval_tool_output(call, context_tool, user, conversation, prior, seen)
     name = call[:name].to_sym
     return context_tool.call(call[:arguments]) if name == Buddy::GPT::ContextTool::NAME
     return JSON.generate({ ok: true }) if Buddy::SideEffects.handles?(name)
@@ -267,7 +269,13 @@ namespace :buddy do
     tool = Buddy::Tools[name]
     return JSON.generate({ ok: false, error: "no tool named #{name}" }) if tool.nil?
 
-    JSON.generate(Buddy::GPT::Turn.resolve_tool(tool, call, user: user, conversation: conversation))
+    result, signature = Buddy::GPT::Turn.resolve_call(tool, call, user: user, conversation: conversation)
+    # Same cross-round repeat detection Turn does, so an eval doesn't report a
+    # duplicate call that production would have ignored.
+    return JSON.generate(Buddy::GPT::Turn::DUPLICATE_ACK) if signature && prior.include?(signature)
+
+    seen << signature if signature
+    JSON.generate(result)
   end
 
   # Never saved. `new` (not `create!`) so nothing can leak into the real thread

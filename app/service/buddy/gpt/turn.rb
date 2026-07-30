@@ -17,11 +17,14 @@ module Buddy
     # The `client:` seam is what keeps this testable: specs inject a fake client
     # that yields recorded events, so none of the above needs the network.
     class Turn
-      # Every round of tool calls needs a follow-up round for the model to answer
-      # in, so the cap has to allow the deepest legitimate chain: look something
-      # up, act on what it found, then speak. That's three calls plus the closing
-      # one. Beyond that a model is spinning, not working.
-      MAX_ROUNDS = 4
+      # The deepest legitimate chain is look something up, act on what it found,
+      # then speak. That's three rounds - but the model reliably spends one more
+      # on something incidental (a set_mood, a repeat of the call it just made),
+      # and hitting the cap mid-chain means it never speaks at all and the person
+      # gets a filler line above their checklist. The extra round is only ever
+      # spent on turns that would otherwise have ended silent; the wall-clock
+      # deadline still bounds a model that's genuinely spinning.
+      MAX_ROUNDS = 5
 
       # Wall-clock budget for the WHOLE turn, shared across rounds so a
       # round-trip can't multiply it. A normal turn is 1-3s; this only bites on
@@ -189,7 +192,7 @@ module Buddy
       # them across turns, and this loop is what stitches them back into one reply.
       def converse
         input     = History.build(@conversation, upto: @inbound)
-        spoken    = []
+        spoken    = nil
         proposals = []
         rounds    = 0
         @deadline = Time.current + TURN_BUDGET_SECONDS
@@ -206,7 +209,15 @@ module Buddy
 
           calls      = result[:tool_calls]
           round_text = result[:text].to_s.strip
-          add_spoken(spoken, round_text)
+          # LAST round wins, rather than stitching every round together.
+          #
+          # The model is told to call first and speak after, but it often writes a
+          # lead-in anyway - and then writes the real answer next round, so the
+          # person got both: "Yesss, counting three more waters. Let me match that
+          # up." followed by "Yessss, three waters counted." (prod 1144). They
+          # aren't near-duplicates, so no text comparison catches them; they're
+          # two drafts of the same reply, and only the last one had the outcome.
+          spoken = round_text if round_text.present?
 
           # Nothing to call means the answer is already written, and a second
           # round would only cost money to re-say it. Pure conversation is a
@@ -236,11 +247,13 @@ module Buddy
           # we have rather than burning a call to be told the same thing.
           break if Time.current > @deadline
 
-          input += [{ role: :assistant, content: round_text }] if round_text.present?
+          # A discarded lead-in is deliberately NOT fed back. Telling the model it
+          # already said "let me match that up" makes it write the next round as a
+          # continuation, and the person only ever sees that second half.
           input += items
         end
 
-        { ok: true, text: spoken.join("\n\n"), proposals: proposals }
+        { ok: true, text: spoken.to_s, proposals: proposals }
       end
 
       # No incremental rendering: Buddy replies are 1-3 sentences and land in
@@ -298,27 +311,6 @@ module Buddy
 
       def proposal?(name)
         Buddy::Tools.known?(name)
-      end
-
-      # Collect a line unless we've effectively said it already. Compared on a
-      # normalized form so punctuation or capitalization drift doesn't sneak a
-      # near-duplicate through, and containment counts either way — a round-two
-      # restatement is usually a superset of the round-one line.
-      def add_spoken(spoken, line)
-        text = line.to_s.strip
-        return if text.empty?
-
-        norm = normalize_spoken(text)
-        return if spoken.any? { |prior|
-          p_norm = normalize_spoken(prior)
-          p_norm == norm || p_norm.include?(norm) || norm.include?(p_norm)
-        }
-
-        spoken << text
-      end
-
-      def normalize_spoken(text)
-        text.to_s.downcase.gsub(/[^a-z0-9 ]/, "").squish
       end
 
       # ---- cost accounting ---------------------------------------------------
