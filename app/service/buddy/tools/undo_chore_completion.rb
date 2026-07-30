@@ -4,6 +4,10 @@ Buddy::Tools.register(
     Undo a chore completion - remove a record that a chore was done. Use
     when the user says they marked something by mistake, or wants to
     reverse a completion.
+
+    Removing is not the same as fixing. If the completion should STAY and
+    something about it is wrong - a missing note, the wrong time - that's
+    `edit_chore_completion`. Don't undo and re-complete to patch a detail.
   TXT
   args:        {
     chore: { type: :string, required: true,  description: "Fuzzy chore name" },

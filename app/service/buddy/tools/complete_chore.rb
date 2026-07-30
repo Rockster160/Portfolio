@@ -11,6 +11,10 @@ Buddy::Tools.register(
     ISO timestamp. Omit `at` (or use "now") when they just finished. The
     non-default time gets surfaced on the confirmation row so it's clear
     what will be recorded.
+
+    To change a completion that's already recorded — attach the note you
+    missed, correct the time — use `edit_chore_completion`, not a second
+    `complete_chore`.
   TXT
   args:        {
     chore: { type: :string, required: true,  description: "Fuzzy chore name" },

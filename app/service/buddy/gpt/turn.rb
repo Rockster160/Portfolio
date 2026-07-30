@@ -56,10 +56,11 @@ module Buddy
                 "follow once they confirm - never that it's done or that anyone's been told. #{AGAIN}",
       }.freeze
 
-      # `gated:` — a level-3 row is already waiting on a tap, and this call came
-      # AFTER it, so ProposalBuilder holds it back until that tap lands (see
-      # split_on_gate). Prod 1201 is what this exists for: "moved it to Ours,
-      # and Chelsea's in the loop now" was written about a message that went out
+      # `gate:` — the turn already produced something the person has to deal with
+      # (`:rows`, a checkbox; `:forms`, an editable form) and this call came AFTER
+      # it, so ProposalBuilder holds it back until that one resolves (see
+      # build_steps). Prod 1201 is what this exists for: "moved it to Ours, and
+      # Chelsea's in the loop now" was written about a message that went out
       # before the move it announced, and a move that hadn't happened yet.
       FORM_ACK = {
         status: "form_posted",
@@ -69,9 +70,22 @@ module Buddy
                 "check. #{AGAIN}",
       }.freeze
 
-      def self.ack_for(tool, gated: false)
-        return QUEUED_ACK if gated && tool[:level] == 1
-        return FORM_ACK if Buddy::Tools.form?(tool)
+      CHAINED_ACK = {
+        status: "queued",
+        note:   "Lined up BEHIND the step you asked for first. It is NOT in front of them yet - it " \
+                "appears once they finish that one. Say it's next in line, never that it's ready, " \
+                "waiting, or done. #{AGAIN}",
+      }.freeze
+
+      # A rough mirror of ProposalBuilder#build_steps — accurate for the shapes
+      # that actually occur (a form after a checklist, a checklist after a form,
+      # a level-1 after either), and deliberately not a full re-implementation.
+      # Where it's imprecise it under-claims: a second checklist reports as
+      # "waiting for a tap", which is true, just of a later message.
+      def self.ack_for(tool, gate: nil)
+        return QUEUED_ACK if gate && tool[:level] == 1
+        return gate == :rows ? CHAINED_ACK : FORM_ACK if Buddy::Tools.form?(tool)
+        return CHAINED_ACK if gate == :forms && tool[:level] == 3
 
         case tool[:level]
         when 1
@@ -116,15 +130,22 @@ module Buddy
         nil
       end
 
-      def self.resolve_tool(tool, call, user:, conversation:, gated: false)
-        resolve_call(tool, call, user: user, conversation: conversation, gated: gated).first
+      def self.resolve_tool(tool, call, user:, conversation:, gate: nil)
+        resolve_call(tool, call, user: user, conversation: conversation, gate: gate).first
+      end
+
+      # Which kind of gate this tool opens, or nil when it isn't one.
+      def self.gate_kind_for(tool)
+        return :forms if Buddy::Tools.form?(tool)
+
+        :rows if tool[:level] == 3
       end
 
       # Returns [output_for_the_model, identity_signature]. The signature is what
       # the call RESOLVED to with the volatile bits dropped, so the same chore
       # asked for twice in one turn is recognisable as a repeat even when the
       # model varies the wording or the timestamp between attempts.
-      def self.resolve_call(tool, call, user:, conversation:, gated: false)
+      def self.resolve_call(tool, call, user:, conversation:, gate: nil)
         args = Buddy::Tools.normalize_function_arguments(tool, call[:arguments])
         payload, errors = Buddy::Tools.validate_payload(tool, args)
         return [resolve_failure(errors.join("; ")), nil] if errors.any?
@@ -138,14 +159,14 @@ module Buddy
           fields = Buddy::FormFields.normalize(tool[:form][:fields].call(payload, ctx))
           raise "nothing to fill in for that one" if fields.empty?
 
-          return [ack_for(tool), [tool[:name], payload.except(*VOLATILE_ARGS).sort_by { |k, _| k.to_s }]]
+          return [ack_for(tool, gate: gate), [tool[:name], payload.except(*VOLATILE_ARGS).sort_by { |k, _| k.to_s }]]
         end
 
         confirm  = tool[:confirm].call(payload, ctx)
         resolved = payload.merge(confirm[:resolved] || {})
 
         [
-          ack_for(tool, gated: gated).merge(resolved: confirm[:summary].to_s.presence).compact,
+          ack_for(tool, gate: gate).merge(resolved: confirm[:summary].to_s.presence).compact,
           [tool[:name], resolved.except(*VOLATILE_ARGS).sort_by { |k, _| k.to_s }],
         ]
       rescue StandardError => e
@@ -245,10 +266,11 @@ module Buddy
         @deadline = Time.current + TURN_BUDGET_SECONDS
         @failed   = Set.new
         @seen     = Set.new
-        # Flipped once a level-3 row is resolved; everything level-1 after that
-        # point is queued behind it rather than fired on arrival.
-        @gated    = false
-        nudged    = false
+        # Set to the kind of the turn's FIRST gate (:rows / :forms) once one
+        # resolves; everything asked for after that point is queued behind it
+        # rather than going out with this reply.
+        @gate_kind = nil
+        nudged     = false
 
         loop do
           rounds += 1
@@ -375,7 +397,7 @@ module Buddy
         return JSON.generate({ ok: false, error: "no tool named #{name}" }) if tool.nil?
 
         result, signature = self.class.resolve_call(
-          tool, call, user: @user, conversation: @conversation, gated: @gated,
+          tool, call, user: @user, conversation: @conversation, gate: @gate_kind,
         )
 
         if signature && @prior.include?(signature)
@@ -386,9 +408,10 @@ module Buddy
         @seen << signature if signature
         @failed << call[:call_id] if result[:status].to_s == "failed"
         # Set AFTER this call's ack, so the gating call itself isn't described as
-        # queued behind itself. Everything the model asks for from here on waits
-        # on the tap — matching how ProposalBuilder actually splits them.
-        @gated = true if tool[:level] == 3 && result[:status].to_s != "failed"
+        # queued behind itself, and only ONCE — the first gate is the one the
+        # person meets, and everything the model asks for after it waits on that,
+        # matching how ProposalBuilder actually splits them.
+        @gate_kind ||= self.class.gate_kind_for(tool) if result[:status].to_s != "failed"
         JSON.generate(result)
       end
 

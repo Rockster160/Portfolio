@@ -2906,7 +2906,14 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
     min-width: 0;
     padding: 7px 9px;
     font: inherit;
-    font-size: 14px;
+    // 16px minimum, same as the composer and the drawer selects: iOS Safari
+    // zooms the whole layout viewport when a focused field is smaller.
+    font-size: 16px;
+    // `font: inherit` pulls in the bubble's numeric line-height (1.35), and a
+    // numeric line-height makes iOS Safari's native <select> clip its text at
+    // the top - the option renders half-height with the caps cut off. `normal`
+    // lets the OS pick a metric that agrees with the padding box.
+    line-height: normal;
     color: inherit;
     background: rgba(255, 255, 255, 0.07);
     border: 1px solid rgba(255, 255, 255, 0.14);
@@ -3046,9 +3053,12 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
   }
 
   &[data-status="submitted"],
+  &[data-status="superseded"],
   &[data-status="expired"] {
     .byte-msg-form-label { opacity: 0.5; }
   }
+
+  &[data-status="superseded"] { opacity: 0.55; }
 }
 
 // -------- Generic multi-select action rows (used by Buddy proposals) -----
@@ -3186,6 +3196,15 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
     opacity: 0.4;
     text-decoration: line-through;
     .byte-msg-action-kind { opacity: 0.5; }
+  }
+  // Replaced by a corrected version further down. Struck through like a
+  // cancelled row, but a touch more legible — it's still a record of what was
+  // asked for, and the note underneath explains why it's crossed out.
+  &[data-status="superseded"] {
+    opacity: 0.45;
+    text-decoration: line-through;
+    .byte-msg-action-kind { opacity: 0.5; }
+    .byte-msg-action-expired { text-decoration: none; }
   }
   &[data-status="failed"] {
     color: #F26B6B;

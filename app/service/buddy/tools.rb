@@ -55,7 +55,7 @@ module Buddy
       @loading_tools = false
     end
 
-    def register(name:, description:, args:, confirm:, label:, execute:, receipt:, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil)
+    def register(name:, description:, args:, confirm:, label:, execute:, receipt:, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false)
       # Confidence level governs how a proposal is presented (see
       # Buddy::ProposalBuilder):
       #   1 — highest confidence (reminders, car/house/light commands): fires
@@ -93,6 +93,12 @@ module Buddy
         # collected values land on the payload under `arg`, and `fields` doubles
         # as the resolver, raising when the thing being edited is gone.
         form:             validate_form!(form, resolved_level),
+        # Whether a LATER call with the same merge_key replaces an earlier one
+        # instead of adding to it (see Buddy::Supersede). True only where the
+        # target holds one state: an item is on a list once, a prompt has one
+        # answer. Water drunk twice is two completions, so complete_chore and
+        # log_event stay false even though they merge inside a single turn.
+        supersedes:       supersedes && !merge_key.nil?,
       }
       registry[name.to_sym] = spec
     end
@@ -100,6 +106,11 @@ module Buddy
     # A tool whose proposal is a form the person fills in.
     def form?(tool)
       tool.is_a?(Hash) && tool[:form].present?
+    end
+
+    # A tool where asking again means correcting, not repeating.
+    def supersedes?(tool)
+      tool.is_a?(Hash) && tool[:supersedes].present?
     end
 
     def all

@@ -5,6 +5,12 @@ Buddy::Tools.register(
     clock time. Use for "remind me to X when / the next time I <arrive /
     leave / do> Y". For plain time-based reminders use schedule_reminder.
 
+    This is a nudge that fires once and evaporates. "Add an agenda task to
+    shower once I get home" is asking for a row on the AGENDA, so it's
+    `add_agenda_item` - the condition just tells you when to put it. Reach
+    for this tool only when the nudge itself is the thing they wanted, or
+    alongside an agenda item when they want both.
+
     `trigger` picks the condition:
       "arrive" - when they get to a place. `target` = the place name
                  ("Costco", "the gym", "home").

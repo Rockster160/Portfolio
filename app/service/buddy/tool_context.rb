@@ -36,15 +36,23 @@ module Buddy
     end
 
     def resolve_chore_completion(chore_or_name, hint: :last)
-      chore = chore_or_name.is_a?(Chore) ? chore_or_name : resolve_chore(chore_or_name)
-      return nil if chore.nil?
+      resolve_chore_completions(chore_or_name, hint: hint, limit: 1).first
+    end
 
-      scope = ChoreCompletion.where(chore_id: chore.id, user_id: user.id)
-      case hint.to_sym
-      when :today     then scope.where(completed_at: user.perceived_today.beginning_of_day..).order(completed_at: :desc).first
-      when :yesterday then scope.where(completed_at: (user.perceived_today - 1.day).all_day).order(completed_at: :desc).first
-      else                 scope.order(completed_at: :desc).first
+    # Newest-first. `limit` is what "put that note on both waters" needs:
+    # `complete_chore(count: 2)` writes two separate rows, so an edit aimed at
+    # "the ones you just did" has to reach more than the single latest.
+    def resolve_chore_completions(chore_or_name, hint: :last, limit: 1)
+      chore = chore_or_name.is_a?(Chore) ? chore_or_name : resolve_chore(chore_or_name)
+      return [] if chore.nil?
+
+      scope = ChoreCompletion.where(chore_id: chore.id, user_id: user.id).order(completed_at: :desc)
+      scope = case hint.to_sym
+      when :today     then scope.where(completed_at: user.perceived_today.beginning_of_day..)
+      when :yesterday then scope.where(completed_at: (user.perceived_today - 1.day).all_day)
+      else                 scope
       end
+      scope.limit([limit.to_i, 1].max).to_a
     end
 
     # ---- lists ----

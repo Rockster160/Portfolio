@@ -67,5 +67,62 @@ RSpec.describe Buddy::Personality do
       prompt = described_class.for(User.me, conversation: convo)
       expect(prompt).to include("remind_when")
     end
+
+    # Prod 1226: "Sorry, love." Those names belong to the two of them.
+    it "puts the couple's terms of address out of reach, in the rules and both profiles" do
+      byte = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+      moss = described_class.for(create(:user), conversation: buddy_convo(create(:user), "moss"), tone: :chelsea)
+
+      expect([byte, moss]).to all(include("Some names are not yours to use").and(include("`love`")))
+      # ...and each voice profile carries the same example in its own words.
+      expect([byte, moss]).to all(include("Sorry, love."))
+    end
+
+    # Prod 1222: "Ohhh, got it." in answer to a preference nobody had argued about.
+    it "reserves realization interjections for actually being corrected" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include('"Ohhh" is a realization, not a reaction')
+      expect(prompt).to include("they told you something")
+    end
+  end
+
+  # Prod 1238-1257: "add an agenda task to shower once I get home" became a
+  # location reminder, twice, across five exchanges.
+  describe ".for agenda routing" do
+    it "says the word means the calendar, and that a missing time is not a blocker" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include('"Agenda" means the agenda')
+      expect(prompt).to include("add_agenda_item")
+      expect(prompt).to include("is not a reason to stop and ask")
+    end
+  end
+
+  # Prod 1266-1270: Buddy listed three pending prompts, and answered "I did the
+  # down, but Chelsea did the others" with a fact it intended to remember.
+  describe ".for thread continuity" do
+    it "tells the model to read its own last message before reading theirs" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("What you said last is still the context")
+      expect(prompt).to include("the acting IS the reply")
+    end
+
+    it "says several prompts can be opened and posted together" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("Several at once is fine")
+      expect(prompt).to include("in the SAME reply")
+    end
+  end
+
+  describe ".for list placement" do
+    it "sends the model to `lists` for real sections before filing an item" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("Pass the exact section name as `section`")
+      expect(prompt).to include("Only fall back to `category` for the placement itself when no section matches")
+    end
   end
 end

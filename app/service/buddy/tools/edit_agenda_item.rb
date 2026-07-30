@@ -67,9 +67,16 @@ Buddy::Tools.register(
     # `at` is an ISO string at execute time (JSON round-trip) — parse it.
     new_start = payload[:at].present? ? ctx.resolve_time(payload[:at]) : nil
     attrs[:start_at] = new_start if new_start
-    if payload[:duration].present?
+    # Only an event has a span. A task's end_at is nil and must stay nil, or the
+    # row starts rendering as a time range it doesn't actually occupy.
+    if item.event?
       base_start = attrs[:start_at] || item.start_at
-      attrs[:end_at] = base_start + payload[:duration].to_i.minutes
+      minutes = payload[:duration].presence&.to_i
+      # Moving an event's start without a new duration keeps the old length —
+      # otherwise end_at stays put and a move later in the day fails the
+      # end-after-start validation.
+      minutes ||= ((item.end_at - item.start_at) / 60).round if new_start && item.end_at.present?
+      attrs[:end_at] = base_start + minutes.minutes if minutes
     end
     attrs[:status] = :cancelled if payload[:cancelled] == "true"
     prior_name = item.name

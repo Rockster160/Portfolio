@@ -17,6 +17,10 @@ Buddy::Tools.register(
   },
   label:       ->(payload, _ctx) { { title: "Remove #{payload[:item]}", sub: "📋 #{payload[:list_name]}" } },
   merge_key:   ->(payload) { "remove_list_item:#{payload[:list_id]}:#{payload[:item].to_s.downcase.strip}" },
+  # Removing the same item again is the same act, not a second one, so the
+  # later row replaces the earlier rather than stacking two undo handles on one
+  # record.
+  supersedes:  true,
   merge_label: ->(payload, count) { { title: "Remove #{count}× #{payload[:item]}", sub: "📋 #{payload[:list_name]}" } },
   # Level 2: removes immediately as a pre-checked row; unchecking re-adds it.
   level:       2,

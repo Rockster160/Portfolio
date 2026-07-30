@@ -138,7 +138,7 @@ module Buddy
       # slower motion.
       if deferred.any?
         ran = buttons.any? { |b| b["status"].to_s == "executed" }
-        Buddy::ProposalBuilder.run_deferred!(action, deferred, executed: ran)
+        Buddy::ProposalBuilder.advance_queue!(action, deferred, executed: ran)
       end
 
       # NOTE: tapping a checkbox no longer moves the pet's face. The mood is a
@@ -229,7 +229,13 @@ module Buddy
       # checklist, so an incremental tap only ever reports its own row.
       def compose_summary(done, partial, failed, cancelled)
         parts = []
-        parts << "Done: #{done.pluck("label").join(", ")} ✓" if done.any?
+        # Prefer each tool's own receipt ("Added Shower to Rockster160 ✓"). The
+        # generic "Done: Shower ✓" describes the ROW, but reads as the shower
+        # having been taken — exactly backwards when the row was adding a task.
+        # Rows whose tool declined a receipt still fall back to the label.
+        receipted, plain = done.partition { |b| b["receipt"].to_s.strip.present? }
+        parts.concat(receipted.map { |b| b["receipt"].to_s.strip })
+        parts << "Done: #{plain.pluck("label").join(", ")} ✓" if plain.any?
         parts << "Partial: #{partial.pluck("label").join(", ")}" if partial.any?
         parts << "Skipped: #{cancelled.pluck("label").join(", ")}" if cancelled.any?
         if failed.any?

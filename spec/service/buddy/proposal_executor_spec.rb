@@ -117,4 +117,60 @@ RSpec.describe Buddy::ProposalExecutor do
     expect(action).to be_decided                  # nothing left pending
     expect(action.buttons.map { |b| b["status"] }).to all(eq("executed"))
   end
+
+  # ---- receipt wording ---------------------------------------------------
+  #
+  # Prod 1260-1261: adding "Shower" to the agenda produced "Done: Shower ✓",
+  # which reads as the shower having been taken. Each tool already writes a
+  # receipt that says what actually happened; use it.
+  describe "the receipt bubble" do
+    def receipts
+      convo.byte_messages.where("metadata->>'kind' = ?", "buddy_receipt").pluck(:body)
+    end
+
+    it "speaks in the tool's own words rather than a generic Done" do
+      action = two_button_action
+
+      described_class.perform(action.id, [1])
+
+      expect(receipts).to eq(["Did A"])
+    end
+
+    it "gives each row its own line" do
+      action = two_button_action
+
+      described_class.perform(action.id, [1, 2])
+
+      expect(receipts.first.split("\n")).to eq(["Did A", "Did B"])
+    end
+
+    it "falls back to the label for a tool that declines a receipt" do
+      Buddy::Tools.register(
+        name:        :spec_quiet,
+        description: "no receipt",
+        args:        {},
+        confirm:     ->(_p, _) { { summary: "Quiet?", resolved: {} } },
+        label:       ->(_p, _) { "Quiet" },
+        execute:     ->(_p, _) { {} },
+        receipt:     ->(_r, _) {},
+      )
+      action = ByteAction.create!(
+        user:              user,
+        byte_conversation: convo,
+        byte_message:      msg,
+        kind:              :custom,
+        tool_name:         "buddy_proposals",
+        multi_select:      true,
+        buttons:           [
+          { "id" => 1, "label" => "Quiet", "tool_name" => "spec_quiet", "payload" => {}, "count" => 1, "status" => "pending" },
+        ],
+        decision:          {},
+        tool_input:        {},
+      )
+
+      described_class.perform(action.id, [1])
+
+      expect(receipts).to eq(["Done: Quiet ✓"])
+    end
+  end
 end

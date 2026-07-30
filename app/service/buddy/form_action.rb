@@ -29,7 +29,7 @@ module Buddy
     # Build the form and post it. Returns the ByteAction, or nil when the tool
     # can't produce one (its `fields` proc is also its resolver — a prompt that
     # has since been answered raises there rather than posting an empty form).
-    def post!(user:, conversation:, tool:, payload:, deferred: [])
+    def post!(user:, conversation:, tool:, payload:, merge_key: nil, deferred: [])
       spec = tool[:form]
       return nil if spec.nil?
 
@@ -51,6 +51,7 @@ module Buddy
         tool_input:        {
           "tool_name" => tool[:name].to_s,
           "payload"   => stringify(payload),
+          "merge_key" => merge_key,
           "deferred"  => deferred,
         },
         expires_at:        TTL.from_now,
@@ -58,6 +59,9 @@ module Buddy
 
       message.update!(metadata: message.metadata.merge(wire(action, fields, spec)))
       broadcast(user, message.reload)
+      # An earlier form for the same thing is a question they no longer need to
+      # answer — re-asking a prompt with better values shouldn't leave two of it.
+      Buddy::Supersede.replace!(action: action, keys: [merge_key])
       action
     rescue StandardError => e
       Buddy::Errors.report(section: "form_action.post", exception: e, user: user)
@@ -99,7 +103,7 @@ module Buddy
 
       if outcome[:ok]
         finish!(action, outcome)
-        Buddy::ProposalBuilder.run_deferred!(action, deferred, executed: true) if deferred.any?
+        Buddy::ProposalBuilder.advance_queue!(action, deferred, executed: true) if deferred.any?
       end
 
       outcome.slice(:ok, :errors)

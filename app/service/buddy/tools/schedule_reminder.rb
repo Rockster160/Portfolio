@@ -5,6 +5,10 @@ Buddy::Tools.register(
     says "remind me to X at Y", "at 3pm ping me about the vet appt",
     "in an hour tell me to check the oven", etc.
 
+    A reminder arrives once and is gone. If they said "agenda", "calendar",
+    or asked for a TASK, they want a row they can see and check off - that's
+    `add_agenda_item`, and a reminder is not a substitute for it.
+
     ONE-SHOT: pass `at` (ISO-8601 datetime with timezone offset).
     Convert natural-language times ("in 30 min", "3pm", "tomorrow
     morning") into ISO using the local time in RIGHT NOW block.

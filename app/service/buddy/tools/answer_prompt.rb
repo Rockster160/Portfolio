@@ -75,6 +75,9 @@ Buddy::Tools.register(
   # One form, one row. Without this a model that calls twice hands the person two
   # identical checkboxes for the same survey.
   merge_key:   ->(payload) { "answer_prompt:#{payload[:id]}" },
+  # A prompt has one answer, so re-opening it with better values replaces the
+  # form above rather than leaving two of the same question in the thread.
+  supersedes:  true,
   # Idempotent on purpose: a merged row runs `count` times, and the person may
   # also have answered it in the app between the proposal and the tap. Landing on
   # an already-answered prompt is the end state we wanted either way.

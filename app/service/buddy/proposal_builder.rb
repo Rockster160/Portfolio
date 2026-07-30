@@ -59,20 +59,6 @@ module Buddy
           first.merge(count: total_count)
         }
 
-      # Split by confidence level:
-      #   1 → fire now + activity receipt chip (no checkbox).
-      #   2 → fire now, but show up as a PRE-CHECKED checklist row the person
-      #       can uncheck to undo.
-      #   3 → a plain pending checkbox they tap to run.
-      # Level-2 rows lead the checklist so the already-done items sit on top.
-      # Form tools own their whole message (Buddy::FormAction), so they're taken
-      # out before anything is split into rows — a checkbox that says "submit
-      # these seven values" without showing them is exactly what the form
-      # replaces.
-      forms, merged  = merged.partition { |p| Buddy::Tools.form?(p[:tool]) }
-      _, rest        = merged.partition { |p| p[:tool][:level] == 1 }
-      level2, level3 = rest.partition { |p| p[:tool][:level] == 2 }
-
       # ORDER matters, not just level. Prod 1201: "move it to Ours and let
       # Chelsea know" produced add_agenda_item (level 3, a checkbox) plus
       # message_partner (level 1, fires on arrival). Splitting purely on level
@@ -80,71 +66,37 @@ module Buddy
       # before the checkbox was tapped, and would have been told even if it
       # never was.
       #
-      # So a level-3 row is a GATE: level-1 calls the model made BEFORE it run
-      # now, and ones it made AFTER wait on the tap (see run_deferred!). Level 2
-      # is not a gate — it executes on arrival and leaves a visible row in the
-      # same list, so nothing lands out of order behind it.
-      immediate, deferred = split_on_gate(merged, gated: forms.any?)
-      auto_ran = run_auto(user, byte_message, immediate)
+      # So the calls become ordered STEPS (see build_steps). Everything up to and
+      # including the first GATE — the first thing that needs the person — goes
+      # out now; everything after it rides on that gate and lands when they
+      # resolve it (see advance_queue!).
+      steps       = build_steps(merged)
+      head, queue = split_at_gate(steps)
 
-      rows = level2 + level3
-      # A form is a gate too, so anything held back rides on it when there's no
-      # checklist to carry it. With both, the checklist takes the queue — it's
-      # the one the person meets first.
-      posted = post_forms(user, byte_message, forms, deferred: rows.empty? ? deferred : [])
-
-      if rows.empty?
-        return { action: nil, auto_ran: auto_ran, forms: posted }
-      end
-
-      # Build button hashes. Tool label procs may return either a plain
-      # String (title only) or a Hash `{ title:, sub: }` — the second form
-      # renders the `sub` value as small text beneath the title so
-      # non-default details (a past completion time, an assignee that isn't
-      # the current user, extra function args being passed) don't have to
-      # crowd the title line. Level-2 rows run their tool right here so they
-      # arrive already executed (and undoable); level-3 rows stay pending.
-      conversation = byte_message.byte_conversation
-      buttons = rows.each_with_index.map { |p, i|
-        base = build_button(user, p, i + 1)
-        p[:tool][:level] == 2 ? run_level2_row(user, conversation, p, base) : base.merge("status" => "pending")
+      auto_ran  = false
+      rows_step = nil
+      form_step = nil
+      head.each { |step|
+        case step[:kind]
+        when :autos then auto_ran = run_auto(user, byte_message, step[:calls]) || auto_ran
+        when :rows  then rows_step = step
+        when :forms then form_step = step
+        end
       }
 
-      # Attach a ByteAction to the reply message in-place. We don't use
-      # ByteAction.create_request! because that spawns a NEW inbound
-      # "action-request" bubble — we want the checklist right under Buddy's
-      # reply, not as a separate message.
-      action = ByteAction.create!(
-        user:              user,
-        byte_conversation: byte_message.byte_conversation,
-        byte_message:      byte_message,
-        kind:              :custom,
-        tool_name:         "buddy_proposals",
-        multi_select:      true,
-        buttons:           buttons,
-        # Anything the model queued behind the checkbox, waiting on the tap.
-        tool_input:        deferred.any? ? { "deferred" => serialize_deferred(deferred) } : {},
-        # A Buddy checklist is part of the conversation, not a fleeting prompt —
-        # the default 10-minute TTL made a chore-confirm checkbox silently 409 on
-        # tap (the check just vanished) once the person came back to it. Give it
-        # a generous window so tapping later still works.
-        expires_at:        PROPOSAL_TTL.from_now,
-      )
+      # The queue rides on whichever gate the person meets FIRST. `head` holds at
+      # most one gate and it's the last step in it, so a checklist that is a gate
+      # takes the queue and a level-2-only checklist never does.
+      conversation = byte_message.byte_conversation
+      queued       = serialize_steps(queue)
+      on_rows      = gate?(rows_step)
+      posted       = post_forms(user, conversation, form_step&.fetch(:calls, []) || [], deferred: on_rows ? [] : queued)
+      action       = rows_step && attach_checklist!(user, byte_message, rows_step[:calls], deferred: on_rows ? queued : [])
 
-      # Mirror the action into the message metadata so the client picks it
-      # up on hydrate + render. `kind: buddy_reply` opts the message into
-      # markdown body rendering + attaches the checklist under the body.
-      new_meta = (byte_message.metadata || {}).merge(
-        "kind"              => "buddy_reply",
-        "tool_name"         => "buddy_proposals",
-        "action_request_id" => action.request_id,
-        "action_kind"       => "custom",
-        "action_state"      => "pending",
-        "action_expires_at" => action.expires_at&.iso8601,  # so the client can grey out stale rows
-        "multi_select"      => true,
-        "buttons"           => buttons,
-      )
-      byte_message.update!(metadata: new_meta)
+      # The form gate was meant to carry the queue and every form refused to open
+      # (a prompt answered somewhere else, say). Nothing is left to advance it, so
+      # run it now rather than dropping it on the floor.
+      run_steps!(user, conversation, byte_message, queued) if queued.any? && !on_rows && posted.empty?
 
       { action: action, auto_ran: auto_ran, forms: posted }
     end
@@ -189,93 +141,266 @@ module Buddy
       queue
     end
 
-    # Run what was waiting on the tap.
+    # Move the queue forward now that the gate it was waiting on has resolved.
     #
-    # `executed:` is whether anything on the checklist actually ran. When the
-    # person cancelled it all, the follow-up is about something that never
+    # `executed:` is whether anything on that gate actually ran. When the person
+    # cancelled it all, everything behind it is about something that never
     # happened, so it must NOT go out — but silence is how they end up assuming
     # it did, so say what was held back instead.
-    def run_deferred!(action, queue, executed:)
-      return false if queue.blank?
+    #
+    # Level-1 steps fire and the queue keeps moving. The first step that puts
+    # something in FRONT of the person — a checklist or a form — takes whatever
+    # is still behind it and the queue stops there until they deal with it. That
+    # is also the escape hatch: nothing advances on its own, so wandering off
+    # mid-chain just leaves the rest of it unposted.
+    def advance_queue!(action, queue, executed:)
+      steps = rehydrate_steps(queue)
+      return false if steps.empty?
 
       message = action.byte_message
       return false if message.nil?
 
+      user         = action.user
+      conversation = action.byte_conversation
+
       unless executed
-        note = "Held off on #{deferred_summary(action.user, queue)} — nothing on that list went through."
-        post_message(action.user, message.byte_conversation, note)
+        note = "Held off on #{queue_summary(user, steps)} — nothing on that list went through."
+        post_message(user, conversation, note)
         return false
       end
 
-      autos = queue.filter_map { |row| rehydrate_deferred(row) }
-      return false if autos.empty?
-
-      run_auto(action.user, message, autos)
+      run_steps!(user, conversation, message, steps)
     end
 
     class << self
       private
 
-      # Level-1 calls, partitioned on where they sit relative to the first
-      # level-3 row. `merged` is in the model's own call order (filter_map then
-      # group_by both preserve it), which is the only dependency signal we get —
-      # and the right one, since "do X and then tell them" is exactly how a
-      # person phrases a sequence.
-      def split_on_gate(merged, gated: false)
-        gate_at   = merged.index { |p| p[:tool][:level] == 3 }
-        immediate = []
-        deferred  = []
-        merged.each_with_index { |p, i|
-          next unless p[:tool][:level] == 1
-
-          # `gated:` covers a form that was already lifted out of `merged` — it
-          # is a gate as much as a checkbox is, so nothing queued alongside it
-          # should fire before it's sent.
-          (gated || (gate_at && i > gate_at) ? deferred : immediate) << p
+      # The model's calls as ordered STEPS: each one a contiguous run of a single
+      # kind, in the order the calls were made. That order is the only dependency
+      # signal available and it's the right one, since "do X, then Y" is exactly
+      # how a person phrases a sequence.
+      #
+      #   :autos — level 1. Fires the moment it's reached.
+      #   :rows  — one checklist. A GATE when it holds anything level 3.
+      #   :forms — one or more editable forms. Always a gate.
+      #
+      # Contiguous, not global, so the common batch still batches: two agenda
+      # items asked for together stay two rows on one checklist, and three
+      # prompts stay three forms posted side by side.
+      def build_steps(merged)
+        level2, rest = merged.partition { |p| p[:tool][:level] == 2 }
+        steps = rest.each_with_object([]) { |p, out|
+          kind = step_kind(p)
+          out.last && out.last[:kind] == kind ? out.last[:calls] << p : out << { kind: kind, calls: [p] }
         }
-        [immediate, deferred]
+        return steps if level2.empty?
+
+        # Level 2 executes the instant it arrives, so it can never sit in a
+        # queue. It joins the first checklist when that checklist is also the
+        # first gate; otherwise it gets one of its own out front, which isn't a
+        # gate and so holds nothing up behind it.
+        gate_idx = steps.index { |s| gate?(s) }
+        rows_idx = steps.index { |s| s[:kind] == :rows }
+        if rows_idx && rows_idx == gate_idx
+          steps[rows_idx][:calls] = level2 + steps[rows_idx][:calls]
+        else
+          steps.unshift({ kind: :rows, calls: level2 })
+        end
+        steps
       end
 
-      def post_forms(user, byte_message, forms, deferred: [])
+      def step_kind(proposal)
+        return :forms if Buddy::Tools.form?(proposal[:tool])
+
+        proposal[:tool][:level] == 1 ? :autos : :rows
+      end
+
+      # A gate is anything that needs the person before whatever follows it can
+      # honestly happen. A checklist of already-executed level-2 rows doesn't
+      # qualify: nobody has to touch it, so nothing may wait on it.
+      def gate?(step)
+        return false if step.nil?
+        return true if step[:kind] == :forms
+
+        step[:kind] == :rows && step[:calls].any? { |p| p[:tool][:level] == 3 }
+      end
+
+      def split_at_gate(steps)
+        idx = steps.index { |s| gate?(s) }
+        return [steps, []] if idx.nil?
+
+        [steps[..idx], steps[(idx + 1)..] || []]
+      end
+
+      # Build the checklist onto `byte_message` and return its ByteAction. We
+      # don't use ByteAction.create_request! because that spawns a NEW inbound
+      # "action-request" bubble — we want the rows under the message we were
+      # given. Level-2 rows run their tool right here so they arrive already
+      # executed (and undoable); level-3 rows stay pending.
+      #
+      # Tool label procs may return a plain String (title only) or a Hash
+      # `{ title:, sub: }` — the second renders `sub` as small text beneath the
+      # title, so non-default details (a past completion time, an assignee that
+      # isn't the person, extra function args) don't crowd the title line.
+      def attach_checklist!(user, byte_message, calls, deferred: [])
+        conversation = byte_message.byte_conversation
+        buttons = calls.each_with_index.map { |p, i|
+          base = build_button(user, p, i + 1)
+          p[:tool][:level] == 2 ? run_level2_row(user, conversation, p, base) : base.merge("status" => "pending")
+        }
+
+        action = ByteAction.create!(
+          user:              user,
+          byte_conversation: conversation,
+          byte_message:      byte_message,
+          kind:              :custom,
+          tool_name:         "buddy_proposals",
+          multi_select:      true,
+          buttons:           buttons,
+          # Whatever the model lined up behind this, waiting on the tap.
+          tool_input:        deferred.any? ? { "deferred" => deferred } : {},
+          # A Buddy checklist is part of the conversation, not a fleeting prompt —
+          # the default 10-minute TTL made a chore-confirm checkbox silently 409 on
+          # tap (the check just vanished) once the person came back to it. Give it
+          # a generous window so tapping later still works.
+          expires_at:        PROPOSAL_TTL.from_now,
+        )
+
+        # Anything earlier in the thread that these rows replace is done with —
+        # a correction shouldn't leave both versions sitting there.
+        Buddy::Supersede.replace!(action: action, keys: buttons.pluck("merge_key"))
+
+        # Mirror the action into the message metadata so the client picks it up on
+        # hydrate + render. `kind: buddy_reply` opts the message into markdown
+        # body rendering + attaches the checklist under the body.
+        byte_message.update!(metadata: (byte_message.metadata || {}).merge(
+          "kind"              => "buddy_reply",
+          "tool_name"         => "buddy_proposals",
+          "action_request_id" => action.request_id,
+          "action_kind"       => "custom",
+          "action_state"      => "pending",
+          "action_expires_at" => action.expires_at&.iso8601, # so the client can grey out stale rows
+          "multi_select"      => true,
+          "buttons"           => buttons,
+        ))
+        action
+      end
+
+      # The bubble a queued checklist hangs under. Deliberately a bare lead-in:
+      # the rows below it say what they are, and composing a real sentence here
+      # would mean spending a whole model turn the person didn't ask for.
+      def next_step_message(user, conversation)
+        msg = conversation.byte_messages.create!(
+          user:         user,
+          direction:    :inbound,
+          state:        :delivered,
+          body:         "Next up:",
+          metadata:     { "kind" => "buddy_reply", "source" => "queued_step" },
+          delivered_at: Time.current,
+        )
+        broadcast_message(user, msg)
+        msg
+      end
+
+      # Consume steps in order until one of them lands in FRONT of the person;
+      # that one takes whatever is left and the queue stops there. Level-1 steps
+      # just run and the walk continues. Returns whether anything happened.
+      def run_steps!(user, conversation, message, steps)
+        ran = false
+        while (step = steps.shift)
+          calls = rehydrate_calls(step)
+          next if calls.empty?
+
+          # `steps` is what's LEFT, still in its stored shape, so it rides along
+          # untouched onto whatever this step posts.
+          case step["kind"].to_s
+          when "forms"
+            # A form that refuses to open posts nothing, so it can't carry the
+            # queue either — keep walking instead of stranding it.
+            return true if post_forms(user, conversation, calls, deferred: steps).any?
+          when "rows"
+            attach_checklist!(user, next_step_message(user, conversation), calls, deferred: steps)
+            return true
+          else
+            ran = run_auto(user, message, calls) || ran
+          end
+        end
+        ran
+      end
+
+      def post_forms(user, conversation, forms, deferred: [])
         return [] if forms.empty?
 
-        conversation = byte_message.byte_conversation
-        forms.each_with_index.filter_map { |p, i|
-          Buddy::FormAction.post!(
+        # Only ONE form carries the queue. Splitting it across a batch would mean
+        # the follow-up fires when any of them is sent, which is the opposite of
+        # waiting for the step to be finished. It goes to the first form that
+        # actually lands, since a form whose target is gone posts nothing.
+        queue = deferred
+        forms.filter_map { |p|
+          action = Buddy::FormAction.post!(
             user:         user,
             conversation: conversation,
             tool:         p[:tool],
             payload:      p[:payload],
-            # Only the first form carries the queue; two forms in one turn is
-            # already unusual and splitting the queue between them would mean
-            # the follow-up fires when either is sent.
-            deferred:     i.zero? ? serialize_deferred(deferred) : [],
+            merge_key:    (p[:merge_key] if Buddy::Tools.supersedes?(p[:tool])),
+            deferred:     queue,
           )
+          next nil if action.nil?
+
+          queue = []
+          action
         }
       end
 
-      def serialize_deferred(deferred)
-        deferred.map { |p|
-          { "tool_name" => p[:tool][:name].to_s, "payload" => stringify(p[:payload]), "count" => p[:count] || 1 }
+      def serialize_steps(steps)
+        steps.map { |step|
+          {
+            "kind"  => step[:kind].to_s,
+            "calls" => step[:calls].map { |p|
+              {
+                "tool_name" => p[:tool][:name].to_s,
+                "payload"   => stringify(p[:payload]),
+                "count"     => p[:count] || 1,
+                # Carried through so a step that posts later still replaces
+                # whatever it's a corrected version of.
+                "merge_key" => p[:merge_key],
+              }
+            },
+          }
         }
       end
 
-      def rehydrate_deferred(row)
-        tool = Buddy::Tools[row["tool_name"].to_s.to_sym]
-        return nil if tool.nil?
+      def rehydrate_steps(queue)
+        rows = Array(queue)
+        return [] if rows.empty?
+        # Actions posted before the queue understood steps stored a flat list of
+        # level-1 calls. Read that shape as one autos step, so a checklist still
+        # sitting in someone's thread keeps working.
+        return [{ "kind" => "autos", "calls" => rows }] if rows.first.key?("tool_name")
 
-        { tool: tool, payload: (row["payload"] || {}).symbolize_keys, count: (row["count"] || 1).to_i }
+        rows
+      end
+
+      def rehydrate_calls(step)
+        Array(step["calls"]).filter_map { |row|
+          tool = Buddy::Tools[row["tool_name"].to_s.to_sym]
+          next nil if tool.nil?
+
+          {
+            tool:      tool,
+            payload:   (row["payload"] || {}).symbolize_keys,
+            count:     (row["count"] || 1).to_i,
+            merge_key: row["merge_key"],
+          }
+        }
       end
 
       # "Message Chelsea", not "message partner" — the tool's own label proc
       # already renders its payload for a human, so reuse it rather than
       # humanizing a snake_case name at someone.
-      def deferred_summary(user, queue)
+      def queue_summary(user, steps)
         ctx = Buddy::ToolContext.new(user)
-        titles = queue.filter_map { |row|
-          p = rehydrate_deferred(row)
-          next nil if p.nil?
-
+        titles = steps.flat_map { |step| rehydrate_calls(step) }.map { |p|
           title, = extract_title_sub(safely { p[:tool][:label].call(p[:payload], ctx) })
           title.presence || p[:tool][:name].to_s.tr("_", " ")
         }
@@ -426,6 +551,10 @@ module Buddy
           "tool_name" => p[:tool][:name].to_s,
           "payload"   => stringify(p[:payload]),
           "count"     => p[:count],
+          # What makes two calls "the same thing", but ONLY for the tools where
+          # asking again means correcting. A repeatable action (a second glass of
+          # water) carries no key, so nothing can ever retire it.
+          "merge_key" => (p[:merge_key] if Buddy::Tools.supersedes?(p[:tool])),
         }
       end
 

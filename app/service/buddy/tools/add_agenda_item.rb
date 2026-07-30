@@ -5,15 +5,21 @@ Buddy::Tools.register(
     events, or tasks. `at` is an ISO datetime. `duration` is in minutes.
     `kind` is one of: event, task, trigger - use `event` for anything that
     happens over a span of time (a hike, a dinner, an appointment); `task`
-    only for a to-do with no real duration.
+    for a to-do, which sits at ONE time and has no duration at all.
+
+    If they said "agenda" or "calendar", this is the tool. A to-do they want
+    on the agenda is `kind: task` here, not a reminder and not a list item.
+    No time named? Pick the natural one (now, for "once I get home"; tonight,
+    for "later") and say what you assumed - don't stall the add to ask.
 
     Pull the PLACE into `location`, not the title: "coffee at Lucky Ones"
     → title "Coffee", location "Lucky Ones". "dentist" with no place →
     no location.
 
-    `duration`: set it to the activity's actual length - don't leave the 30m
-    default on something clearly longer. If your memory or the person tells
-    you how long a thing runs (e.g. "the plunge is ~2 hours"), use that.
+    `duration`: EVENTS only - set it to the activity's actual length, don't
+    leave the 30m default on something clearly longer. If your memory or the
+    person tells you how long a thing runs (e.g. "the plunge is ~2 hours"),
+    use that. It's ignored on a task; tasks are a single moment.
 
     `calendar`: which calendar to add to, by name ("Ours", "Tasks", etc.).
     Matches the person's own + shared-editable LOCAL calendars. Omit for
@@ -28,7 +34,7 @@ Buddy::Tools.register(
   args:        {
     title:    { type: :string,       required: true,  description: "What is it (the activity, WITHOUT the place)" },
     at:       { type: :iso_time,     required: true,  description: "ISO datetime with timezone offset" },
-    duration: { type: :duration_min, required: false, default: 30, description: "Minutes - the activity's real length, not always 30" },
+    duration: { type: :duration_min, required: false, default: 30, description: "Minutes - the activity's real length, not always 30. Events only; ignored on a task" },
     location: { type: :string,       required: false, description: "Place/venue/address, if one was mentioned" },
     kind:     { type: :enum,         required: false, default: :event, values: %i[event task trigger] },
     all_day:  { type: :string,       required: false, description: "'true' for all-day" },
@@ -65,12 +71,16 @@ Buddy::Tools.register(
     start   = payload[:at].respond_to?(:in_time_zone) ? payload[:at].in_time_zone(ctx.user.timezone) : nil
     all_day = payload[:all_day].to_s == "true"
 
-    # When — one temporal line, a start–end range so the duration is self-evident.
+    # When — one temporal line. Events get a start–end range so the duration is
+    # self-evident; a task has no end, so showing "2:49–3:19 PM" on one would be
+    # inventing a span the row will never have.
     when_line =
       if start.nil?
         payload[:at].to_s
       elsif all_day
         start.strftime("%a %b %-d, all day")
+      elsif payload[:kind].to_s != "event"
+        "#{start.strftime("%a %b %-d")}, #{start.strftime("%-I:%M %p")}"
       else
         dur    = payload[:duration].to_i
         dur    = 30 if dur <= 0
@@ -93,17 +103,21 @@ Buddy::Tools.register(
     start_at = ctx.resolve_time(payload[:at])
     raise "couldn't parse the start time" if start_at.nil?
 
+    kind = (payload[:kind].presence || :event).to_sym
     duration = payload[:duration].to_i
     duration = 30 if duration <= 0
-    end_at   = start_at + duration.minutes
 
     attrs = {
       name:     payload[:title],
       location: payload[:location].presence,
       start_at: start_at,
-      end_at:   end_at,
+      # Only an event occupies a span. `end_at` is required for events and
+      # optional for everything else (see AgendaItem validations), and a task
+      # carrying one renders as a time RANGE - "Shower, 2:49-3:19 PM" - which
+      # reads like a scheduled block instead of the single-moment to-do it is.
+      end_at:   (start_at + duration.minutes if kind == :event),
       all_day:  payload[:all_day].to_s == "true",
-      kind:     payload[:kind] || :event,
+      kind:     kind,
       status:   :confirmed,
     }
     # Arrive 5 minutes early for anything with a place to be, so the travel /

@@ -83,9 +83,15 @@ module Buddy
 
       rec = find!(r)
       rec.update!(before)
-      # AgendaItem re-broadcasts via its own model callbacks; ActionEvent needs
-      # the explicit notify.
-      ActionEventNotifier.notify(rec.user, rec, :changed, auth: :buddy, auth_id: rec.user_id) if r[:model].to_s == "ActionEvent"
+      # AgendaItem re-broadcasts via its own model callbacks; the other two need
+      # to be told, or the Chores/Events app keeps showing the edited values.
+      case r[:model].to_s
+      when "ActionEvent"
+        ActionEventNotifier.notify(rec.user, rec, :changed, auth: :buddy, auth_id: rec.user_id)
+      when "ChoreCompletion"
+        ChoreStreak.rebuild_for!(rec.user, rec.chore) if before.key?("day_key") || before.key?(:day_key)
+        ChoreBroadcaster.broadcast_changes!(rec.user, rec.chore)
+      end
     end
 
     # Undo a hard delete → recreate from the stored attributes. A removed list
@@ -120,15 +126,24 @@ module Buddy
         Array(action.buttons).reverse_each { |btn|
           result = btn["result"]
           next unless result.is_a?(Hash)
+          next if result["undone"]
 
-          revert = result["revert"]
-          next if revert.blank? || result["undone"]
-          next unless reversible?(revert)
+          reverts = descriptors(result)
+          next if reverts.empty? || !reverts.all? { |rv| reversible?(rv) }
 
-          return { action_id: action.id, button_id: btn["id"], summary: normalize(revert)[:summary].to_s.presence || "your last change" }
+          return { action_id: action.id, button_id: btn["id"], summary: normalize(reverts.first)[:summary].to_s.presence || "your last change" }
         }
       end
       nil
+    end
+
+    # A tool that touched several rows in one go (editing both of today's water
+    # completions) stashes `reverts:`; everything else stashes a single
+    # `revert:`. Both shapes read out as a list so callers walk one path.
+    def descriptors(result)
+      raw = result["reverts"].presence || result[:reverts].presence
+      raw ||= [result["revert"] || result[:revert]]
+      Array(raw).compact
     end
 
     # Reverse the button's stashed descriptor and mark it undone so a second
@@ -142,7 +157,10 @@ module Buddy
       result = (btn["result"] || {}).dup
       raise "that's already been undone" if result["undone"]
 
-      summary = call(result["revert"])
+      reverts = descriptors(result)
+      raise "nothing here to undo" if reverts.empty?
+
+      summary = reverts.map { |rv| call(rv) }.first
       result["undone"] = true
       btn["result"] = result
       action.update!(buttons: buttons)

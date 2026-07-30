@@ -70,21 +70,30 @@ export function renderForm(container, message) {
   if (container.contains(document.activeElement)) return true;
 
   const submitted = form.status === "submitted";
+  // A corrected version of this form landed further down the thread, so this
+  // one is no longer a question anyone needs to answer. The server already
+  // refuses the submit; lock it here so it doesn't look live.
+  const superseded = form.status === "superseded";
   const expiresAt = meta.action_expires_at
     ? Date.parse(meta.action_expires_at)
     : NaN;
   const expired =
-    !submitted && Number.isFinite(expiresAt) && Date.now() > expiresAt;
+    !submitted &&
+    !superseded &&
+    Number.isFinite(expiresAt) &&
+    Date.now() > expiresAt;
   const draft = draftFor(requestId);
-  const locked = submitted || expired;
+  const locked = submitted || superseded || expired;
 
   container.innerHTML = "";
   container.className = "byte-msg-form";
   container.dataset.status = submitted
     ? "submitted"
-    : expired
-      ? "expired"
-      : "pending";
+    : superseded
+      ? "superseded"
+      : expired
+        ? "expired"
+        : "pending";
 
   form.fields.forEach((field) => {
     if (field.type === "hidden") return;
@@ -105,7 +114,9 @@ export function renderForm(container, message) {
     note.className = "byte-msg-form-receipt";
     note.textContent = submitted
       ? form.receipt || "Sent ✓"
-      : "Expired — ask me again and I'll rebuild it.";
+      : superseded
+        ? "Replaced by a newer one below."
+        : "Expired — ask me again and I'll rebuild it.";
     footer.appendChild(note);
   } else {
     const submit = document.createElement("button");

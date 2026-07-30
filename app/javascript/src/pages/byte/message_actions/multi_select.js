@@ -36,14 +36,15 @@ async function apiCall(url, method, body) {
 }
 
 const STATUS_GLYPHS = {
-  pending:   "",
-  working:   "…",
-  executed:  "✓",
-  cancelled: "·",
-  failed:    "✗",
-  partial:   "~",
-  undone:    "↩",
-  expired:   "⌛",
+  pending:    "",
+  working:    "…",
+  executed:   "✓",
+  cancelled:  "·",
+  failed:     "✗",
+  partial:    "~",
+  undone:     "↩",
+  superseded: "↻",
+  expired:    "⌛",
 };
 
 // Statuses that mean the row has been acted on — checkbox stays checked
@@ -114,6 +115,12 @@ export function renderMultiSelect(container, message) {
     // action back. Everything else that's resolved stays locked.
     const undoable = status === "executed" && !!btn.undoable;
     const undone = status === "undone";
+    // A newer ask replaced this one, so it's finished with either way: locked,
+    // never re-triggerable, and never undoable — the row that replaced it owns
+    // the record now, so walking this one back would delete what that one did.
+    // `superseded_from` keeps whether it had actually RUN before being replaced,
+    // so an executed row still reads as done rather than as never-happened.
+    const superseded = status === "superseded";
     // A still-pending row on an expired action can't be run.
     const rowExpired = expired && status === "pending";
     const effectiveStatus = rowExpired ? "expired" : status;
@@ -128,11 +135,14 @@ export function renderMultiSelect(container, message) {
     cb.type = "checkbox";
     cb.value = btn.id;
     // executed/partial read as "on"; failed + undone + expired read as "off".
-    cb.checked = resolved && status !== "failed";
-    // Resolved/undone rows are locked; only a still-live pending row (or an
-    // undoable executed one) stays toggleable. An expired row stays tappable —
-    // but tapping REISSUES it (see below) rather than trying to run the stale one.
-    cb.disabled = (resolved || undone) && !undoable;
+    cb.checked = superseded
+      ? btn.superseded_from === "executed"
+      : resolved && status !== "failed";
+    // Resolved/undone/superseded rows are locked; only a still-live pending row
+    // (or an undoable executed one) stays toggleable. An expired row stays
+    // tappable — but tapping REISSUES it (see below) rather than running the
+    // stale one.
+    cb.disabled = superseded || ((resolved || undone) && !undoable);
     if (rowExpired) {
       // Tapping a stale row reissues it as a fresh checklist — no re-typing.
       cb.addEventListener("change", () => {
@@ -143,7 +153,7 @@ export function renderMultiSelect(container, message) {
       cb.addEventListener("change", () => {
         if (!cb.checked) undoRow(container, requestId, cb);
       });
-    } else if (!resolved && !undone && !confirmMode) {
+    } else if (!resolved && !undone && !superseded && !confirmMode) {
       // Checking a pending row IS the confirmation — fire it immediately.
       // Exception: confirm mode collects a set and submits once via the Send
       // button below, so checking a box there only toggles local state.
@@ -194,6 +204,15 @@ export function renderMultiSelect(container, message) {
       err.className = "byte-msg-action-error";
       err.textContent = btn.error_message;
       row.appendChild(err);
+    }
+
+    // Replaced: say so, so a struck-through row doesn't read as a failure.
+    if (superseded) {
+      row.title = "A newer version of this replaced it.";
+      const note = document.createElement("span");
+      note.className = "byte-msg-action-expired";
+      note.textContent = "Replaced by a newer one.";
+      row.appendChild(note);
     }
 
     // Expired: say so, and that tapping brings it back fresh.
