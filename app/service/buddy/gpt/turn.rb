@@ -383,6 +383,35 @@ module Buddy
         | \b(?:that(?:'|’)?s\s+(?:done|logged|counted))\b
       /xi
 
+      # Promises to act NOW that were never backed by a call. Different failure
+      # from a past-tense claim and just as damaging: prod message 1048 answered
+      # "you didn't add it to the Harmon's category" with "Ah, gotcha. I'll fix
+      # that." and called nothing. The person reads that as handled.
+      #
+      # Restricted to concrete, immediate promises about their data. Vague future
+      # intent ("I'll keep an eye out") is conversational and deliberately absent,
+      # as is anything hedged into an offer.
+      #
+      # See SOLICITS_INFO_RX: a promise CONDITIONAL on an answer is legitimate and
+      # must not be retracted.
+      ACTION_PROMISE_RX = /
+        \b(?:i(?:'|’)?ll|i\s+will|let\s+me|i(?:'|’)?m\s+(?:going\s+to|gonna))\s+
+          (?:go\s+)?
+          (?:fix|redo|re-?add|add|update|change|rename|correct|put|move|set|log|record|mark|remove|delete)\b
+        | \b(?:fixing|redoing|re-?adding|adding|updating|changing|renaming|correcting|moving|removing)\s+
+          (?:that|it|those|them|this)\b
+        | \b(?:on\s+it,?\s+(?:fixing|adding|updating))\b
+      /xi
+
+      # A promise is fine when it's waiting on an answer — "tell me which one and
+      # I'll fix it" is the correct move on an ambiguous reference, not a broken
+      # one. Only applied to promises; a past-tense claim is false whether or not
+      # a question trails it.
+      SOLICITS_INFO_RX = /
+        \?
+        | \b(?:tell\s+me|let\s+me\s+know|which\s+(?:one|item|chore|list)|remind\s+me\s+which)\b
+      /xi
+
       # HARD CHECK: never let a reply claim it did something when nothing ran.
       #
       # The prompt covers this at length (tense discipline, the three levels), but
@@ -400,12 +429,18 @@ module Buddy
       def retract_false_claim!(result)
         body = @reply.body.to_s
         return if body.blank?
-        return unless body.match?(COMPLETION_CLAIM_RX)
+
+        kind = if body.match?(COMPLETION_CLAIM_RX)
+          :claim
+        elsif body.match?(ACTION_PROMISE_RX) && !body.match?(SOLICITS_INFO_RX)
+          :promise
+        end
+        return if kind.nil?
         return if executed_anything?(result)
         return if pending_rows?(result)
 
         Rails.logger.warn(
-          "[Buddy::GPT::Turn] retracted unbacked completion claim on message=#{@reply.id} " \
+          "[Buddy::GPT::Turn] retracted unbacked #{kind} on message=#{@reply.id} " \
           "user=#{@user.id}: #{body.truncate(160).inspect}",
         )
         @reply.update!(

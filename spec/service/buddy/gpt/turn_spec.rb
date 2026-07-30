@@ -210,6 +210,49 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to match(/couldn't quite line that one up/i)
     end
 
+    it "retracts a promise to act that was never backed by a call" do
+      # Real prod bug (1048): answered "you didn't add it to the Harmon's
+      # category" with this, and called nothing.
+      run([{ text: "Ah, gotcha. I'll fix that. Sanitizer for hike, in Harmon's." }])
+
+      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.metadata["retracted_claim"]).to be(true)
+    end
+
+    it "retracts 'let me re-add it' with nothing behind it" do
+      run([{ text: "Oh no, let me re-add that for you." }])
+
+      expect(reply.body).to match(/couldn't quite line that one up/i)
+    end
+
+    it "leaves a promise alone when the call actually accompanied it" do
+      allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+
+      run([{ tool_calls: [{ name: :add_list_item, arguments: { "list" => "Shopping", "item" => "milk", "reply" => "On it, adding that now." } }] }])
+
+      expect(reply.body).to eq("On it, adding that now.")
+    end
+
+    it "does not fire on vague future intent, which is conversational" do
+      run([{ text: "I'll keep an eye out for you." }])
+
+      expect(reply.body).to eq("I'll keep an eye out for you.")
+    end
+
+    it "does not fire on a promise that is waiting on an answer" do
+      # Asking which item before fixing it is the RIGHT move on an ambiguous
+      # reference; retracting it would replace a good clarifying question.
+      run([{ text: "Oof, my bad. Tell me which item it was and I'll fix it." }])
+
+      expect(reply.body).to eq("Oof, my bad. Tell me which item it was and I'll fix it.")
+    end
+
+    it "still retracts a past-tense claim even when a question trails it" do
+      run([{ text: "Logged that for you. Anything else on your mind?" }])
+
+      expect(reply.body).to match(/couldn't quite line that one up/i)
+    end
+
     it "does not touch ordinary conversation that claims nothing" do
       run([{ text: "Oof, that sounds like a rough one. How're you holding up?" }])
 
