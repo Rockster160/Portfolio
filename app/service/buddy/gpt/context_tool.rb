@@ -42,7 +42,9 @@ module Buddy
         Look up the person's live state. Call this when their message touches
         chores, the agenda/calendar, logged events, reminders, what you're
         watching for, prompts, stashed ideas, or their Jil automations - and
-        when a bare greeting means "orient me to my day".
+        when a bare greeting means "orient me to my day". Also call it before
+        telling them you can't check something: what you can reach is listed
+        here, not in your own memory.
 
         Ask for only the sections you need. Skip this call entirely on pure
         chit-chat that touches none of it; the at-a-glance summary in your
@@ -59,7 +61,10 @@ module Buddy
           add_list_item so you can file an item under an existing section
           (produce, dairy, a store) instead of guessing.
         - jil_functions / jil_triggers: what you're allowed to fire, with
-          signatures. Fuzzy-match by name and purpose.
+          signatures and a description of what each one does. Fuzzy-match on
+          purpose, not name. These cover status QUESTIONS too, not just
+          commands - a sensor, door, gate, light, or the car's state is
+          answerable here, so check before saying you can't see something.
       TXT
 
       def self.schema
