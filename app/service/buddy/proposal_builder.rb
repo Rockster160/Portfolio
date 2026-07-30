@@ -183,21 +183,27 @@ module Buddy
               # A receipt that RAISED is not an opt-out and must still be seen.
               next if rc.nil?
 
-              [rc.presence || "Done", activity_detail(p[:tool], payload, ctx)].compact.join("\n")
+              rc.presence || "Done"
             else
               Rails.logger.warn("[Buddy::ProposalBuilder] auto tool #{p[:tool][:name]} failed: #{result[:error]}")
-              "#{name} couldn't do that one\n#{activity_detail(p[:tool], payload, ctx)}"
+              "#{name} couldn't do that one"
             end
 
           chip = conversation.byte_messages.create!(
             user:         user,
             direction:    :inbound,
             state:        :delivered,
-            body:         text,
+            # The chip already carries a leading ✓ from CSS, and most receipts end
+            # with one of their own — together they rendered "✓ Called Great Fan ✓".
+            body:         text.sub(/\s*[✓✔]\s*\z/, ""),
             metadata:     {
               "kind"      => "buddy_activity",
               "tool_name" => p[:tool][:name].to_s,
               "ok"        => result[:ok],
+              # Rendered as its own quiet sub-line rather than jammed into the
+              # body, so it reads as a footnote instead of competing with the
+              # receipt above it.
+              "detail"    => activity_detail(p[:tool], payload, ctx),
               # The exact arguments it ran with, for when the chip text isn't
               # enough to answer "what did it actually do".
               "payload"   => stringify(p[:payload]),

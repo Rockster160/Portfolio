@@ -289,6 +289,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     // (your own Buddy) and renders "yours → theirs", so it doesn't read as
     // something the partner's Buddy said. The bubble is tinted for whichever
     // Buddy is speaking rather than the default inbound tint.
+    // Activity-chip footnote: which tool ran and the args it ran with. Only
+    // level-1 actions carry one - they leave no checklist row, so this is the
+    // only record of what happened.
+    const detailEl = node.querySelector("[data-activity-detail]");
+    if (detailEl) {
+      const detail = message?.metadata?.detail;
+      detailEl.hidden = !detail;
+      detailEl.textContent = detail || "";
+    }
+
     const peer = message?.metadata?.relay_peer;
     const relayFrom = message?.metadata?.relay_from;
     const peerEl = node.querySelector("[data-peer]");

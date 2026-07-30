@@ -3339,13 +3339,23 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
 // a soft accent tint and a leading ✓ set it apart from both messages and the
 // user's own tap chips.
 .byte-msg.byte-msg-kind-buddy_activity {
+  // The receipt and its footnote share ONE pill, so the tint and border live on
+  // the article and both lines sit inside it. `width: auto` keeps the pill only
+  // as wide as its content instead of stretching to the cap, which is what had
+  // "mode:" and "low" breaking across two lines with room to spare.
   align-self: center;
-  max-width: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   width: auto;
+  // Long receipts (a weather summary) still wrap rather than running off the
+  // side. (Plain % only — libsass chokes on the CSS min() function.)
+  max-width: 90%;
   margin: 6px 0;
-  padding: 0;
-  background: transparent;
-  border: none;
+  padding: 5px 14px 6px;
+  background: rgba(63, 160, 255, 0.09);
+  border: 1px solid rgba(63, 160, 255, 0.22);
+  border-radius: 14px;
   box-shadow: none;
 
   .byte-msg-meta,
@@ -3354,30 +3364,34 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
   .byte-msg-actions { display: none; }
 
   [data-body] {
-    display: inline-block;
-    // Long receipts (a weather summary) must WRAP inside a capped width, not
-    // run off the side of the screen. Short ones still read as a pill. (Plain
-    // % only — libsass chokes on the CSS min() function.)
-    max-width: 90%;
-    padding: 4px 14px;
     font-size: 11.5px;
     font-weight: 500;
     letter-spacing: 0.03em;
-    line-height: 1.4;
+    line-height: 1.35;
     color: var(--buddy-accent, #3FA0FF);
-    background: rgba(63, 160, 255, 0.10);
-    border: 1px solid rgba(63, 160, 255, 0.24);
-    border-radius: 14px;
     text-align: center;
-    // Honor the newline between the receipt and the tool/params detail line,
-    // while still wrapping a long receipt inside the capped width.
-    white-space: pre-line;
     overflow-wrap: anywhere;
 
     &::before {
       content: "✓ ";
       opacity: 0.85;
     }
+  }
+
+  // Which tool ran, and with what. A record rather than something to read every
+  // time: smaller, dimmer, and never bold, so the receipt stays the headline.
+  .byte-msg-activity-detail {
+    margin-top: 2px;
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 1.3;
+    letter-spacing: 0.02em;
+    color: var(--buddy-accent, #3FA0FF);
+    opacity: 0.55;
+    text-align: center;
+    overflow-wrap: anywhere;
+
+    &[hidden] { display: none; }
   }
 }
 

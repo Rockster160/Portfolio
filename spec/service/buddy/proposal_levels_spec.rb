@@ -82,9 +82,18 @@ RSpec.describe "Buddy proposal levels" do
 
       expect(result[:auto_ran]).to be(true)
       expect(chip).to be_present
-      expect(chip.body).to include("Fan High")
-      expect(chip.body).to include("trigger_jil_task")
-      expect(chip.body).to include("scope: fan-high")
+      # Receipt in the body; which tool and which args as a separate footnote,
+      # so the two can be styled apart instead of running together.
+      expect(chip.body).to eq("Fired **Fan High**")
+      expect(chip.metadata["detail"]).to eq("trigger_jil_task · scope: fan-high")
+    end
+
+    # CSS puts a ✓ in front of every chip, and most receipts end with one of
+    # their own - together they rendered "✓ Fired Fan High ✓".
+    it "does not leave a second checkmark on the end of the receipt" do
+      build([{ tool_name: :trigger_jil_task, payload: { name: "Fan High" } }])
+
+      expect(chip.body).not_to end_with("✓")
     end
 
     it "records the exact arguments on the chip for later inspection" do
@@ -100,7 +109,7 @@ RSpec.describe "Buddy proposal levels" do
       build([{ tool_name: :trigger_jil_task, payload: { name: "Fan High" } }])
 
       expect(chip).to be_present
-      expect(chip.body).to include("trigger_jil_task")
+      expect(chip.metadata["detail"]).to include("trigger_jil_task")
     end
 
     # check_weather returns nil on purpose: it answers via a follow-up Buddy

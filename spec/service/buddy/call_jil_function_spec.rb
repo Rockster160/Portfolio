@@ -82,7 +82,8 @@ RSpec.describe "call_jil_function tool" do
       run({ name: "HASS Sensor State", sensor: "laundry_gate", expect_result: true })
 
       expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
-      expect(chip.body).to include("Called **HASS Sensor State** ✓").and include("call_jil_function")
+      expect(chip.body).to eq("Called **HASS Sensor State**")
+      expect(chip.metadata["detail"]).to include("call_jil_function")
     end
   end
 
@@ -93,7 +94,8 @@ RSpec.describe "call_jil_function tool" do
       run({ name: "HASS Sensor State", sensor: "kennel" })
 
       expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
-      expect(chip.body).to include("Called **HASS Sensor State** ✓").and include("call_jil_function")
+      expect(chip.body).to eq("Called **HASS Sensor State**")
+      expect(chip.metadata["detail"]).to include("call_jil_function")
     end
 
     # Regression: the receipt used to read ctx.proposal["payload"], but level-1
@@ -140,7 +142,8 @@ RSpec.describe "call_jil_function tool" do
 
       run({ name: "HASS Blinds", action: "close" })
 
-      expect(chip.body).to include("Called **HASS Blinds** ✓").and include("call_jil_function")
+      expect(chip.body).to eq("Called **HASS Blinds**")
+      expect(chip.metadata["detail"]).to include("call_jil_function")
     end
 
     it "allows a function that describes itself as reporting" do
