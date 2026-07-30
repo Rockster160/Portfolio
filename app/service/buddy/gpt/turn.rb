@@ -129,8 +129,12 @@ module Buddy
           # reply field.
           round_text = result[:text].to_s.strip
           inline     = Buddy::Tools.spoken_reply(calls)
-          spoken << round_text if round_text.present?
-          spoken << inline if inline.present?
+          # The model often writes the SAME sentence as output text AND into the
+          # reply field of its call. Appending both printed the line twice in one
+          # bubble ("You got it, checking that off." / "You got it, checking that
+          # off."), so anything we've already said is dropped rather than repeated.
+          add_spoken(spoken, round_text)
+          add_spoken(spoken, inline)
 
           break if calls.empty?
 
@@ -204,6 +208,27 @@ module Buddy
 
       def proposal?(name)
         Buddy::Tools.known?(name)
+      end
+
+      # Collect a line unless we've effectively said it already. Compared on a
+      # normalized form so punctuation or capitalization drift doesn't sneak a
+      # near-duplicate through, and containment counts either way — a round-two
+      # restatement is usually a superset of the round-one line.
+      def add_spoken(spoken, line)
+        text = line.to_s.strip
+        return if text.empty?
+
+        norm = normalize_spoken(text)
+        return if spoken.any? { |prior|
+          p_norm = normalize_spoken(prior)
+          p_norm == norm || p_norm.include?(norm) || norm.include?(p_norm)
+        }
+
+        spoken << text
+      end
+
+      def normalize_spoken(text)
+        text.to_s.downcase.gsub(/[^a-z0-9 ]/, "").squish
       end
 
       # ---- cost accounting ---------------------------------------------------
@@ -298,13 +323,31 @@ module Buddy
         body = display_body(outcome[:text])
         @reply.update!(state: :delivered, body: body, delivered_at: Time.current)
 
-        result = build_proposals(outcome[:proposals])
+        proposals = outcome[:proposals]
+        result    = build_proposals(proposals)
+        nothing   = result[:action].nil? && !result[:auto_ran]
 
-        # Never leave a blank bubble. This is the "every tool call got discarded
-        # and there was no prose" case — give honest, warm feedback instead of
-        # an empty message with no explanation.
-        if @reply.body.to_s.strip.empty? && result[:action].nil? && !result[:auto_ran]
+        # A tool call that gets discarded (a chore name that resolves to nothing,
+        # an arg that fails validation) is silent by design — ProposalBuilder just
+        # drops it. But the model has ALREADY written its line by then, and that
+        # line usually claims the thing happened. Left alone, the person reads
+        # "You got it, checking that off." under a reply that recorded nothing and
+        # shows no checkbox, and they have no way to tell.
+        #
+        # So when we had proposals and NONE survived, the prose can't stand.
+        # Replace it rather than appending: "checking that off, but actually I
+        # couldn't" is worse than a clean honest ask.
+        if proposals.any? && nothing
+          Rails.logger.warn(
+            "[Buddy::GPT::Turn] all #{proposals.length} proposal(s) discarded for " \
+            "message=#{@reply.id} user=#{@user.id}: #{proposals.map { |p| p[:name] }.inspect}",
+          )
           @reply.update!(body: FALLBACK_BODY)
+        elsif @reply.body.to_s.strip.empty? && nothing
+          # Nothing proposed and nothing said — never leave a blank bubble.
+          @reply.update!(body: FALLBACK_BODY)
+        else
+          retract_false_claim!(result)
         end
 
         stamp_usage_rollup
@@ -324,6 +367,67 @@ module Buddy
         stamp_usage_rollup
         settle_expression
         broadcast(@reply.reload)
+      end
+
+      # Phrases that assert the thing ALREADY HAPPENED. Kept deliberately narrow
+      # and unambiguous: a false negative here is a missed catch, but a false
+      # positive rewrites a perfectly good reply, which is worse. Anything hedged
+      # ("want me to", "I can") is not a claim and isn't listed.
+      COMPLETION_CLAIM_RX = /
+        \b(?:check(?:ing|ed)?\s+(?:that|it|those|them|this)\s+off)\b
+        | \b(?:checked\s+off|marked\s+(?:it|that|those)?\s*(?:off|done)|crossed\s+off)\b
+        | \b(?:logged|recorded|credited|crediting)\b
+        | \b(?:timer(?:'|’)?s\s+set|reminder(?:'|’)?s\s+set|set\s+(?:a|the)\s+timer)\b
+        | \b(?:added\s+(?:it|that|them)\s+to)\b
+        | \b(?:it(?:'|’)?s\s+(?:on\s+the\s+list|done|logged|set))\b
+        | \b(?:that(?:'|’)?s\s+(?:done|logged|counted))\b
+      /xi
+
+      # HARD CHECK: never let a reply claim it did something when nothing ran.
+      #
+      # The prompt covers this at length (tense discipline, the three levels), but
+      # prompt rules are guidance and this one has already broken twice in prod:
+      # "You got it, checking that off." against an unresolvable chore, and
+      # "Timer's set for 5 minutes." with no set_timer call at all. Claiming a
+      # thing happened when it didn't is the single worst failure mode for
+      # something whose job is keeping a record, because there's no signal that
+      # anything went wrong.
+      #
+      # Scope is deliberately the unambiguous case: the reply asserts completion,
+      # AND nothing executed, AND there is no pending row the person can see. A
+      # pending checkbox is visible on its own, so a wrong tense there is a tone
+      # bug the prompt can own; this is for claims backed by nothing at all.
+      def retract_false_claim!(result)
+        body = @reply.body.to_s
+        return if body.blank?
+        return unless body.match?(COMPLETION_CLAIM_RX)
+        return if executed_anything?(result)
+        return if pending_rows?(result)
+
+        Rails.logger.warn(
+          "[Buddy::GPT::Turn] retracted unbacked completion claim on message=#{@reply.id} " \
+          "user=#{@user.id}: #{body.truncate(160).inspect}",
+        )
+        @reply.update!(
+          body:     FALLBACK_BODY,
+          metadata: (@reply.metadata || {}).merge("retracted_claim" => true),
+        )
+      end
+
+      # Something genuinely ran: a level-1 tool fired, or a level-2 row came back
+      # executed. A "failed" or "partial" row explicitly does NOT count.
+      def executed_anything?(result)
+        return true if result[:auto_ran]
+
+        buttons(result).any? { |b| b["status"].to_s == "executed" }
+      end
+
+      def pending_rows?(result)
+        buttons(result).any? { |b| b["status"].to_s == "pending" }
+      end
+
+      def buttons(result)
+        Array(result[:action]&.buttons)
       end
 
       def build_proposals(proposals)

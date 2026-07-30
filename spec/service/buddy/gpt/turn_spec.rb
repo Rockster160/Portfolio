@@ -91,6 +91,144 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
+  # Both regressions came off one real prod message (1041): "Just hung the shelves
+  # for Chelsea" produced "You got it, checking that off." printed twice, with no
+  # checkbox, and no chore completion recorded anywhere.
+  describe "when the model says the same line twice" do
+    it "does not print it twice when it lands in both output text and the reply field" do
+      run([{
+        text:       "You got it, checking that off.",
+        tool_calls: [{ name: :log_event, arguments: { "name" => "Shelves", "reply" => "You got it, checking that off." } }],
+      }])
+
+      expect(reply.body).to eq("You got it, checking that off.")
+    end
+
+    it "ignores punctuation and case drift between the two copies" do
+      run([{
+        text:       "You got it, checking that off.",
+        tool_calls: [{ name: :log_event, arguments: { "name" => "x", "reply" => "You got it — checking that off!" } }],
+      }])
+
+      expect(reply.body.scan(/checking that off/i).length).to eq(1)
+    end
+
+    it "still keeps two lines that actually say different things" do
+      run([
+        { text: "One sec.", tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
+        { text: "Nothing left on your list." },
+      ])
+
+      expect(reply.body).to eq("One sec.\n\nNothing left on your list.")
+    end
+  end
+
+  describe "when every proposal is discarded" do
+    # ProposalBuilder drops a call whose target can't be resolved — an archived
+    # chore, a name that matches nothing. That is silent, and the model has
+    # already written "checking that off" by then.
+    before { allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: false) }
+
+    it "does not leave a confident claim standing over a reply that did nothing" do
+      run([{
+        tool_calls: [{ name: :complete_chore, arguments: { "chore" => "hang the shelves", "reply" => "You got it, checking that off." } }],
+      }])
+
+      expect(reply.body).not_to match(/checking that off/i)
+      expect(reply.body).to match(/couldn't quite line that one up/i)
+    end
+
+    it "leaves the reply alone when something actually ran" do
+      allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+
+      run([{
+        tool_calls: [{ name: :complete_chore, arguments: { "chore" => "dishes", "reply" => "Nice, that's done." } }],
+      }])
+
+      expect(reply.body).to eq("Nice, that's done.")
+    end
+
+    it "leaves a pure-conversation reply alone, since nothing was claimed" do
+      run([{ text: "Not much on my end, how's your night?" }])
+
+      expect(reply.body).to eq("Not much on my end, how's your night?")
+    end
+  end
+
+  # Hard check, not prompt guidance: this has broken twice in prod. Claiming an
+  # action happened when nothing ran is the worst failure mode for something whose
+  # job is keeping a record, because nothing signals that it went wrong.
+  describe "retracting a completion claim nothing backs up" do
+    it "retracts a timer claim made with no tool call at all" do
+      # Real prod bug: "5m" produced this with no set_timer call.
+      run([{ text: "Kk! Timer's set for 5 minutes." }])
+
+      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.metadata["retracted_claim"]).to be(true)
+    end
+
+    it "retracts a checking-that-off claim when the tool resolved to nothing" do
+      allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: false)
+
+      run([{ text: "You got it, checking that off." }])
+
+      expect(reply.body).not_to match(/checking that off/i)
+    end
+
+    it "leaves the claim alone when a level-1 tool actually fired" do
+      allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+
+      run([{ tool_calls: [{ name: :schedule_reminder, arguments: { "text" => "call mom", "reply" => "Reminder's set for 6." } }] }])
+
+      expect(reply.body).to eq("Reminder's set for 6.")
+    end
+
+    it "leaves the claim alone when a level-2 row came back executed" do
+      action = instance_double(ByteAction, buttons: [{ "status" => "executed" }])
+      allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: action, auto_ran: false)
+
+      run([{ tool_calls: [{ name: :complete_chore, arguments: { "chore" => "dishes", "reply" => "Nice, that's logged." } }] }])
+
+      expect(reply.body).to eq("Nice, that's logged.")
+    end
+
+    it "leaves it alone when a pending row is visible, since the person can see it" do
+      action = instance_double(ByteAction, buttons: [{ "status" => "pending" }])
+      allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: action, auto_ran: false)
+
+      run([{ tool_calls: [{ name: :create_chore, arguments: { "name" => "Mow", "reply" => "Logged that for you." } }] }])
+
+      expect(reply.body).to eq("Logged that for you.")
+    end
+
+    it "retracts when the row came back failed rather than executed" do
+      action = instance_double(ByteAction, buttons: [{ "status" => "failed" }])
+      allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: action, auto_ran: false)
+
+      run([{ tool_calls: [{ name: :complete_chore, arguments: { "chore" => "dishes", "reply" => "That's logged." } }] }])
+
+      expect(reply.body).to match(/couldn't quite line that one up/i)
+    end
+
+    it "does not touch ordinary conversation that claims nothing" do
+      run([{ text: "Oof, that sounds like a rough one. How're you holding up?" }])
+
+      expect(reply.body).to eq("Oof, that sounds like a rough one. How're you holding up?")
+    end
+
+    it "does not fire on an offer, which claims nothing" do
+      run([{ text: "Want me to log that for you?" }])
+
+      expect(reply.body).to eq("Want me to log that for you?")
+    end
+
+    it "does not fire on a plain warm acknowledgement" do
+      run([{ text: "Nice, that counts. 💙" }])
+
+      expect(reply.body).to eq("Nice, that counts. 💙")
+    end
+  end
+
   describe "malformed and unknown tool calls" do
     it "discards an unknown tool without losing the prose" do
       run([{
@@ -393,6 +531,10 @@ RSpec.describe Buddy::GPT::Turn do
     end
 
     it "combines a read round's prose with a following action's inline reply" do
+      # Subject here is how prose is stitched across rounds, so let the proposal
+      # resolve — an unresolvable chore would (correctly) swap in the fallback.
+      allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+
       run([
         { text: "One sec.", tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
         { tool_calls: [{ name: :complete_chore, arguments: { "chore" => "dishes", "reply" => "Dishes are done." } }] },
@@ -424,6 +566,9 @@ RSpec.describe Buddy::GPT::Turn do
     end
 
     it "allows look-up, then act, then speak within the cap" do
+      # Subject here is the round cap, so let the proposal resolve.
+      allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+
       client = run([
         { text: "", tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
         { text: "", tool_calls: [{ name: :complete_chore, arguments: { "chore" => "dishes" } }] },
