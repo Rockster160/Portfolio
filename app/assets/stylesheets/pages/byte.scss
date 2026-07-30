@@ -623,9 +623,9 @@ html.html-ctr-byte body {
     border-bottom-left-radius: 4px;
   }
 
-  // Cross-user relay bubble — attributed to the OTHER household's Buddy. Repaint
-  // in that household's accent (left bar + faint tint) so a bridged message
-  // reads as coming from/going to the other side, not a normal reply.
+  // Cross-user relay bubble. Repainted (left bar + faint tint) in the accent of
+  // whichever Buddy is speaking — the partner's on an incoming relay, your own
+  // on the copy of one you sent out — so it never reads as a normal reply.
   &[data-peer-theme="byte"] {
     background: rgba(63, 160, 255, 0.13);
     border-left: 3px solid #3fa0ff;
@@ -635,11 +635,12 @@ html.html-ctr-byte body {
     border-left: 3px solid #4fcf7c;
   }
 
-  // Attribution header: the other Buddy's icon + name atop the bubble.
+  // Attribution header atop the bubble. Incoming: the sending Buddy's icon +
+  // name. Outgoing: your Buddy's icon → the destination Buddy's icon + name.
   .byte-msg-peer {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     margin-bottom: 4px;
     font-size: 11.5px;
     font-weight: 600;
@@ -652,10 +653,21 @@ html.html-ctr-byte body {
       border-radius: 50%;
       object-fit: cover;
       flex-shrink: 0;
+
+      &[hidden] { display: none; }
+    }
+    .byte-msg-peer-arrow {
+      color: var(--bs-text);
+      opacity: 0.5;
+      font-size: 11px;
+      line-height: 1;
+
+      &[hidden] { display: none; }
     }
     .byte-msg-peer-name {
       color: var(--bs-text);
       opacity: 0.9;
+      margin-left: 1px;
     }
   }
 

@@ -245,9 +245,13 @@
         <summary data-thoughts-summary>Thinking</summary>
         <div class="byte-msg-thoughts-body" data-thoughts-body></div>
       </details>
-      <%# Cross-user relay attribution header — the other household's Buddy %>
-      <%# (icon + name). Hidden unless the message carries relay_peer metadata. %>
+      <%# Cross-user relay attribution header. Incoming: the sending Buddy's %>
+      <%# icon + name. Outgoing (your Buddy passed something along): your own %>
+      <%# Buddy's icon, an arrow, then the destination Buddy's icon + name. %>
+      <%# Hidden unless the message carries relay_peer metadata. %>
       <div class="byte-msg-peer" data-peer hidden>
+        <img class="byte-msg-peer-icon" data-peer-from-icon alt="" aria-hidden="true" hidden>
+        <span class="byte-msg-peer-arrow" data-peer-arrow hidden>→</span>
         <img class="byte-msg-peer-icon" data-peer-icon alt="" aria-hidden="true">
         <span class="byte-msg-peer-name" data-peer-name></span>
       </div>

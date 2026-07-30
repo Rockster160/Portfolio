@@ -318,7 +318,8 @@ module Buddy
           type:        [:string, :null],
           description: "What you SAY to the person this turn - the words they will see. " \
                        "Put it on your FIRST tool call and leave it null on any others. " \
-                       "Never leave it null on every call, or they get an empty message",
+                       "Never leave it null on every call, or they get an empty message. " \
+                       "Write it warm, the way you'd text a friend - a clipped confirmation reads as a receipt",
         }
       end
 

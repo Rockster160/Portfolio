@@ -137,11 +137,12 @@ module Buddy
 
       # Post a bridged message from `from_user` to `to_user`. The recipient's
       # copy is attributed to the SENDER's Buddy (their icon/name/color) so they
-      # see who it's from; a second copy lands in the SENDER's own thread
-      # attributed to the RECIPIENT's Buddy, so each side renders the OTHER
-      # household's identity (a cross-household chat feel). Recipient gets a push;
-      # the sender copy is a silent record. No recompose — the text is delivered
-      # verbatim in the sending Buddy's words.
+      # see who it's from. A second copy lands in the SENDER's own thread as an
+      # outgoing record: it carries BOTH identities (`relay_from` = their own
+      # Buddy, `relay_peer` = the destination) so the UI can render it as
+      # "yours → theirs" rather than as the partner talking. Recipient gets a
+      # push; the sender copy is a silent record. No recompose — the text is
+      # delivered verbatim in the sending Buddy's words.
       def bridge!(from_user:, to_user:, text:, from_conversation: nil, to_conversation: nil)
         to_convo   = to_conversation   || conversation_for(to_user)
         from_convo = from_conversation || conversation_for(from_user)
@@ -164,7 +165,12 @@ module Buddy
           direction:    :inbound,
           state:        :delivered,
           body:         text,
-          metadata:     { "kind" => "buddy_relay", "source" => "relay_copy", "relay_peer" => recipient },
+          metadata:     {
+            "kind"       => "buddy_relay",
+            "source"     => "relay_copy",
+            "relay_peer" => recipient,
+            "relay_from" => sender,
+          },
           delivered_at: Time.current,
         )
         broadcast(from_user, from_msg)

@@ -23,6 +23,13 @@ module Buddy
       # one. Beyond that a model is spinning, not working.
       MAX_ROUNDS = 4
 
+      # Wall-clock budget for the WHOLE turn, shared across rounds so a
+      # round-trip can't multiply it. A normal turn is 1-3s; this only bites on
+      # a pathological stream. It has to stay under TurnDispatcher's lock wait,
+      # or a slow turn would still block the next message on the same
+      # conversation for longer than it took to give up.
+      TURN_BUDGET_SECONDS = 90
+
       # What we hand back as a tool's output. The model has to know whether the
       # thing it called has HAPPENED or is merely waiting on a tap, because the
       # tense it writes in depends on it (see the three-kinds-of-action section of
@@ -114,6 +121,7 @@ module Buddy
         spoken    = []
         proposals = []
         rounds    = 0
+        @deadline = Time.current + TURN_BUDGET_SECONDS
 
         loop do
           rounds += 1
@@ -149,6 +157,9 @@ module Buddy
           reads = calls.select { |c| c[:name].to_sym == ContextTool::NAME }
           break if reads.empty? && spoken.any?
           break if rounds >= MAX_ROUNDS
+          # Out of budget: another round would just abort on arrival. Take what
+          # we have rather than burning a call to be told the same thing.
+          break if Time.current > @deadline
 
           # Carry forward whatever was spoken this round, from EITHER source. Only
           # feeding back output_text left the model blind to its own inline reply,
@@ -168,7 +179,7 @@ module Buddy
       # client's contract is a complete body), and side effects still fire the
       # moment they arrive so the face moves before the words appear.
       def run_round(input)
-        @client.stream(instructions: instructions, input: input, tools: tools) { |event|
+        @client.stream(instructions: instructions, input: input, tools: tools, deadline: @deadline) { |event|
           next unless event[:type] == :tool_call
           next unless Buddy::SideEffects.handles?(event[:name])
 

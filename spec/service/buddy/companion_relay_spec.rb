@@ -48,10 +48,18 @@ RSpec.describe "Buddy companion relay" do
       expect(to_msg.body).to eq("he fed the dog")
       expect(to_msg.metadata.dig("relay_peer", "name")).to eq("Byte")
 
-      # Rocco's own thread gets a copy attributed to Chelsea's Buddy (Moss).
+      # Rocco's own thread gets an outgoing copy carrying both identities, so
+      # it renders as "Byte → Moss" instead of looking like Moss said it.
       copy = source(convo, "relay_copy")
       expect(copy.body).to eq("he fed the dog")
+      expect(copy.metadata.dig("relay_from", "name")).to eq("Byte")
       expect(copy.metadata.dig("relay_peer", "name")).to eq("Moss")
+    end
+
+    it "leaves the recipient's copy without a sender-side arrow" do
+      run(:message_partner, { to: her, message: "he fed the dog" })
+
+      expect(source(BuddyRelay.last.to_conversation, "relay").metadata).not_to have_key("relay_from")
     end
 
     it "refuses a name that isn't in the household" do

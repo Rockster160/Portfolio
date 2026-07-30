@@ -40,6 +40,7 @@ Buddy::Tools.register(
     if chore&.assigned? && chore.assigned_to_user_id != ctx.user.id
       subs << "for #{chore.assigned_to_user&.first_name}"
     end
+    subs << "📝 #{payload[:note]}" if payload[:note].present?
     if payload[:completed_at].present?
       subs << "at #{Buddy::TimeParser.friendly(payload[:completed_at], user: ctx.user)}"
     end

@@ -284,21 +284,35 @@ document.addEventListener("DOMContentLoaded", async () => {
     const bodyEl = node.querySelector("[data-body]");
 
     // Cross-user relay attribution: a bridged message carries `relay_peer`
-    // (the OTHER household's Buddy — name/theme/icon). Show an avatar+name
-    // header and tag the bubble with the peer theme so CSS paints it in that
-    // household's accent color instead of the default inbound tint.
+    // (the OTHER household's Buddy — name/theme/icon). Incoming relays show
+    // that avatar+name alone. The sender-side copy also carries `relay_from`
+    // (your own Buddy) and renders "yours → theirs", so it doesn't read as
+    // something the partner's Buddy said. The bubble is tinted for whichever
+    // Buddy is speaking rather than the default inbound tint.
     const peer = message?.metadata?.relay_peer;
+    const relayFrom = message?.metadata?.relay_from;
     const peerEl = node.querySelector("[data-peer]");
     if (peerEl) {
+      const fromIconEl = peerEl.querySelector("[data-peer-from-icon]");
+      const arrowEl = peerEl.querySelector("[data-peer-arrow]");
+      const outgoing = Boolean(peer && relayFrom?.icon);
       if (peer && (peer.name || peer.icon)) {
         peerEl.hidden = false;
         const iconEl = peerEl.querySelector("[data-peer-icon]");
         if (iconEl) iconEl.src = peer.icon || "";
         const nameEl = peerEl.querySelector("[data-peer-name]");
         if (nameEl) nameEl.textContent = peer.name || "";
-        node.dataset.peerTheme = peer.theme || "";
+        if (fromIconEl) {
+          fromIconEl.hidden = !outgoing;
+          if (outgoing) fromIconEl.src = relayFrom.icon;
+        }
+        if (arrowEl) arrowEl.hidden = !outgoing;
+        node.dataset.peerTheme =
+          (outgoing ? relayFrom.theme : peer.theme) || "";
       } else {
         peerEl.hidden = true;
+        if (fromIconEl) fromIconEl.hidden = true;
+        if (arrowEl) arrowEl.hidden = true;
         node.removeAttribute("data-peer-theme");
       }
     }

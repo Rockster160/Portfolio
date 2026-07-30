@@ -166,6 +166,54 @@ RSpec.describe Buddy::GPT::Client do
     end
   end
 
+  describe "the wall-clock deadline" do
+    # Faraday's request_timeout is per-READ, so a stream that keeps trickling
+    # never trips it. One prod turn ran 3m45s that way and blocked every message
+    # behind it on the conversation lock.
+    def stream_with_deadline(deadline)
+      described_class.new.stream(
+        instructions: "x", input: [{ role: :user, content: "hi" }], deadline: deadline,
+      )
+    end
+
+    it "keeps the prose it already streamed when the budget runs out" do
+      stub_sse(sse(text_delta("Partial thought"), text_delta(" continues"), completed))
+
+      result = stream_with_deadline(1.hour.ago)
+
+      expect(result[:ok]).to be(true)
+      expect(result[:text]).to include("Partial")
+      expect(result[:error]).to be_nil
+    end
+
+    it "keeps a completed tool call, since only whole items ever arrive" do
+      stub_sse(sse(function_call("log_event", '{"name":"Coffee"}'), completed))
+
+      result = stream_with_deadline(1.hour.ago)
+
+      expect(result[:tool_calls].first).to include(name: :log_event)
+    end
+
+    it "reports failure when the budget ran out before anything usable arrived" do
+      stub_sse(sse(completed))
+
+      result = stream_with_deadline(1.hour.ago)
+
+      expect(result[:ok]).to be(false)
+      expect(result[:error]).to eq("timed out")
+    end
+
+    it "does not interfere with a stream that finishes in time" do
+      stub_sse(sse(text_delta("All good"), completed))
+
+      result = stream_with_deadline(1.hour.from_now)
+
+      expect(result[:ok]).to be(true)
+      expect(result[:text]).to eq("All good")
+      expect(result[:usage]).to be_present
+    end
+  end
+
   describe "failure modes" do
     it "reports a turn that produced neither text nor tool calls as not ok" do
       stub_sse(sse(completed))

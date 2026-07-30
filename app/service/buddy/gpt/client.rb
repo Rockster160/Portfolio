@@ -32,9 +32,14 @@ module Buddy
 
       DEFAULT_MODEL = "gpt-5.4-mini".freeze
 
-      # Generous. A long reply with a couple of tool calls streams for a while,
-      # and a timeout mid-stream strands the message bubble in :streaming.
+      # Faraday's timeout is per-READ, not wall clock: as long as bytes keep
+      # arriving it never fires. This is the backstop for a stream that goes
+      # completely silent. For a stream that merely trickles, see the deadline.
       TIMEOUT_SECONDS = 120
+
+      # Raised when a turn blows its wall-clock budget. Carries whatever had
+      # already streamed, so a slow-but-useful reply isn't thrown away.
+      DeadlineExceeded = Class.new(StandardError)
 
       attr_reader :model
 
@@ -43,7 +48,11 @@ module Buddy
         @timeout = timeout
       end
 
-      def stream(instructions:, input:, tools: [], &block)
+      # `deadline` is an absolute Time. Checked on every SSE event, which is
+      # exactly the case Faraday's read timeout can't see: a stream that keeps
+      # dribbling tokens resets the read clock forever. One prod turn ran 3m45s
+      # this way and blocked every message behind it on the conversation lock.
+      def stream(instructions:, input:, tools: [], deadline: nil, &block)
         text        = String.new(encoding: "UTF-8")
         tool_calls  = []
         response_id = nil
@@ -81,6 +90,11 @@ module Buddy
           when ERROR
             stream_error = event["message"].presence || "stream error"
           end
+
+          # Checked AFTER handling, so the event that trips the budget is still
+          # kept. Losing a chunk to be a few milliseconds more punctual is a bad
+          # trade when the whole point is salvaging a slow reply.
+          raise DeadlineExceeded if deadline && Time.current > deadline
         }
 
         client.responses.create(parameters: request_parameters(
@@ -88,6 +102,17 @@ module Buddy
         ))
 
         result(text: text, tool_calls: tool_calls, response_id: response_id, error: stream_error, usage: usage)
+      rescue DeadlineExceeded
+        # Keep what we got. Only complete items ever reach us (tool calls arrive
+        # on `output_item.done`), so a truncated stream can't yield half-parsed
+        # arguments — partial prose is the worst case, and that beats an error
+        # bubble. Usage is lost because the terminal event never arrived.
+        Rails.logger.warn("[Buddy::GPT::Client] stream exceeded its deadline; keeping #{text.length} chars")
+        {
+          ok: text.strip.present? || tool_calls.any?, text: text, tool_calls: tool_calls,
+          response_id: response_id, error: ("timed out" if text.strip.empty? && tool_calls.empty?),
+          model: model, usage: usage,
+        }
       rescue StandardError => e
         # Faraday raises on non-200 (the gem installs :raise_error), so an API
         # rejection lands here rather than arriving as an ERROR event. A rejected

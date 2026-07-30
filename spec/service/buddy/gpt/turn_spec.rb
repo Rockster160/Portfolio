@@ -597,6 +597,23 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
+  describe "the turn budget" do
+    it "hands every round the same deadline, so round-trips can't multiply it" do
+      client = run([
+        { text: "", tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
+        { text: "Done." },
+      ])
+
+      deadlines = client.calls.map(&:deadline)
+      expect(deadlines.compact.length).to eq(2)
+      expect(deadlines.uniq.length).to eq(1)
+    end
+
+    it "sets the deadline inside the dispatcher's lock wait, so a slow turn can't outlast it" do
+      expect(described_class::TURN_BUDGET_SECONDS).to be < Buddy::TurnDispatcher::LOCK_WAIT_SECONDS
+    end
+  end
+
   describe "round limit" do
     it "stops after the cap instead of looping forever" do
       rounds = Array.new(8) {

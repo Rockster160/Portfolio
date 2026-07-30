@@ -20,7 +20,7 @@
 # Every request it received is kept on `#calls` so specs can assert on the
 # instructions, input array, and tool schemas that were actually sent.
 class FakeBuddyClient
-  Request = Struct.new(:instructions, :input, :tools, keyword_init: true)
+  Request = Struct.new(:instructions, :input, :tools, :deadline, keyword_init: true)
 
   # A real model slug by default so Buddy::GPT::Pricing resolves a rate and cost
   # assertions exercise the real math. Override per instance to test the
@@ -46,8 +46,8 @@ class FakeBuddyClient
     @index  = 0
   end
 
-  def stream(instructions:, input:, tools: [], &block)
-    @calls << Request.new(instructions: instructions, input: input, tools: tools)
+  def stream(instructions:, input:, tools: [], deadline: nil, &block)
+    @calls << Request.new(instructions: instructions, input: input, tools: tools, deadline: deadline)
 
     round = @rounds[@index] || { text: "" }
     @index += 1

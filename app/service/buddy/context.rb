@@ -35,6 +35,7 @@ module Buddy
         chores_overdue_backlog: chore_buckets[:overdue_backlog], # long-term todo, NOT all-must-do-today
         chores_all:             chore_buckets[:all_names],       # EVERY active chore name - the match roster for complete_chore
         recent_events:          recent_events(user, now),
+        lists:                  lists(user),                    # the person's lists + each one's sections, for filing items in the right place
         active_proposals:       active_proposals(conversation),
         upcoming_reminders:     upcoming_reminders(conversation, now),
         active_watches:         active_watches(conversation),
@@ -443,6 +444,26 @@ module Buddy
           }
       rescue StandardError => e
         Buddy::Errors.report(section: "context.recent_events", exception: e, user: user)
+        []
+      end
+
+      # The person's lists, each with the SECTIONS defined on it (produce,
+      # dairy, a store name, an aisle). Lets Buddy file a new item under the
+      # right existing section instead of guessing a freeform category. Only
+      # the section NAMES ship - that's all the add/edit tools need to match.
+      # Lists with no sections still appear (bare name) so Buddy knows the
+      # roster of lists that exist.
+      def lists(user)
+        return [] unless user.respond_to?(:ordered_lists)
+
+        user.ordered_lists.includes(:sections).map { |list|
+          entry = { name: list.name }
+          section_names = list.sections.map(&:name).compact_blank
+          entry[:sections] = section_names if section_names.any?
+          entry
+        }
+      rescue StandardError => e
+        Buddy::Errors.report(section: "context.lists", exception: e, user: user)
         []
       end
 

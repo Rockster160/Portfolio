@@ -27,6 +27,7 @@ module Buddy
         chores_overdue_backlog
         chores_all
         recent_events
+        lists
         active_proposals
         upcoming_reminders
         active_watches
@@ -54,6 +55,9 @@ module Buddy
           isn't due today.
         - chores_pending_today: their intentional today list only, not
           everything that exists.
+        - lists: the person's lists, each with its SECTIONS. Check this before
+          add_list_item so you can file an item under an existing section
+          (produce, dairy, a store) instead of guessing.
         - jil_functions / jil_triggers: what you're allowed to fire, with
           signatures. Fuzzy-match by name and purpose.
       TXT
