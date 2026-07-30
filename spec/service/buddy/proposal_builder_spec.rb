@@ -96,7 +96,7 @@ RSpec.describe Buddy::ProposalBuilder do
       # Receipt first, then the record of WHICH tool ran - a level-1 action has
       # no checklist row, so the chip is the only trace it leaves.
       expect(chip.body).to eq("Handled reminder")
-      expect(chip.metadata["detail"]).to include("spec_auto")
+      expect(chip.metadata["tool_name"]).to eq("spec_auto")
       expect(chip.direction).to eq("inbound")
     end
 

@@ -229,15 +229,26 @@ module Buddy
         "Ran #{tool[:name].to_s.tr("_", " ")}"
       end
 
-      # The second line of an activity chip: which tool ran, and the arguments it
-      # ran with. A level-1 action leaves no checklist row behind, so without this
-      # the only trace is prose the model wrote — and prose is exactly what we
-      # can't take at face value. Reuses the tool's own label proc, which already
-      # formats its params for the checklist.
+      # The second line of an activity chip: the arguments the action ran with. A
+      # level-1 action leaves no checklist row behind, so without this the only
+      # trace is prose the model wrote — and prose is exactly what we can't take
+      # at face value. Reuses the tool's own label proc, which already formats
+      # its params for the checklist.
+      #
+      # The internal tool name used to lead this line, but `call_jil_function`
+      # means nothing to someone reading a receipt, and the line above already
+      # says WHAT ran. It stays on the message metadata, where debugging can
+      # reach it without putting snake_case in front of a person. Argument keys
+      # get their underscores turned back into spaces for the same reason.
       def activity_detail(tool, payload, ctx)
         raw = safely { tool[:label].call(payload, ctx) }
         sub = raw.is_a?(Hash) ? (raw[:sub] || raw["sub"]).to_s.presence : nil
-        [tool[:name], sub&.tr("\n", ", ")].compact.join(" · ")
+        return nil if sub.blank?
+
+        sub.split("\n").map { |line|
+          key, value = line.split(":", 2)
+          value ? "#{key.to_s.strip.tr("_", " ")}: #{value.strip}" : line.strip
+        }.join(" · ")
       end
 
       # The shared "row shell" both level-2 and level-3 rows start from: id,

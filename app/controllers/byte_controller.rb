@@ -482,6 +482,8 @@ class ByteController < ApplicationController
       conversation.update!(mode: new_mode)
       broadcast_convo_change(conversation, :updated)
       ack(conversation, "Mode set to **#{new_mode}** for this conversation.")
+    when "compact", "forget"
+      compact_conversation(conversation)
     when "fork", "continue"
       # Spin up a brand-new conversation with the same mode + same cwd.
       # Useful when the old shell died and left corrupt state, or the
@@ -489,6 +491,30 @@ class ByteController < ApplicationController
       # in the same directory.
       fork_conversation(conversation, arg.presence)
     end
+  end
+
+  # Drop the model's view of this thread WITHOUT deleting anything.
+  #
+  # `buddy_recap_at` is the line Buddy::GPT::History truncates at, so moving it
+  # to now means the next turn opens on an empty transcript. The messages stay
+  # on screen, and nothing durable is touched: memories, this thread's notes,
+  # stashed ideas, chores, reminders, and watches are all separate records.
+  #
+  # Distinct from Buddy::Compactor, which summarizes the stretch first and hands
+  # the recap forward. This is the version you reach for when the history itself
+  # is the problem — Buddy answering from the shape of the last few turns rather
+  # than from the request in front of it — so the recap is cleared, not written.
+  def compact_conversation(conversation)
+    return ack(conversation, "`/compact` is a Buddy thing - this conversation is in #{conversation.mode} mode.") unless conversation.buddy?
+
+    dropped = Buddy::GPT::History.build(conversation, upto: nil).length
+    metadata = (conversation.metadata || {}).merge(
+      "buddy_recap"    => nil,
+      "buddy_recap_at" => Time.current.iso8601(6),
+    ).compact
+    conversation.update!(metadata: metadata)
+
+    ack(conversation, "Cleared #{dropped} #{"turn".pluralize(dropped)} of history. Memories, notes, and everything else are untouched.")
   end
 
   def fork_conversation(source, custom_name)

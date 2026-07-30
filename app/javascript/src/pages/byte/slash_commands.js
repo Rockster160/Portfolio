@@ -33,6 +33,7 @@ const COMMANDS = [
 
   // Buddy mode
   { name: "tools",    description: "Buddy tool access (on default | off | list)",     args: "[spec]" },
+  { name: "compact",  description: "Drop this thread's history — memories stay" },
 
   // Conversation
   { name: "rename",   description: "Rename this conversation",                         args: "<new name>" },

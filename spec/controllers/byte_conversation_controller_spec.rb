@@ -118,6 +118,68 @@ RSpec.describe ByteController, type: :controller do
     end
   end
 
+  # Buddy answering from the shape of the last few turns rather than the request
+  # in front of it is a real failure mode, so there needs to be a way to cut the
+  # thread's history loose without losing anything durable.
+  describe "POST #create_message /compact" do
+    let(:convo) { rocco.byte_conversations.create!(name: "buddy", mode: :buddy) }
+
+    def say(text)
+      convo.byte_messages.create!(
+        user: rocco, direction: :inbound, state: :delivered, body: text, metadata: { "kind" => "buddy" },
+      )
+    end
+
+    def compact!
+      post :create_message, params: { body: "/compact", conversation_id: convo.id }
+    end
+
+    it "hides prior turns from the model without deleting them" do
+      say("something from earlier")
+      expect(Buddy::GPT::History.build(convo, upto: nil)).not_to be_empty
+
+      expect { compact! }.not_to change { convo.byte_messages.where("body = 'something from earlier'").count }
+      expect(Buddy::GPT::History.build(convo.reload, upto: nil)).to be_empty
+    end
+
+    it "clears any carried recap rather than handing it forward" do
+      convo.update!(metadata: { "buddy_recap" => "they had a rough week", "buddy_recap_at" => 1.day.ago.iso8601(6) })
+
+      compact!
+
+      expect(convo.reload.metadata).not_to have_key("buddy_recap")
+      expect(convo.metadata["buddy_recap_at"]).to be_present
+    end
+
+    it "leaves durable memory and this thread's notes alone" do
+      memory = BuddyMemory.create!(user: rocco, content: "prefers oat milk")
+      convo.update!(buddy_memories: "keep this thread work-only")
+
+      compact!
+
+      expect(memory.reload.content).to eq("prefers oat milk")
+      expect(convo.reload.buddy_memories).to eq("keep this thread work-only")
+    end
+
+    it "answers with what it dropped" do
+      say("one")
+      say("two")
+
+      compact!
+
+      expect(JSON.parse(response.body)["body"]).to match(/cleared 2 turns/i)
+    end
+
+    it "declines outside Buddy mode instead of silently doing nothing" do
+      other = rocco.byte_conversations.create!(name: "claude", mode: :claude)
+
+      post :create_message, params: { body: "/compact", conversation_id: other.id }
+
+      expect(JSON.parse(response.body)["body"]).to match(/Buddy thing/i)
+      expect(other.reload.metadata["buddy_recap_at"]).to be_nil
+    end
+  end
+
   describe "GET #messages scoped to conversation" do
     it "filters the history by conversation_id" do
       a = rocco.byte_conversations.create!(name: "A", mode: :claude)

@@ -85,7 +85,8 @@ RSpec.describe "Buddy proposal levels" do
       # Receipt in the body; which tool and which args as a separate footnote,
       # so the two can be styled apart instead of running together.
       expect(chip.body).to eq("Fired **Fan High**")
-      expect(chip.metadata["detail"]).to eq("trigger_jil_task · scope: fan-high")
+      expect(chip.metadata["detail"]).to eq("scope: fan-high")
+      expect(chip.metadata["tool_name"]).to eq("trigger_jil_task")
     end
 
     # CSS puts a ✓ in front of every chip, and most receipts end with one of
@@ -109,7 +110,7 @@ RSpec.describe "Buddy proposal levels" do
       build([{ tool_name: :trigger_jil_task, payload: { name: "Fan High" } }])
 
       expect(chip).to be_present
-      expect(chip.metadata["detail"]).to include("trigger_jil_task")
+      expect(chip.metadata["tool_name"]).to eq("trigger_jil_task")
     end
 
     # check_weather returns nil on purpose: it answers via a follow-up Buddy
