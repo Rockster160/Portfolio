@@ -440,6 +440,16 @@ module Buddy
         @conversation.metadata.is_a?(Hash) ? @conversation.metadata["buddy_recap"] : nil
       end
 
+      # The hidden seed CompanionDelivery#deliver_prompt writes to make Buddy
+      # speak unprompted. `true` or nil rather than false, so `.compact` keeps
+      # the flag off ordinary replies instead of stamping every one of them.
+      def self_initiated?
+        meta = @inbound.metadata
+        return nil unless meta.is_a?(Hash) && meta["kind"].to_s == "buddy_trigger"
+
+        true
+      end
+
       # ---- message lifecycle -------------------------------------------------
 
       def create_reply
@@ -448,7 +458,16 @@ module Buddy
           direction: :inbound,
           state:     :streaming,
           body:      PLACEHOLDER,
-          metadata:  { "kind" => "buddy", "in_reply_to" => @inbound.id },
+          metadata:  {
+            "kind"        => "buddy",
+            "in_reply_to" => @inbound.id,
+            # Buddy speaking on its OWN initiative rather than answering: a
+            # reminder firing, a watch tripping, the morning briefing. Carried
+            # onto the reply because by the time ByteNotifier sees it, the hidden
+            # seed that started it is out of scope — and a nudge nobody asked for
+            # is exactly the one that must not be swallowed by presence.
+            "self_initiated" => self_initiated?,
+          }.compact,
         )
         broadcast(msg)
         msg

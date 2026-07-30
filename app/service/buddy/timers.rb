@@ -40,9 +40,9 @@ module Buddy
           name:        clean,
           timer_page:  page,
         )
-        # Anchor to WHEN THE PERSON ASKED, not when the Mac round-trip finished, so
-        # a slow turn doesn't quietly shave time off a "3 minute" timer.
-        timer.start!(at: anchor_time(conversation))
+        # Anchor to WHEN THE PERSON ASKED, not when the turn finished, so a slow
+        # turn doesn't quietly shave time off a "3 minute" timer.
+        timer.start!(at: anchor_time(conversation, secs))
         raise ActiveRecord::Rollback unless timer.running?
       end
 
@@ -99,17 +99,26 @@ module Buddy
       Buddy::Errors.report(section: "timers.on_fired", exception: e, user: timer&.user)
     end
 
+    # How much of a countdown the back-dating is allowed to consume. A turn takes
+    # a few seconds, which is nothing against three minutes and nearly everything
+    # against five: a "5s" timer anchored to the request was starting with about
+    # a second left, so it announced itself set and expired in the same breath.
+    MAX_BACKDATE_FRACTION = 0.25
+
     # The moment the countdown should count FROM: the most recent message the
     # person sent in this thread (the timer request itself). Clamped to a recent
     # window and never the future, so a queued/replayed turn can't anchor the
-    # timer hours in the past. Falls back to now when there's nothing to anchor.
-    def anchor_time(conversation)
+    # timer hours in the past, and never further back than a quarter of the
+    # countdown so a short one survives the turn that created it. Falls back to
+    # now when there's nothing to anchor.
+    def anchor_time(conversation, seconds)
       return Time.current if conversation.nil?
 
       sent = conversation.byte_messages.where(direction: :outbound).order(:created_at).last&.created_at
       return Time.current if sent.nil? || sent > Time.current || sent < 1.hour.ago
 
-      sent
+      floor = Time.current - (seconds.to_i * MAX_BACKDATE_FRACTION)
+      [sent, floor].max
     end
 
     # "5 min", "90 sec", "1 min 30 sec" - for receipts.

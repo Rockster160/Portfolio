@@ -58,6 +58,35 @@ RSpec.describe Buddy::Timers do
       expect(timer.remaining_ms).to be < 180_000
     end
 
+    # Prod: "timer for 5s" announced itself set and expired in the same breath.
+    # The turn that created it took a few seconds, and anchoring to the request
+    # handed the countdown back already spent. Fine at three minutes, fatal at
+    # five seconds - so the back-date is capped as a FRACTION of the countdown.
+    it "does not let the back-date eat a short countdown" do
+      convo = user.byte_conversations.create!(mode: :buddy)
+      convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: "timer for 5s", created_at: 8.seconds.ago,
+      )
+
+      timer = described_class.create!(user: user, seconds: 5, conversation: convo)
+
+      # At most a quarter of 5s may be given back, so >= ~3.75s must remain.
+      expect(timer.remaining_ms).to be > 3_500
+      expect(timer.end_at).to be > Time.current
+    end
+
+    it "still back-dates a long countdown by the full turn latency" do
+      convo = user.byte_conversations.create!(mode: :buddy)
+      sent_at = 20.seconds.ago
+      convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: "timer 10m", created_at: sent_at,
+      )
+
+      timer = described_class.create!(user: user, seconds: 600, conversation: convo)
+
+      expect(timer.end_at).to be_within(2.seconds).of(sent_at + 600.seconds)
+    end
+
     it "leaves no timer and raises when the fire can't be scheduled" do
       allow(TimerFireWorker).to receive(:perform_at).and_raise(StandardError, "redis down")
 

@@ -19,15 +19,11 @@ module ByteNotifier
     meta = message.metadata.is_a?(Hash) ? message.metadata : {}
 
     # Buddy replies carrying a proposal checklist are a WAITING ASK — the user
-    # must tap boxes for anything to happen. These are NOT suppressed by
-    # presence (the PWA may be "present" but backgrounded on a lock screen, or
-    # the heartbeat may be stale). Force-notify with a distinct framing.
+    # must tap boxes for anything to happen.
     has_proposals = meta["tool_name"] == "buddy_proposals" ||
       (meta["buttons"].is_a?(Array) && meta["buttons"].any?)
 
-    # Suppress the usual "you're present so skip" gate ONLY for high-priority
-    # asks. Normal chatter still respects presence.
-    return if !has_proposals && meta["kind"] != "action-request" && user_present?(user)
+    return if user_present?(user) && !always_notify?(meta, has_proposals)
 
     title, body = framing(message, meta, has_proposals)
 
@@ -37,6 +33,23 @@ module ByteNotifier
       tag:   "byte-#{message.id}",
       users: [user],
     )
+  end
+
+  # Presence suppression assumes "the app is open" means "they'll see it". That
+  # holds for ordinary back-and-forth and fails for everything below, where the
+  # PWA may be present-but-backgrounded on a lock screen, or the heartbeat may
+  # simply be stale.
+  def always_notify?(meta, has_proposals)
+    return true if has_proposals            # a checklist waiting on their tap
+    return true if meta["kind"] == "action-request"
+
+    # Buddy speaking on its own initiative: a reminder firing, a watch tripping,
+    # the morning briefing. They didn't ask for it and aren't waiting on it, so
+    # whether the app happens to be open says nothing about whether they'll see
+    # it — and a reminder that arrives silently is the whole feature failing.
+    # CompanionDelivery#deliver_plain already ignores presence for exactly this
+    # reason; the prompt path routes through a Buddy turn and used to lose it.
+    meta["self_initiated"] == true
   end
 
   # Is this user's Byte PWA foreground right now? Populated by the

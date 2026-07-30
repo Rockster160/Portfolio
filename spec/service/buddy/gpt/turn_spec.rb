@@ -794,6 +794,32 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
+  # A reminder firing, a watch tripping, the morning briefing: all arrive as a
+  # hidden buddy_trigger seed, and the reply to one must not be silenced by
+  # presence the way ordinary back-and-forth is. ByteNotifier can't see the seed
+  # by then, so the flag has to ride on the reply.
+  describe "replies to something Buddy started itself" do
+    def trigger_says(text)
+      convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: text,
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "source" => "watch" },
+      )
+    end
+
+    it "marks the reply self-initiated" do
+      client = FakeBuddyClient.new([{ text: "Loops away, friend." }])
+      described_class.run!(trigger_says("[scheduled prompt] put your Loops away"), client: client)
+
+      expect(reply.metadata["self_initiated"]).to be(true)
+    end
+
+    it "leaves the flag off an ordinary reply rather than stamping every one" do
+      run([{ text: "Not much on my end." }])
+
+      expect(reply.metadata).not_to have_key("self_initiated")
+    end
+  end
+
   describe "the turn budget" do
     it "hands every round the same deadline, so round-trips can't multiply it" do
       # Deliberately not a completion claim - that would earn a corrective round
