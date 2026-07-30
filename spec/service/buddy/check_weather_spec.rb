@@ -50,6 +50,6 @@ RSpec.describe "check_weather tool" do
 
     run(location: "somewhere imaginary")
     expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
-    expect(chip.body).to eq("Couldn't pull the weather for somewhere imaginary right now.")
+    expect(chip.body).to include("Couldn't pull the weather for somewhere imaginary right now.")
   end
 end

@@ -347,8 +347,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else if (kind === "buddy_activity") {
       // A trusted tool ran WITHOUT a confirmation checkbox (e.g. a reminder
       // was scheduled). Reads as an activity receipt - a centered pill,
-      // clearly not a message - via CSS.
-      bodyEl.textContent = message.body || "";
+      // clearly not a message - via CSS. Markdown because receipts bold the
+      // thing they acted on, and rendering that literally showed the asterisks.
+      bodyEl.innerHTML = renderMarkdown(message.body || "");
     } else if (
       kind === "buddy_reply" ||
       kind === "buddy" ||

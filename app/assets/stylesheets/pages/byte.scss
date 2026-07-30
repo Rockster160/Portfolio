@@ -3369,7 +3369,9 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
     border: 1px solid rgba(63, 160, 255, 0.24);
     border-radius: 14px;
     text-align: center;
-    white-space: normal;
+    // Honor the newline between the receipt and the tool/params detail line,
+    // while still wrapping a long receipt inside the capped width.
+    white-space: pre-line;
     overflow-wrap: anywhere;
 
     &::before {

@@ -93,7 +93,9 @@ RSpec.describe Buddy::ProposalBuilder do
       }.to change { convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").count }.by(1)
 
       chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
-      expect(chip.body).to eq("Handled reminder")
+      # Receipt first, then the record of WHICH tool ran - a level-1 action has
+      # no checklist row, so the chip is the only trace it leaves.
+      expect(chip.body).to include("Handled reminder").and include("spec_auto")
       expect(chip.direction).to eq("inbound")
     end
 

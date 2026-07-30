@@ -52,6 +52,69 @@ RSpec.describe "Buddy proposal levels" do
     expect(Chore.where(name: "Dust shelves")).not_to exist
   end
 
+  # Prod message 1134: "Turn the fan to high, please" -> "Done. Fan's on high
+  # now." and NOTHING else. The task really fired, but the receipt read
+  # `ctx.proposal["payload"]`, and run_auto built a context without a proposal,
+  # so it raised NoMethodError on nil, got swallowed, and the chip was skipped.
+  # A level-1 action leaves no checklist row, so that prose was the only trace -
+  # and prose is the one thing we can't take at face value.
+  describe "the activity chip a level-1 action leaves behind" do
+    let!(:fan) {
+      Task.create!(
+        user:          user,
+        name:          "Fan High",
+        listener:      "fan-high",
+        code:          "// noop",
+        enabled:       true,
+        buddy_enabled: true,
+        description:   "Sets the great room fan to high",
+      )
+    }
+
+    def chip
+      convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
+    end
+
+    before { allow(::Jil).to receive(:trigger) }
+
+    it "posts a chip naming the tool and the params it ran with" do
+      result = build([{ tool_name: :trigger_jil_task, payload: { name: "Fan High" } }])
+
+      expect(result[:auto_ran]).to be(true)
+      expect(chip).to be_present
+      expect(chip.body).to include("Fan High")
+      expect(chip.body).to include("trigger_jil_task")
+      expect(chip.body).to include("scope: fan-high")
+    end
+
+    it "records the exact arguments on the chip for later inspection" do
+      build([{ tool_name: :trigger_jil_task, payload: { name: "Fan High" } }])
+
+      expect(chip.metadata["tool_name"]).to eq("trigger_jil_task")
+      expect(chip.metadata["payload"]).to include("task_name" => "Fan High", "scope" => "fan-high")
+    end
+
+    it "still posts a chip when the receipt itself blows up" do
+      allow(Buddy::Tools[:trigger_jil_task][:receipt]).to receive(:call).and_raise("receipt exploded")
+
+      build([{ tool_name: :trigger_jil_task, payload: { name: "Fan High" } }])
+
+      expect(chip).to be_present
+      expect(chip.body).to include("trigger_jil_task")
+    end
+
+    # check_weather returns nil on purpose: it answers via a follow-up Buddy
+    # turn, so a chip would just duplicate it. That opt-out has to keep working.
+    it "still honors a deliberate nil-receipt opt-out" do
+      allow(WeatherService).to receive(:summary).and_return("currently 70F.")
+      allow(Buddy::CompanionDelivery).to receive(:deliver_prompt)
+
+      build([{ tool_name: :check_weather, payload: {} }])
+
+      expect(chip).to be_nil
+    end
+  end
+
   it "tiers are assigned as expected on the registry" do
     expect(Buddy::Tools[:log_event][:level]).to eq(2)
     expect(Buddy::Tools[:complete_chore][:level]).to eq(2)

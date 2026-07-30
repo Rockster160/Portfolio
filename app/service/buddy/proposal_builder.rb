@@ -163,25 +163,30 @@ module Buddy
         name = conversation.buddy_name
 
         autos.each do |p|
-          ctx = Buddy::ToolContext.new(user, conversation: conversation)
           # Feed execute the SAME payload shape the confirm path produces (top-
           # level symbol keys, values JSON-flattened so Times are ISO strings),
           # so a tool behaves identically whether it's auto or confirmed.
           payload = stringify(p[:payload]).symbolize_keys
-          result  = Buddy::Tools.dispatch(p[:tool], payload, ctx)
+          # A level-1 tool has no checklist row, but its receipt still reads
+          # `ctx.proposal` for the resolved name. Passing the same shape
+          # run_level2_row builds is what makes that work: without it every such
+          # receipt raised NoMethodError on nil, got swallowed, and the chip was
+          # skipped — so "turn the fan to high" ran with no visible record at all.
+          proposal_shape = { "id" => nil, "payload" => stringify(p[:payload]), "tool_name" => p[:tool][:name].to_s }
+          ctx = Buddy::ToolContext.new(user, proposal: proposal_shape, conversation: conversation)
+          result = Buddy::Tools.dispatch(p[:tool], payload, ctx)
           text =
             if result[:ok]
-              # A blank receipt is a deliberate opt-out: the tool relayed its own
-              # result via a follow-up Buddy turn (e.g. check_weather), so there's
-              # no chip to post. Only fall back to "Done" when a receipt genuinely
-              # returned nothing but the tool didn't opt out.
-              rc = safely { p[:tool][:receipt].call(result[:data], ctx) }
-              next if rc.nil? # opted out — no activity chip
+              rc = receipt_for(p[:tool], result[:data], ctx)
+              # nil is a deliberate opt-out: the tool relays its own result via a
+              # follow-up Buddy turn (check_weather), so there's no chip to post.
+              # A receipt that RAISED is not an opt-out and must still be seen.
+              next if rc.nil?
 
-              rc.presence || "Done"
+              [rc.presence || "Done", activity_detail(p[:tool], payload, ctx)].compact.join("\n")
             else
               Rails.logger.warn("[Buddy::ProposalBuilder] auto tool #{p[:tool][:name]} failed: #{result[:error]}")
-              "#{name} couldn't do that one"
+              "#{name} couldn't do that one\n#{activity_detail(p[:tool], payload, ctx)}"
             end
 
           chip = conversation.byte_messages.create!(
@@ -189,7 +194,14 @@ module Buddy
             direction:    :inbound,
             state:        :delivered,
             body:         text,
-            metadata:     { "kind" => "buddy_activity", "tool_name" => p[:tool][:name].to_s, "ok" => result[:ok] },
+            metadata:     {
+              "kind"      => "buddy_activity",
+              "tool_name" => p[:tool][:name].to_s,
+              "ok"        => result[:ok],
+              # The exact arguments it ran with, for when the chip text isn't
+              # enough to answer "what did it actually do".
+              "payload"   => stringify(p[:payload]),
+            },
             delivered_at: Time.current,
           )
           MonitorChannel.broadcast_to(user, {
@@ -199,6 +211,27 @@ module Buddy
           })
         end
         true
+      end
+
+      # A receipt that returns nil OPTED OUT; a receipt that raises did not, and
+      # swallowing the difference is how a tool ran with nothing to show for it.
+      # A crash falls back to the tool's own name so the chip still posts.
+      def receipt_for(tool, data, ctx)
+        tool[:receipt].call(data, ctx)
+      rescue StandardError => e
+        Rails.logger.warn("[Buddy::ProposalBuilder] #{tool[:name]} receipt raised: #{e.class}: #{e.message}")
+        "Ran #{tool[:name].to_s.tr("_", " ")}"
+      end
+
+      # The second line of an activity chip: which tool ran, and the arguments it
+      # ran with. A level-1 action leaves no checklist row behind, so without this
+      # the only trace is prose the model wrote — and prose is exactly what we
+      # can't take at face value. Reuses the tool's own label proc, which already
+      # formats its params for the checklist.
+      def activity_detail(tool, payload, ctx)
+        raw = safely { tool[:label].call(payload, ctx) }
+        sub = raw.is_a?(Hash) ? (raw[:sub] || raw["sub"]).to_s.presence : nil
+        [tool[:name], sub&.tr("\n", ", ")].compact.join(" · ")
       end
 
       # The shared "row shell" both level-2 and level-3 rows start from: id,
