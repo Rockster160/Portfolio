@@ -21,8 +21,8 @@ RSpec.describe Buddy::GPT::Client do
     )
   end
 
-  def text_delta(text)
-    { type: "response.output_text.delta", delta: text }
+  def text_delta(text, item_id: nil, content_index: 0)
+    { type: "response.output_text.delta", delta: text, item_id: item_id, content_index: content_index }.compact
   end
 
   def function_call(name, arguments, call_id: "call_1", id: "fc_1")
@@ -51,6 +51,31 @@ RSpec.describe Buddy::GPT::Client do
   end
 
   describe "text streaming" do
+    # Prod message 1106 landed as "...keep an eye on that.Yep, I'm watching for
+    # the next deploy to finish." - one API call, no newline anywhere in the
+    # body. Two separate message items had their deltas appended into the same
+    # buffer with nothing between them, fusing two replies mid-sentence.
+    it "keeps separate output items apart instead of fusing them mid-sentence" do
+      stub_sse(sse(
+        text_delta("You got it. ",   item_id: "msg_1"),
+        text_delta("I'll watch it.", item_id: "msg_1"),
+        text_delta("Yep, watching.", item_id: "msg_2"),
+        completed,
+      ))
+
+      expect(run[:text]).to eq("You got it. I'll watch it.\n\nYep, watching.")
+    end
+
+    it "separates two content parts within a single item" do
+      stub_sse(sse(
+        text_delta("First.",  item_id: "msg_1", content_index: 0),
+        text_delta("Second.", item_id: "msg_1", content_index: 1),
+        completed,
+      ))
+
+      expect(run[:text]).to eq("First.\n\nSecond.")
+    end
+
     it "accumulates deltas and yields each one" do
       stub_sse(sse(text_delta("Hey"), text_delta(" there"), completed))
 
@@ -285,6 +310,30 @@ RSpec.describe Buddy::GPT::Client do
         expect(body["tools"].first["name"]).to eq("get_context")
         expect(body["tools"].first).not_to have_key("function")
         true
+      })
+    end
+
+    # Buddy shipped with no reasoning parameter at all, which measured as zero
+    # reasoning tokens over 53 prod calls - the model was never thinking before
+    # it answered. `low` beat both no-parameter and `medium` on tool-call
+    # reliability AND latency; see the constant for the numbers.
+    it "asks for low reasoning effort by default" do
+      stub_sse(sse(text_delta("ok"), completed))
+
+      run
+
+      expect(WebMock).to(have_requested(:post, endpoint).with { |req|
+        JSON.parse(req.body).dig("reasoning", "effort") == "low"
+      })
+    end
+
+    it "omits reasoning when a caller explicitly opts out (compaction)" do
+      stub_sse(sse(text_delta("ok"), completed))
+
+      described_class.new(reasoning_effort: nil).stream(instructions: "x", input: [])
+
+      expect(WebMock).to(have_requested(:post, endpoint).with { |req|
+        !JSON.parse(req.body).key?("reasoning")
       })
     end
 

@@ -32,6 +32,24 @@ module Buddy
 
       DEFAULT_MODEL = "gpt-5.4-mini".freeze
 
+      # Sending no `reasoning` parameter is NOT the same as asking for a little
+      # reasoning: 53 consecutive prod calls came back with literally zero
+      # reasoning tokens, so Buddy was answering entirely off the cuff.
+      #
+      # `low` is measured, not assumed. Against "just got back from a walk with
+      # the puppy" - the phrasing that had been dropping its complete_chore call
+      # roughly half the time - the three settings ran:
+      #
+      #   no parameter  2/4 called, ~3s
+      #   medium        1/4 called, ~6s      (and 2/3 on cases that were 3/3)
+      #   low           7/7 called, ~3s
+      #
+      # More reasoning made tool-calling WORSE and doubled latency, which is
+      # counterintuitive enough to be worth writing down: a bigger budget seems
+      # to get spent deliberating toward a conversational answer rather than
+      # acting. Raise this only with numbers in hand.
+      DEFAULT_REASONING_EFFORT = ENV.fetch("BUDDY_GPT_REASONING", "low").freeze
+
       # Faraday's timeout is per-READ, not wall clock: as long as bytes keep
       # arriving it never fires. This is the backstop for a stream that goes
       # completely silent. For a stream that merely trickles, see the deadline.
@@ -43,9 +61,12 @@ module Buddy
 
       attr_reader :model
 
-      def initialize(model: nil, timeout: TIMEOUT_SECONDS)
-        @model   = model.presence || ENV.fetch("BUDDY_GPT_MODEL", DEFAULT_MODEL)
-        @timeout = timeout
+      # `reasoning_effort: nil` omits the parameter entirely, which is what a
+      # mechanical call (compaction) wants - it has no judgement to exercise.
+      def initialize(model: nil, timeout: TIMEOUT_SECONDS, reasoning_effort: DEFAULT_REASONING_EFFORT)
+        @model            = model.presence || ENV.fetch("BUDDY_GPT_MODEL", DEFAULT_MODEL)
+        @timeout          = timeout
+        @reasoning_effort = reasoning_effort.presence
       end
 
       # `deadline` is an absolute Time. Checked on every SSE event, which is
@@ -61,12 +82,24 @@ module Buddy
         # instance must not carry an error or a token count from a previous turn
         # into this one.
         stream_error = nil
+        # Which output part the last delta belonged to. One response can carry
+        # SEVERAL message items, and their deltas arrive interleaved into this
+        # one buffer with nothing marking the seam.
+        last_part = nil
 
         handler = proc { |event|
           case event["type"]
           when TEXT_DELTA
             delta = event["delta"].to_s
             unless delta.empty?
+              # Prod message 1106 came back as "...keep an eye on that.Yep, I'm
+              # watching..." - two separate replies fused mid-sentence because
+              # every delta was appended blind. Reinstate the boundary the API
+              # gave us rather than letting the parts run together.
+              part = [event["item_id"], event["content_index"]]
+              text << "\n\n" if last_part && part != last_part && !text.empty?
+              last_part = part
+
               text << delta
               block&.call({ type: :text_delta, text: delta })
             end
@@ -173,7 +206,8 @@ module Buddy
           # retention.
           store:        false,
         }
-        params[:tools] = tools if tools.present?
+        params[:tools]     = tools if tools.present?
+        params[:reasoning] = { effort: @reasoning_effort } if @reasoning_effort
         params
       end
 

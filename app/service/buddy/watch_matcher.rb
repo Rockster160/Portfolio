@@ -13,7 +13,7 @@ module Buddy
     def dispatch(user, scope, raw_data)
       return if user.nil?
 
-      scope = scope.to_s
+      scope = deploy_alias(scope.to_s, raw_data)
       return unless WATCHABLE_SCOPES.include?(scope)
 
       watches = BuddyWatch.active.where(user_id: user.id, trigger_scope: scope).to_a
@@ -30,6 +30,29 @@ module Buddy
         user:      user,
         extra:     { scope: scope },
       )
+    end
+
+    # There is no `deploy` trigger. A finished deploy announces itself as a
+    # `monitor` broadcast on the `deploy:success` channel - that's what the
+    # "Deploy Success" / "Run After Deploy Queue" Jil tasks listen on, and what
+    # bin/wait_for_deploy subscribes to. But `remind_when` stores the watch under
+    # scope `deploy`, and `monitor` isn't watchable, so dispatch bailed on the
+    # only event that could ever satisfy it. Every deploy watch ever created sat
+    # unfired (prod watch 4 waited two days through multiple deploys) while Buddy
+    # had already promised the person a heads-up. Translating here is what makes
+    # that promise keepable.
+    #
+    # Both shapes are accepted: the channel may carry the status itself
+    # (`deploy:success`) or ride in the payload (`deploy` + status).
+    def deploy_alias(scope, raw_data)
+      return scope unless scope == "monitor"
+
+      data    = raw_data.is_a?(Hash) ? raw_data.with_indifferent_access : {}
+      channel = data[:channel].to_s.strip.downcase
+      return scope unless channel.start_with?("deploy")
+
+      succeeded = channel == "deploy:success" || data[:status].to_s.downcase == "success"
+      succeeded ? "deploy" : scope
     end
 
     # Trigger payloads reach us in two shapes. Jil-built triggers (travel,

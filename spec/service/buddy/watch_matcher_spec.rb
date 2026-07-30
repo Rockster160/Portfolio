@@ -42,6 +42,42 @@ RSpec.describe Buddy::WatchMatcher do
       w = make_watch(trigger_scope: "deploy", match: {})
       expect(w.matches?("sha" => "abc123")).to be(true)
     end
+  end
+
+  # There is no `deploy` trigger anywhere in the app. A finished deploy is a
+  # `monitor` broadcast on the `deploy:success` channel, and `monitor` isn't a
+  # watchable scope - so dispatch bailed before ever loading the watch. Prod
+  # watch 4 sat unfired for two days across multiple deploys while Buddy had
+  # already told the person it would let them know.
+  describe "the deploy signal" do
+    let!(:watch) { make_watch(trigger_scope: "deploy", match: {}, body: "let you know the deploy finished") }
+
+    it "fires a deploy watch off the monitor broadcast that actually carries it" do
+      described_class.dispatch(user, :monitor, { channel: "deploy:success", sha: "abc123" })
+
+      expect(watch.reload.fired_at).to be_present
+      expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt)
+    end
+
+    it "also accepts the status riding in the payload instead of the channel" do
+      described_class.dispatch(user, :monitor, { channel: "deploy", status: "success", sha: "abc" })
+
+      expect(watch.reload.fired_at).to be_present
+    end
+
+    it "does not fire on a deploy that started or failed" do
+      described_class.dispatch(user, :monitor, { channel: "deploy:start" })
+      described_class.dispatch(user, :monitor, { channel: "deploy:failed" })
+
+      expect(watch.reload.fired_at).to be_nil
+    end
+
+    it "leaves unrelated monitor channels alone" do
+      described_class.dispatch(user, :monitor, { channel: "surveys", blip: 3 })
+
+      expect(watch.reload.fired_at).to be_nil
+      expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
+    end
 
     context "place (travel) matching" do
       let(:watch) do

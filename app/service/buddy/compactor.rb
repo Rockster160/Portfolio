@@ -75,7 +75,10 @@ module Buddy
       history = Buddy::GPT::History.build(conversation, upto: nil)
       return nil if history.length < 2
 
-      result = Buddy::GPT::Client.new(model: MODEL).stream(
+      # No reasoning: summarizing a transcript is mechanical, and paying
+      # reasoning tokens (billed at the output rate) on a background job that
+      # exists purely to SAVE tokens would be self-defeating.
+      result = Buddy::GPT::Client.new(model: MODEL, reasoning_effort: nil).stream(
         instructions: INSTRUCTIONS,
         input:        history + [{ role: :user, content: "Summarize our conversation so far." }],
       )

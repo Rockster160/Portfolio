@@ -208,9 +208,9 @@ namespace :buddy do
     reply   = String.new(encoding: "UTF-8")
     calls   = []
 
-    # Mirrors Buddy::GPT::Turn#converse, minus persistence and side effects. Prose
-    # comes either as output text or on a tool call's `reply` field; only a read
-    # forces another round.
+    # Mirrors Buddy::GPT::Turn#converse, minus persistence and side effects: the
+    # model calls a tool and stays quiet, the call is answered, and it speaks on
+    # the round after. A turn that needs no tool ends in one call.
     spoken = []
     rounds = 0
     loop do
@@ -222,15 +222,10 @@ namespace :buddy do
       end
 
       round_text = result[:text].to_s.strip
-      inline     = Buddy::Tools.spoken_reply(result[:tool_calls])
       spoken << round_text if round_text.present?
-      spoken << inline if inline.present?
       calls.concat(result[:tool_calls])
 
       break if result[:tool_calls].empty?
-
-      reads = result[:tool_calls].select { |c| c[:name] == Buddy::GPT::ContextTool::NAME }
-      break if reads.empty? && spoken.any?
       break if rounds >= Buddy::GPT::Turn::MAX_ROUNDS
 
       input += [{ role: :assistant, content: round_text }] if round_text.present?
@@ -245,7 +240,7 @@ namespace :buddy do
           {
             type:    :function_call_output,
             call_id: call[:call_id],
-            output:  eval_tool_output(call, context_tool),
+            output:  eval_tool_output(call, context_tool, user, convo),
           },
         ]
       end
@@ -259,11 +254,12 @@ namespace :buddy do
     puts "  \e[31mCRASHED\e[0m #{e.class}: #{e.message}"
   end
 
-  # What the model gets back for each call. Reads return real context so the
-  # answer is real; everything else returns the same acknowledgement production
-  # sends (Buddy::GPT::Turn.ack_for) WITHOUT running anything, so an eval never
+  # What the model gets back for each call. Reads return real context, and
+  # everything else goes through the SAME resolver production uses
+  # (Buddy::GPT::Turn.resolve_tool), so an eval sees the real "no chore matches
+  # that" errors. Resolving stops short of executing, so an eval still never
   # logs a chore or messages a partner for real.
-  def eval_tool_output(call, context_tool)
+  def eval_tool_output(call, context_tool, user, conversation)
     name = call[:name].to_sym
     return context_tool.call(call[:arguments]) if name == Buddy::GPT::ContextTool::NAME
     return JSON.generate({ ok: true }) if Buddy::SideEffects.handles?(name)
@@ -271,7 +267,7 @@ namespace :buddy do
     tool = Buddy::Tools[name]
     return JSON.generate({ ok: false, error: "no tool named #{name}" }) if tool.nil?
 
-    JSON.generate(Buddy::GPT::Turn.ack_for(tool))
+    JSON.generate(Buddy::GPT::Turn.resolve_tool(tool, call, user: user, conversation: conversation))
   end
 
   # Never saved. `new` (not `create!`) so nothing can leak into the real thread

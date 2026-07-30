@@ -39,23 +39,91 @@ module Buddy
       # Level 1 and 2 do run for real, moments later in build_proposals — the same
       # ordering marker-era Buddy had, where prose was written before Rails
       # executed anything.
+      # Every ack ends the same way on purpose. Once a call is answered the
+      # model's only remaining job is to speak: re-issuing it produced TWO
+      # complete_chore rows for one set of shelves, and level-2 rows execute on
+      # arrival, so a repeat is silent double credit rather than a visible
+      # duplicate.
+      AGAIN = "This is recorded for this turn - do NOT call it again. Write your reply now.".freeze
+
       def self.ack_for(tool)
         case tool[:level]
         when 1
-          { status: "done", note: "Ran immediately. Speak about it as done." }
+          { status: "done", note: "Ran immediately. Speak about it as done. #{AGAIN}" }
         when 2
           {
             status: "done_undoable",
             note:   "Ran immediately and shows as a pre-checked row the person can uncheck to undo. " \
-                    "Speak about it as done.",
+                    "Speak about it as done. #{AGAIN}",
           }
         else
           {
             status: "proposed",
             note:   "A checkbox row is now waiting for the person to tap. It has NOT happened yet - " \
-                    "do not say it's done, logged, or added.",
+                    "do not say it's done, logged, or added. #{AGAIN}",
           }
         end
+      end
+
+      # Run the tool far enough to know whether it CAN happen, and hand that back
+      # as the tool output.
+      #
+      # A tool's `confirm` is its resolver: it turns "shelves" into a real chore
+      # or raises. ProposalBuilder used to be the first thing to call it, long
+      # after the model had written its reply, so a name that matched nothing got
+      # dropped in silence underneath prose already claiming credit. Resolving
+      # here means the model is TOLD before it speaks.
+      #
+      # Nothing is executed and nothing is persisted. Every confirm in the
+      # registry is a pure lookup, so ProposalBuilder re-running it later costs
+      # a repeated query and nothing else.
+      def self.resolve_tool(tool, call, user:, conversation:)
+        resolve_call(tool, call, user: user, conversation: conversation).first
+      end
+
+      # Returns [output_for_the_model, identity_signature]. The signature is what
+      # the call RESOLVED to with the volatile bits dropped, so the same chore
+      # asked for twice in one turn is recognisable as a repeat even when the
+      # model varies the wording or the timestamp between attempts.
+      def self.resolve_call(tool, call, user:, conversation:)
+        args = Buddy::Tools.normalize_function_arguments(tool, call[:arguments])
+        payload, errors = Buddy::Tools.validate_payload(tool, args)
+        return [resolve_failure(errors.join("; ")), nil] if errors.any?
+
+        confirm  = tool[:confirm].call(payload, Buddy::ToolContext.new(user, conversation: conversation))
+        resolved = payload.merge(confirm[:resolved] || {})
+
+        [
+          ack_for(tool).merge(resolved: confirm[:summary].to_s.presence).compact,
+          [tool[:name], resolved.except(*VOLATILE_ARGS).sort_by { |k, _| k.to_s }],
+        ]
+      rescue StandardError => e
+        [resolve_failure(e.message), nil]
+      end
+
+      # Args that describe HOW MUCH or WHEN rather than WHAT. Two calls differing
+      # only in these are the model restating itself, not two real actions:
+      # "just got back from a walk" produced complete_chore with `at: "now"` and
+      # then again with `at: null`, and because complete_chore is level 2 both
+      # would have executed - silent double credit for one walk.
+      VOLATILE_ARGS = %i[count note at completed_at reply].freeze
+
+      DUPLICATE_ACK = {
+        status: "duplicate",
+        note:   "You ALREADY called this in this turn and it is recorded once. This repeat was " \
+                "ignored. Do not call it again - write your reply now.",
+      }.freeze
+
+      # The model has to be able to tell this apart from success, and has to know
+      # that saying it happened anyway is the one unacceptable move.
+      def self.resolve_failure(reason)
+        {
+          status: "failed",
+          error:  reason.to_s.truncate(200),
+          note:   "This did NOT happen and there is no checkbox for it. Do not say you did it, " \
+                  "logged it, or counted it. Tell them plainly what didn't line up, and ask for " \
+                  "what you need if a name was the problem.",
+        }
       end
 
       # The bubble minted at turn start, which the client renders as a live pulsing
@@ -106,12 +174,15 @@ module Buddy
 
       # Runs the model until it stops calling tools, accumulating its prose.
       #
-      # The load-bearing detail: emitting a function call ENDS the model's turn.
-      # It writes no text alongside one, and expects the tool's output back before
-      # it says anything. So every call has to be answered — not just the read
-      # tools — or the person gets an empty bubble on any turn that logs, sets a
-      # mood, or proposes something. That was the whole failure mode of the first
-      # cut of this: 13 of 16 eval scenarios came back with no prose at all.
+      # Call, resolve, speak. Emitting a function call ENDS the model's turn - it
+      # writes no text alongside one - so every call is answered and the model
+      # says its piece on the round after, with the outcome in hand. A turn that
+      # needs no tool never pays for a second round.
+      #
+      # Prose used to ride on the call itself in a `reply` field to save that
+      # round. It worked, but it meant the words were written BEFORE the tool was
+      # resolved, so a chore name that matched nothing got dropped in silence
+      # under a sentence already claiming credit.
       #
       # Marker-era Buddy didn't have this problem because the marker was embedded
       # in the text, so words and action arrived together. Structured calls split
@@ -122,6 +193,8 @@ module Buddy
         proposals = []
         rounds    = 0
         @deadline = Time.current + TURN_BUDGET_SECONDS
+        @failed   = Set.new
+        @seen     = Set.new
 
         loop do
           rounds += 1
@@ -131,43 +204,40 @@ module Buddy
           record_usage(result)
           return { ok: false, error: result[:error] } unless result[:ok]
 
-          calls = result[:tool_calls]
-          # Prose arrives one of two ways: as ordinary output text (when the model
-          # called nothing, or on a follow-up round), or riding on a tool call's
-          # reply field.
+          calls      = result[:tool_calls]
           round_text = result[:text].to_s.strip
-          inline     = Buddy::Tools.spoken_reply(calls)
-          # The model often writes the SAME sentence as output text AND into the
-          # reply field of its call. Appending both printed the line twice in one
-          # bubble ("You got it, checking that off." / "You got it, checking that
-          # off."), so anything we've already said is dropped rather than repeated.
           add_spoken(spoken, round_text)
-          add_spoken(spoken, inline)
 
+          # Nothing to call means the answer is already written, and a second
+          # round would only cost money to re-say it. Pure conversation is a
+          # ONE-call turn and always has been.
           break if calls.empty?
 
-          # Proposals are collected and built ONCE after the loop, so a turn can
-          # never end up with two checklists attached to one reply.
-          proposals.concat(calls.select { |c| proposal?(c[:name]) })
+          # Resolve every call ONCE, here: the output goes back to the model, and
+          # resolving is also what tells us whether the call is still viable.
+          #
+          # Repeat detection is scoped to PREVIOUS rounds. Two identical calls in
+          # the SAME round are deliberate - that's how "two coffees" becomes one
+          # row with count 2 - while the same call arriving a round later is the
+          # model restating itself after reading the acknowledgement.
+          @prior = @seen.dup
+          items  = calls.flat_map { |call| call_items(call) }
 
-          # Only a READ forces another round: the model can't answer until it sees
-          # what came back. Actions need nothing returned, so if the model already
-          # spoke inline we're done — that's the whole point of the reply field,
-          # and it halves the cost and latency of a logging turn.
-          reads = calls.select { |c| c[:name].to_sym == ContextTool::NAME }
-          break if reads.empty? && spoken.any?
+          # Proposals are collected and built ONCE after the loop, so a turn can
+          # never end up with two checklists attached to one reply. A call that
+          # failed to resolve is excluded: ProposalBuilder would only drop it
+          # again, and the model has already been told it failed, so letting it
+          # count as a proposal would trip the all-discarded fallback and replace
+          # a perfectly good "I couldn't find that one, which did you mean?".
+          proposals.concat(calls.select { |c| proposal?(c[:name]) && @failed.exclude?(c[:call_id]) })
+
           break if rounds >= MAX_ROUNDS
           # Out of budget: another round would just abort on arrival. Take what
           # we have rather than burning a call to be told the same thing.
           break if Time.current > @deadline
 
-          # Carry forward whatever was spoken this round, from EITHER source. Only
-          # feeding back output_text left the model blind to its own inline reply,
-          # so it opened the next round by saying the same thing again and the
-          # person got "Oof, yeah. I'll pull it out." twice in one bubble.
-          said = [round_text, inline].compact_blank.join("\n\n")
-          input += [{ role: :assistant, content: said }] if said.present?
-          input += calls.flat_map { |call| call_items(call) }
+          input += [{ role: :assistant, content: round_text }] if round_text.present?
+          input += items
         end
 
         { ok: true, text: spoken.join("\n\n"), proposals: proposals }
@@ -214,7 +284,16 @@ module Buddy
         tool = Buddy::Tools[name]
         return JSON.generate({ ok: false, error: "no tool named #{name}" }) if tool.nil?
 
-        JSON.generate(self.class.ack_for(tool))
+        result, signature = self.class.resolve_call(tool, call, user: @user, conversation: @conversation)
+
+        if signature && @prior.include?(signature)
+          @failed << call[:call_id] # excluded from proposals, same as a resolve failure
+          return JSON.generate(self.class::DUPLICATE_ACK)
+        end
+
+        @seen << signature if signature
+        @failed << call[:call_id] if result[:status].to_s == "failed"
+        JSON.generate(result)
       end
 
       def proposal?(name)
@@ -354,9 +433,12 @@ module Buddy
             "message=#{@reply.id} user=#{@user.id}: #{proposals.map { |p| p[:name] }.inspect}",
           )
           @reply.update!(body: FALLBACK_BODY)
-        elsif @reply.body.to_s.strip.empty? && nothing
-          # Nothing proposed and nothing said — never leave a blank bubble.
-          @reply.update!(body: FALLBACK_BODY)
+        elsif @reply.body.to_s.strip.empty?
+          # Never leave a blank bubble. Running the round budget out on tool
+          # calls without ever speaking is the way this happens now, and a bare
+          # checklist with no words above it reads as broken, so say the minimum
+          # rather than nothing.
+          @reply.update!(body: nothing ? FALLBACK_BODY : "Here you go:")
         else
           retract_false_claim!(result)
         end
@@ -403,6 +485,15 @@ module Buddy
       # intent ("I'll keep an eye out") is conversational and deliberately absent,
       # as is anything hedged into an offer.
       #
+      # The second group covers promises to WATCH for something later, which are
+      # broken the same way but read as harmless. Prod message 1106 answered "can
+      # you watch and let me know when the deploy finishes?" with "You got it -
+      # I'll keep an eye on that." and called nothing, so the deploy came and went
+      # in silence. The distinction that keeps this precise is the object: "keep
+      # an eye ON <that>" names a thing and is a commitment, while "keep an eye
+      # OUT" is small talk. Likewise "I'll let you know WHEN" is a promise about a
+      # future event; a bare "I'll let you know" is not.
+      #
       # See SOLICITS_INFO_RX: a promise CONDITIONAL on an answer is legitimate and
       # must not be retracted.
       ACTION_PROMISE_RX = /
@@ -412,6 +503,11 @@ module Buddy
         | \b(?:fixing|redoing|re-?adding|adding|updating|changing|renaming|correcting|moving|removing)\s+
           (?:that|it|those|them|this)\b
         | \b(?:on\s+it,?\s+(?:fixing|adding|updating))\b
+        | \b(?:keep(?:ing)?\s+an\s+eye\s+on)\b
+        | \b(?:i(?:'|’)?(?:ll|m)\s+watch(?:ing)?\b|watching\s+for\b)
+        | \b(?:i(?:'|’)?ll|i\s+will)\s+
+          (?:let\s+you\s+know|tell\s+you|ping\s+you|remind\s+you|give\s+you\s+a\s+(?:heads-?up|shout))\s+
+          (?:when|once|as\s+soon\s+as|the\s+(?:moment|second|minute))\b
       /xi
 
       # A promise is fine when it's waiting on an answer — "tell me which one and

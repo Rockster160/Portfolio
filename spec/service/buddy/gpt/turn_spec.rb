@@ -139,11 +139,13 @@ RSpec.describe Buddy::GPT::Turn do
     end
 
     it "leaves the reply alone when something actually ran" do
+      allow(described_class).to receive(:resolve_call).and_return([{ status: "done_undoable" }, nil])
       allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
 
-      run([{
-        tool_calls: [{ name: :complete_chore, arguments: { "chore" => "dishes", "reply" => "Nice, that's done." } }],
-      }])
+      run([
+        { tool_calls: [{ name: :complete_chore, arguments: { "chore" => "dishes" } }] },
+        { text: "Nice, that's done." },
+      ])
 
       expect(reply.body).to eq("Nice, that's done.")
     end
@@ -159,6 +161,11 @@ RSpec.describe Buddy::GPT::Turn do
   # action happened when nothing ran is the worst failure mode for something whose
   # job is keeping a record, because nothing signals that it went wrong.
   describe "retracting a completion claim nothing backs up" do
+    # Subject here is what happens AFTER a call is built, so let every call
+    # resolve cleanly and let each example stub what ProposalBuilder made of it.
+    # Resolution failing has its own coverage further down.
+    before { allow(described_class).to receive(:resolve_call).and_return([{ status: "proposed" }, nil]) }
+
     it "retracts a timer claim made with no tool call at all" do
       # Real prod bug: "5m" produced this with no set_timer call.
       run([{ text: "Kk! Timer's set for 5 minutes." }])
@@ -178,7 +185,10 @@ RSpec.describe Buddy::GPT::Turn do
     it "leaves the claim alone when a level-1 tool actually fired" do
       allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
 
-      run([{ tool_calls: [{ name: :schedule_reminder, arguments: { "text" => "call mom", "reply" => "Reminder's set for 6." } }] }])
+      run([
+        { tool_calls: [{ name: :schedule_reminder, arguments: { "text" => "call mom" } }] },
+        { text: "Reminder's set for 6." },
+      ])
 
       expect(reply.body).to eq("Reminder's set for 6.")
     end
@@ -187,7 +197,10 @@ RSpec.describe Buddy::GPT::Turn do
       action = instance_double(ByteAction, buttons: [{ "status" => "executed" }])
       allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: action, auto_ran: false)
 
-      run([{ tool_calls: [{ name: :complete_chore, arguments: { "chore" => "dishes", "reply" => "Nice, that's logged." } }] }])
+      run([
+        { tool_calls: [{ name: :complete_chore, arguments: { "chore" => "dishes" } }] },
+        { text: "Nice, that's logged." },
+      ])
 
       expect(reply.body).to eq("Nice, that's logged.")
     end
@@ -196,7 +209,10 @@ RSpec.describe Buddy::GPT::Turn do
       action = instance_double(ByteAction, buttons: [{ "status" => "pending" }])
       allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: action, auto_ran: false)
 
-      run([{ tool_calls: [{ name: :create_chore, arguments: { "name" => "Mow", "reply" => "Logged that for you." } }] }])
+      run([
+        { tool_calls: [{ name: :create_chore, arguments: { "name" => "Mow" } }] },
+        { text: "Logged that for you." },
+      ])
 
       expect(reply.body).to eq("Logged that for you.")
     end
@@ -205,7 +221,10 @@ RSpec.describe Buddy::GPT::Turn do
       action = instance_double(ByteAction, buttons: [{ "status" => "failed" }])
       allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: action, auto_ran: false)
 
-      run([{ tool_calls: [{ name: :complete_chore, arguments: { "chore" => "dishes", "reply" => "That's logged." } }] }])
+      run([
+        { tool_calls: [{ name: :complete_chore, arguments: { "chore" => "dishes" } }] },
+        { text: "That's logged." },
+      ])
 
       expect(reply.body).to match(/couldn't quite line that one up/i)
     end
@@ -228,7 +247,10 @@ RSpec.describe Buddy::GPT::Turn do
     it "leaves a promise alone when the call actually accompanied it" do
       allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
 
-      run([{ tool_calls: [{ name: :add_list_item, arguments: { "list" => "Shopping", "item" => "milk", "reply" => "On it, adding that now." } }] }])
+      run([
+        { tool_calls: [{ name: :add_list_item, arguments: { "list" => "Shopping", "item" => "milk" } }] },
+        { text: "On it, adding that now." },
+      ])
 
       expect(reply.body).to eq("On it, adding that now.")
     end
@@ -237,6 +259,46 @@ RSpec.describe Buddy::GPT::Turn do
       run([{ text: "I'll keep an eye out for you." }])
 
       expect(reply.body).to eq("I'll keep an eye out for you.")
+    end
+
+    # Real prod bug (1106): "can you watch and let me know when the deploy
+    # finishes?" got this reply with no remind_when call, so the deploy came and
+    # went in silence. A promise to watch is broken exactly like a promise to
+    # act - it just takes longer to notice.
+    it "retracts a promise to watch for something that set no watch" do
+      run([{ text: "You got it - I'll keep an eye on that." }])
+
+      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.metadata["retracted_claim"]).to be(true)
+    end
+
+    it "retracts 'I'm watching for' with no watch behind it" do
+      run([{ text: "Yep, I'm watching for the next deploy to finish." }])
+
+      expect(reply.body).to match(/couldn't quite line that one up/i)
+    end
+
+    it "retracts a promise to notify when a future event happens" do
+      run([{ text: "Sure thing, I'll let you know when it lands." }])
+
+      expect(reply.body).to match(/couldn't quite line that one up/i)
+    end
+
+    it "leaves the watch promise alone once remind_when actually fired" do
+      allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+
+      run([
+        { tool_calls: [{ name: :remind_when, arguments: { "trigger" => "deploy", "body" => "deploy done" } }] },
+        { text: "You got it - I'll keep an eye on that." },
+      ])
+
+      expect(reply.body).to eq("You got it - I'll keep an eye on that.")
+    end
+
+    it "does not fire on a bare 'I'll let you know', which is small talk" do
+      run([{ text: "Sounds good. I'll let you know." }])
+
+      expect(reply.body).to eq("Sounds good. I'll let you know.")
     end
 
     it "does not fire on a promise that is waiting on an answer" do
@@ -457,12 +519,12 @@ RSpec.describe Buddy::GPT::Turn do
 
     it "tells the model an immediate action already happened" do
       client = run([
-        { text: "", tool_calls: [{ name: :complete_chore, arguments: { "chore" => "dishes" } }] },
+        { text: "", tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }] },
         { text: "Nice, knocked out." },
       ])
 
       output = client.calls.last.input.find { |i| i[:type] == :function_call_output }
-      # complete_chore is level 2: fires now, undoable.
+      # log_event is level 2: fires now, undoable.
       expect(JSON.parse(output[:output])).to include("status" => "done_undoable")
     end
 
@@ -489,111 +551,159 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
-  # The reply field is what keeps an action turn to a single API call. Without it
-  # every log/mood/proposal turn pays for a second round purely to collect prose.
-  describe "prose riding on the tool call" do
-    it "takes the reply off the call and answers in ONE round" do
-      client = run([{
-        tool_calls: [{ name: :log_event, arguments: { "name" => "Sandwich", "reply" => "Nice, sandwich fuel." } }],
-      }])
+  # Call, then speak. The model stays quiet while it's calling something, we
+  # resolve the call, and it writes its reply on the round after with the outcome
+  # in hand. Prose used to ride on the call itself to save the second request,
+  # but that meant writing the words BEFORE knowing whether the thing resolved.
+  describe "the call-then-speak flow" do
+    it "answers in ONE call when no tool is needed" do
+      client = run([{ text: "Not much on my end, how's your night?" }])
 
       expect(client.calls.length).to eq(1)
+      expect(reply.body).to eq("Not much on my end, how's your night?")
+    end
+
+    it "spends a second call to speak after an action" do
+      client = run([
+        { tool_calls: [{ name: :log_event, arguments: { "name" => "Sandwich" } }] },
+        { text: "Nice, sandwich fuel." },
+      ])
+
+      expect(client.calls.length).to eq(2)
       expect(reply.body).to eq("Nice, sandwich fuel.")
       expect(reply.state).to eq("delivered")
     end
 
-    it "still builds the checklist from a single-round turn" do
-      run([{
-        tool_calls: [{ name: :create_chore, arguments: { "name" => "Mow the lawn", "reply" => "Sure, here:" } }],
-      }])
+    it "still builds the checklist off the round that called the tool" do
+      run([
+        { tool_calls: [{ name: :create_chore, arguments: { "name" => "Mow the lawn" } }] },
+        { text: "Sure, here you go:" },
+      ])
 
       expect(ByteAction.find_by(byte_message_id: reply.id)).to be_present
-      expect(reply.body).to eq("Sure, here:")
+      expect(reply.body).to eq("Sure, here you go:")
     end
 
-    it "takes the FIRST non-blank reply when several calls carry one" do
-      run([{
-        tool_calls: [
-          { name: :create_chore,   arguments: { "name" => "Spice rack", "reply" => "Setting that up." } },
-          { name: :complete_chore, arguments: { "chore" => "Spice rack", "reply" => "And marking it done." } },
-        ],
-      }])
-
-      expect(reply.body).to eq("Setting that up.")
-    end
-
-    it "skips the reply field entirely on a silent tool and still speaks" do
-      run([{
-        tool_calls: [{ name: :set_mood, arguments: { "expression" => "sad", "reply" => "Oof, I'm sorry." } }],
-      }])
+    it "runs a silent tool as its call arrives and speaks on the round after" do
+      run([
+        { tool_calls: [{ name: :set_mood, arguments: { "expression" => "sad" } }] },
+        { text: "Oof, I'm sorry." },
+      ])
 
       expect(reply.body).to eq("Oof, I'm sorry.")
       expect(convo.reload.buddy_expression).to eq("sad")
     end
 
-    it "never passes reply through to a tool's payload" do
-      captured = nil
-      allow(Buddy::ProposalBuilder).to receive(:create) { |args|
-        captured = args[:markers].first[:payload]
-        { action: nil, auto_ran: true }
-      }
-
-      run([{
-        tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee", "reply" => "Logged it." } }],
-      }])
-
-      expect(captured).not_to have_key(:reply)
-      expect(captured).to include(name: "Coffee")
-    end
-
-    it "still round-trips a read, because it cannot answer before seeing the data" do
+    it "carries what it said into the next round so it does not repeat itself" do
       client = run([
-        { tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
+        { text: "One sec.", tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
         { text: "Nothing left on your list." },
       ])
 
-      expect(client.calls.length).to eq(2)
-      expect(reply.body).to eq("Nothing left on your list.")
+      carried = client.calls.last.input.select { |i| i[:role] == :assistant }
+      expect(carried.last[:content]).to include("One sec.")
+      expect(reply.body).to eq("One sec.\n\nNothing left on your list.")
     end
+  end
 
-    it "feeds an inline reply back so the model does not repeat itself next round" do
-      # Regression: only output_text was carried forward, so a round-1 inline
-      # reply was invisible to round 2 and the model opened by saying it again.
+  # The whole point of paying for the second call: the model learns what the tool
+  # actually resolved to BEFORE it writes a word. A chore name matching nothing
+  # used to be dropped in silence under prose that had already claimed credit.
+  describe "resolving the call before the model speaks" do
+    it "hands back the resolved summary when the tool lines up" do
       client = run([
-        {
-          tool_calls: [
-            { name: :get_context, arguments: { "sections" => ["recent_events"] } },
-            { name: :set_mood, arguments: { "expression" => "thinking", "reply" => "Oof, let me look." } },
-          ],
-        },
-        { text: "Nothing there now." },
+        { tool_calls: [{ name: :create_chore, arguments: { "name" => "Dust shelves" } }] },
+        { text: "Here you go:" },
       ])
 
-      carried = client.calls.last.input.select { |i| i[:role] == :assistant }
-      expect(carried.last[:content]).to include("Oof, let me look.")
+      output = client.calls.last.input.find { |i| i[:type] == :function_call_output }
+      expect(JSON.parse(output[:output])).to include("status" => "proposed")
+      expect(output[:output]).to include("Dust shelves")
     end
 
-    it "combines a read round's prose with a following action's inline reply" do
-      # Subject here is how prose is stitched across rounds, so let the proposal
-      # resolve — an unresolvable chore would (correctly) swap in the fallback.
-      allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+    it "reports a failure when the named thing resolves to nothing" do
+      client = run([
+        { tool_calls: [{ name: :complete_chore, arguments: { "chore" => "a chore that does not exist" } }] },
+        { text: "I couldn't find a chore by that name - which one did you mean?" },
+      ])
+
+      output = JSON.parse(client.calls.last.input.find { |i| i[:type] == :function_call_output }[:output])
+      expect(output["status"]).to eq("failed")
+      expect(output["note"]).to match(/did NOT happen/i)
+      expect(reply.body).to match(/couldn't find a chore/i)
+    end
+
+    it "reports a failure when a required argument is missing" do
+      client = run([
+        { tool_calls: [{ name: :log_event, arguments: {} }] },
+        { text: "What should I call it?" },
+      ])
+
+      output = JSON.parse(client.calls.last.input.find { |i| i[:type] == :function_call_output }[:output])
+      expect(output["status"]).to eq("failed")
+    end
+
+    # "just got back from a walk with the puppy" reliably produced complete_chore
+    # with `at: "now"` and then again a round later with `at: null`. Both resolve
+    # to the same chore, complete_chore is level 2 so both execute on arrival,
+    # and one walk quietly earned two completions.
+    it "ignores a call the model repeats in a later round" do
+      captured = nil
+      allow(Buddy::ProposalBuilder).to receive(:create) { |args|
+        captured = args[:markers]
+        { action: nil, auto_ran: true }
+      }
 
       run([
-        { text: "One sec.", tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
-        { tool_calls: [{ name: :complete_chore, arguments: { "chore" => "dishes", "reply" => "Dishes are done." } }] },
-      ])
-
-      expect(reply.body).to eq("One sec.\n\nDishes are done.")
-    end
-
-    it "falls back to a second round when the model leaves reply null everywhere" do
-      client = run([
+        { tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee", "at" => "now" } }] },
         { tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }] },
         { text: "Got it." },
       ])
 
-      expect(client.calls.length).to eq(2)
-      expect(reply.body).to eq("Got it.")
+      expect(captured.length).to eq(1)
+    end
+
+    it "tells the model its repeat was ignored rather than silently dropping it" do
+      client = run([
+        { tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }] },
+        { tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }] },
+        { text: "Got it." },
+      ])
+
+      output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
+      expect(output["status"]).to eq("duplicate")
+      expect(output["note"]).to match(/already called this/i)
+    end
+
+    # The same call twice in ONE round is the model asking for two of something,
+    # which ProposalBuilder collapses into a single row with count 2.
+    it "keeps two identical calls made in the same round" do
+      captured = nil
+      allow(Buddy::ProposalBuilder).to receive(:create) { |args|
+        captured = args[:markers]
+        { action: nil, auto_ran: true }
+      }
+
+      run([
+        {
+          tool_calls: [
+            { name: :log_event, call_id: "a", arguments: { "name" => "Coffee" } },
+            { name: :log_event, call_id: "b", arguments: { "name" => "Coffee" } },
+          ],
+        },
+        { text: "Two coffees, noted." },
+      ])
+
+      expect(captured.length).to eq(2)
+    end
+
+    it "resolves without executing, so nothing lands until the checklist runs" do
+      run([
+        { tool_calls: [{ name: :create_chore, arguments: { "name" => "Never actually created" } }] },
+        { text: "Tap when you're ready." },
+      ])
+
+      expect(Chore.where(name: "Never actually created")).not_to exist
     end
   end
 
