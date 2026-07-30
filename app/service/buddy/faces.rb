@@ -39,6 +39,12 @@ module Buddy
       selectable(theme).include?(expression.to_s.to_sym)
     end
 
+    # The resting face. Where the pet sits when nothing has moved it, and where
+    # it returns after a lull (see BuddyExpressionResetWorker).
+    def default
+      :neutral
+    end
+
     # Faces every theme can render — safe for SERVER-driven expression sets
     # (proposal states, check-in) that must show up on both Byte and Moss.
     def common

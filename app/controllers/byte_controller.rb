@@ -72,6 +72,26 @@ class ByteController < ApplicationController
       return render(json: message.as_wire, status: :created)
     end
 
+    # Timer fast path: "5m", "5m pasta", "timer for 90s". Served straight from
+    # Rails, because a model round trip costs several seconds — invisible on a
+    # 20-minute timer, most of the countdown on a 10-second one — and is several
+    # seconds during which the model might not call the tool at all. Their bubble
+    # still posts; the timer and its chip land with it. Anything shaped less
+    # plainly than this falls through and the agent's set_timer handles it.
+    if conversation.buddy? && (timer = ::Buddy::Timers.parse_request(body))
+      message = conversation.byte_messages.create!(
+        user:       current_user,
+        direction:  :outbound,
+        state:      :sent,
+        body:       body,
+        metadata:   metadata,
+        created_at: created,
+      )
+      broadcast(message)
+      ::Buddy::Timers.quick_set!(current_user, conversation, **timer)
+      return render(json: message.as_wire, status: :created)
+    end
+
     message = conversation.byte_messages.create!(
       user:       current_user,
       direction:  :outbound,

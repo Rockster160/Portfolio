@@ -138,7 +138,7 @@ RSpec.describe ByteController, type: :controller do
       say("something from earlier")
       expect(Buddy::GPT::History.build(convo, upto: nil)).not_to be_empty
 
-      expect { compact! }.not_to change { convo.byte_messages.where("body = 'something from earlier'").count }
+      expect { compact! }.not_to(change { convo.byte_messages.where("body = 'something from earlier'").count })
       expect(Buddy::GPT::History.build(convo.reload, upto: nil)).to be_empty
     end
 
@@ -167,7 +167,7 @@ RSpec.describe ByteController, type: :controller do
 
       compact!
 
-      expect(JSON.parse(response.body)["body"]).to match(/cleared 2 turns/i)
+      expect(response.parsed_body["body"]).to match(/cleared 2 turns/i)
     end
 
     it "declines outside Buddy mode instead of silently doing nothing" do
@@ -175,8 +175,61 @@ RSpec.describe ByteController, type: :controller do
 
       post :create_message, params: { body: "/compact", conversation_id: other.id }
 
-      expect(JSON.parse(response.body)["body"]).to match(/Buddy thing/i)
+      expect(response.parsed_body["body"]).to match(/Buddy thing/i)
       expect(other.reload.metadata["buddy_recap_at"]).to be_nil
+    end
+  end
+
+  # A model round trip costs several seconds. That's invisible on a 20-minute
+  # timer and most of the countdown on a 10-second one — and it's several seconds
+  # during which the model might not call set_timer at all, which is exactly what
+  # prod was doing.
+  describe "POST #create_message timer fast path" do
+    let(:convo) { rocco.byte_conversations.create!(name: "buddy", mode: :buddy) }
+
+    around { |ex| Sidekiq::Testing.fake! { ex.run } }
+
+    before do
+      allow(MonitorChannel).to receive(:broadcast_to)
+      allow(BuddyDeliverWorker).to receive(:perform_async)
+    end
+
+    def send_message(text)
+      post :create_message, params: { body: text, conversation_id: convo.id }
+    end
+
+    def chip
+      convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
+    end
+
+    it "sets the timer without waking the model" do
+      send_message("5m pasta")
+
+      expect(BuddyDeliverWorker).not_to have_received(:perform_async)
+      expect(rocco.timers.where(kind: :countdown).count).to eq(1)
+      expect(chip.body).to eq("Byte set a 5 min timer for pasta ⏲")
+    end
+
+    it "still posts the person's own message" do
+      send_message("5m")
+
+      expect(convo.byte_messages.where(direction: :outbound).last.body).to eq("5m")
+      expect(response).to have_http_status(:created)
+    end
+
+    it "hands anything less plainly shaped to the model" do
+      send_message("20 minutes of stretching")
+
+      expect(BuddyDeliverWorker).to have_received(:perform_async)
+      expect(rocco.timers.where(kind: :countdown).count).to eq(0)
+    end
+
+    it "does not fast-path outside Buddy mode" do
+      claude = rocco.byte_conversations.create!(name: "claude", mode: :claude)
+
+      post :create_message, params: { body: "5m", conversation_id: claude.id }
+
+      expect(rocco.timers.where(kind: :countdown).count).to eq(0)
     end
   end
 

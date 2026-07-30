@@ -99,8 +99,10 @@ RSpec.describe Buddy::GPT::Turn do
   describe "when the model writes a lead-in before it acts" do
     it "shows only the round that spoke last" do
       run([
-        { text: "Yesss, counting three more waters. Let me match that up.",
-          tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
+        {
+          text:       "Yesss, counting three more waters. Let me match that up.",
+          tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }],
+        },
         { text: "Yessss, three waters counted." },
       ])
 
@@ -114,15 +116,17 @@ RSpec.describe Buddy::GPT::Turn do
       ])
 
       carried = client.calls.last.input.select { |i| i[:role] == :assistant }
-      expect(carried.map { |i| i[:content] }).not_to include("One sec.")
+      expect(carried.pluck(:content)).not_to include("One sec.")
       expect(reply.body).to eq("Nothing left on your list.")
     end
 
     it "keeps the earlier line when the final round says nothing at all" do
       # Ran the budget out mid-chain. A stale lead-in still beats a blank bubble.
       run([
-        { text: "Let me take a look.",
-          tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
+        {
+          text:       "Let me take a look.",
+          tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }],
+        },
         { tool_calls: [{ name: :get_context, arguments: { "sections" => ["lists"] } }] },
       ])
 
@@ -142,7 +146,7 @@ RSpec.describe Buddy::GPT::Turn do
       }])
 
       expect(reply.body).not_to match(/checking that off/i)
-      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.body).to eq(described_class::FALLBACK_BODY)
     end
 
     it "leaves the reply alone when something actually ran" do
@@ -177,7 +181,7 @@ RSpec.describe Buddy::GPT::Turn do
       # Real prod bug: "5m" produced this with no set_timer call.
       run([{ text: "Kk! Timer's set for 5 minutes." }])
 
-      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.body).to eq(described_class::FALLBACK_BODY)
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 
@@ -233,7 +237,7 @@ RSpec.describe Buddy::GPT::Turn do
         { text: "That's logged." },
       ])
 
-      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.body).to eq(described_class::FALLBACK_BODY)
     end
 
     # Prod 1146: "Turn the fan to low" came back "Done. Fan's on low now." off a
@@ -265,7 +269,7 @@ RSpec.describe Buddy::GPT::Turn do
       ])
 
       expect(client.calls.length).to eq(2)
-      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.body).to eq(described_class::FALLBACK_BODY)
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 
@@ -294,14 +298,14 @@ RSpec.describe Buddy::GPT::Turn do
     it "retracts a bare Done with nothing behind it" do
       run([{ text: "Done. Fan's on low now." }])
 
-      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.body).to eq(described_class::FALLBACK_BODY)
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 
     it "retracts a device reported in its new state" do
       run([{ text: "Yesss, lights are off now. 😊" }])
 
-      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.body).to eq(described_class::FALLBACK_BODY)
     end
 
     it "leaves an OFFER to change a device alone" do
@@ -321,14 +325,14 @@ RSpec.describe Buddy::GPT::Turn do
       # category" with this, and called nothing.
       run([{ text: "Ah, gotcha. I'll fix that. Sanitizer for hike, in Harmon's." }])
 
-      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.body).to eq(described_class::FALLBACK_BODY)
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 
     it "retracts 'let me re-add it' with nothing behind it" do
       run([{ text: "Oh no, let me re-add that for you." }])
 
-      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.body).to eq(described_class::FALLBACK_BODY)
     end
 
     it "leaves a promise alone when the call actually accompanied it" do
@@ -355,20 +359,20 @@ RSpec.describe Buddy::GPT::Turn do
     it "retracts a promise to watch for something that set no watch" do
       run([{ text: "You got it - I'll keep an eye on that." }])
 
-      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.body).to eq(described_class::FALLBACK_BODY)
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 
     it "retracts 'I'm watching for' with no watch behind it" do
       run([{ text: "Yep, I'm watching for the next deploy to finish." }])
 
-      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.body).to eq(described_class::FALLBACK_BODY)
     end
 
     it "retracts a promise to notify when a future event happens" do
       run([{ text: "Sure thing, I'll let you know when it lands." }])
 
-      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.body).to eq(described_class::FALLBACK_BODY)
     end
 
     it "leaves the watch promise alone once remind_when actually fired" do
@@ -399,7 +403,7 @@ RSpec.describe Buddy::GPT::Turn do
     it "still retracts a past-tense claim even when a question trails it" do
       run([{ text: "Logged that for you. Anything else on your mind?" }])
 
-      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.body).to eq(described_class::FALLBACK_BODY)
     end
 
     it "does not touch ordinary conversation that claims nothing" do
@@ -436,7 +440,7 @@ RSpec.describe Buddy::GPT::Turn do
     it "falls back to an honest body when there is no prose and nothing survived" do
       run([{ text: "", tool_calls: [{ name: :not_a_real_tool, arguments: {} }] }])
 
-      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.body).to eq(described_class::FALLBACK_BODY)
     end
   end
 

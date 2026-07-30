@@ -148,7 +148,7 @@ module Buddy
       # there's nothing worth animating in between.
       PLACEHOLDER = "…".freeze
 
-      FALLBACK_BODY = "Hmm, I couldn't quite line that one up - can you give me a little more to go on?".freeze
+      FALLBACK_BODY = "Hmm, I don't quite follow - can you give me a little more to go on?".freeze
 
       # Defensive only. The model emits structured tool calls now, but if prompt
       # residue makes it write a `[[marker]]` we strip it rather than show
@@ -425,7 +425,7 @@ module Buddy
       def at_glance
         {
           user:                        @user.first_name,
-          pet_expression:              @conversation.buddy_expression.presence || "neutral",
+          pet_expression:              @conversation.buddy_expression.presence || Buddy::Faces.default.to_s,
           open_questions_from_partner: open_relay_count,
         }
       end

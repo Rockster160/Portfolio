@@ -13,6 +13,107 @@ RSpec.describe Buddy::Timers do
     TimerFireWorker.clear
   end
 
+  # Serving a plain timer request from Rails skips a model round trip that costs
+  # several seconds and might not call the tool at all. The whole risk is
+  # hijacking a message that meant something else, so the negatives below matter
+  # more than the positives.
+  describe ".parse_request" do
+    def parse(text) = described_class.parse_request(text)
+
+    it "reads a bare duration" do
+      expect(parse("5m")).to eq(seconds: 300, label: nil)
+      expect(parse("90s")).to eq(seconds: 90, label: nil)
+      expect(parse("2h")).to eq(seconds: 7200, label: nil)
+      expect(parse("45 min")).to eq(seconds: 2700, label: nil)
+    end
+
+    it "reads a duration with a label" do
+      expect(parse("5m pasta")).to eq(seconds: 300, label: "pasta")
+      expect(parse("10 min tea")).to eq(seconds: 600, label: "tea")
+    end
+
+    it "adds compound durations up" do
+      expect(parse("1h30m")).to eq(seconds: 5400, label: nil)
+      expect(parse("1h 30m")).to eq(seconds: 5400, label: nil)
+    end
+
+    it "reads the explicit phrasings people actually type" do
+      expect(parse("timer for 5s")).to eq(seconds: 5, label: nil)
+      expect(parse("Set a timer for 1m")).to eq(seconds: 60, label: nil)
+      expect(parse("set a timer for 10 minutes")).to eq(seconds: 600, label: nil)
+      expect(parse("start a timer for 20m laundry")).to eq(seconds: 1200, label: "laundry")
+      expect(parse("timer 10m")).to eq(seconds: 600, label: nil)
+    end
+
+    # "timer" is the word for the thing, not a name for it. A 10-minute timer
+    # called "timer" (or worse, "timer for pasta") is nobody's idea of a label.
+    it "never turns the word timer into the timer's name" do
+      expect(parse("10m timer")).to eq(seconds: 600, label: nil)
+      expect(parse("10 min timer")).to eq(seconds: 600, label: nil)
+      expect(parse("10m timer for pasta")).to eq(seconds: 600, label: "pasta")
+      expect(parse("5m timer for the pasta")).to eq(seconds: 300, label: "pasta")
+    end
+
+    it "drops the article people put in front of a label" do
+      expect(parse("20m for the laundry")).to eq(seconds: 1200, label: "laundry")
+    end
+
+    # Every one of these leads with a duration and is NOT a countdown request.
+    # Turning them into timers would swallow a chore completion, which is the
+    # thing the person most wants recorded.
+    it "leaves a reported duration alone" do
+      expect(parse("20 minutes of stretching")).to be_nil
+      expect(parse("5 min walk done")).to be_nil
+      expect(parse("2 hours of sleep")).to be_nil
+      expect(parse("30m left on the roast")).to be_nil
+      expect(parse("15 min ago")).to be_nil
+    end
+
+    it "leaves anything that isn't led by a duration alone" do
+      expect(parse("I did 20 minutes of stretching")).to be_nil
+      expect(parse("remind me in 5 minutes to call mom")).to be_nil
+      expect(parse("how long is 5m")).to be_nil
+      expect(parse("hey")).to be_nil
+      expect(parse("")).to be_nil
+    end
+
+    it "leaves a question alone even when it starts with a duration" do
+      expect(parse("5m?")).to be_nil
+    end
+
+    # A long leading duration is far likelier to be narration than a countdown,
+    # and the agent can still set it via the tool.
+    it "hands an implausibly long countdown to the model instead" do
+      expect(parse("8 hours sleep")).to be_nil
+      expect(parse("8h")).to be_nil
+    end
+
+    it "hands a wordy message to the model instead" do
+      expect(parse("5m pasta and also start the dishwasher please")).to be_nil
+    end
+  end
+
+  describe ".quick_set!" do
+    let(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy") }
+
+    it "starts the timer and posts the same chip the tool path posts" do
+      chip = described_class.quick_set!(user, convo, seconds: 300, label: "pasta")
+
+      expect(chip.body).to eq("Byte set a 5 min timer for pasta ⏲")
+      expect(chip.metadata["kind"]).to eq("buddy_activity")
+      expect(chip.metadata["tool_name"]).to eq("set_timer")
+      expect(user.timers.where(kind: :countdown).count).to eq(1)
+      expect(described_class.live_for(user).first.duration_ms).to eq(300_000)
+    end
+
+    it "returns nil rather than raising when the timer can't start" do
+      allow(TimerFireWorker).to receive(:perform_at).and_raise(StandardError, "redis down")
+      allow(Buddy::Errors).to receive(:report)
+
+      expect(described_class.quick_set!(user, convo, seconds: 60)).to be_nil
+    end
+  end
+
   describe ".page_for" do
     it "creates a single hidden Buddy page and reuses it" do
       page = described_class.page_for(user)
@@ -58,11 +159,12 @@ RSpec.describe Buddy::Timers do
       expect(timer.remaining_ms).to be < 180_000
     end
 
-    # Prod: "timer for 5s" announced itself set and expired in the same breath.
-    # The turn that created it took a few seconds, and anchoring to the request
-    # handed the countdown back already spent. Fine at three minutes, fatal at
-    # five seconds - so the back-date is capped as a FRACTION of the countdown.
-    it "does not let the back-date eat a short countdown" do
+    # The back-date is NOT clamped to protect short countdowns. A "5 minute
+    # timer" ends five minutes after it was asked for, and trimming that to keep
+    # a short one alive would make every timer end at a slightly different offset
+    # than requested. A short timer landing already spent is honest; the answer
+    # is to not spend seconds in a model round trip (see the fast path).
+    it "honours the request time even when that leaves the countdown spent" do
       convo = user.byte_conversations.create!(mode: :buddy)
       convo.byte_messages.create!(
         user: user, direction: :outbound, state: :sent, body: "timer for 5s", created_at: 8.seconds.ago,
@@ -70,9 +172,7 @@ RSpec.describe Buddy::Timers do
 
       timer = described_class.create!(user: user, seconds: 5, conversation: convo)
 
-      # At most a quarter of 5s may be given back, so >= ~3.75s must remain.
-      expect(timer.remaining_ms).to be > 3_500
-      expect(timer.end_at).to be > Time.current
+      expect(timer.end_at).to be < Time.current
     end
 
     it "still back-dates a long countdown by the full turn latency" do

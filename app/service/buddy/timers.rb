@@ -12,6 +12,107 @@ module Buddy
     PAGE_NAME = "Buddy".freeze
     MAX_SECONDS = 24 * 60 * 60
 
+    # ---- the fast path -------------------------------------------------------
+    #
+    # "5m" and "5m pasta" are unambiguous enough to serve from Rails without
+    # waking the model. Going through a turn costs several seconds, which is
+    # invisible on a 20-minute timer and most of the countdown on a 10-second
+    # one, and it's several seconds during which the model may decide not to call
+    # the tool at all. The agent keeps its own set_timer for everything shaped
+    # less plainly than this.
+
+    UNIT_SECONDS = {
+      3600 => %w[h hr hrs hour hours],
+      60   => %w[m min mins minute minutes],
+      1    => %w[s sec secs second seconds],
+    }.flat_map { |secs, names| names.map { |name| [name, secs] } }.to_h.freeze
+
+    # Longest unit first so "minutes" wins over "min", and a not-a-letter
+    # lookahead rather than \b: there is no word boundary between the "h" and the
+    # "3" of "1h30m", so \b refused to match a compound duration at all.
+    CHUNK_RX = /\A(\d{1,4})\s*(#{Regexp.union(UNIT_SECONDS.keys.sort_by { |u| -u.length })})(?![a-z])/i
+    # "timer for 5m", "set a timer 90s" — saying the word makes it explicit, so
+    # the label is trusted without further sniffing.
+    LEAD_RX  = /\A(?:(?:set|start)\s+)?(?:an?\s+)?timer\s+(?:for\s+)?/i
+    TRAIL_RX = /\s+timer\z/i
+
+    # Words that mean the person is REPORTING a duration rather than asking for
+    # one. "20 minutes of stretching" and "5 min walk done" both lead with a
+    # duration and are chore completions; turning either into a countdown would
+    # swallow a log the person cares about. Only consulted when they didn't say
+    # "timer" outright.
+    REPORT_RX = /\b(?:of|done|did|finished|ago|already|left|remaining|so far|total)\b/i
+
+    # Above this, a leading duration is far likelier to be narration ("8 hours
+    # sleep") than a countdown request, so it goes to the model instead.
+    FAST_PATH_MAX_SECONDS = 3 * 60 * 60
+    FAST_PATH_MAX_LENGTH  = 60
+    FAST_PATH_MAX_LABEL_WORDS = 3
+
+    # Returns { seconds:, label: } when the message is plainly a timer request,
+    # otherwise nil so the caller falls through to a normal Buddy turn.
+    def parse_request(body)
+      text = body.to_s.strip
+      return nil if text.empty? || text.length > FAST_PATH_MAX_LENGTH || text.include?("?")
+
+      explicit = false
+      if text.sub!(LEAD_RX, "")
+        explicit = true
+      end
+      explicit = true if text.sub!(TRAIL_RX, "")
+
+      seconds = 0
+      while (match = text.match(CHUNK_RX))
+        seconds += match[1].to_i * UNIT_SECONDS.fetch(match[2].downcase)
+        text = match.post_match.strip
+      end
+      return nil if seconds < 1 || seconds > FAST_PATH_MAX_SECONDS
+
+      # A "timer" sitting between the duration and the label is the word for the
+      # THING, not a name for it: "10m timer for pasta" is a pasta timer, and
+      # calling it "timer for pasta" would be daft. The "for" and the article
+      # that usually trail it go the same way, so "5m timer for the pasta" comes
+      # out as plain "pasta" rather than blowing the label-length check.
+      explicit = true if text.sub!(/\Atimer\b/i, "")
+      label = text.strip.sub(/\Afor\b/i, "").strip.sub(/\A(?:the|an?)\b/i, "").strip
+
+      return nil if label.split.length > FAST_PATH_MAX_LABEL_WORDS
+      # A bare "5m walk done" reads as a report; "5m timer walk" does not.
+      return nil if !explicit && label.present? && label.match?(REPORT_RX)
+
+      { seconds: seconds, label: label.presence }
+    end
+
+    # Create the timer AND post the same activity chip the tool path posts, so a
+    # fast-path timer is indistinguishable from one the model set. Returns the
+    # chip, or nil if the timer couldn't be started.
+    def quick_set!(user, conversation, seconds:, label: nil)
+      timer = create!(user: user, seconds: seconds, label: label, conversation: conversation)
+      name  = conversation.buddy_name
+      text  = "#{name} set a #{humanize_seconds(seconds)} timer#{" for #{label}" if label.present?} ⏲"
+
+      chip = conversation.byte_messages.create!(
+        user:         user,
+        direction:    :inbound,
+        state:        :delivered,
+        body:         text,
+        metadata:     {
+          "kind"      => "buddy_activity",
+          "tool_name" => "set_timer",
+          "ok"        => true,
+          "source"    => "fast_path",
+          "payload"   => { "seconds" => seconds, "label" => label.to_s },
+          "timer_id"  => timer.id,
+        },
+        delivered_at: Time.current,
+      )
+      broadcast_chip(user, chip)
+      chip
+    rescue StandardError => e
+      Buddy::Errors.report(section: "timers.quick_set", exception: e, user: user)
+      nil
+    end
+
     def page_for(user)
       user.timer_pages.find_or_create_by!(slug: PAGE_SLUG) do |page|
         page.name = PAGE_NAME
@@ -42,7 +143,7 @@ module Buddy
         )
         # Anchor to WHEN THE PERSON ASKED, not when the turn finished, so a slow
         # turn doesn't quietly shave time off a "3 minute" timer.
-        timer.start!(at: anchor_time(conversation, secs))
+        timer.start!(at: anchor_time(conversation))
         raise ActiveRecord::Rollback unless timer.running?
       end
 
@@ -99,26 +200,32 @@ module Buddy
       Buddy::Errors.report(section: "timers.on_fired", exception: e, user: timer&.user)
     end
 
-    # How much of a countdown the back-dating is allowed to consume. A turn takes
-    # a few seconds, which is nothing against three minutes and nearly everything
-    # against five: a "5s" timer anchored to the request was starting with about
-    # a second left, so it announced itself set and expired in the same breath.
-    MAX_BACKDATE_FRACTION = 0.25
-
     # The moment the countdown should count FROM: the most recent message the
     # person sent in this thread (the timer request itself). Clamped to a recent
     # window and never the future, so a queued/replayed turn can't anchor the
-    # timer hours in the past, and never further back than a quarter of the
-    # countdown so a short one survives the turn that created it. Falls back to
-    # now when there's nothing to anchor.
-    def anchor_time(conversation, seconds)
+    # timer hours in the past. Falls back to now when there's nothing to anchor.
+    #
+    # Deliberately NOT capped as a fraction of the duration. A "5 minute timer"
+    # should end five minutes after you asked, full stop — trimming the back-date
+    # to protect short countdowns just makes every timer end at a slightly
+    # different offset than the one requested. A short timer arriving with a
+    # second left is correct; the fix for it feeling instant is not spending
+    # seconds in a model round trip (see ByteController's timer fast path).
+    def anchor_time(conversation)
       return Time.current if conversation.nil?
 
       sent = conversation.byte_messages.where(direction: :outbound).order(:created_at).last&.created_at
       return Time.current if sent.nil? || sent > Time.current || sent < 1.hour.ago
 
-      floor = Time.current - (seconds.to_i * MAX_BACKDATE_FRACTION)
-      [sent, floor].max
+      sent
+    end
+
+    def broadcast_chip(user, message)
+      MonitorChannel.broadcast_to(user, {
+        id:      :byte,
+        channel: :byte,
+        data:    { kind: :message, message: message.as_wire },
+      })
     end
 
     # "5 min", "90 sec", "1 min 30 sec" - for receipts.

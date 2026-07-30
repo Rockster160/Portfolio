@@ -124,7 +124,7 @@ RSpec.describe "Buddy end-to-end" do
     Buddy::GPT::Turn.run!(user_says("do the thing"), client: client)
 
     reply = convo.byte_messages.where(direction: :inbound).order(:created_at).last
-    expect(reply.body).to match(/couldn't quite line that one up/i)
+    expect(reply.body).to eq(Buddy::GPT::Turn::FALLBACK_BODY)
   end
 
   it "marks the reply failed when the model errors" do

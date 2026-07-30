@@ -53,6 +53,21 @@ module Buddy
       broadcast(conversation, expression, transient: false)
     end
 
+    # Back to resting after a stretch of silence (BuddyExpressionResetWorker).
+    #
+    # The mood is deliberately persistent — it stays where a check-in, a marker,
+    # or sleep put it rather than drifting on its own, because a face that
+    # changes unprompted reads as a glitch (that was the old cycler job). But a
+    # mood set an hour ago has stopped being a mood and become a leftover, so
+    # after a lull the pet rests rather than holding an expression about a
+    # conversation that ended.
+    def reset!(conversation)
+      return if conversation.nil?
+      return if conversation.buddy_expression.to_s == Buddy::Faces.default.to_s
+
+      set(conversation, Buddy::Faces.default)
+    end
+
     # Back-compat shim for the old event-based callers. Turn start shows the
     # thinking overlay; every other event just settles the pet back onto its
     # stored mood. No event forces a mood any more — the mood persists until
