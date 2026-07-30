@@ -458,6 +458,13 @@ module Buddy
       # and unambiguous: a false negative here is a missed catch, but a false
       # positive rewrites a perfectly good reply, which is worse. Anything hedged
       # ("want me to", "I can") is not a claim and isn't listed.
+      #
+      # The last four alternatives are the HOUSE-COMMAND shape, from prod 1146:
+      # "Turn the fan to low" got "Done. Fan's on low now." off a single API call
+      # with no tool use anywhere and no execution to show for it. A bare "Done."
+      # and a device reported in its new state are the whole tell, and neither
+      # was covered. The two anchored to \A are anchored on purpose - unanchored,
+      # "I can set that to low if you want" reads as a claim when it's an offer.
       COMPLETION_CLAIM_RX = /
         \b(?:check(?:ing|ed)?\s+(?:that|it|those|them|this)\s+off)\b
         | \b(?:checked\s+off|marked\s+(?:it|that|those)?\s*(?:off|done)|crossed\s+off)\b
@@ -466,6 +473,10 @@ module Buddy
         | \b(?:added\s+(?:it|that|them)\s+to)\b
         | \b(?:it(?:'|’)?s\s+(?:on\s+the\s+list|done|logged|set))\b
         | \b(?:that(?:'|’)?s\s+(?:done|logged|counted))\b
+        | \A\s*(?:done|all\s+set|got\s+it\s+done)\b[.!,]
+        | \b(?:turned|switched|flipped)\s+(?:it|that|the)\b
+        | (?:\bis|\bare|(?:'|’)s)\s+(?:on|off)\s+(?:now|high|low|mid|medium)\b
+        | \A\s*(?:set|setting)\s+(?:it|that|the\s+\w+)\s+to\b
       /xi
 
       # Promises to act NOW that were never backed by a call. Different failure

@@ -118,9 +118,19 @@ module Buddy
         @context ||= Buddy::Context.build(@user, @conversation)
       end
 
+      JIL_SECTIONS = %i[jil_triggers jil_functions].freeze
+
       def requested_sections(args)
         raw = args.is_a?(Hash) ? (args["sections"] || args[:sections]) : nil
-        Array(raw).map { |s| s.to_s.to_sym } & SECTIONS
+        sections = Array(raw).map { |s| s.to_s.to_sym } & SECTIONS
+        # Whether an automation is a trigger or a function is OUR filing system,
+        # not something the person's request tells you. Asked to "turn the fan to
+        # low", the model looked in jil_triggers, found only "Fan High", and said
+        # it couldn't - while "Great Fan" (off/low/mid/high) sat in jil_functions
+        # the whole time. Asking for either now returns both, because the model
+        # has no way to know which shelf a capability was put on.
+        sections |= JIL_SECTIONS if sections.intersect?(JIL_SECTIONS)
+        sections
       end
     end
   end

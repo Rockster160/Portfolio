@@ -236,6 +236,34 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to match(/couldn't quite line that one up/i)
     end
 
+    # Prod 1146: "Turn the fan to low" came back "Done. Fan's on low now." off a
+    # single API call - no tool use, no execution, nothing. The old pattern had
+    # no notion of a bare "Done" or a device reported in its new state.
+    it "retracts a bare Done with nothing behind it" do
+      run([{ text: "Done. Fan's on low now." }])
+
+      expect(reply.body).to match(/couldn't quite line that one up/i)
+      expect(reply.metadata["retracted_claim"]).to be(true)
+    end
+
+    it "retracts a device reported in its new state" do
+      run([{ text: "Yesss, lights are off now. 😊" }])
+
+      expect(reply.body).to match(/couldn't quite line that one up/i)
+    end
+
+    it "leaves an OFFER to change a device alone" do
+      run([{ text: "I can set that to low if you want." }])
+
+      expect(reply.body).to eq("I can set that to low if you want.")
+    end
+
+    it "leaves a question about a device alone" do
+      run([{ text: "Is the fan on right now?" }])
+
+      expect(reply.body).to eq("Is the fan on right now?")
+    end
+
     it "retracts a promise to act that was never backed by a call" do
       # Real prod bug (1048): answered "you didn't add it to the Harmon's
       # category" with this, and called nothing.
@@ -407,10 +435,12 @@ RSpec.describe Buddy::GPT::Turn do
   end
 
   describe "stray marker defense" do
+    # Deliberately not a completion claim - "Done." on its own is retracted now,
+    # which would mask what this is actually testing.
     it "strips a marker the model emitted anyway rather than showing brackets" do
-      run([{ text: "Done. [[mood: happy]]" }])
+      run([{ text: "Good to hear. [[mood: happy]]" }])
 
-      expect(reply.body).to eq("Done.")
+      expect(reply.body).to eq("Good to hear.")
     end
   end
 
