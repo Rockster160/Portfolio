@@ -4,12 +4,15 @@
 #
 #  id               :bigint           not null, primary key
 #  address          :text
-#  birthday         :date
+#  birth_day        :integer
+#  birth_month      :integer
+#  birth_year       :integer
 #  data             :jsonb
 #  email            :text
 #  last_name        :text
 #  lat              :float
 #  lng              :float
+#  maiden_name      :text
 #  name             :text
 #  nickname         :text
 #  notes            :text
@@ -92,11 +95,29 @@ class Contact < ApplicationRecord
       permit_relay: friend_id.presence && permit_relay,
       phone:        phone,
       email:        email,
-      birthday:     birthday,
+      birth_month:  birth_month,
+      birth_day:    birth_day,
+      birth_year:   birth_year,
+      maiden_name:  maiden_name,
       notes:        notes,
       tags:         tags.map(&:name),
       data:         data,
     }
+  end
+
+  # Full date, only when we actually know the year. Nil for year-less birthdays.
+  def full_birthdate
+    return unless birth_year && birth_month && birth_day
+
+    ::Date.new(birth_year, birth_month, birth_day)
+  end
+
+  # "Jul 6" or "Jul 6, 1995" when a year is on file; nil when no birthday set.
+  def birthday_display
+    return unless birth_month && birth_day
+
+    base = "#{::Date::ABBR_MONTHNAMES[birth_month]} #{birth_day}"
+    birth_year ? "#{base}, #{birth_year}" : base
   end
 
   def primary_address

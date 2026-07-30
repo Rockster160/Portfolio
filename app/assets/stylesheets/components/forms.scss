@@ -78,6 +78,15 @@ form:not(.basic) {
     }
   }
 
+  .triple-fields {
+    display: flex;
+
+    .form-field {
+      flex: 1;
+      box-sizing: border-box;
+    }
+  }
+
   .flex-fields {
     display: flex;
     justify-content: space-between;

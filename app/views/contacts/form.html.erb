@@ -11,19 +11,30 @@
     <%= render partial: "layouts/error_container", locals: { resource: @contact } %>
 
     <div class="form-fields">
-      <div class="form-field">
-        <%= f.label :name %>
-        <%= f.text_field :name %>
+      <div class="triple-fields">
+        <div class="form-field">
+          <%= f.label :name, "First name" %>
+          <%= f.text_field :name %>
+        </div>
+        <div class="form-field">
+          <%= f.label :last_name %>
+          <%= f.text_field :last_name %>
+        </div>
+        <div class="form-field">
+          <%= f.label :maiden_name, "Maiden name (optional)" %>
+          <%= f.text_field :maiden_name %>
+        </div>
       </div>
 
-      <div class="form-field">
-        <%= f.label :nickname, "Nickname (Comma separated)" %>
-        <%= f.text_field :nickname %>
-      </div>
-
-      <div class="form-field">
-        <%= f.label :username %>
-        <%= f.text_field :username %>
+      <div class="split-fields">
+        <div class="form-field">
+          <%= f.label :username %>
+          <%= f.text_field :username %>
+        </div>
+        <div class="form-field">
+          <%= f.label :nickname, "Nickname (Comma separated)" %>
+          <%= f.text_field :nickname %>
+        </div>
       </div>
 
       <% if @contact.friend? %>
@@ -38,19 +49,32 @@
         </div>
       <% end %>
 
-      <div class="form-field">
-        <%= f.label :phone %>
-        <%= f.phone_field :phone %>
+      <div class="split-fields">
+        <div class="form-field">
+          <%= f.label :phone %>
+          <%= f.phone_field :phone %>
+        </div>
+        <div class="form-field">
+          <%= f.label :email %>
+          <%= f.email_field :email %>
+        </div>
       </div>
 
-      <div class="form-field">
-        <%= f.label :email %>
-        <%= f.email_field :email %>
-      </div>
-
-      <div class="form-field">
-        <%= f.label :birthday %>
-        <%= f.date_field :birthday %>
+      <div class="triple-fields">
+        <div class="form-field">
+          <%= f.label :birth_month, "Birthday" %>
+          <%= f.select :birth_month,
+            (1..12).map { |m| [::Date::MONTHNAMES[m], m] },
+            { include_blank: "Month" } %>
+        </div>
+        <div class="form-field">
+          <%= f.label :birth_day, "Day" %>
+          <%= f.number_field :birth_day, in: 1..31, placeholder: "Day" %>
+        </div>
+        <div class="form-field">
+          <%= f.label :birth_year, "Year (optional)" %>
+          <%= f.number_field :birth_year, in: 1900..Date.current.year, placeholder: "e.g. 1995" %>
+        </div>
       </div>
 
       <div class="form-field">

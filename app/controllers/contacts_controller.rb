@@ -72,11 +72,15 @@ class ContactsController < ApplicationController
   def contact_params
     params.require(:contact).permit(
       :name,
+      :last_name,
+      :maiden_name,
       :nickname,
       :username,
       :phone,
       :email,
-      :birthday,
+      :birth_month,
+      :birth_day,
+      :birth_year,
       :notes,
       :tag_strings,
       :permit_relay,

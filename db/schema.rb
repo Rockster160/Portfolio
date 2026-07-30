@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_07_29_220000) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_30_111451) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -788,9 +788,12 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_29_220000) do
     t.bigint "friend_id"
     t.boolean "permit_relay", default: true
     t.text "email"
-    t.date "birthday"
     t.text "notes"
     t.text "last_name"
+    t.integer "birth_month"
+    t.integer "birth_day"
+    t.integer "birth_year"
+    t.text "maiden_name"
     t.index ["friend_id"], name: "index_contacts_on_friend_id"
     t.index ["user_id"], name: "index_contacts_on_user_id"
   end

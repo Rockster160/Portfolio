@@ -3,33 +3,46 @@ require "rails_helper"
 RSpec.describe Contact, type: :model do
   let(:user) { create(:user, phone: 10.times.map { rand(0..9) }.join) }
 
-  describe "new fields" do
-    it "persists email, birthday, notes" do
-      contact = user.contacts.create!(
-        name:     "Alex",
-        email:    "alex@example.com",
-        birthday: Date.new(1990, 4, 12),
-        notes:    "Met at the coffee shop",
-      )
+  describe "birthday (month/day + optional year)" do
+    it "has no full_birthdate when the year is unknown" do
+      contact = user.contacts.create!(name: "Alex", birth_month: 4, birth_day: 12)
 
-      contact.reload
-      expect(contact.email).to eq("alex@example.com")
-      expect(contact.birthday).to eq(Date.new(1990, 4, 12))
-      expect(contact.notes).to eq("Met at the coffee shop")
+      expect(contact.full_birthdate).to be_nil
+      expect(contact.birthday_display).to eq("Apr 12")
     end
 
-    it "includes new fields in serialize" do
+    it "builds a full_birthdate once the year is known" do
+      contact = user.contacts.create!(name: "Sam", birth_month: 6, birth_day: 1, birth_year: 1985)
+
+      expect(contact.full_birthdate).to eq(Date.new(1985, 6, 1))
+      expect(contact.birthday_display).to eq("Jun 1, 1985")
+    end
+
+    it "has no display when no birthday is set" do
+      contact = user.contacts.create!(name: "Nobody")
+
+      expect(contact.birthday_display).to be_nil
+      expect(contact.full_birthdate).to be_nil
+    end
+
+    it "persists email, notes and includes the new fields in serialize" do
       contact = user.contacts.create!(
-        name:     "Sam",
-        email:    "sam@example.com",
-        birthday: Date.new(1985, 6, 1),
-        notes:    "Owes me $5",
+        name:        "Sammy",
+        email:       "sam@example.com",
+        birth_month: 6,
+        birth_day:   1,
+        birth_year:  1985,
+        maiden_name: "Green",
+        notes:       "Owes me $5",
       )
       contact.tags = [Tag.find_or_create_by(name: "friend")]
 
       serialized = contact.serialize
       expect(serialized[:email]).to eq("sam@example.com")
-      expect(serialized[:birthday]).to eq(Date.new(1985, 6, 1))
+      expect(serialized[:birth_month]).to eq(6)
+      expect(serialized[:birth_day]).to eq(1)
+      expect(serialized[:birth_year]).to eq(1985)
+      expect(serialized[:maiden_name]).to eq("Green")
       expect(serialized[:notes]).to eq("Owes me $5")
       expect(serialized[:tags]).to eq(["friend"])
     end
