@@ -19,15 +19,19 @@ RSpec.describe Buddy::AgendaBriefing do
       )
     }
 
-    it "names the actor, agenda, item, and the non-standard details" do
+    it "names the actor, item, and the non-standard details" do
       seed = described_class.seed(source: item, actor: actor, recipient: recipient, action: :created)
 
       expect(seed).to include("#{actor.first_name} just added")
-      expect(seed).to include("Ours 💕")
       expect(seed).to include("Dentist")
       expect(seed).to include(recipient.first_name) # who the recipient's Buddy addresses
       expect(seed).to include("Where: 123 Main St")
       expect(seed).to include("Note: bring insurance card")
+    end
+
+    it "does NOT name the calendar (its name is usually just the owner's handle)" do
+      seed = described_class.seed(source: item, actor: actor, recipient: recipient, action: :created)
+      expect(seed).not_to include("Ours 💕")
     end
 
     it "formats the time in the recipient's timezone (MDT, 12h)" do
@@ -41,6 +45,39 @@ RSpec.describe Buddy::AgendaBriefing do
     it "says 'changed' for an update" do
       seed = described_class.seed(source: item, actor: actor, recipient: recipient, action: :updated)
       expect(seed).to include("#{actor.first_name} just changed")
+    end
+
+    it "scopes an actor-owned (personal) calendar to the actor, not the recipient" do
+      seed = described_class.seed(source: item, actor: actor, recipient: recipient, action: :created)
+
+      # Framed as the actor's own calendar + plans, never the recipient's own.
+      expect(seed).to include("on their own calendar")
+      expect(seed).to include("not #{recipient.first_name}'s")
+      expect(seed).not_to include("a calendar you both share")
+    end
+
+    it "calls it the recipient's own calendar when they own it" do
+      recipient_agenda = create(:agenda, user: recipient, name: "Chelsea's Calendar")
+      recipient_item = create(
+        :agenda_item, agenda: recipient_agenda, kind: :event, name: "Board meeting",
+        start_at: Time.utc(2026, 7, 31, 20, 0), end_at: Time.utc(2026, 7, 31, 21, 0)
+      )
+      seed = described_class.seed(source: recipient_item, actor: actor, recipient: recipient, action: :created)
+
+      expect(seed).to include("on your calendar")
+    end
+
+    it "calls a jointly-owned (third-party) calendar's event 'a shared <kind>'" do
+      third_party = create(:user)
+      joint_agenda = create(:agenda, user: third_party, name: "Team")
+      joint_item = create(
+        :agenda_item, agenda: joint_agenda, kind: :event, name: "Sprint demo",
+        start_at: Time.utc(2026, 7, 31, 20, 0), end_at: Time.utc(2026, 7, 31, 21, 0)
+      )
+      seed = described_class.seed(source: joint_item, actor: actor, recipient: recipient, action: :created)
+
+      expect(seed).to include("a shared event")
+      expect(seed).not_to include("Team")
     end
 
     it "includes travel time when metadata carries it" do

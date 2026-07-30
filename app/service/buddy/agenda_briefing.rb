@@ -49,10 +49,28 @@ module Buddy
     def wrap(actor:, recipient:, agenda:, action:, kind_word:, name:, details:)
       verb  = action.to_sym == :created ? "added" : "changed"
       who   = actor.first_name
-      body  = "#{who} just #{verb} a #{kind_word} on \"#{agenda.name}\", a calendar you both share: \"#{name}\"."
+      body  = "#{who} just #{verb} #{event_phrase(agenda, actor, recipient, kind_word)}: \"#{name}\"."
       body += "\n#{details}" if details.present?
-      "#{body}\n\nGive #{recipient.first_name} a warm heads-up about it in your own voice — this is just an FYI " \
-        "from #{who}, nothing to confirm or act on. Lead with what actually matters (the when/where and anything unusual)."
+      "#{body}\n\nGive #{recipient.first_name} a warm heads-up in your own voice — this is #{who}'s own " \
+        "plan, not #{recipient.first_name}'s, so frame it as #{who}'s (\"#{who} added…\"), never as something " \
+        "on #{recipient.first_name}'s own schedule. Just an FYI, nothing to confirm or act on. Lead with what " \
+        "actually matters (the when/where and anything unusual)."
+    end
+
+    # Scope the event to whose calendar it lives on, WITHOUT naming the
+    # calendar (its name is usually just the owner's handle — "Chelsea's
+    # Alchemibluum calendar" is redundant). The actor's own calendar reads
+    # "on their own calendar" (the recipient's Buddy renders the right
+    # pronoun since it knows both people); the recipient's own reads "on your
+    # calendar"; anything jointly-owned is simply "a shared <kind>".
+    def event_phrase(agenda, actor, recipient, kind_word)
+      if agenda.user_id == recipient.id
+        "a #{kind_word} on your calendar"
+      elsif agenda.user_id == actor.id
+        "a #{kind_word} on their own calendar"
+      else
+        "a shared #{kind_word}"
+      end
     end
 
     def detail_lines(when_text:, location:, notes:, extra: [])

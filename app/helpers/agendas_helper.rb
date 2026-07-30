@@ -13,7 +13,7 @@ module AgendasHelper
   # changes that don't naturally bump asset digests (server-side
   # behavior, shell-inline script edits served by ERB partials) but
   # still need to invalidate existing client caches.
-  SW_CACHE_EPOCH = 1
+  SW_CACHE_EPOCH = 2
 
   def sw_cache_version
     parts = [
