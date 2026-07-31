@@ -16,6 +16,7 @@ Buddy::Tools.register(
     Only pass what's changing. To REMOVE the completion instead, that's
     undo_chore_completion.
   TXT
+  feature:     :chores,
   args:        {
     chore:  { type: :string,  required: true,  description: "Fuzzy chore name" },
     note:   { type: :string,  required: false, description: "New note, replacing whatever note is on it" },

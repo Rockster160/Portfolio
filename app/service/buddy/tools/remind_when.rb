@@ -28,6 +28,19 @@ Buddy::Tools.register(
                  failed. No `target`. Pair with `repeat: true` for a standing
                  "ping me on every deploy"; you'll be told which outcome it
                  was when it fires.
+      "custom" - anything else that happens in the app: a list getting an item,
+                 a prompt arriving, the car parking. Pass `listener` instead of
+                 `target`, written in Jil listener syntax. USE ONE OF THE NAMED
+                 TRIGGERS ABOVE WHEN ONE FITS - they're resolved against real
+                 chores, places and calendars, and a hand-written listener is
+                 not. This is for what they don't cover.
+
+    `listener` (custom only) is a Jil listener string, e.g.
+    `item:action:added item:list:name:/^Groceries$/`. **Call
+    `read_listener_guide` before writing one, every time** - it returns the
+    syntax plus the listeners already running on their own automations, and
+    copying a real key path from those is the difference between a watch that
+    fires and one that silently never does. Do not guess at payload keys.
 
     `text` is what to remind them of, phrased as the nudge itself. It fires
     ONCE by default (the next time the condition happens). Set `repeat`
@@ -50,11 +63,17 @@ Buddy::Tools.register(
   TXT
   args: {
     text:    { type: :string,  required: true,  description: "What to remind them of" },
-    trigger: { type: :enum,    required: true,  values: %i[arrive depart chore event agenda deploy], description: "Condition type" },
-    target:  { type: :string,  required: false, description: "Place / chore / event / calendar name the condition is about (omit for deploy)" },
+    trigger:  { type: :enum,    required: true,  values: %i[arrive depart chore event agenda deploy custom], description: "Condition type" },
+    target:   { type: :string,  required: false, description: "Place / chore / event / calendar name the condition is about (omit for deploy and custom)" },
+    listener: { type: :string,  required: false, description: "Jil listener string. Required for trigger=custom, ignored otherwise. Read read_listener_guide first." },
     repeat:  { type: :boolean, required: false, default: false, description: "Fire every time (true) instead of just the next time (false)" },
     notify:  { type: :string,  required: false, description: "Household member to notify instead of the user (optional)" },
   },
+  # Watching for an arrival or a deploy is everyone's. The other three reach
+  # into a feature: a chore watch would tell someone without chores when the
+  # rest of the household finished theirs, which is exactly the visibility the
+  # block exists to prevent.
+  gated_values: { trigger: { chore: :chores, event: :events, agenda: :agenda } },
   confirm: ->(payload, ctx) {
     trigger = payload[:trigger].to_s
     target  = payload[:target].to_s.strip
@@ -90,6 +109,25 @@ Buddy::Tools.register(
       # Phrased without "next" so the repeating form reads "every time a deploy
       # finishes" rather than "every time the NEXT deploy finishes".
       ["deploy", {}, "when a deploy finishes", true, nil]
+    when "custom"
+      listener = payload[:listener].to_s.strip
+      raise "custom needs a `listener` - read read_listener_guide first" if listener.blank?
+
+      unless ::Jil::ListenerMatch.valid?(listener)
+        known = ::Jil::ListenerMatch.scope_of(listener)
+        raise(
+          if known && !::Jil::ListenerMatch.known_scope?(known)
+            "there's no #{known.inspect} trigger in this app, so that listener could never fire - read read_listener_guide for the real scopes"
+          else
+            "#{listener.inspect} isn't a listener that could ever fire"
+          end,
+        )
+      end
+
+      # The listener itself is the human phrasing. It's jargon, but a custom
+      # watch that fires on something unexpected is unexplainable without it,
+      # and this is the one place the person can see what it's really watching.
+      [::Jil::ListenerMatch.scope_of(listener), {}, "when `#{listener}` fires", true, nil]
     else
       raise "unknown trigger #{trigger.inspect}"
     end
@@ -127,6 +165,7 @@ Buddy::Tools.register(
       resolved: {
         trigger_scope:  scope,
         match:          match,
+        listener:       (payload[:listener].to_s.strip.presence if trigger == "custom"),
         human_when:     human,
         recipient_name: (to_self ? nil : recipient.first_name),
         one_shot:       !every,
@@ -160,11 +199,18 @@ Buddy::Tools.register(
       kind:              "prompt",
       body:              payload[:text].to_s.first(500),
       trigger_scope:     payload[:trigger_scope].to_s,
+      listener:          payload[:listener].presence,
       match:             payload[:match] || {},
       one_shot:          ActiveModel::Type::Boolean.new.cast(payload[:one_shot]),
       metadata:          { "human_when" => payload[:human_when].to_s },
     )
-    { watch_id: watch.id, human_when: payload[:human_when], recipient_name: payload[:recipient_name], trigger_scope: watch.trigger_scope }
+    {
+      watch_id:       watch.id,
+      human_when:     payload[:human_when],
+      recipient_name: payload[:recipient_name],
+      trigger_scope:  watch.trigger_scope,
+      listener:       watch.listener,
+    }
   },
   # Setting a watch is safe + reversible (cancel_reminder undoes it), so it
   # runs WITHOUT a confirmation checkbox and drops an activity receipt.

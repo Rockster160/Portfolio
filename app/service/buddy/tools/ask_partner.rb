@@ -16,6 +16,7 @@ Buddy::Tools.register(
     For a pick-ONE question use ask_partner_choice; for a pick-ANY /
     select-all question use ask_partner_multi.
   TXT
+  feature:     :relay,
   args:        {
     to:       { type: :string, required: true, description: "Who to ask (household member)" },
     question: { type: :string, required: true, description: "What to ask. Their exact words when they gave you words; your phrasing when they only gave you the gist." },

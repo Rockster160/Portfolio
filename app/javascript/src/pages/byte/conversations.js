@@ -12,6 +12,14 @@ function csrfMetaToken() {
   return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
 }
 
+// What to call a thread in the list, the header, and the menu. `name` is
+// already the server's resolved display name; `buddy_name` is the fallback for
+// a Buddy thread that was never given one, so an unnamed Suki thread reads
+// "Suki" rather than everything defaulting to Byte.
+function convoLabel(convo) {
+  return convo?.name || convo?.buddy_name || "Byte";
+}
+
 // Shared fetch helper. Keeps CSRF/credentials boilerplate out of every
 // call site. `body` is JSON-stringified when present.
 async function apiCall(url, method, body) {
@@ -267,7 +275,7 @@ export class ConversationManager {
 
   render() {
     const convo = this.currentConversation();
-    if (this.nameEl && convo) this.nameEl.textContent = convo.name || "Byte";
+    if (this.nameEl && convo) this.nameEl.textContent = convoLabel(convo);
     if (this.modeEl && convo) {
       this.modeEl.textContent = convo.mode;
       this.modeEl.dataset.mode = convo.mode;
@@ -397,7 +405,7 @@ export class ConversationManager {
     pick.className = "byte-convo-pick";
     pick.innerHTML = `
       <span class="byte-convo-mode" data-mode="${escapeAttr(convo.mode)}">${escapeAttr(convo.mode)}</span>
-      <span class="byte-convo-name">${escapeHtml(convo.name || "Byte")}</span>
+      <span class="byte-convo-name">${escapeHtml(convoLabel(convo))}</span>
       <span class="byte-convo-time">${relativeTime(convo.last_message_at)}${unreadHtml}</span>
     `;
     pick.addEventListener("click", () => {
@@ -460,7 +468,7 @@ export class ConversationManager {
 
   openMenu(convo) {
     this.menuTargetId = convo.id;
-    if (this.menuTitle) this.menuTitle.textContent = convo.name || "Byte";
+    if (this.menuTitle) this.menuTitle.textContent = convoLabel(convo);
     // Adopt only makes sense for Claude-mode conversations.
     const adoptBtn = document.querySelector("[data-byte-menu-adopt]");
     if (adoptBtn) adoptBtn.style.display = convo.mode === "claude" ? "" : "none";

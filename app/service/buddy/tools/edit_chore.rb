@@ -5,6 +5,7 @@ Buddy::Tools.register(
     or archive/unarchive a chore the user already has. Only include the
     fields that are changing.
   TXT
+  feature:     :chores,
   args:        {
     chore:    { type: :string, required: true,  description: "Fuzzy name of the chore to edit" },
     name:     { type: :string, required: false, description: "New name" },

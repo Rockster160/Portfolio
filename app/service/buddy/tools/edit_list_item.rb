@@ -10,6 +10,7 @@ Buddy::Tools.register(
     section when one matches; `category` only holds a placement when no
     section by that name exists.
   TXT
+  feature:     :lists,
   args:        {
     list:      { type: :string, required: true, description: "List name" },
     item:      { type: :string, required: true, description: "Current item name" },

@@ -1,25 +1,12 @@
-<%# Buddy's identity follows the user's theme: Moss (green) for moss users,
-    Suki (violet) for suki users, Byte (navy) otherwise — icon, PWA title,
-    manifest, and chrome theme-color. %>
-<% case ByteConversation.default_theme_for(current_user)
-   when "moss" %>
-  <link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path 'moss_favicon/moss-apple-touch-icon.png' %>">
-  <link rel="icon" type="image/png" href="<%= asset_path 'moss_favicon/moss-favicon-96x96.png' %>" sizes="96x96">
-  <link rel="manifest" href="/moss.webmanifest">
-  <meta name="theme-color" content="#14231A">
-  <meta name="apple-mobile-web-app-title" content="Moss">
-<% when "suki" %>
-  <link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path 'suki_favicon/suki-apple-touch-icon.png' %>">
-  <link rel="icon" type="image/png" href="<%= asset_path 'suki_favicon/suki-favicon-96x96.png' %>" sizes="96x96">
-  <link rel="manifest" href="/suki.webmanifest">
-  <meta name="theme-color" content="#150A22">
-  <meta name="apple-mobile-web-app-title" content="Suki">
-<% else %>
-  <link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path 'byte_favicon/apple-touch-icon.png' %>">
-  <link rel="icon" type="image/png" href="<%= asset_path 'byte_favicon/favicon-96x96.png' %>" sizes="96x96">
-  <link rel="manifest" href="/byte.webmanifest">
-  <meta name="theme-color" content="#0E1930">
-  <meta name="apple-mobile-web-app-title" content="Byte">
-<% end %>
+<%# Browser chrome for whichever pet this thread wears — icon, PWA home-screen
+    title, manifest, and theme-color. Driven by the conversation's THEME (see
+    Buddy::Themes), not by who the user is, so a Suki thread installs as Suki
+    regardless of whose account it's on. %>
+<% chrome = Buddy::Themes.for(buddy_page_theme) %>
+<link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path chrome[:touch_icon] %>">
+<link rel="icon" type="image/png" href="<%= asset_path chrome[:favicon] %>" sizes="96x96">
+<link rel="manifest" href="<%= chrome[:manifest] %>">
+<meta name="theme-color" content="<%= chrome[:color] %>">
+<meta name="apple-mobile-web-app-title" content="<%= chrome[:name] %>">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

@@ -544,7 +544,7 @@ class ByteController < ApplicationController
       ack(conversation, "Mode set to **#{new_mode}** for this conversation.")
     when "buddy"
       switch_buddy_theme(conversation, arg)
-    when "compact", "forget"
+    when "compact", "forget", "reset"
       compact_conversation(conversation)
     when "fork", "continue"
       # Spin up a brand-new conversation with the same mode + same cwd.
@@ -564,10 +564,10 @@ class ByteController < ApplicationController
     return ack(conversation, "`/buddy` is a Buddy thing - this conversation is in #{conversation.mode} mode.") unless conversation.buddy?
 
     theme  = arg.downcase
-    themes = ByteConversation::THEME_NAMES.keys.map(&:to_s)
+    themes = Buddy::Themes.keys.map(&:to_s)
     return ack(conversation, "usage: `/buddy #{themes.join("|")}`") unless themes.include?(theme)
 
-    name = ByteConversation.display_name_for(theme)
+    name = Buddy::Themes.name_for(theme)
     return ack(conversation, "This thread is already **#{name}**!") if conversation.buddy_theme.to_s == theme
 
     conversation.update!(buddy_theme: theme, buddy_expression: "neutral")
@@ -575,19 +575,23 @@ class ByteController < ApplicationController
     ack(conversation, "This thread is **#{name}** now. Say hi!")
   end
 
-  # Drop the model's view of this thread WITHOUT deleting anything.
+  # Drop a RESET POINT in the thread: everything above it stops being sent as
+  # history, and everything from here on is the whole conversation as far as the
+  # model is concerned. `/compact`, `/forget`, and `/reset` are the same thing.
   #
   # `buddy_recap_at` is the line Buddy::GPT::History truncates at, so moving it
-  # to now means the next turn opens on an empty transcript. The messages stay
-  # on screen, and nothing durable is touched: memories, this thread's notes,
-  # stashed ideas, chores, reminders, and watches are all separate records.
+  # to now means the next turn opens on an empty transcript. Nothing is deleted:
+  # the messages stay on screen and scrollable, and memories, this thread's
+  # notes, stashed ideas, chores, reminders, and watches are all separate records
+  # that never went through history in the first place. It's a fresh start
+  # without losing the thread you were in.
   #
   # Distinct from Buddy::Compactor, which summarizes the stretch first and hands
   # the recap forward. This is the version you reach for when the history itself
   # is the problem — Buddy answering from the shape of the last few turns rather
   # than from the request in front of it — so the recap is cleared, not written.
   def compact_conversation(conversation)
-    return ack(conversation, "`/compact` is a Buddy thing - this conversation is in #{conversation.mode} mode.") unless conversation.buddy?
+    return ack(conversation, "`/reset` is a Buddy thing - this conversation is in #{conversation.mode} mode.") unless conversation.buddy?
 
     dropped = Buddy::GPT::History.build(conversation, upto: nil).length
     metadata = (conversation.metadata || {}).merge(
@@ -596,7 +600,11 @@ class ByteController < ApplicationController
     ).compact
     conversation.update!(metadata: metadata)
 
-    ack(conversation, "Cleared #{dropped} #{"turn".pluralize(dropped)} of history. Memories, notes, and everything else are untouched.")
+    ack(
+      conversation,
+      "Fresh start from here — #{dropped} #{"turn".pluralize(dropped)} of history won't be sent any more. " \
+      "Everything above is still on screen, and memories, notes, reminders, and watches are all untouched.",
+    )
   end
 
   def fork_conversation(source, custom_name)

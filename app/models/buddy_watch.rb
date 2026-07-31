@@ -9,6 +9,7 @@
 #  fired_at             :datetime
 #  kind                 :string           default("prompt"), not null
 #  last_fired_at        :datetime
+#  listener             :string
 #  match                :jsonb            not null
 #  metadata             :jsonb            not null
 #  one_shot             :boolean          default(TRUE), not null
@@ -30,10 +31,11 @@ class BuddyWatch < ApplicationRecord
 
   KINDS = %w[reminder prompt].freeze
 
-  # The Jil trigger scopes a watch can listen on. Kept in lockstep with
-  # Buddy::WatchMatcher::WATCHABLE_SCOPES - anything not here can't be
-  # matched, so the tool must never store it.
-  SCOPES = %w[travel chore_completion event deploy agenda_item].freeze
+  # The scopes the NAMED triggers use (arrive/depart, chore, event, deploy,
+  # agenda). A custom listener isn't limited to these: it names whatever scope
+  # its syntax says, and `Jil::Executor.trigger` only ever fires a scope in the
+  # context of the user whose data it is, so there's nothing here to guard.
+  NAMED_SCOPES = %w[travel chore_completion event deploy agenda_item].freeze
 
   # `active` = not terminally fired, not cancelled, not expired. One-shot
   # watches set `fired_at` after firing (terminal); repeating watches only
@@ -45,7 +47,18 @@ class BuddyWatch < ApplicationRecord
 
   validates :body,          presence: true, length: { maximum: 500 }
   validates :kind,          inclusion: { in: KINDS }
-  validates :trigger_scope, inclusion: { in: SCOPES }
+  validates :trigger_scope, presence: true
+  validate  :listener_parses
+
+  # WatchMatcher bails on any scope nothing is watching, off a cached set. A new
+  # watch on a scope nobody was watching has to invalidate that set or it won't
+  # fire until the TTL rolls over.
+  after_commit :bust_watch_scope_cache
+
+  # Written in Jil listener syntax rather than assembled from a named trigger.
+  def custom?
+    listener.present?
+  end
 
   # Same physical spot even after a rename: ~0.0015° ≈ 165m, forgiving enough
   # for a parking lot / large complex. `action` is also checked, so this only
@@ -62,6 +75,11 @@ class BuddyWatch < ApplicationRecord
   # matched by COORDINATE proximity (address identity) so a renamed place, or
   # a second contact at the same address, still matches - see #place_matches?.
   def matches?(payload)
+    # A custom watch is a Jil listener, so it's matched by the same code a Jil
+    # task is - including dot-paths into nested payload keys, regex, and
+    # multi-term listeners, none of which the `match` hash below can express.
+    return ::Jil::ListenerMatch.call(listener, trigger_scope, payload) if custom?
+
     data = payload.respond_to?(:with_indifferent_access) ? payload.with_indifferent_access : {}
     (match || {}).all? { |key, want|
       next place_matches?(want, data) if key.to_s == "place"
@@ -74,6 +92,21 @@ class BuddyWatch < ApplicationRecord
   end
 
   private
+
+  def bust_watch_scope_cache
+    ::Buddy::WatchMatcher.bust_scope_cache!
+  rescue StandardError => e
+    Rails.logger.warn("[BuddyWatch] scope cache bust failed: #{e.class}: #{e.message}")
+  end
+
+  # A listener that can't be parsed would sit there matching nothing, which is
+  # the one failure a reminder must not have: they'd believe it was set.
+  def listener_parses
+    return if listener.blank?
+    return if ::Jil::ListenerMatch.valid?(listener) && ::Jil::ListenerMatch.scope_of(listener) == trigger_scope
+
+    errors.add(:listener, "isn't a listener that would ever fire")
+  end
 
   # A place matches by coordinate proximity FIRST - two differently-named
   # contacts at the same address share coordinates and cross-match, and a

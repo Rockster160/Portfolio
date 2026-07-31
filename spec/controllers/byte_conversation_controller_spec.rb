@@ -161,13 +161,29 @@ RSpec.describe ByteController, type: :controller do
       expect(convo.reload.buddy_memories).to eq("keep this thread work-only")
     end
 
-    it "answers with what it dropped" do
+    it "answers with what it dropped, and says the thread itself is still there" do
       say("one")
       say("two")
 
       compact!
 
-      expect(response.parsed_body["body"]).to match(/cleared 2 turns/i)
+      body = response.parsed_body["body"]
+      expect(body).to match(/2 turns of history won't be sent/i)
+      expect(body).to match(/still on screen/i)
+    end
+
+    # `/reset` is the name that describes what it does; the other two are what
+    # it was called before.
+    it "answers to /reset and /forget the same way" do
+      %w[/reset /forget].each { |cmd|
+        convo.update!(metadata: {})
+        say("something")
+
+        post :create_message, params: { body: cmd, conversation_id: convo.id }
+
+        expect(convo.reload.metadata["buddy_recap_at"]).to be_present, "expected #{cmd} to set a reset point"
+        expect(Buddy::GPT::History.build(convo, upto: nil)).to be_empty
+      }
     end
 
     it "declines outside Buddy mode instead of silently doing nothing" do

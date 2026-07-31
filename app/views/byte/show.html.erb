@@ -1,6 +1,14 @@
-<%= meta_title "Byte", include_name: false %>
+<%# Which pet this page wears. Everything downstream — the tab title, the PWA
+    install name, the icon, the accent colour, the composer placeholder — reads
+    from the THEME rather than from who's logged in, so a thread themed to a
+    different companion than the account's default is that companion all the way
+    through. A non-buddy thread (claude/bash/jarvis) has no pet of its own and
+    falls back to the owner's default purely for stable branding. %>
+<% buddy_page_theme = @conversation.buddy? ? @conversation.buddy_theme : ByteConversation.default_theme_for(current_user) %>
+<% buddy_page_chrome = Buddy::Themes.for(buddy_page_theme) %>
+<%= meta_title buddy_page_chrome[:name], include_name: false %>
 <%= meta_description "Direct chat channel to your automations." %>
-<%= content_for(:favicon) { render "byte/favicon" } %>
+<%= content_for(:favicon) { render "byte/favicon", buddy_page_theme: buddy_page_theme } %>
 <%= content_for(:meta) do %>
   <%# interactive-widget=resizes-content: Android Chrome shrinks the layout %>
   <%# viewport when the soft keyboard opens so 100dvh + fixed positioning %>
@@ -34,11 +42,9 @@
   </script>
 <% end %>
 
-<%# Pet identity is per-conversation now. The hero follows the active thread's
-    theme/expression; app chrome (avatar, favicon) uses the user's default pet so
-    the branding stays stable when a non-buddy thread is open. %>
-<% buddy_page_theme = @conversation.buddy? ? @conversation.buddy_theme : ByteConversation.default_theme_for(current_user) %>
-<% app_pet_theme = ByteConversation.default_theme_for(current_user) %>
+<%# `data-buddy-name` is the client's only source for what to call the pet.
+    applyBuddyTheme repoints it (and the tab title) on every thread switch, so
+    nothing in the JS has to carry its own copy of the theme table. %>
 <div class="byte-app"
      data-monitor-channel="byte"
      data-messages-url="<%= byte_message_history_path %>"
@@ -48,6 +54,10 @@
      data-claude-sessions-url="<%= byte_claude_sessions_path %>"
      data-initial-conversation-id="<%= @conversation.id %>"
      data-buddy-theme="<%= buddy_page_theme %>"
+     data-buddy-name="<%= buddy_page_chrome[:name] %>"
+     <%# Owner of the Mac. Only used to stop offering slash commands that would %>
+     <%# be refused anyway - the server is the actual gate. %>
+     data-byte-owner="<%= current_user.me? %>"
      data-active-mode="<%= @conversation.mode %>">
   <header class="byte-header">
     <%# Drawer trigger — sits before the avatar so it lands in the natural %>
@@ -58,14 +68,7 @@
       </svg>
     </button>
     <span class="byte-avatar">
-      <% case app_pet_theme
-         when "moss" %>
-        <%= image_tag "moss_favicon/moss.png", alt: "Moss" %>
-      <% when "suki" %>
-        <%= image_tag "suki_favicon/suki.png", alt: "Suki" %>
-      <% else %>
-        <%= image_tag "byte_favicon/byte.png", alt: "Byte" %>
-      <% end %>
+      <%= image_tag buddy_page_chrome[:avatar], alt: buddy_page_chrome[:name] %>
     </span>
     <span class="byte-title">
       <span class="byte-title-row">
@@ -120,7 +123,7 @@
     <%# Buddy's area so they don't push the character down. Rendered by %>
     <%# buddy/timers.js off the live Timer stack; empty + hidden when none. %>
     <div class="byte-buddy-timers" data-buddy-timers hidden></div>
-    <div class="byte-buddy-char" aria-label="<%= ByteConversation.display_name_for(buddy_page_theme) %>">
+    <div class="byte-buddy-char" aria-label="<%= buddy_page_chrome[:name] %>">
       <div class="byte-buddy-body" aria-hidden="true"></div>
       <div class="byte-buddy-face" aria-hidden="true"></div>
       <div class="byte-buddy-arm"  aria-hidden="true"></div>
@@ -174,14 +177,14 @@
     <div class="byte-buddy-face-popover" data-buddy-face-popover hidden>
       <span class="byte-buddy-mood-label">Debug: theme + face</span>
       <div class="byte-buddy-face-themes" data-buddy-face-themes>
-        <button type="button" data-buddy-theme-set="byte">Byte</button>
-        <button type="button" data-buddy-theme-set="moss">Moss</button>
-        <button type="button" data-buddy-theme-set="suki">Suki</button>
+        <% Buddy::Themes.keys.each do |theme| %>
+          <button type="button" data-buddy-theme-set="<%= theme %>"><%= Buddy::Themes.name_for(theme) %></button>
+        <% end %>
       </div>
       <%# One grid per theme; JS shows the one matching the live theme so the
           picker only ever offers faces that theme actually has. %>
-      <% %w[byte moss suki].each do |theme| %>
-        <div class="byte-buddy-face-choices" data-buddy-face-choices data-face-theme="<%= theme %>"<%= " hidden".html_safe unless buddy_page_theme == theme %>>
+      <% Buddy::Themes.keys.each do |theme| %>
+        <div class="byte-buddy-face-choices" data-buddy-face-choices data-face-theme="<%= theme %>"<%= " hidden".html_safe unless buddy_page_theme.to_s == theme.to_s %>>
           <% face_names.call(theme).each do |f| %>
             <button type="button" data-face="<%= f %>"><%= f.tr('_', ' ') %></button>
           <% end %>
@@ -290,14 +293,14 @@
     <%# Hidden file picker driven by the attach button below. %>
     <input type="file" class="byte-attach-input" data-byte-file accept="image/*" multiple hidden aria-hidden="true">
     <%# Single mode-adaptive avatar to the left of the input: %>
-    <%#   Claude  → Byte image %>
+    <%#   Claude  → this thread's pet image %>
     <%#   Jarvis  → Ardesian favicon (proxy for the Jarvis mark) %>
     <%#   Bash    → `$` in lime monospace %>
     <%#   Buddy   → speech-bubble glyph in violet %>
     <%# CSS on `.byte-composer[data-mode="…"]` toggles which child is visible. %>
     <span class="byte-composer-avatar" data-byte-composer-avatar>
       <img class="byte-composer-avatar-img byte-composer-avatar-claude"
-           src="<%= asset_path('byte_favicon/byte.png') %>" alt="Byte">
+           src="<%= asset_path(buddy_page_chrome[:avatar]) %>" alt="<%= buddy_page_chrome[:name] %>">
       <img class="byte-composer-avatar-img byte-composer-avatar-jarvis"
            data-byte-composer-avatar-jarvis src="" alt="Jarvis">
       <span class="byte-composer-avatar-bash">$</span>
@@ -311,7 +314,7 @@
       class="byte-input"
       data-byte-input
       rows="1"
-      placeholder="Say something to <%= ByteConversation.display_name_for(buddy_page_theme) %>…"
+      placeholder="Say something to <%= buddy_page_chrome[:name] %>…"
       autocapitalize="<%= bash_mode ? 'none' : 'sentences' %>"
       autocorrect="<%= bash_mode ? 'off' : 'on' %>"
       spellcheck="<%= bash_mode ? 'false' : 'true' %>"

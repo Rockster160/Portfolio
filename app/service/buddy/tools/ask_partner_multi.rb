@@ -13,6 +13,7 @@ Buddy::Tools.register(
     options="words, time, touch, service, gifts". No brackets. For a pick-ONE
     question use ask_partner_choice; for a free-text answer use ask_partner.
   TXT
+  feature:     :relay,
   args:        {
     to:       { type: :string, required: true, description: "Who to ask (household member)" },
     question: { type: :string, required: true, description: "The question to pose" },

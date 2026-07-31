@@ -5,6 +5,7 @@ Buddy::Tools.register(
     specific `id` (e.g. from search_events), or `event` as a fuzzy name with
     `when` to narrow it. Only include the fields that are changing.
   TXT
+  feature:     :events,
   args:        {
     id:    { type: :integer,  required: false, description: "Exact ActionEvent id (e.g. from search_events)" },
     event: { type: :string,   required: false, description: "Fuzzy name of the event to edit (if no id)" },

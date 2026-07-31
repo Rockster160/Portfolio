@@ -11,6 +11,7 @@ Buddy::Tools.register(
     lead-in ("let me check") - the actual summary lands in your NEXT reply, told
     warmly (celebrate the full days, be kind about the misses), not as a table.
   TXT
+  feature:     :chores,
   args:        {
     days: { type: :integer, required: false, default: 7, description: "How many days back to include (1-31)" },
   },

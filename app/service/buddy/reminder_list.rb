@@ -167,6 +167,9 @@ module Buddy
         when "event"            then "📝"
         when "agenda_item"      then "📅"
         when "deploy"           then "🚀"
+        when "item", "list", "section" then "🧾"
+        # A custom listener can name any scope, so this is a real fallback now
+        # rather than a defensive one.
         else                         "🔔"
         end
       end

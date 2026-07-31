@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_07_31_040000) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_31_233000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -489,6 +489,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_31_040000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "notify_user_id"
+    t.string "listener"
     t.index ["byte_conversation_id"], name: "index_buddy_watches_on_byte_conversation_id"
     t.index ["notify_user_id"], name: "index_buddy_watches_on_notify_user_id"
     t.index ["user_id", "trigger_scope"], name: "index_buddy_watches_on_user_id_and_trigger_scope"
@@ -840,6 +841,20 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_31_040000) do
     t.index ["user_id"], name: "index_emails_on_user_id"
   end
 
+  create_table "execution_archives", id: :bigint, default: nil, force: :cascade do |t|
+    t.bigint "user_id"
+    t.bigint "task_id"
+    t.integer "status"
+    t.integer "auth_type"
+    t.integer "auth_type_id"
+    t.string "trigger_scope"
+    t.datetime "started_at"
+    t.datetime "finished_at"
+    t.datetime "created_at", null: false
+    t.index ["task_id", "started_at"], name: "index_execution_archives_on_task_id_and_started_at", order: { started_at: :desc }
+    t.index ["user_id", "started_at"], name: "index_execution_archives_on_user_id_and_started_at", order: { started_at: :desc }
+  end
+
   create_table "execution_payloads", force: :cascade do |t|
     t.text "code"
     t.jsonb "input_data"
@@ -864,6 +879,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_31_040000) do
     t.index ["task_id", "started_at"], name: "index_executions_on_task_id_and_started_at", order: { started_at: :desc }
     t.index ["trigger_scope"], name: "index_executions_on_trigger_scope"
     t.index ["user_id", "started_at"], name: "index_executions_on_user_id_and_started_at", order: { started_at: :desc }
+    t.index ["user_id", "task_id", "status", "started_at"], name: "index_executions_on_compaction_candidates", order: { started_at: :desc }, where: "(payload_id IS NOT NULL)"
   end
 
   create_table "flash_cards", id: :serial, force: :cascade do |t|
@@ -1526,6 +1542,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_31_040000) do
     t.string "email"
     t.bigint "chore_household_id"
     t.jsonb "chore_notify_prefs", default: {}, null: false
+    t.jsonb "buddy_features", default: [], null: false
     t.index ["chore_household_id"], name: "index_users_on_chore_household_id"
   end
 

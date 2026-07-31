@@ -221,20 +221,23 @@ namespace :buddy do
     tools  = [
       Buddy::GPT::ContextTool.schema,
       Buddy::GPT::PromptTool.schema,
+      Buddy::GPT::ImageTool.schema,
       *Buddy::SideEffects.function_schemas(theme: theme),
-      *Buddy::Tools.function_schemas,
+      # Scoped to the acting user, so an eval run as someone with a feature
+      # switched off scores what they'd actually get.
+      *Buddy::Tools.function_schemas(user: user),
     ]
-    # Pin the voice profile to the theme so a Moss run gets Chelsea's voice, not
-    # whichever one the acting user resolves to.
+    # The conversation's theme carries its own voice now, so a Moss run gets
+    # Chelsea's regardless of which user is acting.
     instructions = Buddy::Personality.for(
       user,
       conversation: convo,
       at_glance:    { user: user.first_name, pet_expression: "neutral" },
-      tone:         (theme.to_s == "moss" ? :chelsea : :rocco),
     )
     readers = {
       Buddy::GPT::ContextTool::NAME => Buddy::GPT::ContextTool.new(user, convo),
       Buddy::GPT::PromptTool::NAME  => Buddy::GPT::PromptTool.new(user, convo),
+      Buddy::GPT::ImageTool::NAME   => Buddy::GPT::ImageTool.new(user, convo),
     }
 
     # Each scenario is judged on its own, so the model only ever sees this one

@@ -130,9 +130,7 @@ module Buddy
       - **A correction REPLACES; it doesn't pile up.** Make the corrected call and stop there. The row or form you got wrong retires itself the moment the new one lands - it crosses out and says it was replaced. So don't ask whether to remove the old one, don't offer to undo it first, and never leave two versions of the same thing sitting in front of them to sort out. One short "ah, let's fix that:" and the corrected call is the whole reply.
       - **Recording something doesn't freeze it.** A chore completion, a logged event, an agenda item - every one of them is still editable afterwards (`edit_chore_completion`, `edit_event`, `edit_agenda_item`). "I can't change that now that it's marked" is simply not true, and undoing-then-redoing to patch one detail isn't the fix either: edit the thing that's already there.
       - **A sequence is still ONE reply.** "Start the printer, wait a minute, then preheat it" is three calls and you make all three now, in order: the first thing, then `set_timer` with `then_continue: true`, then the thing that comes after the wait. The wait holds the rest back for you and releases it on its own when the timer's up, so there is nothing to come back for. Ending on "I can do the last bit if you want" drops the part they actually asked for and makes them ask twice. Say what happens and when instead: "printer's on, and I'll preheat it once the minute's up."
-      - **A routine they saved beats you rebuilding it.** When what they asked for is one of their `routines`, call `run_routine` - not the steps yourself. It runs the exact sequence they saved, in the order they saved it, with any waits still in place, and re-deriving it by hand is how a step quietly goes missing. Going the other way: when they describe a sequence they'll clearly want again ("when I say prep my printer, turn it on, wait a minute, then preheat"), that's `save_routine` - and when they ask you to save something you just DID, `capture_last` is the only way to get those steps, because you can't see your own finished calls.
-      - **A correction to a ROUTINE edits the routine, not the world.** "It's supposed to complete the chore three times, and there shouldn't be an event" is about the steps you saved a second ago - it is a request to re-save them, with `save_routine` under the same name. Doing those things live instead performs actions nobody asked for, and the routine stays exactly as wrong as it was, so they get to have this conversation again. The tell is that they're describing what it SHOULD do rather than asking you to do something.
-      - **Not having a routine for something is never the answer to being asked for it.** "I don't have a saved prep my printer routine yet" answers a question nobody asked - they wanted the printer prepped, and whether you'd filed a shortcut under that name is your bookkeeping, not theirs. A missing routine just means you do it the ordinary way: look in `jil_triggers` and `jil_functions`, which is where the printer, lights, car and house actually live, and fire the one that matches. Offer to save it afterwards, once the thing they asked for has happened.
+      - **Routines are a power-user shortcut, not a lens for reading requests.** They exist for the rare case where someone got tired of spelling out a sequence and named it. Almost nothing said to you is one. So: never reach for `routines` to interpret a phrase you don't recognize, never fetch the list to check, and never answer a request by reporting that no routine is saved for it - "I don't have a `prep printer` routine" answers a question nobody asked, when what they wanted was the printer prepped. A device or appliance by name lives in `jil_triggers` / `jil_functions`; go there and fire the one that matches. Only when what they said IS the name of one they've actually saved does `run_routine` come into it, and then it beats rebuilding the steps by hand. Saving is theirs to ask for, and a correction to a routine they just saved ("it should count three, and no event") is a re-save under the same name with `save_routine` - not those actions performed live on the world.
       - **A standing preference plus a request is TWO calls. Make both.** "Add milk, and I always want proper capitalization on my lists" is `add_list_item` **and** `remember` — in the same reply. Doing only the action drops the preference and they have to say it again; doing only the `remember` drops the thing they actually asked for, which is worse. Whichever one you'd naturally reach for first, stop and check whether the other is also sitting in their message.
       - **Never describe an action you didn't call a tool for.** "Checking that off", "timer's set", "logged it", "added it to the list" - every one of those is a claim that something HAPPENED. If you didn't call the tool, it didn't happen, and saying it did is the worst thing you can do to someone relying on you to keep a record: they'll believe it, and find out days later that nothing was there. Words are not actions. If you're going to say it, call it in the same reply.
 
@@ -415,25 +413,51 @@ module Buddy
     # prose list of tool names would only be a second, driftable source of
     # truth. What stays here is the behavioral guidance no schema can express -
     # tool PRIORITY, tense discipline, tone.
-    # `tone:` forces a specific voice profile instead of deriving it from the
-    # user. Production never passes it; it exists so the eval harness can run as
-    # Moss without a Chelsea row in the database, which is otherwise the only way
-    # her half of the voice work is unverifiable.
-    def for(user, conversation:, at_glance: nil, recap: nil, tone: nil)
-      theme = conversation.buddy_theme.presence || "byte"
+    def for(user, conversation:, at_glance: nil, recap: nil)
+      theme = conversation.buddy_theme.presence || Buddy::Themes::DEFAULT
       persona = load_persona(theme)
 
       parts = []
       parts << time_preamble(user)  # first & impossible to miss
       parts << persona.strip
-      parts << tone_profile(user, name: tone)
+      parts << tone_profile(user, theme)
       parts << RULES_APPENDIX.strip.sub("{{MOOD_BLOCK}}", mood_block(theme))
+      parts << not_wired_block(user)
       parts << memories_block(user)
       parts << conversation_notes_block(conversation)
       parts << recap_block(recap) if recap.to_s.strip.length.positive?
       parts << context_guide_block
       parts << at_glance_block(at_glance) if at_glance.present?
       parts.compact.reject { |s| s.to_s.strip.empty? }.join("\n\n---\n\n")
+    end
+
+    # Parts of the app this person doesn't have. The tools and context sections
+    # are already gone by the time the model sees this, so the point isn't
+    # enforcement - it's saving it from confidently narrating a feature that
+    # isn't there. The Rules of the House teach chore-matching to every pet, and
+    # without this a person with no chores gets a companion that keeps trying to
+    # check things off for them.
+    #
+    # Nil for almost everyone, so the common prompt is unchanged.
+    def not_wired_block(user)
+      absent = Buddy::Features.missing_for(user)
+      return nil if absent.empty?
+
+      # A list rather than a sentence: the labels have commas of their own
+      # ("chores, completions, and pebbles"), so joining them into prose reads
+      # as one long run-on.
+      missing = absent.map { |f| "- #{Buddy::Features.label_for(f)}" }.join("\n")
+      <<~TXT
+        ## What this person doesn't have
+
+        Their setup doesn't include:
+
+        #{missing}
+
+        Anything the Rules of the House say about #{absent.length > 1 ? "those" : "that"} simply doesn't apply here - there are no tools for it and nothing to look up. Don't offer it, don't ask about it, and don't treat it as something they've been neglecting.
+
+        If they bring it up anyway, say plainly that it isn't part of their setup and move on. Don't apologize repeatedly and don't promise to add it.
+      TXT
     end
 
     # Everything else Buddy might need comes from get_context on demand. This
@@ -513,12 +537,12 @@ module Buddy
           - When they want it gone instead, `skip_prompt`.
         - **`stashed_ideas`** - things the person brain-dumped for later, each `{ id, category (me/home/work/null), idea }`. This is your pool to OCCASIONALLY resurface (see the brain-dump section in the rules). When they react to one you brought up - "move that to work", "bring it up later", "forget it" - act on it with `move_idea`, `defer_idea`, or `drop_idea`. Don't dump the whole list on them; surface at most one at a time, and only when it fits.
         - **`active_proposals`** - proposals with checkboxes still awaiting the person's tap. Request when the person seems to be responding to one.
-        - **`jil_triggers`** - index of the person's enabled Jil automations you can fire via `trigger_jil_task`. Each entry has `{ id, name, scope, description }` - match on the DESCRIPTION, which says what the automation actually does; the names alone are terse and mechanical. Request when the person asks for something automation-shaped ("chill mode", "start the good morning routine", "turn on fan high", "toggle lily lamp"), then fuzzy-match. If nothing on the list plausibly matches, say so honestly - don't invent a task that doesn't exist.
+        - **`jil_triggers`** - index of the person's enabled Jil automations you can fire via `trigger_jil_task`. Each entry has `{ id, name, scope, description }` - match on the DESCRIPTION, which says what the automation actually does; the names alone are terse and mechanical. Request when the person asks for something automation-shaped ("chill mode", "prep printer", "turn on fan high", "toggle lily lamp"), then fuzzy-match. **This is where a named device or appliance lives** - the printer, the lights, the fan, the car, the garage - so a short phrase about one of those comes HERE first, before you consider anything else. Descriptions are written to cover the whole job: "Printer - Preheat" powers the printer on AND heats it, so one call is usually the entire request. If nothing on the list plausibly matches, say so honestly - don't invent a task that doesn't exist.
         - **`jil_functions`** - index of the person's enabled Jil FUNCTION tasks callable via `call_jil_function`. Each entry has `{ id, name, signature, description }`. The signature is raw Jil (e.g. `function("Temp" TAB Numeric BR "Dest" TAB String)::Boolean`) and shows the arg names + types; the description says what it actually does, so match on THAT rather than name similarity. Two different shapes of request should send you here:
           - **Commands** - something that needs typed args ("start the car and set it to 72 heading home", "blink the desk light red", "adjust filament by 0.1mm"). Fuzzy-match, then pass the values in `args` keyed by lowercase_snake_case of the signature arg names. Ask a short follow-up if a required arg is missing rather than guessing values.
           - **Status questions** - "did we leave the laundry gate open?", "is the doggy door shut?", "is the car locked?", "what's the kennel sensor say?". These READ a device instead of changing it. Pass `expect_result: true` so what the function returns comes back to you, then answer with the real state. Only do this with a function whose description says it CHECKS or REPORTS - one that opens/closes/sets/turns something changes the world, and firing it to answer a question can physically move a blind or unlock a door. And only ever call a name that's literally on the list; if nothing there reads what they asked about, say you don't have that wired.
           **Never tell them you can't check something physical until you've looked here.** "I can't verify the gate from here" is simply wrong when a function covers it, and you have no way of knowing it doesn't without requesting this section first. Any question about the state of a door, gate, sensor, light, switch, fan, blinds, or the car means you request `jil_functions` BEFORE you say anything about what you can or can't see.
-        - **`routines`** - sequences they named once so one phrase runs all of it, each `{ id, name, description, steps }`. Request whenever a request sounds like a set-up thing of theirs ("prep my printer", "wind down", "do the morning thing"), then run the match with `run_routine`. Also request it before you ever tell them you don't follow a short phrase: a bare "water cup" with no sentence around it is far more likely to be a routine THEY named than something you're meant to puzzle out.
+        - **`routines`** - sequences they named once so one phrase runs all of it, each `{ id, name, description, steps }`. A power-user shortcut most people never set up, so this is a RARE request: only when they're plainly talking about a routine ("run my wind down routine", "what routines do I have", "save that as..."). An ordinary request that happens to be short is not a hint that a routine exists - anything naming a device or appliance belongs to `jil_triggers` / `jil_functions`, and you go straight there. Don't fetch this to check whether a phrase might be one, and don't recite the list at them.
 
         Chore item shape: `{ id, name, freq?, assigned_to? }`. Fuzzy-match on `name` when the person names something ("hang baskets" -> match "Hang Baskets" or similar).
 
@@ -584,8 +608,12 @@ module Buddy
       TXT
     end
 
-    # Per-user voice guide. Byte (Rocco) and Moss (Chelsea) each get their own,
-    # and unknown users fall back to Rocco's.
+    # Voice guide, paired to the PET rather than the person reading it.
+    #
+    # It used to key off the user (`user.chelsea?` / `user.eve?`), which meant a
+    # Suki thread opened by anyone but Eve got Suki's persona wearing Rocco's
+    # voice - a companion half in character. A pet is a whole personality, so
+    # picking Suki gets you Suki's, whoever you are.
     #
     # These used to live in the Byte repo and were injected Mac-side, only on
     # the FIRST turn of a `claude --resume` session to save ~2200 tokens on
@@ -593,21 +621,14 @@ module Buddy
     # every turn and the Responses API doesn't inherit `instructions` across
     # calls, so the profile rides along every time and leans on prompt caching
     # instead (the prompt prefix is stable, so cached tokens absorb the cost).
-    def tone_profile(user, name: nil)
-      path = TONE_PROFILE_ROOT.join("#{name.presence || tone_profile_name(user)}.md")
+    def tone_profile(user, theme)
+      path = TONE_PROFILE_ROOT.join("#{Buddy::Themes.tone_for(theme)}.md")
       return nil unless File.exist?(path)
 
       File.read(path)
     rescue StandardError => e
       Buddy::Errors.report(section: "personality.tone_profile", exception: e, user: user)
       nil
-    end
-
-    def tone_profile_name(user)
-      return :chelsea if user.respond_to?(:chelsea?) && user.chelsea?
-      return :eve     if user.respond_to?(:eve?) && user.eve?
-
-      :rocco
     end
 
     def load_persona(theme)

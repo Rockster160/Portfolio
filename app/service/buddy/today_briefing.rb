@@ -53,6 +53,45 @@ module Buddy
       lines.join("\n")
     end
 
+    # The briefing is chore-led for most people: what's still pending IS the
+    # answer to "what's on today". For someone without chores that guidance is
+    # worse than useless — it points the model at sections that aren't in their
+    # context at all, so it either invents something or spends a paragraph
+    # explaining an absence. The bullets come out entirely rather than being
+    # softened, which also gets the prompt space back.
+    def chores?(user)
+      user.present? && Buddy::Features.enabled?(user, :chores)
+    end
+
+    def chores_done_line(user)
+      return "" unless chores?(user)
+
+      "\n- `chores_done_today` is finished business - don't report it as an update."
+    end
+
+    def chores_lead_lines(user)
+      return "" unless chores?(user)
+
+      [
+        "",
+        "- `chores_pending_today` - the primary answer. Name them.",
+        "- Give extra weight to items explicitly DUE today that AREN'T daily (a `due_today: true` chore whose `freq` is weekly/monthly/less, or a hot pick). Those are the easy-to-forget ones and the most useful to surface - daily habits I know cold.",
+        "- BATCH related items: if several due chores are obviously one errand or theme (all the trash / recycling / bins, or all the plant watering), say it once as the theme (\"it's trash day\", \"watering day\") rather than listing each one.",
+      ].join("\n")
+    end
+
+    def chores_hot_line(user)
+      return "" unless chores?(user)
+
+      "\n- `chores_hot_picks` - flagged for attention today."
+    end
+
+    def chores_secondary_line(user)
+      return "" unless chores?(user)
+
+      "\n- `chores_done_today` - only if I've clearly gotten a lot done and it's worth acknowledging. Never lead with it. Never make it the point."
+    end
+
     # After ~4pm local the day's weather isn't actionable anymore.
     def late_in_day?(user)
       return false if user.nil?
@@ -87,17 +126,12 @@ module Buddy
         #{weather_block(user)}#{plunge_block(user)}
 
         FORWARD-LOOKING ONLY. Only surface what's STILL AHEAD from `now_local`. Anything already over is not news:
-        - Agenda items flagged `passed: true` are DONE for the day - never recite or recap them.
-        - `chores_done_today` is finished business - don't report it as an update.
+        - Agenda items flagged `passed: true` are DONE for the day - never recite or recap them.#{chores_done_line(user)}
         - If it's evening or later and the day is essentially behind them (most items passed, little pending), DON'T force a full rundown. A day that's over doesn't need a briefing - give whatever is actually left tonight (if anything) and a quick nod to tomorrow, then stop. Short is correct here.
 
-        LEAD WITH what still needs to happen today:
-        - `chores_pending_today` - the primary answer. Name them.
-        - Give extra weight to items explicitly DUE today that AREN'T daily (a `due_today: true` chore whose `freq` is weekly/monthly/less, or a hot pick). Those are the easy-to-forget ones and the most useful to surface - daily habits I know cold.
-        - BATCH related items: if several due chores are obviously one errand or theme (all the trash / recycling / bins, or all the plant watering), say it once as the theme ("it's trash day", "watering day") rather than listing each one.
+        LEAD WITH what still needs to happen today:#{chores_lead_lines(user)}
         - `today_agenda` - today's events / meetings with times. But see UNUSUAL-ONLY below: don't recite the daily-recurring stuff.
-        - Agenda items tagged `mine: false` (with an `owner`, e.g. Chelsea) are on a partner's PERSONAL calendar shared with me - awareness only. They are NOT my tasks. Don't list them as mine; usually don't mention them at all. Only bring one up if it actually affects me (a conflict, a hand-off, something I'm part of), and attribute it ("Chelsea's got a thing at 3").
-        - `chores_hot_picks` - flagged for attention today.
+        - Agenda items tagged `mine: false` (with an `owner`, e.g. Chelsea) are on a partner's PERSONAL calendar shared with me - awareness only. They are NOT my tasks. Don't list them as mine; usually don't mention them at all. Only bring one up if it actually affects me (a conflict, a hand-off, something I'm part of), and attribute it ("Chelsea's got a thing at 3").#{chores_hot_line(user)}
 
         WHEN referring to a day: say "tomorrow" for the next day, not the weekday name. Weekday names only for two-plus days out.
 
@@ -113,8 +147,7 @@ module Buddy
         - Same cadence weighting: gloss/skip the daily-and-weekday repeats, lightly flag the less-common recurrences and one-offs, call out cancelled routines. On a weekend, a unique Monday thing is fair game ("heads up, dentist Monday morning").
         - At most a line. If nothing worth noting is coming, say nothing about the week.
 
-        SECONDARY (mention only if clearly relevant):
-        - `chores_done_today` - only if I've clearly gotten a lot done and it's worth acknowledging. Never lead with it. Never make it the point.
+        SECONDARY (mention only if clearly relevant):#{chores_secondary_line(user)}
         - `stashed_ideas` - OCCASIONALLY (not most days) float ONE idea I brain-dumped, if it fits the morning. Light, one at a time, easy to wave off. Skip it entirely most of the time.
 
         DO NOT USE:

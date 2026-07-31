@@ -280,10 +280,30 @@ RSpec.describe Buddy::WatchMatcher do
       expect(BuddyWatch.active.where(id: w.id)).to exist
     end
 
-    it "bails on a non-watchable scope without querying watches" do
+    # This runs for EVERY trigger the platform fires, including tesla telemetry,
+    # so a scope nobody is watching has to cost nothing. The watched set is
+    # cached; what must never happen is a per-user watch lookup for a scope no
+    # watch names.
+    it "bails on an unwatched scope without looking up anyone's watches" do
       make_watch
+      allow(described_class).to receive(:watched_scopes).and_return(["chore_completion"])
+
       expect(BuddyWatch).not_to receive(:active)
       described_class.dispatch(user, "monitor", { "channel" => "uptime" })
+    end
+
+    # A custom listener can name any scope, so the bail set is derived from the
+    # watches that exist rather than a fixed list - and a new watch on a scope
+    # nobody was watching has to take effect now, not when the TTL rolls over.
+    it "picks up a scope the moment a watch names it" do
+      expect(described_class.watched_scopes).not_to include("item")
+
+      BuddyWatch.create!(
+        user: user, byte_conversation: convo, body: "milk landed",
+        trigger_scope: "item", listener: "item:action:added", match: {},
+      )
+
+      expect(described_class.watched_scopes).to include("item")
     end
 
     # The real bug: chore/event triggers arrive as the RECORD itself

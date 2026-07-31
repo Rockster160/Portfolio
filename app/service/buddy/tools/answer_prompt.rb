@@ -25,6 +25,7 @@ Buddy::Tools.register(
     them one tap; a question costs a whole extra exchange. Leave a field out
     only when you have genuinely nothing to go on.
   TXT
+  feature:     :prompts,
   args:        {
     id:      { type: :integer, required: true, description: "Prompt id from pending_prompts" },
     answers: { type: :object,  required: true, description: "Question text => the person's answer" },

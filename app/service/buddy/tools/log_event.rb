@@ -6,6 +6,7 @@ Buddy::Tools.register(
     (short label). `notes` are optional. Use `count=N` when the same
     thing repeats (e.g. 5 glasses of water, 20 push-ups).
   TXT
+  feature:     :events,
   args:        {
     name:  { type: :string, required: true,  description: "Short event label (e.g. 'Coffee', 'Push-ups')" },
     notes: { type: :string, required: false, description: "Optional free-form notes" },

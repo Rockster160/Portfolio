@@ -10,7 +10,15 @@ module Buddy
     # still lands in the window.
     UPCOMING_WEEK_WINDOW = 8.days
 
+    # Sections belonging to a feature this person doesn't have are dropped
+    # rather than returned empty — an empty `chores_pending_today` reads as "you
+    # have nothing due today", which is a different (and wrong) statement from
+    # "chores aren't part of your setup".
     def build(user, conversation)
+      full(user, conversation).except(*Buddy::Features.hidden_sections(user))
+    end
+
+    def full(user, conversation)
       tz = user.timezone
       now = Time.current.in_time_zone(tz)
       today = user.perceived_today
@@ -512,7 +520,11 @@ module Buddy
             id:   w.id,
             when: (w.metadata.is_a?(Hash) ? w.metadata["human_when"].to_s.presence : nil) || w.trigger_scope,
             body: w.body.to_s.first(120),
-          }
+            # Present only on a hand-written watch. Carried so a "why did that
+            # fire" (or a near-duplicate) can be reasoned about from the actual
+            # condition rather than the prose around it.
+            listener: w.listener,
+          }.compact
         }
       rescue StandardError => e
         Buddy::Errors.report(section: "context.active_watches", exception: e, user: conversation.user)

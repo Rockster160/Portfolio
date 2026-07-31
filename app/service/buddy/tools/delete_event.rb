@@ -6,6 +6,7 @@ Buddy::Tools.register(
     wants it gone. Best to pass a specific `id` (from a `search_events` result);
     otherwise `event` is a fuzzy name and `when` narrows it.
   TXT
+  feature:     :events,
   args:        {
     id:    { type: :integer, required: false, description: "Exact ActionEvent id (e.g. from search_events)" },
     event: { type: :string,  required: false, description: "Fuzzy event name (if no id)" },

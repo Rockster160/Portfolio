@@ -16,6 +16,7 @@ Buddy::Tools.register(
     missed, correct the time — use `edit_chore_completion`, not a second
     `complete_chore`.
   TXT
+  feature:     :chores,
   args:        {
     chore: { type: :string, required: true,  description: "Fuzzy chore name" },
     note:  { type: :string, required: false, description: "Optional note captured on the completion" },

@@ -13,6 +13,7 @@ Buddy::Tools.register(
 
     #{ByteLocal::MAC_COMMANDS.map { |name, purpose| "- `#{name}`: #{purpose}" }.join("\n")}
   TXT
+  feature:     :mac,
   args:        {
     command: {
       type:        :enum,

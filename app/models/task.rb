@@ -267,11 +267,17 @@ class Task < ApplicationRecord
   end
 
   def average_duration(count)
-    executions.finished.order(:finished_at).limit(count).map(&:duration).then { |a| a.sum.to_f / a.length }
+    executions.finished.order(:started_at).limit(count).map(&:duration).then { |a| a.sum.to_f / a.length }
   end
 
+  # Ordered by started_at, not finished_at: only started_at is indexed
+  # (task_id, started_at DESC), and ordering on finished_at forced a sort of
+  # every execution the task has ever logged — ~6s once a task passed a
+  # million rows. For a serialized task the two orderings agree; when runs do
+  # overlap, started_at is the better answer anyway, since the caller wants
+  # the run it just kicked off, not whichever one happened to finish last.
   def last_execution
-    @last_execution ||= executions.finished.order(:finished_at).last
+    @last_execution ||= executions.finished.order(:started_at).last
   end
 
   def last_error
@@ -314,19 +320,10 @@ class Task < ApplicationRecord
     }
   end
 
+  # Matching lives in Jil::ListenerMatch so a Buddy watch written in the same
+  # syntax is matched by the same code — see that file for why.
   def match_run(trigger, trigger_data, force: false, auth: :trigger, auth_id: nil)
-    first_match = nil
-    serialized_data = ::Tokenizing::TriggerData.serialize(trigger_data, use_global_id: false)
-    did_match = listener_match?(trigger) { |sub_listener|
-      next true if sub_listener == trigger
-
-      if trigger == :monitor && trigger_data.is_a?(::Hash) && trigger_data[:channel].present?
-        next true if sub_listener.match?(/\A\s*monitor::?#{Regexp.escape(trigger_data[:channel].to_s)}\s*\z/)
-      end
-
-      matcher = ::Tokenizing::Matcher.new(sub_listener, { trigger => serialized_data })
-      matcher.match?.tap { |m| first_match ||= matcher if m }
-    }
+    did_match, first_match = ::Jil::ListenerMatch.match_with_captures(listener, trigger, trigger_data)
     return if !did_match && !force
 
     ::Jarvis.log("[#{id}]\e[35m#{listener}")
@@ -338,12 +335,16 @@ class Task < ApplicationRecord
     )
   end
 
+  # Adopt the executor's own Execution as `last_execution` rather than
+  # clearing the memo. The trigger loop calls `stop_propagation?` on every
+  # task it runs, and re-querying for the row we just wrote costs a lookup
+  # per trigger for an object already in memory.
   def execute(data={}, broadcast_task: nil, auth: :trigger, auth_id: nil, trigger_scope: nil)
     ::Jil::Executor.call(
       user, code, data,
       task: self, broadcast_task: broadcast_task || self,
       auth: auth, auth_id: auth_id, trigger_scope: trigger_scope
-    ).tap { @last_execution = nil }
+    ).tap { |executor| @last_execution = executor.execution }
   end
 
   def accessible_by?(user)

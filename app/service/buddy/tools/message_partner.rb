@@ -29,6 +29,7 @@ Buddy::Tools.register(
     This is one-way. If the user wants an ANSWER back, use ask_partner (open
     question), ask_partner_choice (pick one), or ask_partner_multi (pick any).
   TXT
+  feature:     :relay,
   args:        {
     to:      { type: :string, required: true, description: "Who the message is for (household member)" },
     message: { type: :string, required: true, description: "The note to send. Their exact words when they gave you words; your phrasing when they only gave you the gist." },

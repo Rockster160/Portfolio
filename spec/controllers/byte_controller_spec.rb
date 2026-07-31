@@ -35,6 +35,24 @@ RSpec.describe ByteController, type: :controller do
       expect(response).to be_successful
       expect(chelsea.byte_conversations.reload.map(&:mode)).to all(eq("buddy"))
     end
+
+    # The page used to brand itself off the USER's default pet, so opening a
+    # Suki thread on Rocco's account said "Byte" in the tab, the home-screen
+    # title, the header avatar, and the composer placeholder.
+    it "wears the open thread's pet, not the account's default one" do
+      sign_in rocco
+      # #show opens the most recently active thread, so this is the one it lands on.
+      convo = rocco.byte_conversations.create!(name: "with suki", mode: :buddy)
+      convo.update!(buddy_theme: :suki, last_message_at: Time.current)
+
+      get :show
+
+      expect(response.body).to include('data-buddy-name="Suki"')
+      expect(response.body).to include('content="Suki"')      # PWA home-screen title
+      expect(response.body).to include("/suki.webmanifest")
+      expect(response.body).to include("Say something to Suki")
+      expect(response.body).not_to include("Say something to Byte")
+    end
   end
 
   describe "DELETE #delete_message" do

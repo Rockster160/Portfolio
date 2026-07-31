@@ -60,6 +60,7 @@ Buddy::Tools.register(
     values. If nothing on the function list plausibly matches, tell
     them you don't have that wired.
   TXT
+  feature:     :jil,
   args:             {
     name:          { type: :string, required: true, description: "Fuzzy function-task name to call" },
     # Declared purely so validate_payload keeps it OUT of the passthrough args -

@@ -366,7 +366,7 @@ class WebhooksController < ApplicationController
       if reset_at
         ::Buddy::SleepGuard.sleep_until!(message.user, reset_at)
         message.update!(
-          body:     ::Buddy::SleepGuard.sleeping_reply_body(message.user),
+          body:     ::Buddy::SleepGuard.sleeping_reply_body(message.user, message.byte_conversation),
           state:    :delivered,
           metadata: (message.metadata || {}).merge("kind" => "buddy", "source" => "sleep_guard"),
         )

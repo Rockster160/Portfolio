@@ -138,9 +138,12 @@ module Buddy
         .strftime("%-I:%M %p")
     end
 
-    # Buddy's in-character reply while asleep. Personalized to the theme.
-    def sleeping_reply_body(user)
-      name = ByteConversation.default_theme_for(user) == "moss" ? "Moss" : "Byte"
+    # Buddy's in-character reply while asleep, named for whichever pet is asleep.
+    # `conversation` is optional because some callers only know the user; without
+    # a thread the honest answer is their default pet.
+    def sleeping_reply_body(user, conversation=nil)
+      theme = conversation&.buddy_theme.presence || ByteConversation.default_theme_for(user)
+      name  = Buddy::Themes.name_for(theme)
       "💤 #{name} is sleeping right now. They'll be back up at #{wake_string(user)}."
     end
   end

@@ -7,7 +7,7 @@
 // positions the cursor so args can be typed immediately.
 //
 // The command list is client-side and hardcoded — commands are stable
-// enough (~15 total) that a server round-trip would just add latency
+// enough (~20 total) that a server round-trip would just add latency
 // without buying anything. Order here roughly matches the /help output
 // so the popover feels familiar next to that.
 //
@@ -15,49 +15,85 @@
 //   1. Prefix match on the command name  (highest)
 //   2. Substring match on the description (lowest)
 // With an empty query, everything shows in list order.
+//
+// `modes` is which conversation modes a command actually does something in;
+// absent means all of them. `owner` marks the ones only the Mac's owner can
+// use. Both are about not OFFERING something that would only fail — the server
+// refuses each of these on its own (ByteController#handle_rails_slash_command
+// for the Rails-owned ones, ByteMessageIntake#locked_out? for the Mac handoff),
+// so this list is presentation, never the gate.
+
+// Commands the Mac's meta handler owns. Only claude and bash threads reach it —
+// jarvis dispatches to ByteJarvisWorker and buddy never leaves Rails — so
+// offering these anywhere else is offering a no-op.
+const MAC_MODES = ["claude", "bash"];
 
 const COMMANDS = [
   // Claude sessions
-  { name: "sessions", description: "Recent Claude sessions in this cwd" },
-  { name: "switch",   description: "Resume a Claude session",           args: "<n|name|prefix>" },
-  { name: "adopt",    description: "Attach this conversation to an existing session", args: "<name>" },
-  { name: "join",     description: "Alias for /adopt — join a session", args: "<name>" },
-  { name: "new",      description: "Clear Claude session — next msg starts fresh" },
-  { name: "watch",    description: "Ping when a session next stops / prompts",         args: "[name]" },
-  { name: "unwatch",  description: "Stop watching a session",                          args: "[name]" },
-  { name: "watches",  description: "List sessions this thread is watching" },
+  { name: "sessions", modes: MAC_MODES, description: "Recent Claude sessions in this cwd" },
+  { name: "switch",   modes: MAC_MODES, description: "Resume a Claude session",           args: "<n|name|prefix>" },
+  { name: "adopt",    modes: MAC_MODES, description: "Attach this conversation to an existing session", args: "<name>" },
+  { name: "join",     modes: MAC_MODES, alias: true, description: "Alias for /adopt — join a session", args: "<name>" },
+  { name: "new",      modes: MAC_MODES, description: "Clear Claude session — next msg starts fresh" },
+  { name: "watch",    modes: MAC_MODES, description: "Ping when a session next stops / prompts",         args: "[name]" },
+  { name: "unwatch",  modes: MAC_MODES, description: "Stop watching a session",                          args: "[name]" },
+  { name: "watches",  modes: MAC_MODES, description: "List sessions this thread is watching" },
 
   // Background tasks
-  { name: "wait",     description: "Kick off a background task; ping when done",       args: "<preset|cmd>" },
-  { name: "waits",    description: "List running waits" },
+  { name: "wait",     modes: MAC_MODES, description: "Kick off a background task; ping when done",       args: "<preset|cmd>" },
+  { name: "waits",    modes: MAC_MODES, description: "List running waits" },
 
   // Buddy mode
-  { name: "buddy",    description: "Switch this thread's pet",                         args: "<byte|moss|suki>" },
-  { name: "tools",    description: "Buddy tool access (on default | off | list)",     args: "[spec]" },
-  { name: "compact",  description: "Drop this thread's history — memories stay" },
+  { name: "buddy",    modes: ["buddy"], description: "Switch this thread's pet",                         args: "<byte|moss|suki>" },
+  { name: "reset",    modes: ["buddy"], description: "Fresh start here — stop sending everything above as history" },
+  { name: "compact",  modes: ["buddy"], alias: true, description: "Alias for /reset" },
 
   // Conversation
   { name: "rename",   description: "Rename this conversation",                         args: "<new name>" },
   { name: "archive",  description: "Archive this conversation" },
-  { name: "mode",     description: "Change dispatch mode",                             args: "<claude|bash|jarvis|buddy>" },
+  { name: "mode",     owner: true, description: "Change dispatch mode",                 args: "<claude|bash|jarvis|buddy>" },
   { name: "fork",     description: "Fork this conversation into a new one" },
 
   // Shell / utility
-  { name: "abort",    description: "Cancel a running shell command" },
-  { name: "pwd",      description: "Show current working directory" },
+  { name: "abort",    modes: MAC_MODES, description: "Cancel a running shell command" },
+  { name: "pwd",      modes: MAC_MODES, description: "Show current working directory" },
   { name: "clear",    description: "(client-only) wipe local queue + cache" },
-  { name: "help",     description: "Show all slash commands" },
+  { name: "help",     modes: MAC_MODES, description: "Show all slash commands" },
 ];
+
+// The commands that mean something for the thread on screen. Mode does nearly
+// all the narrowing: a Buddy thread has no Claude session to resume and no
+// shell to abort, which takes 21 down to 7 for the owner and 6 for everyone
+// else (only /mode is owner-only).
+//
+// `alias` entries are real commands and stay matchable — typing `/compact`
+// still finds it — they just don't take up a row in the browse list next to
+// the name they're an alias for.
+export function available({ mode, owner }) {
+  return COMMANDS.filter((c) => {
+    if (c.owner && !owner) return false;
+    return !c.modes || c.modes.includes(mode);
+  });
+}
 
 // Wire up the popover. Called once at boot from index.js.
 //   options.input     — the <textarea> element (must have `data-byte-input`)
 //   options.popover   — the popover container element
 //   options.autosize  — the composer's autosize() to call after inserts
-export function setupSlashAutocomplete({ input, popover, autosize }) {
+//   options.app       — the `.byte-app` element, read for the live mode + owner
+export function setupSlashAutocomplete({ input, popover, autosize, app }) {
   if (!input || !popover) return;
 
+  // Read at filter time rather than captured at boot: `data-active-mode` is
+  // repointed on every conversation switch, so switching into a Buddy thread
+  // narrows the list with no re-wiring.
+  const context = () => ({
+    mode: app?.dataset.activeMode,
+    owner: app?.dataset.byteOwner === "true",
+  });
+
   let visible   = false;
-  let filtered  = COMMANDS.slice();
+  let filtered  = filter("", context());
   let highlight = 0;
 
   const render = () => {
@@ -134,7 +170,7 @@ export function setupSlashAutocomplete({ input, popover, autosize }) {
     const rest = v.slice(1);
     // Past the verb (whitespace present) → hide. User is typing args now.
     if (/\s/.test(rest)) { hide(); return; }
-    filtered = filter(rest.toLowerCase());
+    filtered = filter(rest.toLowerCase(), context());
     highlight = 0;
     show();
   };
@@ -224,9 +260,10 @@ export function setupSlashAutocomplete({ input, popover, autosize }) {
 // that typing a common letter (like "t") barely narrowed the list -
 // almost every command had "t" somewhere in its description, so the
 // popover felt unresponsive. Prefix match ranks above substring match.
-function filter(query) {
-  if (!query) return COMMANDS.slice();
-  return COMMANDS
+function filter(query, ctx) {
+  const pool = available(ctx);
+  if (!query) return pool.filter((c) => !c.alias);
+  return pool
     .map((c) => {
       let score = 0;
       if (c.name.startsWith(query))     score = 100;

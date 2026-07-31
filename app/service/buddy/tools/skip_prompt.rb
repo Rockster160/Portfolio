@@ -6,6 +6,7 @@ Buddy::Tools.register(
     get_context. Use when they say to skip, dismiss, or "not now" one of them.
     `id` is the prompt's id from that list.
   TXT
+  feature:     :prompts,
   args:        {
     id: { type: :integer, required: true, description: "Prompt id from pending_prompts" },
   },

@@ -5,12 +5,21 @@ class ExecutionCompactWorker
 
   RETENTION_PER_GROUP = 10
   BATCH_SIZE = 1000
+  # Bounds on a worker that runs every minute and holds an advisory lock for
+  # the duration. Whatever is left over is picked up on the next tick rather
+  # than pinning a Sidekiq thread.
+  MAX_BATCHES = 25
+  TIME_BUDGET = 45.seconds
 
   def perform
     return if User.advisory_lock_exists?(lock_name)
 
     User.with_advisory_lock(lock_name, 0) {
-      loop do
+      deadline = Time.current + TIME_BUDGET
+
+      MAX_BATCHES.times do
+        break if Time.current > deadline
+
         rows = candidate_rows
         break if rows.empty?
 

@@ -202,9 +202,23 @@ module Buddy
       # the same chore asked for twice in one turn is recognisable as a repeat
       # even when the model varies the wording or the timestamp between attempts.
       def self.resolve_call(tool, call, user:, conversation:, gate: nil)
+        # The schema was never offered, so getting here means the model invented
+        # the name. Reads as "doesn't exist" rather than "you're not allowed",
+        # because for this person it doesn't.
+        unless Buddy::Features.allows_tool?(user, tool)
+          return [resolve_failure("#{tool[:name]} isn't something this person has set up"), nil, nil]
+        end
+
         args = Buddy::Tools.normalize_function_arguments(tool, call[:arguments])
         payload, errors = Buddy::Tools.validate_payload(tool, args)
         return [resolve_failure(errors.join("; ")), nil, nil] if errors.any?
+
+        # A core tool reaching into a feature this person doesn't have, via an
+        # option that was trimmed out of the schema (remind_when's chore
+        # trigger). Same treatment as a tool that doesn't exist for them.
+        if (gated = Buddy::Features.gated_arg(user, tool, payload))
+          return [resolve_failure("#{tool[:name]} can't watch for #{gated.first} #{payload[gated.first]} - that isn't part of this person's setup"), nil, nil]
+        end
 
         ctx = Buddy::ToolContext.new(user, conversation: conversation)
         opens = gate_kind_for(tool, payload, user: user)
@@ -465,9 +479,10 @@ module Buddy
       # never put a checkbox in front of anyone.
       def read_tools
         @read_tools ||= {
-          ContextTool::NAME => ContextTool.new(@user, @conversation),
-          PromptTool::NAME  => PromptTool.new(@user, @conversation),
-          ImageTool::NAME   => ImageTool.new(@user, @conversation),
+          ContextTool::NAME  => ContextTool.new(@user, @conversation),
+          PromptTool::NAME   => PromptTool.new(@user, @conversation),
+          ImageTool::NAME    => ImageTool.new(@user, @conversation),
+          ListenerTool::NAME => ListenerTool.new(@user, @conversation),
         }
       end
 
@@ -637,11 +652,12 @@ module Buddy
 
       def tools
         @tools ||= [
-          ContextTool.schema,
+          ContextTool.schema(user: @user),
           PromptTool.schema,
           ImageTool.schema,
+          ListenerTool.schema,
           *Buddy::SideEffects.function_schemas(theme: @conversation.buddy_theme),
-          *Buddy::Tools.function_schemas,
+          *Buddy::Tools.function_schemas(user: @user),
         ]
       end
 

@@ -14,6 +14,7 @@ Buddy::Tools.register(
     chore PAYS and belongs to create_chore / edit_chore; this SPENDS what
     they've already earned.
   TXT
+  feature:     :chores,
   args:        {
     amount: { type: :integer, required: true,  description: "How many pebbles to take out. Must be positive." },
     note:   { type: :string,  required: false, description: "What they spent it on" },

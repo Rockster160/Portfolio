@@ -11,6 +11,7 @@ Buddy::Tools.register(
     options="dishes, mop". Do NOT use brackets or quotes inside the list.
     For a select-all / pick-any question, use ask_partner_multi instead.
   TXT
+  feature:     :relay,
   args:        {
     to:       { type: :string, required: true, description: "Who to ask (household member)" },
     question: { type: :string, required: true, description: "The question to pose" },

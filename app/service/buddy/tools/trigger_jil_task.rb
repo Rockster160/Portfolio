@@ -56,6 +56,7 @@ Buddy::Tools.register(
     include tasks shared with them by someone else (those run under the
     owner's account).
   TXT
+  feature:     :jil,
   args:        {
     name: { type: :string, required: true,  description: "Task name to fire, verbatim from the index" },
     data: { type: :string, required: false, description: "Colon-separated key:value data the listener filters on. Omit for bare-scope tasks." },

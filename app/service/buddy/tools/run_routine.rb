@@ -2,30 +2,23 @@ Buddy::Tools.register(
   name:        :run_routine,
   description: <<~TXT,
     Run one of the person's saved routines - a sequence they named once so they
-    never have to spell it out again. "Prep my printer" is the shape: power the
-    printer on, wait a minute, then preheat.
+    never have to spell it out again.
 
-    The `routines` section of get_context lists what they have, each with the
-    steps it runs. Match on what they asked for, and use the routine's `name`.
+    A POWER-USER SHORTCUT, not a way of understanding requests. Almost nothing
+    they say is a routine. Reach for this only when what they said matches the
+    name of something actually sitting in the `routines` section of get_context,
+    and pass that routine's `name`. When it does match, running it beats doing
+    the steps by hand - it's the exact sequence they saved, in order, with any
+    waits intact.
 
-    Reach for this whenever what they said IS one of their routines, even
-    loosely worded - "prep the printer", "do the printer thing", "wind down".
-    Running the routine is better than doing the steps yourself: it's the exact
-    sequence they saved, in order, with any waits intact.
-
-    A short phrase on its own that doesn't obviously mean anything - "water
-    cup", "wind down", "the printer thing" - is very often a routine NAME. They
-    named it, so to them it's a word that means something. Check the routines
-    list before answering "I don't follow"; asking what they meant about a name
-    they chose reads as though you've forgotten it.
-
-    If nothing on the list matches, the ABSENCE IS NOT THE ANSWER. "You don't
-    have a routine for that" tells them nothing they wanted to know - they asked
-    for a thing to happen, and whether you'd saved a shortcut for it is your
-    filing problem, not theirs. Go do it with the ordinary tools: check
-    `jil_triggers` and `jil_functions`, which is where the printer, the lights,
-    the car and the house live. THEN, once it's done, offer to save it as a
-    routine if it sounds like something they'll ask for again.
+    Everything else is an ordinary request and goes to the ordinary tools. A
+    phrase naming a device or a chore - the printer, the lights, the fan, the
+    car - lives in `jil_triggers` and `jil_functions`, and that is where you
+    look. Do NOT treat an unfamiliar short phrase as probably-a-routine, do not
+    fetch the routines list to check, and never answer a request by reporting
+    that no routine is saved for it: they asked for a thing to happen, and your
+    filing is not an answer. Do the thing. If it's clearly something they'll ask
+    for again, offering to save it AFTERWARDS is fine.
   TXT
   args:        {
     name: { type: :string, required: true, description: "Routine name, from the routines list" },

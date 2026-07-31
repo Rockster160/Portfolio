@@ -128,6 +128,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   const claudeSessionsUrl = app.dataset.claudeSessionsUrl;
   const monitorChannel = app.dataset.monitorChannel;
 
+  // Whatever this thread's companion is called. Server-rendered from the active
+  // conversation's theme and repointed by applyBuddyTheme on every switch, so
+  // any copy that names the pet ("Byte's asleep") reads it from here rather than
+  // hardcoding one companion's name.
+  const buddyName = () => app.dataset.buddyName || "Byte";
+
   configureApi({ sendUrl, csrfRefreshUrl: csrfUrl });
 
   // ---------- bootstrap ----------
@@ -1011,7 +1017,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       node.querySelector("[data-attachments]"),
       entry.attachments_preview?.length
         ? entry.attachments_preview
-        : (entry.attachment_signed_ids || []).map((id) => ({ id, pending: true })),
+        : (entry.attachment_signed_ids || []).map((id) => ({
+            id,
+            pending: true,
+          })),
     );
     node.querySelector("[data-state]").textContent = held ? "queued" : "…";
     const cancelBtn = node.querySelector("[data-msg-cancel]");
@@ -1268,6 +1277,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!convo) return;
     const app = document.querySelector(".byte-app");
     if (app && convo.buddy_theme) app.dataset.buddyTheme = convo.buddy_theme;
+    // The pet's name rides on the wire (ByteConversation#as_wire) rather than
+    // being mapped from the theme here, so the client never keeps a second copy
+    // of the theme table for a new companion to fall out of date with.
+    if (app && convo.buddy_name) {
+      app.dataset.buddyName = convo.buddy_name;
+      document.title = convo.buddy_name;
+      updateSleepChip();
+    }
     if (convo.buddy_theme) buddyHero?.setTheme(convo.buddy_theme);
     const expr = convo.buddy_expression;
     if (expr && expr !== "sleeping") {
@@ -1387,7 +1404,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Free the optimistic-preview objectURLs once they're no longer on screen.
   function revokePreviews(entry) {
     (entry?.attachments_preview || []).forEach((p) => {
-      if (p?.url && String(p.url).startsWith("blob:")) URL.revokeObjectURL(p.url);
+      if (p?.url && String(p.url).startsWith("blob:"))
+        URL.revokeObjectURL(p.url);
     });
   }
 
@@ -1578,19 +1596,25 @@ document.addEventListener("DOMContentLoaded", async () => {
   // opens rather than at boot: most sessions never open it, and a stale list
   // would be worse than no list.
   const buddyRoutines = initBuddyRoutines({
-    panel:    app.querySelector("[data-byte-routines]"),
-    list:     app.querySelector("[data-byte-routine-list]"),
+    panel: app.querySelector("[data-byte-routines]"),
+    list: app.querySelector("[data-byte-routine-list]"),
     indexUrl: "/buddy/routines",
   });
-  document.querySelector("[data-byte-drawer-toggle]")?.addEventListener("click", () => buddyRoutines?.refresh());
+  document
+    .querySelector("[data-byte-drawer-toggle]")
+    ?.addEventListener("click", () => buddyRoutines?.refresh());
 
   // Timer broadcasts carry `id: :timers`, and the Monitor dispatcher routes
   // envelopes by their id — so they arrive on a DEDICATED subscription, not the
   // byte one above. Mirrors how the Timers app subscribes. Hydrate on (re)connect
   // so a timer set while we were away shows up.
   Monitor.subscribe("timers", {
-    connected() { buddyTimers?.hydrate(); },
-    received(payload) { buddyTimers?.applyBroadcast(payload); },
+    connected() {
+      buddyTimers?.hydrate();
+    },
+    received(payload) {
+      buddyTimers?.applyBroadcast(payload);
+    },
   });
 
   // Header sound toggle (Buddy's own mute, matching Whisper's control). Paints
@@ -1599,7 +1623,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const paintMute = () => {
     muteBtn?.classList.toggle("muted", isBuddyMuted());
     if (muteBtn) {
-      muteBtn.title = isBuddyMuted() ? "Sound off — tap to enable" : "Sound on — tap to mute";
+      muteBtn.title = isBuddyMuted()
+        ? "Sound off — tap to enable"
+        : "Sound on — tap to mute";
     }
   };
   muteBtn?.addEventListener("click", () => {
@@ -1671,12 +1697,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     const show = onBuddyConversation() && buddyAsleep();
     sleepChip.hidden = !show;
     if (!show) return;
+    const who = buddyName();
     if (usageCapped()) {
       sleepText.textContent = sleepWake
-        ? `Byte's asleep until ${sleepWake}`
-        : "Byte's asleep";
+        ? `${who}'s asleep until ${sleepWake}`
+        : `${who}'s asleep`;
     } else {
-      sleepText.textContent = "Byte's asleep — reconnecting…";
+      sleepText.textContent = `${who}'s asleep — reconnecting…`;
     }
   }
   updateSleepChip();
@@ -1702,6 +1729,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     input,
     popover: app.querySelector("[data-byte-slash-popover]"),
     autosize: () => autosize(),
+    // Read for the live mode + owner flag, so the offered commands narrow to
+    // whatever the thread on screen can actually do.
+    app,
   });
 
   // Composer image attachments — file picker, paste, and drag-drop. Uploads

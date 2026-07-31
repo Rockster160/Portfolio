@@ -77,7 +77,11 @@ module Buddy
           run_routine rather than doing the steps yourself.
       TXT
 
-      def self.schema
+      # `user:` narrows the enum to sections this person actually has, so a
+      # feature that's switched off isn't even nameable — the model can't ask
+      # for chores and then have to explain the empty answer.
+      def self.schema(user: nil)
+        offered = SECTIONS - Buddy::Features.hidden_sections(user)
         {
           type:        :function,
           name:        NAME,
@@ -88,7 +92,7 @@ module Buddy
             properties:           {
               sections: {
                 type:        [:array, :null],
-                items:       { type: :string, enum: SECTIONS },
+                items:       { type: :string, enum: offered },
                 description: "Which sections to fetch. Null or empty returns everything, " \
                              "which is only worth it for a full day orientation.",
               },
@@ -132,7 +136,7 @@ module Buddy
 
       def requested_sections(args)
         raw = args.is_a?(Hash) ? (args["sections"] || args[:sections]) : nil
-        sections = Array(raw).map { |s| s.to_s.to_sym } & SECTIONS
+        sections = Array(raw).map { |s| s.to_s.to_sym } & (SECTIONS - Buddy::Features.hidden_sections(@user))
         # Whether an automation is a trigger or a function is OUR filing system,
         # not something the person's request tells you. Asked to "turn the fan to
         # low", the model looked in jil_triggers, found only "Fan High", and said

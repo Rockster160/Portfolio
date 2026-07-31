@@ -22,6 +22,7 @@ Buddy::Tools.register(
     qualifier that says why it's on the list ("sanitizer for hike", not
     "sanitizer"). Match the capitalization style of the list's existing items.
   TXT
+  feature:     :lists,
   args:        {
     list:     { type: :string, required: true,  description: "Fuzzy list name" },
     item:     { type: :string, required: true,  description: "Item to add, in their own words" },

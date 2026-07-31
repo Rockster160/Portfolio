@@ -11,6 +11,7 @@ Buddy::Tools.register(
     `id` is the relay id from the pending question. `answer` is what to tell the
     asker, capturing what the user meant.
   TXT
+  feature:     :relay,
   args:        {
     id:     { type: :integer, required: true, description: "The pending relay/question id" },
     answer: { type: :string,  required: true, description: "The user's answer to pass back" },

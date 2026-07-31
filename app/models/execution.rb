@@ -55,8 +55,58 @@ class Execution < ApplicationRecord
   }
 
   def self.average_duration(count)
-    finished.order(:finished_at).limit(count).map(&:duration).then { |a| a.sum.to_f / a.length }
+    finished.order(:started_at).limit(count).map(&:duration).then { |a| a.sum.to_f / a.length }
   end
+
+  # Usage/billing questions have to span both halves of the log: rows inside
+  # ExecutionArchiveWorker::RETENTION live here, everything older was moved to
+  # execution_archives. Querying `executions` alone silently under-reports, so
+  # anything that bills or charts should come through here.
+  UNION_SQL = <<~SQL.squish.freeze
+    (SELECT user_id, task_id, status, started_at FROM executions
+     UNION ALL
+     SELECT user_id, task_id, status, started_at FROM execution_archives)
+  SQL
+
+  BUCKET_UNITS = %w[hour day week month].freeze
+
+  def self.usage_count(since:, until_at: Time.current, user: nil)
+    where_sql, args = usage_conditions(since, until_at, user)
+    sql = sanitize_sql_array(
+      ["SELECT COUNT(*) FROM #{UNION_SQL} AS all_executions WHERE #{where_sql}", *args],
+    )
+
+    connection.select_value(sql).to_i
+  end
+
+  # => [[bucket_time, count], ...] across the full retained history.
+  def self.usage_over_time(since:, until_at: Time.current, user: nil, bucket: :day)
+    unit = BUCKET_UNITS.include?(bucket.to_s) ? bucket.to_s : "day"
+    where_sql, args = usage_conditions(since, until_at, user)
+    sql = sanitize_sql_array(
+      [
+        "SELECT date_trunc(?, started_at) AS bucket, COUNT(*) " \
+        "FROM #{UNION_SQL} AS all_executions WHERE #{where_sql} GROUP BY 1 ORDER BY 1",
+        unit,
+        *args,
+      ],
+    )
+
+    connection.select_rows(sql).map { |bucket_at, count| [bucket_at, count.to_i] }
+  end
+
+  def self.usage_conditions(since, until_at, user)
+    conditions = ["started_at >= ?", "started_at < ?"]
+    args = [since, until_at]
+
+    if user.present?
+      conditions << "user_id IN (?)"
+      args << ::User.ids(user)
+    end
+
+    [conditions.join(" AND "), args]
+  end
+  private_class_method :usage_conditions
 
   def serialize
     super(except: [

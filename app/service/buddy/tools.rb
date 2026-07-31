@@ -62,7 +62,7 @@ module Buddy
       @loading_tools = false
     end
 
-    def register(name:, description:, args:, confirm:, label:, execute:, receipt:, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true)
+    def register(name:, description:, args:, confirm:, label:, execute:, receipt:, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, feature: Buddy::Features::CORE, gated_values: {})
       # Confidence level governs how a proposal is presented (see
       # Buddy::ProposalBuilder):
       #   1 — highest confidence (reminders, car/house/light commands): fires
@@ -113,6 +113,17 @@ module Buddy
         # at all on the next run, so they're kept out of routines entirely
         # rather than failing quietly halfway through one.
         routinable:       routinable,
+        # Enum values that only exist when the person has a given feature, as
+        # `{ arg_name => { value => feature } }`. A tool can be core while some
+        # of its options aren't: remind_when watching for an arrival is
+        # everyone's, but watching for a CHORE completion would tell someone
+        # without chores when other people in the household finished theirs.
+        gated_values:     gated_values,
+        # Which part of the app this tool belongs to (see Buddy::Features). A
+        # person who doesn't have that feature is never shown the tool, and
+        # can't run it if the model asks for it anyway. `core` is the default
+        # and can't be switched off.
+        feature:          feature.to_sym,
       }
       registry[name.to_sym] = spec
     end
@@ -179,13 +190,18 @@ module Buddy
       duration_min: "Whole minutes",
     }.freeze
 
-    def function_schemas
-      all.map { |tool| function_schema(tool) }
+    # `user:` drops tools belonging to a feature this person doesn't have. Not
+    # offering the schema at all is the real enforcement: the model can't reach
+    # for what it was never shown, so there's no refusal to write and no tokens
+    # spent describing a capability that isn't there.
+    def function_schemas(user: nil)
+      offered = user ? all.select { |tool| Buddy::Features.allows_tool?(user, tool) } : all
+      offered.map { |tool| function_schema(tool, user: user) }
     end
 
-    def function_schema(tool)
+    def function_schema(tool, user: nil)
       properties = {}
-      tool[:args].each { |key, spec| properties[key] = json_property(spec) }
+      tool[:args].each { |key, spec| properties[key] = json_property(gate_values(tool, key, spec, user)) }
       # `count` is a registry-wide convention rather than a declared arg (see
       # validate_payload). Only advertise it on tools defining merge_label,
       # since that proc exists precisely to render a collapsed "5x Drink
@@ -336,6 +352,20 @@ module Buddy
         return false if tool[:passthrough_args]
 
         tool[:args].values.none? { |spec| spec[:type] == :object }
+      end
+
+      # Trims an enum down to the values this person can actually use. Returns
+      # the spec untouched for everyone else, which is nearly every call.
+      #
+      # `dig` rather than `[]` because Buddy::SideEffects hand-builds a bare
+      # `{ name:, description:, args: }` hash and calls straight in here, so a
+      # registry key it never heard of has to read as absent, not blow up.
+      def gate_values(tool, key, spec, user)
+        gates = tool[:gated_values]&.dig(key)
+        return spec if user.nil? || gates.blank?
+
+        allowed = Array(spec[:values]).select { |v| Buddy::Features.enabled?(user, gates[v.to_sym]) }
+        spec.merge(values: allowed)
       end
 
       def json_property(spec)

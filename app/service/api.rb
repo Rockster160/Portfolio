@@ -99,6 +99,10 @@ class Api
   end
 
   def self.output(name, json)
+    # `pst` already no-ops in production, but Ruby builds the arguments first
+    # — so every response was still being run through CodeRay and four regex
+    # passes just to throw the result away. Bail before any of that.
+    return if Rails.env.production?
     return if json.to_s.gsub(/\s/, "").empty? # .blank?
 
     padded = "  #{name}  "

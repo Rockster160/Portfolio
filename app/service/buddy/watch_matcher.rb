@@ -1,20 +1,35 @@
 module Buddy
-  # The condition-side counterpart to Buddy::ReminderFirer. Called once
-  # from Jil::Executor.trigger for EVERY trigger the platform fires, so
-  # the first thing it does is bail on any scope no watch can listen on -
-  # that keeps the hot path (monitor, command, ...) to a single hash
-  # lookup with zero DB work. Only the four watchable scopes ever touch
-  # the DB, and only when the user has an active watch on that scope.
+  # The condition-side counterpart to Buddy::ReminderFirer. Called once from
+  # Jil::Executor.trigger for EVERY trigger the platform fires, so the first
+  # thing it does is bail on any scope nothing is currently watching.
+  #
+  # That used to be a static list of the five scopes the named triggers use.
+  # Custom listeners can name any scope, so the bail set is now derived from the
+  # watches that actually exist - cached, because the alternative is an indexed
+  # query on every tesla telemetry ping. The cache is busted whenever a watch is
+  # created or settled (see BuddyWatch), so a brand-new watch is live at once
+  # rather than up to the TTL later.
   module WatchMatcher
     module_function
 
-    WATCHABLE_SCOPES = BuddyWatch::SCOPES
+    SCOPE_CACHE_KEY = "buddy:watch_scopes".freeze
+    SCOPE_CACHE_TTL = 5.minutes
+
+    def watched_scopes
+      Rails.cache.fetch(SCOPE_CACHE_KEY, expires_in: SCOPE_CACHE_TTL) {
+        BuddyWatch.active.distinct.pluck(:trigger_scope).compact
+      }
+    end
+
+    def bust_scope_cache!
+      Rails.cache.delete(SCOPE_CACHE_KEY)
+    end
 
     def dispatch(user, scope, raw_data)
       return if user.nil?
 
       scope = deploy_alias(scope.to_s, raw_data)
-      return unless WATCHABLE_SCOPES.include?(scope)
+      return unless watched_scopes.include?(scope)
 
       watches = BuddyWatch.active.where(user_id: user.id, trigger_scope: scope).to_a
       return if watches.empty?

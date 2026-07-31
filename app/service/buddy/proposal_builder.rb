@@ -28,9 +28,14 @@ module Buddy
       raw = markers.filter_map { |m|
         tool = Buddy::Tools[m[:tool_name]]
         next nil if tool.nil?
+        # A tool for a feature this person doesn't have is dropped exactly like
+        # an unknown one. The model was never offered it, so this only fires on
+        # a stale routine or a hand-built marker — either way it must not run.
+        next nil unless Buddy::Features.allows_tool?(user, tool)
 
         payload, errors = Buddy::Tools.validate_payload(tool, m[:payload])
         next nil if errors.any?
+        next nil unless Buddy::Features.allows_payload?(user, tool, payload)
 
         # A form tool's confirm is its PRE-SUBMIT gate and runs when the person
         # sends. Running it here rejects a half-filled form for being half-filled

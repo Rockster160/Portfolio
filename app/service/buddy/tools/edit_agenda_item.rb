@@ -13,6 +13,7 @@ Buddy::Tools.register(
 
     For v1, only edits local (non-Google-synced) items.
   TXT
+  feature:     :agenda,
   args:        {
     item:      { type: :string,       required: true,  description: "Fuzzy title of the item to edit" },
     hint_date: { type: :string,       required: false, description: "Date hint (YYYY-MM-DD) for disambiguation" },

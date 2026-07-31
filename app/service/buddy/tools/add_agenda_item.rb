@@ -31,6 +31,7 @@ Buddy::Tools.register(
     which calendar it lives on. Adding in that situation doesn't move
     anything; it leaves the original where it was and gives them two.
   TXT
+  feature:     :agenda,
   args:        {
     title:    { type: :string,       required: true,  description: "What is it (the activity, WITHOUT the place)" },
     at:       { type: :iso_time,     required: true,  description: "ISO datetime with timezone offset" },

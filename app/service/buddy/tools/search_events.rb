@@ -13,6 +13,7 @@ Buddy::Tools.register(
     In THIS reply just give a short lead-in ("let me dig around for that") - the
     results land in your NEXT reply.
   TXT
+  feature:     :events,
   args:        {
     query: { type: :string,  required: false, description: "Name fragment to match; omit to list recent" },
     days:  { type: :integer, required: false, default: 14, description: "How many days back to search (1-90)" },

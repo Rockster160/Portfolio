@@ -29,26 +29,31 @@ RSpec.describe Buddy::Personality do
 
       # Moss's distinctive faces are offered...
       expect(prompt).to include("`loving`", "`star`", "`wink`", "`dizzy`")
-      # ...and Byte-only faces are not.
-      expect(prompt).not_to include("`nerd`", "`uwu`")
       expect(prompt).not_to include("{{MOOD_BLOCK}}")
+      # ...and Byte-only faces are not. Scoped to the face list rather than the
+      # whole prompt: Chelsea's voice profile mentions `nerd` as a pet name, and
+      # that has nothing to do with what Moss's face vocabulary offers.
+      expect(described_class.mood_block("moss")).not_to include("`nerd`", "`uwu`")
     end
 
     it "injects Suki's own sunbird face set for a Suki conversation" do
       user  = create(:user)
       convo = buddy_convo(user, "suki")
 
-      prompt = described_class.for(user, conversation: convo, tone: :eve)
+      prompt = described_class.for(user, conversation: convo)
 
       # Suki's distinctive faces are offered (cheery + offering + excited are hers)...
       expect(prompt).to include("`cheery`", "`offering`", "`excited`", "`dizzy`", "`loving`")
-      # ...and faces belonging only to the other pets are not.
-      expect(prompt).not_to include("`nerd`", "`uwu`", "`star`", "`wink`")
-      # Her set is deliberately upbeat — no sad/crying face at all.
-      expect(prompt).not_to include("`sad`", "`crying`")
-      # sleeping is system-driven, never a selectable mood.
-      expect(prompt).not_to include("`sleeping`")
       expect(prompt).not_to include("{{MOOD_BLOCK}}")
+
+      # ...and nothing else is. Scoped to the face list: a voice profile is
+      # allowed to use any of these words for its own reasons.
+      faces = described_class.mood_block("suki")
+      expect(faces).not_to include("`nerd`", "`uwu`", "`star`", "`wink`")
+      # Her set is deliberately upbeat — no sad/crying face at all.
+      expect(faces).not_to include("`sad`", "`crying`")
+      # sleeping is system-driven, never a selectable mood.
+      expect(faces).not_to include("`sleeping`")
       # dizzy carries the overwhelmed read for her.
       expect(prompt).to include("overwhelmed")
     end
@@ -93,7 +98,7 @@ RSpec.describe Buddy::Personality do
     # Prod 1226: "Sorry, love." Those names belong to the two of them.
     it "puts the couple's terms of address out of reach, in the rules and both profiles" do
       byte = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
-      moss = described_class.for(create(:user), conversation: buddy_convo(create(:user), "moss"), tone: :chelsea)
+      moss = described_class.for(create(:user), conversation: buddy_convo(create(:user), "moss"))
 
       expect([byte, moss]).to all(include("Some names are not yours to use").and(include("`love`")))
       # ...and each voice profile carries the same example in its own words.
@@ -211,7 +216,7 @@ RSpec.describe Buddy::Personality do
 
     # Moss has her own voice; the slime vocabulary is Byte's alone.
     it "keeps the computerisms and slime-isms out of Moss" do
-      moss = described_class.for(create(:user), conversation: buddy_convo(create(:user), "moss"), tone: :chelsea)
+      moss = described_class.for(create(:user), conversation: buddy_convo(create(:user), "moss"))
 
       expect(moss).not_to include("Blorp")
       expect(moss).not_to include("Soft and bouncy")
@@ -220,7 +225,7 @@ RSpec.describe Buddy::Personality do
 
   describe ".for Suki's character (Eve)" do
     def suki_prompt
-      described_class.for(create(:user), conversation: buddy_convo(create(:user), "suki"), tone: :eve)
+      described_class.for(create(:user), conversation: buddy_convo(create(:user), "suki"))
     end
 
     it "loads the Suki persona, not a fallback" do
@@ -286,45 +291,61 @@ RSpec.describe Buddy::Personality do
     end
   end
 
+  # Prod 1449-1454: "prep printer", then "repp my printer", then "prep my
+  # printer" - three tries, and the first two got "I don't have a prep printer
+  # routine saved" while the Jil task that does exactly that ("Printer -
+  # Preheat", buddy-enabled, described as the whole warm-up) sat in
+  # jil_triggers. The prompt had taught it that: "prep my printer" was the
+  # worked example on the routines section AND on run_routine's description, and
+  # both said to treat an unfamiliar short phrase as probably-a-routine.
+  #
+  # DELIBERATE TRADE, do not quietly revert: the earlier rule existed because a
+  # bare "water cup" (prod 1371) was a real routine name that got "I don't quite
+  # follow". Routines are a power-user shortcut almost nobody sets up, so
+  # occasionally needing "run my water cup routine" is much cheaper than every
+  # ordinary request being read as a routine lookup first.
   describe ".for saved routines" do
-    it "sends the model to run_routine instead of rebuilding the sequence" do
-      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
-
-      expect(prompt).to include("A routine they saved beats you rebuilding it")
-      expect(prompt).to include("re-deriving it by hand is how a step quietly goes missing")
+    def routines_prompt
+      described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
     end
 
-    it "says capture_last is the only way to save what it just did" do
-      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
-
-      expect(prompt).to include("you can't see your own finished calls")
+    it "frames them as a rare power-user shortcut rather than a way to read requests" do
+      expect(routines_prompt).to include("power-user shortcut, not a lens for reading requests")
+      expect(routines_prompt).to include("Almost nothing said to you is one")
     end
 
-    # Prod 1343: "prep my printer" got "I don't have a saved prep my printer
-    # routine yet" while the Jil task that does exactly that sat in jil_triggers.
-    it "says a missing routine means do it the ordinary way, not announce the gap" do
-      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+    it "forbids reaching for the list to interpret a phrase it doesn't recognize" do
+      prompt = routines_prompt
 
-      expect(prompt).to include("never the answer to being asked for it")
-      expect(prompt).to include("your bookkeeping, not theirs")
+      expect(prompt).to include("never reach for `routines` to interpret a phrase you don't recognize")
+      expect(prompt).to include("never fetch the list to check")
+    end
+
+    it "sends a named device to the Jil automations instead" do
+      prompt = routines_prompt
+
+      expect(prompt).to include("A device or appliance by name lives in `jil_triggers` / `jil_functions`")
+      expect(prompt).to include("**This is where a named device or appliance lives**")
+    end
+
+    # The half of the old guidance that was right: reporting the absence answers
+    # a question nobody asked.
+    it "still forbids answering a request with the fact that no routine is saved" do
+      expect(routines_prompt).to include("answers a question nobody asked")
+    end
+
+    it "keeps run_routine as the way to run one they actually named" do
+      expect(routines_prompt).to include("does `run_routine` come into it")
     end
 
     # Prod 1362: "it's supposed to complete the chore 3 times, there shouldn't be
     # an event" was a description of the saved steps. Buddy ran them on live data
     # instead, and left the routine exactly as wrong as it was.
-    it "says correcting a routine edits the routine rather than running it" do
-      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+    it "says correcting a routine re-saves it rather than running it" do
+      prompt = routines_prompt
 
-      expect(prompt).to include("A correction to a ROUTINE edits the routine, not the world")
-      expect(prompt).to include("describing what it SHOULD do")
-    end
-
-    # Prod 1371: a bare "water cup" — the exact name of a routine they'd saved
-    # ninety seconds earlier — got "Hmm, I don't quite follow".
-    it "says to check the routines list before shrugging at a short phrase" do
-      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
-
-      expect(prompt).to include("before you ever tell them you don't follow a short phrase")
+      expect(prompt).to include("re-save under the same name")
+      expect(prompt).to include("not those actions performed live on the world")
     end
   end
 

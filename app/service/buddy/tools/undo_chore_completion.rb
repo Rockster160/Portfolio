@@ -9,6 +9,7 @@ Buddy::Tools.register(
     something about it is wrong - a missing note, the wrong time - that's
     `edit_chore_completion`. Don't undo and re-complete to patch a detail.
   TXT
+  feature:     :chores,
   args:        {
     chore: { type: :string, required: true,  description: "Fuzzy chore name" },
     when:  { type: :string, required: false, default: "last", description: "One of: today, yesterday, last" },

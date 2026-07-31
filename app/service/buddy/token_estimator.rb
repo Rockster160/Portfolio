@@ -33,15 +33,17 @@ module Buddy
     #   framing + glance     ~120
     #   ---------------------------
     #   prompt total      ~20,135
-    #   tool schemas      ~14,350   (39 proposal + 5 silent + get_context,
-    #                                read_prompt, view_image)
+    #   tool schemas      ~15,330   (39 proposal + 5 silent + get_context,
+    #                                read_prompt, view_image, read_listener_guide;
+    #                                remind_when alone is ~1,060 since it grew
+    #                                the custom-listener trigger)
     #   ===========================
-    #   TOTAL             ~34,485
+    #   TOTAL             ~35,465
     #
     # Re-measure if the rules, tone profile, or tool count change materially:
     #   Buddy::Personality::RULES_APPENDIX.bytesize / 4
     #   JSON.generate(tool_schemas).bytesize / 4
-    FIXED_OVERHEAD = 34_485
+    FIXED_OVERHEAD = 35_465
 
     def estimate_for(conversation)
       compact_at   = compact_timestamp(conversation)

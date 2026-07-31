@@ -5,6 +5,7 @@ Buddy::Tools.register(
     behavior). Use when the user says they finished something on a list or
     wants it gone.
   TXT
+  feature:     :lists,
   args:        {
     list: { type: :string, required: true, description: "List name" },
     item: { type: :string, required: true, description: "Item to remove" },

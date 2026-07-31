@@ -3,6 +3,7 @@
 # Table name: users
 #
 #  id                 :integer          not null, primary key
+#  buddy_features     :jsonb            not null
 #  chore_notify_prefs :jsonb            not null
 #  dark_mode          :boolean
 #  email              :string
@@ -98,6 +99,11 @@ class User < ApplicationRecord
 
   after_save :confirm_guest
   after_save :ensure_default_agenda
+  # Buddy features are an allow-list, so a new account with an empty column
+  # would arrive unable to do anything. Fail-closed is about a new FEATURE
+  # nobody has considered yet, not about a new person — they get the default
+  # set and get narrowed deliberately (see Buddy::Features).
+  before_create { self.buddy_features = Buddy::Features::DEFAULT if buddy_features.blank? }
   validates :phone, uniqueness: { allow_nil: true }
   validate :proper_fields_present?
 
@@ -126,6 +132,21 @@ class User < ApplicationRecord
   def me? = id == 1
   def chelsea? = id == 58_128
   def eve? = id == 4
+
+  # Parts of Buddy this person holds (see Buddy::Features). Stored rather than
+  # derived from the id, so changing what someone can do is a data change and
+  # not another branch keyed on who they are.
+  def grant_buddy_features!(*features)
+    update!(buddy_features: (Array(buddy_features) | features.flatten.map(&:to_s)).sort)
+  end
+
+  def revoke_buddy_features!(*features)
+    update!(buddy_features: Array(buddy_features) - features.flatten.map(&:to_s))
+  end
+
+  def buddy_feature?(feature)
+    Buddy::Features.enabled?(self, feature)
+  end
 
   # Trusted household members who should never be IP-banned. They share the
   # home IP, so a burst of legit requests from the house can trip the

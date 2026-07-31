@@ -18,6 +18,7 @@ Buddy::Tools.register(
       due      - when it should first be due ("today", "tomorrow", a date).
     An icon is chosen automatically from the name.
   TXT
+  feature:     :chores,
   args:        {
     name:     { type: :string, required: true,  description: "Chore name" },
     schedule: { type: :string, required: false, description: "Free-form schedule; blank = one-off" },

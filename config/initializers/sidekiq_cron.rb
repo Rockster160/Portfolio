@@ -12,6 +12,7 @@ every_minute = "* * * * *"
 every_5_minutes = "*/5 * * * *"
 every_hour = "0 * * * *"
 every_3_daylight_hours = "0 5-21/3 * * * MST"
+daily_3am = "0 3 * * * MST"
 daily_4am = "0 4 * * * MST"
 daily_9pm = "0 21 * * * MST"
 thursdays_at_noon = "0 12 * * 4 MST"
@@ -80,10 +81,21 @@ cron_jobs = [
     class: "ActiveStorageSweepWorker",
     cron:  daily_4am,
   },
+  {
+    # Deliberately off the 4am slot — that hour already runs four jobs against
+    # a Sidekiq concurrency of 5.
+    name:  "Archive Aged Executions",
+    class: "ExecutionArchiveWorker",
+    cron:  daily_3am,
+  },
 ]
 
 if Rails.env.production?
   cron_jobs += [
+    # Blocked on pg_stat_statements: the extension is installed but the
+    # library has never been in shared_preload_libraries, so PgHero has
+    # nothing to capture. Uncomment once the postgresql.conf block at the
+    # repo root has been applied and Postgres restarted.
     # {
     #   name: "CaptureQueryStats",
     #   class: "CaptureQueryStatsWorker",

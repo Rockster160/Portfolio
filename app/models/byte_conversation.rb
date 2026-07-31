@@ -17,14 +17,10 @@
 #  user_id           :bigint           not null
 #
 class ByteConversation < ApplicationRecord
-  # Display name per pet theme. Single source of truth so the persona loader,
-  # the tool context, and this model never drift on what a theme is called.
-  # Anything not listed falls back to Byte.
-  THEME_NAMES = { byte: "Byte", moss: "Moss", suki: "Suki" }.freeze
-
   # Users whose new Buddy threads spin up as a non-default pet. The pet theme is
   # now per-conversation, so these only seed the default at creation — nothing
-  # else keys off the id.
+  # else keys off the id. Everything a theme MEANS (name, voice, icon, colour)
+  # lives in Buddy::Themes.
   MOSS_USER_IDS = [58_128].freeze  # Chelsea
   SUKI_USER_IDS = [4].freeze       # Eve
 
@@ -65,7 +61,7 @@ class ByteConversation < ApplicationRecord
 
   # Display name ("Byte"/"Moss"/"Suki") for a theme string.
   def self.display_name_for(theme)
-    THEME_NAMES.fetch(theme.to_sym, "Byte")
+    Buddy::Themes.name_for(theme)
   end
 
   # Return the user's default conversation, creating one on first access.
@@ -92,6 +88,10 @@ class ByteConversation < ApplicationRecord
       created_at:       created_at.iso8601(3),
       metadata:         metadata,
       buddy_theme:      buddy_theme,
+      # The pet's name travels with the thread so the client never has to carry
+      # its own copy of the theme table — switching threads repaints the title
+      # and the sleeping chip off this.
+      buddy_name:       buddy_name,
       buddy_expression: buddy_expression,
     }
   end
