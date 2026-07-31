@@ -32,23 +32,33 @@ module Buddy
       )
     end
 
-    # There is no `deploy` trigger. A finished deploy announces itself as a
-    # `monitor` broadcast on the `deploy:success` channel - that's what the
-    # "Deploy Success" / "Run After Deploy Queue" Jil tasks listen on, and what
-    # bin/wait_for_deploy subscribes to. But `remind_when` stores the watch under
-    # scope `deploy`, and `monitor` isn't watchable, so dispatch bailed on the
-    # only event that could ever satisfy it. Every deploy watch ever created sat
-    # unfired (prod watch 4 waited two days through multiple deploys) while Buddy
-    # had already promised the person a heads-up. Translating here is what makes
-    # that promise keepable.
+    # `remind_when` files a deploy watch under scope `deploy`, but almost
+    # nothing actually fires that scope. A deploy announces itself as a
+    # `monitor` broadcast, so it has to be translated here or the watch can
+    # never be satisfied — prod watch 4 sat unfired for two days, and watch 10
+    # slept through the 01:39 deploy on 07-31.
     #
-    # Both shapes are accepted: the channel may carry the status itself
-    # (`deploy:success`) or ride in the payload (`deploy` + status).
+    # What actually marks a deploy DONE is the app's own `startup` trigger: the
+    # Jil task fires `monitor` with a bare `deploy: "success"` the moment the new
+    # Rails boots, and that's what flips the Deploy ActionEvent to Success. It
+    # carries no `id` and no `channel`, which is precisely what an earlier
+    # version of this guard demanded — so the one signal that reliably arrives
+    # was the one being dropped.
     #
-    # A FAILED deploy counts as finished. It used to be dropped, which made a
-    # standing "ping me on every deploy" watch silent on exactly the deploys
-    # worth hearing about — the person is told nothing and reads that as "still
-    # going". Only a deploy that hasn't landed yet (`deploy:start`) is ignored.
+    # (The workflow's own "Finish Deploy" curl posts to /jil/trigger/deploy, but
+    # it fires while Puma is still restarting and comes back 502. Nothing
+    # listens on that scope besides this, so success is single-sourced from
+    # `startup` on purpose.)
+    #
+    # Three payload shapes reach us, so read the outcome from any of them:
+    #   { deploy: "success" }               — the startup trigger
+    #   { id: "deploy", deploy: "failed" }  — the workflow's failure hook
+    #   { channel: "deploy:success" }       — the cable re-broadcast
+    #
+    # A FAILED deploy counts as finished: dropping it left a standing "ping me
+    # on every deploy" watch silent on exactly the deploys worth hearing about,
+    # and the person reads silence as "still going". Only a deploy that hasn't
+    # landed yet (`deploy:start`) is ignored.
     def deploy_alias(scope, raw_data)
       return scope unless scope == "monitor"
 
@@ -58,10 +68,11 @@ module Buddy
       deploy_outcome(data) ? "deploy" : scope
     end
 
-    # Is this monitor broadcast about a deploy at all? The workflow sets the
-    # monitor `id`; the cable re-broadcast names the channel instead.
+    # Is this monitor broadcast about a deploy at all? A `deploy` key is enough
+    # on its own — that's the startup trigger's whole payload.
     def deploy_monitor?(data)
-      data[:id].to_s.strip.downcase == "deploy" ||
+      data.key?(:deploy) ||
+        data[:id].to_s.strip.downcase == "deploy" ||
         data[:channel].to_s.strip.downcase.start_with?("deploy")
     end
 

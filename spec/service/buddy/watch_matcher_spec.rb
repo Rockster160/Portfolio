@@ -85,19 +85,28 @@ RSpec.describe Buddy::WatchMatcher do
       expect(watch.reload.fired_at).to be_nil
     end
 
-    # The shapes .github/workflows/deploy.yml actually posts. These are what
-    # reach WatchMatcher in production, and none of them carry `channel` or
-    # `status` — the keys the earlier version was reading. A failure therefore
-    # matched nothing at all, which is the whole reason this went unnoticed.
-    describe "the payloads the deploy workflow really sends" do
-      it "fires on the failure hook (monitor scope, id + deploy keys)" do
+    # The payloads that actually reach WatchMatcher in production. Getting these
+    # wrong is the entire history of this bug: the guard used to demand an `id`
+    # or a `channel`, and the one signal that reliably arrives carries neither.
+    describe "the payloads a real deploy sends" do
+      # THE important one. The `startup` Jil task fires this the moment the new
+      # Rails boots, and it's what flips the Deploy ActionEvent to Success — a
+      # bare `deploy` key, no id, no channel, no sha.
+      it "fires on the bare success the startup trigger emits" do
+        described_class.dispatch(user, :monitor, { deploy: "success" })
+
+        expect(watch.reload.fired_at).to be_present
+        expect(seeds.last).to include("finished successfully")
+      end
+
+      it "fires on the workflow's failure hook (id + deploy keys)" do
         described_class.dispatch(user, :monitor, { id: "deploy", deploy: "failed", sha: "abc123" })
 
         expect(watch.reload.fired_at).to be_present
         expect(seeds.last).to include("FAILED")
       end
 
-      it "fires on the success hook, which arrives on the deploy scope directly" do
+      it "fires on the finish hook, which arrives on the deploy scope directly" do
         described_class.dispatch(
           user, :deploy,
           { id: "deploy", deploy: "finished", sha: "abc123", message: "Fix the thing" },
@@ -113,8 +122,8 @@ RSpec.describe Buddy::WatchMatcher do
         expect(watch.reload.fired_at).to be_nil
       end
 
-      it "leaves other monitors alone even when they carry a deploy-ish word" do
-        described_class.dispatch(user, :monitor, { id: "surveys", deploy: "failed" })
+      it "leaves other monitors alone" do
+        described_class.dispatch(user, :monitor, { id: "surveys", blip: 3 })
 
         expect(watch.reload.fired_at).to be_nil
       end

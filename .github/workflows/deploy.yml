@@ -67,15 +67,29 @@ jobs:
         ssh-add /home/runner/.ssh/github_actions
         bundle exec cap production deploy
 
+    # NOTE: this one is vestigial and deliberately left un-retried. It fires
+    # while cap is still restarting Puma, so it comes back 502 every time — and
+    # nothing listens on the `deploy` scope anyway. What actually marks a deploy
+    # successful is the app's own `startup` Jil task, which fires `monitor` with
+    # `deploy: "success"` once the new Rails boots. That's the honest signal
+    # (the server is genuinely back up), it's what flips the Deploy ActionEvent,
+    # and it's what a Buddy deploy watch fires from. Making this curl land would
+    # only double up on that.
     - name: Finish Deploy
       run: |
         curl -X POST -H "Authorization: Bearer ${{ secrets.PORTFOLIO_ACCESS_KEY }}" \
         -d "id=deploy&deploy=finished&merge=${{ steps.commit_info.outputs.merge }}&sha=${{ steps.commit_info.outputs.sha }}&author=${{ steps.commit_info.outputs.author }}&message=${{ steps.commit_info.outputs.message }}" \
         https://ardesian.com/jil/trigger/deploy
 
+    # This one is NOT optional and has no fallback: a deploy that died never
+    # boots the new Rails, so the `startup` trigger never fires and this curl is
+    # the only thing that can report it. It races the same restart, so retry
+    # until Rails answers — but never fail the job over a lost ping.
     - name: Handle Deploy Failure
       if: failure()
       run: |
         curl -X POST -H "Authorization: Bearer ${{ secrets.PORTFOLIO_ACCESS_KEY }}" \
+        --retry 10 --retry-delay 6 --retry-all-errors --fail --silent --show-error \
         -d "id=deploy&deploy=failed&sha=${{ steps.commit_info.outputs.sha }}" \
-        https://ardesian.com/jil/trigger/monitor
+        https://ardesian.com/jil/trigger/monitor \
+        || echo "::warning::deploy-failed ping never landed — Rails unreachable after retries"
