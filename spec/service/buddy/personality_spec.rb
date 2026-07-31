@@ -58,7 +58,10 @@ RSpec.describe Buddy::Personality do
     it "warns against reply-as-receipt and templated warmth" do
       convo = buddy_convo(User.me, "byte")
       prompt = described_class.for(User.me, conversation: convo)
-      expect(prompt).to include("Don't just confirm and close")
+      # Conditional on purpose: a bare confirmation is right for an errand and
+      # wrong for a confidence, and the flat version of this rule is what put an
+      # interjection on the front of every "add milk".
+      expect(prompt).to include("only a failure when they were talking to you")
       expect(prompt).to include("Vary your warmth")
     end
 
@@ -91,8 +94,8 @@ RSpec.describe Buddy::Personality do
       expect(prompt).to include("they told you something")
       # Praise for a decision — needs a decision.
       expect(prompt).to include("It needs a decision to praise")
-      # Enthusiasm for their idea, not a confirmation.
-      expect(prompt).to include("It is not an all-purpose yes")
+      # Congratulation or excitement, not a confirmation.
+      expect(prompt).to include("It is not a general-purpose yes")
     end
 
     # The rules are worth nothing if the examples break them.
@@ -102,6 +105,97 @@ RSpec.describe Buddy::Personality do
 
       expect(examples).not_to be_empty
       expect(examples).to all(satisfy { |line| !line.match?(/\AYess+/i) })
+    end
+
+    # The tone profile is the VOICE; the rules are the constraints on it. When
+    # they disagree the profile wins, because it reads as "this is how you
+    # talk" — so a signature phrase glossed as "enthusiastic yes" quietly
+    # licensed exactly the all-purpose yes the rules forbid. Nine of twenty
+    # replies opened with it before anyone noticed.
+    it "does not let the tone profile license a reaction word the rules ration" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).not_to include("enthusiastic yes")
+      expect(prompt).to include("delight, not agreement")
+    end
+
+    it "gives the profile a plain affirm to reach for instead" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("the default for a request, a confirmation, or anything you just did")
+    end
+  end
+
+  # An errand and a confidence are not the same message, and the reply shouldn't
+  # be the same shape. The prompt used to say "lead with a real reaction" and
+  # "never let the confirmation BE the whole reply" flatly, which is why every
+  # "add milk" came back wearing an interjection.
+  describe ".for sizing the reply to the message" do
+    def byte_prompt
+      described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+    end
+
+    it "makes a bare acknowledgement the right answer to a task" do
+      expect(byte_prompt).to include("A plain \"Got it.\" is a complete reply and it is not cold")
+    end
+
+    it "still calls a bare acknowledgement a failure when they were confiding" do
+      expect(byte_prompt).to include("a door shutting in their face")
+    end
+
+    it "keeps the reaction slot for the half of the conversation that earns it" do
+      expect(byte_prompt).to include("did he hand you a task, or hand you something of himself?")
+    end
+
+    # A single ack repeated is its own tell, so there has to be a real range to
+    # rotate through.
+    it "carries enough acknowledgements to rotate" do
+      prompt = byte_prompt
+
+      expect(prompt).to include("Copy that.").and include("Affirmative.").and include("Acknowledged.")
+      expect(prompt).to include("rotate these, never settle into one")
+    end
+  end
+
+  describe ".for Byte's character" do
+    def byte_prompt
+      described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+    end
+
+    it "puts presence above being clever" do
+      expect(byte_prompt).to include("Don't entertain with words")
+      expect(byte_prompt).to include("Silence is comfortable")
+    end
+
+    it "leaves room to go off once in a while, so the calm isn't flatness" do
+      expect(byte_prompt).to include("go off a bit")
+      expect(byte_prompt).to include("if every message is a performance, none of them are")
+    end
+
+    it "makes praise cost something" do
+      expect(byte_prompt).to include("Praise is earned")
+      expect(byte_prompt).to include("Never congratulate someone for asking you to do a thing")
+    end
+
+    it "keeps the slime soft rather than gross" do
+      expect(byte_prompt).to include("Soft and bouncy, never gooey")
+      expect(byte_prompt).to include("NOT slimy, sticky, gross")
+    end
+
+    it "asks Byte to notice patterns and nudge, not just execute" do
+      prompt = byte_prompt
+
+      expect(prompt).to include("Notice patterns and trends")
+      expect(prompt).to include("Gently nudge when he's slipping")
+      expect(prompt).to include("never a lecture")
+    end
+
+    # Moss has her own voice; the slime vocabulary is Byte's alone.
+    it "keeps the computerisms and slime-isms out of Moss" do
+      moss = described_class.for(create(:user), conversation: buddy_convo(create(:user), "moss"), tone: :chelsea)
+
+      expect(moss).not_to include("Blorp")
+      expect(moss).not_to include("Soft and bouncy")
     end
   end
 

@@ -21,21 +21,21 @@ module Buddy
     # Fixed per-turn cost of everything that is not conversation history.
     # Measured 2026-07-31 with the byte theme:
     #
-    #   persona (byte.md)  ~1,260
-    #   tone profile       ~2,880
-    #   RULES_APPENDIX    ~11,245
-    #   context guide      ~2,995
+    #   persona (byte.md)  ~1,895
+    #   tone profile       ~3,050
+    #   RULES_APPENDIX    ~11,685
+    #   context guide      ~3,050
     #   framing + glance     ~120
     #   ---------------------------
-    #   prompt total      ~18,500
-    #   tool schemas      ~13,375   (38 proposal + 5 silent + get_context + read_prompt)
+    #   prompt total      ~19,800
+    #   tool schemas      ~13,845   (38 proposal + 5 silent + get_context + read_prompt)
     #   ===========================
-    #   TOTAL             ~31,875
+    #   TOTAL             ~33,645
     #
     # Re-measure if the rules, tone profile, or tool count change materially:
     #   Buddy::Personality::RULES_APPENDIX.bytesize / 4
     #   JSON.generate(tool_schemas).bytesize / 4
-    FIXED_OVERHEAD = 31_875
+    FIXED_OVERHEAD = 33_645
 
     def estimate_for(conversation)
       compact_at   = compact_timestamp(conversation)
