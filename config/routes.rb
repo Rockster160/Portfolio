@@ -225,6 +225,7 @@ Rails.application.routes.draw do
   post "webhooks/jenkins" => "webhooks#jenkins"
   post "webhooks/post" => "webhooks#post"
   post "webhooks/email" => "webhooks#email"
+  post "webhooks/sms" => "webhooks#sms"
   post "webhooks/speak" => "webhooks#speak"
   post  "webhooks/byte"                  => "webhooks#byte_create"
   # Above the `:id` patch/post pair so "say" can't be read as a message id.

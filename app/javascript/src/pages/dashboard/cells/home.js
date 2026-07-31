@@ -96,6 +96,20 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
       this._update("email_ids", val);
     }
 
+    // Server-set carrier metadata (read-only from the client's perspective).
+    get carrier() {
+      return this._data.carrier;
+    }
+    get tracking_number() {
+      return this._data.tracking_number;
+    }
+    get source() {
+      return this._data.source;
+    }
+    get url() {
+      return this._data.url;
+    }
+
     remove() {
       cell.amz_socket.send({
         action: "change",
@@ -112,7 +126,10 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
       // Amazon's printed id is often a shipment id that opens a partial view,
       // so search Amazon's order history by ASIN instead — always resolves.
       let url;
-      if (this.order_id_confirmed) {
+      if (this.carrier && this.carrier !== "amazon" && this.url) {
+        // UPS/USPS/etc. — open the carrier's tracking page.
+        url = this.url;
+      } else if (this.order_id_confirmed) {
         url =
           "https://www.amazon.com/gp/your-account/order-details?orderID=" +
           this.order_id.replace("#", "");
@@ -160,6 +177,11 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
         this._update("time_range", newData.time_range, true);
       if ("email_ids" in newData)
         this._update("email_ids", newData.email_ids, true);
+      if ("carrier" in newData) this._update("carrier", newData.carrier, true);
+      if ("tracking_number" in newData)
+        this._update("tracking_number", newData.tracking_number, true);
+      if ("source" in newData) this._update("source", newData.source, true);
+      if ("url" in newData) this._update("url", newData.url, true);
     }
   }
 
@@ -224,6 +246,23 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
       return hours > 99 ? Text.grey("--h") : `${hours}h`;
     }
   }
+
+  // One-char carrier glyph so every row shows its source at a glance while
+  // preserving the fixed-width terminal alignment.
+  let carrierGlyph = function (carrier) {
+    switch (carrier) {
+      case "ups":
+        return Text.orange("U");
+      case "usps":
+        return Text.blue("P");
+      case "fedex":
+        return Text.purple("F");
+      case "manual":
+        return Text.grey("•");
+      default:
+        return Text.yellow("a"); // amazon
+    }
+  };
 
   let renderLines = function () {
     let lines = [];
@@ -376,7 +415,8 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
         }
       }
 
-      lines.push(Text.justify(idx + 1 + ". " + name, delivery));
+      let glyph = carrierGlyph(order.carrier);
+      lines.push(Text.justify(idx + 1 + ". " + glyph + " " + name, delivery));
     });
 
     cell.lines(lines);
@@ -592,6 +632,26 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
       order.remove();
     },
     command: function (msg) {
+      // "2+4" — merge item #4 into item #2 (target keeps its name/basic info,
+      // adopts #4's tracking/shipping). Must run BEFORE the numeric branch,
+      // since "2+4" starts with a digit.
+      const mg = msg.trim().match(/^(\d+)\s*\+\s*(\d+)$/);
+      if (mg) {
+        const target = this.data.orders[parseInt(mg[1]) - 1];
+        const source = this.data.orders[parseInt(mg[2]) - 1];
+        if (target && source && target !== source) {
+          cell.amz_socket.send({
+            action: "change",
+            merge: true,
+            order_id: target.order_id,
+            item_id: target.item_id,
+            from_order_id: source.order_id,
+            from_item_id: source.item_id,
+          });
+        }
+        return;
+      }
+
       if (msg.trim() == "o") {
         window.open(cell.config.google_api_url, "_blank");
       } else if (/^-?\d+/.test(msg) && parseInt(msg.match(/\d+/)[0]) < 30) {

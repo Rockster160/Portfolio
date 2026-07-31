@@ -7,7 +7,7 @@
 class AmazonEmailParserError < StandardError; end
 
 class AmazonEmailParser
-  include ::Memoizable
+  include ::Memoizable, ::Shipments::DateParsing
 
   ASIN_REGEX = /(?:%2Fdp%2F|\/dp\/)([A-Z0-9]{10,})/i
   ORDER_ID_REGEX = /\b\d{3}-\d{7}-\d{7}\b/
@@ -290,59 +290,6 @@ class AmazonEmailParser
     (asin_subcard(asin) || order_card)&.text.to_s.then { |t| t.gsub(/\s+/, " ").strip }
   end
 
-  💾(:month_regex) {
-    month_names = Date::MONTHNAMES.compact
-    Regexp.new("\\b(?:#{month_names.flat_map { |m| [m, m.first(3)] }.join("|")})\\b")
-  }
-
-  💾(:wday_regex) {
-    day_names = Date::DAYNAMES.compact
-    Regexp.new("\\b(?:#{day_names.flat_map { |d| [d, d.first(3)] }.join("|")})\\b")
-  }
-
-  def future(date)
-    loop { date.past? ? date += 1.week : (break date) }
-  end
-
-  def arrival_date_from(text)
-    return nil if text.blank?
-
-    # "Delivered today" / "Delivered yesterday" / "Your package was delivered"
-    return Time.zone.today if text.match?(/Delivered\s+today|Your package was delivered|Your package has been delivered/i)
-    return Time.zone.today - 1.day if text.match?(/Delivered\s+yesterday/i)
-
-    # "Arriving overnight ..." - overnight means by the next morning
-    return Time.zone.today + 1.day if text.match?(/Arriving\s+overnight/i)
-
-    # "Arriving today" / "Arriving tomorrow"
-    return Time.zone.today if text.match?(/Arriving\s+today/i)
-    return Time.zone.today + 1.day if text.match?(/Arriving\s+tomorrow/i)
-
-    # "Arriving <Weekday>" - parse to next occurrence
-    if (match = text.match(/Arriving\s+(#{wday_regex})/))
-      return future(Date.parse(match[1]))
-    end
-
-    # "Arriving <Month> <day>" / "Estimated to arrive by <Month> <day>" - explicit date
-    if (match = text.match(/(?:Arriving|Estimated\s+to\s+arrive)\s+(?:by\s+)?(#{month_regex}\s+\d{1,2})/i))
-      return future(Date.parse(match[1]))
-    end
-
-    # "Arriving between <Month> <day>" - take the lower bound
-    if (match = text.match(/Arriving\s+between\s+(#{month_regex}\s+\d{1,2})/))
-      return future(Date.parse(match[1]))
-    end
-
-    # Fallback - bare "Month Day" anywhere in the text
-    if (date_str = text[/(#{month_regex})\s+\d{1,2}/])
-      return future(Date.parse(date_str))
-    end
-
-    nil
-  rescue StandardError
-    nil
-  end
-
   # "Total: $65.31" / "Order Total: $1,234.56" — Amazon prints the full order
   # charge (subtotal + tax + shipping) alongside the order card. Returned as a
   # Float so it can be compared against a Chase transaction amount.
@@ -357,17 +304,6 @@ class AmazonEmailParser
 
   def whole_email_text
     @whole_email_text ||= @doc.text.to_s.gsub(/\s+/, " ").strip
-  end
-
-  def arrival_time_from(text)
-    return if text.blank?
-
-    match = text.match(/(\d{1,2} ?[ap]\.?m\.?)\W{1,5}(\d{1,2} ?[ap]\.?m\.?)/i)
-    return if match.blank?
-
-    _, start_range, end_range = match.to_a
-    meridian = (end_range || start_range).gsub(/[^a-z]/i, "")
-    [start_range, end_range].compact.map { |t| t.gsub(/\D/, "") }.join("-") + meridian
   end
 
   # Resolves a display name for `item`. The expensive GPT call has already been

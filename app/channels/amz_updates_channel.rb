@@ -7,7 +7,15 @@ class AmzUpdatesChannel < ApplicationCable::Channel
     json = data.deep_symbolize_keys
     order = AmazonOrder.find(json[:order_id], json[:item_id])
 
-    if json[:remove]
+    if json[:merge]
+      # `2+4` in home.js: fold the source item into the target, keeping the
+      # target's name/basic info but adopting the source's tracking/shipping
+      # data so future carrier updates land on the target row.
+      source = AmazonOrder.find(json[:from_order_id], json[:from_item_id])
+      if order && source && !(order.order_id == source.order_id && order.item_id == source.item_id)
+        order.merge!(source)
+      end
+    elsif json[:remove]
       order.destroy
     else
       name = json[:add] || json[:rename]
@@ -16,7 +24,7 @@ class AmzUpdatesChannel < ApplicationCable::Channel
       sub, datetime = ::Jarvis::Times.extract_time(name, context: :future)
       name = name.gsub(sub, "") unless sub.nil?
 
-      order ||= AmazonOrder.create if json.key?(:add)
+      order ||= AmazonOrder.create(carrier: :manual) if json.key?(:add)
       order.name = name.squish if name.present?
       order.delivery_date = datetime if datetime.present?
 

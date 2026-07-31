@@ -14,7 +14,18 @@ class AmazonOrder
     :errors,
     :amount,
     :just_added,
+    :carrier,
+    :tracking_number,
+    :source,
   )
+
+  # Public tracking URL per carrier. Amazon rows keep the historical product
+  # link; other carriers link to their tracking page by tracking number.
+  CARRIER_TRACKING_URLS = {
+    ups:   "https://www.ups.com/track?tracknum=%<tracking>s",
+    usps:  "https://tools.usps.com/go/TrackConfirmAction?tLabels=%<tracking>s",
+    fedex: "https://www.fedex.com/fedextrack/?trknbr=%<tracking>s",
+  }.freeze
 
   def self.all
     @@all ||= reload
@@ -79,9 +90,19 @@ class AmazonOrder
     @errors = []
     @email_ids = []
     @just_added = false # Gets overridden
+    # Default carrier keeps every pre-carrier cached row (and the whole Amazon
+    # path) reading back as :amazon with no migration. order_hash can override.
+    @carrier = :amazon
     order_hash.each do |key, val|
       send(:"#{key}=", val) if respond_to?(key)
     end
+  end
+
+  # MeCache round-trips through JSON, so a stored symbol comes back a string.
+  # Normalize to a symbol so `carrier` is always the enum-style symbol the rest
+  # of the code (and #url) expects, whether freshly set or reloaded.
+  def carrier=(val)
+    @carrier = val.presence&.to_sym
   end
 
   def reparse(email_id=nil)
@@ -95,6 +116,11 @@ class AmazonOrder
   # end
 
   def url
+    template = CARRIER_TRACKING_URLS[carrier]
+    if template && tracking_number.present?
+      return format(template, tracking: tracking_number)
+    end
+
     "https://www.amazon.com/dp/#{item_id}"
   end
 
@@ -131,6 +157,24 @@ class AmazonOrder
     @errors.push(str)
   end
 
+  # Fold `other` into this item and drop `other`. Used by the manual `2+4`
+  # merge: the target keeps its own display info (name/listed_name/full_name)
+  # while adopting the source's shipping/tracking data so future updates
+  # (matched by tracking_number) land on this row. Email history is unioned.
+  def merge!(other)
+    self.carrier         = other.carrier
+    self.tracking_number = other.tracking_number
+    self.source          = other.source
+    self.delivery_date   = other.delivery_date
+    self.time_range      = other.time_range
+    self.delivered       = other.delivered
+    self.status          = other.status
+    self.email_ids       = (Array(email_ids) + Array(other.email_ids)).uniq
+    self.amount        ||= other.amount
+    other.destroy
+    self
+  end
+
   def serialize
     {
       order_id:           order_id,
@@ -146,6 +190,10 @@ class AmazonOrder
       email_ids:          email_ids,
       errors:             errors,
       amount:             amount,
+      carrier:            carrier,
+      tracking_number:    tracking_number,
+      source:             source,
+      url:                url,
     }
   end
 end

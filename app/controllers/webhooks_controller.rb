@@ -2,7 +2,7 @@ class WebhooksController < ApplicationController
   skip_before_action :verify_authenticity_token
   before_action :post_params, except: [:report]
   before_action :none_unless_user, only: [:execute_task, :jil, :command]
-  before_action :none_unless_admin, only: [:battery, :report, :speak, :tesla_local]
+  before_action :none_unless_admin, only: [:battery, :report, :speak, :tesla_local, :sms]
   skip_before_action :pretty_logit, only: [:report] # Lots of data here
 
   def jenkins
@@ -177,6 +177,18 @@ class WebhooksController < ApplicationController
     filename = action["objectKey"]
 
     ReceiveEmailWorker.perform_async(bucket, filename)
+
+    head :no_content
+  end
+
+  # Inbound forwarded SMS (e.g. an iOS Shortcut POSTing a forwarded UPS text).
+  # Authed as admin via the API key in the Authorization header (see
+  # none_unless_admin). Accepts a `text`/`body` param or the raw request body.
+  def sms
+    text = params[:text].presence || params[:body].presence || request.raw_post.presence
+    return head :bad_request if text.blank?
+
+    ReceiveSmsWorker.perform_async(current_user.id, text.to_s)
 
     head :no_content
   end

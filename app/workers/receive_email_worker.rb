@@ -35,6 +35,8 @@ class ReceiveEmailWorker
     # TODO: Remove the below- these should be taken care of via tasks, including the Slack notifier
     if amazon_update?
       parse_amazon && @email.archive! # Auto archive Amazon emails
+    elsif usps_update?
+      parse_usps && @email.archive! # Auto archive parsed USPS tracking emails
     end
 
     notify_slack unless @email.archived?
@@ -50,6 +52,21 @@ class ReceiveEmailWorker
 
   def parse_amazon
     ::AmazonEmailParser.parse(@email)
+  end
+
+  # USPS tracking emails arrive from a usps.com sender when auto-forwarded (Gmail
+  # preserves the original From), or — for a manual forward that rewrites From —
+  # are recognized by the distinctive USPS tracking subject shape. NOTE: verify
+  # the real sender address once the first forwarded USPS email lands in prod and
+  # tighten this gate if needed.
+  def usps_update?
+    return true if external_addresses.any? { |a| a.to_s.downcase.include?("usps.com") }
+
+    mail.subject.to_s.match?(/USPS.*(?:Expected Delivery|out for delivery|delivered)/i)
+  end
+
+  def parse_usps
+    ::UspsEmailParser.parse(@email)
   end
 
   💾(:content) { ::FileStorage.download(@object_key, bucket: @bucket) }
