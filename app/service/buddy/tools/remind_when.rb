@@ -112,8 +112,18 @@ Buddy::Tools.register(
 
     framed = to_self ? "Remind you #{human}" : "Let #{recipient.first_name} know #{human}"
 
+    # Deliberately a note rather than a raise: two reminders on one condition
+    # ("shower" and "do laundry" when I get home) are perfectly normal. The one
+    # that hurts is the one they forgot - a stale deploy watch nobody remembered
+    # sat behind a fresh one and a single deploy pinged twice. This runs before
+    # the model writes a word, so it can mention it in the same turn.
+    twin    = ctx.existing_watch_twin(scope, match, owner: owner)
+    warning = twin && "One is ALREADY listening for this: #{twin.body.to_s.truncate(60).inspect}. " \
+                      "Setting this leaves both, so both will fire. Say that plainly and offer to " \
+                      "retire the old one (cancel_reminder) - don't add a second one silently."
+
     {
-      summary:  "#{framed}?",
+      summary:  ["#{framed}?", warning].compact.join(" "),
       resolved: {
         trigger_scope:  scope,
         match:          match,

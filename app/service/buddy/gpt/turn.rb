@@ -77,12 +77,26 @@ module Buddy
                 "waiting, or done. #{AGAIN}",
       }.freeze
 
+      # A wait gates on the clock rather than on the person, so nothing behind it
+      # needs a tap - it simply happens later. Prod 1307: "start my printer, wait
+      # 1m, then preheat it for PLA" started the printer and the timer and then
+      # offered to maybe do the preheat, which was the one part they'd asked for.
+      WAITING_ACK = {
+        status: "queued",
+        note:   "Lined up BEHIND the wait you just set. It has NOT run, and nothing here needs " \
+                "them - it happens on its own the moment that timer is up. Say what you'll do and " \
+                "when (\"then I'll preheat it\"). Never say it's done, never say it's in progress, " \
+                "and never offer it back to them as something you COULD do - it's already set to " \
+                "happen. #{AGAIN}",
+      }.freeze
+
       # A rough mirror of ProposalBuilder#build_steps — accurate for the shapes
       # that actually occur (a form after a checklist, a checklist after a form,
       # a level-1 after either), and deliberately not a full re-implementation.
       # Where it's imprecise it under-claims: a second checklist reports as
       # "waiting for a tap", which is true, just of a later message.
       def self.ack_for(tool, gate: nil)
+        return WAITING_ACK if gate == :timer
         return QUEUED_ACK if gate && tool[:level] == 1
         return gate == :rows ? CHAINED_ACK : FORM_ACK if Buddy::Tools.form?(tool)
         return CHAINED_ACK if gate == :forms && tool[:level] == 3
@@ -134,23 +148,27 @@ module Buddy
         resolve_call(tool, call, user: user, conversation: conversation, gate: gate).first
       end
 
-      # Which kind of gate this tool opens, or nil when it isn't one.
-      def self.gate_kind_for(tool)
+      # Which kind of gate this call opens, or nil when it isn't one. A wait
+      # depends on the ARGUMENTS rather than the tool: the same set_timer is an
+      # ordinary countdown without `then_continue`.
+      def self.gate_kind_for(tool, payload={})
+        return :timer if Buddy::Tools.waits?(tool, payload)
         return :forms if Buddy::Tools.form?(tool)
 
         :rows if tool[:level] == 3
       end
 
-      # Returns [output_for_the_model, identity_signature]. The signature is what
-      # the call RESOLVED to with the volatile bits dropped, so the same chore
-      # asked for twice in one turn is recognisable as a repeat even when the
-      # model varies the wording or the timestamp between attempts.
+      # Returns [output_for_the_model, identity_signature, gate_kind]. The
+      # signature is what the call RESOLVED to with the volatile bits dropped, so
+      # the same chore asked for twice in one turn is recognisable as a repeat
+      # even when the model varies the wording or the timestamp between attempts.
       def self.resolve_call(tool, call, user:, conversation:, gate: nil)
         args = Buddy::Tools.normalize_function_arguments(tool, call[:arguments])
         payload, errors = Buddy::Tools.validate_payload(tool, args)
-        return [resolve_failure(errors.join("; ")), nil] if errors.any?
+        return [resolve_failure(errors.join("; ")), nil, nil] if errors.any?
 
         ctx = Buddy::ToolContext.new(user, conversation: conversation)
+        opens = gate_kind_for(tool, payload)
         # A form tool's confirm is its PRE-SUBMIT gate and runs when they send,
         # so running it here would reject a form for being incomplete — which is
         # the entire point of showing them one. Its `fields` proc is the resolver
@@ -159,7 +177,8 @@ module Buddy
           fields = Buddy::FormFields.normalize(tool[:form][:fields].call(payload, ctx))
           raise "nothing to fill in for that one" if fields.empty?
 
-          return [ack_for(tool, gate: gate), [tool[:name], payload.except(*VOLATILE_ARGS).sort_by { |k, _| k.to_s }]]
+          signature = [tool[:name], payload.except(*VOLATILE_ARGS).sort_by { |k, _| k.to_s }]
+          return [ack_for(tool, gate: gate), signature, opens]
         end
 
         confirm  = tool[:confirm].call(payload, ctx)
@@ -168,9 +187,10 @@ module Buddy
         [
           ack_for(tool, gate: gate).merge(resolved: confirm[:summary].to_s.presence).compact,
           [tool[:name], resolved.except(*VOLATILE_ARGS).sort_by { |k, _| k.to_s }],
+          opens,
         ]
       rescue StandardError => e
-        [resolve_failure(e.message), nil]
+        [resolve_failure(e.message), nil, nil]
       end
 
       # Args that describe HOW MUCH or WHEN rather than WHAT. Two calls differing
@@ -303,10 +323,11 @@ module Buddy
             # honest but useless - the person asked for a thing and got a shrug.
             # It is far likelier the model skipped the call than that it meant
             # the claim, so it gets exactly one corrective round to make it.
-            break unless nudge?(proposals, spoken, nudged, rounds)
+            nudge = nudge_for(proposals, spoken, nudged, rounds)
+            break if nudge.nil?
 
             nudged = true
-            input += [{ role: :developer, content: RETRY_NUDGE }]
+            input += [{ role: :developer, content: nudge }]
             next
           end
 
@@ -396,7 +417,7 @@ module Buddy
         tool = Buddy::Tools[name]
         return JSON.generate({ ok: false, error: "no tool named #{name}" }) if tool.nil?
 
-        result, signature = self.class.resolve_call(
+        result, signature, opens = self.class.resolve_call(
           tool, call, user: @user, conversation: @conversation, gate: @gate_kind,
         )
 
@@ -411,7 +432,7 @@ module Buddy
         # queued behind itself, and only ONCE — the first gate is the one the
         # person meets, and everything the model asks for after it waits on that,
         # matching how ProposalBuilder actually splits them.
-        @gate_kind ||= self.class.gate_kind_for(tool) if result[:status].to_s != "failed"
+        @gate_kind ||= opens if result[:status].to_s != "failed"
         JSON.generate(result)
       end
 
@@ -432,13 +453,47 @@ module Buddy
         Do not repeat the claim.
       TXT
 
-      # Worth a corrective round: nothing was proposed, the reply claims an
-      # action anyway, and we haven't already spent the one retry we allow.
-      def nudge?(proposals, spoken, nudged, rounds)
-        return false if nudged || proposals.any?
-        return false if rounds >= MAX_ROUNDS || Time.current > @deadline
+      POINTER_NUDGE = <<~TXT.freeze
+        STOP. Your whole reply is a lead-in pointing at something, and you called
+        no tool, so there is nothing underneath it. The person is looking at a
+        sentence that promises a list or an answer and then just ends.
 
-        unbacked_claim(spoken.to_s).present?
+        Do ONE of these now:
+        - If a tool produces the thing you were pointing at, call it. Listing
+          their reminders, their lists, their prompts - each of those is a tool
+          call, not a sentence.
+        - If you meant to say the thing yourself, say it. In full, in this reply.
+
+        A lead-in is never the whole message.
+      TXT
+
+      # A reply that is NOTHING BUT a pointer at output that was never rendered.
+      # Prod 1313 answered "which reminders do I have set up?" with "Here's what
+      # you've got." and no call - `list_reminders`' own description had handed
+      # the model that exact sentence as the lead-in to write, and it wrote the
+      # lead-in instead of making the call.
+      #
+      # Anchored at both ends and allowing no clause break, so it only fires on a
+      # reply that IS the pointer. "Here's the thing, I can't do that from here"
+      # and "Here's what I'd do: skip it" both carry a real second clause and are
+      # left alone.
+      DANGLING_POINTER_RX = /
+        \A
+        (?:here(?:'|’)?s | here\s+(?:is|are) | these\s+are | below\s+(?:is|are))
+        \s+ [^,.:;!?]{0,60} [.:!]? \s*
+        \z
+      /xi
+
+      # Worth a corrective round: nothing was proposed, we haven't already spent
+      # the one retry we allow, and the reply either claims an action or points
+      # at output that isn't there. Returns the nudge to send, or nil.
+      def nudge_for(proposals, spoken, nudged, rounds)
+        return nil if nudged || proposals.any?
+        return nil if rounds >= MAX_ROUNDS || Time.current > @deadline
+        return RETRY_NUDGE if unbacked_claim(spoken.to_s).present?
+        return POINTER_NUDGE if spoken.to_s.strip.match?(DANGLING_POINTER_RX)
+
+        nil
       end
 
       def unbacked_claim(body)

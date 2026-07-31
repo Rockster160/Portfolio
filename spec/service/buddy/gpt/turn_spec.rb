@@ -285,6 +285,35 @@ RSpec.describe Buddy::GPT::Turn do
       expect(client.calls.length).to eq(1)
     end
 
+    # Prod 1313: "Which reminders do I have set up?" came back as "Here's what
+    # you've got." (twice over, verbatim) off a single call with no tool use. The
+    # list_reminders description had handed the model that exact sentence to use
+    # as a lead-in, and it wrote the lead-in instead of making the call - leaving
+    # a reply that points at a list nobody ever drew.
+    it "gives the model a round when its whole reply points at output that isn't there" do
+      client = run([
+        { text: "Here's what you've got." },
+        { tool_calls: [{ name: :list_reminders, arguments: {} }] },
+        { text: "Two on the books right now." },
+      ])
+
+      expect(client.calls.length).to eq(3)
+      expect(client.calls[1].input.any? { |i| i[:content].to_s.include?("lead-in") }).to be(true)
+      # The lead-in is gone and the tool it was pointing at actually ran.
+      bodies = convo.byte_messages.where(direction: :inbound).pluck(:body)
+      expect(bodies).to include("Two on the books right now.")
+      expect(bodies).not_to include("Here's what you've got.")
+    end
+
+    # The pointer has to be the WHOLE reply. A sentence that opens that way and
+    # then says something real is ordinary conversation.
+    it "leaves a pointer alone when a second clause follows it" do
+      client = run([{ text: "Here's the thing, I can't reach the printer from here." }])
+
+      expect(client.calls.length).to eq(1)
+      expect(reply.body).to eq("Here's the thing, I can't reach the printer from here.")
+    end
+
     it "does not spend a round when the claim is already backed by a call" do
       client = run([
         { tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }] },

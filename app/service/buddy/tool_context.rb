@@ -124,6 +124,24 @@ module Buddy
       nil
     end
 
+    # A watch already listening for exactly this condition. Same purpose as
+    # existing_agenda_twin: surface it before Buddy speaks, so a second one is a
+    # choice rather than a surprise.
+    #
+    # It's the invisible ones that hurt. A "deploy" watch carries an empty match,
+    # so every deploy watch is identical by construction and there is nothing in
+    # the request to tell one from another - prod had a two-day-old one-shot
+    # nobody remembered sitting behind a fresh repeating one, and a single deploy
+    # pinged twice. Two reminders for arriving home ("shower", "do laundry") hit
+    # this too and are perfectly legitimate; the point is to mention it, never to
+    # refuse.
+    def existing_watch_twin(scope, match, owner: user)
+      BuddyWatch.active.where(user_id: owner.id, trigger_scope: scope.to_s, match: (match || {})).order(:id).last
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::ToolContext] watch twin lookup failed: #{e.class}: #{e.message}")
+      nil
+    end
+
     # ---- places ----
 
     # Resolve a spoken place ("costco", "the gym") to its canonical known

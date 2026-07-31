@@ -13,6 +13,11 @@ module Buddy
     # the thread — the person may confirm it minutes or hours later.
     PROPOSAL_TTL = 3.days
 
+    # The invisible action a WAIT parks its queue on, keyed to the timer that
+    # will release it. Never mirrored into message metadata: there's nothing to
+    # tap, and the countdown is already on screen.
+    TIMER_GATE = "buddy_timer_gate".freeze
+
     # Returns { action: <ByteAction or nil>, auto_ran: <bool> } so the caller
     # can pick the right expression: something to confirm (action present) vs
     # something already done (auto_ran) vs nothing.
@@ -67,36 +72,44 @@ module Buddy
       # never was.
       #
       # So the calls become ordered STEPS (see build_steps). Everything up to and
-      # including the first GATE — the first thing that needs the person — goes
-      # out now; everything after it rides on that gate and lands when they
-      # resolve it (see advance_queue!).
-      steps       = build_steps(merged)
-      head, queue = split_at_gate(steps)
+      # including the first GATE — the first thing that has to finish before the
+      # rest can honestly happen — goes out now; everything after it rides on
+      # that gate and lands when it resolves (see advance_queue!). split_at_gate
+      # leaves the gate as the last step of `head`, so it's the only step handed
+      # anything to carry, and a level-2-only checklist never takes the queue.
+      steps        = build_steps(merged)
+      head, queue  = split_at_gate(steps)
+      queued       = serialize_steps(queue)
+      gate         = (head.last if gate?(head.last))
+      conversation = byte_message.byte_conversation
 
-      auto_ran  = false
-      rows_step = nil
-      form_step = nil
+      auto_ran = false
+      action   = nil
+      posted   = []
+      # Whether the queue found something to ride on. A gate that refuses to
+      # materialize (every form's target gone, a countdown that won't start)
+      # leaves nothing to advance it, so it runs below rather than being dropped.
+      carried  = queued.empty?
+
       head.each { |step|
+        deferred = (step.equal?(gate) ? queued : [])
         case step[:kind]
-        when :autos then auto_ran = run_auto(user, byte_message, step[:calls]) || auto_ran
-        when :rows  then rows_step = step
-        when :forms then form_step = step
+        when :autos
+          auto_ran = run_auto(user, byte_message, step[:calls]) || auto_ran
+        when :timer
+          ran, holding = run_wait!(user, byte_message, step[:calls], deferred: deferred)
+          auto_ran ||= ran
+          carried  ||= holding
+        when :rows
+          action = attach_checklist!(user, byte_message, step[:calls], deferred: deferred)
+          carried ||= deferred.any?
+        when :forms
+          posted = post_forms(user, conversation, step[:calls], deferred: deferred)
+          carried ||= deferred.any? && posted.any?
         end
       }
 
-      # The queue rides on whichever gate the person meets FIRST. `head` holds at
-      # most one gate and it's the last step in it, so a checklist that is a gate
-      # takes the queue and a level-2-only checklist never does.
-      conversation = byte_message.byte_conversation
-      queued       = serialize_steps(queue)
-      on_rows      = gate?(rows_step)
-      posted       = post_forms(user, conversation, form_step&.fetch(:calls, []) || [], deferred: on_rows ? [] : queued)
-      action       = rows_step && attach_checklist!(user, byte_message, rows_step[:calls], deferred: on_rows ? queued : [])
-
-      # The form gate was meant to carry the queue and every form refused to open
-      # (a prompt answered somewhere else, say). Nothing is left to advance it, so
-      # run it now rather than dropping it on the floor.
-      run_steps!(user, conversation, byte_message, queued) if queued.any? && !on_rows && posted.empty?
+      run_steps!(user, conversation, byte_message, queued) unless carried
 
       { action: action, auto_ran: auto_ran, forms: posted }
     end
@@ -141,12 +154,41 @@ module Buddy
       queue
     end
 
+    # Is this timer a WAIT with the rest of a sequence lined up behind it?
+    # Buddy::Timers asks before it words the alarm, so a pause Buddy took on its
+    # own doesn't announce itself as a countdown that merely ran out.
+    def waiting_on?(timer)
+      timer_gate(timer).present?
+    end
+
+    # Release what the wait was holding. Called by Buddy::Timers the moment the
+    # countdown fires. The queue is claimed under a lock, so a re-delivered fire
+    # job can't run the follow-up twice.
+    #
+    # Nothing releases it early and nothing releases it if the timer is dismissed
+    # before it rings — same escape hatch a checklist has, where walking away
+    # mid-chain just leaves the rest unposted.
+    def resume_after!(timer)
+      action = timer_gate(timer)
+      return false if action.nil?
+
+      queue = nil
+      action.with_lock do
+        queue = claim_deferred(action)
+        action.update!(state: :decided, decided_at: Time.current)
+      end
+      return false if queue.blank?
+
+      advance_queue!(action, queue, executed: true)
+    end
+
     # Move the queue forward now that the gate it was waiting on has resolved.
     #
     # `executed:` is whether anything on that gate actually ran. When the person
     # cancelled it all, everything behind it is about something that never
     # happened, so it must NOT go out — but silence is how they end up assuming
-    # it did, so say what was held back instead.
+    # it did, so say what was held back instead. A wait always passes true: the
+    # clock can't decline.
     #
     # Level-1 steps fire and the queue keeps moving. The first step that puts
     # something in FRONT of the person — a checklist or a form — takes whatever
@@ -183,15 +225,21 @@ module Buddy
       #   :autos — level 1. Fires the moment it's reached.
       #   :rows  — one checklist. A GATE when it holds anything level 3.
       #   :forms — one or more editable forms. Always a gate.
+      #   :timer — a wait. Always a gate, and always alone, so "wait a minute,
+      #            do X, wait five, do Y" nests instead of collapsing.
       #
-      # Contiguous, not global, so the common batch still batches: two agenda
-      # items asked for together stay two rows on one checklist, and three
+      # Otherwise contiguous, not global, so the common batch still batches: two
+      # agenda items asked for together stay two rows on one checklist, and three
       # prompts stay three forms posted side by side.
       def build_steps(merged)
         level2, rest = merged.partition { |p| p[:tool][:level] == 2 }
         steps = rest.each_with_object([]) { |p, out|
           kind = step_kind(p)
-          out.last && out.last[:kind] == kind ? out.last[:calls] << p : out << { kind: kind, calls: [p] }
+          if kind != :timer && out.last && out.last[:kind] == kind
+            out.last[:calls] << p
+          else
+            out << { kind: kind, calls: [p] }
+          end
         }
         return steps if level2.empty?
 
@@ -210,17 +258,19 @@ module Buddy
       end
 
       def step_kind(proposal)
+        return :timer if Buddy::Tools.waits?(proposal[:tool], proposal[:payload])
         return :forms if Buddy::Tools.form?(proposal[:tool])
 
         proposal[:tool][:level] == 1 ? :autos : :rows
       end
 
-      # A gate is anything that needs the person before whatever follows it can
-      # honestly happen. A checklist of already-executed level-2 rows doesn't
-      # qualify: nobody has to touch it, so nothing may wait on it.
+      # A gate is anything that has to finish before whatever follows it can
+      # honestly happen — usually the person, sometimes just the clock. A
+      # checklist of already-executed level-2 rows is neither: nobody has to
+      # touch it, so nothing may wait on it.
       def gate?(step)
         return false if step.nil?
-        return true if step[:kind] == :forms
+        return true if [:forms, :timer].include?(step[:kind])
 
         step[:kind] == :rows && step[:calls].any? { |p| p[:tool][:level] == 3 }
       end
@@ -321,11 +371,55 @@ module Buddy
           when "rows"
             attach_checklist!(user, next_step_message(user, conversation), calls, deferred: steps)
             return true
+          when "timer"
+            # Same rule as a form that won't open: a countdown that fails to
+            # start can't hold anything, so the rest runs rather than stalling.
+            wait_ran, holding = run_wait!(user, message, calls, deferred: steps)
+            return true if holding
+
+            ran = wait_ran || ran
           else
             ran = run_auto(user, message, calls) || ran
           end
         end
         ran
+      end
+
+      # Start the wait and park everything after it on the countdown. Returns
+      # [whether the timer ran, whether it's now holding the queue].
+      def run_wait!(user, byte_message, calls, deferred: [])
+        timer_id = nil
+        ran = run_auto(user, byte_message, calls) { |result|
+          data = result[:data]
+          timer_id ||= data[:timer_id] if result[:ok] && data.is_a?(Hash)
+        }
+
+        holding = timer_id.present? && deferred.any?
+        hold_for_timer!(user, byte_message, timer_id, deferred) if holding
+        [ran, holding]
+      end
+
+      def hold_for_timer!(user, byte_message, timer_id, deferred)
+        ByteAction.create!(
+          user:              user,
+          byte_conversation: byte_message.byte_conversation,
+          byte_message:      byte_message,
+          kind:              :custom,
+          tool_name:         TIMER_GATE,
+          buttons:           [],
+          tool_input:        { "deferred" => deferred, "timer_id" => timer_id },
+          # Well past any countdown Buddy will set (Timers caps at 24h), so the
+          # gate can never expire out from under a wait that's still running.
+          expires_at:        PROPOSAL_TTL.from_now,
+        )
+      end
+
+      def timer_gate(timer)
+        return nil if timer.nil?
+
+        scope = ByteAction.where(user_id: timer.user_id, tool_name: TIMER_GATE, state: :pending)
+        scope = scope.where("tool_input->>'timer_id' = ?", timer.id.to_s)
+        scope.order(:id).last
       end
 
       def post_forms(user, conversation, forms, deferred: [])
@@ -431,6 +525,9 @@ module Buddy
       # Execute each auto (no-confirm) tool now and post a distinct activity
       # receipt chip for it. Returns true if any ran. Failures degrade to a
       # short "couldn't" chip rather than blowing up the whole reply.
+      #
+      # Yields each raw dispatch result, for the one caller that needs what the
+      # tool returned rather than just that it went (see run_wait!).
       def run_auto(user, byte_message, autos)
         return false if autos.empty?
 
@@ -450,6 +547,7 @@ module Buddy
           proposal_shape = { "id" => nil, "payload" => stringify(p[:payload]), "tool_name" => p[:tool][:name].to_s }
           ctx = Buddy::ToolContext.new(user, proposal: proposal_shape, conversation: conversation)
           result = Buddy::Tools.dispatch(p[:tool], payload, ctx)
+          yield(result) if block_given?
           text =
             if result[:ok]
               rc = receipt_for(p[:tool], result[:data], ctx)

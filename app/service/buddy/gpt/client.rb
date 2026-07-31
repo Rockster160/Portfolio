@@ -74,7 +74,10 @@ module Buddy
       # dribbling tokens resets the read clock forever. One prod turn ran 3m45s
       # this way and blocked every message behind it on the conversation lock.
       def stream(instructions:, input:, tools: [], deadline: nil, &block)
-        text        = String.new(encoding: "UTF-8")
+        # One response can carry SEVERAL message items, and their deltas arrive
+        # interleaved with nothing in the text marking the seam. Keyed by part
+        # so they're reassembled rather than appended blind (see join_parts).
+        parts       = {}
         tool_calls  = []
         response_id = nil
         usage       = nil
@@ -82,25 +85,14 @@ module Buddy
         # instance must not carry an error or a token count from a previous turn
         # into this one.
         stream_error = nil
-        # Which output part the last delta belonged to. One response can carry
-        # SEVERAL message items, and their deltas arrive interleaved into this
-        # one buffer with nothing marking the seam.
-        last_part = nil
 
         handler = proc { |event|
           case event["type"]
           when TEXT_DELTA
             delta = event["delta"].to_s
             unless delta.empty?
-              # Prod message 1106 came back as "...keep an eye on that.Yep, I'm
-              # watching..." - two separate replies fused mid-sentence because
-              # every delta was appended blind. Reinstate the boundary the API
-              # gave us rather than letting the parts run together.
-              part = [event["item_id"], event["content_index"]]
-              text << "\n\n" if last_part && part != last_part && !text.empty?
-              last_part = part
-
-              text << delta
+              key = [event["item_id"], event["content_index"]]
+              (parts[key] ||= String.new(encoding: "UTF-8")) << delta
               block&.call({ type: :text_delta, text: delta })
             end
           when ITEM_DONE
@@ -134,19 +126,26 @@ module Buddy
           instructions: instructions, input: input, tools: tools, handler: handler,
         ))
 
-        result(text: text, tool_calls: tool_calls, response_id: response_id, error: stream_error, usage: usage)
+        result(
+          text:        join_parts(parts),
+          tool_calls:  tool_calls,
+          response_id: response_id,
+          error:       stream_error,
+          usage:       usage,
+        )
       rescue DeadlineExceeded
         # Keep what we got. Only complete items ever reach us (tool calls arrive
         # on `output_item.done`), so a truncated stream can't yield half-parsed
         # arguments — partial prose is the worst case, and that beats an error
         # bubble. Usage is lost because the terminal event never arrived.
+        text = join_parts(parts)
         Rails.logger.warn("[Buddy::GPT::Client] stream exceeded its deadline; keeping #{text.length} chars")
         {
-          ok:          text.strip.present? || tool_calls.any?,
+          ok:          text.present? || tool_calls.any?,
           text:        text,
           tool_calls:  tool_calls,
           response_id: response_id,
-          error:       ("timed out" if text.strip.empty? && tool_calls.empty?),
+          error:       ("timed out" if text.empty? && tool_calls.empty?),
           model:       model,
           usage:       usage,
         }
@@ -156,7 +155,7 @@ module Buddy
         # request bills nothing, so usage stays nil.
         {
           ok:          false,
-          text:        text.to_s,
+          text:        join_parts(parts),
           tool_calls:  tool_calls,
           response_id: response_id,
           error:       describe(e),
@@ -166,6 +165,25 @@ module Buddy
       end
 
       private
+
+      # The response's message parts as one body.
+      #
+      # Separated by a blank line because prod 1106 came back as "...keep an eye
+      # on that.Yep, I'm watching..." - two separate replies fused mid-sentence
+      # when every delta was appended blind. Deduped because prod 1313 came back
+      # as "Here's what you've got." twice, verbatim, in two parts of one
+      # response; the person read the same sentence to themselves and got no
+      # more information the second time.
+      def join_parts(parts)
+        kept = Set.new
+        parts.values.filter_map { |part|
+          body = part.strip
+          next nil if body.empty?
+          next nil unless kept.add?(body.downcase)
+
+          body
+        }.join("\n\n")
+      end
 
       def result(text:, tool_calls:, response_id:, error:, usage:)
         # A turn that produced neither prose nor a tool call is a failure even

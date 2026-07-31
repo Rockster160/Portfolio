@@ -98,6 +98,52 @@ RSpec.describe "remind_when tool" do
     expect(BuddyWatch.last.one_shot).to be(false)
   end
 
+  # Prod: a deploy watch set on the 28th sat unfired for two days, and a second
+  # one set on the 30th looked like the only one there was. When deploys started
+  # matching again, one deploy pinged twice. Every deploy watch carries an empty
+  # match, so there is nothing in the request itself to tell them apart - the
+  # only place this can surface is at confirm time, before Buddy speaks.
+  describe "a watch that's already listening for the same thing" do
+    def confirm(payload)
+      tool = Buddy::Tools[:remind_when]
+      normalized, = Buddy::Tools.validate_payload(tool, payload)
+      tool[:confirm].call(normalized, Buddy::ToolContext.new(user, conversation: convo))
+    end
+
+    it "warns rather than refusing, and names the one already set" do
+      run(text: "let you know the deploy finished", trigger: "deploy")
+
+      summary = confirm(text: "ping me on every deploy", trigger: "deploy", repeat: true)[:summary]
+
+      expect(summary).to include("ALREADY listening")
+      expect(summary).to include("let you know the deploy finished")
+      expect(summary).to include("cancel_reminder")
+    end
+
+    it "says nothing when the only match is a watch that's already been used up" do
+      run(text: "let you know the deploy finished", trigger: "deploy")
+      BuddyWatch.last.update!(fired_at: Time.current)
+
+      expect(confirm(text: "ping me on every deploy", trigger: "deploy")[:summary]).not_to include("ALREADY")
+    end
+
+    it "leaves a genuinely different condition alone" do
+      run(text: "floss", trigger: "chore", target: "Brush Teeth")
+
+      expect(confirm(text: "stretch", trigger: "chore", target: "Shower")[:summary]).not_to include("ALREADY")
+    end
+
+    # Two nudges for one condition are ordinary. The warning is information, not
+    # an objection, and it must never stop the second one being set.
+    it "flags a non-empty match too, and still sets the second watch" do
+      run(text: "shower", trigger: "chore", target: "Brush Teeth")
+
+      expect(confirm(text: "do laundry", trigger: "chore", target: "Brush Teeth")[:summary]).to include("shower")
+      expect { run(text: "do laundry", trigger: "chore", target: "Brush Teeth") }
+        .to change { BuddyWatch.count }.by(1)
+    end
+  end
+
   it "surfaces active watches in Buddy::Context" do
     run(text: "floss", trigger: "chore", target: "Brush Teeth")
     ctx = Buddy::Context.build(user, convo)

@@ -66,6 +66,19 @@ RSpec.describe Buddy::GPT::Client do
       expect(run[:text]).to eq("You got it. I'll watch it.\n\nYep, watching.")
     end
 
+    # Prod message 1313 read "Here's what you've got.\n\nHere's what you've got."
+    # - one call, two message items, the same sentence in both. Keeping the seam
+    # is right; keeping the repeat is just making them read it twice.
+    it "drops a part that only repeats one it already kept" do
+      stub_sse(sse(
+        text_delta("Here's what you've got.", item_id: "msg_1"),
+        text_delta("Here's what you've got.", item_id: "msg_2"),
+        completed,
+      ))
+
+      expect(run[:text]).to eq("Here's what you've got.")
+    end
+
     it "separates two content parts within a single item" do
       stub_sse(sse(
         text_delta("First.",  item_id: "msg_1", content_index: 0),

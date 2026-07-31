@@ -24,6 +24,13 @@ module Buddy
 
     COUNT_ARG = :count
 
+    # Marks a call as a WAIT: it runs now, but whatever the model asked for
+    # after it is held until the wait finishes on its own (see
+    # Buddy::ProposalBuilder's :timer step). Only set_timer declares the arg.
+    # "Start my printer, wait a minute, then preheat it" is a real sequence, and
+    # without a gate in the middle the third step fires alongside the first.
+    WAIT_ARG = :then_continue
+
     # Buddy USED to carry its spoken words on the tool call, to save the second
     # round trip. That's gone: the model now stays quiet on the call, we resolve
     # the tool, and it speaks on the follow-up with the outcome in hand. Writing
@@ -111,6 +118,13 @@ module Buddy
     # A tool where asking again means correcting, not repeating.
     def supersedes?(tool)
       tool.is_a?(Hash) && tool[:supersedes].present?
+    end
+
+    # Is THIS call a wait the rest of the turn has to line up behind?
+    def waits?(tool, payload)
+      return false unless tool.is_a?(Hash) && tool[:args].key?(WAIT_ARG)
+
+      (payload || {})[WAIT_ARG].present?
     end
 
     def all

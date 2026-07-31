@@ -187,17 +187,36 @@ module Buddy
       conversation = Buddy::CompanionRelay.conversation_for(timer.user)
       return if conversation.nil?
 
-      label = timer.name.to_s.strip
-      text  = label.present? ? "⏲ Time's up - your #{label} timer's done!" : "⏲ Time's up - your timer's done!"
+      # A WAIT is Buddy holding the middle of a sequence the person asked for
+      # ("start the printer, wait a minute, then preheat it"), not a countdown
+      # they're watching. Say what's happening rather than that time is up — the
+      # step it was holding lands directly underneath.
+      label   = timer.name.to_s.strip
+      waiting = Buddy::ProposalBuilder.waiting_on?(timer)
       Buddy::CompanionDelivery.deliver_plain(
         user:         timer.user,
         conversation: conversation,
-        text:         text,
+        text:         fired_text(label, waiting: waiting),
         metadata:     { "kind" => "buddy", "source" => "timer", "timer_id" => timer.id },
-        push_title:   label.present? ? "#{label} timer" : "Timer's up",
+        push_title:   fired_title(label, waiting: waiting),
       )
+      Buddy::ProposalBuilder.resume_after!(timer) if waiting
     rescue StandardError => e
       Buddy::Errors.report(section: "timers.on_fired", exception: e, user: timer&.user)
+    end
+
+    def fired_text(label, waiting:)
+      named = (" on #{label}" if label.present?)
+      return "⏲ That's the wait#{named} - picking it back up." if waiting
+      return "⏲ Time's up - your #{label} timer's done!" if label.present?
+
+      "⏲ Time's up - your timer's done!"
+    end
+
+    def fired_title(label, waiting:)
+      return "Picking it back up" if waiting
+
+      label.present? ? "#{label} timer" : "Timer's up"
     end
 
     # The moment the countdown should count FROM: the most recent message the

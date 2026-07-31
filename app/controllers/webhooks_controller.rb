@@ -549,8 +549,10 @@ class WebhooksController < ApplicationController
     id = params[:conversation_id].presence
     return user.byte_conversations.find_by(id: id) if id
 
-    user.byte_conversations.where(mode: :buddy, archived: false).order(last_message_at: :desc).first ||
-      ByteConversation.default_for(user)
+    # `ordered` rather than a bare last_message_at DESC: Postgres sorts NULLs
+    # FIRST on a descending order, so a Buddy thread that was created and never
+    # used would quietly capture every message sent this way.
+    user.byte_conversations.buddy.active.real.ordered.first || ByteConversation.default_for(user)
   end
 
   # Weather passthrough for Buddy — server holds WEATHER_APIKEY.
