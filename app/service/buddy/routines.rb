@@ -55,21 +55,28 @@ module Buddy
     # one can't run. Accepts either shape of key, since these arrive both from
     # the model (a JSON array it wrote) and from `capture` (rows we built).
     #
-    # validate_payload does the real work: it drops undeclared keys, applies
-    # defaults, and coerces types - so what comes out is exactly what the tool
-    # would receive on a live call. Pass-through tools keep their extra keys,
-    # which is right, because for call_jil_function those ARE the arguments.
-    def sanitize(rows)
+    # Two checks, and the second is the one that matters. validate_payload gets
+    # the SHAPE right - drops undeclared keys, applies defaults, coerces types -
+    # but it has no idea whether the arguments point at anything real. Shape
+    # alone happily saved `complete_chore(chore: "Drink Water")` against a
+    # household with no chore by that name, so "water cup" was a routine that
+    # could only ever fail, and it failed silently on every run.
+    #
+    # So each step is also RESOLVED through the tool's own confirm, which is the
+    # thing that turns a fuzzy name into a record or raises. A name that matches
+    # nothing gets caught here, while the person is still in the conversation
+    # and can say which one they meant.
+    def sanitize(rows, ctx)
       list = Array(rows)
       raise "a routine needs at least one step" if list.empty?
 
-      list.each_with_index.map { |raw, i| sanitize_step(raw, i + 1) }
+      list.each_with_index.map { |raw, i| sanitize_step(raw, i + 1, ctx) }
     end
 
     # Keys that name the TOOL rather than being an argument to it.
     TOOL_KEYS = %w[tool_name tool].freeze
 
-    def sanitize_step(raw, position)
+    def sanitize_step(raw, position, ctx)
       row      = raw.respond_to?(:to_h) ? raw.to_h.transform_keys(&:to_s) : {}
       tool_key = TOOL_KEYS.find { |k| row[k].present? }
       name     = (tool_key ? row[tool_key] : row["name"]).to_s
@@ -81,7 +88,21 @@ module Buddy
       payload, errors = Buddy::Tools.validate_payload(tool, given)
       raise "step #{position} (#{name}): #{errors.join("; ")}" if errors.any?
 
+      resolves!(tool, payload, name, position, ctx)
       BuddyRoutine.step(name, payload)
+    end
+
+    # Does this step point at something that exists? A tool's confirm is its
+    # resolver: it turns "8oz Water" into a chore or raises saying it couldn't.
+    # Its resolved ids are deliberately THROWN AWAY here - the step stores the
+    # name, and every run re-resolves it - so this is purely the question of
+    # whether the routine can run at all.
+    def resolves!(tool, payload, name, position, ctx)
+      return if ctx.nil?
+
+      tool[:confirm].call(payload, ctx)
+    rescue StandardError => e
+      raise "step #{position} (#{name}): #{e.message}"
     end
 
     # Both spellings of a step, because the model writes both and there was

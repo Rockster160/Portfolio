@@ -32,8 +32,13 @@ Buddy::Tools.register(
     steps under the same name. Running the steps live instead performs actions
     they never asked for and leaves the routine every bit as wrong as it was.
 
-    Steps are checked before anything is stored, so a bad tool name or a missing
-    argument comes straight back to you and nothing half-broken gets saved.
+    Every step is CHECKED before anything is stored - the tool has to exist, the
+    arguments have to be complete, and each one has to actually resolve against
+    their data. A chore name that matches nothing comes straight back to you
+    here, while they're still in the conversation to tell you which one they
+    meant. Use their real names: look chores, lists and tasks up in get_context
+    rather than writing down what they said verbatim, because a routine saved
+    against a name that doesn't exist can only ever fail.
 
     `name` is what they'll say to run it - keep it close to their own words.
   TXT
@@ -67,7 +72,7 @@ Buddy::Tools.register(
       end
     )
 
-    steps = Buddy::Routines.sanitize(rows)
+    steps = Buddy::Routines.sanitize(rows, ctx)
     { summary: "Save **#{title}**?", resolved: { routine_name: title, steps: steps } }
   },
   label:       ->(payload, _ctx) {

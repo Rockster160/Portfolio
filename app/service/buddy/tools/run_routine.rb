@@ -13,6 +13,12 @@ Buddy::Tools.register(
     Running the routine is better than doing the steps yourself: it's the exact
     sequence they saved, in order, with any waits intact.
 
+    A short phrase on its own that doesn't obviously mean anything - "water
+    cup", "wind down", "the printer thing" - is very often a routine NAME. They
+    named it, so to them it's a word that means something. Check the routines
+    list before answering "I don't follow"; asking what they meant about a name
+    they chose reads as though you've forgotten it.
+
     If nothing on the list matches, the ABSENCE IS NOT THE ANSWER. "You don't
     have a routine for that" tells them nothing they wanted to know - they asked
     for a thing to happen, and whether you'd saved a shortcut for it is your

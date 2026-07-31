@@ -756,6 +756,7 @@ module Buddy
         | \A\s*(?:set|setting)\s+(?:it|that|the\s+\w+)\s+to\b
         | \b(?:saved\s+(?:it|that|as)|(?:it|that)(?:'|’)?s\s+saved|now\s+runs)\b
         | \b(?:running|firing)\s+(?:\*\*|`)[^*`\n]{1,60}(?:\*\*|`)
+        | \b(?:counted|counting)\s+(?:it|that|those|them|\*\*|\d)
       /xi
 
       # Promises to act NOW that were never backed by a call. Different failure

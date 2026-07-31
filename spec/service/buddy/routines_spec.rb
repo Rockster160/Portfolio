@@ -32,6 +32,13 @@ RSpec.describe "Buddy routines" do
     client
   end
 
+  # One round, prose only, no calls — the shape a reply takes when the model
+  # writes about doing something instead of doing it.
+  def says!(body, text)
+    inbound = convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: body)
+    Buddy::GPT::Turn.run!(inbound, client: FakeBuddyClient.new([{ text: text }, { text: text }]))
+  end
+
   def run_call(name)
     { name: :run_routine, call_id: "r1", arguments: { "name" => name } }
   end
@@ -190,6 +197,7 @@ RSpec.describe "Buddy routines" do
     # what fixes it; running the steps live does actions nobody asked for and
     # leaves the routine wrong.
     it "fixes a routine by re-saving it, leaving nothing behind from the old one" do
+      create(:chore, created_by_user: user, chore_household: household, name: "8oz Water")
       routine!("Water Cup", [
         BuddyRoutine.step(:complete_chore, { chore: "8oz Water", count: 3 }),
         BuddyRoutine.step(:log_event, { name: "Water", count: 3 }),
@@ -222,6 +230,45 @@ RSpec.describe "Buddy routines" do
       expect(user.buddy_routines.count).to eq(0)
       output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
       expect(output["error"]).to match(/missing required arg/i)
+    end
+
+    # Prod: "water cup" saved as complete_chore(chore: "Drink Water") against a
+    # household with no such chore. The arguments were the right SHAPE, so it
+    # stored happily — and then failed silently on every run. Shape is not the
+    # question; whether it points at anything is.
+    it "refuses a step aimed at something that doesn't exist" do
+      client = turn!("save that as water cup", [
+        save_call("Water Cup", [{ tool_name: "complete_chore", payload: { chore: "Drink Water", count: 3 } }]),
+      ])
+
+      expect(user.buddy_routines.count).to eq(0)
+      output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
+      expect(output["error"]).to match(/no chore matching/i)
+    end
+
+    it "saves the same step once the chore is real" do
+      create(:chore, created_by_user: user, chore_household: household, name: "8oz Water")
+
+      turn!("save that as water cup", [
+        save_call("Water Cup", [{ tool_name: "complete_chore", payload: { chore: "8oz Water", count: 3 } }]),
+      ])
+
+      steps = user.buddy_routines.find_by(name: "Water Cup").steps
+      expect(steps.first["payload"]).to include("chore" => "8oz Water", "count" => 3)
+    end
+
+    # Resolution is a check, not a rewrite: the step keeps the NAME so every run
+    # re-resolves it, rather than freezing today's id.
+    it "keeps the name rather than the id confirm resolved it to" do
+      create(:chore, created_by_user: user, chore_household: household, name: "8oz Water")
+
+      turn!("save that", [
+        save_call("Water Cup", [{ tool_name: "complete_chore", payload: { chore: "8oz water" } }]),
+      ])
+
+      payload = user.buddy_routines.find_by(name: "Water Cup").steps.first["payload"]
+      expect(payload).to include("chore" => "8oz water")
+      expect(payload.keys).not_to include("chore_id")
     end
 
     it "refuses a step whose tool doesn't exist instead of saving something broken" do
@@ -389,6 +436,22 @@ RSpec.describe "Buddy routines" do
       turn!("prep my printer", [run_call("Prep")], text: "I can save that as a routine if you want.")
 
       expect(reply.body).to eq("I can save that as a routine if you want.")
+    end
+
+    # Prod 1374 and 1379: "I counted drank water cup as 8oz Water" and "I'm
+    # counting it as 3", both with no tool call behind them. They had to point
+    # it out — "I don't see any tool uses".
+    it "retracts a count nothing recorded" do
+      says!("drank water cup", "Yesss, I counted **drank water cup** as **8oz Water**.")
+
+      expect(reply.body).to eq(Buddy::GPT::Turn::FALLBACK_BODY)
+      expect(reply.metadata["retracted_claim"]).to be(true)
+    end
+
+    it "leaves an offer to count alone" do
+      says!("drank water cup", "Want me to count that as 3?")
+
+      expect(reply.body).to eq("Want me to count that as 3?")
     end
   end
 

@@ -88,7 +88,10 @@ RSpec.describe "SubChore behavior" do
 
     it "day-reset cooldown (parent threshold=-1) applies per leaf" do
       parent.update!(threshold_seconds: Chore::THRESHOLD_DAY_RESET)
-      base = Time.current
+      # Both taps have to land on the same CHORE day, which rolls at 4am — so
+      # "now" plus three hours is only the same day if you don't run the suite
+      # between about 1am and 4am. Pin it to the middle of a day instead.
+      base = Time.current.change(hour: 12)
       sub_a = create(:chore, created_by_user: user, parent_chore: parent, one_off: true, reward_pebbles: 3)
       sub_b = create(:chore, created_by_user: user, parent_chore: parent, one_off: true, reward_pebbles: 3)
       travel_to(base) { described_class.new(sub_a, user).call }

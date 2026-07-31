@@ -167,6 +167,14 @@ RSpec.describe Buddy::Personality do
       expect(prompt).to include("A correction to a ROUTINE edits the routine, not the world")
       expect(prompt).to include("describing what it SHOULD do")
     end
+
+    # Prod 1371: a bare "water cup" — the exact name of a routine they'd saved
+    # ninety seconds earlier — got "Hmm, I don't quite follow".
+    it "says to check the routines list before shrugging at a short phrase" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("before you ever tell them you don't follow a short phrase")
+    end
   end
 
   # Prod 1319: a deploy watch tripped for the second time that night and got
