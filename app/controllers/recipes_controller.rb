@@ -1,5 +1,6 @@
 class RecipesController < ApplicationController
   before_action :authorize_user_or_guest, :set_recipe
+  before_action :authorize_user, only: [:print]
   before_action :authorize_owner, only: [:edit, :update, :destroy]
 
   def index
