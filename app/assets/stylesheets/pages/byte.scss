@@ -2870,6 +2870,19 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
 // .byte-msg is `user-select: none` + `-webkit-touch-callout: none` so the
 // context menu owns the long-press; both have to be handed back inside a form
 // or fields can't be selected or edited on touch.
+// A message carrying a form gets the full column. A form is a data-entry
+// surface rather than a sentence: several labelled fields, option text that
+// shouldn't wrap mid-word, and a native date picker with an intrinsic minimum
+// width. At the ordinary bubble width the fields get squeezed and the picker
+// pushes out past the edge. Same specificity as the per-kind widths above, so
+// it wins on source order.
+.byte-msg.byte-msg-has-form {
+  max-width: 100%;
+  @media (min-width: 720px) {
+    max-width: 720px;
+  }
+}
+
 .ctr-byte .byte-app .byte-msg-form {
   display: flex;
   flex-direction: column;
@@ -2903,8 +2916,14 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
   input.byte-msg-form-input,
   select.byte-msg-form-input {
     width: 100%;
+    max-width: 100%;
+    // A native date / datetime input carries an intrinsic minimum width that
+    // shoves it straight past the bubble. iOS only honors the -webkit- form;
+    // the agenda modal clamps its pickers the same way.
     min-width: 0;
-    padding: 7px 9px;
+    -webkit-min-logical-width: 0;
+    box-sizing: border-box;
+    padding: 10px 12px;
     font: inherit;
     // 16px minimum, same as the composer and the drawer selects: iOS Safari
     // zooms the whole layout viewport when a focused field is smaller.
@@ -2914,8 +2933,18 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
     // the top - the option renders half-height with the caps cut off. `normal`
     // lets the OS pick a metric that agrees with the padding box.
     line-height: normal;
+    // The global `select` rule (forms.scss) pins `height: 28px`, which leaves
+    // ~12px of content box for 16px text — THAT was the clipping, and it
+    // survived the line-height fix because nothing here set a height at all.
+    // min-height locks the box so iOS can't shrink it under the text bounds.
+    height: auto;
+    min-height: 44px;
     color: inherit;
-    background: rgba(255, 255, 255, 0.07);
+    // Colour only: the same global rule paints a white background with a blue
+    // caret image on it, and a `background` shorthand here would have to
+    // restate the caret to clear it.
+    background-color: rgba(255, 255, 255, 0.07);
+    background-image: none;
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 8px;
     box-shadow: none;
@@ -2923,7 +2952,7 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
     &:focus {
       outline: none;
       border-color: rgba(255, 255, 255, 0.32);
-      background: rgba(255, 255, 255, 0.1);
+      background-color: rgba(255, 255, 255, 0.1);
     }
 
     &:disabled {
@@ -2932,14 +2961,33 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
     }
   }
 
+  // Dropping the global background-image also drops the only caret a select
+  // had, since `appearance: none` up the cascade took the OS one away. Drawn
+  // with gradients, the same way the drawer's selects do it.
+  select.byte-msg-form-input {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 34px;
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--bs-muted) 50%),
+      linear-gradient(135deg, var(--bs-muted) 50%, transparent 50%);
+    background-position:
+      calc(100% - 18px) center,
+      calc(100% - 13px) center;
+    background-size:
+      5px 5px,
+      5px 5px;
+    background-repeat: no-repeat;
+  }
+
   textarea.byte-msg-form-input {
     resize: vertical;
-    min-height: 38px;
+    min-height: 60px;
   }
 
   input.byte-msg-form-input[type="color"] {
     padding: 2px;
-    height: 34px;
+    min-height: 40px;
   }
 
   .byte-msg-form-choices {

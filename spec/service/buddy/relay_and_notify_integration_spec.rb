@@ -153,7 +153,10 @@ RSpec.describe "relay bridge and agenda notify over the GPT turn" do
 
     it "seeds the recipient's own Buddy, which composes the heads-up in its voice" do
       seed = Buddy::AgendaBriefing.seed(source: item, actor: rocco, recipient: chelsea, action: :created)
-      expect(seed).to include("Dentist").and include("Ours")
+      # The calendar is scoped by WHOSE it is rather than by name — a calendar
+      # is usually named after its owner, so naming it reads as "Rocco's Rocco
+      # calendar" (see AgendaBriefing#event_phrase).
+      expect(seed).to include("Dentist").and include("on their own calendar")
 
       outbound = Buddy::CompanionDelivery.deliver_prompt(
         user: chelsea, conversation: chelsea_convo, seed: seed,

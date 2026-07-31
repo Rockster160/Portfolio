@@ -18,6 +18,11 @@ RSpec.describe GoogleCalendarSyncWorker do
   let(:api) { instance_double(Oauth::GoogleApi) }
 
   before do
+    # #perform returns immediately outside production, and every behavior below
+    # is about what it does when it actually runs. Slack goes out on the same
+    # guard, so hold that too.
+    allow(Rails.env).to receive(:production?).and_return(true)
+    allow(::SlackNotifier).to receive(:notify)
     allow(Oauth::GoogleApi).to receive(:for_account).with(google_account).and_return(api)
     allow(api).to receive(:get_calendar).and_return(nil)
     # ensure_watch! kicks off after the first successful sync; stub the

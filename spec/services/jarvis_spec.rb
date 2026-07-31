@@ -7,12 +7,23 @@ RSpec.describe Jarvis do
   end
 
   before do
+    # These are built once in before(:context) and shared by every example, so
+    # their association caches outlive the per-example transaction that rolled
+    # the rows back. `pluck` reads a loaded relation straight from that cache,
+    # which handed later examples either rows that no longer exist or an empty
+    # set that does. Reload drops the caches so each example queries for real.
+    [@admin, @default_list, @other_list].compact.each(&:reload)
     Time.zone = User.timezone
     Timecop.freeze(Time.zone.local(2022, 6, 24, 5, 45))
   end
 
   after do
     Timecop.return
+    # `Time.zone=` is a thread-local that outlives the example. Leaving it set
+    # meant every file that ran after this one in the same process built its
+    # times in Denver instead of the app default, which quietly moved dates
+    # across midnight in specs that had nothing to do with Jarvis.
+    Time.zone = Rails.application.config.time_zone
   end
 
   before(:context) do
@@ -102,7 +113,10 @@ RSpec.describe Jarvis do
   context "with lists" do
     it "can add items to a list with elaborate text" do
       expect(jarvis("add miter saw to my home depot list")).to eq("Home Depot:\n - miter saw")
-      expect(@other_list.list_items.pluck(:name)).to include("miter saw")
+      # `@other_list` is built in before(:context) and outlives every example,
+      # so its association cache can still hold rows another example loaded and
+      # then rolled back. `pluck` reads that cache when the relation is loaded.
+      expect(@other_list.reload.list_items.pluck(:name)).to include("miter saw")
     end
 
     specify { expect(jarvis("add miter saw to home depot")).to eq("Home Depot:\n - miter saw") }

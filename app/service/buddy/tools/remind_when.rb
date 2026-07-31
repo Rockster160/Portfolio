@@ -24,7 +24,10 @@ Buddy::Tools.register(
       "agenda" - when something is added to one of their calendars. `target` =
                  the calendar name ("Ours", "our agenda", "Work").
                  e.g. "whenever something's added to our agenda, let me know".
-      "deploy" - when the next Portfolio deploy finishes. No `target`.
+      "deploy" - when a Portfolio deploy finishes, whether it succeeded or
+                 failed. No `target`. Pair with `repeat: true` for a standing
+                 "ping me on every deploy"; you'll be told which outcome it
+                 was when it fires.
 
     `text` is what to remind them of, phrased as the nudge itself. It fires
     ONCE by default (the next time the condition happens). Set `repeat`
@@ -84,7 +87,9 @@ Buddy::Tools.register(
       owner  = agenda.user
       ["agenda_item", { "action" => "created", "agenda_id" => agenda.id }, "when something's added to #{agenda.name}", true, agenda.name]
     when "deploy"
-      ["deploy", {}, "when the next deploy finishes", true, nil]
+      # Phrased without "next" so the repeating form reads "every time a deploy
+      # finishes" rather than "every time the NEXT deploy finishes".
+      ["deploy", {}, "when a deploy finishes", true, nil]
     else
       raise "unknown trigger #{trigger.inspect}"
     end

@@ -14,9 +14,13 @@ RSpec.describe Buddy::WatchMatcher do
     # thread, which deadlocks against transactional fixtures. WatchMatcher's
     # own contract is "which watch fires + how state advances"; delivery is
     # CompanionDelivery's concern (covered via the reminder path).
-    allow(Buddy::CompanionDelivery).to receive(:deliver_prompt)
+    captured = seeds
+    allow(Buddy::CompanionDelivery).to receive(:deliver_prompt) { |**kwargs| captured << kwargs[:seed] }
     allow(Buddy::CompanionDelivery).to receive(:deliver_plain)
   end
+
+  # What each fired watch actually handed Buddy to compose from.
+  let(:seeds) { [] }
 
   def make_watch(attrs = {})
     BuddyWatch.create!({
@@ -65,11 +69,84 @@ RSpec.describe Buddy::WatchMatcher do
       expect(watch.reload.fired_at).to be_present
     end
 
-    it "does not fire on a deploy that started or failed" do
+    # A failed deploy is the one you most want to hear about. Dropping it meant
+    # a standing deploy watch went quiet on exactly those, which reads as
+    # "still deploying" rather than "it broke".
+    it "fires on a deploy that failed" do
+      described_class.dispatch(user, :monitor, { channel: "deploy:failed", sha: "def456" })
+
+      expect(watch.reload.fired_at).to be_present
+    end
+
+    it "does not fire on a deploy that has only started" do
       described_class.dispatch(user, :monitor, { channel: "deploy:start" })
-      described_class.dispatch(user, :monitor, { channel: "deploy:failed" })
+      described_class.dispatch(user, :monitor, { channel: "deploy", status: "running" })
 
       expect(watch.reload.fired_at).to be_nil
+    end
+
+    # The shapes .github/workflows/deploy.yml actually posts. These are what
+    # reach WatchMatcher in production, and none of them carry `channel` or
+    # `status` — the keys the earlier version was reading. A failure therefore
+    # matched nothing at all, which is the whole reason this went unnoticed.
+    describe "the payloads the deploy workflow really sends" do
+      it "fires on the failure hook (monitor scope, id + deploy keys)" do
+        described_class.dispatch(user, :monitor, { id: "deploy", deploy: "failed", sha: "abc123" })
+
+        expect(watch.reload.fired_at).to be_present
+        expect(seeds.last).to include("FAILED")
+      end
+
+      it "fires on the success hook, which arrives on the deploy scope directly" do
+        described_class.dispatch(
+          user, :deploy,
+          { id: "deploy", deploy: "finished", sha: "abc123", message: "Fix the thing" },
+        )
+
+        expect(watch.reload.fired_at).to be_present
+        expect(seeds.last).to include("finished successfully").and include("Fix the thing")
+      end
+
+      it "stays quiet on the start hook" do
+        described_class.dispatch(user, :monitor, { id: "deploy", deploy: "start", sha: "abc123" })
+
+        expect(watch.reload.fired_at).to be_nil
+      end
+
+      it "leaves other monitors alone even when they carry a deploy-ish word" do
+        described_class.dispatch(user, :monitor, { id: "surveys", deploy: "failed" })
+
+        expect(watch.reload.fired_at).to be_nil
+      end
+    end
+
+    it "tells Buddy WHICH outcome it was, so the message can differ" do
+      described_class.dispatch(user, :monitor, { channel: "deploy", status: "failed", sha: "abc1234def" })
+
+      seed = seeds.last
+      expect(seed).to include("FAILED")
+      expect(seed).to include("abc1234") # short sha, for finding it later
+      expect(seed).to include(watch.body)
+    end
+
+    it "says so plainly when it succeeded" do
+      described_class.dispatch(user, :monitor, { channel: "deploy:success", sha: "abc123" })
+
+      expect(seeds.last).to include("finished successfully")
+    end
+
+    # "Ping me on EVERY deploy" — the standing form.
+    it "keeps a repeating deploy watch alive across deploys, either outcome" do
+      repeating = make_watch(trigger_scope: "deploy", match: {}, body: "deploy's done", one_shot: false)
+
+      described_class.dispatch(user, :monitor, { channel: "deploy:success" })
+      described_class.dispatch(user, :monitor, { channel: "deploy:failed" })
+
+      repeating.reload
+      expect(repeating.fired_at).to be_nil # never goes terminal
+      expect(repeating.last_fired_at).to be_present
+      expect(seeds).to include(a_string_including("finished successfully"))
+      expect(seeds).to include(a_string_including("FAILED"))
     end
 
     it "leaves unrelated monitor channels alone" do

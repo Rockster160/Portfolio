@@ -67,6 +67,10 @@ RSpec.describe "AgendaItem.query — is:<state> markers" do
 
   it "is:recurring narrows to items linked to a schedule" do
     sched = create(:agenda_schedule, agenda: agenda, recurrence: { "freq" => "daily" }, starts_on: Date.current)
+    # Saving the schedule already materialized its upcoming occurrences; clear
+    # them so this is about the filter rather than about how many rows the
+    # materialization window happened to produce at this hour.
+    AgendaItem.where(agenda_schedule_id: sched.id).delete_all
     recurring_item = sched.agenda_items.create!(agenda: agenda, kind: "task",
       name: "From schedule", start_at: 1.day.ago)
     expect(AgendaItem.query("is:recurring")).to contain_exactly(recurring_item)

@@ -8,6 +8,17 @@ RSpec.describe Jil::Methods::Agenda, "#search" do
   let(:jil) { double("jil_executor", user: user, ctx: {}) }
   let(:methods) { described_class.new(jil) }
 
+  # Saving a schedule eagerly materializes every occurrence inside
+  # AgendaSchedule::MATERIALIZE_WINDOW (an after_save hook). These examples are
+  # about what SEARCH does with an occurrence that is still a phantom, so drop
+  # the rows the save left behind and start from the state they describe.
+  # Straight SQL rather than the association: `delete_all` on a has_many would
+  # NULL out agenda_schedule_id and leave the rows in the table, still matching.
+  def phantom_only(schedule)
+    AgendaItem.where(agenda_schedule_id: schedule.id).delete_all
+    schedule
+  end
+
   it "scopes results to the calling user's agendas" do
     mine = create(
       :agenda_item, agenda: agenda, kind: :task, name: "Mine",
@@ -27,11 +38,11 @@ RSpec.describe Jil::Methods::Agenda, "#search" do
     # User timezone is America/Denver. Frozen time well past the schedule's
     # 14:00 local start time so occurrence_start_at < Time.current.
     Timecop.freeze(Time.utc(2026, 5, 14, 22, 0)) {
-      schedule = create(
+      schedule = phantom_only(create(
         :agenda_schedule, agenda: agenda, kind: :task,
         name: "Garbage Cans In", start_time: "14:00",
         recurrence: { "freq" => "daily" }, starts_on: Date.current - 1
-      )
+      ))
 
       expect(schedule.agenda_items.count).to eq(0)
 
@@ -44,11 +55,11 @@ RSpec.describe Jil::Methods::Agenda, "#search" do
   it "does NOT materialize phantoms that haven't reached their start_at yet" do
     # 13:00 UTC = ~07:00 MDT — before the 14:00 MDT schedule time.
     Timecop.freeze(Time.utc(2026, 5, 14, 13, 0)) {
-      schedule = create(
+      schedule = phantom_only(create(
         :agenda_schedule, agenda: agenda, kind: :task,
         name: "Future Task", start_time: "14:00",
         recurrence: { "freq" => "daily" }, starts_on: Date.current
-      )
+      ))
 
       methods.search("kind:task is:incomplete", 50, "ASC")
       expect(schedule.agenda_items.count).to eq(0)
@@ -77,11 +88,11 @@ RSpec.describe Jil::Methods::Agenda, "#search" do
 
   it "includes future recurring phantoms when the query is upcoming-leaning" do
     Timecop.freeze(Time.utc(2026, 5, 14, 13, 0)) {
-      schedule = create(
+      schedule = phantom_only(create(
         :agenda_schedule, agenda: agenda, kind: :event,
         name: "Daily Standup", start_time: "14:00", duration_minutes: 30,
         recurrence: { "freq" => "daily" }, starts_on: Date.current
-      )
+      ))
 
       results = methods.search("kind:event is:upcoming", 50, "ASC")
       hits = results.select { |h| h[:name] == "Daily Standup" }
@@ -195,11 +206,11 @@ RSpec.describe Jil::Methods::Agenda, "#search" do
 
   it "does NOT include phantoms when the query has no future-leaning is: token" do
     Timecop.freeze(Time.utc(2026, 5, 14, 13, 0)) {
-      create(
+      phantom_only(create(
         :agenda_schedule, agenda: agenda, kind: :task,
         name: "Phantomable", start_time: "14:00",
         recurrence: { "freq" => "daily" }, starts_on: Date.current
-      )
+      ))
 
       # `kind:task` alone (no is:upcoming / is:today / is:recurring / is:phantom)
       # keeps the SQL-only behavior — phantoms remain hidden.

@@ -10,6 +10,20 @@ RSpec.describe Jil::Methods::Chore, type: :service do
   let(:jil_stub) { instance_double("Jil::Executor", user: user, ctx: nil) }
   subject(:methods) { described_class.new(jil_stub) }
 
+  # `cast` is how every Jil method coerces its arguments, so anything on this
+  # module that takes structured data reaches for it. File-wide rather than
+  # per-describe: #complete grew a `details` hash and started needing it too.
+  before do
+    allow(jil_stub).to receive(:cast) { |val, type|
+      case type
+      when :Hash    then val.is_a?(Hash) ? val : {}
+      when :Boolean then ::ActiveModel::Type::Boolean.new.cast(val)
+      when :Numeric then val.to_i
+      else val
+      end
+    }
+  end
+
   it "find('Vit') returns the matching chore" do
     expect(methods.find("Vit")).to eq(vitamins)
   end
@@ -21,11 +35,18 @@ RSpec.describe Jil::Methods::Chore, type: :service do
     expect(completion.user_id).to eq(user.id)
   end
 
+  # The second argument is ChoreCompletionData now (timestamp + note), not a
+  # bare timestamp string.
   it "complete with a timestamp records the supplied time" do
     when_at = Time.zone.local(2026, 4, 1, 7, 30, 0)
-    methods.complete("Floss", when_at.iso8601)
+    methods.complete("Floss", { timestamp: when_at.iso8601 })
     completion = ChoreCompletion.order(:id).last
     expect(completion.completed_at.to_i).to eq(when_at.to_i)
+  end
+
+  it "complete carries a note onto the completion" do
+    methods.complete("Floss", { note: "used the good floss" })
+    expect(ChoreCompletion.order(:id).last.note).to eq("used the good floss")
   end
 
   it "uncomplete destroys today's most recent completion" do

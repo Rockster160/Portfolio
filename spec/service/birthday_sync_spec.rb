@@ -90,4 +90,55 @@ RSpec.describe BirthdaySync do
       expect(birthdays_agenda).to be_nil
     end
   end
+
+  describe "hiding duplicate birthday events on other calendars" do
+    let(:gmail) { create(:agenda, user: user, name: "Gmail") }
+
+    def yearly_event(name, month, day)
+      create(
+        :agenda_schedule,
+        agenda: gmail, name: name, kind: :event, all_day: true,
+        start_time: "00:00", duration_minutes: 1440,
+        recurrence: { "freq" => "yearly" }, starts_on: Date.new(2022, month, day)
+      )
+    end
+
+    def hidden_ids
+      AgendaPreference.for(user).hidden_schedule_ids
+    end
+
+    it "hides a matching birthday event when the contact's birthday is added" do
+      dup = yearly_event("Blake's Birthday", 7, 6)
+      user.contacts.create!(name: "Blake", last_name: "Condit", birth_month: 7, birth_day: 6)
+
+      expect(hidden_ids).to include(dup.id)
+    end
+
+    it "leaves a non-birthday event on the same day visible" do
+      meeting = yearly_event("Blake Planning Sync", 7, 6)
+      user.contacts.create!(name: "Blake", last_name: "Condit", birth_month: 7, birth_day: 6)
+
+      expect(hidden_ids).not_to include(meeting.id)
+    end
+
+    it "leaves a different person's birthday on the same day visible" do
+      other = yearly_event("Sarah's Birthday", 7, 6)
+      user.contacts.create!(name: "Blake", last_name: "Condit", birth_month: 7, birth_day: 6)
+
+      expect(hidden_ids).not_to include(other.id)
+    end
+
+    it "un-hides the duplicate when the birthday is cleared, preserving manual hides" do
+      dup = yearly_event("Blake's Birthday", 7, 6)
+      manual = yearly_event("Some Anniversary", 3, 1)
+      AgendaPreference.for(user).update!(hidden_schedule_ids: [manual.id])
+
+      contact = user.contacts.create!(name: "Blake", last_name: "Condit", birth_month: 7, birth_day: 6)
+      expect(hidden_ids).to include(dup.id, manual.id)
+
+      contact.update!(birth_month: nil, birth_day: nil)
+      expect(hidden_ids).to include(manual.id)
+      expect(hidden_ids).not_to include(dup.id)
+    end
+  end
 end

@@ -227,13 +227,16 @@ RSpec.describe AgendasController, type: :controller do
     it "renders an empty cells shell — items live-fill from AgendaStore" do
       # Server emits cells with data-date but no item markup; month_view.js
       # populates `.cal-month-cell-items` from the store on every change.
-      create(:agenda_schedule, agenda: agenda, name: "Standup",
+      # The name has to be one the page can't say on its own: the quick-add
+      # examples baked into this view include "Standup in 30 minutes", so a
+      # common word here proves nothing.
+      create(:agenda_schedule, agenda: agenda, name: "Kumquat Review",
         recurrence: { "freq" => "daily" }, starts_on: Date.current)
       get :cal_month
       expect(response.body).to include('class="cal-month-cell-items"')
       expect(response.body).to include('data-items-container')
       # No server-side item buttons in the response — the store fills them.
-      expect(response.body).not_to include("Standup")
+      expect(response.body).not_to include("Kumquat Review")
     end
 
     it "emits an empty all-day seed container — seed_hydrator fills it from the store" do

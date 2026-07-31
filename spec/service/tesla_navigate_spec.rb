@@ -8,7 +8,16 @@ RSpec.describe "TeslaControl.resolve_destination" do
   subject(:resolve) { TeslaControl.resolve_destination(input) }
 
   let(:address_book) { instance_double("AddressBook") }
-  before { allow(User.me).to receive(:address_book).and_return(address_book) }
+  before do
+    allow(User.me).to receive(:address_book).and_return(address_book)
+    # After a contact miss, resolve_destination asks Places to place the phrase
+    # near us ("the plunge in Alpine" → the trailhead, not the town). nil is the
+    # off-prod / can't-place answer, which is what makes it fall through to the
+    # raw text. Stubbed here because the call is wrapped in `rescue nil`, and a
+    # verifying double raises an Exception that a StandardError rescue misses —
+    # so an unstubbed call fails the example instead of the lookup.
+    allow(address_book).to receive(:nearest_from_name).and_return(nil)
+  end
 
   context "when AddressBook returns a contact match" do
     let(:input) { "Sarah" }

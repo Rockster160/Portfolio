@@ -44,15 +44,47 @@ module Buddy
     #
     # Both shapes are accepted: the channel may carry the status itself
     # (`deploy:success`) or ride in the payload (`deploy` + status).
+    #
+    # A FAILED deploy counts as finished. It used to be dropped, which made a
+    # standing "ping me on every deploy" watch silent on exactly the deploys
+    # worth hearing about — the person is told nothing and reads that as "still
+    # going". Only a deploy that hasn't landed yet (`deploy:start`) is ignored.
     def deploy_alias(scope, raw_data)
       return scope unless scope == "monitor"
 
-      data    = raw_data.is_a?(Hash) ? raw_data.with_indifferent_access : {}
-      channel = data[:channel].to_s.strip.downcase
-      return scope unless channel.start_with?("deploy")
+      data = raw_data.is_a?(Hash) ? raw_data.with_indifferent_access : {}
+      return scope unless deploy_monitor?(data)
 
-      succeeded = channel == "deploy:success" || data[:status].to_s.downcase == "success"
-      succeeded ? "deploy" : scope
+      deploy_outcome(data) ? "deploy" : scope
+    end
+
+    # Is this monitor broadcast about a deploy at all? The workflow sets the
+    # monitor `id`; the cable re-broadcast names the channel instead.
+    def deploy_monitor?(data)
+      data[:id].to_s.strip.downcase == "deploy" ||
+        data[:channel].to_s.strip.downcase.start_with?("deploy")
+    end
+
+    DEPLOY_OUTCOMES = {
+      "success"   => :success,
+      "succeeded" => :success,
+      "finished"  => :success,
+      "failed"    => :failed,
+      "failure"   => :failed,
+      "error"     => :failed,
+    }.freeze
+
+    # :success / :failed once a deploy is over, nil while it's still running.
+    # Emitters disagree about where the outcome lives, so read all three:
+    #   .github/workflows/deploy.yml posts `deploy=finished|failed|start`
+    #   the cable re-broadcast names it in the channel (`deploy:success`)
+    #   others put it in `status`
+    def deploy_outcome(data)
+      [
+        data[:status],
+        data[:deploy],
+        data[:channel].to_s.split(":", 2).last,
+      ].filter_map { |raw| DEPLOY_OUTCOMES[raw.to_s.strip.downcase] }.first
     end
 
     # Trigger payloads reach us in two shapes. Jil-built triggers (travel,
@@ -76,7 +108,7 @@ module Buddy
       if watch.notify_user_id
         fire_cross_user!(watch, payload)
       else
-        fire_self!(watch)
+        fire_self!(watch, payload)
       end
 
       # One-shot watches go terminal (fired_at) so `active` drops them and
@@ -96,7 +128,7 @@ module Buddy
       )
     end
 
-    def fire_self!(watch)
+    def fire_self!(watch, payload={})
       conversation = watch.byte_conversation
       user         = watch.user
 
@@ -105,7 +137,7 @@ module Buddy
         Buddy::CompanionDelivery.deliver_prompt(
           user:         user,
           conversation: conversation,
-          seed:         watch.body,
+          seed:         self_seed(watch, payload),
           metadata:     { kind: "buddy_trigger", hidden: true, source: "watch", watch_id: watch.id },
         )
       else
@@ -117,6 +149,29 @@ module Buddy
           push_title:   watch.body,
         )
       end
+    end
+
+    # The stored body says what to tell them; for a deploy the OUTCOME is the
+    # news, and "it finished" is a very different message from "it failed".
+    # Without this the seed is the same either way and Buddy has to guess —
+    # which, on a watch that now fires for failures too, means guessing wrong
+    # half the time it matters.
+    def self_seed(watch, payload)
+      return watch.body unless watch.trigger_scope == "deploy"
+
+      data    = payload.is_a?(Hash) ? payload.with_indifferent_access : {}
+      outcome = deploy_outcome(data)
+      return watch.body if outcome.nil?
+
+      sha  = data[:sha].to_s.strip.first(7).presence
+      note = data[:message].to_s.strip.presence
+      [
+        outcome == :success ? "The deploy just finished successfully." : "The deploy just FAILED.",
+        ("Commit #{sha}." if sha),
+        ("What shipped: \"#{note}\"." if note),
+        "Tell them, in your own voice: #{watch.body}.",
+        ("Lead with the fact that it failed - that's the part they need." if outcome == :failed),
+      ].compact.join(" ")
     end
 
     # A cross-user watch ("whenever I add to our Agenda, let Rocco know")

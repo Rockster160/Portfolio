@@ -44,12 +44,31 @@ RSpec.describe "Buddy Today forward-looking" do
       end
     end
 
+    it "carries the comfort bands so the briefing frames the number rather than reciting it" do
+      travel_to(tz.parse("2026-07-28 08:00")) do
+        block = Buddy::TodayBriefing.weather_block(user)
+        expect(block).to include("currently 72°F, clear")
+        expect(block).to include("comfortable sweet spot")
+        expect(block).to match(/hot/)
+      end
+    end
+
     it "drops today's weather in the evening, keeps the week outlook" do
       travel_to(tz.parse("2026-07-28 21:00")) do
         block = Buddy::TodayBriefing.weather_block(user)
         expect(block).not_to include("Today:")
         expect(block).not_to include("Comfort read")
         expect(block).to include("This week to flag")
+      end
+    end
+
+    # Off-prod, or with no API key, there's simply no forecast. Inject nothing
+    # rather than a heading with nothing under it.
+    it "is empty when there's no weather to be had" do
+      allow(WeatherService).to receive_messages(summary: nil, week_outlook: nil)
+
+      travel_to(tz.parse("2026-07-28 08:00")) do
+        expect(Buddy::TodayBriefing.weather_block(user)).to eq("")
       end
     end
   end

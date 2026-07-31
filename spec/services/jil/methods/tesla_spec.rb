@@ -69,9 +69,10 @@ RSpec.describe Jil::Methods::Tesla do
     expect(@push_payloads.size).to eq(12)
   end
 
-  it "notifies on setTemp with the temperature in the body" do
+  # setTemp says the whole thing in the title; there's no body to split across.
+  it "notifies on setTemp with the temperature in the title" do
     tesla.setTemp(72)
-    expect_notify("Temperature set", "72°F")
+    expect_notify("Temperature set to: 72°F")
   end
 
   it "notifies on start with a summary of selected options in the body" do

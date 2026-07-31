@@ -273,6 +273,9 @@ RSpec.describe SendDueAgendaNotificationsWorker do
         sched = create(:agenda_schedule, agenda: agenda, kind: :task,
           name: "Brush teeth", start_time: "09:00",
           recurrence: { "freq" => "daily" }, starts_on: Date.current - 1)
+        # Saving already materialized whatever fell inside MATERIALIZE_WINDOW.
+        # Clear it so the worker meets the phantom this example is about.
+        AgendaItem.where(agenda_schedule_id: sched.id).delete_all
         expect(sched.agenda_items.count).to eq(0)
 
         described_class.new.perform

@@ -118,7 +118,11 @@ RSpec.describe AddressBook do
         stub_response(duration_in_traffic: 2700),
       )
 
-      t = Time.current
+      # Anchored to the start of a bucket (epoch / 10 minutes). With a wall-clock
+      # `t`, the +2 minute step could land in the NEXT bucket and re-fetch —
+      # which is precisely what the middle assertion says must not happen — so
+      # this passed or failed depending on the minute the suite ran.
+      t = Time.utc(2026, 5, 14, 12, 0, 0)
       travel_to(t) do
         expect(book.traveltime_seconds("dest", "origin")).to eq(1800)
       end

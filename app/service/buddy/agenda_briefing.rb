@@ -65,12 +65,18 @@ module Buddy
     # calendar"; anything jointly-owned is simply "a shared <kind>".
     def event_phrase(agenda, actor, recipient, kind_word)
       if agenda.user_id == recipient.id
-        "a #{kind_word} on your calendar"
+        "#{article(kind_word)} #{kind_word} on your calendar"
       elsif agenda.user_id == actor.id
-        "a #{kind_word} on their own calendar"
+        "#{article(kind_word)} #{kind_word} on their own calendar"
       else
         "a shared #{kind_word}"
       end
+    end
+
+    # "an event", not "a event". The seed is prose the recipient's Buddy reads
+    # and echoes, so it should read like a sentence someone wrote.
+    def article(word)
+      word.to_s.start_with?(/[aeiou]/i) ? "an" : "a"
     end
 
     def detail_lines(when_text:, location:, notes:, extra: [])

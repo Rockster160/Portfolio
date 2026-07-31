@@ -57,7 +57,12 @@ RSpec.describe "Excluded-date sweep" do
       expect(::ScheduledTrigger.exists?(already_fired.id)).to be true
     end
 
-    it "sweeps detached overrides that kept their original_start_at" do
+    # A detached row is an explicit modification someone made to that one
+    # occurrence, so excluding the PATTERN date doesn't speak for it — it's
+    # cancelled through its own paths (handle_cancellation / cancel_occurrence!)
+    # instead. Its derived triggers therefore survive too: the occurrence is
+    # still happening, just not on the schedule's terms.
+    it "leaves a detached override alone, triggers and all" do
       detached = create(:agenda_item,
         agenda: agenda,
         agenda_schedule: sched,
@@ -72,8 +77,8 @@ RSpec.describe "Excluded-date sweep" do
       sched.add_excluded_date!(excluded_date)
 
       detached.reload
-      expect(detached.status).to eq("cancelled")
-      expect(::ScheduledTrigger.exists?(trig.id)).to be false
+      expect(detached.status).to eq("confirmed")
+      expect(::ScheduledTrigger.exists?(trig.id)).to be true
     end
 
     it "leaves items on other dates untouched" do

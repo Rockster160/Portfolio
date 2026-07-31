@@ -297,6 +297,11 @@ RSpec.describe AgendaSchedule do
           recurrence:       { "freq" => "daily" },
           starts_on:        Date.current - 1,
         )
+        # Saving the schedule already materialized whatever fell inside the
+        # window. Clear it so the row under test is the only one on its date —
+        # `materialize_upcoming!` keys existing rows by date and keeps the FIRST
+        # per date, so a second row on the same day is a coin flip.
+        AgendaItem.where(agenda_schedule_id: sched.id).delete_all
         tomorrow = Date.current + 1
         existing = sched.agenda_items.create!(
           agenda:   agenda, kind: "event",
@@ -349,6 +354,8 @@ RSpec.describe AgendaSchedule do
           starts_on:        Date.current - 1,
           metadata:         { "travel_minutes" => 10, "travel_location" => "A" },
         )
+        # See above: one row per date, or which one gets updated is arbitrary.
+        AgendaItem.where(agenda_schedule_id: sched.id).delete_all
         tomorrow = Date.current + 1
         item = sched.agenda_items.create!(
           agenda:   agenda, kind: "event",

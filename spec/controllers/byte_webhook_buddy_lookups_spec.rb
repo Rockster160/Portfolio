@@ -44,26 +44,21 @@ RSpec.describe WebhooksController, type: :controller do
       expect(response).to have_http_status(:unauthorized)
     end
 
-    it "returns 503 when the API key is missing" do
-      allow(ENV).to receive(:[]).and_call_original
-      allow(ENV).to receive(:[]).with("WEATHER_APIKEY").and_return("")
+    # Fetching and formatting moved into WeatherService (see
+    # weather_service_spec for the one-liner itself); the endpoint is now just
+    # a pass-through with an availability guard.
+    it "returns 503 when there's no forecast to be had" do
+      allow(WeatherService).to receive(:summary).and_return(nil)
       get :byte_weather, params: { user_id: user.id }
       expect(response).to have_http_status(:service_unavailable)
     end
 
-    it "formats the OpenWeather payload into a compact one-liner" do
-      allow(ENV).to receive(:[]).and_call_original
-      allow(ENV).to receive(:[]).with("WEATHER_APIKEY").and_return("stub")
-
-      fake_body = JSON.generate(
-        current: { temp: 72.4, feels_like: 70.1, weather: [{ description: "partly cloudy" }] },
-        daily:   [{ temp: { max: 85.2, min: 55.8 }, pop: 0.2 }],
-      )
-      fake_res = instance_double(Net::HTTPOK, is_a?: true, body: fake_body)
-      allow(fake_res).to receive(:is_a?).with(Net::HTTPSuccess).and_return(true)
-      allow(Net::HTTP).to receive(:start).and_yield(double(get: fake_res))
+    it "renders the service's one-liner" do
+      allow(WeatherService).to receive(:summary)
+        .and_return("currently 72°F, partly cloudy. today high 85°F / low 56°F, chance of rain 20%.")
 
       get :byte_weather, params: { user_id: user.id }
+
       expect(response).to be_successful
       json = JSON.parse(response.body)
       expect(json["body"]).to include("72°F", "partly cloudy", "high 85°F", "low 56°F", "chance of rain 20%")

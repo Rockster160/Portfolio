@@ -648,8 +648,12 @@ class AgendaItemsController < ApplicationController
       occurrence_date = @item.occurrence_date
       mirror_occurrence_cancel_to_google!(@item)
       ActiveRecord::Base.transaction do
-        source_schedule&.add_excluded_date!(occurrence_date)
         @item.materialize!({}) if @item.phantom?
+        # Cut the row loose from the series BEFORE excluding the date. Writing
+        # `recurrence` re-runs materialize_upcoming!, which destroys any row
+        # still attached to the schedule whose date no longer matches the rule —
+        # and that's exactly the row we're moving. Excluding first deleted the
+        # occurrence instead of relocating it.
         @item.update!(
           agenda_id:           target.id,
           agenda_schedule_id:  nil,
@@ -660,6 +664,7 @@ class AgendaItemsController < ApplicationController
           external_updated_at: nil,
           locally_modified_at: nil,
         )
+        source_schedule&.add_excluded_date!(occurrence_date)
       end
     else
       mirror_destroy_to_google!(@item) if @item.external_uid.present?

@@ -12,6 +12,12 @@ RSpec.describe SystemController, type: :controller do
   end
 
   describe "GET #gpt_spending" do
+    # Every bucket here is derived from the wall clock in America/Denver, and
+    # the labels are what the assertions read. Pinned to a mid-afternoon instant
+    # where UTC and Denver agree on the date, so nothing shifts by a day
+    # depending on when the suite runs.
+    around { |example| travel_to(Time.utc(2026, 5, 14, 21, 30)) { example.run } }
+
     before { sign_in me }
 
     it "buckets spend by local day and by model, defaulting to a 30-day window" do
@@ -51,7 +57,7 @@ RSpec.describe SystemController, type: :controller do
       expect(chart_payload["labels"].length).to eq(30)
     end
 
-    it "buckets today by the hour for the 1-day window" do
+    it "buckets the last 24 hours by the hour for the 1-day window" do
       tz = ActiveSupport::TimeZone["America/Denver"]
       convo = ByteConversation.create!(user: me, mode: :buddy, name: "Buddy")
 
@@ -63,9 +69,12 @@ RSpec.describe SystemController, type: :controller do
 
       payload = chart_payload
       expect(payload["labels"].length).to eq(24)
-      expect(payload["labels"].first).to eq("12 AM")
+      # A ROLLING 24 hours ending at the current hour (3:30 PM local here), not
+      # a midnight-anchored day.
+      expect(payload["labels"].first).to eq("4 PM")
+      expect(payload["labels"].last).to eq("3 PM")
       expect(payload["labels"]).to include("2 PM")
-      expect(response.body).to include("Total, today")
+      expect(response.body).to include("Total, last 24h")
       expect(response.body).to include("Per hour (avg)")
 
       mini = payload["datasets"].find { |d| d["label"] == "gpt-5.4-mini" }

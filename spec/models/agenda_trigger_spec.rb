@@ -94,28 +94,36 @@ RSpec.describe "AgendaItem trigger kind" do
       }.not_to change { AgendaItem.where(kind: :trigger).count }
     end
 
+    # How MANY occurrences land depends on where `now` sits inside
+    # MATERIALIZE_WINDOW, so these pin the SHAPE of each one instead. (The
+    # earlier version derived start_time from `1.hour.from_now` in the Rails
+    # zone and handed the bare "%H:%M" to a schedule that reads it as LOCAL
+    # time, so it silently drifted by a day once UTC crossed midnight.)
     it "materializes event schedules forward with end_at derived from duration" do
-      start_time = 1.hour.from_now.strftime("%H:%M")
-      sched = nil
-      expect {
+      travel_to(Time.utc(2026, 5, 14, 18, 0)) {
         sched = create(:agenda_schedule, agenda: agenda, kind: "event",
           name: "Tech Stand-Up", duration_minutes: 30,
-          start_time: start_time,
+          start_time: "14:00",
           recurrence: { "freq" => "daily" }, starts_on: Date.current)
-      }.to change { AgendaItem.where(kind: :event).count }.by(1)
-      item = sched.agenda_items.where(kind: :event).first
-      expect(item.end_at).to be_within(1.second).of(item.start_at + 30.minutes)
+
+        items = sched.agenda_items.where(kind: :event).to_a
+        expect(items).not_to be_empty
+        items.each { |item|
+          expect(item.end_at).to be_within(1.second).of(item.start_at + 30.minutes)
+        }
+      }
     end
 
     it "materializes task schedules forward with nil end_at" do
-      start_time = 1.hour.from_now.strftime("%H:%M")
-      sched = nil
-      expect {
+      travel_to(Time.utc(2026, 5, 14, 18, 0)) {
         sched = create(:agenda_schedule, agenda: agenda, kind: "task",
-          name: "Stretch", start_time: start_time,
+          name: "Stretch", start_time: "14:00",
           recurrence: { "freq" => "daily" }, starts_on: Date.current)
-      }.to change { AgendaItem.where(kind: :task).count }.by(1)
-      expect(sched.agenda_items.where(kind: :task).first.end_at).to be_nil
+
+        items = sched.agenda_items.where(kind: :task).to_a
+        expect(items).not_to be_empty
+        expect(items.map(&:end_at)).to all(be_nil)
+      }
     end
 
     it "leaves out-of-window event/task occurrences as phantoms" do

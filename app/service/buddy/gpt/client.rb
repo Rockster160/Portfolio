@@ -142,9 +142,13 @@ module Buddy
         # bubble. Usage is lost because the terminal event never arrived.
         Rails.logger.warn("[Buddy::GPT::Client] stream exceeded its deadline; keeping #{text.length} chars")
         {
-          ok: text.strip.present? || tool_calls.any?, text: text, tool_calls: tool_calls,
-          response_id: response_id, error: ("timed out" if text.strip.empty? && tool_calls.empty?),
-          model: model, usage: usage,
+          ok:          text.strip.present? || tool_calls.any?,
+          text:        text,
+          tool_calls:  tool_calls,
+          response_id: response_id,
+          error:       ("timed out" if text.strip.empty? && tool_calls.empty?),
+          model:       model,
+          usage:       usage,
         }
       rescue StandardError => e
         # Faraday raises on non-200 (the gem installs :raise_error), so an API

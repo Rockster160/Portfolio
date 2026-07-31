@@ -417,6 +417,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         formEl.setAttribute("data-buddy-form", "");
         bodyEl.parentNode.insertBefore(formEl, bodyEl.nextSibling);
       }
+      // Widens the bubble (see .byte-msg-has-form). A form is a data-entry
+      // surface, not a sentence — several fields, long option labels, and a
+      // native date picker that won't render below a certain width. Added
+      // after the className rebuild above, which would wipe it.
+      node.classList.add("byte-msg-has-form");
       renderForm(formEl, message);
     }
 
