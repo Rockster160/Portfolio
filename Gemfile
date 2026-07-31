@@ -39,6 +39,10 @@ gem "chronic", "0.10.2"
 gem "erubis", "2.7.0"
 gem "exception_notification", "4.5.0"
 gem "fugit", "1.5.3"
+# Normalizes Byte image uploads (HEIC -> JPEG, downscale). Needs ImageMagick
+# with the heic delegate on the box; ByteImageNormalizer degrades gracefully
+# when it's missing rather than storing something no model can read.
+gem "image_processing", "~> 1.12"
 gem "inline_svg", "1.8.0"
 gem "jwt"
 gem "kaminari", "1.2.2"

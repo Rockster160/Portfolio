@@ -19,16 +19,19 @@ class ByteMessageIntake
     new(**).call
   end
 
-  def initialize(user:, conversation:, body:, metadata: {}, created_at: nil)
-    @user         = user
-    @conversation = conversation
-    @body         = body.to_s.strip
-    @metadata     = metadata || {}
-    @created_at   = created_at || Time.current
+  def initialize(user:, conversation:, body:, metadata: {}, created_at: nil, attachment_signed_ids: [])
+    @user                  = user
+    @conversation          = conversation
+    @body                  = body.to_s.strip
+    @metadata              = metadata || {}
+    @created_at            = created_at || Time.current
+    @attachment_signed_ids = Array(attachment_signed_ids).compact_blank
   end
 
   def call
-    return nil if @body.empty? || @conversation.nil?
+    # An image with no caption is a real message — only a genuinely empty send
+    # (no text AND no attachments) is a no-op.
+    return nil if (@body.empty? && @attachment_signed_ids.empty?) || @conversation.nil?
 
     # Brain-dump capture: if they armed a "Stash" bucket, THIS message is the
     # idea being dumped, so file it instead of running a normal turn. Their
@@ -76,8 +79,21 @@ class ByteMessageIntake
       metadata:   @metadata,
       created_at: @created_at,
     )
+    attach_files!(message)
     broadcast(message)
     message
+  end
+
+  # Attach the images the client pre-uploaded to /byte/uploads. They arrive as
+  # ActiveStorage signed ids; `find_signed` (not the bang) returns nil for a
+  # tampered or expired id, so a bad ref is silently dropped rather than 500ing
+  # the send. Attaching before `broadcast` means the very first bubble the
+  # client repaints already carries the real attachment.
+  def attach_files!(message)
+    return if @attachment_signed_ids.empty?
+
+    blobs = @attachment_signed_ids.filter_map { |sid| ActiveStorage::Blob.find_signed(sid) }
+    message.files.attach(blobs) if blobs.any?
   end
 
   def dispatch!(message)

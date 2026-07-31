@@ -976,6 +976,15 @@ html.html-ctr-byte body {
         text-underline-offset: 3px;
         word-break: break-all;
       }
+
+      // Uploaded but still waiting on its send, with no local preview left
+      // (page was reloaded). Stands in so the bubble isn't empty.
+      &.byte-attachment-pending {
+        padding: 8px 12px;
+        font-size: 13px;
+        font-style: italic;
+        color: var(--bs-muted);
+      }
     }
   }
 
@@ -1263,6 +1272,9 @@ html.html-ctr-byte body {
   flex: 0 0 auto;
   display: flex;
   align-items: flex-end;
+  // Wrap so the pending-image tray can take a full-width row above the
+  // avatar / input / send controls.
+  flex-wrap: wrap;
   gap: 10px;
   // Bumped horizontal padding + safe-area-aware left/right so the pill
   // isn't kissing the screen edges on notch/rounded-corner devices.
@@ -1280,6 +1292,10 @@ html.html-ctr-byte body {
 
   .byte-input {
     flex: 1;
+    // The composer wraps (for the attachment tray), so the textarea's automatic
+    // minimum size would otherwise push the send button onto its own row on a
+    // narrow phone. Let it shrink instead.
+    min-width: 0;
     background: var(--bs-panel-soft);
     color: var(--bs-text);
     border: 1px solid var(--bs-border);
@@ -1339,6 +1355,144 @@ html.html-ctr-byte body {
       opacity: 0.5;
       cursor: not-allowed;
     }
+  }
+
+  // Attach-image button — mirrors the Send button footprint but reads as a
+  // quiet secondary control. Specificity here (0,3,0) beats the global
+  // `button` reset in forms.scss, so no !important needed.
+  .byte-attach {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--bs-muted);
+    background: var(--bs-panel-soft);
+    border: 1px solid var(--bs-border);
+    transition:
+      color 0.12s,
+      border-color 0.12s,
+      transform 0.1s;
+
+    &:hover:not(:disabled) {
+      color: var(--bs-text);
+      border-color: rgba(63, 160, 255, 0.5);
+    }
+    &:active:not(:disabled) {
+      transform: scale(0.95);
+    }
+  }
+
+  // Bash is a shell REPL — no images. Hide the attach affordance there.
+  &[data-mode="bash"] .byte-attach {
+    display: none;
+  }
+
+  // Dragging a file over the composer.
+  &.is-dragover {
+    outline: 2px dashed rgba(63, 160, 255, 0.6);
+    outline-offset: -4px;
+  }
+
+  // Pending-image tray — full-width row above the controls, scrolls sideways.
+  .byte-attach-tray {
+    flex: 0 0 100%;
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px 0 4px;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  .byte-attach-chip {
+    position: relative;
+    flex: 0 0 auto;
+    width: 56px;
+    height: 56px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--bs-border);
+    background: var(--bs-panel-soft);
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    &.is-uploading::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(9, 16, 33, 0.55);
+      z-index: 1;
+    }
+    &.is-uploading .byte-attach-spin {
+      display: block;
+    }
+    &.is-failed {
+      border-color: rgba(255, 99, 99, 0.7);
+
+      &::before {
+        content: "!";
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: #ffb4b4;
+        font-weight: 700;
+        background: rgba(9, 16, 33, 0.55);
+        z-index: 1;
+      }
+    }
+
+    .byte-attach-remove {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      line-height: 1;
+      color: #fff;
+      background: rgba(9, 16, 33, 0.72);
+      z-index: 3;
+    }
+  }
+
+  .byte-attach-spin {
+    display: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 18px;
+    height: 18px;
+    margin: -9px 0 0 -9px;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: byte-attach-spin 0.7s linear infinite;
+    z-index: 2;
+  }
+}
+
+@keyframes byte-attach-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

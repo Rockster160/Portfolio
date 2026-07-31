@@ -68,6 +68,9 @@ async function trySend(entry) {
     client_ts:       entry.client_ts,
     source:          entry.metadata?.source || "web",
     metadata:        entry.metadata || {},
+    // Images the composer pre-uploaded to /byte/uploads. Empty on the vast
+    // majority of sends; the server attaches these blobs to the message.
+    attachment_signed_ids: entry.attachment_signed_ids || [],
   };
 
   const doFetch = (token) => fetchWithTimeout(SEND_URL, {

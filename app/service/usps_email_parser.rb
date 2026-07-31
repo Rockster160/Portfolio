@@ -10,8 +10,13 @@
 #             Package Shipped from: SHOPIFY"
 #
 # The body "Tracking Number:" label is authoritative for the tracking number
-# (the subject's trailing number is a fallback). Informed-Delivery "Daily Digest"
-# / mailpiece emails carry no per-package tracking we care about and are skipped.
+# (the subject's trailing number is a fallback).
+#
+# Informed-Delivery "Daily Digest" emails are ALSO parsed: their Packages section
+# lists each inbound package as "FROM: <sender> <tracking>" under date buckets
+# ("Expected Today" / "Expected 1-2 Days"). Mailpieces (letter scans) carry no
+# tracking number, so requiring one naturally skips them. Digests matter because
+# the full per-package tracking email doesn't always arrive.
 class UspsEmailParser
   include ::Shipments::DateParsing
 
@@ -19,6 +24,15 @@ class UspsEmailParser
   TRACKING_LABEL_REGEX = /Tracking\s*Number\s*:?\s*([0-9]{18,})/i
   TRACKING_BARE_REGEX = /\b(9\d{17,25})\b/
   SOURCE_LABEL_REGEX = /Package\s+Shipped\s+from\s*:?\s*(.+)/im
+
+  # Digest package row: "FROM: SHOPIFY 9200190267338000065163052". Nokogiri's
+  # `.text` concatenates the bolded merchant straight onto the tracking number
+  # with no space ("SHOPIFY92001902…"), so the separator is optional and the
+  # tracking's leading 9 + 16 digits is the real boundary. Source is bounded
+  # (letters/digits/space/punct, ≤38 chars) so a lazy match can't span from the
+  # forwarded "From: USPS Informed Delivery <…>" header to a later tracking.
+  DIGEST_PKG_REGEX = /FROM:\s*([A-Z0-9][A-Z0-9 .&'-]{0,38}?)\s*(9\d{15,})/i
+  DIGEST_BUCKET_REGEX = /Expected Today|Expected 1-2 Days|Awaiting From Sender|Outbound/i
 
   def self.parse(email)
     Time.use_zone(User.timezone) { new(email).parse }
@@ -30,10 +44,8 @@ class UspsEmailParser
   end
 
   def parse
-    # Not a USPS tracking email we handle (digest / no tracking number) — leave
-    # it for the Slack notifier, same as AmazonEmailParser's Jarvis-flag paths.
-    return false if informed_delivery_digest?
-    return false if tracking_number.blank?
+    return parse_digest if informed_delivery_digest?
+    return false if tracking_number.blank? # not a USPS email we handle → Slack fallback
 
     item = ::Shipments::Connector.connect_or_create(
       carrier:         :usps,
@@ -52,6 +64,60 @@ class UspsEmailParser
     AmazonOrder.save
     AmazonOrder.broadcast
     item
+  end
+
+  # Informed-Delivery digest: create/connect an item per package in the Packages
+  # section (skipping mailpieces, which have no tracking). Returns the items (so
+  # the worker archives), or nil when no package was found → Slack fallback.
+  def parse_digest
+    packages = digest_packages
+    return if packages.empty?
+
+    items = packages.map { |pkg|
+      item = ::Shipments::Connector.connect_or_create(
+        carrier:         :usps,
+        tracking_number: pkg[:tracking],
+        source:          pkg[:source],
+        name:            pkg[:source],
+      )
+      item.source ||= pkg[:source]
+      item.name   ||= pkg[:source] || pkg[:tracking]
+      # Digest dates are coarse — don't overwrite a precise date a full tracking
+      # email already set. Only fill when we still have nothing.
+      item.delivery_date = pkg[:date] if pkg[:date].present? && item.delivery_date.blank?
+      item.errors = []
+      item
+    }
+
+    AmazonOrder.save
+    AmazonOrder.broadcast
+    items
+  end
+
+  # Splits the digest text on bucket labels so each package inherits its bucket's
+  # rough delivery date. Skips the "Outbound" bucket (packages you're sending).
+  def digest_packages
+    segments = body_text.split(/(#{DIGEST_BUCKET_REGEX})/)
+    packages = {}
+    segments.each_with_index { |seg, i|
+      next unless seg.match?(/\A#{DIGEST_BUCKET_REGEX}\z/)
+
+      label = seg.downcase
+      next if label == "outbound"
+
+      date = digest_bucket_date(label)
+      segments[i + 1].to_s.scan(DIGEST_PKG_REGEX) { |src, tracking|
+        packages[tracking] ||= { source: src.squish.presence, tracking: tracking, date: date }
+      }
+    }
+    packages.values
+  end
+
+  def digest_bucket_date(label)
+    case label
+    when "expected today"     then Time.zone.today
+    when "expected 1-2 days"  then Time.zone.today + 1.day
+    end
   end
 
   def tracking_number
@@ -92,10 +158,9 @@ class UspsEmailParser
     arrival_time_from(body_text) || deadline_time_from("#{subject} #{body_text}")
   end
 
-  # Informed-Delivery digest ("Your Daily Digest … mailpiece(s) … package(s)")
-  # is a summary, not a trackable shipment — skip it. Keyed on the digest subject
-  # or "mailpiece" in the body; NOT on a bare "Informed Delivery" mention, which
-  # also appears in the footer of ordinary USPS tracking emails.
+  # Routes to the digest parser. Keyed on the digest subject or "mailpiece" in
+  # the body; NOT on a bare "Informed Delivery" mention, which also appears in
+  # the footer of ordinary USPS tracking emails.
   def informed_delivery_digest?
     subject.match?(/Daily\s+Digest/i) || body_text.match?(/mailpiece/i)
   end
@@ -106,7 +171,9 @@ class UspsEmailParser
     @email.subject.to_s
   end
 
+  # Normalize with POSIX [[:space:]] (not \s) so non-breaking spaces — which USPS
+  # sprinkles between the merchant and tracking number — collapse to real spaces.
   def body_text
-    @body_text ||= @doc.text.to_s.gsub(/\s+/, " ").strip
+    @body_text ||= @doc.text.to_s.gsub(/[[:space:]]+/, " ").strip
   end
 end

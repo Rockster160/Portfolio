@@ -152,7 +152,7 @@ RSpec.describe Buddy::Personality do
     it "carries enough acknowledgements to rotate" do
       prompt = byte_prompt
 
-      expect(prompt).to include("Copy that.").and include("Affirmative.").and include("Acknowledged.")
+      expect(prompt).to include("Copy that.").and include("On it.").and include("Logged.")
       expect(prompt).to include("rotate these, never settle into one")
     end
   end

@@ -137,4 +137,57 @@ RSpec.describe Buddy::GPT::History do
       expect(items.last[:content]).to eq("msg #{described_class::MAX_MESSAGES + 9}")
     end
   end
+
+  describe "image attachments (multimodal)" do
+    # DiskService#url needs url options; there's no request in a service spec.
+    before { ActiveStorage::Current.url_options = { host: "example.com", protocol: "https" } }
+    after  { ActiveStorage::Current.url_options = nil }
+
+    def with_image(message, name: "photo.png")
+      message.files.attach(io: StringIO.new("png-bytes"), filename: name, content_type: "image/png")
+      message
+    end
+
+    it "builds a multimodal user turn when the person's message has an image" do
+      with_image(said("what's this?"))
+
+      item = build.first
+      expect(item[:role]).to eq(:user)
+      expect(item[:content].first).to eq({ type: :input_text, text: "what's this?" })
+      image = item[:content].last
+      expect(image[:type]).to eq(:input_image)
+      expect(image[:image_url]).to be_present
+    end
+
+    it "keeps an image-only turn (no caption) instead of dropping it" do
+      with_image(said(""))
+
+      item = build.first
+      expect(item[:role]).to eq(:user)
+      expect(item[:content].pluck(:type)).to eq([:input_image])
+    end
+
+    it "leaves a plain text turn as a bare string" do
+      said("just text")
+
+      expect(build.first).to eq({ role: :user, content: "just text" })
+    end
+
+    # History is rebuilt from scratch every turn, so an unbounded replay means
+    # one photo is re-fetched and re-billed as vision tokens forever.
+    it "stops sending the pixels once the image falls out of the replay depth" do
+      with_image(said("look at this"), name: "chart.png")
+      (described_class::IMAGE_REPLAY_DEPTH + 2).times { |i| said("later #{i}") }
+
+      item = build.first
+      expect(item[:content]).to eq("look at this [image: chart.png]")
+    end
+
+    it "keeps the pixels while the image is still recent" do
+      with_image(said("look at this"))
+      said("and one more")
+
+      expect(build.first[:content].pluck(:type)).to eq([:input_text, :input_image])
+    end
+  end
 end

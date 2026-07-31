@@ -17,6 +17,11 @@ module Buddy
 
     CHARS_PER_TOKEN      = 4
     PER_MESSAGE_OVERHEAD = 20   # role tags, framing tokens
+    # A replayed `input_image`, once OpenAI tiles it. Rough, but bodies alone
+    # would say a thread of photos costs nothing — the one case where char/4 is
+    # not merely coarse but blind. Only images still inside History's replay
+    # depth count; past that they're sent as filenames and cost ~nothing.
+    IMAGE_TOKENS = 1_100
 
     # Fixed per-turn cost of everything that is not conversation history.
     # Measured 2026-07-31 with the byte theme:
@@ -42,7 +47,16 @@ module Buddy
       scope        = conversation.byte_messages
       scope        = scope.where("created_at > ?", compact_at) if compact_at
       body_tokens  = scope.pluck(:body).sum { |b| body_cost(b) }
-      body_tokens + recap_cost(conversation)
+      body_tokens + image_cost(scope) + recap_cost(conversation)
+    end
+
+    def image_cost(scope)
+      recent = scope.order(created_at: :desc).limit(Buddy::GPT::History::IMAGE_REPLAY_DEPTH)
+      count  = ActiveStorage::Attachment.where(
+        record_type: "ByteMessage", name: :files, record_id: recent.select(:id),
+      ).count
+
+      count * IMAGE_TOKENS
     end
 
     def body_cost(body)

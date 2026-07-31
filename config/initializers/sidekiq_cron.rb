@@ -75,6 +75,11 @@ cron_jobs = [
     class: "ChoreDailyResetWorker",
     cron:  daily_4am,
   },
+  {
+    name:  "Purge Unclaimed Uploads",
+    class: "ActiveStorageSweepWorker",
+    cron:  daily_4am,
+  },
 ]
 
 if Rails.env.production?

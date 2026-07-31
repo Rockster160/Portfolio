@@ -26,6 +26,21 @@ class ByteMessage < ApplicationRecord
 
   has_many_attached :files
 
+  # Content types accepted for user uploads. Kept deliberately narrow: Byte's
+  # image support is for photos/screenshots the model can actually see, not a
+  # general file drop. HEIC/HEIF are accepted at the door because that's what an
+  # iPhone hands over out of the Files app, but ByteImageNormalizer transcodes
+  # them to JPEG before storage — no model or non-Safari browser reads HEIC.
+  UPLOADABLE_IMAGE_TYPES = (
+    ByteImageNormalizer::PASSTHROUGH_TYPES + ByteImageNormalizer::TRANSCODE_TYPES
+  ).freeze
+  MAX_UPLOAD_BYTES = 25.megabytes
+
+  # How long a model-facing image URL stays valid. The fetch (OpenAI pulling an
+  # `input_image`, or the Mac downloading before a Claude turn) happens within
+  # seconds of the turn dispatching; an hour is slack for a queued Sidekiq job.
+  SOURCE_URL_TTL = 1.hour
+
   enum :direction, { outbound: 0, inbound: 1 }
   # NOTE: never reassign existing integers — enum order is persisted.
   # :queued = held because Buddy is asleep (usage cap). Not yet dispatched;
@@ -57,7 +72,46 @@ class ByteMessage < ApplicationRecord
     }
   end
 
+  # Image attachments as {filename, content_type, url} for the model paths:
+  # Buddy's OpenAI `input_image` blocks (Buddy::GPT::History) and the Claude
+  # handoff (ByteLocal.deliver → the Mac). Unlike `attachments_wire`, which
+  # emits a same-origin `rails_blob_path` for the PWA to render, these URLs are
+  # absolute and directly fetchable by an external service. A blob whose URL
+  # can't be built is dropped rather than raising — a broken image must never
+  # take down a whole turn (missing over wrong).
+  def model_image_sources
+    model_images.filter_map { |f|
+      url = source_url_for(f)
+      next if url.nil?
+
+      { filename: f.filename.to_s, content_type: f.content_type.to_s, url: url }
+    }
+  end
+
+  # Just the names, for the far end of history where the pixels are no longer
+  # worth re-billing (see Buddy::GPT::History::IMAGE_REPLAY_DEPTH). Skips URL
+  # signing entirely.
+  def model_image_names
+    model_images.map { |f| f.filename.to_s }
+  end
+
   private
+
+  # Only formats every model reads. Normalization means a fresh upload is always
+  # one of these; this guards a legacy row or a Mac-posted file from 400ing an
+  # entire turn on a format OpenAI rejects.
+  def model_images
+    return [] unless files.attached?
+
+    files.select { |f| ByteImageNormalizer::PASSTHROUGH_TYPES.include?(f.content_type.to_s) }
+  end
+
+  def source_url_for(file)
+    file.url(expires_in: SOURCE_URL_TTL)
+  rescue StandardError => e
+    Rails.logger.warn("[ByteMessage] image source url failed for blob #{file.blob&.id}: #{e.class}: #{e.message}")
+    nil
+  end
 
   def assign_default_conversation
     return if byte_conversation_id.present? || byte_conversation.present?

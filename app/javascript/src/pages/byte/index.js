@@ -45,6 +45,7 @@ import {
   unregisterByteNotifications,
 } from "./push";
 import { ConversationManager } from "./conversations";
+import { initComposerAttachments } from "./attachments";
 import { setupSlashAutocomplete } from "./slash_commands";
 import { renderMultiSelect } from "./message_actions/multi_select";
 import { renderForm } from "./message_actions/form";
@@ -1001,7 +1002,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     node.querySelector("[data-time]").textContent = formatTime(
       new Date(entry.client_ts || entry.queued_at || Date.now()).toISOString(),
     );
-    renderAttachments(node.querySelector("[data-attachments]"), []);
+    // Optimistic image previews (objectURLs) while the send is in flight; the
+    // server bubble replaces these with the real attachments on delivery.
+    // After a reload the objectURLs are gone but the signed ids survive, so a
+    // still-queued image falls back to a placeholder rather than an empty
+    // bubble (which is all an image-only send would otherwise be).
+    renderAttachments(
+      node.querySelector("[data-attachments]"),
+      entry.attachments_preview?.length
+        ? entry.attachments_preview
+        : (entry.attachment_signed_ids || []).map((id) => ({ id, pending: true })),
+    );
     node.querySelector("[data-state]").textContent = held ? "queued" : "…";
     const cancelBtn = node.querySelector("[data-msg-cancel]");
     if (cancelBtn) cancelBtn.hidden = !held;
@@ -1035,7 +1046,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     wrap.dataset.attachmentId = String(a.id);
     wrap.dataset.contentType = a.content_type || "";
     const type = (a.content_type || "").split("/")[0];
-    if (type === "image") {
+    if (a.pending) {
+      // Uploaded, still waiting on its send — no local preview survived the
+      // reload, so stand in for it until the server bubble arrives.
+      wrap.classList.add("byte-attachment-pending");
+      wrap.textContent = "image";
+    } else if (type === "image") {
       const img = document.createElement("img");
       img.src = a.url;
       img.alt = a.filename || "";
@@ -1358,8 +1374,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   // composer. Used by drawer actions (e.g. adopting a Claude session)
   // that want to auto-send a slash command straight at the target
   // thread instead of prefilling the composer for the user to submit.
-  function sendMessageTo(convId, body) {
-    if (!body || !convId) return;
+  // Free the optimistic-preview objectURLs once they're no longer on screen.
+  function revokePreviews(entry) {
+    (entry?.attachments_preview || []).forEach((p) => {
+      if (p?.url && String(p.url).startsWith("blob:")) URL.revokeObjectURL(p.url);
+    });
+  }
+
+  function sendMessageTo(convId, body, pending = null) {
+    const signedIds = pending?.signed_ids || [];
+    const previews = pending?.previews || [];
+    if ((!body && signedIds.length === 0) || !convId) return;
 
     if (body === "/clear" || body === "/clear-local") {
       clearLocalState();
@@ -1385,6 +1410,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       body,
       client_ts,
       held,
+      // Signed ids of images already uploaded to /byte/uploads. Persisted in
+      // the offline queue (plain strings). `attachments_preview` carries local
+      // objectURLs for the optimistic bubble only — NOT persisted, since a
+      // reloaded page can't resurrect an objectURL (the send still works: the
+      // server echoes the real attachment on delivery).
+      attachment_signed_ids: signedIds,
+      attachments_preview: previews,
       metadata: { source: "web", local_id, client_ts, conversation_id: convId },
     };
 
@@ -1416,11 +1448,17 @@ document.addEventListener("DOMContentLoaded", async () => {
           if (targetConv === currentConversationId)
             upsertMessage(message, { live: true });
           convoManager.bumpActivity(targetConv, message.created_at);
+          // The server bubble now carries the real (rails_blob_path) image
+          // URLs, so the optimistic objectURLs are done — free them.
+          revokePreviews(e);
         },
         onTransientFail: () => {},
         onPermanentFail: (e, reason) => {
           if (e.conversation_id === currentConversationId)
             markQueuedFailed(e.local_id, reason);
+          // Give up on the send, give up on its previews — nothing will repaint
+          // this bubble again, so holding the objectURLs just leaks them.
+          revokePreviews(e);
         },
       },
       { hold: held },
@@ -1474,15 +1512,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   }
 
-  function handleSend(rawBody) {
+  async function handleSend(rawBody) {
     const body = rawBody.trim();
-    if (!body) return;
+    // An image with no caption is a valid send. Nothing typed AND nothing
+    // attached (ready or still going up) is a no-op.
+    if (
+      !body &&
+      !composerAttachments.hasReady() &&
+      !composerAttachments.isUploading()
+    )
+      return;
     input.value = "";
     // Clear any brain-dump capture hint once the idea (or any message) is sent.
     if (originalPlaceholder != null) input.placeholder = originalPlaceholder;
     autosize();
     armIdleFaceReset(); // sending is activity
-    sendMessageTo(currentConversationId, body);
+    // The composer clears instantly, but the send itself waits on any image
+    // still uploading — otherwise the caption goes without the picture it was
+    // written about, and the chip is stranded in the tray with no explanation.
+    if (composerAttachments.isUploading()) await composerAttachments.settled();
+    const pending = composerAttachments.commit();
+    sendMessageTo(currentConversationId, body, pending);
   }
 
   // Mount the Buddy hero once the composer + input handles exist. The
@@ -1642,6 +1692,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     input,
     popover: app.querySelector("[data-byte-slash-popover]"),
     autosize: () => autosize(),
+  });
+
+  // Composer image attachments — file picker, paste, and drag-drop. Uploads
+  // each image to /byte/uploads and holds the signed id; handleSend pulls the
+  // ready ones out via commit(). Notices (bad type, too big, upload failure)
+  // surface as a local system bubble.
+  const composerAttachments = initComposerAttachments({
+    composer,
+    input,
+    thread,
+    tray: app.querySelector("[data-byte-attach-tray]"),
+    fileInput: app.querySelector("[data-byte-file]"),
+    attachBtn: app.querySelector("[data-byte-attach]"),
+    onNotice: (msg) => surfaceLocal(msg),
   });
 
   // Long-press / right-click a message bubble → Copy ID / Copy full message.

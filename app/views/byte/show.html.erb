@@ -279,6 +279,12 @@
   <div class="byte-slash-popover" data-byte-slash-popover hidden role="listbox" aria-label="Slash commands"></div>
 
   <form class="byte-composer" data-byte-composer autocomplete="off" data-mode="<%= @conversation.mode %>">
+    <%# Pending-image tray. Full-width first row (the composer wraps), holds a %>
+    <%# thumbnail chip per picked/pasted/dropped image while it uploads to %>
+    <%# /byte/uploads. Hidden until something's in it; JS owns its contents. %>
+    <div class="byte-attach-tray" data-byte-attach-tray hidden></div>
+    <%# Hidden file picker driven by the attach button below. %>
+    <input type="file" class="byte-attach-input" data-byte-file accept="image/*" multiple hidden aria-hidden="true">
     <%# Single mode-adaptive avatar to the left of the input: %>
     <%#   Claude  → Byte image %>
     <%#   Jarvis  → Ardesian favicon (proxy for the Jarvis mark) %>
@@ -307,6 +313,15 @@
       spellcheck="<%= bash_mode ? 'false' : 'true' %>"
       enterkeyhint="enter"
     ></textarea>
+    <%# Attach an image. Bash is a shell REPL — no images there — so CSS hides %>
+    <%# this button in bash mode. %>
+    <button type="button" class="byte-attach" data-byte-attach aria-label="Attach image">
+      <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true">
+        <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"
+              d="M4 17V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6M4 17l4.5-4.5a2 2 0 0 1 2.8 0L16 17M14 13l1.8-1.8a2 2 0 0 1 2.8 0L20 13"/>
+        <circle cx="9" cy="9" r="1.6" fill="currentColor"/>
+      </svg>
+    </button>
     <button type="submit" class="byte-send" data-byte-send aria-label="Send">
       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
         <path fill="currentColor" d="M3.4 20.6 22 12 3.4 3.4l-.1 6.7L17 12 3.3 13.9Z"/>

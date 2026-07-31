@@ -45,13 +45,17 @@ export function clearLegacyQueue() {
 export function enqueue(entry) {
   const q = read();
   q.push({
-    local_id:        entry.local_id,
-    conversation_id: entry.conversation_id,
-    body:            entry.body,
-    metadata:        entry.metadata || {},
-    client_ts:       entry.client_ts,
-    queued_at:       Date.now(),
-    attempts:        0,
+    local_id:              entry.local_id,
+    conversation_id:       entry.conversation_id,
+    body:                  entry.body,
+    metadata:              entry.metadata || {},
+    client_ts:             entry.client_ts,
+    // Signed ids of pre-uploaded images. Plain strings, so they survive the
+    // localStorage round-trip; the send resolves them back to attachments
+    // server-side. (Preview objectURLs are intentionally not persisted.)
+    attachment_signed_ids: entry.attachment_signed_ids || [],
+    queued_at:             Date.now(),
+    attempts:              0,
   });
   write(q);
 }

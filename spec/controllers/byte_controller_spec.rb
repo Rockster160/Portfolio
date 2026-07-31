@@ -127,6 +127,124 @@ RSpec.describe ByteController, type: :controller do
     end
   end
 
+  describe "POST #create_message with attachments" do
+    before { sign_in rocco }
+
+    let(:convo) { rocco.byte_conversations.create!(name: :T, mode: :claude) }
+
+    def signed_image(name: "photo.png")
+      ActiveStorage::Blob.create_and_upload!(
+        io:           StringIO.new("png-bytes"),
+        filename:     name,
+        content_type: "image/png",
+      ).signed_id
+    end
+
+    it "attaches a pre-uploaded image to the outbound message" do
+      sid = signed_image
+      expect {
+        post :create_message, params: { conversation_id: convo.id, body: "look", attachment_signed_ids: [sid] }
+      }.to change { convo.byte_messages.outbound.count }.by(1)
+
+      expect(response).to have_http_status(:created)
+      msg = convo.byte_messages.outbound.last
+      expect(msg.files.count).to eq(1)
+      expect(msg.files.first.filename.to_s).to eq("photo.png")
+      wire = JSON.parse(response.body)
+      expect(wire["attachments"].size).to eq(1)
+      expect(wire["attachments"].first).to include("content_type" => "image/png")
+    end
+
+    it "allows an image-only send with a blank body" do
+      sid = signed_image
+      post :create_message, params: { conversation_id: convo.id, body: "", attachment_signed_ids: [sid] }
+
+      expect(response).to have_http_status(:created)
+      expect(convo.byte_messages.outbound.last.files.count).to eq(1)
+    end
+
+    it "still 400s a blank send with no attachments" do
+      post :create_message, params: { conversation_id: convo.id, body: "   " }
+      expect(response).to have_http_status(:bad_request)
+    end
+
+    it "silently drops a tampered signed id instead of erroring the send" do
+      post :create_message, params: { conversation_id: convo.id, body: "hi", attachment_signed_ids: ["not-a-real-signed-id"] }
+
+      expect(response).to have_http_status(:created)
+      expect(convo.byte_messages.outbound.last.files.count).to eq(0)
+    end
+  end
+
+  describe "POST #uploads" do
+    before { sign_in rocco }
+
+    def image(type: "image/png", name: "chart.png", bytes: "pretend-png")
+      Rack::Test::UploadedFile.new(StringIO.new(bytes), type, original_filename: name)
+    end
+
+    it "stores the image and returns a resolvable signed id" do
+      post :uploads, params: { files: [image] }
+
+      expect(response).to have_http_status(:created)
+      att = JSON.parse(response.body)["attachments"].first
+      expect(att["signed_id"]).to be_present
+      expect(att).to include("content_type" => "image/png", "filename" => "chart.png")
+      expect(ActiveStorage::Blob.find_signed(att["signed_id"])).to be_present
+    end
+
+    it "rejects a non-image file type" do
+      post :uploads, params: { files: [image(type: "application/pdf", name: "doc.pdf")] }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(JSON.parse(response.body)["error"]).to match(/unsupported/i)
+    end
+
+    it "rejects an oversized image" do
+      stub_const("ByteMessage::MAX_UPLOAD_BYTES", 1)
+
+      post :uploads, params: { files: [image(bytes: "several-bytes")] }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(JSON.parse(response.body)["error"]).to match(/too large/i)
+    end
+
+    it "forbids a non-owner" do
+      sign_in create(:user)
+      post :uploads, params: { files: [image] }
+      expect(response).to have_http_status(:forbidden)
+    end
+
+    it "transcodes a HEIC on the way in, since nothing downstream reads one" do
+      png = ChunkyPNG::Image.new(4, 4, ChunkyPNG::Color::WHITE).to_blob
+      post :uploads, params: {
+        files: [Rack::Test::UploadedFile.new(StringIO.new(png), "image/heic", original_filename: "IMG_1.HEIC")],
+      }
+
+      expect(response).to have_http_status(:created)
+      att = JSON.parse(response.body)["attachments"].first
+      expect(att).to include("content_type" => "image/jpeg", "filename" => "IMG_1.jpg")
+    end
+
+    # A rejection partway through a batch used to leave the earlier files stored
+    # with nothing to attach them to.
+    it "stores nothing at all when one file in a batch is rejected" do
+      expect {
+        post :uploads, params: { files: [image, image(type: "application/pdf", name: "doc.pdf")] }
+      }.not_to change(ActiveStorage::Blob, :count)
+
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+
+    it "refuses a batch bigger than MAX_UPLOADS" do
+      files = Array.new(ByteController::MAX_UPLOADS + 1) { image }
+
+      expect { post :uploads, params: { files: files } }.not_to change(ActiveStorage::Blob, :count)
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(JSON.parse(response.body)["error"]).to match(/too many/i)
+    end
+  end
+
   describe "GET #csrf" do
     it "returns a fresh token for the owner" do
       sign_in rocco

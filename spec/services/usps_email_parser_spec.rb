@@ -57,13 +57,42 @@ RSpec.describe UspsEmailParser do
     expect(AmazonOrder.all.first.delivered).to be(true)
   end
 
-  it "skips an Informed-Delivery digest (mailpieces) — no item created" do
-    result = described_class.parse(email(
+  it "parses packages out of an Informed-Delivery digest, skipping mailpieces" do
+    described_class.parse(email(
       subject:   "Your Daily Digest for Thu, 7/16 is ready to view",
-      body_html: "<p>You have 1 mailpiece(s) and 1 inbound package(s) arriving soon.</p>",
+      body_html: <<~HTML,
+        <p>You have 1 mailpiece(s) and 1 inbound package(s) arriving soon.</p>
+        <div>MAIL</div>
+        <div>Expected Today</div>
+        <div>PACKAGES</div>
+        <div>Expected Today</div>
+        <div>FROM: SHOPIFY <span>9200190267338000065163052</span></div>
+        <div>Expected 1-2 Days</div>
+        <div>FROM: NINGBO DEYI SAM <span>9405511899560000000000</span></div>
+        <div>Outbound</div>
+        <div>FROM: ME <span>9111111111111111111111</span></div>
+      HTML
     ))
 
-    expect(result).to eq(false)
+    shopify = AmazonOrder.all.find { |o| o.tracking_number == "9200190267338000065163052" }
+    ninbo   = AmazonOrder.all.find { |o| o.tracking_number == "9405511899560000000000" }
+
+    expect(shopify.carrier).to eq(:usps)
+    expect(shopify.source).to eq("SHOPIFY")
+    expect(shopify.delivery_date).to eq(Date.new(2026, 7, 16).iso8601)   # Expected Today
+    expect(ninbo.source).to eq("NINGBO DEYI SAM")
+    expect(ninbo.delivery_date).to eq(Date.new(2026, 7, 17).iso8601)     # Expected 1-2 Days
+    # Outbound package is skipped:
+    expect(AmazonOrder.all.map(&:tracking_number)).not_to include("9111111111111111111111")
+  end
+
+  it "does not create an item for a digest with only mailpieces (no packages)" do
+    result = described_class.parse(email(
+      subject:   "Your Daily Digest for Thu, 7/16 is ready to view",
+      body_html: "<p>You have 2 mailpiece(s) and 0 inbound package(s) arriving soon.</p>",
+    ))
+
+    expect(result).to be_falsey
     expect(AmazonOrder.all).to be_empty
   end
 

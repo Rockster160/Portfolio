@@ -8,6 +8,9 @@ class ByteController < ApplicationController
   # exactly. `?limit=` can override up to MAX_LIMIT for larger bootstraps.
   HISTORY_LIMIT = 50
   MAX_LIMIT     = 200
+  # Images per /byte/uploads request. The composer posts one at a time; this is
+  # only here so a hand-rolled request can't ask us to store a hundred blobs.
+  MAX_UPLOADS   = 10
 
   def show
     scope = current_user.byte_conversations.active.ordered
@@ -19,7 +22,11 @@ class ByteController < ApplicationController
 
   def create_message
     body = params[:body].to_s.strip
-    return head(:bad_request) if body.empty?
+    # Signed ids for images the client already pushed to /byte/uploads. An
+    # image with no caption is a valid send, so a blank body is only rejected
+    # when there are no attachments either.
+    attachment_signed_ids = Array(params[:attachment_signed_ids]).map(&:to_s).compact_blank
+    return head(:bad_request) if body.empty? && attachment_signed_ids.empty?
 
     conversation = resolve_conversation
     return head(:not_found) if conversation.nil?
@@ -31,7 +38,9 @@ class ByteController < ApplicationController
     # the Mac via the normal message pipeline.
     # Accept either "/" or "." as the slash-command prefix. Both feel
     # natural on mobile (period is closer to the space bar than slash);
-    # the dispatcher strips whichever one was used.
+    # the dispatcher strips whichever one was used. A command has no bubble to
+    # hang an image on, so any attachment sent alongside one is deliberately
+    # dropped; the blob it left behind is ActiveStorageSweepWorker's problem.
     if (body.start_with?("/") || body.start_with?(".")) && (handled = handle_rails_slash_command(conversation, body))
       return render(json: handled.as_wire, status: :ok)
     end
@@ -59,15 +68,42 @@ class ByteController < ApplicationController
     # all live in ByteMessageIntake so the Mac CLI (/webhooks/byte/say) puts a
     # message in by exactly the same door.
     message = ByteMessageIntake.call(
-      user:         current_user,
-      conversation: conversation,
-      body:         body,
-      metadata:     metadata,
-      created_at:   created,
+      user:                  current_user,
+      conversation:          conversation,
+      body:                  body,
+      metadata:              metadata,
+      created_at:            created,
+      attachment_signed_ids: attachment_signed_ids,
     )
     return head(:bad_request) if message.nil?
 
     render json: message.as_wire, status: :created
+  end
+
+  # Two-phase image send, phase one: the client POSTs each picked/pasted/dropped
+  # image here (multipart) BEFORE the message send. We stash it as a loose
+  # ActiveStorage blob and hand back a signed id; the subsequent JSON
+  # create_message carries those ids in `attachment_signed_ids`, which keeps the
+  # offline outbound queue a plain-JSON contract (signed ids are strings; File
+  # objects don't survive localStorage). The blob stays unattached until a
+  # message claims it — a picked-then-removed image, or a send that's abandoned
+  # or fails, leaves one behind, and ActiveStorageSweepWorker reclaims those.
+  def uploads
+    files = Array(params[:files]).compact_blank
+    return render(json: { error: "no file" }, status: :unprocessable_entity) if files.empty?
+    return render(json: { error: "too many images at once (max #{MAX_UPLOADS})" }, status: :unprocessable_entity) if files.size > MAX_UPLOADS
+
+    # Validate and normalize EVERY file before storing any of them, so a
+    # rejection halfway through a batch can't leave earlier blobs orphaned.
+    results = files.map { |upload| upload_rejection(upload) || ByteImageNormalizer.call(upload) }
+    failed  = results.find { |r| r.is_a?(String) || !r.ok? }
+    return render(json: { error: failed.is_a?(String) ? failed : failed.error }, status: :unprocessable_entity) if failed
+
+    blobs = results.map { |r|
+      ActiveStorage::Blob.create_and_upload!(io: r.io, filename: r.filename, content_type: r.content_type)
+    }
+
+    render json: { attachments: blobs.map { |b| blob_wire(b) } }, status: :created
   end
 
   # Paginated history.
@@ -425,6 +461,26 @@ class ByteController < ApplicationController
   def normalized_mode(raw)
     sym = raw.to_s.downcase.to_sym
     ByteConversation.modes.key?(sym.to_s) ? sym : :claude
+  end
+
+  # Nil = accept. Anything else is a user-facing rejection string. Kept to
+  # images only and a sane size ceiling — this is a photo/screenshot channel,
+  # not a general upload surface.
+  def upload_rejection(upload)
+    return "unsupported file type" unless ByteMessage::UPLOADABLE_IMAGE_TYPES.include?(upload.content_type)
+    return "image too large (max 25MB)" if upload.size.to_i > ByteMessage::MAX_UPLOAD_BYTES
+
+    nil
+  end
+
+  def blob_wire(blob)
+    {
+      signed_id:    blob.signed_id,
+      filename:     blob.filename.to_s,
+      content_type: blob.content_type,
+      byte_size:    blob.byte_size,
+      url:          Rails.application.routes.url_helpers.rails_blob_path(blob),
+    }
   end
 
   # Client sends `client_ts` as JS `Date.now()` — a millisecond epoch.

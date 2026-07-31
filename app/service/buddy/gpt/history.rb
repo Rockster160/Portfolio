@@ -35,13 +35,24 @@ module Buddy
       # model those brackets are system framing so it doesn't write them itself.
       RELAY_KIND = "buddy_relay".freeze
 
+      # How far back an image is still worth sending as pixels. History is
+      # rebuilt from scratch every turn, so an unbounded replay means a photo
+      # from forty messages ago is re-fetched by OpenAI and re-billed as vision
+      # tokens on every single turn for the rest of the thread. Past this depth
+      # the message keeps its text and its images degrade to their filenames —
+      # enough for Buddy to know a picture was there and refer back to it.
+      IMAGE_REPLAY_DEPTH = 6
+
       def build(conversation, upto:)
-        rows = scope(conversation, upto)
-        rows.filter_map { |msg| item_for(msg) }
+        rows   = scope(conversation, upto)
+        cutoff = rows.length - IMAGE_REPLAY_DEPTH
+        rows.each_with_index.filter_map { |msg, i| item_for(msg, replay_images: i >= cutoff) }
       end
 
       def scope(conversation, upto)
-        scope = conversation.byte_messages.chronological
+        # Preload attachments so building multimodal user turns doesn't fire an
+        # N+1 across the (up to MAX_MESSAGES) replayed rows.
+        scope = conversation.byte_messages.chronological.with_attached_files
         scope = scope.where(byte_messages: { created_at: ..upto.created_at }) if upto
         compact_at = compact_timestamp(conversation)
         scope = scope.where(byte_messages: { created_at: compact_at... }) if compact_at
@@ -49,17 +60,47 @@ module Buddy
         scope.to_a.last(MAX_MESSAGES)
       end
 
-      def item_for(message)
+      def item_for(message, replay_images: true)
         body = message.body.to_s.strip
+
+        return user_item(message, body, replay_images) if message.direction == "outbound"
+
         return nil if body.empty?
 
-        if message.direction == "outbound"
-          { role: :user, content: body }
-        elsif prose_reply?(message)
+        if prose_reply?(message)
           { role: :assistant, content: body }
         elsif relay?(message)
           { role: :assistant, content: relay_content(message, body) }
         end
+      end
+
+      # The person's turn. A plain text message stays a bare string so the vast
+      # majority of history is untouched; a message with image attachments
+      # becomes an OpenAI Responses multimodal content array (an input_text
+      # block when there's a caption, plus one input_image per image). An
+      # image with no caption is still a real turn — we send the images with no
+      # text rather than dropping it, which the old bare-body guard did.
+      def user_item(message, body, replay_images)
+        return faded_item(message, body) unless replay_images
+
+        images = message.model_image_sources
+        return nil if body.empty? && images.empty?
+        return { role: :user, content: body } if images.empty?
+
+        content = []
+        content << { type: :input_text, text: body } unless body.empty?
+        images.each { |img| content << { type: :input_image, image_url: img[:url] } }
+        { role: :user, content: content }
+      end
+
+      # Too far back to be worth the pixels: the turn stays in the thread as
+      # text, with the images named so a later "that photo I sent" still has
+      # something to land on.
+      def faded_item(message, body)
+        names = message.model_image_names.map { |name| "[image: #{name}]" }
+        return nil if body.empty? && names.empty?
+
+        { role: :user, content: [body, *names].compact_blank.join(" ") }
       end
 
       # Buddy's own replies only, and only once settled. A `streaming` or

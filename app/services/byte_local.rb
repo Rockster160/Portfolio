@@ -102,6 +102,11 @@ module ByteLocal
       metadata:        message.metadata,
       conversation_id: conversation&.id || message.byte_conversation_id,
       conversation:    conversation ? conversation_payload(conversation) : nil,
+      # Images the person attached, as {filename, content_type, url} with a
+      # short-lived directly-fetchable URL. The Mac downloads each to a temp
+      # file and points the Claude turn at it (Claude Code can Read image
+      # files). Empty for the overwhelming majority of turns.
+      attachments:     message.model_image_sources,
     }
 
     req.body = JSON.generate(payload)

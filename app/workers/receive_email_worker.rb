@@ -62,7 +62,9 @@ class ReceiveEmailWorker
   def usps_update?
     return true if external_addresses.any? { |a| a.to_s.downcase.include?("usps.com") }
 
-    mail.subject.to_s.match?(/USPS.*(?:Expected Delivery|out for delivery|delivered)/i)
+    subj = mail.subject.to_s
+    subj.match?(/USPS.*(?:Expected Delivery|out for delivery|delivered)/i) ||
+      subj.match?(/Daily Digest/i) # Informed-Delivery digest (manual forward loses the usps.com sender)
   end
 
   def parse_usps
