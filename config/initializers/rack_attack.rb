@@ -57,6 +57,17 @@ class Rack::Attack
     end
   }
 
+  ### Block Cookieless Scrapers ###
+
+  # /recipes/print requires a logged-in session, so any legitimate visitor
+  # arrives carrying the Rails session cookie. Distributed scrapers cycling
+  # through IPs hit the URL cold with no cookie, so IP throttling can't catch
+  # them. Reject cookieless requests to this path in middleware (fast 403,
+  # before Rails routing/DB) regardless of source IP.
+  blocklist("cookieless recipe print") { |req|
+    req.path == "/recipes/print" && req.cookies["_Portfolio_session"].blank?
+  }
+
   ### Custom Throttle Response ###
 
   # By default, Rack::Attack returns an HTTP 429 for throttled responses,
