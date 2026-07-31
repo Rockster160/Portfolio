@@ -754,6 +754,8 @@ module Buddy
         | \b(?:turned|switched|flipped)\s+(?:it|that|the)\b
         | (?:\bis|\bare|(?:'|’)s)\s+(?:on|off)\s+(?:now|high|low|mid|medium)\b
         | \A\s*(?:set|setting)\s+(?:it|that|the\s+\w+)\s+to\b
+        | \b(?:saved\s+(?:it|that|as)|(?:it|that)(?:'|’)?s\s+saved|now\s+runs)\b
+        | \b(?:running|firing)\s+(?:\*\*|`)[^*`\n]{1,60}(?:\*\*|`)
       /xi
 
       # Promises to act NOW that were never backed by a call. Different failure

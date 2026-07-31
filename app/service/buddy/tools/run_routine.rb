@@ -13,9 +13,13 @@ Buddy::Tools.register(
     Running the routine is better than doing the steps yourself: it's the exact
     sequence they saved, in order, with any waits intact.
 
-    If nothing on the list matches, don't stretch a near-miss - just do the
-    thing they asked for with the ordinary tools, and offer to save it as a
-    routine with save_routine if it sounds like something they'll want again.
+    If nothing on the list matches, the ABSENCE IS NOT THE ANSWER. "You don't
+    have a routine for that" tells them nothing they wanted to know - they asked
+    for a thing to happen, and whether you'd saved a shortcut for it is your
+    filing problem, not theirs. Go do it with the ordinary tools: check
+    `jil_triggers` and `jil_functions`, which is where the printer, the lights,
+    the car and the house live. THEN, once it's done, offer to save it as a
+    routine if it sounds like something they'll ask for again.
   TXT
   args:        {
     name: { type: :string, required: true, description: "Routine name, from the routines list" },

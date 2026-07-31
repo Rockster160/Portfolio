@@ -66,21 +66,44 @@ module Buddy
       list.each_with_index.map { |raw, i| sanitize_step(raw, i + 1) }
     end
 
+    # Keys that name the TOOL rather than being an argument to it.
+    TOOL_KEYS = %w[tool_name tool].freeze
+
     def sanitize_step(raw, position)
-      row = raw.respond_to?(:to_h) ? raw.to_h.transform_keys(&:to_s) : {}
-      name = (row["tool_name"] || row["tool"] || row["name"]).to_s
-      tool = Buddy::Tools[name.presence || "-"]
+      row      = raw.respond_to?(:to_h) ? raw.to_h.transform_keys(&:to_s) : {}
+      tool_key = TOOL_KEYS.find { |k| row[k].present? }
+      name     = (tool_key ? row[tool_key] : row["name"]).to_s
+      tool     = Buddy::Tools[name.presence || "-"]
       raise "step #{position}: there's no tool called #{name.inspect}" if tool.nil?
       raise "step #{position}: #{name} can't be saved in a routine" unless Buddy::Tools.routinable?(tool)
 
-      given = (row["payload"] || row["args"] || {})
-      given = JSON.parse(given) rescue {} if given.is_a?(String)
-      given = Buddy::Tools.normalize_function_arguments(tool, given.to_h.transform_keys(&:to_sym))
-
+      given = Buddy::Tools.normalize_function_arguments(tool, step_args(row, tool_key).transform_keys(&:to_sym))
       payload, errors = Buddy::Tools.validate_payload(tool, given)
       raise "step #{position} (#{name}): #{errors.join("; ")}" if errors.any?
 
       BuddyRoutine.step(name, payload)
+    end
+
+    # Both spellings of a step, because the model writes both and there was
+    # never a way to know which one it would reach for:
+    #
+    #   { "tool_name": "trigger_jil_task", "payload": { "name": "Printer - Preheat" } }
+    #   { "tool_name": "trigger_jil_task", "name": "Printer - Preheat" }
+    #
+    # The flat one used to fall through as an empty payload and come back
+    # "missing required arg :name" - a baffling thing to be told about a step
+    # whose name is sitting right there, and prod 1345 lost a routine to it.
+    #
+    # Flat only makes sense when the tool was named by its OWN key. If `name`
+    # was doing that job then there are no arguments in this row at all, and
+    # treating the tool's name as its own argument would save a step that fires
+    # a task called "trigger_jil_task".
+    def step_args(row, tool_key)
+      nested = row["payload"] || row["args"]
+      nested = (JSON.parse(nested) rescue nil) if nested.is_a?(String)
+      return nested.transform_keys(&:to_s) if nested.is_a?(Hash)
+
+      tool_key ? row.except(*TOOL_KEYS) : {}
     end
 
     # The last `limit` tool calls this conversation actually ran, oldest first -

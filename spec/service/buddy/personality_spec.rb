@@ -148,6 +148,15 @@ RSpec.describe Buddy::Personality do
 
       expect(prompt).to include("you can't see your own finished calls")
     end
+
+    # Prod 1343: "prep my printer" got "I don't have a saved prep my printer
+    # routine yet" while the Jil task that does exactly that sat in jil_triggers.
+    it "says a missing routine means do it the ordinary way, not announce the gap" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("never the answer to being asked for it")
+      expect(prompt).to include("your bookkeeping, not theirs")
+    end
   end
 
   # Prod 1319: a deploy watch tripped for the second time that night and got

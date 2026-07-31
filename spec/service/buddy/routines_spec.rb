@@ -185,6 +185,26 @@ RSpec.describe "Buddy routines" do
       expect(user.buddy_routines.first.steps.first["payload"]["message"]).to eq("new")
     end
 
+    # Prod 1345: the model wrote its step flat, the payload came through empty,
+    # and it came back "missing required arg :name" about a step whose name was
+    # sitting right there. The routine was lost and the reply claimed it saved.
+    it "takes a step written flat, not just one wrapped in a payload" do
+      turn!("save the preheat task as prep my printer", [
+        save_call("Prep", [{ tool_name: "message_partner", to: her, message: "flat" }]),
+      ])
+
+      routine = user.buddy_routines.find_by(name: "Prep")
+      expect(routine.steps.first["payload"]).to include("to" => her, "message" => "flat")
+    end
+
+    it "doesn't mistake the tool's own name for one of its arguments" do
+      client = turn!("save this", [save_call("Nope", [{ name: "message_partner" }])])
+
+      expect(user.buddy_routines.count).to eq(0)
+      output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
+      expect(output["error"]).to match(/missing required arg/i)
+    end
+
     it "refuses a step whose tool doesn't exist instead of saving something broken" do
       client = turn!("save this", [
         save_call("Nope", [{ tool_name: "launch_rocket", payload: {} }]),
@@ -313,6 +333,43 @@ RSpec.describe "Buddy routines" do
       Buddy::ProposalExecutor.perform(action.id, action.buttons.pluck("id"))
 
       expect(user.buddy_routines.count).to eq(0)
+    end
+  end
+
+  # ---- a save that didn't take can't read as one that did -------------------
+
+  # Prod 1345-1348. save_routine failed on a malformed step, run_routine failed
+  # on the routine that was therefore never there, and BOTH replies announced
+  # success - so the person tried to run a thing that had never been saved and
+  # got "Yesss, running prep my printer now" with nothing behind it.
+  describe "when the call didn't land" do
+    def reply
+      convo.byte_messages.where(direction: :inbound).order(:id).last
+    end
+
+    it "retracts a claim that a routine was saved when nothing was" do
+      turn!(
+        "save that as prep my printer",
+        [{ name: :save_routine, call_id: "s1", arguments: { "name" => "Prep", "steps" => "not json" } }],
+        text: "Saved as **prep my printer**. It now runs the preheat task.",
+      )
+
+      expect(user.buddy_routines.count).to eq(0)
+      expect(reply.body).to eq(Buddy::GPT::Turn::FALLBACK_BODY)
+      expect(reply.metadata["retracted_claim"]).to be(true)
+    end
+
+    it "retracts a claim that a routine is running when it doesn't exist" do
+      turn!("prep my printer", [run_call("Prep")], text: "Yesss, running **prep my printer** now.")
+
+      expect(reply.body).to eq(Buddy::GPT::Turn::FALLBACK_BODY)
+      expect(reply.metadata["retracted_claim"]).to be(true)
+    end
+
+    it "leaves an honest offer alone" do
+      turn!("prep my printer", [run_call("Prep")], text: "I can save that as a routine if you want.")
+
+      expect(reply.body).to eq("I can save that as a routine if you want.")
     end
   end
 
