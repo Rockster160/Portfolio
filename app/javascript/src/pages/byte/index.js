@@ -1255,15 +1255,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     buddyTimers?.setActive();
     // Mood + theme are per-conversation — repaint the pet for the thread we
     // just switched to so it wears ITS face, not the previous thread's.
-    if (convo?.mode === "buddy") {
-      if (convo.buddy_theme) buddyHero?.setTheme(convo.buddy_theme);
-      const expr = convo.buddy_expression;
-      if (expr && expr !== "sleeping") {
-        buddyWakeExpr = expr; // rest/reconnect target for this thread
-        if (!sleepUntil) buddyHero?.setExpression(expr);
-      }
-    }
+    if (convo?.mode === "buddy") applyBuddyTheme(convo);
     updateSleepChip();
+  }
+
+  // Paint the whole surface + hero for a Buddy conversation's theme. Both the
+  // palette (keyed off `.byte-app[data-buddy-theme]`) and the character (the
+  // hero element) have to move together, or a theme change repaints the pet
+  // while the surface keeps the old colour. Also restores the thread's stored
+  // face. Shared by the conversation switch and a live `/buddy` theme change.
+  function applyBuddyTheme(convo) {
+    if (!convo) return;
+    const app = document.querySelector(".byte-app");
+    if (app && convo.buddy_theme) app.dataset.buddyTheme = convo.buddy_theme;
+    if (convo.buddy_theme) buddyHero?.setTheme(convo.buddy_theme);
+    const expr = convo.buddy_expression;
+    if (expr && expr !== "sleeping") {
+      buddyWakeExpr = expr; // rest/reconnect target for this thread
+      if (!sleepUntil) buddyHero?.setExpression(expr);
+    }
   }
 
   function migrateLegacy(defaultConvId) {
@@ -1996,6 +2006,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (data.kind === "conversation") {
         convoManager.applyBroadcast(data);
         updateSleepChip(); // mode may have changed under the active thread
+        // A live theme swap (`/buddy suki`) on the thread on screen has to
+        // repaint the surface + pet now — applyBroadcast only touches the list.
+        const convo = data.conversation;
+        if (convo && convo.id === currentConversationId && convo.mode === "buddy") {
+          applyBuddyTheme(convo);
+        }
         return;
       }
       if (data.kind === "buddy_expression") {

@@ -100,6 +100,66 @@ RSpec.describe ByteController, type: :controller do
     end
   end
 
+  describe "/buddy theme switch" do
+    before { sign_in rocco }
+
+    def buddy_convo
+      rocco.byte_conversations.create!(name: :Buddy, mode: :buddy, buddy_theme: "byte")
+    end
+
+    it "swaps the pet theme on the thread and does not dispatch to the Mac" do
+      convo = buddy_convo
+      expect(ByteLocal).not_to receive(:deliver)
+
+      post :create_message, params: { conversation_id: convo.id, body: "/buddy suki" }
+
+      expect(convo.reload.buddy_theme).to eq("suki")
+    end
+
+    it "resets the stored expression so the new pet never renders a face it lacks" do
+      convo = rocco.byte_conversations.create!(name: :Buddy, mode: :buddy, buddy_theme: "moss", buddy_expression: "wink")
+
+      post :create_message, params: { conversation_id: convo.id, body: "/buddy suki" }
+
+      expect(convo.reload.buddy_expression).to eq("neutral")
+    end
+
+    it "acks with the new pet name instead of a bubble-less send" do
+      convo = buddy_convo
+
+      post :create_message, params: { conversation_id: convo.id, body: "/buddy moss" }
+
+      ack = convo.byte_messages.order(:id).last
+      expect(ack.body).to include("Moss")
+      expect(ack.metadata["source"]).to eq("slash")
+    end
+
+    it "rejects an unknown theme with a usage hint and leaves the theme alone" do
+      convo = buddy_convo
+
+      post :create_message, params: { conversation_id: convo.id, body: "/buddy dragon" }
+
+      expect(convo.reload.buddy_theme).to eq("byte")
+      expect(convo.byte_messages.order(:id).last.body).to include("usage:")
+    end
+
+    it "no-ops with a nudge when the thread is already that pet" do
+      convo = buddy_convo
+
+      post :create_message, params: { conversation_id: convo.id, body: "/buddy byte" }
+
+      expect(convo.byte_messages.order(:id).last.body).to include("already")
+    end
+
+    it "refuses outside buddy mode" do
+      convo = rocco.byte_conversations.create!(name: :Legacy, mode: :claude)
+
+      post :create_message, params: { conversation_id: convo.id, body: "/buddy suki" }
+
+      expect(convo.byte_messages.order(:id).last.body).to include("Buddy thing")
+    end
+  end
+
   describe "POST #create_message" do
     before { sign_in rocco }
 

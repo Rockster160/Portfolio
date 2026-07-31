@@ -30,4 +30,16 @@ RSpec.describe AmazonOrder do
       expect(rebuilt.url).to eq("https://www.amazon.com/dp/B0GF24P6J3")
     end
   end
+
+  describe "#url" do
+    it "is the carrier tracking page when a non-Amazon item has a tracking number" do
+      order = described_class.new(carrier: :usps, tracking_number: "9200190267338000065163052")
+      expect(order.url).to eq("https://tools.usps.com/go/TrackConfirmAction?tLabels=9200190267338000065163052")
+    end
+
+    it "is nil for a non-Amazon item with no tracking number (no bogus Amazon link)" do
+      order = described_class.new(carrier: :ups, item_id: "UPS-abcd", source: "NINGBO")
+      expect(order.url).to be_nil
+    end
+  end
 end

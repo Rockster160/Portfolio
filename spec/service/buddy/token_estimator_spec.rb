@@ -19,18 +19,19 @@ RSpec.describe Buddy::TokenEstimator do
     expect(described_class.estimate_for(convo)).to eq(120) # 400/4 + overhead
   end
 
-  # Bodies alone say a thread of photos costs nothing, which is the one case
-  # where char/4 isn't merely coarse but blind — an image is ~1,100 tokens and
-  # gets replayed on every turn it's still in History's window.
-  it "counts an attached image, which a body-only estimate can't see" do
+  # Bodies alone say a photo costs nothing, which is the one case where char/4
+  # isn't merely coarse but blind — an image is ~1,100 tokens.
+  it "counts an image on the message about to be answered" do
     with_image(said("look"))
 
     expect(described_class.estimate_for(convo)).to be > described_class::IMAGE_TOKENS
   end
 
-  it "stops counting an image once it falls out of the replay depth" do
+  # History sends the pixels once, on the turn the image arrives; every replay
+  # after that is just its filename, so it stops costing anything.
+  it "stops counting it once a newer message has arrived" do
     with_image(said("look"))
-    (Buddy::GPT::History::IMAGE_REPLAY_DEPTH + 1).times { |i| said("later #{i}") }
+    said("and another thing")
 
     expect(described_class.estimate_for(convo)).to be < described_class::IMAGE_TOKENS
   end

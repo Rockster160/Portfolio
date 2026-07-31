@@ -17,10 +17,10 @@ module Buddy
 
     CHARS_PER_TOKEN      = 4
     PER_MESSAGE_OVERHEAD = 20   # role tags, framing tokens
-    # A replayed `input_image`, once OpenAI tiles it. Rough, but bodies alone
-    # would say a thread of photos costs nothing — the one case where char/4 is
-    # not merely coarse but blind. Only images still inside History's replay
-    # depth count; past that they're sent as filenames and cost ~nothing.
+    # An `input_image`, once OpenAI tiles it. Rough, but bodies alone would say
+    # a photo costs nothing — the one case where char/4 is not merely coarse but
+    # blind. Only the NEWEST message counts: History sends an image's pixels once
+    # on the turn it arrives, and every replay after that is just its filename.
     IMAGE_TOKENS = 1_100
 
     # Fixed per-turn cost of everything that is not conversation history.
@@ -28,19 +28,20 @@ module Buddy
     #
     #   persona (byte.md)  ~1,895
     #   tone profile       ~3,050
-    #   RULES_APPENDIX    ~11,685
-    #   context guide      ~3,050
+    #   RULES_APPENDIX    ~11,970
+    #   context guide      ~3,100
     #   framing + glance     ~120
     #   ---------------------------
-    #   prompt total      ~19,800
-    #   tool schemas      ~13,845   (38 proposal + 5 silent + get_context + read_prompt)
+    #   prompt total      ~20,135
+    #   tool schemas      ~14,350   (39 proposal + 5 silent + get_context,
+    #                                read_prompt, view_image)
     #   ===========================
-    #   TOTAL             ~33,645
+    #   TOTAL             ~34,485
     #
     # Re-measure if the rules, tone profile, or tool count change materially:
     #   Buddy::Personality::RULES_APPENDIX.bytesize / 4
     #   JSON.generate(tool_schemas).bytesize / 4
-    FIXED_OVERHEAD = 33_645
+    FIXED_OVERHEAD = 34_485
 
     def estimate_for(conversation)
       compact_at   = compact_timestamp(conversation)
@@ -51,9 +52,9 @@ module Buddy
     end
 
     def image_cost(scope)
-      recent = scope.order(created_at: :desc).limit(Buddy::GPT::History::IMAGE_REPLAY_DEPTH)
+      newest = scope.order(created_at: :desc).limit(1)
       count  = ActiveStorage::Attachment.where(
-        record_type: "ByteMessage", name: :files, record_id: recent.select(:id),
+        record_type: "ByteMessage", name: :files, record_id: newest.select(:id),
       ).count
 
       count * IMAGE_TOKENS

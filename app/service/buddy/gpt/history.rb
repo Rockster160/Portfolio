@@ -35,18 +35,17 @@ module Buddy
       # model those brackets are system framing so it doesn't write them itself.
       RELAY_KIND = "buddy_relay".freeze
 
-      # How far back an image is still worth sending as pixels. History is
-      # rebuilt from scratch every turn, so an unbounded replay means a photo
-      # from forty messages ago is re-fetched by OpenAI and re-billed as vision
-      # tokens on every single turn for the rest of the thread. Past this depth
-      # the message keeps its text and its images degrade to their filenames —
-      # enough for Buddy to know a picture was there and refer back to it.
-      IMAGE_REPLAY_DEPTH = 6
-
+      # An image is sent as pixels EXACTLY ONCE: on the turn it arrives, which is
+      # the message this build is answering. History is rebuilt from scratch
+      # every turn, so replaying it would mean one photo is re-fetched by OpenAI
+      # and re-billed as vision tokens on every turn for the rest of the thread.
+      #
+      # Afterwards it stays in the thread as `[image #id: name]`, so Buddy still
+      # knows a picture was there and can refer back to it — and can call
+      # `view_image` with that id to actually look again when it matters.
       def build(conversation, upto:)
-        rows   = scope(conversation, upto)
-        cutoff = rows.length - IMAGE_REPLAY_DEPTH
-        rows.each_with_index.filter_map { |msg, i| item_for(msg, replay_images: i >= cutoff) }
+        rows = scope(conversation, upto)
+        rows.filter_map { |msg| item_for(msg, replay_images: upto.present? && msg.id == upto.id) }
       end
 
       def scope(conversation, upto)
@@ -60,7 +59,7 @@ module Buddy
         scope.to_a.last(MAX_MESSAGES)
       end
 
-      def item_for(message, replay_images: true)
+      def item_for(message, replay_images: false)
         body = message.body.to_s.strip
 
         return user_item(message, body, replay_images) if message.direction == "outbound"
@@ -93,11 +92,12 @@ module Buddy
         { role: :user, content: content }
       end
 
-      # Too far back to be worth the pixels: the turn stays in the thread as
-      # text, with the images named so a later "that photo I sent" still has
-      # something to land on.
+      # Already parsed on the turn it arrived, so the pixels aren't worth
+      # re-sending. The turn stays in the thread as text with each image named
+      # and carrying its message id, which is both what lets "that photo I sent"
+      # land on something and what Buddy passes to `view_image` to see it again.
       def faded_item(message, body)
-        names = message.model_image_names.map { |name| "[image: #{name}]" }
+        names = message.model_image_names.map { |name| "[image ##{message.id}: #{name}]" }
         return nil if body.empty? && names.empty?
 
         { role: :user, content: [body, *names].compact_blank.join(" ") }

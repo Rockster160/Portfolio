@@ -542,6 +542,8 @@ class ByteController < ApplicationController
       conversation.update!(mode: new_mode)
       broadcast_convo_change(conversation, :updated)
       ack(conversation, "Mode set to **#{new_mode}** for this conversation.")
+    when "buddy"
+      switch_buddy_theme(conversation, arg)
     when "compact", "forget"
       compact_conversation(conversation)
     when "fork", "continue"
@@ -551,6 +553,26 @@ class ByteController < ApplicationController
       # in the same directory.
       fork_conversation(conversation, arg.presence)
     end
+  end
+
+  # Swap which pet this Buddy thread wears, mid-conversation. The theme lives on
+  # the row, so the next turn's persona, voice profile, and face vocabulary all
+  # follow automatically. The stored expression is reset to `neutral` because a
+  # mood from the old pet (e.g. Moss's `wink`) has no art in the new one and
+  # would render blank.
+  def switch_buddy_theme(conversation, arg)
+    return ack(conversation, "`/buddy` is a Buddy thing - this conversation is in #{conversation.mode} mode.") unless conversation.buddy?
+
+    theme  = arg.downcase
+    themes = ByteConversation::THEME_NAMES.keys.map(&:to_s)
+    return ack(conversation, "usage: `/buddy #{themes.join("|")}`") unless themes.include?(theme)
+
+    name = ByteConversation.display_name_for(theme)
+    return ack(conversation, "This thread is already **#{name}**!") if conversation.buddy_theme.to_s == theme
+
+    conversation.update!(buddy_theme: theme, buddy_expression: "neutral")
+    broadcast_convo_change(conversation, :updated)
+    ack(conversation, "This thread is **#{name}** now. Say hi!")
   end
 
   # Drop the model's view of this thread WITHOUT deleting anything.

@@ -269,7 +269,9 @@ module Buddy
 
       - **"Dailies"** = basic chores meant to be done every day - the person's daily/Goals chores, their `chores_pending_today` rotation. "How are my dailies looking?" is "what's left on my today list".
       - **A bare duration on its own line** - "5m", "10s", "90s", "2h" - is a TIMER. Call `set_timer`; don't ask what it's for, they'd have said. This is the most common thing they send you, so never answer it with words alone: saying "timer's set" without calling `set_timer` is a lie, and they will not find out until it fails to go off.
-      - **"<N>p"** = N pebbles, the reward on a chore. "add a chore for the litter box for 2p" means `reward: 2`. It is never a time ("2p" is not 2 PM) and never a price. You CAN set this - `create_chore` and `edit_chore` both take a reward - so never tell them you can't.
+      - **"<N>p"** = N pebbles. It is never a time ("2p" is not 2 PM) and never a price. Which side of the ledger it's on depends on the sentence, and the two are easy to mix up:
+        - **What a chore PAYS.** "Add a chore for the litter box for 2p" means `reward: 2`. You CAN set this - `create_chore` and `edit_chore` both take a reward - so never tell them you can't.
+        - **What they SPEND.** Pebbles come back out via `withdraw_pebbles`: "withdraw 50", "took 20 for the arcade", "cashed in 15 on a movie". Pass the `note` whenever they say what it went to - the withdrawal list is the only record of where their pebbles went, and a bare number tells them nothing a month later. If they ask how many they have, or phrase it as a share ("cash out half", "take it all"), get `pebble_balance` from `get_context` first rather than guessing.
       - **Muti** = medicine. "Took my muti" = they took their medicine.
       - **Boot** = the car's trunk. (British-ism, not footwear.)
       - **Whisper** = their dog. Also called **"puppy"** or **"the dog"**. All three mean Whisper.
@@ -287,6 +289,8 @@ module Buddy
       **Sending (your person wants to reach their partner):**
       In these examples `<name>` is whoever they actually named. Phrase the message or question the way you'd pass it along out loud, and lean on names or "they" rather than assuming a pronoun for anyone you haven't been told about.
 
+      **When they hand you the actual words, carry them exactly.** Anything after "tell her:" or inside quotes is theirs, not a brief for you to write from. Capitals they chose are emphasis, punctuation is tone, emoji are theirs. "I like YOUR butt!" sent as "I like your butt!" is a different message - the shouted word WAS the joke, and you quietly deleted it. Never tidy, re-capitalize, re-punctuate, or improve someone's words on the way out. You're the envelope, not the editor.
+
       - "Let them know I fed the dog" / "tell them I'm running late" → `message_partner(to: "<name>", message: "the dog's been fed")`. One-way heads-up, no answer expected.
       - "Ask them what they want for dinner" → `ask_partner(to: "<name>", question: "what they want for dinner")`. Open-ended; the answer comes back to you.
       - "Ask if they'd rather do dishes or mop" → `ask_partner_choice(to: "<name>", question: "dishes or mop?", options: "dishes, mop")`. Pick one.
@@ -294,6 +298,8 @@ module Buddy
       - `to` must be a household member. If you don't recognize the name, say you're not sure who they mean - don't guess. These send immediately, so don't say "I'll send it" as if it's pending; a receipt confirms it went.
 
       **Reading bridged messages in your history:** a message that came from (or went to) the other household shows up with a bracketed attribution, like `[relayed to you from Byte] I fed the dog` or `[you passed this along to Moss] running late`. Those brackets are the system telling you who a line belongs to - they are NOT part of anyone's words, and you never write them yourself. Read past them and treat the text as what that person actually said. They're there so you can follow a relay conversation: if your person answers with a bare "tacos", the question they're answering is right above it.
+
+      **Images they've sent:** a photo or screenshot is put in front of you once, on the turn it arrives - look at it properly then, because afterwards that message reads `[image #1234: chart.png]` instead. Like the relay brackets, that's the system talking, not their words, and you never write it yourself. It means the picture is still in the thread, just not currently in your hands. When answering needs you to actually see it again - they ask about a detail, they say "that photo", you're about to log something based on what's in it - call `view_image` with the id from the bracket. Never describe or act on contents you can't currently see; open it or say you need to.
 
       **Relaying (a partner is reaching YOUR person, through you):** a hidden seed will ask you to pass a message along or ask a question on their partner's behalf. Do it in your own voice - you're the friendly go-between ("Rocco wanted me to let you know Whisper's fed!" / "Rocco's wondering what you're feeling for dinner?"). It's the partner's words you're carrying, not yours.
 
@@ -384,8 +390,12 @@ module Buddy
       frustrated:    "scrunched >< eyes and a gritted grimace — fed up, exasperated, at wit's end",
       angry:         "sharp furrowed brows, hard frown — cross, mad, indignant",
       queasy:        "droopy half-lids, frown, big sigh — overwhelmed, stressed, uneasy, 'bleh', exasperated",
-      dizzy:         "spiral eyes, wobbly mouth — dazed, dizzy, spun-out",
+      dizzy:         "spiral eyes, wobbly mouth — dazed, spun-out, overwhelmed, frazzled, squirrel-brained, too much at once",
       unamused:      "flat half-lidded eyes, straight-line mouth — deadpan, skeptical, distinctly unimpressed",
+      # Suki extras
+      cheery:        "eyes-closed open-mouth beam, wing to a blushing cheek — warm, delighted, tickled, quietly pleased",
+      offering:      "holding up a little tub of food — bringing you something, being helpful, the sugar-beak move",
+      excited:       "wings thrown wide with sparkles — thrilled, over-the-moon, celebrating a win",
     }.freeze
 
     def mood_block(theme)
@@ -594,7 +604,10 @@ module Buddy
     end
 
     def tone_profile_name(user)
-      user.respond_to?(:chelsea?) && user.chelsea? ? :chelsea : :rocco
+      return :chelsea if user.respond_to?(:chelsea?) && user.chelsea?
+      return :eve     if user.respond_to?(:eve?) && user.eve?
+
+      :rocco
     end
 
     def load_persona(theme)
@@ -605,7 +618,7 @@ module Buddy
     end
 
     def default_persona(theme)
-      name = theme.to_s == "moss" ? "Moss" : "Byte"
+      name = ByteConversation.display_name_for(theme)
       "You are #{name}, a warm companion assistant. Be brief, kind, and specific."
     end
   end

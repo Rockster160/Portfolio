@@ -17,9 +17,16 @@
 #  user_id           :bigint           not null
 #
 class ByteConversation < ApplicationRecord
-  # Users whose Buddy is Moss by default. The pet theme is now per-conversation,
-  # so this only seeds the default at creation — nothing else keys off the id.
-  MOSS_USER_IDS = [58_128].freeze
+  # Display name per pet theme. Single source of truth so the persona loader,
+  # the tool context, and this model never drift on what a theme is called.
+  # Anything not listed falls back to Byte.
+  THEME_NAMES = { byte: "Byte", moss: "Moss", suki: "Suki" }.freeze
+
+  # Users whose new Buddy threads spin up as a non-default pet. The pet theme is
+  # now per-conversation, so these only seed the default at creation — nothing
+  # else keys off the id.
+  MOSS_USER_IDS = [58_128].freeze  # Chelsea
+  SUKI_USER_IDS = [4].freeze       # Eve
 
   belongs_to :user
 
@@ -49,7 +56,16 @@ class ByteConversation < ApplicationRecord
 
   # Single source of truth for which pet a user's new Buddy threads spin up as.
   def self.default_theme_for(user)
-    MOSS_USER_IDS.include?(user&.id) ? "moss" : "byte"
+    case user&.id
+    when *MOSS_USER_IDS then :moss
+    when *SUKI_USER_IDS then :suki
+    else :byte
+    end
+  end
+
+  # Display name ("Byte"/"Moss"/"Suki") for a theme string.
+  def self.display_name_for(theme)
+    THEME_NAMES.fetch(theme.to_sym, "Byte")
   end
 
   # Return the user's default conversation, creating one on first access.
@@ -60,10 +76,10 @@ class ByteConversation < ApplicationRecord
       user.byte_conversations.create!(name: :Byte, mode: :claude)
   end
 
-  # Display name for the pet on a Buddy thread ("Moss"/"Byte"), from this
+  # Display name for the pet on a Buddy thread ("Byte"/"Moss"/"Suki"), from this
   # conversation's own theme.
   def buddy_name
-    buddy_theme.to_s == "moss" ? "Moss" : "Byte"
+    self.class.display_name_for(buddy_theme)
   end
 
   def as_wire

@@ -15,8 +15,8 @@ RSpec.describe UspsEmailParser do
 
   around { |ex| travel_to(DateTime.new(2026, 7, 16, 18, 0, 0)) { ex.run } }
 
-  def email(subject:, body_html:)
-    double("Email", subject: subject, to_html: body_html)
+  def email(subject:, body_html:, id: 900)
+    double("Email", id: id, subject: subject, to_html: body_html)
   end
 
   it "parses an out-for-delivery tracking email" do
@@ -39,6 +39,7 @@ RSpec.describe UspsEmailParser do
     expect(item.delivery_date).to eq(Date.new(2026, 7, 16).iso8601)
     expect(item.time_range).to eq("9PM")
     expect(item.item_id).to eq("9200190267338000065163052")
+    expect(item.email_ids).to include(900) # so the dashboard can open the email
   end
 
   it "flips delivered on a delivered email and connects by tracking number" do

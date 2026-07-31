@@ -32,6 +32,7 @@ const COMMANDS = [
   { name: "waits",    description: "List running waits" },
 
   // Buddy mode
+  { name: "buddy",    description: "Switch this thread's pet",                         args: "<byte|moss|suki>" },
   { name: "tools",    description: "Buddy tool access (on default | off | list)",     args: "[spec]" },
   { name: "compact",  description: "Drop this thread's history — memories stay" },
 

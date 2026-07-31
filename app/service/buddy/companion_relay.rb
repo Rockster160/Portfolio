@@ -15,6 +15,13 @@ module Buddy
   #   ask_choice/ -> bridge! + a checkbox ByteAction on the recipient's copy; the
   #   ask_multi      answer comes through respond_action, then bridges back.
   module CompanionRelay
+    # Pet icon asset per theme, for the relay attribution header.
+    THEME_ICONS = {
+      "byte" => "byte_favicon/byte.png",
+      "moss" => "moss_favicon/moss.png",
+      "suki" => "suki_favicon/suki.png",
+    }.freeze
+
     class << self
       # ---- resolving the recipient + their conversation ----
 
@@ -182,14 +189,13 @@ module Buddy
       # theme (drives the bubble accent color), and pet icon asset path.
       def peer_identity(user)
         theme = ByteConversation.default_theme_for(user).to_s
-        moss  = theme == "moss"
-        asset = moss ? "moss_favicon/moss.png" : "byte_favicon/byte.png"
+        asset = THEME_ICONS.fetch(theme, THEME_ICONS["byte"])
         icon  = begin
           ActionController::Base.helpers.image_path(asset)
         rescue StandardError
           "/assets/#{asset}"
         end
-        { "name" => moss ? "Moss" : "Byte", "theme" => theme, "icon" => icon }
+        { "name" => ByteConversation.display_name_for(theme), "theme" => theme, "icon" => icon }
       end
 
       # ---- body copy ----

@@ -216,6 +216,51 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to eq("Nice, that's logged.")
     end
 
+    # Prod 1439/1440. Asked to pass a line to Chelsea, the model answered
+    # "Sent. 😅" and then WROTE OUT the `[you passed this along to Moss]`
+    # attribution that History puts on bridged messages so Buddy can read them.
+    # No message_partner call, no relay row, no receipt chip - and neither guard
+    # fired, because "Sent." matched no claim pattern and the bracket was only
+    # ever checked for the retired `[[marker]]` syntax.
+    describe "a relay it only described" do
+      let(:faked) { "Sent. 😅\n\n[you passed this along to Moss] Rude. Byte took away my formatting!" }
+
+      it "gets one corrective round to actually make the call" do
+        allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+
+        client = run([
+          { text: faked },
+          { tool_calls: [{ name: :message_partner, arguments: { "to" => "Chelsea", "message" => "Rude." } }] },
+          { text: "Okay, that one's actually on its way." },
+        ])
+
+        expect(client.calls[1].input.last[:content]).to eq(described_class::RETRY_NUDGE)
+        expect(reply.body).to eq("Okay, that one's actually on its way.")
+      end
+
+      it "retracts rather than showing a send that never happened" do
+        allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: false)
+
+        run([{ text: faked }, { text: faked }])
+
+        expect(reply.body).to eq(described_class::FALLBACK_BODY)
+        expect(reply.metadata["retracted_claim"]).to be(true)
+      end
+
+      # Defense in depth: even when something legitimately ran this turn, the
+      # attribution is input framing and must never reach the person.
+      it "strips the attribution out of a reply that survives" do
+        allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+
+        run([
+          { tool_calls: [{ name: :message_partner, arguments: { "to" => "Chelsea", "message" => "Rude." } }] },
+          { text: "[you passed this along to Moss] Rude. Byte took away my formatting!" },
+        ])
+
+        expect(reply.body).to eq("Rude. Byte took away my formatting!")
+      end
+    end
+
     it "leaves it alone when a pending row is visible, since the person can see it" do
       action = instance_double(ByteAction, buttons: [{ "status" => "pending" }])
       allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: action, auto_ran: false)
@@ -516,6 +561,41 @@ RSpec.describe Buddy::GPT::Turn do
 
       expect(client.calls.first.instructions).not_to include("[[propose:")
       expect(client.calls.first.instructions).not_to include("[[mood:")
+    end
+  end
+
+  # An image's pixels are sent once, on the turn it arrives, and every replay
+  # after that is just its filename - so view_image is the only way back to a
+  # picture. A function_call_output is a STRING and can't carry one, which is
+  # why the tool stages a user item for Turn to splice in behind the output.
+  describe "re-opening an image the person sent earlier" do
+    before { ActiveStorage::Current.url_options = { host: "example.com", protocol: "https" } }
+    after  { ActiveStorage::Current.url_options = nil }
+
+    it "puts the pixels back on the input for the round that follows the call" do
+      old = convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "look")
+      old.files.attach(io: StringIO.new("png-bytes"), filename: "chart.png", content_type: "image/png")
+
+      client = run(
+        [
+          { tool_calls: [{ name: :view_image, arguments: { "message_id" => old.id } }] },
+          { text: "Top left says 42." },
+        ],
+        text: "what was the number again?",
+      )
+
+      # Round one only names it; round two is where it can actually be seen.
+      expect(client.calls.first.input.to_s).not_to include("input_image")
+      reopened = client.calls.last.input.last
+      expect(reopened[:role]).to eq(:user)
+      expect(reopened[:content].pluck(:type)).to eq([:input_text, :input_image])
+      expect(reply.body).to eq("Top left says 42.")
+    end
+
+    it "offers the tool alongside the other read tools" do
+      client = run([{ text: "ok" }])
+
+      expect(client.calls.first.tools.pluck(:name)).to include(:view_image)
     end
   end
 

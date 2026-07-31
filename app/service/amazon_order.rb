@@ -17,6 +17,7 @@ class AmazonOrder
     :carrier,
     :tracking_number,
     :source,
+    :custom_url,
   )
 
   # Public tracking URL per carrier. Amazon rows keep the historical product
@@ -120,9 +121,11 @@ class AmazonOrder
 
   def url
     template = CARRIER_TRACKING_URLS[carrier]
-    if template && tracking_number.present?
-      return format(template, tracking: tracking_number)
-    end
+    return format(template, tracking: tracking_number) if template && tracking_number.present?
+
+    # A non-Amazon item without a tracking number (e.g. a UPS SMS that only named
+    # the sender) has no meaningful link — don't fall back to an Amazon product URL.
+    return nil if carrier && carrier != :amazon
 
     "https://www.amazon.com/dp/#{item_id}"
   end
@@ -174,6 +177,9 @@ class AmazonOrder
     self.status          = other.status
     self.email_ids       = (Array(email_ids) + Array(other.email_ids)).uniq
     self.amount        ||= other.amount
+    # Keep the target's own link (part of its basic info); only adopt the
+    # source's if the target didn't have one.
+    self.custom_url    ||= other.custom_url
     other.destroy
     self
   end
@@ -196,6 +202,7 @@ class AmazonOrder
       carrier:            carrier,
       tracking_number:    tracking_number,
       source:             source,
+      custom_url:         custom_url,
       url:                url,
     }
   end

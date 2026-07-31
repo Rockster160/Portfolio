@@ -60,5 +60,43 @@ RSpec.describe AmzUpdatesChannel, type: :channel do
       expect(created.name).to eq("Birthday gift")
       expect(created.carrier).to eq(:manual)
     end
+
+    it "parses an inline metadata block: name, date, and custom url" do
+      url = "https://www.wayfair.com/session/secure/account/order_search.php?csnid=978882AB&_emr=fac652f5&wfcs=cs7"
+      perform :change, { "add" => %(Computer Desk on Aug 7 { url: "#{url}" }) }
+
+      created = AmazonOrder.all.last
+      expect(created.name).to eq("Computer Desk")
+      expect(created.custom_url).to eq(url)
+      expect(created.delivery_date).to eq(Date.new(Date.current.year + (Date.current.month > 8 ? 1 : 0), 8, 7).iso8601)
+      # The URL's digits must not leak into the name.
+      expect(created.name).not_to match(/\d/)
+    end
+
+    it "seeds a tracking number from metadata so a later carrier update auto-connects" do
+      perform :change, { "add" => %(Desk { tracking_number: "9200190267338000065163052", source: "Wayfair" }) }
+      seeded = AmazonOrder.all.last
+      expect(seeded.tracking_number).to eq("9200190267338000065163052")
+      expect(seeded.source).to eq("Wayfair")
+
+      hit = Shipments::Connector.connect_or_create(carrier: :usps, tracking_number: "9200190267338000065163052")
+      expect(hit).to be(seeded) # strong-matched the pre-seeded item
+    end
+  end
+
+  describe "merge keeps the target's custom url" do
+    it "does not overwrite the target's link when merging a carrier shipment in" do
+      target = AmazonOrder.create(order_id: "CUSTOM", item_id: "CUSTOM-9", name: "Computer Desk", carrier: :manual, custom_url: "https://wayfair.com/x")
+      AmazonOrder.create(order_id: "UPS", item_id: "1Zdesk", name: "NINGBO", carrier: :ups, tracking_number: "1Zdesk")
+
+      perform :change, {
+        "merge" => true, "order_id" => "CUSTOM", "item_id" => "CUSTOM-9",
+        "from_order_id" => "UPS", "from_item_id" => "1Zdesk",
+      }
+
+      expect(target.custom_url).to eq("https://wayfair.com/x") # kept
+      expect(target.tracking_number).to eq("1Zdesk")           # adopted
+      expect(target.name).to eq("Computer Desk")               # kept
+    end
   end
 end

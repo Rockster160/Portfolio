@@ -34,6 +34,25 @@ RSpec.describe Buddy::Personality do
       expect(prompt).not_to include("{{MOOD_BLOCK}}")
     end
 
+    it "injects Suki's own sunbird face set for a Suki conversation" do
+      user  = create(:user)
+      convo = buddy_convo(user, "suki")
+
+      prompt = described_class.for(user, conversation: convo, tone: :eve)
+
+      # Suki's distinctive faces are offered (cheery + offering + excited are hers)...
+      expect(prompt).to include("`cheery`", "`offering`", "`excited`", "`dizzy`", "`loving`")
+      # ...and faces belonging only to the other pets are not.
+      expect(prompt).not_to include("`nerd`", "`uwu`", "`star`", "`wink`")
+      # Her set is deliberately upbeat — no sad/crying face at all.
+      expect(prompt).not_to include("`sad`", "`crying`")
+      # sleeping is system-driven, never a selectable mood.
+      expect(prompt).not_to include("`sleeping`")
+      expect(prompt).not_to include("{{MOOD_BLOCK}}")
+      # dizzy carries the overwhelmed read for her.
+      expect(prompt).to include("overwhelmed")
+    end
+
     it "does not offer sleeping as a selectable mood" do
       convo = buddy_convo(User.me, "byte")
       prompt = described_class.for(User.me, conversation: convo)
@@ -196,6 +215,44 @@ RSpec.describe Buddy::Personality do
 
       expect(moss).not_to include("Blorp")
       expect(moss).not_to include("Soft and bouncy")
+    end
+  end
+
+  describe ".for Suki's character (Eve)" do
+    def suki_prompt
+      described_class.for(create(:user), conversation: buddy_convo(create(:user), "suki"), tone: :eve)
+    end
+
+    it "loads the Suki persona, not a fallback" do
+      expect(suki_prompt).to include("You are Suki.")
+      expect(suki_prompt).to include("sunbird")
+    end
+
+    it "carries the moves that make her Eve's companion, not Byte's or Moss's" do
+      prompt = suki_prompt
+
+      # Offer-first / bring-something, exclamation baseline, Ag-shame-then-remedy,
+      # and the hard never-nag rule are the load-bearing character beats.
+      expect(prompt).to include("Bring something, don't perform")
+      expect(prompt).to include("Exclamation is her baseline")
+      expect(prompt).to include("Ag shame, then a remedy")
+      expect(prompt).to include("Never nag")
+    end
+
+    it "pulls in Eve's voice profile, not Rocco's or Chelsea's" do
+      prompt = suki_prompt
+
+      expect(prompt).to include("Voice for Suki")
+      # A couple of Eve-only signatures from the tone profile.
+      expect(prompt).to include("Ag shame").and include("suikerbekkie")
+    end
+
+    # The slime and moss voices belong to the other pets.
+    it "keeps Byte's slime-isms and Moss's sprout out of Suki" do
+      prompt = suki_prompt
+
+      expect(prompt).not_to include("Soft and bouncy")
+      expect(prompt).not_to include("moss-ball")
     end
   end
 

@@ -1,11 +1,19 @@
 <%# Buddy's identity follows the user's theme: Moss (green) for moss users,
-    Byte (navy) otherwise — icon, PWA title, manifest, and chrome theme-color. %>
-<% if ByteConversation.default_theme_for(current_user) == "moss" %>
+    Suki (violet) for suki users, Byte (navy) otherwise — icon, PWA title,
+    manifest, and chrome theme-color. %>
+<% case ByteConversation.default_theme_for(current_user)
+   when "moss" %>
   <link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path 'moss_favicon/moss-apple-touch-icon.png' %>">
   <link rel="icon" type="image/png" href="<%= asset_path 'moss_favicon/moss-favicon-96x96.png' %>" sizes="96x96">
   <link rel="manifest" href="/moss.webmanifest">
   <meta name="theme-color" content="#14231A">
   <meta name="apple-mobile-web-app-title" content="Moss">
+<% when "suki" %>
+  <link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path 'suki_favicon/suki-apple-touch-icon.png' %>">
+  <link rel="icon" type="image/png" href="<%= asset_path 'suki_favicon/suki-favicon-96x96.png' %>" sizes="96x96">
+  <link rel="manifest" href="/suki.webmanifest">
+  <meta name="theme-color" content="#150A22">
+  <meta name="apple-mobile-web-app-title" content="Suki">
 <% else %>
   <link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path 'byte_favicon/apple-touch-icon.png' %>">
   <link rel="icon" type="image/png" href="<%= asset_path 'byte_favicon/favicon-96x96.png' %>" sizes="96x96">

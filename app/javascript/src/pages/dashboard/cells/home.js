@@ -109,6 +109,9 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
     get url() {
       return this._data.url;
     }
+    get custom_url() {
+      return this._data.custom_url;
+    }
 
     remove() {
       cell.amz_socket.send({
@@ -125,11 +128,27 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
       // via Shipped/Delivery emails (S&S subscriptions, orphaned shipments)
       // Amazon's printed id is often a shipment id that opens a partial view,
       // so search Amazon's order history by ASIN instead — always resolves.
+      // A user-provided link (from `add … { url: "…" }` or a merge) always wins.
+      if (this.custom_url) {
+        window.open(this.custom_url, "_blank");
+        return;
+      }
+
+      // Non-Amazon: prefer the forwarded email (it has the detail I forwarded).
+      // Fall back to the carrier tracking page when there's no email — e.g. a
+      // UPS update that came in via SMS.
+      if (this.carrier && this.carrier !== "amazon") {
+        if (this.email_ids && this.email_ids.length > 0) {
+          this.openEmails();
+        } else if (this.url) {
+          window.open(this.url, "_blank");
+        }
+        // Nothing useful to open (e.g. a UPS SMS with no tracking/email).
+        return;
+      }
+
       let url;
-      if (this.carrier && this.carrier !== "amazon" && this.url) {
-        // UPS/USPS/etc. — open the carrier's tracking page.
-        url = this.url;
-      } else if (this.order_id_confirmed) {
+      if (this.order_id_confirmed) {
         url =
           "https://www.amazon.com/gp/your-account/order-details?orderID=" +
           this.order_id.replace("#", "");
@@ -182,6 +201,8 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
         this._update("tracking_number", newData.tracking_number, true);
       if ("source" in newData) this._update("source", newData.source, true);
       if ("url" in newData) this._update("url", newData.url, true);
+      if ("custom_url" in newData)
+        this._update("custom_url", newData.custom_url, true);
     }
   }
 
@@ -247,20 +268,18 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
     }
   }
 
-  // One-char carrier glyph so every row shows its source at a glance while
-  // preserving the fixed-width terminal alignment.
-  let carrierGlyph = function (carrier) {
+  // Non-Amazon rows get a colored carrier tag in front of the name ("USPS: …")
+  // so the source is obvious. Amazon/manual rows keep their bare name.
+  let carrierLabel = function (carrier) {
     switch (carrier) {
       case "ups":
-        return Text.orange("U");
+        return Text.orange("UPS:");
       case "usps":
-        return Text.blue("P");
+        return Text.blue("USPS:");
       case "fedex":
-        return Text.purple("F");
-      case "manual":
-        return Text.grey("•");
+        return Text.purple("FedEx:");
       default:
-        return Text.yellow("a"); // amazon
+        return null; // amazon, manual
     }
   };
 
@@ -415,8 +434,9 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
         }
       }
 
-      let glyph = carrierGlyph(order.carrier);
-      lines.push(Text.justify(idx + 1 + ". " + glyph + " " + name, delivery));
+      let label = carrierLabel(order.carrier);
+      let display = label ? label + " " + name : name;
+      lines.push(Text.justify(idx + 1 + ". " + display, delivery));
     });
 
     cell.lines(lines);

@@ -62,6 +62,27 @@ html.html-ctr-byte body {
     --bs-pending: #8CA886;
   }
 
+  // Suki theme (Eve) — a bright iridescent-violet surface for her purple
+  // sunbird. Same override mechanism as Moss: `:has` on the themed .byte-app
+  // retints page, drawer, and modals. Suki's replies/buttons are her violet;
+  // Eve's own (outbound) messages are a warm sunset coral, so the two never
+  // blur together against the plum.
+  &:has(.byte-app[data-buddy-theme="suki"]) {
+    --bs-bg: #150A22;
+    --bs-panel: #241338;
+    --bs-panel-soft: #341C4E;
+    --bs-border: #482860;
+    --bs-text: #F2E9FA;
+    --bs-muted: #B69BD4;
+    --bs-accent: #B266F2;
+    --bs-accent-strong: #C98BFF;
+    --bs-me-bg: linear-gradient(135deg, #E0688F 0%, #EFA06A 100%);  // Eve sunset coral
+    --bs-accent-grad: linear-gradient(135deg, #8E44D8 0%, #B266F2 100%);  // violet buttons
+    --bs-them-bg: #301B47;
+    --bs-danger: #F4756B;
+    --bs-pending: #9B84B8;
+  }
+
   .byte-app,
   .byte-app *,
   .byte-drawer,
@@ -633,6 +654,10 @@ html.html-ctr-byte body {
   &[data-peer-theme="moss"] {
     background: rgba(79, 207, 124, 0.13);
     border-left: 3px solid #4fcf7c;
+  }
+  &[data-peer-theme="suki"] {
+    background: rgba(178, 102, 242, 0.13);
+    border-left: 3px solid #b266f2;
   }
 
   // Attribution header atop the bubble. Incoming: the sending Buddy's icon +
@@ -2766,6 +2791,12 @@ dialog.byte-modal {
     --buddy-danger: #E88A5C;
   }
 
+  &[data-buddy-theme="suki"] {
+    --buddy-primary: #3A1F52;
+    --buddy-accent: #B266F2;
+    --buddy-danger: #F4756B;
+  }
+
   &[hidden] {
     display: none;
   }
@@ -2881,7 +2912,8 @@ dialog.byte-modal {
 // within the hero, so no special height cap is needed anymore — just a little
 // sky above so the sprout sits clear of the header rather than jammed against
 // it. (The compact layout overrides this padding back to 8px.)
-.byte-buddy-hero[data-buddy-theme="moss"] {
+.byte-buddy-hero[data-buddy-theme="moss"],
+.byte-buddy-hero[data-buddy-theme="suki"] {
   padding-top: 3vh;
 }
 .byte-buddy-body,
@@ -2962,6 +2994,11 @@ dialog.byte-modal {
 .byte-buddy-hero[data-buddy-theme="moss"] .byte-buddy-body {
   background-image: none;
 }
+// Suki (like Moss) bakes the whole sunbird — body, expression, and any
+// sparkles/hearts/zzz — into each face PNG, so no separate body layer.
+.byte-buddy-hero[data-buddy-theme="suki"] .byte-buddy-body {
+  background-image: none;
+}
 
 // Face per theme + expression. Both themes now ship a full raster set (PNG);
 // every face in the folder is wired so the debug picker can switch to any of
@@ -3000,6 +3037,37 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
   .byte-buddy-hero[data-buddy-theme="moss"][data-buddy-expression="#{$mood}"]
     .byte-buddy-face {
     background-image: image-url("buddy/moss/face_#{$face}.png");
+  }
+}
+
+// Suki (Eve) — a full raster set of her purple sunbird. Each name here must
+// have a matching buddy/suki/face_#{name}.png or precompile fails.
+$suki_expressions: neutral happy cheery offering excited loving dizzy annoyed sleeping;
+@each $expr in $suki_expressions {
+  .byte-buddy-hero[data-buddy-theme="suki"][data-buddy-expression="#{$expr}"]
+    .byte-buddy-face {
+    background-image: image-url("buddy/suki/face_#{$expr}.png");
+  }
+}
+// Server- and system-driven expressions Suki has no identically-named art for,
+// aliased to the closest sunbird face so a proposal state, a check-in, the
+// thinking/sleeping system faces, or a stale stored mood always render. Her
+// set is relentlessly upbeat by design (no sad/crying face), so the down
+// moods fall back to her calm neutral. `overwhelmed` doubles onto dizzy.
+$suki_expr_aliases: (
+  "thinking": "neutral",
+  "sad": "neutral",
+  "crying": "neutral",
+  "sleeping_frown": "sleeping",
+  "celebrating": "excited",
+  "encouraging": "cheery",
+  "focused": "neutral",
+  "overwhelmed": "dizzy",
+);
+@each $mood, $face in $suki_expr_aliases {
+  .byte-buddy-hero[data-buddy-theme="suki"][data-buddy-expression="#{$mood}"]
+    .byte-buddy-face {
+    background-image: image-url("buddy/suki/face_#{$face}.png");
   }
 }
 
@@ -3104,6 +3172,31 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
       180deg,
       rgba(79, 207, 124, 0.22),
       rgba(79, 207, 124, 0.12)
+    ) !important;
+  }
+}
+
+// Suki palette override for buttons.
+.byte-buddy-hero[data-buddy-theme="suki"] .byte-buddy-quick-actions button {
+  background: linear-gradient(
+    180deg,
+    rgba(178, 102, 242, 0.28),
+    rgba(178, 102, 242, 0.14)
+  ) !important;
+  border-color: rgba(178, 102, 242, 0.5) !important;
+
+  &:hover {
+    background: linear-gradient(
+      180deg,
+      rgba(178, 102, 242, 0.38),
+      rgba(178, 102, 242, 0.2)
+    ) !important;
+  }
+  &:active {
+    background: linear-gradient(
+      180deg,
+      rgba(178, 102, 242, 0.22),
+      rgba(178, 102, 242, 0.12)
     ) !important;
   }
 }

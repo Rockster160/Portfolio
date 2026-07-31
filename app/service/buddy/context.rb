@@ -34,6 +34,7 @@ module Buddy
         chores_scheduled_today: chore_buckets[:scheduled_today], # recurring chores landing today but NOT in the user's intentional list
         chores_overdue_backlog: chore_buckets[:overdue_backlog], # long-term todo, NOT all-must-do-today
         chores_all:             chore_buckets[:all_names],       # EVERY active chore name - the match roster for complete_chore
+        pebble_balance:         user.chore_balance,              # spendable pebbles, for "how many do I have" and withdraw_pebbles
         recent_events:          recent_events(user, now),
         lists:                  lists(user),                    # the person's lists + each one's sections, for filing items in the right place
         active_proposals:       active_proposals(conversation),

@@ -20,6 +20,7 @@ module Buddy
       "ActionEvent"     => "ActionEvent",
       "AgendaItem"      => "AgendaItem",
       "ChoreCompletion" => "ChoreCompletion",
+      "ChoreWithdrawal" => "ChoreWithdrawal",
       "ListItem"        => "ListItem",
     }.freeze
 
@@ -108,8 +109,19 @@ module Buddy
       # Go through the shared undoer so the streak rebuilds AND the Chores app
       # gets the broadcast — not just a silent destroy.
       when "ChoreCompletion" then ChoreCompletionUndoer.call(rec.user, rec)
-      when "ListItem"        then rec.soft_destroy
+      when "ListItem" then rec.soft_destroy
+      when "ChoreWithdrawal"
+        rec.destroy!
+        refresh_balance(rec.user)
       end
+    end
+
+    # A balance change is invisible until the goal cards are recomputed and the
+    # Chores app is told, so both halves of a withdrawal undo have to do what
+    # ChoreWithdrawalsController does.
+    def refresh_balance(user)
+      ChoreGoal.refresh_all_for(user)
+      ChoreBroadcaster.broadcast_changes!(user)
     end
 
     # Undo an edit → put the previous values back.
@@ -154,6 +166,8 @@ module Buddy
       when "ChoreCompletion"
         ChoreStreak.rebuild_for!(rec.user, rec.chore)
         ChoreBroadcaster.broadcast_changes!(rec.user, rec.chore, related: (rec.chore.parent_chore if rec.chore.sub_chore?))
+      when "ChoreWithdrawal"
+        refresh_balance(rec.user)
       end
       rec
     end

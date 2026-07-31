@@ -7,13 +7,18 @@ Buddy::Tools.register(
     "ask how they're feeling". Their companion asks in its own voice, waits
     for a natural reply, and passes the answer back to you.
 
-    `to` is who to ask (household member). `question` is what you want to know,
-    phrased as intent. For a pick-ONE question use ask_partner_choice; for a
-    pick-ANY / select-all question use ask_partner_multi.
+    `to` is who to ask (household member). `question` is what you want to know.
+    When they only gave you the gist ("ask what she wants for dinner"), the
+    wording is yours. When they GAVE YOU THE WORDS - after "ask her:" or inside
+    quotes - send those exactly, capitals and punctuation and all; how they
+    phrased it is part of what they're asking.
+
+    For a pick-ONE question use ask_partner_choice; for a pick-ANY /
+    select-all question use ask_partner_multi.
   TXT
   args:        {
     to:       { type: :string, required: true, description: "Who to ask (household member)" },
-    question: { type: :string, required: true, description: "What to ask, phrased as intent" },
+    question: { type: :string, required: true, description: "What to ask. Their exact words when they gave you words; your phrasing when they only gave you the gist." },
   },
   confirm:     ->(payload, ctx) {
     partner = ctx.resolve_household_user(payload[:to])

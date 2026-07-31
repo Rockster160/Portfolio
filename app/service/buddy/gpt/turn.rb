@@ -271,6 +271,17 @@ module Buddy
       # some prompt section still teaches the retired protocol.
       STRAY_MARKER_RX = /\[\[\s*[a-z_]+\s*:[^\]]*\]\]/i
 
+      # The bracketed attribution Buddy::GPT::History puts on a bridged message
+      # so Buddy can tell whose words a line is. It is INPUT framing and the
+      # prompt says so outright, so the model writing one means it is imitating
+      # the SHAPE of a past relay instead of calling message_partner.
+      #
+      # Prod 1439/1440: "Tell Chelsea: Rude. Byte took away my formatting!" came
+      # back as "Sent. 😅\n\n[you passed this along to Moss] Rude. Byte took away
+      # my formatting!" with no tool call, no relay row, and no receipt chip.
+      # Nothing reached Chelsea and nothing said so.
+      RELAY_FRAMING_RX = /\[(?:you\s+passed\s+this\s+along\s+to|relayed\s+to\s+you\s+from)\s[^\]\n]{0,40}\]/i
+
       def self.run!(message, client: nil)
         new(message, client: client).run!
       end
@@ -418,7 +429,13 @@ module Buddy
 
       # A function_call_output is only accepted alongside the function_call it
       # answers, so both items go back on the input together.
+      #
+      # `staged_input` is for what an output CAN'T carry: it's a string, and
+      # view_image's whole job is to put pixels back in front of the model. The
+      # tool stages a user item and we splice it in behind the output it belongs
+      # to. Empty for every other call.
       def call_items(call)
+        output = tool_output(call)
         [
           {
             type:      :function_call,
@@ -429,9 +446,16 @@ module Buddy
           {
             type:    :function_call_output,
             call_id: call[:call_id],
-            output:  tool_output(call),
+            output:  output,
           },
+          *staged_input,
         ]
+      end
+
+      def staged_input
+        read_tools.values.flat_map { |reader|
+          reader.respond_to?(:drain_input) ? reader.drain_input : []
+        }
       end
 
       # Tools that ANSWER the model instead of acting for the person. Their
@@ -443,6 +467,7 @@ module Buddy
         @read_tools ||= {
           ContextTool::NAME => ContextTool.new(@user, @conversation),
           PromptTool::NAME  => PromptTool.new(@user, @conversation),
+          ImageTool::NAME   => ImageTool.new(@user, @conversation),
         }
       end
 
@@ -614,6 +639,7 @@ module Buddy
         @tools ||= [
           ContextTool.schema,
           PromptTool.schema,
+          ImageTool.schema,
           *Buddy::SideEffects.function_schemas(theme: @conversation.buddy_theme),
           *Buddy::Tools.function_schemas,
         ]
@@ -757,6 +783,12 @@ module Buddy
         | \b(?:saved\s+(?:it|that|as)|(?:it|that)(?:'|’)?s\s+saved|now\s+runs)\b
         | \b(?:running|firing)\s+(?:\*\*|`)[^*`\n]{1,60}(?:\*\*|`)
         | \b(?:counted|counting)\s+(?:it|that|those|them|\*\*|\d)
+        | \A\s*sent\b[.!,]
+        | \b(?:passed|sent)\s+(?:it|that|this|them|those)\s+(?:along|on|over|to)\b
+        | \b(?:told|messaged|pinged|texted)\s+(?:her|him|them)\b
+        | \bin\s+the\s+loop\s+now\b
+        | \b(?:she|he|they)\s+(?:knows?|has\s+it)\s+now\b
+        | #{RELAY_FRAMING_RX}
       /xi
 
       # Promises to act NOW that were never backed by a call. Different failure
@@ -880,12 +912,17 @@ module Buddy
         Rails.logger.warn("[Buddy::GPT::Turn] settle failed: #{e.class}: #{e.message}")
       end
 
+      # Framing the model was given to READ and echoed back into what it SAYS.
+      # Both get stripped rather than shown, and both get logged: a marker means
+      # some prompt section still teaches the retired protocol, and a relay
+      # bracket means Buddy imitated a bridged message instead of sending one.
       def display_body(text)
-        raw = text.to_s
-        return raw.strip unless raw.match?(STRAY_MARKER_RX)
+        raw   = text.to_s
+        stray = { marker: STRAY_MARKER_RX, relay: RELAY_FRAMING_RX }.select { |_kind, rx| raw.match?(rx) }
+        return raw.strip if stray.empty?
 
-        Rails.logger.warn("[Buddy::GPT::Turn] stray marker in output: #{raw[STRAY_MARKER_RX]}")
-        raw.gsub(STRAY_MARKER_RX, "").gsub(/\n{3,}/, "\n\n").strip
+        stray.each { |kind, rx| Rails.logger.warn("[Buddy::GPT::Turn] stray #{kind} in output: #{raw[rx]}") }
+        stray.each_value.reduce(raw) { |body, rx| body.gsub(rx, "") }.gsub(/\n{3,}/, "\n\n").strip
       end
 
       def broadcast(message)

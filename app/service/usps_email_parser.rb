@@ -60,6 +60,7 @@ class UspsEmailParser
     item.delivery_date = delivery_date if delivery_date.present?
     item.time_range = time_range if time_range.present?
     item.errors = []
+    item.email_ids << @email.id unless item.email_ids.include?(@email.id)
 
     AmazonOrder.save
     AmazonOrder.broadcast
@@ -86,6 +87,7 @@ class UspsEmailParser
       # email already set. Only fill when we still have nothing.
       item.delivery_date = pkg[:date] if pkg[:date].present? && item.delivery_date.blank?
       item.errors = []
+      item.email_ids << @email.id unless item.email_ids.include?(@email.id)
       item
     }
 

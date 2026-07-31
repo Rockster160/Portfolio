@@ -148,10 +148,10 @@ RSpec.describe Buddy::GPT::History do
       message
     end
 
-    it "builds a multimodal user turn when the person's message has an image" do
-      with_image(said("what's this?"))
+    it "builds a multimodal user turn for the message being answered" do
+      msg = with_image(said("what's this?"))
 
-      item = build.first
+      item = build(upto: msg).first
       expect(item[:role]).to eq(:user)
       expect(item[:content].first).to eq({ type: :input_text, text: "what's this?" })
       image = item[:content].last
@@ -160,34 +160,34 @@ RSpec.describe Buddy::GPT::History do
     end
 
     it "keeps an image-only turn (no caption) instead of dropping it" do
-      with_image(said(""))
+      msg = with_image(said(""))
 
-      item = build.first
+      item = build(upto: msg).first
       expect(item[:role]).to eq(:user)
       expect(item[:content].pluck(:type)).to eq([:input_image])
     end
 
     it "leaves a plain text turn as a bare string" do
-      said("just text")
+      msg = said("just text")
 
-      expect(build.first).to eq({ role: :user, content: "just text" })
+      expect(build(upto: msg).first).to eq({ role: :user, content: "just text" })
     end
 
-    # History is rebuilt from scratch every turn, so an unbounded replay means
-    # one photo is re-fetched and re-billed as vision tokens forever.
-    it "stops sending the pixels once the image falls out of the replay depth" do
-      with_image(said("look at this"), name: "chart.png")
-      (described_class::IMAGE_REPLAY_DEPTH + 2).times { |i| said("later #{i}") }
+    # History is rebuilt from scratch every turn, so replaying the pixels would
+    # re-fetch and re-bill one photo on every turn for the rest of the thread.
+    it "sends the pixels once, then names the image with the id view_image takes" do
+      msg  = with_image(said("look at this"), name: "chart.png")
+      last = said("and another thing")
 
-      item = build.first
-      expect(item[:content]).to eq("look at this [image: chart.png]")
+      item = build(upto: last).first
+      expect(item[:content]).to eq("look at this [image ##{msg.id}: chart.png]")
     end
 
-    it "keeps the pixels while the image is still recent" do
-      with_image(said("look at this"))
-      said("and one more")
+    it "names an image-only turn rather than dropping it once it's been read" do
+      msg = with_image(said(""), name: "chart.png")
+      said("and another thing")
 
-      expect(build.first[:content].pluck(:type)).to eq([:input_text, :input_image])
+      expect(build.first[:content]).to eq("[image ##{msg.id}: chart.png]")
     end
   end
 end

@@ -14,11 +14,11 @@ module Buddy
       @conversation = conversation
     end
 
-    # The pet's display name for the thread this tool ran in ("Moss"/"Byte").
-    # Falls back to the user's default when a conversation isn't in scope.
+    # The pet's display name for the thread this tool ran in ("Byte"/"Moss"/
+    # "Suki"). Falls back to the user's default when a conversation isn't in scope.
     def buddy_name
       theme = conversation&.buddy_theme || ByteConversation.default_theme_for(user)
-      theme.to_s == "moss" ? "Moss" : "Byte"
+      ByteConversation.display_name_for(theme)
     end
 
     # ---- chores ----

@@ -58,8 +58,11 @@
       </svg>
     </button>
     <span class="byte-avatar">
-      <% if app_pet_theme == "moss" %>
+      <% case app_pet_theme
+         when "moss" %>
         <%= image_tag "moss_favicon/moss.png", alt: "Moss" %>
+      <% when "suki" %>
+        <%= image_tag "suki_favicon/suki.png", alt: "Suki" %>
       <% else %>
         <%= image_tag "byte_favicon/byte.png", alt: "Byte" %>
       <% end %>
@@ -117,7 +120,7 @@
     <%# Buddy's area so they don't push the character down. Rendered by %>
     <%# buddy/timers.js off the live Timer stack; empty + hidden when none. %>
     <div class="byte-buddy-timers" data-buddy-timers hidden></div>
-    <div class="byte-buddy-char" aria-label="<%= buddy_page_theme == 'moss' ? 'Moss' : 'Byte' %>">
+    <div class="byte-buddy-char" aria-label="<%= ByteConversation.display_name_for(buddy_page_theme) %>">
       <div class="byte-buddy-body" aria-hidden="true"></div>
       <div class="byte-buddy-face" aria-hidden="true"></div>
       <div class="byte-buddy-arm"  aria-hidden="true"></div>
@@ -173,10 +176,11 @@
       <div class="byte-buddy-face-themes" data-buddy-face-themes>
         <button type="button" data-buddy-theme-set="byte">Byte</button>
         <button type="button" data-buddy-theme-set="moss">Moss</button>
+        <button type="button" data-buddy-theme-set="suki">Suki</button>
       </div>
       <%# One grid per theme; JS shows the one matching the live theme so the
           picker only ever offers faces that theme actually has. %>
-      <% %w[byte moss].each do |theme| %>
+      <% %w[byte moss suki].each do |theme| %>
         <div class="byte-buddy-face-choices" data-buddy-face-choices data-face-theme="<%= theme %>"<%= " hidden".html_safe unless buddy_page_theme == theme %>>
           <% face_names.call(theme).each do |f| %>
             <button type="button" data-face="<%= f %>"><%= f.tr('_', ' ') %></button>
@@ -307,7 +311,7 @@
       class="byte-input"
       data-byte-input
       rows="1"
-      placeholder="Say something to <%= buddy_page_theme == 'moss' ? 'Moss' : 'Byte' %>…"
+      placeholder="Say something to <%= ByteConversation.display_name_for(buddy_page_theme) %>…"
       autocapitalize="<%= bash_mode ? 'none' : 'sentences' %>"
       autocorrect="<%= bash_mode ? 'off' : 'on' %>"
       spellcheck="<%= bash_mode ? 'false' : 'true' %>"

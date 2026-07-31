@@ -99,5 +99,26 @@ RSpec.describe ByteConversation, type: :model do
 
     convo.update!(buddy_theme: "moss")
     expect(convo.display_name).to eq("Moss")
+
+    convo.update!(buddy_theme: "suki")
+    expect(convo.display_name).to eq("Suki")
+  end
+
+  describe ".default_theme_for" do
+    it "seeds Suki for Eve, Moss for Chelsea, and Byte for everyone else" do
+      expect(described_class.default_theme_for(instance_double(User, id: 4))).to eq(:suki)
+      expect(described_class.default_theme_for(instance_double(User, id: 58_128))).to eq(:moss)
+      expect(described_class.default_theme_for(instance_double(User, id: 999_999))).to eq(:byte)
+      expect(described_class.default_theme_for(nil)).to eq(:byte)
+    end
+  end
+
+  describe ".display_name_for" do
+    it "maps each theme to its pet name and falls back to Byte" do
+      expect(described_class.display_name_for("suki")).to eq("Suki")
+      expect(described_class.display_name_for("moss")).to eq("Moss")
+      expect(described_class.display_name_for("byte")).to eq("Byte")
+      expect(described_class.display_name_for("nonsense")).to eq("Byte")
+    end
   end
 end
