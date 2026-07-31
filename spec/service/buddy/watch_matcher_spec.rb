@@ -149,13 +149,65 @@ RSpec.describe Buddy::WatchMatcher do
       repeating = make_watch(trigger_scope: "deploy", match: {}, body: "deploy's done", one_shot: false)
 
       described_class.dispatch(user, :monitor, { channel: "deploy:success" })
-      described_class.dispatch(user, :monitor, { channel: "deploy:failed" })
+      # Far enough apart to be two deploys rather than one deploy talking twice.
+      travel(10.minutes) { described_class.dispatch(user, :monitor, { channel: "deploy:failed" }) }
 
       repeating.reload
       expect(repeating.fired_at).to be_nil # never goes terminal
       expect(repeating.last_fired_at).to be_present
       expect(seeds).to include(a_string_including("finished successfully"))
       expect(seeds).to include(a_string_including("FAILED"))
+    end
+
+    # Prod 1320/1322/1323: one deploy, three notifications 8 seconds apart. The
+    # workflow's finish hook lands, then the app's `startup` trigger fires again
+    # for each Puma worker as the new Rails comes up. Nothing in the payloads
+    # ties them together, so the only thing that can tell "again" from "still"
+    # is how close together they are.
+    describe "one deploy announcing itself more than once" do
+      let!(:repeating) {
+        make_watch(trigger_scope: "deploy", match: {}, body: "deploy's done", one_shot: false)
+      }
+
+      # The enclosing one-shot would fire on the first signal and go terminal,
+      # which is correct but makes the seed count here about two watches instead
+      # of one. This block is only about the repeating one.
+      before { watch.update!(cancelled_at: Time.current) }
+
+      it "notifies once, no matter how many emitters report the same deploy" do
+        described_class.dispatch(user, :deploy, { id: "deploy", deploy: "finished", sha: "bc271e0" })
+        described_class.dispatch(user, :monitor, { deploy: "success" })
+        described_class.dispatch(user, :monitor, { deploy: "success" })
+
+        expect(seeds.length).to eq(1)
+      end
+
+      it "keeps the FIRST one, which is the only signal carrying the sha" do
+        described_class.dispatch(user, :deploy, { id: "deploy", deploy: "finished", sha: "bc271e0" })
+        described_class.dispatch(user, :monitor, { deploy: "success" })
+
+        expect(seeds.last).to include("bc271e0")
+      end
+
+      it "fires again once the window has passed, so a real second deploy pings" do
+        described_class.dispatch(user, :monitor, { deploy: "success" })
+        travel(10.minutes) { described_class.dispatch(user, :monitor, { deploy: "success" }) }
+
+        expect(seeds.length).to eq(2)
+      end
+
+      # A chore done twice in a minute is two completions, and swallowing one
+      # would lose a log entry. The window is deploy-only for that reason.
+      it "leaves other scopes alone, where two in a row means two" do
+        chores = make_watch(one_shot: false)
+
+        2.times {
+          described_class.dispatch(user, "chore_completion", { "action" => "completed", "chore_name" => "Brush Teeth" })
+        }
+
+        expect(chores.reload.last_fired_at).to be_present
+        expect(seeds.length).to eq(2)
+      end
     end
 
     it "leaves unrelated monitor channels alone" do

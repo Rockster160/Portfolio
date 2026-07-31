@@ -115,7 +115,32 @@ module Buddy
       base.merge(raw.execution_attrs || {})
     end
 
+    # ONE real-world event can announce itself several times, and a repeating
+    # watch has no way to tell that from the event happening again. Prod
+    # 1320/1322/1323 were three notifications for a single deploy, 8 seconds
+    # apart: the workflow's finish hook, then the app's own `startup` trigger
+    # once per Puma worker as the new Rails came up.
+    #
+    # Nothing in the payloads ties them together - the startup trigger carries
+    # no sha - so identity has to come from the clock. A deploy takes minutes,
+    # so "finished" twice inside this window is one deploy talking twice.
+    #
+    # Deliberately per-scope, and deliberately only deploy. Two chore
+    # completions a second apart really are two, and collapsing those would
+    # lose one. Firing on the FIRST signal is also the right end to keep: it's
+    # the workflow hook, the only one carrying the sha and commit message.
+    DEBOUNCE_WINDOWS = { "deploy" => 2.minutes }.freeze
+
+    def debounced?(watch)
+      window = DEBOUNCE_WINDOWS[watch.trigger_scope.to_s]
+      return false if window.nil? || watch.last_fired_at.nil?
+
+      watch.last_fired_at > window.ago
+    end
+
     def fire!(watch, payload={})
+      return if debounced?(watch)
+
       if watch.notify_user_id
         fire_cross_user!(watch, payload)
       else

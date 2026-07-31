@@ -67,14 +67,18 @@ jobs:
         ssh-add /home/runner/.ssh/github_actions
         bundle exec cap production deploy
 
-    # NOTE: this one is vestigial and deliberately left un-retried. It fires
-    # while cap is still restarting Puma, so it comes back 502 every time — and
-    # nothing listens on the `deploy` scope anyway. What actually marks a deploy
-    # successful is the app's own `startup` Jil task, which fires `monitor` with
-    # `deploy: "success"` once the new Rails boots. That's the honest signal
-    # (the server is genuinely back up), it's what flips the Deploy ActionEvent,
-    # and it's what a Buddy deploy watch fires from. Making this curl land would
-    # only double up on that.
+    # A deploy reports success from TWO places, on purpose, and neither is
+    # reliable alone. This hook knows the sha and the commit message but races
+    # cap restarting Puma, so it 502s some of the time. The app's own `startup`
+    # Jil task fires `monitor` with `deploy: "success"` once the new Rails is
+    # genuinely up — the honest signal, and what flips the Deploy ActionEvent —
+    # but it carries no sha, and it fires once per Puma worker.
+    #
+    # So a single deploy can emit three signals within a few seconds (prod
+    # 1320/1322/1323 were exactly that). Buddy::WatchMatcher::DEBOUNCE_WINDOWS
+    # collapses them, keeping the first — which is usually this one, and it's
+    # the richest. Left un-retried for the same reason: if it loses the race,
+    # startup covers it.
     - name: Finish Deploy
       run: |
         curl -X POST -H "Authorization: Bearer ${{ secrets.PORTFOLIO_ACCESS_KEY }}" \
