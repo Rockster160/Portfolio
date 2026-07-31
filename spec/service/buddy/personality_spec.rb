@@ -117,6 +117,25 @@ RSpec.describe Buddy::Personality do
     end
   end
 
+  # Prod 1295: "Ping me every time a deploy finishes, success or fail" got
+  # "I don't have a deploy watcher wired up right now, so I can't set that one
+  # from here" — while `remind_when` carried `trigger: "deploy"` in its schema
+  # and no tool was called at all.
+  describe ".for capability denial" do
+    it "makes the tool list the authority on what it can do" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("Your tool list is the authority on what you can do")
+      expect(prompt).to include("never evidence that you're unable to")
+    end
+
+    it "says an empty watch list isn't a missing capability" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("it does NOT mean you can't watch for something")
+    end
+  end
+
   describe ".for list placement" do
     it "sends the model to `lists` for real sections before filing an item" do
       prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))

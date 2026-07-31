@@ -1,6 +1,6 @@
 module Buddy
   # Single delivery path for a Buddy outbound turn. Shared by the live send
-  # (ByteController#dispatch_message via BuddyDeliverWorker) and the wake-drain
+  # (ByteMessageIntake via BuddyDeliverWorker) and the wake-drain
   # (BuddyWakeWorker), so a queued-then-woken turn behaves exactly like a fresh
   # send: compaction, then the model turn, then state and broadcast.
   #

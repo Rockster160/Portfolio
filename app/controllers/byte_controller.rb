@@ -55,54 +55,17 @@ class ByteController < ApplicationController
     # for callers that don't send one (or garbage).
     created = client_ts_from(params[:client_ts]) || Time.current
 
-    # Brain-dump capture: if the person armed a "Stash" bucket, THIS message is
-    # the idea being dumped — file it instead of running a normal Buddy turn.
-    # The message still shows as their bubble; capture! adds the confirmation.
-    if conversation.buddy? && (stash_category = ::Buddy::Stash.armed_category(conversation))
-      message = conversation.byte_messages.create!(
-        user:       current_user,
-        direction:  :outbound,
-        state:      :sent,
-        body:       body,
-        metadata:   metadata,
-        created_at: created,
-      )
-      broadcast(message)
-      ::Buddy::Stash.capture!(current_user, conversation, message, stash_category)
-      return render(json: message.as_wire, status: :created)
-    end
-
-    # Timer fast path: "5m", "5m pasta", "timer for 90s". Served straight from
-    # Rails, because a model round trip costs several seconds — invisible on a
-    # 20-minute timer, most of the countdown on a 10-second one — and is several
-    # seconds during which the model might not call the tool at all. Their bubble
-    # still posts; the timer and its chip land with it. Anything shaped less
-    # plainly than this falls through and the agent's set_timer handles it.
-    if conversation.buddy? && (timer = ::Buddy::Timers.parse_request(body))
-      message = conversation.byte_messages.create!(
-        user:       current_user,
-        direction:  :outbound,
-        state:      :sent,
-        body:       body,
-        metadata:   metadata,
-        created_at: created,
-      )
-      broadcast(message)
-      ::Buddy::Timers.quick_set!(current_user, conversation, **timer)
-      return render(json: message.as_wire, status: :created)
-    end
-
-    message = conversation.byte_messages.create!(
-      user:       current_user,
-      direction:  :outbound,
-      state:      :pending,
-      body:       body,
-      metadata:   metadata,
-      created_at: created,
+    # The stash capture, the timer fast path, the sleep queue and the dispatch
+    # all live in ByteMessageIntake so the Mac CLI (/webhooks/byte/say) puts a
+    # message in by exactly the same door.
+    message = ByteMessageIntake.call(
+      user:         current_user,
+      conversation: conversation,
+      body:         body,
+      metadata:     metadata,
+      created_at:   created,
     )
-
-    broadcast(message)
-    dispatch_message(conversation, message)
+    return head(:bad_request) if message.nil?
 
     render json: message.as_wire, status: :created
   end
@@ -587,47 +550,5 @@ class ByteController < ApplicationController
     )
     broadcast(message)
     message
-  end
-
-  # Route the outbound message according to its conversation's mode:
-  # * jarvis → in-process worker; skips the Mac entirely
-  # * claude / bash → hand off to the Mac via ByteLocal
-  def dispatch_message(conversation, message)
-    # Safety net: a buddy-only member must never reach the owner's Mac via a
-    # claude/bash/jarvis conversation. Creation + /mode are already locked,
-    # so this only fires on an unexpected legacy state — refuse the handoff.
-    return if buddy_only? && !conversation.buddy?
-
-    if conversation.jarvis?
-      ByteJarvisWorker.perform_async(message.id)
-      return
-    end
-
-    # If Buddy is currently asleep (Anthropic usage cap), HOLD the message
-    # in the queue rather than dispatching or bouncing a canned reply. The
-    # persistent sleeping chip on the client communicates the state, and
-    # BuddyWakeWorker drains these in order when the wake window passes.
-    # Only applies to :buddy mode; claude / bash still dispatch as normal.
-    if conversation.buddy? && ::Buddy::SleepGuard.sleeping?(current_user)
-      message.update!(state: :queued)
-      broadcast(message.reload)
-      return
-    end
-
-    # Auto-wake if the sleep window has passed.
-    ::Buddy::SleepGuard.maybe_wake!(current_user) if conversation.buddy?
-
-    # Flip the pet to `thinking` the moment a message is sent so there's
-    # always visible life on a normal turn (quick-action chips already do
-    # this). The reply resolves it back to a mood / neutral on arrival.
-    ::Buddy::ExpressionState.transition!(conversation, :turn_started) if conversation.buddy?
-
-    # Hand the Mac round-trip to Sidekiq. It used to run inline in a bare
-    # Thread.new wrapped in executor.wrap, which held one of the web-sized
-    # AR connections for the ENTIRE 5-30s Mac HTTP round-trip and starved
-    # the pool — unrelated web requests hit ConnectionTimeoutError. The
-    # worker routes :buddy through TurnDispatcher.deliver! (compaction,
-    # state, broadcast, sleep-on-failure) and claude/bash to a plain handoff.
-    BuddyDeliverWorker.perform_async(message.id)
   end
 end

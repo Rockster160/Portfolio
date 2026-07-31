@@ -500,6 +500,47 @@ class WebhooksController < ApplicationController
     render json: { range: label[:name], count: items.length, body: body }
   end
 
+  # The mirror of byte_create: a message FROM the person, injected from off-web
+  # (the Mac `tell` CLI, a cron job, a Jil bash step). byte_create posts as
+  # Byte; this posts as them and gets a real Buddy turn back, exactly as if
+  # they'd typed it in the PWA — same stash capture, same timer fast path, same
+  # sleep queue, because it goes through the same ByteMessageIntake.
+  #
+  # Targets their default Buddy conversation unless `conversation_id` says
+  # otherwise. Refuses a non-Buddy conversation: a CLI has no business steering
+  # a claude/bash thread on the Mac that spawned it.
+  def byte_say
+    return head :unauthorized unless byte_authorized?
+
+    user = User.find_by(id: params[:user_id].presence || User.me.id)
+    return head :not_found if user.blank?
+
+    conversation = byte_say_conversation(user)
+    return render json: { error: :"no buddy conversation" }, status: :not_found if conversation.nil?
+    return render json: { error: :"not a buddy conversation" }, status: :unprocessable_entity unless conversation.buddy?
+
+    message = ByteMessageIntake.call(
+      user:         user,
+      conversation: conversation,
+      body:         params[:body].to_s,
+      metadata:     byte_metadata(params).symbolize_keys.reverse_merge(source: :cli),
+    )
+    return render json: { error: :"empty body" }, status: :bad_request if message.nil?
+
+    render json: message.as_wire, status: :created
+  end
+
+  # Explicit id wins; otherwise their most recent Buddy thread, falling back to
+  # the default. `ByteConversation.default_for` can hand back a claude thread
+  # for the owner, which is not what "send this to Byte" means.
+  def byte_say_conversation(user)
+    id = params[:conversation_id].presence
+    return user.byte_conversations.find_by(id: id) if id
+
+    user.byte_conversations.where(mode: :buddy, archived: false).order(last_message_at: :desc).first ||
+      ByteConversation.default_for(user)
+  end
+
   # Weather passthrough for Buddy — server holds WEATHER_APIKEY.
   # No location param support yet: uses the home coords the dashboard
   # already uses. Returns a compact one-liner suitable for chat.
