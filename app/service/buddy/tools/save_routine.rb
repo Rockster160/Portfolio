@@ -24,7 +24,14 @@ Buddy::Tools.register(
     A WAIT between two steps is `set_timer` with `then_continue: true`, same as
     in a live sequence - the routine pauses there and picks itself back up.
 
-    Saving over an existing name REPLACES its steps, which is how they edit one.
+    Saving over an existing name REPLACES its steps, and that is how a routine
+    gets FIXED. When they tell you a routine you just saved is wrong - "it's
+    supposed to complete the chore three times", "there shouldn't be an event in
+    there", "drop the wait" - they are describing the SAVED STEPS, not asking
+    you to go do those things now. Call save_routine again with the corrected
+    steps under the same name. Running the steps live instead performs actions
+    they never asked for and leaves the routine every bit as wrong as it was.
+
     Steps are checked before anything is stored, so a bad tool name or a missing
     argument comes straight back to you and nothing half-broken gets saved.
 

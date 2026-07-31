@@ -185,6 +185,25 @@ RSpec.describe "Buddy routines" do
       expect(user.buddy_routines.first.steps.first["payload"]["message"]).to eq("new")
     end
 
+    # Prod 1362: "it's supposed to complete the chore 3 times, and there
+    # shouldn't be an event in there" describes the SAVED steps. Re-saving is
+    # what fixes it; running the steps live does actions nobody asked for and
+    # leaves the routine wrong.
+    it "fixes a routine by re-saving it, leaving nothing behind from the old one" do
+      routine!("Water Cup", [
+        BuddyRoutine.step(:complete_chore, { chore: "8oz Water", count: 3 }),
+        BuddyRoutine.step(:log_event, { name: "Water", count: 3 }),
+      ])
+
+      turn!("there shouldn't be an event in that one", [
+        save_call("Water Cup", [{ tool_name: "complete_chore", payload: { chore: "8oz Water", count: 3 } }]),
+      ])
+
+      steps = user.buddy_routines.find_by(name: "Water Cup").steps
+      expect(steps.map { |s| s["tool_name"] }).to eq(["complete_chore"])
+      expect(ActionEvent.where(user_id: user.id)).to be_empty
+    end
+
     # Prod 1345: the model wrote its step flat, the payload came through empty,
     # and it came back "missing required arg :name" about a step whose name was
     # sitting right there. The routine was lost and the reply claimed it saved.

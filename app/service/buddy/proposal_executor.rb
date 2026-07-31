@@ -74,6 +74,11 @@ module Buddy
             btn["status"] = "executed"
             btn["result"] = outcomes.first[:data]
             btn["receipt"] = safe_receipt(tool, outcomes.first[:data], ctx)
+            # A tapped row that came back with a way to reverse itself can be
+            # unchecked, same as a pre-checked Level-2 one. Level 2 set this and
+            # Level 3 never did, which is how `undo` became a one-way door: it
+            # removed a chore completion and there was no way back to it.
+            btn["undoable"] = Buddy::Reverter.descriptors(outcomes.first[:data] || {}).any?
             just_done << btn
           elsif outcomes.any? { |o| o[:ok] }
             btn["status"] = "partial"

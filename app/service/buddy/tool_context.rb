@@ -23,16 +23,25 @@ module Buddy
 
     # ---- chores ----
 
+    # How far a typo may be from a real chore name before we stop guessing,
+    # as a share of what was typed. `complete_chore` runs the moment it
+    # resolves, so a wrong guess writes a completion for a chore nobody did:
+    # unbounded, the nearest-neighbour fallback answered "waters" with
+    # "Shower" — the least-bad of a bad field, and 5 edits away from what was
+    # asked for. Roughly a third lets ordinary typos through ("brush teth")
+    # while a word that simply isn't there resolves to nothing, which raises,
+    # which makes Buddy ask instead of act.
+    FUZZY_TOLERANCE = 0.34
+
     def resolve_chore(name)
       return nil if name.blank?
 
-      needle = name.to_s.downcase.strip
+      needle     = name.to_s.downcase.strip
       candidates = user.accessible_chores.to_a
-      exact = candidates.find { |c| c.name.to_s.downcase == needle }
+      exact      = candidates.find { |c| c.name.to_s.downcase == needle }
       return exact if exact
 
-      candidates.find { |c| c.name.to_s.downcase.include?(needle) } ||
-        candidates.min_by { |c| levenshtein(c.name.to_s.downcase, needle) }
+      best_contained(candidates, needle) || nearest_name(candidates, needle)
     end
 
     def resolve_chore_completion(chore_or_name, hint: :last)
@@ -315,6 +324,32 @@ module Buddy
     end
 
     private
+
+    # Chores whose NAME contains what was typed, best first. Enumeration order
+    # used to decide this, and enumeration order is arbitrary: "water" matches
+    # both "Wash Water Bowls" (id 5) and "8oz Water" (id 9), so the lower id
+    # won and someone logging that they drank something got three bowl-washings
+    # marked off instead.
+    #
+    # Rank by how much of the name the needle accounts for. "water" is most of
+    # "8oz Water" and a fifth of "Wash Water Bowls", which is the instinct a
+    # person uses without thinking: the shorter name is the one that's ABOUT
+    # the thing you said, the longer one merely mentions it.
+    def best_contained(candidates, needle)
+      hits = candidates.select { |c| c.name.to_s.downcase.include?(needle) }
+      return nil if hits.empty?
+
+      hits.max_by { |c| needle.length.to_f / c.name.to_s.length }
+    end
+
+    # Nearest name by edit distance, but only when it's near ENOUGH to be a
+    # typo of what they said rather than the closest thing in an empty field.
+    def nearest_name(candidates, needle)
+      best = candidates.min_by { |c| levenshtein(c.name.to_s.downcase, needle) }
+      return nil if best.nil?
+
+      best if levenshtein(best.name.to_s.downcase, needle) <= [(needle.length * FUZZY_TOLERANCE).round, 1].max
+    end
 
     # A watch's stored place: coordinates are what matching uses; name is for
     # display; address is kept for legibility and as a human-readable record of

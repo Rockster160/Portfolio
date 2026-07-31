@@ -3,6 +3,14 @@ require "rails_helper"
 RSpec.describe AgendasController, type: :controller do
   render_views
 
+  # The default date is `perceived_today`, which rolls at 3am rather than
+  # midnight — so between midnight and 3am local it is still YESTERDAY, and an
+  # item these examples build for "today at 9am" lands in days[1] instead of
+  # days[0]. Everything here is about a date-based view, so pin the clock to an
+  # unambiguous hour rather than leaving three examples that only fail if you
+  # happen to run the suite after midnight.
+  around { |ex| travel_to(Time.zone.parse("2026-07-15 16:00 UTC")) { ex.run } }
+
   let(:user) { create(:user) }
   let!(:agenda) { create(:agenda, user: user) }
 

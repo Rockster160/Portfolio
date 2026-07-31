@@ -157,6 +157,16 @@ RSpec.describe Buddy::Personality do
       expect(prompt).to include("never the answer to being asked for it")
       expect(prompt).to include("your bookkeeping, not theirs")
     end
+
+    # Prod 1362: "it's supposed to complete the chore 3 times, there shouldn't be
+    # an event" was a description of the saved steps. Buddy ran them on live data
+    # instead, and left the routine exactly as wrong as it was.
+    it "says correcting a routine edits the routine rather than running it" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("A correction to a ROUTINE edits the routine, not the world")
+      expect(prompt).to include("describing what it SHOULD do")
+    end
   end
 
   # Prod 1319: a deploy watch tripped for the second time that night and got

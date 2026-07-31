@@ -6,10 +6,19 @@ Buddy::Tools.register(
     old values), or delete (brings it back). Use when they say "undo that",
     "never mind", "put it back", "revert that", "scratch that".
 
+    "The last thing" is meant literally - this reaches back a couple of hours
+    at most, because it takes no arguments and so can only ever mean the thing
+    you just did. It is NOT the tool for "undo the water I logged this morning";
+    that one has a name attached, so it wants undo_chore_completion, edit_event
+    or delete_event.
+
     Currently covers events you logged and agenda items you added / edited /
     removed. For undoing a chore COMPLETION specifically, use
-    undo_chore_completion instead. If there's nothing recent to undo, say so
-    plainly rather than guessing.
+    undo_chore_completion instead.
+
+    When it comes back with nothing recent, say so plainly. Do not go looking
+    for something else to undo - offering to unpick something from hours ago is
+    alarming, and it is never what they meant.
   TXT
   args: {},
   # "The last thing" means something different every single run.

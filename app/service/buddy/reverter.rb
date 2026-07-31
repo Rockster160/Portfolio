@@ -42,6 +42,42 @@ module Buddy
       r[:summary].to_s.presence || "Undone."
     end
 
+    # The descriptor that would put back whatever `call(revert)` is ABOUT to
+    # take away. Must be built BEFORE reversing, because for a create the whole
+    # point is to read the row while it still exists.
+    #
+    # Prod: an undo removed a chore completion carrying the note "built rocking
+    # chair", and there was no way back - `remove` destroyed the row and kept
+    # nothing, so re-marking the chore produced a bare completion with the note
+    # gone. An undo has to be undoable, or it's a delete with a friendly name.
+    #
+    # Only creates need this. An `updated` descriptor already carries `before`,
+    # and a `recreated` one is itself the inverse of a delete.
+    def inverse(revert)
+      r = normalize(revert)
+      return nil unless r[:op].to_s == "created"
+      return nil unless MODELS.key?(r[:model].to_s)
+
+      rec = klass(r[:model]).find_by(id: r[:id])
+      return nil if rec.nil?
+
+      {
+        "op"      => "recreated",
+        "model"   => r[:model].to_s,
+        "attrs"   => restorable_attrs(rec),
+        "summary" => "put #{r[:summary].to_s.sub(/\Aunmarked\s+/i, "").presence || "it"} back",
+      }
+    end
+
+    # Everything except the identity and the bookkeeping Rails owns. `id` is
+    # deliberately dropped: the row is coming back as a new record, and holding
+    # the old primary key would collide with anything created since.
+    SKIP_ATTRS = %w[id created_at updated_at].freeze
+
+    def restorable_attrs(rec)
+      rec.attributes.except(*SKIP_ATTRS)
+    end
+
     def normalize(revert)
       revert.respond_to?(:with_indifferent_access) ? revert.with_indifferent_access : {}
     end
@@ -107,21 +143,46 @@ module Buddy
       end
 
       rec = klass(r[:model]).create!(attrs)
+      case r[:model].to_s
       # Re-adding a deleted event fires the :event trigger + broadcast, same as
       # a fresh log.
-      ActionEventNotifier.notify(rec.user, rec, :added, auth: :buddy, auth_id: rec.user_id) if r[:model].to_s == "ActionEvent"
+      when "ActionEvent"
+        ActionEventNotifier.notify(rec.user, rec, :added, auth: :buddy, auth_id: rec.user_id)
+      # A completion coming back has to rebuild the streak and tell the Chores
+      # app, exactly as removing it did — otherwise the row is in the database
+      # but the app still shows the day as missed.
+      when "ChoreCompletion"
+        ChoreStreak.rebuild_for!(rec.user, rec.chore)
+        ChoreBroadcaster.broadcast_changes!(rec.user, rec.chore, related: (rec.chore.parent_chore if rec.chore.sub_chore?))
+      end
       rec
     end
 
     # ---- finding + performing the most-recent undo (for the `undo` tool) ----
 
+    # How far back "undo that" is willing to reach. `undo` takes no arguments -
+    # it means "the thing you just did" - so anything old enough that they'd
+    # have to NAME it isn't what they're pointing at.
+    #
+    # Prod 1362: told the routine it had just saved was wrong, Buddy offered to
+    # undo a chore completion from five hours earlier, because that was simply
+    # the newest reversible thing in the thread. Past this window the honest
+    # answer is "nothing recent to undo", which sends them to the tools that
+    # take a name (undo_chore_completion, edit_event, delete_event) instead of
+    # quietly proposing to unpick their morning.
+    RECENT_WINDOW = 2.hours
+
     # The newest executed proposal button in the conversation that carries a
     # still-un-undone, reversible `revert` descriptor. Returns
     # { action_id:, button_id:, summary: } or nil.
-    def most_recent(conversation)
+    def most_recent(conversation, within: RECENT_WINDOW)
       return nil if conversation.nil?
 
-      actions = ByteAction.where(byte_conversation_id: conversation.id, tool_name: "buddy_proposals").order(created_at: :desc).limit(25)
+      actions = ByteAction
+        .where(byte_conversation_id: conversation.id, tool_name: "buddy_proposals")
+        .where(created_at: within.ago..)
+        .order(created_at: :desc)
+        .limit(25)
       actions.each do |action|
         Array(action.buttons).reverse_each { |btn|
           result = btn["result"]
@@ -148,6 +209,10 @@ module Buddy
 
     # Reverse the button's stashed descriptor and mark it undone so a second
     # undo moves on to the previous action.
+    #
+    # Returns `reverts:` alongside the summary — the descriptors that put back
+    # what this just removed. The `undo` tool passes them straight through as
+    # its own revert, which is what makes the undo row itself undoable.
     def perform!(byte_action_id, button_id)
       action  = ByteAction.find(byte_action_id)
       buttons = Array(action.buttons).map(&:dup)
@@ -160,11 +225,15 @@ module Buddy
       reverts = descriptors(result)
       raise "nothing here to undo" if reverts.empty?
 
-      summary = reverts.map { |rv| call(rv) }.first
+      # Snapshot first: after `call` the rows are gone and there is nothing left
+      # to read them off.
+      inverses = reverts.filter_map { |rv| inverse(rv) }
+      summary  = reverts.map { |rv| call(rv) }.first
+
       result["undone"] = true
       btn["result"] = result
       action.update!(buttons: buttons)
-      { summary: summary }
+      { summary: summary, reverts: inverses }
     end
   end
 end

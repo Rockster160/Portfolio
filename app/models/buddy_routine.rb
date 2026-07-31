@@ -14,6 +14,7 @@
 #  updated_at  :datetime         not null
 #  user_id     :bigint           not null
 #
+
 # A named sequence of Buddy tool calls the person can trigger by saying its
 # name. `steps` is the same [{ tool_name:, payload: }] shape Buddy::GPT::Turn
 # hands Buddy::ProposalBuilder, so running one is a replay through the ordinary

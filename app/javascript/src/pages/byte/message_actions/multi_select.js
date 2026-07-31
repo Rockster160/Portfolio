@@ -110,9 +110,11 @@ export function renderMultiSelect(container, message) {
     // permanent record, not something that vanishes on execution). Only
     // still-pending rows are live and re-triggerable.
     const resolved = RESOLVED_STATUSES.has(status);
-    // A Level-2 row ran the instant Buddy proposed it, so it arrives already
-    // executed AND undoable: shown pre-checked, and UNchecking it walks the
-    // action back. Everything else that's resolved stays locked.
+    // Any row that ran AND came back with a way to reverse itself: shown
+    // checked, and UNchecking it walks the action back. A Level-2 row arrives
+    // this way (it ran the instant Buddy proposed it); a tapped Level-3 row
+    // becomes it once it executes, which is what gives `undo` a way back.
+    // Everything else that's resolved stays locked.
     const undoable = status === "executed" && !!btn.undoable;
     const undone = status === "undone";
     // A newer ask replaced this one, so it's finished with either way: locked,
