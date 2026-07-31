@@ -9,6 +9,12 @@ RSpec.describe Buddy::Context, ".build agenda" do
   let(:agenda) { create(:agenda, user: user) }
   let(:schedule) { create(:agenda_schedule, agenda: agenda) }
 
+  # "Today" is a real window in the user's zone, so an item placed a few hours
+  # out lands in TOMORROW when the suite runs late enough in the evening - these
+  # passed all day and failed after 9pm. Mid-morning keeps every relative offset
+  # below on the day the examples mean.
+  around { |ex| travel_to(Time.zone.parse("2026-07-15 15:00 UTC")) { ex.run } }
+
   def item(attrs)
     create(:agenda_item, { agenda: agenda }.merge(attrs))
   end

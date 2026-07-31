@@ -11,6 +11,9 @@ Buddy::Tools.register(
   args: {
     match: { type: :string, required: true, description: "Substring to match, or numeric id" },
   },
+  # Cancelling matches whatever is pending right now, which is never the same
+  # set twice - a saved copy would retire a reminder they still want.
+  routinable: false,
   confirm: ->(payload, ctx) {
     needle = payload[:match].to_s.strip
     numeric = needle.match?(/\A\d+\z/)

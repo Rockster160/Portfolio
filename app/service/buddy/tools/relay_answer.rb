@@ -15,6 +15,8 @@ Buddy::Tools.register(
     id:     { type: :integer, required: true, description: "The pending relay/question id" },
     answer: { type: :string,  required: true, description: "The user's answer to pass back" },
   },
+  # One answer to one question that was open at the time.
+  routinable:  false,
   confirm:     ->(payload, ctx) {
     relay = BuddyRelay.open_questions_for(ctx.user).find_by(id: payload[:id])
     raise "no open question with id #{payload[:id]}" if relay.nil?

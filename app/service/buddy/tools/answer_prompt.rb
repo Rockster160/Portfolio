@@ -78,6 +78,8 @@ Buddy::Tools.register(
   # A prompt has one answer, so re-opening it with better values replaces the
   # form above rather than leaving two of the same question in the thread.
   supersedes:  true,
+  # Answers belong to one specific prompt. There is nothing to replay.
+  routinable:  false,
   # Idempotent on purpose: a merged row runs `count` times, and the person may
   # also have answered it in the app between the proposal and the tap. Landing on
   # an already-answered prompt is the end state we wanted either way.

@@ -324,6 +324,14 @@
     </div>
     <button type="button" class="byte-new-convo" data-byte-new-convo>+ New conversation</button>
     <ul class="byte-convo-list" data-byte-convo-list></ul>
+
+    <%# Saved routines — a phrase that runs a whole sequence. Read-only here on %>
+    <%# purpose: the STEPS are tool calls with validated arguments, so they get %>
+    <%# written by talking to Byte. This is for reviewing and pruning them. %>
+    <section class="byte-routines" data-byte-routines hidden>
+      <h2 class="byte-routines-title">Routines</h2>
+      <ul class="byte-routine-list" data-byte-routine-list></ul>
+    </section>
     <%# Build fingerprint pinned to the bottom of the drawer so you can %>
     <%# eyeball whether a "hard reload" actually landed a fresh shell. %>
     <%# `shell` = COMMIT_SHA of the deployed HTML at page-render time; %>

@@ -12,6 +12,18 @@ module Buddy
   #             chips), so the reply reads like Byte/Moss talking, not a
   #             canned string.
   module CompanionDelivery
+    # The seed is the only thing on the input for a turn nobody asked for, and
+    # two firings of the same watch or recurring reminder word it identically.
+    # Prod 1318 was byte-for-byte 1315 from 45 minutes earlier, so the model
+    # found its own announcement of the FIRST deploy sitting in history, read the
+    # second as a duplicate, and sent "Already handled that one just now." to the
+    # lock screen - the deploy it fired for went unmentioned.
+    #
+    # The clock stamp is what makes each firing distinct on its face, and the
+    # rest of the frame says whose turn this is: nothing was said to Buddy, and
+    # the reply IS the notification.
+    SEED_FRAME = "[nothing was said to you - this fired on its own at %s, and your reply is the notification]".freeze
+
     class << self
       def deliver_plain(user:, conversation:, text:, metadata:, push_title: nil)
         message = conversation.byte_messages.create!(
@@ -32,7 +44,7 @@ module Buddy
           user:      user,
           direction: :outbound,
           state:     :pending,
-          body:      "[scheduled prompt] #{seed}",
+          body:      "#{frame(user)} #{seed}",
           metadata:  metadata,
         )
 
@@ -47,6 +59,10 @@ module Buddy
       end
 
       private
+
+      def frame(user)
+        format(SEED_FRAME, Buddy::TimeParser.friendly(Time.current, user: user))
+      end
 
       def broadcast(user, message)
         MonitorChannel.broadcast_to(user, {

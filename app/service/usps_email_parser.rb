@@ -18,9 +18,7 @@ class UspsEmailParser
   # USPS IMpb/tracking numbers are long digit runs, usually starting 92/94/93/95.
   TRACKING_LABEL_REGEX = /Tracking\s*Number\s*:?\s*([0-9]{18,})/i
   TRACKING_BARE_REGEX = /\b(9\d{17,25})\b/
-  # Merchant name runs to the end of its line — capture against newline-preserving
-  # text so a multi-word name isn't cut, and isn't over-captured into the next block.
-  SOURCE_REGEX = /Package\s+Shipped\s+from\s*:?\s*([^\n\r]+)/i
+  SOURCE_LABEL_REGEX = /Package\s+Shipped\s+from\s*:?\s*(.+)/im
 
   def self.parse(email)
     Time.use_zone(User.timezone) { new(email).parse }
@@ -62,8 +60,17 @@ class UspsEmailParser
       body_text[TRACKING_BARE_REGEX, 1]
   end
 
+  # The merchant is bolded right after "Package Shipped from:". Nokogiri's
+  # whole-doc `.text` runs it straight into the next section (no block newlines),
+  # so scope to the SMALLEST element that still contains the label — its own text
+  # is just "Package Shipped from: SHOPIFY". Guard against an over-broad match.
   def source
-    @doc.text.to_s[SOURCE_REGEX, 1]&.squish.presence
+    node = @doc.css("*").select { |n| n.text.match?(/Package\s+Shipped\s+from/i) }.min_by { |n| n.text.length }
+    raw = node&.text&.[](SOURCE_LABEL_REGEX, 1)
+    cleaned = raw&.squish
+    return nil if cleaned.blank? || cleaned.length > 40
+
+    cleaned
   end
 
   def delivered?
@@ -86,9 +93,11 @@ class UspsEmailParser
   end
 
   # Informed-Delivery digest ("Your Daily Digest … mailpiece(s) … package(s)")
-  # is a summary, not a trackable shipment — skip it entirely.
+  # is a summary, not a trackable shipment — skip it. Keyed on the digest subject
+  # or "mailpiece" in the body; NOT on a bare "Informed Delivery" mention, which
+  # also appears in the footer of ordinary USPS tracking emails.
   def informed_delivery_digest?
-    "#{subject} #{body_text}".match?(/Informed\s+Delivery|Daily\s+Digest|mailpiece\(s\)/i)
+    subject.match?(/Daily\s+Digest/i) || body_text.match?(/mailpiece/i)
   end
 
   private

@@ -9,6 +9,9 @@ Buddy::Tools.register(
   args:        {
     id: { type: :integer, required: true, description: "Prompt id from pending_prompts" },
   },
+  # A prompt id is whichever survey was pending that day; replaying it later
+  # skips something nobody asked to skip.
+  routinable:  false,
   confirm:     ->(payload, ctx) {
     prompt = ctx.user.prompts.unanswered.find_by(id: payload[:id])
     raise "no pending prompt ##{payload[:id]}" if prompt.nil?

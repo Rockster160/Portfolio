@@ -51,6 +51,7 @@ import { renderForm } from "./message_actions/form";
 import { initMessageContextMenu } from "./message_actions/context_menu";
 import { initBuddyHero } from "./buddy/hero";
 import { initBuddyTimers } from "./buddy/timers";
+import { initBuddyRoutines } from "./buddy/routines";
 import { toggleBuddyMuted, isBuddyMuted } from "./buddy/alarm";
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -1512,6 +1513,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     hero: buddyHero,
     isBuddyActiveFn: () => convoManager.currentConversation()?.mode === "buddy",
   });
+
+  // Saved routines, listed at the bottom of the drawer. Fetched when the drawer
+  // opens rather than at boot: most sessions never open it, and a stale list
+  // would be worse than no list.
+  const buddyRoutines = initBuddyRoutines({
+    panel:    app.querySelector("[data-byte-routines]"),
+    list:     app.querySelector("[data-byte-routine-list]"),
+    indexUrl: "/buddy/routines",
+  });
+  document.querySelector("[data-byte-drawer-toggle]")?.addEventListener("click", () => buddyRoutines?.refresh());
 
   // Timer broadcasts carry `id: :timers`, and the Monitor dispatcher routes
   // envelopes by their id — so they arrive on a DEDICATED subscription, not the

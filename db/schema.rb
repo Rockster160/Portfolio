@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_07_30_130000) do
+ActiveRecord::Schema[7.1].define(version: 2026_07_31_040000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -437,6 +437,21 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_30_130000) do
     t.index ["byte_conversation_id"], name: "index_buddy_reminders_on_byte_conversation_id"
     t.index ["fire_at"], name: "idx_buddy_reminders_pending", where: "((fired_at IS NULL) AND (cancelled_at IS NULL))"
     t.index ["user_id"], name: "index_buddy_reminders_on_user_id"
+  end
+
+  create_table "buddy_routines", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "name", null: false
+    t.string "description"
+    t.jsonb "steps", default: [], null: false
+    t.boolean "enabled", default: true, null: false
+    t.integer "run_count", default: 0, null: false
+    t.datetime "last_run_at"
+    t.jsonb "metadata", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index "user_id, lower((name)::text)", name: "index_buddy_routines_on_user_and_name", unique: true
+    t.index ["user_id"], name: "index_buddy_routines_on_user_id"
   end
 
   create_table "buddy_usages", force: :cascade do |t|
@@ -1537,6 +1552,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_30_130000) do
   add_foreign_key "buddy_relays", "users", column: "to_user_id"
   add_foreign_key "buddy_reminders", "byte_conversations"
   add_foreign_key "buddy_reminders", "users"
+  add_foreign_key "buddy_routines", "users"
   add_foreign_key "buddy_usages", "byte_conversations"
   add_foreign_key "buddy_usages", "byte_messages"
   add_foreign_key "buddy_usages", "users"

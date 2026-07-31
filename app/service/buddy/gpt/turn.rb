@@ -90,13 +90,37 @@ module Buddy
                 "happen. #{AGAIN}",
       }.freeze
 
+      # A routine run is a whole sequence behind one name, so its own level says
+      # nothing useful about what happened. What matters is where the sequence
+      # STOPPED: everything up to the first gate has already run, and the gate
+      # decides whether the rest is coming on its own or waiting on a tap.
+      ROUTINE_WAITING_ACK = {
+        status: "waiting",
+        note:   "The routine is running. Everything up to its wait has happened; the rest goes on " \
+                "its own the moment that timer is up, and needs nothing from them. Say what ran and " \
+                "what's still coming (\"printer's on, and I'll preheat it once the minute's up\"). " \
+                "Never offer the remaining steps back as something you COULD do. #{AGAIN}",
+      }.freeze
+
+      ROUTINE_PENDING_ACK = {
+        status: "proposed",
+        note:   "The routine is running, and it reached a step that needs them - a row is waiting " \
+                "for a tap. Say what ran and that the rest is sitting there for them. #{AGAIN}",
+      }.freeze
+
+      ROUTINE_DONE_ACK = {
+        status: "done",
+        note:   "The whole routine ran, every step. Speak about it as done. #{AGAIN}",
+      }.freeze
+
       # A rough mirror of ProposalBuilder#build_steps — accurate for the shapes
       # that actually occur (a form after a checklist, a checklist after a form,
       # a level-1 after either), and deliberately not a full re-implementation.
       # Where it's imprecise it under-claims: a second checklist reports as
       # "waiting for a tap", which is true, just of a later message.
-      def self.ack_for(tool, gate: nil)
+      def self.ack_for(tool, gate: nil, opens: nil)
         return WAITING_ACK if gate == :timer
+        return routine_ack(opens) if Buddy::Routines.runner?(tool)
         return QUEUED_ACK if gate && tool[:level] == 1
         return gate == :rows ? CHAINED_ACK : FORM_ACK if Buddy::Tools.form?(tool)
         return CHAINED_ACK if gate == :forms && tool[:level] == 3
@@ -116,6 +140,14 @@ module Buddy
             note:   "A checkbox row is now waiting for the person to tap. It has NOT happened yet - " \
                     "do not say it's done, logged, or added. #{AGAIN}",
           }
+        end
+      end
+
+      def self.routine_ack(opens)
+        case opens
+        when :timer         then ROUTINE_WAITING_ACK
+        when :rows, :forms  then ROUTINE_PENDING_ACK
+        else                     ROUTINE_DONE_ACK
         end
       end
 
@@ -151,7 +183,14 @@ module Buddy
       # Which kind of gate this call opens, or nil when it isn't one. A wait
       # depends on the ARGUMENTS rather than the tool: the same set_timer is an
       # ordinary countdown without `then_continue`.
-      def self.gate_kind_for(tool, payload={})
+      #
+      # A routine run stands in for the steps it names, so its gate is the first
+      # gate among THOSE — a routine with a wait in it holds the rest of the
+      # turn back exactly as the same calls made by hand would.
+      def self.gate_kind_for(tool, payload={}, user: nil)
+        steps = (Buddy::Routines.expand(user, tool, payload) if user)
+        return steps.filter_map { |m| gate_kind_for(Buddy::Tools[m[:tool_name]], m[:payload]) }.first if steps
+
         return :timer if Buddy::Tools.waits?(tool, payload)
         return :forms if Buddy::Tools.form?(tool)
 
@@ -168,7 +207,7 @@ module Buddy
         return [resolve_failure(errors.join("; ")), nil, nil] if errors.any?
 
         ctx = Buddy::ToolContext.new(user, conversation: conversation)
-        opens = gate_kind_for(tool, payload)
+        opens = gate_kind_for(tool, payload, user: user)
         # A form tool's confirm is its PRE-SUBMIT gate and runs when they send,
         # so running it here would reject a form for being incomplete — which is
         # the entire point of showing them one. Its `fields` proc is the resolver
@@ -178,14 +217,14 @@ module Buddy
           raise "nothing to fill in for that one" if fields.empty?
 
           signature = [tool[:name], payload.except(*VOLATILE_ARGS).sort_by { |k, _| k.to_s }]
-          return [ack_for(tool, gate: gate), signature, opens]
+          return [ack_for(tool, gate: gate, opens: opens), signature, opens]
         end
 
         confirm  = tool[:confirm].call(payload, ctx)
         resolved = payload.merge(confirm[:resolved] || {})
 
         [
-          ack_for(tool, gate: gate).merge(resolved: confirm[:summary].to_s.presence).compact,
+          ack_for(tool, gate: gate, opens: opens).merge(resolved: confirm[:summary].to_s.presence).compact,
           [tool[:name], resolved.except(*VOLATILE_ARGS).sort_by { |k, _| k.to_s }],
           opens,
         ]
@@ -467,6 +506,35 @@ module Buddy
         A lead-in is never the whole message.
       TXT
 
+      NOTIFY_NUDGE = <<~TXT.freeze
+        STOP. Nobody spoke to you. Something fired, and your reply is the whole
+        notification - the only thing that reaches them. What you just wrote
+        tells them there is nothing to hear, so the thing that fired never gets
+        mentioned at all.
+
+        A trigger that reads exactly like an earlier one is a SECOND occurrence,
+        not a repeat. Deploys finish again; recurring reminders come back around.
+
+        Write the notification now: what just happened, in your voice.
+      TXT
+
+      # A self-initiated reply that decides the news is old. Prod 1319: a second
+      # deploy tripped the same watch 45 minutes after the first, and since both
+      # seeds read identically the model found its own announcement of the first
+      # one in history and answered "Already handled that one just now. Nothing
+      # new is waiting on my side." That went out as the push.
+      #
+      # Only ever consulted on a self-initiated turn - answering a person with
+      # "already did that" is often the honest reply.
+      DISMISSAL_RX = /
+        \b(?:
+          already \s+ (?:handled|covered|sent|told|did|done|mentioned|passed|flagged|pinged|got) \b |
+          nothing \s+ (?:new|else|more) \b |
+          nothing \s+ (?:to|left \s+ to) \s+ (?:report|add|pass|tell|say) \b |
+          no \s+ (?:new \s+)? (?:updates?|news) \b
+        )
+      /xi
+
       # A reply that is NOTHING BUT a pointer at output that was never rendered.
       # Prod 1313 answered "which reminders do I have set up?" with "Here's what
       # you've got." and no call - `list_reminders`' own description had handed
@@ -485,11 +553,13 @@ module Buddy
       /xi
 
       # Worth a corrective round: nothing was proposed, we haven't already spent
-      # the one retry we allow, and the reply either claims an action or points
-      # at output that isn't there. Returns the nudge to send, or nil.
+      # the one retry we allow, and the reply either claims an action, points at
+      # output that isn't there, or waves off news nobody has heard yet. Returns
+      # the nudge to send, or nil.
       def nudge_for(proposals, spoken, nudged, rounds)
         return nil if nudged || proposals.any?
         return nil if rounds >= MAX_ROUNDS || Time.current > @deadline
+        return NOTIFY_NUDGE if self_initiated? && spoken.to_s.match?(DISMISSAL_RX)
         return RETRY_NUDGE if unbacked_claim(spoken.to_s).present?
         return POINTER_NUDGE if spoken.to_s.strip.match?(DANGLING_POINTER_RX)
 
@@ -784,9 +854,15 @@ module Buddy
       def build_proposals(proposals)
         return { action: nil, auto_ran: false, forms: [] } if proposals.empty?
 
-        markers = proposals.map { |call|
-          tool = Buddy::Tools[call[:name]]
-          { tool_name: call[:name], payload: Buddy::Tools.normalize_function_arguments(tool, call[:arguments]) }
+        markers = proposals.flat_map { |call|
+          tool    = Buddy::Tools[call[:name]]
+          payload = Buddy::Tools.normalize_function_arguments(tool, call[:arguments])
+          # A routine run is a stand-in for the steps it names. Swapping it here,
+          # rather than letting it execute and fan out on its own, means the
+          # steps reach ProposalBuilder as ordinary markers — so they order,
+          # gate, and wait exactly like the same calls typed out by hand.
+          Buddy::Routines.expand(@user, tool, payload) ||
+            [{ tool_name: call[:name], payload: payload }]
         }
         Buddy::ProposalBuilder.create(user: @user, byte_message: @reply, markers: markers)
       end

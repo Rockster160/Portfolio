@@ -11,6 +11,9 @@ Buddy::Tools.register(
     category: { type: :enum, required: true, values: %i[me home work], description: "New bucket" },
   },
   level:       1,
+  # `id` names one stashed idea, so a saved copy points at whatever that id
+  # happens to be months later.
+  routinable:  false,
   confirm:     ->(payload, ctx) {
     idea = ctx.user.buddy_ideas.live.find_by(id: payload[:id])
     raise "no stashed idea ##{payload[:id]}" if idea.nil?

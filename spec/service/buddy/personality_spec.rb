@@ -135,6 +135,47 @@ RSpec.describe Buddy::Personality do
     end
   end
 
+  describe ".for saved routines" do
+    it "sends the model to run_routine instead of rebuilding the sequence" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("A routine they saved beats you rebuilding it")
+      expect(prompt).to include("re-deriving it by hand is how a step quietly goes missing")
+    end
+
+    it "says capture_last is the only way to save what it just did" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("you can't see your own finished calls")
+    end
+  end
+
+  # Prod 1319: a deploy watch tripped for the second time that night and got
+  # "Already handled that one just now. Nothing new is waiting on my side." The
+  # first firing was in history, worded identically, so the model read the second
+  # as a duplicate — and that reply WAS the push notification.
+  describe ".for turns nobody asked for" do
+    it "says the reply is the whole notification" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("When nobody said anything: something fired")
+      expect(prompt).to include("Your reply is the entire notification")
+    end
+
+    it "says a trigger that reads like an earlier one is a second occurrence" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("SECOND occurrence, not a repeat")
+      expect(prompt).to include("never that you've already covered this one")
+    end
+
+    it "rules out answering the trigger instead of delivering the news" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("there's nobody there to acknowledge")
+    end
+  end
+
   # Prod 1295: "Ping me every time a deploy finishes, success or fail" got
   # "I don't have a deploy watcher wired up right now, so I can't set that one
   # from here" — while `remind_when` carried `trigger: "deploy"` in its schema

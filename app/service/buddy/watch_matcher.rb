@@ -180,7 +180,12 @@ module Buddy
         outcome == :success ? "The deploy just finished successfully." : "The deploy just FAILED.",
         ("Commit #{sha}." if sha),
         ("What shipped: \"#{note}\"." if note),
-        "Tell them, in your own voice: #{watch.body}.",
+        # Quoted and attributed, because the bare imperative ran straight into
+        # the stored body and read as one instruction: "Tell them, in your own
+        # voice: let you know the deploy finished" got answered with "Yep, sent
+        # it along" (prod 1316) - the model took itself for the messenger and
+        # reported back on the errand instead of doing it.
+        "What they asked for was: \"#{watch.body}\". Say it to them in your own voice.",
         ("Lead with the fact that it failed - that's the part they need." if outcome == :failed),
       ].compact.join(" ")
     end

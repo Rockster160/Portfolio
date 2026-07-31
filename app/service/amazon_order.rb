@@ -93,8 +93,11 @@ class AmazonOrder
     # Default carrier keeps every pre-carrier cached row (and the whole Amazon
     # path) reading back as :amazon with no migration. order_hash can override.
     @carrier = :amazon
+    # Guard on the SETTER, not the getter: `serialize` includes computed,
+    # read-only fields (e.g. `url`) that round-trip into the cache but have no
+    # writer. Assigning only when a writer exists ignores those on reload.
     order_hash.each do |key, val|
-      send(:"#{key}=", val) if respond_to?(key)
+      send(:"#{key}=", val) if respond_to?(:"#{key}=")
     end
   end
 

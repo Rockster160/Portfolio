@@ -12,6 +12,8 @@ Buddy::Tools.register(
     plainly rather than guessing.
   TXT
   args: {},
+  # "The last thing" means something different every single run.
+  routinable: false,
   confirm: ->(_payload, ctx) {
     found = Buddy::Reverter.most_recent(ctx.conversation)
     raise "nothing recent to undo" if found.nil?

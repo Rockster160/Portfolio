@@ -839,9 +839,14 @@ RSpec.describe Buddy::GPT::Turn do
       )
     end
 
+    def fires(text, rounds)
+      client = FakeBuddyClient.new(rounds)
+      described_class.run!(trigger_says(text), client: client)
+      client
+    end
+
     it "marks the reply self-initiated" do
-      client = FakeBuddyClient.new([{ text: "Loops away, friend." }])
-      described_class.run!(trigger_says("[scheduled prompt] put your Loops away"), client: client)
+      fires("[nothing was said to you] put your Loops away", [{ text: "Loops away, friend." }])
 
       expect(reply.metadata["self_initiated"]).to be(true)
     end
@@ -850,6 +855,36 @@ RSpec.describe Buddy::GPT::Turn do
       run([{ text: "Not much on my end." }])
 
       expect(reply.metadata).not_to have_key("self_initiated")
+    end
+
+    # Prod 1319. The same deploy watch tripped twice 45 minutes apart, and the
+    # model found its own announcement of the first one in history and decided
+    # the second was a duplicate. That reply was the push notification, so the
+    # deploy it fired for was never mentioned to anyone.
+    it "gives the model a round when it waves off news nobody has heard yet" do
+      client = fires("[nothing was said to you] The deploy just finished successfully.", [
+        { text: "Already handled that one just now. Nothing new is waiting on my side." },
+        { text: "Deploy's through clean." },
+      ])
+
+      expect(client.calls.length).to eq(2)
+      expect(client.calls[1].input.any? { |i| i[:content].to_s.include?("Nobody spoke to you") }).to be(true)
+      expect(reply.body).to eq("Deploy's through clean.")
+    end
+
+    it "leaves the same sentence alone when a person actually asked" do
+      client = run([{ text: "Already handled that one just now." }], text: "did you get the trash out?")
+
+      expect(client.calls.length).to eq(1)
+      expect(reply.body).to eq("Already handled that one just now.")
+    end
+
+    it "spends no round when the trigger got the announcement it fired for" do
+      client = fires("[nothing was said to you] The deploy just finished successfully.", [
+        { text: "Deploy landed clean a second ago." },
+      ])
+
+      expect(client.calls.length).to eq(1)
     end
   end
 

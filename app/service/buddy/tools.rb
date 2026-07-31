@@ -62,7 +62,7 @@ module Buddy
       @loading_tools = false
     end
 
-    def register(name:, description:, args:, confirm:, label:, execute:, receipt:, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false)
+    def register(name:, description:, args:, confirm:, label:, execute:, receipt:, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true)
       # Confidence level governs how a proposal is presented (see
       # Buddy::ProposalBuilder):
       #   1 — highest confidence (reminders, car/house/light commands): fires
@@ -106,6 +106,13 @@ module Buddy
         # answer. Water drunk twice is two completions, so complete_chore and
         # log_event stay false even though they merge inside a single turn.
         supersedes:       supersedes && !merge_key.nil?,
+        # Whether this call still means the same thing replayed weeks later
+        # inside a BuddyRoutine. False where an argument names a specific row
+        # the person pointed at in the moment — a prompt id, an idea id, "the
+        # last completion". Those resolve to something different or to nothing
+        # at all on the next run, so they're kept out of routines entirely
+        # rather than failing quietly halfway through one.
+        routinable:       routinable,
       }
       registry[name.to_sym] = spec
     end
@@ -113,6 +120,11 @@ module Buddy
     # A tool whose proposal is a form the person fills in.
     def form?(tool)
       tool.is_a?(Hash) && tool[:form].present?
+    end
+
+    # Safe to save into a BuddyRoutine and replay later.
+    def routinable?(tool)
+      tool.is_a?(Hash) && tool[:routinable] != false
     end
 
     # A tool where asking again means correcting, not repeating.

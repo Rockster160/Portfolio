@@ -45,6 +45,7 @@ module Buddy
         stashed_ideas:          stashed_ideas(user),                 # brain-dump ideas to occasionally resurface
         jil_triggers:           jil_triggers(user),
         jil_functions:          jil_functions(user),
+        routines:               routines(user),                      # saved sequences one phrase runs end to end
       }
     end
 
@@ -567,6 +568,21 @@ module Buddy
           }
       rescue StandardError => e
         Buddy::Errors.report(section: "context.jil_functions", exception: e, user: user)
+        []
+      end
+
+      # The person's saved routines, run by `run_routine`. `steps` is a plain
+      # summary rather than the raw payloads: it's there so Buddy can tell them
+      # what a routine does and recognise when a request IS one, and the actual
+      # arguments only matter at run time, where they're read from the record.
+      def routines(user)
+        return [] unless user.respond_to?(:buddy_routines)
+
+        user.buddy_routines.enabled.ordered.limit(30).map { |r|
+          { id: r.id, name: r.name, description: r.description.presence, steps: r.summary }.compact
+        }
+      rescue StandardError => e
+        Buddy::Errors.report(section: "context.routines", exception: e, user: user)
         []
       end
 

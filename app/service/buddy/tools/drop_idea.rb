@@ -9,6 +9,8 @@ Buddy::Tools.register(
     id: { type: :integer, required: true, description: "Idea id from stashed_ideas" },
   },
   level:       1,
+  # See move_idea: an idea id doesn't survive being replayed.
+  routinable:  false,
   confirm:     ->(payload, ctx) {
     idea = ctx.user.buddy_ideas.live.find_by(id: payload[:id])
     raise "no stashed idea ##{payload[:id]}" if idea.nil?

@@ -48,6 +48,12 @@ module Buddy
         {
           tool:      tool,
           payload:   resolved_payload,
+          # What was ASKED for, before confirm resolved names into ids. Kept
+          # alongside because the two answer different questions: the resolved
+          # payload is what to run now, and this is what the request meant —
+          # which is the only half worth saving into a BuddyRoutine, since a
+          # `task_id` captured today points somewhere else next month.
+          args:      payload,
           count:     payload[Buddy::Tools::COUNT_ARG] || 1,
           merge_key: safely { tool[:merge_key].call(resolved_payload) } || SecureRandom.uuid,
         }
@@ -580,6 +586,8 @@ module Buddy
               # The exact arguments it ran with, for when the chip text isn't
               # enough to answer "what did it actually do".
               "payload"   => stringify(p[:payload]),
+              # Pre-resolution arguments, for Buddy::Routines.capture.
+              "args"      => stringify(p[:args] || p[:payload]),
             },
             delivered_at: Time.current,
           )
@@ -648,6 +656,8 @@ module Buddy
           "sublabel"  => sub,
           "tool_name" => p[:tool][:name].to_s,
           "payload"   => stringify(p[:payload]),
+          # Pre-resolution arguments, for Buddy::Routines.capture.
+          "args"      => stringify(p[:args] || p[:payload]),
           "count"     => p[:count],
           # What makes two calls "the same thing", but ONLY for the tools where
           # asking again means correcting. A repeatable action (a second glass of

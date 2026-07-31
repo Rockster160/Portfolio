@@ -19,23 +19,23 @@ module Buddy
     PER_MESSAGE_OVERHEAD = 20   # role tags, framing tokens
 
     # Fixed per-turn cost of everything that is not conversation history.
-    # Measured 2026-07-30 with the byte theme:
+    # Measured 2026-07-31 with the byte theme:
     #
     #   persona (byte.md)  ~1,260
     #   tone profile       ~2,880
-    #   RULES_APPENDIX    ~10,960
-    #   context guide      ~2,930
+    #   RULES_APPENDIX    ~11,245
+    #   context guide      ~2,995
     #   framing + glance     ~120
     #   ---------------------------
-    #   prompt total      ~18,170
-    #   tool schemas      ~12,375   (35 proposal + 5 silent + get_context + read_prompt)
+    #   prompt total      ~18,500
+    #   tool schemas      ~13,375   (38 proposal + 5 silent + get_context + read_prompt)
     #   ===========================
-    #   TOTAL             ~30,550
+    #   TOTAL             ~31,875
     #
     # Re-measure if the rules, tone profile, or tool count change materially:
-    #   Buddy::Personality.for(...).bytesize / 4
+    #   Buddy::Personality::RULES_APPENDIX.bytesize / 4
     #   JSON.generate(tool_schemas).bytesize / 4
-    FIXED_OVERHEAD = 30_550
+    FIXED_OVERHEAD = 31_875
 
     def estimate_for(conversation)
       compact_at   = compact_timestamp(conversation)

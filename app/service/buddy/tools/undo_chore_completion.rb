@@ -13,6 +13,9 @@ Buddy::Tools.register(
     chore: { type: :string, required: true,  description: "Fuzzy chore name" },
     when:  { type: :string, required: false, default: "last", description: "One of: today, yesterday, last" },
   },
+  # Reaches for "the last one", so replaying it removes a completion that has
+  # nothing to do with the run that saved it.
+  routinable:  false,
   confirm:     ->(payload, ctx) {
     completion = ctx.resolve_chore_completion(payload[:chore], hint: (payload[:when] || "last").to_sym)
     raise "no matching completion for #{payload[:chore].inspect}" if completion.nil?

@@ -36,6 +36,7 @@ module Buddy
         stashed_ideas
         jil_triggers
         jil_functions
+        routines
       ].freeze
 
       DESCRIPTION = <<~TXT.freeze
@@ -65,6 +66,10 @@ module Buddy
           purpose, not name. These cover status QUESTIONS too, not just
           commands - a sensor, door, gate, light, or the car's state is
           answerable here, so check before saying you can't see something.
+        - routines: sequences they named once so a single phrase runs the whole
+          thing. Check here whenever a request sounds like a thing they'd have
+          set up ("prep my printer", "wind down"), and run the match with
+          run_routine rather than doing the steps yourself.
       TXT
 
       def self.schema

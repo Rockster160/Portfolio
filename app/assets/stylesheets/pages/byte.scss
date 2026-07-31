@@ -2401,6 +2401,106 @@ dialog.byte-modal {
 // Version fingerprint pinned to the bottom of the drawer. Shows
 // server-rendered shell SHA + active SW cache tag so a hard reload can
 // be verified visually.
+// Saved routines, under the conversation list. Capped and scrollable so a
+// dozen of them can't push the conversation list out of the drawer — the list
+// is what people open this for.
+.byte-routines {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 38%;
+  overflow-y: auto;
+  border-top: 1px solid var(--bs-border);
+  padding: 10px 16px 4px;
+}
+
+.byte-routines-title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bs-muted);
+}
+
+.byte-routine-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.byte-routine {
+  &.byte-routine-off {
+    opacity: 0.45;
+  }
+}
+
+.byte-routine-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+// The drawer's buttons get reset app-wide, so these out-specify that rather
+// than relying on the bare element defaults.
+.ctr-byte .byte-app .byte-routine-head button,
+.byte-drawer .byte-routine-head button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.byte-routine-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  color: var(--bs-text);
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.byte-routine-toggle {
+  color: var(--bs-muted);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--bs-border) !important;
+  border-radius: 6px;
+  padding: 2px 6px !important;
+}
+
+.byte-routine-remove {
+  color: var(--bs-muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px !important;
+
+  &:hover {
+    color: var(--bs-danger, #e5484d);
+  }
+}
+
+.byte-routine-desc {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--bs-muted);
+}
+
+.byte-routine-steps {
+  margin: 5px 0 0;
+  padding-left: 18px;
+  font-size: 11.5px;
+  color: var(--bs-muted);
+  line-height: 1.5;
+}
+
 .byte-drawer-version {
   margin-top: auto;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
