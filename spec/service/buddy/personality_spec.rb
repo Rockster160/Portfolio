@@ -78,12 +78,30 @@ RSpec.describe Buddy::Personality do
       expect([byte, moss]).to all(include("Sorry, love."))
     end
 
-    # Prod 1222: "Ohhh, got it." in answer to a preference nobody had argued about.
-    it "reserves realization interjections for actually being corrected" do
+    # Three of the same failure, so they live under one rule: a reaction word
+    # whose meaning is specific, fired at everything.
+    #   1222 "Ohhh, got it."      — to a preference nobody had argued about
+    #   1291 "Good call."         — to a laundry timer, where nothing was in doubt
+    #        "Yesssss"            — as an all-purpose yes
+    it "reserves reaction words for the situations they actually mean" do
       prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
 
-      expect(prompt).to include('"Ohhh" is a realization, not a reaction')
+      expect(prompt).to include("Reaction words mean specific things")
+      # Realization — only after being corrected.
       expect(prompt).to include("they told you something")
+      # Praise for a decision — needs a decision.
+      expect(prompt).to include("It needs a decision to praise")
+      # Enthusiasm for their idea, not a confirmation.
+      expect(prompt).to include("It is not an all-purpose yes")
+    end
+
+    # The rules are worth nothing if the examples break them.
+    it "keeps its own examples inside the rule" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+      examples = prompt.scan(/→ "([^"]+)"/).flatten
+
+      expect(examples).not_to be_empty
+      expect(examples).to all(satisfy { |line| !line.match?(/\AYess+/i) })
     end
   end
 

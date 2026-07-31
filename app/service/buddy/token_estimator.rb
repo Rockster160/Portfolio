@@ -23,19 +23,19 @@ module Buddy
     #
     #   persona (byte.md)  ~1,260
     #   tone profile       ~2,880
-    #   RULES_APPENDIX    ~11,340
-    #   context guide      ~2,860
+    #   RULES_APPENDIX    ~10,820
+    #   context guide      ~2,930
     #   framing + glance     ~120
     #   ---------------------------
-    #   prompt total      ~18,460
+    #   prompt total      ~18,010
     #   tool schemas      ~12,110   (35 proposal + 5 silent + get_context + read_prompt)
     #   ===========================
-    #   TOTAL             ~30,570
+    #   TOTAL             ~30,150
     #
     # Re-measure if the rules, tone profile, or tool count change materially:
     #   Buddy::Personality.for(...).bytesize / 4
     #   JSON.generate(tool_schemas).bytesize / 4
-    FIXED_OVERHEAD = 30_570
+    FIXED_OVERHEAD = 30_150
 
     def estimate_for(conversation)
       compact_at   = compact_timestamp(conversation)
