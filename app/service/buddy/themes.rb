@@ -55,6 +55,16 @@ module Buddy
         manifest:       "/suki.webmanifest",
         kiosk_manifest: "/suki_kiosk.webmanifest",
       },
+      glimmer: {
+        name:           "Glimmer",
+        tone:           :chelsea,
+        color:          "#2A1E0A",
+        avatar:         "glimmer_favicon/glimmer.png",
+        touch_icon:     "glimmer_favicon/glimmer-apple-touch-icon.png",
+        favicon:        "glimmer_favicon/glimmer-favicon-96x96.png",
+        manifest:       "/glimmer.webmanifest",
+        kiosk_manifest: "/glimmer_kiosk.webmanifest",
+      },
     }.freeze
 
     # Anything unrecognised reads as the default rather than raising — a theme

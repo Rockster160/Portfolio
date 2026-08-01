@@ -83,6 +83,27 @@ html.html-ctr-byte body {
     --bs-pending: #9B84B8;
   }
 
+  // Glimmer theme (Chelsea's yoga companion) — a warm amber lantern surface for
+  // her firefly. Same `:has` override mechanism as Moss/Suki: retints page,
+  // drawer, and modals to a soft glowing dusk. Glimmer's replies/buttons are her
+  // gold; Chelsea's own (outbound) messages stay her purple (as with Moss), so
+  // the two never blur together against the amber.
+  &:has(.byte-app[data-buddy-theme="glimmer"]) {
+    --bs-bg: #160F04;
+    --bs-panel: #241A0A;
+    --bs-panel-soft: #33260F;
+    --bs-border: #4A3818;
+    --bs-text: #F5ECD8;
+    --bs-muted: #C0A870;
+    --bs-accent: #F2B84B;
+    --bs-accent-strong: #FFD277;
+    --bs-me-bg: linear-gradient(135deg, #8A6FCB 0%, #A082D9 100%);  // Chelsea purple
+    --bs-accent-grad: linear-gradient(135deg, #E0A038 0%, #F2B84B 100%);  // gold buttons
+    --bs-them-bg: #3A2A12;
+    --bs-danger: #E8825C;
+    --bs-pending: #B09A6E;
+  }
+
   .byte-app,
   .byte-app *,
   .byte-drawer,
@@ -2848,6 +2869,12 @@ dialog.byte-modal {
     --buddy-danger: #F4756B;
   }
 
+  &[data-buddy-theme="glimmer"] {
+    --buddy-primary: #3A2A0E;
+    --buddy-accent: #F2B84B;
+    --buddy-danger: #E8825C;
+  }
+
   &[hidden] {
     display: none;
   }
@@ -2972,7 +2999,8 @@ dialog.byte-modal {
 // sky above so the sprout sits clear of the header rather than jammed against
 // it. (The compact layout overrides this padding back to 8px.)
 .byte-buddy-hero[data-buddy-theme="moss"],
-.byte-buddy-hero[data-buddy-theme="suki"] {
+.byte-buddy-hero[data-buddy-theme="suki"],
+.byte-buddy-hero[data-buddy-theme="glimmer"] {
   padding-top: 3vh;
 }
 .byte-buddy-body,
@@ -3058,6 +3086,11 @@ dialog.byte-modal {
 .byte-buddy-hero[data-buddy-theme="suki"] .byte-buddy-body {
   background-image: none;
 }
+// Glimmer (like Moss/Suki) bakes the whole firefly — body, wings, expression,
+// glowing belly, and any sparkles/zzz — into each face PNG, so no body layer.
+.byte-buddy-hero[data-buddy-theme="glimmer"] .byte-buddy-body {
+  background-image: none;
+}
 
 // Face per theme + expression. Both themes now ship a full raster set (PNG);
 // every face in the folder is wired so the debug picker can switch to any of
@@ -3096,6 +3129,41 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
   .byte-buddy-hero[data-buddy-theme="moss"][data-buddy-expression="#{$mood}"]
     .byte-buddy-face {
     background-image: image-url("buddy/moss/face_#{$face}.png");
+  }
+}
+
+// Glimmer (Chelsea's firefly) — spliced from a 9-pose sheet, so a smaller
+// raster set than Moss. Each name here must have a matching
+// buddy/glimmer/face_#{name}.png or precompile fails.
+$glimmer_expressions: neutral happy grin sad content surprised loving star sleeping;
+@each $expr in $glimmer_expressions {
+  .byte-buddy-hero[data-buddy-theme="glimmer"][data-buddy-expression="#{$expr}"]
+    .byte-buddy-face {
+    background-image: image-url("buddy/glimmer/face_#{$expr}.png");
+  }
+}
+// Moods Glimmer has no dedicated art for, aliased to the closest of her nine
+// faces: the harsher negatives fold into sad, alert/off-kilter into surprised,
+// thinking into her calm meditation (content), and the server's celebratory
+// moods into grin/star.
+$glimmer_expr_aliases: (
+  "wink": "happy",
+  "crying": "sad",
+  "angry": "sad",
+  "frustrated": "sad",
+  "queasy": "sad",
+  "unamused": "sad",
+  "shocked": "surprised",
+  "dizzy": "surprised",
+  "focused": "surprised",
+  "thinking": "content",
+  "encouraging": "grin",
+  "celebrating": "star",
+);
+@each $mood, $face in $glimmer_expr_aliases {
+  .byte-buddy-hero[data-buddy-theme="glimmer"][data-buddy-expression="#{$mood}"]
+    .byte-buddy-face {
+    background-image: image-url("buddy/glimmer/face_#{$face}.png");
   }
 }
 
@@ -3238,6 +3306,31 @@ $suki_expr_aliases: (
       180deg,
       rgba(79, 207, 124, 0.22),
       rgba(79, 207, 124, 0.12)
+    ) !important;
+  }
+}
+
+// Glimmer palette override for buttons.
+.byte-buddy-hero[data-buddy-theme="glimmer"] .byte-buddy-quick-actions button {
+  background: linear-gradient(
+    180deg,
+    rgba(242, 184, 75, 0.28),
+    rgba(242, 184, 75, 0.14)
+  ) !important;
+  border-color: rgba(242, 184, 75, 0.5) !important;
+
+  &:hover {
+    background: linear-gradient(
+      180deg,
+      rgba(242, 184, 75, 0.38),
+      rgba(242, 184, 75, 0.2)
+    ) !important;
+  }
+  &:active {
+    background: linear-gradient(
+      180deg,
+      rgba(242, 184, 75, 0.22),
+      rgba(242, 184, 75, 0.12)
     ) !important;
   }
 }
