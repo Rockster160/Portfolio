@@ -104,6 +104,7 @@ module Buddy
       # anything to carry, and a level-2-only checklist never takes the queue.
       steps        = build_steps(merged)
       head, queue  = split_at_gate(steps)
+      head         = runnable_now(user, byte_message.byte_conversation, head)
       queued       = serialize_steps(queue)
       gate         = (head.last if gate?(head.last))
       conversation = byte_message.byte_conversation
@@ -350,7 +351,9 @@ module Buddy
       # agenda items asked for together stay two rows on one checklist, and three
       # prompts stay three forms posted side by side.
       def build_steps(merged)
-        level2, rest = merged.partition { |p| p[:tool][:level] == 2 }
+        level2, rest = merged.partition { |p|
+          p[:tool][:level] == 2 && Buddy::StepVars.references(p[:payload]).empty?
+        }
         steps = rest.each_with_object([]) { |p, out|
           kind = step_kind(p)
           if SOLO_KINDS.exclude?(kind) && out.last && out.last[:kind] == kind
@@ -365,6 +368,13 @@ module Buddy
         # queue. It joins the first checklist when that checklist is also the
         # first gate; otherwise it gets one of its own out front, which isn't a
         # gate and so holds nothing up behind it.
+        #
+        # Unless it's waiting on a value. Hoisting is a reordering, and it's
+        # harmless right up until a step's arguments depend on something an
+        # earlier gate collects: `ask_me` then `log_event("{{mine}}")` logged an
+        # event literally named "{{mine}}" before the question was even asked.
+        # Those stay where they were put and ride the queue like anything else —
+        # they run a moment later than usual, which is the whole point.
         gate_idx = steps.index { |s| gate?(s) }
         rows_idx = steps.index { |s| s[:kind] == :rows }
         if rows_idx && rows_idx == gate_idx
@@ -526,6 +536,24 @@ module Buddy
           end
         end
         ran
+      end
+
+      # Nothing has been collected yet at the head of a sequence, so a step here
+      # that references a value is asking for one that cannot exist. Say so and
+      # drop it, rather than dispatching the literal `{{mine}}` at something
+      # that will act on it.
+      #
+      # Reachable from a saved routine whose collecting step was deleted, or
+      # markers built by hand. check_var_flow! stops it at save; this is the
+      # backstop for everything that didn't come through there.
+      def runnable_now(user, conversation, head)
+        head.filter_map { |step|
+          keep, broken = step[:calls].partition { |p| Buddy::StepVars.references(p[:payload]).empty? }
+          next step if broken.empty?
+
+          report_missing_vars(user, conversation, broken.map { |p| p.merge(missing: Buddy::StepVars.references(p[:payload])) })
+          step.merge(calls: keep) if keep.any?
+        }
       end
 
       # A step wanted a value nothing ever captured. Nearly always a routine

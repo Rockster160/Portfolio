@@ -256,6 +256,35 @@ RSpec.describe "Buddy step variables" do
       expect(convo.byte_messages.last.body).to match(/needed `nope`/)
     end
 
+    # Nothing has been collected at the head of a sequence, so a reference there
+    # can never be satisfied. Dispatching the literal token at something that
+    # acts on it is the failure; this is the backstop for markers that didn't
+    # come through the save-time check.
+    it "refuses to run a step at the very start that references anything" do
+      build!([{ tool_name: :log_event, payload: { name: "{{mine}}" } }])
+
+      expect(ActionEvent.count).to eq(0)
+      expect(convo.byte_messages.last.body).to match(/needed `mine`/)
+    end
+
+    # Level-2 calls are normally hoisted to the front, since they execute on
+    # arrival. That reordering silently broke a sequence: this logged an event
+    # literally named "{{mine}}" before the question was even asked.
+    it "keeps a step that's waiting on a value behind the gate that collects it" do
+      build!([ask_me("Dinner?", "mine"), { tool_name: :log_event, payload: { name: "{{mine}}" } }])
+      expect(ActionEvent.count).to eq(0)
+
+      Buddy::FormAction.submit!(form_action, values: { "answer" => "curry" })
+
+      expect(ActionEvent.pluck(:name)).to eq(["curry"])
+    end
+
+    it "still hoists one that isn't waiting on anything" do
+      build!([ask_me("Dinner?", "mine"), { tool_name: :log_event, payload: { name: "Snack" } }])
+
+      expect(ActionEvent.pluck(:name)).to eq(["Snack"])
+    end
+
     it "still runs the steps beside it that were fine" do
       build!([ask_me("Dinner?", "mine"), tell_her("{{nope}}"), tell_her("this one's fine")])
       Buddy::FormAction.submit!(form_action, values: { "answer" => "curry" })
