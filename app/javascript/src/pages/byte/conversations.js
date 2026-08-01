@@ -20,6 +20,35 @@ function convoLabel(convo) {
   return convo?.name || convo?.buddy_name || "Byte";
 }
 
+// The pet table the server rendered onto `.byte-app` (ByteHelper#buddy_themes_json).
+// Read here as well as in index.js — same single attribute, so there's still one
+// source of truth; the drawer just needs it to show which pet a row belongs to.
+let themeTable = null;
+
+function buddyThemes() {
+  if (themeTable) return themeTable;
+  try {
+    themeTable = JSON.parse(
+      document.querySelector(".byte-app")?.dataset.buddyThemes || "{}",
+    );
+  } catch (e) {
+    themeTable = {};
+  }
+  return themeTable;
+}
+
+// A Buddy row leads with its pet's face rather than the mode chip: every one of
+// them says "buddy", so the chip carries no information while the face is the
+// whole question ("which of these is Suki?").
+function convoBadge(convo) {
+  const chrome = convo?.mode === "buddy" && buddyThemes()[convo.buddy_theme];
+  if (!chrome) {
+    return `<span class="byte-convo-mode" data-mode="${escapeAttr(convo.mode)}">${escapeAttr(convo.mode)}</span>`;
+  }
+
+  return `<img class="byte-convo-avatar" src="${escapeAttr(chrome.avatar)}" alt="${escapeAttr(chrome.name)}" loading="lazy">`;
+}
+
 // Shared fetch helper. Keeps CSRF/credentials boilerplate out of every
 // call site. `body` is JSON-stringified when present.
 async function apiCall(url, method, body) {
@@ -404,7 +433,7 @@ export class ConversationManager {
     pick.type = "button";
     pick.className = "byte-convo-pick";
     pick.innerHTML = `
-      <span class="byte-convo-mode" data-mode="${escapeAttr(convo.mode)}">${escapeAttr(convo.mode)}</span>
+      ${convoBadge(convo)}
       <span class="byte-convo-name">${escapeHtml(convoLabel(convo))}</span>
       <span class="byte-convo-time">${relativeTime(convo.last_message_at)}${unreadHtml}</span>
     `;

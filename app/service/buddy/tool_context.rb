@@ -144,8 +144,14 @@ module Buddy
     # pinged twice. Two reminders for arriving home ("shower", "do laundry") hit
     # this too and are perfectly legitimate; the point is to mention it, never to
     # refuse.
-    def existing_watch_twin(scope, match, owner: user)
-      BuddyWatch.active.where(user_id: owner.id, trigger_scope: scope.to_s, match: (match || {})).order(:id).last
+    # Two watches are twins when they'd fire on the same thing. For a named
+    # trigger that's the match hash; for a hand-written one it's the listener,
+    # because every custom watch carries an empty match and comparing those
+    # would call any two watches on the same scope duplicates.
+    def existing_watch_twin(scope, match, owner: user, listener: nil)
+      scoped = BuddyWatch.active.where(user_id: owner.id, trigger_scope: scope.to_s)
+      scoped = listener.present? ? scoped.where(listener: listener) : scoped.where(listener: nil, match: (match || {}))
+      scoped.order(:id).last
     rescue StandardError => e
       Rails.logger.warn("[Buddy::ToolContext] watch twin lookup failed: #{e.class}: #{e.message}")
       nil

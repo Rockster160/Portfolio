@@ -1743,6 +1743,17 @@ html.html-ctr-byte body {
   border: none;
   cursor: pointer;
 
+  // Stands in for the mode chip on a Buddy row. Sized to the chip's footprint
+  // so the name column stays aligned whichever one a row shows.
+  .byte-convo-avatar {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    display: block;
+  }
+
   .byte-convo-mode {
     font-size: 9px;
     font-weight: 700;
@@ -3726,6 +3737,9 @@ $suki_expr_aliases: (
     opacity: 0.65;
     word-break: break-word;
     margin-top: 1px;
+    // A custom watch puts its raw listener on a second line under the plain
+    // description, the same shape the action rows use.
+    white-space: pre-line;
   }
 
   // Remove (×) / restore (Undo) control.

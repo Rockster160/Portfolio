@@ -53,6 +53,19 @@ RSpec.describe ByteController, type: :controller do
       expect(response.body).to include("Say something to Suki")
       expect(response.body).not_to include("Say something to Byte")
     end
+
+    # Everything above is baked in for the thread that happened to be open. A
+    # switch has to repaint it, which needs the pets the client has no thread
+    # for - so the whole table ships once, and the images that follow the switch
+    # are marked for it to find.
+    it "ships every pet's chrome so a switch can repaint without a round trip" do
+      sign_in rocco
+
+      get :show
+
+      expect(response.body).to include("data-buddy-themes=")
+      expect(response.body.scan("data-byte-pet-avatar").length).to be >= 2
+    end
   end
 
   describe "DELETE #delete_message" do

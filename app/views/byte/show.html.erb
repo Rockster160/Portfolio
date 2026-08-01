@@ -55,6 +55,10 @@
      data-initial-conversation-id="<%= @conversation.id %>"
      data-buddy-theme="<%= buddy_page_theme %>"
      data-buddy-name="<%= buddy_page_chrome[:name] %>"
+     <%# Every pet's name, colour, icons and face set. The client repaints from %>
+     <%# this on a conversation switch, and needs pets with no open thread for %>
+     <%# the drawer rows and face warming. See ByteHelper#buddy_themes_json. %>
+     data-buddy-themes="<%= buddy_themes_json %>"
      <%# Owner of the Mac. Only used to stop offering slash commands that would %>
      <%# be refused anyway - the server is the actual gate. %>
      data-byte-owner="<%= current_user.me? %>"
@@ -68,7 +72,9 @@
       </svg>
     </button>
     <span class="byte-avatar">
-      <%= image_tag buddy_page_chrome[:avatar], alt: buddy_page_chrome[:name] %>
+      <%# `data-byte-pet-avatar` marks every image that has to follow the open %>
+      <%# thread's pet; applyBuddyTheme repoints them all on a switch. %>
+      <%= image_tag buddy_page_chrome[:avatar], alt: buddy_page_chrome[:name], data: { byte_pet_avatar: true } %>
     </span>
     <span class="byte-title">
       <span class="byte-title-row">
@@ -299,7 +305,7 @@
     <%#   Buddy   → speech-bubble glyph in violet %>
     <%# CSS on `.byte-composer[data-mode="…"]` toggles which child is visible. %>
     <span class="byte-composer-avatar" data-byte-composer-avatar>
-      <img class="byte-composer-avatar-img byte-composer-avatar-claude"
+      <img class="byte-composer-avatar-img byte-composer-avatar-claude" data-byte-pet-avatar
            src="<%= asset_path(buddy_page_chrome[:avatar]) %>" alt="<%= buddy_page_chrome[:name] %>">
       <img class="byte-composer-avatar-img byte-composer-avatar-jarvis"
            data-byte-composer-avatar-jarvis src="" alt="Jarvis">

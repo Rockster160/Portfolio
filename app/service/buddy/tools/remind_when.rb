@@ -42,6 +42,13 @@ Buddy::Tools.register(
     copying a real key path from those is the difference between a watch that
     fires and one that silently never does. Do not guess at payload keys.
 
+    `when_phrase` (custom only) says what that listener MEANS, in their words:
+    "when something is added to the Claude list", "when the car parks at home".
+    It's what they'll read in their reminders list; the listener itself shows
+    underneath as the detail. Write it the way they said it, starting with
+    "when", and don't describe the syntax - "when item:action:added fires" tells
+    them nothing they wanted to know.
+
     `text` is what to remind them of, phrased as the nudge itself. It fires
     ONCE by default (the next time the condition happens). Set `repeat`
     true only if they clearly want it every time ("every time I get home...").
@@ -65,7 +72,8 @@ Buddy::Tools.register(
     text:    { type: :string,  required: true,  description: "What to remind them of" },
     trigger:  { type: :enum,    required: true,  values: %i[arrive depart chore event agenda deploy custom], description: "Condition type" },
     target:   { type: :string,  required: false, description: "Place / chore / event / calendar name the condition is about (omit for deploy and custom)" },
-    listener: { type: :string,  required: false, description: "Jil listener string. Required for trigger=custom, ignored otherwise. Read read_listener_guide first." },
+    listener:     { type: :string, required: false, description: "Jil listener string. Required for trigger=custom, ignored otherwise. Read read_listener_guide first." },
+    when_phrase:  { type: :string, required: false, description: "Plain-language meaning of the listener (\"when something is added to the Claude list\"). Required for trigger=custom." },
     repeat:  { type: :boolean, required: false, default: false, description: "Fire every time (true) instead of just the next time (false)" },
     notify:  { type: :string,  required: false, description: "Household member to notify instead of the user (optional)" },
   },
@@ -124,10 +132,14 @@ Buddy::Tools.register(
         )
       end
 
-      # The listener itself is the human phrasing. It's jargon, but a custom
-      # watch that fires on something unexpected is unexplainable without it,
-      # and this is the one place the person can see what it's really watching.
-      [::Jil::ListenerMatch.scope_of(listener), {}, "when `#{listener}` fires", true, nil]
+      # The person reads the plain phrasing; the listener rides underneath as
+      # detail (see `listener` on the resolved payload). Showing them the raw
+      # syntax as the whole description tells them nothing they asked about,
+      # but dropping it entirely makes an unexpected fire unexplainable.
+      phrase = payload[:when_phrase].to_s.strip
+      raise "custom needs a `when_phrase` saying what that listener means in their words" if phrase.blank?
+
+      [::Jil::ListenerMatch.scope_of(listener), {}, phrase.sub(/\A(when|whenever)\s+/i, "when "), true, nil]
     else
       raise "unknown trigger #{trigger.inspect}"
     end
@@ -155,7 +167,7 @@ Buddy::Tools.register(
     # that hurts is the one they forgot - a stale deploy watch nobody remembered
     # sat behind a fresh one and a single deploy pinged twice. This runs before
     # the model writes a word, so it can mention it in the same turn.
-    twin    = ctx.existing_watch_twin(scope, match, owner: owner)
+    twin    = ctx.existing_watch_twin(scope, match, owner: owner, listener: (payload[:listener].to_s.strip.presence if trigger == "custom"))
     warning = twin && "One is ALREADY listening for this: #{twin.body.to_s.truncate(60).inspect}. " \
                       "Setting this leaves both, so both will fire. Say that plainly and offer to " \
                       "retire the old one (cancel_reminder) - don't add a second one silently."
@@ -220,10 +232,16 @@ Buddy::Tools.register(
     if result[:unknown_place]
       where = result[:place_name].to_s.strip
       "Not sure where #{where.presence || "that"} is - what's the address, or is it on your calendar?"
-    elsif result[:recipient_name].present?
-      "#{name} will let #{result[:recipient_name]} know #{result[:human_when]}"
     else
-      "#{name} will remind you #{result[:human_when]}"
+      line = if result[:recipient_name].present?
+        "#{name} will let #{result[:recipient_name]} know #{result[:human_when]}"
+      else
+        "#{name} will remind you #{result[:human_when]}"
+      end
+      # A hand-written watch shows what it's really matching underneath. This is
+      # the one moment they can catch a listener that's subtly wrong, before it
+      # sits there for a month not firing.
+      result[:listener].present? ? "#{line}\n`#{result[:listener]}`" : line
     end
   },
 )

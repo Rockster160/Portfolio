@@ -18,10 +18,10 @@ RSpec.describe "Buddy custom listeners" do
     Buddy::ToolContext.new(user, conversation: convo)
   end
 
-  def set!(listener, text: "milk landed")
-    confirm = tool[:confirm].call({ text: text, trigger: "custom", listener: listener }, ctx)
-    merged  = { text: text, trigger: "custom", listener: listener }.merge(confirm[:resolved])
-    tool[:execute].call(merged, ctx)
+  def set!(listener, text: "milk landed", phrase: "when something is added to the Claude list")
+    args    = { text: text, trigger: "custom", listener: listener, when_phrase: phrase }
+    confirm = tool[:confirm].call(args, ctx)
+    tool[:execute].call(args.merge(confirm[:resolved]), ctx)
   end
 
   def item_payload(list_name:, action: "added", name: "Milk")
@@ -86,11 +86,31 @@ RSpec.describe "Buddy custom listeners" do
   end
 
   describe "what the person can see" do
-    it "puts the listener itself in the phrasing, since nothing else explains a custom fire" do
+    # They read what they asked for; the syntax is detail underneath. "when
+    # item:action:added fires" tells them nothing they wanted to know.
+    it "describes the condition in their words, not in syntax" do
       result = set!("item:action:added")
 
-      expect(result[:human_when]).to eq("when `item:action:added` fires")
+      expect(result[:human_when]).to eq("when something is added to the Claude list")
       expect(result[:listener]).to eq("item:action:added")
+    end
+
+    it "refuses a custom watch with no plain description" do
+      expect { set!("item:action:added", phrase: "") }.to raise_error(/when_phrase/)
+    end
+
+    it "normalizes a 'whenever' opener so the framing reads right" do
+      expect(set!("item:action:added", phrase: "whenever milk shows up")[:human_when])
+        .to eq("when milk shows up")
+    end
+
+    # The description says what they asked for; the listener says what's really
+    # being matched, which is the only thing that explains a surprising fire.
+    it "puts the listener underneath as a second line in the reminders list" do
+      set!("item:action:added")
+
+      row = Buddy::ReminderList.send(:rows_for, user).find { |r| r["record_type"] == "watch" }
+      expect(row["sublabel"]).to eq("when something is added to the Claude list\nitem:action:added")
     end
 
     it "carries the listener into context so a near-duplicate is visible" do
@@ -98,6 +118,48 @@ RSpec.describe "Buddy custom listeners" do
 
       watch = Buddy::Context.send(:active_watches, convo).first
       expect(watch[:listener]).to eq("item:action:added")
+    end
+
+    it "shows it on the receipt too, the one moment a wrong listener is catchable" do
+      result  = set!("item:action:added")
+      receipt = tool[:receipt].call(result, ctx)
+
+      expect(receipt).to include("when something is added to the Claude list")
+      expect(receipt).to include("`item:action:added`")
+    end
+  end
+
+  # Every custom watch carries an empty match hash, so comparing those would
+  # call any two watches on the same scope duplicates.
+  describe "spotting a real duplicate" do
+    it "doesn't flag a different listener on the same scope" do
+      set!("item:action:added item:list:name:/^Claude$/")
+
+      confirm = tool[:confirm].call(
+        {
+          text:        "eggs",
+          trigger:     "custom",
+          listener:    "item:action:added item:list:name:/^Shopping$/",
+          when_phrase: "when something is added to Shopping",
+        }, ctx
+      )
+
+      expect(confirm[:summary]).not_to match(/ALREADY listening/)
+    end
+
+    it "does flag the same listener twice" do
+      set!("item:action:added")
+
+      confirm = tool[:confirm].call(
+        {
+          text:        "again",
+          trigger:     "custom",
+          listener:    "item:action:added",
+          when_phrase: "when something is added",
+        }, ctx
+      )
+
+      expect(confirm[:summary]).to match(/ALREADY listening/)
     end
   end
 

@@ -63,6 +63,35 @@ RSpec.describe Buddy::Themes do
 
       expect(convo.as_wire).to include(buddy_theme: "suki", buddy_name: "Suki")
     end
+
+    # Switching threads has to repaint both avatars, the placeholder, the
+    # favicon and the surface colour, and warm the incoming pet's faces - which
+    # means the client needs pets it has no open conversation for. That comes as
+    # one blob generated from this table, so a new companion is still one entry.
+    describe "the theme table rendered into the page" do
+      # Through the real view context, so the asset paths are the ones the page
+      # would actually render.
+      let(:table) { JSON.parse(ApplicationController.helpers.buddy_themes_json) }
+
+      it "covers every pet" do
+        expect(table.keys).to match_array(described_class::ALL.keys.map(&:to_s))
+      end
+
+      it "gives each one everything a repaint needs" do
+        table.each_value { |chrome|
+          expect(chrome["name"]).to be_present
+          expect(chrome["color"]).to match(/\A#[0-9A-F]{6}\z/i)
+          expect(chrome.values_at("avatar", "touch_icon", "favicon")).to all(start_with("/"))
+        }
+      end
+
+      it "resolves each pet's face set so a switch can warm them" do
+        table.each { |theme, chrome|
+          expect(chrome["faces"]).not_to be_empty, "#{theme} has no face images"
+          expect(chrome["faces"]).to all(include("buddy/#{theme}/face_"))
+        }
+      end
+    end
   end
 
   # SleepGuard used to be a Moss-or-Byte ternary keyed off the user, so a Suki

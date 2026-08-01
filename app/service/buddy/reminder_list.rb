@@ -170,12 +170,21 @@ module Buddy
         when "item", "list", "section" then "🧾"
         # A custom listener can name any scope, so this is a real fallback now
         # rather than a defensive one.
-        else                         "🔔"
+        else "🔔"
         end
       end
 
+      # Plain description on top; for a hand-written watch, its listener goes
+      # underneath as the detail line. The description says what they asked for,
+      # the listener says what's actually being matched - and when a custom
+      # watch fires on something surprising, that second line is the only thing
+      # that explains it.
       def watch_when(watch)
-        (watch.metadata.is_a?(Hash) ? watch.metadata["human_when"].to_s.presence : nil) || watch.trigger_scope.to_s
+        phrase = (watch.metadata.is_a?(Hash) ? watch.metadata["human_when"].to_s.presence : nil)
+        phrase ||= watch.trigger_scope.to_s
+        return phrase if watch.listener.blank?
+
+        "#{phrase}\n#{watch.listener}"
       end
 
       def post_message(user, conversation, body, broadcast: true)

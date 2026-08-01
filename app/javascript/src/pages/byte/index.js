@@ -134,6 +134,25 @@ document.addEventListener("DOMContentLoaded", async () => {
   // hardcoding one companion's name.
   const buddyName = () => app.dataset.buddyName || "Byte";
 
+  // Every pet's name, colour, icons and faces, rendered once from
+  // Buddy::Themes (see ByteHelper#buddy_themes_json). Keyed by theme, and
+  // includes pets with no open thread — the drawer rows and face warming both
+  // need those.
+  const buddyThemes = (() => {
+    try {
+      return JSON.parse(app.dataset.buddyThemes || "{}");
+    } catch (e) {
+      return {};
+    }
+  })();
+
+  // The face a pet settles back to. Declared up here because applyBuddyTheme
+  // resets to it on every conversation switch, well before the sleep/wake block
+  // that also uses it.
+  const DEFAULT_WAKE_EXPRESSION =
+    document.querySelector("[data-buddy-hero]")?.dataset.buddyAwakeExpression ||
+    "happy";
+
   configureApi({ sendUrl, csrfRefreshUrl: csrfUrl });
 
   // ---------- bootstrap ----------
@@ -1285,12 +1304,64 @@ document.addEventListener("DOMContentLoaded", async () => {
       document.title = convo.buddy_name;
       updateSleepChip();
     }
-    if (convo.buddy_theme) buddyHero?.setTheme(convo.buddy_theme);
-    const expr = convo.buddy_expression;
-    if (expr && expr !== "sleeping") {
-      buddyWakeExpr = expr; // rest/reconnect target for this thread
-      if (!sleepUntil) buddyHero?.setExpression(expr);
+    if (convo.buddy_theme) {
+      buddyHero?.setTheme(convo.buddy_theme);
+      paintThemeChrome(convo.buddy_theme, convo.buddy_name);
+      warmFaces(convo.buddy_theme);
     }
+    // Always derived, never inherited: a thread with no stored face used to
+    // keep whatever the PREVIOUS thread was wearing, because this only
+    // assigned when the incoming conversation had one.
+    const expr = convo.buddy_expression;
+    buddyWakeExpr = expr && expr !== "sleeping" ? expr : DEFAULT_WAKE_EXPRESSION;
+    if (!sleepUntil) buddyHero?.setExpression(buddyWakeExpr);
+  }
+
+  // The pet's identity outside the hero: both avatars, the composer
+  // placeholder, and the browser chrome. Server-rendered for the thread that
+  // was open at load, so without this a switch left the previous pet's face in
+  // the header and its name in the composer.
+  function paintThemeChrome(theme, name) {
+    const chrome = buddyThemes[theme];
+    if (!chrome) return;
+
+    const label = name || chrome.name;
+    document.querySelectorAll("[data-byte-pet-avatar]").forEach((img) => {
+      img.src = chrome.avatar;
+      img.alt = label;
+    });
+    const char = document.querySelector(".byte-buddy-char");
+    if (char) char.setAttribute("aria-label", label);
+    if (input) input.placeholder = `Say something to ${label}…`;
+
+    setLinkHref('link[rel="icon"]', chrome.favicon);
+    setLinkHref('link[rel="apple-touch-icon"]', chrome.touch_icon);
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) themeColor.setAttribute("content", chrome.color);
+    // The manifest is deliberately left alone. A PWA keeps the name and icon it
+    // was installed under; rewriting the link post-load changes nothing on the
+    // home screen and only risks a re-prompt.
+  }
+
+  function setLinkHref(selector, href) {
+    const el = document.querySelector(selector);
+    if (el && href) el.setAttribute("href", href);
+  }
+
+  // Pull a pet's face set into cache the first time you land on one of its
+  // threads, so the hero's first expression change doesn't pop. The page
+  // preloads only the thread it opened with — preloading all three up front is
+  // forty images most sessions never look at.
+  const warmedThemes = new Set();
+
+  function warmFaces(theme) {
+    if (warmedThemes.has(theme)) return;
+    warmedThemes.add(theme);
+    (buddyThemes[theme]?.faces || []).forEach((src) => {
+      const img = new Image();
+      img.decoding = "async";
+      img.src = src;
+    });
   }
 
   function migrateLegacy(defaultConvId) {
@@ -1344,18 +1415,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       const url = new URL(messagesUrl, location.href);
       url.searchParams.set("before", String(oldestLoadedId));
-      url.searchParams.set("conversation_id", String(currentConversationId));
+      url.searchParams.set("conversation_id", String(convIdAtStart));
       const res = await fetch(url.toString(), {
         credentials: "same-origin",
         headers: { Accept: "application/json" },
       });
       if (!res.ok) return;
-      // If the user switched conversations while we were awaiting the
-      // response, discard the payload — appending it now would corrupt
-      // the newly-shown thread.
-      if (convIdAtStart !== currentConversationId) return;
 
       const payload = await res.json();
+      // Checked AFTER the body is parsed, not before: `res.json()` is its own
+      // await, and a switch during it would have slipped past a guard placed
+      // above and prepended this thread's history onto a different one.
+      if (convIdAtStart !== currentConversationId) return;
+
       const older = Array.isArray(payload.messages) ? payload.messages : [];
       hasMore = !!payload.has_more;
 
@@ -1366,6 +1438,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const frag = document.createDocumentFragment();
       older.forEach((m) => {
+        // Only mount what isn't already on screen. This path builds nodes
+        // directly rather than going through upsertMessage — it has to, to
+        // prepend the whole page in one insert and keep the scroll anchored —
+        // so it carries its own guard. Without it, any overlap between the
+        // fetched page and what's already mounted (a repeat call, a refetch
+        // that already landed) renders the same message twice.
+        if (nodeForServerMessage(m)) return;
+
         const node = newMessageNode();
         paintMessageNode(node, m);
         frag.appendChild(node);
@@ -1640,7 +1720,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // channel connects we wake it to its stored mood; a drop puts it back
   // to sleep. `buddyWakeExpr` tracks the latest real (non-connection)
   // expression so a reconnect restores the right face.
-  let buddyWakeExpr = heroEl?.dataset.buddyAwakeExpression || "happy";
+  let buddyWakeExpr = DEFAULT_WAKE_EXPRESSION;
 
   // Idle face reset: after 10 minutes of no activity, let Buddy's face settle
   // back to its neutral resting default (a mood shouldn't linger forever with
@@ -2155,14 +2235,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         headers: { Accept: "application/json" },
       });
       if (!res.ok) return;
-      if (convIdAtStart !== currentConversationId) return;
       const payload = await res.json();
+      // After the parse, not before — `res.json()` is its own await, and a
+      // switch during it used to land this thread's history in the cache and
+      // the DOM of whichever thread you'd moved to.
+      if (convIdAtStart !== currentConversationId) return;
+
       const latest = Array.isArray(payload.messages) ? payload.messages : [];
       if (typeof payload.has_more === "boolean") hasMore = payload.has_more;
       if (!oldestLoadedId && latest[0]) oldestLoadedId = latest[0].id;
       const wasAtBottom = atBottom;
       latest.forEach((m) => {
-        messages = upsertPersisted(currentConversationId, messages, m);
+        messages = upsertPersisted(convIdAtStart, messages, m);
         upsertMessage(m);
       });
       if (wasAtBottom) scrollToBottom("auto");
