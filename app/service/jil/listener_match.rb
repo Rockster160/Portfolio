@@ -12,12 +12,15 @@ class Jil
   module ListenerMatch
     module_function
 
-    # Every scope the app actually triggers. A listener naming anything else can
+    # Every scope the app itself triggers. A listener naming anything else can
     # never fire, so this is what stops Buddy inventing one and handing back a
     # watch that sits there forever.
     #
-    # Kept honest by spec/service/jil/listener_scopes_spec.rb, which greps the
-    # app for `Jil.trigger` / `jil_trigger` calls and fails if one isn't listed.
+    # Kept honest by spec/service/jil/listener_match_scopes_spec.rb, which greps
+    # the app for `Jil.trigger` / `jil_trigger` calls and fails if one isn't
+    # listed.
+    #
+    # This is HALF the picture - see `wired_scopes` for the other half.
     KNOWN_SCOPES = %w[
       agenda_item
       agenda_schedule
@@ -57,8 +60,42 @@ class Jil
       listener.to_s.strip.downcase.split(":").first.presence
     end
 
-    def known_scope?(scope)
-      KNOWN_SCOPES.include?(scope.to_s.downcase)
+    # Anything OUTSIDE the app can trigger a scope too. `/jil/webhook` and
+    # `/jil/trigger/:trigger` take the scope straight off the request, so Home
+    # Assistant posts `hass-sensor`, `hass-button`, `hass-alert`; a camera or
+    # any other integration names whatever it likes. None of those appear as a
+    # literal anywhere in app code, so KNOWN_SCOPES structurally cannot list
+    # them - and it refused all nine of the HASS scopes this install's 28 house
+    # tasks run on, which is how "let me know when someone rings the doorbell"
+    # came back as "I don't have that wired" (prod 1479-1482).
+    #
+    # A task the person already has listening on a scope is the evidence
+    # instead: nobody wires a task to a scope that never fires. That's a
+    # stronger test than a hand-kept list, and it needs no maintenance when
+    # they add a new sensor.
+    WIRED_CACHE_TTL = 10.minutes
+
+    def known_scope?(scope, user: nil)
+      scope = scope.to_s.downcase
+      return true if KNOWN_SCOPES.include?(scope)
+
+      user.present? && wired_scopes(user).include?(scope)
+    end
+
+    # Scopes with a real, running task listening on them, for this person or
+    # shared to them. Cached: this is read while validating a listener, not on
+    # the trigger hot path, so a 10-minute lag only means a sensor wired up
+    # minutes ago isn't watchable quite yet.
+    def wired_scopes(user)
+      return [] if user.nil?
+
+      Rails.cache.fetch("jil:wired_scopes:#{user.id}", expires_in: WIRED_CACHE_TTL) {
+        listeners = user.accessible_tasks.active.enabled.where.not(listener: [nil, ""]).pluck(:listener)
+        listeners.reject { |l| l.to_s.match?(/\Afunction\(/i) }.filter_map { |l| scope_of(l) }.uniq.sort
+      }
+    rescue StandardError => e
+      Rails.logger.warn("[ListenerMatch] wired_scopes failed: #{e.class}: #{e.message}")
+      []
     end
 
     # A listener is a whitespace-separated set of terms that must ALL match
@@ -103,17 +140,20 @@ class Jil
       [matched, first]
     end
 
-    # Whether a string could ever match anything: it names a scope the app
+    # Whether a string could ever match anything: it names a scope something
     # really triggers, and the tokenizer can split it without blowing up.
+    #
+    # `user` widens the scope check to everything they have a task listening on
+    # - pass it wherever you have one, or an integration-fed scope gets refused.
     #
     # What this can NOT tell you is whether the KEYS exist in that scope's
     # payload - `item:sparkle:yes` is perfectly valid and will never fire. No
     # static check can catch that, which is why the tool that writes these is
     # told to read real listeners off the person's own tasks first rather than
     # guessing at key names.
-    def valid?(listener)
+    def valid?(listener, user: nil)
       scope = scope_of(listener)
-      return false if scope.blank? || !known_scope?(scope)
+      return false if scope.blank? || !known_scope?(scope, user: user)
 
       terms(listener).any?
     rescue StandardError

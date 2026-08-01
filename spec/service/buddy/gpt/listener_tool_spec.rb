@@ -60,4 +60,47 @@ RSpec.describe Buddy::GPT::ListenerTool do
   it "tells the model to copy key paths rather than invent them" do
     expect(call["next"]).to match(/rather than inventing them/)
   end
+
+  # The scope index and the search are the discovery half. A scope fed by an
+  # integration has no name anyone could guess (`hass-sensor`), and it appears
+  # in no context section, so without these the only honest answer to "can you
+  # watch the doorbell" is a wrong no.
+  describe "discovery" do
+    it "counts what's listening on each scope" do
+      task!("item:action:added", name: "List ping")
+      task!("item:action:removed", name: "List unping")
+      task!("email:from:bank", name: "Bank mail")
+
+      expect(call["scopes"]).to eq("item" => 2, "email" => 1)
+    end
+
+    it "puts the busiest scope first, so the index reads as a summary" do
+      task!("email:from:bank", name: "Bank mail")
+      task!("item:action:added", name: "List ping")
+      task!("item:action:removed", name: "List unping")
+
+      expect(call["scopes"].keys.first).to eq("item")
+    end
+
+    it "searches names, descriptions and listeners together" do
+      task!("hass-sensor:location:doorbell", name: "Ring", description: "Pushes when the bell is rung")
+      task!("item:action:added", name: "List ping")
+
+      expect(call(about: "doorbell").fetch("matches").pluck("listener"))
+        .to eq(["hass-sensor:location:doorbell"])
+    end
+
+    it "ranks a task matching more of the phrase above one matching less" do
+      task!("hass-sensor:location:backyard", name: "Backyard camera")
+      task!("hass-sensor:location:doorbell", name: "Front door camera")
+
+      expect(call(about: "front door camera").fetch("matches").first["does"]).to eq("Front door camera")
+    end
+
+    # An omitted search is a different question from one that found nothing,
+    # and an empty array would read as the latter.
+    it "leaves the key out entirely when nothing was searched for" do
+      expect(call).not_to have_key("matches")
+    end
+  end
 end

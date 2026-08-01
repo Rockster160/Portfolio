@@ -66,8 +66,8 @@ RSpec.describe "Buddy custom listeners" do
   end
 
   describe "refusing one that could never fire" do
-    it "rejects a scope this app never triggers" do
-      expect { set!("sparkle:action:added") }.to raise_error(/no "sparkle" trigger/)
+    it "rejects a scope nothing has ever triggered" do
+      expect { set!("sparkle:action:added") }.to raise_error(/nothing here has ever fired a "sparkle" trigger/)
     end
 
     it "rejects an empty listener" do

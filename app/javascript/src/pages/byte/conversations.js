@@ -97,6 +97,7 @@ export class ConversationManager {
     conversationsUrl,
     claudeSessionsUrl,
     initialConversationId,
+    pinnedConversationId,
     initialConversations,
     onSwitch,
     prefillComposer,
@@ -119,13 +120,20 @@ export class ConversationManager {
     this.conversations      = initialConversations && initialConversations.length
       ? initialConversations
       : loadCachedList();
-    // Resolve initial id: server bootstrap wins, then localStorage, then
-    // fall back to the first known conversation.
+    // Resolve initial id, most-specific first. A pinned id comes from an
+    // explicit `?conversation_id=` — a request rather than a guess, so it beats
+    // whatever this browser happened to have open last; that's what makes a
+    // link to a thread land on that thread. Otherwise the last-viewed one from
+    // localStorage, then the server's pick, then anything at all.
+    const pinned = this.conversations.find((c) => c.id === pinnedConversationId);
     const preferred = String(loadCurrentId() || "");
     const validPreferred = this.conversations.find((c) => String(c.id) === preferred);
-    this.currentId = validPreferred
-      ? Number(preferred)
-      : (initialConversationId ?? this.conversations[0]?.id ?? null);
+    this.currentId =
+      pinned?.id ??
+      (validPreferred ? Number(preferred) : null) ??
+      initialConversationId ??
+      this.conversations[0]?.id ??
+      null;
 
     this.menuTargetId = null;
     this.bindDom();

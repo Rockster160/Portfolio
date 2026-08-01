@@ -28,12 +28,16 @@ Buddy::Tools.register(
                  failed. No `target`. Pair with `repeat: true` for a standing
                  "ping me on every deploy"; you'll be told which outcome it
                  was when it fires.
-      "custom" - anything else that happens in the app: a list getting an item,
-                 a prompt arriving, the car parking. Pass `listener` instead of
-                 `target`, written in Jil listener syntax. USE ONE OF THE NAMED
-                 TRIGGERS ABOVE WHEN ONE FITS - they're resolved against real
-                 chores, places and calendars, and a hand-written listener is
-                 not. This is for what they don't cover.
+      "custom" - anything else that happens: a list getting an item, a prompt
+                 arriving, the car parking - and everything PHYSICAL, which is
+                 most of what people actually want watched. The doorbell, the
+                 cameras, the door and kennel sensors, the buttons around the
+                 house and the printer all report in as ordinary triggers, so
+                 "tell me when someone's at the front door" is this. Pass
+                 `listener` instead of `target`. USE ONE OF THE NAMED TRIGGERS
+                 ABOVE WHEN ONE FITS - they're resolved against real chores,
+                 places and calendars, and a hand-written listener is not. This
+                 is for what they don't cover.
 
     `listener` (custom only) is a Jil listener string, e.g.
     `item:action:added item:list:name:/^Groceries$/`. **Call
@@ -41,6 +45,15 @@ Buddy::Tools.register(
     syntax plus the listeners already running on their own automations, and
     copying a real key path from those is the difference between a watch that
     fires and one that silently never does. Do not guess at payload keys.
+
+    That tool is also how you find out whether something is watchable in the
+    first place, by passing what they called it (`about: "doorbell"`). The house
+    sensors and cameras appear NOWHERE else you can see - not in `jil_triggers`,
+    not in any context section - so your not knowing about a thing is not
+    evidence it isn't there. **Search before you tell anyone you can't watch
+    something.** Answering "I don't have a doorbell watch to hook into" while
+    three doorbell automations were running is the failure this exists to
+    prevent, and repeating it after they say it's set up is worse.
 
     `when_phrase` (custom only) says what that listener MEANS, in their words:
     "when something is added to the Claude list", "when the car parks at home".
@@ -121,11 +134,12 @@ Buddy::Tools.register(
       listener = payload[:listener].to_s.strip
       raise "custom needs a `listener` - read read_listener_guide first" if listener.blank?
 
-      unless ::Jil::ListenerMatch.valid?(listener)
-        known = ::Jil::ListenerMatch.scope_of(listener)
+      unless ::Jil::ListenerMatch.valid?(listener, user: ctx.user)
+        named = ::Jil::ListenerMatch.scope_of(listener)
         raise(
-          if known && !::Jil::ListenerMatch.known_scope?(known)
-            "there's no #{known.inspect} trigger in this app, so that listener could never fire - read read_listener_guide for the real scopes"
+          if named && !::Jil::ListenerMatch.known_scope?(named, user: ctx.user)
+            "nothing here has ever fired a #{named.inspect} trigger, so that listener could " \
+              "never fire - call read_listener_guide and use a scope off the real list"
           else
             "#{listener.inspect} isn't a listener that could ever fire"
           end,

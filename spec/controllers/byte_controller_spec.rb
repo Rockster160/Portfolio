@@ -66,6 +66,95 @@ RSpec.describe ByteController, type: :controller do
       expect(response.body).to include("data-buddy-themes=")
       expect(response.body.scan("data-byte-pet-avatar").length).to be >= 2
     end
+
+    # #show renders the most recently ACTIVE thread; the client opens the last
+    # VIEWED one from localStorage, and those differ whenever another thread got
+    # a message after you left yours. Repainting for that needs to know which
+    # pet a claude or bash thread wears, and the answer isn't the Suki one that
+    # happened to be baked into the page.
+    it "names the account's own pet for threads that have none of their own" do
+      sign_in rocco
+      suki = rocco.byte_conversations.create!(name: "with suki", mode: :buddy)
+      suki.update!(buddy_theme: :suki, last_message_at: Time.current)
+
+      get :show
+
+      expect(response.body).to include('data-buddy-theme="suki"')
+      expect(response.body).to include('data-default-buddy-theme="byte"')
+    end
+
+    # Without this, #show opens whichever thread has the newest message - which
+    # is a different one any time a watch fired somewhere else while you were
+    # reading - and the client then had to correct it after boot. Reloading a
+    # Byte thread painted Suki's face, name and favicon over it.
+    describe "with a thread named in the URL" do
+      let!(:byte_thread) {
+        rocco.byte_conversations.create!(name: "mine", mode: :buddy).tap { |c|
+          c.update!(buddy_theme: :byte, last_message_at: 1.hour.ago)
+        }
+      }
+      let!(:suki_thread) {
+        rocco.byte_conversations.create!(name: "with suki", mode: :buddy).tap { |c|
+          c.update!(buddy_theme: :suki, last_message_at: Time.current)
+        }
+      }
+
+      before { sign_in rocco }
+
+      # What the client boots from, so this is the thread that actually opens.
+      def opened_id
+        response.body[/data-initial-conversation-id="(\d+)"/, 1].to_i
+      end
+
+      it "opens it instead of the most recently active one" do
+        get :show, params: { conversation_id: byte_thread.id }
+
+        expect(opened_id).to eq(byte_thread.id)
+        expect(response.body).to include('data-buddy-name="Byte"')
+      end
+
+      it "still falls back to most-recent when no thread is named" do
+        get :show
+
+        expect(opened_id).to eq(suki_thread.id)
+      end
+
+      it "ignores someone else's thread" do
+        theirs = create(:user).byte_conversations.create!(name: "theirs", mode: :buddy)
+
+        get :show, params: { conversation_id: theirs.id }
+
+        expect(opened_id).to eq(suki_thread.id)
+      end
+
+      it "ignores an archived one, which isn't in the list to switch back to" do
+        byte_thread.update!(archived: true)
+
+        get :show, params: { conversation_id: byte_thread.id }
+
+        expect(opened_id).to eq(suki_thread.id)
+      end
+
+      it "ignores a garbage id rather than blowing up" do
+        get :show, params: { conversation_id: "nonsense" }
+
+        expect(response).to be_successful
+        expect(opened_id).to eq(suki_thread.id)
+      end
+
+      # Buddy-only members never see claude threads in their list, so a link to
+      # one must not become a back door into rendering it.
+      it "ignores a thread the viewer isn't allowed to see" do
+        chelsea = create(:user, id: 58_128)
+        claude  = chelsea.byte_conversations.create!(name: "shell", mode: :claude)
+        sign_in chelsea
+
+        get :show, params: { conversation_id: claude.id }
+
+        expect(opened_id).not_to eq(claude.id)
+        expect(chelsea.byte_conversations.find(opened_id).mode).to eq("buddy")
+      end
+    end
   end
 
   describe "DELETE #delete_message" do

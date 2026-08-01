@@ -41,4 +41,61 @@ RSpec.describe Jil::ListenerMatch do
       "Buddy is told these scopes are valid but the guide doesn't say what they " \
       "carry, so it would be guessing at keys: #{undocumented.inspect}"
   end
+
+  # KNOWN_SCOPES can only ever cover what the app triggers itself. /jil/webhook
+  # takes the scope off the request, so Home Assistant and anything else posting
+  # in names its own, and no grep of app code will ever find those. A task
+  # already listening to one is what proves it fires.
+  describe "scopes an integration fires" do
+    let(:user) { create(:user) }
+
+    def task!(listener, enabled: true, owner: user)
+      Task.create!(
+        user: owner, name: "T#{listener.object_id}", listener: listener,
+        code: "// noop", enabled: enabled
+      )
+    end
+
+    before { Rails.cache.clear }
+
+    it "accepts one the person has a task listening on" do
+      task!("hass-sensor:location:doorbell")
+
+      expect(described_class.known_scope?("hass-sensor", user: user)).to be(true)
+    end
+
+    it "refuses one nothing listens on" do
+      expect(described_class.known_scope?("hass-sensor", user: user)).to be(false)
+    end
+
+    it "still refuses without a user to check against" do
+      task!("hass-sensor:location:doorbell")
+
+      expect(described_class.known_scope?("hass-sensor")).to be(false)
+    end
+
+    it "doesn't leak another person's integrations" do
+      task!("hass-sensor", owner: create(:user))
+
+      expect(described_class.known_scope?("hass-sensor", user: user)).to be(false)
+    end
+
+    it "ignores a disabled task, which is no evidence the scope still fires" do
+      task!("hass-sensor", enabled: false)
+
+      expect(described_class.known_scope?("hass-sensor", user: user)).to be(false)
+    end
+
+    # A function's "listener" is a type signature, and its leading segment
+    # (`function(...`) is not a scope anything triggers.
+    it "ignores function signatures" do
+      task!('function("Temp" TAB Numeric)::Boolean')
+
+      expect(described_class.wired_scopes(user)).to be_empty
+    end
+
+    it "keeps accepting the app's own scopes with no task at all" do
+      expect(described_class.known_scope?("chore_completion", user: user)).to be(true)
+    end
+  end
 end

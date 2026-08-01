@@ -55,6 +55,9 @@
      data-initial-conversation-id="<%= @conversation.id %>"
      data-buddy-theme="<%= buddy_page_theme %>"
      data-buddy-name="<%= buddy_page_chrome[:name] %>"
+     <%# The pet a NON-Buddy thread wears. Claude and bash threads still show an %>
+     <%# avatar and a title, and this is what the client falls back to for them. %>
+     data-default-buddy-theme="<%= ByteConversation.default_theme_for(current_user) %>"
      <%# Every pet's name, colour, icons and face set. The client repaints from %>
      <%# this on a conversation switch, and needs pets with no open thread for %>
      <%# the drawer rows and face warming. See ByteHelper#buddy_themes_json. %>

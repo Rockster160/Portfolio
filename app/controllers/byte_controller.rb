@@ -16,7 +16,7 @@ class ByteController < ApplicationController
     scope = current_user.byte_conversations.active.ordered
     scope = scope.buddy if buddy_only?
     @conversations = scope.to_a
-    @conversation  = @conversations.first || default_conversation
+    @conversation  = requested_conversation || @conversations.first || default_conversation
     @messages      = @conversation.byte_messages.chronological.last(HISTORY_LIMIT)
   end
 
@@ -442,6 +442,23 @@ class ByteController < ApplicationController
     else
       ByteConversation.default_for(current_user)
     end
+  end
+
+  # The thread the URL asks for. The client keeps the open one in the query
+  # string (see `rememberConversationInUrl`) so a reload comes back to what you
+  # were reading. Without it #show falls back to "whichever thread has the
+  # newest message" — a different thread any time a watch fired somewhere else
+  # while you were away, which then rendered the page in THAT pet's name,
+  # avatar and favicon over the thread the client restored.
+  #
+  # Resolved against the visible list rather than by id, so an archived thread,
+  # someone else's, or a claude thread a buddy-only member asked for all fall
+  # straight back to the default instead of being honoured.
+  def requested_conversation
+    id = params[:conversation_id].presence
+    return nil if id.blank?
+
+    @conversations.detect { |c| c.id == id.to_i }
   end
 
   # Resolve the target conversation for this request. Falls back to the

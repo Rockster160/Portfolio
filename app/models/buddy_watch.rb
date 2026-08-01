@@ -103,7 +103,7 @@ class BuddyWatch < ApplicationRecord
   # the one failure a reminder must not have: they'd believe it was set.
   def listener_parses
     return if listener.blank?
-    return if ::Jil::ListenerMatch.valid?(listener) && ::Jil::ListenerMatch.scope_of(listener) == trigger_scope
+    return if ::Jil::ListenerMatch.valid?(listener, user: user) && ::Jil::ListenerMatch.scope_of(listener) == trigger_scope
 
     errors.add(:listener, "isn't a listener that would ever fire")
   end

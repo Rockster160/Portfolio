@@ -146,6 +146,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   })();
 
+  // This user's own pet, worn by any thread that isn't a Buddy one.
+  const defaultBuddyTheme = app.dataset.defaultBuddyTheme || "byte";
+
   // The face a pet settles back to. Declared up here because applyBuddyTheme
   // resets to it on every conversation switch, well before the sleep/wake block
   // that also uses it.
@@ -161,6 +164,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     bootstrap.conversation?.id ??
     Number(app.dataset.initialConversationId || 0) ??
     null;
+
+  // The thread the URL asked for, if any. #show honours it too, so on a normal
+  // reload this agrees with what the server rendered — it's read here so an
+  // explicit link still wins over this browser's last-viewed thread.
+  const urlConversationId =
+    Number(new URLSearchParams(location.search).get("conversation_id")) || null;
 
   // ---------- conversation manager ----------
   //
@@ -199,6 +208,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     conversationsUrl,
     claudeSessionsUrl,
     initialConversationId,
+    pinnedConversationId: urlConversationId,
     initialConversations: bootstrap.conversations || [],
     onSwitch: (id) => handleSwitch(id),
     prefillComposer: (text, opts = {}) => {
@@ -1277,14 +1287,60 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (nextId === currentConversationId) return;
     currentConversationId = nextId;
     hydrateForConversation(nextId, []);
-    // Notify the Buddy hero so it shows/hides based on new mode.
+    syncConversationChrome();
+  }
+
+  // Everything about the visible thread that ISN'T its messages: whether the
+  // hero shows at all, the timer chips, the pet's whole identity, and the URL.
+  //
+  // Init has to run this too, and forgetting to was a bug: the server used to
+  // open whichever thread had the newest message while the client restored the
+  // last VIEWED one from localStorage. Those differ any time another thread got
+  // a message after you left yours, so reloading a Byte thread painted it in
+  // Suki's face, name, colour and favicon until you switched away and back.
+  function syncConversationChrome() {
     const convo = convoManager.currentConversation();
+    rememberConversationInUrl(currentConversationId);
     buddyHero?.onModeChange(convo?.mode);
     buddyTimers?.setActive();
-    // Mood + theme are per-conversation — repaint the pet for the thread we
-    // just switched to so it wears ITS face, not the previous thread's.
+    // Mood + theme are per-conversation — repaint the pet for the thread we're
+    // on so it wears ITS face, not whichever one was painted before.
     if (convo?.mode === "buddy") applyBuddyTheme(convo);
+    else wearDefaultPet();
     updateSleepChip();
+  }
+
+  // Park the open thread in the query string so the SERVER opens it on the next
+  // load, rather than guessing and being corrected a moment later. That guess
+  // is what put Suki's face on a Byte thread for the first paint.
+  //
+  // `replaceState`, not `pushState`: changing threads isn't a navigation, and
+  // stacking them would turn the back button into an undo history for the
+  // drawer. The hard-reload button builds its URL off location.href, so it
+  // carries the thread through a cache-busting reload too.
+  function rememberConversationInUrl(id) {
+    if (!id) return;
+    try {
+      const url = new URL(location.href);
+      if (url.searchParams.get("conversation_id") === String(id)) return;
+      url.searchParams.set("conversation_id", String(id));
+      history.replaceState(history.state, "", url);
+    } catch (_) {}
+  }
+
+  // A claude or bash thread has no pet of its own, but it still has an avatar,
+  // a title and a palette. Leaving the last Buddy thread's there let a Suki
+  // conversation rename and recolour the whole app for threads that aren't
+  // hers. The server picks the same default when it renders one of these
+  // directly (see `buddy_page_theme`).
+  function wearDefaultPet() {
+    const chrome = buddyThemes[defaultBuddyTheme];
+    if (!chrome) return;
+
+    app.dataset.buddyTheme = defaultBuddyTheme;
+    app.dataset.buddyName = chrome.name;
+    document.title = chrome.name;
+    paintThemeChrome(defaultBuddyTheme, chrome.name);
   }
 
   // Paint the whole surface + hero for a Buddy conversation's theme. Both the
@@ -1661,8 +1717,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       input.focus();
     },
   });
-  // Sync initial visibility to the currently-active conversation.
-  buddyHero?.onModeChange(convoManager.currentConversation()?.mode);
 
   // Buddy timer chips (top-left under the nav). Server-authoritative countdowns
   // that ride the existing Timer stack; this just renders + reconciles them.
@@ -1786,7 +1840,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       sleepText.textContent = `${who}'s asleep — reconnecting…`;
     }
   }
-  updateSleepChip();
+
+  // Dress the page for the thread we actually opened into. Deliberately down
+  // here rather than beside the hydrate up top: this reaches the hero, the
+  // timer chips, `buddyWakeExpr` and the sleep chip, none of which exist yet at
+  // that point, and a `let` read before its declaration throws. Nothing paints
+  // between the two - init is one synchronous run - so late costs nothing.
+  syncConversationChrome();
 
   function clearLocalState() {
     clearAllPersisted();

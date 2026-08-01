@@ -84,7 +84,23 @@ item:name:ANY(Milk Eggs Bread)
 4. **Prefer an id over a name** whenever you have the id, both for precision and because a rename won't break it.
 5. **One scope per listener.** `item:... email:...` can never match, because an event only ever belongs to one scope.
 
-## Scopes
+## Scopes are open-ended
+
+The table below is the app's own scopes. It is **not** the whole list, and treating it as one is the single most expensive mistake you can make here.
+
+`/jil/webhook` and `/jil/trigger/:trigger` take the scope straight off the request, so anything that can reach the app names its own. On this install that means Home Assistant - every sensor, button, camera and doorbell in the house arrives as a Jil trigger under a scope no app code declares:
+
+| Scope | Fires when | Useful keys |
+|---|---|---|
+| `hass-sensor` | a house sensor or camera reports | `detected` (bool), `location` (`Doorbell`, `Driveway`, `Backyard`, `Storage`), `subject` (`person`/`pet`/`vehicle`), `device_name`, `type`, `rang`, `battery` |
+| `hass-button` | a physical button is pressed | `device_name`, `type` (`single`/`double`/`hold`), `battery` |
+| `hass-trigger`, `hass-alert`, `hass-update`, `hass-power`, `hass-toggle` | other Home Assistant events | varies - read a real listener |
+
+Those names are examples, not a second fixed list. **The authoritative answer to "does this fire here?" is whether a real task listens to it**, which is exactly what `read_listener_guide` returns: `scopes` is every scope with something already listening, and `about` searches those automations by what they're for. A doorbell is not findable by guessing the word `hass-sensor`; it is findable by searching "doorbell".
+
+So: a physical thing in the house - a door, a camera, a button, a printer, the car - is presumed watchable until a search comes back empty.
+
+## App scopes
 
 These fire per user, carrying that user's own data.
 
@@ -115,3 +131,21 @@ These fire per user, carrying that user's own data.
 | `startup` | the app boots | - |
 
 The table is a map, not a contract - the authoritative answer for any scope is what the user's existing tasks listen to. Read those before writing something new on a scope you haven't seen a real example of.
+
+## Worked example: somebody at the front door
+
+They ask to be told when someone rings the bell or is seen out front. Nothing above mentions a doorbell, and no scope name suggests one. Searching `about: "doorbell"` turns up their real automations:
+
+```
+hass-sensor:location:doorbell type:rang rang:true   sends a push when the doorbell sensor reports a ring
+hass-sensor:location                                records camera detections (pet, person, vehicle, motion) per location
+hass-button:device_name::"DoorbellButton1" type::single
+```
+
+The first is the ring itself, and it can be used as-is. For "seen out front", the second shows the keys the camera payload carries, so the watch is built from those:
+
+```
+hass-sensor:location:/^Doorbell$/ subject:person detected:true
+```
+
+`location` is anchored because `Doorbell` and `Driveway` are separate cameras and a bare substring would be loose; `detected:true` is there because the same scope also fires when a detection clears.

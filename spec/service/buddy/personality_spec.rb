@@ -392,6 +392,22 @@ RSpec.describe Buddy::Personality do
 
       expect(prompt).to include("it does NOT mean you can't watch for something")
     end
+
+    # Prod 1479-1482. The house sensors are in no context section the model can
+    # read, so its own unfamiliarity is the only signal it has - and it read
+    # that as "not wired", twice, over a doorbell three tasks were watching.
+    it "says the house is watchable and not knowing a thing isn't evidence" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("not recognising a thing is never evidence it isn't wired")
+      expect(prompt).to include("read_listener_guide")
+    end
+
+    it "tells it to go look when they push back rather than repeat the no" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("Saying the same no twice")
+    end
   end
 
   describe ".for list placement" do
