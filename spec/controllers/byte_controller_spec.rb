@@ -157,6 +157,232 @@ RSpec.describe ByteController, type: :controller do
     end
   end
 
+  # The wall tablet: the pet up top, the routines pinned to the Quick grid as
+  # buttons underneath, and nothing else. Same page and same controller as the
+  # chat - what differs is what's on screen and which thread it opens.
+  describe "GET #kiosk" do
+    render_views
+
+    def routine!(name, position: nil, enabled: true)
+      BuddyRoutine.create!(
+        user:     rocco,
+        name:     name,
+        position: position,
+        enabled:  enabled,
+        steps:    [BuddyRoutine.step(:message_partner, { to: "someone", message: "night" })],
+      )
+    end
+
+    before { sign_in rocco }
+
+    it "renders the wall surface: the routines, and the control that sets who's on it" do
+      get :kiosk
+
+      expect(response).to be_successful
+      expect(response.body).to include('data-kiosk="true"')
+      expect(response.body).to include("byte-kiosk-pad")
+      expect(response.body).to include("data-kiosk-who")
+    end
+
+    # The chat page and the kiosk are one template, so the flag has to actually
+    # be off everywhere else or the normal app loses its header.
+    it "leaves the chat page alone" do
+      get :show
+
+      expect(response.body).to include('data-kiosk="false"')
+      expect(response.body).not_to include("byte-kiosk-pad")
+    end
+
+    def button_names
+      response.body.scan(/byte-kiosk-btn-name">([^<]+)</).flatten
+    end
+
+    # Starring PROMOTES rather than admits. Gating the wall on it made saving a
+    # routine two steps, and the second one happened somewhere you weren't.
+    it "puts every routine on it, starred ones first and the rest by name" do
+      routine!("Wind Down", position: 1)
+      routine!("Prep Printer", position: 0)
+      routine!("Almost Never")
+
+      get :kiosk
+
+      expect(button_names).to eq(["Prep Printer", "Wind Down", "Almost Never"])
+    end
+
+    it "leaves off the ones that are switched off" do
+      routine!("Muted", enabled: false)
+
+      get :kiosk
+
+      expect(button_names).to be_empty
+      expect(response.body).to include("No routines saved yet")
+    end
+
+    # There's no keyboard on a wall, and a claude or bash thread is nothing but
+    # typing. #show opens whichever thread spoke most recently, which here would
+    # have landed the tablet on a shell.
+    it "opens a Buddy thread even when a claude one is newer" do
+      buddy = rocco.byte_conversations.create!(name: "wall", mode: :buddy, last_message_at: 1.hour.ago)
+      rocco.byte_conversations.create!(name: "shell", mode: :claude, last_message_at: Time.current)
+
+      get :kiosk
+
+      expect(response.body).to include(%(data-initial-conversation-id="#{buddy.id}"))
+      expect(response.body).to include('data-active-mode="buddy"')
+    end
+
+    it "makes one when there's no Buddy thread to open" do
+      rocco.byte_conversations.destroy_all
+
+      expect { get :kiosk }.to change { rocco.byte_conversations.buddy.count }.by(1)
+      expect(response).to be_successful
+    end
+
+    it "honours a thread named in the URL" do
+      wanted = rocco.byte_conversations.create!(name: "kitchen", mode: :buddy, last_message_at: 1.hour.ago)
+      rocco.byte_conversations.create!(name: "other", mode: :buddy, last_message_at: Time.current)
+
+      get :kiosk, params: { conversation_id: wanted.id }
+
+      expect(response.body).to include(%(data-initial-conversation-id="#{wanted.id}"))
+    end
+
+    # Which companion is on the wall IS which thread it's pinned to — the theme
+    # on the row decides the character, the name, the palette and the voice.
+    # Without the pin it opens whichever thread spoke last, which is a
+    # different companion any time a watch fires somewhere else.
+    describe "the thread it's been set to" do
+      let!(:suki) {
+        rocco.byte_conversations.create!(name: "kitchen", mode: :buddy).tap { |c|
+          c.update!(buddy_theme: :suki, last_message_at: 2.hours.ago)
+        }
+      }
+      let!(:newest) {
+        rocco.byte_conversations.create!(name: "phone", mode: :buddy).tap { |c|
+          c.update!(buddy_theme: :byte, last_message_at: Time.current)
+        }
+      }
+
+      it "opens it, and wears its companion, over the one that spoke last" do
+        ByteConversation.pin_kiosk!(suki)
+
+        get :kiosk
+
+        expect(response.body).to include(%(data-initial-conversation-id="#{suki.id}"))
+        expect(response.body).to include('data-buddy-name="Suki"')
+      end
+
+      it "falls back to the newest when nothing is pinned" do
+        get :kiosk
+
+        expect(response.body).to include(%(data-initial-conversation-id="#{newest.id}"))
+      end
+
+      it "falls back rather than opening one that's since been archived" do
+        ByteConversation.pin_kiosk!(suki)
+        suki.update!(archived: true)
+
+        get :kiosk
+
+        expect(response.body).to include(%(data-initial-conversation-id="#{newest.id}"))
+      end
+
+      it "still lets the URL override it" do
+        ByteConversation.pin_kiosk!(suki)
+
+        get :kiosk, params: { conversation_id: newest.id }
+
+        expect(response.body).to include(%(data-initial-conversation-id="#{newest.id}"))
+      end
+    end
+
+    # An icon added from this page has to reopen the KIOSK. Both manifests are
+    # the same pet, and start_url is the only thing separating them.
+    it "points at the pet's kiosk manifest so an install comes back here" do
+      convo = rocco.byte_conversations.create!(name: "wall", mode: :buddy)
+      convo.update!(buddy_theme: :suki, last_message_at: Time.current)
+
+      get :kiosk
+
+      expect(response.body).to include("/suki_kiosk.webmanifest")
+      expect(response.body).not_to include(%(href="/suki.webmanifest"))
+      expect(response.body).to include('content="Suki Kiosk"')
+    end
+
+    # The service worker refuses to cache a page without this, so a kiosk
+    # missing it silently loses the offline boot that makes it dependable.
+    it "carries the shell marker the service worker caches on" do
+      get :kiosk
+
+      expect(response.body).to include('<meta name="byte-shell" content="ok">')
+    end
+
+    it "forbids anyone who can't open Byte at all" do
+      sign_in create(:user)
+
+      get :kiosk
+
+      expect(response).to have_http_status(:forbidden)
+    end
+
+    it "lets Chelsea put one on a wall too" do
+      sign_in create(:user, id: 58_128)
+
+      get :kiosk
+
+      expect(response).to be_successful
+    end
+  end
+
+  describe "POST #pin_kiosk_conversation" do
+    before { sign_in rocco }
+
+    def buddy!(name)
+      rocco.byte_conversations.create!(name: name, mode: :buddy)
+    end
+
+    it "points the wall at the chosen thread" do
+      convo = buddy!("kitchen")
+
+      post :pin_kiosk_conversation, params: { conversation_id: convo.id }
+
+      expect(response).to be_successful
+      expect(convo.reload).to be_kiosk
+    end
+
+    # "Which one is out there" is a single fact. Two pinned would make what the
+    # tablet opens on depend on row order.
+    it "unpins whichever was there before" do
+      first  = buddy!("kitchen")
+      second = buddy!("desk")
+      ByteConversation.pin_kiosk!(first)
+
+      post :pin_kiosk_conversation, params: { conversation_id: second.id }
+
+      expect(rocco.byte_conversations.kiosk.pluck(:id)).to eq([second.id])
+    end
+
+    # The kiosk can't show one, so pinning it would leave the wall on a thread
+    # it silently falls back off of every load.
+    it "refuses a claude thread" do
+      claude = rocco.byte_conversations.create!(name: "shell", mode: :claude)
+
+      post :pin_kiosk_conversation, params: { conversation_id: claude.id }
+
+      expect(response).to have_http_status(:not_found)
+      expect(claude.reload).not_to be_kiosk
+    end
+
+    it "refuses someone else's" do
+      theirs = create(:user).byte_conversations.create!(name: "theirs", mode: :buddy)
+
+      post :pin_kiosk_conversation, params: { conversation_id: theirs.id }
+
+      expect(response).to have_http_status(:not_found)
+      expect(theirs.reload).not_to be_kiosk
+    end
+  end
+
   describe "DELETE #delete_message" do
     before { sign_in rocco }
 

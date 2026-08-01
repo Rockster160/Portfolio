@@ -21,6 +21,10 @@ Rails.application.routes.draw do
 
   constraints subdomain: "byte" do
     root "byte#show", as: :byte_root
+    # The wall-tablet view. Its own path rather than a flag on the root so it
+    # can be installed to a home screen as a separate app, and so the service
+    # worker caches it as a shell in its own right.
+    get "/kiosk" => "byte#kiosk", as: :byte_kiosk
   end
 
   post "tesla/api/1/vehicles/:vin/command/:command" => "vehicles#command"
@@ -44,6 +48,8 @@ Rails.application.routes.draw do
   get "/fae", to: redirect(subdomain: "fae", path: "/")
 
   get "/byte", to: redirect(subdomain: "byte", path: "/")
+  get  "/byte/kiosk", to: redirect(subdomain: "byte", path: "/kiosk")
+  post "/byte/kiosk/conversation" => "byte#pin_kiosk_conversation", as: :byte_kiosk_conversation
   get    "/byte/messages"     => "byte#messages",       as: :byte_message_history
   post   "/byte/messages"     => "byte#create_message", as: :byte_messages
   delete "/byte/messages/:id" => "byte#delete_message", as: :byte_message

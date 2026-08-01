@@ -114,8 +114,8 @@ Buddy::Tools.register(
 
     { routine_id: routine.id, routine_name: routine.name, step_count: steps.length, summary: routine.summary }
   },
-  receipt:     ->(result, _ctx) {
-    count = result[:step_count].to_i
-    "Saved **#{result[:routine_name]}** - #{count} #{"step".pluralize(count)} ✓"
-  },
+  # No step count. The chip already lists the steps underneath, so the number
+  # was restating what's right there — and "1 step" is a strange thing to be
+  # told about something you just described in one sentence.
+  receipt:     ->(result, _ctx) { "Saved **#{result[:routine_name]}** ✓" },
 )

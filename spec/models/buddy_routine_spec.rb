@@ -81,6 +81,54 @@ RSpec.describe BuddyRoutine do
 
       expect(routine.summary).to eq(["set a 90 sec timer"])
     end
+
+    # How MANY times is half of what the step does, and leaving it out made a
+    # routine misrepresent itself: "cup water" saved as three waters read back
+    # as one "complete chore: 8oz Water", so the only thing worth checking was
+    # the one thing not shown.
+    it "says how many times a repeated step runs" do
+      routine = build_routine([described_class.step(:complete_chore, { chore: "8oz Water", count: 3 })])
+
+      expect(routine.summary).to eq(["complete chore: 8oz Water ×3"])
+    end
+
+    it "leaves a single run unadorned" do
+      routine = build_routine([described_class.step(:complete_chore, { chore: "8oz Water", count: 1 })])
+
+      expect(routine.summary).to eq(["complete chore: 8oz Water"])
+    end
+  end
+
+  # What the Quick grid and the wall tablet both list. Starring used to be the
+  # gate, which made saving a routine two steps and left people looking at an
+  # empty panel that told them to go star it somewhere they weren't.
+  describe ".for_quick" do
+    def routine!(name, position: nil, enabled: true)
+      described_class.create!(
+        user: user, name: name, position: position, enabled: enabled, steps: [tell("hi")],
+      )
+    end
+
+    it "puts the starred ones first, in the order they were dragged into" do
+      routine!("Zebra", position: 1)
+      routine!("Apple", position: 0)
+
+      expect(user.buddy_routines.for_quick.pluck(:name)).to eq(["Apple", "Zebra"])
+    end
+
+    it "includes the unstarred ones after them, by name" do
+      routine!("Starred", position: 0)
+      routine!("Zebra")
+      routine!("Apple")
+
+      expect(user.buddy_routines.for_quick.pluck(:name)).to eq(["Starred", "Apple", "Zebra"])
+    end
+
+    it "leaves out the ones switched off" do
+      routine!("Off", enabled: false)
+
+      expect(user.buddy_routines.for_quick).to be_empty
+    end
   end
 
   describe "#markers" do

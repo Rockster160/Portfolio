@@ -42,8 +42,31 @@ class ByteConversation < ApplicationRecord
   scope :evals, -> { where("metadata->>'eval' = 'true'") }
   scope :real,  -> { where("metadata->>'eval' IS DISTINCT FROM 'true'") }
 
+  # The thread the wall tablet opens on. /kiosk has no drawer and no composer,
+  # so pinning the thread is the only way to say which companion lives out
+  # there — everything else about that screen (the character, the name, the
+  # palette, the persona it answers in) follows from the thread's own theme.
+  scope :kiosk, -> { where("metadata->>'kiosk' = 'true'") }
+
   def eval?
     metadata.is_a?(Hash) && metadata["eval"].to_s == "true"
+  end
+
+  def kiosk?
+    metadata.is_a?(Hash) && metadata["kiosk"].to_s == "true"
+  end
+
+  # Move the wall to this thread. Exclusive by construction: "which one is out
+  # there" is a single fact, and leaving two pinned would make what the tablet
+  # opens on depend on row order.
+  def self.pin_kiosk!(conversation)
+    transaction {
+      conversation.user.byte_conversations.kiosk.where.not(id: conversation.id).find_each { |other|
+        other.update!(metadata: other.metadata.except("kiosk"))
+      }
+      conversation.update!(metadata: conversation.metadata.merge("kiosk" => true))
+    }
+    conversation
   end
 
   # A new Buddy thread inherits its owner's default pet; the theme then lives on

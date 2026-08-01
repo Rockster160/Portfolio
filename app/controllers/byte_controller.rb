@@ -13,11 +13,35 @@ class ByteController < ApplicationController
   MAX_UPLOADS   = 10
 
   def show
-    scope = current_user.byte_conversations.active.ordered
-    scope = scope.buddy if buddy_only?
-    @conversations = scope.to_a
-    @conversation  = requested_conversation || @conversations.first || default_conversation
-    @messages      = @conversation.byte_messages.chronological.last(HISTORY_LIMIT)
+    load_thread
+  end
+
+  # The wall-tablet view: the pet at full size with the routines pinned to the
+  # Quick grid as buttons underneath, and none of the chrome. Same page, same
+  # socket, same everything — `@kiosk` only decides what's on screen, so a
+  # routine tapped here goes through the identical path a tap in the popover
+  # does.
+  #
+  # Buddy-only, since there is no keyboard here and a claude/bash thread is
+  # nothing BUT typing. Which Buddy is whichever one the pinned thread wears —
+  # set it from the screen itself, and the character, name, palette and persona
+  # all move together.
+  def kiosk
+    @kiosk = true
+    load_thread(only_buddy: true, prefer: current_user.byte_conversations.kiosk.pick(:id))
+    @routines = current_user.buddy_routines.for_quick.to_a
+    render :show
+  end
+
+  # Point the wall at a thread. Its own action rather than a metadata write
+  # through #update_conversation, because setting one is also unsetting
+  # whichever was pinned before — one write, one fact.
+  def pin_kiosk_conversation
+    convo = current_user.byte_conversations.active.buddy.find_by(id: params[:conversation_id])
+    return head(:not_found) if convo.nil?
+
+    ByteConversation.pin_kiosk!(convo)
+    render json: convo.as_wire
   end
 
   def create_message
@@ -416,6 +440,31 @@ class ByteController < ApplicationController
 
   private
 
+  # Which thread the page opens on, and the list beside it. `only_buddy`
+  # narrows the whole page to Buddy threads; a non-owner is already pinned
+  # there, and the kiosk pins itself there too.
+  def load_thread(only_buddy: false, prefer: nil)
+    buddy = only_buddy || buddy_only?
+    scope = current_user.byte_conversations.active.ordered
+    scope = scope.buddy if buddy
+    @conversations = scope.to_a
+    @conversation  = open_thread(prefer) || default_conversation(buddy)
+    @messages      = @conversation.byte_messages.chronological.last(HISTORY_LIMIT)
+  end
+
+  # Which of the visible threads to open, most specific first: one the URL
+  # named, then one this page was set to (the kiosk's pin), then whichever
+  # spoke most recently.
+  #
+  # Resolved against @conversations throughout, so an archived thread, someone
+  # else's, or a claude thread a buddy-only member asked for all fall through
+  # rather than being honoured.
+  def open_thread(preferred_id)
+    requested_conversation ||
+      @conversations.detect { |c| c.id == preferred_id } ||
+      @conversations.first
+  end
+
   def authorize_owner
     head :forbidden unless byte_accessible?
   end
@@ -434,14 +483,13 @@ class ByteController < ApplicationController
     !current_user&.me?
   end
 
-  # First-open conversation. Owners get the normal claude default; buddy-only
-  # members get a Buddy conversation so the page has something to show.
-  def default_conversation
-    if buddy_only?
-      current_user.byte_conversations.create!(mode: :buddy)
-    else
-      ByteConversation.default_for(current_user)
-    end
+  # First-open conversation, for when there's nothing to open. Owners get the
+  # normal claude default; buddy-only members and the kiosk get a Buddy thread,
+  # since neither has any use for another kind.
+  def default_conversation(only_buddy=buddy_only?)
+    return current_user.byte_conversations.create!(mode: :buddy) if only_buddy
+
+    ByteConversation.default_for(current_user)
   end
 
   # The thread the URL asks for. The client keeps the open one in the query

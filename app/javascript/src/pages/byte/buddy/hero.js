@@ -4,6 +4,8 @@
 // Check-in). Neither injects a fake user message; both fire server-
 // side actions that produce a genuine Buddy-authored reply.
 
+import { quickOrder, NO_ROUTINES } from "./routine_order";
+
 const ROUTINES_URL = "/buddy/routines";
 
 function csrfToken() {
@@ -33,16 +35,14 @@ function postQuickAction(payload) {
   return postJSON("/buddy/quick_action", payload);
 }
 
-async function fetchPinnedRoutines() {
+async function fetchQuickRoutines() {
   const res = await fetch(ROUTINES_URL, {
     credentials: "same-origin",
     headers:     { Accept: "application/json" },
   });
   if (!res.ok) return [];
   const data = await res.json().catch(() => null);
-  return (data?.routines || [])
-    .filter((r) => r.enabled && r.position != null)
-    .sort((a, b) => a.position - b.position);
+  return quickOrder(data?.routines);
 }
 
 export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
@@ -119,16 +119,16 @@ export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
     quickList.textContent = "Loading…";
     let routines = [];
     try {
-      routines = await fetchPinnedRoutines();
+      routines = await fetchQuickRoutines();
     } catch (_) {
       quickList.textContent = "Couldn't load those.";
       return;
     }
 
     if (routines.length === 0) {
-      // Says what to DO about it. An empty grid with no explanation reads as
-      // broken, and pinning happens somewhere they aren't currently looking.
-      quickList.textContent = "Nothing pinned yet — pin a routine in the drawer.";
+      // Empty here now means there genuinely aren't any, so it says the thing
+      // that would actually produce one.
+      quickList.textContent = NO_ROUTINES;
       return;
     }
 

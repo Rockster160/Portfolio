@@ -13,12 +13,13 @@
 // Cache name is versioned: bump CACHE on shipping a new shell so old
 // clients re-pull the HTML next time they're online.
 
-const CACHE = "byte-v17";
+const CACHE = "byte-v18";
 
-// Byte only has one shell: the root of byte.<host>. Extending this list
-// later (a settings screen, a per-thread view, etc.) is a matter of
-// adding paths and giving each shell the shell marker.
-const SHELL_PATHS = ["/"];
+// Every page that is a Byte shell in its own right. `/kiosk` is the wall
+// tablet: the same controller and the same markup, so it carries the shell
+// marker too, but a distinct URL — which is what lets it be installed to a
+// home screen separately and cached so it boots through a dropped connection.
+const SHELL_PATHS = ["/", "/kiosk"];
 
 // Cheap structural validation: the real byte shell always carries
 // `<meta name="byte-shell" content="ok">` (rendered from show.html.erb).

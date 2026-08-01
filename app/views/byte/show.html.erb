@@ -8,7 +8,7 @@
 <% buddy_page_chrome = Buddy::Themes.for(buddy_page_theme) %>
 <%= meta_title buddy_page_chrome[:name], include_name: false %>
 <%= meta_description "Direct chat channel to your automations." %>
-<%= content_for(:favicon) { render "byte/favicon", buddy_page_theme: buddy_page_theme } %>
+<%= content_for(:favicon) { render "byte/favicon", buddy_page_theme: buddy_page_theme, kiosk: @kiosk } %>
 <%= content_for(:meta) do %>
   <%# interactive-widget=resizes-content: Android Chrome shrinks the layout %>
   <%# viewport when the soft keyboard opens so 100dvh + fixed positioning %>
@@ -65,6 +65,11 @@
      <%# Owner of the Mac. Only used to stop offering slash commands that would %>
      <%# be refused anyway - the server is the actual gate. %>
      data-byte-owner="<%= current_user.me? %>"
+     <%# Wall-tablet view. Everything the kiosk drops - the header, the thread, %>
+     <%# the composer - is still rendered and still wired; this attribute is %>
+     <%# what hides it. Keeping one page means the socket, the expression %>
+     <%# state and the routine runner have exactly one implementation. %>
+     data-kiosk="<%= @kiosk ? "true" : "false" %>"
      data-active-mode="<%= @conversation.mode %>">
   <header class="byte-header">
     <%# Drawer trigger — sits before the avatar so it lands in the natural %>
@@ -146,9 +151,9 @@
       <button type="button" data-buddy-action="affirmation">Affirmation</button>
       <button type="button" data-buddy-action="facepick">Faces</button>
     </nav>
-    <%# Pinned routines. The only popover whose contents come from the server, %>
-    <%# so it fills on open rather than being rendered here - which also means %>
-    <%# pinning one in the drawer shows up the next time this is opened. %>
+    <%# Saved routines, starred ones first. The only popover whose contents come %>
+    <%# from the server, so it fills on open rather than being rendered here - %>
+    <%# which also means saving one shows up the next time this is opened. %>
     <div class="byte-buddy-mood-popover byte-buddy-quick-popover" data-buddy-quick-popover hidden>
       <span class="byte-buddy-mood-label">Quick actions</span>
       <div class="byte-buddy-mood-choices" data-buddy-quick-list></div>
@@ -209,6 +214,8 @@
       <% end %>
     </div>
   </section>
+
+  <%= render "byte/kiosk", chrome: buddy_page_chrome if @kiosk %>
 
   <%# Slim strip glued to the bottom of the header showing the effective %>
   <%# cwd (defaults to Portfolio) and the currently-adopted Claude session %>
@@ -369,6 +376,9 @@
     <%# written by talking to Byte. This is for reviewing and pruning them. %>
     <section class="byte-routines" data-byte-routines hidden>
       <h2 class="byte-routines-title">Routines</h2>
+      <%# The star was the one control here nobody found, because nothing on %>
+      <%# screen said what it was for. %>
+      <p class="byte-routines-hint">★ pins one to the front of Quick and the kiosk. Drag ⠿ to order them.</p>
       <ul class="byte-routine-list" data-byte-routine-list></ul>
     </section>
     <%# Build fingerprint pinned to the bottom of the drawer so you can %>

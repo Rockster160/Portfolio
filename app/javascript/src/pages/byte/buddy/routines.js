@@ -9,9 +9,9 @@
 // Hydrated when the drawer opens rather than at boot — most sessions never
 // open it, and the list is only interesting once it's on screen.
 //
-// Pinning is the one thing here that isn't housekeeping: a pinned routine gets
-// a button on the Quick grid in the hero, and their order there is the order
-// they drag them into.
+// Pinning is the one thing here that isn't housekeeping. Every enabled routine
+// is already on the Quick grid and the wall tablet; starring one moves it to
+// the front of both, and their order there is the order they drag them into.
 
 import Sortable from "../../../../jil/Sortable.min.js";
 
@@ -78,11 +78,14 @@ export function initBuddyRoutines({ panel, list, indexUrl }) {
       // slightly-moved tap is ambiguous.
       const handle = `<span class="byte-routine-grip" data-routine-grip aria-hidden="true">⠿</span>`;
       const grip   = isPin ? handle : "";
+      // "Front" rather than "add/remove": every enabled routine is already on
+      // the Quick grid and the wall, and starring is what moves it up.
+      const pinTip = isPin ? "Unpin from the front" : "Pin to the front";
       return `
         <li class="byte-routine${off}${drag}" data-routine-id="${r.id}">
           <div class="byte-routine-head">
             ${grip}
-            <button type="button" class="byte-routine-pin" data-routine-pin aria-pressed="${isPin}" title="${isPin ? "Remove from Quick" : "Add to Quick"}" aria-label="${isPin ? "Remove from Quick" : "Add to Quick"}">${isPin ? "★" : "☆"}</button>
+            <button type="button" class="byte-routine-pin" data-routine-pin aria-pressed="${isPin}" title="${pinTip}" aria-label="${pinTip}">${isPin ? "★" : "☆"}</button>
             <button type="button" class="byte-routine-name" data-routine-rename title="Rename">${escapeHtml(r.name)}</button>
             <button type="button" class="byte-routine-toggle" data-routine-toggle aria-label="${r.enabled ? "Turn off" : "Turn on"}">${r.enabled ? "on" : "off"}</button>
             <button type="button" class="byte-routine-remove" data-routine-remove aria-label="Delete">×</button>

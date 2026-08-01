@@ -28,10 +28,17 @@ class BuddyRoutine < ApplicationRecord
 
   scope :enabled,  -> { where(enabled: true) }
   scope :ordered,  -> { order(Arel.sql("LOWER(name) ASC")) }
-  # On the Quick grid in the hero, in the order they put them. Alphabetical is
-  # right for the drawer, where you're looking something up; a grid you tap is
-  # ordered by how often you reach for it, which only they know.
   scope :pinned,   -> { where.not(position: nil).order(:position, :id) }
+
+  # What the Quick grid and the wall tablet show: everything that's switched on,
+  # pinned ones first in the order they were dragged into, then the rest by name.
+  #
+  # Pinning PROMOTES rather than admits. It used to be the gate, and that made
+  # saving a routine two steps — you'd save one, go looking for it in Quick, and
+  # find an empty panel telling you to go star it somewhere you weren't. A
+  # routine you bothered to save is one you want to tap; the star is for putting
+  # the three you reach for daily at the front.
+  scope :for_quick, -> { enabled.order(Arel.sql("position ASC NULLS LAST, LOWER(name) ASC")) }
 
   def pinned?
     position.present?
@@ -76,7 +83,13 @@ class BuddyRoutine < ApplicationRecord
     return wait_phrase(args) if tool == "set_timer"
 
     detail = args["name"] || args["chore"] || args["item"] || args["command"] || args["message"] || args["title"]
-    detail.present? ? "#{tool.tr("_", " ")}: #{detail}" : tool.tr("_", " ")
+    phrase = detail.present? ? "#{tool.tr("_", " ")}: #{detail}" : tool.tr("_", " ")
+    times  = args[Buddy::Tools::COUNT_ARG.to_s].to_i
+    # How MANY times is half of what a step does, and leaving it off made a
+    # routine lie about itself: "cup water" saved as three waters read back as
+    # a single "complete chore: 8oz Water", so the one thing worth checking was
+    # the one thing not shown.
+    times > 1 ? "#{phrase} ×#{times}" : phrase
   end
 
   def self.wait_phrase(args)

@@ -53,6 +53,7 @@ import { initMessageContextMenu } from "./message_actions/context_menu";
 import { initBuddyHero } from "./buddy/hero";
 import { initBuddyTimers } from "./buddy/timers";
 import { initBuddyRoutines } from "./buddy/routines";
+import { initBuddyKiosk } from "./buddy/kiosk";
 import { toggleBuddyMuted, isBuddyMuted } from "./buddy/alarm";
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -119,6 +120,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // handleSwitch (which can fire before the hero is mounted on the first
   // render) doesn't hit a TDZ error.
   let buddyHero = null;
+  // Same reason: hydrateForConversation runs during init and feeds this, well
+  // before the mount point below exists. Null on every page but the kiosk.
+  let buddyKiosk = null;
   const tpl = app.querySelector("[data-byte-message-tpl]");
 
   const sendUrl = app.dataset.sendUrl;
@@ -171,6 +175,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   const urlConversationId =
     Number(new URLSearchParams(location.search).get("conversation_id")) || null;
 
+  // The wall tablet. It has no drawer, so it is only ever on one thread — and
+  // it takes the server's, not this browser's last-viewed one, which on a
+  // device that also opens the chat would be whatever was read there last.
+  const isKiosk = app.dataset.kiosk === "true";
+
   // ---------- conversation manager ----------
   //
   // ConversationManager owns the drawer + name/mode chip + create/rename/
@@ -208,7 +217,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     conversationsUrl,
     claudeSessionsUrl,
     initialConversationId,
-    pinnedConversationId: urlConversationId,
+    pinnedConversationId:
+      urlConversationId ?? (isKiosk ? initialConversationId : null),
     initialConversations: bootstrap.conversations || [],
     onSwitch: (id) => handleSwitch(id),
     prefillComposer: (text, opts = {}) => {
@@ -1318,8 +1328,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   // stacking them would turn the back button into an undo history for the
   // drawer. The hard-reload button builds its URL off location.href, so it
   // carries the thread through a cache-busting reload too.
+  // The kiosk is the exception, and it matters: its URL is one of the service
+  // worker's shell paths, and a query string it doesn't recognise drops the
+  // page out of the cache-first branch — so writing this would cost the wall
+  // tablet the offline boot, to remember a thread it can't switch away from.
   function rememberConversationInUrl(id) {
-    if (!id) return;
+    if (!id || isKiosk) return;
     try {
       const url = new URL(location.href);
       if (url.searchParams.get("conversation_id") === String(id)) return;
@@ -1729,14 +1743,35 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Saved routines, listed at the bottom of the drawer. Fetched when the drawer
   // opens rather than at boot: most sessions never open it, and a stale list
   // would be worse than no list.
+  // `document`, not `app`: the drawer is a SIBLING of .byte-app, not a child of
+  // it (it's fixed-position and overlays the grid, so it's mounted outside).
+  // Scoping the lookup to the app returned null for both, initBuddyRoutines
+  // bailed on its own guard, and the panel — which only unhides once it has
+  // rows — stayed invisible no matter how many routines you had.
   const buddyRoutines = initBuddyRoutines({
-    panel: app.querySelector("[data-byte-routines]"),
-    list: app.querySelector("[data-byte-routine-list]"),
+    panel: document.querySelector("[data-byte-routines]"),
+    list: document.querySelector("[data-byte-routine-list]"),
     indexUrl: "/buddy/routines",
   });
   document
     .querySelector("[data-byte-drawer-toggle]")
     ?.addEventListener("click", () => buddyRoutines?.refresh());
+
+  // The wall-tablet surface. Only mounts when the page rendered it, so this is
+  // null everywhere else and every call below is a no-op. It needs
+  // renderMarkdown because a receipt bolds the thing it acted on, and the
+  // bubble is the only place that text is read here; and it needs the theme
+  // table plus `switchTo` because choosing which companion is on the wall is
+  // choosing a thread, which repaints the pet through the ordinary switch.
+  buddyKiosk = initBuddyKiosk({
+    root: app.querySelector("[data-byte-kiosk]"),
+    conversationIdFn: () => currentConversationId,
+    conversationsFn: () => convoManager.conversations,
+    themes: buddyThemes,
+    switchTo: (id) => convoManager.switchTo(id),
+    renderMarkdown,
+  });
+  buddyKiosk?.sync(messages);
 
   // Timer broadcasts carry `id: :timers`, and the Monitor dispatcher routes
   // envelopes by their id — so they arrive on a DEDICATED subscription, not the
@@ -2262,6 +2297,9 @@ document.addEventListener("DOMContentLoaded", async () => {
           // and non-reply chips, so the pet keeps thinking until REAL words
           // stream — not the moment a placeholder/chip lands.
           if (msg.direction === "inbound") buddyHero?.onReplyStreaming(msg);
+          // The kiosk has no thread to read this in, so it's the bubble over
+          // the pet or the question card over the buttons.
+          buddyKiosk?.onLive(msg);
           armIdleFaceReset(); // a new message is activity
         } else if (msg.direction === "inbound") {
           const prev = drawerUnread.get(convId) || 0;
@@ -2309,6 +2347,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         messages = upsertPersisted(convIdAtStart, messages, m);
         upsertMessage(m);
       });
+      // Silently, so a reconnect doesn't replay an hour-old line — but an
+      // unanswered question has to come back, or a sequence that stopped for
+      // one is stranded with nothing on screen to finish it.
+      buddyKiosk?.sync(messages);
       if (wasAtBottom) scrollToBottom("auto");
     } catch (_) {}
   }
@@ -2472,7 +2514,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else if (data.kind === "shell_sync_failed") {
       setSyncBadge("sync failed", "failed");
     } else if (data.kind === "shell_updated") {
-      setUpdateAvailable(true);
+      // The kiosk takes it immediately instead. Its header is hidden, so the
+      // "!" badge has nowhere to appear and there's no reload button to press
+      // — a wall tablet nobody navigates would otherwise sit on the shell it
+      // booted with forever. Anything unanswered on screen comes back: that's
+      // what buddyKiosk.sync restores after the load.
+      if (isKiosk) hardReload();
+      else setUpdateAvailable(true);
     } else if (data.kind === "sw_version") {
       const el = document.querySelector("[data-byte-version-sw]");
       if (el) el.textContent = (data.cache || "?").replace(/^byte-/, "");

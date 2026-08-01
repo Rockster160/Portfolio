@@ -1,12 +1,17 @@
 <%# Browser chrome for whichever pet this thread wears — icon, PWA home-screen
     title, manifest, and theme-color. Driven by the conversation's THEME (see
     Buddy::Themes), not by who the user is, so a Suki thread installs as Suki
-    regardless of whose account it's on. %>
+    regardless of whose account it's on.
+
+    The kiosk points at the pet's OTHER manifest, whose start_url is /kiosk —
+    that's what makes an icon added from this page open the wall view rather
+    than the chat. %>
 <% chrome = Buddy::Themes.for(buddy_page_theme) %>
+<% kiosk = local_assigns[:kiosk] %>
 <link rel="apple-touch-icon" sizes="180x180" href="<%= asset_path chrome[:touch_icon] %>">
 <link rel="icon" type="image/png" href="<%= asset_path chrome[:favicon] %>" sizes="96x96">
-<link rel="manifest" href="<%= chrome[:manifest] %>">
+<link rel="manifest" href="<%= kiosk ? chrome[:kiosk_manifest] : chrome[:manifest] %>">
 <meta name="theme-color" content="<%= chrome[:color] %>">
-<meta name="apple-mobile-web-app-title" content="<%= chrome[:name] %>">
+<meta name="apple-mobile-web-app-title" content="<%= kiosk ? "#{chrome[:name]} Kiosk" : chrome[:name] %>">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

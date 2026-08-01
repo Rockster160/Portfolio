@@ -16,6 +16,9 @@ module Buddy
   #   name in app/service/buddy/personalities.
   # - The chrome keys drive the PWA install: what it's called on a home screen,
   #   which icon, which manifest, what colour the browser paints around it.
+  #   `kiosk_manifest` is the same pet installed as the wall-tablet view — a
+  #   second manifest rather than a flag, because `start_url` is what makes the
+  #   home-screen icon open the kiosk instead of the chat.
   module Themes
     module_function
 
@@ -23,31 +26,34 @@ module Buddy
 
     ALL = {
       byte: {
-        name:       "Byte",
-        tone:       :rocco,
-        color:      "#0E1930",
-        avatar:     "byte_favicon/byte.png",
-        touch_icon: "byte_favicon/apple-touch-icon.png",
-        favicon:    "byte_favicon/favicon-96x96.png",
-        manifest:   "/byte.webmanifest",
+        name:           "Byte",
+        tone:           :rocco,
+        color:          "#0E1930",
+        avatar:         "byte_favicon/byte.png",
+        touch_icon:     "byte_favicon/apple-touch-icon.png",
+        favicon:        "byte_favicon/favicon-96x96.png",
+        manifest:       "/byte.webmanifest",
+        kiosk_manifest: "/byte_kiosk.webmanifest",
       },
       moss: {
-        name:       "Moss",
-        tone:       :chelsea,
-        color:      "#14231A",
-        avatar:     "moss_favicon/moss.png",
-        touch_icon: "moss_favicon/moss-apple-touch-icon.png",
-        favicon:    "moss_favicon/moss-favicon-96x96.png",
-        manifest:   "/moss.webmanifest",
+        name:           "Moss",
+        tone:           :chelsea,
+        color:          "#14231A",
+        avatar:         "moss_favicon/moss.png",
+        touch_icon:     "moss_favicon/moss-apple-touch-icon.png",
+        favicon:        "moss_favicon/moss-favicon-96x96.png",
+        manifest:       "/moss.webmanifest",
+        kiosk_manifest: "/moss_kiosk.webmanifest",
       },
       suki: {
-        name:       "Suki",
-        tone:       :eve,
-        color:      "#150A22",
-        avatar:     "suki_favicon/suki.png",
-        touch_icon: "suki_favicon/suki-apple-touch-icon.png",
-        favicon:    "suki_favicon/suki-favicon-96x96.png",
-        manifest:   "/suki.webmanifest",
+        name:           "Suki",
+        tone:           :eve,
+        color:          "#150A22",
+        avatar:         "suki_favicon/suki.png",
+        touch_icon:     "suki_favicon/suki-apple-touch-icon.png",
+        favicon:        "suki_favicon/suki-favicon-96x96.png",
+        manifest:       "/suki.webmanifest",
+        kiosk_manifest: "/suki_kiosk.webmanifest",
       },
     }.freeze
 

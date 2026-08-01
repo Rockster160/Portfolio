@@ -2604,12 +2604,20 @@ dialog.byte-modal {
 }
 
 .byte-routines-title {
-  margin: 0 0 8px;
+  margin: 0 0 4px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--bs-muted);
+}
+
+.byte-routines-hint {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--bs-muted);
+  opacity: 0.8;
 }
 
 .byte-routine-list {
@@ -2920,13 +2928,21 @@ dialog.byte-modal {
 // Keyboard up (mobile). :has isn't in the oldest safaris, but every
 // iOS 16.4+ / Chrome 105+ supports it; the fallback is the hero stays big
 // and the messages just scroll — acceptable.
-.byte-app:has([data-byte-input]:focus) .byte-buddy-hero {
+//
+// Excluding the kiosk belt-and-braces: its composer is display:none so nothing
+// there can take focus, but this selector outranks the kiosk's own sizing, and
+// a stray match would silently turn the wall sideways.
+.byte-app:not([data-kiosk="true"]):has([data-byte-input]:focus)
+  .byte-buddy-hero {
   @include buddy-hero-compact;
 }
 // Short viewport (shrunk desktop window, landscape phone) — collapse to the
 // same compact side-by-side layout so Buddy fits instead of being clipped.
+// Exempting the kiosk: its whole premise is a fixed half/half split, and the
+// compact row would swap the character out for a strip of chips it doesn't
+// even show.
 @media (max-height: 560px) {
-  .byte-app[data-active-mode="buddy"] .byte-buddy-hero {
+  .byte-app[data-active-mode="buddy"]:not([data-kiosk="true"]) .byte-buddy-hero {
     @include buddy-hero-compact;
   }
 }
@@ -3182,16 +3198,23 @@ $suki_expr_aliases: (
   }
 }
 
-// When a popover is open (Check-in mood, Stash bucket, What-now bucket, or the
-// debug face picker) it TAKES THE PLACE of the quick-action chips rather than
-// sitting alongside them. In the compact side-by-side row (keyboard up / short
-// window) an inline popover was squeezing the chip grid down to a single column,
-// so the chips stacked vertically beside it — this hands the row to the popover.
+// When a popover is open (Quick, Check-in mood, Stash bucket, What-now bucket,
+// or the debug face picker) it TAKES THE PLACE of the quick-action chips rather
+// than sitting alongside them. A popover is an in-flow flex child, so in the
+// compact side-by-side row it becomes a third column and squeezes the chip grid
+// down to one 78px-wide stack, which then overflows the bar top and bottom.
+//
+// `!important`, because this is an absolute rather than a preference and it was
+// losing an arms race it shouldn't have been in: at three classes it was
+// outranked by BOTH compact triggers (the short-viewport one and the
+// keyboard-focus one), which set `display: grid` on the same element from a
+// longer selector — so the layout this rule exists to prevent was exactly the
+// layout where it stopped applying.
 .byte-buddy-hero:has(
     .byte-buddy-mood-popover:not([hidden]),
     .byte-buddy-face-popover:not([hidden])
   ) .byte-buddy-quick-actions {
-  display: none;
+  display: none !important;
 }
 
 // Moss palette override for buttons.
@@ -3248,6 +3271,399 @@ $suki_expr_aliases: (
 // Claude/bash concern that's just noise here.
 .byte-app[data-active-mode="buddy"] .byte-pwd-bar {
   display: none;
+}
+
+// -------- Kiosk: the wall tablet ----------------------------------------
+//
+// Half the screen is the pet and half is the routines you tap, and that's the
+// entire surface. Everything else on the page is still rendered and still
+// wired — the socket, the expression state, the timer chips, the routine
+// runner all have one implementation — and this is what takes it off screen.
+//
+// A tablet on a wall is read from across a room and tapped in passing, so the
+// two things it shows are as large as they can be, and there is nothing on it
+// that opens something else.
+
+.byte-app[data-kiosk="true"] {
+  .byte-header,
+  .byte-pwd-bar,
+  .byte-thread,
+  .byte-composer,
+  .byte-jump-btn,
+  .byte-sleep-chip,
+  .byte-slash-popover,
+  // The chip row and its popovers. Their contents either need a keyboard
+  // (Stash arms the next thing you type) or open a second layer over the pet,
+  // and the pinned grid they lead to is the whole bottom half here anyway.
+  .byte-buddy-quick-actions,
+  .byte-buddy-mood-popover,
+  .byte-buddy-face-popover {
+    display: none !important;
+  }
+}
+
+// The pet takes the top half exactly, rather than the 34–42vh range it
+// negotiates with the thread. There's no thread to negotiate with.
+//
+// `flex: 1 1 0` against the kiosk's identical `1 1 0` rather than a 50% basis,
+// for the reason the thread is sized that way too (see .byte-app): the app's
+// height is `100dvh` CLAMPED by the JS-measured `--byte-app-h`, and a
+// percentage basis resolves against the uncapped 100dvh — so whenever the
+// visible viewport was shorter than that (iOS URL bar, PWA chrome) the "half"
+// came out taller than half. Two equal grows split whatever room there
+// actually is, measured or not.
+.byte-app[data-kiosk="true"] .byte-buddy-hero {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: none;
+  justify-content: center;
+  padding: calc(env(safe-area-inset-top) + 10px) 16px 10px;
+}
+
+// Uncapped, so he's as big as the half allows — the 260px ceiling is there to
+// stop him dominating a phone thread, and here dominating is the point.
+// max-width keeps a portrait tablet from growing him wider than the screen;
+// aspect-ratio pulls the height back down to match when it bites.
+.byte-app[data-kiosk="true"] .byte-buddy-char {
+  max-width: 88vw;
+  max-height: none;
+}
+
+.byte-kiosk {
+  flex: 1 1 0;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--bs-border);
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.16),
+    rgba(0, 0, 0, 0.34)
+  );
+}
+
+// Rows share the half between them, so two routines are two big targets rather
+// than two small ones above a lot of empty. The floor keeps a full grid
+// tappable without looking; the ceiling is on the BUTTON rather than the row,
+// because a row that grows past it should centre its button in the space, not
+// stretch one control to 350px.
+.byte-kiosk-pad {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-auto-rows: minmax(76px, 1fr);
+  gap: 12px;
+  padding:
+    14px
+    calc(env(safe-area-inset-right) + 16px)
+    calc(env(safe-area-inset-bottom) + 16px)
+    calc(env(safe-area-inset-left) + 16px);
+}
+
+.ctr-byte .byte-app .byte-kiosk-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  width: 100%;
+  height: 100%;
+  max-height: 132px;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--bs-border);
+  background: var(--bs-accent-grad);
+  color: #FFFFFF !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.12) inset,
+    0 4px 14px rgba(0, 0, 0, 0.3);
+  transition:
+    transform 90ms ease,
+    filter 100ms ease,
+    opacity 100ms ease;
+
+  &:active {
+    transform: scale(0.98);
+    filter: brightness(0.9);
+  }
+
+  // While its steps are dispatching. Not a spinner: a routine's steps post
+  // their own receipts, so the only thing this has to say is "your tap
+  // landed", and it has to say it in the ~200ms before the first one does.
+  &[data-running="true"] {
+    opacity: 0.55;
+    pointer-events: none;
+  }
+}
+
+.byte-kiosk-btn-name {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.byte-kiosk-btn-sub {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: center;
+  opacity: 0.75;
+}
+
+.byte-kiosk-empty {
+  grid-column: 1 / -1;
+  align-self: center;
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--bs-muted);
+}
+
+// What the pet just said, floated over the bottom of its half. Positioned
+// against the kiosk section rather than the app so it always sits on the
+// dividing line, whatever the split works out to.
+.byte-kiosk-say {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  width: max-content;
+  // SassC can't evaluate a mixed-unit min(), so the two bounds are written
+  // separately the way the drawer's are — nearly all of a tablet, but capped
+  // to a readable line once the screen is wider than that.
+  max-width: 88vw;
+  @media (min-width: 780px) {
+    max-width: 680px;
+  }
+  max-height: 34vh;
+  overflow-y: auto;
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--bs-border);
+  background: var(--bs-panel);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  color: var(--bs-text);
+  font-size: 16px;
+  line-height: 1.4;
+  text-align: center;
+  opacity: 1;
+  transition: opacity 260ms ease;
+
+  &[hidden] {
+    display: none;
+  }
+  // Set for the fade-out beat before `hidden` lands, so a receipt doesn't
+  // vanish between frames.
+  &[data-fading="true"] {
+    opacity: 0;
+  }
+
+  p {
+    margin: 0 0 6px;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+  ul,
+  ol {
+    margin: 0;
+    padding-left: 20px;
+    text-align: left;
+  }
+}
+
+// A question mid-routine sits ABOVE the buttons and takes only the room it
+// needs, shrinking the pad rather than covering it. It was an overlay at
+// `inset: 0`, and that was wrong on a wall tablet in a way that only shows up
+// once something goes wrong with it: a question whose action had expired
+// stayed on screen and swallowed every press meant for the routine underneath,
+// so the buttons looked present and did nothing. The ceiling keeps a long form
+// from taking the whole half; past it, the card scrolls.
+.byte-kiosk-ask {
+  position: relative;
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  max-height: 70%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px calc(env(safe-area-inset-right) + 16px) 16px
+    calc(env(safe-area-inset-left) + 16px);
+  border-bottom: 1px solid var(--bs-border);
+  background: var(--bs-panel);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.byte-kiosk-ask-text {
+  margin: 0 0 12px;
+  font-size: 17px;
+  line-height: 1.35;
+  color: var(--bs-text);
+}
+
+// Its own row at the top of the card rather than floated over the text, and
+// sticky so a long form can't scroll the only way out of itself off screen.
+// Carries the extra class for specificity for the same reason .byte-kiosk-who
+// does: the app-wide `button:active { position: static }` reset outranks a
+// three-class selector and would unstick it mid-press.
+.ctr-byte .byte-app .byte-kiosk .byte-kiosk-ask-close {
+  position: sticky;
+  top: 0;
+  align-self: flex-end;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--bs-border);
+  background: var(--bs-panel);
+  color: var(--bs-muted) !important;
+  font-size: 18px;
+  line-height: 1;
+
+  &:active {
+    position: sticky;
+    background: var(--bs-panel-soft);
+  }
+}
+
+// The one control on the screen that isn't a routine: which companion is out
+// here. It wears the current pet's face, so what it does is legible without a
+// label, and it's dim because it's for whoever set the tablet up rather than
+// whoever walks past it. `fixed` rather than `absolute`: it belongs in the
+// screen's corner, and its parent is the bottom half.
+//
+// Carries the extra `.byte-kiosk` for specificity, same as .byte-jump-btn and
+// for the same reason: the app-wide `.ctr-byte .byte-app button:active
+// { position: static }` reset is (0,3,1), so at (0,3,0) this dropped out of
+// `fixed` the moment it was pressed and collapsed into the pad below it.
+.ctr-byte .byte-app .byte-kiosk .byte-kiosk-who {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 10px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  z-index: 6;
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid var(--bs-border);
+  background: rgba(0, 0, 0, 0.25);
+  opacity: 0.35;
+  transition: opacity 140ms ease;
+
+  &:hover,
+  &:active,
+  &[aria-expanded="true"] {
+    opacity: 1;
+  }
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+}
+
+.byte-kiosk-picker {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 56px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 260px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid var(--bs-border);
+  background: var(--bs-panel);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.byte-kiosk-picker-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--bs-muted);
+  padding: 0 2px;
+}
+
+.byte-kiosk-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+// One row per Buddy thread: its pet's face, its pet's name, and the thread's
+// own name underneath, since several threads can wear the same companion.
+.ctr-byte .byte-app .byte-kiosk-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  text-align: left;
+
+  &[aria-current="true"] {
+    border-color: var(--bs-accent);
+    background: rgba(255, 255, 255, 0.06);
+  }
+  &:active {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  img {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+}
+
+.byte-kiosk-pick-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.byte-kiosk-pick-pet {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bs-text);
+}
+
+.byte-kiosk-pick-thread {
+  font-size: 11px;
+  color: var(--bs-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 // -------- Editable form inside a bubble (Buddy::FormAction) --------------

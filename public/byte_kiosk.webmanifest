@@ -1,0 +1,26 @@
+{
+  "short_name": "Byte Kiosk",
+  "name": "Byte Kiosk",
+  "icons": [
+    {
+      "src": "/byte_favicon/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/byte_favicon/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "byte-kiosk",
+  "start_url": "/kiosk",
+  "background_color": "#0E1930",
+  "display": "standalone",
+  "orientation": "any",
+  "scope": "/",
+  "theme_color": "#0E1930",
+  "description": "Byte on the wall: the character, and the routines you tap."
+}

@@ -1,0 +1,62 @@
+<%# The wall-tablet surface: the pet fills the top half (that's the ordinary
+    hero, just given the room), and this is everything below the fold.
+
+    Shows the same set the Quick popover does — every routine that's switched
+    on, starred ones first — so there's nothing kiosk-specific to curate. Save
+    a routine and it's on the wall; star it to move it to the front. %>
+<section class="byte-kiosk" data-byte-kiosk>
+  <%# What the pet just said, floated over the bottom of its half. Filled and
+      cleared by buddy/kiosk.js; a tap here has no thread to scroll, so this is
+      the only place a receipt can land. %>
+  <div class="byte-kiosk-say" data-kiosk-say aria-live="polite" hidden></div>
+
+  <%# A question mid-routine (ask_me, or a step that wants confirming). Same
+      renderers the thread uses, so the dinner routine works here exactly as it
+      does in chat.
+
+      Above the buttons and IN FLOW, taking only the room it needs — never
+      floated over them. It used to be an overlay, which meant a question that
+      couldn't be answered (its action expired, or the tap just failed) sat
+      there swallowing every press aimed at a routine underneath. The buttons
+      on a wall tablet are the whole point; nothing gets to cover them. %>
+  <div class="byte-kiosk-ask" data-kiosk-ask hidden>
+    <button type="button" class="byte-kiosk-ask-close" data-kiosk-ask-close
+            aria-label="Put this away" title="Put this away">×</button>
+    <div data-kiosk-ask-body></div>
+  </div>
+
+  <%# Server-rendered so a cold boot off the cached shell has its buttons
+      immediately. kiosk.js rebuilds this from /buddy/routines on load and
+      whenever the tablet comes back to the foreground, in the same shape —
+      pinning something on your phone should show up here without a reload. %>
+  <div class="byte-kiosk-pad" data-kiosk-pad>
+    <% Array(@routines).each do |routine| %>
+      <button type="button" class="byte-kiosk-btn" data-kiosk-routine="<%= routine.id %>">
+        <span class="byte-kiosk-btn-name"><%= routine.name %></span>
+        <% if routine.description.present? %>
+          <span class="byte-kiosk-btn-sub"><%= routine.description %></span>
+        <% end %>
+      </button>
+    <% end %>
+    <% if Array(@routines).empty? %>
+      <p class="byte-kiosk-empty">No routines saved yet — ask to save one.</p>
+    <% end %>
+  </div>
+
+  <%# Which companion is on this screen. The thread IS the answer — its theme
+      decides the character, the name, the palette and the voice — so choosing
+      one here is the whole of "set the Buddy".
+
+      The control is the current pet's own face, so what it changes is legible
+      without a label. `data-byte-pet-avatar` gets it repointed along with
+      every other avatar when the thread switches. %>
+  <button type="button" class="byte-kiosk-who" data-kiosk-who
+          aria-label="Choose which companion is on this screen"
+          title="Choose which companion is on this screen">
+    <%= image_tag chrome[:avatar], alt: chrome[:name], data: { byte_pet_avatar: true } %>
+  </button>
+  <div class="byte-kiosk-picker" data-kiosk-picker hidden>
+    <span class="byte-kiosk-picker-label">On this screen</span>
+    <div class="byte-kiosk-picker-list" data-kiosk-picker-list></div>
+  </div>
+</section>
