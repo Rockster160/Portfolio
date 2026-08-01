@@ -138,6 +138,7 @@
       <div class="byte-buddy-arm"  aria-hidden="true"></div>
     </div>
     <nav class="byte-buddy-quick-actions" data-buddy-quick-actions>
+      <button type="button" data-buddy-action="quick">Quick</button>
       <button type="button" data-buddy-action="today">Today</button>
       <button type="button" data-buddy-action="suggest">What now?</button>
       <button type="button" data-buddy-action="stash">Stash</button>
@@ -145,6 +146,13 @@
       <button type="button" data-buddy-action="affirmation">Affirmation</button>
       <button type="button" data-buddy-action="facepick">Faces</button>
     </nav>
+    <%# Pinned routines. The only popover whose contents come from the server, %>
+    <%# so it fills on open rather than being rendered here - which also means %>
+    <%# pinning one in the drawer shows up the next time this is opened. %>
+    <div class="byte-buddy-mood-popover byte-buddy-quick-popover" data-buddy-quick-popover hidden>
+      <span class="byte-buddy-mood-label">Quick actions</span>
+      <div class="byte-buddy-mood-choices" data-buddy-quick-list></div>
+    </div>
     <%# What now?: optionally focus the suggestion on a bucket. "Anything" is %>
     <%# the unfiltered "just tell me what to do" ask. %>
     <div class="byte-buddy-mood-popover" data-buddy-suggest-popover hidden>

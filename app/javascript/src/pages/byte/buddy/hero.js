@@ -4,16 +4,21 @@
 // Check-in). Neither injects a fake user message; both fire server-
 // side actions that produce a genuine Buddy-authored reply.
 
-async function postQuickAction(payload) {
-  const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-  const csrf = csrfMeta ? csrfMeta.getAttribute("content") : "";
-  const res = await fetch("/buddy/quick_action", {
+const ROUTINES_URL = "/buddy/routines";
+
+function csrfToken() {
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  return meta ? meta.getAttribute("content") : "";
+}
+
+async function postJSON(url, payload) {
+  const res = await fetch(url, {
     method:      "POST",
     credentials: "same-origin",
     headers:     {
       "Content-Type": "application/json",
       "Accept":       "application/json",
-      "X-CSRF-Token": csrf,
+      "X-CSRF-Token": csrfToken(),
     },
     body: JSON.stringify(payload),
   });
@@ -22,6 +27,22 @@ async function postQuickAction(payload) {
     throw new Error(`HTTP ${res.status}`);
   }
   return res.json().catch(() => ({}));
+}
+
+function postQuickAction(payload) {
+  return postJSON("/buddy/quick_action", payload);
+}
+
+async function fetchPinnedRoutines() {
+  const res = await fetch(ROUTINES_URL, {
+    credentials: "same-origin",
+    headers:     { Accept: "application/json" },
+  });
+  if (!res.ok) return [];
+  const data = await res.json().catch(() => null);
+  return (data?.routines || [])
+    .filter((r) => r.enabled && r.position != null)
+    .sort((a, b) => a.position - b.position);
 }
 
 export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
@@ -33,6 +54,8 @@ export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
   const facePopover    = hero.querySelector("[data-buddy-face-popover]");
   const stashPopover   = hero.querySelector("[data-buddy-stash-popover]");
   const suggestPopover = hero.querySelector("[data-buddy-suggest-popover]");
+  const quickPopover   = hero.querySelector("[data-buddy-quick-popover]");
+  const quickList      = hero.querySelector("[data-buddy-quick-list]");
 
   const setActive = (isBuddy) => {
     hero.dataset.buddyActive = isBuddy ? "true" : "false";
@@ -41,6 +64,7 @@ export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
     if (!isBuddy && facePopover) facePopover.hidden = true;
     if (!isBuddy && stashPopover) stashPopover.hidden = true;
     if (!isBuddy && suggestPopover) suggestPopover.hidden = true;
+    if (!isBuddy && quickPopover) quickPopover.hidden = true;
   };
 
   // The pet has two layers: a persistent MOOD and a transient "thinking"
@@ -82,6 +106,53 @@ export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
 
   const openSuggest  = () => { if (suggestPopover) suggestPopover.hidden = false; };
   const closeSuggest = () => { if (suggestPopover) suggestPopover.hidden = true;  };
+
+  const closeQuick = () => { if (quickPopover) quickPopover.hidden = true; };
+
+  // The only popover filled from the server. Opened first and populated after,
+  // so a slow request shows the panel with "loading" rather than swallowing the
+  // tap and looking broken.
+  const openQuick = async () => {
+    if (!quickPopover || !quickList) return;
+
+    quickPopover.hidden = false;
+    quickList.textContent = "Loading…";
+    let routines = [];
+    try {
+      routines = await fetchPinnedRoutines();
+    } catch (_) {
+      quickList.textContent = "Couldn't load those.";
+      return;
+    }
+
+    if (routines.length === 0) {
+      // Says what to DO about it. An empty grid with no explanation reads as
+      // broken, and pinning happens somewhere they aren't currently looking.
+      quickList.textContent = "Nothing pinned yet — pin a routine in the drawer.";
+      return;
+    }
+
+    quickList.textContent = "";
+    routines.forEach((r) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.dataset.quickRoutine = String(r.id);
+      btn.textContent = r.name;
+      if (r.description) btn.title = r.description;
+      quickList.appendChild(btn);
+    });
+  };
+
+  // Runs server-side with no model turn, so there's no "thinking" flip to make
+  // here — the steps post their own receipts as they go.
+  const dispatchRoutine = async (id) => {
+    const cid = currentConversationId();
+    if (cid == null) return;
+    closeQuick();
+    try {
+      await postJSON(`${ROUTINES_URL}/${id}/run`, { conversation_id: cid });
+    } catch (_) { /* server logs the reason */ }
+  };
 
   // "What now?" focused on a bucket (or Anything = unfiltered). Same server
   // action as the bare tap, just with a category.
@@ -186,10 +257,16 @@ export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
       const btn = e.target.closest("[data-buddy-action]");
       if (!btn) return;
       const action = btn.dataset.buddyAction;
-      if (action === "checkin") { closeFace(); closeStash(); closeSuggest(); openMood(); return; }
-      if (action === "stash") { closeMood(); closeFace(); closeSuggest(); openStash(); return; }
-      if (action === "suggest") { closeMood(); closeFace(); closeStash(); openSuggest(); return; }
-      if (action === "facepick") { closeMood(); closeStash(); closeSuggest(); openFace(); return; }
+      // Opening one closes the rest — they all cover the pet, so two at once is
+      // just a stack.
+      const others = { checkin: closeMood, stash: closeStash, suggest: closeSuggest, facepick: closeFace, quick: closeQuick };
+      Object.entries(others).forEach(([name, close]) => { if (name !== action) close(); });
+
+      if (action === "checkin") return openMood();
+      if (action === "stash") return openStash();
+      if (action === "suggest") return openSuggest();
+      if (action === "facepick") return openFace();
+      if (action === "quick") return openQuick();
       dispatchAction(action);
     });
   }
@@ -208,6 +285,23 @@ export function initBuddyHero({ hero, conversationIdFn, onStashArmed }) {
       if (suggestPopover.contains(e.target)) return;
       if (e.target.closest('[data-buddy-action="suggest"]')) return;
       closeSuggest();
+    });
+  }
+
+  // Pinned-routine grid — one tap runs it + closes.
+  if (quickPopover) {
+    keepFocusOnButtonTap(quickPopover);
+    quickPopover.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-quick-routine]");
+      if (!btn) return;
+      dispatchRoutine(btn.dataset.quickRoutine);
+    });
+
+    document.addEventListener("click", (e) => {
+      if (quickPopover.hidden) return;
+      if (quickPopover.contains(e.target)) return;
+      if (e.target.closest('[data-buddy-action="quick"]')) return;
+      closeQuick();
     });
   }
 

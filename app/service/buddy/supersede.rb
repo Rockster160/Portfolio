@@ -36,13 +36,27 @@ module Buddy
       wanted = Array(keys).map(&:to_s).compact_blank.to_set
       return if wanted.empty? || action.byte_conversation_id.blank?
 
-      rescued = recent(action).flat_map { |old| retire(old, wanted) }
+      rescued = []
+      salvage = {}
+      recent(action).each { |old|
+        queue = retire(old, wanted)
+        next if queue.empty?
+
+        rescued.concat(queue)
+        # The values that queue was carrying come with it. Without this a
+        # corrected form drops the answers collected before it, and the step
+        # behind the queue asks for a `{{name}}` that used to exist.
+        salvage = Buddy::ProposalBuilder.vars_on(old).merge(salvage)
+      }
       return if rescued.empty?
 
       # A queue rescued off something we just retired belongs behind whatever
       # replaced it, rather than nowhere.
       input = action.tool_input.is_a?(Hash) ? action.tool_input : {}
-      action.update!(tool_input: input.merge("deferred" => Array(input["deferred"]) + rescued))
+      action.update!(tool_input: input.merge(
+        "deferred" => Array(input["deferred"]) + rescued,
+        "vars"     => salvage.merge((input["vars"] || {}).to_h),
+      ))
     rescue StandardError => e
       Buddy::Errors.report(section: "supersede.replace", exception: e, user: action&.user)
       nil

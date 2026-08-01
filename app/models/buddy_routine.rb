@@ -8,6 +8,7 @@
 #  last_run_at :datetime
 #  metadata    :jsonb            not null
 #  name        :string           not null
+#  position    :integer
 #  run_count   :integer          default(0), not null
 #  steps       :jsonb            not null
 #  created_at  :datetime         not null
@@ -27,6 +28,14 @@ class BuddyRoutine < ApplicationRecord
 
   scope :enabled,  -> { where(enabled: true) }
   scope :ordered,  -> { order(Arel.sql("LOWER(name) ASC")) }
+  # On the Quick grid in the hero, in the order they put them. Alphabetical is
+  # right for the drawer, where you're looking something up; a grid you tap is
+  # ordered by how often you reach for it, which only they know.
+  scope :pinned,   -> { where.not(position: nil).order(:position, :id) }
+
+  def pinned?
+    position.present?
+  end
 
   validates :name, presence: true, length: { maximum: 80 }
   validates :description, length: { maximum: 300 }
@@ -90,6 +99,7 @@ class BuddyRoutine < ApplicationRecord
       summary:     summary,
       run_count:   run_count,
       last_run_at: last_run_at&.iso8601,
+      position:    position,
     }
   end
 
@@ -104,6 +114,12 @@ class BuddyRoutine < ApplicationRecord
     return errors.add(:steps, "is limited to #{MAX_STEPS} steps") if rows.length > MAX_STEPS
 
     rows.each_with_index { |raw, i| validate_step(raw, i + 1) }
+    # Repeated here rather than left to Buddy::Routines.sanitize, because a
+    # dangling `{{name}}` is a routine that stops halfway through and this is
+    # the last gate before it's stored - whichever path it arrived by.
+    Buddy::Routines.check_var_flow!(rows) if errors.empty?
+  rescue StandardError => e
+    errors.add(:steps, e.message)
   end
 
   def validate_step(raw, position)

@@ -18,6 +18,20 @@ module Buddy
     # tap, and the countdown is already on screen.
     TIMER_GATE = "buddy_timer_gate".freeze
 
+    # The same idea for a question put to another person: invisible, keyed to
+    # the relay whose answer will release it.
+    RELAY_GATE = "buddy_relay_gate".freeze
+
+    # How long a sequence will wait on someone else to answer. A clock always
+    # finishes; a person may simply not reply, and the rest of the sequence
+    # can't sit pending forever waiting to find out.
+    AWAIT_TTL = 3.days
+
+    # Step kinds that never merge with a neighbour of the same kind: each one is
+    # a separate wait, so "wait, X, wait, Y" has to nest rather than collapsing
+    # into one wait with two things behind it.
+    SOLO_KINDS = [:timer, :relay].freeze
+
     # Returns { action: <ByteAction or nil>, auto_ran: <bool> } so the caller
     # can pick the right expression: something to confirm (action present) vs
     # something already done (auto_ran) vs nothing.
@@ -111,6 +125,10 @@ module Buddy
           ran, holding = run_wait!(user, byte_message, step[:calls], deferred: deferred)
           auto_ran ||= ran
           carried  ||= holding
+        when :relay
+          asked, holding = run_ask!(user, byte_message, step[:calls], deferred: deferred)
+          auto_ran ||= asked
+          carried  ||= holding
         when :rows
           action = attach_checklist!(user, byte_message, step[:calls], deferred: deferred)
           carried ||= deferred.any?
@@ -146,6 +164,35 @@ module Buddy
 
       if result[:action].nil? && !result[:auto_ran]
         msg.update!(body: "Hmm, I couldn't set that back up - what it pointed at might be gone now. Just ask me again?")
+      end
+
+      broadcast_message(user, msg.reload)
+      result
+    end
+
+    # Run a set of markers with no model turn behind them: the Quick grid taps a
+    # routine and its steps are already decided, so spending a round trip on
+    # having the model re-say them costs money and introduces the one thing a
+    # saved sequence exists to remove - a different answer each time.
+    #
+    # `body` is the line the steps hang under, since a checklist needs a message
+    # to attach to and silence would read as nothing having happened.
+    def run_markers!(user:, conversation:, markers:, body:)
+      msg = conversation.byte_messages.create!(
+        user:         user,
+        direction:    :inbound,
+        state:        :delivered,
+        body:         body,
+        metadata:     { "kind" => "buddy_reply", "source" => "quick_action" },
+        delivered_at: Time.current,
+      )
+
+      result = create(user: user, byte_message: msg, markers: markers)
+      # Every step dropped out - each one's target is gone, or the whole thing is
+      # feature-gated away. Say so on the same message rather than leaving a
+      # bare heading over nothing.
+      if result[:action].nil? && !result[:auto_ran] && result[:forms].blank?
+        msg.update!(body: "#{body}\n\nNothing in it could run just now - what it points at might be gone.")
       end
 
       broadcast_message(user, msg.reload)
@@ -193,6 +240,37 @@ module Buddy
       advance_queue!(action, queue, executed: true)
     end
 
+    # Is this relay a question a sequence is lined up behind? Buddy::CompanionRelay
+    # asks before it does anything, so an ordinary question — the overwhelming
+    # majority — costs one indexed lookup and nothing else.
+    def awaiting_reply?(relay)
+      relay_gate(relay).present?
+    end
+
+    # Release what the question was holding, now that they've answered. Called
+    # the moment the answer is recorded, from the one funnel both ways of
+    # answering pass through.
+    #
+    # Their answer becomes the gate's captured value, so the step behind it can
+    # reference it. Claimed under a lock like every other release, so answering
+    # twice can't run the follow-up twice.
+    def resume_after_reply!(relay)
+      action = relay_gate(relay)
+      return false if action.nil?
+
+      queue = nil
+      var   = nil
+      action.with_lock do
+        var   = action.tool_input["var"].to_s.presence
+        queue = claim_deferred(action)
+        action.update!(state: :decided, decided_at: Time.current)
+      end
+      return false if queue.blank?
+
+      captured = var ? { var => relay.answer } : {}
+      advance_queue!(action, queue, executed: true, captured: captured)
+    end
+
     # Move the queue forward now that the gate it was waiting on has resolved.
     #
     # `executed:` is whether anything on that gate actually ran. When the person
@@ -206,7 +284,11 @@ module Buddy
     # is still behind it and the queue stops there until they deal with it. That
     # is also the escape hatch: nothing advances on its own, so wandering off
     # mid-chain just leaves the rest of it unposted.
-    def advance_queue!(action, queue, executed:)
+    # `captured` is whatever this gate LEARNED — a form's answers, a partner's
+    # reply — folded onto the values already collected. Read off the action
+    # rather than passed in by every caller, because the queue is what the
+    # values belong to and the queue is already there.
+    def advance_queue!(action, queue, executed:, captured: {})
       steps = rehydrate_steps(queue)
       return false if steps.empty?
 
@@ -215,14 +297,39 @@ module Buddy
 
       user         = action.user
       conversation = action.byte_conversation
+      vars         = vars_on(action).merge(stringify(captured))
 
       unless executed
-        note = "Held off on #{queue_summary(user, steps)} — nothing on that list went through."
+        note = "Held off on #{queue_summary(user, steps, vars)} — nothing on that list went through."
         post_message(user, conversation, note)
         return false
       end
 
-      run_steps!(user, conversation, message, steps)
+      run_steps!(user, conversation, message, steps, vars)
+    end
+
+    # The gate is never going to resolve, so say what won't be happening and
+    # throw the queue away. Same shape as the `executed: false` path in
+    # advance_queue! — silence is how someone ends up assuming a sequence
+    # finished, and this is the one case where nothing else will ever say so.
+    def abandon_queue!(action, queue, because:)
+      steps = rehydrate_steps(queue)
+      return false if steps.empty?
+
+      conversation = action.byte_conversation
+      return false if conversation.nil?
+
+      user = action.user
+      post_message(
+        user, conversation,
+        "#{because}, so I didn't go on to #{queue_summary(user, steps, vars_on(action))}."
+      )
+    end
+
+    # Values collected so far, as stored on whichever gate is holding the queue.
+    def vars_on(action)
+      input = action.tool_input.is_a?(Hash) ? action.tool_input : {}
+      (input["vars"] || {}).to_h.transform_keys(&:to_s)
     end
 
     class << self
@@ -246,7 +353,7 @@ module Buddy
         level2, rest = merged.partition { |p| p[:tool][:level] == 2 }
         steps = rest.each_with_object([]) { |p, out|
           kind = step_kind(p)
-          if kind != :timer && out.last && out.last[:kind] == kind
+          if SOLO_KINDS.exclude?(kind) && out.last && out.last[:kind] == kind
             out.last[:calls] << p
           else
             out << { kind: kind, calls: [p] }
@@ -270,6 +377,7 @@ module Buddy
 
       def step_kind(proposal)
         return :timer if Buddy::Tools.waits?(proposal[:tool], proposal[:payload])
+        return :relay if Buddy::Tools.awaits_reply?(proposal[:tool], proposal[:payload])
         return :forms if Buddy::Tools.form?(proposal[:tool])
 
         proposal[:tool][:level] == 1 ? :autos : :rows
@@ -281,7 +389,7 @@ module Buddy
       # touch it, so nothing may wait on it.
       def gate?(step)
         return false if step.nil?
-        return true if [:forms, :timer].include?(step[:kind])
+        return true if [:forms, :timer, :relay].include?(step[:kind])
 
         step[:kind] == :rows && step[:calls].any? { |p| p[:tool][:level] == 3 }
       end
@@ -291,6 +399,20 @@ module Buddy
         return [steps, []] if idx.nil?
 
         [steps[..idx], steps[(idx + 1)..] || []]
+      end
+
+      # What a gate stores: the queue it's holding, plus the values collected so
+      # far on the way here. `vars` travels with the queue rather than living
+      # anywhere of its own, so it survives however many gates the tail crosses
+      # and is thrown away with the queue when the sequence ends.
+      #
+      # Both keys are omitted when empty so a gate holding nothing keeps the
+      # `{}` tool_input it has always had.
+      def gate_input(deferred, vars)
+        input = {}
+        input["deferred"] = deferred if deferred.present?
+        input["vars"] = stringify(vars) if vars.present?
+        input
       end
 
       # Build the checklist onto `byte_message` and return its ByteAction. We
@@ -303,7 +425,7 @@ module Buddy
       # `{ title:, sub: }` — the second renders `sub` as small text beneath the
       # title, so non-default details (a past completion time, an assignee that
       # isn't the person, extra function args) don't crowd the title line.
-      def attach_checklist!(user, byte_message, calls, deferred: [])
+      def attach_checklist!(user, byte_message, calls, deferred: [], vars: {})
         conversation = byte_message.byte_conversation
         buttons = calls.each_with_index.map { |p, i|
           base = build_button(user, p, i + 1)
@@ -319,7 +441,7 @@ module Buddy
           multi_select:      true,
           buttons:           buttons,
           # Whatever the model lined up behind this, waiting on the tap.
-          tool_input:        deferred.any? ? { "deferred" => deferred } : {},
+          tool_input:        gate_input(deferred, vars),
           # A Buddy checklist is part of the conversation, not a fleeting prompt —
           # the default 10-minute TTL made a chore-confirm checkbox silently 409 on
           # tap (the check just vanished) once the person came back to it. Give it
@@ -366,26 +488,36 @@ module Buddy
       # Consume steps in order until one of them lands in FRONT of the person;
       # that one takes whatever is left and the queue stops there. Level-1 steps
       # just run and the walk continues. Returns whether anything happened.
-      def run_steps!(user, conversation, message, steps)
+      def run_steps!(user, conversation, message, steps, vars={})
         ran = false
         while (step = steps.shift)
-          calls = rehydrate_calls(step)
+          calls, broken = rehydrate_calls(step, vars).partition { |p| p[:missing].blank? }
+          report_missing_vars(user, conversation, broken) if broken.any?
           next if calls.empty?
 
           # `steps` is what's LEFT, still in its stored shape, so it rides along
-          # untouched onto whatever this step posts.
+          # untouched onto whatever this step posts — and `vars` with it, since
+          # a value captured before this step is just as needed after it.
           case step["kind"].to_s
           when "forms"
             # A form that refuses to open posts nothing, so it can't carry the
             # queue either — keep walking instead of stranding it.
-            return true if post_forms(user, conversation, calls, deferred: steps).any?
+            return true if post_forms(user, conversation, calls, deferred: steps, vars: vars).any?
           when "rows"
-            attach_checklist!(user, next_step_message(user, conversation), calls, deferred: steps)
+            attach_checklist!(user, next_step_message(user, conversation), calls, deferred: steps, vars: vars)
             return true
+          when "relay"
+            # A question put to someone else. Same rule as the two above: if it
+            # didn't actually go out there's nothing to answer it, so the rest
+            # runs rather than waiting forever on a reply that can't come.
+            asked, holding = run_ask!(user, message, calls, deferred: steps, vars: vars)
+            return true if holding
+
+            ran = asked || ran
           when "timer"
             # Same rule as a form that won't open: a countdown that fails to
             # start can't hold anything, so the rest runs rather than stalling.
-            wait_ran, holding = run_wait!(user, message, calls, deferred: steps)
+            wait_ran, holding = run_wait!(user, message, calls, deferred: steps, vars: vars)
             return true if holding
 
             ran = wait_ran || ran
@@ -396,9 +528,23 @@ module Buddy
         ran
       end
 
+      # A step wanted a value nothing ever captured. Nearly always a routine
+      # whose earlier step was edited out from under it, and the person has to
+      # hear about it: silence here reads as the sequence having finished.
+      def report_missing_vars(user, conversation, broken)
+        names = broken.flat_map { |p| p[:missing] }.uniq
+        steps = broken.map { |p| p[:tool][:name].to_s.tr("_", " ") }.uniq
+        Rails.logger.warn("[Buddy::ProposalBuilder] unfilled step vars #{names.inspect} on #{steps.inspect}")
+        post_message(
+          user, conversation,
+          "I skipped #{steps.to_sentence} — it needed #{names.map { |n| "`#{n}`" }.to_sentence}, " \
+          "and nothing earlier in that sequence collected it."
+        )
+      end
+
       # Start the wait and park everything after it on the countdown. Returns
       # [whether the timer ran, whether it's now holding the queue].
-      def run_wait!(user, byte_message, calls, deferred: [])
+      def run_wait!(user, byte_message, calls, deferred: [], vars: {})
         timer_id = nil
         ran = run_auto(user, byte_message, calls) { |result|
           data = result[:data]
@@ -406,11 +552,58 @@ module Buddy
         }
 
         holding = timer_id.present? && deferred.any?
-        hold_for_timer!(user, byte_message, timer_id, deferred) if holding
+        hold_for_timer!(user, byte_message, timer_id, deferred, vars) if holding
         [ran, holding]
       end
 
-      def hold_for_timer!(user, byte_message, timer_id, deferred)
+      # Put the question, then park everything after it on the ANSWER. Returns
+      # [whether it went out, whether it's now holding the queue].
+      #
+      # The mirror of run_wait!, with one difference that matters: a countdown
+      # always finishes, and a person doesn't. Everything queued behind this
+      # waits on someone else deciding to reply, which is why the gate carries
+      # its own expiry (see AWAIT_TTL) rather than trusting it to arrive.
+      def run_ask!(user, byte_message, calls, deferred: [], vars: {})
+        relay_id = nil
+        var      = nil
+        asked = run_auto(user, byte_message, calls) { |result|
+          data = result[:data]
+          next unless result[:ok] && data.is_a?(Hash) && relay_id.nil?
+
+          relay_id = data[:relay_id]
+          var      = data[:var]
+        }
+
+        holding = relay_id.present? && deferred.any?
+        hold_for_reply!(user, byte_message, relay_id, var, deferred, vars) if holding
+        [asked, holding]
+      end
+
+      def hold_for_reply!(user, byte_message, relay_id, var, deferred, vars)
+        ByteAction.create!(
+          user:              user,
+          byte_conversation: byte_message.byte_conversation,
+          byte_message:      byte_message,
+          kind:              :custom,
+          tool_name:         RELAY_GATE,
+          buttons:           [],
+          tool_input:        gate_input(deferred, vars).merge("relay_id" => relay_id, "var" => var),
+          # Long, but finite. Someone who hasn't answered in three days isn't
+          # going to, and a sequence that fires its last step a week later is
+          # worse than one that admits it gave up.
+          expires_at:        AWAIT_TTL.from_now,
+        )
+      end
+
+      def relay_gate(relay)
+        return nil if relay.nil?
+
+        scope = ByteAction.where(user_id: relay.from_user_id, tool_name: RELAY_GATE, state: :pending)
+        scope = scope.where("tool_input->>'relay_id' = ?", relay.id.to_s)
+        scope.order(:id).last
+      end
+
+      def hold_for_timer!(user, byte_message, timer_id, deferred, vars)
         ByteAction.create!(
           user:              user,
           byte_conversation: byte_message.byte_conversation,
@@ -418,7 +611,7 @@ module Buddy
           kind:              :custom,
           tool_name:         TIMER_GATE,
           buttons:           [],
-          tool_input:        { "deferred" => deferred, "timer_id" => timer_id },
+          tool_input:        gate_input(deferred, vars).merge("timer_id" => timer_id),
           # Well past any countdown Buddy will set (Timers caps at 24h), so the
           # gate can never expire out from under a wait that's still running.
           expires_at:        PROPOSAL_TTL.from_now,
@@ -433,7 +626,7 @@ module Buddy
         scope.order(:id).last
       end
 
-      def post_forms(user, conversation, forms, deferred: [])
+      def post_forms(user, conversation, forms, deferred: [], vars: {})
         return [] if forms.empty?
 
         # Only ONE form carries the queue. Splitting it across a batch would mean
@@ -449,6 +642,7 @@ module Buddy
             payload:      p[:payload],
             merge_key:    (p[:merge_key] if Buddy::Tools.supersedes?(p[:tool])),
             deferred:     queue,
+            vars:         vars,
           )
           next nil if action.nil?
 
@@ -486,26 +680,34 @@ module Buddy
         rows
       end
 
-      def rehydrate_calls(step)
+      # The one place a queued step's arguments are turned back into something
+      # dispatchable, and so the one place `{{name}}` is filled in. A call whose
+      # references can't be satisfied comes back carrying `missing` rather than
+      # being dropped, because the caller has to SAY so - passing a literal
+      # `{{hers}}` to a Jil task, or quietly skipping the step, are the two
+      # failures worth more than the step itself.
+      def rehydrate_calls(step, vars={})
         Array(step["calls"]).filter_map { |row|
           tool = Buddy::Tools[row["tool_name"].to_s.to_sym]
           next nil if tool.nil?
 
+          payload, missing = Buddy::StepVars.fill((row["payload"] || {}).symbolize_keys, vars)
           {
             tool:      tool,
-            payload:   (row["payload"] || {}).symbolize_keys,
+            payload:   payload,
             count:     (row["count"] || 1).to_i,
             merge_key: row["merge_key"],
-          }
+            missing:   missing.presence,
+          }.compact
         }
       end
 
       # "Message Chelsea", not "message partner" — the tool's own label proc
       # already renders its payload for a human, so reuse it rather than
       # humanizing a snake_case name at someone.
-      def queue_summary(user, steps)
+      def queue_summary(user, steps, vars={})
         ctx = Buddy::ToolContext.new(user)
-        titles = steps.flat_map { |step| rehydrate_calls(step) }.map { |p|
+        titles = steps.flat_map { |step| rehydrate_calls(step, vars) }.map { |p|
           title, = extract_title_sub(safely { p[:tool][:label].call(p[:payload], ctx) })
           title.presence || p[:tool][:name].to_s.tr("_", " ")
         }

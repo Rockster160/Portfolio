@@ -24,6 +24,28 @@ Buddy::Tools.register(
     A WAIT between two steps is `set_timer` with `then_continue: true`, same as
     in a live sequence - the routine pauses there and picks itself back up.
 
+    ## Steps that need an answer first
+
+    A routine can also stop and ASK, then use what it's told:
+
+    - `ask_me` puts a question to the person and files their answer under `var`.
+    - Any of `ask_partner` / `ask_partner_choice` / `ask_partner_multi` with
+      `await_reply: true` does the same with a household member, and picks back
+      up whenever they reply - typed or tapped, either way.
+
+    A later step reaches either answer by putting `{{that_var_name}}` in one of
+    its arguments. "Ask me what I want for dinner, ask Chelsea what she wants,
+    then send both to the dinner planner" is:
+
+      [{"tool_name":"ask_me","payload":{"question":"What do you want for dinner?","var":"mine"}},
+       {"tool_name":"ask_partner","payload":{"to":"Chelsea","question":"What do you want for dinner?","await_reply":true,"var":"hers"}},
+       {"tool_name":"call_jil_function","payload":{"name":"Dinner Planner","mine":"{{mine}}","hers":"{{hers}}"}}]
+
+    Every `{{name}}` must be collected by an EARLIER step - a routine can't use
+    an answer it hasn't asked for yet, and one that tries is rejected here. Only
+    add an asking step when something after it genuinely needs the answer; a
+    routine that stops to ask a question nothing uses is just slower.
+
     Saving over an existing name REPLACES its steps, and that is how a routine
     gets FIXED. When they tell you a routine you just saved is wrong - "it's
     supposed to complete the chore three times", "there shouldn't be an event in

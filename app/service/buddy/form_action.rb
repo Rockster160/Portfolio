@@ -29,7 +29,7 @@ module Buddy
     # Build the form and post it. Returns the ByteAction, or nil when the tool
     # can't produce one (its `fields` proc is also its resolver — a prompt that
     # has since been answered raises there rather than posting an empty form).
-    def post!(user:, conversation:, tool:, payload:, merge_key: nil, deferred: [])
+    def post!(user:, conversation:, tool:, payload:, merge_key: nil, deferred: [], vars: {})
       spec = tool[:form]
       return nil if spec.nil?
 
@@ -53,6 +53,9 @@ module Buddy
           "payload"   => stringify(payload),
           "merge_key" => merge_key,
           "deferred"  => deferred,
+          # Values collected before this form, so a step after it can still use
+          # them. Rides with the queue, not with the form.
+          "vars"      => stringify(vars),
         },
         expires_at:        TTL.from_now,
       )
@@ -103,7 +106,12 @@ module Buddy
 
       if outcome[:ok]
         finish!(action, outcome)
-        Buddy::ProposalBuilder.advance_queue!(action, deferred, executed: true) if deferred.any?
+        # `captured` is what this form ADDED to the run - an ask_me answer the
+        # steps behind it are waiting on. A form that captures nothing passes an
+        # empty hash and the queue advances exactly as it always did.
+        if deferred.any?
+          Buddy::ProposalBuilder.advance_queue!(action, deferred, executed: true, captured: outcome[:captured] || {})
+        end
       end
 
       outcome.slice(:ok, :errors)
@@ -138,6 +146,10 @@ module Buddy
         {
           ok:        true,
           collected: collected,
+          # A tool that exists to collect a value says so by returning
+          # `captured:` from its execute; everything else returns nothing here
+          # and the run's variables are untouched.
+          captured:  (result[:data].is_a?(Hash) ? result[:data][:captured] : nil) || {},
           fields:    Buddy::FormFields.apply_values(fields, collected),
           receipt:   safely { tool[:receipt].call(result[:data], exec_ctx) }.to_s.presence || "Sent ✓",
         }

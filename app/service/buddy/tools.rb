@@ -150,6 +150,18 @@ module Buddy
       (payload || {})[WAIT_ARG].present?
     end
 
+    # Marks a call as a question put to SOMEONE ELSE that the rest of the
+    # sequence waits on. Same idea as WAIT_ARG, but the thing being waited for
+    # is a person rather than a clock, so it can take days or never arrive at
+    # all — which is why it gets its own step kind rather than reusing :timer.
+    AWAIT_ARG = :await_reply
+
+    def awaits_reply?(tool, payload)
+      return false unless tool.is_a?(Hash) && tool[:args].key?(AWAIT_ARG)
+
+      (payload || {})[AWAIT_ARG].present?
+    end
+
     def all
       registry.values.sort_by { |t| t[:name].to_s }
     end

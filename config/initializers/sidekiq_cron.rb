@@ -82,6 +82,13 @@ cron_jobs = [
     cron:  daily_4am,
   },
   {
+    # Hourly rather than daily: the gap between "they're not going to answer"
+    # and being told is the whole cost here, and it's already three days.
+    name:  "Close Out Unanswered Buddy Questions",
+    class: "BuddyAwaitSweepWorker",
+    cron:  every_hour,
+  },
+  {
     # Deliberately off the 4am slot — that hour already runs four jobs against
     # a Sidekiq concurrency of 5.
     name:  "Archive Aged Executions",

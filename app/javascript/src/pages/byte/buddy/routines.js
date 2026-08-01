@@ -8,6 +8,12 @@
 //
 // Hydrated when the drawer opens rather than at boot — most sessions never
 // open it, and the list is only interesting once it's on screen.
+//
+// Pinning is the one thing here that isn't housekeeping: a pinned routine gets
+// a button on the Quick grid in the hero, and their order there is the order
+// they drag them into.
+
+import Sortable from "../../../../jil/Sortable.min.js";
 
 async function apiCall(url, method, body) {
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
@@ -39,15 +45,44 @@ export function initBuddyRoutines({ panel, list, indexUrl }) {
 
   let routines = [];
   let loading  = false;
+  let sortable = null;
+
+  // Pinned first, in grid order, so the drawer reads the way the Quick grid
+  // looks — dragging one here is only meaningful if you can see the order
+  // you're dragging it into.
+  function pinned() {
+    return routines
+      .filter((r) => r.position != null)
+      .sort((a, b) => a.position - b.position);
+  }
+
+  function sorted() {
+    return pinned().concat(routines.filter((r) => r.position == null));
+  }
+
+  function pinnedIds() {
+    return pinned().map((r) => r.id);
+  }
 
   function render() {
     panel.hidden = routines.length === 0;
-    list.innerHTML = routines.map((r) => {
-      const steps = (r.summary || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("");
-      const off   = r.enabled ? "" : " byte-routine-off";
+    list.innerHTML = sorted().map((r) => {
+      const steps  = (r.summary || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("");
+      const off    = r.enabled ? "" : " byte-routine-off";
+      const isPin  = r.position != null;
+      // Only pinned rows are draggable: the order being dragged into is the
+      // Quick grid's, and an unpinned routine isn't on it.
+      const drag   = isPin ? " byte-routine-pinned" : "";
+      // The grip is separate from the star on purpose: the star is a tap and
+      // the grip is a drag, and one element answering to both means every
+      // slightly-moved tap is ambiguous.
+      const handle = `<span class="byte-routine-grip" data-routine-grip aria-hidden="true">⠿</span>`;
+      const grip   = isPin ? handle : "";
       return `
-        <li class="byte-routine${off}" data-routine-id="${r.id}">
+        <li class="byte-routine${off}${drag}" data-routine-id="${r.id}">
           <div class="byte-routine-head">
+            ${grip}
+            <button type="button" class="byte-routine-pin" data-routine-pin aria-pressed="${isPin}" title="${isPin ? "Remove from Quick" : "Add to Quick"}" aria-label="${isPin ? "Remove from Quick" : "Add to Quick"}">${isPin ? "★" : "☆"}</button>
             <button type="button" class="byte-routine-name" data-routine-rename title="Rename">${escapeHtml(r.name)}</button>
             <button type="button" class="byte-routine-toggle" data-routine-toggle aria-label="${r.enabled ? "Turn off" : "Turn on"}">${r.enabled ? "on" : "off"}</button>
             <button type="button" class="byte-routine-remove" data-routine-remove aria-label="Delete">×</button>
@@ -57,6 +92,45 @@ export function initBuddyRoutines({ panel, list, indexUrl }) {
         </li>
       `;
     }).join("");
+    bindSortable();
+  }
+
+  // Rebuilt after every render because render() replaces the whole list.
+  function bindSortable() {
+    sortable?.destroy();
+    sortable = Sortable.create(list, {
+      animation:     150,
+      draggable:     ".byte-routine-pinned",
+      handle:        ".byte-routine-grip",
+      ghostClass:    "byte-routine-ghost",
+      // Matches the timers board: the native HTML5 drag is unreliable inside a
+      // scrolling drawer on iOS.
+      forceFallback:     true,
+      fallbackOnBody:    true,
+      fallbackTolerance: 0,
+      onEnd: () => {
+        const ids = Array.from(list.querySelectorAll(".byte-routine-pinned"))
+          .map((el) => Number(el.dataset.routineId))
+          .filter(Boolean);
+        reorder(ids);
+      },
+    });
+  }
+
+  // One request for the whole grid. Positions are rewritten from the list sent,
+  // and anything left out is unpinned — so this is pin, unpin and reorder.
+  async function reorder(ids) {
+    try {
+      const data = await apiCall(`${indexUrl}/reorder`, "POST", { ids });
+      if (data && Array.isArray(data.routines)) {
+        routines = data.routines;
+        render();
+      }
+    } catch (e) {
+      // Put the rows back where the server still thinks they are, rather than
+      // leaving the drag showing an order that didn't save.
+      render();
+    }
   }
 
   async function refresh() {
@@ -97,6 +171,11 @@ export function initBuddyRoutines({ panel, list, indexUrl }) {
     const routine = routineFor(e.target);
     if (!routine) return;
 
+    if (e.target.closest("[data-routine-pin]")) {
+      const ids = pinnedIds();
+      reorder(routine.position == null ? ids.concat(routine.id) : ids.filter((id) => id !== routine.id));
+      return;
+    }
     if (e.target.closest("[data-routine-toggle]")) {
       patch(routine, { enabled: !routine.enabled });
       return;

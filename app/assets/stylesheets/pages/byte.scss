@@ -2677,6 +2677,38 @@ dialog.byte-modal {
   }
 }
 
+// Pinned to the hero's Quick grid. Filled star when it's on, and lit rather
+// than muted so a glance down the drawer says which ones have a button.
+.byte-routine-pin {
+  color: var(--bs-muted);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 1px !important;
+
+  &[aria-pressed="true"] {
+    color: var(--bs-warning, #f5b544);
+  }
+}
+
+// Only on pinned rows, since the order it drags into is the Quick grid's.
+.byte-routine-grip {
+  color: var(--bs-muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: grab;
+  // Otherwise a drag that starts here selects the row text instead.
+  user-select: none;
+  touch-action: none;
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.byte-routine-ghost {
+  opacity: 0.4;
+}
+
 .byte-routine-desc {
   margin: 3px 0 0;
   font-size: 12px;
@@ -3867,6 +3899,29 @@ $suki_expr_aliases: (
   color: rgba(255, 255, 255, 0.7);
   text-align: center;
 }
+
+// Pinned routines. The other popovers hold four or five one-word choices that
+// fit a single row; routine names are the person's own words and there can be
+// any number of them, so this one wraps into a grid and lets each button size
+// to its label instead of splitting the row evenly.
+.byte-buddy-quick-popover .byte-buddy-mood-choices {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  // Reads as body text while it's a sentence ("Nothing pinned yet…"), before
+  // any buttons replace it.
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.62);
+
+  button {
+    flex: 0 1 auto;
+    padding: 8px 12px !important;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 .byte-buddy-mood-choices {
   display: flex;
   gap: 6px;

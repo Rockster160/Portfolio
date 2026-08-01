@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_07_31_233000) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_01_040000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -450,7 +450,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_07_31_233000) do
     t.jsonb "metadata", default: {}, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "position"
     t.index "user_id, lower((name)::text)", name: "index_buddy_routines_on_user_and_name", unique: true
+    t.index ["user_id", "position"], name: "index_buddy_routines_pinned", where: "(\"position\" IS NOT NULL)"
     t.index ["user_id"], name: "index_buddy_routines_on_user_id"
   end
 

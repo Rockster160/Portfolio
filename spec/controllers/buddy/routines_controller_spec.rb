@@ -106,4 +106,126 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
       expect(BuddyRoutine.exists?(routine.id)).to be(false)
     end
   end
+
+  # The Quick grid in the hero. Its order is one fact rather than N independent
+  # ones, so the whole thing is sent at once: pinning is that list plus one,
+  # unpinning is it minus one, and a drag is the new order.
+  describe "POST #reorder" do
+    it "pins in the order given" do
+      a = routine!("Alpha")
+      b = routine!("Beta")
+
+      post :reorder, params: { ids: [b.id, a.id] }
+
+      expect(response).to be_successful
+      expect([b.reload.position, a.reload.position]).to eq([0, 1])
+    end
+
+    it "unpins anything left out" do
+      a = routine!("Alpha")
+      b = routine!("Beta")
+      post :reorder, params: { ids: [a.id, b.id] }
+
+      post :reorder, params: { ids: [a.id] }
+
+      expect(a.reload.position).to eq(0)
+      expect(b.reload.position).to be_nil
+    end
+
+    it "clears the whole grid when nothing is sent" do
+      a = routine!("Alpha")
+      post :reorder, params: { ids: [a.id] }
+
+      post :reorder, params: { ids: [] }
+
+      expect(a.reload.position).to be_nil
+    end
+
+    it "refuses to pin someone else's" do
+      theirs = BuddyRoutine.create!(
+        user:  create(:user),
+        name:  "Theirs",
+        steps: [BuddyRoutine.step(:message_partner, { to: "x", message: "y" })],
+      )
+
+      post :reorder, params: { ids: [theirs.id] }
+
+      expect(theirs.reload.position).to be_nil
+    end
+  end
+
+  describe "POST #run" do
+    let(:partner) { create(:user) }
+    let(:household) { user.chore_household || ChoreHousehold.create!(name: "Home", owner_user: user) }
+    let!(:convo) {
+      user.byte_conversations.create!(mode: :buddy, name: "Buddy", last_message_at: Time.current)
+    }
+
+    before {
+      allow(MonitorChannel).to receive(:broadcast_to)
+      allow(WebPushNotifications).to receive(:send_to_byte)
+      allow(::WebPushNotifications).to receive(:update_count)
+      ChoreHouseholdMembership.create!(chore_household: household, user: partner, role: :member)
+      user.update!(chore_household_id: household.id)
+      partner.update!(chore_household_id: household.id)
+      partner.byte_conversations.create!(mode: :buddy, name: "Buddy", last_message_at: Time.current)
+    }
+
+    def nightly!
+      BuddyRoutine.create!(
+        user:  user,
+        name:  "Nightly",
+        steps: [BuddyRoutine.step(:message_partner, { to: partner.username, message: "night" })],
+      )
+    end
+
+    # A tapped routine is already decided, so spending a model round trip on
+    # having it re-said costs money and reintroduces the one thing a saved
+    # sequence removes - a different answer each time.
+    it "runs the steps without a model turn" do
+      routine = nightly!
+
+      expect(BuddyDeliverWorker).not_to receive(:perform_async)
+      post :run, params: { id: routine.id, conversation_id: convo.id }
+
+      expect(response).to be_successful
+      expect(BuddyRelay.last.body).to eq("night")
+      expect(routine.reload.run_count).to eq(1)
+    end
+
+    it "hangs the steps under a line saying what ran" do
+      routine = nightly!
+
+      post :run, params: { id: routine.id, conversation_id: convo.id }
+
+      expect(convo.byte_messages.pluck(:body)).to include("Running **Nightly**")
+    end
+
+    # A bare heading over nothing reads as the routine having worked.
+    it "says so on the same message when nothing in it could run" do
+      routine = routine!("Nightly") # targets a name nobody in the household has
+
+      post :run, params: { id: routine.id, conversation_id: convo.id }
+
+      expect(convo.byte_messages.last.body).to include("Nothing in it could run")
+    end
+
+    it "refuses one that's turned off" do
+      routine = BuddyRoutine.create!(user: user, name: "Nightly", enabled: false, steps: [BuddyRoutine.step(:message_partner, { to: partner.username, message: "night" })])
+
+      post :run, params: { id: routine.id, conversation_id: convo.id }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(routine.reload.run_count).to eq(0)
+    end
+
+    it "needs a conversation that's really theirs" do
+      routine = routine!("Nightly")
+      theirs  = create(:user).byte_conversations.create!(mode: :buddy, name: "Buddy")
+
+      post :run, params: { id: routine.id, conversation_id: theirs.id }
+
+      expect(response).to have_http_status(:not_found)
+    end
+  end
 end

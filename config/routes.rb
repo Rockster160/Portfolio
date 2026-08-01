@@ -62,9 +62,11 @@ Rails.application.routes.draw do
   post   "/buddy/timers/:id/resume" => "buddy/timers#resume",  as: :buddy_timer_resume
   post   "/buddy/timers/:id/confirm" => "buddy/timers#confirm", as: :buddy_timer_confirm
   delete "/buddy/timers/:id"        => "buddy/timers#destroy", as: :buddy_timer
-  get    "/buddy/routines"      => "buddy/routines#index",   as: :buddy_routines
-  patch  "/buddy/routines/:id"  => "buddy/routines#update",  as: :buddy_routine
-  delete "/buddy/routines/:id"  => "buddy/routines#destroy"
+  get    "/buddy/routines"         => "buddy/routines#index",   as: :buddy_routines
+  post   "/buddy/routines/reorder" => "buddy/routines#reorder", as: :buddy_routines_reorder
+  post   "/buddy/routines/:id/run" => "buddy/routines#run",     as: :buddy_routine_run
+  patch  "/buddy/routines/:id"     => "buddy/routines#update",  as: :buddy_routine
+  delete "/buddy/routines/:id"     => "buddy/routines#destroy"
 
   namespace :internal do
     get "auth", to: "auth#check"

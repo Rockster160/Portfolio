@@ -15,17 +15,46 @@ Buddy::Tools.register(
 
     For a pick-ONE question use ask_partner_choice; for a pick-ANY /
     select-all question use ask_partner_multi.
+
+    ## Waiting on the answer
+
+    Normally this fires and the turn carries on - their reply arrives whenever
+    it arrives. Set `await_reply: true` when a LATER STEP genuinely needs what
+    they say: everything queued behind it is then held until they answer, and
+    their answer is filed under `var` for a later step to reference as
+    `{{that_name}}`.
+
+      ask_partner(to: "Chelsea", question: "What do you want for dinner?",
+                  await_reply: true, var: "hers")
+      call_jil_function(name: "Dinner Planner", hers: "{{hers}}")
+
+    Use it only when something really is downstream of the answer. A person is
+    not a countdown: they may take hours, or never reply at all, and everything
+    behind the wait sits there until they do.
   TXT
   feature:     :relay,
   args:        {
-    to:       { type: :string, required: true, description: "Who to ask (household member)" },
-    question: { type: :string, required: true, description: "What to ask. Their exact words when they gave you words; your phrasing when they only gave you the gist." },
+    to:          { type: :string,  required: true,  description: "Who to ask (household member)" },
+    question:    { type: :string,  required: true,  description: "What to ask. Their exact words when they gave you words; your phrasing when they only gave you the gist." },
+    await_reply: { type: :boolean, required: false, description: "Hold the rest of the sequence until they answer. Only when a later step needs what they say." },
+    var:         { type: :string,  required: false, description: "Name their answer is filed under, for a later {{step}} to use. With await_reply." },
   },
   confirm:     ->(payload, ctx) {
     partner = ctx.resolve_household_user(payload[:to])
     raise "I'm not sure who #{payload[:to]} is" if partner.nil? || partner == ctx.user
 
-    { summary: "Ask #{partner.first_name}: #{payload[:question]}", resolved: { to_user_id: partner.id, to_name: partner.first_name } }
+    awaiting = Buddy::StepVars.awaiting?(payload)
+    {
+      summary:  "Ask #{partner.first_name}: #{payload[:question]}",
+      resolved: {
+        to_user_id: partner.id,
+        to_name:    partner.first_name,
+        # Resolved rather than re-derived in execute, so the "is anything
+        # waiting on this" question is answered once, here, where it can raise
+        # while the person is still in the conversation.
+        await_var:  (Buddy::StepVars.capture_name!(payload, required: awaiting) if awaiting),
+      }.compact,
+    }
   },
   label:       ->(payload, _ctx) { { title: "Ask #{payload[:to_name]}", sub: payload[:question].to_s } },
   execute:     ->(payload, ctx) {
@@ -38,8 +67,14 @@ Buddy::Tools.register(
       status:            :pending,
     )
     Buddy::CompanionRelay.deliver!(relay)
-    { relay_id: relay.id, to_name: payload[:to_name] }
+    # `var` rides back out so ProposalBuilder can key the gate to it — the
+    # answer has to land somewhere named for the step behind it to reach.
+    { relay_id: relay.id, to_name: payload[:to_name], var: payload[:await_var] }.compact
   },
   auto:        true,
-  receipt:     ->(result, _ctx) { "Asked #{result[:to_name]} — I'll let you know what they say 💬" },
+  receipt:     ->(result, _ctx) {
+    return "Asked #{result[:to_name]} — I'll pick this back up when they answer 💬" if result[:var]
+
+    "Asked #{result[:to_name]} — I'll let you know what they say 💬"
+  },
 )

@@ -84,7 +84,30 @@ module Buddy
 
         relay.update!(answer: answer, status: :answered, answered_at: Time.current)
         relay_answer_back(relay)
+        resume_sequence(relay)
         relay
+      end
+
+      # A question asked with `await_reply` has the rest of a sequence parked on
+      # it. This is the only moment that can be known, and both ways of
+      # answering — the answerer's `relay_answer` tool and a tapped choice
+      # button — come through record_answer!, which is why the continuation
+      # hangs here rather than on either path.
+      #
+      # Never allowed to take the answer down with it: the answer has already
+      # been bridged by this point, and a broken follow-up step must not make it
+      # look like they never replied.
+      def resume_sequence(relay)
+        return unless Buddy::ProposalBuilder.awaiting_reply?(relay)
+
+        Buddy::ProposalBuilder.resume_after_reply!(relay)
+      rescue StandardError => e
+        Buddy::Errors.report(
+          section:   "companion_relay.resume",
+          exception: e,
+          user:      relay.from_user,
+          extra:     { relay_id: relay.id },
+        )
       end
 
       # The answer flows back the other way: from the answerer (relay.to_user) to

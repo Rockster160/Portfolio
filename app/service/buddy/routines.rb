@@ -51,6 +51,20 @@ module Buddy
       tool.is_a?(Hash) && tool[:name] == RUNNER
     end
 
+    # Run one directly, with no model turn - what a tap on the Quick grid does.
+    # Same replay through ProposalBuilder that a spoken "run my wind-down" gets;
+    # the only thing skipped is the model deciding to call `run_routine`, which
+    # on a button has already been decided.
+    def run!(routine, conversation:)
+      routine.touch_run!
+      Buddy::ProposalBuilder.run_markers!(
+        user:         routine.user,
+        conversation: conversation,
+        markers:      routine.markers,
+        body:         "Running **#{routine.name}**",
+      )
+    end
+
     # Normalize rows into storable steps, raising with a readable reason when
     # one can't run. Accepts either shape of key, since these arrive both from
     # the model (a JSON array it wrote) and from `capture` (rows we built).
@@ -70,7 +84,36 @@ module Buddy
       list = Array(rows)
       raise "a routine needs at least one step" if list.empty?
 
-      list.each_with_index.map { |raw, i| sanitize_step(raw, i + 1, ctx) }
+      steps = list.each_with_index.map { |raw, i| sanitize_step(raw, i + 1, ctx) }
+      check_var_flow!(steps)
+      steps
+    end
+
+    # Every `{{name}}` has to be captured by a step BEFORE the one using it.
+    #
+    # This is the compensation for what a placeholder costs: a step holding one
+    # can't be resolved at save time (see resolves!), because the value it will
+    # be given doesn't exist yet. So the one thing that CAN be checked statically
+    # is checked hard - a typo in a var name is caught here rather than surfacing
+    # weeks later as a step that skipped itself.
+    #
+    # Order matters and is the whole point: a routine that references its own
+    # later answer parses perfectly and can never run.
+    def check_var_flow!(steps)
+      available = []
+      steps.each_with_index { |step, i|
+        tool    = Buddy::Tools[step["tool_name"]]
+        payload = (step["payload"] || {}).transform_keys(&:to_sym)
+
+        unmet = Buddy::StepVars.references(payload) - available
+        if unmet.any?
+          raise "step #{i + 1} (#{step["tool_name"]}) uses #{unmet.map { |n| "{{#{n}}}" }.join(", ")}, " \
+                "but nothing before it collects that"
+        end
+
+        captured = Buddy::StepVars.captured_name(tool, payload)
+        available << captured if captured
+      }
     end
 
     # Keys that name the TOOL rather than being an argument to it.
@@ -102,7 +145,16 @@ module Buddy
 
       tool[:confirm].call(payload, ctx)
     rescue StandardError => e
-      raise "step #{position} (#{name}): #{e.message}"
+      # A step holding a `{{placeholder}}` is the one thing that can't be
+      # checked here: the value it will be handed doesn't exist yet, so a
+      # confirm that tries to look it up is asking about a chore literally named
+      # "{{dinner}}". Its other arguments are still resolved - a wrong Jil
+      # function name in the same step is caught exactly as before - and what's
+      # lost is only the guarantee about the argument that's a placeholder,
+      # which is unknowable by definition. check_var_flow! covers what remains.
+      raise "step #{position} (#{name}): #{e.message}" if Buddy::StepVars.references(payload).empty?
+
+      Rails.logger.info("[Buddy::Routines] step #{position} (#{name}) unresolved at save: #{e.message}")
     end
 
     # Both spellings of a step, because the model writes both and there was
