@@ -55,7 +55,7 @@ module Buddy
 
       ### Greetings = mini briefing
 
-      When the person opens with a bare greeting - "hi", "hello", "hey", "morning", "good morning", "how are things?", "what's up" - treat it as an implicit ask for a short day-orientation. Open with a warm time-of-day greeting ("Good morning!" / "Afternoon!" / "Evening!"), then give a compact briefing:
+      When the person opens with a bare greeting - "hi", "hello", "hey", "morning", "good morning", "how are things?", "what's up" - treat it as an implicit ask for a short day-orientation. Open with a warm time-of-day greeting, taking the half of the day from `Part of day` at the top of this prompt rather than working it out yourself, then give a compact briefing:
       - A brief update of the day so far (what's already been done from `chores_done_today`, notable recent events - only if worth naming).
       - A brief summary of what's still ahead (`chores_pending_today` filtered by typical_hour + due_today, plus notable events from `today_agenda`).
       - **Weight agenda by how routine it is (the `cadence` tag).** "daily" / "every weekday" items I know cold - gloss them, don't recite. Less-frequent cadences ("weekly", "monthly", "yearly", "every 6 days") I may not have top of mind, so a light touch helps. No cadence = a one-off, always worth a mention. DO flag a `cancelled` routine (a normal thing NOT happening). If a soon item has `drive_min`, a quick drive-time nudge is welcome.
@@ -606,14 +606,46 @@ module Buddy
     # unambiguous statement of local time.
     def time_preamble(user)
       tz  = user.timezone.presence || "America/Denver"
-      now = Time.current.in_time_zone(tz).strftime("%a %Y-%m-%d %-I:%M %p %Z")
+      now = Time.current.in_time_zone(tz)
       <<~TXT.strip
         ## Right now
 
-        - **Local time:** #{now}
+        - **Local time:** #{now.strftime("%a %Y-%m-%d %-I:%M %p %Z")}
         - **Timezone:** #{tz}
+        - **Part of day:** #{part_of_day(now)}. If you open with a time-of-day greeting, the only correct one is "#{greeting_for(now)}".
         - When you mention the time in your reply, use this local time in 12-hour AM/PM format. Do NOT use UTC. Do NOT use your training-data default.
       TXT
+    end
+
+    # Given rather than derived, because deriving it is the step that kept going
+    # wrong. The hour was right in the line above all along and the briefing
+    # still opened with "Good afternoon" at 9am — a whole paragraph of rules for
+    # reading a clock loses to one bad guess, and greeting someone with the
+    # wrong half of the day is the most obviously broken thing a companion can
+    # do. So the answer is handed over and there is nothing left to work out.
+    #
+    # Bands match what the Today briefing used to spell out for itself, which is
+    # why it can now just point here instead of keeping a second copy.
+    def part_of_day(now)
+      case now.hour
+      when 4..11  then "morning"
+      when 12..16 then "afternoon"
+      when 17..21 then "evening"
+      else             "late night"
+      end
+    end
+
+    # Late night gets a bare "Hey": at 2am "Good morning" is wrong and "Good
+    # evening" is wronger, and there's no third greeting that fits.
+    GREETINGS = {
+      "morning"    => "Good morning",
+      "afternoon"  => "Good afternoon",
+      "evening"    => "Good evening",
+      "late night" => "Hey",
+    }.freeze
+
+    def greeting_for(now)
+      GREETINGS.fetch(part_of_day(now))
     end
 
     # Voice guide, paired to the PET rather than the person reading it.

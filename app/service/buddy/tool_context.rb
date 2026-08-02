@@ -57,8 +57,8 @@ module Buddy
 
       scope = ChoreCompletion.where(chore_id: chore.id, user_id: user.id).order(completed_at: :desc)
       scope = case hint.to_sym
-      when :today     then scope.where(completed_at: user.perceived_today.beginning_of_day..)
-      when :yesterday then scope.where(completed_at: (user.perceived_today - 1.day).all_day)
+      when :today     then scope.where(completed_at: Buddy::Day.range(user).first..)
+      when :yesterday then scope.where(completed_at: yesterday_range(user))
       else                 scope
       end
       scope.limit([limit.to_i, 1].max).to_a
@@ -84,12 +84,24 @@ module Buddy
 
       scope = user.action_events.where("LOWER(name) LIKE ?", "%#{name.to_s.downcase}%")
       case hint.to_s
-      when "today"        then scope.where(timestamp: user.perceived_today.beginning_of_day..).order(timestamp: :desc).first
-      when "yesterday"    then scope.where(timestamp: (user.perceived_today - 1.day).all_day).order(timestamp: :desc).first
-      when "this morning" then scope.where(timestamp: user.perceived_today.beginning_of_day..user.perceived_today.change(hour: 12)).order(timestamp: :desc).first
+      when "today"        then scope.where(timestamp: Buddy::Day.range(user).first..).order(timestamp: :desc).first
+      when "yesterday"    then scope.where(timestamp: yesterday_range(user)).order(timestamp: :desc).first
+      when "this morning" then scope.where(timestamp: Buddy::Day.range(user).first...Buddy::Day.at(user, hour: 12)).order(timestamp: :desc).first
       when /^\d+$/        then scope.find_by(id: hint.to_i)
       else                     scope.order(timestamp: :desc).first
       end
+    end
+
+    # The perceived day before this one, as a half-open range of real Times.
+    #
+    # `Date#all_day` and `Date#beginning_of_day` both resolve in `Time.zone`,
+    # which is UTC app-wide — so on a UTC-6 account "today" started at 6pm the
+    # previous evening and "yesterday" was a window six hours out of step. Every
+    # boundary here goes through Buddy::Day, which builds them in the person's
+    # own zone and rolls the day at 3am like the rest of Buddy does.
+    def yesterday_range(user)
+      start, finish = Buddy::Day.range(user, date: user.perceived_today - 1.day)
+      start...finish
     end
 
     # ---- agenda ----
@@ -105,8 +117,14 @@ module Buddy
       scope = AgendaItem.where(agenda_id: agendas)
       scope = scope.where("LOWER(name) LIKE ?", "%#{needle}%")
       if hint_date.present?
-        day = (Time.zone.parse(hint_date.to_s) rescue nil)
-        scope = scope.where(start_at: day.beginning_of_day...day.end_of_day) if day
+        # Midnight to midnight in THEIR zone. Parsed in Time.zone (UTC) it named
+        # the six hours either side of the wrong boundary, so "the dentist thing
+        # on Tuesday" could match Monday evening's item instead.
+        day = (Time.zone.parse(hint_date.to_s)&.to_date rescue nil)
+        if day
+          from = Buddy::Day.at(user, hour: 0, date: day)
+          scope = scope.where(start_at: from...(from + 1.day))
+        end
       end
       scope.order(start_at: :asc).first
     end

@@ -159,7 +159,7 @@ module Buddy
       fact = fact.to_s.strip
       return if fact.empty?
 
-      ttl = parse_duration(expires_in)
+      ttl = parse_duration(expires_in, user)
 
       existing = find_similar_memory(user, fact)
       if existing
@@ -179,11 +179,15 @@ module Buddy
     # Duration phrase to an absolute expiry. Unparseable (or nil) is treated as
     # durable rather than guessed at — a fact that outlives its usefulness is a
     # smaller problem than one that vanishes early.
-    def parse_duration(text)
+    # "today" and "tomorrow" end at the end of THEIR day. `Time.current` carries
+    # the app-wide UTC zone, so `end_of_day` was 23:59 UTC — 5:59pm on a UTC-6
+    # account, which quietly expired a fact meant to last the evening several
+    # hours before the evening was over.
+    def parse_duration(text, user=nil)
       t = text.to_s.strip.downcase
       return nil if t.empty?
-      return Time.current.end_of_day if t == "today"
-      return Time.current.tomorrow.end_of_day if t == "tomorrow"
+      return end_of_local_day(user) if t == "today"
+      return end_of_local_day(user, offset: 1) if t == "tomorrow"
 
       m = t.match(/\A(\d+)\s*(day|week|month|year|hour)s?\z/)
       return nil unless m
@@ -191,6 +195,17 @@ module Buddy
       Time.current + m[1].to_i.public_send("#{m[2]}s")
     rescue StandardError
       nil
+    end
+
+    # The end of their PERCEIVED day (3am, like everywhere else in Buddy) rather
+    # than local midnight. Two reasons, and the second is the one that matters:
+    # someone still up at 1am means the day they're in, not the one the calendar
+    # rolled to an hour ago — and anchoring on midnight would have handed back
+    # an expiry already in the past, so the fact would vanish on write.
+    def end_of_local_day(user, offset: 0)
+      return Time.current.end_of_day + offset.days if user.nil?
+
+      Buddy::Day.range(user, date: Buddy::Day.today(user) + offset).last
     end
 
     # An active memory that's effectively the same fact - exact (normalized)

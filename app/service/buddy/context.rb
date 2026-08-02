@@ -434,7 +434,11 @@ module Buddy
       def recent_events(user, now)
         return [] unless user.respond_to?(:action_events)
 
-        start_of_today = user.perceived_today.beginning_of_day
+        # Buddy::Day rather than Date#beginning_of_day: the latter resolves in
+        # Time.zone (UTC app-wide), so on a UTC-6 account "today" opened at 6pm
+        # the previous evening and swept yesterday's tail into the briefing —
+        # the exact thing the seed prompt then has to talk it out of.
+        start_of_today, = Buddy::Day.range(user, now: now)
         user.action_events
           .where(timestamp: start_of_today..)
           .order(timestamp: :desc)
