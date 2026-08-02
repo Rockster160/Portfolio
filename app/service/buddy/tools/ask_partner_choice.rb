@@ -24,7 +24,7 @@ Buddy::Tools.register(
   TXT
   feature:     :relay,
   args:        {
-    to:          { type: :string,  required: true,  description: "Who to ask (household member)" },
+    to:          { type: :string,  required: true,  description: "First name of anyone on the household roster in \"Who else is in the house\" - not only a partner" },
     question:    { type: :string,  required: true,  description: "The question to pose" },
     options:     { type: :string,  required: true,  description: "Comma-separated choices, e.g. \"dishes, mop\"" },
     await_reply: { type: :boolean, required: false, description: "Hold the rest of the sequence until they pick. Only when a later step needs it." },

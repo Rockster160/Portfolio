@@ -28,14 +28,15 @@ module Buddy
     #
     #   persona (byte.md)  ~1,873
     #   tone profile       ~3,048
-    #   RULES_APPENDIX    ~13,030
+    #   RULES_APPENDIX    ~13,391
     #   context guide      ~3,180
     #   framing + glance     ~410
+    #   household roster     ~150
     #   ---------------------------
-    #   prompt total      ~21,541
-    #   tool schemas      ~17,628
+    #   prompt total      ~22,110
+    #   tool schemas      ~17,693
     #   ===========================
-    #   TOTAL             ~39,169
+    #   TOTAL             ~39,803
     #
     # The schema half was reading ~2,200 LOW because the recipe below used to
     # measure `Buddy::Tools.function_schemas` alone. That's the registry, which
@@ -43,7 +44,9 @@ module Buddy
     # view_image, read_listener_guide and the five side effects are assembled
     # separately in Buddy::GPT::Turn#tools and ship on every turn too.
     #
-    # Not counted, because they're per-person and start at zero: durable
+    # The roster IS counted even though it's per-person, because everyone who
+    # actually uses this is in a household, so it ships every turn for all of
+    # them. Not counted, because these genuinely start at zero: durable
     # memories, this thread's notes, and the held-items block.
     #
     # Re-measure if the rules, tone profile, or tool count change materially —
@@ -51,7 +54,7 @@ module Buddy
     # the tool array from Turn#tools rather than the registry:
     #   Buddy::Personality.for(user, conversation: c).bytesize / 4
     #   JSON.generate(turn_tools).bytesize / 4
-    FIXED_OVERHEAD = 39_170
+    FIXED_OVERHEAD = 39_805
 
     def estimate_for(conversation)
       compact_at   = compact_timestamp(conversation)

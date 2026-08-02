@@ -31,7 +31,7 @@ Buddy::Tools.register(
   TXT
   feature:     :relay,
   args:        {
-    to:      { type: :string, required: true, description: "Who the message is for (household member)" },
+    to:      { type: :string, required: true, description: "First name of anyone on the household roster in \"Who else is in the house\" - not only a partner" },
     message: { type: :string, required: true, description: "The note to send. Their exact words when they gave you words; your phrasing when they only gave you the gist." },
   },
   confirm:     ->(payload, ctx) {

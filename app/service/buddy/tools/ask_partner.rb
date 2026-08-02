@@ -34,7 +34,7 @@ Buddy::Tools.register(
   TXT
   feature:     :relay,
   args:        {
-    to:          { type: :string,  required: true,  description: "Who to ask (household member)" },
+    to:          { type: :string,  required: true,  description: "First name of anyone on the household roster in \"Who else is in the house\" - not only a partner" },
     question:    { type: :string,  required: true,  description: "What to ask. Their exact words when they gave you words; your phrasing when they only gave you the gist." },
     await_reply: { type: :boolean, required: false, description: "Hold the rest of the sequence until they answer. Only when a later step needs what they say." },
     var:         { type: :string,  required: false, description: "Name their answer is filed under, for a later {{step}} to use. With await_reply." },
