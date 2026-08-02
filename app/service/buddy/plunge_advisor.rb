@@ -28,7 +28,7 @@ module Buddy
       data = WeatherService.data(lat: ALPINE[:lat], lng: ALPINE[:lng])
       return "" if data.blank?
 
-      tz = user.timezone.presence || "America/Denver"
+      tz = Buddy::Day.zone(user).name
       a  = analyze(data, user, tz, now)
       return "" unless a[:notable]
 

@@ -54,6 +54,43 @@ RSpec.describe "Buddy and local time" do
       expect(text).to include("**Part of day:** late night")
       expect(text).to include(%("Hey"))
     end
+
+    # The part of day and the perceived day turn over together: the moment
+    # yesterday ends is the moment morning starts, so neither can drift from
+    # the other by picking its own boundary.
+    it "starts morning exactly when the day rolls over" do
+      expect(preamble_at(Buddy::Day::ROLLOVER_HOUR - 1)).to include("late night")
+      expect(preamble_at(Buddy::Day::ROLLOVER_HOUR)).to include("**Part of day:** morning")
+    end
+
+    it "covers every hour of the clock" do
+      parts = (0..23).map { |h| preamble_at(h)[/\*\*Part of day:\*\* ([a-z ]+)\./, 1] }
+
+      expect(parts).to all(be_present)
+      expect(parts.uniq).to contain_exactly("morning", "afternoon", "evening", "late night")
+    end
+  end
+
+  # The SCHEDULE is a morning thing; the briefing isn't. The chip sits in the
+  # hero all day, so the seed can't assume which part of the day it's read in.
+  describe "the Today briefing at any hour" do
+    def seed_at(hour)
+      Timecop.freeze(zone.local(2026, 8, 2, hour, 0)) { Buddy::TodayBriefing.seed(user) }
+    end
+
+    it "never tells it which part of the day it is" do
+      [8, 14, 20].each { |hour|
+        expect(seed_at(hour)).not_to match(/\b(good morning|this morning|fits the morning)\b/i)
+      }
+    end
+
+    it "sends it to the part of day worked out from the clock instead" do
+      expect(seed_at(20)).to include("Part of day")
+    end
+
+    it "says outright that it isn't a morning thing" do
+      expect(seed_at(8)).to include("not a morning thing")
+    end
   end
 
   describe "which events count as today" do

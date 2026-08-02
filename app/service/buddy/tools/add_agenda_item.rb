@@ -97,6 +97,12 @@ Buddy::Tools.register(
 
     { title: payload[:title].to_s, sub: lines.join("\n") }
   },
+  # Level 2: goes on the calendar the moment it's proposed, as a pre-checked row
+  # that unchecks back off. Putting something on a calendar is easy to see and
+  # easy to take back (the revert below cancels the item), so making them tap to
+  # confirm every add was a toll on the common case — they'd already said what
+  # they wanted. The row is the receipt AND the undo.
+  level:       2,
   execute:     ->(payload, ctx) {
     agenda = Agenda.find(payload[:agenda_id])
     # `at` arrives here as an ISO STRING (the payload was JSON-serialized onto

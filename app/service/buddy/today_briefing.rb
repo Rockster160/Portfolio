@@ -1,8 +1,12 @@
 module Buddy
-  # The "Today" morning briefing seed + delivery. Extracted from
-  # QuickActionsController so the SAME prompt can be fired two ways: by tapping
-  # the hero "Today" chip, and by the scheduled morning broadcast
-  # (Buddy::TodayScheduler). Rails owns the prompt text; the Mac just runs it.
+  # The "Today" briefing seed + delivery. Fired two ways: by tapping the hero
+  # "Today" chip, and by the scheduled broadcast (Buddy::TodayScheduler). Rails
+  # owns the prompt text; the Mac just runs it.
+  #
+  # The SCHEDULE is a morning thing. The briefing is not — the chip is there all
+  # day and gets tapped at all hours, so nothing in the seed may assume which
+  # part of the day it's being read in. Anything that needs the hour reads it
+  # off the clock (Buddy::Day) or off `Part of day` at the top of the prompt.
   module TodayBriefing
     module_function
 
@@ -96,8 +100,8 @@ module Buddy
     def late_in_day?(user)
       return false if user.nil?
 
-      hour = Time.current.in_time_zone(user.timezone.presence || "America/Denver").hour
-      hour >= 16 || hour < 4
+      hour = Buddy::Day.now(user).hour
+      hour >= 16 || hour < Buddy::Day::ROLLOVER_HOUR
     end
 
     # Alpine plunge / notable-weather block. Only speaks up for rain/snow or
@@ -118,7 +122,7 @@ module Buddy
 
         OPEN with a warm time-of-day greeting when it fits. **Use the one given as `Part of day` at the very top of your prompt** - not the shape of this request, and not what a briefing usually sounds like. A briefing is not a morning thing; I ask for these at all hours, and the greeting is already worked out for you up there. Don't second-guess it against anything else.
 
-        **Greeting me with the wrong part of the day is one of the most obviously broken things you can do.** Phrase it however you like ("Morning!" is as good as "Good morning") - just keep the half of the day it names.
+        **Greeting me with the wrong part of the day is one of the most obviously broken things you can do.** Phrase it however you like, clipped or full - just keep the half of the day it names.
 
         Lean into the greeting when it lands: the first check of the day, or when we haven't talked in a while. Skip it when we just talked a moment ago - don't greet twice in one thread.
         #{weather_block(user)}#{plunge_block(user)}
@@ -146,10 +150,10 @@ module Buddy
         - At most a line. If nothing worth noting is coming, say nothing about the week.
 
         SECONDARY (mention only if clearly relevant):#{chores_secondary_line(user)}
-        - `stashed_ideas` - OCCASIONALLY (not most days) float ONE idea I brain-dumped, if it fits the morning. Light, one at a time, easy to wave off. Skip it entirely most of the time.
+        - `stashed_ideas` - OCCASIONALLY (not most days) float ONE idea I brain-dumped, if it fits the moment. Light, one at a time, easy to wave off. Skip it entirely most of the time.
 
         DO NOT USE:
-        - `recent_events` for anything with a timestamp older than this morning. Those are yesterday. This ask is about today, not a diary of the last 24 hours.
+        - `recent_events` from before today started. Those are yesterday. This ask is about today, not a diary of the last 24 hours.
         - "Yesterday you..." framing at all. Yesterday is done. Today is what I'm asking about.
         - Motivational spin like "you crushed it yesterday, keep it up today". That's a review, not a briefing.
 
@@ -172,7 +176,7 @@ module Buddy
     end
 
     # Deliver a Today briefing as a hidden Buddy turn into `conversation`. Used
-    # by the scheduled morning broadcast (the tap path goes through
+    # by the scheduled broadcast (the tap path goes through
     # QuickActionsController#dispatch_trigger for its action chip).
     def deliver!(user, conversation, scheduled: true)
       msg = conversation.byte_messages.create!(

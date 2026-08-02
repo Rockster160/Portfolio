@@ -33,14 +33,17 @@ RSpec.describe "Buddy deferred actions" do
     convo.byte_messages.where(direction: :inbound).order(:created_at).first
   end
 
-  # The 1201 shape: a checkbox first, a partner message after it.
+  # The 1201 shape: a checkbox first, a partner message after it. The gate is a
+  # chore rather than the agenda add of the original report, because agenda adds
+  # have since moved to level 2 and run on arrival — any level-3 tool reproduces
+  # the ordering this is about.
   def move_then_tell
-    inbound = convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "move it to Ours and let Chelsea know")
+    inbound = convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "add the costco run and let Chelsea know")
     client  = FakeBuddyClient.new([
       {
         tool_calls: [
-          { name: :add_agenda_item, call_id: "c1", arguments: { "title" => "Costco Run", "at" => at.iso8601 } },
-          { name: :message_partner, call_id: "c2", arguments: { "to" => her, "message" => "I moved Costco Run onto Ours." } },
+          { name: :create_chore, call_id: "c1", arguments: { "name" => "Costco Run" } },
+          { name: :message_partner, call_id: "c2", arguments: { "to" => her, "message" => "Costco Run's on the list." } },
         ],
       },
       { text: "Once you tap that, I'll let Chelsea know." },

@@ -48,7 +48,7 @@ module Buddy
       private
 
       def user_zone(user)
-        user&.timezone.presence || "America/Denver"
+        Buddy::Day.zone(user).name
       end
 
       def parse_iso(str)

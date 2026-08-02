@@ -43,8 +43,12 @@ RSpec.describe "Buddy action queue" do
     client
   end
 
+  # A gate: something that waits for a tap. Any level-3 tool does — what's being
+  # tested is the queue, not the chore. It used to be add_agenda_item, until
+  # agenda adds moved to level 2 and started running on arrival, at which point
+  # there was nothing left for the queue to hold.
   def add_call(id, title)
-    { name: :add_agenda_item, call_id: id, arguments: { "title" => title, "at" => at.iso8601, "kind" => "task" } }
+    { name: :create_chore, call_id: id, arguments: { "name" => title } }
   end
 
   def tell_call(id, message)
@@ -101,7 +105,7 @@ RSpec.describe "Buddy action queue" do
     expect(forms.map(&:state).uniq).to eq(["pending"])
   end
 
-  it "keeps two agenda items on one checklist rather than making them a chain" do
+  it "keeps two of them on one checklist rather than making them a chain" do
     turn!("add shower and laundry", [add_call("c1", "Shower"), add_call("c2", "Laundry")])
 
     expect(checklists.count).to eq(1)

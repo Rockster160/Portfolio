@@ -605,33 +605,33 @@ module Buddy
     # defaulting to UTC / training-data time. Shortest possible
     # unambiguous statement of local time.
     def time_preamble(user)
-      tz  = user.timezone.presence || "America/Denver"
-      now = Time.current.in_time_zone(tz)
+      now = Buddy::Day.now(user)
       <<~TXT.strip
         ## Right now
 
         - **Local time:** #{now.strftime("%a %Y-%m-%d %-I:%M %p %Z")}
-        - **Timezone:** #{tz}
+        - **Timezone:** #{Buddy::Day.zone(user).name}
         - **Part of day:** #{part_of_day(now)}. If you open with a time-of-day greeting, the only correct one is "#{greeting_for(now)}".
         - When you mention the time in your reply, use this local time in 12-hour AM/PM format. Do NOT use UTC. Do NOT use your training-data default.
       TXT
     end
 
-    # Given rather than derived, because deriving it is the step that kept going
-    # wrong. The hour was right in the line above all along and the briefing
-    # still opened with "Good afternoon" at 9am — a whole paragraph of rules for
-    # reading a clock loses to one bad guess, and greeting someone with the
-    # wrong half of the day is the most obviously broken thing a companion can
-    # do. So the answer is handed over and there is nothing left to work out.
+    # Read off the clock every turn, never assumed from what's being asked. The
+    # hour was already right in the line above and a 9am briefing still opened
+    # with "Good afternoon" — a paragraph of rules for reading a clock loses to
+    # one bad guess, so the answer is handed over and there's nothing left to
+    # work out. Nothing here knows or cares which feature is asking.
     #
-    # Bands match what the Today briefing used to spell out for itself, which is
-    # why it can now just point here instead of keeping a second copy.
+    # The morning band starts at the ROLLOVER_HOUR rather than a number of its
+    # own, so the part of day and the perceived day turn over together: 2am is
+    # the tail of the previous day and reads as late night, and the moment that
+    # day ends is the moment morning begins.
     def part_of_day(now)
       case now.hour
-      when 4..11  then "morning"
-      when 12..16 then "afternoon"
-      when 17..21 then "evening"
-      else             "late night"
+      when Buddy::Day::ROLLOVER_HOUR..11 then "morning"
+      when 12..16                        then "afternoon"
+      when 17..21                        then "evening"
+      else                                    "late night"
       end
     end
 

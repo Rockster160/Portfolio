@@ -51,6 +51,66 @@ const STATUS_GLYPHS = {
 // and locked. Everything else (pending) is still live and re-triggerable.
 const RESOLVED_STATUSES = new Set(["executed", "partial", "failed"]);
 
+// Rows the person has tapped whose outcome hasn't come back yet, as
+// requestId -> Map(buttonId -> tapped at).
+//
+// The server runs a checked row in a JOB and answers the POST immediately, so
+// the response — and any broadcast triggered by an EARLIER tap — still reports
+// this row as pending. A repaint is destructive (the container is rebuilt from
+// `buttons` every time), so checking two rows in a row used to unpick the
+// second one: tap A, tap B, A's broadcast lands saying "A executed, B pending",
+// B renders unchecked, and a moment later B's own broadcast flips it back. The
+// flicker was the render being authoritative about a row whose answer was
+// simply still in the post.
+//
+// Module-level so it survives repaints, and keyed by request so two checklists
+// in one thread can't tread on each other.
+const IN_FLIGHT = new Map();
+
+// A tap whose job never reported back — the worker died, the deploy landed
+// mid-flight. Long enough that a slow tool (a Mac round trip) still counts as
+// in flight, short enough that the row doesn't stay locked forever.
+const IN_FLIGHT_TTL_MS = 120000;
+
+function inFlightFor(requestId) {
+  if (!IN_FLIGHT.has(requestId)) IN_FLIGHT.set(requestId, new Map());
+  return IN_FLIGHT.get(requestId);
+}
+
+function markInFlight(requestId, id) {
+  inFlightFor(requestId).set(Number(id), Date.now());
+}
+
+function clearInFlight(requestId, id) {
+  inFlightFor(requestId).delete(Number(id));
+}
+
+// Whether this row is still waiting on its own answer. Anything the server has
+// since resolved, or that has sat here past the TTL, is dropped — so the map
+// empties itself and nothing has to remember to tidy it.
+function stillAwaiting(requestId, id, serverStatus) {
+  const pending = inFlightFor(requestId);
+  const at = pending.get(Number(id));
+  if (at == null) return false;
+  if (serverStatus !== "pending" || Date.now() - at > IN_FLIGHT_TTL_MS) {
+    pending.delete(Number(id));
+    return false;
+  }
+  return true;
+}
+
+// An agenda item is a task, an event, or a trigger, and they are not the same
+// thing to the person reading the row — a to-do called an "Event" is simply
+// wrong, and it's the word that tells them whether the thing will occupy a span
+// of their day. Both agenda tools put the item's kind on the payload
+// (add_agenda_item takes it as an argument; edit_agenda_item resolves it off the
+// record, since editing one doesn't change what it is).
+const AGENDA_KINDS = { task: "Task", trigger: "Trigger" };
+
+function agendaVerb(verb, payload) {
+  return `${verb} ${AGENDA_KINDS[payload?.kind] || "Event"}`;
+}
+
 // Per-tool action-verb prefix so each checkbox row makes it clear WHAT
 // tapping the box will do. Without this the label is just "Water 24oz"
 // and the user can't tell if it'll log an event, complete a chore, or
@@ -58,14 +118,17 @@ const RESOLVED_STATUSES = new Set(["executed", "partial", "failed"]);
 // item name.
 // Verb + what it acts on, so a generic "Add" / "Edit" / "Remove" never
 // stands alone. "Log" and "Complete" are specific enough as-is.
+//
+// A value may be a function of the payload when one tool covers more than one
+// kind of thing.
 const ACTION_KIND_LABELS = {
   complete_chore:        "Complete",
   create_chore:          "Add Chore",
   edit_chore:            "Edit Chore",
   undo_chore_completion: "Undo",
   undo:                  "Undo",
-  add_agenda_item:       "Add Event",
-  edit_agenda_item:      "Edit Event",
+  add_agenda_item:       (p) => agendaVerb("Add", p),
+  edit_agenda_item:      (p) => agendaVerb("Edit", p),
   add_list_item:         "Add to List",
   edit_list_item:        "Edit List Item",
   remove_list_item:      "Remove from List",
@@ -75,6 +138,13 @@ const ACTION_KIND_LABELS = {
   schedule_reminder:     "Remind",
   cancel_reminder:       "Cancel Reminder",
 };
+
+// The chip above a checklist row, or null for a tool that doesn't get one.
+// Exported so it can be tested without a DOM.
+export function actionKindLabel(toolName, payload) {
+  const entry = ACTION_KIND_LABELS[toolName];
+  return typeof entry === "function" ? entry(payload || {}) : entry || null;
+}
 
 // Render (or re-render) into a container element. Container is expected
 // to sit inside the message bubble, cleared each call so per-row state
@@ -104,7 +174,12 @@ export function renderMultiSelect(container, message) {
   container.classList.add("byte-msg-multi-select");
 
   buttons.forEach((btn) => {
-    const status = btn.status || "pending";
+    const serverStatus = btn.status || "pending";
+    // Their tap outranks a repaint that hasn't heard about it yet. See
+    // IN_FLIGHT: the executor is a job, so "pending" here can simply mean the
+    // answer is still on its way.
+    const awaiting = stillAwaiting(requestId, btn.id, serverStatus);
+    const status = awaiting ? "working" : serverStatus;
     // A row is "resolved" once it has been acted on. Resolved rows stay
     // checked and locked so the checkmark persists (the user's tap is a
     // permanent record, not something that vanishes on execution). Only
@@ -137,15 +212,20 @@ export function renderMultiSelect(container, message) {
     cb.type = "checkbox";
     cb.value = btn.id;
     // executed/partial read as "on"; failed + undone + expired read as "off".
-    cb.checked = superseded
-      ? btn.superseded_from === "executed"
-      : resolved && status !== "failed";
+    // A row awaiting its answer stays on, because they put it there.
+    cb.checked = awaiting
+      ? true
+      : superseded
+        ? btn.superseded_from === "executed"
+        : resolved && status !== "failed";
     // Resolved/undone/superseded rows are locked; only a still-live pending row
     // (or an undoable executed one) stays toggleable. An expired row stays
     // tappable — but tapping REISSUES it (see below) rather than running the
-    // stale one.
-    cb.disabled = superseded || ((resolved || undone) && !undoable);
-    if (rowExpired) {
+    // stale one. One mid-flight is locked so a second tap can't double-fire it.
+    cb.disabled = awaiting || superseded || ((resolved || undone) && !undoable);
+    if (awaiting) {
+      // Nothing to bind: it's already doing the thing.
+    } else if (rowExpired) {
       // Tapping a stale row reissues it as a fresh checklist — no re-typing.
       cb.addEventListener("change", () => {
         if (cb.checked) redoExpired(container, requestId, cb);
@@ -171,7 +251,7 @@ export function renderMultiSelect(container, message) {
     // secondary metadata, not the primary content.
     const body = document.createElement("span");
     body.className = "byte-msg-action-body";
-    const kindLabel = ACTION_KIND_LABELS[btn.tool_name];
+    const kindLabel = actionKindLabel(btn.tool_name, btn.payload);
     if (kindLabel) {
       const kind = document.createElement("span");
       kind.className = "byte-msg-action-kind";
@@ -427,17 +507,23 @@ async function triggerChecked(container, requestId, changedCb) {
   changedCb.disabled = true;
   const row = changedCb.closest(".byte-msg-action-row");
   if (row) row.dataset.status = "working";
+  // Held across repaints, not just on this node — the node itself is about to
+  // be thrown away and rebuilt by the next broadcast.
+  markInFlight(requestId, changedCb.value);
 
   try {
     await apiCall(`/byte/actions/${encodeURIComponent(requestId)}/respond`, "POST", {
       value: checkedIds,
     });
     // Server broadcast re-renders each row with its executed/failed status,
-    // so we don't touch the DOM here — no double-application.
+    // so we don't touch the DOM here — no double-application. The row stays
+    // marked in-flight until that arrives, since the executor is a job and the
+    // response we just got still says "pending".
   } catch (e) {
     // Roll back the optimistic lock so the user can retry — but SAY so. A bare
     // silent uncheck reads like nothing happened (or a bug); a short note tells
     // them it didn't go through and re-tapping retries.
+    clearInFlight(requestId, changedCb.value);
     changedCb.checked = false;
     changedCb.disabled = false;
     if (row) {

@@ -29,7 +29,10 @@ Buddy::Tools.register(
     raise "no agenda item matching #{payload[:item].inspect}" if item.nil?
     raise "cannot edit Google-synced items yet" if item.agenda.managed_externally?
 
-    resolved = { agenda_item_id: item.id }
+    # Carried so the row can say "Edit Task" rather than "Edit Event" on a
+    # to-do. There's no `kind` ARGUMENT here (editing one doesn't change what it
+    # is), so the only way the checklist can know is to resolve it here.
+    resolved = { agenda_item_id: item.id, kind: item.kind }
     if payload[:calendar].present?
       # resolve_writable_agenda only ever returns LOCAL calendars the person can
       # write to, so the destination needs no Google guard of its own. `strict`

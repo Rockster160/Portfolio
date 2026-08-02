@@ -89,6 +89,79 @@ RSpec.describe "Buddy agenda tools" do
     end
   end
 
+  # The checklist row prefixes itself with what tapping it will do, and calling
+  # a to-do an "Event" is wrong in the one word that says whether the thing
+  # occupies a span of the day. add_agenda_item takes `kind` as an argument;
+  # editing one doesn't change what it is, so there's no argument to read and
+  # confirm has to carry it off the record.
+  describe "telling the row whether it's a task or an event" do
+    def task_on(agenda)
+      agenda.agenda_items.create!(name: "Shower", start_at: at, kind: :task, status: :confirmed)
+    end
+
+    it "resolves the kind of the item being edited" do
+      task_on(personal)
+
+      _, confirm = run(:edit_agenda_item, { item: "Shower", title: "Long shower" })
+
+      expect(confirm[:resolved][:kind]).to eq("task")
+    end
+
+    it "says event for one that is one" do
+      costco_on(personal)
+
+      _, confirm = run(:edit_agenda_item, { item: "Costco Run", title: "Costco Trip" })
+
+      expect(confirm[:resolved][:kind]).to eq("event")
+    end
+  end
+
+  # Level 2: it goes on the calendar the moment Byte proposes it, as a
+  # pre-checked row that unchecks back off. Making them tap to confirm every add
+  # was a toll on the common case — they'd already said what they wanted, and
+  # putting something on a calendar is easy to see and easy to take back.
+  describe "an add landing on its own" do
+    let!(:convo) {
+      user.byte_conversations.create!(mode: :buddy, name: "Buddy", last_message_at: Time.current)
+    }
+
+    before { allow(MonitorChannel).to receive(:broadcast_to) }
+
+    def propose!(title)
+      msg = convo.byte_messages.create!(
+        user: user, direction: :inbound, state: :delivered, body: "ok", delivered_at: Time.current,
+      )
+      Buddy::ProposalBuilder.create(
+        user:         user,
+        byte_message: msg,
+        markers:      [{ tool_name: :add_agenda_item, payload: { title: title, at: at.iso8601, kind: "task" } }],
+      )
+    end
+
+    it "is on the calendar without anyone tapping anything" do
+      expect { propose!("Shower") }.to change { AgendaItem.where(name: "Shower").count }.by(1)
+    end
+
+    it "leaves a row that's already ticked, and can be unticked" do
+      result = propose!("Shower")
+      row    = result[:action].buttons.first
+
+      expect(row["status"]).to eq("executed")
+      expect(row["undoable"]).to be(true)
+    end
+
+    # The undo has to actually reach the item, or the pre-checked row is a
+    # promise it can't keep.
+    it "takes it back off when the row is unticked" do
+      result = propose!("Shower")
+      action = result[:action]
+
+      Buddy::ProposalExecutor.undo!(action.id, action.buttons.first["id"])
+
+      expect(AgendaItem.find_by(name: "Shower")).to be_cancelled
+    end
+  end
+
   describe "add_agenda_item when the thing already exists" do
     it "warns that this looks like a move so the model can switch tools" do
       costco_on(personal)
