@@ -8,18 +8,22 @@ RSpec.describe Buddy::Supersede do
   let!(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy", last_message_at: Time.current) }
   let!(:list)  { create(:list, user: user, name: "Shopping") }
   let!(:costco) { create(:section, list: list, name: "Costco") }
-  # Only so create_chore has somewhere to put one — it's this file's stand-in
-  # for a level-3 tool that waits on a tap.
-  let!(:household) { ChoreHousehold.create!(name: "Home", owner_user: user) }
 
   before {
     allow(MonitorChannel).to receive(:broadcast_to)
     allow(::Jil).to receive(:trigger).and_return(true)
     allow(::WebPushNotifications).to receive(:update_count)
     allow(AgendaTravelChainSyncWorker).to receive(:perform_async)
-    user.update!(chore_household_id: household.id)
     convo.update_columns(buddy_theme: "byte")
   }
+
+  # A level-3 tool: something that waits on a tap. Chore and agenda writes have
+  # both moved to level 2 and run on arrival, so an edit to a logged event is
+  # the cheapest thing left that still holds.
+  def gate_call(call_id, name)
+    ActionEvent.find_or_create_by!(user: user, name: name) { |e| e.timestamp = Time.current }
+    { name: :edit_event, call_id: call_id, arguments: { "event" => name, "notes" => "from #{call_id}" } }
+  end
 
   def turn!(body, tool_calls)
     inbound = convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: body)
@@ -105,14 +109,9 @@ RSpec.describe Buddy::Supersede do
     end
 
     it "keeps rows from a tool that never said what makes two calls the same" do
-      2.times { |i|
-        turn!(
-          "add a costco run chore",
-          [{ name: :create_chore, call_id: "a#{i}", arguments: { "name" => "Costco Run" } }],
-        )
-      }
+      2.times { |i| turn!("fix the costco run", [gate_call("a#{i}", "Costco Run")]) }
 
-      # create_chore declares no merge_key, so every call is its own thing and
+      # edit_event declares no merge_key, so every call is its own thing and
       # nothing gets retired out from under the person.
       expect(rows(checklists.first).first["status"]).to eq("pending")
     end
@@ -144,9 +143,9 @@ RSpec.describe Buddy::Supersede do
     end
 
     it "moves a queue off the form it retired onto the one that replaced it" do
-      turn!("the prompt, then add laundry", [
+      turn!("the prompt, then fix laundry", [
         answer_call("c1", "Rockster160"),
-        { name: :create_chore, call_id: "c2", arguments: { "name" => "Laundry" } },
+        gate_call("c2", "Laundry"),
       ])
       turn!("actually that was Chelsea", [answer_call("c3", "Chelsea")])
 

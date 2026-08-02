@@ -19,6 +19,7 @@ module Buddy
     MODELS = {
       "ActionEvent"     => "ActionEvent",
       "AgendaItem"      => "AgendaItem",
+      "Chore"           => "Chore",
       "ChoreCompletion" => "ChoreCompletion",
       "ChoreWithdrawal" => "ChoreWithdrawal",
       "ListItem"        => "ListItem",
@@ -106,6 +107,12 @@ module Buddy
         rec.destroy!
         ActionEventNotifier.notify(rec.user, rec, :removed, auth: :buddy, auth_id: rec.user_id)
       when "AgendaItem"      then rec.update!(status: :cancelled, cancelled_at: Time.current)
+      # Archived, not destroyed. A chore owns its completions and its streak
+      # history, and undoing "you just made this" must not take a month of
+      # someone's record with it. Archiving is also what the Chores app itself
+      # does for "delete", so this lands the same way removing it by hand would
+      # — including the cascade to sub-chores and the :archived Jil trigger.
+      when "Chore"           then rec.update!(archived_at: Time.current)
       # Go through the shared undoer so the streak rebuilds AND the Chores app
       # gets the broadcast — not just a silent destroy.
       when "ChoreCompletion" then ChoreCompletionUndoer.call(rec.user, rec)
@@ -131,8 +138,9 @@ module Buddy
 
       rec = find!(r)
       rec.update!(before)
-      # AgendaItem re-broadcasts via its own model callbacks; the other two need
-      # to be told, or the Chores/Events app keeps showing the edited values.
+      # AgendaItem and Chore re-broadcast via their own model callbacks; the
+      # other two need to be told, or the Chores/Events app keeps showing the
+      # edited values.
       case r[:model].to_s
       when "ActionEvent"
         ActionEventNotifier.notify(rec.user, rec, :changed, auth: :buddy, auth_id: rec.user_id)

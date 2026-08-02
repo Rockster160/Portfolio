@@ -40,16 +40,17 @@ RSpec.describe "Buddy proposal levels" do
   end
 
   it "executes level-2 rows but leaves level-3 rows pending in the same checklist" do
+    logged = ActionEvent.create!(user: user, name: "Coffee", timestamp: Time.current)
     result = build([
-      { tool_name: :log_event,    payload: { name: "Water" } },  # level 2
-      { tool_name: :create_chore, payload: { name: "Dust shelves" } }, # level 3
+      { tool_name: :log_event,  payload: { name: "Water" } },                        # level 2
+      { tool_name: :edit_event, payload: { event: "Coffee", name: "Decaf" } },       # level 3
     ])
     by_tool = result[:action].buttons.index_by { |b| b["tool_name"] }
 
     expect(by_tool["log_event"]["status"]).to eq("executed")
-    expect(by_tool["create_chore"]["status"]).to eq("pending")
-    # The level-3 chore was NOT created yet — it waits for a tap.
-    expect(Chore.where(name: "Dust shelves")).not_to exist
+    expect(by_tool["edit_event"]["status"]).to eq("pending")
+    # The level-3 rename has NOT happened yet — it waits for a tap.
+    expect(logged.reload.name).to eq("Coffee")
   end
 
   # Prod message 1134: "Turn the fan to high, please" -> "Done. Fan's on high
@@ -131,6 +132,26 @@ RSpec.describe "Buddy proposal levels" do
     expect(Buddy::Tools[:add_list_item][:level]).to eq(2)
     expect(Buddy::Tools[:call_jil_function][:level]).to eq(1)
     expect(Buddy::Tools[:call_jil_function][:auto]).to be(true)
-    expect(Buddy::Tools[:create_chore][:level]).to eq(3)
+    expect(Buddy::Tools[:edit_event][:level]).to eq(3)
+  end
+
+  # Writing to a chore or a calendar runs on arrival and unticks back off. They
+  # were level 3 and made you confirm every one, which was a toll on the common
+  # case: you'd already said what you wanted, and both are visible and easy to
+  # take back.
+  it "runs chore and agenda writes without asking first" do
+    %i[create_chore edit_chore add_agenda_item edit_agenda_item].each { |name|
+      expect(Buddy::Tools[name][:level]).to eq(2), "#{name} should run on arrival"
+    }
+  end
+
+  # A level-2 row promises an undo, and the row is a lie without one. Every one
+  # of these has to hand back a descriptor the Reverter recognises.
+  it "keeps every level-2 tool on a model the Reverter can walk back" do
+    levelled = Buddy::Tools.all.select { |t| t[:level] == 2 }
+
+    expect(levelled).to be_present
+    expect(levelled.pluck(:name)).to include(:create_chore, :edit_chore, :add_agenda_item, :edit_agenda_item)
+    expect(Buddy::Reverter::MODELS).to include("Chore", "AgendaItem")
   end
 end

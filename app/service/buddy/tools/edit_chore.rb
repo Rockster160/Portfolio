@@ -33,6 +33,10 @@ Buddy::Tools.register(
     diffs << (payload[:disabled] == "true" ? "archive" : "unarchive") if payload.key?(:disabled)
     { title: base, sub: diffs.join("\n").presence }
   },
+  # Level 2: the edit lands as a pre-checked row that unticks back off, since
+  # `before` below snapshots every field being written and Buddy::Reverter puts
+  # them back exactly.
+  level:       2,
   execute:     ->(payload, _ctx) {
     chore = Chore.find(payload[:chore_id])
     attrs = {}
@@ -42,8 +46,14 @@ Buddy::Tools.register(
     if payload.key?(:disabled)
       attrs[:archived_at] = payload[:disabled] == "true" ? Time.current : nil
     end
+    prior_name = chore.name
+    before     = attrs.keys.index_with { |k| chore.public_send(k) }  # old values, for undo
     chore.update!(attrs) unless attrs.empty?
-    { chore_id: chore.id, updated_fields: attrs.keys }
+    {
+      chore_id:       chore.id,
+      updated_fields: attrs.keys,
+      revert:         { op: "updated", model: "Chore", id: chore.id, before: before, summary: "reverted #{prior_name}" },
+    }
   },
   receipt:     ->(_result, ctx) {
     name = Chore.find_by(id: ctx.proposal["payload"]&.dig("chore_id"))&.name || "chore"

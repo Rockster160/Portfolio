@@ -44,11 +44,12 @@ RSpec.describe "Buddy action queue" do
   end
 
   # A gate: something that waits for a tap. Any level-3 tool does — what's being
-  # tested is the queue, not the chore. It used to be add_agenda_item, until
-  # agenda adds moved to level 2 and started running on arrival, at which point
-  # there was nothing left for the queue to hold.
-  def add_call(id, title)
-    { name: :create_chore, call_id: id, arguments: { "name" => title } }
+  # tested is the queue, not the event. Agenda and chore writes have both since
+  # moved to level 2 and run on arrival, so an edit to a logged event is the
+  # cheapest thing left that still waits on the person.
+  def gate_call(id, title)
+    ActionEvent.find_or_create_by!(user: user, name: title) { |e| e.timestamp = Time.current }
+    { name: :edit_event, call_id: id, arguments: { "event" => title, "notes" => "from #{id}" } }
   end
 
   def tell_call(id, message)
@@ -106,7 +107,7 @@ RSpec.describe "Buddy action queue" do
   end
 
   it "keeps two of them on one checklist rather than making them a chain" do
-    turn!("add shower and laundry", [add_call("c1", "Shower"), add_call("c2", "Laundry")])
+    turn!("add shower and laundry", [gate_call("c1", "Shower"), gate_call("c2", "Laundry")])
 
     expect(checklists.count).to eq(1)
     expect(checklists.first.buttons.pluck("label")).to eq(["Shower", "Laundry"])
@@ -119,7 +120,7 @@ RSpec.describe "Buddy action queue" do
 
     turn!(
       "answer the puppy prompt then put laundry on my agenda",
-      [answer_call("c1", prompt), add_call("c2", "Laundry")],
+      [answer_call("c1", prompt), gate_call("c2", "Laundry")],
     )
 
     expect(forms.count).to eq(1)
@@ -137,7 +138,7 @@ RSpec.describe "Buddy action queue" do
 
     turn!(
       "add laundry, then let's do that prompt",
-      [add_call("c1", "Laundry"), answer_call("c2", prompt)],
+      [gate_call("c1", "Laundry"), answer_call("c2", prompt)],
     )
 
     expect(forms).to be_empty
@@ -151,9 +152,9 @@ RSpec.describe "Buddy action queue" do
 
   it "walks a three-step chain one gate at a time" do
     turn!("add shower, tell Chelsea, then add laundry", [
-      add_call("c1", "Shower"),
+      gate_call("c1", "Shower"),
       tell_call("c2", "Shower's on the agenda."),
-      add_call("c3", "Laundry"),
+      gate_call("c3", "Laundry"),
     ])
 
     expect(checklists.count).to eq(1)
@@ -170,9 +171,9 @@ RSpec.describe "Buddy action queue" do
   it "carries the rest of the chain onto whatever it just posted" do
     prompt = prompt_for("Puppy Down")
     turn!("add shower, do the prompt, then add laundry", [
-      add_call("c1", "Shower"),
+      gate_call("c1", "Shower"),
       answer_call("c2", prompt),
-      add_call("c3", "Laundry"),
+      gate_call("c3", "Laundry"),
     ])
 
     # Gate 1 is the Shower checklist; the form and the second checklist wait.
@@ -223,7 +224,7 @@ RSpec.describe "Buddy action queue" do
     end
 
     it "posts a checklist held behind a wait only once the wait is over" do
-      turn!("wait a minute then add laundry", [wait_call("c1", 60), add_call("c2", "Laundry")])
+      turn!("wait a minute then add laundry", [wait_call("c1", 60), gate_call("c2", "Laundry")])
 
       expect(checklists).to be_empty
 
@@ -308,7 +309,7 @@ RSpec.describe "Buddy action queue" do
 
   it "never advances on its own — an untouched gate leaves the rest unposted" do
     prompt = prompt_for("Puppy Down")
-    turn!("laundry then the prompt", [add_call("c1", "Laundry"), answer_call("c2", prompt)])
+    turn!("laundry then the prompt", [gate_call("c1", "Laundry"), answer_call("c2", prompt)])
 
     expect(forms).to be_empty
     expect(checklists.first).to be_pending
@@ -316,7 +317,7 @@ RSpec.describe "Buddy action queue" do
 
   it "says what it held back when the gate is declined outright" do
     prompt = prompt_for("Puppy Down")
-    turn!("laundry then the prompt", [add_call("c1", "Laundry"), answer_call("c2", prompt)])
+    turn!("laundry then the prompt", [gate_call("c1", "Laundry"), answer_call("c2", prompt)])
     allow(Buddy::Tools).to receive(:dispatch).and_return({ ok: false, error: "nope" })
 
     Buddy::ProposalExecutor.perform(checklists.first.id, [1])
@@ -345,7 +346,7 @@ RSpec.describe "Buddy action queue" do
 
   it "tells the model a chained gate is next in line, not waiting on them" do
     prompt = prompt_for("Puppy Down")
-    client = turn!("the prompt, then laundry", [answer_call("c1", prompt), add_call("c2", "Laundry")])
+    client = turn!("the prompt, then laundry", [answer_call("c1", prompt), gate_call("c2", "Laundry")])
 
     outputs = client.calls.last.input.select { |i| i[:type] == :function_call_output }
     chained = JSON.parse(outputs.find { |o| o[:call_id] == "c2" }[:output])
@@ -357,7 +358,7 @@ RSpec.describe "Buddy action queue" do
   # ---- rows written before the queue understood steps ---------------------
 
   it "still fires a queue stored in the old flat shape" do
-    turn!("move it and tell her", [add_call("c1", "Costco Run"), tell_call("c2", "Moved it.")])
+    turn!("move it and tell her", [gate_call("c1", "Costco Run"), tell_call("c2", "Moved it.")])
     action = checklists.first
     flat   = action.tool_input["deferred"].flat_map { |step| step["calls"] }
     action.update!(tool_input: { "deferred" => flat })

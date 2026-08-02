@@ -85,6 +85,10 @@ Buddy::Tools.register(
     end
     { title: payload[:name].to_s, sub: subs.join(" · ").presence }
   },
+  # Level 2: the chore exists the moment it's proposed, as a pre-checked row
+  # that unticks back off. They'd already said they wanted it, and a chore is
+  # visible and reversible, so a confirmation tap was a toll on the common case.
+  level:       2,
   execute:     ->(payload, ctx) {
     household = ctx.user.chore_household
     raise "no chore household on user" if household.nil?
@@ -105,7 +109,13 @@ Buddy::Tools.register(
       parent_chore_id:     payload[:parent_chore_id],
       marked_due_at:       (Time.zone.parse(payload[:marked_due_at_iso].to_s) if payload[:marked_due_at_iso].present?),
     )
-    { chore_id: chore.id }
+    {
+      chore_id: chore.id,
+      # Unticking the row archives it — see Buddy::Reverter. Not a destroy: a
+      # chore owns its completion history, and undoing "you just made this"
+      # mustn't take that with it.
+      revert:   { op: "created", model: "Chore", id: chore.id, summary: "removed #{chore.name}" },
+    }
   },
   receipt:     ->(result, _ctx) {
     chore = Chore.find_by(id: result[:chore_id])

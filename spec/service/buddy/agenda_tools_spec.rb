@@ -160,6 +160,26 @@ RSpec.describe "Buddy agenda tools" do
 
       expect(AgendaItem.find_by(name: "Shower")).to be_cancelled
     end
+
+    it "puts an edit back the way it was" do
+      item = personal.agenda_items.create!(
+        name: "Costco Run", start_at: at, end_at: at + 30.minutes, kind: :event, status: :confirmed,
+      )
+      msg = convo.byte_messages.create!(
+        user: user, direction: :inbound, state: :delivered, body: "ok", delivered_at: Time.current,
+      )
+      result = Buddy::ProposalBuilder.create(
+        user:         user,
+        byte_message: msg,
+        markers:      [{ tool_name: :edit_agenda_item, payload: { item: "Costco Run", title: "Costco Trip" } }],
+      )
+      expect(item.reload.name).to eq("Costco Trip")
+
+      action = result[:action]
+      Buddy::ProposalExecutor.undo!(action.id, action.buttons.first["id"])
+
+      expect(item.reload.name).to eq("Costco Run")
+    end
   end
 
   describe "add_agenda_item when the thing already exists" do

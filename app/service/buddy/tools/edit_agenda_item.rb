@@ -60,6 +60,10 @@ Buddy::Tools.register(
     diffs << "cancel" if payload[:cancelled] == "true"
     { title: base, sub: diffs.join("\n").presence }
   },
+  # Level 2, like the add: the change lands as a pre-checked row that unticks
+  # back off. `before` below snapshots every field being written, so the undo
+  # restores exactly what was there.
+  level:       2,
   execute:     ->(payload, ctx) {
     item = AgendaItem.find(payload[:agenda_item_id])
     attrs = {}

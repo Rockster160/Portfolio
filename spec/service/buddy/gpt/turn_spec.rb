@@ -709,8 +709,9 @@ RSpec.describe Buddy::GPT::Turn do
     end
 
     it "tells the model a pending proposal has NOT happened yet" do
+      ActionEvent.create!(user: user, name: "Mow", timestamp: Time.current)
       client = run([
-        { text: "", tool_calls: [{ name: :create_chore, arguments: { "name" => "Mow" } }] },
+        { text: "", tool_calls: [{ name: :edit_event, arguments: { "event" => "Mow", "notes" => "front yard" } }] },
         { text: "Want me to set that up?" },
       ])
 
@@ -811,8 +812,9 @@ RSpec.describe Buddy::GPT::Turn do
   # used to be dropped in silence under prose that had already claimed credit.
   describe "resolving the call before the model speaks" do
     it "hands back the resolved summary when the tool lines up" do
+      ActionEvent.create!(user: user, name: "Dust shelves", timestamp: Time.current)
       client = run([
-        { tool_calls: [{ name: :create_chore, arguments: { "name" => "Dust shelves" } }] },
+        { tool_calls: [{ name: :edit_event, arguments: { "event" => "Dust shelves", "notes" => "hallway" } }] },
         { text: "Here you go:" },
       ])
 
@@ -898,12 +900,14 @@ RSpec.describe Buddy::GPT::Turn do
     end
 
     it "resolves without executing, so nothing lands until the checklist runs" do
+      logged = ActionEvent.create!(user: user, name: "Untouched", timestamp: Time.current)
+
       run([
-        { tool_calls: [{ name: :create_chore, arguments: { "name" => "Never actually created" } }] },
+        { tool_calls: [{ name: :edit_event, arguments: { "event" => "Untouched", "name" => "Renamed" } }] },
         { text: "Tap when you're ready." },
       ])
 
-      expect(Chore.where(name: "Never actually created")).not_to exist
+      expect(logged.reload.name).to eq("Untouched")
     end
   end
 
