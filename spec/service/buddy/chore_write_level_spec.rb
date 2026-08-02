@@ -88,4 +88,81 @@ RSpec.describe "Buddy chore writes" do
       expect(chore.reload).not_to be_archived
     end
   end
+
+  # Moving when a chore is next due, without touching how often it repeats.
+  #
+  # The date is the whole difficulty. A bare "2026-08-05" parsed in Time.zone
+  # (UTC app-wide) is 6pm on the 4th locally, and the chore day runs 4am to 4am
+  # — so both the zone and the rollover push a naive parse into the day before.
+  # Every example fixes the clock where those disagree.
+  describe "setting when one is next due" do
+    let(:zone)   { ActiveSupport::TimeZone["America/Denver"] }
+    let(:now)    { zone.local(2026, 8, 2, 9, 0) }
+    let!(:chore) { create(:chore, name: "Vacuum", created_by_user: user) }
+
+    def due_day_after(payload)
+      Timecop.freeze(now) { propose!({ tool_name: :edit_chore, payload: payload }) }
+      ChoreDay.current(user, at: chore.reload.marked_due_at)
+    end
+
+    it "lands on the day they named, not the evening before it" do
+      expect(due_day_after({ chore: "Vacuum", due: "2026-08-05" })).to eq(Date.new(2026, 8, 5))
+    end
+
+    it "keeps the hour when one is actually given" do
+      Timecop.freeze(now) {
+        propose!({ tool_name: :edit_chore, payload: { chore: "Vacuum", due: "2026-08-05T18:30:00-06:00" } })
+      }
+
+      expect(chore.reload.marked_due_at.in_time_zone(zone).hour).to eq(18)
+    end
+
+    it "leaves the recurrence alone — a due date is a one-off, not a schedule" do
+      before_rec = chore.recurrence
+
+      Timecop.freeze(now) { propose!({ tool_name: :edit_chore, payload: { chore: "Vacuum", due: "2026-08-05" } }) }
+
+      expect(chore.reload.recurrence).to eq(before_rec)
+    end
+
+    it "clears one on request" do
+      chore.update!(marked_due_at: now)
+
+      Timecop.freeze(now) { propose!({ tool_name: :edit_chore, payload: { chore: "Vacuum", due: "none" } }) }
+
+      expect(chore.reload.marked_due_at).to be_nil
+    end
+
+    it "puts the old due date back when unticked" do
+      chore.update!(marked_due_at: zone.local(2026, 8, 10, 4, 0))
+      result = Timecop.freeze(now) {
+        propose!({ tool_name: :edit_chore, payload: { chore: "Vacuum", due: "2026-08-05" } })
+      }
+
+      untick!(result)
+
+      expect(ChoreDay.current(user, at: chore.reload.marked_due_at)).to eq(Date.new(2026, 8, 10))
+    end
+
+    # Silently not moving it is the bad outcome: they'd be told it was done.
+    it "refuses a date it can't read rather than quietly doing nothing" do
+      ctx = Buddy::ToolContext.new(user)
+
+      expect { Buddy::Tools[:edit_chore][:confirm].call({ chore: "Vacuum", due: "sometime-ish" }, ctx) }
+        .to raise_error(/couldn't read/i)
+    end
+  end
+
+  describe "a due date given at creation" do
+    it "lands on the day they named" do
+      zone = ActiveSupport::TimeZone["America/Denver"]
+
+      Timecop.freeze(zone.local(2026, 8, 2, 9, 0)) {
+        propose!({ tool_name: :create_chore, payload: { name: "Water plants", due: "2026-08-05" } })
+      }
+
+      chore = household.chores.find_by(name: "Water plants")
+      expect(ChoreDay.current(user, at: chore.marked_due_at)).to eq(Date.new(2026, 8, 5))
+    end
+  end
 end

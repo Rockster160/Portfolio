@@ -26,7 +26,7 @@ Buddy::Tools.register(
     reward:   { type: :integer, required: false, description: "Pebble reward; omit to auto-guess" },
     parent:   { type: :string, required: false, description: "Parent chore name to nest this under" },
     after:    { type: :string, required: false, description: "Chore this one follows (dependency)" },
-    due:      { type: :string, required: false, description: "When it's first due (date/relative)" },
+    due:      { type: :string, required: false, description: "When it's first due - YYYY-MM-DD (from the local date in RIGHT NOW) or an ISO datetime" },
     one_off:  { type: :string, required: false, description: "Pass 'true' for a one-off chore" },
   },
   confirm:     ->(payload, ctx) {
@@ -55,7 +55,11 @@ Buddy::Tools.register(
     # the name doesn't score a confident match.
     icon = IconPool.best_match_value(payload[:name], for_household: household).presence || "📋"
 
-    due_at = (Time.zone.parse(payload[:due].to_s) rescue nil) if payload[:due].present?
+    # Through resolve_due, not Time.zone.parse: a bare date parsed in the
+    # app-wide UTC zone is the previous evening locally, and the chore day runs
+    # 4am to 4am, so either way the chore came out due a day early.
+    due_at = ctx.resolve_due(payload[:due]) if payload[:due].present?
+    due_at = nil if due_at == :clear
 
     {
       summary:  "Add new chore: #{payload[:name]}?",

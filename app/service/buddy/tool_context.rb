@@ -304,6 +304,40 @@ module Buddy
       nil
     end
 
+    # An explicit offset is authoritative; without one the string is their wall
+    # clock, not the server's.
+    HAS_OFFSET_RX = /[zZ]\z|[+-]\d{2}:?\d{2}\z/
+    DATE_ONLY_RX  = /\A\d{4}-\d{2}-\d{2}\z/
+    # What "no due date" looks like coming from the model.
+    CLEAR_DUE     = %w[none clear never off null].freeze
+
+    # A chore due DATE, as an instant inside the chore-day it names. Returns
+    # :clear to unset one, or nil when there's nothing usable.
+    #
+    # Two traps here, and a bare date walks into both. Parsed in Time.zone
+    # (UTC app-wide) "2026-08-05" is 6pm the previous evening locally — and the
+    # chore day runs 4am to 4am, so even local midnight falls in the day BEFORE.
+    # Either one marks a chore due a day early. A date on its own is therefore
+    # anchored to the start of its chore day; anything naming a real clock time
+    # is kept as the instant it names.
+    def resolve_due(text)
+      str = text.to_s.strip
+      return nil if str.empty?
+      return :clear if CLEAR_DUE.include?(str.downcase)
+
+      time = parse_in_zone(str)
+      return nil if time.nil?
+      return time unless str.match?(DATE_ONLY_RX)
+
+      ChoreDay.starts_at(time.to_date, user)
+    end
+
+    def parse_in_zone(str)
+      str.match?(HAS_OFFSET_RX) ? Time.zone.parse(str) : Buddy::Day.zone(user).parse(str)
+    rescue ArgumentError
+      nil
+    end
+
     # Friendly future phrasing for a receipt/confirmation, in the user's zone:
     #   today            → "at 6:01pm"
     #   tomorrow         → "tomorrow at 6:01pm"

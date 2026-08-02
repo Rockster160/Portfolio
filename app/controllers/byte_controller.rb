@@ -473,7 +473,7 @@ class ByteController < ApplicationController
   # the page dispatches Bash/Claude to the owner's Mac, so it is
   # deliberately not a general-user surface.
   def byte_accessible?
-    current_user&.me? || current_user&.chelsea?
+    current_user&.me? || current_user&.chelsea? || current_user&.eve?
   end
 
   # Non-owner household members get Buddy ONLY. claude/bash/jarvis modes

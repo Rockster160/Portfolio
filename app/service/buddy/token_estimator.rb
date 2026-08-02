@@ -24,28 +24,29 @@ module Buddy
     IMAGE_TOKENS = 1_100
 
     # Fixed per-turn cost of everything that is not conversation history.
-    # Measured 2026-07-31 with the byte theme:
+    # Measured 2026-08-02 with the byte theme:
     #
-    #   persona (byte.md)  ~1,895
+    #   persona (byte.md)  ~1,875
     #   tone profile       ~3,050
-    #   RULES_APPENDIX    ~12,380
-    #   context guide      ~3,100
-    #   framing + glance     ~120
+    #   RULES_APPENDIX    ~12,395
+    #   context guide      ~3,160
+    #   framing + glance     ~410
     #   ---------------------------
-    #   prompt total      ~20,545
-    #   tool schemas      ~17,000   (40 proposal + 5 silent + get_context,
-    #                                read_prompt, view_image, read_listener_guide;
-    #                                remind_when is ~1,415 for the custom-listener
-    #                                trigger, and all three ask_partner tools grew
-    #                                the await/var pair that lets a sequence wait
-    #                                on a reply)
+    #   prompt total      ~20,890
+    #   tool schemas      ~14,985
     #   ===========================
-    #   TOTAL             ~37,545
+    #   TOTAL             ~35,875
     #
-    # Re-measure if the rules, tone profile, or tool count change materially:
-    #   Buddy::Personality::RULES_APPENDIX.bytesize / 4
-    #   JSON.generate(tool_schemas).bytesize / 4
-    FIXED_OVERHEAD = 37_545
+    # The schema half had drifted ~2,000 high: it was last written down as an
+    # estimate rather than a measurement, and the number carried forward through
+    # several rounds of tool edits. Reading high only makes compaction fire
+    # early, which is why nothing surfaced it.
+    #
+    # Re-measure if the rules, tone profile, or tool count change materially —
+    # against a user who has every feature, since the schemas are gated:
+    #   Buddy::Personality.for(user, conversation: c).bytesize / 4
+    #   JSON.generate(Buddy::Tools.function_schemas(user: user)).bytesize / 4
+    FIXED_OVERHEAD = 35_875
 
     def estimate_for(conversation)
       compact_at   = compact_timestamp(conversation)
