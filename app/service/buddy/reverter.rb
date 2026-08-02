@@ -19,10 +19,21 @@ module Buddy
     MODELS = {
       "ActionEvent"     => "ActionEvent",
       "AgendaItem"      => "AgendaItem",
+      "BuddyIdea"       => "BuddyIdea",
       "Chore"           => "Chore",
       "ChoreCompletion" => "ChoreCompletion",
       "ChoreWithdrawal" => "ChoreWithdrawal",
       "ListItem"        => "ListItem",
+    }.freeze
+
+    # Models where undoing a create HIDES the row instead of deleting it, and
+    # the columns that hiding moved. Putting one back is a flip of those
+    # columns, so `inverse` hands out an `updated` descriptor rather than a
+    # `recreated` one - re-creating would leave the hidden original sitting
+    # next to a fresh duplicate.
+    SOFT_CREATE_UNDO = {
+      "BuddyIdea" => %w[status],
+      "Chore"     => %w[archived_at],
     }.freeze
 
     def reversible?(revert)
@@ -63,11 +74,23 @@ module Buddy
       rec = klass(r[:model]).find_by(id: r[:id])
       return nil if rec.nil?
 
+      summary = "put #{r[:summary].to_s.sub(/\Aunmarked\s+/i, "").presence || "it"} back"
+      soft    = SOFT_CREATE_UNDO[r[:model].to_s]
+      if soft
+        return {
+          "op"      => "updated",
+          "model"   => r[:model].to_s,
+          "id"      => rec.id,
+          "before"  => rec.attributes.slice(*soft),
+          "summary" => summary,
+        }
+      end
+
       {
         "op"      => "recreated",
         "model"   => r[:model].to_s,
         "attrs"   => restorable_attrs(rec),
-        "summary" => "put #{r[:summary].to_s.sub(/\Aunmarked\s+/i, "").presence || "it"} back",
+        "summary" => summary,
       }
     end
 
@@ -107,6 +130,10 @@ module Buddy
         rec.destroy!
         ActionEventNotifier.notify(rec.user, rec, :removed, auth: :buddy, auth_id: rec.user_id)
       when "AgendaItem"      then rec.update!(status: :cancelled, cancelled_at: Time.current)
+      # Dropped, not destroyed. "I didn't mean that" is the same gesture as
+      # telling Buddy to forget one, and it lands the same way - out of the
+      # pool, off the prompt, still there if the undo gets undone.
+      when "BuddyIdea"       then rec.update!(status: :dropped)
       # Archived, not destroyed. A chore owns its completions and its streak
       # history, and undoing "you just made this" must not take a month of
       # someone's record with it. Archiving is also what the Chores app itself

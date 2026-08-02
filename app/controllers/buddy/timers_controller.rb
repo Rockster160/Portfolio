@@ -48,7 +48,7 @@ module Buddy
     private
 
     def authorize_owner
-      head :forbidden unless current_user&.me? || current_user&.chelsea?
+      head :forbidden unless current_user&.byte_access?
     end
 
     # Only Buddy's own timers are reachable here - a regular board timer id 404s.

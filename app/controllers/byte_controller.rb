@@ -469,11 +469,9 @@ class ByteController < ApplicationController
     head :forbidden unless byte_accessible?
   end
 
-  # Who may open Byte at all: the owner (Rocco) and Chelsea. No one else —
-  # the page dispatches Bash/Claude to the owner's Mac, so it is
-  # deliberately not a general-user surface.
+  # See User#byte_access?, which the hero's own controllers share.
   def byte_accessible?
-    current_user&.me? || current_user&.chelsea? || current_user&.eve?
+    current_user&.byte_access?
   end
 
   # Non-owner household members get Buddy ONLY. claude/bash/jarvis modes

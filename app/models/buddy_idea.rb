@@ -43,4 +43,17 @@ class BuddyIdea < ApplicationRecord
   def category_label
     CATEGORY_LABELS[category] || "Unsorted"
   end
+
+  # How long this has been sitting, at the resolution that matters for
+  # something measured in days rather than minutes. Buddy weighs it when
+  # deciding which held item has the most claim on a lull.
+  def waiting_label(now=Date.current)
+    days = (now - created_at.to_date).to_i
+    case days
+    when ..0   then "today"
+    when 1     then "since yesterday"
+    when 2..13 then "#{days} days"
+    else            "#{days / 7} weeks"
+    end
+  end
 end

@@ -39,7 +39,7 @@ module Buddy
     private
 
     def authorize_owner
-      head :forbidden unless current_user&.me? || current_user&.chelsea?
+      head :forbidden unless current_user&.byte_access?
     end
 
     # Prompts are DELIBERATELY tiny. Long structural instructions turn

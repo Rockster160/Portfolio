@@ -26,27 +26,32 @@ module Buddy
     # Fixed per-turn cost of everything that is not conversation history.
     # Measured 2026-08-02 with the byte theme:
     #
-    #   persona (byte.md)  ~1,875
-    #   tone profile       ~3,050
-    #   RULES_APPENDIX    ~12,395
-    #   context guide      ~3,160
+    #   persona (byte.md)  ~1,873
+    #   tone profile       ~3,048
+    #   RULES_APPENDIX    ~13,030
+    #   context guide      ~3,180
     #   framing + glance     ~410
     #   ---------------------------
-    #   prompt total      ~20,890
-    #   tool schemas      ~14,985
+    #   prompt total      ~21,541
+    #   tool schemas      ~17,628
     #   ===========================
-    #   TOTAL             ~35,875
+    #   TOTAL             ~39,169
     #
-    # The schema half had drifted ~2,000 high: it was last written down as an
-    # estimate rather than a measurement, and the number carried forward through
-    # several rounds of tool edits. Reading high only makes compaction fire
-    # early, which is why nothing surfaced it.
+    # The schema half was reading ~2,200 LOW because the recipe below used to
+    # measure `Buddy::Tools.function_schemas` alone. That's the registry, which
+    # is most of the list but not the list: get_context, read_prompt,
+    # view_image, read_listener_guide and the five side effects are assembled
+    # separately in Buddy::GPT::Turn#tools and ship on every turn too.
+    #
+    # Not counted, because they're per-person and start at zero: durable
+    # memories, this thread's notes, and the held-items block.
     #
     # Re-measure if the rules, tone profile, or tool count change materially —
-    # against a user who has every feature, since the schemas are gated:
+    # against a user who has every feature, since the schemas are gated. Take
+    # the tool array from Turn#tools rather than the registry:
     #   Buddy::Personality.for(user, conversation: c).bytesize / 4
-    #   JSON.generate(Buddy::Tools.function_schemas(user: user)).bytesize / 4
-    FIXED_OVERHEAD = 35_875
+    #   JSON.generate(turn_tools).bytesize / 4
+    FIXED_OVERHEAD = 39_170
 
     def estimate_for(conversation)
       compact_at   = compact_timestamp(conversation)

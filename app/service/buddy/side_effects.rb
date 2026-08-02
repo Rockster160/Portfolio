@@ -164,7 +164,13 @@ module Buddy
       existing = find_similar_memory(user, fact)
       if existing
         existing.reinforce!
-        existing.update_columns(expires_at: ttl, updated_at: Time.current) if ttl
+        attrs = {}
+        # A re-mention that SPELLS OUT the one we hold replaces it. "Ryker plays
+        # soccer" reinforced by "Ryker plays soccer Tuesdays at 4" should leave
+        # us holding the useful one, not the stub plus a bumped counter.
+        attrs[:content]    = fact.first(500) if elaborates?(fact, existing.content)
+        attrs[:expires_at] = ttl if ttl
+        existing.update_columns(attrs.merge(updated_at: Time.current)) if attrs.any?
         return
       end
 
@@ -208,17 +214,85 @@ module Buddy
       Buddy::Day.range(user, date: Buddy::Day.today(user) + offset).last
     end
 
-    # An active memory that's effectively the same fact - exact (normalized)
-    # match, or one clearly contains the other. Conservative on purpose: only
-    # obvious re-mentions reinforce; anything novel becomes its own row.
+    # An active memory that's effectively the same fact. Three ways to be the
+    # same: identical once normalized, one string containing the other, or the
+    # two carrying essentially the same significant words.
+    #
+    # That third test is what makes reinforcement work on a person who thinks
+    # out loud. Substring matching only ever fires on a near-verbatim repeat,
+    # and nobody repeats themselves verbatim - "Ryker has soccer Tuesdays" and
+    # "Roo's soccer is on a Tuesday" are one fact said twice, and under
+    # containment alone they became two rows, each at priority zero, competing
+    # for the same recall slots. The fact got said MORE and remembered LESS.
     def find_similar_memory(user, fact)
-      norm = fact.to_s.downcase.gsub(/\s+/, " ").strip
+      norm = normalize_fact(fact)
       return nil if norm.length < 8
 
+      words = significant_words(norm)
       BuddyMemory.where(user: user).active.find { |m|
-        other = m.content.to_s.downcase.gsub(/\s+/, " ").strip
-        other == norm || other.include?(norm) || norm.include?(other)
+        other = normalize_fact(m.content)
+        next true if other == norm || other.include?(norm) || norm.include?(other)
+
+        overlaps?(words, significant_words(other))
       }
+    end
+
+    def normalize_fact(text)
+      text.to_s.downcase.gsub(/\s+/, " ").strip
+    end
+
+    # The new wording says everything the old one did and then some. Strict
+    # containment only - a reworded fact of similar length is a re-mention, not
+    # an upgrade, and swapping it in would churn the memory for nothing.
+    def elaborates?(fact, held)
+      fresh = normalize_fact(fact)
+      prior = normalize_fact(held)
+      fresh.length > prior.length && fresh.include?(prior)
+    end
+
+    # Words that carry the fact. Stripped of punctuation and of the connective
+    # tissue two phrasings of one fact won't share anyway.
+    STOP_WORDS = <<~WORDS.split.to_set.freeze
+      a an and are as at be been but by does do for from get gets going had has have her
+      him his how i if in into is it its like me my of on or our she that the their them
+      they this to too up us was we were what when where which who will with you your
+    WORDS
+
+    def significant_words(norm)
+      norm.scan(/[a-z0-9']+/).filter_map { |raw|
+        word = stem(raw)
+        word if word.length >= 3 && STOP_WORDS.exclude?(word) && STOP_WORDS.exclude?(raw)
+      }.to_set
+    end
+
+    # Enough of a stemmer to survive the two ways one fact gets typed twice:
+    # a possessive ("Ryker's soccer" vs "Ryker has soccer") and a plural
+    # ("Tuesdays" vs "Tuesday"). Lossy, and knowingly so - it's applied to both
+    # sides of every comparison, so a mangled stem still matches its own twin.
+    # `ss` is left alone or "glass" and "glas" would be the same word.
+    def stem(word)
+      base = word.delete("'")
+      base.length > 3 && base.end_with?("s") && !base.end_with?("ss") ? base[0..-2] : base
+    end
+
+    # Same fact if nearly all of the shorter one's meaningful words appear in
+    # the longer. Measured against the SHORTER side so a terse re-mention still
+    # matches the fuller original it's re-stating.
+    #
+    # 0.8 with a floor of two shared words: high enough that "Ryker plays
+    # soccer" and "Ryker plays piano" stay separate facts, low enough to
+    # absorb a rewording. When it does get it wrong the cost is asymmetric and
+    # small - a reinforced near-miss keeps a true fact near the top of recall,
+    # where a missed match silently buries one.
+    OVERLAP_RATIO = 0.8
+    MIN_SHARED    = 2
+
+    def overlaps?(left, right)
+      smaller = [left.size, right.size].min
+      return false if smaller < MIN_SHARED
+
+      shared = (left & right).size
+      shared >= MIN_SHARED && shared >= (smaller * OVERLAP_RATIO)
     end
 
     # `[[forget: <substring or id>]]` — prunes matching memory rows. If

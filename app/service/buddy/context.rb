@@ -605,13 +605,22 @@ module Buddy
 
       # Brain-dump ideas the person stashed, eligible to resurface now (active,
       # or a defer whose remind_after has passed). Grouped so Today / What now
-      # can pull one from the relevant bucket. Each: { id, category, idea }
-      # where `idea` is the summary if Buddy sorted it, else the raw body.
+      # can pull one from the relevant bucket. Each: { id, category, idea,
+      # waiting } where `idea` is the summary if Buddy sorted it, else the raw
+      # body, and `waiting` is how long it's been sitting.
+      #
+      # Oldest first: this list is what keeps a loose end from going quietly
+      # missing, so the one at most risk of that goes at the top.
       def stashed_ideas(user)
         return [] unless user.respond_to?(:buddy_ideas)
 
-        user.buddy_ideas.surfaceable.order(surfaced_at: :asc, created_at: :asc).limit(12).map { |i|
-          { id: i.id, category: i.category, idea: i.summary.presence || i.body.to_s.first(140) }
+        user.buddy_ideas.surfaceable.order(created_at: :asc).limit(12).map { |i|
+          {
+            id:       i.id,
+            category: i.category,
+            idea:     i.summary.presence || i.body.to_s.first(140),
+            waiting:  i.waiting_label,
+          }
         }
       rescue StandardError => e
         Buddy::Errors.report(section: "context.stashed_ideas", exception: e, user: user)

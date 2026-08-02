@@ -54,6 +54,41 @@ RSpec.describe "BuddyMemory lifecycle" do
     end
   end
 
+  # Reinforcement has to survive being said DIFFERENTLY, or it never fires for
+  # someone who thinks out loud - nobody repeats themselves word for word, and
+  # a fact re-mentioned five ways used to become five rows at priority zero.
+  describe "reinforcement across rewordings" do
+    it "bumps the fact we hold when the same thing is said another way" do
+      remember("Ryker has soccer on Tuesdays")
+      held = BuddyMemory.last
+
+      expect { remember("Ryker's soccer is on a Tuesday") }.not_to change { BuddyMemory.count }
+      expect(held.reload.priority).to eq(1)
+      expect(held.content).to eq("Ryker has soccer on Tuesdays") # reinforced, not churned
+    end
+
+    it "keeps two facts about one subject apart" do
+      remember("Ryker plays soccer")
+
+      expect { remember("Ryker plays piano") }.to change { BuddyMemory.count }.by(1)
+    end
+
+    it "takes the fuller wording when a re-mention spells the fact out" do
+      remember("Ryker has soccer")
+      held = BuddyMemory.last
+
+      expect { remember("Ryker has soccer on Tuesdays at 4") }.not_to change { BuddyMemory.count }
+      expect(held.reload.content).to eq("Ryker has soccer on Tuesdays at 4")
+      expect(held.priority).to eq(1)
+    end
+
+    it "doesn't collapse two facts that only share filler words" do
+      remember("Eve is going to the shop")
+
+      expect { remember("Eve is going to the doctor") }.to change { BuddyMemory.count }.by(1)
+    end
+  end
+
   describe BuddyMemoryPruneWorker do
     it "deletes expired memories but keeps durable ones" do
       expired = BuddyMemory.create!(user: user, content: "gone", expires_at: 1.minute.ago)

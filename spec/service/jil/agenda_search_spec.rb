@@ -204,6 +204,24 @@ RSpec.describe Jil::Methods::Agenda, "#search" do
     end
   end
 
+  it "excludes cancelled (archived/deleted) items" do
+    live = create(
+      :agenda_item, agenda: agenda, kind: :event, name: "Live Meeting",
+      start_at: 1.hour.from_now, end_at: 2.hours.from_now
+    )
+    create(
+      :agenda_item, agenda: agenda, kind: :event, name: "Deleted Meeting",
+      start_at: 1.hour.from_now, end_at: 2.hours.from_now, status: :cancelled,
+      cancelled_at: Time.current
+    )
+
+    results = methods.search("kind:event is:upcoming is:visible", 100, "ASC")
+    names = results.map { |h| h[:name] }
+    expect(names).to include("Live Meeting")
+    expect(names).not_to include("Deleted Meeting")
+    expect(results.pluck(:id)).to include(live.id.to_s)
+  end
+
   it "does NOT include phantoms when the query has no future-leaning is: token" do
     Timecop.freeze(Time.utc(2026, 5, 14, 13, 0)) {
       phantom_only(create(

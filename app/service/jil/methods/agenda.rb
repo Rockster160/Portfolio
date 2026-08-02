@@ -115,7 +115,7 @@ class Jil::Methods::Agenda < Jil::Methods::Base
     # `relation.query(...)` uses `search_scope.where(...)` internally and
     # therefore drops any pre-applied scoping (see ApplicationRecord#query).
     # Apply user scoping AFTER the query — mirrors the Email Jil method.
-    scope = ::AgendaItem.query(query_for_db).where(agenda_id: user_agenda_ids)
+    scope = ::AgendaItem.query(query_for_db).not_cancelled.where(agenda_id: user_agenda_ids)
     scope = apply_hidden_scope_sql(scope, hidden_filter)
     real_items = scope.order(start_at: order_sym).limit(capped).to_a
 
@@ -135,7 +135,7 @@ class Jil::Methods::Agenda < Jil::Methods::Base
 
     materialize_overdue_phantoms_for_today!(agendas: [a])
     query_for_db, hidden_filter = split_hidden_state(query)
-    scope = ::AgendaItem.query(query_for_db).where(agenda_id: a.id)
+    scope = ::AgendaItem.query(query_for_db).not_cancelled.where(agenda_id: a.id)
     scope = apply_hidden_scope_sql(scope, hidden_filter)
     apply_search_args(scope, limit, order).map(&:serialize)
   end

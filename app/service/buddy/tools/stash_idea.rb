@@ -1,0 +1,69 @@
+Buddy::Tools.register(
+  name:        :stash_idea,
+  description: <<~TXT,
+    Hold onto something that came up in passing so it can't get lost - a thing
+    they need to do, an idea, a worry, a follow-up they'd be annoyed to have
+    forgotten. This is the catch-all for anything with no better home: no clock
+    time (that's an agenda item), nothing to buy or tick off a list (that's a
+    list item). When someone is thinking out loud and several loose ends land in
+    one message, that is several calls - one per thing. Keep `idea` close to
+    their own words; `summary` is your own short label for it, and `category`
+    files it under me (personal), home (household/family), or work. This CREATES
+    a new held item - to file or relabel one that's already stashed, use
+    sort_stash instead.
+  TXT
+  args:        {
+    idea:     { type: :string, required: true,  description: "The thing to hold onto, in their words" },
+    category: { type: :enum,   required: false, values: %i[me home work], description: "Which bucket it belongs in" },
+    summary:  { type: :string, required: false, description: "Your own 3-6 word label for it" },
+  },
+  confirm:     ->(payload, _ctx) {
+    idea = payload[:idea].to_s.strip
+    raise "nothing to hold onto" if idea.empty?
+
+    { summary: "Hold onto #{idea}?", resolved: { idea: idea } }
+  },
+  label:       ->(payload, _ctx) {
+    bucket = BuddyIdea::CATEGORY_LABELS[payload[:category].to_s]
+    { title: "📥 #{payload[:summary].presence || payload[:idea]}", sub: bucket }
+  },
+  # Two dumps of the same thought in one turn is one thing to hold, not two.
+  merge_key:   ->(payload) { "stash_idea:#{payload[:idea].to_s.downcase.strip}" },
+  # "no, file that under work" is a correction of what was just caught, so the
+  # first row retires rather than leaving two copies of one thought.
+  supersedes:  true,
+  # Level 2: held the moment it's said, as a pre-checked row. The row doubles as
+  # the read-back of what was caught, and unchecking it means "that's not a
+  # thing, let it go".
+  level:       2,
+  # The whole value is the wording of one particular thought, so replaying it
+  # weeks later inside a routine would just re-stash a stale idea.
+  routinable:  false,
+  execute:     ->(payload, ctx) {
+    body     = payload[:idea].to_s.strip
+    category = (payload[:category].to_s if BuddyIdea.categories.key?(payload[:category].to_s))
+
+    # Saying the same thing twice is one thing to hold, whether the two came in
+    # the same breath or three days apart - and someone who talks to empty their
+    # head circles the same loose end constantly. A second telling fills in
+    # whatever the first one didn't carry rather than starting a second pile.
+    held = ctx.user.buddy_ideas.live.where("LOWER(body) = ?", body.downcase).first
+    if held
+      held.update!(category: held.category || category, summary: held.summary.presence || payload[:summary].presence)
+      return { idea_id: held.id, label: held.summary.presence || held.body }
+    end
+
+    idea = ctx.user.buddy_ideas.create!(
+      body:     body,
+      summary:  payload[:summary].presence,
+      category: category,
+      status:   :active,
+    )
+    {
+      idea_id: idea.id,
+      label:   idea.summary.presence || idea.body,
+      revert:  { op: "created", model: "BuddyIdea", id: idea.id, summary: "let go of that one" },
+    }
+  },
+  receipt:     ->(result, _ctx) { "Holding onto #{result[:label]} ✓" },
+)

@@ -133,6 +133,15 @@ class User < ApplicationRecord
   def chelsea? = id == 58_128
   def eve? = id == 4
 
+  # Who may open Byte at all. Not a general-user surface: the page can dispatch
+  # Bash/Claude to the owner's Mac, so the roster is explicit.
+  #
+  # One rule for the page AND everything inside it. Byte's own controller
+  # listed three people while the hero's chips - quick actions, timers,
+  # routines - each carried their own copy that still said two, so Eve got a
+  # row of buttons that every one of them answered with a 403.
+  def byte_access? = me? || chelsea? || eve?
+
   # Parts of Buddy this person holds (see Buddy::Features). Stored rather than
   # derived from the id, so changing what someone can do is a data change and
   # not another branch keyed on who they are.

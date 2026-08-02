@@ -507,6 +507,9 @@
   #dismiss(String:"Tag")
 [Sms]
   #deliver(Text)::Boolean
+[Buddy]
+  #say(Text)::Boolean
+  #prompt(Text)::Boolean
 [Tesla]
   #start(content(TeslaStartOptions))::Boolean
   #stop::Boolean
