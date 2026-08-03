@@ -807,6 +807,102 @@ RSpec.describe ByteController, type: :controller do
     end
   end
 
+  # Claude / Bash / Jarvis all hand off to the owner's Mac, and
+  # create_conversation has always pinned everyone else to :buddy. The form
+  # offered them anyway, so Chelsea picked "Claude" and silently got a Buddy
+  # thread — a menu whose choices don't mean anything.
+  describe "the new-conversation form" do
+    render_views
+
+    it "offers the owner every mode" do
+      sign_in rocco
+
+      get :show
+
+      expect(response.body).to include('value="claude"', 'value="bash"', 'value="jarvis"')
+    end
+
+    it "offers a buddy-only member no mode choice at all" do
+      sign_in create(:user, id: 58_128)
+
+      get :show
+
+      expect(response.body).not_to include('value="bash"')
+      expect(response.body).not_to include('value="jarvis"')
+      expect(response.body).to include('name="mode" value="buddy"')
+    end
+
+    it "lets them pick which companion the thread wears" do
+      sign_in rocco
+
+      get :show
+
+      expect(response.body).to include('name="buddy_theme"')
+      pets = Buddy::Themes.keys
+      pets.each { |theme| expect(response.body).to include(%(value="#{theme}")) }
+    end
+  end
+
+  describe "POST #create_conversation" do
+    it "wears the companion they picked" do
+      sign_in rocco
+
+      post :create_conversation, params: { mode: "buddy", buddy_theme: "suki" }
+
+      expect(rocco.byte_conversations.order(:id).last.buddy_theme).to eq("suki")
+    end
+
+    # The account default is what it falls back to, exactly as before.
+    it "falls back to the account's own pet when none is named" do
+      chelsea = create(:user, id: 58_128)
+      sign_in chelsea
+
+      post :create_conversation, params: { mode: "buddy" }
+
+      expect(chelsea.byte_conversations.order(:id).last.buddy_theme).to eq("moss")
+    end
+
+    # The case dirty-tracking can't see: "byte" is the column default, so
+    # choosing it on a non-Byte account looks identical to choosing nothing.
+    it "honours picking Byte on an account whose default is not Byte" do
+      chelsea = create(:user, id: 58_128)
+      sign_in chelsea
+
+      post :create_conversation, params: { mode: "buddy", buddy_theme: "byte" }
+
+      expect(chelsea.byte_conversations.order(:id).last.buddy_theme).to eq("byte")
+    end
+
+    it "ignores a theme that isn't a real companion" do
+      sign_in rocco
+
+      post :create_conversation, params: { mode: "buddy", buddy_theme: "gremlin" }
+
+      expect(rocco.byte_conversations.order(:id).last.buddy_theme).to eq("byte")
+    end
+
+    # Server-side enforcement is what actually matters; the form is just no
+    # longer lying about it.
+    it "still pins a buddy-only member to a Buddy thread whatever they post" do
+      chelsea = create(:user, id: 58_128)
+      sign_in chelsea
+
+      post :create_conversation, params: { mode: "bash" }
+
+      expect(chelsea.byte_conversations.order(:id).last.mode).to eq("buddy")
+    end
+
+    it "leaves a non-Buddy thread without a chosen pet" do
+      sign_in rocco
+
+      post :create_conversation, params: { mode: "bash", buddy_theme: "suki" }
+
+      convo = rocco.byte_conversations.order(:id).last
+      expect(convo.mode).to eq("bash")
+      expect(convo.buddy_theme).to eq("byte")
+    end
+  end
+
   describe "POST #font_scale" do
     it "saves it and hands back what it settled on" do
       sign_in rocco

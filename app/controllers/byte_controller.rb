@@ -198,6 +198,7 @@ class ByteController < ApplicationController
       name:            name,
       mode:            mode,
       last_message_at: Time.current,
+      **requested_theme(mode),
     )
     broadcast_convo_change(convo, :created)
     render json: convo.as_wire, status: :created
@@ -536,6 +537,20 @@ class ByteController < ApplicationController
   def normalized_mode(raw)
     sym = raw.to_s.downcase.to_sym
     ByteConversation.modes.key?(sym.to_s) ? sym : :claude
+  end
+
+  # Which companion a new Buddy thread wears. Empty when they didn't pick one
+  # or it isn't a Buddy thread, which leaves ByteConversation's before_create
+  # to seed the account's own default exactly as it always did. An unknown
+  # theme is dropped for the same reason: falling back to their default beats
+  # storing a string nothing in Buddy::Themes can render.
+  def requested_theme(mode)
+    return {} unless mode.to_sym == :buddy
+
+    theme = params[:buddy_theme].to_s.downcase.to_sym
+    return {} unless Buddy::Themes.keys.include?(theme)
+
+    { buddy_theme: theme, theme_chosen: true }
   end
 
   # Nil = accept. Anything else is a user-facing rejection string. Kept to

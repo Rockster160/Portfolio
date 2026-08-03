@@ -183,6 +183,8 @@ export class ConversationManager {
     document.querySelector("[data-byte-new-convo]")?.addEventListener("click", () => this.openNewModal());
     document.querySelector("[data-byte-new-cancel]")?.addEventListener("click", () => this.newModal?.close());
     this.newForm?.addEventListener("submit", (e) => this.handleCreateSubmit(e));
+    document.querySelector("[data-byte-new-mode]")
+      ?.addEventListener("change", () => this.syncNewBuddyRow());
 
     document.querySelector("[data-byte-menu-close]")?.addEventListener("click", () => this.menuModal?.close());
     this.pwdMode?.addEventListener("click", () => this.togglePermissionMode());
@@ -214,8 +216,12 @@ export class ConversationManager {
     } catch (e) {}
   }
 
-  async createConversation({ name, mode }) {
-    const created = await apiCall(this.conversationsUrl, "POST", { name, mode });
+  async createConversation({ name, mode, buddyTheme }) {
+    const created = await apiCall(this.conversationsUrl, "POST", {
+      name,
+      mode,
+      buddy_theme: mode === "buddy" ? buddyTheme : null,
+    });
     if (!created || !created.id) return null;
     // Upsert into local cache and switch to it.
     this.conversations = [created, ...this.conversations.filter((c) => c.id !== created.id)];
@@ -492,17 +498,32 @@ export class ConversationManager {
   openNewModal() {
     if (!this.newModal) return;
     this.newForm?.reset();
+    // `reset()` restores the markup's selected mode, so re-derive from that
+    // rather than assuming the row starts hidden.
+    this.syncNewBuddyRow();
     if (typeof this.newModal.showModal === "function") this.newModal.showModal();
     else this.newModal.setAttribute("open", "");
+  }
+
+  // Only a Buddy thread wears a pet, so the picker follows the mode. For
+  // anyone but the owner the mode input is a hidden `buddy`, which means this
+  // simply leaves the row visible.
+  syncNewBuddyRow() {
+    const row = document.querySelector("[data-byte-new-buddy-row]");
+    if (!row) return;
+
+    const mode = document.querySelector("[data-byte-new-mode]")?.value || "claude";
+    row.hidden = mode !== "buddy";
   }
 
   async handleCreateSubmit(e) {
     e.preventDefault();
     const fd = new FormData(this.newForm);
     const name = (fd.get("name") || "").toString().trim();
-    const mode = (fd.get("mode") || "claude").toString();
+    const mode = (fd.get("mode") || "buddy").toString();
+    const buddyTheme = (fd.get("buddy_theme") || "").toString();
     try {
-      await this.createConversation({ name, mode });
+      await this.createConversation({ name, mode, buddyTheme });
       this.newModal?.close();
       this.closeDrawer();
     } catch (err) {

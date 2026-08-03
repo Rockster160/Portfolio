@@ -425,13 +425,34 @@
         Name
         <input type="text" class="byte-modal-input" name="name" placeholder="Optional (defaults to mode name)">
       </label>
-      <label class="byte-modal-label">
-        Mode
-        <select class="byte-modal-input" name="mode">
-          <option value="claude" selected>Claude — AI conversation</option>
-          <option value="bash">Bash — shell commands, no prefix</option>
-          <option value="jarvis">Jarvis — automation commands</option>
-          <option value="buddy">Buddy — conversational LLM chat</option>
+      <%# Claude / Bash / Jarvis all hand off to the owner's Mac, and %>
+      <%# ByteController#create_conversation pins everyone else to :buddy %>
+      <%# regardless. Offering them anyway showed Chelsea three choices that %>
+      <%# silently became a fourth. Owner sees the whole menu; for everyone %>
+      <%# else there's only one mode, so the row itself is pointless. %>
+      <% if current_user.me? %>
+        <label class="byte-modal-label">
+          Mode
+          <select class="byte-modal-input" name="mode" data-byte-new-mode>
+            <option value="claude" selected>Claude — AI conversation</option>
+            <option value="bash">Bash — shell commands, no prefix</option>
+            <option value="jarvis">Jarvis — automation commands</option>
+            <option value="buddy">Buddy — conversational LLM chat</option>
+          </select>
+        </label>
+      <% else %>
+        <input type="hidden" name="mode" value="buddy" data-byte-new-mode>
+      <% end %>
+
+      <%# Which companion the thread wears. Shown only for a Buddy thread - %>
+      <%# there's no pet on a shell. Defaults to the account's own, which is %>
+      <%# what it used to be pinned to with no way to say otherwise. %>
+      <label class="byte-modal-label" data-byte-new-buddy-row <%= "hidden" if current_user.me? %>>
+        Buddy
+        <select class="byte-modal-input" name="buddy_theme">
+          <% Buddy::Themes.keys.each do |theme| %>
+            <option value="<%= theme %>" <%= "selected" if theme == ByteConversation.default_theme_for(current_user) %>><%= Buddy::Themes.name_for(theme) %></option>
+          <% end %>
         </select>
       </label>
       <div class="byte-modal-actions">

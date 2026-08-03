@@ -69,9 +69,19 @@ class ByteConversation < ApplicationRecord
     conversation
   end
 
+  # Set by any caller that let a person CHOOSE the pet — today that's the
+  # new-conversation form. Every other caller stays silent and gets the
+  # account's default seeded below.
+  #
+  # A flag rather than dirty-tracking, because `buddy_theme` carries a column
+  # default of "byte": someone on a Suki account deliberately picking Byte
+  # assigns a value identical to the default, so `buddy_theme_changed?` is
+  # false and their choice is indistinguishable from not having made one.
+  attr_accessor :theme_chosen
+
   # A new Buddy thread inherits its owner's default pet; the theme then lives on
   # the row and can diverge per conversation. Only buddy convos carry a pet.
-  before_create { self.buddy_theme = self.class.default_theme_for(user) if buddy? }
+  before_create { self.buddy_theme = self.class.default_theme_for(user) if buddy? && !theme_chosen }
 
   # Single source of truth for which pet a user's new Buddy threads spin up as.
   def self.default_theme_for(user)
