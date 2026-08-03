@@ -159,7 +159,7 @@ module Buddy
       fact = fact.to_s.strip
       return if fact.empty?
 
-      ttl = parse_duration(expires_in, user)
+      ttl = parse_duration(expires_in, user) || implied_ttl(fact, user)
 
       existing = find_similar_memory(user, fact)
       if existing
@@ -180,6 +180,22 @@ module Buddy
         expires_at:   ttl,
         last_used_at: Time.current,
       )
+    end
+
+    # A fact that says "today" in it is about today, whatever expiry the model
+    # forgot to pass. The prompt has always asked for `expires_in` on short-term
+    # facts and it gets skipped anyway, which is how "doesn't want to do
+    # anything after the ceremony ends at 8:30 PM today, wants everything
+    # scheduled between 10 AM and shower time today" became a permanent fact
+    # about someone — injected into every future turn, and already wrong by the
+    # evening. A same-day word is unambiguous enough to act on without the model
+    # agreeing, and the cost of being wrong is one re-mention.
+    TODAY_BOUND_RX = /\b(?:today|tonight|this morning|this afternoon|this evening|right now)\b/i
+
+    def implied_ttl(fact, user)
+      return nil unless fact.match?(TODAY_BOUND_RX)
+
+      end_of_local_day(user)
     end
 
     # Duration phrase to an absolute expiry. Unparseable (or nil) is treated as

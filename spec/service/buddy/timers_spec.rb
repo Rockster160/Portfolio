@@ -91,6 +91,75 @@ RSpec.describe Buddy::Timers do
     it "hands a wordy message to the model instead" do
       expect(parse("5m pasta and also start the dishwasher please")).to be_nil
     end
+
+    # "2 hours early please Suki" became a two-hour countdown named "early
+    # please Suki" - it cleared every check because the leftover happened to be
+    # exactly three words. Nobody names a timer by asking for one.
+    it "leaves a duration wrapped in a request to the companion alone" do
+      expect(parse("2 hours early please Suki")).to be_nil
+      expect(parse("2 hours please")).to be_nil
+      expect(parse("10 min remind me")).to be_nil
+      expect(parse("5 min let me know")).to be_nil
+    end
+
+    # ...but saying "timer" outright is unambiguous however politely it's asked.
+    it "still takes an explicit timer request with please in it" do
+      expect(parse("timer for 5m please")).to eq(seconds: 300, label: nil)
+    end
+  end
+
+  # The fast path answers nothing: it posts a chip and returns without a turn.
+  # Firing it on a reply to Buddy's own question leaves the question hanging,
+  # and the person has to say the whole thing again.
+  describe ".parse_request in a conversation" do
+    let(:conversation) { user.byte_conversations.create!(mode: :buddy, name: "Buddy") }
+
+    def buddy_says(body, kind: :buddy)
+      conversation.byte_messages.create!(
+        user: user, direction: :inbound, state: :delivered,
+        body: body, metadata: { "kind" => kind.to_s }, delivered_at: Time.current
+      )
+    end
+
+    def parse(text) = described_class.parse_request(text, conversation: conversation)
+
+    it "declines a bare duration answering a question Buddy just asked" do
+      buddy_says("Ja, I can do that! How early do you want the nudge, before 6 PM?")
+
+      expect(parse("2 hours")).to be_nil
+    end
+
+    # Suki's persona terminates nearly everything in "!", so a question from her
+    # routinely carries no question mark at all.
+    it "reads a question that ends in an exclamation mark as a question" do
+      buddy_says("Absolutely! What do you want on it!")
+
+      expect(parse("20 min")).to be_nil
+    end
+
+    it "still fast-paths after an ordinary Buddy reply" do
+      buddy_says("Popped that on your list!")
+
+      expect(parse("5m pasta")).to eq(seconds: 300, label: "pasta")
+    end
+
+    # A receipt chip isn't Buddy asking anything, and one lands after most
+    # tool calls - treating it as prose would disable the fast path constantly.
+    it "ignores receipt chips when deciding" do
+      buddy_says("Suki set a 5 min timer for pasta ⏲", kind: :buddy_activity)
+
+      expect(parse("10m tea")).to eq(seconds: 600, label: "tea")
+    end
+
+    it "takes an explicit timer request even mid-question" do
+      buddy_says("How long do you want it for?")
+
+      expect(parse("timer for 10m")).to eq(seconds: 600, label: nil)
+    end
+
+    it "fast-paths in an empty thread" do
+      expect(parse("5m")).to eq(seconds: 300, label: nil)
+    end
   end
 
   describe ".quick_set!" do

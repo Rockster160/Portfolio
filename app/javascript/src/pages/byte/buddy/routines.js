@@ -40,7 +40,7 @@ function escapeHtml(s) {
 }
 function escapeAttr(s) { return escapeHtml(s).replace(/"/g, "&quot;"); }
 
-export function initBuddyRoutines({ panel, list, empty, indexUrl, onCount, addBtn, picker, pickerList, pickerEmpty }) {
+export function initBuddyRoutines({ panel, list, empty, indexUrl, onCount, addBtn, picker, pickerList, pickerEmpty, pickerSearch }) {
   if (!panel || !list) return null;
 
   let routines = [];
@@ -181,14 +181,40 @@ export function initBuddyRoutines({ panel, list, empty, indexUrl, onCount, addBt
   // button to say what that payload is — so those stay conversational rather
   // than becoming a button that looks fine and never fires.
 
-  function paintPicker(actions) {
+  let jilActions = [];
+
+  // Name, description and the raw scope all match, because which one you'd
+  // reach for depends on the automation: "Scene: Chill" is findable by name,
+  // an ESP button is only findable by what its description says it does, and
+  // someone who wrote the listener will type the scope.
+  function matching(term) {
+    const q = term.trim().toLowerCase();
+    if (!q) return jilActions;
+    return jilActions.filter((a) =>
+      `${a.name} ${a.description || ""} ${a.scope || ""}`.toLowerCase().includes(q));
+  }
+
+  function paintPicker() {
     if (!pickerList) return;
-    if (pickerEmpty) pickerEmpty.hidden = actions.length > 0;
-    pickerList.innerHTML = actions.map((a) => `
+    const term = pickerSearch?.value || "";
+    const shown = matching(term);
+
+    if (pickerEmpty) {
+      // Two different nothings: nothing left to add at all, versus nothing
+      // matching what they typed. Saying "everything already has a button"
+      // to someone mid-search would read as a bug.
+      pickerEmpty.hidden = shown.length > 0;
+      pickerEmpty.textContent = jilActions.length === 0
+        ? "Nothing left to add — every automation you can fire by name already has a button."
+        : `No automation matches “${term.trim()}”.`;
+    }
+
+    pickerList.innerHTML = shown.map((a) => `
       <li class="byte-jil-action" data-jil-id="${a.id}" data-jil-name="${escapeAttr(a.name)}">
         <button type="button" class="byte-jil-add" data-jil-add>
           <span class="byte-jil-name">${escapeHtml(a.name)}</span>
           ${a.description ? `<span class="byte-jil-desc">${escapeHtml(a.description)}</span>` : ""}
+          <span class="byte-jil-scope">${escapeHtml(a.scope || "")}</span>
         </button>
       </li>
     `).join("");
@@ -201,13 +227,18 @@ export function initBuddyRoutines({ panel, list, empty, indexUrl, onCount, addBt
       return;
     }
     picker.hidden = false;
+    if (pickerSearch) pickerSearch.value = "";
     try {
       const data = await apiCall(`${indexUrl}/jil_actions`, "GET");
-      paintPicker(Array.isArray(data?.actions) ? data.actions : []);
+      jilActions = Array.isArray(data?.actions) ? data.actions : [];
     } catch (e) {
-      paintPicker([]);
+      jilActions = [];
     }
+    paintPicker();
+    pickerSearch?.focus();
   }
+
+  pickerSearch?.addEventListener("input", paintPicker);
 
   async function addJil(id, taskName) {
     // Prefilled with the automation's own name, because that's usually right,

@@ -4,14 +4,31 @@ module Buddy
   # then filed as an idea instead of running a normal Buddy turn. However it's
   # bucketed, Buddy responds: it drops an instant "stashed" chip, then runs a
   # short turn to acknowledge the idea (sorting + summarizing it when the bucket
-  # was "anything"), and OFFERS to talk it through - and talking it through can
-  # sharpen the idea's summary. Ideas resurface later in Today / What now, and
-  # the person can move / defer / drop them by just telling Buddy.
+  # was "anything"). What it says AFTER the acknowledgement varies — see
+  # `closing` — because the one fixed ending it used to have was an offer to
+  # talk the idea through, which is right once and grating by the fourth in a
+  # row. Ideas resurface later in Today / What now, and the person can move /
+  # defer / drop them by just telling Buddy.
   module Stash
     module_function
 
     LATCH_TTL  = 10.minutes
     CATEGORIES = %w[me home work anything].freeze
+
+    # Things that repeat don't belong on a static pile. "Feed fish daily" and
+    # "check propagations every 4 days" both landed as inert ideas next to
+    # one-off jobs, and the person compensated by asking to leave them there
+    # forever so she'd see them every day - which is a reminder, described the
+    # long way round, by someone who didn't know she could have one.
+    RECURRING_RX = /\b(?:daily|nightly|weekly|monthly|every\s+(?:day|night|morning|evening|week|month|other\b|\d+\s*\w+)|each\s+(?:day|night|morning|week|month))\b/i
+
+    # Someone who has thrown three things at you in ten minutes is emptying
+    # their head, and asking what to do with each one is the opposite of the
+    # point. The "want to talk it through?" offer is worth making once at the
+    # start of a run; made every time it's noise, and they end up saying "just
+    # leave them there" over and over to a hidden instruction they can neither
+    # see nor turn off.
+    DUMP_WINDOW = 2.hours
 
     # The latch lives on the conversation's metadata (not a cache) so it
     # survives across the two requests reliably even in multi-worker prod, and
@@ -90,7 +107,7 @@ module Buddy
           user:      user,
           direction: :outbound,
           state:     :pending,
-          body:      response_seed(idea, cat),
+          body:      response_seed(user, idea, cat),
           metadata:  { "kind" => "buddy_trigger", "hidden" => true, "source" => "stash_response" },
         )
         MonitorChannel.broadcast_to(user, { id: :byte, channel: :byte, data: { kind: :message, message: msg.as_wire } })
@@ -98,7 +115,7 @@ module Buddy
         BuddyDeliverWorker.perform_async(msg.id)
       end
 
-      def response_seed(idea, cat)
+      def response_seed(user, idea, cat)
         filed = if cat.nil?
           "Sort it into ONE bucket - me (personal), home (household/family), or work - and give it a short 3-6 word summary. Record your call with this exact silent marker: [[stash: id=#{idea.id} category=<me|home|work> summary=\"<short summary>\"]]"
         else
@@ -110,10 +127,48 @@ module Buddy
 
           #{filed}
 
+          #{closing(user, idea)}
+        SEED
+      end
+
+      # What to do after the acknowledgement, which is the part that used to be
+      # fixed and shouldn't be.
+      def closing(user, idea)
+        return recurring_closing if recurring?(idea)
+        return mid_dump_closing if mid_dump?(user, idea)
+
+        talk_closing(idea)
+      end
+
+      def recurring_closing
+        <<~TXT.strip
+          This one repeats. Acknowledge where it landed in one short warm line, then OFFER to put it on a repeating reminder so it comes to them at the right moment instead of sitting on a pile they have to remember to read ("want me to make that a daily nudge?"). One offer, easy to wave off - if they say yes, that's `schedule_reminder` with a recurrence. Don't also ask whether they want to talk it through.
+        TXT
+      end
+
+      def recurring?(idea)
+        idea.body.to_s.match?(RECURRING_RX)
+      end
+
+      def mid_dump?(user, idea)
+        scope = BuddyIdea.where(user_id: user.id).where.not(id: idea.id)
+        scope.exists?(created_at: DUMP_WINDOW.ago..)
+      rescue StandardError
+        false
+      end
+
+      def mid_dump_closing
+        <<~TXT.strip
+          They're mid-dump - this isn't the first thing they've handed you in the last while. Just acknowledge it, one short warm line, and stop. Don't offer to talk it through and don't ask what they want done with it; they're getting things out of their head, and a question back is a thing to answer instead of a thing put down. The pile is the answer.
+        TXT
+      end
+
+      def talk_closing(idea)
+        <<~TXT.strip
           Then respond warmly in one or two short lines: acknowledge it (name where it landed if you sorted it), and OFFER to talk it through if they'd like - low-key, no pressure ("want to think it through, or just park it for now?"). Keep it light.
 
           If they take you up on it and start talking it through, help them shape it - and as the idea gets sharper, quietly update its note with [[stash: id=#{idea.id} summary="<the sharpened summary>"]]. Never announce that you're updating it.
-        SEED
+        TXT
       end
     end
   end

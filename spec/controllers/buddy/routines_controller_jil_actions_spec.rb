@@ -46,6 +46,28 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
       expect(actions).to be_empty
     end
 
+    # What actually accounts for most of the gap between "automations I have"
+    # and "automations offered here": a function takes typed arguments, so it's
+    # `call_jil_function` with values, not a button. The picker says so in place
+    # now, because 7 offered out of 21 buddy-enabled otherwise reads as a bug.
+    it "leaves out a function, which needs arguments rather than a name" do
+      task!(name: "HASS Light", listener: 'function("Action" TAB ["on" "off"]("on"))::None')
+
+      get :jil_actions
+
+      expect(actions).to be_empty
+    end
+
+    # The client filters on name, description AND scope, because which one you'd
+    # search by depends on the automation.
+    it "sends the scope along so the picker can be searched by it" do
+      task!(name: "Fan High", listener: "fan-high")
+
+      get :jil_actions
+
+      expect(actions.first["scope"]).to eq("fan-high")
+    end
+
     it "leaves out one the owner hasn't opted in to Buddy" do
       task!(name: "Private", buddy_enabled: false)
 

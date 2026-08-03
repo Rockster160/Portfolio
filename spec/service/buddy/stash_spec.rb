@@ -52,6 +52,61 @@ RSpec.describe "Buddy brain-dump (stash)" do
       expect(idea.reload).to have_attributes(category: "home", summary: "build garage shelves")
     end
 
+    # What Buddy is told to say AFTER the acknowledgement. It used to be one
+    # fixed instruction, so "just leave it there, I don't want to talk about
+    # each one" couldn't be honoured: the seed asked again every single time.
+    describe "the response seed" do
+      def seed_for(body, category: "home")
+        described_class.arm!(convo, category)
+        described_class.capture!(user, convo, message(body), category)
+        convo.byte_messages.where("metadata->>'source' = 'stash_response'").order(:id).last.body
+      end
+
+      # The scripted offer itself, rather than the words "talk it through" -
+      # the closings that SUPPRESS the offer have to name it to forbid it.
+      let(:offer) { "want to think it through" }
+
+      it "offers to talk the first one through" do
+        expect(seed_for("that garage shelf thing")).to include(offer)
+      end
+
+      it "stops offering once they're mid-dump" do
+        seed_for("that garage shelf thing")
+
+        expect(seed_for("check the battery on the smoke alarm")).not_to include(offer)
+      end
+
+      it "says why it's staying quiet rather than just going silent" do
+        seed_for("that garage shelf thing")
+
+        expect(seed_for("check the battery on the smoke alarm")).to include("mid-dump")
+      end
+
+      it "offers again once the run is over" do
+        BuddyIdea.create!(user: user, body: "yesterday's thing", status: :active, created_at: 5.hours.ago)
+
+        expect(seed_for("check the battery on the smoke alarm")).to include(offer)
+      end
+
+      # A thing that repeats on a static pile is a reminder nobody set. Both of
+      # these were parked as one-offs, and the person worked around it by asking
+      # for them to be left on the pile forever so she'd see them each day.
+      it "offers a repeating reminder for something that plainly repeats" do
+        expect(seed_for("Feed fish daily")).to include("repeating reminder")
+        expect(seed_for("Check propagations every 4 days")).to include("repeating reminder")
+      end
+
+      it "offers the reminder even mid-dump, since that one is worth the interruption" do
+        seed_for("that garage shelf thing")
+
+        expect(seed_for("water the greenhouse every morning")).to include("repeating reminder")
+      end
+
+      it "leaves a one-off alone" do
+        expect(seed_for("Pothos needs repotting")).not_to include("repeating reminder")
+      end
+    end
+
     it "refines just the summary from a talk-through (summary-only call)" do
       idea = BuddyIdea.create!(user: user, category: :home, summary: "shelves", body: "garage shelves", status: :active)
       Buddy::SideEffects.call(convo, :sort_stash, {

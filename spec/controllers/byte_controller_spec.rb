@@ -31,6 +31,17 @@ RSpec.describe ByteController, type: :controller do
       expect(response.body).not_to include("byte-routines-hint")
     end
 
+    # The picker offered 7 of 21 buddy-enabled automations with no search box,
+    # no scroll and no explanation, which read as an arbitrary handful.
+    it "gives the Jil picker a search box and says what it leaves out" do
+      sign_in rocco
+
+      get :show
+
+      expect(response.body).to include("data-byte-jil-search")
+      expect(response.body).to include("Only automations that fire by name are listed")
+    end
+
     it "forbids everyone else" do
       sign_in create(:user)
 

@@ -18,7 +18,7 @@ Buddy::Tools.register(
     item:      { type: :string,       required: true,  description: "Fuzzy title of the item to edit" },
     hint_date: { type: :string,       required: false, description: "Date hint (YYYY-MM-DD) for disambiguation" },
     title:     { type: :string,       required: false, description: "New title" },
-    at:        { type: :iso_time,     required: false, description: "New start time (ISO)" },
+    at:        { type: :iso_time,     required: false, description: "New local wall-clock start, 24-hour. Moving something on today's calendar puts it AHEAD of the current time" },
     duration:  { type: :duration_min, required: false, description: "New duration in minutes" },
     location:  { type: :string,       required: false, description: "New place/venue" },
     calendar:  { type: :string,       required: false, description: "Move it to this calendar, by name (e.g. 'Ours')" },
@@ -33,6 +33,10 @@ Buddy::Tools.register(
     # to-do. There's no `kind` ARGUMENT here (editing one doesn't change what it
     # is), so the only way the checklist can know is to resolve it here.
     resolved = { agenda_item_id: item.id, kind: item.kind }
+    # Resolved HERE rather than at execute so the row shows the time that
+    # actually lands. This is the call that put a shower at 4:45 AM under a
+    # reply announcing 4:45 PM — see ToolContext#resolve_calendar_time.
+    resolved[:at] = ctx.resolve_calendar_time(payload[:at]) if payload[:at].present?
     if payload[:calendar].present?
       # resolve_writable_agenda only ever returns LOCAL calendars the person can
       # write to, so the destination needs no Google guard of its own. `strict`
@@ -96,10 +100,16 @@ Buddy::Tools.register(
       revert:         { op: "updated", model: "AgendaItem", id: item.id, before: before, summary: "reverted #{prior_name}" },
     }
   },
-  receipt:     ->(result, _ctx) {
-    item  = AgendaItem.find_by(id: result[:agenda_item_id])
-    name  = item&.name || "that item"
-    moved = Array(result[:updated_fields]).map(&:to_s).include?("agenda_id")
-    moved ? "Moved #{name} to #{item&.agenda&.name} ✓" : "Updated #{name} ✓"
+  receipt:     ->(result, ctx) {
+    item   = AgendaItem.find_by(id: result[:agenda_item_id])
+    name   = item&.name || "that item"
+    fields = Array(result[:updated_fields]).map(&:to_s)
+    return "Moved #{name} to #{item&.agenda&.name} ✓" if fields.include?("agenda_id")
+    # When the change IS the time, say the time. A bare "Updated Shower ✓" sat
+    # under a reply claiming 4:45 PM while the row went to 4:45 AM, and nothing
+    # on screen disagreed with the sentence.
+    return "Updated #{name} ✓" unless fields.include?("start_at") && item&.start_at
+
+    "#{name} → #{item.start_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p")} ✓"
   },
 )

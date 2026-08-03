@@ -210,7 +210,7 @@ module Buddy
         end
 
         args = Buddy::Tools.normalize_function_arguments(tool, call[:arguments])
-        payload, errors = Buddy::Tools.validate_payload(tool, args)
+        payload, errors = Buddy::Tools.validate_payload(tool, args, zone: Buddy::Day.zone(user))
         return [resolve_failure(errors.join("; ")), nil, nil] if errors.any?
 
         # A core tool reaching into a feature this person doesn't have, via an

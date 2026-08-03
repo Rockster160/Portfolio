@@ -34,7 +34,7 @@ Buddy::Tools.register(
   feature:     :agenda,
   args:        {
     title:    { type: :string,       required: true,  description: "What is it (the activity, WITHOUT the place)" },
-    at:       { type: :iso_time,     required: true,  description: "ISO datetime with timezone offset" },
+    at:       { type: :iso_time,     required: true,  description: "Local wall-clock start, 24-hour. Something happening today goes AHEAD of the current time" },
     duration: { type: :duration_min, required: false, default: 30, description: "Minutes - the activity's real length, not always 30. Events only; ignored on a task" },
     location: { type: :string,       required: false, description: "Place/venue/address, if one was mentioned" },
     kind:     { type: :enum,         required: false, default: :event, values: %i[event task trigger] },
@@ -61,7 +61,16 @@ Buddy::Tools.register(
 
     {
       summary:  ["Add #{payload[:title]} to #{agenda.name}?", warning].compact.join(" "),
-      resolved: { agenda_id: agenda.id, agenda_name: agenda.name, agenda_default: is_default },
+      # `at` is resolved HERE, not at execute, so the checklist row renders the
+      # same time that lands on the calendar. See resolve_calendar_time: a
+      # same-day time that's already past is the 12-hour slip, and the row is
+      # where it has to be visible.
+      resolved: {
+        agenda_id:      agenda.id,
+        agenda_name:    agenda.name,
+        agenda_default: is_default,
+        at:             ctx.resolve_calendar_time(payload[:at]),
+      }.compact,
     }
   },
   # The confirm card is for a HUMAN to review, so favour readability: one
@@ -138,9 +147,14 @@ Buddy::Tools.register(
       revert:         { op: "created", model: "AgendaItem", id: item.id, summary: "removed #{item.name}" },
     }
   },
-  receipt:     ->(result, _ctx) {
-    item = AgendaItem.find_by(id: result[:agenda_item_id])
+  receipt:     ->(result, ctx) {
+    item  = AgendaItem.find_by(id: result[:agenda_item_id])
     where = item&.agenda&.name.presence
-    "Added #{item&.name || "that"} to #{where || "your calendar"} ✓"
+    start = item&.start_at&.in_time_zone(ctx.user.timezone)
+    when_ = start&.strftime("%a %-I:%M %p")
+    # The time is the half most worth reading back. Without it the receipt
+    # agreed with a reply that said "later this afternoon" while the row went
+    # on at 4:45 AM.
+    ["Added #{item&.name || "that"}", ("at #{when_}" if when_), "to #{where || "your calendar"} ✓"].compact.join(" ")
   },
 )

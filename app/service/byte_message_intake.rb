@@ -46,7 +46,7 @@ class ByteMessageIntake
     # Rails, because a model round trip costs several seconds — invisible on a
     # 20-minute timer, most of the countdown on a 10-second one — and is several
     # seconds during which the model might not call the tool at all.
-    if buddy? && (timer = ::Buddy::Timers.parse_request(@body))
+    if buddy? && (timer = ::Buddy::Timers.parse_request(@body, conversation: @conversation))
       message = post!(state: :sent)
       ::Buddy::Timers.quick_set!(@user, @conversation, **timer)
       return message

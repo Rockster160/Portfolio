@@ -197,8 +197,14 @@ module Buddy
 
     # The bare JSON type loses information the registry type carried, so hand
     # the model the format expectation in prose instead.
+    # Asking for "an offset" invited the model to do the UTC arithmetic itself,
+    # and it got the sign backwards: 4:45 PM at UTC-6 went out as 10:45Z, which
+    # is 4:45 AM. Its own reply said "4:45 PM". So don't ask for a conversion at
+    # all — the wall clock is what it already knows, and the parser applies the
+    # person's zone (see cast_value's parse_iso).
     TYPE_HINTS = {
-      iso_time:     "ISO8601 datetime with timezone offset",
+      iso_time:     "ISO8601 in the person's LOCAL wall-clock time, 24-hour, " \
+                    "e.g. 2pm is \"2026-08-03T14:00:00\". Never convert to UTC and never write a Z",
       duration_min: "Whole minutes",
     }.freeze
 
@@ -283,7 +289,12 @@ module Buddy
 
     # Validate a payload hash against a tool's arg schema. Returns
     # [normalized_payload, errors]. Errors non-empty → discard the marker.
-    def validate_payload(tool, raw_payload)
+    # `zone` is the person's wall clock, and it only matters for :iso_time args
+    # — pass it whenever there's a user in scope. Without it a naive ISO string
+    # is read as UTC, which is a silent several-hour shift on every time the
+    # model writes without an offset. Optional so the validator stays callable
+    # from places that are only checking an arg's SHAPE (routine validation).
+    def validate_payload(tool, raw_payload, zone: nil)
       normalized = {}
       errors     = []
       raw_payload = (raw_payload || {}).transform_keys(&:to_sym)
@@ -299,7 +310,7 @@ module Buddy
           next
         end
 
-        cast = cast_value(value, spec[:type])
+        cast = cast_value(value, spec[:type], zone: zone)
         if cast.nil?
           errors << "arg :#{key} could not be coerced to #{spec[:type]}"
           next
@@ -441,17 +452,31 @@ module Buddy
         raise ArgumentError, "tool executor must be a proc, or a hash with :bash or :jil_trigger"
       end
 
-      def cast_value(value, type)
+      def cast_value(value, type, zone: nil)
         case type
         when :string       then value.to_s
         when :integer      then Integer(value.to_s, exception: false)
         when :enum         then value.to_s.to_sym
         when :boolean      then ActiveModel::Type::Boolean.new.cast(value)
-        when :iso_time     then Time.zone.parse(value.to_s) rescue nil
+        when :iso_time     then parse_iso(value.to_s, zone)
         when :duration_min then Integer(value.to_s, exception: false)
         when :object       then hashify(value)
         else value
         end
+      end
+
+      # An explicit offset is authoritative; without one the string is the
+      # person's WALL CLOCK, not the server's. Time.zone is UTC app-wide, so a
+      # bare "2026-08-03T16:45:00" parsed here was 10:45 AM on a UTC-6 calendar
+      # — and the checklist row then displayed that shifted time, so the wrong
+      # answer looked confirmed. Same rule as ToolContext#parse_in_zone, which
+      # guards chore due dates; this guards every iso_time arg.
+      def parse_iso(str, zone)
+        return Time.zone.parse(str) if zone.nil? || str.match?(Buddy::ToolContext::HAS_OFFSET_RX)
+
+        zone.parse(str)
+      rescue ArgumentError
+        nil
       end
 
       # An object arg arrives as a Hash from a parsed function call, but a model

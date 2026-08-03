@@ -298,10 +298,41 @@ module Buddy
 
     # ---- times ----
 
+    # Every `iso_time` arg lands here eventually. Goes through parse_in_zone
+    # rather than a bare Time.zone.parse because Time.zone is UTC app-wide: a
+    # naive "2026-08-03T16:45:00" — the most natural thing for the model to
+    # write — used to become 16:45 UTC, which is 10:45 AM on a UTC-6 calendar.
     def resolve_time(iso)
-      Time.zone.parse(iso.to_s)
-    rescue ArgumentError
-      nil
+      parse_in_zone(iso.to_s)
+    end
+
+    # A time for something going ON the calendar, with the 12-hour slip undone.
+    #
+    # A calendar entry is nearly always ahead of you, and the two ways the model
+    # gets a same-day time wrong both land it in the morning: writing 04:45 when
+    # it means 16:45, and converting to UTC with the offset the wrong way round
+    # (which, at UTC-6, is the same 12-hour error). Prod Aug 3: "move the shower
+    # earlier" was answered with "Shower's now at 4:45 PM" and an `at` of
+    # 10:45Z - 4:45 AM, eleven hours before the reply that announced it.
+    #
+    # Deliberately narrow. It can only ever touch a time that is TODAY, ALREADY
+    # PAST, and still today once shifted - so a deliberate back-date to
+    # yesterday, an ordinary future time, and a late-evening entry are all
+    # untouched. Runs in `confirm` so the checklist row shows the corrected
+    # time; a wrong guess is one untick away.
+    def resolve_calendar_time(iso)
+      time = resolve_time(iso)
+      return nil if time.nil?
+
+      now    = Time.current
+      zone   = Buddy::Day.zone(user)
+      today  = now.in_time_zone(zone).to_date
+      return time unless time < now && time.in_time_zone(zone).to_date == today
+
+      bumped = time + 12.hours
+      return time unless bumped > now && bumped.in_time_zone(zone).to_date == today
+
+      bumped
     end
 
     # An explicit offset is authoritative; without one the string is their wall

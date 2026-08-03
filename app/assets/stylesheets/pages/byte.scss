@@ -2823,10 +2823,45 @@ dialog.byte-modal {
   border-top: 1px dashed var(--bs-border);
 }
 
+.ctr-byte .byte-app .byte-jil-search,
+.byte-modal .byte-jil-search {
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 7px 10px;
+  background: var(--bs-panel-soft);
+  border: 1px solid var(--bs-border);
+  border-radius: 8px;
+  color: var(--bs-text);
+  font: inherit;
+  font-size: 13px;
+
+  &::placeholder { color: var(--bs-muted); }
+  &:focus {
+    outline: none;
+    border-color: var(--bs-accent);
+  }
+}
+
+// Capped and scrollable. The picker opens BELOW the saved routines inside the
+// same modal body, so an unbounded list pushed the automations off the bottom
+// with nothing to indicate they were there.
 .byte-jil-list {
   list-style: none;
   padding: 0;
   margin: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+// Why the list is shorter than their task list. Without it, a picker offering
+// 7 of 21 buddy-enabled automations just looks broken.
+.byte-jil-note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--bs-muted);
+  opacity: 0.8;
 }
 
 .ctr-byte .byte-app .byte-jil-add,
@@ -2860,6 +2895,19 @@ dialog.byte-modal {
   font-size: 11.5px;
   line-height: 1.35;
   color: var(--bs-muted);
+}
+
+// The listener scope. Mostly noise, but it's the one thing that's unique and
+// searchable when two automations have near-identical names, and it's what
+// someone who wrote the task would type into the filter.
+.byte-jil-scope {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 10px;
+  color: var(--bs-muted);
+  opacity: 0.6;
+  overflow-wrap: anywhere;
+
+  &:empty { display: none; }
 }
 
 // ---- Reminders manager -----------------------------------------------------
@@ -4751,6 +4799,29 @@ $suki_expr_aliases: (
       content: "✓ ";
       opacity: 0.85;
     }
+  }
+
+  // A hand-written watch prints its raw listener under the receipt, as inline
+  // code, so a subtly wrong one can be caught before it sits there for a month
+  // not firing. `renderMarkdown` emits `.byte-md-inline` for that, but the
+  // class was only styled inside the prose-reply kinds — here it fell through
+  // to the GLOBAL `code` rule (components/code_formatting.scss), which is
+  // `white-space: nowrap` on a lime-on-blue chip. An unbreakable 60-character
+  // listener then ran straight off the side of the screen and took the
+  // sentence above it along, since the pill sizes to its widest child.
+  //
+  // Specificity matters here: `.dark-mode code` is (0,1,1), so a bare
+  // `.byte-md-inline` would lose. Nested under the chip it's (0,3,0).
+  .byte-md-inline {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 90%;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.28);
+    color: inherit;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   // Which tool ran, and with what. A record rather than something to read every

@@ -1768,6 +1768,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     picker: document.querySelector("[data-byte-jil-picker]"),
     pickerList: document.querySelector("[data-byte-jil-list]"),
     pickerEmpty: document.querySelector("[data-byte-jil-empty]"),
+    pickerSearch: document.querySelector("[data-byte-jil-search]"),
   });
   const buddyReminders = initBuddyReminders({
     list: document.querySelector("[data-byte-reminder-list]"),

@@ -309,6 +309,17 @@ RSpec.describe Buddy::Personality do
       expect(prompt).not_to include("Soft and bouncy")
       expect(prompt).not_to include("moss-ball")
     end
+
+    # Prod: the exclamation-baseline rule got applied to questions too, so eight
+    # of the nine she asked ended in "!". Read as statements, they slid past —
+    # "do you want it before the card or after it!" never got an answer, and the
+    # thing it was about never got scheduled.
+    it "exempts questions from the exclamation baseline" do
+      prompt = suki_prompt
+
+      expect(prompt).to include("A question ends in `?`")
+      expect(prompt).to include("makes it read as a statement")
+    end
   end
 
   # Prod 1238-1257: "add an agenda task to shower once I get home" became a
@@ -320,6 +331,55 @@ RSpec.describe Buddy::Personality do
       expect(prompt).to include('"Agenda" means the agenda')
       expect(prompt).to include("add_agenda_item")
       expect(prompt).to include("is not a reason to stop and ask")
+    end
+  end
+
+  # Prod, Eve/Suki Aug 3: she asked for an hour of kitchen work, it was invented
+  # at 7 PM on a day whose 6 PM was a two-hour ceremony, she said "no chores
+  # after the ceremony", and it was cancelled outright. The hour she wanted is
+  # now nowhere — and it was described as still on four more times over the next
+  # twenty minutes, because that's what the conversation above said.
+  describe ".for changing something that's already on the day" do
+    def prompt
+      described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+    end
+
+    it "says to check the day before inventing an hour" do
+      expect(prompt).to include("Look at the day before you pick an hour")
+      expect(prompt).to include("today_agenda")
+    end
+
+    it "says a wrong time means move it, not drop it" do
+      expect(prompt).to include("Cancelling is not rescheduling")
+      expect(prompt).to include("Only cancel when they said to drop the thing itself")
+    end
+
+    it "says the record outranks the scrollback once something has changed" do
+      expect(prompt).to include("the change is what's true")
+      expect(prompt).to include("cancelled item is simply gone from `today_agenda`")
+    end
+
+    it "says an agreed plan has to land somewhere they can see it" do
+      expect(prompt).to include("A plan you only said is not a plan")
+    end
+
+    # Prod Aug 3: "Shower's now at 4:45 PM" wrote 10:45Z, which is 4:45 AM. The
+    # model was doing the UTC conversion by hand and got the sign backwards.
+    it "tells it to write local wall-clock time and never convert to UTC" do
+      expect(prompt).to include("never convert to UTC")
+      expect(prompt).to include("belongs AHEAD of `now_local`")
+    end
+  end
+
+  # Prod, Eve/Suki Aug 3: "wants everything scheduled between 10 AM and shower
+  # time today" was stored durably, so a single day's shape became a standing
+  # fact — and it was already wrong by that evening.
+  describe ".for what counts as a memory" do
+    it "says today's shape is not a durable fact about the person" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("A fact about TODAY is not a memory about the person")
+      expect(prompt).to include('expires_in: "today"')
     end
   end
 

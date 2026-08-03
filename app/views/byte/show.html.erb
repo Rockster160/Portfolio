@@ -461,8 +461,14 @@
         <%# one-step routine, so it pins, orders, mutes and deletes like the %>
         <%# rest and needs no separate handling on the wall. %>
         <div class="byte-jil-picker" data-byte-jil-picker hidden>
-          <p class="byte-manage-empty" data-byte-jil-empty hidden>Nothing left to add — every automation you can fire by name already has a button.</p>
+          <input type="search" class="byte-jil-search" data-byte-jil-search
+                 placeholder="Search automations" autocomplete="off" spellcheck="false">
           <ul class="byte-jil-list" data-byte-jil-list></ul>
+          <p class="byte-manage-empty" data-byte-jil-empty hidden></p>
+          <%# Answers "where's my task?" in place. Anything whose listener takes %>
+          <%# options can't be a button, because a button has nowhere to say %>
+          <%# what to pass — those stay conversational. %>
+          <p class="byte-jil-note">Only automations that fire by name are listed. Ones that take options (the HASS and Tesla functions) need Byte to ask you what to pass.</p>
         </div>
       </div>
       <div class="byte-modal-actions">

@@ -118,7 +118,7 @@ module Buddy
 
     def addable_actions
       taken = wrapped_task_names
-      firable_tasks.order(:name).limit(80).filter_map { |t|
+      firable_tasks.order(:name).limit(300).filter_map { |t|
         next nil if taken.include?(t.name.to_s.downcase)
 
         { id: t.id, name: t.name, description: t.description.to_s.strip.presence, scope: t.listener.to_s.strip }.compact

@@ -47,7 +47,7 @@ module Buddy
         # a stale routine or a hand-built marker — either way it must not run.
         next nil unless Buddy::Features.allows_tool?(user, tool)
 
-        payload, errors = Buddy::Tools.validate_payload(tool, m[:payload])
+        payload, errors = Buddy::Tools.validate_payload(tool, m[:payload], zone: Buddy::Day.zone(user))
         next nil if errors.any?
         next nil unless Buddy::Features.allows_payload?(user, tool, payload)
 

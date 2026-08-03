@@ -38,7 +38,7 @@ module AuthHelper
   end
 
   def controller_action
-    "#{controller_name}##{action_name}"
+    "#{controller_path}##{action_name}"
   end
 
   def store_previous_url
@@ -113,7 +113,13 @@ module AuthHelper
   end
 
   def sign_in(user)
+    # Regenerating the session on login clears everything, including the
+    # post-login destination the login actions redirect to right after. Carry
+    # it across the reset so `redirect_to previous_url` lands where the user was
+    # headed instead of falling back to /lists.
+    forwarding_url = session[:forwarding_url]
     sign_out
+    session[:forwarding_url] = forwarding_url if forwarding_url.present?
     session[:current_user_id] = user.id
     cookies.signed[:current_user_id] = user.id
     @_current_user = user

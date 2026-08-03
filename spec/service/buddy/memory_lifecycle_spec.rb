@@ -42,6 +42,38 @@ RSpec.describe "BuddyMemory lifecycle" do
       expect(BuddyMemory.last.expires_at).to be_nil
     end
 
+    # The prompt has always asked for `expires_in` on short-term facts, and it
+    # gets skipped anyway: "doesn't want to do anything after the ceremony ends
+    # at 8:30 PM today" was stored as a permanent truth about someone, injected
+    # into every turn after it and already wrong by that evening.
+    it "expires a fact about today even when the model forgot to say so" do
+      remember("Doesn't want to do anything after the ceremony ends at 8:30 PM today")
+
+      # The end of their PERCEIVED day (Buddy's 3am rollover), same as an
+      # explicit `expires_in: "today"` — someone still up at 1am is in the day
+      # the calendar left an hour ago.
+      expect(BuddyMemory.last.expires_at).to eq(Buddy::Day.range(user, date: Buddy::Day.today(user)).last)
+    end
+
+    it "catches the other same-day wordings" do
+      ["Feeling rough this morning", "Wants a quiet evening tonight", "Is at her mum's right now"].each { |fact|
+        remember(fact)
+        expect(BuddyMemory.last.expires_at).to be_present, "expected #{fact.inspect} to expire"
+      }
+    end
+
+    it "leaves a genuinely durable fact durable" do
+      remember("Works from home on Fridays")
+
+      expect(BuddyMemory.last.expires_at).to be_nil
+    end
+
+    it "doesn't override an expiry the model did pass" do
+      remember("Heads-down on the launch today and all week", expires_in: "2 weeks")
+
+      expect(BuddyMemory.last.expires_at).to be_within(1.day).of(2.weeks.from_now)
+    end
+
     it "reinforces an existing fact instead of duplicating it" do
       remember("Rocco takes coffee 8oz oat milk")
       original = BuddyMemory.last

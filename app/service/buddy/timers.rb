@@ -43,6 +43,24 @@ module Buddy
     # "timer" outright.
     REPORT_RX = /\b(?:of|done|did|finished|ago|already|left|remaining|so far|total)\b/i
 
+    # Words that mean they're ASKING the companion for something, which is a
+    # sentence rather than a label. "2 hours early please Suki" parsed as a
+    # two-hour countdown named "early please Suki" - it cleared every check
+    # because the leftover happened to be exactly three words. Nobody names a
+    # timer this way; a real one is "5m pasta". Same gate as REPORT_RX: only
+    # consulted when they didn't say "timer" outright.
+    ASK_RX = /\b(?:please|remind|remember|nudge|wake|tell|let me know)\b/i
+
+    # Buddy having just asked something. Not only "?" - Suki's persona makes her
+    # terminate almost everything in "!", so a question from her frequently
+    # carries no question mark at all. A sentence OPENING with an interrogative
+    # is the half that survives that.
+    QUESTION_RX = /\?|(?:\A|[.!?]\s+)(?:how|what|when|which|who|where|why|do you|are you|would you|want|should i|shall i)\b/i
+
+    # Inbound kinds that are Buddy talking, as opposed to a receipt chip or a
+    # card. Mirrors Buddy::GPT::History::PROSE_KINDS.
+    PROSE_KINDS = %w[buddy buddy_reply].freeze
+
     # Above this, a leading duration is far likelier to be narration ("8 hours
     # sleep") than a countdown request, so it goes to the model instead.
     FAST_PATH_MAX_SECONDS = 3 * 60 * 60
@@ -51,7 +69,13 @@ module Buddy
 
     # Returns { seconds:, label: } when the message is plainly a timer request,
     # otherwise nil so the caller falls through to a normal Buddy turn.
-    def parse_request(body)
+    #
+    # `conversation` is what the message is landing in, and it's optional only
+    # because the parse is also exercised on bare strings. Pass it: without it
+    # this reads a message with no idea what it's replying to, which is how
+    # "2 hours early please Suki" - an answer to "how early do you want the
+    # nudge?" - became a countdown and left the question unanswered.
+    def parse_request(body, conversation: nil)
       text = body.to_s.strip
       return nil if text.empty? || text.length > FAST_PATH_MAX_LENGTH || text.include?("?")
 
@@ -79,8 +103,35 @@ module Buddy
       return nil if label.split.length > FAST_PATH_MAX_LABEL_WORDS
       # A bare "5m walk done" reads as a report; "5m timer walk" does not.
       return nil if !explicit && label.present? && label.match?(REPORT_RX)
+      return nil if !explicit && label.present? && label.match?(ASK_RX)
+      # An answer to a question Buddy just asked is a reply, not a request, and
+      # the fast path answers nothing - it posts a chip and returns, so the
+      # question is left hanging and they have to say it twice. Saying "timer"
+      # outright still wins, since that's unambiguous whatever came before it.
+      return nil if !explicit && replying_to_a_question?(conversation)
+
+      # Politeness, not a name. Only reachable on an explicit request ("timer
+      # for 5m please"), since ASK_RX has already turned everything else away.
+      label = label.sub(/\Aplease\b/i, "").sub(/\bplease\z/i, "").strip
 
       { seconds: seconds, label: label.presence }
+    end
+
+    # Did Buddy's last turn end on a question? Reads the newest message in the
+    # thread, which at intake is still Buddy's reply - the person's message is
+    # posted only once the fast path has declined it.
+    def replying_to_a_question?(conversation)
+      return false if conversation.nil?
+
+      last = conversation.byte_messages.order(:created_at).last
+      return false if last.nil? || last.direction != "inbound"
+
+      meta = last.metadata.is_a?(Hash) ? last.metadata : {}
+      return false unless PROSE_KINDS.include?(meta["kind"].to_s)
+
+      last.body.to_s.match?(QUESTION_RX)
+    rescue StandardError
+      false
     end
 
     # Create the timer AND post the same activity chip the tool path posts, so a
