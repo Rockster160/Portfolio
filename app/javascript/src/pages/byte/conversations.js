@@ -15,9 +15,16 @@ function csrfMetaToken() {
 // What to call a thread in the list, the header, and the menu. `name` is
 // already the server's resolved display name; `buddy_name` is the fallback for
 // a Buddy thread that was never given one, so an unnamed Suki thread reads
-// "Suki" rather than everything defaulting to Byte.
+// "Suki".
+//
+// The last resort walks to the account's own default pet rather than a
+// literal — naming somebody else's companion is worse than being vague.
 function convoLabel(convo) {
-  return convo?.name || convo?.buddy_name || "Byte";
+  if (convo?.name) return convo.name;
+  if (convo?.buddy_name) return convo.buddy_name;
+
+  const theme = document.querySelector(".byte-app")?.dataset.defaultBuddyTheme;
+  return buddyThemes()[theme]?.name || "Conversation";
 }
 
 // The pet table the server rendered onto `.byte-app` (ByteHelper#buddy_themes_json).

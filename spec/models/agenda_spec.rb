@@ -1,3 +1,27 @@
+# == Schema Information
+#
+# Table name: agendas
+#
+#  id                 :bigint           not null, primary key
+#  user_id            :bigint           not null
+#  name               :string           not null
+#  parameterized_name :string           not null
+#  color              :string
+#  sort_order         :integer
+#  created_at         :datetime         not null
+#  updated_at         :datetime         not null
+#  source             :integer          default("user"), not null
+#  external_id        :text
+#  sync_token         :text
+#  synced_at          :datetime
+#  watch_channel_id   :text
+#  watch_resource_id  :text
+#  watch_expires_at   :datetime
+#  watch_failed_at    :datetime
+#  google_account_id  :bigint
+#  sync_reason        :string
+#  read_only          :boolean          default(FALSE), not null
+#
 require "rails_helper"
 
 RSpec.describe Agenda do

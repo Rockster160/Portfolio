@@ -625,7 +625,13 @@ html.html-ctr-byte body {
   @media (min-width: 720px) {
     max-width: 620px;
   }
-  font-size: 14px;
+  // The one anchor for thread text size. Everything inside a bubble either
+  // inherits this or is expressed as a percentage of it, so the reader's
+  // font-size preference is this single multiplier (see User#byte_font_scale).
+  // Deliberately NOT applied to the composer or the modals: iOS Safari zooms
+  // the whole layout viewport for any focused field under 16px, so those have
+  // a hard floor and can't ride a scale that goes below 100.
+  font-size: calc(14px * var(--byte-font-scale, 1));
   padding: 8px 12px 6px;
   border-radius: 16px;
   background: var(--bs-them-bg);
@@ -2823,6 +2829,72 @@ dialog.byte-modal {
   border-top: 1px dashed var(--bs-border);
 }
 
+// One row of the Settings modal: what it is on the left, the control on the
+// right. A list shape even with a single entry, because the next preference
+// slots in beside it rather than needing this rebuilt.
+.byte-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 4px 0;
+}
+
+.byte-setting-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.byte-setting-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bs-text);
+}
+
+.byte-setting-hint {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--bs-muted);
+}
+
+.byte-setting-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.byte-setting-value {
+  font-size: 13px;
+  color: var(--bs-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 4ch;
+  text-align: center;
+}
+
+.ctr-byte .byte-app .byte-drawer-step,
+.byte-modal .byte-drawer-step,
+.byte-drawer .byte-drawer-step {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 !important;
+  border: 1px solid var(--bs-border) !important;
+  border-radius: 8px !important;
+  background: var(--bs-panel-soft) !important;
+  color: var(--bs-text) !important;
+  font-size: 16px !important;
+  line-height: 1;
+  cursor: pointer;
+
+  &:hover { background: var(--bs-border) !important; }
+}
+
 .ctr-byte .byte-app .byte-jil-search,
 .byte-modal .byte-jil-search {
   width: 100%;
@@ -4127,6 +4199,42 @@ $suki_expr_aliases: (
   input.byte-msg-form-input[type="color"] {
     padding: 2px;
     min-height: 40px;
+  }
+
+  // Temporal inputs, which are the ones that keep escaping the bubble.
+  //
+  // `min-width: 0` above clamps the HOST box and it does work — the input's
+  // border box is the right size. What it can't reach is the picker's shadow
+  // DOM: WebKit lays MM/DD/YYYY and --:-- -- out at their own preferred width
+  // and lets them spill straight out of the host, so the box looks right and
+  // the digits sit over the edge of the screen. Dropping the native appearance
+  // is the only thing that makes those sub-fields subject to the host's width,
+  // and `overflow: hidden` is the backstop for the ones that still won't be.
+  //
+  // The font-size floor has to stay 16px (iOS zooms the layout viewport for
+  // anything smaller on focus), so shrinking the text is not the way out.
+  input.byte-msg-form-input[type="date"],
+  input.byte-msg-form-input[type="datetime-local"],
+  input.byte-msg-form-input[type="time"] {
+    appearance: none;
+    -webkit-appearance: none;
+    display: block;
+    overflow: hidden;
+    // Removing the appearance also removes the intrinsic height it carried.
+    min-height: 44px;
+
+    // Left-aligned rather than WebKit's default centring, which reserves room
+    // on both sides and makes a narrow field overflow sooner.
+    &::-webkit-date-and-time-value {
+      text-align: left;
+      margin: 0;
+    }
+    // The calendar glyph is absolutely sized and doesn't shrink; keeping it
+    // inside the padding box stops it being the thing that pokes out.
+    &::-webkit-calendar-picker-indicator {
+      margin-left: 0;
+      flex-shrink: 0;
+    }
   }
 
   .byte-msg-form-choices {

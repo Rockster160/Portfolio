@@ -1,3 +1,15 @@
+# == Schema Information
+#
+# Table name: chore_transfers
+#
+#  id             :bigint           not null, primary key
+#  from_user_id   :bigint           not null
+#  to_user_id     :bigint           not null
+#  amount_pebbles :integer          not null
+#  note           :text
+#  created_at     :datetime         not null
+#  updated_at     :datetime         not null
+#
 require "rails_helper"
 
 RSpec.describe ChoreTransfer, type: :model do

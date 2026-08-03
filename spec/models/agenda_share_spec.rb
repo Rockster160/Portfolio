@@ -1,3 +1,14 @@
+# == Schema Information
+#
+# Table name: agenda_shares
+#
+#  id         :bigint           not null, primary key
+#  agenda_id  :bigint           not null
+#  user_id    :bigint           not null
+#  permission :integer          default("editor"), not null
+#  created_at :datetime         not null
+#  updated_at :datetime         not null
+#
 require "rails_helper"
 
 RSpec.describe AgendaShare do

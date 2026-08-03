@@ -1,3 +1,24 @@
+# == Schema Information
+#
+# Table name: byte_actions
+#
+#  id                   :bigint           not null, primary key
+#  request_id           :string           not null
+#  kind                 :integer          default("permission"), not null
+#  state                :integer          default("pending"), not null
+#  user_id              :bigint           not null
+#  byte_conversation_id :bigint           not null
+#  byte_message_id      :bigint
+#  tool_name            :string
+#  tool_input           :jsonb            not null
+#  buttons              :jsonb            not null
+#  multi_select         :boolean          default(FALSE), not null
+#  decision             :jsonb            not null
+#  expires_at           :datetime
+#  decided_at           :datetime
+#  created_at           :datetime         not null
+#  updated_at           :datetime         not null
+#
 require "rails_helper"
 
 RSpec.describe ByteAction, type: :model do

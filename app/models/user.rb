@@ -3,18 +3,19 @@
 # Table name: users
 #
 #  id                 :integer          not null, primary key
-#  buddy_features     :jsonb            not null
-#  chore_notify_prefs :jsonb            not null
-#  dark_mode          :boolean
-#  email              :string
-#  invitation_token   :string
-#  password_digest    :string
-#  phone              :string
-#  role               :integer          default("standard")
 #  username           :string
+#  password_digest    :string
 #  created_at         :datetime         not null
 #  updated_at         :datetime         not null
+#  phone              :string
+#  invitation_token   :string
+#  role               :integer          default("standard")
+#  dark_mode          :boolean
+#  email              :string
 #  chore_household_id :bigint
+#  chore_notify_prefs :jsonb            not null
+#  buddy_features     :jsonb            not null
+#  byte_prefs         :jsonb            not null
 #
 
 # Should have `invited_at` and `invited_by`
@@ -141,6 +142,24 @@ class User < ApplicationRecord
   # routines - each carried their own copy that still said two, so Eve got a
   # row of buttons that every one of them answered with a 403.
   def byte_access? = me? || chelsea? || eve?
+
+  # How big Byte's thread text renders, as a percentage. Clamped rather than
+  # validated: this is set from a stepper AND from a Buddy tool acting on
+  # "make the text bigger", and neither is a place to hand back an error.
+  # 100 is the design size; the floor keeps the composer above iOS's zoom
+  # threshold and the ceiling keeps a bubble from being one word wide.
+  FONT_SCALE_RANGE = (80..200)
+  FONT_SCALE_STEP  = 10
+
+  def byte_font_scale
+    raw = byte_prefs.to_h["font_scale"]
+    raw.presence ? raw.to_i.clamp(FONT_SCALE_RANGE.min, FONT_SCALE_RANGE.max) : 100
+  end
+
+  def byte_font_scale=(value)
+    scale = value.to_i.clamp(FONT_SCALE_RANGE.min, FONT_SCALE_RANGE.max)
+    self.byte_prefs = byte_prefs.to_h.merge("font_scale" => scale)
+  end
 
   # Parts of Buddy this person holds (see Buddy::Features). Stored rather than
   # derived from the id, so changing what someone can do is a data change and

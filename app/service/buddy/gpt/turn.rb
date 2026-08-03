@@ -798,6 +798,23 @@ module Buddy
         | \A\s*(?:set|setting)\s+(?:it|that|the\s+\w+)\s+to\b
         | \b(?:saved\s+(?:it|that|as)|(?:it|that)(?:'|’)?s\s+saved|now\s+runs)\b
         | \b(?:running|firing)\s+(?:\*\*|`)[^*`\n]{1,60}(?:\*\*|`)
+        # Prod 2054: "Print again" got "Yep. Running the last print again." and
+        # then, when told it hadn't, "Yep, it's running again now." — neither
+        # turn called anything. The emphasised form above only catches the
+        # receipt shape ("Firing **Fan High**"); a plain-prose claim walked
+        # straight past it, twice, and the person had to notice on their own.
+        #
+        # `running` on its own is far too common to match ("running late",
+        # "running low", "the dishwasher is running"), so this is anchored to
+        # the START of the reply and requires an object right after the verb.
+        # Both halves are load-bearing; the turn spec carries the
+        # false-positive list they exist to protect.
+        # (No slashes in these comments - inside a regex literal, even an
+        # extended-mode comment ends at one.)
+        | \A\s*(?:yep|yeah|yes|sure|ok(?:ay)?|on\s+it|got\s+it)?[\s\-—:.,!]*
+            (?:running|re-?running|firing|kicking\s+off)\s+(?:it|that|the|your|another)\b
+        | \b(?:it|that)(?:'|’)?s\s+(?:running|firing)\s+(?:again|now)\b
+        | \bi(?:'|’)?m\s+(?:running|re-?running|firing)\s+(?:it|that|the|your)\b
         | \b(?:counted|counting)\s+(?:it|that|those|them|\*\*|\d)
         | \A\s*sent\b[.!,]
         | \b(?:passed|sent)\s+(?:it|that|this|them|those)\s+(?:along|on|over|to)\b

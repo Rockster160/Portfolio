@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_03_112829) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_03_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1547,6 +1547,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_03_112829) do
     t.bigint "chore_household_id"
     t.jsonb "chore_notify_prefs", default: {}, null: false
     t.jsonb "buddy_features", default: [], null: false
+    t.jsonb "byte_prefs", default: {}, null: false
     t.index ["chore_household_id"], name: "index_users_on_chore_household_id"
   end
 

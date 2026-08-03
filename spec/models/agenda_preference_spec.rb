@@ -1,3 +1,19 @@
+# == Schema Information
+#
+# Table name: agenda_preferences
+#
+#  id                   :bigint           not null, primary key
+#  user_id              :bigint           not null
+#  hidden_agenda_ids    :jsonb            not null
+#  hide_completed       :jsonb            not null
+#  hide_tentative       :boolean          default(FALSE), not null
+#  created_at           :datetime         not null
+#  updated_at           :datetime         not null
+#  hidden_schedule_ids  :jsonb            not null
+#  hidden_name_patterns :jsonb            not null
+#  hidden_item_ids      :jsonb            not null
+#  default_agenda_id    :bigint
+#
 require "rails_helper"
 
 RSpec.describe AgendaPreference, type: :model do

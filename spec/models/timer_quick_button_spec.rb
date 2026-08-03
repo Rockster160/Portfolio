@@ -1,3 +1,19 @@
+# == Schema Information
+#
+# Table name: timer_quick_buttons
+#
+#  id               :bigint           not null, primary key
+#  user_id          :bigint           not null
+#  label            :text
+#  duration_seconds :integer
+#  sort_order       :integer          default(0), not null
+#  color            :text
+#  created_at       :datetime         not null
+#  updated_at       :datetime         not null
+#  template         :jsonb            not null
+#  pinned           :boolean          default(TRUE), not null
+#  timer_page_id    :bigint
+#
 require "rails_helper"
 
 RSpec.describe TimerQuickButton do

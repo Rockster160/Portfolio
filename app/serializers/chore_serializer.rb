@@ -1,3 +1,33 @@
+# == Schema Information
+#
+# Table name: chores
+#
+#  id                  :bigint           not null, primary key
+#  created_by_user_id  :bigint           not null
+#  name                :text             not null
+#  short_name          :text
+#  icon                :text
+#  aliases             :jsonb            not null
+#  reward_pebbles      :integer          default(0), not null
+#  threshold_seconds   :integer
+#  recurrence          :jsonb
+#  starts_on           :date
+#  one_off             :boolean          default(FALSE), not null
+#  archived_at         :datetime
+#  sort_order          :integer
+#  created_at          :datetime         not null
+#  updated_at          :datetime         not null
+#  show_on_today_view  :integer          default("when_scheduled"), not null
+#  sharing_mode        :integer          default("personal"), not null
+#  assigned_to_user_id :bigint
+#  notes_template      :text
+#  chore_household_id  :bigint           not null
+#  hot_eligibility     :integer          default("when_available"), not null
+#  notes               :text
+#  marked_due_at       :datetime
+#  parent_chore_id     :bigint
+#  target_count        :integer          default(1), not null
+#
 # Canonical chore JSON shape — the single payload that powers every
 # client view (Grid, Today, Hot strip), every endpoint that touches a
 # chore (sync, state, create, update, complete), and any external

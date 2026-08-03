@@ -1,3 +1,31 @@
+# == Schema Information
+#
+# Table name: agenda_schedules
+#
+#  id                   :bigint           not null, primary key
+#  agenda_id            :bigint           not null
+#  name                 :string           not null
+#  kind                 :integer          not null
+#  start_time           :time             not null
+#  duration_minutes     :integer
+#  starts_on            :date             not null
+#  until_on             :date
+#  recurrence           :jsonb            not null
+#  notes                :text
+#  location             :string
+#  created_at           :datetime         not null
+#  updated_at           :datetime         not null
+#  color                :string
+#  trigger_expression   :text
+#  occurrence_count     :integer
+#  external_uid         :text
+#  external_etag        :text
+#  external_updated_at  :datetime
+#  all_day              :boolean          default(FALSE), not null
+#  metadata             :jsonb            not null
+#  arrive_early_minutes :integer          default(0), not null
+#  travel_nav_address   :string
+#
 require "rails_helper"
 
 RSpec.describe AgendaSchedule do

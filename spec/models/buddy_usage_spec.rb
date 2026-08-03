@@ -1,3 +1,21 @@
+# == Schema Information
+#
+# Table name: buddy_usages
+#
+#  id                   :bigint           not null, primary key
+#  user_id              :bigint           not null
+#  byte_conversation_id :bigint
+#  byte_message_id      :bigint
+#  kind                 :integer          default("turn"), not null
+#  model                :string           not null
+#  input_tokens         :integer          default(0), not null
+#  cached_input_tokens  :integer          default(0), not null
+#  output_tokens        :integer          default(0), not null
+#  reasoning_tokens     :integer          default(0), not null
+#  cost_micros          :bigint           default(0), not null
+#  created_at           :datetime         not null
+#  updated_at           :datetime         not null
+#
 require "rails_helper"
 
 RSpec.describe BuddyUsage do

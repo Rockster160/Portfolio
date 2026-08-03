@@ -1,3 +1,17 @@
+# == Schema Information
+#
+# Table name: pages
+#
+#  id                 :bigint           not null, primary key
+#  name               :string
+#  content            :text
+#  user_id            :bigint           not null
+#  created_at         :datetime         not null
+#  updated_at         :datetime         not null
+#  folder_id          :bigint
+#  parameterized_name :text
+#  sort_order         :integer
+#
 require "rails_helper"
 
 RSpec.describe Page do

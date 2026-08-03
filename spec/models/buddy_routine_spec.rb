@@ -1,3 +1,20 @@
+# == Schema Information
+#
+# Table name: buddy_routines
+#
+#  id          :bigint           not null, primary key
+#  user_id     :bigint           not null
+#  name        :string           not null
+#  description :string
+#  steps       :jsonb            not null
+#  enabled     :boolean          default(TRUE), not null
+#  run_count   :integer          default(0), not null
+#  last_run_at :datetime
+#  metadata    :jsonb            not null
+#  created_at  :datetime         not null
+#  updated_at  :datetime         not null
+#  position    :integer
+#
 require "rails_helper"
 
 RSpec.describe BuddyRoutine do

@@ -42,6 +42,53 @@ RSpec.describe ByteController, type: :controller do
       expect(response.body).to include("Only automations that fire by name are listed")
     end
 
+    # Rendered inline rather than applied by JS after boot, so a reload doesn't
+    # flash the default size and reflow.
+    it "paints the saved text size on the first frame" do
+      rocco.update!(byte_font_scale: 130)
+      sign_in rocco
+
+      get :show
+
+      expect(response.body).to include("--byte-font-scale: 1.3")
+      expect(response.body).to include("data-byte-font-bigger")
+    end
+
+    # The stepper first sat loose in the drawer nav, where a control among a
+    # list of destinations read as something that had been dropped there.
+    it "puts the text-size control behind a Settings row like the others" do
+      sign_in rocco
+
+      get :show
+
+      expect(response.body).to include("data-byte-open-settings", "data-byte-settings-modal")
+      expect(response.body).not_to include("byte-drawer-stepper")
+    end
+
+    # Copy that names the companion must name THIS thread's companion. The
+    # drawer hints said "Ask Byte to save a new one" to everyone, which is
+    # simply the wrong pet's name for two of the three people who use this.
+    it "names the open thread's companion in copy, never a hardcoded one" do
+      chelsea = create(:user, id: 58_128)
+      sign_in chelsea
+
+      get :show
+
+      body = response.body
+      expect(body).to include("Ask <span data-buddy-name-slot>Moss</span>")
+      expect(body).not_to match(/Ask Byte|Tell Byte|need Byte/)
+    end
+
+    # …and the slots have to move on a thread switch, which is the client's
+    # job. This just proves the server marks them for it.
+    it "marks that copy so a thread switch can repaint it" do
+      sign_in rocco
+
+      get :show
+
+      expect(response.body.scan("data-buddy-name-slot").length).to be >= 4
+    end
+
     it "forbids everyone else" do
       sign_in create(:user)
 
@@ -757,6 +804,33 @@ RSpec.describe ByteController, type: :controller do
       get :messages, params: { limit: 100_000 }
       expect(response).to be_successful
       expect(JSON.parse(response.body)["messages"].size).to be <= ByteController::MAX_LIMIT
+    end
+  end
+
+  describe "POST #font_scale" do
+    it "saves it and hands back what it settled on" do
+      sign_in rocco
+
+      post :font_scale, params: { scale: 140 }
+
+      expect(response.parsed_body["scale"]).to eq(140)
+      expect(rocco.reload.byte_font_scale).to eq(140)
+    end
+
+    it "clamps an absurd value rather than erroring" do
+      sign_in rocco
+
+      post :font_scale, params: { scale: 9000 }
+
+      expect(rocco.reload.byte_font_scale).to eq(User::FONT_SCALE_RANGE.max)
+    end
+
+    it "refuses someone who can't open Byte" do
+      sign_in create(:user)
+
+      post :font_scale, params: { scale: 140 }
+
+      expect(response).to have_http_status(:forbidden)
     end
   end
 end

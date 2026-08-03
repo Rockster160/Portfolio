@@ -1,3 +1,16 @@
+# == Schema Information
+#
+# Table name: household_icons
+#
+#  id                  :bigint           not null, primary key
+#  chore_household_id  :bigint           not null
+#  uploaded_by_user_id :bigint           not null
+#  name                :text             not null
+#  keywords            :text             default(""), not null
+#  image_data          :text             not null
+#  created_at          :datetime         not null
+#  updated_at          :datetime         not null
+#
 require "rails_helper"
 
 RSpec.describe HouseholdIcon, type: :model do

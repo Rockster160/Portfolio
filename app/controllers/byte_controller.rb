@@ -422,6 +422,18 @@ class ByteController < ApplicationController
     head :no_content
   end
 
+  # How big the thread's text renders, for this person, everywhere they open
+  # Byte. Deliberately server-side rather than localStorage: the whole point of
+  # the request was that Buddy can change it too ("make the text bigger"), and
+  # a preference living only in one browser can't be reached from a tool.
+  def font_scale
+    return head(:forbidden) unless current_user&.byte_access?
+
+    current_user.byte_font_scale = params[:scale]
+    current_user.save!
+    render json: { scale: current_user.byte_font_scale }
+  end
+
   def self.presence_key(user)
     "byte:presence:#{user.id}"
   end

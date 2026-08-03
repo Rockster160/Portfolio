@@ -1,3 +1,27 @@
+# == Schema Information
+#
+# Table name: chore_goals
+#
+#  id              :bigint           not null, primary key
+#  user_id         :bigint           not null
+#  name            :string           not null
+#  image_url       :text
+#  link_url        :text
+#  achieved_at     :datetime
+#  archived_at     :datetime
+#  sort_order      :integer
+#  created_at      :datetime         not null
+#  updated_at      :datetime         not null
+#  kind            :integer          default("pebbles"), not null
+#  scope_mode      :integer          default("relative"), not null
+#  tracking_mode   :integer          default("earned"), not null
+#  target_value    :integer          default(0), not null
+#  baseline_value  :integer          default(0), not null
+#  awarded_pebbles :integer          default(0), not null
+#  description     :text
+#  config          :jsonb            not null
+#  chore_id        :bigint
+#
 require "rails_helper"
 
 RSpec.describe ChoreGoal do

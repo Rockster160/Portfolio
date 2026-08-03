@@ -133,11 +133,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   const claudeSessionsUrl = app.dataset.claudeSessionsUrl;
   const monitorChannel = app.dataset.monitorChannel;
 
-  // Whatever this thread's companion is called. Server-rendered from the active
+  // Whatever THIS thread's companion is called. Server-rendered from the active
   // conversation's theme and repointed by applyBuddyTheme on every switch, so
-  // any copy that names the pet ("Byte's asleep") reads it from here rather than
+  // any copy that names the pet ("… is asleep") reads it from here rather than
   // hardcoding one companion's name.
-  const buddyName = () => app.dataset.buddyName || "Byte";
+  //
+  // The fallback walks to the account's own default pet rather than a literal.
+  // Naming the wrong companion is the one thing this must never do, and a
+  // hardcoded "Byte" in a Suki thread is exactly that.
+  const buddyName = () =>
+    app.dataset.buddyName ||
+    buddyThemes[app.dataset.defaultBuddyTheme]?.name ||
+    "Your buddy";
 
   // Every pet's name, colour, icons and faces, rendered once from
   // Buddy::Themes (see ByteHelper#buddy_themes_json). Keyed by theme, and
@@ -1404,6 +1411,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     const char = document.querySelector(".byte-buddy-char");
     if (char) char.setAttribute("aria-label", label);
     if (input) input.placeholder = `Say something to ${label}…`;
+    // Any static copy that names the pet — modal hints, empty states. The
+    // server renders whichever thread you opened into, and switching threads
+    // has to move these with it, or Suki's drawer sits there talking about Byte.
+    document.querySelectorAll("[data-buddy-name-slot]").forEach((el) => {
+      el.textContent = label;
+    });
 
     setLinkHref('link[rel="icon"]', chrome.favicon);
     setLinkHref('link[rel="apple-touch-icon"]', chrome.touch_icon);
@@ -1811,6 +1824,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     "[data-byte-reminders-modal]",
     buddyReminders,
   );
+  // No manager to refresh — the only control in here reads its value from the
+  // DOM, which applyFontScale already keeps current.
+  wireManager(
+    "[data-byte-open-settings]",
+    "[data-byte-settings-close]",
+    "[data-byte-settings-modal]",
+    null,
+  );
 
   // The wall-tablet surface. Only mounts when the page rendered it, so this is
   // null everywhere else and every call below is a no-op. It needs
@@ -2123,6 +2144,67 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Clear any lingering `--byte-vv-height` from earlier bundles.
   document.documentElement.style.removeProperty("--byte-vv-height");
 
+  // Bigger than any URL bar, smaller than any keyboard. See setAppHeight.
+  const STALE_VIEWPORT_GAP = 160;
+
+  // ---- reader font size ----
+  //
+  // One multiplier, bound to `.byte-msg` in CSS. The server renders the saved
+  // value inline so the first paint is already right; this is for changes made
+  // after that, from the stepper or from Buddy.
+  const FONT_MIN = 80;
+  const FONT_MAX = 200;
+  const FONT_STEP = 10;
+
+  function applyFontScale(scale) {
+    const pct = Math.min(FONT_MAX, Math.max(FONT_MIN, Number(scale) || 100));
+    app.style.setProperty("--byte-font-scale", String(pct / 100));
+    app.dataset.fontScale = String(pct);
+    const out = document.querySelector("[data-byte-font-value]");
+    if (out) out.textContent = `${pct}%`;
+    // The bubbles just changed height, so whoever was reading the newest
+    // message should still be looking at it.
+    if (atBottom) scrollToBottom("auto");
+    return pct;
+  }
+
+  async function nudgeFontScale(delta) {
+    const url = app.dataset.fontScaleUrl;
+    if (!url) return;
+
+    const next = applyFontScale(Number(app.dataset.fontScale || 100) + delta);
+    try {
+      await fetch(url, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "",
+        },
+        body: JSON.stringify({ scale: next }),
+      });
+    } catch (_e) {
+      // Optimistic on purpose: the size already changed on screen, and a failed
+      // save costs them one tap next time rather than a snap-back mid-read.
+    }
+  }
+
+  applyFontScale(app.dataset.fontScale || 100);
+  document.querySelector("[data-byte-font-smaller]")
+    ?.addEventListener("click", () => nudgeFontScale(-FONT_STEP));
+  document.querySelector("[data-byte-font-bigger]")
+    ?.addEventListener("click", () => nudgeFontScale(FONT_STEP));
+
+  // Any focused editable, not just the composer — a form field inside a
+  // message opens the keyboard too, and treating that as "no keyboard" would
+  // fight the real one.
+  const typingSomewhere = () => {
+    const el = document.activeElement;
+    if (!el || el === document.body) return false;
+
+    return el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName);
+  };
+
   let rafH = 0;
   const setAppHeight = () => {
     if (rafH) return;
@@ -2136,7 +2218,17 @@ document.addEventListener("DOMContentLoaded", async () => {
       // the visible viewport (excludes keyboard). window.innerHeight can
       // report the LAYOUT viewport on some iOS PWA configurations,
       // which is bigger than what's visible when the keyboard is up.
-      const h = vvh || wh;
+      // ...but a keyboard that closed while the app was BACKGROUNDED never
+      // fires a resize, so on resume visualViewport can still be reporting the
+      // keyboard-sized viewport. That left the composer stranded mid-screen
+      // with no keyboard under it and nothing to nudge it back.
+      //
+      // Nothing focused means no keyboard, so a viewport that's dramatically
+      // shorter than the window is a stale reading and the window wins. The
+      // threshold is well past any URL bar (~100px) and well under any
+      // keyboard (~300px), so this only ever fires on the stale case.
+      const stale = vvh != null && !typingSomewhere() && wh - vvh > STALE_VIEWPORT_GAP;
+      const h = (stale ? wh : vvh) || wh;
       document.documentElement.style.setProperty("--byte-app-h", `${h}px`);
       // Debug: publish to the drawer footer so misreports are visible.
       const setV = (sel, val) => {
@@ -2169,6 +2261,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   window.visualViewport?.addEventListener("scroll", setAppHeight);
   window.addEventListener("focusin", setAppHeight);
   window.addEventListener("focusout", setAppHeight);
+
+  // Coming back from the background. iOS suspends the page, so a keyboard
+  // dismissed while away produces no event at all — without this the app
+  // repaints at whatever height it was frozen at. Measured several times
+  // because the first reading after a resume is often still the old one, and
+  // the viewport settles over a few hundred milliseconds.
+  const remeasureAfterResume = () => {
+    setAppHeight();
+    [60, 250, 600].forEach((ms) => setTimeout(setAppHeight, ms));
+  };
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) remeasureAfterResume();
+  });
+  window.addEventListener("pageshow", remeasureAfterResume);
 
   // Layout-viewport-scroll compensator (unchanged) — no height side-effect.
   if (window.visualViewport) {
@@ -2312,6 +2418,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         sleepWake = null;
         updateSleepChip();
         buddyWake();
+        return;
+      }
+      if (data.kind === "font_scale") {
+        // Buddy changed it ("make the text bigger"). Apply here rather than
+        // waiting for a reload — the whole point is that they see it happen.
+        applyFontScale(data.scale);
         return;
       }
       if (data.kind === "message_deleted") {

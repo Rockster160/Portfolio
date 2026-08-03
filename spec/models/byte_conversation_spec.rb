@@ -1,3 +1,21 @@
+# == Schema Information
+#
+# Table name: byte_conversations
+#
+#  id                :bigint           not null, primary key
+#  user_id           :bigint           not null
+#  name              :string
+#  mode              :integer          default("claude"), not null
+#  archived          :boolean          default(FALSE), not null
+#  metadata          :jsonb            not null
+#  last_message_at   :datetime
+#  created_at        :datetime         not null
+#  updated_at        :datetime         not null
+#  buddy_theme       :string           default("byte"), not null
+#  buddy_expression  :string           default("neutral"), not null
+#  buddy_sleep_until :datetime
+#  buddy_memories    :text
+#
 require "rails_helper"
 
 RSpec.describe ByteConversation, type: :model do

@@ -1,3 +1,39 @@
+# == Schema Information
+#
+# Table name: agenda_items
+#
+#  id                   :bigint           not null, primary key
+#  agenda_id            :bigint           not null
+#  agenda_schedule_id   :bigint
+#  kind                 :integer          not null
+#  start_at             :datetime         not null
+#  end_at               :datetime
+#  completed_at         :datetime
+#  detached_at          :datetime
+#  name                 :string           not null
+#  notes                :text
+#  location             :string
+#  created_at           :datetime         not null
+#  updated_at           :datetime         not null
+#  color                :string
+#  trigger_expression   :text
+#  notified_at          :datetime
+#  original_start_at    :datetime
+#  external_uid         :text
+#  external_etag        :text
+#  external_updated_at  :datetime
+#  all_day              :boolean          default(FALSE), not null
+#  locally_modified_at  :datetime
+#  local_color          :string
+#  cancelled_at         :datetime
+#  status               :integer          default("confirmed"), not null
+#  fired_at             :datetime
+#  ended_fired_at       :datetime
+#  metadata             :jsonb            not null
+#  arrive_early_minutes :integer          default(0), not null
+#  client_mutation_id   :string
+#  travel_nav_address   :string
+#
 require "rails_helper"
 
 RSpec.describe AgendaItem do

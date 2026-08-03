@@ -388,6 +388,55 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to eq("I can set that to low if you want.")
     end
 
+    # Prod 2054: "Print again" got "Yep. Running the last print again." with no
+    # call, and then, when told it hadn't, "Yep, it's running again now." — also
+    # with no call. The pattern only covered the emphasised receipt shape
+    # ("Firing **Fan High**"), so plain prose walked past it twice.
+    describe "a plain-prose claim to have run something" do
+      it "retracts the one from prod" do
+        run([{ text: "Yep. Running the last print again." }])
+
+        expect(reply.body).to eq(described_class::FALLBACK_BODY)
+        expect(reply.metadata["retracted_claim"]).to be(true)
+      end
+
+      it "retracts the doubled-down follow-up too" do
+        run([{ text: "Yep, it’s running again now." }])
+
+        expect(reply.body).to eq(described_class::FALLBACK_BODY)
+      end
+
+      it "leaves it alone once the function actually fired" do
+        allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+
+        run([
+          { tool_calls: [{ name: :call_jil_function, arguments: { "name" => "Print Again" } }] },
+          { text: "Yep. Running the last print again." },
+        ])
+
+        expect(reply.body).to eq("Yep. Running the last print again.")
+      end
+
+      # `running` is far too ordinary a word to match loose, and a false
+      # positive here replaces a perfectly good reply with the fallback. These
+      # are the shapes the anchoring and the required object exist to protect.
+      {
+        "running late"        => "I’m running late, sorry.",
+        "running low"         => "You’re running low on milk.",
+        "a device running"    => "The dishwasher is running.",
+        "a question"          => "Is the print still running?",
+        "someone else's verb" => "Looks like the printer is running the last job.",
+        "a past observation"  => "That’s still running from earlier, want me to check?",
+        "an offer"            => "Want me to run that again?",
+      }.each do |label, text|
+        it "leaves #{label} alone" do
+          run([{ text: text }])
+
+          expect(reply.body).to eq(text)
+        end
+      end
+    end
+
     it "leaves a question about a device alone" do
       run([{ text: "Is the fan on right now?" }])
 

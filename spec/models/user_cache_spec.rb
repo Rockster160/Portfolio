@@ -1,3 +1,14 @@
+# == Schema Information
+#
+# Table name: user_caches
+#
+#  id         :bigint           not null, primary key
+#  user_id    :bigint
+#  data       :jsonb
+#  created_at :datetime         not null
+#  updated_at :datetime         not null
+#  key        :string
+#
 RSpec.describe UserCache, type: :model do
   let!(:user) { User.me }
   let(:caches) { user.caches }

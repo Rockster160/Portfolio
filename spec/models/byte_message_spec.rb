@@ -1,3 +1,19 @@
+# == Schema Information
+#
+# Table name: byte_messages
+#
+#  id                   :bigint           not null, primary key
+#  user_id              :bigint           not null
+#  direction            :integer          default("outbound"), not null
+#  state                :integer          default("pending"), not null
+#  body                 :text
+#  external_ref         :string
+#  metadata             :jsonb            not null
+#  delivered_at         :datetime
+#  created_at           :datetime         not null
+#  updated_at           :datetime         not null
+#  byte_conversation_id :bigint           not null
+#
 require "rails_helper"
 
 RSpec.describe ByteMessage, type: :model do

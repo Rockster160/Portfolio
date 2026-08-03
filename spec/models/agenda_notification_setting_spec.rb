@@ -1,3 +1,19 @@
+# == Schema Information
+#
+# Table name: agenda_notification_settings
+#
+#  id                       :bigint           not null, primary key
+#  user_id                  :bigint           not null
+#  agenda_id                :bigint           not null
+#  notify_task_oneoff       :boolean          default(TRUE), not null
+#  notify_task_recurring    :boolean          default(TRUE), not null
+#  notify_event_oneoff      :boolean          default(TRUE), not null
+#  notify_event_recurring   :boolean          default(TRUE), not null
+#  notify_trigger_oneoff    :boolean          default(FALSE), not null
+#  notify_trigger_recurring :boolean          default(FALSE), not null
+#  created_at               :datetime         not null
+#  updated_at               :datetime         not null
+#
 require "rails_helper"
 
 RSpec.describe AgendaNotificationSetting do

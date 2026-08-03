@@ -1,3 +1,30 @@
+# == Schema Information
+#
+# Table name: contacts
+#
+#  id               :bigint           not null, primary key
+#  user_id          :bigint
+#  name             :text
+#  address          :text
+#  phone            :text
+#  lat              :float
+#  lng              :float
+#  created_at       :datetime         not null
+#  updated_at       :datetime         not null
+#  nickname         :text
+#  raw              :jsonb
+#  apple_contact_id :text
+#  data             :jsonb
+#  friend_id        :bigint
+#  permit_relay     :boolean          default(TRUE)
+#  email            :text
+#  notes            :text
+#  last_name        :text
+#  birth_month      :integer
+#  birth_day        :integer
+#  birth_year       :integer
+#  maiden_name      :text
+#
 require "rails_helper"
 
 RSpec.describe Contact, type: :model do

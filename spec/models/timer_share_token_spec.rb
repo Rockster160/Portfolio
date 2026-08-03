@@ -1,3 +1,19 @@
+# == Schema Information
+#
+# Table name: timer_share_tokens
+#
+#  id            :bigint           not null, primary key
+#  user_id       :bigint           not null
+#  timer_id      :bigint
+#  timer_page_id :bigint
+#  token         :string           not null
+#  access_mode   :integer          default("view_only"), not null
+#  revoked_at    :datetime
+#  expires_at    :datetime
+#  hit_count     :integer          default(0), not null
+#  created_at    :datetime         not null
+#  updated_at    :datetime         not null
+#
 require "rails_helper"
 
 RSpec.describe TimerShareToken do

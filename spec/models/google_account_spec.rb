@@ -1,3 +1,19 @@
+# == Schema Information
+#
+# Table name: google_accounts
+#
+#  id                  :bigint           not null, primary key
+#  user_id             :bigint           not null
+#  email               :string           not null
+#  access_token        :text
+#  refresh_token       :text
+#  id_token            :text
+#  tokens_refreshed_at :datetime
+#  reauth_required_at  :datetime
+#  created_at          :datetime         not null
+#  updated_at          :datetime         not null
+#  disconnected_at     :datetime
+#
 require "rails_helper"
 
 RSpec.describe GoogleAccount do

@@ -1,3 +1,17 @@
+# == Schema Information
+#
+# Table name: action_events
+#
+#  id            :integer          not null, primary key
+#  name          :text
+#  user_id       :integer
+#  created_at    :datetime         not null
+#  updated_at    :datetime         not null
+#  timestamp     :datetime
+#  notes         :text
+#  streak_length :integer
+#  data          :jsonb
+#
 require "rails_helper"
 
 RSpec.describe ActionEvent do

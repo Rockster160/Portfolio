@@ -56,6 +56,7 @@ Rails.application.routes.draw do
   post   "/byte/uploads"      => "byte#uploads",        as: :byte_uploads
   get  "/byte/csrf"     => "byte#csrf",           as: :byte_csrf
   post "/byte/presence" => "byte#presence",       as: :byte_presence
+  post "/byte/font_scale" => "byte#font_scale",   as: :byte_font_scale
   get    "/byte/conversations"     => "byte#list_conversations",   as: :byte_conversations
   post   "/byte/conversations"     => "byte#create_conversation",  as: :byte_create_conversation
   patch  "/byte/conversations/:id" => "byte#update_conversation",  as: :byte_conversation
