@@ -371,16 +371,23 @@
     <button type="button" class="byte-new-convo" data-byte-new-convo>+ New conversation</button>
     <ul class="byte-convo-list" data-byte-convo-list></ul>
 
-    <%# Saved routines — a phrase that runs a whole sequence. Read-only here on %>
-    <%# purpose: the STEPS are tool calls with validated arguments, so they get %>
-    <%# written by talking to Byte. This is for reviewing and pruning them. %>
-    <section class="byte-routines" data-byte-routines hidden>
-      <h2 class="byte-routines-title">Routines</h2>
-      <%# The star was the one control here nobody found, because nothing on %>
-      <%# screen said what it was for. %>
-      <p class="byte-routines-hint">★ pins one to the front of Quick and the kiosk. Drag ⠿ to order them.</p>
-      <ul class="byte-routine-list" data-byte-routine-list></ul>
-    </section>
+    <%# Routines and reminders are both MANAGERS, not part of the conversation %>
+    <%# list, and routines inline here is what crowded the drawer out. A row %>
+    <%# each, opening a real panel. %>
+    <nav class="byte-drawer-links">
+      <button type="button" class="byte-drawer-link" data-byte-open-routines>
+        <span class="byte-drawer-link-icon" aria-hidden="true">⚡</span>
+        <span class="byte-drawer-link-name">Routines</span>
+        <span class="byte-drawer-link-count" data-byte-routines-count></span>
+        <span class="byte-drawer-link-chev" aria-hidden="true">›</span>
+      </button>
+      <button type="button" class="byte-drawer-link" data-byte-open-reminders>
+        <span class="byte-drawer-link-icon" aria-hidden="true">⏰</span>
+        <span class="byte-drawer-link-name">Reminders</span>
+        <span class="byte-drawer-link-count" data-byte-reminders-count></span>
+        <span class="byte-drawer-link-chev" aria-hidden="true">›</span>
+      </button>
+    </nav>
     <%# Build fingerprint pinned to the bottom of the drawer so you can %>
     <%# eyeball whether a "hard reload" actually landed a fresh shell. %>
     <%# `shell` = COMMIT_SHA of the deployed HTML at page-render time; %>
@@ -433,6 +440,52 @@
       </div>
       <div class="byte-modal-actions">
         <button type="button" class="byte-modal-btn" data-byte-menu-close>Close</button>
+      </div>
+    </div>
+  </dialog>
+
+  <%# Saved routines — a phrase that runs a whole sequence. Read-mostly on %>
+  <%# purpose: the STEPS are tool calls with validated arguments, so they get %>
+  <%# written by talking to Byte. This is for reviewing and pruning them. %>
+  <dialog class="byte-modal byte-modal-wide" data-byte-routines-modal>
+    <div class="byte-modal-form basic">
+      <h3 class="byte-modal-title">Routines</h3>
+      <%# The star was the one control here nobody found, because nothing on %>
+      <%# screen said what it was for. %>
+      <p class="byte-modal-hint">★ pins one to the front of Quick and the kiosk. Drag ⠿ to reorder. Ask Byte to save a new one.</p>
+      <div class="byte-manage-body" data-byte-routines>
+        <ul class="byte-routine-list" data-byte-routine-list></ul>
+        <p class="byte-manage-empty" data-byte-routines-empty hidden>Nothing saved yet. Tell Byte to "save that as a routine" after it does something worth repeating.</p>
+
+        <%# A one-tap button for a Jil automation. It becomes an ordinary %>
+        <%# one-step routine, so it pins, orders, mutes and deletes like the %>
+        <%# rest and needs no separate handling on the wall. %>
+        <div class="byte-jil-picker" data-byte-jil-picker hidden>
+          <p class="byte-manage-empty" data-byte-jil-empty hidden>Nothing left to add — every automation you can fire by name already has a button.</p>
+          <ul class="byte-jil-list" data-byte-jil-list></ul>
+        </div>
+      </div>
+      <div class="byte-modal-actions">
+        <button type="button" class="byte-modal-btn" data-byte-add-jil>＋ Jil action</button>
+        <button type="button" class="byte-modal-btn" data-byte-routines-close>Close</button>
+      </div>
+    </div>
+  </dialog>
+
+  <%# Everything Buddy is holding for later: clock reminders and condition %>
+  <%# watches in one list, since they're the same promise from this side. %>
+  <%# Turning one OFF keeps it (that's why the off ones stay listed); the × %>
+  <%# is the one that's gone for good. %>
+  <dialog class="byte-modal byte-modal-wide" data-byte-reminders-modal>
+    <div class="byte-modal-form basic">
+      <h3 class="byte-modal-title">Reminders</h3>
+      <p class="byte-modal-hint">Turning one off keeps it here so you can switch it back on. × deletes it. Ask Byte to set a new one.</p>
+      <div class="byte-manage-body">
+        <ul class="byte-reminder-list" data-byte-reminder-list></ul>
+        <p class="byte-manage-empty" data-byte-reminders-empty hidden>Nothing set right now.</p>
+      </div>
+      <div class="byte-modal-actions">
+        <button type="button" class="byte-modal-btn" data-byte-reminders-close>Close</button>
       </div>
     </div>
   </dialog>

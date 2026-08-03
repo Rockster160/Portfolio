@@ -107,84 +107,26 @@ module Buddy
         end
       end
 
-      # Time-based reminders first (soonest to fire on top), then condition
-      # watches (oldest first). Row ids are sequential across both so the client
-      # + respond handler address a row by a single id.
+      # What a row SAYS comes from Buddy::ReminderPresenter, shared with the
+      # drawer's Reminders panel. What it CARRIES is this surface's own: a
+      # sequential id so the client and respond handler address a row by one
+      # number, and a status the cancel/restore taps flip.
+      #
+      # Only live rows here. A cancelled reminder is off the list as far as a
+      # thread is concerned; the drawer panel is where you'd go to switch one
+      # back on.
       def rows_for(user)
-        tz  = user.timezone
-        idx = 0
-        rows = []
-
-        BuddyReminder.pending.where(user_id: user.id).order(:fire_at).limit(50).each do |r|
-          idx += 1
-          recurring = r.recurring?
-          rows << {
-            "id"          => idx,
-            "record_type" => "reminder",
-            "record_id"   => r.id,
-            "glyph"       => recurring ? "🔁" : "⏰",
-            "label"       => r.body.to_s.truncate(80),
-            "sublabel"    => recurring ? recurrence_text(r) : r.fire_at.in_time_zone(tz).strftime("%a %-I:%M %p"),
+        Buddy::ReminderPresenter.rows(user).each_with_index.map { |row, i|
+          {
+            "id"          => i + 1,
+            "record_type" => row[:type].to_s,
+            "record_id"   => row[:record_id],
+            "glyph"       => row[:glyph],
+            "label"       => row[:label],
+            "sublabel"    => row[:sublabel],
             "status"      => "active",
           }
-        end
-
-        BuddyWatch.active.where(user_id: user.id).order(:created_at).limit(50).each do |w|
-          idx += 1
-          rows << {
-            "id"          => idx,
-            "record_type" => "watch",
-            "record_id"   => w.id,
-            "glyph"       => watch_glyph(w.trigger_scope),
-            "label"       => w.body.to_s.truncate(80),
-            "sublabel"    => watch_when(w),
-            "status"      => "active",
-          }
-        end
-
-        rows
-      end
-
-      # Mirrors schedule_reminder's receipt phrasing for a recurrence hash.
-      def recurrence_text(reminder)
-        rec  = reminder.recurrence || {}
-        hhmm = (Time.zone.parse(rec["at"].to_s) rescue nil)
-        tstr = hhmm ? hhmm.strftime("%-I:%M %p") : rec["at"].to_s
-        base = case rec["kind"]
-        when "daily"    then "every day"
-        when "weekdays" then "every weekday"
-        when "weekly"   then "every #{rec["weekday"].to_s.capitalize}"
-        when "monthly"  then "day #{rec["day"]} monthly"
-        else                 "on a schedule"
-        end
-        "#{base} at #{tstr}"
-      end
-
-      def watch_glyph(scope)
-        case scope.to_s
-        when "travel"           then "📍"
-        when "chore_completion" then "✅"
-        when "event"            then "📝"
-        when "agenda_item"      then "📅"
-        when "deploy"           then "🚀"
-        when "item", "list", "section" then "🧾"
-        # A custom listener can name any scope, so this is a real fallback now
-        # rather than a defensive one.
-        else "🔔"
-        end
-      end
-
-      # Plain description on top; for a hand-written watch, its listener goes
-      # underneath as the detail line. The description says what they asked for,
-      # the listener says what's actually being matched - and when a custom
-      # watch fires on something surprising, that second line is the only thing
-      # that explains it.
-      def watch_when(watch)
-        phrase = (watch.metadata.is_a?(Hash) ? watch.metadata["human_when"].to_s.presence : nil)
-        phrase ||= watch.trigger_scope.to_s
-        return phrase if watch.listener.blank?
-
-        "#{phrase}\n#{watch.listener}"
+        }
       end
 
       def post_message(user, conversation, body, broadcast: true)

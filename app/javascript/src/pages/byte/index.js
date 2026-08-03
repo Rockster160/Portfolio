@@ -53,6 +53,7 @@ import { initMessageContextMenu } from "./message_actions/context_menu";
 import { initBuddyHero } from "./buddy/hero";
 import { initBuddyTimers } from "./buddy/timers";
 import { initBuddyRoutines } from "./buddy/routines";
+import { initBuddyReminders } from "./buddy/reminders";
 import { initBuddyKiosk } from "./buddy/kiosk";
 import { toggleBuddyMuted, isBuddyMuted } from "./buddy/alarm";
 
@@ -1740,22 +1741,75 @@ document.addEventListener("DOMContentLoaded", async () => {
     isBuddyActiveFn: () => convoManager.currentConversation()?.mode === "buddy",
   });
 
-  // Saved routines, listed at the bottom of the drawer. Fetched when the drawer
-  // opens rather than at boot: most sessions never open it, and a stale list
-  // would be worse than no list.
-  // `document`, not `app`: the drawer is a SIBLING of .byte-app, not a child of
-  // it (it's fixed-position and overlays the grid, so it's mounted outside).
-  // Scoping the lookup to the app returned null for both, initBuddyRoutines
-  // bailed on its own guard, and the panel — which only unhides once it has
-  // rows — stayed invisible no matter how many routines you had.
+  // Routines and reminders: two managers reached from the drawer, each in its
+  // own dialog. Fetched when the drawer opens rather than at boot — most
+  // sessions never open it, and a stale list would be worse than no list. The
+  // counts on the drawer rows come from the same fetch, so opening the drawer
+  // is what fills them in.
+  //
+  // `document`, not `app`: the drawer and the dialogs are SIBLINGS of
+  // .byte-app, not children of it (fixed-position, mounted outside the grid).
+  // Scoping the lookup to the app returned null and the panel silently never
+  // mounted, no matter how many routines you had.
+  function paintCount(selector) {
+    const el = document.querySelector(selector);
+    return (n) => {
+      if (el) el.textContent = n > 0 ? String(n) : "";
+    };
+  }
+
   const buddyRoutines = initBuddyRoutines({
     panel: document.querySelector("[data-byte-routines]"),
     list: document.querySelector("[data-byte-routine-list]"),
+    empty: document.querySelector("[data-byte-routines-empty]"),
     indexUrl: "/buddy/routines",
+    onCount: paintCount("[data-byte-routines-count]"),
+    addBtn: document.querySelector("[data-byte-add-jil]"),
+    picker: document.querySelector("[data-byte-jil-picker]"),
+    pickerList: document.querySelector("[data-byte-jil-list]"),
+    pickerEmpty: document.querySelector("[data-byte-jil-empty]"),
   });
+  const buddyReminders = initBuddyReminders({
+    list: document.querySelector("[data-byte-reminder-list]"),
+    empty: document.querySelector("[data-byte-reminders-empty]"),
+    indexUrl: "/buddy/reminders",
+    onCount: paintCount("[data-byte-reminders-count]"),
+  });
+
   document
     .querySelector("[data-byte-drawer-toggle]")
-    ?.addEventListener("click", () => buddyRoutines?.refresh());
+    ?.addEventListener("click", () => {
+      buddyRoutines?.refresh();
+      buddyReminders?.refresh();
+    });
+
+  // Each row opens its dialog and re-fetches: the drawer may have been sitting
+  // open a while, and a reminder that fired in the meantime shouldn't still be
+  // listed when you finally look.
+  function wireManager(openSel, closeSel, modalSel, manager) {
+    const modal = document.querySelector(modalSel);
+    if (!modal) return;
+
+    document.querySelector(openSel)?.addEventListener("click", () => {
+      manager?.refresh();
+      if (typeof modal.showModal === "function") modal.showModal();
+      else modal.setAttribute("open", "");
+    });
+    document.querySelector(closeSel)?.addEventListener("click", () => modal.close());
+  }
+
+  wireManager(
+    "[data-byte-open-routines]",
+    "[data-byte-routines-close]",
+    "[data-byte-routines-modal]",
+    buddyRoutines,
+  );
+  wireManager(
+    "[data-byte-open-reminders]",
+    "[data-byte-reminders-close]",
+    "[data-byte-reminders-modal]",
+    buddyReminders,
+  );
 
   // The wall-tablet surface. Only mounts when the page rendered it, so this is
   // null everywhere else and every call below is a no-op. It needs

@@ -40,6 +40,13 @@ class BuddyRoutine < ApplicationRecord
   # the three you reach for daily at the front.
   scope :for_quick, -> { enabled.order(Arel.sql("position ASC NULLS LAST, LOWER(name) ASC")) }
 
+  # The wall tablet takes only the starred ones, and that's about space rather
+  # than principle. Quick is a popover you open, scan and dismiss, so carrying
+  # everything costs nothing. The kiosk is a fixed pad with room for a handful
+  # of big targets, and filling it with every routine ever saved buries the
+  # three you walk up and press. There the star IS the gate.
+  scope :for_kiosk, -> { enabled.pinned }
+
   def pinned?
     position.present?
   end

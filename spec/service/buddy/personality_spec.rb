@@ -186,19 +186,69 @@ RSpec.describe Buddy::Personality do
       described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
     end
 
-    it "puts presence above being clever" do
-      expect(byte_prompt).to include("Don't entertain with words")
-      expect(byte_prompt).to include("Silence is comfortable")
+    # Wit is a LIKED trait, not a rationed one. The file used to tell Byte to
+    # trim the cleverness, which is aimed at the wrong thing entirely: what
+    # grates is volume and repetition, and a dry line is most of the reason to
+    # talk to a companion instead of tapping a button.
+    it "wants clever and witty rather than rationing them" do
+      prompt = byte_prompt
+
+      expect(prompt).to include("Clever, witty, opinionated, warm")
+      expect(prompt).to include("The failures are loud, obnoxious, and repetitive")
+      expect(prompt).to include("none of those is \"too clever\"")
     end
 
-    it "leaves room to go off once in a while, so the calm isn't flatness" do
-      expect(byte_prompt).to include("go off a bit")
-      expect(byte_prompt).to include("if every message is a performance, none of them are")
+    # Which still leaves a real thing to cut. The bar is whether a line is
+    # good, not whether the reply felt like it was due one.
+    it "cuts the reflex rather than the joke" do
+      prompt = byte_prompt
+
+      expect(prompt).to include("only there because the personality slot felt empty")
+      expect(prompt).to include("just does the thing and says so is complete")
     end
 
-    it "makes praise cost something" do
-      expect(byte_prompt).to include("Praise is earned")
-      expect(byte_prompt).to include("Never congratulate someone for asking you to do a thing")
+    # The shared rules are read by every pet, so an instruction there to "trim
+    # the cleverness" would quietly overrule the persona above.
+    it "doesn't tell every pet to be less funny in the shared rules" do
+      expect(byte_prompt).to include("Trim the reflex, keep the feeling")
+      expect(byte_prompt).not_to include("Trim the cleverness")
+    end
+
+    it "keeps volume down without confusing it for wit" do
+      prompt = byte_prompt
+
+      expect(prompt).to include("Warm, never loud")
+      expect(prompt).to include("One exclamation mark, not three")
+      expect(prompt).to include("Loud and clever pull in opposite directions")
+    end
+
+    # The thing he actually notices. A phrase that turns up every time stops
+    # meaning anything and starts reading as a script running, so this gets its
+    # own rules rather than a clause tacked onto the acknowledgements.
+    it "treats sounding like a template as the main way to sound like a bot" do
+      prompt = byte_prompt
+
+      expect(prompt).to include("The tell of a bot isn't a bad sentence. It's the same sentence twice")
+      expect(prompt).to include("Check your own last message before you send this one")
+      expect(prompt).to include("Never a signature sign-off")
+    end
+
+    # Praise stopped being rationed - rationing it didn't make it mean more.
+    # What it must never do is congratulate someone for handing over an errand.
+    it "spends praise on something he did, never on him asking" do
+      prompt = byte_prompt
+
+      expect(prompt).to include("Praise is real, not rare - but it is never for a request")
+      expect(prompt).to include("spending it on nothing does make it mean less")
+    end
+
+    # A companion that only reflects is a mirror. Curiosity and an opinion are
+    # what make it worth talking to rather than worth issuing commands at.
+    it "asks for curiosity and an actual opinion, not just reflection" do
+      prompt = byte_prompt
+
+      expect(prompt).to include("**Opinionated.**")
+      expect(prompt).to include("a mirror is dull")
     end
 
     it "keeps the slime soft rather than gross" do

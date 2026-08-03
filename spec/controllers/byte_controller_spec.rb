@@ -18,6 +18,19 @@ RSpec.describe ByteController, type: :controller do
       expect(response.body).to include("byte-composer")
     end
 
+    # Routines used to be a whole inline panel in the drawer, which is what
+    # crowded it enough to squash the New conversation button. Both managers
+    # are a row that opens a dialog now.
+    it "puts routines and reminders behind drawer rows rather than inline" do
+      sign_in rocco
+
+      get :show
+
+      expect(response.body).to include("data-byte-open-routines", "data-byte-open-reminders")
+      expect(response.body).to include("data-byte-routines-modal", "data-byte-reminders-modal")
+      expect(response.body).not_to include("byte-routines-hint")
+    end
+
     it "forbids everyone else" do
       sign_in create(:user)
 
@@ -163,13 +176,14 @@ RSpec.describe ByteController, type: :controller do
   describe "GET #kiosk" do
     render_views
 
-    def routine!(name, position: nil, enabled: true)
+    def routine!(name, position: nil, enabled: true, description: nil)
       BuddyRoutine.create!(
-        user:     rocco,
-        name:     name,
-        position: position,
-        enabled:  enabled,
-        steps:    [BuddyRoutine.step(:message_partner, { to: "someone", message: "night" })],
+        user:        rocco,
+        name:        name,
+        description: description,
+        position:    position,
+        enabled:     enabled,
+        steps:       [BuddyRoutine.step(:message_partner, { to: "someone", message: "night" })],
       )
     end
 
@@ -194,28 +208,55 @@ RSpec.describe ByteController, type: :controller do
     end
 
     def button_names
-      response.body.scan(/byte-kiosk-btn-name">([^<]+)</).flatten
+      response.body.scan(/data-kiosk-routine="\d+"[^>]*>([^<]+)</).flatten.map(&:strip)
     end
 
-    # Starring PROMOTES rather than admits. Gating the wall on it made saving a
-    # routine two steps, and the second one happened somewhere you weren't.
-    it "puts every routine on it, starred ones first and the rest by name" do
+    # A wall tablet is read from across a room and tapped without stopping, so a
+    # button only has to say which one it is. The description used to ride
+    # underneath as a second line of small print, which made every button taller
+    # and none of them clearer.
+    it "puts the name on a button and nothing else" do
+      routine!("Prep Printer", position: 0, description: "Powers it on, waits, then preheats")
+
+      get :kiosk
+
+      expect(button_names).to eq(["Prep Printer"])
+      expect(response.body).not_to include("byte-kiosk-btn-sub")
+      # Still reachable on a long-press / hover, just not taking up the face.
+      expect(response.body).to include('title="Powers it on, waits, then preheats"')
+    end
+
+    # A matter of space, not principle. Quick is a popover you open, scan and
+    # dismiss, so it carries everything; the wall is a fixed pad with room for a
+    # handful of big targets, and every routine ever saved buries the three you
+    # walk up and press.
+    it "takes only the starred ones, in the order they were dragged into" do
       routine!("Wind Down", position: 1)
       routine!("Prep Printer", position: 0)
       routine!("Almost Never")
 
       get :kiosk
 
-      expect(button_names).to eq(["Prep Printer", "Wind Down", "Almost Never"])
+      expect(button_names).to eq(["Prep Printer", "Wind Down"])
     end
 
-    it "leaves off the ones that are switched off" do
-      routine!("Muted", enabled: false)
+    it "leaves off the ones that are switched off, starred or not" do
+      routine!("Muted", position: 0, enabled: false)
 
       get :kiosk
 
       expect(button_names).to be_empty
-      expect(response.body).to include("No routines saved yet")
+    end
+
+    # They may well have routines and just none starred, so "save one" would
+    # send them off to do a thing they've already done.
+    it "says what's actually missing when nothing is pinned" do
+      routine!("Saved but unstarred")
+
+      get :kiosk
+
+      expect(button_names).to be_empty
+      expect(response.body).to include("Nothing pinned yet")
     end
 
     # There's no keyboard on a wall, and a claude or bash thread is nothing but

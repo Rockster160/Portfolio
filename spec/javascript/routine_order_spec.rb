@@ -13,15 +13,23 @@ require "open3"
 # BuddyRoutine.for_quick is the other half of this, and its spec is the mirror
 # of this one. Runs the real module rather than re-deriving the rule.
 RSpec.describe "Quick routine ordering" do
-  def ordered(routines)
+  def run_order(fn, routines)
     script = <<~JS
-      import { quickOrder } from "#{Rails.root.join("app/javascript/src/pages/byte/buddy/routine_order.js")}";
-      console.log(JSON.stringify(quickOrder(#{routines.to_json}).map((r) => r.name)));
+      import { #{fn} } from "#{Rails.root.join("app/javascript/src/pages/byte/buddy/routine_order.js")}";
+      console.log(JSON.stringify(#{fn}(#{routines.to_json}).map((r) => r.name)));
     JS
     out, err, status = Open3.capture3("node", "--input-type=module", stdin_data: script)
     raise "node failed: #{err}" unless status.success?
 
     JSON.parse(out)
+  end
+
+  def ordered(routines)
+    run_order("quickOrder", routines)
+  end
+
+  def on_wall(routines)
+    run_order("kioskOrder", routines)
   end
 
   def routine(name, position: nil, enabled: true)
@@ -52,5 +60,25 @@ RSpec.describe "Quick routine ordering" do
 
   it "survives an empty list and a missing one" do
     expect(ordered([])).to eq([])
+  end
+
+  # The wall is the one place the star is a GATE rather than a promotion, and
+  # it's about space: a fixed pad has room for a handful of big targets, so
+  # carrying every routine there buries the three you walk up and press.
+  # BuddyRoutine.for_kiosk is the server half of this and has to agree.
+  describe "the wall tablet" do
+    it "takes only the starred ones, in their dragged order" do
+      rows = [routine("Zebra", position: 1), routine("Unstarred"), routine("Apple", position: 0)]
+
+      expect(on_wall(rows)).to eq(["Apple", "Zebra"])
+    end
+
+    it "still drops a starred one that's switched off" do
+      expect(on_wall([routine("Off", position: 0, enabled: false), routine("On", position: 1)])).to eq(["On"])
+    end
+
+    it "comes back empty when they have routines but none starred" do
+      expect(on_wall([routine("Saved"), routine("Also saved")])).to eq([])
+    end
   end
 end

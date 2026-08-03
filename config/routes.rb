@@ -69,10 +69,20 @@ Rails.application.routes.draw do
   post   "/buddy/timers/:id/confirm" => "buddy/timers#confirm", as: :buddy_timer_confirm
   delete "/buddy/timers/:id"        => "buddy/timers#destroy", as: :buddy_timer
   get    "/buddy/routines"         => "buddy/routines#index",   as: :buddy_routines
+  post   "/buddy/routines"         => "buddy/routines#create"
+  # Before the :id routes so "jil_actions" is never read as one.
+  get    "/buddy/routines/jil_actions" => "buddy/routines#jil_actions", as: :buddy_routine_jil_actions
   post   "/buddy/routines/reorder" => "buddy/routines#reorder", as: :buddy_routines_reorder
   post   "/buddy/routines/:id/run" => "buddy/routines#run",     as: :buddy_routine_run
   patch  "/buddy/routines/:id"     => "buddy/routines#update",  as: :buddy_routine
   delete "/buddy/routines/:id"     => "buddy/routines#destroy"
+  # Reminders and watches are separate tables but one list to the person, so
+  # `type` picks the table and the pair is the identity.
+  get    "/buddy/reminders" => "buddy/reminders#index", as: :buddy_reminders
+  scope constraints: { type: /reminder|watch/ } do
+    patch  "/buddy/reminders/:type/:id" => "buddy/reminders#update", as: :buddy_reminder
+    delete "/buddy/reminders/:type/:id" => "buddy/reminders#destroy"
+  end
 
   namespace :internal do
     get "auth", to: "auth#check"

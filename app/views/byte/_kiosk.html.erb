@@ -31,15 +31,16 @@
       pinning something on your phone should show up here without a reload. %>
   <div class="byte-kiosk-pad" data-kiosk-pad>
     <% Array(@routines).each do |routine| %>
-      <button type="button" class="byte-kiosk-btn" data-kiosk-routine="<%= routine.id %>">
-        <span class="byte-kiosk-btn-name"><%= routine.name %></span>
-        <% if routine.description.present? %>
-          <span class="byte-kiosk-btn-sub"><%= routine.description %></span>
-        <% end %>
-      </button>
+      <%# Title only - see paintPad in kiosk.js, which this has to match or the %>
+      <%# first paint changes shape the moment the pad refreshes. %>
+      <button type="button" class="byte-kiosk-btn" data-kiosk-routine="<%= routine.id %>"
+              title="<%= routine.description.presence || routine.name %>"><%= routine.name %></button>
     <% end %>
     <% if Array(@routines).empty? %>
-      <p class="byte-kiosk-empty">No routines saved yet — ask to save one.</p>
+        <%# Matches NO_PINNED_ROUTINES in routine_order.js. They may well have %>
+        <%# routines and just none starred, so "save one" would send them off %>
+        <%# to do a thing they've already done. %>
+        <p class="byte-kiosk-empty">Nothing pinned yet — star a routine to put it on this screen.</p>
     <% end %>
   </div>
 

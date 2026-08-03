@@ -29,7 +29,7 @@ class ByteController < ApplicationController
   def kiosk
     @kiosk = true
     load_thread(only_buddy: true, prefer: current_user.byte_conversations.kiosk.pick(:id))
-    @routines = current_user.buddy_routines.for_quick.to_a
+    @routines = current_user.buddy_routines.for_kiosk.to_a
     render :show
   end
 

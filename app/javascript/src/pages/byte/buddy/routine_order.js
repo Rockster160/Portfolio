@@ -24,6 +24,19 @@ export function quickOrder(routines) {
     });
 }
 
+// The wall tablet is the exception, and it's a matter of space rather than
+// principle. Quick is a popover you open, scan and dismiss, so carrying every
+// routine costs nothing. The kiosk is a fixed pad on a wall with room for a
+// handful of big targets, and filling it with everything ever saved buries the
+// three you actually walk up and press. There the star IS the gate.
+export function kioskOrder(routines) {
+  return quickOrder(routines).filter((r) => r.position != null);
+}
+
 // Said the same way in both places, because both are reached by someone
 // looking for a routine they think they have.
 export const NO_ROUTINES = "No routines saved yet — ask to save one.";
+
+// The kiosk's version of empty is different: they may well have routines, just
+// none starred, so "save one" would send them to do a thing they've done.
+export const NO_PINNED_ROUTINES = "Nothing pinned yet — star a routine to put it on this screen.";

@@ -12,6 +12,45 @@ module Buddy
       render json: { routines: current_user.buddy_routines.ordered.map(&:serialize_for_client) }
     end
 
+    # Jil automations that can be turned into a one-tap button.
+    #
+    # `plain_scopes` is the filter that matters: a listener with data filters on
+    # it needs a payload constructed to fire, and there's nowhere on a button to
+    # say what that payload is. Offering one would produce a button that looks
+    # fine and quietly never fires - the exact failure a saved button must not
+    # have. Those stay conversational, where Buddy can ask for the missing bit.
+    #
+    # Ones already wrapped are left out so the list is what you can still ADD.
+    def jil_actions
+      render json: { actions: addable_actions }
+    end
+
+    # Wrap one as a single-step routine.
+    #
+    # A Jil button IS a routine with one `trigger_jil_task` step - same record,
+    # same runner, same pin/order/on-off/delete, same rendering on the Quick
+    # grid and the wall. This is only here because getting one used to mean
+    # asking Buddy to save it, and there's nothing to discuss when the whole
+    # routine is "fire this".
+    def create
+      task = firable_tasks.find_by(id: params[:task_id])
+      return render(json: { errors: ["that automation isn't available"] }, status: :unprocessable_entity) if task.nil?
+
+      name = params[:name].to_s.strip.presence || task.name
+      if current_user.buddy_routines.exists?(["LOWER(name) = ?", name.downcase])
+        return render(json: { errors: ["you already have one called \"#{name}\""] }, status: :unprocessable_entity)
+      end
+
+      routine = build_jil_routine(task, name)
+      if routine.save
+        render json: routine.serialize_for_client, status: :created
+      else
+        render json: { errors: routine.errors.full_messages }, status: :unprocessable_entity
+      end
+    rescue StandardError => e
+      render json: { errors: [e.message] }, status: :unprocessable_entity
+    end
+
     def update
       if routine.update(routine_params)
         render json: routine.serialize_for_client
@@ -71,6 +110,42 @@ module Buddy
 
     def routine
       @routine ||= current_user.buddy_routines.find(params[:id])
+    end
+
+    def firable_tasks
+      current_user.accessible_tasks.buddy_visible.plain_scopes
+    end
+
+    def addable_actions
+      taken = wrapped_task_names
+      firable_tasks.order(:name).limit(80).filter_map { |t|
+        next nil if taken.include?(t.name.to_s.downcase)
+
+        { id: t.id, name: t.name, description: t.description.to_s.strip.presence, scope: t.listener.to_s.strip }.compact
+      }
+    end
+
+    # Which tasks already have a button. Read off the steps rather than tracked
+    # separately, so a routine deleted by hand frees its task back up with
+    # nothing to keep in sync.
+    def wrapped_task_names
+      current_user.buddy_routines.pluck(:steps).flatten.filter_map { |step|
+        next nil unless step.is_a?(Hash) && step["tool_name"].to_s == "trigger_jil_task"
+
+        step.dig("payload", "name").to_s.downcase.presence
+      }.to_set
+    end
+
+    # Through Buddy::Routines.sanitize rather than hand-built, so a button made
+    # here is checked by exactly what checks one Buddy saves - including the
+    # tool's own confirm, which is what proves the name still resolves to a task
+    # that exists.
+    def build_jil_routine(task, name)
+      steps = Buddy::Routines.sanitize(
+        [{ "tool_name" => "trigger_jil_task", "payload" => { "name" => task.name } }],
+        Buddy::ToolContext.new(current_user),
+      )
+      current_user.buddy_routines.new(name: name, description: task.description.to_s.strip.presence, steps: steps)
     end
 
     # Deliberately no `position`: the grid's order is one fact, so #reorder owns

@@ -18,7 +18,7 @@
 
 import { renderForm } from "../message_actions/form";
 import { renderMultiSelect } from "../message_actions/multi_select";
-import { quickOrder, NO_ROUTINES } from "./routine_order";
+import { kioskOrder, NO_PINNED_ROUTINES } from "./routine_order";
 
 const ROUTINES_URL = "/buddy/routines";
 const PIN_URL = "/byte/kiosk/conversation";
@@ -221,29 +221,23 @@ export function initBuddyKiosk({
     if (routines.length === 0) {
       const empty = document.createElement("p");
       empty.className = "byte-kiosk-empty";
-      empty.textContent = NO_ROUTINES;
+      empty.textContent = NO_PINNED_ROUTINES;
       padEl.appendChild(empty);
       return;
     }
 
+    // The name and nothing else. A wall tablet is read from across a room and
+    // tapped without stopping, so the button only has to say which one it is —
+    // the description was a second line of small print that made every button
+    // taller and none of them clearer. It's still in the Routines panel, where
+    // you're actually reading.
     routines.forEach((routine) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "byte-kiosk-btn";
       btn.dataset.kioskRoutine = String(routine.id);
-
-      const name = document.createElement("span");
-      name.className = "byte-kiosk-btn-name";
-      name.textContent = routine.name;
-      btn.appendChild(name);
-
-      if (routine.description) {
-        const sub = document.createElement("span");
-        sub.className = "byte-kiosk-btn-sub";
-        sub.textContent = routine.description;
-        btn.appendChild(sub);
-      }
-
+      btn.title = routine.description || routine.name;
+      btn.textContent = routine.name;
       padEl.appendChild(btn);
     });
   }
@@ -254,7 +248,7 @@ export function initBuddyKiosk({
   async function refresh() {
     try {
       const data = await apiCall(ROUTINES_URL, "GET");
-      paintPad(quickOrder(data?.routines));
+      paintPad(kioskOrder(data?.routines));
     } catch (e) {
       // Leave whatever's on screen. The buttons that are already there still
       // work, and a wall tablet that blanks its own controls on a blip is

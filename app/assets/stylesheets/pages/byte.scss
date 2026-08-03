@@ -1692,6 +1692,9 @@ html.html-ctr-byte body {
   justify-content: space-between;
   padding: 14px 16px;
   border-bottom: 1px solid var(--bs-border);
+  // Column flex parent: without this the header is a shrinkable item and a
+  // full drawer squashes it. See .byte-new-convo.
+  flex-shrink: 0;
 
   .byte-drawer-title {
     font-weight: 600;
@@ -1714,7 +1717,13 @@ html.html-ctr-byte body {
   }
 }
 
+// The drawer is a column flex container, and a flex item shrinks below its
+// content by default. Once the conversation list, the links and the version
+// footer added up to more than the drawer, this button was the thing that gave
+// — it collapsed to a few pixels and its label spilled out over the first
+// conversation row. It's a fixed-size control, so it never shrinks.
 .byte-drawer .byte-new-convo {
+  flex-shrink: 0;
   margin: 12px 16px;
   padding: 10px 12px;
   border-radius: 8px;
@@ -1727,6 +1736,66 @@ html.html-ctr-byte body {
 
   &:hover {
     background: rgba(63, 160, 255, 0.2);
+  }
+}
+
+// Routines / Reminders. Both used to be things you could only get at by
+// talking to Buddy, and Routines then moved into the drawer as a whole inline
+// panel — which is what made it crowded enough to squash the button above.
+// They're managers, so they live behind a row each and open a real panel.
+.byte-drawer-links {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--bs-border);
+}
+
+.ctr-byte .byte-app .byte-drawer-link,
+.byte-drawer .byte-drawer-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 16px;
+  text-align: left;
+  color: var(--bs-text);
+  font-size: 13.5px;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .byte-drawer-link-icon {
+    width: 18px;
+    text-align: center;
+    opacity: 0.85;
+  }
+
+  .byte-drawer-link-name {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+  }
+
+  // Blank until the fetch lands, so an empty badge must take no room rather
+  // than sitting there as a stray pill.
+  .byte-drawer-link-count {
+    font-size: 11px;
+    color: var(--bs-muted);
+    font-variant-numeric: tabular-nums;
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  .byte-drawer-link-chev {
+    color: var(--bs-muted);
+    font-size: 15px;
+    line-height: 1;
   }
 }
 
@@ -2615,30 +2684,23 @@ dialog.byte-modal {
 // Saved routines, under the conversation list. Capped and scrollable so a
 // dozen of them can't push the conversation list out of the drawer — the list
 // is what people open this for.
-.byte-routines {
-  flex: 0 1 auto;
+// The scrolling middle of a manager dialog. Bounded so a long list scrolls
+// inside the dialog and the Close button stays put, rather than the dialog
+// itself growing past the viewport.
+.byte-manage-body {
   min-height: 0;
-  max-height: 38%;
+  max-height: 55vh;
   overflow-y: auto;
-  border-top: 1px solid var(--bs-border);
-  padding: 10px 16px 4px;
+  margin: 4px 0 2px;
 }
 
-.byte-routines-title {
-  margin: 0 0 4px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+// A dialog you deliberately opened owes you a sentence when it's empty. The
+// old inline drawer panel could just hide itself; this can't.
+.byte-manage-empty {
+  margin: 6px 2px;
+  font-size: 12.5px;
+  line-height: 1.45;
   color: var(--bs-muted);
-}
-
-.byte-routines-hint {
-  margin: 0 0 8px;
-  font-size: 11px;
-  line-height: 1.35;
-  color: var(--bs-muted);
-  opacity: 0.8;
 }
 
 .byte-routine-list {
@@ -2662,9 +2724,10 @@ dialog.byte-modal {
   gap: 6px;
 }
 
-// The drawer's buttons get reset app-wide, so these out-specify that rather
+// The app's buttons get reset app-wide, so these out-specify that rather
 // than relying on the bare element defaults.
 .ctr-byte .byte-app .byte-routine-head button,
+.byte-modal .byte-routine-head button,
 .byte-drawer .byte-routine-head button {
   background: none;
   border: 0;
@@ -2750,6 +2813,142 @@ dialog.byte-modal {
   font-size: 11.5px;
   color: var(--bs-muted);
   line-height: 1.5;
+}
+
+// ---- "＋ Jil action" picker inside the routines manager ---------------------
+
+.byte-jil-picker {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--bs-border);
+}
+
+.byte-jil-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.ctr-byte .byte-app .byte-jil-add,
+.byte-modal .byte-jil-add {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 6px;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+.byte-jil-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bs-text);
+}
+
+// The name is terse and mechanical ("ESP Button"); the description is the part
+// that says what tapping it will actually do, so it's the half worth reading.
+.byte-jil-desc {
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--bs-muted);
+}
+
+// ---- Reminders manager -----------------------------------------------------
+
+.byte-reminder-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.byte-reminder {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+  // Muted, not gone. It's still listed precisely so it can come back on, and
+  // it has to look switched-off at a glance or the list reads as all-armed.
+  &.byte-reminder-off {
+    opacity: 0.45;
+  }
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.byte-reminder-glyph {
+  font-size: 14px;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+.byte-reminder-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.byte-reminder-label {
+  font-size: 13px;
+  color: var(--bs-text);
+  line-height: 1.35;
+  // Wrapped rather than ellipsed: a reminder IS its sentence, and a truncated
+  // one can read as the opposite of what was set.
+  overflow-wrap: anywhere;
+}
+
+.byte-reminder-sub {
+  font-size: 11.5px;
+  color: var(--bs-muted);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.ctr-byte .byte-app .byte-reminder button,
+.byte-modal .byte-reminder button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  flex-shrink: 0;
+}
+
+.byte-reminder-toggle {
+  color: var(--bs-muted);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--bs-border) !important;
+  border-radius: 6px;
+  padding: 2px 6px !important;
+}
+
+.byte-reminder-remove {
+  color: var(--bs-muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px !important;
+
+  &:hover {
+    color: var(--bs-danger, #e5484d);
+  }
 }
 
 .byte-drawer-version {
@@ -3447,8 +3646,10 @@ $suki_expr_aliases: (
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  grid-auto-rows: minmax(76px, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  // Shorter now the buttons are one line, so more of them fit before the pad
+  // has to scroll.
+  grid-auto-rows: minmax(64px, 1fr);
   gap: 12px;
   padding:
     14px
@@ -3457,17 +3658,23 @@ $suki_expr_aliases: (
     calc(env(safe-area-inset-left) + 16px);
 }
 
+// One line of text, centred. The button carries a title and nothing else, so
+// it's sized and weighted for reading at arm's length rather than for holding
+// a stack of detail.
 .ctr-byte .byte-app .byte-kiosk-btn {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   align-self: center;
   width: 100%;
   height: 100%;
-  max-height: 132px;
-  gap: 4px;
+  max-height: 112px;
   padding: 14px 16px;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
   border-radius: 18px;
   border: 1px solid var(--bs-border);
   background: var(--bs-accent-grad);
@@ -3492,21 +3699,6 @@ $suki_expr_aliases: (
     opacity: 0.55;
     pointer-events: none;
   }
-}
-
-.byte-kiosk-btn-name {
-  font-size: 17px;
-  font-weight: 700;
-  line-height: 1.2;
-  text-align: center;
-}
-
-.byte-kiosk-btn-sub {
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.25;
-  text-align: center;
-  opacity: 0.75;
 }
 
 .byte-kiosk-empty {

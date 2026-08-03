@@ -1,4 +1,4 @@
-// The saved-routines panel at the bottom of the Byte drawer.
+// The saved-routines manager, opened from the Byte drawer.
 //
 // Read-mostly by design. A routine's STEPS are tool calls with validated
 // arguments, which is a bad thing to hand-edit in a text box, so they're
@@ -40,7 +40,7 @@ function escapeHtml(s) {
 }
 function escapeAttr(s) { return escapeHtml(s).replace(/"/g, "&quot;"); }
 
-export function initBuddyRoutines({ panel, list, indexUrl }) {
+export function initBuddyRoutines({ panel, list, empty, indexUrl, onCount, addBtn, picker, pickerList, pickerEmpty }) {
   if (!panel || !list) return null;
 
   let routines = [];
@@ -65,7 +65,11 @@ export function initBuddyRoutines({ panel, list, indexUrl }) {
   }
 
   function render() {
-    panel.hidden = routines.length === 0;
+    // The panel is a dialog you deliberately opened, so an empty one owes you
+    // an explanation rather than hiding itself the way the inline drawer
+    // section used to.
+    if (empty) empty.hidden = routines.length > 0;
+    onCount?.(routines.length);
     list.innerHTML = sorted().map((r) => {
       const steps  = (r.summary || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("");
       const off    = r.enabled ? "" : " byte-routine-off";
@@ -169,6 +173,63 @@ export function initBuddyRoutines({ panel, list, indexUrl }) {
       render();
     } catch (e) {}
   }
+
+  // ---- adding a Jil automation as a one-tap button ----
+  //
+  // The server only offers the ones firable by name alone. A task with data
+  // filters on its listener needs a payload built, and there's nowhere on a
+  // button to say what that payload is — so those stay conversational rather
+  // than becoming a button that looks fine and never fires.
+
+  function paintPicker(actions) {
+    if (!pickerList) return;
+    if (pickerEmpty) pickerEmpty.hidden = actions.length > 0;
+    pickerList.innerHTML = actions.map((a) => `
+      <li class="byte-jil-action" data-jil-id="${a.id}" data-jil-name="${escapeAttr(a.name)}">
+        <button type="button" class="byte-jil-add" data-jil-add>
+          <span class="byte-jil-name">${escapeHtml(a.name)}</span>
+          ${a.description ? `<span class="byte-jil-desc">${escapeHtml(a.description)}</span>` : ""}
+        </button>
+      </li>
+    `).join("");
+  }
+
+  async function togglePicker() {
+    if (!picker) return;
+    if (!picker.hidden) {
+      picker.hidden = true;
+      return;
+    }
+    picker.hidden = false;
+    try {
+      const data = await apiCall(`${indexUrl}/jil_actions`, "GET");
+      paintPicker(Array.isArray(data?.actions) ? data.actions : []);
+    } catch (e) {
+      paintPicker([]);
+    }
+  }
+
+  async function addJil(id, taskName) {
+    // Prefilled with the automation's own name, because that's usually right,
+    // and editable because a wall button wants "Preheat" where the task is
+    // called "Printer - Preheat".
+    const label = window.prompt("Button label", taskName);
+    if (label === null) return;
+
+    try {
+      await apiCall(indexUrl, "POST", { task_id: id, name: label.trim() || taskName });
+      if (picker) picker.hidden = true;
+      await refresh();
+    } catch (e) {
+      window.alert("Couldn't add that one.");
+    }
+  }
+
+  addBtn?.addEventListener("click", togglePicker);
+  pickerList?.addEventListener("click", (e) => {
+    const row = e.target.closest?.("[data-jil-id]");
+    if (row && e.target.closest("[data-jil-add]")) addJil(Number(row.dataset.jilId), row.dataset.jilName);
+  });
 
   list.addEventListener("click", async (e) => {
     const routine = routineFor(e.target);
