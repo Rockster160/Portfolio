@@ -7,7 +7,7 @@ class SystemController < ApplicationController
   # A window of 1 means "last 24 hours, hour by hour"; the rest are rolling day windows.
   SPEND_WINDOWS = [1, 7, 30, 90].freeze
   SPEND_DEFAULT_DAYS = 30
-  # Dark-theme palette, assigned to models by spend rank.
+  # Dark-theme palette, assigned to users by spend rank.
   SPEND_PALETTE = %w[
     #5DADE2 #58D68D #F5B041 #AF7AC5 #EC7063 #48C9B0 #F7DC6F #5499C7
   ].freeze
@@ -22,17 +22,18 @@ class SystemController < ApplicationController
 
     scope, grouped, @buckets, @labels = @hourly ? hourly_spend : daily_spend
 
-    @model_totals = grouped.each_with_object(Hash.new(0)) { |((_bucket, model), micros), totals|
-      totals[model] += micros
-    }.sort_by { |_model, micros| -micros }
-    @models = @model_totals.map(&:first)
+    @user_totals = grouped.each_with_object(Hash.new(0)) { |((_bucket, user_id), micros), totals|
+      totals[user_id] += micros
+    }.sort_by { |_user_id, micros| -micros }
+    @user_ids = @user_totals.map(&:first)
+    @users = User.where(id: @user_ids).index_by(&:id)
 
-    @colors = @models.each_with_index.to_h { |model, i| [model, SPEND_PALETTE[i % SPEND_PALETTE.length]] }
-    @datasets = @models.map { |model|
+    @colors = @user_ids.each_with_index.to_h { |user_id, i| [user_id, SPEND_PALETTE[i % SPEND_PALETTE.length]] }
+    @datasets = @user_ids.map { |user_id|
       {
-        model: model,
-        color: @colors[model],
-        data:  @buckets.map { |bucket| (grouped[[bucket, model]] || 0) / Buddy::GPT::Pricing::MICROS_PER_DOLLAR.to_f },
+        label: @users[user_id]&.first_name || "User ##{user_id}",
+        color: @colors[user_id],
+        data:  @buckets.map { |bucket| (grouped[[bucket, user_id]] || 0) / Buddy::GPT::Pricing::MICROS_PER_DOLLAR.to_f },
       }
     }
     @total_micros = grouped.values.sum
@@ -71,13 +72,13 @@ class SystemController < ApplicationController
     head :not_found unless current_user&.me?
   end
 
-  # Each returns [scope, grouped_by_[bucket, model], buckets, labels].
+  # Each returns [scope, grouped_by_[bucket, user_id], buckets, labels].
 
   def daily_spend
     tz = ActiveSupport::TimeZone[SPEND_ZONE]
     start_date = tz.today - (@days - 1)
     scope = BuddyUsage.where(created_at: start_date.in_time_zone(tz).beginning_of_day..)
-    grouped = scope.group(spend_day_sql, :model).sum(:cost_micros)
+    grouped = scope.group(spend_day_sql, :user_id).sum(:cost_micros)
     buckets = (start_date..tz.today).to_a
     [scope, grouped, buckets, buckets.map { |d| d.strftime("%b %-d") }]
   end
@@ -87,8 +88,8 @@ class SystemController < ApplicationController
     end_hour = tz.now.beginning_of_hour
     start_hour = end_hour - 23.hours
     scope = BuddyUsage.where(created_at: start_hour..)
-    grouped = scope.group(spend_hour_sql, :model).sum(:cost_micros)
-    grouped = grouped.transform_keys { |(hour, model)| [hour.to_i, model] }
+    grouped = scope.group(spend_hour_sql, :user_id).sum(:cost_micros)
+    grouped = grouped.transform_keys { |(hour, user_id)| [hour.to_i, user_id] }
     # Chronological hour-of-day for each of the last 24 hourly slots; each hour
     # appears exactly once across a 24-hour window, so it doubles as the group key.
     buckets = (0..23).map { |i| (start_hour + i.hours).hour }

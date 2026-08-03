@@ -29,7 +29,27 @@ class BuddyWatch < ApplicationRecord
   # owner's ("whenever I add to our Agenda, let Rocco know"). Same household.
   belongs_to :notify_user, class_name: "User", optional: true
 
-  KINDS = %w[reminder prompt].freeze
+  # `prompt` seeds a Buddy turn, `reminder` delivers a fixed line, and `action`
+  # runs a Jil automation with no model in the loop at all. That last one exists
+  # because "trigger whisper-quiet ten seconds after the doggy door" is not a
+  # nudge - nobody is being told anything - and routing it through a turn would
+  # put a language model between a sensor and a light at 2am.
+  KINDS = %w[reminder prompt action].freeze
+
+  # How long a delayed action may hold. Long enough for "a couple of minutes
+  # after", short enough that a queue backed up behind one is a bug rather than
+  # a design. Anything longer is a reminder or a schedule, not a reflex.
+  MAX_ACTION_DELAY = 15.minutes.to_i
+
+  def action?
+    kind.to_s == "action"
+  end
+
+  # The Jil scope this watch fires, the task name it was resolved from (for the
+  # receipt and the reminders list), and how long to wait first.
+  def run_scope      = metadata.to_h["run_scope"].to_s.presence
+  def run_task_name  = metadata.to_h["run_task_name"].to_s.presence
+  def run_delay      = metadata.to_h["run_delay"].to_i.clamp(0, MAX_ACTION_DELAY)
 
   # The scopes the NAMED triggers use (arrive/depart, chore, event, deploy,
   # agenda). A custom listener isn't limited to these: it names whatever scope

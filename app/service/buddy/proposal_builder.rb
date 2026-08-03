@@ -266,10 +266,54 @@ module Buddy
         queue = claim_deferred(action)
         action.update!(state: :decided, decided_at: Time.current)
       end
-      return false if queue.blank?
+      # Awaited, but with nothing lined up behind it. The promise was still made
+      # out loud, so hand the answer to Buddy as a turn instead of letting it
+      # land as a bubble nobody responds to.
+      return pick_back_up!(action, relay) if queue.blank?
 
       captured = var ? { var => relay.answer } : {}
       advance_queue!(action, queue, executed: true, captured: captured)
+    end
+
+    # Buddy's turn on an answer it said it would come back to.
+    #
+    # The answer itself is already in the thread by now (record_answer! bridges
+    # it before it gets here), so this is only the nudge to act on it — which is
+    # the whole difference between "Chelsea said yes" sitting there and the
+    # plunge actually going on the calendar.
+    def pick_back_up!(action, relay)
+      conversation = action.byte_conversation || Buddy::CompanionRelay.conversation_for(relay.from_user)
+      return false if conversation.nil?
+
+      Buddy::CompanionDelivery.deliver_prompt(
+        user:         relay.from_user,
+        conversation: conversation,
+        seed:         answered_seed(relay),
+        metadata:     {
+          "kind"     => "buddy_trigger",
+          "hidden"   => true,
+          "source"   => "relay_answer",
+          "relay_id" => relay.id,
+        },
+      )
+      true
+    rescue StandardError => e
+      Buddy::Errors.report(section: "proposal_builder.pick_back_up", exception: e, user: relay.from_user)
+      false
+    end
+
+    def answered_seed(relay)
+      who    = relay.to_user&.first_name.presence || "They"
+      answer = Array.wrap(relay.answer).map(&:to_s).compact_blank.join(", ").presence || "(no answer given)"
+
+      <<~SEED.strip
+        [nothing was said to you - #{who} just answered the question you were waiting on, and your reply is what happens next]
+
+        You asked #{who}: "#{relay.body}"
+        #{who} answered: #{answer}
+
+        Their answer is already visible in the thread, so don't read it back to them. Do the thing the answer was FOR - put it on the calendar, pass it along, set the reminder, whatever you asked in order to find out - and say what you did in one short line. If the answer means there's nothing to do after all, say so warmly and stop.
+      SEED
     end
 
     # Move the queue forward now that the gate it was waiting on has resolved.
@@ -602,7 +646,15 @@ module Buddy
           var      = data[:var]
         }
 
-        holding = relay_id.present? && deferred.any?
+        # A gate goes up whenever the answer was AWAITED, not only when steps
+        # are queued behind it. `await_reply` with nothing following is a
+        # perfectly ordinary thing to ask for — "ask Chelsea if she wants to
+        # plunge tomorrow" and then act on what she says — and the receipt
+        # promises "I'll pick this back up when they answer" off the var alone.
+        # Gating only on `deferred.any?` meant that promise was made and then
+        # nothing existed to keep it: the answer came back as a bubble and Buddy
+        # never took a turn on it. resume_after_reply! handles the empty queue.
+        holding = relay_id.present? && (deferred.any? || var.present?)
         hold_for_reply!(user, byte_message, relay_id, var, deferred, vars) if holding
         [asked, holding]
       end

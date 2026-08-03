@@ -1120,8 +1120,8 @@ class AgendaItemsController < ApplicationController
   def item_params
     raw = params.require(:agenda_item).permit(
       :agenda_id, :name, :kind, :color, :local_color, :start_at, :end_at, :all_day,
-      :notes, :location, :arrive_early_minutes, :completed_at, :trigger_expression,
-      :client_mutation_id
+      :notes, :location, :travel_nav_address, :arrive_early_minutes, :completed_at,
+      :trigger_expression, :client_mutation_id
     )
 
     # Time fields cross the wire as integer epoch seconds (UTC) so the FE
@@ -1155,6 +1155,7 @@ class AgendaItemsController < ApplicationController
       :occurrence_count,
       :notes,
       :location,
+      :travel_nav_address,
       :arrive_early_minutes,
       :trigger_expression,
       :all_day,
@@ -1200,6 +1201,7 @@ class AgendaItemsController < ApplicationController
     attrs[:name] = item_params[:name] if item_params[:name].present?
     attrs[:notes] = item_params[:notes] if item_params.key?(:notes)
     attrs[:location] = item_params[:location] if item_params.key?(:location)
+    attrs[:travel_nav_address] = item_params[:travel_nav_address] if item_params.key?(:travel_nav_address)
     attrs[:arrive_early_minutes] = item_params[:arrive_early_minutes] if item_params.key?(:arrive_early_minutes)
     attrs[:color] = item_params[:color] if item_params[:color].present?
     attrs[:trigger_expression] = item_params[:trigger_expression] if item_params.key?(:trigger_expression)

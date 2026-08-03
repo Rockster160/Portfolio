@@ -26,6 +26,7 @@
 #  original_start_at    :datetime
 #  start_at             :datetime         not null
 #  status               :integer          default("confirmed"), not null
+#  travel_nav_address   :string
 #  trigger_expression   :text
 #  created_at           :datetime         not null
 #  updated_at           :datetime         not null
@@ -425,6 +426,7 @@ class AgendaItem < ApplicationRecord
         :name,
         :notes,
         :location,
+        :travel_nav_address,
         :arrive_early_minutes,
         :all_day,
         :metadata,
@@ -511,6 +513,7 @@ class AgendaItem < ApplicationRecord
       "name"                  => name,
       "notes"                 => notes,
       "location"              => location,
+      "nav-address"           => travel_nav_address,
       "resolved-address"      => travel["location_address"],
       "arrive-early-minutes"  => arrive_early_minutes.to_i,
       "travel-minutes"        => travel["travel_minutes"].to_i,
@@ -599,7 +602,7 @@ class AgendaItem < ApplicationRecord
   # cares about has changed — every other update (notes prose, attendees,
   # color, completion) should be a no-op so we don't burn worker capacity
   # or cache misses. Guards layered in order of cheapness.
-  CHAIN_RELEVANT_COLUMNS = %w[start_at end_at location arrive_early_minutes kind all_day].freeze
+  CHAIN_RELEVANT_COLUMNS = %w[start_at end_at location travel_nav_address arrive_early_minutes kind all_day].freeze
 
   def enqueue_travel_chain_sync
     return if Thread.current[::GoogleCalendar::Sync::SUPPRESS_KEY]

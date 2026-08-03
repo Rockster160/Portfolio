@@ -1254,6 +1254,8 @@
     const startTimeInput = $(".add-start-time", form);
     const endTimeInput   = $(".add-end-time", form);
     const dateInput      = $(".add-date", form);
+    const navField       = $(".add-nav-address-field", form);
+    const locationInput  = $(".add-location", form);
 
     let activeKind = "task";
     let currentRecurring = false;
@@ -1269,8 +1271,19 @@
       // to preserve what they were composing.
       alldayField?.classList.toggle("hidden", activeKind !== "event");
       if (activeKind !== "event" && alldayInput) alldayInput.checked = false;
+      syncNavField();
       syncAllDay();
     }
+
+    // The nav-address override only makes sense for an event that has a
+    // location to override. Keep it out of the way everywhere else (tasks,
+    // triggers, location-less events) so it doesn't clutter the form.
+    function syncNavField() {
+      if (!navField) return;
+      const hasLoc = !!locationInput?.value.trim();
+      navField.classList.toggle("hidden", !(activeKind === "event" && hasLoc));
+    }
+    locationInput?.addEventListener("input", syncNavField);
 
     function syncAllDay() {
       const isAllDay = !!alldayInput?.checked;
@@ -1427,6 +1440,10 @@
 
       $(".add-location", form).value = d.location || "";
       $(".add-arrive-early", form).value = parseInt(d.arriveEarlyMinutes, 10) || 0;
+      $(".add-nav-address", form).value = d.navAddress || "";
+      // Location is set above (after the syncKind() at open), so reveal the
+      // nav field against the freshly-prefilled location.
+      syncNavField();
       $(".add-notes", form).value = d.notes || "";
       $(".add-trigger-expression", form).value = d.triggerExpression || "";
 
@@ -1616,6 +1633,7 @@
           end_at:             endAt,
           all_day:            isAllDay,
           location:           $(".add-location", form).value,
+          travel_nav_address: $(".add-nav-address", form)?.value || "",
           arrive_early_minutes: parseInt($(".add-arrive-early", form)?.value, 10) || 0,
           notes:              $(".add-notes", form).value,
           trigger_expression: triggerExpression,
@@ -1636,6 +1654,7 @@
           allDay: isAllDay,
         });
         payload.agenda_schedule.location = payload.agenda_item.location;
+        payload.agenda_schedule.travel_nav_address = payload.agenda_item.travel_nav_address;
         payload.agenda_schedule.arrive_early_minutes = payload.agenda_item.arrive_early_minutes;
         payload.agenda_schedule.notes = payload.agenda_item.notes;
       }
@@ -1657,6 +1676,7 @@
         id:            String(itemIdRaw),
         name:          payload.agenda_item.name,
         location:      payload.agenda_item.location,
+        travel_nav_address: payload.agenda_item.travel_nav_address,
         notes:         payload.agenda_item.notes,
         start_at:      payload.agenda_item.start_at,
         end_at:        payload.agenda_item.end_at,
@@ -1673,6 +1693,7 @@
         const pa = Object.assign({}, existing.presentation_attrs || {}, {
           "name":     patch.name || "",
           "location": patch.location || "",
+          "nav-address": patch.travel_nav_address || "",
           "notes":    patch.notes || "",
           "color":    patch.color || "",
           "start-at": patch.start_at || 0,

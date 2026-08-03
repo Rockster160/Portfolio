@@ -184,6 +184,8 @@ module Buddy
       user         = watch.user
 
       case watch.kind
+      when "action"
+        run_action!(watch)
       when "prompt"
         Buddy::CompanionDelivery.deliver_prompt(
           user:         user,
@@ -200,6 +202,51 @@ module Buddy
           push_title:   watch.body,
         )
       end
+    end
+
+    # An automation hanging off a condition. Deliberately no model anywhere on
+    # this path: the scope is resolved when the watch is SET, so firing it is a
+    # Jil trigger and a receipt chip. A delay hands off to a Sidekiq job rather
+    # than sleeping, so the trigger that matched returns immediately and the
+    # rest of the watches on that event still get their turn.
+    def run_action!(watch)
+      return BuddyWatchActionWorker.perform_in(watch.run_delay.seconds, watch.id) if watch.run_delay.positive?
+
+      run_action_now!(watch)
+    end
+
+    # Fires the scope and leaves a trace. Shared with the delayed worker, which
+    # re-checks the watch is still live before calling it.
+    def run_action_now!(watch)
+      scope = watch.run_scope
+      return if scope.blank?
+
+      ::Jil.trigger(watch.user, scope.to_sym, {}, auth: :buddy, auth_id: watch.user_id)
+      action_chip(watch)
+    end
+
+    def action_chip(watch)
+      conversation = watch.byte_conversation
+      return if conversation.nil?
+
+      name = watch.run_task_name.presence || watch.run_scope
+      when_ = watch.run_delay.positive? ? " (#{watch.run_delay}s after)" : ""
+      msg = conversation.byte_messages.create!(
+        user:         watch.user,
+        direction:    :inbound,
+        state:        :delivered,
+        body:         "Fired **#{name}**#{when_} ⚡",
+        metadata:     {
+          "kind"      => "buddy_activity",
+          "tool_name" => "trigger_jil_task",
+          "ok"        => true,
+          "source"    => "watch",
+          "watch_id"  => watch.id,
+          "detail"    => watch.metadata.to_h["human_when"].to_s.presence,
+        }.compact,
+        delivered_at: Time.current,
+      )
+      MonitorChannel.broadcast_to(watch.user, { id: :byte, channel: :byte, data: { kind: :message, message: msg.as_wire } })
     end
 
     # The stored body says what to tell them; for a deploy the OUTCOME is the

@@ -1,7 +1,13 @@
 class Jil::Methods::AgendaItem < Jil::Methods::Base
   PERMIT_ATTRS = [:name, :notes, :location, :arrive_early_minutes, :start_at, :end_at, :color, :metadata].freeze
   GETTER_ATTRS = [
-    :id, :kind, :completed_at, :trigger_expression, :agenda_schedule_id, *PERMIT_ATTRS
+    :id,
+    :kind,
+    :completed_at,
+    :trigger_expression,
+    :agenda_schedule_id,
+    :travel_nav_address,
+    *PERMIT_ATTRS,
   ].freeze
 
   def cast(value)

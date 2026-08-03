@@ -73,6 +73,23 @@ Buddy::Tools.register(
     notify="Rocco". Their companion delivers it. Omit for an ordinary
     reminder-to-self. Must be someone in the household.
 
+    ## Doing something instead of saying something
+
+    `run` turns this from a nudge into an automation: name a Jil task from
+    `jil_triggers` and it FIRES when the condition hits, with nothing said to
+    anyone. "Trigger whisper-quiet the next time the doggy door opens" is
+    `trigger: "custom"` with the sensor's listener and `run: "Whisper Quiet"`.
+
+    `delay` (seconds, up to 900) waits that long after the condition before
+    running it - "ten seconds after the doggy door" is `delay: 10`. It only
+    applies with `run`.
+
+    This is a real capability, so don't decline it. "I can watch the sensor but
+    I can't make it wait ten seconds after" was wrong: one call sets the watch,
+    the wait and the trigger. Use `run` only when they want a THING to happen;
+    if they want to be told, that's `text` as usual. `notify` and `run` don't
+    combine - one is a message to a person, the other isn't a message at all.
+
     IMPORTANT for places (arrive/depart): the system resolves the place from
     the person's contacts and calendar. You do NOT know in advance whether it
     can - so don't state the reminder is set in your own words, and don't
@@ -82,13 +99,15 @@ Buddy::Tools.register(
     detected - just that you'll let them know.
   TXT
   args: {
-    text:    { type: :string,  required: true,  description: "What to remind them of" },
-    trigger:  { type: :enum,    required: true,  values: %i[arrive depart chore event agenda deploy custom], description: "Condition type" },
-    target:   { type: :string,  required: false, description: "Place / chore / event / calendar name the condition is about (omit for deploy and custom)" },
-    listener:     { type: :string, required: false, description: "Jil listener string. Required for trigger=custom, ignored otherwise. Read read_listener_guide first." },
-    when_phrase:  { type: :string, required: false, description: "Plain-language meaning of the listener (\"when something is added to the Claude list\"). Required for trigger=custom." },
-    repeat:  { type: :boolean, required: false, default: false, description: "Fire every time (true) instead of just the next time (false)" },
-    notify:  { type: :string,  required: false, description: "Household member to notify instead of the user (optional)" },
+    text:        { type: :string,  required: true,  description: "What to remind them of" },
+    trigger:     { type: :enum,    required: true,  values: %i[arrive depart chore event agenda deploy custom], description: "Condition type" },
+    target:      { type: :string,  required: false, description: "Place / chore / event / calendar name the condition is about (omit for deploy and custom)" },
+    listener:    { type: :string,  required: false, description: "Jil listener string. Required for trigger=custom, ignored otherwise. Read read_listener_guide first." },
+    when_phrase: { type: :string,  required: false, description: "Plain-language meaning of the listener (\"when something is added to the Claude list\"). Required for trigger=custom." },
+    repeat:      { type: :boolean, required: false, default: false, description: "Fire every time (true) instead of just the next time (false)" },
+    notify:      { type: :string,  required: false, description: "Household member to notify instead of the user (optional)" },
+    run:         { type: :string,  required: false, description: "Jil task name to FIRE when the condition hits, instead of saying anything. Verbatim from jil_triggers." },
+    delay:       { type: :integer, required: false, description: "Seconds to wait after the condition before running it (max 900). With `run` only." },
   },
   # Watching for an arrival or a deploy is everyone's. The other three reach
   # into a feature: a chore watch would tell someone without chores when the
@@ -158,6 +177,27 @@ Buddy::Tools.register(
       raise "unknown trigger #{trigger.inspect}"
     end
 
+    # An action watch resolves its task NOW, not at fire time. The whole point
+    # of this shape is that nothing has to think when the sensor trips, so a
+    # name that doesn't match anything has to fail here, while there's still
+    # someone in the conversation to tell.
+    run_name = payload[:run].to_s.strip
+    run_task = nil
+    if run_name.present?
+      raise "running an automation needs Jil access" unless Buddy::Features.enabled?(ctx.user, :jil)
+      raise "a watch either tells someone or runs something, not both" if payload[:notify].to_s.strip.present?
+
+      run_task = ctx.resolve_jil_trigger(run_name)
+      raise "no Jil task matches #{run_name.inspect}" if run_task.nil?
+      # Nothing fills in a payload when a sensor trips, so a listener with data
+      # filters on it would be wired up and then never fire.
+      unless run_task[:plain]
+        raise "#{run_task[:name]} needs data to fire (`#{run_task[:listener]}`), so it can't hang off a watch"
+      end
+    end
+    delay = payload[:delay].to_i.clamp(0, BuddyWatch::MAX_ACTION_DELAY)
+    delay = 0 if run_task.nil?
+
     every = ActiveModel::Type::Boolean.new.cast(payload[:repeat])
     human = human.sub(/\Awhen /, "every time ").sub(/\Anext time /, "every time ") if every
 
@@ -174,7 +214,13 @@ Buddy::Tools.register(
     recipient   = notify_user || owner
     to_self     = recipient.id == ctx.user.id
 
-    framed = to_self ? "Remind you #{human}" : "Let #{recipient.first_name} know #{human}"
+    framed = if run_task
+      "Run #{run_task[:name]}#{" #{delay}s after" if delay.positive?} #{human}"
+    elsif to_self
+      "Remind you #{human}"
+    else
+      "Let #{recipient.first_name} know #{human}"
+    end
 
     # Deliberately a note rather than a raise: two reminders on one condition
     # ("shower" and "do laundry" when I get home) are perfectly normal. The one
@@ -199,6 +245,9 @@ Buddy::Tools.register(
         place_name:     place_name,
         notify_user_id: notify_user&.id,
         watch_owner_id: owner.id,
+        run_scope:      run_task&.dig(:scope),
+        run_task_name:  run_task&.dig(:name),
+        run_delay:      delay,
       },
     }
   },
@@ -222,13 +271,18 @@ Buddy::Tools.register(
       user:              owner,
       byte_conversation: conversation,
       notify_user_id:    payload[:notify_user_id],
-      kind:              "prompt",
+      kind:              payload[:run_scope].present? ? "action" : "prompt",
       body:              payload[:text].to_s.first(500),
       trigger_scope:     payload[:trigger_scope].to_s,
       listener:          payload[:listener].presence,
       match:             payload[:match] || {},
       one_shot:          ActiveModel::Type::Boolean.new.cast(payload[:one_shot]),
-      metadata:          { "human_when" => payload[:human_when].to_s },
+      metadata:          {
+        "human_when"    => payload[:human_when].to_s,
+        "run_scope"     => payload[:run_scope].presence,
+        "run_task_name" => payload[:run_task_name].presence,
+        "run_delay"     => payload[:run_delay].to_i,
+      }.compact,
     )
     {
       watch_id:       watch.id,
@@ -236,6 +290,8 @@ Buddy::Tools.register(
       recipient_name: payload[:recipient_name],
       trigger_scope:  watch.trigger_scope,
       listener:       watch.listener,
+      run_task_name:  watch.run_task_name,
+      run_delay:      watch.run_delay,
     }
   },
   # Setting a watch is safe + reversible (cancel_reminder undoes it), so it
@@ -247,7 +303,10 @@ Buddy::Tools.register(
       where = result[:place_name].to_s.strip
       "Not sure where #{where.presence || "that"} is - what's the address, or is it on your calendar?"
     else
-      line = if result[:recipient_name].present?
+      line = if result[:run_task_name].present?
+        after = result[:run_delay].to_i.positive? ? ", #{result[:run_delay]}s after" : ""
+        "#{name} will run **#{result[:run_task_name]}** #{result[:human_when]}#{after}"
+      elsif result[:recipient_name].present?
         "#{name} will let #{result[:recipient_name]} know #{result[:human_when]}"
       else
         "#{name} will remind you #{result[:human_when]}"

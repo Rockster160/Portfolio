@@ -296,6 +296,38 @@ module Buddy
       { "label" => label, "lat" => loc[0], "lng" => loc[1] }
     end
 
+    # ---- jil ----
+
+    # Fuzzy-match a Jil automation this person is allowed to fire, by name.
+    # Returns { id:, name:, listener:, scope:, plain: } or nil.
+    #
+    # `plain` is whether the listener is a bare scope token. Those fire on the
+    # name alone; anything with `:` filters needs a payload built to satisfy
+    # them, so a caller with nowhere to supply one (a watch action, a saved
+    # button) has to refuse rather than wire up something that never fires.
+    def resolve_jil_trigger(name)
+      q = name.to_s.downcase.strip
+      return nil if q.blank?
+
+      candidates = user.accessible_tasks.buddy_visible.where.not(listener: [nil, ""])
+        .pluck(:id, :name, :listener)
+        .reject { |_, _, listener| listener.to_s.match?(/(^|\s)function\(/i) }
+
+      match = candidates.find { |_, n, _| n.downcase == q }
+      match ||= candidates.find { |_, n, _| n.downcase.start_with?(q) }
+      match ||= candidates.find { |_, n, _| n.downcase.include?(q) }
+      return nil if match.nil?
+
+      id, task_name, listener = match
+      {
+        id:       id,
+        name:     task_name,
+        listener: listener,
+        scope:    listener.to_s.strip.split(":").first,
+        plain:    listener.to_s.strip.match?(/\A[a-zA-Z][a-zA-Z0-9_-]*\z/),
+      }
+    end
+
     # ---- times ----
 
     # Every `iso_time` arg lands here eventually. Goes through parse_in_zone

@@ -19,6 +19,7 @@
 #  recurrence           :jsonb            not null
 #  start_time           :time             not null
 #  starts_on            :date             not null
+#  travel_nav_address   :string
 #  trigger_expression   :text
 #  until_on             :date
 #  created_at           :datetime         not null
@@ -107,6 +108,7 @@ class AgendaSchedule < ApplicationRecord
       all_day:              all_day,
       color:                color,
       location:             location,
+      travel_nav_address:   travel_nav_address,
       arrive_early_minutes: arrive_early_minutes,
       notes:                notes,
       trigger_expression:   trigger_expression,
@@ -131,6 +133,7 @@ class AgendaSchedule < ApplicationRecord
       name:                 name,
       notes:                notes,
       location:             location,
+      travel_nav_address:   travel_nav_address,
       color:                color,
       all_day:              all_day,
       start_time:           start_time&.strftime("%H:%M"),
@@ -231,6 +234,7 @@ class AgendaSchedule < ApplicationRecord
       name:                 name,
       notes:                notes,
       location:             location,
+      travel_nav_address:   travel_nav_address,
       arrive_early_minutes: arrive_early_minutes,
       color:                color,
       trigger_expression:   trigger_expression,
@@ -407,7 +411,8 @@ class AgendaSchedule < ApplicationRecord
       saved_change_to_kind? || saved_change_to_name? ||
       saved_change_to_trigger_expression? ||
       saved_change_to_duration_minutes? || saved_change_to_all_day? ||
-      saved_change_to_location? || saved_change_to_color? ||
+      saved_change_to_location? || saved_change_to_travel_nav_address? ||
+      saved_change_to_color? ||
       saved_change_to_notes? || saved_change_to_arrive_early_minutes? ||
       saved_change_to_metadata? ||
       previously_new_record?
@@ -424,6 +429,7 @@ class AgendaSchedule < ApplicationRecord
       color:                color,
       notes:                notes,
       location:             location,
+      travel_nav_address:   travel_nav_address,
       arrive_early_minutes: arrive_early_minutes,
       trigger_expression:   trigger_expression,
     }

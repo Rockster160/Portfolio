@@ -66,27 +66,16 @@ Buddy::Tools.register(
   # just happen rather than prompt a checkbox.
   level:       1,
   confirm:     ->(payload, ctx) {
-    q = payload[:name].to_s.downcase.strip
-    candidates = ctx.user.accessible_tasks.buddy_visible.where.not(listener: [nil, ""])
-      .pluck(:id, :name, :listener)
-      .reject { |_, _, listener| listener.to_s.match?(/(^|\s)function\(/i) }
+    task = ctx.resolve_jil_trigger(payload[:name])
+    raise "no Jil task matches #{payload[:name].inspect}" if task.nil?
 
-    match = candidates.find { |_, n, _| n.downcase == q } ||
-            candidates.find { |_, n, _| n.downcase.start_with?(q) } ||
-            candidates.find { |_, n, _| n.downcase.include?(q) }
-
-    raise "no Jil task matches #{payload[:name].inspect}" if match.nil?
-
-    id, name, listener = match
-    scope = listener.to_s.strip.split(":").first
-    data  = payload[:data].to_s.strip.presence
-
+    data = payload[:data].to_s.strip.presence
     summary = if data
-      "Fire **#{name}**? (`#{scope}` with `#{data}`)"
+      "Fire **#{task[:name]}**? (`#{task[:scope]}` with `#{data}`)"
     else
-      "Fire **#{name}**? (scope: `#{scope}`)"
+      "Fire **#{task[:name]}**? (scope: `#{task[:scope]}`)"
     end
-    { summary: summary, resolved: { task_id: id, task_name: name, scope: scope, data: data } }
+    { summary: summary, resolved: { task_id: task[:id], task_name: task[:name], scope: task[:scope], data: data } }
   },
   label:       ->(payload, _ctx) {
     title = (payload[:task_name] || payload[:name]).to_s

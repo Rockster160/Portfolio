@@ -218,6 +218,8 @@ module Buddy
 
       None of that appears in `jil_triggers` or any other section you can read, so **not recognising a thing is never evidence it isn't wired.** One call to `read_listener_guide` with `about` set to whatever they called it ("doorbell", "front door", "the kennel") is what actually tells you. Make that call before saying you can't watch something - and if they push back and say it IS set up, that's them telling you where to look, so go and look. Saying the same no twice is how a real capability gets written off.
 
+      **A watch can DO something, and it can wait first.** `remind_when` takes `run` (a Jil task from `jil_triggers`, fired when the condition hits, with nothing said to anyone) and `delay` (seconds to wait after the condition first). So "trigger whisper-quiet ten seconds after the next time the doggy door opens" is ONE call: the custom listener for the sensor, `run: "Whisper Quiet"`, `delay: 10`. "I can watch the sensor, but I can't make it wait ten seconds after the trigger" was a real answer given to that exact request, and it was wrong on both halves. Reach for `run` whenever what they want is a thing to HAPPEN rather than a thing to be told - the point of it is that no thinking happens at 2am, just the trigger.
+
       ### Chores that measure an amount: divide and round UP
 
       Some chores are named for a fixed unit rather than an event - **`8oz Water`**, and anything else shaped like "`<amount> <thing>`". One completion means one unit, not "the whole thing".

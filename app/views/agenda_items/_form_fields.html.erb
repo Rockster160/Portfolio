@@ -127,6 +127,18 @@
   </div>
 </div>
 
+<% if mode == :edit %>
+  <%# Nav-address override — edit-only, and revealed by agenda.js only for an
+      event that already has a location. Lets `location` stay a display name
+      ("Eyebrow appointment") while the car + travel-time math use a real
+      address. Blank = use the location text (unchanged behavior). %>
+  <div class="ff add-nav-address-field hidden">
+    <label>Navigate to</label>
+    <input type="text" class="add-nav-address" autocomplete="off"
+           placeholder="Address the car drives to — leave blank to use the location name">
+  </div>
+<% end %>
+
 <div class="ff">
   <label>Notes</label>
   <textarea class="add-notes" rows="3"></textarea>

@@ -26,11 +26,11 @@ module Buddy
     # Fixed per-turn cost of everything that is not conversation history.
     # Measured 2026-08-03 with the byte theme:
     #
-    #   prompt total      ~23,552   (Personality.for, byte theme, all features)
-    #   registry schemas  ~15,595   (Tools.function_schemas)
+    #   prompt total      ~23,734   (Personality.for, byte theme, all features)
+    #   registry schemas  ~15,891   (Tools.function_schemas)
     #   Turn's own tools   ~2,098   (see below)
     #   ===========================
-    #   TOTAL             ~41,245
+    #   TOTAL             ~41,723
     #
     # The schema half was reading ~2,200 LOW because the recipe below used to
     # measure `Buddy::Tools.function_schemas` alone. That's the registry, which
@@ -48,7 +48,7 @@ module Buddy
     # the tool array from Turn#tools rather than the registry:
     #   Buddy::Personality.for(user, conversation: c).bytesize / 4
     #   JSON.generate(turn_tools).bytesize / 4
-    FIXED_OVERHEAD = 41_245
+    FIXED_OVERHEAD = 41_723
 
     def estimate_for(conversation)
       compact_at   = compact_timestamp(conversation)

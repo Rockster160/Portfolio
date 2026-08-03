@@ -33,12 +33,12 @@
     <canvas id="spend-chart"></canvas>
   </div>
 
-  <% if @models.any? %>
+  <% if @user_ids.any? %>
     <div class="spend-legend">
-      <% @model_totals.each do |model, micros| %>
+      <% @user_totals.each do |user_id, micros| %>
         <div class="spend-legend-row">
-          <span class="spend-swatch" style="background-color: <%= @colors[model] %>;"></span>
-          <span class="spend-legend-model"><%= model %></span>
+          <span class="spend-swatch" style="background-color: <%= @colors[user_id] %>;"></span>
+          <span class="spend-legend-model"><%= @users[user_id]&.first_name || "User ##{user_id}" %></span>
           <span class="spend-legend-total"><%= Buddy::GPT::Pricing.format_micros(micros) %></span>
         </div>
       <% end %>
@@ -52,7 +52,7 @@
 <%=
   raw JSON.generate({
     labels:   @labels,
-    datasets: @datasets.map { |ds| { label: ds[:model], color: ds[:color], data: ds[:data] } },
+    datasets: @datasets.map { |ds| { label: ds[:label], color: ds[:color], data: ds[:data] } },
   })
 %>
 </script>

@@ -49,7 +49,10 @@ Payloads are nested. Keep adding segments to walk down:
 ```
 item:list:name:Groceries     matches { list: { name: "Groceries" } }
 item:list:id:7               matches { list: { id: 7 } }
+item:section:name:Ocs-Backend  matches { section: { name: "Ocs-Backend" } }
 ```
+
+**A segment that isn't in the payload silently never matches.** It doesn't error and it doesn't warn - `ListenerMatch` can only tell you a listener PARSES, never that its keys exist - so the watch saves cleanly and then sits there forever. `item:sparkle:yes` is a perfectly valid listener that can never fire. This is the single most common way a watch fails, so check the key path against a real payload rather than assuming a field you can see in the UI is in the trigger.
 
 A value with no key at all matches anywhere in the payload, which is almost always too loose:
 
@@ -106,7 +109,7 @@ These fire per user, carrying that user's own data.
 
 | Scope | Fires when | Useful keys |
 |---|---|---|
-| `item` | a list item is added or removed | `action` (`added`/`removed`), `name`, `list:id`, `list:name` |
+| `item` | a list item is added or removed | `action` (`added`/`removed`), `name`, `list:id`, `list:name`, `section:id`, `section:name` (null when the item isn't in one) |
 | `list` | a list itself changes | `action`, `id`, `name` |
 | `section` | a list section changes | `action`, `name` |
 | `chore_completion` | a chore is marked done or undone | `action`, `chore_name` |

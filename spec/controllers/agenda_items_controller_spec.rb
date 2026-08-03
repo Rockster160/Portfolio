@@ -238,6 +238,55 @@ RSpec.describe AgendaItemsController, type: :controller do
     end
   end
 
+  describe "PATCH #update with travel_nav_address" do
+    let!(:item) {
+      create(
+        :agenda_item, agenda: agenda, kind: :event, name: "Eyebrow appointment",
+        start_at: Time.current, end_at: Time.current + 1.hour, location: "Eyebrow appointment"
+      )
+    }
+
+    it "persists the nav-address override on a non-recurring item" do
+      patch :update, params: {
+        id:          item.id,
+        agenda_item: {
+          agenda_id:          agenda.id,
+          name:               "Eyebrow appointment",
+          location:           "Eyebrow appointment",
+          travel_nav_address: "1234 S Main St, Denver CO",
+        },
+      }, format: :json
+      item.reload
+      expect(item.travel_nav_address).to eq("1234 S Main St, Denver CO")
+      expect(item.location).to eq("Eyebrow appointment") # display name untouched
+    end
+
+    it "carries the nav-address override to the schedule on a series edit" do
+      sched = create(
+        :agenda_schedule, agenda: agenda, kind: :event, name: "Waxing",
+        start_time: "09:00", duration_minutes: 60,
+        recurrence: { "freq" => "weekly" }, starts_on: Date.current
+      )
+      phantom_id = "p-#{sched.id}-#{(Date.current + 7.days).iso8601}"
+      patch :update, params: {
+        id:              phantom_id,
+        scope:           :series,
+        agenda_item:     { agenda_id: agenda.id, name: "Waxing", location: "Waxing" },
+        agenda_schedule: {
+          name:               "Waxing",
+          kind:               "event",
+          start_time:         "09:00",
+          starts_on:          Date.current.iso8601,
+          recurrence:         { freq: "weekly" },
+          location:           "Waxing",
+          travel_nav_address: "1234 S Main St, Denver CO",
+        },
+      }, format: :json
+      sched.reload
+      expect(sched.travel_nav_address).to eq("1234 S Main St, Denver CO")
+    end
+  end
+
   describe "POST #create" do
     it "creates a one-off task and broadcasts" do
       expect(MonitorChannel).to receive(:broadcast_to).with(user, hash_including(id: :agenda))

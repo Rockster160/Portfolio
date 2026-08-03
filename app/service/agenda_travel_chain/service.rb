@@ -161,7 +161,7 @@ module AgendaTravelChain
       fp = location_fingerprint(evt)
       return if evt.metadata.dig("travel", "location_fingerprint") == fp
 
-      res = @resolver.resolve_location(evt.location)
+      res = @resolver.resolve_location(nav_target(evt))
       return unless res
 
       merge_travel_metadata(evt,
@@ -172,8 +172,16 @@ module AgendaTravelChain
       )
     end
 
+    # The navigation target the geocoder/Distance Matrix actually resolves.
+    # `travel_nav_address` lets the user keep `location` as a display-only
+    # name ("Eyebrow appointment") while pointing the car and drive-time
+    # math at a real address. Blank falls back to the location text.
+    def nav_target(evt)
+      evt.travel_nav_address.presence || evt.location
+    end
+
     def location_fingerprint(evt)
-      ::Digest::SHA256.hexdigest(evt.location.to_s)
+      ::Digest::SHA256.hexdigest([evt.location, evt.travel_nav_address].map(&:to_s).join("\x1f"))
     end
 
     # ----- chain linking ------------------------------------------------------
@@ -507,6 +515,7 @@ module AgendaTravelChain
     def input_fingerprint(evt, _all_events, travel)
       payload = {
         loc:      evt.location.to_s,
+        nav:      evt.travel_nav_address.to_s,
         start:    evt.start_at.to_i,
         end:      evt.end_at&.to_i,
         early:    evt.arrive_early_minutes.to_i,

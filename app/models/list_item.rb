@@ -119,8 +119,23 @@ class ListItem < ApplicationRecord
     }.merge(opts))
   end
 
+  # The payload every `:item` trigger matches against — model paths and both
+  # controllers go through here, so this is the one place that decides what a
+  # listener can filter on.
+  #
+  # `section` is nested for the same reason `list` is: people write
+  # `item:section:name:/^Ocs-Backend$/`, not the id. The bare `section_id` from
+  # `serialize` is unusable in a listener written by hand or by Buddy, and
+  # because Jil::ListenerMatch can only check that a listener PARSES — never
+  # that its keys exist in the payload — a watch filtering on the missing key
+  # validated fine, saved fine, and then sat there silently never firing.
+  # Absent for an unsectioned item (Rails drops a nil association from
+  # `include`), which is the same nothing-to-match as a name that differs.
   def jil_serialize(additional={})
-    serialize(include: { list: { only: [:id, :name, :description] } }).merge(additional)
+    serialize(include: {
+      list:    { only: [:id, :name, :description] },
+      section: { only: [:id, :name] },
+    }).merge(additional)
   end
 
   # Fire the same Jil `:item` trigger the list controllers fire, so items
@@ -132,9 +147,14 @@ class ListItem < ApplicationRecord
   def notify_jil(action)
     return self unless persisted?
 
-    list&.owners&.each { |owner|
-      ::Jil.trigger(owner, :item, jil_serialize(action: action), auth: :trigger)
-    }
+    owners = list&.owners
+    return self if owners.blank?
+
+    # Serialized ONCE rather than per owner. The payload is identical for all of
+    # them - it describes the item, not who's listening - and building it inside
+    # the loop meant a co-owned list did the whole thing twice.
+    payload = jil_serialize(action: action)
+    owners.each { |owner| ::Jil.trigger(owner, :item, payload, auth: :trigger) }
     self
   end
 

@@ -927,4 +927,47 @@ RSpec.describe AgendaTravelChain::Service do
       expect(a_meta["chain_successor_id"]).to be_nil
     end
   end
+
+  # travel_nav_address lets a display-only location name ("Eyebrow
+  # appointment", "Far") point the geocoder + Distance Matrix at a real
+  # address, so the car navigates correctly and the drive time is right —
+  # without changing the label the user sees.
+  describe "travel_nav_address override" do
+    it "resolves + measures against the nav address, not the display location" do
+      evt = make_event(
+        name:               "Eyebrow appointment",
+        start_at:           Time.zone.parse("2026-06-18 14:00"),
+        end_at:             Time.zone.parse("2026-06-18 15:00"),
+        location:           "Far",     # would be Home→Far = 7200s = 120m
+        travel_nav_address: "Office",  # real address: Home→Office = 600s = 10m
+      )
+      described_class.new(user, Date.new(2026, 6, 18)).run
+
+      meta = evt.reload.metadata["travel"]
+      # Distance Matrix used the nav address, not the far-away display name.
+      expect(meta["location_address"]).to eq("Office")
+      expect(meta["travel_seconds"]).to eq(600)
+      expect(meta["travel_minutes"]).to eq(10)
+      # The display location itself is untouched.
+      expect(evt.location).to eq("Far")
+    end
+
+    it "re-resolves when the nav address changes (fingerprint tracks it)" do
+      evt = make_event(
+        name:     "Eyebrow appointment",
+        start_at: Time.zone.parse("2026-06-18 14:00"),
+        end_at:   Time.zone.parse("2026-06-18 15:00"),
+        location: "Far",
+      )
+      described_class.new(user, Date.new(2026, 6, 18)).run
+      expect(evt.reload.metadata["travel"]["travel_minutes"]).to eq(120)
+
+      evt.update!(travel_nav_address: "Office")
+      described_class.new(user, Date.new(2026, 6, 18)).run
+
+      meta = evt.reload.metadata["travel"]
+      expect(meta["location_address"]).to eq("Office")
+      expect(meta["travel_minutes"]).to eq(10)
+    end
+  end
 end

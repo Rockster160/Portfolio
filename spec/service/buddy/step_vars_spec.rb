@@ -24,6 +24,9 @@ RSpec.describe "Buddy step variables" do
     allow(WebPushNotifications).to receive(:send_to_byte)
     allow(::WebPushNotifications).to receive(:update_count)
     allow(::Jil).to receive(:trigger).and_return(true)
+    # Picking a question back up seeds a real Buddy turn, and Sidekiq runs
+    # inline here. We assert on the seed that gets written, not on the reply.
+    allow(BuddyDeliverWorker).to receive(:perform_async)
     ChoreHouseholdMembership.create!(chore_household: household, user: partner, role: :member)
     user.update!(chore_household_id: household.id)
     partner.update!(chore_household_id: household.id)
@@ -158,6 +161,65 @@ RSpec.describe "Buddy step variables" do
 
       expect(relay_gate).to be_nil
       expect(told).to eq(["asked her"])
+    end
+
+    # Prod Aug 3: "ask Chelsea if she wants to plunge tomorrow" went out with
+    # `await_reply` and nothing behind it. The receipt promised "I'll pick this
+    # back up when they answer", the gate was only built when steps were queued,
+    # so she answered "yes" and Byte never took a turn on it.
+    describe "awaited with nothing queued behind it" do
+      def ask_only!
+        build!([ask_her("Want to plunge tomorrow?", "hers")])
+      end
+
+      it "still holds a gate, because the receipt promised one" do
+        ask_only!
+
+        expect(relay_gate).to be_present
+      end
+
+      it "hands the answer to Buddy as a turn when it lands" do
+        ask_only!
+        relay = BuddyRelay.last
+        relay.update!(status: :delivered)
+
+        expect { Buddy::CompanionRelay.record_answer!(relay, "yes") }
+          .to change { convo.byte_messages.where("metadata->>'source' = 'relay_answer'").count }.by(1)
+      end
+
+      it "seeds that turn with the question and the answer, and says not to parrot it" do
+        ask_only!
+        relay = BuddyRelay.last
+        relay.update!(status: :delivered)
+        Buddy::CompanionRelay.record_answer!(relay, "yes")
+
+        seed = convo.byte_messages.where("metadata->>'source' = 'relay_answer'").last
+        expect(seed.body).to include("Want to plunge tomorrow?", "yes", partner.first_name)
+        expect(seed.body).to include("don't read it back")
+        expect(seed.metadata["hidden"]).to be(true)
+      end
+
+      it "picks it back up only once, however many times the answer lands" do
+        ask_only!
+        relay = BuddyRelay.last
+        relay.update!(status: :delivered)
+
+        Buddy::CompanionRelay.record_answer!(relay, "yes")
+        Buddy::CompanionRelay.record_answer!(relay.reload, "yes")
+
+        expect(convo.byte_messages.where("metadata->>'source' = 'relay_answer'").count).to eq(1)
+      end
+
+      # A plain ask is still fire-and-forget — no gate, no extra turn.
+      it "doesn't take a turn for a question that never asked to wait" do
+        build!([{ tool_name: :ask_partner, payload: { to: her, question: "Dinner?" } }])
+        relay = BuddyRelay.last
+        relay.update!(status: :delivered)
+
+        Buddy::CompanionRelay.record_answer!(relay, "tacos")
+
+        expect(convo.byte_messages.where("metadata->>'source' = 'relay_answer'")).to be_empty
+      end
     end
 
     it "needs somewhere to put the answer before it will wait for one" do
