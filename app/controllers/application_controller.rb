@@ -4,8 +4,8 @@ class ApplicationController < ActionController::Base
   # Prevent CSRF attacks by raising an exception.
   # For APIs, you may want to use :null_session instead.
   protect_from_forgery with: :exception, if: -> {
-    !current_user&.id.in?([1, 58128])
-  } # Hack- skip CSRF if it's me or Alchemibluum
+    !current_user&.perma_safe?
+  } # Hack- skip CSRF for trusted household members (User::PERMA_SAFE_IDS)
   helper_method :current_user, :user_signed_in?, :guest_account?
 
   # skip_before_action :pretty_logit # Defined by gem
