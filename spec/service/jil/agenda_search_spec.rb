@@ -222,6 +222,41 @@ RSpec.describe Jil::Methods::Agenda, "#search" do
     expect(results.pluck(:id)).to include(live.id.to_s)
   end
 
+  describe "#find_items" do
+    it "excludes cancelled (archived/deleted) items" do
+      create(
+        :agenda_item, agenda: agenda, kind: :event, name: "Live Meeting",
+        start_at: 1.hour.from_now, end_at: 2.hours.from_now
+      )
+      create(
+        :agenda_item, agenda: agenda, kind: :event, name: "Deleted Meeting",
+        start_at: 1.hour.from_now, end_at: 2.hours.from_now, status: :cancelled,
+        cancelled_at: Time.current
+      )
+
+      results = methods.find_items(agenda, "kind:event is:upcoming", 100, "ASC")
+      names = results.map { |h| h[:name] }
+      expect(names).to include("Live Meeting")
+      expect(names).not_to include("Deleted Meeting")
+    end
+
+    # Regression: materialize_overdue_phantoms_for_today! iterates with
+    # `find_each`, so it must be handed a relation, not an Array of one agenda.
+    it "materializes today's overdue phantoms for the scoped agenda" do
+      Timecop.freeze(Time.utc(2026, 5, 14, 22, 0)) {
+        schedule = phantom_only(create(
+          :agenda_schedule, agenda: agenda, kind: :task,
+          name: "Bins Out", start_time: "14:00",
+          recurrence: { "freq" => "daily" }, starts_on: Date.current - 1
+        ))
+
+        results = methods.find_items(agenda, "kind:task is:incomplete is:overdue", 50, "ASC")
+        expect(results.pluck(:name)).to include("Bins Out")
+        expect(schedule.agenda_items.where(start_at: ..Time.current).count).to be >= 1
+      }
+    end
+  end
+
   it "does NOT include phantoms when the query has no future-leaning is: token" do
     Timecop.freeze(Time.utc(2026, 5, 14, 13, 0)) {
       phantom_only(create(

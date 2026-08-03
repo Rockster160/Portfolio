@@ -133,7 +133,7 @@ class Jil::Methods::Agenda < Jil::Methods::Base
     a = load_agenda(agenda)
     return [] if a.blank?
 
-    materialize_overdue_phantoms_for_today!(agendas: [a])
+    materialize_overdue_phantoms_for_today!(agendas: ::Agenda.where(id: a.id))
     query_for_db, hidden_filter = split_hidden_state(query)
     scope = ::AgendaItem.query(query_for_db).not_cancelled.where(agenda_id: a.id)
     scope = apply_hidden_scope_sql(scope, hidden_filter)
