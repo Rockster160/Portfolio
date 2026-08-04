@@ -181,6 +181,38 @@ RSpec.describe Buddy::Timers do
 
       expect(described_class.quick_set!(user, convo, seconds: 60)).to be_nil
     end
+
+    # Nobody composes a fast-pathed timer, so nothing answered the person -
+    # and every other receipt chip is kept out of history. The transcript
+    # showed the request with nothing after it, so the next vague message got
+    # read as being about it: "set a timer for 50 minutes to rotate laundry" at
+    # 10:41, "Okay! What next?" at 11:30, and the reply was "Timer's set for 50
+    # minutes, and it's labeled rotate laundry" plus a second 50-minute timer.
+    it "leaves a trace the model can see, so the next turn knows it happened" do
+      convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: "set a timer for 50 minutes to rotate laundry",
+      )
+      described_class.quick_set!(user, convo, seconds: 3000, label: "rotate laundry")
+      last = convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "Okay! What next?")
+
+      turns = Buddy::GPT::History.build(convo.reload, upto: last)
+
+      expect(turns.pluck(:role)).to eq(%i[user assistant user])
+      expect(turns[1][:content]).to include("50 min timer")
+    end
+
+    it "still keeps ordinary receipt chips out, since a reply already covers those" do
+      convo.byte_messages.create!(
+        user:      user,
+        direction: :inbound,
+        state:     :delivered,
+        body:      "Byte will send you a reminder at 5pm",
+        metadata:  { "kind" => "buddy_activity", "tool_name" => "schedule_reminder", "ok" => true },
+      )
+      last = convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "thanks")
+
+      expect(Buddy::GPT::History.build(convo.reload, upto: last).pluck(:role)).to eq([:user])
+    end
   end
 
   describe ".page_for" do

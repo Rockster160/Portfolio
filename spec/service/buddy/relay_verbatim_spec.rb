@@ -70,6 +70,33 @@ RSpec.describe "Buddy relay integrity" do
     end
   end
 
+  # Prod: "Ask Rocco if we're leaving at 5:30" got "Rocco's wondering if you're
+  # leaving at 5:30" - the direction inverted, no tool called, and she had to
+  # send it again. The prompt was teaching that: a bullet about incoming relays
+  # described a "hidden seed" flow that no longer exists (bridge! delivers
+  # verbatim and seeds nothing) and handed over two finished sentences using a
+  # real household name, one of which came back almost word for word.
+  describe "which direction a relay is going" do
+    let(:prompt) {
+      Buddy::Personality.for(User.me, conversation: User.me.byte_conversations.create!(mode: :buddy))
+    }
+
+    it "no longer promises a seed for something arriving from someone else" do
+      expect(prompt).not_to match(/hidden seed will ask you to pass a message along/i)
+      expect(prompt).to include("this needs nothing from you")
+    end
+
+    it "doesn't hand over a ready-made go-between line to copy" do
+      expect(prompt).not_to include("wanted me to let you know")
+      expect(prompt).not_to match(/'s wondering what you're feeling for dinner/)
+    end
+
+    it "says an ask/tell from their OWN person is the tool, not a narration" do
+      expect(prompt).to include("the reply is the call")
+      expect(prompt).to include("Ask Rocco if we're leaving at 5:30")
+    end
+  end
+
   describe Buddy::GPT::Turn do
     # The exact body that went out in prod.
     let(:faked) { "Sent. 😅\n\n[you passed this along to Moss] Rude. Byte took away my formatting!" }

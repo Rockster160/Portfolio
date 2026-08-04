@@ -187,12 +187,16 @@ module Buddy
       when "action"
         run_action!(watch)
       when "prompt"
-        Buddy::CompanionDelivery.deliver_prompt(
-          user:         user,
-          conversation: conversation,
-          seed:         self_seed(watch, payload),
-          metadata:     { kind: "buddy_trigger", hidden: true, source: "watch", watch_id: watch.id },
-        )
+        if templated?(watch)
+          announce!(watch, payload)
+        else
+          Buddy::CompanionDelivery.deliver_prompt(
+            user:         user,
+            conversation: conversation,
+            seed:         self_seed(watch, payload),
+            metadata:     { kind: "buddy_trigger", hidden: true, source: "watch", watch_id: watch.id },
+          )
+        end
       else
         Buddy::CompanionDelivery.deliver_plain(
           user:         user,
@@ -202,6 +206,66 @@ module Buddy
           push_title:   watch.body,
         )
       end
+    end
+
+    # A repeating watch is a FEED, and a feed doesn't need composing.
+    #
+    # Every fire of one costs a whole model turn - prompt, tool schemas, the
+    # lot - to produce a sentence whose entire content is "that happened
+    # again". The Claude-list watch fired 64 times in one day, about a third of
+    # the day's spend, and found 64 different ways to say another item landed
+    # without ever naming the item.
+    #
+    # A one-shot is the opposite case and keeps its turn: it fires once, at a
+    # moment that matters, often mid-conversation, and what it says is worth
+    # writing.
+    def templated?(watch)
+      !watch.one_shot
+    end
+
+    def announce!(watch, payload)
+      text = announcement(watch, payload)
+      Buddy::CompanionDelivery.deliver_plain(
+        user:         watch.user,
+        conversation: watch.byte_conversation,
+        text:         text,
+        metadata:     { kind: "buddy", source: "watch", watch_id: watch.id },
+        # Without the glyph, since a push notification has an icon of its own.
+        push_title:   text.sub(/\A[^\p{Alnum}]+\s*/, ""),
+      )
+    end
+
+    def announcement(watch, payload)
+      return deploy_line(payload) if watch.trigger_scope == "deploy"
+
+      # The body IS the message on this path, so remind_when tells the model to
+      # write these as finished sentences. A trailing full stop would collide
+      # with the detail appended after it.
+      said   = watch.body.to_s.strip.sub(/[.!]+\z/, "")
+      detail = payload_detail(payload)
+      ["🔔 #{said}", detail].compact.join(" — ")
+    end
+
+    # What actually changed, when the trigger carries it. This is the half that
+    # went missing every single time: sixty-four pings saying an item landed,
+    # not one of them saying which one.
+    def payload_detail(payload)
+      return nil unless payload.is_a?(Hash)
+
+      data = payload.with_indifferent_access
+      name = [data[:name], data[:title], data[:body]].filter_map { |v| v.to_s.strip.presence }.first
+      name.present? ? "“#{name.truncate(80)}”" : nil
+    end
+
+    def deploy_line(payload)
+      data    = payload.is_a?(Hash) ? payload.with_indifferent_access : {}
+      failed  = deploy_outcome(data) == :failed
+      sha     = data[:sha].to_s.strip.first(7).presence
+      note    = data[:message].to_s.strip.presence
+      head    = failed ? "❌ Deploy FAILED" : "🚀 Deploy finished successfully"
+      tail    = [sha, (note && "“#{note.truncate(80)}”")].compact_blank.join(" ").presence
+
+      [head, tail].compact.join(" — ")
     end
 
     # An automation hanging off a condition. Deliberately no model anywhere on

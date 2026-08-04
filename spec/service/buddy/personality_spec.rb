@@ -363,6 +363,23 @@ RSpec.describe Buddy::Personality do
       expect(prompt).to include("A plan you only said is not a plan")
     end
 
+    # Prod: "When is my next 1-1 with Eric?" got "Wednesday at 11:00 AM" - a
+    # real event at a real time, and it's Zoom with Bri. It then survived two
+    # follow-ups, including one asking for the date.
+    it "says a named thing has to be named on the row it answers with" do
+      expect(prompt).to include("is answered by a row that actually says X")
+      expect(prompt).to include("the honest answer is that you don't see one")
+    end
+
+    # Prod, Eve/Suki: her whole day was reminders, so the agenda looked nearly
+    # empty. "What's next" left the tomatoes out twice, and the second time it
+    # came out as "that's not on today's calendar anymore" - which reads as
+    # cancelled, about a reminder that was sitting right there.
+    it "says what's next has to read reminders too, not just the calendar" do
+      expect(prompt).to include("not the same question as \"what's on the calendar.\"")
+      expect(prompt).to include("Read `upcoming_reminders` alongside it")
+    end
+
     # Prod Aug 3: "Shower's now at 4:45 PM" wrote 10:45Z, which is 4:45 AM. The
     # model was doing the UTC conversion by hand and got the sign backwards.
     it "tells it to write local wall-clock time and never convert to UTC" do

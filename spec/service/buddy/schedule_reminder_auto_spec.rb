@@ -26,6 +26,65 @@ RSpec.describe "schedule_reminder auto-run" do
     expect(chip.body).to match(/\A(Byte|Moss) will send you a reminder /)
   end
 
+  # Prod: "please alert me of both of those items" produced second copies of two
+  # reminders set three hours earlier, and both fired twice - 3:15 and 3:35, a
+  # minute apart each. Buddy had `upcoming_reminders` and never read it, which
+  # is why this can't be prompt guidance alone.
+  describe "one that's already set" do
+    let(:at) { 2.hours.from_now.in_time_zone(user.timezone) }
+    let(:ctx) { Buddy::ToolContext.new(user, conversation: convo) }
+    let(:tool) { Buddy::Tools[:schedule_reminder] }
+
+    def existing!(text, when_at=at)
+      BuddyReminder.create!(user: user, byte_conversation: convo, body: text, fire_at: when_at)
+    end
+
+    it "refuses a second copy of the same thing at the same minute" do
+      existing!("Write Doug's card")
+
+      expect { tool[:confirm].call({ text: "Write Doug's card", at: at.iso8601 }, ctx) }
+        .to raise_error(/already set/i)
+    end
+
+    # The two didn't share a single word of phrasing, but they were the same
+    # nudge, and Eve got both of them at 3:35.
+    it "catches a reworded copy that still means the same thing" do
+      existing!("Get your outfit and accessories sorted before your shower.")
+
+      expect { tool[:confirm].call({ text: "Pick out your outfit", at: at.iso8601 }, ctx) }
+        .to raise_error(/already set/i)
+    end
+
+    it "lets two genuinely different reminders share a minute" do
+      existing!("Take the meatloaf out")
+
+      expect { tool[:confirm].call({ text: "Call mom", at: at.iso8601 }, ctx) }.not_to raise_error
+    end
+
+    it "lets the same thing be set again at a different time" do
+      existing!("Write Doug's card", at - 1.hour)
+
+      expect { tool[:confirm].call({ text: "Write Doug's card", at: at.iso8601 }, ctx) }.not_to raise_error
+    end
+
+    it "ignores one that's already been cancelled or fired" do
+      existing!("Write Doug's card").update!(cancelled_at: Time.current)
+
+      expect { tool[:confirm].call({ text: "Write Doug's card", at: at.iso8601 }, ctx) }.not_to raise_error
+    end
+
+    # A daily 9am and a one-off tomorrow at 9am are different requests, and the
+    # recurring one is never "already set" for a particular day.
+    it "doesn't compare against a recurring reminder" do
+      BuddyReminder.create!(
+        user: user, byte_conversation: convo, body: "Write Doug's card",
+        fire_at: at, recurrence: { "kind" => "daily", "at" => at.strftime("%H:%M") }
+      )
+
+      expect { tool[:confirm].call({ text: "Write Doug's card", at: at.iso8601 }, ctx) }.not_to raise_error
+    end
+  end
+
   describe "friendly_future phrasing" do
     let(:ctx) { Buddy::ToolContext.new(user) }
     let(:noon) { Time.current.in_time_zone(user.timezone).change(hour: 18, min: 1) }

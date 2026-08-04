@@ -15,12 +15,17 @@ RSpec.describe Buddy::WatchMatcher do
     # own contract is "which watch fires + how state advances"; delivery is
     # CompanionDelivery's concern (covered via the reminder path).
     captured = seeds
+    written  = lines
     allow(Buddy::CompanionDelivery).to receive(:deliver_prompt) { |**kwargs| captured << kwargs[:seed] }
-    allow(Buddy::CompanionDelivery).to receive(:deliver_plain)
+    allow(Buddy::CompanionDelivery).to receive(:deliver_plain) { |**kwargs| written << kwargs[:text] }
   end
 
   # What each fired watch actually handed Buddy to compose from.
   let(:seeds) { [] }
+
+  # And what went out with no model in the loop at all - the repeating form,
+  # which is delivered as written rather than composed.
+  let(:lines) { [] }
 
   def make_watch(attrs = {})
     BuddyWatch.create!({
@@ -155,8 +160,8 @@ RSpec.describe Buddy::WatchMatcher do
       repeating.reload
       expect(repeating.fired_at).to be_nil # never goes terminal
       expect(repeating.last_fired_at).to be_present
-      expect(seeds).to include(a_string_including("finished successfully"))
-      expect(seeds).to include(a_string_including("FAILED"))
+      expect(lines).to include(a_string_including("finished successfully"))
+      expect(lines).to include(a_string_including("FAILED"))
     end
 
     # Prod 1320/1322/1323: one deploy, three notifications 8 seconds apart. The
@@ -179,21 +184,21 @@ RSpec.describe Buddy::WatchMatcher do
         described_class.dispatch(user, :monitor, { deploy: "success" })
         described_class.dispatch(user, :monitor, { deploy: "success" })
 
-        expect(seeds.length).to eq(1)
+        expect(lines.length).to eq(1)
       end
 
       it "keeps the FIRST one, which is the only signal carrying the sha" do
         described_class.dispatch(user, :deploy, { id: "deploy", deploy: "finished", sha: "bc271e0" })
         described_class.dispatch(user, :monitor, { deploy: "success" })
 
-        expect(seeds.last).to include("bc271e0")
+        expect(lines.last).to include("bc271e0")
       end
 
       it "fires again once the window has passed, so a real second deploy pings" do
         described_class.dispatch(user, :monitor, { deploy: "success" })
         travel(10.minutes) { described_class.dispatch(user, :monitor, { deploy: "success" }) }
 
-        expect(seeds.length).to eq(2)
+        expect(lines.length).to eq(2)
       end
 
       # A chore done twice in a minute is two completions, and swallowing one
@@ -206,7 +211,7 @@ RSpec.describe Buddy::WatchMatcher do
         }
 
         expect(chores.reload.last_fired_at).to be_present
-        expect(seeds.length).to eq(2)
+        expect(lines.length).to eq(2)
       end
     end
 
@@ -249,6 +254,59 @@ RSpec.describe Buddy::WatchMatcher do
         expect(name_watch.matches?("action" => "arrived", "location" => "costco")).to be(true)
         expect(name_watch.matches?("action" => "arrived", "location" => "Target")).to be(false)
       end
+    end
+  end
+
+  # A watch that fires over and over is a feed, and a feed doesn't need writing.
+  # The Claude-list watch fired 64 times in one day - a full model turn each,
+  # about a third of that day's spend - to say "another item landed" 64 different
+  # ways, never once naming the item.
+  describe "a repeating watch" do
+    let!(:feed) {
+      make_watch(
+        trigger_scope: "item",
+        match:         { "action" => "added" },
+        body:          "Claude list got a new item in Ocs-Backend.",
+        one_shot:      false,
+      )
+    }
+
+    it "goes out as written, with no model turn behind it" do
+      described_class.dispatch(user, :item, { "action" => "added", "name" => "Fix the estimator" })
+
+      expect(seeds).to be_empty
+      expect(lines.last).to include("Claude list got a new item in Ocs-Backend")
+    end
+
+    # The half that went missing on all 64 of them.
+    it "names what actually changed, when the trigger carries it" do
+      described_class.dispatch(user, :item, { "action" => "added", "name" => "Fix the estimator" })
+
+      expect(lines.last).to include("Fix the estimator")
+    end
+
+    it "still reads cleanly when the trigger carries nothing to name" do
+      described_class.dispatch(user, :item, { "action" => "added" })
+
+      expect(lines.last).to eq("🔔 Claude list got a new item in Ocs-Backend")
+    end
+
+    it "keeps composing the one-shot kind, which fires once and is worth a turn" do
+      one_off = make_watch(trigger_scope: "item", match: { "action" => "added" }, body: "grab the thing")
+
+      described_class.dispatch(user, :item, { "action" => "added", "name" => "whatever" })
+
+      expect(one_off.reload.fired_at).to be_present
+      expect(seeds).to include("grab the thing")
+    end
+
+    it "builds the deploy line from the outcome rather than the stored body" do
+      make_watch(trigger_scope: "deploy", match: {}, body: "Ping me when a deploy finishes.", one_shot: false)
+
+      described_class.dispatch(user, :deploy, { deploy: "failed", sha: "bc271e0abc", message: "relay fixes" })
+
+      expect(lines.last).to include("Deploy FAILED", "bc271e0", "relay fixes")
+      expect(lines.last).not_to include("Ping me when")
     end
   end
 

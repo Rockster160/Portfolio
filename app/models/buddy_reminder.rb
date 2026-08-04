@@ -40,6 +40,41 @@ class BuddyReminder < ApplicationRecord
     recurrence.is_a?(Hash) && recurrence["kind"].present?
   end
 
+  # A pending reminder that already means THIS, at this minute, or nil.
+  #
+  # Asking again about something you already asked about is the normal shape of
+  # a conversation, and Buddy has no memory of having set one three hours ago -
+  # `upcoming_reminders` is available and simply wasn't read. Prod: "please
+  # alert me of both of those items" produced second copies of two reminders
+  # set that morning, and both fired twice, at 3:15 and again at 3:35.
+  #
+  # Same MINUTE and a shared word, both required. Same minute alone would
+  # collapse "check the oven" and "call mom" at six o'clock into one, and
+  # losing a real reminder is a worse failure than the double ping this exists
+  # to stop. Recurring ones are left out of the comparison entirely: a daily
+  # 9am and a one-off tomorrow at 9am are genuinely different requests.
+  def self.clashing(user, text, fire_at)
+    words = significant_words(text)
+    return nil if words.empty? || fire_at.blank?
+
+    minute = fire_at.change(sec: 0)
+    pending.where(user_id: user.id, recurrence: nil)
+      .where(fire_at: minute...(minute + 1.minute))
+      .find { |r| significant_words(r.body).intersect?(words) }
+  end
+
+  # Words worth matching on: everything that isn't scaffolding. Deliberately a
+  # small list rather than a real stemmer - the comparison only has to separate
+  # "outfit" from "meatloaf", and it's already narrowed to one minute.
+  FILLER = <<~WORDS.split.to_set.freeze
+    about after alert and are before check do done for get got going make made
+    my need needs please put remind reminder take that the then this you your
+  WORDS
+
+  def self.significant_words(text)
+    text.to_s.downcase.scan(/[a-z]+/).reject { |w| w.length < 3 || FILLER.include?(w) }.to_set
+  end
+
   # Compute the next fire_at from the recurrence spec + a base moment.
   # Supported shapes:
   #   { "kind" => "daily",   "at" => "21:00" }

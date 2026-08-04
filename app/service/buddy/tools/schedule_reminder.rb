@@ -63,6 +63,15 @@ Buddy::Tools.register(
     raise "fire time is in the past" if fire_at < Time.current
 
     when_str = fire_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p")
+
+    # Refusing rather than quietly merging: if this really is a second, separate
+    # thing at the same minute, silently folding it into the first would lose a
+    # reminder they asked for. Told about it, Buddy can say it's already set, or
+    # cancel and re-set if the wording is meant to replace it.
+    if recurrence_hash.nil? && (clash = BuddyReminder.clashing(ctx.user, payload[:text], fire_at))
+      raise "#{clash.body.inspect} is already set for #{when_str} - nothing new to add"
+    end
+
     summary = if recurrence_hash
       "Repeating reminder starting #{when_str}?"
     else

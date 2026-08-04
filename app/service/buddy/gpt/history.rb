@@ -35,6 +35,20 @@ module Buddy
       # model those brackets are system framing so it doesn't write them itself.
       RELAY_KIND = "buddy_relay".freeze
 
+      # The one receipt chip that DOES have to be replayed.
+      #
+      # A fast-pathed timer is served straight from Rails, so the model is never
+      # asked and never answers - and with the chip excluded like every other
+      # chip, the transcript shows the person's request with nothing after it.
+      # The next vague message then gets read as being about the last unanswered
+      # thing: "set a timer for 50 minutes to rotate laundry" at 10:41, "Okay!
+      # What next?" at 11:30, and the reply was "Timer's set for 50 minutes, and
+      # it's labeled rotate laundry!" plus a second 50-minute timer.
+      #
+      # Every other chip follows a real assistant turn that already says what
+      # happened, which is why this is the only one.
+      FAST_PATH_SOURCE = "fast_path".freeze
+
       # An image is sent as pixels EXACTLY ONCE: on the turn it arrives, which is
       # the message this build is answering. History is rebuilt from scratch
       # every turn, so replaying it would mean one photo is re-fetched by OpenAI
@@ -66,11 +80,9 @@ module Buddy
 
         return nil if body.empty?
 
-        if prose_reply?(message)
-          { role: :assistant, content: body }
-        elsif relay?(message)
-          { role: :assistant, content: relay_content(message, body) }
-        end
+        return { role: :assistant, content: relay_content(message, body) } if relay?(message)
+
+        { role: :assistant, content: body } if prose_reply?(message) || fast_path?(message)
       end
 
       # The person's turn. A plain text message stays a bare string so the vast
@@ -114,6 +126,11 @@ module Buddy
 
       def relay?(message)
         kind_of(message) == RELAY_KIND
+      end
+
+      def fast_path?(message)
+        meta = message.metadata
+        meta.is_a?(Hash) && meta["source"].to_s == FAST_PATH_SOURCE
       end
 
       # `source` distinguishes the two halves bridge! writes: "relay" is the copy

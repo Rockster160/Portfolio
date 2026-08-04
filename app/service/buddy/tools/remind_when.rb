@@ -62,11 +62,18 @@ Buddy::Tools.register(
     "when", and don't describe the syntax - "when item:action:added fires" tells
     them nothing they wanted to know.
 
-    `text` is what to remind them of, phrased as the nudge itself. It fires
-    ONCE by default (the next time the condition happens). Set `repeat`
-    true only if they clearly want it every time ("every time I get home...").
-    When it fires you'll compose a fresh in-character message, so keep
-    `text` about the intent, not the exact words.
+    `text` is what to remind them of. It fires ONCE by default (the next time
+    the condition happens). Set `repeat` true only if they clearly want it
+    every time ("every time I get home...").
+
+    **How you write `text` depends on `repeat`, and it matters.** A one-shot
+    fires once and you compose the message then, so `text` can be about the
+    intent. A REPEATING one is delivered exactly as written, every single time,
+    without you in the loop - it's a feed, and a feed doesn't need you to say
+    it in a fresh way sixty times a day. So write those as the finished
+    sentence they'll read: "Claude list got a new item in Ocs-Backend", not
+    "ping me when the Claude list gets an item". Whatever the trigger carries -
+    the item, the title - is appended for you, so don't try to write it in.
 
     `notify` (optional) redirects the heads-up to a household member instead of
     the user themselves: "whenever I add to our agenda, let Rocco know" →
