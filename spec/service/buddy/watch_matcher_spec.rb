@@ -164,6 +164,151 @@ RSpec.describe Buddy::WatchMatcher do
       expect(lines).to include(a_string_including("FAILED"))
     end
 
+    # Every deploy notification for months read exactly "🚀 Deploy finished
+    # successfully" and nothing else - never which commit, never what shipped.
+    #
+    # The signal that wins the race is `startup`, whose entire payload is
+    # `{deploy: "success"}`. The workflow's hook has the sha and the message
+    # but arrives second and gets collapsed as a duplicate. Waiting for it
+    # would add latency to every deploy and still lose when it 502s; sending a
+    # second message would mean two pings each time.
+    #
+    # Neither is needed, because the details are already in the database: the
+    # workflow posts them at deploy=start, which is what creates the Deploy
+    # ActionEvent, minutes before any of this fires.
+    describe "the commit behind the deploy" do
+      let!(:watch) { make_watch(trigger_scope: "deploy", match: {}, body: "deploy news", one_shot: false) }
+
+      def deploy_event!(**data)
+        ActionEvent.create!(
+          user: user, name: "Deploy",
+          data: { "sha" => "1a5f8fbb5621d474", "message" => "custom charts", "author" => "Rocco" }.merge(data),
+        )
+      end
+
+      it "fills them in from the in-flight deploy when the signal has none" do
+        deploy_event!
+
+        described_class.dispatch(user, :monitor, { deploy: "success" })
+
+        expect(lines.last).to include("1a5f8fb").and(include("custom charts"))
+      end
+
+      it "keeps what the signal carried rather than overwriting it" do
+        deploy_event!(sha: "0000000deadbeef", message: "an older deploy")
+
+        described_class.dispatch(user, :monitor, { id: "deploy", deploy: "failed", sha: "abc1234", message: "the real one" })
+
+        expect(lines.last).to include("abc1234").and(include("the real one"))
+        expect(lines.last).not_to include("0000000")
+      end
+
+      # A restart long after the last deploy isn't that deploy, and stamping
+      # its sha on would be worse than saying nothing.
+      it "leaves a stale deploy alone" do
+        deploy_event!.update!(created_at: 2.hours.ago)
+
+        described_class.dispatch(user, :monitor, { deploy: "success" })
+
+        expect(lines.last).not_to include("1a5f8fb")
+      end
+
+      it "still announces when there's no deploy row to read" do
+        described_class.dispatch(user, :monitor, { deploy: "success" })
+
+        expect(lines.last).to include("finished successfully")
+      end
+
+      # An empty string is TRUTHY in Liquid, so passing sha through as "" would
+      # render the branch and leave a dangling em dash on the end.
+      it "leaves no trailing punctuation when there's no commit to name" do
+        described_class.dispatch(user, :monitor, { deploy: "success" })
+
+        expect(lines.last).to eq("🚀 Deploy finished successfully")
+      end
+
+      it "shortens the hash to the seven characters a commit is known by" do
+        deploy_event!(sha: "1a5f8fbb5621d4749b5a0ac824b8db5fe1c70577")
+
+        described_class.dispatch(user, :monitor, { deploy: "success" })
+
+        expect(lines.last).to include("1a5f8fb")
+        expect(lines.last).not_to include("1a5f8fbb5")
+      end
+
+      it "does not go looking on a scope that isn't a deploy" do
+        deploy_event!
+        make_watch(trigger_scope: "item", match: {}, body: "🔔 item news", one_shot: false)
+
+        described_class.dispatch(user, :item, { "name" => "Milk" })
+
+        expect(lines.last).not_to include("1a5f8fb")
+      end
+    end
+
+    # Prod 08-04 14:11. The deploy FAILED, and Byte said it finished
+    # successfully.
+    #
+    # The app's `startup` trigger fires the moment new Rails boots and reports
+    # success unconditionally - it has no way to know cap died two seconds
+    # later. The workflow's failure hook, which does know, landed inside the
+    # debounce window and was thrown away as a duplicate. The person was told
+    # the opposite of what happened and nothing ever corrected it.
+    #
+    # Booting is not succeeding, so the outcome cannot be trusted to the first
+    # signal. What the debounce is FOR is three voices saying the same thing;
+    # two voices disagreeing is the one case that has to get through.
+    describe "when the outcome changes after the first signal" do
+      let!(:watch) { make_watch(trigger_scope: "deploy", match: {}, body: "deploy news", one_shot: false) }
+
+      it "reports a failure that lands seconds after a premature success" do
+        described_class.dispatch(user, :monitor, { deploy: "success" })
+        described_class.dispatch(user, :monitor, { id: "deploy", deploy: "failed", sha: "1a5f8fbb" })
+
+        expect(lines.length).to eq(2)
+        expect(lines.last).to include("FAILED")
+      end
+
+      # They read the wrong one first, so the second has to say it supersedes
+      # rather than just contradicting it.
+      it "marks the second one as a correction" do
+        described_class.dispatch(user, :monitor, { deploy: "success" })
+        described_class.dispatch(user, :monitor, { id: "deploy", deploy: "failed" })
+
+        expect(lines.last).to start_with("Correction — ")
+      end
+
+      it "does not call an ordinary later deploy a correction" do
+        described_class.dispatch(user, :monitor, { deploy: "success" })
+        travel(3.minutes) { described_class.dispatch(user, :monitor, { id: "deploy", deploy: "failed" }) }
+
+        expect(lines.last).not_to include("Correction")
+        expect(lines.last).to include("FAILED")
+      end
+
+      it "still collapses the same outcome arriving three times" do
+        3.times { described_class.dispatch(user, :monitor, { deploy: "success" }) }
+
+        expect(lines.length).to eq(1)
+      end
+
+      # Two real deploys minutes apart are two deploys, whatever they did.
+      it "still reports the same outcome once the window has passed" do
+        described_class.dispatch(user, :monitor, { deploy: "success" })
+        travel(3.minutes) { described_class.dispatch(user, :monitor, { deploy: "success" }) }
+
+        expect(lines.length).to eq(2)
+      end
+
+      it "does not then re-announce the failure it just corrected to" do
+        described_class.dispatch(user, :monitor, { deploy: "success" })
+        described_class.dispatch(user, :monitor, { id: "deploy", deploy: "failed" })
+        described_class.dispatch(user, :monitor, { id: "deploy", deploy: "failed" })
+
+        expect(lines.length).to eq(2)
+      end
+    end
+
     # Prod 1320/1322/1323: one deploy, three notifications 8 seconds apart. The
     # workflow's finish hook lands, then the app's `startup` trigger fires again
     # for each Puma worker as the new Rails comes up. Nothing in the payloads

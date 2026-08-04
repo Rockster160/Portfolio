@@ -35,6 +35,7 @@ module Buddy
       return if watches.empty?
 
       payload = normalize_payload(raw_data)
+      payload = Buddy::DeploySignal.with_commit(user, payload) if scope == "deploy"
       watches.each { |watch| fire!(watch, payload) if watch.matches?(payload) }
     rescue => e
       # A watch failing to match must never take down the trigger it's
@@ -65,10 +66,9 @@ module Buddy
     # listens on that scope besides this, so success is single-sourced from
     # `startup` on purpose.)
     #
-    # Three payload shapes reach us, so read the outcome from any of them:
-    #   { deploy: "success" }               — the startup trigger
-    #   { id: "deploy", deploy: "failed" }  — the workflow's failure hook
-    #   { channel: "deploy:success" }       — the cable re-broadcast
+    # What a deploy payload MEANS - is this about one, did it work, which
+    # commit was it - lives in Buddy::DeploySignal. Several shapes arrive for a
+    # single deploy and none of them agree; this is only the routing.
     #
     # A FAILED deploy counts as finished: dropping it left a standing "ping me
     # on every deploy" watch silent on exactly the deploys worth hearing about,
@@ -76,52 +76,11 @@ module Buddy
     # landed yet (`deploy:start`) is ignored.
     def deploy_alias(scope, raw_data)
       return scope unless scope == "monitor"
+      return scope unless Buddy::DeploySignal.about_deploy?(raw_data)
 
-      data = raw_data.is_a?(Hash) ? raw_data.with_indifferent_access : {}
-      return scope unless deploy_monitor?(data)
-
-      deploy_outcome(data) ? "deploy" : scope
+      Buddy::DeploySignal.outcome(raw_data) ? "deploy" : scope
     end
 
-    # Is this monitor broadcast about a deploy at all? A `deploy` key is enough
-    # on its own — that's the startup trigger's whole payload.
-    def deploy_monitor?(data)
-      data.key?(:deploy) ||
-        data[:id].to_s.strip.downcase == "deploy" ||
-        data[:channel].to_s.strip.downcase.start_with?("deploy")
-    end
-
-    DEPLOY_OUTCOMES = {
-      "success"   => :success,
-      "succeeded" => :success,
-      "finished"  => :success,
-      "failed"    => :failed,
-      "failure"   => :failed,
-      "error"     => :failed,
-    }.freeze
-
-    # :success / :failed once a deploy is over, nil while it's still running.
-    # Emitters disagree about where the outcome lives, so read all three:
-    #   .github/workflows/deploy.yml posts `deploy=finished|failed|start`
-    #   the cable re-broadcast names it in the channel (`deploy:success`)
-    #   others put it in `status`
-    def deploy_outcome(data)
-      [
-        data[:status],
-        data[:deploy],
-        data[:channel].to_s.split(":", 2).last,
-      ].filter_map { |raw| DEPLOY_OUTCOMES[raw.to_s.strip.downcase] }.first
-    end
-
-    # Trigger payloads reach us in two shapes. Jil-built triggers (travel,
-    # deploy) arrive as a plain Hash. But model-sourced triggers (chore
-    # completions, events) arrive as the RECORD itself: `with_jil_attrs`
-    # returns `self` with the real attrs stashed in `@execution_attrs`, and
-    # `TriggerData.parse` passes ApplicationRecords through untouched. Flatten
-    # both to one plain hash so `matches?` can read `action`/`chore_name`/
-    # `name` uniformly. For a record we overlay execution_attrs (which carry
-    # derived fields like `chore_name` and the `action` verb) on top of the
-    # DB columns (which carry `name`), so either source of a key is visible.
     def normalize_payload(raw)
       return raw if raw.is_a?(Hash)
       return {} unless raw.respond_to?(:execution_attrs)
@@ -138,23 +97,63 @@ module Buddy
     #
     # Nothing in the payloads ties them together - the startup trigger carries
     # no sha - so identity has to come from the clock. A deploy takes minutes,
-    # so "finished" twice inside this window is one deploy talking twice.
+    # so the same outcome twice inside this window is one deploy talking twice.
     #
     # Deliberately per-scope, and deliberately only deploy. Two chore
     # completions a second apart really are two, and collapsing those would
-    # lose one. Firing on the FIRST signal is also the right end to keep: it's
-    # the workflow hook, the only one carrying the sha and commit message.
+    # lose one.
     DEBOUNCE_WINDOWS = { "deploy" => 2.minutes }.freeze
 
-    def debounced?(watch)
+    # What the window collapses, and what it must never collapse.
+    #
+    # This used to suppress everything inside the window on the theory that the
+    # first signal was the workflow hook, the richest one. It frequently isn't:
+    # `startup` fires the moment new Rails boots and usually wins the race.
+    #
+    # Prod 08-04 14:11 is what that costs. The deploy failed; Rails booted
+    # anyway two seconds before cap died; `startup` reported success because
+    # booting is all it can see; the workflow's failure hook - the only signal
+    # that knew - landed inside the window and was dropped as a duplicate.
+    # Byte said the deploy finished successfully and nothing ever corrected it.
+    #
+    # So the window collapses REPEATS, not contradictions. Three voices saying
+    # success are one deploy; a failure after a success is the truth arriving
+    # after a guess, and it has to get through.
+    def debounced?(watch, payload={})
       window = DEBOUNCE_WINDOWS[watch.trigger_scope.to_s]
       return false if window.nil? || watch.last_fired_at.nil?
+      return false if watch.last_fired_at <= window.ago
 
-      watch.last_fired_at > window.ago
+      signature_of(watch, payload) == watch.metadata.to_h["last_signature"]
+    end
+
+    # What makes two firings "the same news". For a deploy that's the OUTCOME -
+    # not the sha, which only some of the signals carry, and not the payload,
+    # which differs between them for one deploy.
+    def signature_of(watch, payload)
+      return nil unless watch.trigger_scope.to_s == "deploy"
+
+      Buddy::DeploySignal.outcome(payload).to_s
+    end
+
+    # A second announcement moments after the first that says the OPPOSITE.
+    # Marked as such because otherwise the thread carries two contradictory
+    # lines two seconds apart with nothing to say which one is current - and
+    # the one that's wrong is the one they read first.
+    #
+    # Deliberately not part of the template: this is about the pair of
+    # messages, not about what either of them says, and it has to work on a
+    # watch whose wording someone has since rewritten.
+    def correcting?(watch, payload)
+      window = DEBOUNCE_WINDOWS[watch.trigger_scope.to_s]
+      return false if window.nil? || watch.last_fired_at.nil? || watch.last_fired_at <= window.ago
+
+      previous = watch.metadata.to_h["last_signature"].to_s
+      previous.present? && previous != signature_of(watch, payload)
     end
 
     def fire!(watch, payload={})
-      return if debounced?(watch)
+      return if debounced?(watch, payload)
 
       if watch.notify_user_id
         fire_cross_user!(watch, payload)
@@ -165,11 +164,13 @@ module Buddy
       # One-shot watches go terminal (fired_at) so `active` drops them and
       # they never re-fire. Repeating watches only stamp last_fired_at and
       # stay active for the next occurrence.
-      if watch.one_shot
-        watch.update!(fired_at: Time.current, last_fired_at: Time.current)
-      else
-        watch.update!(last_fired_at: Time.current)
-      end
+      stamp = { last_fired_at: Time.current }
+      stamp[:fired_at] = Time.current if watch.one_shot
+      # Remembered so the next signal inside the window can be told apart from
+      # a repeat of this one.
+      signature = signature_of(watch, payload)
+      stamp[:metadata] = watch.metadata.to_h.merge("last_signature" => signature) if signature
+      watch.update!(stamp)
     rescue => e
       Buddy::Errors.report(
         section:   "watch_matcher.fire",
@@ -229,6 +230,7 @@ module Buddy
 
     def announce!(watch, payload)
       text = Buddy::WatchMessage.for(watch, payload)
+      text = "Correction — #{text}" if correcting?(watch, payload)
       Buddy::CompanionDelivery.deliver_plain(
         user:         watch.user,
         conversation: watch.byte_conversation,
@@ -297,8 +299,8 @@ module Buddy
       )
       return body unless watch.trigger_scope == "deploy"
 
-      data    = payload.is_a?(Hash) ? payload.with_indifferent_access : {}
-      outcome = deploy_outcome(data)
+      data    = Buddy::DeploySignal.indifferent(payload)
+      outcome = Buddy::DeploySignal.outcome(data)
       return body if outcome.nil?
 
       sha  = data[:sha].to_s.strip.first(7).presence

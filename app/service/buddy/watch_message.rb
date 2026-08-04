@@ -60,15 +60,29 @@ module Buddy
     # context. The whole trigger payload is exposed by its own keys, so
     # `{{ list }}` and `{{ section }}` work on a list item without this knowing
     # anything about lists - plus the two things worth naming outright.
+    # Seven characters is how a commit is named everywhere else, and a
+    # forty-character hash on a lock screen is a wall that pushes the message
+    # off the end. The full one stays reachable as `full_sha`.
+    SHORT_SHA_LENGTH = 7
+
     def variables(watch, payload)
       data = payload.is_a?(Hash) ? payload.with_indifferent_access : {}.with_indifferent_access
-      data.to_h.merge(
+      sha  = data[:sha].to_s.strip
+      derived = {
         # What changed, wherever the trigger chose to put it.
-        "name"    => detail_name(payload),
+        "name"     => detail_name(payload),
         # :success / :failed on a deploy, blank elsewhere. The logic gate.
-        "outcome" => Buddy::WatchMatcher.deploy_outcome(data).to_s,
-        "watch"   => watch.body.to_s,
-      )
+        "outcome"  => Buddy::DeploySignal.outcome(data).to_s,
+        "watch"    => watch.body.to_s,
+        "sha"      => sha.first(SHORT_SHA_LENGTH),
+        "full_sha" => sha,
+      }
+      # A blank derived value is DROPPED rather than passed as "" - an empty
+      # string is TRUTHY in Liquid, so `{% if sha %}` would render its branch
+      # (and a dangling em dash) for a signal that carried no sha at all. Only
+      # these are compacted; a `false` the trigger genuinely sent is its own
+      # answer and stays.
+      data.to_h.except("sha").merge(derived.compact_blank)
     end
 
     # What actually changed, when the trigger carries it.

@@ -116,6 +116,12 @@ $(document).ready(function() {
     if (payload.time_axis) {
       scales.x.type = "time"
       scales.x.time = { tooltipFormat: "PP" }
+      // Pin the axis to the selected range so data and markers span the full
+      // window, not just where events happen to fall (else edge markers clip).
+      if (payload.window) {
+        scales.x.min = payload.window.start
+        scales.x.max = payload.window.end
+      }
     }
 
     return {
@@ -175,9 +181,11 @@ $(document).ready(function() {
     }
     const idx = bucketIndexFor(ms, payload.buckets_ms)
     if (idx === null) { return null }
-    // getPixelForTick is index-based and reliable on a category scale.
-    const px = xScale.getPixelForTick(idx)
-    return (px === undefined || px === null) ? null : px
+    // getPixelForValue(index) is math-based (offset-aware, immune to autoSkipped
+    // ticks) and matches where the bars/points sit. getPixelForTick misses when
+    // Chart.js skips ticks on dense axes.
+    const px = xScale.getPixelForValue(idx)
+    return (px === undefined || px === null || !isFinite(px)) ? null : px
   }
 
   // Index of the bucket a marker falls into (last start <= ms); null if before the first.

@@ -3215,10 +3215,6 @@ dialog.byte-modal {
   border: 1px solid var(--bs-border);
   border-left: 3px solid var(--bs-primary, #4c8bf5);
   background: rgba(255, 255, 255, 0.04);
-  font-size: 13px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  word-break: break-word;
 
   &[hidden] { display: none; } // author `display` beats the hidden attr
 }
@@ -3226,11 +3222,24 @@ dialog.byte-modal {
 // The caption is what says this is output, not another field.
 .byte-edit-preview-title {
   display: block;
-  margin-bottom: 3px;
   font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--bs-muted);
+}
+
+// `pre-wrap` belongs HERE and not on the box around it. A rendered template
+// can contain its own line breaks and they have to survive - but the box also
+// contains the newlines and indentation between the two spans in the markup,
+// and preserving those put a blank line above the caption, an indent in front
+// of the message, and a phantom line of height underneath.
+.byte-edit-preview-body {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .byte-edit-preview-bad {
@@ -3265,7 +3274,9 @@ dialog.byte-modal {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  align-items: end;
+  // `flex-end` rather than the bare `end`, which autoprefixer flags as mixed
+  // support and which Safari on iOS is exactly the wrong browser to gamble on.
+  align-items: flex-end;
 
   > * { flex: 1 1 120px; }
 
