@@ -42,6 +42,53 @@ RSpec.describe MonitorChannel, type: :channel do
     end
   end
 
+  describe "terminal watch registration" do
+    it "registers the watch and acks back to just this subscription" do
+      allow(::TerminalWatch).to receive(:register).and_return("hass-sensor")
+
+      perform :watch, { "listener" => "hass-sensor:location:doorbell", "watch_id" => "w-1" }
+
+      expect(::TerminalWatch).to have_received(:register).with(user, "w-1", "hass-sensor:location:doorbell")
+      expect(transmissions.last).to include(
+        "id" => :"terminal-watch", "type" => :ack, "watch_id" => "w-1", "scope" => "hass-sensor"
+      )
+    end
+
+    it "ignores a watch with no listener" do
+      allow(::TerminalWatch).to receive(:register)
+
+      perform :watch, { "watch_id" => "w-1" }
+
+      expect(::TerminalWatch).not_to have_received(:register)
+    end
+
+    it "refreshes the lease on heartbeat" do
+      allow(::TerminalWatch).to receive(:heartbeat)
+
+      perform :watch_heartbeat, { "watch_id" => "w-1" }
+
+      expect(::TerminalWatch).to have_received(:heartbeat).with(user, "w-1")
+    end
+
+    it "unregisters on explicit unwatch" do
+      allow(::TerminalWatch).to receive(:unregister)
+
+      perform :unwatch, { "watch_id" => "w-1" }
+
+      expect(::TerminalWatch).to have_received(:unregister).with(user, "w-1")
+    end
+
+    it "unregisters outstanding watches when the client disconnects" do
+      allow(::TerminalWatch).to receive(:register).and_return("hass-sensor")
+      allow(::TerminalWatch).to receive(:unregister)
+      perform :watch, { "listener" => "hass-sensor:location:doorbell", "watch_id" => "w-1" }
+
+      unsubscribe
+
+      expect(::TerminalWatch).to have_received(:unregister).with(user, "w-1")
+    end
+  end
+
   describe "whisper page auto-refresh on subscribe" do
     let(:eve) { FactoryBot.create(:user) }
 

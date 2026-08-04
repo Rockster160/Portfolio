@@ -2,10 +2,15 @@ module Buddy
   # What a fired watch SAYS, when it's delivered without a model in the loop.
   #
   # Split out from Buddy::WatchMatcher, which owns the other question: which
-  # watch fires, and how its state advances afterwards. The phrasing side grew
-  # its own rules - templates, placeholders, whose glyph wins, a deploy reading
-  # from its outcome rather than its stored body - and the two concerns were
-  # only ever adjacent, never entangled.
+  # watch fires, and how its state advances afterwards.
+  #
+  # The body is a Liquid template (see Buddy::Template). A plain sentence is
+  # still a plain sentence - most of them are, and one with no markup in it
+  # never touches Liquid - but the moment it carries `{{ }}` or `{% %}` it's
+  # rendered against what the trigger sent, which is what makes "strip the >
+  # off the list item" and "say one thing on a failed deploy and another on a
+  # good one" things the person can write themselves instead of things that
+  # have to be shipped.
   #
   # Only the REPEATING form comes through here. A one-shot watch fires once, at
   # a moment that matters, and what it says is worth a model turn; a repeating
@@ -13,47 +18,60 @@ module Buddy
   module WatchMessage
     module_function
 
-    # A `{placeholder}` in a repeating watch's body. `{name}` is whatever the
-    # trigger calls the thing that changed; any other key reads straight off the
-    # payload, so `{list}` and `{section}` work on a list item without this
-    # needing to know a thing about lists.
-    PLACEHOLDER_RX = /\{([a-z_][a-z0-9_]*)\}/i
+    # A deploy's news is its OUTCOME, and "it finished" is not the same message
+    # as "it failed". This used to be built in Ruby and ignore the stored body
+    # entirely, which meant the one watch whose wording mattered most was the
+    # one nobody could edit. It's now just a template - the default a deploy
+    # watch is created with, and editable like any other.
+    DEPLOY_DEFAULT = <<~LIQUID.strip.freeze
+      {% if outcome == "failed" %}❌ Deploy FAILED{% else %}🚀 Deploy finished successfully{% endif %}{% if sha %} — {{ sha }}{% endif %}{% if message %} “{{ message }}”{% endif %}
+    LIQUID
 
-    # Leading punctuation or a symbol counts as a glyph the person chose, so the
-    # default bell isn't stapled in front of it. Matching on "not a letter,
-    # digit or space" covers every emoji without enumerating any.
-    HAS_GLYPH_RX = /\A[^\p{Alnum}\p{Space}]/
+    def for(watch, payload={})
+      body = body_for(watch)
+      rendered = Buddy::Template.render(
+        body,
+        variables(watch, payload),
+        user:         watch.user,
+        conversation: watch.byte_conversation,
+      )
+      # A template writes its own line, glyph and all. A plain sentence still
+      # gets the detail appended, because that's the half that went missing on
+      # all sixty-four of them - pings saying an item landed, never which one.
+      return rendered if Buddy::Template.templated?(body)
 
-    def for(watch, payload)
-      return deploy_line(payload) if watch.trigger_scope == "deploy"
+      [rendered.sub(/[.!]+\z/, ""), payload_detail(payload)].compact.join(" — ")
+    end
 
+    # A deploy watch whose body doesn't mention the outcome can't report the
+    # outcome, and the outcome is the entire news. Rather than let one read
+    # "Ping me when a deploy finishes" on a deploy that broke, a deploy watch
+    # with no logic in its body falls back to the default that has some. Write
+    # a template of your own and it's used as written, like any other.
+    def body_for(watch)
       body = watch.body.to_s.strip
-      # A body with placeholders in it IS the whole line - the person wrote
-      # where the detail goes, so appending it again would say it twice.
-      return render_template(body, payload) if body.match?(PLACEHOLDER_RX)
+      return body unless watch.trigger_scope == "deploy"
+      return body if Buddy::Template.templated?(body)
 
-      # Otherwise the body is a finished sentence (remind_when asks for one) and
-      # the detail is tacked on. A trailing full stop would collide with it.
-      ["🔔 #{body.sub(/[.!]+\z/, "")}", payload_detail(payload)].compact.join(" — ")
+      DEPLOY_DEFAULT
     end
 
-    # Substitutes what the trigger carried, then leads with the bell unless the
-    # person put their own glyph in front. An unknown key leaves a blank rather
-    # than the raw `{whatever}`: a notification with template syntax showing
-    # through reads like a bug, and a slightly short sentence doesn't.
-    def render_template(body, payload)
-      data = payload.is_a?(Hash) ? payload.with_indifferent_access : {}
-      text = body.gsub(PLACEHOLDER_RX) { |_|
-        key = Regexp.last_match(1).downcase
-        (key == "name" ? detail_name(payload) : data[key].to_s.strip).truncate(80)
-      }.squeeze(" ").strip
-
-      text.blank? || text.match?(HAS_GLYPH_RX) ? text : "🔔 #{text}"
+    # Everything a watch template can reach, on top of Buddy::Template's base
+    # context. The whole trigger payload is exposed by its own keys, so
+    # `{{ list }}` and `{{ section }}` work on a list item without this knowing
+    # anything about lists - plus the two things worth naming outright.
+    def variables(watch, payload)
+      data = payload.is_a?(Hash) ? payload.with_indifferent_access : {}.with_indifferent_access
+      data.to_h.merge(
+        # What changed, wherever the trigger chose to put it.
+        "name"    => detail_name(payload),
+        # :success / :failed on a deploy, blank elsewhere. The logic gate.
+        "outcome" => Buddy::WatchMatcher.deploy_outcome(data).to_s,
+        "watch"   => watch.body.to_s,
+      )
     end
 
-    # What actually changed, when the trigger carries it. This is the half that
-    # went missing every single time: sixty-four pings saying an item landed,
-    # not one of them saying which one.
+    # What actually changed, when the trigger carries it.
     def payload_detail(payload)
       name = detail_name(payload)
       name.present? ? "“#{name.truncate(80)}”" : nil
@@ -64,23 +82,6 @@ module Buddy
 
       data = payload.with_indifferent_access
       [data[:name], data[:title], data[:body]].filter_map { |v| v.to_s.strip.presence }.first.to_s
-    end
-
-    # A deploy's news is its OUTCOME, so the stored body is ignored entirely -
-    # "it finished" and "it failed" are not the same message, and a watch that
-    # fires for both can't say one sentence for the pair.
-    def deploy_line(payload)
-      data   = payload.is_a?(Hash) ? payload.with_indifferent_access : {}
-      failed = Buddy::WatchMatcher.deploy_outcome(data) == :failed
-      sha    = data[:sha].to_s.strip.first(7).presence
-      note   = data[:message].to_s.strip.presence
-      # The glyph is the fastest thing to read here and it says WHICH outcome,
-      # which is the entire point of a deploy ping. Green and red are legible
-      # at a glance on a lock screen in a way two similar sentences are not.
-      head   = failed ? "❌ Deploy FAILED" : "🚀 Deploy finished successfully"
-      tail   = [sha, (note && "“#{note.truncate(80)}”")].compact_blank.join(" ").presence
-
-      [head, tail].compact.join(" — ")
     end
   end
 end

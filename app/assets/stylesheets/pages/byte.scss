@@ -3197,6 +3197,93 @@ dialog.byte-modal {
   color: inherit;
 }
 
+// ---- the edit modal --------------------------------------------------------
+
+.byte-edit-body {
+  resize: vertical;
+  min-height: 52px;
+  line-height: 1.4;
+}
+
+// What the words actually come out as. Set apart from the field above it so
+// it reads as a RESULT rather than another thing to fill in.
+.byte-edit-preview {
+  margin: 0;
+  padding: 7px 9px;
+  border-radius: 6px;
+  border-left: 2px solid var(--bs-primary, #4c8bf5);
+  background: var(--bs-body-bg);
+  font-size: 12.5px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.byte-edit-preview-bad {
+  border-left-color: var(--bs-danger, #e5484d);
+  color: var(--bs-danger, #e5484d);
+}
+
+.byte-edit-vars code {
+  font-size: 10.5px;
+  padding: 1px 4px;
+  margin-right: 2px;
+  border-radius: 4px;
+  background: var(--bs-body-bg);
+  white-space: nowrap;
+}
+
+// The rule's parts sit on one line where they fit and wrap where they don't —
+// a phone gets one control per row without a second set of rules for it.
+.byte-edit-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: flex-end;
+
+  > * { flex: 1 1 120px; }
+}
+
+.byte-edit-repeat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.byte-edit-inline {
+  flex: 0 0 auto;
+  font-size: 12.5px;
+  padding-bottom: 8px;
+}
+
+.byte-edit-interval { flex: 0 0 68px; }
+
+// Seven toggles rather than a multi-select: picking Mon/Wed/Fri is three taps
+// and the whole week is legible without opening anything.
+.byte-edit-days {
+  display: flex;
+  gap: 4px;
+}
+
+.byte-edit-day {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 34px;
+  border-radius: 6px;
+  border: 1px solid var(--bs-border);
+  background: var(--bs-body-bg);
+  color: var(--bs-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  &.on {
+    background: var(--bs-primary, #4c8bf5);
+    border-color: var(--bs-primary, #4c8bf5);
+    color: #fff;
+  }
+}
+
 .byte-reminder-error {
   color: var(--bs-danger, #e5484d);
 }

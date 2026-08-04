@@ -44,6 +44,10 @@ class Jil::Executor
     # free on the hot path.
     ::Buddy::WatchMatcher.dispatch(user, trigger, raw_trigger_data)
 
+    # Terminal `watch <listener>` sessions ride the same bus. Cheap: one cache
+    # read, then bail unless a live terminal is watching this scope.
+    ::TerminalWatch.dispatch(user, trigger, trigger_data)
+
     user_tasks = user.accessible_tasks.active.enabled.ordered
     stopped = false
     user_tasks.by_listener(trigger).filter_map { |task|

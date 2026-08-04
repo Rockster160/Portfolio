@@ -16,13 +16,28 @@ Buddy::Tools.register(
     RECURRING: pass `repeat` to fire the reminder on a schedule instead
     of just once. Use for "check in with me every day at 9", "remind me
     to take the trash out every Wednesday night", etc. `repeat` accepts:
-      "daily:HH:MM"                 - every day at HH:MM
-      "weekdays:HH:MM"              - Mon-Fri at HH:MM
-      "weekly:<weekday>:HH:MM"      - e.g. "weekly:wednesday:20:00"
+      "daily:HH:MM"                  - every day at HH:MM
+      "weekdays:HH:MM"               - Mon-Fri at HH:MM
+      "weekly:<days>:HH:MM"          - "weekly:wednesday:20:00", and more
+                                       than one is fine: "weekly:mon,wed,fri:07:30"
       "monthly:<day-of-month>:HH:MM" - e.g. "monthly:1:09:00"
+      "monthly:<nth>-<weekday>:HH:MM" - the Nth weekday of the month, where
+                                       nth is 1-4 or "last": "monthly:2-tuesday:10:00"
+                                       is the SECOND TUESDAY of every month
+      "every:<n>-<unit>:HH:MM"       - every N days / weeks / months, counting
+                                       from today: "every:2-weeks:10:00" is
+                                       every OTHER week on today's weekday
+      "yearly:HH:MM"                 - once a year, on today's date
+
+    "Every second Tuesday" is two different requests and they aren't the
+    same days - the second Tuesday OF THE MONTH is
+    "monthly:2-tuesday:HH:MM", every OTHER Tuesday is "every:2-weeks:HH:MM"
+    set on a Tuesday. Ask which they meant if it isn't clear.
+
     When `repeat` is set, `at` is optional (the first fire computes
     from the recurrence). If both are set, `at` is the first fire and
-    the recurrence takes over from then on.
+    the recurrence takes over from then on. `until` (a plain date,
+    YYYY-MM-DD) stops it repeating after that day.
 
     `kind` controls what happens at fire time:
       "reminder" (default) - plain text nudge + push notification.
@@ -41,22 +56,21 @@ Buddy::Tools.register(
   args: {
     text:   { type: :string, required: true,  description: "What to remind them of / prompt about" },
     at:     { type: :string, required: false, description: "First fire time (ISO datetime). Required for one-shot." },
-    repeat: { type: :string, required: false, description: "Recurrence spec: daily:HH:MM / weekdays:HH:MM / weekly:<day>:HH:MM / monthly:<dom>:HH:MM" },
+    repeat: { type: :string, required: false, description: "Recurrence spec: daily:HH:MM / weekdays:HH:MM / weekly:<days>:HH:MM / monthly:<dom>:HH:MM / monthly:<nth>-<weekday>:HH:MM / every:<n>-<unit>:HH:MM / yearly:HH:MM" },
+    until:  { type: :string, required: false, description: "Stop repeating after this date (YYYY-MM-DD)" },
     kind:   { type: :enum,   required: false, default: :reminder, values: %i[reminder prompt] },
   },
   confirm: ->(payload, ctx) {
-    # Parse recurrence spec (colon-separated) into the hash BuddyReminder
-    # understands. Deliberately narrow, extend by adding another `when`.
-    recurrence_hash = nil
-    if payload[:repeat].to_s.strip.length > 0
-      parts = payload[:repeat].to_s.strip.downcase.split(":")
-      recurrence_hash = case parts.first
-      when "daily"     then { "kind" => "daily",    "at" => "#{parts[1]}:#{parts[2]}" }
-      when "weekdays"  then { "kind" => "weekdays", "at" => "#{parts[1]}:#{parts[2]}" }
-      when "weekly"    then { "kind" => "weekly", "weekday" => parts[1], "at" => "#{parts[2]}:#{parts[3]}" }
-      when "monthly"   then { "kind" => "monthly", "day" => parts[1].to_i, "at" => "#{parts[2]}:#{parts[3]}" }
-      end
-      raise "unknown repeat spec #{payload[:repeat].inspect}" if recurrence_hash.nil?
+    recurrence_hash = Buddy::RepeatSpec.parse(payload[:repeat], on: ctx.user.perceived_today)
+    if payload[:repeat].to_s.strip.present? && recurrence_hash.nil?
+      raise "unknown repeat spec #{payload[:repeat].inspect}"
+    end
+
+    if recurrence_hash && payload[:until].to_s.strip.present?
+      ends = (Date.parse(payload[:until].to_s) rescue nil)
+      raise "couldn't read #{payload[:until].inspect} as a date" if ends.nil?
+
+      recurrence_hash = recurrence_hash.merge("until_on" => ends.iso8601)
     end
 
     fire_at = ctx.resolve_time(payload[:at]) if payload[:at].to_s.strip.length > 0
@@ -119,14 +133,8 @@ Buddy::Tools.register(
     if rec.is_a?(Hash)
       hhmm  = (Time.zone.parse(rec["at"].to_s) rescue nil)
       tstr  = hhmm ? hhmm.strftime("%-I:%M%P").sub(":00", "") : rec["at"].to_s
-      every = case rec["kind"]
-      when "daily"    then "every day"
-      when "weekdays" then "every weekday"
-      when "weekly"   then "every #{rec["weekday"].to_s.capitalize}"
-      when "monthly"  then "on day #{rec["day"]} each month"
-      else                 "on a schedule"
-      end
-      "#{name} will remind you #{every} at #{tstr}"
+      ends  = rec["until_on"].present? ? " until #{rec["until_on"]}" : ""
+      "#{name} will remind you #{Buddy::ReminderPresenter.repeat_phrase(rec)} at #{tstr}#{ends}"
     else
       "#{name} will send you a reminder #{ctx.friendly_future(fire_at)}"
     end

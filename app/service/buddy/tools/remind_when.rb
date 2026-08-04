@@ -71,16 +71,27 @@ Buddy::Tools.register(
     intent. A REPEATING one is delivered exactly as written, every single time,
     without you in the loop - it's a feed, and a feed doesn't need you to say
     it in a fresh way sixty times a day. So write those as the finished
-    sentence they'll read: "Claude list got a new item in Ocs-Backend", not
+    sentence they'll read: "🔔 Claude list got a new item in Ocs-Backend", not
     "ping me when the Claude list gets an item". Whatever the trigger carries -
     the item, the title - is appended for you, so don't try to write it in.
+    **Open it with a glyph**, since nothing adds one for you and these land on
+    a lock screen where the first character is what's read first.
 
-    Unless they want it somewhere OTHER than the end, which is what a
-    `{placeholder}` is for. `{name}` is the thing that changed, and any other
-    key reads straight off the trigger, so "{name} landed on the Claude list"
-    comes out naming the item mid-sentence and nothing is appended. Use one only
-    when they've said where they want it; the plain sentence is the default and
-    it's usually right.
+    `text` is a LIQUID TEMPLATE, which matters as soon as they want anything
+    other than a fixed sentence with the detail on the end:
+    - `{{ name }}` is what changed, and any other key reads straight off the
+      trigger - `{{ list }}`, `{{ section }}`. Writing one of these puts the
+      detail where they want it instead of at the end, and nothing is appended.
+    - Filters clean it up: `{{ name | remove: ">" | strip }}` for a list whose
+      items arrive prefixed, `{{ name | truncate: 40 }}` for a long one.
+    - `{% if %}` picks between two messages:
+      `{% if outcome == "failed" %}❌ it broke{% else %}🚀 all good{% endif %}`.
+    - `{{ now }}`, `{{ today }}`, `{{ weekday }}`, `{{ user }}`, `{{ buddy }}`
+      and `{{ greeting }}` are there whatever the trigger was.
+
+    A plain sentence is still the right answer most of the time. Reach for a
+    template when they've said something a sentence can't do - where the detail
+    goes, what to strip off it, or which of two things to say.
 
     `notify` (optional) redirects the heads-up to a household member instead of
     the user themselves: "whenever I add to our agenda, let Rocco know" →

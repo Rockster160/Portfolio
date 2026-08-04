@@ -37,7 +37,7 @@ class BuddyReminder < ApplicationRecord
   validates :kind,    inclusion: { in: KINDS }
 
   def recurring?
-    recurrence.is_a?(Hash) && recurrence["kind"].present?
+    normalized_recurrence["freq"].present?
   end
 
   # "run the wind-down routine", "trigger printer preheat", "fire whisper quiet".
@@ -118,44 +118,77 @@ class BuddyReminder < ApplicationRecord
     text.to_s.downcase.scan(/[a-z]+/).reject { |w| w.length < 3 || FILLER.include?(w) }.to_set
   end
 
-  # Compute the next fire_at from the recurrence spec + a base moment.
-  # Supported shapes:
-  #   { "kind" => "daily",   "at" => "21:00" }
-  #   { "kind" => "weekly",  "weekday" => "wednesday", "at" => "20:00" }
-  #   { "kind" => "weekdays","at" => "09:00" }             # Mon-Fri
-  #   { "kind" => "monthly", "day" => 1, "at" => "09:00" }
-  # Returns nil for unknown shapes so the firer can mark them terminal.
+  # The repeat pattern, as the shared matcher the calendar uses.
+  #
+  # A reminder used to carry four frequencies of its own with no interval, no
+  # nth-weekday and no end date, so "every second Tuesday" was something the
+  # calendar could express and a reminder could not - for no reason other than
+  # which file the code was in. It now speaks the same rule vocabulary; see
+  # Recurrence for the shapes.
+  #
+  # `at` (the wall-clock time of day) and `starts_on` (what an interval counts
+  # from) ride in the same hash, since a reminder has no columns for them.
+  def rule
+    data = normalized_recurrence
+    Recurrence.new(
+      data,
+      starts_on: parse_date(data["starts_on"]) || created_at&.to_date || Time.current.to_date,
+      until_on:  parse_date(data["until_on"]),
+    )
+  end
+
+  def time_of_day
+    hh, mm = (normalized_recurrence["at"].presence || "09:00").to_s.split(":").map(&:to_i)
+    [hh.to_i.clamp(0, 23), mm.to_i.clamp(0, 59)]
+  end
+
+  # Older rows wrote `{kind:, weekday:, day:}` before reminders and the calendar
+  # shared a vocabulary. Translated on read rather than only in a migration, so
+  # a row written by the previous release keeps firing through the deploy.
+  LEGACY_WEEKDAYS = %w[sunday monday tuesday wednesday thursday friday saturday].freeze
+
+  def normalized_recurrence
+    data = (recurrence || {}).with_indifferent_access
+    return data if data["kind"].blank?
+
+    converted = { "freq" => data["kind"].to_s, "at" => data["at"] }
+    if data["weekday"].present?
+      index = LEGACY_WEEKDAYS.index(data["weekday"].to_s.downcase)
+      converted["by_day"] = [Recurrence::WEEKDAY_KEYS[index].to_s] if index
+    end
+    converted["by_month_day"] = [data["day"].to_i] if data["day"].present?
+    converted.merge(data.slice("starts_on", "until_on", "excluded_dates")).compact
+  end
+
+  # The next moment this should go off, or nil when the pattern has run out
+  # (an end date that's passed) so the firer can mark it terminal.
   def next_fire_at(from: Time.current)
     return nil unless recurring?
 
-    tz = ActiveSupport::TimeZone[user.timezone] || Time.zone
-    from_local = from.in_time_zone(tz)
-    hh, mm = (recurrence["at"] || "09:00").split(":").map(&:to_i)
+    tz    = ActiveSupport::TimeZone[user&.timezone.to_s] || Time.zone
+    local = from.in_time_zone(tz)
+    hh, mm = time_of_day
+    pattern = rule
 
-    case recurrence["kind"]
-    when "daily"
-      candidate = from_local.change(hour: hh, min: mm)
-      candidate <= from_local ? candidate + 1.day : candidate
-    when "weekdays"
-      candidate = from_local.change(hour: hh, min: mm)
-      candidate += 1.day while candidate <= from_local || candidate.saturday? || candidate.sunday?
-      candidate
-    when "weekly"
-      target = weekday_index(recurrence["weekday"])
-      return nil if target.nil?
-      candidate = from_local.change(hour: hh, min: mm)
-      candidate += 1.day until candidate.wday == target && candidate > from_local
-      candidate
-    when "monthly"
-      day = (recurrence["day"] || 1).to_i.clamp(1, 28)
-      candidate = from_local.change(day: day, hour: hh, min: mm)
-      candidate <= from_local ? candidate + 1.month : candidate
+    # Today counts only if its hour hasn't already gone by, so a daily 9am
+    # asked at 9:01 rolls to tomorrow rather than firing immediately.
+    date = pattern.next_on_or_after(local.to_date)
+    while date
+      candidate = tz.local(date.year, date.month, date.day, hh, mm)
+      return candidate if candidate > local
+
+      date = pattern.next_on_or_after(date + 1)
     end
+    nil
   end
 
   private
 
-  def weekday_index(name)
-    %w[sunday monday tuesday wednesday thursday friday saturday].index(name.to_s.downcase)
+  def parse_date(value)
+    return nil if value.blank?
+
+    Date.parse(value.to_s)
+  rescue ArgumentError, TypeError
+    nil
   end
 end

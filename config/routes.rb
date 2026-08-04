@@ -81,6 +81,8 @@ Rails.application.routes.draw do
   # Reminders and watches are separate tables but one list to the person, so
   # `type` picks the table and the pair is the identity.
   get    "/buddy/reminders" => "buddy/reminders#index", as: :buddy_reminders
+  # Before the :type routes so "preview" is never read as a record type.
+  post   "/buddy/reminders/preview" => "buddy/reminders#preview", as: :buddy_reminders_preview
   scope constraints: { type: /reminder|watch/ } do
     patch  "/buddy/reminders/:type/:id" => "buddy/reminders#update", as: :buddy_reminder
     delete "/buddy/reminders/:type/:id" => "buddy/reminders#destroy"

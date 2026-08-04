@@ -38,9 +38,12 @@ class AgendaSchedule < ApplicationRecord
   self.skip_time_zone_conversion_for_attributes = [:start_time]
 
   KINDS = [:task, :event, :trigger].freeze
-  FREQUENCIES = [:daily, :weekdays, :weekly, :monthly, :yearly, :custom].freeze
-  WEEKDAY_KEYS = [:sun, :mon, :tue, :wed, :thu, :fri, :sat].freeze
-  CUSTOM_UNITS = [:day, :week, :month].freeze
+  # The rule vocabulary itself lives in Recurrence, which owns the matching and
+  # is shared with BuddyReminder. Re-exported here because callers (the edit
+  # modal's option lists, Jil, specs) have always read them off this class.
+  FREQUENCIES  = Recurrence::FREQUENCIES
+  WEEKDAY_KEYS = Recurrence::WEEKDAY_KEYS
+  CUSTOM_UNITS = Recurrence::CUSTOM_UNITS
   # Forward-looking window for materializing upcoming occurrences into
   # real rows. Anything further out stays a phantom — the periodic worker
   # rolls the window forward each tick. Past occurrences keep their
@@ -59,7 +62,7 @@ class AgendaSchedule < ApplicationRecord
 
   # 50-year horizon for resolving occurrence_count → until_on. Plenty for any
   # realistic schedule and bounded so a bad rule can't loop forever.
-  OCCURRENCE_SCAN_CAP = 50.years
+  OCCURRENCE_SCAN_CAP = Recurrence::OCCURRENCE_SCAN_CAP
 
   before_save :sync_until_on_from_occurrence_count, if: -> { occurrence_count.present? }
   after_save :materialize_upcoming!, if: :saved_change_affecting_materialization?
@@ -162,18 +165,25 @@ class AgendaSchedule < ApplicationRecord
   }
 
   def freq
-    (recurrence_data[:freq].to_s.presence || :daily).to_sym
+    recurrence_rule.freq
   end
 
   def recurrence_data
     (recurrence || {}).with_indifferent_access
   end
 
+  # The pattern, as the shared matcher. Not memoized for the same reason
+  # `excluded_dates` isn't: reload() doesn't clear plain ivars, so a cached one
+  # would outlive a refresh-from-DB and answer from the old rule.
+  def recurrence_rule
+    Recurrence.new(recurrence_data, starts_on: starts_on, until_on: until_on)
+  end
+
   # Not memoized: reload() doesn't clear non-AR ivars, so a stale @set
   # would survive a refresh-from-DB. The set is small enough that
   # recomputing on every call is fine.
   def excluded_dates
-    Array(recurrence_data[:excluded_dates]).filter_map { |d| safe_parse_date(d) }.to_set
+    recurrence_rule.excluded_dates
   end
 
   # Adding a date to excluded_dates always means "no more phantom on this
@@ -244,26 +254,14 @@ class AgendaSchedule < ApplicationRecord
 
   # Pure in-memory check. Never hits the DB.
   def matches?(date)
-    return false if until_on.present? && date > until_on
-
-    matches_recurrence_rule?(date)
+    recurrence_rule.matches?(date)
   end
 
   # Recurrence-rule match WITHOUT the until_on bound. Used by
   # sync_until_on_from_occurrence_count to walk the rule without recursing
   # through until_on (which we're about to derive).
   def matches_recurrence_rule?(date)
-    return false if date < starts_on
-    return false if excluded_dates.include?(date)
-
-    case freq
-    when :daily    then true
-    when :weekdays then (1..5).cover?(date.wday)
-    when :weekly   then weekday_indices.include?(date.wday)
-    when :monthly  then matches_month_day?(date)
-    when :yearly   then date.month == starts_on.month && date.day == starts_on.day
-    when :custom   then matches_custom?(date)
-    end
+    recurrence_rule.matches_rule?(date)
   end
 
   # When the user picks "stop after N occurrences", we resolve that to a
@@ -272,20 +270,7 @@ class AgendaSchedule < ApplicationRecord
   def sync_until_on_from_occurrence_count
     return if occurrence_count.blank? || occurrence_count.to_i <= 0
 
-    remaining = occurrence_count.to_i
-    date = starts_on
-    cap = starts_on + OCCURRENCE_SCAN_CAP
-    last_match = nil
-
-    while date <= cap && remaining.positive?
-      if matches_recurrence_rule?(date)
-        last_match = date
-        remaining -= 1
-      end
-      date += 1
-    end
-
-    self.until_on = last_match
+    self.until_on = recurrence_rule.date_of_occurrence(occurrence_count)
   end
 
   # Back-compat alias. Older callsites (controller + specs) expected a
@@ -457,12 +442,6 @@ class AgendaSchedule < ApplicationRecord
     merged
   end
 
-  def safe_parse_date(value)
-    Date.parse(value.to_s)
-  rescue ArgumentError
-    nil
-  end
-
   def user_zone
     ActiveSupport::TimeZone[user.timezone] || Time.zone
   end
@@ -477,71 +456,6 @@ class AgendaSchedule < ApplicationRecord
       .find_each { |item| item.update!(status: :cancelled, cancelled_at: ::Time.current) }
   end
 
-  def weekday_indices
-    Array(recurrence_data[:by_day]).filter_map { |d|
-      WEEKDAY_KEYS.index(d.to_s.downcase.to_sym)
-    }.presence || [starts_on.wday]
-  end
-
-  def month_days
-    Array(recurrence_data[:by_month_day]).map(&:to_i).presence || [starts_on.day]
-  end
-
-  def matches_month_day?(date)
-    # Monthly + Nth weekday — e.g. "third Tuesday of every month". When
-    # the recurrence carries both `by_set_pos` and `by_day` we ignore
-    # `by_month_day` entirely and dispatch to the nth-weekday matcher.
-    if recurrence_data[:by_set_pos].present? && recurrence_data[:by_day].present?
-      return matches_nth_weekday_of_month?(date)
-    end
-
-    month_days.include?(date.day) || (month_days.include?(-1) && date.day == date.end_of_month.day)
-  end
-
-  def matches_custom?(date)
-    interval = [recurrence_data[:interval].to_i, 1].max
-    unit = (recurrence_data[:unit].to_s.presence || :day).to_sym
-    unit = :day unless CUSTOM_UNITS.include?(unit)
-
-    case unit
-    when :day   then ((date - starts_on).to_i % interval).zero?
-    when :week  then (((date - starts_on).to_i / 7) % interval).zero? && date.wday == starts_on.wday
-    when :month then matches_custom_month?(date, interval)
-    end
-  end
-
-  def matches_custom_month?(date, interval)
-    return false unless (months_between(starts_on, date) % interval).zero?
-
-    if recurrence_data[:by_set_pos].present? && recurrence_data[:by_day].present?
-      matches_nth_weekday_of_month?(date)
-    elsif Array(recurrence_data[:by_month_day]).any?
-      matches_month_day?(date)
-    else
-      date.day == starts_on.day
-    end
-  end
-
-  # Matches "Nth weekday of month" rules: second Thursday, last Friday, etc.
-  # set_pos is 1..4 or -1 (last); by_day is a single weekday key.
-  def matches_nth_weekday_of_month?(date)
-    set_pos = recurrence_data[:by_set_pos].to_i
-    target_key = Array(recurrence_data[:by_day]).first
-    target_wday = WEEKDAY_KEYS.index(target_key.to_s.downcase.to_sym)
-    return false if target_wday.nil? || date.wday != target_wday
-
-    if set_pos == -1
-      (date + 7).month != date.month
-    else
-      week_of_month = ((date.day - 1) / 7) + 1
-      week_of_month == set_pos
-    end
-  end
-
-  def months_between(a, b)
-    ((b.year - a.year) * 12) + (b.month - a.month)
-  end
-
   def duration_required_for_event
     return unless event?
 
@@ -551,6 +465,6 @@ class AgendaSchedule < ApplicationRecord
   def freq_valid
     return if recurrence_data[:freq].blank?
 
-    errors.add(:recurrence, "freq must be one of #{FREQUENCIES.join(", ")}") if FREQUENCIES.exclude?(freq)
+    errors.add(:recurrence, "freq must be one of #{FREQUENCIES.join(", ")}") unless recurrence_rule.valid_freq?
   end
 end

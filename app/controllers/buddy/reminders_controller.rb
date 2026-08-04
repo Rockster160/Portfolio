@@ -54,11 +54,36 @@ module Buddy
       head :no_content
     end
 
-    RECURRENCE_KINDS = %w[daily weekdays weekly monthly].freeze
-    WEEKDAYS         = %w[sunday monday tuesday wednesday thursday friday saturday].freeze
-    SCHEDULE_FIELDS  = %i[at repeat_kind weekday day].freeze
+    # What a template WOULD say, rendered against a plausible payload, so the
+    # editor can show it while it's being typed. Nothing is saved and nothing
+    # fires; a template that won't parse comes back as the error rather than a
+    # failed request, because seeing why is the whole point of the preview.
+    def preview
+      body = params[:body].to_s
+      error = Buddy::Template.error_in(body)
+      render json: {
+        preview:   error ? nil : Buddy::Template.render(body, sample_vars, user: current_user),
+        error:     error,
+        variables: Buddy::Template.variables_for(current_user, sample_vars),
+      }
+    end
+
+    FREQUENCIES     = Recurrence::FREQUENCIES.map(&:to_s).freeze
+    WEEKDAY_KEYS    = Recurrence::WEEKDAY_KEYS.map(&:to_s).freeze
+    CUSTOM_UNITS    = Recurrence::CUSTOM_UNITS.map(&:to_s).freeze
+    SCHEDULE_FIELDS = %i[at freq by_day by_month_day interval unit by_set_pos until_on].freeze
 
     private
+
+    # Stand-in values for the preview. A watch's own trigger only exists when it
+    # fires, so the editor renders against something shaped like one rather
+    # than showing an empty line and leaving them to guess.
+    def sample_vars
+      given = params[:vars]
+      return given.to_unsafe_h.transform_values(&:to_s) if given.respond_to?(:to_unsafe_h)
+
+      { "name" => "the thing that changed", "outcome" => "success" }
+    end
 
     def authorize_owner
       head :forbidden unless current_user&.byte_access?
@@ -87,11 +112,18 @@ module Buddy
       record.cancelled_at = on ? nil : Time.current
     end
 
+    # The body is a Liquid template (see Buddy::Template). Refused at the door
+    # when it won't parse: rendering falls back to the raw text so a broken one
+    # is never silent, but saving markup that will never run is a trap - it
+    # looks like a template and reads out as one.
     def apply_body
-      body = edits[:body].to_s.strip
       return if edits[:body].nil?
 
+      body = edits[:body].to_s.strip
       return fail_with("it needs to say something") if body.empty?
+
+      error = Buddy::Template.error_in(body)
+      return fail_with(error) if error
 
       record.body = body
     end
@@ -110,26 +142,46 @@ module Buddy
     # Rescheduling a repeat recomputes its next firing, so it has to be reserved
     # for edits that were actually ASKED for. Without this, flipping one off and
     # back on would silently roll it forward.
+    #
+    # `until_on` counts on the KEY rather than the value, because sending it
+    # empty is how you say "actually, keep going forever" - a real edit that a
+    # present-value check reads as no edit at all.
     def schedule_touched?
-      SCHEDULE_FIELDS.any? { |field| edits[field].present? }
+      edits.key?(:until_on) || SCHEDULE_FIELDS.any? { |field| edits[field].present? }
     end
 
     # The whole repeat RULE, not just its hour: how often, and the weekday or
     # date it hangs off. Each part falls back to what's already stored, so a
     # client sending only `at` still behaves the way it always did.
+    # The whole repeat rule, in the vocabulary Recurrence shares with the
+    # calendar - so "the second Tuesday of the month" and "every other
+    # Thursday" are editable here rather than being things only a calendar
+    # event could ever be.
+    #
+    # Written against the row's CURRENT rule (already normalized out of the old
+    # shape), so a client sending one field changes one thing.
     def move_recurrence
-      rec = anchored(record.recurrence.to_h.merge(recurrence_edits))
+      rule = anchored(record.normalized_recurrence.to_h.merge(recurrence_edits))
       return if @errors&.any?
 
-      next_at = BuddyReminder.new(user: record.user, recurrence: rec).next_fire_at(from: Time.current)
-      return fail_with("that repeat doesn't work out to a time") if next_at.nil?
+      next_at = BuddyReminder.new(user: record.user, recurrence: rule).next_fire_at(from: Time.current)
+      return fail_with("that repeat never comes round again") if next_at.nil?
 
-      record.recurrence = rec
+      record.recurrence = rule
       record.fire_at    = next_at
     end
 
     def recurrence_edits
-      { "at" => recurrence_time, "kind" => recurrence_kind }.compact
+      {
+        "at"        => recurrence_time,
+        "freq"      => picked(:freq, FREQUENCIES, "that isn't a repeat I know"),
+        "unit"      => picked(:unit, CUSTOM_UNITS, "that isn't a unit I know"),
+        "interval"  => interval_edit,
+        "until_on"  => until_edit,
+        # A rule that counts intervals needs to know what it counts FROM, and
+        # for a reminder that's the day it was set unless they say otherwise.
+        "starts_on" => record.rule.starts_on&.iso8601,
+      }.compact
     end
 
     def recurrence_time
@@ -140,38 +192,85 @@ module Buddy
       hhmm
     end
 
-    def recurrence_kind
-      kind = edits[:repeat_kind].to_s.strip.downcase
-      return nil if kind.empty?
-      return fail_with("that isn't a repeat I know") unless RECURRENCE_KINDS.include?(kind)
-
-      kind
-    end
-
-    # `weekly` hangs off a weekday and `monthly` off a date; daily and weekdays
-    # hang off nothing. Switching between them has to DROP the key that no
-    # longer applies, or a weekly-turned-daily keeps a stale `weekday` that the
-    # next switch back would silently reuse.
-    def anchored(rec)
-      case rec["kind"].to_s
-      when "weekly"  then rec.merge("weekday" => weekday_edit).except("day")
-      when "monthly" then rec.merge("day" => day_edit).except("weekday")
-      else                rec.except("weekday", "day")
-      end
-    end
-
-    def weekday_edit
-      given = edits[:weekday].to_s.strip.downcase.presence || record.recurrence.to_h["weekday"].to_s
-      return fail_with("pick a day of the week") unless WEEKDAYS.include?(given)
+    def picked(field, allowed, message)
+      given = edits[field].to_s.strip.downcase
+      return nil if given.empty?
+      return fail_with(message) unless allowed.include?(given)
 
       given
     end
 
-    def day_edit
-      given = (edits[:day].presence || record.recurrence.to_h["day"]).to_i
-      # BuddyReminder#next_fire_at clamps to 28 so a monthly never skips
-      # February; saying so up front beats silently moving what they typed.
-      return fail_with("pick a date from 1 to 28") unless given.between?(1, 28)
+    def interval_edit
+      return nil if edits[:interval].blank?
+
+      given = edits[:interval].to_i
+      return fail_with("repeat every 1 to 52, not #{edits[:interval]}") unless given.between?(1, 52)
+
+      given
+    end
+
+    # Blank clears it: "actually, keep going" is as real an edit as setting one.
+    def until_edit
+      return nil unless edits.key?(:until_on)
+      return "" if edits[:until_on].blank?
+
+      date = Date.parse(edits[:until_on].to_s) rescue nil
+      return fail_with("that isn't a date") if date.nil?
+      return fail_with("that end date has already passed") if date < Date.current
+
+      date.iso8601
+    end
+
+    # Each frequency hangs off a different thing - weekly off weekdays, monthly
+    # off dates or an Nth weekday, custom off an interval. Switching between
+    # them has to DROP what no longer applies, or a weekly-turned-daily keeps a
+    # stale weekday that the next switch back silently reuses.
+    def anchored(rule)
+      rule = rule.except("kind", "weekday", "day") # the shape reminders used to store
+      rule = rule.except("until_on") if rule["until_on"].blank?
+
+      case rule["freq"].to_s
+      when "weekly"  then rule.merge("by_day" => weekday_keys).except("by_month_day", "by_set_pos", "interval", "unit")
+      when "monthly" then monthly_anchor(rule)
+      when "custom"  then rule.except("by_month_day").merge("interval" => (rule["interval"] || 1).to_i)
+      else                rule.except("by_day", "by_month_day", "by_set_pos", "interval", "unit")
+      end
+    end
+
+    # Monthly is two rules wearing one name: particular DATES of the month, or
+    # the Nth weekday of it. Whichever the edit named wins, and the other is
+    # dropped so Recurrence isn't left choosing between them.
+    def monthly_anchor(rule)
+      pos = set_pos_edit
+      return rule.merge("by_set_pos" => pos, "by_day" => weekday_keys).except("by_month_day") if pos
+
+      rule.merge("by_month_day" => month_days).except("by_set_pos", "by_day", "interval", "unit")
+    end
+
+    def weekday_keys
+      given = Array(edits[:by_day]).map { |d| d.to_s.strip.downcase }.select { |d| WEEKDAY_KEYS.include?(d) }
+      return given if given.any?
+
+      stored = record.rule.by_day
+      stored.any? ? stored : [WEEKDAY_KEYS[record.rule.starts_on.wday]]
+    end
+
+    def month_days
+      given = Array(edits[:by_month_day]).map(&:to_i).select { |d| d == -1 || d.between?(1, 31) }
+      return given if given.any?
+
+      stored = Array(record.normalized_recurrence["by_month_day"]).map(&:to_i)
+      stored.any? ? stored : [record.rule.starts_on.day]
+    end
+
+    # 1..4, or -1 for "the last one". Absent means they're picking dates
+    # instead, which is the other half of monthly.
+    def set_pos_edit
+      raw = edits[:by_set_pos]
+      return nil if raw.blank?
+
+      given = raw.to_i
+      return fail_with("pick first through fourth, or last") unless given == -1 || given.between?(1, 4)
 
       given
     end

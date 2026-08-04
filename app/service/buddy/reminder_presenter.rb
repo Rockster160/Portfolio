@@ -51,27 +51,48 @@ module Buddy
       }
     end
 
-    # The repeat RULE, broken into the three things that can change: how often,
-    # which weekday (weekly), which date (monthly). Only the hour used to be
-    # editable, so a weekday alarm could be moved from 7:54 to 8:00 but never
-    # off weekdays - the rule itself was set once in conversation and then
-    # frozen.
+    # The repeat RULE, in the vocabulary the calendar has always used (see
+    # Recurrence). A reminder used to carry four frequencies with no interval,
+    # no nth-weekday and no end date, so "every second Tuesday" was something
+    # the calendar could express and a reminder could not.
+    #
+    # Handed over already normalized, so a row still written in the old shape
+    # edits as though it had always been in the new one.
     def recurrence_fields(reminder)
-      return { repeat_kind: nil, weekday: nil, day: nil } unless reminder.recurring?
+      return NO_RECURRENCE unless reminder.recurring?
 
-      rec = reminder.recurrence.to_h
+      rule = reminder.rule
       {
-        repeat_kind: rec["kind"].to_s,
-        weekday:     rec["weekday"].to_s.presence,
-        day:         rec["day"].presence&.to_i,
+        freq:         rule.freq.to_s,
+        by_day:       rule.by_day,
+        by_month_day: Array(reminder.normalized_recurrence["by_month_day"]).map(&:to_i),
+        interval:     rule.interval,
+        unit:         rule.unit.to_s,
+        by_set_pos:   rule.set_pos,
+        starts_on:    rule.starts_on&.iso8601,
+        until_on:     rule.until_on&.iso8601,
       }
     end
+
+    NO_RECURRENCE = {
+      freq:         nil,
+      by_day:       [],
+      by_month_day: [],
+      interval:     nil,
+      unit:         nil,
+      by_set_pos:   nil,
+      starts_on:    nil,
+      until_on:     nil,
+    }.freeze
 
     # What the time field starts on. A recurrence only has an hour to move, so
     # it hands back "HH:MM" for a `time` input; a one-off hands back a whole
     # local datetime. The controller reads them apart the same way.
     def edit_time(reminder, user)
-      return reminder.recurrence.to_h["at"].to_s if reminder.recurring?
+      if reminder.recurring?
+        hour, minute = reminder.time_of_day
+        return format("%<hour>02d:%<minute>02d", hour: hour, minute: minute)
+      end
 
       reminder.fire_at&.in_time_zone(user.timezone)&.strftime("%Y-%m-%dT%H:%M")
     end
@@ -113,7 +134,7 @@ module Buddy
           # so the editor can offer the placeholders. A one-shot goes through
           # the model, where the body is a brief rather than a line to print.
           templated: !w.one_shot,
-        }.merge(repeat_kind: nil, weekday: nil, day: nil)
+        }.merge(NO_RECURRENCE)
       }
     end
 
@@ -132,19 +153,55 @@ module Buddy
       reminder.fire_at.in_time_zone(user.timezone).strftime("%a %-I:%M %p")
     end
 
-    # Mirrors schedule_reminder's receipt phrasing for a recurrence hash.
     def recurrence_text(reminder)
-      rec  = reminder.recurrence || {}
+      rec  = reminder.normalized_recurrence
       hhmm = (Time.zone.parse(rec["at"].to_s) rescue nil)
       tstr = hhmm ? hhmm.strftime("%-I:%M %p") : rec["at"].to_s
-      base = case rec["kind"]
+      ends = rec["until_on"].present? ? " until #{rec["until_on"]}" : ""
+      "#{repeat_phrase(rec)} at #{tstr}#{ends}"
+    end
+
+    DAY_NAMES = {
+      "sun" => "Sunday",
+      "mon" => "Monday",
+      "tue" => "Tuesday",
+      "wed" => "Wednesday",
+      "thu" => "Thursday",
+      "fri" => "Friday",
+      "sat" => "Saturday",
+    }.freeze
+    ORDINAL_NAMES = { 1 => "first", 2 => "second", 3 => "third", 4 => "fourth", -1 => "last" }.freeze
+
+    # The rule in words, shared by the panel's sublabel and schedule_reminder's
+    # receipt so the two can never describe the same rule differently.
+    def repeat_phrase(rec)
+      rec = rec.with_indifferent_access
+      case rec[:freq].to_s
       when "daily"    then "every day"
       when "weekdays" then "every weekday"
-      when "weekly"   then "every #{rec["weekday"].to_s.capitalize}"
-      when "monthly"  then "day #{rec["day"]} monthly"
+      when "weekly"   then "every #{named_days(rec[:by_day])}"
+      when "yearly"   then "once a year"
+      when "monthly"  then monthly_phrase(rec)
+      when "custom"   then custom_phrase(rec)
       else                 "on a schedule"
       end
-      "#{base} at #{tstr}"
+    end
+
+    def monthly_phrase(rec)
+      return "day #{Array(rec[:by_month_day]).join(", ")} monthly" if rec[:by_set_pos].blank?
+
+      "the #{ORDINAL_NAMES[rec[:by_set_pos].to_i] || rec[:by_set_pos]} #{named_days(rec[:by_day])} monthly"
+    end
+
+    def custom_phrase(rec)
+      count = rec[:interval].to_i
+      unit  = rec[:unit].to_s.presence || "day"
+      count > 1 ? "every #{count} #{unit}s" : "every #{unit}"
+    end
+
+    def named_days(keys)
+      names = Array(keys).filter_map { |k| DAY_NAMES[k.to_s] }
+      names.presence&.to_sentence || "week"
     end
 
     def watch_glyph(scope)

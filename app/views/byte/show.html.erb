@@ -531,6 +531,107 @@
     </div>
   </dialog>
 
+  <%# Editing one. A repeat rule is a handful of controls that depend on each %>
+  <%# other and the words are a template with a preview under them, so this %>
+  <%# outgrew the row it used to happen inside. Fields are painted by %>
+  <%# reminders.js against whichever row was opened. %>
+  <dialog class="byte-modal byte-modal-wide" data-byte-reminder-edit>
+    <div class="byte-modal-form basic">
+      <h3 class="byte-modal-title" data-byte-edit-title>Edit reminder</h3>
+
+      <label class="byte-modal-label">
+        <span class="byte-modal-label-text">What it says</span>
+        <textarea class="byte-modal-input byte-edit-body" data-byte-edit-body rows="2"
+                  spellcheck="false" autocapitalize="sentences"></textarea>
+      </label>
+      <%# The preview is the documentation. A list of available variables tells %>
+      <%# you the names; seeing the sentence come out tells you what you wrote. %>
+      <p class="byte-edit-preview" data-byte-edit-preview hidden></p>
+      <p class="byte-modal-hint byte-edit-vars" data-byte-edit-vars hidden></p>
+
+      <div class="byte-edit-row" data-byte-edit-when hidden>
+        <label class="byte-modal-label">
+          <span class="byte-modal-label-text" data-byte-edit-when-label>When</span>
+          <input class="byte-modal-input" data-byte-edit-at type="datetime-local">
+        </label>
+      </div>
+
+      <div class="byte-edit-repeat" data-byte-edit-repeat hidden>
+        <label class="byte-modal-label">
+          <span class="byte-modal-label-text">Repeats</span>
+          <select class="byte-modal-input" data-byte-edit-freq>
+            <option value="daily">Every day</option>
+            <option value="weekdays">Weekdays</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+            <option value="custom">Every few…</option>
+          </select>
+        </label>
+
+        <%# Weekly: any combination of days, so it's toggles rather than a select. %>
+        <div class="byte-edit-days" data-byte-edit-days hidden></div>
+
+        <%# Monthly is two rules under one name - particular dates, or the Nth %>
+        <%# weekday. The choice comes first so only one set of inputs is shown. %>
+        <div class="byte-edit-row" data-byte-edit-monthly hidden>
+          <select class="byte-modal-input" data-byte-edit-monthmode>
+            <option value="date">On date(s)</option>
+            <option value="nth">On the…</option>
+          </select>
+          <input class="byte-modal-input" data-byte-edit-monthdays type="text"
+                 inputmode="numeric" placeholder="1, 15" spellcheck="false">
+          <select class="byte-modal-input" data-byte-edit-setpos hidden>
+            <option value="1">First</option>
+            <option value="2">Second</option>
+            <option value="3">Third</option>
+            <option value="4">Fourth</option>
+            <option value="-1">Last</option>
+          </select>
+        </div>
+
+        <div class="byte-edit-row" data-byte-edit-custom hidden>
+          <span class="byte-edit-inline">Every</span>
+          <input class="byte-modal-input byte-edit-interval" data-byte-edit-interval
+                 type="number" min="1" max="52" step="1">
+          <select class="byte-modal-input" data-byte-edit-unit>
+            <option value="day">days</option>
+            <option value="week">weeks</option>
+            <option value="month">months</option>
+          </select>
+        </div>
+
+        <div class="byte-edit-row">
+          <label class="byte-modal-label">
+            <span class="byte-modal-label-text">At</span>
+            <input class="byte-modal-input" data-byte-edit-time type="time">
+          </label>
+          <label class="byte-modal-label">
+            <span class="byte-modal-label-text">Until (optional)</span>
+            <input class="byte-modal-input" data-byte-edit-until type="date">
+          </label>
+        </div>
+        <p class="byte-modal-hint" data-byte-edit-summary></p>
+      </div>
+
+      <%# A hand-written watch's condition. A named trigger has none to type - %>
+      <%# it was assembled from structured pieces - so it reads as text instead. %>
+      <label class="byte-modal-label" data-byte-edit-trigger-row hidden>
+        <span class="byte-modal-label-text">Fires when</span>
+        <input class="byte-modal-input byte-reminder-mono" data-byte-edit-listener type="text"
+               spellcheck="false" autocapitalize="off" autocorrect="off"
+               placeholder="Jil listener, e.g. item:action:added">
+      </label>
+      <p class="byte-modal-hint" data-byte-edit-trigger-note hidden></p>
+
+      <p class="byte-reminder-error" data-byte-edit-error hidden></p>
+      <div class="byte-modal-actions">
+        <button type="button" class="byte-modal-btn" data-byte-edit-cancel>Cancel</button>
+        <button type="button" class="byte-modal-btn byte-modal-btn-primary" data-byte-edit-save>Save</button>
+      </div>
+    </div>
+  </dialog>
+
   <%# Display settings. One row today, but the shape is a list on purpose - %>
   <%# text size was the first of these to be asked for, not the last. %>
   <dialog class="byte-modal" data-byte-settings-modal>

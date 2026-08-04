@@ -42,7 +42,7 @@ module Buddy
       else
         reminder.update!(fired_at: Time.current)
       end
-    rescue => e
+    rescue StandardError => e
       # Firing a reminder failing is a data-integrity event: the user
       # asked to be reminded of something at a specific time and the
       # nudge did not fire. Route through Buddy::Errors so it shows up
@@ -66,12 +66,17 @@ module Buddy
       # by the second one, and someone with a day full of them reads the same
       # character a dozen times before the words.
       def deliver_plain_reminder(user, conversation, reminder)
+        # The body is a Liquid template like any other editable one. A reminder
+        # has no trigger payload behind it, so what it reaches is the base
+        # context - the clock, the day, their name, the pet's - which is enough
+        # for "{{ greeting }}, {{ user }} - bins go out tonight".
+        said = Buddy::Template.render(reminder.body, {}, user: user, conversation: conversation)
         Buddy::CompanionDelivery.deliver_plain(
           user:         user,
           conversation: conversation,
-          text:         "Reminder: #{reminder.body}",
+          text:         "Reminder: #{said}",
           metadata:     { kind: "buddy", source: "reminder", reminder_id: reminder.id },
-          push_title:   reminder.body,
+          push_title:   said,
         )
       end
 

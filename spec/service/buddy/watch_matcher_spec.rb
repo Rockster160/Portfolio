@@ -266,7 +266,7 @@ RSpec.describe Buddy::WatchMatcher do
       make_watch(
         trigger_scope: "item",
         match:         { "action" => "added" },
-        body:          "Claude list got a new item in Ocs-Backend.",
+        body:          "🔔 Claude list got a new item in Ocs-Backend.",
         one_shot:      false,
       )
     }
@@ -291,46 +291,66 @@ RSpec.describe Buddy::WatchMatcher do
       expect(lines.last).to eq("🔔 Claude list got a new item in Ocs-Backend")
     end
 
-    # Appending the detail is only the DEFAULT. Someone who wants the item
-    # named mid-sentence rather than quoted on the end can write it there, and
-    # the panel's body field is where that's edited.
+    # Appending the detail is only what happens to a plain sentence. A body
+    # with Liquid in it writes its own line - where the detail goes, what it's
+    # been through on the way, and which of two things to say.
     describe "when the body is written as a template" do
-      def announce(body, payload)
-        make_watch(trigger_scope: "event", match: {}, body: body, one_shot: false)
-        described_class.dispatch(user, :event, payload)
+      def announce(body, payload, scope: :event)
+        make_watch(trigger_scope: scope.to_s, match: {}, body: body, one_shot: false)
+        described_class.dispatch(user, scope, payload)
         lines.last
       end
 
       it "puts what changed where they asked for it" do
-        line = announce("{name} landed on the Claude list", { "name" => "Fix the estimator" })
+        line = announce("🔔 {{ name }} landed on the Claude list", { "name" => "Fix the estimator" })
 
         expect(line).to eq("🔔 Fix the estimator landed on the Claude list")
       end
 
       it "reads any other key straight off the trigger" do
-        line = announce("{name} went on {list}", { "name" => "Milk", "list" => "Groceries" })
+        line = announce("{{ name }} went on {{ list }}", { "name" => "Milk", "list" => "Groceries" })
 
-        expect(line).to eq("🔔 Milk went on Groceries")
+        expect(line).to eq("Milk went on Groceries")
       end
 
       it "does not also tack the detail on the end" do
-        line = announce("{name} landed", { "name" => "Fix the estimator" })
+        line = announce("{{ name }} landed", { "name" => "Fix the estimator" })
 
         expect(line).not_to include("—")
       end
 
-      # Template syntax showing through on a lock screen reads like a bug; a
-      # slightly shorter sentence does not.
-      it "leaves a blank rather than raw braces when the trigger lacks the key" do
-        line = announce("{name} went on {list}", { "name" => "Milk" })
+      # The example that asked for filters in the first place: Claude's list
+      # items arrive prefixed with the branch, ">main Permission".
+      it "runs the filters, so the noise can be stripped off" do
+        line = announce('{{ name | remove: ">" | strip }}', { "name" => ">main Permission" })
 
-        expect(line).to eq("🔔 Milk went on")
+        expect(line).to eq("main Permission")
       end
 
-      it "keeps a glyph they chose instead of stacking the bell in front of it" do
-        line = announce("📥 {name}", { "name" => "Fix the estimator" })
+      it "can branch on what the trigger said" do
+        template = "{% if list == 'Groceries' %}🥕 {{ name }}{% else %}📥 {{ name }}{% endif %}"
 
-        expect(line).to eq("📥 Fix the estimator")
+        expect(announce(template, { "name" => "Milk", "list" => "Groceries" })).to eq("🥕 Milk")
+      end
+
+      it "reaches the base context every template gets" do
+        line = announce("{{ buddy }} saw {{ name }} on {{ weekday }}", { "name" => "a thing" })
+
+        expect(line).to match(/\A#{convo.buddy_name} saw a thing on \w+day\z/)
+      end
+
+      it "leaves a blank rather than raw markup when the trigger lacks the key" do
+        line = announce("{{ name }} went on {{ list }}", { "name" => "Milk" })
+
+        expect(line).to eq("Milk went on")
+      end
+
+      # A template that can't render still has to produce a notification - the
+      # person is waiting on a doorbell, and silence is the one bad outcome.
+      it "falls back to the raw body rather than saying nothing" do
+        line = announce("{% nonsense %}🔔 something happened", { "name" => "x" })
+
+        expect(line).to include("something happened")
       end
     end
 

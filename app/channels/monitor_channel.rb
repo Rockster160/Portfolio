@@ -53,6 +53,34 @@ class MonitorChannel < ApplicationCable::Channel
     )
   end
 
+  # `bin/watch_trigger` registers an ephemeral listener watch and gets an ack
+  # transmitted back to just this subscription; the eventual hit rides a
+  # regular MonitorChannel broadcast (see TerminalWatch#broadcast!).
+  def watch(data)
+    data = data.symbolize_keys
+    listener = data[:listener].to_s
+    watch_id = data[:watch_id].to_s
+    return if listener.blank? || watch_id.blank?
+
+    (@watch_ids ||= []) << watch_id unless @watch_ids&.include?(watch_id)
+    scope = ::TerminalWatch.register(current_user, watch_id, listener)
+    transmit({ id: :"terminal-watch", type: :ack, watch_id: watch_id, listener: listener, scope: scope })
+  end
+
+  def watch_heartbeat(data)
+    ::TerminalWatch.heartbeat(current_user, data.symbolize_keys[:watch_id].to_s)
+  end
+
+  def unwatch(data)
+    watch_id = data.symbolize_keys[:watch_id].to_s
+    @watch_ids&.delete(watch_id)
+    ::TerminalWatch.unregister(current_user, watch_id)
+  end
+
+  def unsubscribed
+    Array(@watch_ids).each { |wid| ::TerminalWatch.unregister(current_user, wid) }
+  end
+
   private
 
   def kick_whisper_refresh

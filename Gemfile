@@ -104,3 +104,5 @@ group :development, :test do
   gem "timecop", "0.9.5"
   gem "webmock", "3.23.1", require: false
 end
+
+gem "liquid", "~> 5.13"

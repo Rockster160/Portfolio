@@ -198,12 +198,16 @@ module Buddy
           )
         end
       else
+        said = Buddy::Template.render(
+          watch.body, Buddy::WatchMessage.variables(watch, payload),
+          user: user, conversation: conversation
+        )
         Buddy::CompanionDelivery.deliver_plain(
           user:         user,
           conversation: conversation,
-          text:         "Reminder: #{watch.body}",
+          text:         "Reminder: #{said}",
           metadata:     { kind: "buddy", source: "watch", watch_id: watch.id },
-          push_title:   watch.body,
+          push_title:   said,
         )
       end
     end
@@ -287,11 +291,15 @@ module Buddy
     # which, on a watch that now fires for failures too, means guessing wrong
     # half the time it matters.
     def self_seed(watch, payload)
-      return watch.body unless watch.trigger_scope == "deploy"
+      body = Buddy::Template.render(
+        watch.body, Buddy::WatchMessage.variables(watch, payload),
+        user: watch.user, conversation: watch.byte_conversation
+      )
+      return body unless watch.trigger_scope == "deploy"
 
       data    = payload.is_a?(Hash) ? payload.with_indifferent_access : {}
       outcome = deploy_outcome(data)
-      return watch.body if outcome.nil?
+      return body if outcome.nil?
 
       sha  = data[:sha].to_s.strip.first(7).presence
       note = data[:message].to_s.strip.presence
@@ -304,7 +312,7 @@ module Buddy
         # voice: let you know the deploy finished" got answered with "Yep, sent
         # it along" (prod 1316) - the model took itself for the messenger and
         # reported back on the errand instead of doing it.
-        "What they asked for was: \"#{watch.body}\". Say it to them in your own voice.",
+        "What they asked for was: \"#{body}\". Say it to them in your own voice.",
         ("Lead with the fact that it failed - that's the part they need." if outcome == :failed),
       ].compact.join(" ")
     end
@@ -326,7 +334,13 @@ module Buddy
     def cross_user_seed(watch, payload)
       owner  = watch.user.first_name
       detail = payload.is_a?(Hash) ? payload[:name].to_s.strip.presence : nil
-      base   = "#{owner} asked me to give #{watch.notify_user.first_name} a heads-up: #{watch.body}."
+      # Rendered against the OWNER's context - it's their watch and their
+      # wording, being passed along to someone else.
+      said   = Buddy::Template.render(
+        watch.body, Buddy::WatchMessage.variables(watch, payload),
+        user: watch.user, conversation: watch.byte_conversation
+      )
+      base   = "#{owner} asked me to give #{watch.notify_user.first_name} a heads-up: #{said}."
       base   = "#{base} (What changed: \"#{detail}\".)" if detail
       "#{base} Say it warmly, in your own voice - you're passing it along for #{owner}."
     end

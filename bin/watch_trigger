@@ -1,0 +1,244 @@
+#!/usr/bin/env bash
+# Subscribes to Portfolio MonitorChannel and waits for the next Jil trigger
+# that matches a listener, then exits 0. Written in the same listener syntax as
+# Jil tasks / Buddy watches (matched server-side by Jil::ListenerMatch).
+# Auto-reconnects with backoff and re-registers the watch on every reconnect.
+#
+# Usage:
+#   bin/watch_trigger <listener> [timeout_seconds]
+#
+# Examples:
+#   bin/watch_trigger "hass-sensor:location:doorbell"
+#   bin/watch_trigger "email:from:hunter body:challenge" 300
+#
+# Args:
+#   listener         Jil listener string to watch (required)
+#   timeout_seconds  Optional. Exit 2 if nothing matches within this many
+#                    seconds (default: no timeout — wait forever)
+#
+# Env:
+#   PORTFOLIO_LOCAL_APIKEY  Bearer API key (auto-sourced from .env if unset)
+#   PORTFOLIO_CABLE_URL     Override wss://ardesian.com/cable
+#   WATCH_DEBUG=1           Print verbose connect/subscribe/match logs
+
+set -euo pipefail
+
+: "${WATCH_DEBUG:=0}"
+
+if [[ -z "${PORTFOLIO_LOCAL_APIKEY:-}" && -f "$(dirname "$0")/../.env" ]]; then
+  PORTFOLIO_LOCAL_APIKEY="$(grep -E '^PORTFOLIO_LOCAL_APIKEY=' "$(dirname "$0")/../.env" | head -1 | cut -d= -f2- | tr -d '"'"'")"
+  export PORTFOLIO_LOCAL_APIKEY
+fi
+
+: "${PORTFOLIO_LOCAL_APIKEY:?PORTFOLIO_LOCAL_APIKEY must be set}"
+
+LISTENER="${1:-}"
+if [[ -z "$LISTENER" ]]; then
+  echo "usage: bin/watch_trigger <listener> [timeout_seconds]" >&2
+  exit 64
+fi
+TIMEOUT="${2:-0}"
+CABLE_URL="${PORTFOLIO_CABLE_URL:-wss://ardesian.com/cable}"
+
+exec node --experimental-websocket --no-warnings - \
+  "$CABLE_URL" "$PORTFOLIO_LOCAL_APIKEY" "$LISTENER" "$TIMEOUT" "$WATCH_DEBUG" <<'JS'
+const crypto = require("crypto");
+const [,, cableUrl, apiKey, listener, timeoutArg, debugFlag] = process.argv;
+const DEBUG = debugFlag === "1";
+const TIMEOUT_MS = (parseInt(timeoutArg, 10) || 0) * 1000;
+const url = `${cableUrl}?Authorization=${encodeURIComponent(`Bearer ${apiKey}`)}`;
+const identifier = JSON.stringify({ channel: "MonitorChannel" });
+const watchId = crypto.randomUUID();
+
+let attempt = 0;
+let ws = null;
+let reconnectAt = null;
+let heartbeat = null;
+let registered = false;
+const startedAt = Date.now();
+
+// A dropped socket almost always comes right back; only escalate to
+// exponential backoff after a few fast retries (server actually down).
+const FAST_RETRIES = 5;
+const FAST_RETRY_MS = 3000;
+const HEARTBEAT_MS = 20000; // must stay under the server's 60s lease
+
+function formatElapsed(ms) {
+  const total = Math.round(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h) return `${h}h ${m}m ${s}s`;
+  if (m) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+const isTTY = process.stderr.isTTY;
+const c = {
+  green:  isTTY ? "\x1b[32m" : "",
+  red:    isTTY ? "\x1b[31m" : "",
+  cyan:   isTTY ? "\x1b[36m" : "",
+  dim:    isTTY ? "\x1b[2m"  : "",
+  grey:   isTTY ? "\x1b[90m" : "",
+  reset:  isTTY ? "\x1b[0m"  : "",
+};
+
+function greyText(s) {
+  return c.grey + s + c.reset;
+}
+
+function log(msg) {
+  if (!DEBUG) return;
+  const prefix = isTTY ? "\r\x1b[2K" : "";
+  process.stderr.write(`${prefix}[${new Date().toISOString()}] ${msg}\n`);
+  redraw();
+}
+
+let currentStatus = { dot: c.dim + "●" + c.reset, text: greyText("Connecting...") };
+
+function status(dot, text) {
+  currentStatus = { dot, text };
+  redraw();
+}
+
+function redraw() {
+  if (!isTTY) return;
+  let { dot, text } = currentStatus;
+  if (reconnectAt !== null) {
+    const remaining = Math.max(1, Math.ceil((reconnectAt - Date.now()) / 1000));
+    text = greyText(`Reconnecting in ${remaining}s...`);
+  }
+  const elapsed = greyText(` (${formatElapsed(Date.now() - startedAt)})`);
+  process.stderr.write(`\r\x1b[2K${dot} ${text}${elapsed}`);
+}
+
+function finalize(dot, text) {
+  const prefix = isTTY ? "\r\x1b[2K" : "";
+  process.stderr.write(`${prefix}${dot} ${text}\n`);
+}
+
+function stopHeartbeat() {
+  if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+}
+
+function send(action, data) {
+  ws.send(JSON.stringify({
+    command: "message",
+    identifier,
+    data: JSON.stringify({ action, ...data }),
+  }));
+}
+
+function scheduleReconnect() {
+  stopHeartbeat();
+  const delay = (
+    attempt <= FAST_RETRIES
+      ? FAST_RETRY_MS
+      : Math.min(30000, 3000 * 2 ** (attempt - FAST_RETRIES))
+  );
+  log(`reconnecting in ${delay}ms (attempt ${attempt})`);
+
+  reconnectAt = Date.now() + delay;
+  currentStatus = { dot: c.red + "●" + c.reset, text: "" };
+  redraw();
+
+  setTimeout(() => {
+    reconnectAt = null;
+    connect();
+  }, delay);
+}
+
+function hit(payload) {
+  stopHeartbeat();
+  try { ws.close(); } catch {}
+  const elapsed = greyText(` (${formatElapsed(Date.now() - startedAt)})`);
+  finalize(c.green + "✔" + c.reset, `Matched ${c.cyan}${listener}${c.reset}!` + elapsed);
+  const data = payload.data || {};
+  if (Object.keys(data).length && isTTY) {
+    process.stderr.write(greyText("  " + JSON.stringify(data)) + "\n");
+  }
+  process.exit(0);
+}
+
+function connect() {
+  attempt++;
+  registered = false;
+  log(`connect (attempt ${attempt}) → ${cableUrl}`);
+  status(c.dim + "●" + c.reset, greyText("Connecting..."));
+
+  ws = new WebSocket(url);
+
+  ws.addEventListener("open", () => log("open"));
+
+  ws.addEventListener("message", (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+
+    if (msg.type === "welcome") {
+      attempt = 0;
+      ws.send(JSON.stringify({ command: "subscribe", identifier }));
+      return;
+    }
+
+    if (msg.type === "confirm_subscription") {
+      log(`subscribed → MonitorChannel, registering watch ${watchId}`);
+      send("watch", { listener, watch_id: watchId });
+      stopHeartbeat();
+      heartbeat = setInterval(() => send("watch_heartbeat", { watch_id: watchId }), HEARTBEAT_MS);
+      heartbeat.unref();
+      return;
+    }
+
+    if (msg.type) return; // ping / disconnect / reject
+
+    const payload = msg.message;
+    if (!payload || payload.id !== "terminal-watch" || payload.watch_id !== watchId) return;
+
+    if (payload.type === "ack") {
+      registered = true;
+      log(`watch registered (scope=${payload.scope || "?"})`);
+      status(c.green + "●" + c.reset, greyText(`Watching ${listener}...`));
+      return;
+    }
+
+    if (payload.type === "hit") return hit(payload);
+  });
+
+  ws.addEventListener("close", (ev) => {
+    log(`close code=${ev.code} reason=${ev.reason || ""}`);
+    status(c.red + "●" + c.reset, greyText("Disconnected"));
+    scheduleReconnect();
+  });
+
+  ws.addEventListener("error", (ev) => {
+    log(`error ${ev.message || ""}`);
+  });
+}
+
+redraw();
+setInterval(redraw, 1000).unref();
+
+if (TIMEOUT_MS > 0) {
+  setTimeout(() => {
+    stopHeartbeat();
+    finalize(c.red + "✘" + c.reset, `Timed out after ${formatElapsed(TIMEOUT_MS)} waiting for ${listener}`);
+    process.exit(2);
+  }, TIMEOUT_MS).unref();
+}
+
+function shutdown(code) {
+  stopHeartbeat();
+  try { if (registered) send("unwatch", { watch_id: watchId }); } catch {}
+  try { ws.close(); } catch {}
+  // Give the unwatch a beat to flush, then exit regardless.
+  setTimeout(() => process.exit(code), 100).unref();
+}
+
+process.on("SIGINT",  () => shutdown(130));
+process.on("SIGTERM", () => shutdown(143));
+
+if (isTTY) {
+  process.stderr.write(greyText(`(Ctrl+C to stop watching for "${listener}")`) + "\n");
+}
+connect();
+JS
