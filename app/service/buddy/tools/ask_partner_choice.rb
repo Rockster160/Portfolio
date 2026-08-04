@@ -6,7 +6,10 @@ Buddy::Tools.register(
     "ask them: pizza, tacos, or thai?". Their companion shows the options as
     tappable buttons; tapping one sends that choice back to you.
 
-    `to` is who to ask. `question` is the prompt. `options` is a
+    `to` is who to ask. `question` is the prompt, and it is READ BY them, so
+    "you" means THEM and your own person gets named: "ask if he'll learn
+    mahjong with me" goes out as "Will you learn mahjong with Chelsea?" - never
+    "with you", which asks him to do it with himself. `options` is a
     COMMA-SEPARATED list of the choices (at least two), e.g.
     options="dishes, mop". Do NOT use brackets or quotes inside the list.
     For a select-all / pick-any question, use ask_partner_multi instead.
@@ -25,7 +28,7 @@ Buddy::Tools.register(
   feature:     :relay,
   args:        {
     to:          { type: :string,  required: true,  description: "First name of anyone on the household roster in \"Who else is in the house\" - not only a partner" },
-    question:    { type: :string,  required: true,  description: "The question to pose" },
+    question:    { type: :string,  required: true,  description: "The question, addressed TO them - \"you\" is the person being asked, and your own person is named" },
     options:     { type: :string,  required: true,  description: "Comma-separated choices, e.g. \"dishes, mop\"" },
     await_reply: { type: :boolean, required: false, description: "Hold the rest of the sequence until they pick. Only when a later step needs it." },
     var:         { type: :string,  required: false, description: "Name their pick is filed under, for a later {{step}} to use. With await_reply." },

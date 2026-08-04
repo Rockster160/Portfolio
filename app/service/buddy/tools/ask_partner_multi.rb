@@ -8,10 +8,12 @@ Buddy::Tools.register(
     checkboxes with a Send button, so they can pick several at once;
     the full set comes back to you.
 
-    `to` is who to ask. `question` is the prompt. `options` is a
-    COMMA-SEPARATED list of the choices (at least two), e.g.
-    options="words, time, touch, service, gifts". No brackets. For a pick-ONE
-    question use ask_partner_choice; for a free-text answer use ask_partner.
+    `to` is who to ask. `question` is the prompt, and it is READ BY them, so
+    "you" means THEM and your own person gets named ("...with Chelsea?", never
+    "...with me" or "...with you"). `options` is a COMMA-SEPARATED list of the
+    choices (at least two), e.g. options="words, time, touch, service, gifts".
+    No brackets. For a pick-ONE question use ask_partner_choice; for a
+    free-text answer use ask_partner.
 
     When a LATER STEP needs what they picked, add `await_reply: true` and a
     `var`: everything queued behind this holds until they send, and the full set
@@ -24,7 +26,7 @@ Buddy::Tools.register(
   feature:     :relay,
   args:        {
     to:          { type: :string,  required: true,  description: "First name of anyone on the household roster in \"Who else is in the house\" - not only a partner" },
-    question:    { type: :string,  required: true,  description: "The question to pose" },
+    question:    { type: :string,  required: true,  description: "The question, addressed TO them - \"you\" is the person being asked, and your own person is named" },
     options:     { type: :string,  required: true,  description: "Comma-separated choices to pick any of" },
     await_reply: { type: :boolean, required: false, description: "Hold the rest of the sequence until they send. Only when a later step needs it." },
     var:         { type: :string,  required: false, description: "Name their picks are filed under, for a later {{step}} to use. With await_reply." },

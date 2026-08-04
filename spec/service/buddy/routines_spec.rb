@@ -94,6 +94,18 @@ RSpec.describe "Buddy routines" do
       expect(chips.length).to eq(1)
     end
 
+    # Prod 2183: "log cup water" against a saved **water cup** that marks three
+    # waters logged exactly one. Every other branch of the name match is a
+    # substring test, and a transposition walks straight past all of them.
+    it "runs the saved one when the words come back in a different order" do
+      create(:chore, created_by_user: user, chore_household: household, name: "8oz Water")
+      routine!("water cup", [BuddyRoutine.step(:complete_chore, { chore: "8oz Water", count: 3 })])
+
+      turn!("log cup water", [run_call("cup water")])
+
+      expect(ChoreCompletion.where(user_id: user.id).count).to eq(3)
+    end
+
     it "says so rather than running something else when nothing matches" do
       routine!("Nightly", [tell_step("night")])
 
@@ -102,6 +114,16 @@ RSpec.describe "Buddy routines" do
       expect(chips).to be_empty
       output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
       expect(output["status"]).to eq("failed")
+      expect(output["error"]).to match(/no routine called/i)
+    end
+
+    it "doesn't reach for a routine that merely shares a word with the request" do
+      routine!("water cup", [tell_step("night")])
+
+      client = turn!("prep the printer", [run_call("prep printer")])
+
+      expect(chips).to be_empty
+      output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
       expect(output["error"]).to match(/no routine called/i)
     end
 
@@ -120,6 +142,47 @@ RSpec.describe "Buddy routines" do
 
       expect(routine.reload.run_count).to eq(1)
       expect(routine.last_run_at).to be_present
+    end
+  end
+
+  # ---- a step that stopped pointing anywhere -------------------------------
+
+  # Saving only proves a routine could run on the day it was saved. Steps hold
+  # NAMES and re-resolve every run, so a renamed chore turns one into a marker
+  # ProposalBuilder drops without a word - and nobody re-reads a saved sequence,
+  # so it fails identically every time and looks like it ran. Routines stored
+  # before save-time resolution shipped never had the check at all.
+  describe "a routine that can't run any more" do
+    let!(:rotten) {
+      routine!("Water Cup", [BuddyRoutine.step(:complete_chore, { chore: "Drink Water", count: 3 })])
+    }
+
+    it "tells the model why, instead of running none of it quietly" do
+      client = turn!("water cup", [run_call("Water Cup")])
+
+      output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
+      expect(output["status"]).to eq("failed")
+      expect(output["error"]).to match(/no chore matching/i)
+    end
+
+    it "records nothing at all" do
+      turn!("water cup", [run_call("Water Cup")])
+
+      expect(ChoreCompletion.where(user_id: user.id)).to be_empty
+      expect(rotten.reload.run_count).to eq(0)
+    end
+
+    # All or nothing: the half that ran would look like the whole thing worked.
+    it "holds back the steps that WOULD have worked" do
+      create(:chore, created_by_user: user, chore_household: household, name: "8oz Water")
+      rotten.update!(steps: [
+        BuddyRoutine.step(:message_partner, { to: her, message: "drinking" }),
+        BuddyRoutine.step(:complete_chore, { chore: "Drink Water" }),
+      ])
+
+      turn!("water cup", [run_call("Water Cup")])
+
+      expect(told).to be_empty
     end
   end
 
@@ -330,6 +393,38 @@ RSpec.describe "Buddy routines" do
       expect(user.buddy_routines.first.steps.map { |s| s["payload"]["message"] }).to eq(["new"])
     end
 
+    # Three waters collapse into ONE row that runs three times, and the three
+    # lives on the row - `args`, which is what a capture reads, still holds the
+    # first call's payload and says one. Saved from that, "cash in three
+    # waters" became a button that cashes in one.
+    it "keeps the count when the calls it saves were collapsed into one row" do
+      create(:chore, created_by_user: user, chore_household: household, name: "8oz Water")
+      turn!("drank three waters", [
+        { name: :complete_chore, call_id: "a", arguments: { "chore" => "8oz Water" } },
+        { name: :complete_chore, call_id: "b", arguments: { "chore" => "8oz Water" } },
+        { name: :complete_chore, call_id: "c", arguments: { "chore" => "8oz Water" } },
+      ])
+
+      turn!("save that as water cup", [capture_call("Water Cup", 1)])
+
+      payload = user.buddy_routines.find_by(name: "Water Cup").steps.first["payload"]
+      expect(payload).to include("chore" => "8oz Water", "count" => 3)
+    end
+
+    it "runs that saved copy three times, the way it was captured" do
+      create(:chore, created_by_user: user, chore_household: household, name: "8oz Water")
+      turn!("drank three waters", [
+        { name: :complete_chore, call_id: "a", arguments: { "chore" => "8oz Water" } },
+        { name: :complete_chore, call_id: "b", arguments: { "chore" => "8oz Water" } },
+        { name: :complete_chore, call_id: "c", arguments: { "chore" => "8oz Water" } },
+      ])
+      turn!("save that as water cup", [capture_call("Water Cup", 1)])
+
+      turn!("water cup", [run_call("Water Cup")])
+
+      expect(ChoreCompletion.where(user_id: user.id).count).to eq(6)
+    end
+
     it "says it has nothing to save rather than inventing steps" do
       client = turn!("save that", [capture_call("Nightly", 2)])
 
@@ -476,6 +571,44 @@ RSpec.describe "Buddy routines" do
       routine!("Off", [tell_step("night")], enabled: false)
 
       expect(Buddy::Context.build(user, convo)[:routines]).to be_empty
+    end
+  end
+
+  # The names have to be in the PROMPT. Behind get_context they were unreachable
+  # in practice: the rules say don't fetch that section on the chance a phrase
+  # might be a routine (correctly - almost nothing is), which left a routine
+  # recognisable only to someone who said the word "routine" out loud.
+  describe "the names in the prompt" do
+    def prompt = Buddy::Personality.for(user, conversation: convo)
+
+    it "lists every saved name, with what it's for" do
+      routine!("water cup", [tell_step("night")], description: "Three waters")
+
+      expect(prompt).to include("## Routines they've saved", "water cup", "Three waters")
+    end
+
+    # The rules bullet and run_routine's description both name this section, so
+    # a heading carrying the person's name couldn't be quoted by either.
+    it "heads the section with the same words the rules point at" do
+      routine!("water cup", [tell_step("night")])
+
+      expect(prompt.scan("Routines they've saved").length).to be >= 2
+    end
+
+    it "leaves a switched-off one out, so it can't be offered" do
+      routine!("Off", [tell_step("night")], enabled: false)
+
+      expect(prompt).not_to include("## Routines they've saved")
+    end
+
+    it "costs nothing for the people who never saved one" do
+      expect(Buddy::Personality.routines_block(user)).to be_nil
+    end
+
+    it "still tells Buddy not to go hunting for one" do
+      routine!("water cup", [tell_step("night")])
+
+      expect(prompt).to match(/if it isn't here, it isn't one/i)
     end
   end
 end

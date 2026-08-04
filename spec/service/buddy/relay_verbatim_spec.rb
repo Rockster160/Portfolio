@@ -38,6 +38,38 @@ RSpec.describe "Buddy relay integrity" do
     end
   end
 
+  # Prod 2212. Chelsea: "Ask Rocco if he will learn how to play American mahjong
+  # with me". What reached Rocco was "Will you learn how to play American
+  # mahjong with you?" - the model turned BOTH people into the second person, so
+  # the question asked him to do it with himself. Half the swap is right ("if he
+  # will" is addressed as "will you"); the other half has to become a name.
+  describe "which person the words are written to" do
+    # Squished the way function_schema squishes it, so a line wrap in the
+    # heredoc isn't the thing these assertions are about.
+    def described(name)
+      Buddy::Tools[name][:description].strip.gsub(/\s+/, " ")
+    end
+
+    %i[ask_partner ask_partner_choice ask_partner_multi].each { |name|
+      it "tells #{name} that \"you\" means the recipient" do
+        expect(described(name)).to match(/READ BY (them|the person being asked)/i)
+        expect(described(name)).to match(/your own person (gets|is) named/i)
+      end
+
+      it "says it on #{name}'s question argument, where the value is written" do
+        expect(Buddy::Tools[name][:args][:question][:description]).to match(/addressed TO them/i)
+      end
+    }
+
+    it "works the case out in the prompt, with the sentence that broke" do
+      convo = User.me.byte_conversations.create!(mode: :buddy)
+      prompt = Buddy::Personality.for(User.me, conversation: convo)
+
+      expect(prompt).to include("Will you learn American mahjong with you?")
+      expect(prompt).to include("\"you\" is the recipient and nobody else")
+    end
+  end
+
   describe Buddy::GPT::Turn do
     # The exact body that went out in prod.
     let(:faked) { "Sent. 😅\n\n[you passed this along to Moss] Rude. Byte took away my formatting!" }

@@ -409,11 +409,16 @@ RSpec.describe Buddy::Personality do
   # worked example on the routines section AND on run_routine's description, and
   # both said to treat an unfamiliar short phrase as probably-a-routine.
   #
-  # DELIBERATE TRADE, do not quietly revert: the earlier rule existed because a
-  # bare "water cup" (prod 1371) was a real routine name that got "I don't quite
-  # follow". Routines are a power-user shortcut almost nobody sets up, so
-  # occasionally needing "run my water cup routine" is much cheaper than every
-  # ordinary request being read as a routine lookup first.
+  # That rule used to cost something on the other side, and prod 2183 is what
+  # the bill looked like: "log cup water", against a saved **water cup** that
+  # marks three waters, logged one. A bare "water cup" (prod 1371) got "I don't
+  # quite follow" for the same reason. Recognising a routine required a lookup
+  # the prompt forbade, so a routine was reachable only by someone who said the
+  # word "routine" out loud.
+  #
+  # The trade is off the table now rather than resolved in either direction: the
+  # NAMES ride in the prompt (see routines_block), so recognition costs nothing
+  # and the ban on going hunting can stay exactly as strict as it is.
   describe ".for saved routines" do
     def routines_prompt
       described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
@@ -424,11 +429,15 @@ RSpec.describe Buddy::Personality do
       expect(routines_prompt).to include("Almost nothing said to you is one")
     end
 
-    it "forbids reaching for the list to interpret a phrase it doesn't recognize" do
+    it "forbids fetching the list to interpret a phrase it doesn't recognize" do
       prompt = routines_prompt
 
-      expect(prompt).to include("never reach for `routines` to interpret a phrase you don't recognize")
-      expect(prompt).to include("never fetch the list to check")
+      expect(prompt).to include("Never reach for `routines` in `get_context` to interpret a phrase you don't recognize")
+      expect(prompt).to include("Don't fetch this to check whether a phrase might be one")
+    end
+
+    it "answers that question from the prompt instead, so nothing has to be fetched" do
+      expect(routines_prompt).to include("every name they've saved is listed below")
     end
 
     it "sends a named device to the Jil automations instead" do
@@ -444,8 +453,13 @@ RSpec.describe Buddy::Personality do
       expect(routines_prompt).to include("answers a question nobody asked")
     end
 
+    # A match is not a suggestion. Rebuilding "three waters" by hand is how it
+    # comes back as one, so the saved copy has to win outright.
     it "keeps run_routine as the way to run one they actually named" do
-      expect(routines_prompt).to include("does `run_routine` come into it")
+      prompt = routines_prompt
+
+      expect(prompt).to include("`run_routine` is the answer and doing the steps by hand is not")
+      expect(prompt).to include("how \"three waters\" quietly becomes one")
     end
 
     # Prod 1362: "it's supposed to complete the chore 3 times, there shouldn't be

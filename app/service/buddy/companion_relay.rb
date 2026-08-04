@@ -60,11 +60,16 @@ module Buddy
       # recipient's side carries a checkbox action; the sender's copy is just a
       # record. The recipient's answer returns through respond_buddy_relay.
       def send_choice_question(relay)
+        action = nil
+        # The buttons have to be on the message BEFORE it goes out. bridge!
+        # broadcasts the recipient's copy the moment it creates it, so attaching
+        # the action afterwards left the question sitting in their thread as
+        # plain text with no way to answer it, until something unrelated redrew
+        # the thread and the options finally appeared (prod 2212).
         res = bridge!(
           from_user: relay.from_user, to_user: relay.to_user,
           from_conversation: relay.from_conversation, text: choice_body(relay)
-        )
-        action = attach_answer_action(relay, res[:to_message])
+        ) { |message| action = attach_answer_action(relay, message) }
         relay.update!(
           to_conversation: res[:to_conversation],
           to_byte_action:  action,
@@ -180,6 +185,11 @@ module Buddy
           metadata:     { "kind" => "buddy_relay", "source" => "relay", "relay_peer" => sender },
           delivered_at: Time.current,
         )
+        # Whatever else belongs ON the recipient's copy - a choice question's
+        # answer buttons - attaches here, while it's still unsent. A message
+        # broadcast half-built arrives half-built, and the rest of it only shows
+        # up whenever the thread next happens to redraw.
+        yield to_msg if block_given?
         broadcast(to_user, to_msg)
         push(to_user, "#{sender["name"]}: #{text}")
 
@@ -220,10 +230,6 @@ module Buddy
         lead = "#{from_name(relay)} is asking:"
         tail = relay.ask_multi? ? " Check any that fit." : " Tap the one that fits."
         "#{lead} #{relay.body}#{tail}"
-      end
-
-      def choice_push(relay)
-        "#{from_name(relay)} is asking: #{relay.body}"
       end
 
       def formatted_answer(relay)

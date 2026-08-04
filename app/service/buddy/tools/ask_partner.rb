@@ -13,6 +13,10 @@ Buddy::Tools.register(
     quotes - send those exactly, capitals and punctuation and all; how they
     phrased it is part of what they're asking.
 
+    Either way it is READ BY the person being asked, so "you" means THEM. Your
+    own person gets named: "ask if he'll come with me" goes out as "Will you
+    come with Chelsea?", never "with you".
+
     For a pick-ONE question use ask_partner_choice; for a pick-ANY /
     select-all question use ask_partner_multi.
 
@@ -35,7 +39,7 @@ Buddy::Tools.register(
   feature:     :relay,
   args:        {
     to:          { type: :string,  required: true,  description: "First name of anyone on the household roster in \"Who else is in the house\" - not only a partner" },
-    question:    { type: :string,  required: true,  description: "What to ask. Their exact words when they gave you words; your phrasing when they only gave you the gist." },
+    question:    { type: :string,  required: true,  description: "What to ask, addressed TO them - \"you\" is the person being asked, and your own person is named. Their exact words when they gave you words." },
     await_reply: { type: :boolean, required: false, description: "Hold the rest of the sequence until they answer. Only when a later step needs what they say." },
     var:         { type: :string,  required: false, description: "Name their answer is filed under, for a later {{step}} to use. With await_reply." },
   },

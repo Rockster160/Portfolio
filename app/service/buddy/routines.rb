@@ -31,7 +31,32 @@ module Buddy
       rows.find { |r| r.name.downcase == wanted } ||
         rows.find { |r| r.name.downcase.start_with?(wanted) } ||
         rows.find { |r| r.name.downcase.include?(wanted) } ||
-        rows.find { |r| wanted.include?(r.name.downcase) }
+        rows.find { |r| wanted.include?(r.name.downcase) } ||
+        by_words(rows, wanted)
+    end
+
+    # Same words, any order. People don't say a name back the way they typed it
+    # - "water cup" gets asked for as "cup water" or "log cup water" - and every
+    # branch above is a substring test, which a transposition slips straight
+    # past.
+    #
+    # A routine matches when ALL of its words are somewhere in what was asked,
+    # and the one with the most words wins so a two-word name beats a one-word
+    # name sitting inside the same phrase. Nothing looser than that: this runs
+    # a whole saved sequence, so a wrong guess does several things nobody asked
+    # for.
+    def by_words(rows, wanted)
+      asked = words(wanted)
+      return nil if asked.empty?
+
+      rows.select { |r|
+        parts = words(r.name)
+        parts.any? && (parts - asked).empty?
+      }.max_by { |r| words(r.name).length }
+    end
+
+    def words(str)
+      str.to_s.downcase.scan(/[a-z0-9]+/)
     end
 
     # The markers a call expands into, or nil when the call isn't a routine run.
@@ -135,6 +160,32 @@ module Buddy
       BuddyRoutine.step(name, payload)
     end
 
+    # The same question sanitize asks at SAVE time, asked again at RUN time.
+    #
+    # Saving only proves a routine could run on the day it was saved. Steps store
+    # names and re-resolve every run, so the chore gets renamed, the list gets
+    # archived, the Jil task gets deleted - and the step quietly becomes a marker
+    # whose confirm raises, which ProposalBuilder drops without a word. A routine
+    # is the one thing where that silence is unaffordable: nobody re-reads a
+    # saved sequence, so it fails the same way every time and looks like it ran.
+    #
+    # Routines saved before save-time resolution shipped never had the check at
+    # all - **water cup** stored `complete_chore(chore: "Drink Water")` against a
+    # household with no chore by that name - so this is also the backstop for
+    # anything already sitting in the table.
+    #
+    # All or nothing. Half a saved sequence is worse than none of it, because
+    # the half that ran looks like the whole thing worked.
+    def check_runnable!(routine, ctx)
+      Array(routine.steps).each_with_index { |raw, i|
+        name = raw["tool_name"].to_s
+        tool = Buddy::Tools[name.presence || "-"]
+        raise "step #{i + 1} of #{routine.name} uses #{name.inspect}, which isn't a tool any more" if tool.nil?
+
+        resolves!(tool, (raw["payload"] || {}).transform_keys(&:to_sym), name, i + 1, ctx)
+      }
+    end
+
     # Does this step point at something that exists? A tool's confirm is its
     # resolver: it turns "8oz Water" into a chore or raises saying it couldn't.
     # Its resolved ids are deliberately THROWN AWAY here - the step stores the
@@ -217,9 +268,23 @@ module Buddy
         Array(action.buttons).filter_map { |b|
           next nil unless b["status"].to_s == "executed"
 
-          [action.created_at, b["tool_name"].to_s, b["args"] || b["payload"] || {}]
+          [action.created_at, b["tool_name"].to_s, row_args(b)]
         }
       }
+    end
+
+    # A row's arguments, with HOW MANY put back.
+    #
+    # Three `complete_chore` calls for the same chore merge into one row that
+    # runs three times, and the count of three lives on the ROW - `args` keeps
+    # the first call's payload, which says one. Saving that as a routine turned
+    # "cash in three waters" into a button that cashes in one, which is the same
+    # failure as the routine not running at all, only harder to notice.
+    def row_args(button)
+      args  = (button["args"] || button["payload"] || {}).dup
+      count = button["count"].to_i
+      args[Buddy::Tools::COUNT_ARG.to_s] = count if count > 1
+      args
     end
   end
 end

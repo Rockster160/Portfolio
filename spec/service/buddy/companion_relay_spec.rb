@@ -105,6 +105,39 @@ RSpec.describe "Buddy companion relay" do
       expect { tool[:confirm].call({ to: her, question: "?", options: "only one" }, ctx) }
         .to raise_error(/at least two/)
     end
+
+    # Prod 2212: the question landed in Rocco's thread as plain text with no way
+    # to answer it, and the buttons only turned up later. The message went out
+    # the instant it was created, and the action was attached after.
+    it "sends the question with its answers already on it" do
+      sent = []
+      allow(MonitorChannel).to receive(:broadcast_to) { |user, payload|
+        sent << payload.dig(:data, :message) if user == chelsea
+      }
+
+      run(:ask_partner_choice, { to: her, question: "dishes or mop?", options: "dishes, mop" })
+
+      question = sent.find { |m| m[:metadata]["source"] == "relay" }
+      expect(question[:metadata]["buttons"].pluck("label")).to eq(%w[dishes mop])
+      expect(question[:metadata]["select_mode"]).to eq("instant")
+    end
+
+    it "only sends it once, so the options don't arrive as a second draw" do
+      sent = []
+      allow(MonitorChannel).to receive(:broadcast_to) { |user, payload|
+        sent << payload.dig(:data, :message) if user == chelsea
+      }
+
+      run(:ask_partner_choice, { to: her, question: "dishes or mop?", options: "dishes, mop" })
+
+      expect(sent.count { |m| m[:metadata]["source"] == "relay" }).to eq(1)
+    end
+
+    it "leaves a plain message alone - there's nothing to attach" do
+      run(:message_partner, { to: her, message: "he fed the dog" })
+
+      expect(BuddyRelay.last.to_conversation.byte_messages.last.metadata).not_to have_key("buttons")
+    end
   end
 
   # ---- answering ----
