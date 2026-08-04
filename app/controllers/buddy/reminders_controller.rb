@@ -19,15 +19,24 @@ module Buddy
       render json: { reminders: rows }
     end
 
-    # The only editable field is whether it's on. Everything else about a
-    # reminder is the sentence it was set with, and rewriting that in a text box
-    # would let someone save a condition that never fires - a watch validates
-    # its listener, and a half-edited one is worse than the old one.
+    # On/off, the wording, and - for a clock reminder - the time.
+    #
+    # What's still NOT editable is a watch's condition. A listener is validated
+    # when it's written, and a half-edited one is worse than the old one: it
+    # looks set and never fires. The words a watch says when it trips are just
+    # words, so those are fair game.
     def update
       return head(:not_found) if record.nil?
 
-      record.update!(cancelled_at: enabled_param ? nil : Time.current)
+      apply_enabled
+      apply_body
+      apply_time
+      return render(json: { errors: @errors }, status: :unprocessable_entity) if @errors&.any?
+
+      record.save!
       render json: { reminders: rows }
+    rescue ActiveRecord::RecordInvalid => e
+      render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
     end
 
     def destroy
@@ -55,8 +64,59 @@ module Buddy
       @record = Buddy::ReminderPresenter.find(current_user, params[:type], params[:id])
     end
 
-    def enabled_param
-      ActiveModel::Type::Boolean.new.cast(params.dig(:reminder, :enabled))
+    def edits
+      params.fetch(:reminder, {})
+    end
+
+    def apply_enabled
+      return unless edits.key?(:enabled)
+
+      on = ActiveModel::Type::Boolean.new.cast(edits[:enabled])
+      record.cancelled_at = on ? nil : Time.current
+    end
+
+    def apply_body
+      body = edits[:body].to_s.strip
+      return if edits[:body].nil?
+
+      return fail_with("it needs to say something") if body.empty?
+
+      record.body = body
+    end
+
+    # Only a clock reminder has a time to move. A recurring one keeps its shape
+    # and only the hour changes, so `at` means two different things depending on
+    # which it is - "HH:MM" for a recurrence, a whole local datetime otherwise -
+    # and the record itself decides which it's reading.
+    def apply_time
+      at = edits[:at].to_s.strip
+      return if at.empty? || !record.is_a?(BuddyReminder)
+
+      record.recurring? ? move_recurrence(at) : move_fire_at(at)
+    end
+
+    def move_recurrence(hhmm)
+      return fail_with("that isn't a time") unless hhmm.match?(/\A\d{1,2}:\d{2}\z/)
+
+      record.recurrence = record.recurrence.merge("at" => hhmm)
+      record.fire_at    = record.next_fire_at(from: Time.current) || record.fire_at
+    end
+
+    def move_fire_at(local)
+      at = Buddy::Day.zone(current_user).parse(local)
+      return fail_with("that isn't a time") if at.nil?
+      # Saving one in the past means it goes off on the next sweep, seconds
+      # later - which is never what a typo in a date field meant.
+      return fail_with("that's already gone by") if at < Time.current
+
+      record.fire_at = at
+    rescue ArgumentError
+      fail_with("that isn't a time")
+    end
+
+    def fail_with(message)
+      (@errors ||= []) << message
+      nil
     end
   end
 end

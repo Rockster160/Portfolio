@@ -2815,10 +2815,76 @@ dialog.byte-modal {
 
 .byte-routine-steps {
   margin: 5px 0 0;
-  padding-left: 18px;
+  padding-left: 0;
+  list-style: none;
   font-size: 11.5px;
   color: var(--bs-muted);
   line-height: 1.5;
+}
+
+// A step row is editable in three narrow ways - drag it, change how many times
+// it runs, drop it - so each control is its own hit target rather than the row
+// answering to everything.
+.byte-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.byte-step-grip {
+  color: var(--bs-muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.byte-step-ghost {
+  opacity: 0.4;
+}
+
+.byte-step-phrase {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.byte-step-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.byte-step-times {
+  min-width: 22px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.ctr-byte .byte-app .byte-step button,
+.byte-modal .byte-step button {
+  background: none;
+  border: 0;
+  padding: 0 3px;
+  cursor: pointer;
+  font: inherit;
+  color: var(--bs-muted);
+  flex-shrink: 0;
+  // Small glyphs in a dense list, so the tap target has to come from padding
+  // rather than from the character.
+  min-width: 20px;
+  min-height: 24px;
+}
+
+.byte-step-remove:hover {
+  color: var(--bs-danger, #e5484d);
 }
 
 // ---- "＋ Jil action" picker inside the routines manager ---------------------
@@ -3069,6 +3135,59 @@ dialog.byte-modal {
   &:hover {
     color: var(--bs-danger, #e5484d);
   }
+}
+
+.byte-reminder-edit {
+  color: var(--bs-muted);
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 4px !important;
+}
+
+// The row turns into its own little form in place, so the list doesn't jump
+// and it stays obvious which reminder is being changed.
+.byte-reminder-editing {
+  align-items: stretch;
+}
+
+.byte-reminder-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.byte-reminder-input,
+.byte-reminder-when {
+  width: 100%;
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border);
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 6px 8px;
+  // iOS gives temporal inputs an intrinsic width that overflows the row.
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 34px;
+}
+
+.byte-reminder-note,
+.byte-reminder-error {
+  margin: 0;
+  font-size: 11px;
+  color: var(--bs-muted);
+}
+
+.byte-reminder-error {
+  color: var(--bs-danger, #e5484d);
+}
+
+.byte-reminder-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
 }
 
 .byte-drawer-version {

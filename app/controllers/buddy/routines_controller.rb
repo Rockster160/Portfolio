@@ -8,6 +8,10 @@ module Buddy
     before_action :authorize_user
     before_action :authorize_owner
 
+    # High enough that nobody hits it on purpose, low enough that a stuck finger
+    # on the stepper can't cash in two hundred waters.
+    MAX_STEP_COUNT = 20
+
     def index
       render json: { routines: current_user.buddy_routines.ordered.map(&:serialize_for_client) }
     end
@@ -53,6 +57,28 @@ module Buddy
 
     def update
       if routine.update(routine_params)
+        render json: routine.serialize_for_client
+      else
+        render json: { errors: routine.errors.full_messages }, status: :unprocessable_entity
+      end
+    end
+
+    # Prune, reorder, and re-count the steps that are already there.
+    #
+    # The client sends the ORIGINAL index of each step it's keeping, in the
+    # order it wants them, so it never composes a step of its own - it can only
+    # rearrange ones that were validated when they were saved. That's the whole
+    # reason `update` still refuses `steps`: a tool call written into a text box
+    # is a routine that looks fine and fails at 6am.
+    #
+    # Count is the one value editable in place, because it's the one that's
+    # purely a number and the one that's most often wrong - "cup water" was
+    # saved to cash in three and read back as one for days.
+    def steps
+      rebuilt = rebuilt_steps
+      return render(json: { errors: ["a routine needs at least one step"] }, status: :unprocessable_entity) if rebuilt.empty?
+
+      if routine.update(steps: rebuilt)
         render json: routine.serialize_for_client
       else
         render json: { errors: routine.errors.full_messages }, status: :unprocessable_entity
@@ -148,8 +174,38 @@ module Buddy
       current_user.buddy_routines.new(name: name, description: task.description.to_s.strip.presence, steps: steps)
     end
 
+    # Kept steps, in the order asked for. An index that isn't there is dropped
+    # rather than erroring: the panel and the record can be a moment apart, and
+    # a step that has already gone is the outcome either way.
+    #
+    # `uniq` because this reorders and prunes - it doesn't add. Two of the same
+    # index is a dragging glitch, not a request for the step twice.
+    def rebuilt_steps
+      current = Array(routine.steps)
+      Array(params[:steps]).uniq { |raw| raw[:index].to_i }.filter_map { |raw|
+        step = current[raw[:index].to_i]
+        step && recounted(step, raw[:count])
+      }
+    end
+
+    # Only the count moves, and only on a tool that has repeat semantics at all
+    # (merge_label is what declares them). Everything else in the payload rides
+    # through exactly as saved.
+    def recounted(step, count)
+      payload = (step["payload"] || {}).dup
+      tool    = Buddy::Tools[step["tool_name"].to_s.presence || "-"]
+      key     = Buddy::Tools::COUNT_ARG.to_s
+
+      if count.present? && tool && tool[:merge_label]
+        times = count.to_i.clamp(1, MAX_STEP_COUNT)
+        times > 1 ? payload[key] = times : payload.delete(key)
+      end
+      BuddyRoutine.step(step["tool_name"], payload)
+    end
+
     # Deliberately no `position`: the grid's order is one fact, so #reorder owns
     # it outright. Pinning is that list plus one, unpinning is it minus one.
+    # No `steps` either - #steps owns those, and on tighter terms.
     def routine_params
       params.require(:routine).permit(:name, :description, :enabled)
     end

@@ -13,11 +13,20 @@ module Buddy
       conversation = reminder.byte_conversation
       user         = reminder.user
 
-      case reminder.kind
-      when "reminder"
-        deliver_plain_reminder(user, conversation, reminder)
-      when "prompt"
+      # Worked out HERE, not when the reminder was set. `kind` is chosen once,
+      # by the model, and is invisible from then on - so a reminder that was
+      # meant to do something arrives as a line of text, and there's nowhere to
+      # notice. Resolving at fire time also degrades honestly: rename the
+      # routine and it goes back to being a nudge rather than running the
+      # nearest match.
+      command = reminder.command
+
+      if command
+        run_command(reminder, command)
+      elsif reminder.kind == "prompt"
         deliver_prompted_reminder(user, conversation, reminder)
+      else
+        deliver_plain_reminder(user, conversation, reminder)
       end
 
       # Recurring: roll fire_at forward to the next occurrence, keep
@@ -52,13 +61,57 @@ module Buddy
 
       # A simple text message from Buddy. Delivered as inbound so the
       # standard notify path fires (push notification, presence-aware).
+      #
+      # No leading glyph: one that opens every reminder stops saying "reminder"
+      # by the second one, and someone with a day full of them reads the same
+      # character a dozen times before the words.
       def deliver_plain_reminder(user, conversation, reminder)
         Buddy::CompanionDelivery.deliver_plain(
           user:         user,
           conversation: conversation,
-          text:         "⏰ Reminder: #{reminder.body}",
+          text:         "Reminder: #{reminder.body}",
           metadata:     { kind: "buddy", source: "reminder", reminder_id: reminder.id },
           push_title:   reminder.body,
+        )
+      end
+
+      # The reminder was an instruction, so carry it out rather than reading it
+      # back. No model on this path - the target was resolved by name a moment
+      # ago, and a saved sequence firing on a clock shouldn't cost a turn or
+      # come out differently each time.
+      def run_command(reminder, command)
+        if command[:kind] == :routine
+          Buddy::Routines.run!(command[:routine], conversation: reminder.byte_conversation)
+        else
+          ::Jil.trigger(reminder.user, command[:scope].to_sym, {}, auth: :buddy, auth_id: reminder.user_id)
+          command_chip(reminder, command[:name])
+        end
+      end
+
+      # A Jil task leaves nothing behind on its own, so say what ran. A routine
+      # posts its own message through run_markers!, which is why only this
+      # branch needs one.
+      def command_chip(reminder, name)
+        conversation = reminder.byte_conversation
+        return if conversation.nil?
+
+        message = conversation.byte_messages.create!(
+          user:         reminder.user,
+          direction:    :inbound,
+          state:        :delivered,
+          body:         "Fired **#{name}** ⚡",
+          metadata:     {
+            "kind"        => "buddy_activity",
+            "tool_name"   => "trigger_jil_task",
+            "ok"          => true,
+            "source"      => "reminder",
+            "reminder_id" => reminder.id,
+          },
+          delivered_at: Time.current,
+        )
+        MonitorChannel.broadcast_to(
+          reminder.user,
+          { id: :byte, channel: :byte, data: { kind: :message, message: message.as_wire } },
         )
       end
 

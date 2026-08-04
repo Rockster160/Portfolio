@@ -308,6 +308,18 @@ RSpec.describe Buddy::WatchMatcher do
       expect(lines.last).to include("Deploy FAILED", "bc271e0", "relay fixes")
       expect(lines.last).not_to include("Ping me when")
     end
+
+    # The one place a glyph is doing real work: which outcome it was, legible
+    # before you've read a word of it.
+    it "marks the two deploy outcomes apart at a glance" do
+      make_watch(trigger_scope: "deploy", match: {}, body: "deploy's done", one_shot: false)
+
+      described_class.dispatch(user, :deploy, { deploy: "finished" })
+      travel(10.minutes) { described_class.dispatch(user, :deploy, { deploy: "failed" }) }
+
+      expect(lines.first).to start_with("🚀")
+      expect(lines.last).to start_with("❌")
+    end
   end
 
   describe ".dispatch" do

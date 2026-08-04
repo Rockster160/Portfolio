@@ -117,9 +117,27 @@ class BuddyRoutine < ApplicationRecord
       enabled:     enabled,
       steps:       Array(steps),
       summary:     summary,
+      step_rows:   step_rows,
       run_count:   run_count,
       last_run_at: last_run_at&.iso8601,
       position:    position,
+    }
+  end
+
+  # What the editor needs per step, which is more than the summary line: its
+  # ORIGINAL index (the only thing the client is allowed to send back), and
+  # whether a count applies at all. `countable` is read off the tool rather than
+  # guessed - merge_label is what declares repeat semantics, so a step without
+  # one gets no stepper instead of a control that silently does nothing.
+  def step_rows
+    Array(steps).each_with_index.map { |raw, i|
+      tool = Buddy::Tools[raw["tool_name"].to_s.presence || "-"]
+      {
+        index:     i,
+        phrase:    self.class.step_phrase(raw),
+        count:     (raw["payload"] || {})[Buddy::Tools::COUNT_ARG.to_s].to_i.clamp(1, 999),
+        countable: tool.present? && tool[:merge_label].present?,
+      }
     }
   end
 

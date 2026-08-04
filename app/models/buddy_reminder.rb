@@ -40,6 +40,49 @@ class BuddyReminder < ApplicationRecord
     recurrence.is_a?(Hash) && recurrence["kind"].present?
   end
 
+  # "run the wind-down routine", "trigger printer preheat", "fire whisper quiet".
+  #
+  # Deliberately narrow: an explicit run-verb, then a name. A reminder is
+  # usually an instruction to the PERSON ("take the trash out"), and those are
+  # imperative too, so anything looser would start firing automations off
+  # ordinary nudges. The trailing noun is optional and stripped, since people
+  # write "run the X routine" as often as "run X".
+  COMMAND_RX = /
+    \A\s*
+    (?:run|re-?run|trigger|fire|start|launch|execute)\s+
+    (?:the\s+|my\s+)?
+    (?<name>.+?)
+    (?:\s+(?:routine|task|automation|again))?
+    \s*[.!]*\s*\z
+  /xi
+
+  # Is this reminder a note to them, or something to actually DO?
+  #
+  # Answered when it FIRES rather than when it's set, which is the whole point:
+  # `kind` was fixed at creation, invisible afterwards, and frequently wrong.
+  # Resolving at fire time also means it degrades honestly - rename the routine
+  # and the reminder goes back to being a line of text instead of quietly
+  # running the wrong thing.
+  #
+  # Returns the thing to run, or nil for an ordinary reminder.
+  def command
+    match = COMMAND_RX.match(body.to_s)
+    return nil if match.nil?
+
+    name = match[:name].to_s.strip
+    return nil if name.length < 2
+
+    routine = Buddy::Routines.find(user, name)
+    return { kind: :routine, routine: routine, name: routine.name } if routine
+
+    task = Buddy::ToolContext.new(user).resolve_jil_trigger(name)
+    return nil if task.nil? || !task[:plain]
+
+    { kind: :jil, scope: task[:scope], name: task[:name] }
+  rescue StandardError
+    nil
+  end
+
   # A pending reminder that already means THIS, at this minute, or nil.
   #
   # Asking again about something you already asked about is the normal shape of

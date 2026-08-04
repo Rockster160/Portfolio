@@ -33,12 +33,38 @@ module Buddy
         {
           type:      :reminder,
           record_id: r.id,
-          glyph:     r.recurring? ? "🔁" : "⏰",
+          glyph:     reminder_glyph(r),
           label:     r.body.to_s.truncate(80),
           sublabel:  when_text(r, user),
           enabled:   r.cancelled_at.nil?,
+          # The editor writes back into these, so they're the raw values rather
+          # than the display ones - `label` is truncated and `sublabel` is
+          # prose, and round-tripping either would quietly rewrite the reminder.
+          body:      r.body.to_s,
+          at:        edit_time(r, user),
+          recurring: r.recurring?,
         }
       }
+    end
+
+    # What the time field starts on. A recurrence only has an hour to move, so
+    # it hands back "HH:MM" for a `time` input; a one-off hands back a whole
+    # local datetime. The controller reads them apart the same way.
+    def edit_time(reminder, user)
+      return reminder.recurrence.to_h["at"].to_s if reminder.recurring?
+
+      reminder.fire_at&.in_time_zone(user.timezone)&.strftime("%Y-%m-%dT%H:%M")
+    end
+
+    # A reminder that RUNS something is a different animal from one that tells
+    # you something, and until you see them side by side there's no way to know
+    # which you set. The glyph is the whole tell, so it earns its place here in
+    # a way one repeated on every line in the thread does not.
+    def reminder_glyph(reminder)
+      return "⚡" if reminder.command
+      return "🔁" if reminder.recurring?
+
+      "⏰"
     end
 
     def watch_rows(user, include_off)
@@ -53,6 +79,11 @@ module Buddy
           label:     w.body.to_s.truncate(80),
           sublabel:  watch_when(w),
           enabled:   w.cancelled_at.nil?,
+          body:      w.body.to_s,
+          # No time to move: a watch fires on a condition, and the condition is
+          # the one thing an editor must not be able to rewrite.
+          at:        nil,
+          recurring: false,
         }
       }
     end

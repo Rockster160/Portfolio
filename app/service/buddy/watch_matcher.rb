@@ -201,7 +201,7 @@ module Buddy
         Buddy::CompanionDelivery.deliver_plain(
           user:         user,
           conversation: conversation,
-          text:         "⏰ Reminder: #{watch.body}",
+          text:         "Reminder: #{watch.body}",
           metadata:     { kind: "buddy", source: "watch", watch_id: watch.id },
           push_title:   watch.body,
         )
@@ -230,8 +230,9 @@ module Buddy
         conversation: watch.byte_conversation,
         text:         text,
         metadata:     { kind: "buddy", source: "watch", watch_id: watch.id },
-        # Without the glyph, since a push notification has an icon of its own.
-        push_title:   text.sub(/\A[^\p{Alnum}]+\s*/, ""),
+        # Glyph and all: on a deploy it's the outcome, and the lock screen is
+        # exactly where reading that first is worth something.
+        push_title:   text,
       )
     end
 
@@ -262,6 +263,9 @@ module Buddy
       failed  = deploy_outcome(data) == :failed
       sha     = data[:sha].to_s.strip.first(7).presence
       note    = data[:message].to_s.strip.presence
+      # The glyph is the fastest thing to read here and it says WHICH outcome,
+      # which is the entire point of a deploy ping. Green and red are legible
+      # at a glance on a lock screen in a way two similar sentences are not.
       head    = failed ? "❌ Deploy FAILED" : "🚀 Deploy finished successfully"
       tail    = [sha, (note && "“#{note.truncate(80)}”")].compact_blank.join(" ").presence
 

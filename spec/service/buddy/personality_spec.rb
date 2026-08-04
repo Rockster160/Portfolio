@@ -186,16 +186,33 @@ RSpec.describe Buddy::Personality do
       described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
     end
 
-    # Wit is a LIKED trait, not a rationed one. The file used to tell Byte to
-    # trim the cleverness, which is aimed at the wrong thing entirely: what
-    # grates is volume and repetition, and a dry line is most of the reason to
-    # talk to a companion instead of tapping a button.
-    it "wants clever and witty rather than rationing them" do
+    # Wit is a LIKED trait, not a rationed one - and the correction for that
+    # went one layer down rather than landing. The permissions stayed abstract
+    # while every prohibition carried a vivid example, so the model optimised
+    # for the concrete half and came out flat: "Monitors are off." to a request,
+    # for a whole day. Flat is now the failure the file names first.
+    it "names flat as the failure, not too much personality" do
       prompt = byte_prompt
 
-      expect(prompt).to include("Clever, witty, opinionated, warm")
-      expect(prompt).to include("The failures are loud, obnoxious, and repetitive")
-      expect(prompt).to include("none of those is \"too clever\"")
+      expect(prompt).to include("The failure to worry about is FLAT")
+      expect(prompt).to include("A reply any assistant could have sent")
+    end
+
+    # The permission needs an example as concrete as the prohibitions have,
+    # or it loses to them.
+    it "shows what the difference actually looks like" do
+      prompt = byte_prompt
+
+      expect(prompt).to include("`Monitors are off.` is accurate and it is nobody")
+    end
+
+    # rocco.md is full of real words to use, and byte.md was reading as a
+    # reason to hold them back.
+    it "points at the voice guide as a palette rather than a warning label" do
+      prompt = byte_prompt
+
+      expect(prompt).to include("your palette, not a warning label")
+      expect(prompt).to include("sounding like a form letter")
     end
 
     # Which still leaves a real thing to cut. The bar is whether a line is
@@ -204,7 +221,7 @@ RSpec.describe Buddy::Personality do
       prompt = byte_prompt
 
       expect(prompt).to include("only there because the personality slot felt empty")
-      expect(prompt).to include("just does the thing and says so is complete")
+      expect(prompt).to include("Never the one that's actually good")
     end
 
     # The shared rules are read by every pet, so an instruction there to "trim
@@ -214,12 +231,21 @@ RSpec.describe Buddy::Personality do
       expect(byte_prompt).not_to include("Trim the cleverness")
     end
 
-    it "keeps volume down without confusing it for wit" do
+    it "keeps volume calibrated without turning it off" do
       prompt = byte_prompt
 
-      expect(prompt).to include("Warm, never loud")
-      expect(prompt).to include("One exclamation mark, not three")
-      expect(prompt).to include("Loud and clever pull in opposite directions")
+      expect(prompt).to include("That's a dial, not a mute button")
+      expect(prompt).to include("Excitement has to be about something")
+    end
+
+    # These two fought each other. rocco.md asks for ALL CAPS on one word
+    # instead of exclamation marks, and byte.md banned shouted caps outright;
+    # the ban won, and took a piece of his register with it.
+    it "stops contradicting the voice guide it sits above" do
+      prompt = byte_prompt
+
+      expect(prompt).to include("ALL CAPS on ONE word")
+      expect(prompt).not_to include("No shouted caps for emphasis")
     end
 
     # The thing he actually notices. A phrase that turns up every time stops

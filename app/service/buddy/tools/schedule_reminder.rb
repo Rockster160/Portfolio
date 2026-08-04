@@ -30,6 +30,13 @@ Buddy::Tools.register(
         Use for "check in with me every day at 9" where you want Buddy
         to compose a fresh check-in each time, not repeat the exact
         same words.
+
+    A reminder can also RUN something instead of saying it. Write `text` as
+    "run <name>" (or trigger / fire / start) naming one of their saved routines
+    or a Jil task, and that's what happens when it comes due - no message, just
+    the thing. "Every weekday at 7, run my morning routine" is this. It's
+    resolved when it FIRES, so a name that stops matching quietly goes back to
+    being an ordinary nudge rather than running the nearest thing to it.
   TXT
   args: {
     text:   { type: :string, required: true,  description: "What to remind them of / prompt about" },

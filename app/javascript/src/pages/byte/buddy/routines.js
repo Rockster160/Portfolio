@@ -1,10 +1,15 @@
 // The saved-routines manager, opened from the Byte drawer.
 //
-// Read-mostly by design. A routine's STEPS are tool calls with validated
-// arguments, which is a bad thing to hand-edit in a text box, so they're
-// written by talking to Byte (`save_routine`). What's useful here is the part
-// conversation is bad at: seeing everything you've saved at once, fixing a
-// name, muting one without losing it, and throwing one away.
+// A routine's STEPS are tool calls with validated arguments, which is a bad
+// thing to hand-edit in a text box - so WRITING one is still a conversation
+// with Byte (`save_routine`). What this panel does is the part conversation is
+// bad at: seeing everything at once, fixing a name, muting one, throwing one
+// away, and rearranging the steps that are already there.
+//
+// Rearranging, specifically: drop a step, drag them into a different order,
+// change how many times one runs. Never composing a new one. The client only
+// ever sends back the ORIGINAL index of a step it's keeping, so the worst a
+// bug here can do is reorder or lose a step, never invent a broken one.
 //
 // Hydrated when the drawer opens rather than at boot — most sessions never
 // open it, and the list is only interesting once it's on screen.
@@ -71,7 +76,7 @@ export function initBuddyRoutines({ panel, list, empty, indexUrl, onCount, addBt
     if (empty) empty.hidden = routines.length > 0;
     onCount?.(routines.length);
     list.innerHTML = sorted().map((r) => {
-      const steps  = (r.summary || []).map((s) => `<li>${escapeHtml(s)}</li>`).join("");
+      const steps  = stepRowsFor(r);
       const off    = r.enabled ? "" : " byte-routine-off";
       const isPin  = r.position != null;
       // Only pinned rows are draggable: the order being dragged into is the
@@ -95,11 +100,41 @@ export function initBuddyRoutines({ panel, list, empty, indexUrl, onCount, addBt
             <button type="button" class="byte-routine-remove" data-routine-remove aria-label="Delete">×</button>
           </div>
           ${r.description ? `<p class="byte-routine-desc">${escapeHtml(r.description)}</p>` : ""}
-          <ol class="byte-routine-steps">${steps}</ol>
+          <ol class="byte-routine-steps" data-routine-steps>${steps}</ol>
         </li>
       `;
     }).join("");
     bindSortable();
+    bindStepSortables();
+  }
+
+  // The count has its own control, so the "×3" step_phrase tacks on would be
+  // the same number said twice.
+  function phraseOf(step) {
+    return step.countable ? step.phrase.replace(/\s*×\d+\s*$/, "") : step.phrase;
+  }
+
+  function stepRowsFor(routine) {
+    const rows = routine.step_rows || [];
+    // Removing the last step would leave a routine that can't run, and the
+    // server refuses it - so don't offer the button rather than explaining the
+    // refusal afterwards. Deleting the whole routine is right there.
+    const removable = rows.length > 1;
+
+    return rows.map((s) => `
+      <li class="byte-step" data-step-index="${s.index}" data-step-count="${s.count}">
+        <span class="byte-step-grip" data-step-grip aria-hidden="true">⠿</span>
+        <span class="byte-step-phrase">${escapeHtml(phraseOf(s))}</span>
+        ${s.countable ? `
+          <span class="byte-step-count">
+            <button type="button" class="byte-step-step" data-step-less aria-label="One fewer">−</button>
+            <span class="byte-step-times">×${s.count}</span>
+            <button type="button" class="byte-step-step" data-step-more aria-label="One more">+</button>
+          </span>
+        ` : ""}
+        ${removable ? `<button type="button" class="byte-step-remove" data-step-remove aria-label="Remove step">×</button>` : ""}
+      </li>
+    `).join("");
   }
 
   // Rebuilt after every render because render() replaces the whole list.
@@ -122,6 +157,49 @@ export function initBuddyRoutines({ panel, list, empty, indexUrl, onCount, addBt
         reorder(ids);
       },
     });
+  }
+
+  // One Sortable per routine, because a step belongs to its own routine and
+  // dragging one across into another would be meaningless.
+  function bindStepSortables() {
+    list.querySelectorAll("[data-routine-steps]").forEach((ol) => {
+      Sortable.create(ol, {
+        animation:         150,
+        handle:            ".byte-step-grip",
+        ghostClass:        "byte-step-ghost",
+        forceFallback:     true,
+        fallbackOnBody:    true,
+        fallbackTolerance: 0,
+        onEnd: (evt) => {
+          const routine = routineFor(evt.to);
+          if (routine) saveSteps(routine, evt.to);
+        },
+      });
+    });
+  }
+
+  // The whole step list every time, same as the grid reorder: the order is one
+  // fact, and a per-step request would leave it half-applied if one failed.
+  //
+  // Read off the DOM rather than from state, because after a drag the DOM IS
+  // the order - nothing else knows about it yet.
+  async function saveSteps(routine, ol) {
+    const steps = Array.from(ol.querySelectorAll("[data-step-index]")).map((li) => ({
+      index: Number(li.dataset.stepIndex),
+      count: Number(li.dataset.stepCount) || 1,
+    }));
+
+    try {
+      const updated = await apiCall(`${indexUrl}/${routine.id}/steps`, "PATCH", { steps });
+      if (!updated) return;
+      const i = routines.findIndex((r) => r.id === routine.id);
+      if (i >= 0) routines[i] = updated;
+      render();
+    } catch (e) {
+      // Put the steps back the way the server still has them, rather than
+      // leaving a drag on screen that didn't save.
+      render();
+    }
   }
 
   // One request for the whole grid. Positions are rewritten from the list sent,
@@ -265,6 +343,24 @@ export function initBuddyRoutines({ panel, list, empty, indexUrl, onCount, addBt
   list.addEventListener("click", async (e) => {
     const routine = routineFor(e.target);
     if (!routine) return;
+
+    const step = e.target.closest?.("[data-step-index]");
+    if (step) {
+      const ol = step.closest("[data-routine-steps]");
+      if (e.target.closest("[data-step-remove]")) {
+        step.remove();
+        saveSteps(routine, ol);
+        return;
+      }
+      const less = e.target.closest("[data-step-less]");
+      const more = e.target.closest("[data-step-more]");
+      if (less || more) {
+        const now = Number(step.dataset.stepCount) || 1;
+        step.dataset.stepCount = Math.min(20, Math.max(1, now + (more ? 1 : -1)));
+        saveSteps(routine, ol);
+        return;
+      }
+    }
 
     if (e.target.closest("[data-routine-pin]")) {
       const ids = pinnedIds();

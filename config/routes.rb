@@ -75,8 +75,9 @@ Rails.application.routes.draw do
   get    "/buddy/routines/jil_actions" => "buddy/routines#jil_actions", as: :buddy_routine_jil_actions
   post   "/buddy/routines/reorder" => "buddy/routines#reorder", as: :buddy_routines_reorder
   post   "/buddy/routines/:id/run" => "buddy/routines#run",     as: :buddy_routine_run
-  patch  "/buddy/routines/:id"     => "buddy/routines#update",  as: :buddy_routine
-  delete "/buddy/routines/:id"     => "buddy/routines#destroy"
+  patch  "/buddy/routines/:id"       => "buddy/routines#update",  as: :buddy_routine
+  patch  "/buddy/routines/:id/steps" => "buddy/routines#steps",   as: :buddy_routine_steps
+  delete "/buddy/routines/:id"       => "buddy/routines#destroy"
   # Reminders and watches are separate tables but one list to the person, so
   # `type` picks the table and the pair is the identity.
   get    "/buddy/reminders" => "buddy/reminders#index", as: :buddy_reminders

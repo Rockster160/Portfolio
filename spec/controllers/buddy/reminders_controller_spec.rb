@@ -109,6 +109,97 @@ RSpec.describe Buddy::RemindersController, type: :controller do
     end
   end
 
+  # The wording and the hour are the two things that turn out wrong, and until
+  # now the only fix was cancelling and setting the whole thing up again by
+  # talking it through.
+  describe "PATCH #update, editing it" do
+    let(:zone) { ActiveSupport::TimeZone[user.timezone] }
+
+    it "rewrites the words" do
+      rem = reminder!(body: "Vet appt")
+
+      patch :update, params: { type: :reminder, id: rem.id, reminder: { body: "Vet appt - bring the carrier" } }
+
+      expect(rem.reload.body).to eq("Vet appt - bring the carrier")
+    end
+
+    it "moves the time, reading it as their local clock" do
+      rem = reminder!(fire_at: 2.hours.from_now)
+      at  = 3.hours.from_now.in_time_zone(zone)
+
+      patch :update, params: { type: :reminder, id: rem.id, reminder: { at: at.strftime("%Y-%m-%dT%H:%M") } }
+
+      expect(response).to be_successful
+      expect(rem.reload.fire_at.in_time_zone(zone).strftime("%Y-%m-%dT%H:%M")).to eq(at.strftime("%Y-%m-%dT%H:%M"))
+    end
+
+    # Saving one into the past means it goes off on the next sweep, seconds
+    # later, which is never what a mistyped date meant.
+    it "refuses a time that's already gone" do
+      rem = reminder!(fire_at: 2.hours.from_now)
+      was = rem.fire_at
+
+      gone = 2.hours.ago.in_time_zone(zone).strftime("%Y-%m-%dT%H:%M")
+      patch :update, params: { type: :reminder, id: rem.id, reminder: { at: gone } }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(rem.reload.fire_at).to be_within(1.second).of(was)
+    end
+
+    it "refuses to blank the words out" do
+      rem = reminder!(body: "Vet appt")
+
+      patch :update, params: { type: :reminder, id: rem.id, reminder: { body: "  " } }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(rem.reload.body).to eq("Vet appt")
+    end
+
+    # A recurring one keeps its shape; only the hour moves, and the next firing
+    # is recomputed from it.
+    it "moves the hour of a recurring one and rolls the next firing" do
+      rem = reminder!(recurrence: { "kind" => "daily", "at" => "09:00" })
+
+      patch :update, params: { type: :reminder, id: rem.id, reminder: { at: "07:30" } }
+
+      expect(response).to be_successful
+      expect(rem.reload.recurrence["at"]).to eq("07:30")
+      expect(rem.fire_at.in_time_zone(zone).strftime("%H:%M")).to eq("07:30")
+    end
+
+    it "lets a watch's words be edited" do
+      w = watch!(body: "Grab prescription")
+
+      patch :update, params: { type: :watch, id: w.id, reminder: { body: "Grab the prescription and the cat food" } }
+
+      expect(w.reload.body).to eq("Grab the prescription and the cat food")
+    end
+
+    # The one thing this panel must not be able to rewrite: a listener is
+    # validated when it's written, and a half-edited one looks set and never
+    # fires.
+    it "gives a watch no time to move and no condition to edit" do
+      w = watch!(scope: "item", listener: "item:action:added")
+
+      get :index
+      row = rows.find { |r| r["type"] == "watch" }
+
+      expect(row["at"]).to be_nil
+      expect(row.keys).not_to include("listener")
+    end
+
+    it "hands the editor the raw values rather than the display ones" do
+      rem = reminder!(body: "A" * 120)
+
+      get :index
+      row = rows.find { |r| r["record_id"] == rem.id }
+
+      expect(row["label"].length).to be < 120  # truncated for the list
+      expect(row["body"].length).to eq(120)    # what the field starts on
+      expect(row["at"]).to match(/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}\z/)
+    end
+  end
+
   describe "DELETE #destroy" do
     it "deletes a reminder outright" do
       rem = reminder!

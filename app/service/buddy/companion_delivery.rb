@@ -6,7 +6,7 @@ module Buddy
   # push. Owning it here keeps the delivery mechanics (and the Mac
   # round-trip thread) in ONE place so the two callers can't drift.
   #
-  #   plain   - a fixed inbound nudge ("⏰ Reminder: ...") + push.
+  #   plain   - a fixed inbound nudge ("Reminder: ...") + push.
   #   prompt  - re-dispatches a fresh in-character Buddy turn seeded by
   #             the body (same hidden-trigger pattern as the quick-action
   #             chips), so the reply reads like Byte/Moss talking, not a
@@ -75,9 +75,13 @@ module Buddy
       # Self-initiated pushes ignore presence - a reminder/watch fires when
       # it fires, regardless of whether the PWA thinks the user is looking.
       def notify(user, message, push_title:)
-        # OS shows the app name (Byte); the title is the nudge itself.
+        # OS shows the app name (Byte) and its icon, so the title is whatever
+        # the caller hands over, unchanged. This used to staple a ⏰ onto every
+        # one of them regardless of content - a glyph that leads EVERY
+        # notification stops meaning anything by the second one. A caller whose
+        # glyph says something (a deploy's outcome) still leads with it.
         WebPushNotifications.send_to_byte(
-          title: "⏰ #{push_title.to_s.truncate(160)}",
+          title: push_title.to_s.truncate(160),
           tag:   "byte-#{message.id}",
           users: [user],
         )
