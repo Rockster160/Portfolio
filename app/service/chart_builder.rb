@@ -78,7 +78,7 @@ class ChartBuilder
   def all_events
     @all_events ||= (
       if @chart.queries.present?
-        @chart.queries.flat_map { |q| load(q[:query]) }.uniq(&:id)
+        @chart.queries.flat_map { |q| q[:query] ? load(q[:query]) : [] }.uniq(&:id)
       else
         load(@chart.query)
       end
@@ -92,7 +92,11 @@ class ChartBuilder
   # Splits the matched events into one definition per dataset.
   def series_defs
     # Explicit multi-query charts: each query is its own series (X vs Z as lines).
-    return @chart.queries.map { |q| { label: q[:label], events: load(q[:query]) } } if @chart.queries.present?
+    if @chart.queries.present?
+      return @chart.queries.map { |q|
+        { label: q[:label], events: (q[:query] ? load(q[:query]) : []), negate: q[:negate], daily: q[:daily] }
+      }
+    end
 
     case @chart.series_by
     when :name
@@ -133,18 +137,20 @@ class ChartBuilder
   # --- Point mode (bucket == :none): one mark per event, time x-axis ---
 
   def point_data(sdef)
+    return [] if sdef[:daily] # synthetic daily series is bucket-only
+
     if @chart.metric == :gap
       gap_deltas(sdef[:events]).filter_map { |time, days|
         next unless in_range?(time)
 
-        { x: time.to_i * 1000, y: days }
+        { x: time.to_i * 1000, y: signed(days, sdef) }
       }
     else
       sdef[:events].filter_map { |evt|
         next unless in_range?(evt.timestamp)
 
         value = value_for(evt, sdef[:data_key])
-        { x: evt.timestamp.to_i * 1000, y: sdef[:abs] ? value.abs : value }
+        { x: evt.timestamp.to_i * 1000, y: signed(sdef[:abs] ? value.abs : value, sdef) }
       }
     end
   end
@@ -152,17 +158,37 @@ class ChartBuilder
   # --- Bucket mode: aggregate into dense date buckets, category x-axis ---
 
   def bucket_data(sdef)
+    # Synthetic flat series (e.g. RMR): N per day, summed over each bucket's days.
+    return bucket_starts.map { |start| signed(sdef[:daily] * days_in_bucket(start), sdef) } if sdef[:daily]
+
     if @chart.metric == :gap
       grouped = gap_deltas(sdef[:events]).group_by { |time, _days| bucket_key(time) }
       bucket_starts.map { |start|
         deltas = grouped[start]
         next nil if deltas.blank?
 
-        (deltas.sum { |_time, days| days } / deltas.length.to_f).round(1)
+        signed((deltas.sum { |_time, days| days } / deltas.length.to_f).round(1), sdef)
       }
     else
       grouped = sdef[:events].group_by { |evt| bucket_key(evt.timestamp) }
-      bucket_starts.map { |start| aggregate(grouped[start] || [], sdef) }
+      bucket_starts.map { |start| signed(aggregate(grouped[start] || [], sdef), sdef) }
+    end
+  end
+
+  # Negates a series value when the series is marked burn (leading "-").
+  def signed(value, sdef)
+    return value if value.nil?
+
+    sdef[:negate] ? -value : value
+  end
+
+  def days_in_bucket(start)
+    case bucket
+    when :day   then 1
+    when :week  then 7
+    when :month then Time.days_in_month(start.month, start.year)
+    when :year  then (Date.gregorian_leap?(start.year) ? 366 : 365)
+    else 1
     end
   end
 

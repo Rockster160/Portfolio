@@ -10,6 +10,16 @@ class Rack::Attack
 
   # Rack::Attack.cache.store = ActiveSupport::Cache::MemoryStore.new
 
+  ### Safelist Home Network ###
+
+  # Requests from the home network must never be throttled — the household's
+  # PWAs and automations legitimately burst well past the per-IP limit. The
+  # residential IP drifts within the /24, so safelist the whole block. A
+  # safelist match short-circuits every throttle below before it runs, which
+  # the app-level BannedIp/perma_safe whitelisting can't do (that runs in the
+  # controller, after Rack::Attack has already returned the 429).
+  safelist_ip("97.117.17.0/24")
+
   ### Throttle Spammy Clients ###
 
   # If any single client IP is making tons of requests, then they're

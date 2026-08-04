@@ -126,6 +126,26 @@ RSpec.describe ChartBuilder do
     end
   end
 
+  describe "negated and synthetic-daily series (calorie balance)" do
+    it "negates a burn series and adds a flat @daily baseline per bucket" do
+      event("Food", at: tz.local(2026, 1, 6, 12), data: { "Calories" => 700 })
+      event("Workout", at: tz.local(2026, 1, 7, 12), data: { "Calories" => 250 })
+
+      series = ["In = name::Food", "- Burn = name::Workout", "- Base = @daily 1800"].join("\n")
+      result = described_class.new(
+        chart(
+          query: "", value_source: :data, data_key: "Calories", metric: :sum,
+          bucket: :week, chart_type: :stacked_bar, queries: series
+        ),
+        start_at: "2026-01-05", end_at: "2026-01-11",
+      ).call
+
+      expect(result[:datasets].find { |d| d[:label] == "In" }[:data].compact.sum).to eq(700)
+      expect(result[:datasets].find { |d| d[:label] == "Burn" }[:data].compact.sum).to eq(-250)
+      expect(result[:datasets].find { |d| d[:label] == "Base" }[:data].compact.sum).to eq(-12_600)
+    end
+  end
+
   describe "marker query" do
     it "returns marker events with name/notes/date and bucket epochs for overlay lines" do
       event("X", at: tz.local(2026, 1, 10, 12))

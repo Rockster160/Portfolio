@@ -74,16 +74,21 @@ class CustomChart < ApplicationRecord
 
   # Multi-series from several queries, authored one-per-line as "Label = query"
   # (or just "query"). When present, each becomes its own series and overrides
-  # the single filter + series_by.
+  # the single filter + series_by. Two modifiers:
+  #   - a leading "-" negates the series (renders below zero — e.g. burn)
+  #   - a query of "@daily N" is a synthetic flat series worth N per day (e.g. RMR)
   def queries
     settings[:queries].to_s.lines.filter_map { |line|
       line = line.strip
       next if line.blank?
 
-      label, query = (line.include?("=") ? line.split("=", 2).map(&:strip) : [line, line])
-      next if query.blank?
+      negate = line.start_with?("-")
+      line = line.sub(/\A-\s*/, "") if negate
+      label, spec = (line.include?("=") ? line.split("=", 2).map(&:strip) : [line, line])
+      next if spec.blank?
 
-      { label: label.presence || query, query: query }
+      daily = spec[/\A@daily\s+(-?\d+(?:\.\d+)?)\z/, 1]
+      { label: label.presence || spec, query: (daily ? nil : spec), negate: negate, daily: daily&.to_f }
     }
   end
 
