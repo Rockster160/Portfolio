@@ -47,6 +47,7 @@ module Buddy
         lists:                  lists(user),                    # the person's lists + each one's sections, for filing items in the right place
         active_proposals:       active_proposals(conversation),
         upcoming_reminders:     upcoming_reminders(conversation, now),
+        running_timers:         running_timers(user),                # countdowns on the clock right now, for "how long left" and cancel_timer
         active_watches:         active_watches(conversation),
         conversation_notes:     conversation.buddy_memories,         # this thread's own notes ("keep this strictly work")
         pending_relays:         pending_relays(user),                # open questions from a partner, awaiting THIS user's answer
@@ -510,6 +511,39 @@ module Buddy
       rescue StandardError => e
         Buddy::Errors.report(section: "context.upcoming_reminders", exception: e, user: conversation.user)
         []
+      end
+
+      # Countdowns on the clock right now. Buddy could START a timer and then
+      # had no idea it existed: prod "Cancel my timers" got "I can't stop a
+      # running countdown from here", one minute after Buddy set one itself.
+      # Blind is the reason it said no, so this is half of the fix and
+      # `cancel_timer` is the other half.
+      #
+      # A fired-but-unacknowledged timer is deliberately included - it's still
+      # on screen, still alarming, and "turn that off" means it.
+      def running_timers(user)
+        return [] unless defined?(Timer)
+
+        Buddy::Timers.live_for(user).limit(10).map { |t|
+          {
+            id:        t.id,
+            label:     t.name.to_s.presence,
+            remaining: timer_remaining(t),
+          }.compact
+        }
+      rescue StandardError => e
+        Buddy::Errors.report(section: "context.running_timers", exception: e, user: user)
+        []
+      end
+
+      def timer_remaining(timer)
+        return "already up, still ringing" if timer.fired?
+
+        left = timer.remaining_ms.to_i / 1000
+        state = timer.paused? ? " (paused)" : ""
+        "#{Buddy::Timers.humanize_seconds(left)} left#{state}"
+      rescue StandardError
+        nil
       end
 
       # Condition-based reminders (BuddyWatch) still waiting for their

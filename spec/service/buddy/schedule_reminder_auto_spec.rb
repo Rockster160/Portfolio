@@ -85,6 +85,86 @@ RSpec.describe "schedule_reminder auto-run" do
     end
   end
 
+  # Buddy could set a reminder and cancel one, but not MOVE one - so "change the
+  # tomato reminder to 3pm" came out as a second reminder with the original
+  # still sitting there, due to fire at the hour they'd just ruled out.
+  describe "move_reminder" do
+    let(:ctx)  { Buddy::ToolContext.new(user, conversation: convo) }
+    let(:tool) { Buddy::Tools[:move_reminder] }
+    let(:at)   { 2.hours.from_now.in_time_zone(user.timezone) }
+    let(:later) { 4.hours.from_now.in_time_zone(user.timezone) }
+
+    def existing!(text, when_at=at, recurrence: nil)
+      BuddyReminder.create!(
+        user: user, byte_conversation: convo, body: text, fire_at: when_at, recurrence: recurrence,
+      )
+    end
+
+    def move(match, to, text: nil)
+      payload  = { match: match, at: to.iso8601, text: text }.compact
+      resolved = tool[:confirm].call(payload, ctx)[:resolved]
+      Buddy::Tools.dispatch(tool, payload.merge(resolved), ctx)
+    end
+
+    it "moves the one that's already set instead of adding another" do
+      reminder = existing!("Uncover the tomatoes")
+
+      expect { move("tomatoes", later) }.not_to(change { BuddyReminder.where(user: user).count })
+      expect(reminder.reload.fire_at).to be_within(1.minute).of(later)
+    end
+
+    it "rewords it when they changed what it should say" do
+      reminder = existing!("Uncover the tomatoes")
+
+      move("tomatoes", later, text: "Shade the tomatoes")
+
+      expect(reminder.reload.body).to eq("Shade the tomatoes")
+    end
+
+    it "leaves the wording alone when they only moved the time" do
+      reminder = existing!("Uncover the tomatoes")
+
+      move("tomatoes", later)
+
+      expect(reminder.reload.body).to eq("Uncover the tomatoes")
+    end
+
+    # A daily 9am moved to 9:30 is still daily - the shape survives, only the
+    # clock time changes.
+    it "keeps a repeating reminder repeating" do
+      reminder = existing!("Grab my Loops", recurrence: { "kind" => "daily", "at" => "07:54" })
+
+      move("Loops", later)
+
+      expect(reminder.reload.recurrence["kind"]).to eq("daily")
+      expect(reminder.recurrence["at"]).to eq(later.strftime("%H:%M"))
+    end
+
+    it "finds it by id as well as by wording" do
+      reminder = existing!("Check the dryer")
+
+      move(reminder.id.to_s, later)
+
+      expect(reminder.reload.fire_at).to be_within(1.minute).of(later)
+    end
+
+    it "says so rather than silently creating one when nothing matches" do
+      expect { move("meatloaf", later) }.to raise_error(/no pending reminder/i)
+    end
+
+    it "refuses a time that's already gone by" do
+      existing!("Check the dryer")
+
+      expect { move("dryer", 1.hour.ago.in_time_zone(user.timezone)) }.to raise_error(/gone by/i)
+    end
+
+    it "ignores one that's been cancelled or already fired" do
+      existing!("Check the dryer").update!(cancelled_at: Time.current)
+
+      expect { move("dryer", later) }.to raise_error(/no pending reminder/i)
+    end
+  end
+
   describe "friendly_future phrasing" do
     let(:ctx) { Buddy::ToolContext.new(user) }
     let(:noon) { Time.current.in_time_zone(user.timezone).change(hour: 18, min: 1) }

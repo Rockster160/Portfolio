@@ -67,10 +67,27 @@ module Buddy
         # N+1 across the (up to MAX_MESSAGES) replayed rows.
         scope = conversation.byte_messages.chronological.with_attached_files
         scope = scope.where(byte_messages: { created_at: ..upto.created_at }) if upto
-        compact_at = compact_timestamp(conversation)
+        compact_at = compact_boundary(conversation, upto)
         scope = scope.where(byte_messages: { created_at: compact_at... }) if compact_at
         # Take the most recent MAX_MESSAGES, then restore chronological order.
         scope.to_a.last(MAX_MESSAGES)
+      end
+
+      # Where history starts: the recap stamp, but never later than the message
+      # being answered.
+      #
+      # Buddy::TurnDispatcher compacts as the first thing it does with a turn,
+      # by which point the inbound row already exists — so `buddy_recap_at`
+      # always lands a second or two AFTER it. Unclamped, that leaves the window
+      # between the boundary and `upto` empty, and an empty `input` is rejected
+      # outright by the Responses API. Prod 2240: the 7:08am briefing tripped a
+      # compaction and died on the spot with the raw API error in the thread.
+      # Every compaction killed the turn that caused it.
+      def compact_boundary(conversation, upto)
+        at = compact_timestamp(conversation)
+        return at if at.nil? || upto.nil?
+
+        [at, upto.created_at].min
       end
 
       def item_for(message, replay_images: false)

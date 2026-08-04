@@ -43,7 +43,27 @@ module Buddy
           body:      r.body.to_s,
           at:        edit_time(r, user),
           recurring: r.recurring?,
-        }
+          # Both row types carry the same keys so the editor reads one shape.
+          listener:  nil,
+          custom:    false,
+          templated: false,
+        }.merge(recurrence_fields(r))
+      }
+    end
+
+    # The repeat RULE, broken into the three things that can change: how often,
+    # which weekday (weekly), which date (monthly). Only the hour used to be
+    # editable, so a weekday alarm could be moved from 7:54 to 8:00 but never
+    # off weekdays - the rule itself was set once in conversation and then
+    # frozen.
+    def recurrence_fields(reminder)
+      return { repeat_kind: nil, weekday: nil, day: nil } unless reminder.recurring?
+
+      rec = reminder.recurrence.to_h
+      {
+        repeat_kind: rec["kind"].to_s,
+        weekday:     rec["weekday"].to_s.presence,
+        day:         rec["day"].presence&.to_i,
       }
     end
 
@@ -80,11 +100,20 @@ module Buddy
           sublabel:  watch_when(w),
           enabled:   w.cancelled_at.nil?,
           body:      w.body.to_s,
-          # No time to move: a watch fires on a condition, and the condition is
-          # the one thing an editor must not be able to rewrite.
+          # A watch has no clock to move - it fires on a condition.
           at:        nil,
           recurring: false,
-        }
+          # The condition, when it's a hand-written one. A named trigger
+          # (deploy, arriving somewhere, finishing a chore) was assembled from
+          # structured pieces rather than written, so there's no line to hand
+          # back and the editor shows it as read-only instead.
+          listener:  w.listener.presence,
+          custom:    w.custom?,
+          # A repeating watch's body is a TEMPLATE (see Buddy::WatchMatcher),
+          # so the editor can offer the placeholders. A one-shot goes through
+          # the model, where the body is a brief rather than a line to print.
+          templated: !w.one_shot,
+        }.merge(repeat_kind: nil, weekday: nil, day: nil)
       }
     end
 

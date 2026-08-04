@@ -224,7 +224,7 @@ module Buddy
     end
 
     def announce!(watch, payload)
-      text = announcement(watch, payload)
+      text = Buddy::WatchMessage.for(watch, payload)
       Buddy::CompanionDelivery.deliver_plain(
         user:         watch.user,
         conversation: watch.byte_conversation,
@@ -234,42 +234,6 @@ module Buddy
         # exactly where reading that first is worth something.
         push_title:   text,
       )
-    end
-
-    def announcement(watch, payload)
-      return deploy_line(payload) if watch.trigger_scope == "deploy"
-
-      # The body IS the message on this path, so remind_when tells the model to
-      # write these as finished sentences. A trailing full stop would collide
-      # with the detail appended after it.
-      said   = watch.body.to_s.strip.sub(/[.!]+\z/, "")
-      detail = payload_detail(payload)
-      ["🔔 #{said}", detail].compact.join(" — ")
-    end
-
-    # What actually changed, when the trigger carries it. This is the half that
-    # went missing every single time: sixty-four pings saying an item landed,
-    # not one of them saying which one.
-    def payload_detail(payload)
-      return nil unless payload.is_a?(Hash)
-
-      data = payload.with_indifferent_access
-      name = [data[:name], data[:title], data[:body]].filter_map { |v| v.to_s.strip.presence }.first
-      name.present? ? "“#{name.truncate(80)}”" : nil
-    end
-
-    def deploy_line(payload)
-      data    = payload.is_a?(Hash) ? payload.with_indifferent_access : {}
-      failed  = deploy_outcome(data) == :failed
-      sha     = data[:sha].to_s.strip.first(7).presence
-      note    = data[:message].to_s.strip.presence
-      # The glyph is the fastest thing to read here and it says WHICH outcome,
-      # which is the entire point of a deploy ping. Green and red are legible
-      # at a glance on a lock screen in a way two similar sentences are not.
-      head    = failed ? "❌ Deploy FAILED" : "🚀 Deploy finished successfully"
-      tail    = [sha, (note && "“#{note.truncate(80)}”")].compact_blank.join(" ").presence
-
-      [head, tail].compact.join(" — ")
     end
 
     # An automation hanging off a condition. Deliberately no model anywhere on

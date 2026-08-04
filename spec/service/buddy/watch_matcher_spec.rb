@@ -291,6 +291,49 @@ RSpec.describe Buddy::WatchMatcher do
       expect(lines.last).to eq("🔔 Claude list got a new item in Ocs-Backend")
     end
 
+    # Appending the detail is only the DEFAULT. Someone who wants the item
+    # named mid-sentence rather than quoted on the end can write it there, and
+    # the panel's body field is where that's edited.
+    describe "when the body is written as a template" do
+      def announce(body, payload)
+        make_watch(trigger_scope: "event", match: {}, body: body, one_shot: false)
+        described_class.dispatch(user, :event, payload)
+        lines.last
+      end
+
+      it "puts what changed where they asked for it" do
+        line = announce("{name} landed on the Claude list", { "name" => "Fix the estimator" })
+
+        expect(line).to eq("🔔 Fix the estimator landed on the Claude list")
+      end
+
+      it "reads any other key straight off the trigger" do
+        line = announce("{name} went on {list}", { "name" => "Milk", "list" => "Groceries" })
+
+        expect(line).to eq("🔔 Milk went on Groceries")
+      end
+
+      it "does not also tack the detail on the end" do
+        line = announce("{name} landed", { "name" => "Fix the estimator" })
+
+        expect(line).not_to include("—")
+      end
+
+      # Template syntax showing through on a lock screen reads like a bug; a
+      # slightly shorter sentence does not.
+      it "leaves a blank rather than raw braces when the trigger lacks the key" do
+        line = announce("{name} went on {list}", { "name" => "Milk" })
+
+        expect(line).to eq("🔔 Milk went on")
+      end
+
+      it "keeps a glyph they chose instead of stacking the bell in front of it" do
+        line = announce("📥 {name}", { "name" => "Fix the estimator" })
+
+        expect(line).to eq("📥 Fix the estimator")
+      end
+    end
+
     it "keeps composing the one-shot kind, which fires once and is worth a turn" do
       one_off = make_watch(trigger_scope: "item", match: { "action" => "added" }, body: "grab the thing")
 

@@ -221,6 +221,18 @@ module Buddy
         .ordered
     end
 
+    # Stop a countdown for good: kill the scheduled fire and the mid-countdown
+    # callbacks, archive the row, and broadcast so the chip drops off every open
+    # surface. Same three steps as a swipe-away in Buddy::TimersController, kept
+    # here so the `cancel_timer` tool and the gesture can't drift apart.
+    def stop!(timer)
+      timer.cancel_fire!
+      timer.cancel_countdown_callbacks!
+      timer.update!(archived_at: Time.current)
+      timer.broadcast(reason: :archived)
+      timer
+    end
+
     # Is this timer one of Buddy's? Used to gate broadcast handling on the
     # client and to scope controller actions to Buddy's own timers.
     def buddy_timer?(user, timer)

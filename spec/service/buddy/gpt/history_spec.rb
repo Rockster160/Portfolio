@@ -117,6 +117,26 @@ RSpec.describe Buddy::GPT::History do
 
       expect(build.pluck(:content)).to eq(["still here"])
     end
+
+    # Prod 2240. Buddy::TurnDispatcher compacts AFTER the inbound row exists, so
+    # the stamp always lands a second or two past it, and the window between the
+    # boundary and the message being answered is empty. OpenAI rejects an empty
+    # input outright, so the turn that triggers a compaction is the turn that
+    # dies — every time.
+    it "keeps the message being answered even when the recap lands after it" do
+      said("ancient history")
+      asking = said("what's on for today?")
+      convo.update!(metadata: { "buddy_recap_at" => 1.second.from_now.iso8601(6) })
+
+      expect(build(upto: asking).pluck(:content)).to eq(["what's on for today?"])
+    end
+
+    it "never hands back an empty input for a real message" do
+      asking = said("anything at all")
+      convo.update!(metadata: { "buddy_recap_at" => 1.hour.from_now.iso8601(6) })
+
+      expect(build(upto: asking)).not_to be_empty
+    end
   end
 
   describe "upto" do

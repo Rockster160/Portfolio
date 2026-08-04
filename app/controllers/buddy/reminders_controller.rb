@@ -19,18 +19,26 @@ module Buddy
       render json: { reminders: rows }
     end
 
-    # On/off, the wording, and - for a clock reminder - the time.
+    # On/off, the wording, the schedule, and a hand-written watch's condition.
     #
-    # What's still NOT editable is a watch's condition. A listener is validated
-    # when it's written, and a half-edited one is worse than the old one: it
-    # looks set and never fires. The words a watch says when it trips are just
-    # words, so those are fair game.
+    # The condition used to be off limits here on the theory that a half-edited
+    # listener is worse than the old one, because it looks set and never fires.
+    # That's true, and it's also already handled: BuddyWatch#listener_parses
+    # refuses to save anything Jil wouldn't match, so a bad edit comes back as
+    # an error with the old listener still in place. Withholding the field just
+    # meant the only way to retarget a watch was to delete it and describe the
+    # whole thing again.
+    #
+    # A NAMED trigger (deploy, arriving somewhere, finishing a chore) still
+    # isn't editable: its condition is a structured `match` hash rather than a
+    # line of text, and there's nothing here to type into.
     def update
       return head(:not_found) if record.nil?
 
       apply_enabled
       apply_body
       apply_time
+      apply_listener
       return render(json: { errors: @errors }, status: :unprocessable_entity) if @errors&.any?
 
       record.save!
@@ -45,6 +53,10 @@ module Buddy
       record.destroy!
       head :no_content
     end
+
+    RECURRENCE_KINDS = %w[daily weekdays weekly monthly].freeze
+    WEEKDAYS         = %w[sunday monday tuesday wednesday thursday friday saturday].freeze
+    SCHEDULE_FIELDS  = %i[at repeat_kind weekday day].freeze
 
     private
 
@@ -84,22 +96,98 @@ module Buddy
       record.body = body
     end
 
-    # Only a clock reminder has a time to move. A recurring one keeps its shape
-    # and only the hour changes, so `at` means two different things depending on
-    # which it is - "HH:MM" for a recurrence, a whole local datetime otherwise -
-    # and the record itself decides which it's reading.
+    # Only a clock reminder has a time to move. `at` means two different things
+    # depending on which kind it is - "HH:MM" for a recurrence, a whole local
+    # datetime otherwise - and the record itself decides which it's reading.
     def apply_time
-      at = edits[:at].to_s.strip
-      return if at.empty? || !record.is_a?(BuddyReminder)
+      return unless record.is_a?(BuddyReminder)
+      return move_recurrence if record.recurring? && schedule_touched?
 
-      record.recurring? ? move_recurrence(at) : move_fire_at(at)
+      at = edits[:at].to_s.strip
+      move_fire_at(at) if at.present?
     end
 
-    def move_recurrence(hhmm)
+    # Rescheduling a repeat recomputes its next firing, so it has to be reserved
+    # for edits that were actually ASKED for. Without this, flipping one off and
+    # back on would silently roll it forward.
+    def schedule_touched?
+      SCHEDULE_FIELDS.any? { |field| edits[field].present? }
+    end
+
+    # The whole repeat RULE, not just its hour: how often, and the weekday or
+    # date it hangs off. Each part falls back to what's already stored, so a
+    # client sending only `at` still behaves the way it always did.
+    def move_recurrence
+      rec = anchored(record.recurrence.to_h.merge(recurrence_edits))
+      return if @errors&.any?
+
+      next_at = BuddyReminder.new(user: record.user, recurrence: rec).next_fire_at(from: Time.current)
+      return fail_with("that repeat doesn't work out to a time") if next_at.nil?
+
+      record.recurrence = rec
+      record.fire_at    = next_at
+    end
+
+    def recurrence_edits
+      { "at" => recurrence_time, "kind" => recurrence_kind }.compact
+    end
+
+    def recurrence_time
+      hhmm = edits[:at].to_s.strip
+      return nil if hhmm.empty?
       return fail_with("that isn't a time") unless hhmm.match?(/\A\d{1,2}:\d{2}\z/)
 
-      record.recurrence = record.recurrence.merge("at" => hhmm)
-      record.fire_at    = record.next_fire_at(from: Time.current) || record.fire_at
+      hhmm
+    end
+
+    def recurrence_kind
+      kind = edits[:repeat_kind].to_s.strip.downcase
+      return nil if kind.empty?
+      return fail_with("that isn't a repeat I know") unless RECURRENCE_KINDS.include?(kind)
+
+      kind
+    end
+
+    # `weekly` hangs off a weekday and `monthly` off a date; daily and weekdays
+    # hang off nothing. Switching between them has to DROP the key that no
+    # longer applies, or a weekly-turned-daily keeps a stale `weekday` that the
+    # next switch back would silently reuse.
+    def anchored(rec)
+      case rec["kind"].to_s
+      when "weekly"  then rec.merge("weekday" => weekday_edit).except("day")
+      when "monthly" then rec.merge("day" => day_edit).except("weekday")
+      else                rec.except("weekday", "day")
+      end
+    end
+
+    def weekday_edit
+      given = edits[:weekday].to_s.strip.downcase.presence || record.recurrence.to_h["weekday"].to_s
+      return fail_with("pick a day of the week") unless WEEKDAYS.include?(given)
+
+      given
+    end
+
+    def day_edit
+      given = (edits[:day].presence || record.recurrence.to_h["day"]).to_i
+      # BuddyReminder#next_fire_at clamps to 28 so a monthly never skips
+      # February; saying so up front beats silently moving what they typed.
+      return fail_with("pick a date from 1 to 28") unless given.between?(1, 28)
+
+      given
+    end
+
+    # A watch's condition, in the Jil listener syntax the row already shows
+    # underneath it. Validation lives on the model, so a line that wouldn't
+    # match anything comes back as an error and the old one stays.
+    def apply_listener
+      return unless record.is_a?(BuddyWatch) && edits.key?(:listener)
+
+      listener = edits[:listener].to_s.strip
+      return fail_with("a named trigger has no condition to type") unless record.custom?
+      return fail_with("it needs a condition") if listener.empty?
+
+      record.listener      = listener
+      record.trigger_scope = ::Jil::ListenerMatch.scope_of(listener).presence || record.trigger_scope
     end
 
     def move_fire_at(local)

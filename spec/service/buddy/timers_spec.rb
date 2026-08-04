@@ -380,4 +380,87 @@ RSpec.describe Buddy::Timers do
       expect(tool[:receipt].call(result[:data], ctx)).to include("1 min timer for Tea")
     end
   end
+
+  # Prod 2276: "Cancel my timers" got "I can't stop a running countdown from
+  # here", one minute after Buddy had set one itself. There was no tool, and
+  # timers weren't in context either, so it was a true statement about a
+  # capability that plainly should have existed.
+  describe "cancel_timer tool" do
+    let(:convo) { user.byte_conversations.create!(mode: :buddy) }
+    let(:ctx)   { Buddy::ToolContext.new(user, conversation: convo) }
+    let(:tool)  { Buddy::Tools[:cancel_timer] }
+
+    # The real path: Buddy::GPT::Turn resolves the call through `confirm`, then
+    # ProposalBuilder executes with the resolved ids folded into the payload.
+    def cancel(match)
+      payload  = { match: match }
+      resolved = tool[:confirm].call(payload, ctx)[:resolved]
+      Buddy::Tools.dispatch(tool, payload.merge(resolved), ctx)
+    end
+
+    it "stops a timer by label and takes it off the hero" do
+      described_class.create!(user: user, seconds: 300, label: "pasta")
+
+      result = cancel("pasta")
+
+      expect(result[:ok]).to be(true)
+      expect(described_class.live_for(user)).to be_empty
+      expect(tool[:receipt].call(result[:data], ctx)).to include("pasta")
+    end
+
+    it "stops every one of them on 'all'" do
+      described_class.create!(user: user, seconds: 300, label: "pasta")
+      described_class.create!(user: user, seconds: 600, label: "tea")
+
+      result = cancel("all")
+
+      expect(result[:data][:stopped]).to eq(2)
+      expect(described_class.live_for(user)).to be_empty
+    end
+
+    # The commonest timer is "5m" with no label at all, so matching on name
+    # would miss exactly the one they're looking at.
+    it "stops the only running timer even when they name it something else" do
+      described_class.create!(user: user, seconds: 300)
+
+      expect(cancel("the countdown")[:data][:stopped]).to eq(1)
+    end
+
+    it "leaves timers on their ordinary board alone" do
+      page  = user.timer_pages.create!(slug: "work", name: "Work")
+      board = user.timers.create!(kind: :countdown, duration_ms: 60_000, timer_page: page)
+      board.start!
+
+      expect { cancel("all") }.to raise_error(/nothing is running/i)
+      expect(board.reload.archived_at).to be_nil
+    end
+
+    it "says nothing is running rather than claiming it can't reach them" do
+      expect { cancel("pasta") }.to raise_error(/nothing is running/i)
+    end
+
+    it "reports a name that matches none of them" do
+      described_class.create!(user: user, seconds: 300, label: "pasta")
+      described_class.create!(user: user, seconds: 600, label: "tea")
+
+      expect { cancel("laundry") }.to raise_error(/no timer matching/i)
+    end
+  end
+
+  describe "running_timers context" do
+    let(:convo) { user.byte_conversations.create!(mode: :buddy) }
+
+    it "shows what's on the clock so Buddy can answer and cancel" do
+      described_class.create!(user: user, seconds: 300, label: "pasta")
+
+      row = Buddy::Context.build(user, convo)[:running_timers].first
+
+      expect(row[:label]).to eq("pasta")
+      expect(row[:remaining]).to include("left")
+    end
+
+    it "is empty rather than absent when nothing is counting" do
+      expect(Buddy::Context.build(user, convo)[:running_timers]).to eq([])
+    end
+  end
 end

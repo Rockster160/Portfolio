@@ -175,19 +175,6 @@ RSpec.describe Buddy::RemindersController, type: :controller do
       expect(w.reload.body).to eq("Grab the prescription and the cat food")
     end
 
-    # The one thing this panel must not be able to rewrite: a listener is
-    # validated when it's written, and a half-edited one looks set and never
-    # fires.
-    it "gives a watch no time to move and no condition to edit" do
-      w = watch!(scope: "item", listener: "item:action:added")
-
-      get :index
-      row = rows.find { |r| r["type"] == "watch" }
-
-      expect(row["at"]).to be_nil
-      expect(row.keys).not_to include("listener")
-    end
-
     it "hands the editor the raw values rather than the display ones" do
       rem = reminder!(body: "A" * 120)
 
@@ -197,6 +184,192 @@ RSpec.describe Buddy::RemindersController, type: :controller do
       expect(row["label"].length).to be < 120  # truncated for the list
       expect(row["body"].length).to eq(120)    # what the field starts on
       expect(row["at"]).to match(/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}\z/)
+    end
+  end
+
+  # The repeat RULE, not just its hour. "Grab my Loops" could be moved from 7:54
+  # to 8:00 but never off weekdays - the rule was set once in conversation and
+  # then frozen, and changing it meant deleting the reminder and describing the
+  # whole thing again.
+  describe "PATCH #update, changing how it repeats" do
+    let(:zone) { ActiveSupport::TimeZone[user.timezone] }
+
+    it "hands the editor the rule it's on, in parts" do
+      reminder!(recurrence: { "kind" => "weekly", "weekday" => "tuesday", "at" => "07:54" })
+
+      get :index
+      row = rows.first
+
+      expect(row["repeat_kind"]).to eq("weekly")
+      expect(row["weekday"]).to eq("tuesday")
+      expect(row["at"]).to eq("07:54")
+    end
+
+    it "switches weekdays to every day" do
+      rem = reminder!(recurrence: { "kind" => "weekdays", "at" => "07:54" })
+
+      patch :update, params: { type: :reminder, id: rem.id, reminder: { repeat_kind: "daily" } }
+
+      expect(response).to be_successful
+      expect(rem.reload.recurrence["kind"]).to eq("daily")
+      expect(rem.recurrence["at"]).to eq("07:54")
+    end
+
+    it "takes a weekday when they switch to weekly" do
+      rem = reminder!(recurrence: { "kind" => "daily", "at" => "09:00" })
+
+      patch :update, params: { type: :reminder, id: rem.id, reminder: { repeat_kind: "weekly", weekday: "wednesday" } }
+
+      expect(rem.reload.recurrence["weekday"]).to eq("wednesday")
+      expect(rem.fire_at.in_time_zone(zone).strftime("%A").downcase).to eq("wednesday")
+    end
+
+    it "takes a date when they switch to monthly" do
+      rem = reminder!(recurrence: { "kind" => "daily", "at" => "09:00" })
+
+      patch :update, params: { type: :reminder, id: rem.id, reminder: { repeat_kind: "monthly", day: 12 } }
+
+      expect(rem.reload.recurrence["day"]).to eq(12)
+      expect(rem.fire_at.in_time_zone(zone).day).to eq(12)
+    end
+
+    # A weekly-turned-daily keeping its weekday would mean switching back later
+    # silently reuses a day they picked months ago.
+    it "drops the anchor that no longer applies" do
+      rem = reminder!(recurrence: { "kind" => "weekly", "weekday" => "tuesday", "at" => "09:00" })
+
+      patch :update, params: { type: :reminder, id: rem.id, reminder: { repeat_kind: "daily" } }
+
+      expect(rem.reload.recurrence).not_to have_key("weekday")
+    end
+
+    it "changes the rule and the hour in one go" do
+      rem = reminder!(recurrence: { "kind" => "weekdays", "at" => "07:54" })
+
+      edit = { repeat_kind: "weekly", weekday: "friday", at: "18:15" }
+      patch :update, params: { type: :reminder, id: rem.id, reminder: edit }
+
+      expect(rem.reload.recurrence).to include("kind" => "weekly", "weekday" => "friday", "at" => "18:15")
+    end
+
+    it "refuses a repeat it doesn't know" do
+      rem = reminder!(recurrence: { "kind" => "daily", "at" => "09:00" })
+
+      patch :update, params: { type: :reminder, id: rem.id, reminder: { repeat_kind: "fortnightly" } }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(rem.reload.recurrence["kind"]).to eq("daily")
+    end
+
+    # next_fire_at clamps monthly to 28 so it never skips February; offering 31
+    # and quietly moving it would be worse than saying so.
+    it "refuses a date a month might not have" do
+      rem = reminder!(recurrence: { "kind" => "daily", "at" => "09:00" })
+
+      patch :update, params: { type: :reminder, id: rem.id, reminder: { repeat_kind: "monthly", day: 31 } }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body["errors"].join).to match(/1 to 28/)
+    end
+
+    it "leaves a one-off alone" do
+      rem = reminder!(fire_at: 2.hours.from_now)
+      was = rem.fire_at
+
+      patch :update, params: { type: :reminder, id: rem.id, reminder: { repeat_kind: "daily" } }
+
+      expect(rem.reload.recurrence).to be_blank
+      expect(rem.fire_at).to be_within(1.second).of(was)
+    end
+
+    # Recomputing the next firing is what rescheduling MEANS, so it can't ride
+    # along on an edit that didn't ask for it.
+    it "does not roll the next firing when only the switch was flipped" do
+      rem = reminder!(fire_at: 30.minutes.from_now, recurrence: { "kind" => "daily", "at" => "09:00" })
+      was = rem.fire_at
+
+      patch :update, params: { type: :reminder, id: rem.id, reminder: { enabled: false } }
+
+      expect(rem.reload.fire_at).to be_within(1.second).of(was)
+    end
+
+    it "does not roll it for a reword either" do
+      rem = reminder!(fire_at: 30.minutes.from_now, recurrence: { "kind" => "daily", "at" => "09:00" })
+      was = rem.fire_at
+
+      patch :update, params: { type: :reminder, id: rem.id, reminder: { body: "Grab the Loops" } }
+
+      expect(rem.reload.body).to eq("Grab the Loops")
+      expect(rem.fire_at).to be_within(1.second).of(was)
+    end
+  end
+
+  # The condition was held back on the theory that a half-edited listener looks
+  # set and never fires. True, and already covered: BuddyWatch refuses to save
+  # one Jil wouldn't match, so a bad edit bounces with the old one intact.
+  describe "PATCH #update, retargeting a watch" do
+    it "hands the editor the listener it's matching on" do
+      watch!(scope: "item", listener: "item:action:added")
+
+      get :index
+      row = rows.find { |r| r["type"] == "watch" }
+
+      expect(row["listener"]).to eq("item:action:added")
+      expect(row["custom"]).to be(true)
+      expect(row["at"]).to be_nil
+    end
+
+    it "narrows a watch to one list" do
+      w = watch!(scope: "item", listener: "item:action:added")
+
+      narrowed = "item:action:added item:list:name:/^Claude$/"
+      patch :update, params: { type: :watch, id: w.id, reminder: { listener: narrowed } }
+
+      expect(response).to be_successful
+      expect(w.reload.listener).to eq(narrowed)
+    end
+
+    it "keeps the old one and says why when the new one would never fire" do
+      w = watch!(scope: "item", listener: "item:action:added")
+
+      patch :update, params: { type: :watch, id: w.id, reminder: { listener: "!!! nonsense" } }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body["errors"].join).to match(/fire/i)
+      expect(w.reload.listener).to eq("item:action:added")
+    end
+
+    it "follows the listener when its scope changes" do
+      w = watch!(scope: "item", listener: "item:action:added")
+
+      patch :update, params: { type: :watch, id: w.id, reminder: { listener: "event:add" } }
+
+      expect(response).to be_successful
+      expect(w.reload.trigger_scope).to eq("event")
+    end
+
+    it "refuses to blank the condition out" do
+      w = watch!(scope: "item", listener: "item:action:added")
+
+      patch :update, params: { type: :watch, id: w.id, reminder: { listener: "  " } }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(w.reload.listener).to eq("item:action:added")
+    end
+
+    # A named trigger's condition is a structured match hash, not a line of
+    # text - there's nothing to type into, so the editor shows it read-only.
+    it "offers nothing to type on a named trigger" do
+      w = watch!(scope: "travel", body: "Grab prescription")
+
+      get :index
+      row = rows.find { |r| r["type"] == "watch" }
+      expect(row["custom"]).to be(false)
+      expect(row["listener"]).to be_nil
+
+      patch :update, params: { type: :watch, id: w.id, reminder: { listener: "event:add" } }
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(w.reload.listener).to be_nil
     end
   end
 

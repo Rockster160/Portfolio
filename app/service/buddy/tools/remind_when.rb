@@ -75,6 +75,13 @@ Buddy::Tools.register(
     "ping me when the Claude list gets an item". Whatever the trigger carries -
     the item, the title - is appended for you, so don't try to write it in.
 
+    Unless they want it somewhere OTHER than the end, which is what a
+    `{placeholder}` is for. `{name}` is the thing that changed, and any other
+    key reads straight off the trigger, so "{name} landed on the Claude list"
+    comes out naming the item mid-sentence and nothing is appended. Use one only
+    when they've said where they want it; the plain sentence is the default and
+    it's usually right.
+
     `notify` (optional) redirects the heads-up to a household member instead of
     the user themselves: "whenever I add to our agenda, let Rocco know" →
     notify="Rocco". Their companion delivers it. Omit for an ordinary

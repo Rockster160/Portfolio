@@ -38,10 +38,7 @@ module Buddy
     # Swipe-away = archive. Cancels the pending fire + mid-countdown jobs, then
     # broadcasts a removal so the chip disappears everywhere.
     def destroy
-      timer.cancel_fire!
-      timer.cancel_countdown_callbacks!
-      timer.update!(archived_at: Time.current)
-      timer.broadcast(reason: :archived)
+      Buddy::Timers.stop!(timer)
       head :no_content
     end
 

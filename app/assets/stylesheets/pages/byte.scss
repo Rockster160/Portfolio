@@ -3173,11 +3173,28 @@ dialog.byte-modal {
   min-height: 34px;
 }
 
+// A Jil listener is punctuation-dense (`item:list:name:/^Claude$/`), and the
+// difference between a slash and a colon is what decides whether it ever
+// fires - so it gets a fixed-width face and none of the phone keyboard's
+// helpfulness.
+.byte-reminder-mono {
+  font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11.5px;
+}
+
 .byte-reminder-note,
 .byte-reminder-error {
   margin: 0;
   font-size: 11px;
   color: var(--bs-muted);
+}
+
+.byte-reminder-note code {
+  font-size: 10.5px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--bs-body-bg);
+  color: inherit;
 }
 
 .byte-reminder-error {

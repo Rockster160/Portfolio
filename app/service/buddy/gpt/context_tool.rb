@@ -31,6 +31,7 @@ module Buddy
         lists
         active_proposals
         upcoming_reminders
+        running_timers
         active_watches
         pending_relays
         pending_prompts
