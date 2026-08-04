@@ -31,22 +31,23 @@ module Buddy
       scope = scope.where(cancelled_at: nil) unless include_off
       scope.order(:fire_at).limit(LIMIT).map { |r|
         {
-          type:      :reminder,
-          record_id: r.id,
-          glyph:     reminder_glyph(r),
-          label:     r.body.to_s.truncate(80),
-          sublabel:  when_text(r, user),
-          enabled:   r.cancelled_at.nil?,
+          type:       :reminder,
+          record_id:  r.id,
+          glyph:      reminder_glyph(r),
+          label:      r.body.to_s.truncate(80),
+          sublabel:   when_text(r, user),
+          enabled:    r.cancelled_at.nil?,
           # The editor writes back into these, so they're the raw values rather
           # than the display ones - `label` is truncated and `sublabel` is
           # prose, and round-tripping either would quietly rewrite the reminder.
-          body:      r.body.to_s,
-          at:        edit_time(r, user),
-          recurring: r.recurring?,
+          body:       r.body.to_s,
+          at:         edit_time(r, user),
+          recurring:  r.recurring?,
           # Both row types carry the same keys so the editor reads one shape.
-          listener:  nil,
-          custom:    false,
-          templated: false,
+          listener:   nil,
+          custom:     false,
+          templated:  false,
+          expires_on: nil,
         }.merge(recurrence_fields(r))
       }
     end
@@ -114,26 +115,29 @@ module Buddy
       scope = scope.where(cancelled_at: nil) unless include_off
       scope.order(:created_at).limit(LIMIT).map { |w|
         {
-          type:      :watch,
-          record_id: w.id,
-          glyph:     watch_glyph(w.trigger_scope),
-          label:     w.body.to_s.truncate(80),
-          sublabel:  watch_when(w),
-          enabled:   w.cancelled_at.nil?,
-          body:      w.body.to_s,
+          type:       :watch,
+          record_id:  w.id,
+          glyph:      watch_glyph(w.trigger_scope),
+          label:      w.body.to_s.truncate(80),
+          sublabel:   watch_when(w),
+          enabled:    w.cancelled_at.nil?,
+          body:       w.body.to_s,
           # A watch has no clock to move - it fires on a condition.
-          at:        nil,
-          recurring: false,
+          at:         nil,
+          recurring:  false,
           # The condition, when it's a hand-written one. A named trigger
           # (deploy, arriving somewhere, finishing a chore) was assembled from
           # structured pieces rather than written, so there's no line to hand
           # back and the editor shows it as read-only instead.
-          listener:  w.listener.presence,
-          custom:    w.custom?,
+          listener:   w.listener.presence,
+          custom:     w.custom?,
           # A repeating watch's body is a TEMPLATE (see Buddy::WatchMatcher),
           # so the editor can offer the placeholders. A one-shot goes through
           # the model, where the body is a brief rather than a line to print.
-          templated: !w.one_shot,
+          templated:  !w.one_shot,
+          # When it stops watching. A date rather than a timestamp: "only
+          # today" is what people mean, and the sweeper reads end-of-day.
+          expires_on: expiry_date(w, user)&.iso8601,
         }.merge(NO_RECURRENCE)
       }
     end
@@ -226,9 +230,27 @@ module Buddy
     def watch_when(watch)
       phrase = (watch.metadata.is_a?(Hash) ? watch.metadata["human_when"].to_s.presence : nil)
       phrase ||= watch.trigger_scope.to_s
+      # A watch that stops on its own should say so on the row. Otherwise the
+      # only way to tell a standing watch from a today-only one is to open it.
+      phrase = "#{phrase} · until #{expiry_phrase(watch)}" if watch.expires_at.present?
       return phrase if watch.listener.blank?
 
       "#{phrase}\n#{watch.listener}"
+    end
+
+    def expiry_date(watch, user)
+      return nil if watch.expires_at.blank?
+
+      watch.expires_at.in_time_zone(user.timezone).to_date
+    end
+
+    def expiry_phrase(watch)
+      ends  = expiry_date(watch, watch.user)
+      today = Time.current.in_time_zone(watch.user.timezone).to_date
+      return "tonight" if ends <= today
+      return "tomorrow" if ends == today + 1
+
+      ends.strftime("%b %-e")
     end
   end
 end

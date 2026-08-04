@@ -1,0 +1,24 @@
+<%= content_for(:title) { "Charts" } %>
+<%= render "chart_assets" %>
+
+<div class="cc-index">
+  <div class="cc-index-head">
+    <div class="cc-title">Charts</div>
+    <%= link_to "+ New chart", new_custom_chart_path, class: "cc-btn cc-btn-primary" %>
+  </div>
+
+  <% if @charts.any? %>
+    <div class="cc-cards">
+      <% @charts.each do |chart| %>
+        <%= link_to custom_chart_path(chart), class: "cc-card" do %>
+          <div class="cc-card-name"><%= chart.name %></div>
+          <div class="cc-card-meta">
+            <%= chart.chart_type %> · <%= chart.metric %> · <code><%= chart.query.presence || "all events" %></code>
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+  <% else %>
+    <div class="cc-empty">No charts yet. Create one to get started.</div>
+  <% end %>
+</div>

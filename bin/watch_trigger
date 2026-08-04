@@ -55,6 +55,7 @@ let ws = null;
 let reconnectAt = null;
 let heartbeat = null;
 let registered = false;
+let announced = false;
 const startedAt = Date.now();
 
 // A dropped socket almost always comes right back; only escalate to
@@ -197,7 +198,14 @@ function connect() {
     if (payload.type === "ack") {
       registered = true;
       log(`watch registered (scope=${payload.scope || "?"})`);
-      status(c.green + "●" + c.reset, greyText(`Watching ${listener}...`));
+      // Print the (potentially long, wrap-prone) listener ONCE as a permanent
+      // line; the live status/timer below it stays short so \r\x1b[2K can
+      // actually overwrite it in place.
+      if (!announced) {
+        announced = true;
+        finalize(c.green + "●" + c.reset, `Watching ${c.cyan}${listener}${c.reset}`);
+      }
+      status(c.green + "●" + c.reset, greyText("Waiting for a match..."));
       return;
     }
 

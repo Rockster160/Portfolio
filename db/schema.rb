@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_03_180000) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_04_130648) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -818,6 +818,17 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_03_180000) do
     t.text "maiden_name"
     t.index ["friend_id"], name: "index_contacts_on_friend_id"
     t.index ["user_id"], name: "index_contacts_on_user_id"
+  end
+
+  create_table "custom_charts", force: :cascade do |t|
+    t.bigint "user_id"
+    t.text "name"
+    t.text "query"
+    t.jsonb "config", default: {}, null: false
+    t.integer "position"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_custom_charts_on_user_id"
   end
 
   create_table "data_storages", force: :cascade do |t|

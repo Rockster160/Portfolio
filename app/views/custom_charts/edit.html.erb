@@ -1,0 +1,8 @@
+<%= content_for(:title) { "Edit #{@chart.name}" } %>
+<%= render "chart_assets" %>
+
+<div class="cc-index-head" style="max-width: 900px; margin: 0 auto; padding: 12px 12px 0;">
+  <div class="cc-title"><%= link_to "Charts", custom_charts_path, class: "cc-crumb" %> / <%= link_to @chart.name, custom_chart_path(@chart), class: "cc-crumb" %> / Edit</div>
+</div>
+
+<%= render "form" %>

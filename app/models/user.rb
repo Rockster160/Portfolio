@@ -48,6 +48,7 @@ class User < ApplicationRecord
   has_many :scheduled_triggers, dependent: :destroy
   has_many :prompts, dependent: :destroy
   has_many :action_events
+  has_many :custom_charts
   has_many :user_surveys
   has_many :user_survey_responses
   has_many :push_subs, class_name: "UserPushSubscription", dependent: :destroy

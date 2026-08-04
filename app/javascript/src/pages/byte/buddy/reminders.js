@@ -104,10 +104,39 @@ export function initBuddyReminders({ list, empty, indexUrl, onCount }) {
   let editing = null;
   let draft   = {};
   let previewTimer = null;
+  // Bumped every time the editor opens. The preview is a debounced round trip,
+  // so one already in flight for the row you just closed would otherwise paint
+  // its answer into the row you just opened.
+  let generation = 0;
+
+  const VALUE_FIELDS = ["body", "at", "time", "until", "expires", "listener", "monthdays", "interval"];
+  const TOGGLE_FIELDS = [
+    "preview", "vars", "when", "repeat", "days", "monthly", "custom",
+    "trigger-row", "trigger-note", "expiry-row", "error",
+  ];
+
+  // Everything back to empty before anything is painted.
+  //
+  // The paint functions below only set what APPLIES to the row being opened —
+  // a listener for a custom watch, a time for a one-off — so without this the
+  // fields that don't apply keep whatever the LAST row put in them. Opening a
+  // deploy watch after a custom one showed the custom one's listener under
+  // "Fires when", because nothing had told that input it was stale.
+  function resetFields() {
+    VALUE_FIELDS.forEach((name) => { const el = field(name); if (el) el.value = ""; });
+    TOGGLE_FIELDS.forEach((name) => { const el = field(name); if (el) el.hidden = true; });
+    ["preview-body", "trigger-note", "summary", "error", "vars"].forEach((name) => {
+      const el = field(name);
+      if (el) el.textContent = "";
+    });
+    field("preview")?.classList.remove("byte-edit-preview-bad");
+  }
 
   function openEditor(row) {
     if (!modal) return;
+    generation += 1;
     editing = row;
+    resetFields();
     draft = {
       freq:         row.freq || "daily",
       by_day:       (row.by_day || []).slice(),
@@ -119,15 +148,19 @@ export function initBuddyReminders({ list, empty, indexUrl, onCount }) {
 
     field("title").textContent = row.type === "watch" ? "Edit watch" : "Edit reminder";
     field("body").value        = row.body || "";
-    field("error").hidden      = true;
     paintWhen(row);
     paintRepeat();
     paintTrigger(row);
     refreshPreview();
     // Same open/close shape the other Byte managers use, fallback included —
     // this stacks on top of the reminders list, which is itself a dialog.
-    if (typeof modal.showModal === "function") modal.showModal();
-    else modal.setAttribute("open", "");
+    // `showModal` on an already-open dialog throws, and the fields have just
+    // been repainted for the new row either way, so opening is the only part
+    // that needs skipping.
+    if (!modal.open) {
+      if (typeof modal.showModal === "function") modal.showModal();
+      else modal.setAttribute("open", "");
+    }
     field("body").focus();
   }
 
@@ -137,15 +170,21 @@ export function initBuddyReminders({ list, empty, indexUrl, onCount }) {
     else modal?.removeAttribute("open");
   }
 
-  // A one-off has a date and a time; a repeat has a rule; a watch has neither,
-  // because it fires on a condition.
+  // A row is EITHER condition-driven or clock-driven, never both — a listener
+  // and a recurrence would each be deciding when to fire, and they'd disagree.
+  // A watch shows its condition and no schedule; a reminder shows its schedule
+  // and no condition. What a watch wants from the time domain is a BOUND, not
+  // a rule, which is what the expiry is for.
   function paintWhen(row) {
-    const when = field("when");
-    when.hidden = row.at == null || row.recurring;
-    if (!when.hidden) field("at").value = row.at || "";
-    field("repeat").hidden = !row.recurring;
-    if (row.recurring) field("time").value = row.at || "";
-    field("until").value = row.until_on || "";
+    const isWatch = row.type === "watch";
+    field("when").hidden = isWatch || row.at == null || row.recurring;
+    if (!field("when").hidden) field("at").value = row.at || "";
+
+    field("repeat").hidden = isWatch || !row.recurring;
+    if (!field("repeat").hidden) {
+      field("time").value = row.at || "";
+      field("until").value = row.until_on || "";
+    }
   }
 
   function paintRepeat() {
@@ -223,6 +262,8 @@ export function initBuddyReminders({ list, empty, indexUrl, onCount }) {
     const isWatch = row.type === "watch";
     field("trigger-row").hidden = !isWatch || !row.custom;
     field("trigger-note").hidden = !isWatch || row.custom;
+    field("expiry-row").hidden = !isWatch;
+    if (isWatch) field("expires").value = row.expires_on || "";
     if (isWatch && row.custom) field("listener").value = row.listener || "";
     if (isWatch && !row.custom) {
       field("trigger-note").textContent = `Fires on: ${(row.sublabel || "").split("\n")[0]}`;
@@ -234,21 +275,30 @@ export function initBuddyReminders({ list, empty, indexUrl, onCount }) {
   // keystroke and it's a round trip.
   function refreshPreview() {
     clearTimeout(previewTimer);
+    const mine = generation;
     previewTimer = setTimeout(async () => {
       const body = field("body").value;
       try {
         const data = await apiCall(`${indexUrl}/preview`, "POST", { body });
+        // A different row was opened while this was in the air.
+        if (mine !== generation) return;
+
         const out = field("preview");
         const vars = field("vars");
         out.hidden = !data.preview && !data.error;
         out.classList.toggle("byte-edit-preview-bad", !!data.error);
-        out.textContent = data.error ? data.error : data.preview;
-        vars.hidden = !data.variables;
-        if (data.variables) {
-          vars.innerHTML = `Available: ${Object.keys(data.variables).map((k) => `<code>{{ ${escapeHtml(k)} }}</code>`).join(" ")}`;
+        field("preview-title").textContent = data.error ? "Won't send" : "What you'll see";
+        field("preview-body").textContent = data.error || data.preview;
+        // Only worth listing once there's markup to use them in — on a plain
+        // sentence it's a wall of syntax answering a question nobody asked.
+        const useful = data.variables && /\{\{|\{%/.test(body);
+        vars.hidden = !useful;
+        if (useful) {
+          const names = Object.keys(data.variables).map((k) => `<code>{{ ${escapeHtml(k)} }}</code>`);
+          vars.innerHTML = `You can use: ${names.join(" ")}`;
         }
       } catch (e) {
-        field("preview").hidden = true;
+        if (mine === generation) field("preview").hidden = true;
       }
     }, 250);
   }
@@ -257,7 +307,10 @@ export function initBuddyReminders({ list, empty, indexUrl, onCount }) {
     if (!editing) return;
     const edit = { body: field("body").value };
 
-    if (editing.recurring) {
+    if (editing.type === "watch") {
+      if (editing.custom) edit.listener = field("listener").value;
+      edit.expires_on = field("expires").value;
+    } else if (editing.recurring) {
       edit.at = field("time").value;
       edit.until_on = field("until").value;
       edit.freq = draft.freq;
@@ -275,7 +328,6 @@ export function initBuddyReminders({ list, empty, indexUrl, onCount }) {
     } else if (editing.at != null) {
       edit.at = field("at").value;
     }
-    if (editing.type === "watch" && editing.custom) edit.listener = field("listener").value;
 
     try {
       const data = await apiCall(urlFor(editing), "PATCH", { reminder: edit });

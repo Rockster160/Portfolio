@@ -39,6 +39,7 @@ module Buddy
       apply_body
       apply_time
       apply_listener
+      apply_expiry
       return render(json: { errors: @errors }, status: :unprocessable_entity) if @errors&.any?
 
       record.save!
@@ -287,6 +288,24 @@ module Buddy
 
       record.listener      = listener
       record.trigger_scope = ::Jil::ListenerMatch.scope_of(listener).presence || record.trigger_scope
+    end
+
+    # The last day a watch stays armed, stored as the END of that day in their
+    # zone - "only today" means all of today, not until this second tomorrow.
+    # Blank clears it back to a standing watch.
+    def apply_expiry
+      return unless record.is_a?(BuddyWatch) && edits.key?(:expires_on)
+
+      given = edits[:expires_on].to_s.strip
+      return record.expires_at = nil if given.empty?
+
+      date = Date.parse(given) rescue nil
+      return fail_with("that isn't a date") if date.nil?
+
+      ends = Buddy::Day.zone(current_user).parse(date.iso8601).end_of_day
+      return fail_with("that's already gone by") if ends < Time.current
+
+      record.expires_at = ends
     end
 
     def move_fire_at(local)

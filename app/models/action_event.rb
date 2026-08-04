@@ -20,7 +20,10 @@ class ActionEvent < ApplicationRecord
 
   before_save { self.timestamp ||= ::Time.current }
 
-  search_terms :id, :name, :notes, :timestamp, data_source: :search_data_source
+  search_terms :id, :name, :notes, :timestamp,
+    data_source: :search_data_source,
+    action:      :search_data_actions_any,
+    merchant:    :search_data_merchant
 
   # Sources are stored as top-level truthy keys on `data` (e.g. `{ phone:
   # true, car: true, lat, lng }`) so a single event can accumulate multiple
@@ -36,5 +39,12 @@ class ActionEvent < ApplicationRecord
   # Contains ALL
   scope :search_data_actions_all, ->(*qs) {
     where("data @> ?", { actions: Array.wrap(qs).flatten.compact }.to_json)
+  }
+  # Substring match on the `merchant` string stored in `data` (transactions).
+  scope :search_data_merchant, ->(*qs) {
+    where(
+      "data->>'merchant' ILIKE ANY (array[:merchants])",
+      merchants: Array.wrap(qs).flatten.compact.map { |q| "%#{q}%" },
+    )
   }
 end

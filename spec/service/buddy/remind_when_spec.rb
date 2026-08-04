@@ -17,7 +17,7 @@ RSpec.describe "remind_when tool" do
   it "creates a chore-condition watch as an auto tool (no checklist)" do
     result = nil
     expect { result = run(text: "floss", trigger: "chore", target: "Brush Teeth") }
-      .to change { BuddyWatch.count }.by(1)
+      .to change(BuddyWatch, :count).by(1)
 
     expect(result[:action]).to be_nil
     expect(result[:auto_ran]).to be(true)
@@ -32,13 +32,72 @@ RSpec.describe "remind_when tool" do
     expect(chip.body).to match(/will remind you next time you finish Brush Teeth/)
   end
 
+  # Prod watch 13: "Let me know each time the doorbell sees somebody today"
+  # became a standing watch. Nothing would ever have retired it - it would keep
+  # pinging about a day that was over until somebody noticed and deleted it.
+  describe "a watch bounded in time" do
+    let(:zone) { ActiveSupport::TimeZone[user.timezone] }
+
+    def watch_until(phrase)
+      run(
+        text: "something landed", trigger: "custom", repeat: true,
+        listener: "item:action:added", when_phrase: "when something is added",
+        expires: phrase
+      )
+      BuddyWatch.last
+    end
+
+    def expiry_for(phrase)
+      watch_until(phrase).expires_at
+    end
+
+    it "stops at the end of today, not the moment it was set" do
+      ends = expiry_for("today").in_time_zone(zone)
+
+      expect(ends.to_date).to eq(Time.current.in_time_zone(zone).to_date)
+      expect(ends.hour).to eq(23)
+    end
+
+    it "reads tomorrow, a span of days, and a plain date" do
+      today = Time.current.in_time_zone(zone).to_date
+
+      expect(expiry_for("tomorrow").in_time_zone(zone).to_date).to eq(today + 1)
+      expect(expiry_for("3 days").in_time_zone(zone).to_date).to eq(today + 3)
+      expect(expiry_for("2 weeks").in_time_zone(zone).to_date).to eq(today + 14)
+      expect(expiry_for((today + 5).iso8601).in_time_zone(zone).to_date).to eq(today + 5)
+    end
+
+    it "leaves a standing watch open-ended" do
+      run(text: "a deploy finished", trigger: "deploy", repeat: true)
+
+      expect(BuddyWatch.last.expires_at).to be_nil
+    end
+
+    it "says when it stops, rather than implying it runs forever" do
+      watch_until("today")
+
+      chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
+      expect(chip.body).to match(/until/i)
+    end
+
+    # Ignoring it would arm forever the one thing they asked to stop.
+    it "refuses a phrase it can't read rather than dropping it" do
+      tool = Buddy::Tools[:remind_when]
+      payload = { text: "x", trigger: "deploy", expires: "whenever-ish" }
+      normalized, = Buddy::Tools.validate_payload(tool, payload)
+
+      expect { tool[:confirm].call(normalized, Buddy::ToolContext.new(user, conversation: convo)) }
+        .to raise_error(/couldn't read/i)
+    end
+  end
+
   it "refuses to set a location watch for a place it can't resolve, and asks instead" do
     # Not a contact, not on the calendar, and geocoding finds nothing → we
     # genuinely don't know where this is, so no name-only watch is created.
     allow_any_instance_of(AddressBook).to receive(:geocode).and_return(nil)
 
     expect { run(text: "grab my RX", trigger: "arrive", target: "the blorp") }
-      .not_to change { BuddyWatch.count }
+      .not_to(change(BuddyWatch, :count))
 
     chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
     expect(chip.body).to match(/Not sure where the blorp is/)
@@ -48,7 +107,7 @@ RSpec.describe "remind_when tool" do
     allow_any_instance_of(AddressBook).to receive(:geocode).and_return([40.45, -111.77])
 
     expect { run(text: "grab my RX", trigger: "arrive", target: "the Plunge in Alpine") }
-      .to change { BuddyWatch.count }.by(1)
+      .to change(BuddyWatch, :count).by(1)
     w = BuddyWatch.last
     expect(w.match["action"]).to eq("arrived")
     expect(w.match["place"]).to eq("name" => "the Plunge in Alpine", "loc" => [40.45, -111.77])
@@ -76,7 +135,7 @@ RSpec.describe "remind_when tool" do
     agenda = Agenda.create!(user: user, name: "Cal")
     AgendaItem.create!(
       agenda: agenda, name: "TMS", kind: :event, location: "3300 N Triumph Blvd",
-      start_at: 1.hour.from_now, end_at: 2.hours.from_now,
+      start_at: 1.hour.from_now, end_at: 2.hours.from_now
     )
 
     run(text: "grab your Loops", trigger: "arrive", target: "TMS")
@@ -140,14 +199,14 @@ RSpec.describe "remind_when tool" do
 
       expect(confirm(text: "do laundry", trigger: "chore", target: "Brush Teeth")[:summary]).to include("shower")
       expect { run(text: "do laundry", trigger: "chore", target: "Brush Teeth") }
-        .to change { BuddyWatch.count }.by(1)
+        .to change(BuddyWatch, :count).by(1)
     end
   end
 
   it "surfaces active watches in Buddy::Context" do
     run(text: "floss", trigger: "chore", target: "Brush Teeth")
     ctx = Buddy::Context.build(user, convo)
-    expect(ctx[:active_watches].map { |w| w[:body] }).to include("floss")
+    expect(ctx[:active_watches].pluck(:body)).to include("floss")
     expect(ctx[:active_watches].first[:when]).to include("Brush Teeth")
   end
 end

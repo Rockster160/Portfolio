@@ -293,6 +293,11 @@ Rails.application.routes.draw do
 
   resource :calc, only: [:show]
 
+  resources :custom_charts do
+    get :data, on: :member
+    post :preview, on: :collection
+  end
+
   resources :action_events do
     get :calendar, on: :collection
     get :pullups, on: :collection

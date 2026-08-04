@@ -1,0 +1,100 @@
+<div class="cc-editor" data-cc-view="editor" data-cc-endpoint="<%= preview_custom_charts_path %>">
+  <div class="cc-editor-grid">
+    <%= form_with model: @chart, class: "basic cc-form", data: { cc_form: true } do |f| %>
+      <% if @chart.errors.any? %>
+        <div class="cc-empty"><%= @chart.errors.full_messages.to_sentence %></div>
+      <% end %>
+
+      <div class="cc-field">
+        <%= f.label :name %>
+        <%= f.text_field :name %>
+      </div>
+
+      <div class="cc-field">
+        <%= label_tag nil, "Filter (search syntax)" %>
+        <%= f.text_field :query, placeholder: 'name::Pullups' %>
+      </div>
+
+      <div class="cc-field">
+        <%= label_tag nil, "Multiple series — one per line: Label = query (overrides the filter above)" %>
+        <%= text_area_tag "custom_chart[config][queries]", @chart.settings[:queries], rows: 3, placeholder: "X = name::X\nZ = name::Z" %>
+      </div>
+
+      <div class="cc-field">
+        <%= label_tag nil, "Markers — events matching this query become vertical lines" %>
+        <%= text_field_tag "custom_chart[config][marker_query]", @chart.marker_query, placeholder: "name::K" %>
+      </div>
+
+      <div class="cc-field">
+        <%= label_tag nil, "Colors — one per line: Series label = #hex" %>
+        <%= text_area_tag "custom_chart[config][colors]", @chart.settings[:colors], rows: 2, placeholder: "X = #e66767\nZ = #3987e5" %>
+      </div>
+
+      <div class="cc-field cc-form-row">
+        <div>
+          <%= label_tag nil, "Value" %>
+          <%= select_tag "custom_chart[config][value_source]",
+            options_for_select(CustomChart::VALUE_SOURCES.map { |v| [v.to_s.humanize, v] }, @chart.value_source.to_s) %>
+        </div>
+        <div>
+          <%= label_tag nil, "Data key" %>
+          <%= text_field_tag "custom_chart[config][data_key]", @chart.data_key, placeholder: "amount" %>
+        </div>
+      </div>
+
+      <div class="cc-field cc-form-row">
+        <div>
+          <%= label_tag nil, "Metric" %>
+          <%= select_tag "custom_chart[config][metric]",
+            options_for_select(CustomChart::METRICS.map { |v| [v.to_s.humanize, v] }, @chart.metric.to_s) %>
+        </div>
+        <div>
+          <%= label_tag nil, "Series" %>
+          <%= select_tag "custom_chart[config][series_by]",
+            options_for_select(CustomChart::SERIES_BYS.map { |v| [v.to_s.humanize, v] }, @chart.series_by.to_s) %>
+        </div>
+      </div>
+
+      <div class="cc-field cc-form-row">
+        <div>
+          <%= label_tag nil, "Bucket" %>
+          <%= select_tag "custom_chart[config][bucket]",
+            options_for_select(CustomChart::BUCKETS.map { |v| [v.to_s.humanize, v] }, @chart.bucket.to_s) %>
+        </div>
+        <div>
+          <%= label_tag nil, "Type" %>
+          <%= select_tag "custom_chart[config][chart_type]",
+            options_for_select(CustomChart::CHART_TYPES.map { |v| [v.to_s.humanize, v] }, @chart.chart_type.to_s) %>
+        </div>
+      </div>
+
+      <div class="cc-field cc-form-row">
+        <div>
+          <%= label_tag nil, "Default range" %>
+          <%= select_tag "custom_chart[config][range]",
+            options_for_select(%w[3mo 6mo 12mo 24mo ytd all].map { |v| [v, v] }, @chart.range) %>
+        </div>
+        <div>
+          <%= label_tag nil, "Unit" %>
+          <%= text_field_tag "custom_chart[config][unit]", @chart.unit, placeholder: "$" %>
+        </div>
+      </div>
+
+      <div class="cc-field cc-form-actions">
+        <div class="cc-actions-left">
+          <%= f.submit(@chart.persisted? ? "Save" : "Create", class: "cc-btn cc-btn-primary") %>
+          <%= link_to "Cancel", (@chart.persisted? ? custom_chart_path(@chart) : custom_charts_path), class: "cc-btn" %>
+        </div>
+        <% if @chart.persisted? %>
+          <%= button_to "Delete", custom_chart_path(@chart), method: :delete, class: "cc-btn cc-btn-danger", form: { style: "display:inline" }, data: { confirm: "Delete this chart?" } %>
+        <% end %>
+      </div>
+    <% end %>
+
+    <div>
+      <div class="cc-range-label" data-cc-range-label></div>
+      <div class="chart-wrapper"><canvas data-cc-canvas></canvas></div>
+      <div class="cc-legend" data-cc-legend></div>
+    </div>
+  </div>
+</div>

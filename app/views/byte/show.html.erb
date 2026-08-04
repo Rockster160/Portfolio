@@ -546,8 +546,32 @@
       </label>
       <%# The preview is the documentation. A list of available variables tells %>
       <%# you the names; seeing the sentence come out tells you what you wrote. %>
-      <p class="byte-edit-preview" data-byte-edit-preview hidden></p>
+      <%# Captioned, because an unlabelled line under a text field reads as %>
+      <%# another field that somehow filled itself in. %>
+      <div class="byte-edit-preview" data-byte-edit-preview hidden>
+        <span class="byte-edit-preview-title" data-byte-edit-preview-title>What you'll see</span>
+        <span class="byte-edit-preview-body" data-byte-edit-preview-body></span>
+      </div>
       <p class="byte-modal-hint byte-edit-vars" data-byte-edit-vars hidden></p>
+
+      <%# A watch fires on a CONDITION and a reminder on a CLOCK, so a row only %>
+      <%# ever shows one of these two blocks. The condition comes first: it's %>
+      <%# the thing that decides whether this fires at all. %>
+      <label class="byte-modal-label" data-byte-edit-trigger-row hidden>
+        <span class="byte-modal-label-text">Fires when</span>
+        <input class="byte-modal-input byte-reminder-mono" data-byte-edit-listener type="text"
+               spellcheck="false" autocapitalize="off" autocorrect="off"
+               placeholder="Jil listener, e.g. item:action:added">
+      </label>
+      <p class="byte-modal-hint" data-byte-edit-trigger-note hidden></p>
+
+      <%# How long the watch stays armed. The doorbell one was only ever meant %>
+      <%# for a single day, and without this there's nothing that says so - it %>
+      <%# just keeps firing until somebody remembers to delete it. %>
+      <label class="byte-modal-label" data-byte-edit-expiry-row hidden>
+        <span class="byte-modal-label-text">Stop watching after (optional)</span>
+        <input class="byte-modal-input" data-byte-edit-expires type="date">
+      </label>
 
       <div class="byte-edit-row" data-byte-edit-when hidden>
         <label class="byte-modal-label">
@@ -590,10 +614,10 @@
           </select>
         </div>
 
-        <div class="byte-edit-row" data-byte-edit-custom hidden>
+        <div class="byte-edit-row byte-edit-every" data-byte-edit-custom hidden>
           <span class="byte-edit-inline">Every</span>
           <input class="byte-modal-input byte-edit-interval" data-byte-edit-interval
-                 type="number" min="1" max="52" step="1">
+                 type="number" min="1" max="52" step="1" value="2">
           <select class="byte-modal-input" data-byte-edit-unit>
             <option value="day">days</option>
             <option value="week">weeks</option>
@@ -613,16 +637,6 @@
         </div>
         <p class="byte-modal-hint" data-byte-edit-summary></p>
       </div>
-
-      <%# A hand-written watch's condition. A named trigger has none to type - %>
-      <%# it was assembled from structured pieces - so it reads as text instead. %>
-      <label class="byte-modal-label" data-byte-edit-trigger-row hidden>
-        <span class="byte-modal-label-text">Fires when</span>
-        <input class="byte-modal-input byte-reminder-mono" data-byte-edit-listener type="text"
-               spellcheck="false" autocapitalize="off" autocorrect="off"
-               placeholder="Jil listener, e.g. item:action:added">
-      </label>
-      <p class="byte-modal-hint" data-byte-edit-trigger-note hidden></p>
 
       <p class="byte-reminder-error" data-byte-edit-error hidden></p>
       <div class="byte-modal-actions">

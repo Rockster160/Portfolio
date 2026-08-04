@@ -66,6 +66,15 @@ Buddy::Tools.register(
     the condition happens). Set `repeat` true only if they clearly want it
     every time ("every time I get home...").
 
+    **A repeating watch bounded in time needs `expires`, and they say so more
+    often than they realise.** "Let me know each time the doorbell sees
+    somebody TODAY" is `repeat: true` with `expires: "today"` - without the
+    second half it keeps pinging them next week about a day that's over, and
+    the only way it stops is somebody noticing and deleting it. Any "today",
+    "this week", "while I'm away", "until Friday" is this. A watch with no
+    end is for the standing ones: deploys, the Claude list, the front door
+    generally.
+
     **How you write `text` depends on `repeat`, and it matters.** A one-shot
     fires once and you compose the message then, so `text` can be about the
     intent. A REPEATING one is delivered exactly as written, every single time,
@@ -133,6 +142,7 @@ Buddy::Tools.register(
     notify:      { type: :string,  required: false, description: "Household member to notify instead of the user (optional)" },
     run:         { type: :string,  required: false, description: "Jil task name to FIRE when the condition hits, instead of saying anything. Verbatim from jil_triggers." },
     delay:       { type: :integer, required: false, description: "Seconds to wait after the condition before running it (max 900). With `run` only." },
+    expires:     { type: :string,  required: false, description: "Last day it stays armed: \"today\", \"tomorrow\", \"N days/weeks\", or YYYY-MM-DD. Use whenever they bound it in time." },
   },
   # Watching for an arrival or a deploy is everyone's. The other three reach
   # into a feature: a chore watch would tell someone without chores when the
@@ -239,6 +249,12 @@ Buddy::Tools.register(
     recipient   = notify_user || owner
     to_self     = recipient.id == ctx.user.id
 
+    # A bound on how long it stays armed, not a schedule - the condition still
+    # decides when it fires. Raised rather than ignored: a watch they asked to
+    # stop after today and which doesn't is exactly the one nobody cleans up.
+    expires_at = ctx.end_of_day_for(payload[:expires])
+    raise "couldn't read #{payload[:expires].inspect} as a day" if payload[:expires].present? && expires_at.nil?
+
     framed = if run_task
       "Run #{run_task[:name]}#{" #{delay}s after" if delay.positive?} #{human}"
     elsif to_self
@@ -246,6 +262,7 @@ Buddy::Tools.register(
     else
       "Let #{recipient.first_name} know #{human}"
     end
+    framed = "#{framed}, until #{expires_at.strftime("%b %-e")}" if expires_at
 
     # Deliberately a note rather than a raise: two reminders on one condition
     # ("shower" and "do laundry" when I get home) are perfectly normal. The one
@@ -273,6 +290,7 @@ Buddy::Tools.register(
         run_scope:      run_task&.dig(:scope),
         run_task_name:  run_task&.dig(:name),
         run_delay:      delay,
+        expires_at_iso: expires_at&.iso8601,
       },
     }
   },
@@ -302,6 +320,7 @@ Buddy::Tools.register(
       listener:          payload[:listener].presence,
       match:             payload[:match] || {},
       one_shot:          ActiveModel::Type::Boolean.new.cast(payload[:one_shot]),
+      expires_at:        (Time.zone.parse(payload[:expires_at_iso].to_s) if payload[:expires_at_iso].present?),
       metadata:          {
         "human_when"    => payload[:human_when].to_s,
         "run_scope"     => payload[:run_scope].presence,
@@ -317,6 +336,7 @@ Buddy::Tools.register(
       listener:       watch.listener,
       run_task_name:  watch.run_task_name,
       run_delay:      watch.run_delay,
+      expires_at:     watch.expires_at&.iso8601,
     }
   },
   # Setting a watch is safe + reversible (cancel_reminder undoes it), so it
@@ -336,6 +356,11 @@ Buddy::Tools.register(
       else
         "#{name} will remind you #{result[:human_when]}"
       end
+      # A watch that stops on its own has to SAY so. Left off, "every time the
+      # doorbell sees somebody" reads as forever, which is the thing they were
+      # trying to avoid by bounding it.
+      ends = (Time.zone.parse(result[:expires_at].to_s) rescue nil)
+      line = "#{line}, until #{ctx.friendly_day(ends)}" if ends
       # A hand-written watch shows what it's really matching underneath. This is
       # the one moment they can catch a listener that's subtly wrong, before it
       # sits there for a month not firing.

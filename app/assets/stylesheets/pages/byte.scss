@@ -3205,23 +3205,44 @@ dialog.byte-modal {
   line-height: 1.4;
 }
 
-// What the words actually come out as. Set apart from the field above it so
-// it reads as a RESULT rather than another thing to fill in.
+// What the words actually come out as. A titled box rather than a bare line:
+// unlabelled and flush against the field above it, it read as a second input
+// that had somehow filled itself in.
 .byte-edit-preview {
   margin: 0;
-  padding: 7px 9px;
-  border-radius: 6px;
-  border-left: 2px solid var(--bs-primary, #4c8bf5);
-  background: var(--bs-body-bg);
-  font-size: 12.5px;
-  line-height: 1.4;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--bs-border);
+  border-left: 3px solid var(--bs-primary, #4c8bf5);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+  line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
+
+  &[hidden] { display: none; } // author `display` beats the hidden attr
+}
+
+// The caption is what says this is output, not another field.
+.byte-edit-preview-title {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bs-muted);
 }
 
 .byte-edit-preview-bad {
   border-left-color: var(--bs-danger, #e5484d);
-  color: var(--bs-danger, #e5484d);
+
+  .byte-edit-preview-body { color: var(--bs-danger, #e5484d); }
+}
+
+.byte-edit-vars {
+  line-height: 1.9;
+
+  &[hidden] { display: none; }
 }
 
 .byte-edit-vars code {
@@ -3235,35 +3256,57 @@ dialog.byte-modal {
 
 // The rule's parts sit on one line where they fit and wrap where they don't —
 // a phone gets one control per row without a second set of rules for it.
+//
+// EVERY container in here needs its own `[hidden]`: an author `display` beats
+// the attribute's UA rule, so without it a hidden row stays on screen. That's
+// what put a date picker, a repeat rule and an interval on a watch, which has
+// none of the three.
 .byte-edit-row {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  align-items: flex-end;
+  align-items: end;
 
   > * { flex: 1 1 120px; }
+
+  &[hidden] { display: none; }
 }
 
 .byte-edit-repeat {
   display: flex;
   flex-direction: column;
   gap: 8px;
+
+  &[hidden] { display: none; }
+}
+
+// "Every [2] weeks" reads as a sentence, so the parts are sized to their
+// content instead of splitting the row three ways.
+.byte-edit-every {
+  align-items: center;
+
+  > * { flex: 0 0 auto; }
+
+  .byte-edit-interval { flex: 0 0 72px; text-align: center; }
+  select { flex: 0 1 140px; }
 }
 
 .byte-edit-inline {
-  flex: 0 0 auto;
-  font-size: 12.5px;
-  padding-bottom: 8px;
+  font-size: 13px;
+  color: var(--bs-muted);
 }
-
-.byte-edit-interval { flex: 0 0 68px; }
 
 // Seven toggles rather than a multi-select: picking Mon/Wed/Fri is three taps
 // and the whole week is legible without opening anything.
 .byte-edit-days {
   display: flex;
   gap: 4px;
+
+  &[hidden] { display: none; }
 }
+
+.byte-modal-label[hidden],
+.byte-modal-hint[hidden] { display: none; }
 
 .byte-edit-day {
   flex: 1 1 0;

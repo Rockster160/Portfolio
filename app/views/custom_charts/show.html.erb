@@ -1,0 +1,49 @@
+<%= content_for(:title) { @chart.name } %>
+<%= render "chart_assets" %>
+
+<div class="cc-page"
+  data-cc-view="show"
+  data-cc-endpoint="<%= data_custom_chart_path(@chart) %>"
+  data-cc-range="<%= @chart.range %>"
+  data-cc-bucket="<%= @chart.bucket %>">
+
+  <div class="cc-header">
+    <div>
+      <div class="cc-title"><%= link_to "Charts", custom_charts_path, class: "cc-crumb" %> / <%= @chart.name %></div>
+      <div class="cc-range-label" data-cc-range-label></div>
+    </div>
+    <div class="cc-actions">
+      <%= link_to "Edit", edit_custom_chart_path(@chart), class: "cc-btn" %>
+    </div>
+  </div>
+
+  <div class="cc-stats" data-cc-stats></div>
+
+  <div class="cc-controls">
+    <div class="cc-ranges" data-cc-ranges>
+      <% %w[3mo 6mo 12mo 24mo ytd all].each do |preset| %>
+        <button type="button" class="cc-range-btn" data-cc-range-btn="<%= preset %>"><%= preset == "ytd" ? "YTD" : (preset == "all" ? "All" : preset) %></button>
+      <% end %>
+    </div>
+    <div class="cc-nav">
+      <button type="button" class="cc-nav-btn" data-cc-nav="prev">‹ Prev</button>
+      <button type="button" class="cc-nav-btn" data-cc-nav="next">Next ›</button>
+    </div>
+    <label class="cc-bucket">
+      Bucket
+      <select data-cc-bucket-select>
+        <% %w[none day week month year].each do |b| %>
+          <option value="<%= b %>"><%= b.capitalize %></option>
+        <% end %>
+      </select>
+    </label>
+  </div>
+
+  <div class="chart-wrapper">
+    <canvas data-cc-canvas></canvas>
+  </div>
+
+  <div class="cc-legend" data-cc-legend></div>
+</div>
+
+<script type="application/json" data-cc-payload><%= raw JSON.generate(@payload) %></script>

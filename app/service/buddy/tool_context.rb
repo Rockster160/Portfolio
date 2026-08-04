@@ -352,6 +352,67 @@ module Buddy
     # yesterday, an ordinary future time, and a late-evening entry are all
     # untouched. Runs in `confirm` so the checklist row shows the corrected
     # time; a wrong guess is one untick away.
+    # The END of a day named loosely - "today", "tomorrow", "3 days", "friday",
+    # or a plain date. Used for bounding how long a watch stays armed, where
+    # "only today" has to mean all of today rather than this instant tomorrow.
+    #
+    # Returns nil for anything unreadable so the caller can say so; quietly
+    # defaulting would arm a watch forever that they asked to stop.
+    RELATIVE_DAYS_RX = /\A(?:in\s+)?(\d+)\s*(day|days|week|weeks)\z/i
+    WEEKDAY_NAMES    = %w[sunday monday tuesday wednesday thursday friday saturday].freeze
+
+    # A DAY, phrased the way someone would say it out loud. The sibling of
+    # `friendly_future`, which phrases a clock time; this one is for a bound
+    # ("until tonight") where the hour is noise.
+    def friendly_day(time)
+      return "later" if time.nil?
+
+      local = time.in_time_zone(user.timezone).to_date
+      case (local - Time.current.in_time_zone(user.timezone).to_date).to_i
+      when ..0   then "tonight"
+      when 1     then "tomorrow"
+      when 2..6  then local.strftime("%A")
+      else            local.strftime("%b %-e")
+      end
+    end
+
+    def end_of_day_for(phrase)
+      text = phrase.to_s.strip.downcase
+      return nil if text.empty?
+
+      zone  = Buddy::Day.zone(user)
+      today = Time.current.in_time_zone(zone).to_date
+      date  = (
+        case text
+        when "today", "tonight"      then today
+        when "tomorrow"              then today + 1
+        when "this week", "the week" then today.end_of_week(:sunday)
+        else                              relative_or_named_day(text, today)
+        end
+      )
+      return nil if date.nil?
+
+      zone.parse(date.iso8601)&.end_of_day
+    end
+
+    def relative_or_named_day(text, today)
+      if (match = RELATIVE_DAYS_RX.match(text))
+        count = match[1].to_i
+        return today + (match[2].start_with?("week") ? count.weeks : count.days)
+      end
+
+      index = WEEKDAY_NAMES.index(text.delete_prefix("next ").strip)
+      return next_weekday(today, index) if index
+
+      Date.parse(text) rescue nil
+    end
+
+    def next_weekday(today, index)
+      date = today + 1
+      date += 1 until date.wday == index
+      date
+    end
+
     def resolve_calendar_time(iso)
       time = resolve_time(iso)
       return nil if time.nil?

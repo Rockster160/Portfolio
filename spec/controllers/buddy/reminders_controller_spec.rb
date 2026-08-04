@@ -485,6 +485,63 @@ RSpec.describe Buddy::RemindersController, type: :controller do
       expect(w.reload.listener).to eq("item:action:added")
     end
 
+    # "Let me know each time the doorbell sees somebody today" had nothing that
+    # would ever retire it - it kept firing until somebody noticed.
+    describe "how long it stays armed" do
+      it "sets an expiry to the END of that day, not the moment it starts" do
+        w = watch!(scope: "item", listener: "item:action:added")
+        ends = 2.days.from_now.to_date
+
+        patch :update, params: { type: :watch, id: w.id, reminder: { expires_on: ends.iso8601 } }
+
+        expect(response).to be_successful
+        local = w.reload.expires_at.in_time_zone(user.timezone)
+        expect(local.to_date).to eq(ends)
+        expect(local.hour).to eq(23)
+      end
+
+      it "hands the date back to the editor" do
+        watch!(scope: "item", listener: "item:action:added", expires_at: 3.days.from_now)
+
+        get :index
+
+        expect(rows.find { |r| r["type"] == "watch" }["expires_on"]).to be_present
+      end
+
+      it "says on the row that it stops on its own" do
+        watch!(scope: "item", listener: "item:action:added", expires_at: Time.current.end_of_day)
+
+        get :index
+
+        expect(rows.find { |r| r["type"] == "watch" }["sublabel"]).to include("until tonight")
+      end
+
+      it "clears it back to a standing watch" do
+        w = watch!(scope: "item", listener: "item:action:added", expires_at: 3.days.from_now)
+
+        patch :update, params: { type: :watch, id: w.id, reminder: { expires_on: "" } }
+
+        expect(w.reload.expires_at).to be_nil
+      end
+
+      it "refuses a day already behind us" do
+        w = watch!(scope: "item", listener: "item:action:added")
+
+        patch :update, params: { type: :watch, id: w.id, reminder: { expires_on: 2.days.ago.to_date.iso8601 } }
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(w.reload.expires_at).to be_nil
+      end
+
+      it "leaves a reminder's own fields alone" do
+        rem = reminder!(fire_at: 2.hours.from_now)
+
+        patch :update, params: { type: :reminder, id: rem.id, reminder: { expires_on: 3.days.from_now.to_date.iso8601 } }
+
+        expect(response).to be_successful
+      end
+    end
+
     # A named trigger's condition is a structured match hash, not a line of
     # text - there's nothing to type into, so the editor shows it read-only.
     it "offers nothing to type on a named trigger" do

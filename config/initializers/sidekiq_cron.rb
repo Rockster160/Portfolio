@@ -62,6 +62,11 @@ cron_jobs = [
     cron:  daily_4am,
   },
   {
+    name:  "Sweep Finished Buddy Reminders And Watches",
+    class: "BuddyReminderSweepWorker",
+    cron:  daily_4am,
+  },
+  {
     name:  "Google Calendar Sync Fallback",
     class: "GoogleCalendarSyncWorker",
     cron:  every_5_minutes,
