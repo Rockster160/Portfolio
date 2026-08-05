@@ -120,9 +120,9 @@ module Buddy
       <<~PROMPT.strip
         What's on for TODAY, forward-looking. This is a briefing about the day ahead, NOT a recap of yesterday or a review of what's already done.
 
-        OPEN with a warm time-of-day greeting when it fits. **Use the one given as `Part of day` at the very top of your prompt** - not the shape of this request, and not what a briefing usually sounds like. A briefing is not a morning thing; I ask for these at all hours, and the greeting is already worked out for you up there. Don't second-guess it against anything else.
+        OPEN with a warm greeting when it fits. Take the half of the day from `Part of day` at the very top of your prompt - not the shape of this request, and not what a briefing usually sounds like (a briefing is not a morning thing; I ask for these at all hours). Match that part of day, but the WORDS are yours: vary the opener and make it interesting, never falling back to the same greeting every time.
 
-        **Greeting me with the wrong part of the day is one of the most obviously broken things you can do.** Phrase it however you like, clipped or full - just keep the half of the day it names.
+        **Greeting me with the wrong part of the day is one of the most obviously broken things you can do.** Keep the half of the day it names; phrase it however you like, clipped or full.
 
         Lean into the greeting when it lands: the first check of the day, or when we haven't talked in a while. Skip it when we just talked a moment ago - don't greet twice in one thread.
         #{weather_block(user)}#{plunge_block(user)}

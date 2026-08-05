@@ -25,16 +25,17 @@ RSpec.describe "Buddy and local time" do
       }
     end
 
-    # This was already spelled out in prose - "take the hour from the local time
-    # at the top of your prompt", plus a paragraph on how to read it - and the
-    # 9am briefing still opened with "Good afternoon". A rule for deriving it
-    # loses to one bad guess, so the answer is given instead of worked out.
-    it "says morning, and which greeting, while UTC would read afternoon" do
+    # The band is derived from the clock (a 9am briefing kept opening "Good
+    # afternoon"), so it's handed over rather than worked out. But the band is
+    # CONTEXT - the exact greeting words are the model's, varied per reply, not
+    # a prescribed string.
+    it "says morning while UTC would read afternoon, and hands the band as context not a script" do
       text = preamble_at(9)
 
       expect(text).to include("**Part of day:** morning")
-      expect(text).to include(%("Good morning"))
       expect(text).to include("9:00 AM MDT")
+      expect(text).to include("CONTEXT for your opener")
+      expect(text).not_to include("Good morning")
     end
 
     it "carries the local hour, not the UTC one" do
@@ -46,13 +47,14 @@ RSpec.describe "Buddy and local time" do
       expect(preamble_at(18)).to include("**Part of day:** evening")
     end
 
-    # "Good morning" at 2am is wrong and "Good evening" is wronger, so it gets
-    # the one greeting that fits any hour.
-    it "greets the small hours with a plain hey" do
+    # "Good morning" at 2am is wrong and "Good evening" is wronger, and no fixed
+    # greeting fits - so late night gets none, and the preamble tells the model
+    # to skip time-of-day framing rather than force one.
+    it "marks the small hours as late night and tells it to skip time-of-day framing" do
       text = preamble_at(2)
 
       expect(text).to include("**Part of day:** late night")
-      expect(text).to include(%("Hey"))
+      expect(text).to include("skip the time-of-day framing")
     end
 
     # The part of day and the perceived day turn over together: the moment
