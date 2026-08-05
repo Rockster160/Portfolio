@@ -194,6 +194,37 @@ RSpec.describe ChartBuilder do
     end
   end
 
+  describe "[group] stack tags (side-by-side, both positive)" do
+    it "puts grouped series in shared stacks with positive values" do
+      event("Food", at: tz.local(2026, 1, 6, 12), data: { "Calories" => 700 })
+      event("Workout", at: tz.local(2026, 1, 7, 12), data: { "Calories" => 250 })
+
+      series = [
+        "[in] Intake = name::Food",
+        "[burn] Workout = name::Workout",
+        "[burn] RMR = @daily 1800",
+      ].join("\n")
+      result = described_class.new(
+        chart(
+          query: "", value_source: :data, data_key: "Calories", metric: :sum,
+          bucket: :week, chart_type: :stacked_bar, queries: series
+        ),
+        start_at: "2026-01-05", end_at: "2026-01-11",
+      ).call
+
+      intake = result[:datasets].find { |d| d[:label] == "Intake" }
+      workout = result[:datasets].find { |d| d[:label] == "Workout" }
+      rmr = result[:datasets].find { |d| d[:label] == "RMR" }
+
+      expect(intake[:stack]).to eq("in")
+      expect(workout[:stack]).to eq("burn")
+      expect(rmr[:stack]).to eq("burn")
+      # No "-" negation, so burn is positive (up), side by side with intake.
+      expect(workout[:data].compact.sum).to eq(250)
+      expect(rmr[:data].compact.sum).to eq(12_600)
+    end
+  end
+
   describe "range presets" do
     it "resolves 1wk and 1mo windows" do
       travel_to(Time.zone.local(2026, 3, 15, 12)) do

@@ -74,7 +74,9 @@ class CustomChart < ApplicationRecord
 
   # Multi-series from several queries, authored one-per-line as "Label = query"
   # (or just "query"). When present, each becomes its own series and overrides
-  # the single filter + series_by. Two modifiers:
+  # the single filter + series_by. Modifiers (any order at the start of a line):
+  #   - "[group]" assigns a stack group — series sharing a group stack into one
+  #     bar; different groups sit side by side per bucket
   #   - a leading "-" negates the series (renders below zero — e.g. burn)
   #   - a query of "@daily N" is a synthetic flat series worth N per day (e.g. RMR)
   def queries
@@ -82,13 +84,22 @@ class CustomChart < ApplicationRecord
       line = line.strip
       next if line.blank?
 
+      group = line[/\A\[([^\]]+)\]/, 1]
+      line = line.sub(/\A\[[^\]]+\]\s*/, "") if group
+
       negate = line.start_with?("-")
       line = line.sub(/\A-\s*/, "") if negate
       label, spec = (line.include?("=") ? line.split("=", 2).map(&:strip) : [line, line])
       next if spec.blank?
 
       daily = spec[/\A@daily\s+(-?\d+(?:\.\d+)?)\z/, 1]
-      { label: label.presence || spec, query: (daily ? nil : spec), negate: negate, daily: daily&.to_f }
+      {
+        label:  label.presence || spec,
+        query:  (daily ? nil : spec),
+        negate: negate,
+        daily:  daily&.to_f,
+        group:  group&.strip,
+      }
     }
   end
 

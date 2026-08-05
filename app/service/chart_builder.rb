@@ -23,9 +23,9 @@ class ChartBuilder
           # User-defined color for this series wins, then a semantic color (sign),
           # then the validated categorical palette.
           color: @chart.colors[sdef[:label]].presence || sdef[:color] || PALETTE[idx % PALETTE.size],
-          # Stack group: negated (burn) series stack together in one bar, positive
-          # in another — so a stacked chart shows the two side by side per bucket.
-          stack: (sdef[:negate] ? "neg" : "pos"),
+          # Stack group: an explicit [group] wins; otherwise negated (burn) series
+          # share one bar and positive another. Distinct groups render side by side.
+          stack: (sdef[:group].presence || (sdef[:negate] ? "neg" : "pos")),
         }
       }
 
@@ -97,7 +97,13 @@ class ChartBuilder
     # Explicit multi-query charts: each query is its own series (X vs Z as lines).
     if @chart.queries.present?
       return @chart.queries.map { |q|
-        { label: q[:label], events: (q[:query] ? load(q[:query]) : []), negate: q[:negate], daily: q[:daily] }
+        {
+          label:  q[:label],
+          events: (q[:query] ? load(q[:query]) : []),
+          negate: q[:negate],
+          daily:  q[:daily],
+          group:  q[:group],
+        }
       }
     end
 
@@ -306,7 +312,7 @@ class ChartBuilder
     when "ytd" then now.beginning_of_year..now.end_of_day
     when /\A(\d+)mo\z/ then ((now - Regexp.last_match(1).to_i.months).beginning_of_day..now.end_of_day)
     when /\A(\d+)w(?:k)?\z/ then ((now - Regexp.last_match(1).to_i.weeks).beginning_of_day..now.end_of_day)
-    when /\A(\d+)d\z/  then ((now - Regexp.last_match(1).to_i.days).beginning_of_day..now.end_of_day)
+    when /\A(\d+)d\z/ then ((now - Regexp.last_match(1).to_i.days).beginning_of_day..now.end_of_day)
     else (now - 12.months).beginning_of_day..now.end_of_day
     end
   end
