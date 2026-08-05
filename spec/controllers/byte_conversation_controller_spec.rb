@@ -161,6 +161,28 @@ RSpec.describe ByteController, type: :controller do
       expect(convo.reload.buddy_memories).to eq("keep this thread work-only")
     end
 
+    # Prod 2513: `/reset` rendered two identical bubbles off one row.
+    #
+    # `ack` both BROADCASTS its message and returns it as the response, so the
+    # client sees the same row twice. That's fine as long as it can tell the
+    # two apart — and the tell is `direction`. A slash command stores no
+    # outbound record on purpose, so what comes back is an inbound system
+    # message rather than an echo of what was sent; the client keys off that to
+    # know it must not adopt the reply as the sent message's own bubble.
+    #
+    # Here because it's a contract the front end depends on and nothing else
+    # would notice it changing. The other half - an ordinary send answering
+    # with the OUTBOUND row and its local_id - is in byte_controller_spec.
+    it "answers a slash command with an inbound message, not an echo of the command" do
+      compact!
+
+      expect(response.parsed_body["direction"]).to eq("inbound")
+      expect(response.parsed_body.dig("metadata", "kind")).to eq("system")
+      # The command itself is deliberately not stored, so there is nothing for
+      # the client to reconcile its optimistic bubble against.
+      expect(convo.byte_messages.where(direction: :outbound)).to be_empty
+    end
+
     it "answers with what it dropped, and says the thread itself is still there" do
       say("one")
       say("two")

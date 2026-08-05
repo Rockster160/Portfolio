@@ -51,11 +51,21 @@ module Buddy
     FIXED_OVERHEAD = 42_122
 
     def estimate_for(conversation)
-      compact_at   = compact_timestamp(conversation)
-      scope        = conversation.byte_messages
-      scope        = scope.where("created_at > ?", compact_at) if compact_at
-      body_tokens  = scope.pluck(:body).sum { |b| body_cost(b) }
+      compact_at  = compact_timestamp(conversation)
+      scope       = conversation.byte_messages
+      scope       = scope.where("created_at > ?", compact_at) if compact_at
+      body_tokens = scope.pluck(:body, :metadata).sum { |body, meta| body_cost(sent_body(body, meta)) }
       body_tokens + image_cost(scope) + recap_cost(conversation)
+    end
+
+    # What actually goes over the wire for a row, which is not always what's
+    # stored. A quick-action seed is replayed as a short stand-in rather than
+    # its ~4.5KB of instructions (see Buddy::GPT::History), so counting the
+    # stored body would have a thread with a week of briefings in it looking
+    # ~10k tokens heavier than the turn it's describing - and compacting that
+    # much sooner than it needs to.
+    def sent_body(body, metadata)
+      Buddy::GPT::History.seed_standin(metadata) || body
     end
 
     def image_cost(scope)

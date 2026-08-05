@@ -91,7 +91,7 @@ module Buddy
       end
 
       def item_for(message, replay_images: false)
-        body = message.body.to_s.strip
+        body = seed_standin(message.metadata) || message.body.to_s.strip
 
         return user_item(message, body, replay_images) if message.direction == "outbound"
 
@@ -100,6 +100,46 @@ module Buddy
         return { role: :assistant, content: relay_content(message, body) } if relay?(message)
 
         { role: :assistant, content: body } if prose_reply?(message) || fast_path?(message)
+      end
+
+      # What a quick-action seed becomes once it's history.
+      #
+      # Tapping "Today" posts a ~4.5KB block of instructions as the person's
+      # turn. It's hidden in the UI, so nobody sees it - but it's replayed in
+      # full on every later turn, and it is IDENTICAL every time. One thread
+      # had nine of them in a single day: nine copies of the same prompt, each
+      # followed by that day's briefing, then the same prompt once more.
+      #
+      # That isn't a conversation, it's a few-shot example set, and what it
+      # teaches is "answer this prompt the way you answered it the last nine
+      # times". Rewriting the seed's tone changed one copy and left nine
+      # demonstrations of the old voice sitting underneath it, which is why
+      # tone edits appeared not to take until the thread was reset. It also
+      # re-billed ~10k tokens of instructions the model already has.
+      #
+      # Replaced by the label they actually tapped, so the exchange still reads
+      # as one ("Today" → the briefing) without re-teaching the old voice.
+      # Seeds with no `buddy_action` - a watch firing, a relay - are left alone:
+      # those are short and their words are the whole point.
+      ACTION_STANDINS = {
+        "today"       => "[tapped Today - asked for a briefing on the day ahead]",
+        "checkin"     => "[tapped Check-in]",
+        "affirmation" => "[tapped Affirmation - asked for one]",
+        "suggest"     => "[tapped What now? - asked what to pick up]",
+      }.freeze
+
+      # Takes the metadata hash rather than the message so Buddy::TokenEstimator
+      # can ask the same question off a `pluck` - "how big is what we send" has
+      # to be answered by the thing that decides what we send.
+      def seed_standin(metadata)
+        return nil unless metadata.is_a?(Hash)
+
+        action = metadata["buddy_action"].to_s
+        return nil if action.blank?
+
+        stand_in = ACTION_STANDINS[action] || "[tapped #{action}]"
+        mood     = metadata["buddy_mood"].to_s.presence
+        mood ? "#{stand_in.delete_suffix("]")}, feeling #{mood}]" : stand_in
       end
 
       # The person's turn. A plain text message stays a bare string so the vast

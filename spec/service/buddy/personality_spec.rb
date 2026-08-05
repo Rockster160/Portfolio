@@ -131,6 +131,19 @@ RSpec.describe Buddy::Personality do
       expect(examples).to all(satisfy { |line| !line.match?(/\AYess+/i) })
     end
 
+    # Same failure, different rule. The tone profile and the Today briefing both
+    # ban addressing him as "you" ("Hey, you", "Evening, you") as too intimate -
+    # and the opener bullet was offering "Evening, you" as a model greeting.
+    # An example outranks a prohibition it never sees.
+    it "keeps its greeting examples inside the never-address-them-as-you rule" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+      bullet = prompt.lines.find { |line| line.include?("**Part of day:**") }
+
+      greetings = bullet.to_s.scan(/"([^"]+)"/).flatten
+      expect(greetings).not_to be_empty
+      expect(greetings).to all(satisfy { |hello| !hello.match?(/\byou\s*!?\z/i) })
+    end
+
     # The tone profile is the VOICE; the rules are the constraints on it. When
     # they disagree the profile wins, because it reads as "this is how you
     # talk" — so a signature phrase glossed as "enthusiastic yes" quietly

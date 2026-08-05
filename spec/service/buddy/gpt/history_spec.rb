@@ -37,6 +37,66 @@ RSpec.describe Buddy::GPT::History do
     end
   end
 
+  # Tapping a quick action posts a wall of instructions as the person's turn.
+  # It's hidden in the UI but replayed in full forever, and it's IDENTICAL every
+  # time - one prod thread carried NINE Today seeds in a single day, ~40k
+  # characters of the same prompt, each followed by that day's briefing.
+  #
+  # That's a few-shot example set, not a conversation, and it teaches the model
+  # to answer the way it answered before. Rewriting the seed's tone changed one
+  # copy and left nine demonstrations of the old voice underneath, which is why
+  # tone edits looked like they hadn't taken until the thread was reset.
+  describe "quick-action seeds" do
+    def tapped(action, body: "a very long block of briefing instructions", mood: nil)
+      meta = { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => action }
+      meta["buddy_mood"] = mood if mood
+      convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: body, metadata: meta,
+      )
+    end
+
+    it "replays the label they tapped instead of the instructions behind it" do
+      tapped("today")
+
+      expect(build.first[:content]).to eq("[tapped Today - asked for a briefing on the day ahead]")
+    end
+
+    it "keeps the exchange readable, so the reply still has something to answer" do
+      tapped("today")
+      said("Morning! Here's your day.", direction: :inbound, kind: "buddy")
+
+      expect(build.pluck(:role)).to eq(%i[user assistant])
+      expect(build.first[:content]).to include("Today")
+    end
+
+    it "carries the mood on a check-in, which is the one thing that varies" do
+      tapped("checkin", mood: "rough")
+
+      expect(build.first[:content]).to eq("[tapped Check-in, feeling rough]")
+    end
+
+    it "names an action it doesn't have a phrase for rather than dumping the seed" do
+      tapped("something_new")
+
+      expect(build.first[:content]).to eq("[tapped something_new]")
+    end
+
+    # Nine identical 4.5KB prompts is most of what a long Buddy thread costs.
+    it "stops re-sending the same instructions once per briefing" do
+      3.times { tapped("today", body: "x" * 4_500) }
+
+      expect(build.sum { |item| item[:content].to_s.length }).to be < 500
+    end
+
+    # A watch firing or a relay coming in is also a seed, but a short one whose
+    # words ARE the message. Those stay exactly as they are.
+    it "leaves a seed that isn't a quick action alone" do
+      said("[nothing was said to you] The deploy just finished", kind: "buddy_trigger")
+
+      expect(build.first[:content]).to include("The deploy just finished")
+    end
+  end
+
   describe "exclusions" do
     it "leaves out receipt chips so Buddy does not learn to narrate receipts" do
       said("Marked the dishes done ✓", direction: :inbound, kind: "buddy_activity")

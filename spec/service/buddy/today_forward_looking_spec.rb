@@ -9,6 +9,29 @@ RSpec.describe "Buddy Today forward-looking" do
 
   before { allow(user).to receive(:timezone).and_return("America/Denver") }
 
+  # Prod 2516 opened "Hey hey, Rocco. Morning's got some real shape to it." -
+  # the right words landing on a flat period, which is what the opener rule had
+  # just been rewritten to prevent.
+  #
+  # The rule was added to the system prompt only. But the briefing seed carries
+  # four paragraphs of its own opener guidance, and that is the most specific
+  # instruction the model has about how to open THIS message - so a rule living
+  # anywhere else loses to it. Tone guidance has to be where the model is
+  # actually reading about the thing it's writing.
+  describe "the greeting the briefing asks for" do
+    it "tells the briefing itself to land it lifted, not only the system prompt" do
+      expect(Buddy::TodayBriefing.seed(user)).to include("warm and lifted")
+    end
+
+    # The same reply closed with "Which, rude of the calendar, but at least
+    # it's a plan." - a phrase that appears nowhere except inside a don't-do
+    # example in this very seed. A memorable line in a counter-example is still
+    # a line the model read, and it borrows it.
+    it "does not hand the model a phrase to borrow inside a don't-do example" do
+      expect(Buddy::TodayBriefing.seed(user)).not_to include("rude of the calendar")
+    end
+  end
+
   describe "today_agenda passed flag" do
     it "flags timed events that already started, leaves upcoming ones unflagged" do
       travel_to(tz.parse("2026-07-28 14:00")) do

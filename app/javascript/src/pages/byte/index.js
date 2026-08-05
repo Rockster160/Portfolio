@@ -314,6 +314,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     return thread.querySelector(selectorForId(message.id));
   }
 
+  // What comes back from a send is normally the server's ECHO of the message
+  // just sent, so it inherits the entry's local_id and takes over the
+  // optimistic bubble.
+  //
+  // A Rails slash command is the exception. It deliberately stores no outbound
+  // record, and what it returns is a different message entirely: an inbound
+  // system acknowledgement. Stamping the local_id onto that told the client
+  // the ack WAS the echo, so it repainted the optimistic "/reset" bubble into
+  // an ack — and the broadcast of the same ack, which carries no local_id,
+  // mounted a second one beside it. Prod 2513: two identical bubbles, one row.
+  function adoptSendResponse(entry, message) {
+    if (message?.direction === "outbound") {
+      message.metadata = { ...(message.metadata || {}), local_id: entry.local_id };
+      return message;
+    }
+    // Not an echo. The command left no bubble of its own on purpose, so drop
+    // the optimistic one and let the reply mount on its own id.
+    thread.querySelector(selectorForLocal(entry.local_id))?.remove();
+    return message;
+  }
+
   function newMessageNode() {
     return tpl.content.firstElementChild.cloneNode(true);
   }
@@ -1009,8 +1030,25 @@ document.addEventListener("DOMContentLoaded", async () => {
       node = newMessageNode();
       thread.appendChild(node);
     }
+    dropDuplicatesOf(message, node);
     paintMessageNode(node, message, opts);
     reorderActiveTail();
+  }
+
+  // One node per server message, always.
+  //
+  // A message reaches the thread by two routes — the HTTP response to a send
+  // and the WS broadcast — and the two lookups can resolve differently: one
+  // finds the optimistic bubble by local_id, the other mounts a fresh node by
+  // server id. Whichever arrives second then paints its own node and the same
+  // message is on screen twice. Reconciling on the id here means no future
+  // pairing of delivery routes can do that again.
+  function dropDuplicatesOf(message, keep) {
+    if (message?.id == null) return;
+
+    thread.querySelectorAll(selectorForId(message.id)).forEach((other) => {
+      if (other !== keep) other.remove();
+    });
   }
 
   // Reorder the thread so that any "active" message (streaming response
@@ -1684,10 +1722,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             markQueuedSending(e.local_id);
         },
         onSent: (e, message) => {
-          message.metadata = {
-            ...(message.metadata || {}),
-            local_id: e.local_id,
-          };
+          message = adoptSendResponse(e, message);
           // Even for background conversations, persist the resolved message
           // so its cache stays fresh; only paint into the DOM for the
           // currently-visible thread.
@@ -2373,10 +2408,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           markQueuedSending(e.local_id);
       },
       onSent: (e, message) => {
-        message.metadata = {
-          ...(message.metadata || {}),
-          local_id: e.local_id,
-        };
+        message = adoptSendResponse(e, message);
         const targetConv = e.conversation_id || currentConversationId;
         if (targetConv === currentConversationId) {
           messages = upsertPersisted(currentConversationId, messages, message);
