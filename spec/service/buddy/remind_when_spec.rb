@@ -91,6 +91,71 @@ RSpec.describe "remind_when tool" do
     end
   end
 
+  # Prod: "I need to check the front flower bed daily" became a custom watch on
+  # `item:list:name:/^Daily front flower bed check$/`. Well-formed, real scope,
+  # and no such list has ever existed - so it could never fire, and it sat there
+  # looking set. A watch that fails by being silent is the worst shape there is.
+  describe "a listener pointed at something that isn't there" do
+    let(:tool) { Buddy::Tools[:remind_when] }
+    let(:ctx)  { Buddy::ToolContext.new(user, conversation: convo) }
+
+    def confirm(listener)
+      tool[:confirm].call(
+        { text: "check it", trigger: :custom, listener: listener, when_phrase: "when it lands" }, ctx
+      )
+    end
+
+    def list!(name)
+      List.create!(name: name).tap { |list| UserList.create!(user: user, list: list, is_owner: true) }
+    end
+
+    it "refuses a list nobody has" do
+      expect { confirm("item:action:added item:list:name:/^Daily front flower bed check$/") }
+        .to raise_error(/no list called "Daily front flower bed check"/i)
+    end
+
+    # And says what they should have reached for instead.
+    it "points at the calendar when the ask was really a clock" do
+      expect { confirm("item:action:added item:list:name:/^Nope$/") }
+        .to raise_error(/recurring agenda task/i)
+    end
+
+    it "allows one that does exist" do
+      list!("Claude")
+
+      expect { confirm("item:action:added item:list:name:/^Claude$/") }.not_to raise_error
+    end
+
+    it "matches the name case-insensitively rather than being fussy" do
+      list!("Claude")
+
+      expect { confirm("item:action:added item:list:name:/^claude$/") }.not_to raise_error
+    end
+
+    it "refuses a section nobody has" do
+      list!("Claude")
+
+      expect { confirm("item:action:added item:section:name:/^Nowhere$/") }
+        .to raise_error(/no section called "Nowhere"/i)
+    end
+
+    it "allows a section that exists" do
+      Section.create!(list: list!("Claude"), name: "Ocs-Backend", color: "#888888")
+
+      expect { confirm("item:action:added item:section:name:/^Ocs-Backend$/") }.not_to raise_error
+    end
+
+    # A loose pattern is a pattern, not a name - several things could satisfy
+    # it, so refusing because no list is spelled like the regex would be wrong.
+    it "leaves an unanchored pattern alone" do
+      expect { confirm("item:action:added item:list:name:/claude/i") }.not_to raise_error
+    end
+
+    it "leaves a listener that names no list alone" do
+      expect { confirm("item:action:added") }.not_to raise_error
+    end
+  end
+
   it "refuses to set a location watch for a place it can't resolve, and asks instead" do
     # Not a contact, not on the calendar, and geocoding finds nothing → we
     # genuinely don't know where this is, so no name-only watch is created.

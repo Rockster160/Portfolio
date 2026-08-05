@@ -32,6 +32,49 @@ RSpec.describe "Buddy Today forward-looking" do
     end
   end
 
+  # Prod 2528 answered a Today tap with twelve chore names in one comma-run,
+  # credited Rocco for a chore recorded for someone else, and closed on a 💙
+  # that wasn't about anything. Every soft version of "don't recite" was already
+  # in the seed; what wasn't was a number, and what WAS in there was an explicit
+  # licence for the shape that went out.
+  describe "the briefing it asks for" do
+    let(:seed) { Buddy::TodayBriefing.seed(user) }
+
+    it "caps how many chores may be named at a hard number" do
+      expect(seed).to include("THREE NAMES, TOTAL:")
+      expect(seed).to include("at most three specific chores")
+    end
+
+    it "no longer offers the skim-list shape it produced" do
+      expect(seed).not_to include("Still pending: X, Y, Z")
+      expect(seed).to include('If you find yourself writing "Still pending:"')
+    end
+
+    it "refuses to hand the person credit for a chore the house did" do
+      expect(seed).to include("Never tell me I did something")
+      expect(seed).to include("`by:`")
+    end
+
+    it "asks for an emoji that's about something" do
+      expect(seed).to include("has to be ABOUT something")
+    end
+
+    it "asks for odd clock times to be rounded" do
+      expect(seed).to include("just before 8")
+    end
+
+    # The chore rules come out entirely for someone who doesn't have chores,
+    # rather than pointing them at sections that aren't in their context.
+    it "drops the chore guidance for someone without chores" do
+      allow(Buddy::Features).to receive(:enabled?).with(user, :chores).and_return(false)
+
+      bare = Buddy::TodayBriefing.seed(user)
+      expect(bare).not_to include("THREE NAMES")
+      expect(bare).not_to include("chores_pending_today")
+      expect(bare).not_to match(/\n{3,}/)
+    end
+  end
+
   describe "today_agenda passed flag" do
     it "flags timed events that already started, leaves upcoming ones unflagged" do
       travel_to(tz.parse("2026-07-28 14:00")) do

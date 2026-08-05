@@ -5,6 +5,13 @@ Buddy::Tools.register(
     check-ins, whatever the user wants tracked. `name` is what happened
     (short label). `notes` are optional. Use `count=N` when the same
     thing repeats (e.g. 5 glasses of water, 20 push-ups).
+
+    ONLY for something that ALREADY HAPPENED. A log is a record of the past,
+    and a plan is not one: "I'm about to have lunch", "I'm planning on sitting
+    down to eat", "I'll grab a coffee after this" are all things that have not
+    occurred, and writing them down as though they had puts a fact in their
+    history that isn't true. React warmly and log nothing; if they want it
+    held, that's the agenda. The moment they say they DID it, log it then.
   TXT
   feature:     :events,
   args:        {

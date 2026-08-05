@@ -149,7 +149,7 @@ RSpec.describe "schedule_reminder auto-run" do
     end
 
     it "says so rather than silently creating one when nothing matches" do
-      expect { move("meatloaf", later) }.to raise_error(/no pending reminder/i)
+      expect { move("meatloaf", later) }.to raise_error(/no reminder/i)
     end
 
     it "refuses a time that's already gone by" do
@@ -158,10 +158,54 @@ RSpec.describe "schedule_reminder auto-run" do
       expect { move("dryer", 1.hour.ago.in_time_zone(user.timezone)) }.to raise_error(/gone by/i)
     end
 
-    it "ignores one that's been cancelled or already fired" do
+    it "ignores one that's been cancelled" do
       existing!("Check the dryer").update!(cancelled_at: Time.current)
 
-      expect { move("dryer", later) }.to raise_error(/no pending reminder/i)
+      expect { move("dryer", later) }.to raise_error(/no reminder/i)
+    end
+
+    # A one-shot stamps `fired_at` and leaves `pending` the instant it lands,
+    # and that instant is exactly when someone says "send me that again
+    # tomorrow at 6". Prod 2364 answered it with "couldn't find that reminder
+    # to move it" and the whole thing had to be dictated again.
+    describe "snoozing one that just fired" do
+      it "re-arms it instead of losing it" do
+        reminder = existing!("Create a gate for the stairs", 10.minutes.ago)
+        reminder.update!(fired_at: 10.minutes.ago)
+
+        expect { move("gate", later) }.not_to(change { BuddyReminder.where(user: user).count })
+        expect(reminder.reload.fire_at).to be_within(1.minute).of(later)
+      end
+
+      # A new fire_at on a terminal row would just sit there being skipped.
+      it "clears the fired stamp so the firer picks it up again" do
+        reminder = existing!("Create a gate for the stairs", 10.minutes.ago)
+        reminder.update!(fired_at: 10.minutes.ago)
+
+        move("gate", later)
+
+        expect(reminder.reload.fired_at).to be_nil
+        expect(BuddyReminder.pending).to include(reminder)
+      end
+
+      it "leaves one that fired long ago alone" do
+        existing!("Check the dryer", 2.days.ago).update!(fired_at: 2.days.ago)
+
+        expect { move("dryer", later) }.to raise_error(/no reminder/i)
+      end
+
+      # A daily that went off this morning and a live one-off tonight can share
+      # a word; the one still coming is what they mean.
+      it "prefers a still-pending match over a fired one" do
+        fired = existing!("Water the tomatoes", 20.minutes.ago)
+        fired.update!(fired_at: 20.minutes.ago)
+        live = existing!("Water the tomatoes tonight")
+
+        move("tomatoes", later)
+
+        expect(live.reload.fire_at).to be_within(1.minute).of(later)
+        expect(fired.reload.fire_at).to be_within(1.minute).of(20.minutes.ago)
+      end
     end
   end
 

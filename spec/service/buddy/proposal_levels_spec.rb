@@ -29,6 +29,17 @@ RSpec.describe "Buddy proposal levels" do
     expect(ActionEvent.where(user: user, name: "Coffee")).to exist
   end
 
+  # A log is a record of the past. Prod: "I picked up lunch so I'm planning on
+  # sitting down to eat it" was written into the history as a completed Lunch,
+  # which is a fact in their record that never happened.
+  it "tells the model a log is for what already happened, not what they're about to do" do
+    description = Buddy::Tools[:log_event][:description]
+
+    expect(description).to include("ONLY for something that ALREADY HAPPENED")
+    expect(description).to include("I'm about to have lunch")
+    expect(description).to include("The moment they say they DID it, log it then")
+  end
+
   it "undoes a level-2 row when it's unchecked" do
     action = build([{ tool_name: :log_event, payload: { name: "Tea" } }])[:action]
     id = action.buttons.first["id"]

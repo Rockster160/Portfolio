@@ -24,6 +24,12 @@ module Buddy
 
     COUNT_ARG = :count
 
+    # How long after a reminder fires it can still be snoozed by name (see
+    # move_reminder). Long enough to cover "remind me about this after dinner"
+    # answered a couple of hours later, short enough that a word shared with
+    # yesterday's reminder doesn't drag the wrong one back from the dead.
+    SNOOZE_WINDOW = 6.hours
+
     # Marks a call as a WAIT: it runs now, but whatever the model asked for
     # after it is held until the wait finishes on its own (see
     # Buddy::ProposalBuilder's :timer step). Only set_timer declares the arg.

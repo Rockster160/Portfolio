@@ -24,7 +24,19 @@ RSpec.describe "Buddy event search + delete" do
 
     expect(result[:action]).to be_nil # auto, no checklist
     expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt)
-      .with(hash_including(seed: include("Strawberry Celsius").and(include("delete_event id="))))
+      .with(hash_including(seed: include("Strawberry Celsius").and(include("`delete_event`"))))
+  end
+
+  # The seed used to teach `[[propose: delete_event id=N]]`. Markers are retired
+  # — Turn strips a stray one and logs it — so that instruction cost a turn and
+  # left the event sitting there. Nothing that talks to the model may teach it.
+  it "search_events does not teach the retired marker protocol" do
+    ActionEvent.create!(user: user, name: "Strawberry Celsius", timestamp: 2.days.ago)
+
+    build([{ tool_name: :search_events, payload: { query: "celsius" }, span: [0, 0] }])
+
+    expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
+      .with(hash_including(seed: include("[[propose:")))
   end
 
   it "delete_event by id is Level 2 - removes immediately, undoable, and restores on undo" do

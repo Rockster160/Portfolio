@@ -339,11 +339,29 @@ $(document).ready(function() {
     const bucketSel = root.querySelector("[data-cc-bucket-select]")
     if (bucketSel) { bucketSel.value = state.bucket }
 
+    const dateStart = root.querySelector("[data-cc-date-start]")
+    const dateEnd = root.querySelector("[data-cc-date-end]")
+
     function markActiveRange() {
       root.querySelectorAll("[data-cc-range-btn]").forEach(function(btn) {
         btn.classList.toggle("active", !state.start && btn.dataset.ccRangeBtn === state.range)
       })
     }
+
+    // Reflect the resolved window in the date inputs so the user sees the active
+    // span (whether it came from a preset, nav shift, or a custom range).
+    function syncDateInputs() {
+      if (!state.window) { return }
+      if (dateStart) { dateStart.value = isoDate(new Date(state.window.start)) }
+      if (dateEnd) { dateEnd.value = isoDate(new Date(state.window.end)) }
+    }
+
+    const baseRender = render
+    render = function(payload) {
+      baseRender(payload)
+      syncDateInputs()
+    }
+
     markActiveRange()
     if (initial) { render(initial) }
 
@@ -363,6 +381,18 @@ $(document).ready(function() {
         fetchShow()
       })
     }
+
+    function applyDateRange() {
+      if (!dateStart || !dateEnd || !dateStart.value || !dateEnd.value) { return }
+      // Guard against an inverted range; the picker leaves both editable.
+      if (dateStart.value > dateEnd.value) { return }
+      state.start = dateStart.value
+      state.end = dateEnd.value
+      markActiveRange()
+      fetchShow()
+    }
+    if (dateStart) { dateStart.addEventListener("change", applyDateRange) }
+    if (dateEnd) { dateEnd.addEventListener("change", applyDateRange) }
 
     root.querySelectorAll("[data-cc-nav]").forEach(function(btn) {
       btn.addEventListener("click", function() {

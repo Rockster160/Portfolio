@@ -13,6 +13,11 @@ RSpec.describe "Buddy custom listeners" do
   let(:user)   { create(:user) }
   let!(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy") }
   let(:tool)   { Buddy::Tools[:remind_when] }
+  # The listener below names this list, and a watch pointed at a list nobody has
+  # is refused now (see Buddy::ListenerTargets).
+  let!(:list)  {
+    List.create!(name: "Claude").tap { |l| UserList.create!(user: user, list: l, is_owner: true) }
+  }
 
   def ctx
     Buddy::ToolContext.new(user, conversation: convo)
@@ -132,6 +137,10 @@ RSpec.describe "Buddy custom listeners" do
   # Every custom watch carries an empty match hash, so comparing those would
   # call any two watches on the same scope duplicates.
   describe "spotting a real duplicate" do
+    let!(:shopping) {
+      List.create!(name: "Shopping").tap { |l| UserList.create!(user: user, list: l, is_owner: true) }
+    }
+
     it "doesn't flag a different listener on the same scope" do
       set!("item:action:added item:list:name:/^Claude$/")
 

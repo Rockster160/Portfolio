@@ -200,6 +200,15 @@ Buddy::Tools.register(
         )
       end
 
+      # Valid shape, real scope, and still pointed at nothing. A watch that
+      # names a list nobody has fails by being silent forever while they think
+      # it's set, so it's refused here rather than saved (prod: a daily
+      # flower-bed check watching a list that never existed).
+      if (gap = Buddy::ListenerTargets.missing(listener, user: ctx.user))
+        raise "#{gap}, so that watch could never fire - if they wanted something on a CLOCK " \
+              "(\"daily\", \"every morning\"), that's a recurring agenda task, not a watch"
+      end
+
       # The person reads the plain phrasing; the listener rides underneath as
       # detail (see `listener` on the resolved payload). Showing them the raw
       # syntax as the whole description tells them nothing they asked about,

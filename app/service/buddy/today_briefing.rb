@@ -26,7 +26,11 @@ module Buddy
 
       Keep it short - three to five lines - but short and warm, not short and clipped. Break it into short paragraphs with a blank line between distinct beats (a greeting, then what's ahead, then any week heads-up) so it renders clean and skimmable - never one smushed block. Enthusiasm and clean breaks are not at odds; you get both. Prose with shape and a pulse, not a field report.
 
-      Still avoid: em dashes (commas or short sentences instead), bullet-listing what I already did, exact clock times like "8:19", and reciting chores by their record names unless one specific one is your actual recommendation.
+      Still avoid: em dashes (commas or short sentences instead), bullet-listing what I already did, and reciting chores by their record names unless one specific one is your actual recommendation.
+
+      Round odd clock times rather than reading them off: "7:54 AM" and "8:19" are what a machine says, "just before 8" is what you say. A time somebody actually scheduled on the hour or half hour ("3:00 PM" → "3") can stay as it is.
+
+      An emoji, if you use one, has to be ABOUT something in the message. Warmth you actually feel toward me, a reaction to a specific thing. A 💙 parked on the end of a rundown of my chores is punctuation with a colour on it - it would have fit any other briefing equally well, and that's exactly what makes it noise. If it could move to a different message unchanged, it isn't doing anything.
     TONE
 
     # Comfort bands mirror the dashboard weather cell's colour scale. Woven into
@@ -70,7 +74,7 @@ module Buddy
     def chores_done_line(user)
       return "" unless chores?(user)
 
-      "\n- `chores_done_today` is finished business - don't report it as an update."
+      "\n- `chores_done_today` is finished business - don't report it as an update and don't read the names back."
     end
 
     def chores_lead_lines(user)
@@ -78,10 +82,36 @@ module Buddy
 
       [
         "",
-        "- `chores_pending_today` - the primary answer. Name them.",
+        "- `chores_pending_today` is the primary answer - but it is a POOL TO PICK FROM, never a list to read out. See THREE NAMES below.",
         "- Give extra weight to items explicitly DUE today that AREN'T daily (a `due_today: true` chore whose `freq` is weekly/monthly/less, or a hot pick). Those are the easy-to-forget ones and the most useful to surface - daily habits I know cold.",
-        "- BATCH related items: if several due chores are obviously one errand or theme (all the trash / recycling / bins, or all the plant watering), say it once as the theme (\"it's trash day\", \"watering day\") rather than listing each one.",
+        "- BATCH related items: several pending chores that are obviously one errand or one theme go out ONCE as the theme, not one by one. A word shared across their names is the giveaway - three chores that all start with the dog's name are \"the dog's round\", the bin ones are \"it's trash day\", all the plant watering is \"watering day\".",
       ].join("\n")
+    end
+
+    def chores_credit_line(user)
+      return "" unless chores?(user)
+
+      "\n- Never tell me I did something. A shared chore lands in `chores_done_today` the moment " \
+        "ANYONE in the house does it, so \"you knocked out X\" is a guess, and it is wrong often " \
+        "enough to matter."
+    end
+
+    # The single most common way this goes wrong, and the reason it's stated as
+    # a hard number: prod 2528 answered a Today tap with twelve chore names in
+    # one comma-separated run. That is a screenshot of a list I can already
+    # open, and every one of the softer phrasings ("don't recite", "gloss the
+    # dailies") was already in the prompt when it happened.
+    def three_names_block(user)
+      return "" unless chores?(user)
+
+      block = <<~BLOCK.strip
+        THREE NAMES, TOTAL:
+        - Across the WHOLE briefing you may name at most three specific chores. Not three per paragraph, not three per section. Three.
+        - Each one has to earn its slot: due today and not a daily, a hot pick, a one-off, or the one thing you'd actually recommend I start.
+        - Everything past those three is a count or a theme, or it goes unsaid - "plus the usual dailies", "and the rest of the morning routine". Never a comma-separated run of record names.
+        - If you find yourself writing "Still pending:" followed by a list, stop and delete it. That sentence is the failure mode, however tidy it looks.
+      BLOCK
+      "\n#{block}"
     end
 
     def chores_hot_line(user)
@@ -93,7 +123,7 @@ module Buddy
     def chores_secondary_line(user)
       return "" unless chores?(user)
 
-      "\n- `chores_done_today` - only if I've clearly gotten a lot done and it's worth acknowledging. Never lead with it. Never make it the point."
+      "\n- `chores_done_today` - do NOT name these. A briefing is about what's ahead, and reading back what's behind is the fastest way to turn it into a status report. When a lot is already done, a half-clause nod is plenty (\"good start already\"); a roll call of it never is. And an entry carrying `by:` was done by someone ELSE in the house, so it is not mine to be congratulated for."
     end
 
     # After ~4pm local the day's weather isn't actionable anymore.
@@ -117,7 +147,7 @@ module Buddy
     end
 
     def seed(user=nil)
-      <<~PROMPT.strip
+      prompt = <<~PROMPT.strip
         What's on for TODAY, forward-looking. This is a briefing about the day ahead, NOT a recap of yesterday or a review of what's already done.
 
         OPEN with a warm greeting when it fits. Take the half of the day from `Part of day` at the very top of your prompt - not the shape of this request, and not what a briefing usually sounds like (a briefing is not a morning thing; I ask for these at all hours). Match that part of day, but the WORDS are yours: vary the opener and make it interesting, never falling back to the same greeting every time.
@@ -138,6 +168,7 @@ module Buddy
         LEAD WITH what still needs to happen today:#{chores_lead_lines(user)}
         - `today_agenda` - today's events / meetings with times. But see UNUSUAL-ONLY below: don't recite the daily-recurring stuff.
         - Agenda items tagged `mine: false` (with an `owner`, e.g. Chelsea) are on a partner's PERSONAL calendar shared with me - awareness only. They are NOT my tasks. Don't list them as mine; usually don't mention them at all. Only bring one up if it actually affects me (a conflict, a hand-off, something I'm part of), and attribute it ("Chelsea's got a thing at 3").#{chores_hot_line(user)}
+        #{three_names_block(user)}
 
         WHEN referring to a day: say "tomorrow" for the next day, not the weekday name. Weekday names only for two-plus days out.
 
@@ -162,14 +193,14 @@ module Buddy
         - Motivational spin like "you crushed it yesterday, keep it up today". That's a review, not a briefing.
 
         HOW TO ANSWER:
-        - Lead with pending / unusual-upcoming. Names, not vague gestures.
-        - Short list OK when it helps skim ("Still pending: X, Y, Z"). One or two lines of prose for shape.
+        - Lead with pending / unusual-upcoming. Be specific about the few things you do name - vague gestures are the opposite failure and just as bad.
+        - Prose, in short paragraphs. This is you talking, so it reads as sentences about my day, not as fields with values after them.
         - If the day looks empty AND there are no dailies or scheduled items, keep it short and warm - a "not much on deck today, what are you thinking?" not a recap of yesterday.
 
         HARD NO:
         - Never recap yesterday.
         - Never invent chores/events not in context.
-        - Don't recite my daily / every-weekday repeats line by line. Gloss those. Less-frequent recurrences and one-offs are fair to mention.
+        - Don't recite my daily / every-weekday repeats line by line. Gloss those. Less-frequent recurrences and one-offs are fair to mention.#{chores_credit_line(user)}
         - No filler like "quiet day", "not a bad thing", "in the bag".
         - No "based on what I have" / "your context shows" / any scaffolding-talk.
 
@@ -177,6 +208,9 @@ module Buddy
 
         #{TONE}
       PROMPT
+      # Weather, the plunge advisory and every chore line collapse to "" for
+      # someone who doesn't have them, leaving runs of blank lines behind.
+      prompt.gsub(/\n{3,}/, "\n\n")
     end
 
     # Deliver a Today briefing as a hidden Buddy turn into `conversation`. Used

@@ -73,28 +73,32 @@ module Buddy
       end
     end
 
+    # Agendas the person can see, mapped to whether they're the person's OWN
+    # (their events + agendas they own, like a jointly-run "Ours" calendar) vs
+    # merely SHARED to them by someone else (a partner's PERSONAL calendar).
+    # Both are worth being aware of, but a partner's personal items are NOT
+    # the person's own tasks — they get tagged so Buddy treats them as
+    # awareness-only, not "your agenda".
+    #
+    # Public for the same reason as mood_vibe_for: Buddy::AgendaSearch looks at
+    # exactly the same set of calendars, and two answers to "which calendars
+    # count" is how a search starts reaching somewhere the briefing doesn't.
+    def agenda_source_map(user)
+      map = {}
+      Agenda.where(user_id: user.id).pluck(:id).each { |id| map[id] = { mine: true } }
+      user.shared_agendas.includes(:user).find_each { |ag|
+        next if map.key?(ag.id)  # if they own it too, owned wins
+
+        map[ag.id] = { mine: false, owner: ag.user&.first_name.presence || "someone" }
+      }
+      map
+    rescue StandardError => e
+      Buddy::Errors.report(section: "context.agenda_source_map", exception: e, user: user)
+      Agenda.where(user_id: user.id).pluck(:id).index_with { { mine: true } }
+    end
+
     class << self
       private
-
-      # Agendas the person can see, mapped to whether they're the person's OWN
-      # (their events + agendas they own, like a jointly-run "Ours" calendar) vs
-      # merely SHARED to them by someone else (a partner's PERSONAL calendar).
-      # Both are worth being aware of, but a partner's personal items are NOT
-      # the person's own tasks — they get tagged so Buddy treats them as
-      # awareness-only, not "your agenda".
-      def agenda_source_map(user)
-        map = {}
-        Agenda.where(user_id: user.id).pluck(:id).each { |id| map[id] = { mine: true } }
-        user.shared_agendas.includes(:user).find_each { |ag|
-          next if map.key?(ag.id)  # if they own it too, owned wins
-
-          map[ag.id] = { mine: false, owner: ag.user&.first_name.presence || "someone" }
-        }
-        map
-      rescue StandardError => e
-        Buddy::Errors.report(section: "context.agenda_source_map", exception: e, user: user)
-        Agenda.where(user_id: user.id).pluck(:id).index_with { { mine: true } }
-      end
 
       # Tag an item hash with ownership. Owned items carry no marker (the
       # default is "mine"); a shared-in item is stamped mine:false + owner so
@@ -271,6 +275,19 @@ module Buddy
           set << c.id if (shared ? done_by_anyone : done_by_me).include?(c.id)
         }
 
+        # WHO did it, when it wasn't this person. A shared chore counts as done
+        # the moment anyone in the house does it, and with no actor on the row
+        # the whole bucket reads as a list of THEIR wins - prod 2528 told Rocco
+        # he'd knocked out a chore that was recorded for someone else. Only
+        # filled in where this person has no completion of their own, which is
+        # the only case where taking the credit is wrong.
+        credited_to = completions.each_with_object({}) { |(cid, uid), map|
+          next if done_by_me.include?(cid) || map.key?(cid)
+
+          map[cid] = uid
+        }
+        actor_names = household_names(credited_to.values.uniq)
+
         daily_ids = ChoreDaily.for_user(user).limit(20).pluck(:chore_id)
         hot_ids   = ChoreHotPick.for_day(today).where(chore_id: chores.map(&:id)).pluck(:chore_id)
         matches_today_ids = chores.select { |c|
@@ -313,7 +330,9 @@ module Buddy
 
         {
           pending_today:   pending_ids.filter_map   { |id| slim_chore(by_id[id], typical_hours[id], due_ids) }.first(20),
-          done_today:      done_ids.filter_map      { |id| slim_chore(by_id[id], typical_hours[id], due_ids) }.first(20),
+          done_today:      done_ids.filter_map      { |id|
+            slim_chore(by_id[id], typical_hours[id], due_ids, by: actor_names[credited_to[id]])
+          }.first(20),
           hot_picks:       hot_ids.filter_map       { |id| slim_chore(by_id[id], typical_hours[id], due_ids) }.first(15),
           scheduled_today: scheduled_ids.filter_map { |id| slim_chore(by_id[id], typical_hours[id], due_ids) }.first(20),
           overdue_backlog: overdue.filter_map       { |id| slim_chore(by_id[id], nil, due_ids) }.first(20),
@@ -363,13 +382,15 @@ module Buddy
         { pending_today: [], done_today: [], hot_picks: [], scheduled_today: [], overdue_backlog: [], all_names: [] }
       end
 
-      def slim_chore(chore, typical_hour=nil, due_ids=nil)
+      def slim_chore(chore, typical_hour=nil, due_ids=nil, by: nil)
         return nil if chore.nil?
 
         out = {
           id:   chore.id,
           name: chore.name,
         }
+        # Present ONLY on a done chore somebody else in the house did.
+        out[:by] = by if by.present?
         out[:freq] = chore.freq.to_s if chore.respond_to?(:freq) && chore.freq.present?
         if chore.respond_to?(:assigned?) && chore.assigned?
           out[:assigned_to] = chore.assigned_to_user&.first_name
@@ -380,6 +401,12 @@ module Buddy
         end
         out[:due_today] = due_ids.include?(chore.id) if due_ids
         out
+      end
+
+      def household_names(ids)
+        return {} if ids.blank?
+
+        User.where(id: ids).index_by(&:id).transform_values(&:first_name)
       end
 
       # Rolling-window average local hour of completion per chore, for

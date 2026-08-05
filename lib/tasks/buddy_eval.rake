@@ -67,7 +67,12 @@ BUDDY_EVAL_SCENARIOS = [
 
   # --- lookups that today's context can't answer ---
   "does it show that I got a car wash yesterday?",    # chore_progress / search_events, NOT get_context
+  "how many celsius did I drink last month?",         # search_events with a timestamp bound, not a guess
   "how's the weather right now? I may take the bike",  # check_weather
+
+  # --- the printer, where guessing a file name costs hours ---
+  "print that phone thing from earlier again",        # print_history FIRST, then the reprint function
+  "how long did that vase print take?",               # print_history, never invents a duration
 
   # --- conversation and boundaries ---
   "what's that detached mini house that butlers usually have called?", # just answers, no tools

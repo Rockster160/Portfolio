@@ -95,6 +95,43 @@ RSpec.describe Buddy::Personality do
       expect(prompt).to include("remind_when")
     end
 
+    # Prod Aug 3: "when is my next 1-1 with Eric?" was answered "Wednesday at
+    # 11:00 AM" - a real Wednesday 11:00 AM item called "Zoom meet with Bri".
+    # The eight-day window always holds something plausible, so the model has to
+    # be told that seeing nothing is not the same as there being nothing.
+    it "sends the model to search the calendar instead of guessing past its window" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("today plus eight days")
+      expect(prompt).to include("search_agenda")
+      expect(prompt).to include("absent from eight days is not absent")
+    end
+
+    # A reminder pings once and evaporates; a thing to DO wants a row that
+    # survives being missed. Prod turned "check the front flower bed daily" into
+    # a watch on a list that has never existed.
+    it "routes a thing to DO onto the agenda and a thing to remember into a reminder" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("Remember versus DO")
+      expect(prompt).to include("recurring agenda task, not a watch")
+      expect(prompt).to include("A `custom` watch is the LAST thing to reach for")
+    end
+
+    # Prod 2528 closed a chore rundown with a 💙. The profile called that emoji
+    # a signature "used freely" and a "soft close", which is a licence to staple
+    # one onto anything - so the test is whether it points at something, not
+    # whether it's allowed.
+    it "makes an emoji earn its place instead of closing out a delivery of facts" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("An emoji has to be ABOUT something in the message")
+      expect(prompt).to include("never use one to round off a delivery of facts")
+      # The voice profile agrees rather than pulling the other way.
+      expect(prompt).to include("information doesn't take a heart")
+      expect(prompt).not_to include("Your signature, used freely")
+    end
+
     # Prod 1226: "Sorry, love." Those names belong to the two of them.
     it "puts the couple's terms of address out of reach, in the rules and both profiles" do
       byte = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))

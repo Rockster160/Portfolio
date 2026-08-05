@@ -1,9 +1,15 @@
 Buddy::Tools.register(
   name:        :move_reminder,
   description: <<~TXT,
-    Change WHEN a reminder they already have fires, and optionally reword it.
-    Use for "move the tomato reminder to 3", "make that an hour later", "change
-    the dryer one to 2:15", "actually remind me about it tomorrow morning".
+    Change WHEN a reminder fires, and optionally reword it. Use for "move the
+    tomato reminder to 3", "make that an hour later", "change the dryer one to
+    2:15", "actually remind me about it tomorrow morning".
+
+    This also SNOOZES one that just went off. "Send me that again tomorrow at
+    6", "remind me about this later", "not now, push it an hour" - said in
+    reply to a reminder landing - all mean this, with `match` taken from the
+    text of the reminder they're answering. Re-arming the one they're looking at
+    is right; making a fresh one from scratch loses whatever else was on it.
 
     Reach for this instead of `schedule_reminder` any time the thing they're
     talking about already exists. Setting a second one leaves the first alive,
@@ -29,14 +35,24 @@ Buddy::Tools.register(
   routinable: false,
   confirm: ->(payload, ctx) {
     needle = payload[:match].to_s.strip
-    pending = BuddyReminder.pending.where(user_id: ctx.user.id)
+    # Pending FIRST, then anything that went off in the last few hours. A
+    # one-shot stamps `fired_at` and drops out of `pending` the moment it
+    # lands, and the moment it lands is exactly when someone says "send me that
+    # again tomorrow at 6" - so the old lookup answered the most natural snooze
+    # there is with "couldn't find that reminder to move it" (prod 2364), and
+    # the whole thing had to be dictated a second time.
+    scope  = BuddyReminder.where(user_id: ctx.user.id, cancelled_at: nil)
+    recent = scope.where(fired_at: nil).or(scope.where(fired_at: Buddy::Tools::SNOOZE_WINDOW.ago..))
 
     reminder = if needle.match?(/\A\d+\z/)
-      pending.find_by(id: needle.to_i)
+      recent.find_by(id: needle.to_i)
     else
-      pending.where("LOWER(body) LIKE ?", "%#{needle.downcase}%").order(:fire_at).first
+      # Still-pending ones win a tie: a daily that fired this morning and a
+      # one-off tonight can share a word, and the live one is what they mean.
+      matches = recent.where("LOWER(body) LIKE ?", "%#{needle.downcase}%").order(:fire_at).to_a
+      matches.find { |r| r.fired_at.nil? } || matches.first
     end
-    raise "no pending reminder matching #{needle.inspect}" if reminder.nil?
+    raise "no reminder matching #{needle.inspect}" if reminder.nil?
 
     fire_at = ctx.resolve_time(payload[:at])
     raise "couldn't work out the new time" if fire_at.nil?
@@ -66,7 +82,10 @@ Buddy::Tools.register(
   },
   execute: ->(payload, ctx) {
     reminder = BuddyReminder.where(user_id: ctx.user.id).find(payload[:reminder_id])
-    attrs    = { fire_at: Time.zone.parse(payload[:fire_at_iso].to_s) }
+    # Clearing `fired_at` is what makes a snooze a snooze: a one-shot that
+    # already went off is terminal, and a new `fire_at` on its own would sit
+    # there being ignored by the firer.
+    attrs    = { fire_at: Time.zone.parse(payload[:fire_at_iso].to_s), fired_at: nil }
     attrs[:recurrence] = payload[:recurrence] if payload[:recurrence].present?
     attrs[:body]       = payload[:text].to_s.first(500) if payload[:text].to_s.strip.present?
     reminder.update!(attrs)
