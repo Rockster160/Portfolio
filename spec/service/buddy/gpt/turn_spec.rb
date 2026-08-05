@@ -84,6 +84,32 @@ RSpec.describe Buddy::GPT::Turn do
       expect(convo.reload.buddy_expression).to eq("happy")
     end
 
+    it "sets the face from a leading [[mood:]] marker and strips it from the body" do
+      run([{ text: "[[mood:sad]] Oh no, that's rough." }])
+
+      expect(convo.reload.buddy_expression).to eq("sad")
+      expect(reply.body).to eq("Oh no, that's rough.")
+    end
+
+    it "drops a leading marker naming a face the theme can't render, keeping the body" do
+      run([{ text: "[[mood:celebrating]] Woo!" }])
+
+      expect(convo.reload.buddy_expression).to eq("happy") # unchanged
+      expect(reply.body).to eq("Woo!")
+    end
+
+    # The whole reason for the marker over the set_mood tool: the face has to
+    # reach the screen with (or before) the words, not a beat behind them.
+    it "broadcasts the face before the reply body" do
+      kinds = []
+      allow(MonitorChannel).to receive(:broadcast_to) { |_user, payload| kinds << payload[:data][:kind] }
+
+      run([{ text: "[[mood:sad]] Sitting with you on that one." }])
+
+      expect(kinds).to include(:buddy_expression)
+      expect(kinds.index(:buddy_expression)).to be < kinds.rindex(:message)
+    end
+
     it "settles the expression even on a failed turn so thinking cannot stick" do
       expect(Buddy::ExpressionState).to receive(:settle!).with(convo)
 
@@ -605,11 +631,16 @@ RSpec.describe Buddy::GPT::Turn do
       expect(client.calls.first.instructions).to include("pet_expression:** happy")
     end
 
-    it "does not leak the retired marker protocol into the prompt" do
+    it "does not leak genuinely-retired marker protocols into the prompt" do
       client = run([{ text: "ok" }])
 
       expect(client.calls.first.instructions).not_to include("[[propose:")
-      expect(client.calls.first.instructions).not_to include("[[mood:")
+    end
+
+    it "teaches the leading mood marker (the live face protocol)" do
+      client = run([{ text: "ok" }])
+
+      expect(client.calls.first.instructions).to include("[[mood:")
     end
   end
 

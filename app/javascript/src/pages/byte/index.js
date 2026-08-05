@@ -209,6 +209,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   // MutationObserver in the scroll section). Declared here for the same TDZ
   // reason as stickRaf.
   let pinRaf = 0;
+  // A conversation load (first paint or a drawer switch) must land pinned to
+  // the newest message. The `atBottom` heuristic can't be trusted mid-load —
+  // clearing the previous thread emits a scroll event that reads "not at
+  // bottom" before the new messages lay out — so a switched-into thread used
+  // to strand at the top (and then auto-load older, keeping it there).
+  // `stickThroughLoad` keeps the pin asserted across the whole load (initial
+  // render, network refetch, late layout) and is released the instant the user
+  // scrolls or the load settles. Same TDZ reason for living up here: hydrate
+  // reads it during init.
+  let stickThroughLoad = false;
+  let stickThroughLoadTimer = 0;
   // Sleep/queue state — declared early for the same TDZ reason (hydrate and
   // conversation switches can read them before the sleep section runs).
   let channelConnected = false;
@@ -1158,6 +1169,25 @@ document.addEventListener("DOMContentLoaded", async () => {
     return gap < NEAR_BOTTOM_PX;
   }
 
+  // Begin/stop the load-time pin latch (see the declaration up top). Started by
+  // hydrateForConversation; released on the first real user gesture or when the
+  // bounded timer fires, whichever comes first.
+  function beginStickThroughLoad() {
+    stickThroughLoad = true;
+    if (stickThroughLoadTimer) clearTimeout(stickThroughLoadTimer);
+    // Bounded so we never pin forever; long enough to cover the network
+    // refetch plus late layout (images, proposal cards) settling in.
+    stickThroughLoadTimer = setTimeout(releaseStickThroughLoad, 1500);
+  }
+
+  function releaseStickThroughLoad() {
+    stickThroughLoad = false;
+    if (stickThroughLoadTimer) {
+      clearTimeout(stickThroughLoadTimer);
+      stickThroughLoadTimer = 0;
+    }
+  }
+
   // Pin to the bottom of the thread. "auto" runs a short settle loop that
   // re-pins over the next several frames, so late layout shifts can't
   // strand the newest content below the fold: a just-appended sent message,
@@ -1189,13 +1219,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     let frames = 0;
     const step = () => {
-      if (!atBottom) {
+      // A real scroll-up stops us fighting — but during a conversation load the
+      // atBottom heuristic flickers false while content lays out, so
+      // stickThroughLoad keeps us pinning (and re-asserts the flag the growth
+      // observer and refetch guard both read).
+      if (!atBottom && !stickThroughLoad) {
         stickRaf = 0;
         return;
-      } // user scrolled up — stop fighting
+      }
+      if (stickThroughLoad) atBottom = true;
       thread.scrollTop = thread.scrollHeight;
       frames += 1;
-      stickRaf = frames < 8 ? requestAnimationFrame(step) : 0;
+      const maxFrames = stickThroughLoad ? 24 : 8;
+      stickRaf = frames < maxFrames ? requestAnimationFrame(step) : 0;
     };
     stickRaf = requestAnimationFrame(step);
   }
@@ -1222,6 +1258,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (thread.scrollTop < LOAD_TRIGGER_PX) maybeLoadOlder();
   });
 
+  // A real user gesture during a load means "I want to look up here" — drop the
+  // load pin immediately so we stop yanking them back to the bottom. Scroll
+  // events alone can't tell us this (our own pin writes fire them too), so we
+  // key off the actual input devices.
+  ["wheel", "touchmove", "keydown"].forEach((evt) => {
+    thread.addEventListener(
+      evt,
+      () => {
+        if (stickThroughLoad) releaseStickThroughLoad();
+      },
+      { passive: true },
+    );
+  });
+
   // Pin one frame from now, once, whenever thread content grows AFTER an
   // explicit scrollToBottom already ran. scrollToBottom only settles for ~8
   // frames; growth that lands later strands below the fold. Two cases the
@@ -1234,10 +1284,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     // While composing, pin even if the atBottom heuristic momentarily reads
     // false (a long message rendering while the keyboard animates) — otherwise
     // its tail strands below the fold.
-    if ((!atBottom && !composerFocused()) || pinRaf) return;
+    if ((!atBottom && !composerFocused() && !stickThroughLoad) || pinRaf) return;
     pinRaf = requestAnimationFrame(() => {
       pinRaf = 0;
-      if (atBottom || composerFocused()) thread.scrollTop = thread.scrollHeight;
+      if (atBottom || composerFocused() || stickThroughLoad)
+        thread.scrollTop = thread.scrollHeight;
     });
   }
 
@@ -1279,6 +1330,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // kicks a background refetch to pull in anything more recent than the
   // cache. No focus/scroll gymnastics beyond pinning to bottom.
   function hydrateForConversation(convId, seedMessages) {
+    // Pin through the whole load before we disturb the thread — clearing it
+    // below fires a scroll event that would otherwise flip atBottom false and
+    // abort the pin, stranding a switched-into conversation at the top.
+    beginStickThroughLoad();
     Array.from(
       thread.querySelectorAll("[data-message-id], [data-local-id]"),
     ).forEach((n) => n.remove());
@@ -1488,6 +1543,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (loadingOlder || !hasMore || !messagesUrl) return;
     if (!oldestLoadedId) return;
     if (!navigator.onLine) return;
+    // Don't auto-page older history while a load is still settling to the
+    // bottom — the thread transiently sits at scrollTop 0, which would
+    // otherwise kick a fetch that anchors the view up top.
+    if (stickThroughLoad) return;
 
     loadingOlder = true;
     setLoader("loading");
@@ -2518,7 +2577,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       // unanswered question has to come back, or a sequence that stopped for
       // one is stranded with nothing on screen to finish it.
       buddyKiosk?.sync(messages);
-      if (wasAtBottom) scrollToBottom("auto");
+      // `|| stickThroughLoad`: on a fresh switch the real messages arrive here
+      // (empty cache), after the transient that already flipped wasAtBottom
+      // false — so honor the load latch and pin regardless.
+      if (wasAtBottom || stickThroughLoad) scrollToBottom("auto");
     } catch (_) {}
   }
 

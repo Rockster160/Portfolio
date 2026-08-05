@@ -52,12 +52,17 @@ Buddy::Tools.register(
 
     { title: title, sub: subs.join("\n").presence }
   },
-  merge_key:   ->(payload) { "complete_chore:#{payload[:chore_id]}:#{payload[:completed_at]}" },
+  # `note` is part of the key so "2 water with a note" and "3 water without one"
+  # stay two separate rows/counts instead of collapsing into one - completions
+  # that differ only in count still merge, ones that differ in note don't.
+  merge_key:   ->(payload) { "complete_chore:#{payload[:chore_id]}:#{payload[:completed_at]}:#{payload[:note]}" },
   merge_label: ->(payload, count) {
     chore = Chore.find_by(id: payload[:chore_id])
     title = "#{count}× #{chore&.name || payload[:chore]}"
-    sub = payload[:completed_at].present? ? "at #{Buddy::TimeParser.friendly(payload[:completed_at], user: nil)}" : nil
-    { title: title, sub: sub }
+    subs = []
+    subs << "📝 #{payload[:note]}" if payload[:note].present?
+    subs << "at #{Buddy::TimeParser.friendly(payload[:completed_at], user: nil)}" if payload[:completed_at].present?
+    { title: title, sub: subs.join("\n").presence }
   },
   # Level 2: fires immediately as a pre-checked row; unchecking it destroys the
   # completion (which fires the :uncompleted trigger) via the revert descriptor.

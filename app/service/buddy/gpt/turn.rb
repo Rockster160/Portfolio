@@ -251,7 +251,15 @@ module Buddy
       # "just got back from a walk" produced complete_chore with `at: "now"` and
       # then again with `at: null`, and because complete_chore is level 2 both
       # would have executed - silent double credit for one walk.
-      VOLATILE_ARGS = %i[count note at completed_at reply].freeze
+      #
+      # `note` is deliberately NOT here: it's part of WHAT was recorded, not how
+      # much or when. "Log 2 water as Hint Raspberry, then 3 without a note" is
+      # two genuinely different completions, and dropping note from the signature
+      # collapsed the second into a duplicate of the first - three waters that
+      # never happened while the reply claimed they did (prod 2440). Re-noting the
+      # SAME completion goes through edit_chore_completion, so a differing note
+      # here always means a distinct action.
+      VOLATILE_ARGS = %i[count at completed_at reply].freeze
 
       DUPLICATE_ACK = {
         status: "duplicate",
@@ -279,10 +287,16 @@ module Buddy
 
       FALLBACK_BODY = "Hmm, I don't quite follow - can you give me a little more to go on?".freeze
 
-      # Defensive only. The model emits structured tool calls now, but if prompt
-      # residue makes it write a `[[marker]]` we strip it rather than show
-      # brackets to the person — and log it, because a marker in the output means
-      # some prompt section still teaches the retired protocol.
+      # The model leads a reply with `[[mood:NAME]]` to set its face as the words
+      # land (see the persona's "Your face"). Only a LEADING mood marker is the
+      # supported protocol; it's parsed, applied, and stripped in finalize before
+      # the body broadcasts, so the expression reaches the screen first.
+      LEADING_MOOD_RX = /\A\s*\[\[\s*mood\s*:\s*([a-z_]+)\s*\]\]\s*/i
+
+      # Defensive. A leading mood marker is consumed before this ever runs, so a
+      # marker reaching here is stray — a mood marker the model buried mid-text,
+      # or residue of some other retired `[[x:y]]`. We strip it rather than show
+      # brackets to the person, and log it.
       STRAY_MARKER_RX = /\[\[\s*[a-z_]+\s*:[^\]]*\]\]/i
 
       # The bracketed attribution Buddy::GPT::History puts on a bridged message
@@ -721,7 +735,7 @@ module Buddy
       end
 
       def finalize_success(outcome)
-        body = display_body(outcome[:text])
+        body = display_body(apply_leading_mood(outcome[:text]))
         @reply.update!(state: :delivered, body: body, delivered_at: Time.current)
 
         proposals = outcome[:proposals]
@@ -943,6 +957,22 @@ module Buddy
         Buddy::ExpressionState.settle!(@conversation)
       rescue StandardError => e
         Rails.logger.warn("[Buddy::GPT::Turn] settle failed: #{e.class}: #{e.message}")
+      end
+
+      # A leading `[[mood:NAME]]` is the model setting its face for THIS reply.
+      # Apply it here — before the body is broadcast, so the expression reaches
+      # the screen ahead of the words — and strip it off the front so the person
+      # never sees the brackets. apply_mood validates the face against the theme
+      # and no-ops on an unchanged or unrenderable one, so a bad marker just
+      # vanishes. The set_mood tool remains the fallback when the model didn't
+      # (or couldn't) lead with a marker.
+      def apply_leading_mood(text)
+        raw   = text.to_s
+        match = raw.match(LEADING_MOOD_RX)
+        return raw if match.nil?
+
+        Buddy::SideEffects.apply_mood(@conversation, match[1])
+        raw.sub(LEADING_MOOD_RX, "")
       end
 
       # Framing the model was given to READ and echoed back into what it SAYS.
