@@ -60,13 +60,26 @@ $(document).ready(function() {
     }).join("")
   }
 
+  function datasetTotal(ds) {
+    return (ds.data || []).reduce(function(sum, pt) {
+      if (pt === null || pt === undefined) { return sum }
+      const v = typeof pt === "number" ? pt : pt.y
+      return sum + (typeof v === "number" ? v : 0)
+    }, 0)
+  }
+
   function renderLegend(payload) {
     const el = root.querySelector("[data-cc-legend]")
     if (!el) { return }
     if (!payload.datasets || payload.datasets.length < 2) { el.innerHTML = ""; return }
-    el.innerHTML = payload.datasets.map(function(ds) {
+
+    // Legend ordering is presentational only — highest total first. The dataset
+    // order (and thus chart stacking) is untouched.
+    const rows = payload.datasets.slice().sort(function(a, b) { return datasetTotal(b) - datasetTotal(a) })
+    el.innerHTML = rows.map(function(ds) {
       return '<div class="cc-legend-row"><span class="cc-swatch" style="background-color:' +
-        escapeHtml(ds.color) + '"></span>' + escapeHtml(ds.label) + "</div>"
+        escapeHtml(ds.color) + '"></span><span class="cc-legend-label">' + escapeHtml(ds.label) +
+        '</span><span class="cc-legend-total">' + fmtValue(datasetTotal(ds), payload.unit) + "</span></div>"
     }).join("")
   }
 
@@ -89,13 +102,15 @@ $(document).ready(function() {
         base.spanGaps = false
       } else {
         base.borderWidth = 0
-        base.borderRadius = 4
+        // Rounded ends look detached on thin stacked segments; keep square there.
+        base.borderRadius = stacked ? 0 : 4
         base.borderSkipped = false
         base.categoryPercentage = 0.7
         base.barPercentage = 0.9
         base.maxBarThickness = 48
         base.minBarLength = 2
-        if (stacked) { base.stack = "stack" }
+        // Distinct stack groups (e.g. intake vs burn) render side by side per bucket.
+        if (stacked) { base.stack = ds.stack || "stack" }
       }
       return base
     })

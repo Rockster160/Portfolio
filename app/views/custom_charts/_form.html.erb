@@ -72,7 +72,7 @@
         <div>
           <%= label_tag nil, "Default range" %>
           <%= select_tag "custom_chart[config][range]",
-            options_for_select(%w[3mo 6mo 12mo 24mo ytd all].map { |v| [v, v] }, @chart.range) %>
+            options_for_select(%w[1wk 1mo 3mo 6mo 12mo 24mo ytd all].map { |v| [v, v] }, @chart.range) %>
         </div>
         <div>
           <%= label_tag nil, "Unit" %>
@@ -86,7 +86,7 @@
           <%= link_to "Cancel", (@chart.persisted? ? custom_chart_path(@chart) : custom_charts_path), class: "cc-btn" %>
         </div>
         <% if @chart.persisted? %>
-          <%= button_to "Delete", custom_chart_path(@chart), method: :delete, class: "cc-btn cc-btn-danger", form: { style: "display:inline" }, data: { confirm: "Delete this chart?" } %>
+          <%= button_to "Delete", custom_chart_path(@chart), method: :delete, class: "danger", form: { style: "display:inline" }, data: { confirm: "Delete this chart?" } %>
         <% end %>
       </div>
     <% end %>

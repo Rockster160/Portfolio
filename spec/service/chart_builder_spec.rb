@@ -140,9 +140,18 @@ RSpec.describe ChartBuilder do
         start_at: "2026-01-05", end_at: "2026-01-11",
       ).call
 
-      expect(result[:datasets].find { |d| d[:label] == "In" }[:data].compact.sum).to eq(700)
-      expect(result[:datasets].find { |d| d[:label] == "Burn" }[:data].compact.sum).to eq(-250)
-      expect(result[:datasets].find { |d| d[:label] == "Base" }[:data].compact.sum).to eq(-12_600)
+      intake = result[:datasets].find { |d| d[:label] == "In" }
+      burn = result[:datasets].find { |d| d[:label] == "Burn" }
+      base = result[:datasets].find { |d| d[:label] == "Base" }
+
+      expect(intake[:data].compact.sum).to eq(700)
+      expect(burn[:data].compact.sum).to eq(-250)
+      expect(base[:data].compact.sum).to eq(-12_600)
+
+      # Intake sits in its own stack; burn + baseline share the other → side-by-side bars.
+      expect(intake[:stack]).to eq("pos")
+      expect(burn[:stack]).to eq("neg")
+      expect(base[:stack]).to eq("neg")
     end
   end
 
@@ -182,6 +191,21 @@ RSpec.describe ChartBuilder do
       expect(result[:datasets].find { |d| d[:label] == "Z" }[:color]).to eq("#abcdef")
       # Unspecified series fall back to the palette.
       expect(result[:datasets].find { |d| d[:label] == "X" }[:color]).to eq(described_class::PALETTE.first)
+    end
+  end
+
+  describe "range presets" do
+    it "resolves 1wk and 1mo windows" do
+      travel_to(Time.zone.local(2026, 3, 15, 12)) do
+        week = described_class.new(chart(query: "name::X", bucket: :day), range: "1wk").call
+        month = described_class.new(chart(query: "name::X", bucket: :day), range: "1mo").call
+
+        week_days = (week[:window][:end] - week[:window][:start]) / 86_400_000.0
+        month_days = (month[:window][:end] - month[:window][:start]) / 86_400_000.0
+
+        expect(week_days).to be_within(1).of(7)
+        expect(month_days).to be_within(2).of(30)
+      end
     end
   end
 

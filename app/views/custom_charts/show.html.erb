@@ -21,7 +21,7 @@
 
   <div class="cc-controls">
     <div class="cc-ranges" data-cc-ranges>
-      <% %w[3mo 6mo 12mo 24mo ytd all].each do |preset| %>
+      <% %w[1wk 1mo 3mo 6mo 12mo 24mo ytd all].each do |preset| %>
         <button type="button" class="cc-range-btn" data-cc-range-btn="<%= preset %>"><%= preset == "ytd" ? "YTD" : (preset == "all" ? "All" : preset) %></button>
       <% end %>
     </div>

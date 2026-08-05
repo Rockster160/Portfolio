@@ -23,6 +23,9 @@ class ChartBuilder
           # User-defined color for this series wins, then a semantic color (sign),
           # then the validated categorical palette.
           color: @chart.colors[sdef[:label]].presence || sdef[:color] || PALETTE[idx % PALETTE.size],
+          # Stack group: negated (burn) series stack together in one bar, positive
+          # in another — so a stacked chart shows the two side by side per bucket.
+          stack: (sdef[:negate] ? "neg" : "pos"),
         }
       }
 
@@ -302,6 +305,7 @@ class ChartBuilder
     when "all" then nil
     when "ytd" then now.beginning_of_year..now.end_of_day
     when /\A(\d+)mo\z/ then ((now - Regexp.last_match(1).to_i.months).beginning_of_day..now.end_of_day)
+    when /\A(\d+)w(?:k)?\z/ then ((now - Regexp.last_match(1).to_i.weeks).beginning_of_day..now.end_of_day)
     when /\A(\d+)d\z/  then ((now - Regexp.last_match(1).to_i.days).beginning_of_day..now.end_of_day)
     else (now - 12.months).beginning_of_day..now.end_of_day
     end

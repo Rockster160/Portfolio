@@ -202,8 +202,9 @@ module TeslaCommand
     return {} if data.blank?
 
     data.merge(extra_data.symbolize_keys).merge(
-      forbidden: DataStorage[:tesla_forbidden],
-      sleeping:  data[:state] == "asleep" || !!extra_data[:sleeping],
+      forbidden:         DataStorage[:tesla_forbidden],
+      sleeping:          data[:state] == "asleep" || !!extra_data[:sleeping],
+      proxy_unreachable: !!DataStorage[:tesla_proxy_unreachable],
     )
   end
 end

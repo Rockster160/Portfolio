@@ -288,12 +288,22 @@ class TeslaControl
     tries = 0
     begin
       tries += 1
-      block.call if tries <= max_attempts
+      if tries <= max_attempts
+        result = block.call
+        # Reached the proxies successfully — clear any prior disconnect flag so
+        # the dashboard Tesla cell drops its disconnect indicator on the next
+        # broadcast (format_data reads this flag). Only write when it was set,
+        # to avoid churning the row on every successful command.
+        ::DataStorage[:tesla_proxy_unreachable] = false if ::DataStorage[:tesla_proxy_unreachable]
+        result
+      end
     rescue *::TeslaErrorClassifier::PROXY_UNREACHABLE_CLASSES => e
       # Home Mac proxies are down or unreachable. Previously this swallowed
       # silently to avoid noise when laptop was off — now the TeslaSwitch
       # mute covers that case, so being unreachable WITHOUT a deliberate
       # mute is genuinely worth a Slack notification with kickstart steps.
+      # Flag it so the dashboard Tesla cell can surface a disconnect indicator.
+      ::DataStorage[:tesla_proxy_unreachable] = true
       err("Home proxy unreachable", e)
       TeslaCommand.broadcast(loading: false)
       false

@@ -43,6 +43,13 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
   let renderLines = function() {
     let lines = [], data = cell.data.car
     let topchar = cell.data.loading ? "[ico ti ti-fa-spinner ti-spin]" : "  "
+    // Home proxy unreachable — surface a disconnect indicator in the top-left
+    // slot. Takes priority over the (blank) idle char; never collides with the
+    // loading spinner since we're not loading while unreachable, and it also
+    // survives the [NOT CHARGING] center-override below (which keeps topchar).
+    if (cell.data.proxy_unreachable) {
+      topchar = Text.red("[ico ti ti-fa-unlink]")
+    }
     let plugged = data.charging?.state && data.charging.state != "Disconnected"
     let topright = plugged ? Text.yellow("[ico ti ti-fa-bolt]") : "  "
     let topline = topchar + " ".repeat(single_width - 4) + topright
@@ -153,6 +160,7 @@ import { shiftTempToColor, dash_colors, single_width } from "../vars"
     socket: Server.socket("TeslaChannel", function(msg) {
       this.data.sleeping = msg.sleeping
       this.data.forbidden = msg.forbidden
+      this.data.proxy_unreachable = msg.proxy_unreachable
       if (msg.loading) {
         this.data.loading = true
         renderLines()

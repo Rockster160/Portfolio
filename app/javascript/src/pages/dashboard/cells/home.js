@@ -319,14 +319,13 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
     }
 
     if (cell.data.camera) {
-      ["Doorbell", "Driveway", "Backyard", "Storage"].forEach((location) => {
+      ["Doorbell", "Driveway", "Backyard"].forEach((location) => {
         const data = cell.data.camera[location] || { at: "?", type: "?" };
         let typeIcon = Text.grey;
         const locIcon = {
           Doorbell: "[ico ti ti-mdi-door]",
           Driveway: "[ico ti ti-fa-car]",
           Backyard: "[ico ti ti-fae-plant]",
-          Storage: "[ico ti ti-fa-dropbox]",
         }[location];
         switch (data.type) {
           case "person":
@@ -348,6 +347,27 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
           first_row.push(typeIcon(` ${locIcon}${time}`));
         }
       });
+    }
+
+    // Bank balance (from the `bank` Jil cache) — floored to the thousand and
+    // suffixed with "k" (e.g. 14,798 → "14k"). Occupies the slot the Storage
+    // camera used to hold.
+    let amount = cell.data.bank?.amount;
+    if (amount != null && amount !== "" && !isNaN(Number(amount))) {
+      first_row.push(Text.green(` [ico ti ti-fa-bank]${Math.floor(Number(amount) / 1000)}k`));
+    } else {
+      first_row.push(Text.grey(" [ico ti ti-fa-bank]?"));
+    }
+
+    // Bins location (from the `bins` Jil cache, fed by a HASS sensor): at the
+    // curb (out) vs. back by the house. Same line as the bank/cameras.
+    let bins = cell.data.bins?.location;
+    if (bins === "curb") {
+      first_row.push(Text.orange(" [ico ti ti-fa-trash]Curb"));
+    } else if (bins === "house") {
+      first_row.push(Text.green(" [ico ti ti-fa-home]Home"));
+    } else {
+      first_row.push(Text.grey(" [ico ti ti-fa-trash]?"));
     }
 
     lines.push(Text.center(first_row.join("")));
@@ -561,6 +581,26 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
       },
     });
 
+    // Bank balance + bins location ride their own lightweight monitor so the
+    // bins HASS sensor (and a future bank updater) can refresh just this data
+    // without re-running the heavier garage cell.
+    cell.home_extras_monitor = Monitor.subscribe("home_extras", {
+      connected: function () {
+        setTimeout(function () {
+          cell.home_extras_monitor?.resync();
+        }, 1000);
+      },
+      received: function (data) {
+        if (data.loading) {
+          return;
+        }
+        cell.flash();
+        cell.data.bank = data.data?.bank || {};
+        cell.data.bins = data.data?.bins || {};
+        renderLines();
+      },
+    });
+
     cell.nest_socket = new CellWS(
       cell,
       Server.socket("NestChannel", function (msg) {
@@ -605,7 +645,9 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
       device_battery: {},
       orders: [],
       garage: { state: "unknown", timestamp: 0 },
-      camera: { Backyard: {}, Driveway: {}, Doorbell: {}, Storage: {} },
+      camera: { Backyard: {}, Driveway: {}, Doorbell: {} },
+      bank: {},
+      bins: {},
     },
     onload: subscribeWebsockets,
     reloader: function () {
