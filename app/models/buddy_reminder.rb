@@ -14,11 +14,16 @@
 #  created_at           :datetime         not null
 #  updated_at           :datetime         not null
 #  byte_conversation_id :bigint           not null
+#  notify_user_id       :bigint
 #  user_id              :bigint           not null
 #
 class BuddyReminder < ApplicationRecord
   belongs_to :user
   belongs_to :byte_conversation
+  # Who it's FOR, when that isn't the person who set it. The row stays owned by
+  # the requester so it's theirs to see and cancel; ReminderFirer routes the
+  # delivery. Mirrors BuddyWatch#notify_user exactly.
+  belongs_to :notify_user, class_name: "User", optional: true
 
   KINDS = %w[reminder prompt].freeze
 

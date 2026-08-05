@@ -23,6 +23,8 @@ module Buddy
 
       if command
         run_command(reminder, command)
+      elsif reminder.notify_user_id
+        deliver_cross_user_reminder(reminder)
       elsif reminder.kind == "prompt"
         deliver_prompted_reminder(user, conversation, reminder)
       else
@@ -77,6 +79,36 @@ module Buddy
           text:         "Reminder: #{said}",
           metadata:     { kind: "buddy", source: "reminder", reminder_id: reminder.id },
           push_title:   said,
+        )
+      end
+
+      # A reminder somebody set FOR someone else lands on the recipient's own
+      # companion, in that companion's voice, attributed to whoever asked. Same
+      # shape as a cross-user watch (Buddy::WatchMatcher#fire_cross_user!) -
+      # the row stays with the requester, only the delivery moves.
+      def deliver_cross_user_reminder(reminder)
+        owner     = reminder.user
+        recipient = reminder.notify_user
+        said      = Buddy::Template.render(
+          reminder.body, {}, user: owner, conversation: reminder.byte_conversation
+        )
+
+        Buddy::CompanionDelivery.deliver_prompt(
+          user:         recipient,
+          conversation: Buddy::CompanionRelay.conversation_for(recipient),
+          # Quoted and attributed for the same reason the watch relay is: a bare
+          # imperative reads as an instruction to the companion, which answers
+          # "yep, sent it along" instead of saying the thing.
+          seed:         "#{owner.first_name} asked me to remind #{recipient.first_name} " \
+                        "at this time: \"#{said}\". Say it to them warmly, in your own " \
+                        "voice - you're passing it along for #{owner.first_name}, so don't " \
+                        "read the request back as though it were addressed to you.",
+          metadata:     {
+            kind:        "buddy_trigger",
+            hidden:      true,
+            source:      "reminder_relay",
+            reminder_id: reminder.id,
+          },
         )
       end
 

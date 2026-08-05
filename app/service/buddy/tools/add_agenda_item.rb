@@ -25,6 +25,27 @@ Buddy::Tools.register(
     Matches the person's own + shared-editable LOCAL calendars. Omit for
     their default. (Google-synced calendars still need the app's add flow.)
 
+    `repeat` makes it a SERIES instead of a single row - "check the flower bed
+    every day", "trash out every Wednesday", "pay rent on the 1st". Same specs
+    `schedule_reminder` takes, and the clock is optional here since `at`
+    already carries one:
+      "daily" / "daily:HH:MM"          - every day
+      "weekdays"                       - Mon-Fri
+      "weekly:<days>"                  - "weekly:wednesday", "weekly:mon,wed,fri"
+      "monthly:<day-of-month>"         - "monthly:1" is the 1st
+      "monthly:<nth>-<weekday>"        - "monthly:2-tuesday" is the SECOND
+                                         TUESDAY of each month
+      "every:<n>-<unit>"               - "every:2-weeks" is every other week
+      "yearly"                         - once a year, on `at`'s date
+    `at` sets when the series STARTS and what time of day each one lands.
+    `until` (YYYY-MM-DD) stops it after that day.
+
+    A repeating agenda task is SILENT - it appears on the calendar and waits to
+    be looked at. If they need to be TOLD each time, a recurring reminder is
+    what actually reaches them, and for someone who lives out of their
+    reminders rather than their calendar that's most things. Setting both is
+    fine and often right: the series is the record, the reminder is the nudge.
+
     ONLY for something that doesn't exist yet. If they're talking about an
     item that's already on a calendar - moving it, renaming it, changing its
     time or place - that's `edit_agenda_item`, including when the change is
@@ -40,10 +61,30 @@ Buddy::Tools.register(
     kind:     { type: :enum,         required: false, default: :event, values: %i[event task trigger] },
     all_day:  { type: :string,       required: false, description: "'true' for all-day" },
     calendar: { type: :string,       required: false, description: "Which calendar/agenda to add to, by name (e.g. 'Ours'); omit for default" },
+    repeat:   { type: :string,       required: false, description: "Recurrence spec, making this a series: daily / weekdays / weekly:<days> / monthly:<dom> / monthly:<nth>-<weekday> / every:<n>-<unit> / yearly" },
+    until:    { type: :string,       required: false, description: "Stop repeating after this date (YYYY-MM-DD)" },
   },
   confirm:     ->(payload, ctx) {
     agenda = ctx.resolve_writable_agenda(payload[:calendar])
     raise "no writable calendar available" if agenda.nil?
+
+    start = ctx.resolve_calendar_time(payload[:at])
+    raise "couldn't work out when to start" if start.nil?
+
+    local      = start.in_time_zone(ctx.user.timezone)
+    repeat     = payload[:repeat].to_s.strip
+    recurrence = nil
+    if repeat.present?
+      recurrence = Buddy::RepeatSpec.parse(Buddy::RepeatSpec.with_clock(repeat, local), on: local.to_date)
+      raise "unknown repeat spec #{payload[:repeat].inspect}" if recurrence.nil?
+
+      if payload[:until].to_s.strip.present?
+        ends = (Date.parse(payload[:until].to_s) rescue nil)
+        raise "couldn't read #{payload[:until].inspect} as a date" if ends.nil?
+
+        recurrence = recurrence.merge("until_on" => ends.iso8601)
+      end
+    end
 
     is_default = agenda.id == ctx.default_agenda&.id
     # Prod 1201: "move it to Ours" produced an ADD, so the same Costco Run now
@@ -69,7 +110,8 @@ Buddy::Tools.register(
         agenda_id:      agenda.id,
         agenda_name:    agenda.name,
         agenda_default: is_default,
-        at:             ctx.resolve_calendar_time(payload[:at]),
+        at:             start,
+        recurrence:     recurrence,
       }.compact,
     }
   },
@@ -99,6 +141,9 @@ Buddy::Tools.register(
       end
 
     lines = [when_line]
+    if payload[:recurrence].present?
+      lines << "🔁 #{Buddy::ReminderPresenter.repeat_phrase(payload[:recurrence])}"
+    end
     lines << "@ #{payload[:location]}" if payload[:location].present?  # place — @ says it's a location
     # Calendar — only when it's NOT the default (a non-default detail worth
     # calling out); 📅 marks it as a calendar without a word-label.
@@ -141,6 +186,21 @@ Buddy::Tools.register(
     # default (0) alone (it's NOT NULL).
     attrs[:arrive_early_minutes] = 5 if payload[:location].present?
 
+    # A repeat is a SERIES, not a row: AgendaSchedule owns the rule and
+    # materializes occurrences forward on save (and rolls the window on from
+    # there), so creating one is all that's needed. Its items are `dependent:
+    # :destroy`, which is what makes the undo below clean.
+    if payload[:recurrence].present?
+      schedule = Buddy::AgendaSeries.create!(agenda, payload[:recurrence], attrs, duration: duration)
+      next {
+        agenda_schedule_id: schedule.id,
+        recurrence:         payload[:recurrence],
+        revert:             {
+          op: "created", model: "AgendaSchedule", id: schedule.id, summary: "removed #{schedule.name}"
+        },
+      }
+    end
+
     item = agenda.agenda_items.create!(attrs)
     {
       agenda_item_id: item.id,
@@ -148,6 +208,12 @@ Buddy::Tools.register(
     }
   },
   receipt:     ->(result, ctx) {
+    if result[:agenda_schedule_id]
+      schedule = AgendaSchedule.find_by(id: result[:agenda_schedule_id])
+      phrase   = Buddy::ReminderPresenter.repeat_phrase(result[:recurrence])
+      next "Added #{schedule&.name || "that"} #{phrase} to #{schedule&.agenda&.name || "your calendar"} ✓"
+    end
+
     item  = AgendaItem.find_by(id: result[:agenda_item_id])
     where = item&.agenda&.name.presence
     start = item&.start_at&.in_time_zone(ctx.user.timezone)

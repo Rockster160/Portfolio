@@ -9,6 +9,18 @@ Buddy::Tools.register(
     or asked for a TASK, they want a row they can see and check off - that's
     `add_agenda_item`, and a reminder is not a substitute for it.
 
+    `notify` aims it at SOMEBODY ELSE in the house. "Send Chelsea a reminder in
+    10 minutes to...", "remind Eve at 4 that...", "ping mom tonight about..." -
+    name them here, and it arrives on THEIR companion at that time, framed as
+    coming from the person who asked. Read who the reminder is FOR, not just
+    what it says: "send a reminder to Chelsea that we need to X" is for
+    Chelsea, and setting it for yourself instead means the person who was
+    supposed to act never hears about it. The reminder still belongs to whoever
+    asked, so they can see and cancel it. Leave `notify` off for themselves.
+
+    This is for a nudge at a TIME. To tell someone something right now, that's
+    `message_partner`.
+
     ONE-SHOT: pass `at` (ISO-8601 datetime with timezone offset).
     Convert natural-language times ("in 30 min", "3pm", "tomorrow
     morning") into ISO using the local time in RIGHT NOW block.
@@ -59,6 +71,7 @@ Buddy::Tools.register(
     repeat: { type: :string, required: false, description: "Recurrence spec: daily:HH:MM / weekdays:HH:MM / weekly:<days>:HH:MM / monthly:<dom>:HH:MM / monthly:<nth>-<weekday>:HH:MM / every:<n>-<unit>:HH:MM / yearly:HH:MM" },
     until:  { type: :string, required: false, description: "Stop repeating after this date (YYYY-MM-DD)" },
     kind:   { type: :enum,   required: false, default: :reminder, values: %i[reminder prompt] },
+    notify: { type: :string, required: false, description: "Household member this reminder is FOR, if not the person asking" },
   },
   confirm: ->(payload, ctx) {
     recurrence_hash = Buddy::RepeatSpec.parse(payload[:repeat], on: ctx.user.perceived_today)
@@ -85,25 +98,44 @@ Buddy::Tools.register(
 
     when_str = fire_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p")
 
+    # Who it's FOR. Naming someone we can't place is refused rather than
+    # quietly aimed back at the asker - a reminder that reaches the wrong
+    # person is the failure this argument exists to stop (prod 2547).
+    wanted      = payload[:notify].to_s.strip
+    recipient   = wanted.present? ? ctx.resolve_household_user(wanted) : nil
+    raise "I'm not sure who #{wanted} is" if wanted.present? && recipient.nil?
+
+    notify_user = recipient && recipient.id != ctx.user.id ? recipient : nil
+
     # Refusing rather than quietly merging: if this really is a second, separate
     # thing at the same minute, silently folding it into the first would lose a
     # reminder they asked for. Told about it, Buddy can say it's already set, or
     # cancel and re-set if the wording is meant to replace it.
-    if recurrence_hash.nil? && (clash = BuddyReminder.clashing(ctx.user, payload[:text], fire_at))
+    if recurrence_hash.nil? && notify_user.nil? && (clash = BuddyReminder.clashing(ctx.user, payload[:text], fire_at))
       raise "#{clash.body.inspect} is already set for #{when_str} - nothing new to add"
     end
 
+    who = notify_user ? notify_user.first_name : "you"
     summary = if recurrence_hash
-      "Repeating reminder starting #{when_str}?"
+      "Repeating reminder for #{who} starting #{when_str}?"
     else
-      "Remind you at #{when_str}?"
+      "Remind #{who} at #{when_str}?"
     end
-    { summary: summary, resolved: { fire_at_iso: fire_at.iso8601, recurrence: recurrence_hash } }
+    {
+      summary:  summary,
+      resolved: {
+        fire_at_iso:    fire_at.iso8601,
+        recurrence:     recurrence_hash,
+        notify_user_id: notify_user&.id,
+        recipient_name: notify_user&.first_name,
+      }.compact,
+    }
   },
   label: ->(payload, ctx) {
     fire_at  = Time.zone.parse(payload[:fire_at_iso].to_s) rescue nil
     when_str = fire_at ? fire_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p") : payload[:at].to_s
     sub      = payload[:recurrence] ? "repeats #{payload[:repeat] || payload.dig(:recurrence, 'kind')}" : when_str
+    sub      = "for #{payload[:recipient_name]} · #{sub}" if payload[:recipient_name].present?
     { title: payload[:text].to_s.truncate(60), sub: sub.presence }
   },
   execute: ->(payload, ctx) {
@@ -115,26 +147,39 @@ Buddy::Tools.register(
     reminder = BuddyReminder.create!(
       user:              ctx.user,
       byte_conversation: conversation,
+      notify_user_id:    payload[:notify_user_id],
       kind:              (payload[:kind] || :reminder).to_s,
       body:              payload[:text].to_s.first(500),
       fire_at:           fire_at,
       recurrence:        payload[:recurrence],
     )
-    { reminder_id: reminder.id, fire_at: fire_at.iso8601, recurrence: payload[:recurrence] }
+    {
+      reminder_id:    reminder.id,
+      fire_at:        fire_at.iso8601,
+      recurrence:     payload[:recurrence],
+      recipient_name: payload[:recipient_name],
+    }
   },
   # Scheduling a reminder is safe + reversible, so it runs WITHOUT a
   # confirmation checkbox and drops an activity receipt instead.
   auto:    true,
+  # Who it's for leads the receipt when it isn't them. "Byte will send you a
+  # reminder at 12:22pm" was the only visible sign that a reminder meant for
+  # Chelsea had been aimed back at the person who asked, and it's easy to read
+  # past (prod 2547).
   receipt: ->(result, ctx) {
     name    = ctx.buddy_name
     fire_at = (Time.zone.parse(result[:fire_at].to_s) rescue nil)
     rec     = result[:recurrence]
+    who     = result[:recipient_name].presence
 
     if rec.is_a?(Hash)
       hhmm  = (Time.zone.parse(rec["at"].to_s) rescue nil)
       tstr  = hhmm ? hhmm.strftime("%-I:%M%P").sub(":00", "") : rec["at"].to_s
       ends  = rec["until_on"].present? ? " until #{rec["until_on"]}" : ""
-      "#{name} will remind you #{Buddy::ReminderPresenter.repeat_phrase(rec)} at #{tstr}#{ends}"
+      "#{name} will remind #{who || "you"} #{Buddy::ReminderPresenter.repeat_phrase(rec)} at #{tstr}#{ends}"
+    elsif who
+      "#{name} will remind #{who} #{ctx.friendly_future(fire_at)}"
     else
       "#{name} will send you a reminder #{ctx.friendly_future(fire_at)}"
     end

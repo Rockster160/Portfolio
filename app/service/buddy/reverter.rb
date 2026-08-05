@@ -19,6 +19,10 @@ module Buddy
     MODELS = {
       "ActionEvent"     => "ActionEvent",
       "AgendaItem"      => "AgendaItem",
+      # A recurring add creates the SCHEDULE, not the rows - its occurrences are
+      # `dependent: :destroy`, so removing it takes the whole series with it and
+      # the undo is as clean as it is for a single item.
+      "AgendaSchedule"  => "AgendaSchedule",
       "BuddyIdea"       => "BuddyIdea",
       "Chore"           => "Chore",
       "ChoreCompletion" => "ChoreCompletion",
@@ -130,6 +134,11 @@ module Buddy
         rec.destroy!
         ActionEventNotifier.notify(rec.user, rec, :removed, auth: :buddy, auth_id: rec.user_id)
       when "AgendaItem"      then rec.update!(status: :cancelled, cancelled_at: Time.current)
+      # Destroyed rather than cancelled, unlike a single item. A series undone
+      # seconds after it was made has no history worth keeping, and a cancelled
+      # schedule would go on materializing occurrences nobody asked for. Its
+      # items are `dependent: :destroy`, so they go with it.
+      when "AgendaSchedule"  then rec.destroy!
       # Dropped, not destroyed. "I didn't mean that" is the same gesture as
       # telling Buddy to forget one, and it lands the same way - out of the
       # pool, off the prompt, still there if the undo gets undone.

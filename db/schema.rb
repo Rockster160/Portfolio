@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_04_130648) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_05_190000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -436,8 +436,10 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_04_130648) do
     t.datetime "updated_at", null: false
     t.jsonb "recurrence"
     t.datetime "last_fired_at"
+    t.bigint "notify_user_id"
     t.index ["byte_conversation_id"], name: "index_buddy_reminders_on_byte_conversation_id"
     t.index ["fire_at"], name: "idx_buddy_reminders_pending", where: "((fired_at IS NULL) AND (cancelled_at IS NULL))"
+    t.index ["notify_user_id"], name: "index_buddy_reminders_on_notify_user_id"
     t.index ["user_id"], name: "index_buddy_reminders_on_user_id"
   end
 
@@ -1585,6 +1587,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_04_130648) do
   add_foreign_key "buddy_relays", "users", column: "to_user_id"
   add_foreign_key "buddy_reminders", "byte_conversations"
   add_foreign_key "buddy_reminders", "users"
+  add_foreign_key "buddy_reminders", "users", column: "notify_user_id"
   add_foreign_key "buddy_routines", "users"
   add_foreign_key "buddy_usages", "byte_conversations"
   add_foreign_key "buddy_usages", "byte_messages"

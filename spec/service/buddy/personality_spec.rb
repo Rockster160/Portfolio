@@ -114,8 +114,31 @@ RSpec.describe Buddy::Personality do
       prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
 
       expect(prompt).to include("Remember versus DO")
-      expect(prompt).to include("recurring agenda task, not a watch")
+      expect(prompt).to include("`add_agenda_item` with `repeat`, never a watch")
       expect(prompt).to include("A `custom` watch is the LAST thing to reach for")
+    end
+
+    # An agenda row waits to be looked at, which is no use to someone who never
+    # opens the calendar - Eve works almost entirely off reminders. Routing on
+    # "is it a task" alone would file her whole garden list somewhere silent.
+    it "weighs whether they need to be TOLD, not just what kind of thing it is" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("an agenda row is SILENT")
+      expect(prompt).to include("the reminder IS the delivery")
+      expect(prompt).to include("Setting BOTH is fine")
+    end
+
+    # Prod 2547: "Send a reminder to Chelsea in 10 minutes that..." set an
+    # ordinary reminder and pinged the person who asked. Reaching someone LATER
+    # sat between the relay tools (which send now) and schedule_reminder (which
+    # had no recipient), so the model picked the nearest wrong thing.
+    it "routes a timed nudge for somebody else to a reminder aimed at them" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("Reaching them LATER is a reminder aimed at them")
+      expect(prompt).to include('schedule_reminder(notify: "<name>"')
+      expect(prompt).to include("Read who the thing is FOR before you set it")
     end
 
     # Prod 2528 closed a chore rundown with a 💙. The profile called that emoji

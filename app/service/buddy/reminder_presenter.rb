@@ -151,10 +151,14 @@ module Buddy
       end
     end
 
+    # A reminder aimed at someone else says so on the row. Without it the two
+    # are indistinguishable in the list, and "did that go to Chelsea or to me?"
+    # has no answer short of opening it.
     def when_text(reminder, user)
-      return recurrence_text(reminder) if reminder.recurring?
+      base = reminder.recurring? ? recurrence_text(reminder) : reminder.fire_at.in_time_zone(user.timezone).strftime("%a %-I:%M %p")
+      return base if reminder.notify_user_id.blank?
 
-      reminder.fire_at.in_time_zone(user.timezone).strftime("%a %-I:%M %p")
+      "for #{reminder.notify_user&.first_name || "someone else"} · #{base}"
     end
 
     def recurrence_text(reminder)

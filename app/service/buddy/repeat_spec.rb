@@ -135,6 +135,18 @@ module Buddy
       { "freq" => "custom", "interval" => n, "unit" => u, "at" => at, "starts_on" => on.iso8601 }
     end
 
+    # The clock is mandatory in a spec, because a reminder at an hour nobody
+    # asked for is worse than being told the spec was unreadable. An agenda item
+    # already carries its own start time though, so it can supply the missing
+    # half rather than making the model write the hour twice and disagree with
+    # itself. Returns the spec unchanged when it already ends in HH:MM.
+    def with_clock(spec, time)
+      text = spec.to_s.strip
+      return text if text.empty? || clock(text.split(":").last(2))
+
+      "#{text}:#{format("%<hour>02d:%<minute>02d", hour: time.hour, minute: time.min)}"
+    end
+
     def days_in(text)
       text.to_s.split(/[,\s]+/).filter_map { |d| WEEKDAYS[d.strip] }.uniq
     end
