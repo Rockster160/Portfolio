@@ -27,7 +27,7 @@ module Buddy
     ALL = {
       byte: {
         name:           "Byte",
-        tone:           :rocco,
+        tone:           :byte,
         color:          "#0E1930",
         avatar:         "byte_favicon/byte.png",
         touch_icon:     "byte_favicon/apple-touch-icon.png",
