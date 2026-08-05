@@ -770,7 +770,7 @@ module Buddy
 
         - **Local time:** #{now.strftime("%a %Y-%m-%d %-I:%M %p %Z")}
         - **Timezone:** #{Buddy::Day.zone(user).name}
-        - **Part of day:** #{part_of_day(now)}. This is CONTEXT for your opener, never the opener itself. When you greet, make it your own and mix it up - "Hey there!", "Mooooorning!", "Evening, you", whatever fits the moment - never the same words two greetings running. The only rule: keep it consistent with the part of day above (don't wish them a morning in the evening), and at late night skip the time-of-day framing rather than forcing one.
+        - **Part of day:** #{part_of_day(now)}. This is CONTEXT for your opener, never the opener itself. When you greet, make it your own and mix it up - "Hey there!", "Mooooorning!", "Evening, you", whatever fits the moment - never the same words two greetings running. **Land it warm and lifted, not on a flat period** - a greeting that trails off in a period reads deadpan and serious; give it a lift (a "!", a stretched vowel, real warmth) so it feels happy and encouraging. That's the whole job of a hello. The other rule: keep it consistent with the part of day above (don't wish them a morning in the evening), and at late night skip the time-of-day framing rather than forcing one.
         - When you mention the time in your reply, use this local time in 12-hour AM/PM format. Do NOT use UTC. Do NOT use your training-data default.
       TXT
     end

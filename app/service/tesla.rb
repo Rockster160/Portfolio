@@ -1,6 +1,10 @@
 class Tesla
   attr_accessor :id, :controller
 
+  def self.diagnose
+    ::ProxyRequest.diagnose
+  end
+
   # Allows calling methods directly from the class rather than `Tesla.new.start` -> `Tesla.start`
   def self.method_missing(method, *)
     (@instance ||= new).send(method, *)
