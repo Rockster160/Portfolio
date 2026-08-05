@@ -658,10 +658,40 @@
   // key) says another, hand the URL's date to the same client-side
   // renderer used for prev/next clicks. Param name differs per view:
   // cal-week uses `?date=YYYY-MM-DD`, cal-month uses `?month=YYYY-MM`.
+  //
+  // NO param is the important case: a plain `/agenda/grid` (or
+  // `/agenda/month`) open means "today". The shell HTML is served
+  // cache-first keyed on pathname (see service_worker.js.erb), so its
+  // baked-in current-date + is-today markers can be DAYS stale on a fresh
+  // open. Nothing else reconciles this at init — handleDayRollover only
+  // fires on a timer tick / visibilitychange — so without this the grid
+  // opens on whatever day the shell happened to be cached. Reconcile to
+  // the client-side logical today before first paint.
   function syncCalDateFromURL(root, paramName) {
     const params = new URLSearchParams(window.location.search);
     const urlValue = params.get(paramName);
-    if (!urlValue) return;
+    if (!urlValue) {
+      if (paramName === "month") {
+        const todayMonth = todayMonthISO();
+        if ((root.dataset.currentDate || "").slice(0, 7) === todayMonth) {
+          // Right month already, but a same-month stale shell may have
+          // baked the is-today highlight onto the wrong day cell.
+          refreshTodayMarkers(root, 3);
+        } else {
+          renderMonthFor(root, todayMonth);
+        }
+      } else {
+        const grid = $(".cal-week-grid", root);
+        const dayStart = Number(grid?.dataset?.dayStartHour) || 3;
+        const todayISO = logicalDateISO(new Date(), dayStart);
+        // currentDate is a single day, so this catches both a fully stale
+        // week AND a same-week-but-wrong-day shell (highlight on the wrong
+        // column). renderWeekFor rebuilds markers, title, links, and the
+        // anchored-to-today flag so a later rollover behaves correctly.
+        if (root.dataset.currentDate !== todayISO) renderWeekFor(root, todayISO);
+      }
+      return;
+    }
     if (paramName === "month") {
       if (!/^\d{4}-\d{2}$/.test(urlValue)) return;
       const currentMonth = (root.dataset.currentDate || "").slice(0, 7);
