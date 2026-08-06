@@ -38,6 +38,9 @@ module Buddy
         stashed_ideas
         jil_triggers
         jil_functions
+        device_states
+        trigger_shapes
+        record_links
         routines
       ].freeze
 

@@ -53,6 +53,7 @@ Rails.application.routes.draw do
   get    "/byte/messages"     => "byte#messages",       as: :byte_message_history
   post   "/byte/messages"     => "byte#create_message", as: :byte_messages
   delete "/byte/messages/:id" => "byte#delete_message", as: :byte_message
+  post   "/byte/messages/:id/report" => "byte#report_message", as: :byte_message_report
   post   "/byte/uploads"      => "byte#uploads",        as: :byte_uploads
   get  "/byte/csrf"     => "byte#csrf",           as: :byte_csrf
   post "/byte/presence" => "byte#presence",       as: :byte_presence
@@ -62,6 +63,7 @@ Rails.application.routes.draw do
   patch  "/byte/conversations/:id" => "byte#update_conversation",  as: :byte_conversation
   delete "/byte/conversations/:id" => "byte#archive_conversation"
   get    "/byte/claude_sessions"   => "byte#claude_sessions",      as: :byte_claude_sessions
+  get    "/byte/workspaces"        => "byte#workspaces",           as: :byte_workspaces
   post   "/byte/actions/:request_id/respond" => "byte#respond_action", as: :byte_action_respond
   post   "/buddy/quick_action"               => "buddy/quick_actions#create", as: :buddy_quick_action
   get    "/buddy/timers"            => "buddy/timers#index",   as: :buddy_timers
@@ -78,6 +80,12 @@ Rails.application.routes.draw do
   patch  "/buddy/routines/:id"       => "buddy/routines#update",  as: :buddy_routine
   patch  "/buddy/routines/:id/steps" => "buddy/routines#steps",   as: :buddy_routine_steps
   delete "/buddy/routines/:id"       => "buddy/routines#destroy"
+  # Record links. Read/adjust/delete only — making one is a conversation with
+  # Byte (`link_records`), since picking two endpoints with the right cascade
+  # direction is a poor fit for a form.
+  get    "/buddy/links"     => "buddy/links#index",   as: :buddy_links
+  patch  "/buddy/links/:id" => "buddy/links#update",  as: :buddy_link
+  delete "/buddy/links/:id" => "buddy/links#destroy"
   # Reminders and watches are separate tables but one list to the person, so
   # `type` picks the table and the pair is the identity.
   get    "/buddy/reminders" => "buddy/reminders#index", as: :buddy_reminders
@@ -259,6 +267,7 @@ Rails.application.routes.draw do
   patch "webhooks/byte/:id"              => "webhooks#byte_update"
   patch "webhooks/byte/conversation/:id" => "webhooks#byte_update_conversation"
   post  "webhooks/byte/action"           => "webhooks#byte_create_action"
+  post  "webhooks/byte/workspaces"       => "webhooks#byte_workspaces"
   get   "webhooks/byte/agenda"           => "webhooks#byte_agenda"
   get   "webhooks/byte/weather"          => "webhooks#byte_weather"
 

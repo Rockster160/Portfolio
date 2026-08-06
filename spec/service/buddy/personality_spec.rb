@@ -734,4 +734,52 @@ RSpec.describe Buddy::Personality do
       expect(prompt).to include("Only fall back to `category` for the placement itself when no section matches")
     end
   end
+
+  # 2624 asked for clarification chips when a request is ambiguous. What was
+  # actually wanted is the opposite trade: act on the likeliest reading and name
+  # the assumption, because a question costs a round trip and usually returns
+  # the answer you'd have guessed.
+  describe ".for acting on a fuzzy request" do
+    let(:prompt) { described_class.for(User.me, conversation: buddy_convo(User.me, "byte")) }
+
+    it "tells the model to guess and state the guess rather than ask" do
+      expect(prompt).to include("pick one, do it, say what you picked")
+      expect(prompt).to include("take the likeliest reading, act on it, and name the assumption")
+    end
+
+    it "shows the assumption as a clause, paired against the question it replaces" do
+      expect(prompt).to include('"Set for 4 — assuming today." NOT "Did you mean today or tomorrow?"')
+      expect(prompt).to include("the sentence IS the invitation to correct you")
+    end
+
+    # The exception, and the reason for it: a wrong guess aimed at somebody else
+    # is not a correction, it's a message that already arrived.
+    it "keeps cross-user sends behind a question" do
+      expect(prompt).to include("anything that puts words in front of another person")
+      expect(prompt).to include("`message_partner`")
+      expect(prompt).to include("carrying `notify:`")
+      expect(prompt).to include("ask first")
+    end
+
+    it "separates a fuzzy request from one with no likeliest reading at all" do
+      expect(prompt).to include("if you'd be guessing between two sensible answers, guess; if you'd be inventing a number, ask")
+    end
+  end
+
+  describe ".for something stated with nowhere to put it" do
+    let(:prompt) { described_class.for(User.me, conversation: buddy_convo(User.me, "byte")) }
+
+    it "names the failure: an intention answered warmly and filed nowhere" do
+      expect(prompt).to include("A message that says they're going to do a thing, and a reply that calls no tool, is a thing with no home")
+    end
+
+    it "routes the leftover to the stash rather than leaving it loose" do
+      expect(prompt).to include("everything else that they'd be annoyed to have lost is `stash_idea`")
+    end
+
+    it "stops short of filing everything" do
+      expect(prompt).to include("This is not a licence to file everything")
+      expect(prompt).to include("The test is whether it's still open when the message ends")
+    end
+  end
 end

@@ -1,11 +1,17 @@
 // Long-press (touch) / right-click (desktop) context menu on a message
-// bubble. Two actions — Copy ID, Copy full message — plus a header showing
-// the message's id (verbatim + hand-selectable if the clipboard write is
-// blocked in a non-secure context or on denied permission) and its send time.
+// bubble. Three actions — Copy ID, Copy full message, Report a problem — plus
+// a header showing the message's id (verbatim + hand-selectable if the
+// clipboard write is blocked in a non-secure context or on denied permission)
+// and its send time.
 //
 // One reusable menu node is mounted lazily and repositioned per open; the
 // target's id + raw body are read off the bubble's dataset (paintMessageNode
 // stamps `data-message-id` and `data-full-body`).
+//
+// Report is the only action here that reaches the server. It sends the id and
+// a description; the body is re-read server-side rather than taken from
+// `data-full-body`, since that attribute is client-controlled and the whole
+// point of the report is an accurate record of what was said.
 
 // Write to the clipboard with a graceful fallback for browsers / contexts
 // where the async Clipboard API is unavailable or rejected (e.g. http, or
@@ -53,7 +59,31 @@ function formatSent(iso) {
   return sentFmt.format(d);
 }
 
-export function initMessageContextMenu(thread, root) {
+// Same shape as the one in form.js — it lifts `json.errors` off a failure so
+// the caller can say what actually went wrong instead of "HTTP 422".
+async function apiCall(url, method, body) {
+  const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+  const csrf = csrfMeta ? csrfMeta.getAttribute("content") : "";
+  const res = await fetch(url, {
+    method,
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "X-CSRF-Token": csrf,
+    },
+    body: body == null ? undefined : JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(`HTTP ${res.status}`);
+    err.errors = json.errors;
+    throw err;
+  }
+  return json;
+}
+
+export function initMessageContextMenu(thread, root, { onNotice } = {}) {
   if (!thread || !root) return;
 
   let menu = null;
@@ -101,6 +131,7 @@ export function initMessageContextMenu(thread, root) {
         <span class="byte-msg-menu-sent" data-menu-sent hidden></span>
       </div>
       <button type="button" class="byte-msg-menu-item" data-menu-copy-full>Copy full message</button>
+      <button type="button" class="byte-msg-menu-item is-report" data-menu-report>Report a problem</button>
     `;
     root.appendChild(el);
 
@@ -115,7 +146,44 @@ export function initMessageContextMenu(thread, root) {
     el.querySelector("[data-menu-copy-full]").addEventListener("click", (e) => {
       runCopy(e.currentTarget, menu.dataset.msgFull || "");
     });
+    el.querySelector("[data-menu-report]").addEventListener("click", (e) => {
+      runReport(e.currentTarget, menu.dataset.msgId || "");
+    });
     return el;
+  }
+
+  // Ask for the optional description, then hand the id to the server. A native
+  // prompt rather than a dialog: it's the one place in Byte that already does
+  // this (buddy/routines.js), and it distinguishes cancel from "no description"
+  // for free — `null` is Cancel, `""` is OK with an empty box, and only the
+  // first should abort.
+  async function runReport(btn, id) {
+    if (!id) return;
+
+    const description = window.prompt("What went wrong? (optional)");
+    if (description === null) return;
+
+    const label = btn.textContent;
+    btn.textContent = "Reporting…";
+    btn.disabled = true;
+    try {
+      const res = await apiCall(`/byte/messages/${encodeURIComponent(id)}/report`, "POST", {
+        description: description.trim(),
+      });
+      btn.textContent = "Reported ✓";
+      btn.classList.add("is-ok");
+      if (onNotice) onNotice(`Reported message ${id} to **${res.list || "Todo"}**.`);
+      setTimeout(closeMenu, 650);
+    } catch (err) {
+      btn.textContent = (err.errors && err.errors[0]) || "Report failed";
+      btn.classList.add("is-err");
+      setTimeout(() => {
+        btn.textContent = label;
+        btn.classList.remove("is-err");
+      }, 2600);
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   // Icon-button copy (the id): swap the copy glyph for a check on success via
@@ -191,6 +259,9 @@ export function initMessageContextMenu(thread, root) {
     });
     menu.querySelector("[data-menu-copy-id]").classList.remove("is-ok", "is-err");
     menu.querySelector("[data-menu-copy-full]").textContent = "Copy full message";
+    const reportBtn = menu.querySelector("[data-menu-report]");
+    reportBtn.textContent = "Report a problem";
+    reportBtn.disabled = false;
 
     menu.hidden = false;
     positionMenu(x, y);

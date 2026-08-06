@@ -177,6 +177,33 @@ class ByteController < ApplicationController
     head :no_content
   end
 
+  # "This reply was wrong" from the message's own long-press menu, filed onto
+  # the Todo list so it's in the same place as everything else waiting to be
+  # looked at.
+  #
+  # The body is re-read from the record rather than trusted from the client.
+  # The bubble carries `data-full-body`, which is what the menu would otherwise
+  # have to hand, and a report whose quoted text can be edited by the thing
+  # being reported is worth nothing.
+  REPORT_LIST     = "Todo".freeze
+  REPORT_BODY_CAP = 100
+
+  def report_message
+    message = current_user.byte_messages.find_by(id: params[:id])
+    return render(json: { errors: ["that message isn't yours"] }, status: :not_found) if message.nil?
+
+    # `ilike` is case-insensitive and exact (no wildcards), so this is "Todo" /
+    # "TODO" / "ToDo" and not "Code TODO" or "To-do". Ordered because `take` on
+    # an unordered relation is whatever Postgres feels like: if a second one is
+    # ever made, reports should keep landing on the original rather than
+    # alternating between two lists nobody is watching both of.
+    list = User.me.lists.ilike(name: REPORT_LIST).order(:id).first
+    return render(json: { errors: ["no #{REPORT_LIST} list to file it on"] }, status: :unprocessable_entity) if list.nil?
+
+    list.list_items.add(report_line(message))
+    render json: { ok: true, list: list.name }
+  end
+
   # ---------- conversation management ----------
 
   def list_conversations
@@ -189,6 +216,17 @@ class ByteController < ApplicationController
     }
   end
 
+  # Directories a claude/bash/cursor thread could start in, for the picker on
+  # the new-conversation modal. Reported by the Mac and cached (see
+  # ByteWorkspaces), so this answers while the Mac is asleep.
+  def workspaces
+    render json: {
+      paths:       ByteWorkspaces.search(params[:q], limit: (params[:limit] || 20).to_i.clamp(1, 100)),
+      default:     ByteWorkspaces::DEFAULT,
+      reported_at: ByteWorkspaces.reported_at&.iso8601,
+    }
+  end
+
   def create_conversation
     # Buddy-only members can never spin up a claude/bash/jarvis thread.
     mode = buddy_only? ? :buddy : normalized_mode(params[:mode])
@@ -198,6 +236,7 @@ class ByteController < ApplicationController
       name:            name,
       mode:            mode,
       last_message_at: Time.current,
+      metadata:        starting_cwd(mode),
       **requested_theme(mode),
     )
     broadcast_convo_change(convo, :created)
@@ -494,6 +533,39 @@ class ByteController < ApplicationController
     !current_user&.me?
   end
 
+  # Where a new thread should open. Only meaningful for the modes that have a
+  # working directory at all — a Buddy thread has no shell and no filesystem, so
+  # a cwd on one would be a value nothing reads.
+  #
+  # Rails is the source of truth only until the Mac has state of its own: the
+  # Mac seeds from this on the first turn and owns it from then on, because
+  # `!cd` has to keep working and a stale value here must never yank a session
+  # out from under someone mid-conversation.
+  CWD_MODES = %w[claude bash cursor].freeze
+
+  def starting_cwd(mode)
+    return {} unless CWD_MODES.include?(mode.to_s)
+
+    path = params[:cwd].to_s.strip
+    return {} if path.empty? || !ByteWorkspaces.plausible?(path)
+
+    { "cwd" => ByteWorkspaces.tidy(path) }
+  end
+
+  # `{id} [{body}] {description}`, per the shape asked for.
+  #
+  # The id leads for a reason beyond reading order: ListItem.add pulls a
+  # LEADING `[Section]` off an item name and files the row under that section,
+  # dropping the bracketed text from what you see. A line starting with the
+  # quoted body would lose the body. Newlines are flattened for the same class
+  # of reason — a list item is one line, and a pasted multi-line reply would
+  # otherwise arrive as one long unreadable run.
+  def report_line(message)
+    body = message.body.to_s.squish.truncate(REPORT_BODY_CAP)
+    note = params[:description].to_s.squish
+    ["##{message.id}", "[#{body}]", note.presence].compact.join(" ")
+  end
+
   # First-open conversation, for when there's nothing to open. Owners get the
   # normal claude default; buddy-only members and the kiosk get a Buddy thread,
   # since neither has any use for another kind.
@@ -602,6 +674,34 @@ class ByteController < ApplicationController
     })
   end
 
+  # `/cd <path>` — move a thread's working directory.
+  #
+  # Distinct from the Mac's `!cd`, which changes the shell's cwd as a side
+  # effect of running a command. This is the deliberate version: it writes the
+  # conversation record and pushes to the Mac, so it works on a thread that has
+  # never run anything, and it survives the Mac being asleep (the Mac reads the
+  # record when it next wakes).
+  def handle_cd(conversation, arg)
+    return "usage: `/cd ~/code/some-project` — currently #{current_cwd(conversation)}" if arg.empty?
+    return "`#{arg}` doesn't look like a directory." unless ByteWorkspaces.plausible?(arg)
+
+    path = ByteWorkspaces.tidy(arg)
+    conversation.update!(metadata: conversation.metadata.to_h.merge("cwd" => path))
+    broadcast_convo_change(conversation, :updated)
+
+    reached = ByteLocal.set_cwd(conversation_id: conversation.id, cwd: path)
+    known   = ByteWorkspaces.all.include?(path)
+    [
+      "Working directory set to `#{path}`.",
+      ("The Mac didn't answer, so this takes effect when it next wakes." unless reached),
+      ("Note: that isn't one of the directories the Mac has reported." unless known),
+    ].compact.join(" ")
+  end
+
+  def current_cwd(conversation)
+    "`#{conversation.metadata.to_h['cwd'].presence || ByteWorkspaces::DEFAULT}`"
+  end
+
   # Slash commands whose scope is the Byte conversation record itself.
   # Returns a persisted acknowledgement message (system kind, inbound) or
   # nil if the command isn't ours to handle — caller falls through to the
@@ -623,11 +723,14 @@ class ByteController < ApplicationController
       conversation.update!(archived: true)
       broadcast_convo_change(conversation, :archived)
       ack(conversation, "Archived **#{conversation.display_name}**")
+    when "cd"
+      return ack(conversation, "Buddy threads have no working directory.") if buddy_only?
+      return ack(conversation, handle_cd(conversation, arg))
     when "mode"
       return ack(conversation, "Buddy is the only mode available to you.") if buddy_only?
 
       new_mode = normalized_mode(arg)
-      return ack(conversation, "usage: `/mode claude|bash|jarvis|buddy`") if arg.empty?
+      return ack(conversation, "usage: `/mode claude|bash|jarvis|buddy|cursor`") if arg.empty?
 
       conversation.update!(mode: new_mode)
       broadcast_convo_change(conversation, :updated)

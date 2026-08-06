@@ -170,6 +170,29 @@ module ByteLocal
     nil
   end
 
+  # Rails → Mac: point a conversation's shell and Claude turns at a directory.
+  #
+  # The Mac normally owns cwd (a `!cd` moves it, and the Mac reports back), and
+  # this doesn't change that — it's the one case where the decision is made
+  # somewhere the Mac can't see: the new-conversation modal on a phone, and
+  # `/cd`. Returns false rather than raising when the Mac is asleep; the value
+  # is on the conversation record either way and the Mac seeds from it on the
+  # next turn.
+  def set_cwd(conversation_id:, cwd:)
+    uri = URI.join(base_url, "/byte/set_cwd")
+    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
+    req.body = JSON.generate({ conversation_id: conversation_id.to_i, cwd: cwd.to_s })
+
+    res = Net::HTTP.start(uri.hostname, uri.port,
+      use_ssl: uri.scheme == "https", open_timeout: TIMEOUT_SECONDS, read_timeout: TIMEOUT_SECONDS,
+    ) { |http| http.request(req) }
+
+    res.is_a?(Net::HTTPSuccess)
+  rescue => e
+    Rails.logger.warn("[Byte] set_cwd failed: #{e.class}: #{e.message}")
+    false
+  end
+
   def conversation_payload(conversation)
     {
       id:       conversation.id,

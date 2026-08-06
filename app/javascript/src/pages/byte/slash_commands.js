@@ -23,10 +23,10 @@
 // for the Rails-owned ones, ByteMessageIntake#locked_out? for the Mac handoff),
 // so this list is presentation, never the gate.
 
-// Commands the Mac's meta handler owns. Only claude and bash threads reach it —
-// jarvis dispatches to ByteJarvisWorker and buddy never leaves Rails — so
-// offering these anywhere else is offering a no-op.
-const MAC_MODES = ["claude", "bash"];
+// Commands the Mac's meta handler owns. Only claude, bash and cursor threads
+// reach it — jarvis dispatches to ByteJarvisWorker and buddy never leaves Rails
+// — so offering these anywhere else is offering a no-op.
+const MAC_MODES = ["claude", "bash", "cursor"];
 
 const COMMANDS = [
   // Claude sessions
@@ -51,12 +51,16 @@ const COMMANDS = [
   // Conversation
   { name: "rename",   description: "Rename this conversation",                         args: "<new name>" },
   { name: "archive",  description: "Archive this conversation" },
-  { name: "mode",     owner: true, description: "Change dispatch mode",                 args: "<claude|bash|jarvis|buddy>" },
+  { name: "mode",     owner: true, description: "Change dispatch mode",                 args: "<claude|cursor|bash|jarvis|buddy>" },
   { name: "fork",     description: "Fork this conversation into a new one" },
 
   // Shell / utility
   { name: "abort",    modes: MAC_MODES, description: "Cancel a running shell command" },
   { name: "pwd",      modes: MAC_MODES, description: "Show current working directory" },
+  // Rails-owned, unlike the Mac's `!cd`: it writes the conversation record, so
+  // it works on a thread that has never run anything and survives the Mac
+  // being asleep.
+  { name: "cd",       modes: MAC_MODES, description: "Set this thread's working directory", args: "<path>" },
   { name: "clear",    description: "(client-only) wipe local queue + cache" },
   { name: "help",     modes: MAC_MODES, description: "Show all slash commands" },
 ];

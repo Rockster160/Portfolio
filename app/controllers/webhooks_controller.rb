@@ -489,6 +489,17 @@ class WebhooksController < ApplicationController
     render json: convo.as_wire
   end
 
+  # The Mac telling us which directories exist, so the new-conversation picker
+  # has something to offer. Pushed on boot and hourly rather than pulled,
+  # because the whole point of caching it is that the answer has to be there
+  # when the Mac isn't.
+  def byte_workspaces
+    return head :unauthorized unless byte_authorized?
+
+    paths = ByteWorkspaces.replace!(params[:paths])
+    render json: { ok: true, count: paths.length }
+  end
+
   # Read-only agenda lookup for Buddy. Accepts either a symbolic `range`
   # (today / tomorrow / weekend / week / upcoming) or a free-form `q`
   # (mirrors AgendaItem search syntax). Returns a compact text summary

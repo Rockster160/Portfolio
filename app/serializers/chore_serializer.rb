@@ -28,6 +28,7 @@
 #  parent_chore_id     :bigint
 #  target_count        :integer          default(1), not null
 #
+
 # Canonical chore JSON shape — the single payload that powers every
 # client view (Grid, Today, Hot strip), every endpoint that touches a
 # chore (sync, state, create, update, complete), and any external
@@ -42,6 +43,11 @@
 # preloaded context (day, household ids, hot picks lookup), then call
 # `.as_json` to emit. For bulk page rendering, build a
 # ChoreSerializerContext once and reuse it across N serializers.
+#
+# NOTE: the blank line above this block is load-bearing. `annotate` treats a
+# comment butted directly against its schema header as part of the annotation
+# and deletes it on the next run, which is how this paragraph went missing once
+# already.
 class ChoreSerializer
   HICON_PREFIX = "hicon:"
 

@@ -55,6 +55,9 @@ module Buddy
         stashed_ideas:          stashed_ideas(user),                 # brain-dump ideas to occasionally resurface
         jil_triggers:           jil_triggers(user),
         jil_functions:          jil_functions(user),
+        device_states:          device_states(user),          # last known state of every sensor in the house
+        trigger_shapes:         trigger_shapes(user),         # what a payload actually looks like when it fires
+        record_links:           record_links(user),           # chore <-> event / list item / agenda pairings
         routines:               routines(user),                      # saved sequences one phrase runs end to end
       }
     end
@@ -684,16 +687,59 @@ module Buddy
       def stashed_ideas(user)
         return [] unless user.respond_to?(:buddy_ideas)
 
-        user.buddy_ideas.surfaceable.order(created_at: :asc).limit(12).map { |i|
+        now = Time.current
+        user.buddy_ideas.surfaceable.includes(:notes).order(created_at: :asc).limit(12).map { |i|
+          count = i.notes.size
           {
             id:       i.id,
             category: i.category,
             idea:     i.summary.presence || i.body.to_s.first(140),
             waiting:  i.waiting_label,
-          }
+            # Only present on a thread. Their absence is the signal that the
+            # `idea` line above is the whole of it and nothing needs opening.
+            notes:        (count.positive? ? count : nil),
+            last_touched: (i.thread_label(now) if count.positive?),
+          }.compact
         }
       rescue StandardError => e
         Buddy::Errors.report(section: "context.stashed_ideas", exception: e, user: user)
+        []
+      end
+
+      # What the house is doing, off the Home Assistant state cache. The answer
+      # to "is the doggy door shut?" without a live call — and without the
+      # "I can't check that from here" that used to come out when no Jil
+      # function happened to cover it.
+      def device_states(user)
+        Buddy::DeviceStates.for_user(user)
+      rescue StandardError => e
+        Buddy::Errors.report(section: "context.device_states", exception: e, user: user)
+        []
+      end
+
+      # Observed payload shapes, so a custom watch names a field that exists.
+      # Recorded by Buddy::TriggerShapes off the live bus rather than described
+      # anywhere by hand, which is the point — a hand-written list of fields
+      # goes stale the first time a serializer changes and nobody notices,
+      # because a watch that matches nothing looks like a watch that hasn't
+      # fired yet.
+      def trigger_shapes(user)
+        Buddy::TriggerShapes.for_user(user)
+      rescue StandardError => e
+        Buddy::Errors.report(section: "context.trigger_shapes", exception: e, user: user)
+        []
+      end
+
+      # Which records already move each other. Worth having before wiring a new
+      # pairing (there may already be one, pointing the other way) and before
+      # explaining why something ticked itself off — "I didn't do that, the
+      # link did" is only sayable by something that can see the links.
+      def record_links(user)
+        RecordLink.live.where(user_id: user.id).order(:source_name).limit(60).map { |l|
+          { id: l.id, does: l.sentence, broken: l.broken_ends.presence }.compact
+        }
+      rescue StandardError => e
+        Buddy::Errors.report(section: "context.record_links", exception: e, user: user)
         []
       end
 

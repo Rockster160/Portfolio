@@ -837,11 +837,19 @@ html.html-ctr-byte body {
   //
   // Live only — the server never persists these, and the finished reply
   // replaces the whole body.
+  // Class is `byte-think-*`, NOT `byte-step-*`. The routines manager already
+  // owns `.byte-step` for its draggable step rows (`display: flex`, its own
+  // padding and gap), and that rule was landing on these too — same document,
+  // and only the `display` was being overridden here.
   &.byte-msg-stepping {
-    // The typing cursor promises words are being written. None are yet.
-    .byte-msg-body::after { content: none; }
+    // The typing cursor promises words are being written; none are yet, and
+    // the steps are block-level so it fell to a line of its own underneath.
+    // `!important` rather than a longer selector because the rule it's beating
+    // (.byte-msg-streaming.byte-msg-live) is more specific than any sane
+    // selector reachable from here.
+    .byte-msg-body::after { content: none !important; }
 
-    .byte-step {
+    .byte-think-step {
       display: block;
       font-size: 12.5px;
       line-height: 1.6;
@@ -861,7 +869,7 @@ html.html-ctr-byte body {
       }
     }
 
-    .byte-step-now {
+    .byte-think-now {
       color: var(--bs-text);
       opacity: 1;
 
@@ -869,6 +877,16 @@ html.html-ctr-byte body {
         background: var(--buddy-accent, #3FA0FF);
         opacity: 1;
         animation: byte-watch-pulse 1.4s ease-in-out infinite;
+      }
+
+      // The cursor belongs beside the thing currently happening, not stranded
+      // on an empty line below the list.
+      &::after {
+        content: "▍";
+        display: inline-block;
+        margin-left: 3px;
+        animation: byte-cursor 1s steps(1) infinite;
+        opacity: 0.7;
       }
     }
   }
@@ -1293,6 +1311,29 @@ html.html-ctr-byte body {
     }
     &.is-err {
       color: var(--bs-danger) !important;
+    }
+    &:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    // Report files something away rather than acting on the bubble in front of
+    // you, so it sits apart from the two copy actions instead of reading as a
+    // third one.
+    &.is-report {
+      margin-top: 4px;
+      border-top: 1px solid var(--bs-border) !important;
+      border-radius: 0 0 8px 8px !important;
+      color: var(--bs-muted) !important;
+      &:hover,
+      &:focus-visible {
+        color: var(--bs-text) !important;
+      }
+      &.is-ok {
+        color: var(--bs-accent-strong) !important;
+      }
+      &.is-err {
+        color: var(--bs-danger) !important;
+      }
     }
   }
 }
@@ -2969,6 +3010,148 @@ dialog.byte-modal {
 
 .byte-step-remove:hover {
   color: var(--bs-danger, #e5484d);
+}
+
+// ---- Links manager ----------------------------------------------------------
+//
+// One row per pairing. The flow line is the headline (what follows what), the
+// sentence underneath is the whole rule in words, and the fields are how
+// forgiving the match is. A broken end gets its own line in the danger colour,
+// because a link pointing at a chore nobody has is silently dead and this panel
+// is the only place that fact can surface.
+
+.byte-link-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.byte-link-row {
+  padding: 10px 12px;
+  border: 1px solid var(--bs-border);
+  border-radius: 10px;
+  background: var(--bs-panel-soft);
+
+  &.is-off {
+    opacity: 0.55;
+  }
+
+  &.is-broken {
+    border-color: var(--bs-danger, #e5484d);
+  }
+}
+
+.byte-link-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.byte-link-flow {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bs-text);
+  overflow-wrap: anywhere;
+}
+
+.byte-link-arrow {
+  color: var(--bs-muted);
+  padding: 0 2px;
+}
+
+.byte-link-scope {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--bs-muted);
+}
+
+.byte-link-toggle {
+  flex-shrink: 0;
+  // The tap target has to come from the label, not the 13px checkbox.
+  min-width: 34px;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  cursor: pointer;
+}
+
+.byte-link-sentence {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--bs-muted);
+}
+
+.byte-link-broken {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--bs-danger, #e5484d);
+}
+
+.byte-link-fields {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.byte-link-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--bs-muted);
+
+  > span {
+    flex: 0 0 38px;
+  }
+
+  select {
+    flex: 0 0 auto;
+  }
+
+  input[type="text"] {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+.byte-link-actions {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--bs-muted);
+}
+
+.byte-link-ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.ctr-byte .byte-modal .byte-link-remove {
+  background: none;
+  border: 0;
+  padding: 4px 2px;
+  min-height: 32px;
+  font: inherit;
+  color: var(--bs-muted);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--bs-danger, #e5484d);
+  }
 }
 
 // ---- "＋ Jil action" picker inside the routines manager ---------------------

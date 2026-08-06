@@ -28,7 +28,24 @@ class ByteConversation < ApplicationRecord
 
   has_many :byte_messages, dependent: :destroy
 
-  enum :mode, { claude: 0, bash: 1, jarvis: 2, buddy: 3 }
+  # `cursor` runs `cursor-agent` on the Mac the way `claude` runs `claude -p`:
+  # same handoff, same streaming, its own session id in metadata. Purely
+  # additive — nothing branches on the full set, and default_display_name falls
+  # through for anything it doesn't recognise.
+  enum :mode, { claude: 0, bash: 1, jarvis: 2, buddy: 3, cursor: 4 }
+
+  # Modes that run on the Mac and therefore have a working directory. Buddy
+  # runs entirely in Rails and Jarvis has no filesystem, so a cwd on either is a
+  # value nothing would ever read.
+  MAC_MODES = %w[claude bash cursor].freeze
+
+  def mac?
+    MAC_MODES.include?(mode.to_s)
+  end
+
+  def cwd
+    metadata.to_h["cwd"].presence
+  end
 
   scope :active,  -> { where(archived: false) }
   scope :ordered, -> { order(Arel.sql("last_message_at DESC NULLS LAST, id DESC")) }

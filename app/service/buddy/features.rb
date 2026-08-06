@@ -43,7 +43,7 @@ module Buddy
       agenda:     %i[today_agenda upcoming_agenda],
       lists:      %i[lists],
       events:     %i[recent_events],
-      jil:        %i[jil_triggers jil_functions],
+      jil:        %i[jil_triggers jil_functions trigger_shapes],
       relay:      %i[pending_relays],
       prompts:    %i[pending_prompts],
       mac:        [],

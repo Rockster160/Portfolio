@@ -58,6 +58,8 @@ class User < ApplicationRecord
   has_many :byte_actions, dependent: :destroy
   has_many :buddy_ideas, dependent: :destroy
   has_many :buddy_routines, dependent: :destroy
+  has_many :record_links, dependent: :destroy
+  has_many :jil_trigger_shapes, dependent: :destroy
   has_many :timer_pages, dependent: :destroy
   has_many :timer_quick_buttons, dependent: :destroy
   has_many :timer_share_tokens, dependent: :destroy

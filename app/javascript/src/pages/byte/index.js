@@ -55,6 +55,7 @@ import { initBuddyHero } from "./buddy/hero";
 import { initBuddyTimers } from "./buddy/timers";
 import { initBuddyRoutines } from "./buddy/routines";
 import { initBuddyReminders } from "./buddy/reminders";
+import { initBuddyLinks } from "./buddy/links";
 import { initBuddyKiosk } from "./buddy/kiosk";
 import { toggleBuddyMuted, isBuddyMuted } from "./buddy/alarm";
 
@@ -587,14 +588,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   // the calendar, then the printer, then gives up is a different wait from one
   // that answers straight away, and only the accumulated list tells them apart.
   // The last line is the live one and carries the pulse.
+  // `byte-think-*`, not `byte-step-*`: the routines manager already owns
+  // `.byte-step` for its draggable rows, and its flex/padding rules were
+  // landing on these.
   function renderSteps(steps) {
     const list = Array.isArray(steps) ? steps.filter(Boolean) : [];
-    if (list.length === 0) return `<span class="byte-step byte-step-now">Thinking</span>`;
+    if (list.length === 0) return `<span class="byte-think-step byte-think-now">Thinking</span>`;
 
     return list
       .map((s, i) => {
-        const now = i === list.length - 1 ? " byte-step-now" : "";
-        return `<span class="byte-step${now}">${escapeHtml(s)}</span>`;
+        const now = i === list.length - 1 ? " byte-think-now" : "";
+        return `<span class="byte-think-step${now}">${escapeHtml(s)}</span>`;
       })
       .join("");
   }
@@ -1869,6 +1873,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     indexUrl: "/buddy/reminders",
     onCount: paintCount("[data-byte-reminders-count]"),
   });
+  const linksModal = document.querySelector("[data-byte-links-modal]");
+  const buddyLinks = linksModal ? initBuddyLinks(linksModal) : null;
 
   document
     .querySelector("[data-byte-drawer-toggle]")
@@ -1903,6 +1909,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     "[data-byte-reminders-close]",
     "[data-byte-reminders-modal]",
     buddyReminders,
+  );
+  wireManager(
+    "[data-byte-open-links]",
+    "[data-byte-links-close]",
+    "[data-byte-links-modal]",
+    buddyLinks,
   );
   // No manager to refresh — the only control in here reads its value from the
   // DOM, which applyFontScale already keeps current.
@@ -2079,8 +2091,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     onNotice: (msg) => surfaceLocal(msg),
   });
 
-  // Long-press / right-click a message bubble → Copy ID / Copy full message.
-  initMessageContextMenu(thread, app);
+  // Long-press / right-click a message bubble → Copy ID / Copy full message /
+  // Report a problem.
+  initMessageContextMenu(thread, app, { onNotice: (msg) => surfaceLocal(msg) });
 
   composer.addEventListener("submit", (e) => {
     e.preventDefault();

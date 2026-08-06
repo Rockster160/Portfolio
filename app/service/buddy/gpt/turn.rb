@@ -265,12 +265,19 @@ module Buddy
                     "outcome, so say so rather than describing what you expected. Asking " \
                     "again with the same arguments will only return the same thing.".freeze
 
+      # `status` and `note` are applied AFTER the tool's own data, not before.
+      # They're the frame around the answer rather than part of it, and a tool
+      # returning a key of its own by either name would otherwise silently
+      # overwrite the flag the model reads to know the lookup even succeeded.
+      # read_idea did exactly that on its first outing: it reported the idea's
+      # own status, so a perfectly good lookup came back as `status: "active"`,
+      # which reads as a plausible value rather than as a broken one.
       def self.answer_output(tool, payload, ctx)
         outcome = Buddy::Tools.dispatch(tool, payload, ctx)
         return resolve_failure(outcome[:error]) unless outcome[:ok]
         return resolve_failure("#{tool[:name]} returned nothing readable") unless outcome[:data].is_a?(Hash)
 
-        { status: :answered }.merge(outcome[:data]).merge(note: ANSWER_NOTE)
+        outcome[:data].merge(status: :answered, note: ANSWER_NOTE)
       end
 
       # Args that describe HOW MUCH or WHEN rather than WHAT. Two calls differing

@@ -2,19 +2,24 @@
 #
 # Table name: buddy_ideas
 #
-#  id           :bigint           not null, primary key
-#  body         :text             not null
-#  category     :integer
-#  remind_after :datetime
-#  status       :integer          default("active"), not null
-#  summary      :text
-#  surfaced_at  :datetime
-#  created_at   :datetime         not null
-#  updated_at   :datetime         not null
-#  user_id      :bigint           not null
+#  id              :bigint           not null, primary key
+#  user_id         :bigint           not null
+#  category        :integer
+#  body            :text             not null
+#  summary         :text
+#  status          :integer          default("active"), not null
+#  surfaced_at     :datetime
+#  remind_after    :datetime
+#  created_at      :datetime         not null
+#  updated_at      :datetime         not null
+#  last_touched_at :datetime
 #
 class BuddyIdea < ApplicationRecord
   belongs_to :user
+
+  # Everything added to this thought after the seed. Ordered oldest-first,
+  # because reading a thread backwards is reading it wrong.
+  has_many :notes, -> { ordered }, class_name: "BuddyIdeaNote", dependent: :destroy
 
   # A quick-captured thought, filed into a bucket. `category` is nil until it's
   # been sorted (an "anything" dump waiting on Buddy to categorize it).
@@ -54,6 +59,48 @@ class BuddyIdea < ApplicationRecord
     when 1     then "since yesterday"
     when 2..13 then "#{days} days"
     else            "#{days / 7} weeks"
+    end
+  end
+
+  # A thread is an idea somebody came back to. One-note-and-done is the common
+  # case and reads as an ordinary held item; the ones worth treating differently
+  # are the ones that grew.
+  def thread?
+    notes.loaded? ? notes.any? : notes.exists?
+  end
+
+  def touched_at
+    last_touched_at || created_at
+  end
+
+  # "3 notes, last week" — how much is in here and how warm it still is. Nil for
+  # an idea nobody has added to, so an untouched pile reads exactly as it did
+  # before any of this existed.
+  def thread_label(now = Time.current)
+    count = notes.loaded? ? notes.size : notes.count
+    return nil if count.zero?
+
+    ["#{count} #{'note'.pluralize(count)}", "last #{touched_ago(now)}"].join(", ")
+  end
+
+  # The seed plus everything added to it, oldest first, as one readable block.
+  # This is what "remind me what this was" hands back.
+  def transcript(now = Time.current)
+    lines = ["[seed, #{waiting_label(now.to_date)}] #{body.to_s.strip}"]
+    notes.each { |n| lines << "[#{n.from_companion? ? 'you, ' : ''}#{n.age_label(now)}] #{n.body.to_s.strip}" }
+    lines.join("\n")
+  end
+
+  private
+
+  def touched_ago(now)
+    days = (now.to_date - touched_at.to_date).to_i
+    case days
+    when ..0   then "today"
+    when 1     then "yesterday"
+    when 2..6  then "#{days}d ago"
+    when 7..13 then "week"
+    else            "#{days / 7}w ago"
     end
   end
 end

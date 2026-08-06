@@ -48,6 +48,19 @@ class Jil::Executor
     # read, then bail unless a live terminal is watching this scope.
     ::TerminalWatch.dispatch(user, trigger, trigger_data)
 
+    # Write down what this payload looks like, so a custom watch can be written
+    # against fields that exist rather than guessed ones. Also one cache read on
+    # the hot path — it persists at most once per scope per six hours, and it
+    # keeps the shape, never the values.
+    ::Buddy::TriggerShapes.observe(user, trigger, raw_trigger_data)
+
+    # Record links — chore <-> event <-> list item <-> agenda. This replaces the
+    # Jil tasks that used to do it (362, 363, 365, 366, 370, 374, 382, 383,
+    # 416), and it sits HERE rather than on the models because two controllers
+    # and Jarvis::Log fire :event and :item directly, around the model hooks.
+    # One set lookup for any scope that can't be linked.
+    ::RecordLinks::Propagator.dispatch(user, trigger, raw_trigger_data)
+
     user_tasks = user.accessible_tasks.active.enabled.ordered
     stopped = false
     user_tasks.by_listener(trigger).filter_map { |task|

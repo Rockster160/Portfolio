@@ -24,10 +24,22 @@ module Buddy
       # the undo is as clean as it is for a single item.
       "AgendaSchedule"  => "AgendaSchedule",
       "BuddyIdea"       => "BuddyIdea",
+      # One addition to a thread. Notes are append-only by design, so undoing
+      # one really does delete it — there's no earlier version to fall back to,
+      # and leaving a mis-heard note in a thread poisons every later read of it.
+      "BuddyIdeaNote"   => "BuddyIdeaNote",
       "Chore"           => "Chore",
       "ChoreCompletion" => "ChoreCompletion",
       "ChoreWithdrawal" => "ChoreWithdrawal",
       "ListItem"        => "ListItem",
+      # Vocabulary. Nothing hangs off a glossary entry, so a plain destroy is
+      # the whole undo — and a mis-taught word is exactly the sort of thing
+      # somebody unchecks a second after saying it.
+      "HouseholdGlossaryTerm" => "HouseholdGlossaryTerm",
+      # A pairing between two records. Undoing one stops future propagation; it
+      # deliberately does NOT unwind whatever the link already did, because that
+      # already happened and has its own undo row.
+      "RecordLink"            => "RecordLink",
     }.freeze
 
     # Models where undoing a create HIDES the row instead of deleting it, and
@@ -143,6 +155,7 @@ module Buddy
       # telling Buddy to forget one, and it lands the same way - out of the
       # pool, off the prompt, still there if the undo gets undone.
       when "BuddyIdea"       then rec.update!(status: :dropped)
+      when "BuddyIdeaNote"   then rec.destroy!
       # Archived, not destroyed. A chore owns its completions and its streak
       # history, and undoing "you just made this" must not take a month of
       # someone's record with it. Archiving is also what the Chores app itself
@@ -153,6 +166,8 @@ module Buddy
       # gets the broadcast — not just a silent destroy.
       when "ChoreCompletion" then ChoreCompletionUndoer.call(rec.user, rec)
       when "ListItem" then rec.soft_destroy
+      when "HouseholdGlossaryTerm" then rec.destroy!
+      when "RecordLink"            then rec.destroy!
       when "ChoreWithdrawal"
         rec.destroy!
         refresh_balance(rec.user)

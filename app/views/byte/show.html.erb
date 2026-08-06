@@ -393,6 +393,12 @@
         <span class="byte-drawer-link-count" data-byte-reminders-count></span>
         <span class="byte-drawer-link-chev" aria-hidden="true">›</span>
       </button>
+      <button type="button" class="byte-drawer-link" data-byte-open-links>
+        <span class="byte-drawer-link-icon" aria-hidden="true">🔗</span>
+        <span class="byte-drawer-link-name">Links</span>
+        <span class="byte-drawer-link-count" data-byte-links-count></span>
+        <span class="byte-drawer-link-chev" aria-hidden="true">›</span>
+      </button>
       <button type="button" class="byte-drawer-link" data-byte-open-settings>
         <span class="byte-drawer-link-icon" aria-hidden="true">⚙️</span>
         <span class="byte-drawer-link-name">Settings</span>
@@ -435,10 +441,25 @@
           Mode
           <select class="byte-modal-input" name="mode" data-byte-new-mode>
             <option value="claude" selected>Claude — AI conversation</option>
+            <option value="cursor">Cursor — cursor-agent conversation</option>
             <option value="bash">Bash — shell commands, no prefix</option>
             <option value="jarvis">Jarvis — automation commands</option>
             <option value="buddy">Buddy — conversational LLM chat</option>
           </select>
+        </label>
+
+        <%# Where the thread opens. Only the Mac modes have a working %>
+        <%# directory, so the row hides for Jarvis and Buddy. The list is %>
+        <%# reported by the Mac and cached server-side (ByteWorkspaces), so %>
+        <%# the picker still works with the Mac asleep — which is most of the %>
+        <%# time this modal gets opened from a phone. Free text, because a %>
+        <%# repo cloned since the last report is real even if we've not %>
+        <%# heard of it. %>
+        <label class="byte-modal-label" data-byte-new-cwd-row>
+          Starting directory
+          <input type="text" class="byte-modal-input" name="cwd" list="byte-workspaces"
+                 placeholder="<%= ByteWorkspaces::DEFAULT %>" data-byte-new-cwd autocomplete="off">
+          <datalist id="byte-workspaces" data-byte-workspace-list></datalist>
         </label>
       <% else %>
         <input type="hidden" name="mode" value="buddy" data-byte-new-mode>
@@ -460,6 +481,32 @@
         <button type="submit" class="byte-modal-btn byte-modal-btn-primary">Create</button>
       </div>
     </form>
+  </dialog>
+
+  <%# Record links. Read and adjust only — making one is a conversation with %>
+  <%# Byte, since picking two endpoints with the right cascade direction is a %>
+  <%# poor fit for a form. The value here is being able to SEE them, which was %>
+  <%# never possible while they lived as Hash literals inside Jil tasks. %>
+  <dialog class="byte-modal byte-modal-wide" data-byte-links-modal>
+    <div class="byte-modal-form basic">
+      <h3 class="byte-modal-title">Links</h3>
+      <p class="byte-modal-hint">
+        One record following another. These only run downhill —
+        <code>event → chore → agenda → list item</code> — so completing a chore ticks off its
+        agenda task and clears its list item, and nothing ever runs back up.
+        Ask <span data-buddy-name-slot><%= buddy_page_chrome[:name] %></span> to make a new one.
+      </p>
+      <div class="byte-manage-body" data-byte-links>
+        <ul class="byte-link-list" data-byte-link-list></ul>
+        <p class="byte-manage-empty" data-byte-links-empty hidden>
+          Nothing is wired up. Tell <span data-buddy-name-slot><%= buddy_page_chrome[:name] %></span> something like
+          "logging coffee should tick off the coffee chore".
+        </p>
+      </div>
+      <div class="byte-modal-actions">
+        <button type="button" class="byte-modal-btn" data-byte-links-close>Close</button>
+      </div>
+    </div>
   </dialog>
 
   <%# Per-conversation menu (rename/archive/adopt Claude session). %>

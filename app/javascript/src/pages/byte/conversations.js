@@ -27,6 +27,10 @@ function convoLabel(convo) {
   return buddyThemes()[theme]?.name || "Conversation";
 }
 
+// Modes that run on the owner's Mac and therefore have a working directory.
+// Mirrors ByteConversation::MAC_MODES.
+const MAC_MODES = ["claude", "bash", "cursor"];
+
 // The pet table the server rendered onto `.byte-app` (ByteHelper#buddy_themes_json).
 // Read here as well as in index.js — same single attribute, so there's still one
 // source of truth; the drawer just needs it to show which pet a row belongs to.
@@ -216,11 +220,14 @@ export class ConversationManager {
     } catch (e) {}
   }
 
-  async createConversation({ name, mode, buddyTheme }) {
+  async createConversation({ name, mode, buddyTheme, cwd }) {
     const created = await apiCall(this.conversationsUrl, "POST", {
       name,
       mode,
       buddy_theme: mode === "buddy" ? buddyTheme : null,
+      // Only the Mac modes have a working directory; the server ignores it for
+      // the others, and sending it anyway would just be noise on the wire.
+      cwd: MAC_MODES.includes(mode) ? cwd : null,
     });
     if (!created || !created.id) return null;
     // Upsert into local cache and switch to it.
@@ -501,19 +508,39 @@ export class ConversationManager {
     // `reset()` restores the markup's selected mode, so re-derive from that
     // rather than assuming the row starts hidden.
     this.syncNewBuddyRow();
+    this.loadWorkspaces();
     if (typeof this.newModal.showModal === "function") this.newModal.showModal();
     else this.newModal.setAttribute("open", "");
   }
 
-  // Only a Buddy thread wears a pet, so the picker follows the mode. For
-  // anyone but the owner the mode input is a hidden `buddy`, which means this
-  // simply leaves the row visible.
+  // Only a Buddy thread wears a pet, so the picker follows the mode; only a Mac
+  // thread has a working directory, so the directory row follows it the other
+  // way. For anyone but the owner the mode input is a hidden `buddy`, which
+  // means this leaves the pet row visible and the directory row absent.
   syncNewBuddyRow() {
-    const row = document.querySelector("[data-byte-new-buddy-row]");
-    if (!row) return;
-
     const mode = document.querySelector("[data-byte-new-mode]")?.value || "claude";
-    row.hidden = mode !== "buddy";
+    const buddyRow = document.querySelector("[data-byte-new-buddy-row]");
+    if (buddyRow) buddyRow.hidden = mode !== "buddy";
+
+    const cwdRow = document.querySelector("[data-byte-new-cwd-row]");
+    if (cwdRow) cwdRow.hidden = !MAC_MODES.includes(mode);
+  }
+
+  // The directory list comes from the server's cache of what the Mac last
+  // reported, so this resolves whether or not the Mac is awake. Failure is
+  // silent on purpose: the field is free text, and an empty datalist costs
+  // nothing but typing the path out.
+  async loadWorkspaces() {
+    const list = document.querySelector("[data-byte-workspace-list]");
+    if (!list || list.dataset.loaded === "1") return;
+
+    try {
+      const data = await apiCall("/byte/workspaces?limit=100", "GET");
+      list.innerHTML = (data?.paths || [])
+        .map((p) => `<option value="${escapeAttr(p)}"></option>`)
+        .join("");
+      list.dataset.loaded = "1";
+    } catch (e) {}
   }
 
   async handleCreateSubmit(e) {
@@ -522,8 +549,9 @@ export class ConversationManager {
     const name = (fd.get("name") || "").toString().trim();
     const mode = (fd.get("mode") || "buddy").toString();
     const buddyTheme = (fd.get("buddy_theme") || "").toString();
+    const cwd = (fd.get("cwd") || "").toString().trim();
     try {
-      await this.createConversation({ name, mode, buddyTheme });
+      await this.createConversation({ name, mode, buddyTheme, cwd });
       this.newModal?.close();
       this.closeDrawer();
     } catch (err) {

@@ -1,3 +1,22 @@
+# == Schema Information
+#
+# Table name: buddy_reminders
+#
+#  id                   :bigint           not null, primary key
+#  user_id              :bigint           not null
+#  byte_conversation_id :bigint           not null
+#  kind                 :string           default("reminder"), not null
+#  body                 :text             not null
+#  fire_at              :datetime         not null
+#  fired_at             :datetime
+#  cancelled_at         :datetime
+#  metadata             :jsonb            not null
+#  created_at           :datetime         not null
+#  updated_at           :datetime         not null
+#  recurrence           :jsonb
+#  last_fired_at        :datetime
+#  notify_user_id       :bigint
+#
 require "rails_helper"
 
 RSpec.describe BuddyReminder do

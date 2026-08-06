@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_05_190000) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_06_000006) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -371,6 +371,15 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_05_190000) do
     t.index ["user_id"], name: "index_boxes_on_user_id"
   end
 
+  create_table "buddy_idea_notes", force: :cascade do |t|
+    t.bigint "buddy_idea_id", null: false
+    t.text "body", null: false
+    t.integer "source", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["buddy_idea_id"], name: "index_buddy_idea_notes_on_buddy_idea_id"
+  end
+
   create_table "buddy_ideas", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.integer "category"
@@ -381,6 +390,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_05_190000) do
     t.datetime "remind_after"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "last_touched_at"
+    t.index ["last_touched_at"], name: "index_buddy_ideas_on_last_touched_at"
     t.index ["user_id", "status"], name: "index_buddy_ideas_on_user_id_and_status"
     t.index ["user_id"], name: "index_buddy_ideas_on_user_id"
   end
@@ -957,6 +968,19 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_05_190000) do
     t.index ["user_id"], name: "index_google_accounts_on_user_id"
   end
 
+  create_table "household_glossary_terms", force: :cascade do |t|
+    t.bigint "chore_household_id"
+    t.text "term", null: false
+    t.text "meaning", null: false
+    t.jsonb "aliases", default: [], null: false
+    t.integer "kind"
+    t.text "notes"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index "chore_household_id, lower(term)", name: "index_glossary_terms_on_household_and_lower_term", unique: true
+    t.index ["chore_household_id"], name: "index_household_glossary_terms_on_chore_household_id"
+  end
+
   create_table "household_icons", force: :cascade do |t|
     t.bigint "chore_household_id", null: false
     t.bigint "uploaded_by_user_id", null: false
@@ -968,6 +992,18 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_05_190000) do
     t.index ["chore_household_id", "name"], name: "index_household_icons_on_chore_household_id_and_name", unique: true
     t.index ["chore_household_id"], name: "index_household_icons_on_chore_household_id"
     t.index ["uploaded_by_user_id"], name: "index_household_icons_on_uploaded_by_user_id"
+  end
+
+  create_table "jil_trigger_shapes", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.text "scope", null: false
+    t.jsonb "keys", default: [], null: false
+    t.jsonb "sample", default: {}, null: false
+    t.integer "seen_count", default: 0, null: false
+    t.datetime "last_seen_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "scope"], name: "index_jil_trigger_shapes_on_user_id_and_scope", unique: true
   end
 
   create_table "lines", id: :serial, force: :cascade do |t|
@@ -1217,6 +1253,27 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_05_190000) do
     t.string "cook_time"
     t.text "notes"
     t.index ["user_id"], name: "index_recipes_on_user_id"
+  end
+
+  create_table "record_links", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.integer "source_kind", null: false
+    t.text "source_name", null: false
+    t.text "source_scope"
+    t.integer "source_name_match", default: 0, null: false
+    t.integer "source_scope_match", default: 0, null: false
+    t.integer "target_kind", null: false
+    t.text "target_name", null: false
+    t.text "target_scope"
+    t.boolean "ask_who", default: false, null: false
+    t.boolean "reverse", default: false, null: false
+    t.boolean "enabled", default: true, null: false
+    t.text "note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index "user_id, source_kind, lower(source_name), COALESCE(lower(source_scope), ''::text), target_kind, lower(target_name), COALESCE(lower(target_scope), ''::text)", name: "index_record_links_uniqueness", unique: true
+    t.index ["user_id", "source_kind", "source_name"], name: "index_record_links_on_source"
+    t.index ["user_id", "target_kind", "target_name"], name: "index_record_links_on_target"
   end
 
   create_table "rlcraft_map_locations", id: :serial, force: :cascade do |t|
