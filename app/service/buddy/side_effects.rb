@@ -94,11 +94,14 @@ module Buddy
         schema(
           :sort_stash,
           "File or refine a brain-dumped idea. Pass category when first sorting it; pass summary " \
-          "alone to sharpen an existing note as the idea gets clearer. Silent.",
+          "alone to sharpen an existing note as the idea gets clearer. Pass drop when what they " \
+          "dumped wasn't a thought to hold at all and you have ALREADY put it where it belongs - " \
+          "on a list, or as a reminder - so it doesn't sit in two places. Silent.",
           {
             id:       { type: :integer, required: true,  description: "Idea id from stashed_ideas" },
             category: { type: :enum,    required: false, values: %i[me home work], description: "Which bucket it belongs in" },
             summary:  { type: :string,  required: false, description: "Short summary of the idea" },
+            drop:     { type: :boolean, required: false, description: "True once you've filed it somewhere it can actually be acted on" },
           },
         ),
       ]

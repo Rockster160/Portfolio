@@ -393,10 +393,21 @@ RSpec.describe RecordLinks::Propagator do
 
   describe "ask_who" do
     let!(:chore) { chore!("Puppy Down") }
+    let!(:partner) {
+      create(:user).tap { |u|
+        ChoreHouseholdMembership.create!(chore_household: household, user: u)
+      }
+    }
 
     before do
       Prompt.where(user_id: user.id).delete_all
       link!(:event, "Whisper", :chore, "Puppy Down", source_scope: "Down", ask_who: true)
+    end
+
+    def answer!(prompt, who, at)
+      RecordLinks::Guard.reset!
+      prompt.update!(response: { "Who did it?" => who, "When?" => at.iso8601 })
+      Jil::Executor.trigger(user, :prompt, prompt.with_jil_attrs(status: :complete))
     end
 
     it "raises a prompt instead of completing anything" do
@@ -420,6 +431,30 @@ RSpec.describe RecordLinks::Propagator do
 
       prompt.update!(response: { "Who did it?" => user.username, "When?" => at.iso8601 })
       Jil::Executor.trigger(user, :prompt, prompt.with_jil_attrs(status: :complete))
+
+      expect(chore.reload.chore_completions.count).to eq(1)
+    end
+
+    it "credits a household member who isn't the person the links belong to" do
+      log_event!("Whisper", notes: "Down")
+      at = 1.hour.ago.change(usec: 0)
+
+      answer!(user.prompts.last, partner.username, at)
+
+      expect(chore.reload.chore_completions.count).to eq(1)
+      expect(chore.chore_completions.first.user_id).to eq(partner.id)
+    end
+
+    # One answer, one puppy, one payout — however many times the bus says so.
+    # The row it has to notice is credited to whoever was NAMED, which is why
+    # this can't go through the user-scoped `completion_partner`.
+    it "logs once when the same answer is delivered twice" do
+      log_event!("Whisper", notes: "Down")
+      prompt = user.prompts.last
+      at = 1.hour.ago.change(usec: 0)
+
+      answer!(prompt, partner.username, at)
+      answer!(prompt, partner.username, at)
 
       expect(chore.reload.chore_completions.count).to eq(1)
     end

@@ -343,7 +343,7 @@ module RecordLinks
       return false if chore.nil?
 
       who = ::User.find_by(username: completer) || user
-      ::ChoreCompleter.new(chore, who, at: at || Time.current).call
+      complete_once(chore, who, at || Time.current)
       # The event keeps its row and takes the answered time. Under Jil this
       # branch sometimes DESTROYED it, to undo a completion task 362 had already
       # made from the same log. One link per pairing means there's nothing to
@@ -351,6 +351,30 @@ module RecordLinks
       event = user.action_events.find_by(id: event_id)
       event&.update!(timestamp: at) if at.present?
       true
+    end
+
+    # The one completion write with no partner to find first, so it has to look
+    # for itself. An answer reaches the bus more than once often enough to
+    # matter — a retried job, the app and Buddy both submitting the same form —
+    # and a second ChoreCompleter call is a second row in the history and a
+    # second payout for one puppy. A re-answer that names someone ELSE is left
+    # alone rather than moved: the payout was already computed for whoever is
+    # on the row, and reassigning credit is what editing the completion is for.
+    def complete_once(chore, who, at)
+      return false if completed_in_window?(chore, at)
+
+      ::ChoreCompleter.new(chore, who, at: at).call
+      true
+    end
+
+    # Not `user.chore_completions` like `completion_partner` — the person named
+    # in the answer is usually NOT the person whose links these are, so a
+    # user-scoped lookup never sees the row it just made.
+    def completed_in_window?(chore, at)
+      ::ChoreCompletion.exists?(
+        chore_id:     chore.id,
+        completed_at: (at - WINDOW)..(at + WINDOW),
+      )
     end
 
     def household_names(user)

@@ -20,18 +20,18 @@ RSpec.describe Buddy::IdeaDwell do
 
   let(:kennel) {
     [
-      [:them, "What would be the best ways to detect if she's in there or not?"],
-      [:buddy, "A pressure mat inside, an IR break beam across the opening, or a little motion sensor tuned to the kennel mouth."],
+      [:them, "What would be the best ways to detect if Whisper's in the kennel or not?"],
+      [:buddy, "A pressure mat inside, an IR break beam across the opening, or a sensor at the kennel mouth."],
       [:them, "A pressure mat seems excessive. Aren't those pretty pricey?"],
-      [:buddy, "Yeah, a bit. They're usually more special hardware than a cheap sensor, so I'd lean beam or presence first."],
-      [:them, "Would a presence sensor work well for that? I'm not very familiar with how those work."],
-      [:buddy, "A presence sensor notices a body in a space even when nothing's moving much. Hands-off once it's tuned."],
-      [:them, "I don't like the beam since it's just a toggle, and if she stuck her head in it would get mixed up."],
-      [:buddy, "A beam is too binary for that job. For auto-close safety the shape is probably an mmWave sensor inside."],
+      [:buddy, "A bit. More special hardware than a cheap sensor, so I'd lean beam or presence first."],
+      [:them, "Would a presence sensor work well for that? I'm not familiar with how those work."],
+      [:buddy, "It notices a body inside a space even when nothing's moving much. Hands-off once tuned."],
+      [:them, "I don't like the beam, it's just a toggle - if Whisper poked her head in it'd get mixed up."],
+      [:buddy, "Too binary. For auto-close safety the shape is an mmWave presence sensor inside the kennel."],
       [:them, "We already have a door sensor for open and closed, and it's a sliding door that opens slowly."],
-      [:buddy, "If the door state is covered and it moves slowly, the hard part is just presence, not the mechanics."],
+      [:buddy, "Then the hard part is presence, not the mechanics. The treat dispenser hangs off the same signal."],
       [:them, "Just to note, the door is NOT done yet. Just planned. The door sensor is in place though."],
-      [:buddy, "Got it, the sensor's live and the door itself is still a plan. That makes presence matter even more."],
+      [:buddy, "Got it, sensor live and the kennel door still a plan. Presence matters even more then."],
     ]
   }
 
@@ -44,11 +44,16 @@ RSpec.describe Buddy::IdeaDwell do
     ]
   }
 
-  META = {
-    them:     {},
-    buddy:    { "kind" => "buddy" },
-    doorbell: { "kind" => "buddy", "source" => "watch", "watch_id" => 18 },
-  }.freeze
+  let(:meta) {
+    {
+      them:     {},
+      buddy:    { "kind" => "buddy" },
+      doorbell: { "kind" => "buddy", "source" => "watch", "watch_id" => 18 },
+      chip:     { "kind" => "buddy_activity", "tool_name" => "call_jil_function" },
+      quick:    { "kind" => "action_chip", "buddy_action" => "suggest" },
+      seed:     { "kind" => "buddy_trigger", "hidden" => true },
+    }
+  }
 
   def say(who, body, at: Time.current)
     conversation.byte_messages.create!(
@@ -56,7 +61,7 @@ RSpec.describe Buddy::IdeaDwell do
       direction:  who == :them ? :outbound : :inbound,
       state:      :delivered,
       body:       body,
-      metadata:   META.fetch(who),
+      metadata:   meta.fetch(who),
       created_at: at,
     )
   end
@@ -82,11 +87,11 @@ RSpec.describe Buddy::IdeaDwell do
       lay_down(kennel + elsewhere)
       stub_client([{ text: "Landed on an mmWave presence sensor inside." }])
 
-      note = described_class.settle!(conversation)
+      notes = described_class.settle!(conversation)
 
-      expect(note).to be_persisted
-      expect(note).to be_from_companion
-      expect(note.body).to eq("Landed on an mmWave presence sensor inside.")
+      expect(notes.size).to eq(1)
+      expect(notes.first).to be_from_companion
+      expect(notes.first.body).to eq("Landed on an mmWave presence sensor inside.")
       expect(idea.reload.notes.count).to eq(1)
     end
 
@@ -94,14 +99,14 @@ RSpec.describe Buddy::IdeaDwell do
       lay_down(kennel)
       stub_client([{ text: "Ruled out a pressure mat on cost." }])
 
-      expect(described_class.settle!(conversation, over: true)).to be_persisted
+      expect(described_class.settle!(conversation, over: true).size).to eq(1)
     end
 
     it "leaves a live stretch alone" do
       lay_down(kennel)
       expect(Buddy::GPT::Client).not_to receive(:new)
 
-      expect(described_class.settle!(conversation)).to be_nil
+      expect(described_class.settle!(conversation)).to be_empty
       expect(idea.reload.notes).to be_empty
     end
 
@@ -109,7 +114,7 @@ RSpec.describe Buddy::IdeaDwell do
       lay_down(kennel + elsewhere.first(2))
       expect(Buddy::GPT::Client).not_to receive(:new)
 
-      expect(described_class.settle!(conversation)).to be_nil
+      expect(described_class.settle!(conversation)).to be_empty
     end
 
     # The case that killed the first cut of this, which called a stretch over
@@ -121,11 +126,11 @@ RSpec.describe Buddy::IdeaDwell do
       conversation.update!(last_message_at: conversation.byte_messages.maximum(:created_at))
       expect(Buddy::GPT::Client).not_to receive(:new)
 
-      expect(described_class.settle!(conversation)).to be_nil
+      expect(described_class.settle!(conversation)).to be_empty
       expect(idea.reload.notes).to be_empty
     end
 
-    it "hands the model the idea as it stands and the stretch that was about it" do
+    it "hands the model the idea as it stands and the conversation" do
       lay_down(kennel + elsewhere)
       fake = stub_client([{ text: "note" }])
 
@@ -141,7 +146,7 @@ RSpec.describe Buddy::IdeaDwell do
       lay_down(kennel + elsewhere)
       stub_client([{ text: described_class::NOTHING }])
 
-      expect(described_class.settle!(conversation)).to be_nil
+      expect(described_class.settle!(conversation)).to be_empty
       expect(idea.reload.notes).to be_empty
     end
 
@@ -149,7 +154,7 @@ RSpec.describe Buddy::IdeaDwell do
       lay_down(kennel + elsewhere)
       stub_client([{ error: "rate limited" }])
 
-      expect(described_class.settle!(conversation)).to be_nil
+      expect(described_class.settle!(conversation)).to be_empty
       expect(idea.reload.notes).to be_empty
     end
 
@@ -158,7 +163,7 @@ RSpec.describe Buddy::IdeaDwell do
       idea.notes.create!(body: "Presence sensor it is.", source: :companion)
       expect(Buddy::GPT::Client).not_to receive(:new)
 
-      expect(described_class.settle!(conversation)).to be_nil
+      expect(described_class.settle!(conversation)).to be_empty
       expect(idea.reload.notes.count).to eq(1)
     end
 
@@ -179,7 +184,7 @@ RSpec.describe Buddy::IdeaDwell do
       ] + elsewhere)
       expect(Buddy::GPT::Client).not_to receive(:new)
 
-      expect(described_class.settle!(conversation)).to be_nil
+      expect(described_class.settle!(conversation)).to be_empty
     end
 
     it "leaves an idea alone once it's been closed out" do
@@ -187,7 +192,7 @@ RSpec.describe Buddy::IdeaDwell do
       idea.update!(status: :done)
       expect(Buddy::GPT::Client).not_to receive(:new)
 
-      expect(described_class.settle!(conversation)).to be_nil
+      expect(described_class.settle!(conversation)).to be_empty
     end
 
     it "records its own cost separately from turns and compactions" do
@@ -202,17 +207,121 @@ RSpec.describe Buddy::IdeaDwell do
       expect(row.cost_micros).to be > 0
     end
 
-    # Counted, a run of doorbells partway through would shove two thirds of the
-    # exchange out of a 12-message window and the stretch would read as a
-    # passing mention.
-    it "doesn't let watches and chips take up room in the window" do
-      interrupted = kennel.first(8) +
-                    Array.new(6) { [:doorbell, "🔔 Someone's at the door"] } +
-                    kennel.last(4) + elsewhere
-      lay_down(interrupted)
+    # Counted, a run of these partway through would shove most of the exchange
+    # out of the window and a real conversation would read as a passing mention.
+    it "doesn't let watches, chips and hidden seeds take up room in the window" do
+      noise = [
+        %i[doorbell chip quick seed doorbell chip],
+        %i[quick seed doorbell chip quick seed],
+      ].flatten.map { |kind| [kind, "🔔 Someone's at the door"] }
+      lay_down(kennel + noise + elsewhere)
       stub_client([{ text: "Landed on presence." }])
 
-      expect(described_class.settle!(conversation)).to be_persisted
+      expect(described_class.settle!(conversation).size).to eq(1)
+    end
+  end
+
+  # People don't think about one thing for half an hour. The kennel reminds them
+  # of the greenhouse, they weave between the two, and both get further along.
+  describe "two ideas at once" do
+    let!(:greenhouse) {
+      BuddyIdea.create!(
+        user:     user,
+        category: :home,
+        status:   :active,
+        summary:  "Greenhouse propagation shelf",
+        body:     "propagation shelf in the greenhouse with a heat mat and grow lights on a timer",
+      )
+    }
+
+    # Interleaved the way a tangent actually goes, rather than one subject
+    # finishing before the other starts.
+    let(:woven) {
+      [
+        [:them, "What would be the best ways to detect if Whisper's in the kennel or not?"],
+        [:buddy, "A pressure mat inside, an IR beam across the opening, or a sensor at the kennel mouth."],
+        [:them, "Oh - that reminds me, the propagation shelf in the greenhouse needs grow lights sorting."],
+        [:buddy, "The greenhouse shelf? Grow lights on a timer would be the simple version of that."],
+        [:them, "Back to the kennel - a beam is just a toggle, and Whisper pokes her head in constantly."],
+        [:buddy, "Too binary, agreed. An mmWave presence sensor inside the kennel is the shape of it."],
+        [:them, "And the kennel door sensor is already in, the sliding door itself is not."],
+        [:buddy, "So the kennel logic hangs off presence, and the treat dispenser rides the same signal."],
+        [:them, "For the greenhouse, does the heat mat want to be on the same timer as the grow lights?"],
+        [:buddy, "Separate. The heat mat wants a thermostat, the grow lights want a clock."],
+        [:them, "Right, and the greenhouse propagation shelf can wait until the grow lights arrive."],
+        [:buddy, "Fine to park the greenhouse shelf there. The heat mat is the only bit with a lead time."],
+      ]
+    }
+
+    it "settles both, each with its own note" do
+      lay_down(woven + elsewhere)
+      stub_client([
+        { text: "Presence sensor inside; door still only planned." },
+        { text: "Heat mat on a thermostat, grow lights on a clock." },
+      ])
+
+      notes = described_class.settle!(conversation)
+
+      expect(notes.map(&:buddy_idea_id)).to contain_exactly(idea.id, greenhouse.id)
+      expect(idea.reload.notes.map(&:body)).to eq(["Presence sensor inside; door still only planned."])
+      expect(greenhouse.reload.notes.map(&:body)).to eq(["Heat mat on a thermostat, grow lights on a clock."])
+    end
+
+    # Asked one idea at a time, a tangent reads as an ending, and the two take
+    # turns declaring each other over — chopping a live conversation into notes
+    # about where it had got to halfway.
+    it "does not treat a tangent onto the other as having moved on from either" do
+      lay_down(woven)
+      expect(Buddy::GPT::Client).not_to receive(:new)
+
+      expect(described_class.settle!(conversation)).to be_empty
+      expect(idea.reload.notes).to be_empty
+      expect(greenhouse.reload.notes).to be_empty
+    end
+
+    it "tells each note-writer what the other thread was, so it isn't folded in" do
+      lay_down(woven + elsewhere)
+      fake = stub_client([{ text: "note" }, { text: "note" }])
+
+      described_class.settle!(conversation)
+
+      briefs = fake.calls.map { |call| call.input.first[:content] }
+      expect(briefs.first).to include(idea.body).and include("NOT YOURS", greenhouse.summary)
+      expect(briefs.last).to include(greenhouse.body).and include("NOT YOURS", idea.summary)
+    end
+
+    it "still writes the other one when a note fails to come back for the first" do
+      lay_down(woven + elsewhere)
+      stub_client([{ error: "rate limited" }, { text: "Heat mat on a thermostat." }])
+
+      notes = described_class.settle!(conversation)
+
+      expect(notes.map(&:buddy_idea_id)).to eq([greenhouse.id])
+    end
+  end
+
+  # Held ideas share vocabulary all the time, and a note on a thread that was
+  # never discussed gets read back months later as a thing that was decided.
+  describe "an idea that only looks like the subject" do
+    let!(:garage) {
+      BuddyIdea.create!(
+        user:     user,
+        category: :home,
+        status:   :active,
+        summary:  "Garage door sensor upgrade",
+        body:     "upgrade the garage door sensor to report open and closed properly, plus presence inside",
+      )
+    }
+
+    it "keeps the real subject and leaves the overlapping one alone" do
+      lay_down(kennel + elsewhere)
+      fake = stub_client([{ text: "Presence sensor inside." }])
+
+      notes = described_class.settle!(conversation)
+
+      expect(notes.map(&:buddy_idea_id)).to eq([idea.id])
+      expect(garage.reload.notes).to be_empty
+      expect(fake.calls.size).to eq(1)
     end
   end
 end

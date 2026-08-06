@@ -26,6 +26,14 @@ module Buddy
   # exists to avoid. Elapsed time says nothing about whether a thought is
   # finished. What the next messages are ABOUT says everything.
   #
+  # A stretch is also not assumed to be about ONE thing. People tangent: the
+  # kennel reminds them of the greenhouse, they weave between the two, and both
+  # get further along. So every idea the stretch was building on gets settled,
+  # each with its own note; a tangent onto another held idea is not an ending,
+  # because they haven't finished, they've switched tracks; and no idea's note
+  # is written without the others being named, so what belongs to the greenhouse
+  # doesn't quietly end up filed under the kennel.
+  #
   # It is driven entirely by things that were going to happen anyway: the end of
   # a turn, and a compaction. There is nothing on a timer and nothing polling.
   #
@@ -36,10 +44,16 @@ module Buddy
   module IdeaDwell
     module_function
 
-    # How far back to read. Long enough to watch a conversation settle onto one
-    # subject, short enough that an idea touched once at the top of a long
-    # thread drops back out before it starts collecting notes about nothing.
-    WINDOW = 12
+    # How far back to read. Ten exchanges is a session: long enough to watch a
+    # conversation settle, short enough that an idea touched once at the top of
+    # a long thread drops back out before it collects notes about nothing.
+    #
+    # It has to be big enough to hold a stretch two subjects are SHARING, plus
+    # the tail that ends it. At 12 it wasn't: two tangented ideas needing
+    # MIN_MESSAGES each, behind a MOVED_ON_TAIL, is 16 messages, so the second
+    # idea could only ever clear the bar by borrowing the first one's messages.
+    # Tangenting would have looked exactly like never tangenting.
+    WINDOW = 20
 
     # Messages in that window that have to touch the idea. Six is three full
     # exchanges spent on one thought, which is a conversation. Two is a mention,
@@ -61,9 +75,10 @@ module Buddy
     # the stretch in half — and it's counted in messages rather than minutes, so
     # two exchanges is two exchanges whether they took a minute or a fortnight.
     #
-    # It has to leave room for the idea underneath it: MIN_MESSAGES + this must
-    # stay under WINDOW, or the stretch scrolls out of the window in the same
-    # breath that says it's over, and the note is never written.
+    # It has to leave room for the ideas underneath it: (MIN_MESSAGES × the
+    # subjects a stretch can share) + this must stay under WINDOW, or the
+    # stretch scrolls out of the window in the same breath that says it's over,
+    # and the note is never written.
     MOVED_ON_TAIL = 4
 
     # Words that carry no topic. Matching on these is how "close the garage"
@@ -99,30 +114,34 @@ module Buddy
     NOTHING = "NOTHING".freeze
 
     INSTRUCTIONS = <<~TXT.freeze
-      You keep one held idea up to date for someone's companion.
+      You keep ONE held idea up to date for someone's companion.
 
-      You'll be given the idea as it stands - its seed, plus any notes already
-      on it - and the stretch of conversation that was about it. Write the ONE
-      note that stretch was worth: what they settled on, what they ruled out and
-      why, a constraint or a correction that turned up, where the thinking got
-      to.
+      You'll be given that idea as it stands - its seed, plus any notes already
+      on it - and a stretch of conversation. Write the one note that stretch was
+      worth: what they settled on, what they ruled out and why, a constraint or
+      a correction that turned up, where the thinking got to.
 
       - Only what is NEW. Never restate the seed or anything already in a note.
       - Keep the reasons. "Ruled out a pressure mat" is half of it; "ruled out a
         pressure mat as overkill for the price" is the note.
       - A correction is the most valuable thing in a stretch. If they fixed
         something that was wrong, keep it and keep it plain.
+      - The conversation may weave between more than one thing they're holding,
+        and any others get named for you. Write about YOURS only. Something
+        settled about a different one is being written down separately and does
+        not belong in your note, even where the two were being compared - keep
+        the part that changes your idea, leave the rest.
       - Write it so either of you could pick this thought up cold in a month.
       - Prose, no headers, no bullets, under 600 characters, no em dashes.
       - It is YOUR note, not a quote of theirs. Don't write it as their words.
-      - If the stretch genuinely added nothing that isn't already saved, reply
-        with exactly: #{NOTHING}
+      - If the stretch genuinely added nothing to YOUR idea that isn't already
+        saved, reply with exactly: #{NOTHING}
     TXT
 
-    # Write the note if this conversation has been building on a held idea and
-    # that stretch has now ended. Returns the note, or nil when there was
-    # nothing to settle. Never raises: an idea that doesn't get its note is a
-    # thread that reads the way it did before any of this existed.
+    # Write a note on every held idea this conversation has been building on and
+    # has now moved off. Returns those notes, oldest idea first, empty when
+    # there was nothing to settle. Never raises: an idea that doesn't get its
+    # note is a thread that reads the way it did before any of this existed.
     #
     # `over` is the caller saying it already knows the stretch is finished, and
     # there is exactly one thing that knows that: a compaction, which is about
@@ -132,16 +151,16 @@ module Buddy
     # off it.
     def settle!(conversation, over: false)
       user = conversation&.user
-      return nil if user.nil?
+      return [] if user.nil?
 
-      # Two settles of one stretch would write the same note twice, and a
+      # Two settles of one stretch would write the same notes twice, and a
       # compaction happens on the same turn whose end also settles. Whoever is
       # second has nothing to add, so it gives up rather than waits.
       attempt = ByteConversation.with_advisory_lock_result(
         "buddy_idea_settle:#{conversation.id}", timeout_seconds: 0
       ) { run_settle(user, conversation, over) }
 
-      attempt.lock_was_acquired? ? attempt.result : nil
+      attempt.lock_was_acquired? ? attempt.result : []
     rescue StandardError => e
       Buddy::Errors.report(
         section:   "idea_dwell.settle",
@@ -149,29 +168,68 @@ module Buddy
         user:      conversation&.user,
         extra:     { conversation_id: conversation&.id },
       )
-      nil
+      []
     end
 
     def run_settle(user, conversation, over)
       messages = window(conversation)
-      return nil if messages.size < MIN_MESSAGES
+      return [] if messages.size < MIN_MESSAGES
 
-      idea = dwelt_on(user, messages)
-      return nil if idea.nil?
-      return nil unless over || moved_on?(idea, messages)
+      ideas = dwelt_on(user, messages)
+      return [] if ideas.empty?
+      return [] unless over || moved_on?(ideas, messages)
 
-      write_note!(conversation, idea, messages)
+      ideas.filter_map { |idea| write_note!(conversation, idea, ideas, messages) }
     end
 
-    # The one held idea this stretch has been building on without any of it
-    # being written down, or nil. One at a time: a stretch that reads as being
-    # about two ideas is a stretch that hasn't settled onto either.
+    # Every held idea this stretch has been building on without any of it being
+    # written down. Usually one; deliberately not ONLY one.
+    #
+    # Half an hour of thinking out loud is not half an hour on a single subject.
+    # People tangent — the kennel reminds them of the greenhouse, they weave
+    # between the two, and both get further along. Settling only the one with
+    # the most hits would drop the other's thinking on the floor, which is the
+    # exact failure this whole thing exists to fix, just narrower.
     def dwelt_on(user, messages)
       texts = messages.map { |message| message.body.to_s.downcase }
       since = messages.first.created_at
 
       scored = held(user).filter_map { |idea| score(idea, texts, since) }
-      scored.max_by { |row| [row[:messages], row[:terms]] }&.fetch(:idea)
+      own_subject(scored).pluck(:idea)
+    end
+
+    # Which of several co-scoring ideas are really separate subjects.
+    #
+    # Held ideas share vocabulary all the time — "kennel auto-open with a door
+    # sensor" and "upgrade the garage door sensor" have `door`, `sensor` and
+    # `open` in common, so a conversation about one clears the bar for the
+    # other and would collect a note about something never discussed. A wrong
+    # note on a thread is worse than a missing one: it's read back months later
+    # as a thing that was decided.
+    #
+    # So when more than one scores, each has to carry MIN_TERMS of its OWN that
+    # no other candidate matched. Kennel keeps `kennel`, `whisper`, `dispenser`;
+    # the garage keeps nothing but the shared three and drops out, while a
+    # genuine tangent to the greenhouse keeps plenty and stays.
+    def own_subject(scored)
+      return scored if scored.size < 2
+
+      alone = scored.select { |row|
+        shared = (scored - [row]).flat_map { |other| other[:hits] }
+        exclusive(row[:hits], shared).size >= MIN_TERMS
+      }
+      # Everything overlapping everything is one subject matching several ways,
+      # not several subjects. Keep the strongest rather than nothing.
+      alone.presence || [scored.max_by { |row| [row[:messages], row[:hits].size] }]
+    end
+
+    # Compared as substrings, the way every other match here is. Term equality
+    # would count "close" and "closed" as a word each idea owns, which is two
+    # ideas' worth of evidence out of one word in one message.
+    def exclusive(hits, shared)
+      hits.reject { |term|
+        shared.any? { |other| term.include?(other) || other.include?(term) }
+      }
     end
 
     # The same pool the prompt's "Things you're holding" list draws from, so a
@@ -196,19 +254,27 @@ module Buddy
 
       hit      = texts.map { |text| terms.select { |term| text.include?(term) } }
       messages = hit.count(&:any?)
-      distinct = hit.flatten.uniq.size
-      return nil if messages < MIN_MESSAGES || distinct < MIN_TERMS
+      hits     = hit.flatten.uniq
+      return nil if messages < MIN_MESSAGES || hits.size < MIN_TERMS
 
-      { idea: idea, messages: messages, terms: distinct }
+      { idea: idea, messages: messages, hits: hits }
     end
 
     # They're talking about something else now: the last couple of exchanges
-    # have nothing of the idea left in them.
-    def moved_on?(idea, messages)
+    # have nothing of ANY of these ideas left in them.
+    #
+    # Asked one idea at a time this reads a tangent as an ending, and two ideas
+    # being woven together would take turns declaring each other over: four
+    # messages on the greenhouse settles the kennel, four back on the kennel
+    # settles the greenhouse, and a conversation that was going somewhere gets
+    # chopped into notes about where it had got to halfway. Bouncing between two
+    # things they're holding is one session of thinking, and it ends when they
+    # move off BOTH.
+    def moved_on?(ideas, messages)
       tail = messages.last(MOVED_ON_TAIL)
       return false if tail.size < MOVED_ON_TAIL
 
-      terms = terms_for(idea)
+      terms = ideas.flat_map { |idea| terms_for(idea) }.uniq
       tail.none? { |message|
         text = message.body.to_s.downcase
         terms.any? { |term| text.include?(term) }
@@ -241,19 +307,25 @@ module Buddy
       message.body.to_s.strip.empty?
     end
 
-    def write_note!(conversation, idea, messages)
-      text = distill(conversation, idea, messages)
+    def write_note!(conversation, idea, ideas, messages)
+      text = distill(conversation, idea, ideas, messages)
       return nil if text.blank? || text.delete("^A-Za-z").casecmp?(NOTHING)
 
       idea.notes.create!(body: text.first(BuddyIdeaNote::MAX_BODY), source: :companion)
     end
 
-    # No reasoning: reading a transcript back is mechanical, and this runs
-    # behind a conversation that has already ended.
-    def distill(conversation, idea, messages)
+    # One call per idea, over the SAME transcript. Splitting the messages up by
+    # which idea they mention would be cheaper and would also throw away the
+    # half of a tangent that's worth keeping — "same sensor as the kennel, but
+    # for the greenhouse" only means anything with both sides of it present. The
+    # model gets the whole conversation and is told which thread it's writing.
+    #
+    # No reasoning: reading a transcript back is mechanical, and this runs behind
+    # a conversation that has already moved on.
+    def distill(conversation, idea, ideas, messages)
       result = Buddy::GPT::Client.new(model: MODEL, reasoning_effort: nil).stream(
         instructions: INSTRUCTIONS,
-        input:        [{ role: :user, content: brief(conversation, idea, messages) }],
+        input:        [{ role: :user, content: brief(conversation, idea, ideas, messages) }],
       )
       record_usage(result, conversation)
       return nil unless result[:ok]
@@ -261,13 +333,29 @@ module Buddy
       result[:text].to_s.strip
     end
 
-    def brief(conversation, idea, messages)
+    def brief(conversation, idea, ideas, messages)
       <<~TXT
-        THE IDEA AS IT STANDS:
+        THE IDEA YOU ARE WRITING ABOUT:
         #{idea.transcript}
-
-        THE CONVERSATION ABOUT IT:
+        #{alongside(idea, ideas)}
+        THE CONVERSATION:
         #{stretch(conversation, messages)}
+      TXT
+    end
+
+    # Names the other threads the same stretch touched, so their content can be
+    # recognised and left where it belongs. Without this the model has one idea
+    # and a transcript half about something else, and the obliging thing to do
+    # with the rest is fold it in.
+    def alongside(idea, ideas)
+      others = ideas - [idea]
+      return "" if others.empty?
+
+      labels = others.map { |other| "- #{other.summary.presence || other.body.to_s.truncate(80)}" }
+      <<~TXT
+
+        THEY ALSO TANGENTED ONTO THESE, WHICH ARE NOT YOURS TO WRITE:
+        #{labels.join("\n")}
       TXT
     end
 

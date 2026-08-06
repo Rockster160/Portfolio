@@ -1,16 +1,27 @@
 Buddy::Tools.register(
   name:        :stash_idea,
   description: <<~TXT,
-    Hold onto something that came up in passing so it can't get lost - a thing
-    they need to do, an idea, a worry, a follow-up they'd be annoyed to have
-    forgotten. This is the catch-all for anything with no better home: no clock
-    time (that's an agenda item), nothing to buy or tick off a list (that's a
-    list item). When someone is thinking out loud and several loose ends land in
-    one message, that is several calls - one per thing. Keep `idea` close to
-    their own words; `summary` is your own short label for it, and `category`
-    files it under me (personal), home (household/family), or work. This CREATES
-    a new held item - to file or relabel one that's already stashed, use
-    sort_stash instead.
+    Hold onto a THOUGHT that came up in passing so it can't get lost - an idea,
+    a worry, a question to look into, a follow-up they'd be annoyed to have
+    forgotten. The test is whether there's still thinking to do: "I keep meaning
+    to sort out the greenhouse" is a thought, and so is "does the blueberry
+    bush actually need phosphorus?".
+
+    A JOB is not a thought and does not belong here. Anything they could simply
+    go and do - an errand, a chore, a thing to fetch, check, put back or throw
+    out - is `add_list_item` onto one of their lists. "Bring the meat
+    thermometer out to the tomatoes", "chuck the old plastic pots", "put the
+    metal decorations back up" are list items, every one. A pile of thoughts
+    with a dozen errands mixed in is a pile nobody can read. Also not this: a
+    clock time is an agenda item, and a nudge at a time or on a condition is
+    `schedule_reminder` / `remind_when`.
+
+    When someone is thinking out loud and several loose ends land in one
+    message, that is several calls - one per thing, and they don't all have to
+    be this tool. Keep `idea` close to their own words; `summary` is your own
+    short label for it, and `category` files it under me (personal), home
+    (household/family), or work. This CREATES a new held item - to file or
+    relabel one that's already stashed, use sort_stash instead.
   TXT
   args:        {
     idea:     { type: :string, required: true,  description: "The thing to hold onto, in their words" },

@@ -92,16 +92,25 @@ module Buddy
       idea
     end
 
-    # Apply the LLM's sort decision from a [[stash: id=N category=work summary=...]]
-    # side-effect. Only touches the person's own still-unsorted ideas.
+    # Apply the LLM's sort decision from a `sort_stash` side-effect. Only
+    # touches the person's own ideas.
     def apply_sort(user, args)
       idea = user.buddy_ideas.find_by(id: args[:id])
       return if idea.nil?
+
+      # It went somewhere it can actually be acted on, so it comes off the pile
+      # rather than living in both places. Dropped rather than destroyed: it
+      # wasn't DONE, it was re-filed, and the row is the record of that.
+      return idea.update!(status: :dropped) if truthy?(args[:drop])
 
       attrs = {}
       attrs[:category] = args[:category] if %w[me home work].include?(args[:category].to_s)
       attrs[:summary]  = args[:summary].to_s.first(200) if args[:summary].present?
       idea.update!(attrs) if attrs.any?
+    end
+
+    def truthy?(value)
+      ActiveModel::Type::Boolean.new.cast(value).present?
     end
 
     class << self
@@ -135,19 +144,59 @@ module Buddy
       end
 
       def response_seed(user, idea, cat)
-        filed = if cat.nil?
-          "Sort it into ONE bucket - me (personal), home (household/family), or work - and give it a short 3-6 word summary. Record your call with this exact silent marker: [[stash: id=#{idea.id} category=<me|home|work> summary=\"<short summary>\"]]"
-        else
-          "It's filed under their #{BuddyIdea::CATEGORY_LABELS[cat]} list. If a crisper one-line summary comes to mind, set it silently with: [[stash: id=#{idea.id} summary=\"<short summary>\"]]"
-        end
-
         <<~SEED.strip
-          The person just brain-dumped this idea to hold onto: "#{idea.body}"
+          The person just brain-dumped this: "#{idea.body}"
 
-          #{filed}
+          #{destination(user, idea)}
+
+          #{filed(idea, cat)}
 
           #{closing(user, idea)}
         SEED
+      end
+
+      # What the thing actually IS, decided before anything else.
+      #
+      # The pile is where a dump lands, not where everything belongs. Tapping
+      # Stash arms a latch that swallows the very next message whatever it is,
+      # so a request with a clock on it - "remind me at 3:35 to uncover the
+      # tomatoes" - became a pile entry answered with "Done! I parked the
+      # tomatoes reminder on your Home pile", and 3:35 went past with no
+      # reminder set. And a spoken list of errands is a list of errands however
+      # it arrived: "bring out a meat thermometer to check the tomatoes" has no
+      # thinking left in it, and six of those on a pile of thoughts is six
+      # things to step over every time they read it.
+      def destination(user, idea)
+        lines = ["WHAT IS IT? Decide this first, before you file anything."]
+        lines << "- **Something to act on now.** A nudge at a time, a timer, something to send, anything with a clock on it: DO it with the tool that does it (`schedule_reminder`, `set_timer`, and so on), then take it off the pile with `sort_stash(id: #{idea.id}, drop: true)`. It only landed on the pile because they tapped Stash before typing. Never tell them it's handled unless you actually did the thing - a pile entry is not a reminder."
+        lines << task_line(user, idea) if to_do_lists(user).any?
+        lines << "- **A thought worth holding.** Something to mull, decide, look into, or come back to - that one stays on the pile, and the rest of this is about it."
+        lines.join("\n")
+      end
+
+      def task_line(user, idea)
+        names = to_do_lists(user).map { |list| "\"#{list.name}\"" }.join(", ")
+        "- **A job with nothing left to think about.** An errand, a chore, a thing to fetch or check or put back - that's a list item, not a thought. `add_list_item` onto whichever of these fits (#{names}), then `sort_stash(id: #{idea.id}, drop: true)`."
+      end
+
+      # Lists a to-do could plausibly go on. Everything they have, because which
+      # one fits is a judgement about the item and the model is holding the item
+      # - but only when they HAVE lists, so a person without them never gets
+      # told to file things onto nothing.
+      def to_do_lists(user)
+        return [] unless Buddy::Features.enabled?(user, :lists)
+
+        user.ordered_lists.to_a
+      rescue StandardError
+        []
+      end
+
+      def filed(idea, cat)
+        if cat.nil?
+          "If it IS a thought: sort it into ONE bucket - me (personal), home (household/family), or work - give it a short 3-6 word summary, and record both with `sort_stash(id: #{idea.id}, category: <me|home|work>, summary: \"<short summary>\")` (silent)."
+        else
+          "If it IS a thought: it's already filed under their #{BuddyIdea::CATEGORY_LABELS[cat]} list. If a crisper one-line summary comes to mind, set it silently with `sort_stash(id: #{idea.id}, summary: \"<short summary>\")`."
+        end
       end
 
       # What to do after the acknowledgement, which is the part that used to be
@@ -184,9 +233,9 @@ module Buddy
 
       def talk_closing(idea)
         <<~TXT.strip
-          Then respond warmly in one or two short lines: acknowledge it (name where it landed if you sorted it), and OFFER to talk it through if they'd like - low-key, no pressure ("want to think it through, or just park it for now?"). Keep it light.
+          Then respond warmly in one or two short lines: say where it landed - the bucket, the list, the reminder you set - and if it stayed on the pile as a thought, OFFER to talk it through if they'd like, low-key and no pressure ("want to think it through, or just park it for now?"). Keep it light. Something you put on a list or set a reminder for needs no offer; it's handled.
 
-          If they take you up on it and start talking it through, help them shape it - and as the idea gets sharper, quietly update its note with [[stash: id=#{idea.id} summary="<the sharpened summary>"]]. Never announce that you're updating it.
+          If they take you up on it and start talking it through, help them shape it - and as the idea gets sharper, quietly sharpen its label with `sort_stash(id: #{idea.id}, summary: "<the sharpened summary>")`. Never announce that you're updating it.
         TXT
       end
     end

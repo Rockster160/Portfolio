@@ -136,6 +136,87 @@ RSpec.describe "Buddy brain-dump (stash)" do
       end
     end
 
+    # A dump lands on the pile because the latch swallows whatever comes next,
+    # not because the pile is where it belongs. Prod: "Please remind me at 3:35
+    # to uncover the tomatoes" became a Home pile entry answered with "Done! I
+    # parked the tomatoes reminder on your Home pile" — and 3:35 went past with
+    # nothing set, because a pile entry is not a reminder.
+    describe "what the sort turn is asked to decide" do
+      let!(:list) { user.lists.create!(name: "Ongoing TO DO").tap { |l| user.user_lists.create!(list: l) } }
+
+      def seed_for(body, category: "home")
+        described_class.arm!(convo, category)
+        described_class.capture!(user, convo, message(body), category)
+        convo.byte_messages.where("metadata->>'source' = 'stash_response'").order(:id).last.body
+      end
+
+      it "asks what the thing is before asking which bucket" do
+        seed = seed_for("Please remind me at 3:35 to uncover the tomatoes")
+
+        expect(seed).to include("WHAT IS IT?")
+        expect(seed.index("WHAT IS IT?")).to be < seed.index("bucket")
+      end
+
+      it "tells it to do the real thing and take it off the pile" do
+        seed = seed_for("Please remind me at 3:35 to uncover the tomatoes")
+
+        expect(seed).to include("schedule_reminder", "drop: true")
+      end
+
+      it "forbids calling a pile entry a handled reminder" do
+        expect(seed_for("Please remind me at 3:35 to uncover the tomatoes"))
+          .to include("Never tell them it's handled unless you actually did the thing")
+      end
+
+      it "offers their real lists by name for a job with no thinking left in it" do
+        seed = seed_for("bring out a meat thermometer to check the tomatoes")
+
+        expect(seed).to include("add_list_item", "Ongoing TO DO")
+      end
+
+      it "says nothing about lists for someone who has none" do
+        user.user_lists.destroy_all
+
+        expect(seed_for("bring out a meat thermometer")).not_to include("add_list_item")
+      end
+
+      it "still tells it a thought stays on the pile" do
+        expect(seed_for("that garage shelf thing")).to include("A thought worth holding")
+      end
+
+      # The seed used to instruct a `[[stash: ...]]` marker, which Turn strips
+      # as a stray and never applies — so the sort it asked for could only land
+      # if the model reached past the instruction to the real function.
+      it "names the function rather than a marker that gets stripped" do
+        seed = seed_for("that garage shelf thing")
+
+        expect(seed).to include("sort_stash(id:")
+        expect(seed).not_to include("[[stash:")
+      end
+    end
+
+    it "takes it off the pile once it's been filed somewhere real" do
+      idea = BuddyIdea.create!(user: user, body: "remind me at 3:35 to uncover the tomatoes", status: :active)
+
+      Buddy::SideEffects.call(convo, :sort_stash, { "id" => idea.id, "drop" => true })
+
+      expect(idea.reload.status).to eq("dropped")
+    end
+
+    it "leaves a sort alone when drop isn't set" do
+      idea = BuddyIdea.create!(user: user, body: "garage shelves", status: :active)
+
+      Buddy::SideEffects.call(convo, :sort_stash, { "id" => idea.id, "category" => "home", "drop" => false })
+
+      expect(idea.reload).to have_attributes(status: "active", category: "home")
+    end
+
+    it "offers drop to the model as part of sort_stash" do
+      schema = Buddy::SideEffects.function_schemas.find { |s| s[:name].to_s == "sort_stash" }
+
+      expect(schema.to_json).to include("drop")
+    end
+
     it "refines just the summary from a talk-through (summary-only call)" do
       idea = BuddyIdea.create!(user: user, category: :home, summary: "shelves", body: "garage shelves", status: :active)
       Buddy::SideEffects.call(convo, :sort_stash, {
