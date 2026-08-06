@@ -31,6 +31,7 @@ class Jil
       chore_transfer
       chore_withdrawal
       climbing
+      delivery
       email
       event
       item

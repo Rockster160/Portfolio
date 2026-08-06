@@ -50,11 +50,37 @@ module Buddy
       starts.reverse.map { |start| run(start, paired[start.id]) }
     end
 
+    # Printer file names put separators where a person says spaces —
+    # `game_tray-vase`, `Wall_mount_phone_holder_v2` — so a literal substring
+    # test misses every natural phrasing of one. "game tray" and "game tray
+    # vase" both found nothing against thirteen runs of `game_tray-vase`, and it
+    # only matched once they typed the underscore and the hyphen themselves
+    # (prod 2699-2712) — which is the one thing this tool exists to spare them.
+    #
+    # So both sides fold to plain words and every word has to land somewhere in
+    # the name, in any order. A description is loose by nature ("that phone
+    # thing"), so when no name carries all of them we fall back to any: better
+    # to offer the phone holder than to insist they name the file.
     def narrow(runs, query)
-      needle = query.to_s.strip.downcase
-      return runs if needle.blank?
+      words = tokenize(query)
+      return runs if words.empty?
 
-      runs.select { |run| run[:name].downcase.include?(needle) }
+      spelled = runs.to_h { |run| [run[:name], folded(run[:name])] }
+      matched = runs.select { |run| words.all? { |word| spelled[run[:name]].include?(word) } }
+      return matched if matched.any?
+
+      runs.select { |run| words.any? { |word| spelled[run[:name]].include?(word) } }
+    end
+
+    def folded(text)
+      text.to_s.downcase.gsub(/[^a-z0-9]+/, " ").squish
+    end
+
+    # Single characters are dropped: they carry no signal, and one surviving
+    # into the any-word fallback ("print a thing") would match every print
+    # there is.
+    def tokenize(query)
+      folded(query).split.reject { |word| word.length < 2 }
     end
 
     def run(start, ending)

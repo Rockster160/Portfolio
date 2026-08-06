@@ -234,16 +234,43 @@ module Buddy
           return [ack_for(tool, gate: gate, opens: opens), signature, opens]
         end
 
-        confirm  = tool[:confirm].call(payload, ctx)
-        resolved = payload.merge(confirm[:resolved] || {})
+        confirm   = tool[:confirm].call(payload, ctx)
+        resolved  = payload.merge(confirm[:resolved] || {})
+        signature = [tool[:name], resolved.except(*VOLATILE_ARGS).sort_by { |k, _| k.to_s }]
+
+        # An answering tool runs HERE, and what comes back IS the output. It
+        # opens no gate: nothing is waiting on the person, and nothing follows
+        # it in the checklist because it never becomes one (see Turn#proposal?).
+        return [answer_output(tool, resolved, ctx), signature, nil] if Buddy::Tools.answers?(tool)
 
         [
           ack_for(tool, gate: gate, opens: opens).merge(resolved: confirm[:summary].to_s.presence).compact,
-          [tool[:name], resolved.except(*VOLATILE_ARGS).sort_by { |k, _| k.to_s }],
+          signature,
           opens,
         ]
       rescue StandardError => e
         [resolve_failure(e.message), nil, nil]
+      end
+
+      # The `note` is the whole safeguard: an ordinary level-1 ack tells the
+      # model its call is "done", and a model told a LOOKUP is done with nothing
+      # to show for it writes the answer it expected to get.
+      #
+      # It deliberately does NOT forbid calling again. A print handed a name the
+      # printer rejects has to be retried with the corrected one, and that is a
+      # different call. What's pointless is repeating it UNCHANGED, which the
+      # signature guard already catches on its own (see DUPLICATE_ACK).
+      ANSWER_NOTE = "This ran, and what's above is what came back. Speak from what is " \
+                    "actually there - if it came back empty, or refused, that IS the " \
+                    "outcome, so say so rather than describing what you expected. Asking " \
+                    "again with the same arguments will only return the same thing.".freeze
+
+      def self.answer_output(tool, payload, ctx)
+        outcome = Buddy::Tools.dispatch(tool, payload, ctx)
+        return resolve_failure(outcome[:error]) unless outcome[:ok]
+        return resolve_failure("#{tool[:name]} returned nothing readable") unless outcome[:data].is_a?(Hash)
+
+        { status: :answered }.merge(outcome[:data]).merge(note: ANSWER_NOTE)
       end
 
       # Args that describe HOW MUCH or WHEN rather than WHAT. Two calls differing
@@ -502,6 +529,11 @@ module Buddy
 
       def tool_output(call)
         name = call[:name].to_sym
+        # Announced BEFORE the work, not after: an answering tool runs inside
+        # this method, so a line posted afterwards would describe something
+        # already finished and the slowest part of the turn would still look
+        # like nothing was happening.
+        note_progress(name)
         reader = read_tools[name]
         return reader.call(call[:arguments]) if reader
         # Silent tools already ran as their call arrived (see run_round).
@@ -529,8 +561,12 @@ module Buddy
         JSON.generate(result)
       end
 
+      # An answering tool already ran in tool_output and reported there, so it
+      # must not also be collected as a proposal — ProposalBuilder would run it
+      # a second time, which for a lookup is a wasted query and for a print is
+      # a second print.
       def proposal?(name)
-        Buddy::Tools.known?(name)
+        Buddy::Tools.known?(name) && !Buddy::Tools.answers?(Buddy::Tools[name])
       end
 
       RETRY_NUDGE = <<~TXT.freeze
@@ -988,11 +1024,33 @@ module Buddy
         stray.each_value.reduce(raw) { |body, rx| body.gsub(rx, "") }.gsub(/\n{3,}/, "\n\n").strip
       end
 
-      def broadcast(message)
+      # ---- progress ----------------------------------------------------------
+
+      # One line per tool call, pushed to the bubble as it happens.
+      #
+      # Deliberately NOT persisted. These describe a turn in flight and mean
+      # nothing once it lands, so they ride on the broadcast only: the reply row
+      # never holds them, finalize has nothing to clear, and a reload mid-turn
+      # simply shows the placeholder it always did.
+      def note_progress(name)
+        @steps ||= []
+        phrase = Buddy::Progress.phrase_for(name)
+        return if phrase.nil?
+        # A round that repeats a call (the model restating itself) would
+        # otherwise stutter the same line twice.
+        return if @steps.last == phrase
+
+        @steps << phrase
+        broadcast(@reply, steps: @steps)
+      end
+
+      def broadcast(message, steps: nil)
+        wire = message.as_wire
+        wire = wire.merge(metadata: (wire[:metadata] || {}).merge("steps" => steps)) if steps.present?
         MonitorChannel.broadcast_to(@user, {
           id:      :byte,
           channel: :byte,
-          data:    { kind: :message, message: message.as_wire },
+          data:    { kind: :message, message: wire },
         })
       rescue StandardError => e
         Rails.logger.warn("[Buddy::GPT::Turn] broadcast failed: #{e.class}: #{e.message}")

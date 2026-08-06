@@ -91,21 +91,37 @@ RSpec.describe "a reminder set for someone else" do
       reminder
     end
 
-    it "lands on the recipient's own companion, not the asker's" do
+    # A reminder aimed at somebody else is a message from the person who set it,
+    # just one that leaves later — so it goes out bridged, the same way an
+    # immediate message_partner does.
+    it "reaches her as a message from the person who set it" do
       fire!
 
-      expect(seeds.length).to eq(1)
-      expect(seeds.first[:user]).to eq(chelsea)
-      expect(seeds.first[:conversation]).to eq(hers)
+      relay = BuddyRelay.last
+      expect(relay.from_user).to eq(rocco)
+      expect(relay.to_user).to eq(chelsea)
+      expect(relay.body).to eq("we need to remind mom about the puppy")
+      expect(relay.status).to eq("delivered")
     end
 
-    it "attributes it, so her companion passes it on instead of answering it" do
+    it "lands in her thread carrying his companion, not hers" do
       fire!
 
-      seed = seeds.first[:seed]
-      expect(seed).to include(rocco.first_name)
-      expect(seed).to include("we need to remind mom about the puppy")
-      expect(seed).to include("passing it along")
+      hers_copy = chelsea.byte_messages.where("metadata->>'kind' = 'buddy_relay'").last
+      expect(hers_copy.byte_conversation).to eq(hers)
+      expect(hers_copy.body).to eq("we need to remind mom about the puppy")
+      expect(hers_copy.metadata.dig("relay_peer", "name")).to be_present
+    end
+
+    # Prod 2555-2569, the whole reason this changed. The note arrived exactly as
+    # asked and left nothing on Rocco's side, so he asked "did it send?", got a
+    # guess, and a second copy went out for real.
+    it "leaves him the copy that says it went" do
+      fire!
+
+      copy = rocco.byte_messages.where("metadata->>'source' = 'relay_copy'").last
+      expect(copy).to be_present
+      expect(copy.body).to eq("we need to remind mom about the puppy")
     end
 
     it "still closes the reminder out" do
@@ -118,20 +134,19 @@ RSpec.describe "a reminder set for someone else" do
       reminder = BuddyReminder.create!(
         user: rocco, byte_conversation: convo, body: "check the oven", fire_at: 1.minute.ago,
       )
-      Buddy::ReminderFirer.fire!(reminder)
 
+      expect { Buddy::ReminderFirer.fire!(reminder) }.not_to change(BuddyRelay, :count)
       expect(Buddy::CompanionDelivery).to have_received(:deliver_plain).with(hash_including(user: rocco))
-      expect(seeds).to be_empty
     end
   end
 
-  it "shows on the panel row who it's for" do
+  it "shows on the panel row who it's going to" do
     BuddyReminder.create!(
       user: rocco, byte_conversation: convo, notify_user: chelsea,
       body: "remind mom about the puppy", fire_at: soon
     )
 
     row = Buddy::ReminderPresenter.rows(rocco).first
-    expect(row[:sublabel]).to start_with("for #{chelsea.first_name} · ")
+    expect(row[:sublabel]).to start_with("to #{chelsea.first_name} · ")
   end
 end

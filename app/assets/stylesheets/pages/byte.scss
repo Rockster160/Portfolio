@@ -315,6 +315,22 @@ html.html-ctr-byte body {
       color: var(--bs-text);
     }
 
+    // Tapped, and now waiting. A hard reload asks the service worker to
+    // re-fetch itself, waits for the swap, clears every cache and only then
+    // navigates — seconds on a good connection, and on a dead one the
+    // navigation simply never lands. Turning the arrows is the only sign the
+    // tap registered. Nothing here blocks the page; it's a state class.
+    &.is-reloading svg {
+      transform-origin: 50% 50%;
+      animation: byte-attach-spin 900ms linear infinite;
+    }
+
+    // It gave up. A spinner that never stops says "still working" forever, so
+    // the arrows come to rest and tint instead. Cleared after a beat.
+    &.is-stalled {
+      color: var(--bs-danger);
+    }
+
     // Update-available state: red tint on the icon itself + a small "!"
     // in the corner. No background pill / border — the icon has to stay
     // recognisably a reload icon.
@@ -643,21 +659,31 @@ html.html-ctr-byte body {
   overflow-wrap: anywhere;
   word-break: break-word;
 
-  // Long-press on the bubble padding / meta area copies the full body
-  // (JS: setupLongPressCopy). Suppress iOS's native selection callout
-  // there so the two gestures don't fight. Text zones re-enable native
-  // selection so per-word copy still works — see the [data-body] etc.
-  // rule just below.
-  -webkit-user-select: none;
-  user-select: none;
+  // Long-press on the bubble padding / meta area opens the message menu
+  // (message_actions/context_menu.js). Suppressing iOS's own callout is what
+  // keeps that gesture from fighting native selection; the press handler
+  // cancelling selectstart for the length of the press is the other half.
+  //
+  // The bubble itself stays SELECTABLE. It was `user-select: none` with the
+  // text zones opting back in, and a non-selectable ancestor is exactly what
+  // breaks Select All over a message — there's no whole for WebKit to select,
+  // so it comes back empty or partial. The chrome that shouldn't be draggable
+  // says so itself, below.
   -webkit-touch-callout: none;
 
   [data-body],
   [data-thoughts],
   [data-attachments] {
-    -webkit-user-select: text;
-    user-select: text;
     -webkit-touch-callout: default;
+  }
+
+  // Not text anyone means to select: the timestamp, the relay header, the queue
+  // cancel. Dragging across these is reaching for the message underneath.
+  .byte-msg-meta,
+  .byte-msg-peer,
+  .byte-msg-cancel {
+    -webkit-user-select: none;
+    user-select: none;
   }
 
   &.byte-msg-outbound {
@@ -804,6 +830,49 @@ html.html-ctr-byte body {
     }
   }
 
+  // A turn narrating itself. Every tool the server resolves pushes one line, so
+  // a wait that used to be a bare "…" reads as what's been done and what's
+  // happening right now. Finished lines fade back so the eye lands on the live
+  // one, which carries the same pulse a running watch does.
+  //
+  // Live only — the server never persists these, and the finished reply
+  // replaces the whole body.
+  &.byte-msg-stepping {
+    // The typing cursor promises words are being written. None are yet.
+    .byte-msg-body::after { content: none; }
+
+    .byte-step {
+      display: block;
+      font-size: 12.5px;
+      line-height: 1.6;
+      color: var(--bs-muted);
+      opacity: 0.55;
+
+      &::before {
+        content: "";
+        display: inline-block;
+        width: 5px;
+        height: 5px;
+        margin-right: 8px;
+        border-radius: 50%;
+        background: currentColor;
+        vertical-align: middle;
+        opacity: 0.6;
+      }
+    }
+
+    .byte-step-now {
+      color: var(--bs-text);
+      opacity: 1;
+
+      &::before {
+        background: var(--buddy-accent, #3FA0FF);
+        opacity: 1;
+        animation: byte-watch-pulse 1.4s ease-in-out infinite;
+      }
+    }
+  }
+
   .byte-msg-body {
     white-space: pre-wrap;
   }
@@ -898,6 +967,21 @@ html.html-ctr-byte body {
       padding: 1px 5px;
       border-radius: 4px;
       word-break: break-all;
+    }
+
+    // Bullet list. The body is `white-space: pre-wrap`, which would otherwise
+    // indent every marker by the literal spaces in the source, so the list
+    // resets it and does its own spacing.
+    .byte-md-list {
+      margin: 6px 0;
+      padding-left: 18px;
+      list-style: disc outside;
+      white-space: normal;
+
+      li {
+        margin: 2px 0;
+        line-height: 1.35;
+      }
     }
   }
 
@@ -4355,9 +4439,9 @@ $suki_expr_aliases: (
 // field dropped in a bubble renders invisible. Everything here is fighting
 // that, hence the specificity — same fight documented around line 1002.
 //
-// .byte-msg is `user-select: none` + `-webkit-touch-callout: none` so the
-// context menu owns the long-press; both have to be handed back inside a form
-// or fields can't be selected or edited on touch.
+// .byte-msg is `-webkit-touch-callout: none` so the context menu owns the
+// long-press; that has to be handed back inside a form or fields can't be
+// selected or edited on touch.
 // A message carrying a form gets the full column. A form is a data-entry
 // surface rather than a sentence: several labelled fields, option text that
 // shouldn't wrap mid-word, and a native date picker with an intrinsic minimum
@@ -4708,10 +4792,12 @@ $suki_expr_aliases: (
   }
 
   // Action-kind chip - tiny badge ABOVE the label. Secondary metadata,
-  // not primary content, so it stays small and unobtrusive.
+  // not primary content, so it stays small and unobtrusive. The labels name
+  // the thing rather than the verb ("New Agenda Task"), which makes them a
+  // little longer, so this sits a half-point under where it was.
   .byte-msg-action-kind {
     display: inline-block;
-    font-size: 9px;
+    font-size: 8.5px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;

@@ -21,10 +21,10 @@ module Buddy
     # Turns are serialized per conversation. The Mac used to guarantee this with a
     # per-conversation mutex in its handler; moving Buddy into Rails put every
     # turn in its own Sidekiq job, so the guarantee has to be re-established here.
-    # It matters for two real cases: a person firing off two messages in quick
-    # succession, and the read tools (check_weather, search_events,
-    # chore_progress) that finish by seeding a FOLLOW-UP turn in the same
-    # conversation. Unserialized, two turns build history concurrently and the
+    # It matters wherever two turns can overlap in one conversation: a person
+    # firing off two messages in quick succession, and anything that seeds a
+    # turn of its own while one is running (a reminder firing, a watch
+    # tripping). Unserialized, two turns build history concurrently and the
     # second can miss the first's reply entirely.
     def deliver!(message)
       conversation = message.byte_conversation
@@ -57,10 +57,17 @@ module Buddy
     def run_turn!(message, conversation, user)
       Buddy::Compactor.compact!(conversation) if Buddy::Compactor.should_compact?(conversation)
 
-      # The inbound message is "sent" as soon as we accept it for a turn; the
-      # reply is its own record, created and streamed by the Turn.
-      message.update!(state: :sent)
-      broadcast_message(user, message.reload)
+      # Anything that came through ByteMessageIntake is already `sent` — the
+      # server had it long before a worker got here. What this still catches is
+      # the drained-from-sleep path, where BuddyWakeWorker hands the message
+      # back as `pending` on its way out of the queue.
+      #
+      # Guarded so an unchanged message isn't rebroadcast: a second paint of a
+      # bubble nobody changed is exactly what used to knock it backwards.
+      unless message.sent?
+        message.update!(state: :sent)
+        broadcast_message(user, message.reload)
+      end
 
       Buddy::GPT::Turn.run!(message)
     end

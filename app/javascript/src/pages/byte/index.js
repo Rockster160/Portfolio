@@ -50,6 +50,7 @@ import { setupSlashAutocomplete } from "./slash_commands";
 import { renderMultiSelect } from "./message_actions/multi_select";
 import { renderForm } from "./message_actions/form";
 import { initMessageContextMenu } from "./message_actions/context_menu";
+import { renderMarkdown, escapeHtml, escapeAttr } from "./markdown";
 import { initBuddyHero } from "./buddy/hero";
 import { initBuddyTimers } from "./buddy/timers";
 import { initBuddyRoutines } from "./buddy/routines";
@@ -459,7 +460,17 @@ document.addEventListener("DOMContentLoaded", async () => {
       // is set by ProposalBuilder on replies that carry a checklist;
       // `buddy` is Mac's default kind for a plain reply; `buddy_receipt`
       // is the post-execution "Done ✓ ..." summary. All same treatment.
-      bodyEl.innerHTML = renderMarkdown(message.body || "");
+      //
+      // While the turn is still running the body is only a placeholder, so
+      // the bubble shows what Buddy is DOING instead — see renderSteps. The
+      // class is what swaps the typing cursor for the step pulse; className
+      // was rebuilt above, so it lasts exactly one paint, which is right.
+      if (message.state === "streaming") {
+        bodyEl.innerHTML = renderSteps(message?.metadata?.steps);
+        node.classList.add("byte-msg-stepping");
+      } else {
+        bodyEl.innerHTML = renderMarkdown(message.body || "");
+      }
     } else if (kind === "watch") {
       // Watch bubbles carry a `wait_label` while running, then a plain
       // markdown completion body once done. Render markdown either way.
@@ -566,6 +577,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     // call unmarkLive — we just don't refresh the timer. If the node
     // WAS live from a prior WS update, it stays live until the timer
     // expires naturally.
+  }
+
+  // What a Buddy turn is doing, while it's still doing it. The server pushes a
+  // line per tool call on the broadcast only (never persisted), so this grows
+  // as the turn runs and is gone the moment the real reply replaces it.
+  //
+  // Every line stays visible rather than swapping in place: a turn that checks
+  // the calendar, then the printer, then gives up is a different wait from one
+  // that answers straight away, and only the accumulated list tells them apart.
+  // The last line is the live one and carries the pulse.
+  function renderSteps(steps) {
+    const list = Array.isArray(steps) ? steps.filter(Boolean) : [];
+    if (list.length === 0) return `<span class="byte-step byte-step-now">Thinking</span>`;
+
+    return list
+      .map((s, i) => {
+        const now = i === list.length - 1 ? " byte-step-now" : "";
+        return `<span class="byte-step${now}">${escapeHtml(s)}</span>`;
+      })
+      .join("");
   }
 
   function renderThoughts(container, thoughts, state) {
@@ -960,51 +991,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       err.textContent = `Couldn't send: ${e.message}. Tap again.`;
       container.appendChild(err);
     }
-  }
-
-  function escapeAttr(s) {
-    return escapeHtml(String(s ?? "")).replace(/"/g, "&quot;");
-  }
-
-  function renderMarkdown(raw) {
-    const stash = [];
-    let t = raw;
-    t = t.replace(/```([^\n`]*)\n?([\s\S]*?)```/g, (_m, lang, code) => {
-      const i =
-        stash.push({ kind: "fence", lang: (lang || "").trim(), code }) - 1;
-      return `@FENCE@${i}@FENCE@`;
-    });
-    t = t.replace(/`([^`\n]+)`/g, (_m, code) => {
-      const i = stash.push({ kind: "inline", code }) - 1;
-      return `@INLINE@${i}@INLINE@`;
-    });
-    // Strip Buddy side-effect / proposal markers from prose. They're processed
-    // server-side and must never be visible — including a LEADING [[mood:]]
-    // that would otherwise flash at the very start of a streaming reply. Code
-    // spans are stashed above, so genuine code containing "[[" is protected,
-    // and these four verbs are Buddy-only vocabulary so stripping is safe for
-    // every mode.
-    t = t.replace(/\[\[\s*(?:propose|mood|remember|forget|stash)\s*:[^\]]*\]\]/gi, "");
-    t = t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    t = t.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
-    t = t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
-    t = t.replace(/\n/g, "<br>");
-    t = t.replace(/@FENCE@(\d+)@FENCE@/g, (_m, i) => {
-      const b = stash[Number(i)];
-      return `<pre class="byte-md-code"><code>${escapeHtml(b.code)}</code></pre>`;
-    });
-    t = t.replace(/@INLINE@(\d+)@INLINE@/g, (_m, i) => {
-      const b = stash[Number(i)];
-      return `<code class="byte-md-inline">${escapeHtml(b.code)}</code>`;
-    });
-    return t;
-  }
-
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
   }
 
   // `live` distinguishes a paint driven by a fresh WS event (true) from
@@ -2750,7 +2736,67 @@ document.addEventListener("DOMContentLoaded", async () => {
     location.replace(url.toString());
   }
 
-  reloadBtn?.addEventListener("click", hardReload);
+  // How long the arrows turn before the button admits nothing happened.
+  // `location.replace` does not reject when there's no connection — it just
+  // never navigates — so on a dead link this timer is the only thing that ends
+  // the spin. Generous, because a slow reload that DOES land shouldn't get
+  // called a failure on the way.
+  const RELOAD_STALL_MS = 12_000;
+
+  let reloadTimer = null;
+
+  function setReloading(on) {
+    if (!reloadBtn) return;
+    reloadBtn.classList.toggle("is-reloading", on);
+    reloadBtn.setAttribute("aria-busy", on ? "true" : "false");
+  }
+
+  function reloadStalled() {
+    reloadTimer = null;
+    setReloading(false);
+    if (!reloadBtn) return;
+
+    // Put back whatever setUpdateAvailable last wrote rather than assuming
+    // "Reload" — an update may well still be queued behind this.
+    const title = reloadBtn.getAttribute("title");
+    reloadBtn.classList.add("is-stalled");
+    reloadBtn.setAttribute("title", "Reload didn't go through - tap to try again");
+    setTimeout(() => {
+      reloadBtn.classList.remove("is-stalled");
+      reloadBtn.setAttribute("title", title);
+    }, 3000);
+  }
+
+  // Deliberately nothing awaits this before the user can carry on: the spin is
+  // the whole feedback, and the reload runs exactly as it did before.
+  async function onReloadTap() {
+    if (reloadTimer) return; // already going — a second tap changes nothing
+
+    setReloading(true);
+    reloadTimer = setTimeout(reloadStalled, RELOAD_STALL_MS);
+    try {
+      await hardReload();
+      // No clearTimeout on the happy path: the navigation is in flight and the
+      // timer dies with the document. Stopping the spin here would blink the
+      // icon back to rest mid-swap.
+    } catch (_) {
+      clearTimeout(reloadTimer);
+      reloadStalled();
+    }
+  }
+
+  reloadBtn?.addEventListener("click", onReloadTap);
+
+  // bfcache restores the DOM exactly as it was, spinner included, on a page
+  // that is very much not reloading any more.
+  window.addEventListener("pageshow", (e) => {
+    if (!e.persisted) return;
+
+    clearTimeout(reloadTimer);
+    reloadTimer = null;
+    setReloading(false);
+    reloadBtn?.classList.remove("is-stalled");
+  });
 
   // Populate the "sw" version footer in the drawer. Asks the active
   // service worker for its version; the SW replies via a broadcast

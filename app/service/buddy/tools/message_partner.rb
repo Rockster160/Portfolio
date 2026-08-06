@@ -26,6 +26,15 @@ Buddy::Tools.register(
     It must be someone in the user's household - if you don't recognize the
     name, say you're not sure who they mean rather than guessing.
 
+    This sends it NOW. A message they want delivered LATER is the same message
+    on a delay, and both forms exist - don't decline one and don't send it early
+    instead:
+    - At a time ("in five minutes", "at 4", "tonight") - `schedule_reminder`
+      with `notify` set to them, and `text` written as the note itself.
+    - When something HAPPENS ("when someone's at the door", "the next time a
+      deploy finishes") - `remind_when` with `notify` set to them.
+    Either way it arrives from this person, exactly as it would have here.
+
     This is one-way. If the user wants an ANSWER back, use ask_partner (open
     question), ask_partner_choice (pick one), or ask_partner_multi (pick any).
   TXT
@@ -42,15 +51,12 @@ Buddy::Tools.register(
   },
   label:       ->(payload, _ctx) { { title: "Message #{payload[:to_name]}", sub: payload[:message].to_s } },
   execute:     ->(payload, ctx) {
-    relay = BuddyRelay.create!(
-      from_user:         ctx.user,
-      to_user_id:        payload[:to_user_id],
+    relay = Buddy::CompanionRelay.pass_along!(
+      from:              ctx.user,
+      to:                User.find(payload[:to_user_id]),
+      text:              payload[:message].to_s,
       from_conversation: ctx.conversation,
-      kind:              :notify,
-      body:              payload[:message].to_s,
-      status:            :pending,
     )
-    Buddy::CompanionRelay.deliver!(relay)
     { relay_id: relay.id, to_name: payload[:to_name] }
   },
   # Delivering to a partner is low-stakes and conversational, so it goes out

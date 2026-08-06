@@ -18,10 +18,10 @@ Buddy::Tools.register(
     default), `past` for "last time", `any` when they just want to know whether
     it exists at all. `days` bounds how far to reach, default 180.
 
-    It comes BACK to you with the matches and their ids, so you can answer, or
-    act with `edit_agenda_item`, in your NEXT reply. In THIS one give only a
-    short lead-in ("let me look"). If it finds nothing, say so plainly - a
-    calendar with nothing on it is a real answer and much better than a guess.
+    The matches and their ids come back to you in this same turn, so answer, or
+    act with `edit_agenda_item`, right away rather than saying you'll go look.
+    If it finds nothing, say so plainly - a calendar with nothing on it is a
+    real answer and much better than a guess.
   TXT
   feature:     :agenda,
   args:        {
@@ -35,9 +35,8 @@ Buddy::Tools.register(
     },
     days:      { type: :integer, required: false, default: 180, description: "How far to reach in days (1-1095)" },
   },
-  # Level 1 (auto): a read that relays its own follow-up turn, same shape as
-  # search_events. Nothing changes, so there's nothing to confirm.
   auto:        true,
+  answers:     true,
   confirm:     ->(_payload, _ctx) { { summary: "Search the calendar", resolved: {} } },
   label:       ->(_payload, _ctx) { "Search calendar" },
   execute:     ->(payload, ctx) {
@@ -46,38 +45,27 @@ Buddy::Tools.register(
     days      = (payload[:days] || Buddy::AgendaSearch::DEFAULT_DAYS).to_i
     found     = Buddy::AgendaSearch.call(user: ctx.user, query: query, direction: direction, days: days)
     rows      = Buddy::AgendaSearch.rows(found[:items], ctx.user, found[:sources])
+    facing    = { past: "before now", any: "either side of now" }.fetch(direction, "from now on")
 
-    relayed = !ctx.conversation.nil?
-    if relayed
-      facing = { past: "before now", any: "either side of now" }.fetch(direction, "from now on")
-      body = (
+    {
+      searched: query,
+      looking:  facing,
+      days:     days,
+      items:    rows,
+      total:    found[:total],
+      how:      (
         if rows.any?
-          more = found[:total] > rows.length ? " (showing #{rows.length} of #{found[:total]})" : ""
-          "You searched their calendar for `#{query}` #{facing} and found, nearest first#{more}:\n" \
-            "#{rows.join("\n")}\n\n" \
-            "Answer them from THIS, not from what you remember being on the calendar. Give the one " \
-            "they asked about in your own words, with the day and time; don't read the list back. " \
-            "An entry marked as somebody else's is on a shared calendar and is not theirs to do. " \
-            "To change one, call `edit_agenda_item` with its id. Don't search again this turn."
+          "Nearest first#{" - #{rows.length} of #{found[:total]} shown" if found[:total] > rows.length}. " \
+            "Answer from THIS, not from what you remember being on the calendar. Give the one they " \
+            "asked about in your own words, with the day and time; don't read the list back. An " \
+            "entry marked as somebody else's is on a shared calendar and is not theirs to do. To " \
+            "change one, call `edit_agenda_item` with its id."
         else
-          "You searched their calendar for `#{query}` #{facing}, across #{days} days, and found " \
-            "NOTHING. Tell them plainly that there's nothing on the calendar for it - that is the " \
-            "real answer and they need it. Do not offer a nearby item as though it might be the one, " \
-            "and do not guess at a day. Offer to put it on if they want."
+          "NOTHING across #{days} days. Tell them plainly that there's nothing on the calendar for " \
+            "it - that is the real answer and they need it. Do not offer a nearby item as though it " \
+            "might be the one, and do not guess at a day. Offer to put it on if they want."
         end
-      )
-      Buddy::CompanionDelivery.deliver_prompt(
-        user:         ctx.user,
-        conversation: ctx.conversation,
-        seed:         body,
-        metadata:     { "kind" => "buddy_trigger", "hidden" => true, "source" => "agenda_search" },
-      )
-    end
-    { relayed: relayed, count: rows.size, total: found[:total] }
-  },
-  receipt:     ->(result, _ctx) {
-    next nil if result[:relayed]
-
-    "Couldn't search your calendar right now."
+      ),
+    }.compact
   },
 )

@@ -31,7 +31,7 @@ module Buddy
     # feature => context sections Buddy::Context.build produces for it.
     # Anything not listed here belongs to CORE and always ships.
     SECTIONS = {
-      chores:  %i[
+      chores:     %i[
         chores_pending_today
         chores_done_today
         chores_hot_picks
@@ -40,29 +40,38 @@ module Buddy
         chores_all
         pebble_balance
       ],
-      agenda:  %i[today_agenda upcoming_agenda],
-      lists:   %i[lists],
-      events:  %i[recent_events],
-      jil:     %i[jil_triggers jil_functions],
-      relay:   %i[pending_relays],
-      prompts: %i[pending_prompts],
-      mac:     [],
+      agenda:     %i[today_agenda upcoming_agenda],
+      lists:      %i[lists],
+      events:     %i[recent_events],
+      jil:        %i[jil_triggers jil_functions],
+      relay:      %i[pending_relays],
+      prompts:    %i[pending_prompts],
+      mac:        [],
+      # No sections of its own: the delivery list is a lookup, not something
+      # worth carrying in every prompt.
+      deliveries: [],
     }.freeze
 
-    # What a new account is handed. Everything except `mac` - running commands
-    # on the owner's machine is his to grant, not a starting condition.
-    DEFAULT = (SECTIONS.keys - [:mac]).freeze
+    # Granted rather than assumed, for the same reason `mac` is: both reach
+    # something that belongs to one person. The delivery list lives in the
+    # OWNER's cache (see Buddy::Deliveries) and there is no per-user one, so
+    # handing this to a new account would point their companion at his packages.
+    OWNER_ONLY = %i[mac deliveries].freeze
+
+    # What a new account is handed.
+    DEFAULT = (SECTIONS.keys - OWNER_ONLY).freeze
 
     # What to call each one when telling the model (or a person) what's off.
     LABELS = {
-      chores:  "chores, completions, and pebbles",
-      agenda:  "the calendar and agenda",
-      lists:   "lists",
-      events:  "logged events",
-      jil:     "Jil automations",
-      relay:   "passing messages to other people in the household",
-      prompts: "the app's prompts and surveys",
-      mac:     "commands on the Mac",
+      chores:     "chores, completions, and pebbles",
+      agenda:     "the calendar and agenda",
+      lists:      "lists",
+      events:     "logged events",
+      jil:        "Jil automations",
+      relay:      "passing messages to other people in the household",
+      prompts:    "the app's prompts and surveys",
+      mac:        "commands on the Mac",
+      deliveries: "packages on their way",
     }.freeze
 
     def all

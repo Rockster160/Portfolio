@@ -17,8 +17,9 @@ Buddy::Tools.register(
     To cancel ONE specific reminder by name, prefer cancel_reminder instead.
   TXT
   args:        {},
-  # Level 1 (auto): a read that renders its own inline list (like search_events
-  # relays its own follow-up), so there's no checkbox to confirm and no chip.
+  # Level 1 (auto), but NOT an `answers:` tool: what it produces is for the
+  # person, not for the model. It draws rows in the thread rather than handing
+  # findings back, so it stays on the execute-after-the-reply path.
   auto:        true,
   confirm:     ->(_payload, _ctx) { { summary: "List reminders", resolved: {} } },
   label:       ->(_payload, _ctx) { "List reminders" },

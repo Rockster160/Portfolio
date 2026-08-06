@@ -107,35 +107,37 @@ function stillAwaiting(requestId, id, serverStatus) {
 // record, since editing one doesn't change what it is).
 const AGENDA_KINDS = { task: "Task", trigger: "Trigger" };
 
-function agendaVerb(verb, payload) {
-  return `${verb} ${AGENDA_KINDS[payload?.kind] || "Event"}`;
+function agendaKind(verb, payload) {
+  return `${verb} Agenda ${AGENDA_KINDS[payload?.kind] || "Event"}`;
 }
 
-// Per-tool action-verb prefix so each checkbox row makes it clear WHAT
-// tapping the box will do. Without this the label is just "Water 24oz"
-// and the user can't tell if it'll log an event, complete a chore, or
-// add to a list. Short + colored to read as metadata, not part of the
-// item name.
-// Verb + what it acts on, so a generic "Add" / "Edit" / "Remove" never
-// stands alone. "Log" and "Complete" are specific enough as-is.
+// Per-tool chip so each checkbox row makes it clear WHAT tapping the box will
+// do. Without it the label is just "Water 24oz" and there's no telling whether
+// that logs an event, completes a chore, or lands on a list.
+//
+// Names the THING and where it lives, rather than the verb that runs. "Add
+// Task" said what the tool was called; "New Agenda Task" says what will exist
+// afterwards, which is the question someone reading a confirmation is actually
+// asking. The qualifier is load-bearing too — an agenda Event and a logged
+// event are different things that used to read as "Add Event" and "Log".
 //
 // A value may be a function of the payload when one tool covers more than one
 // kind of thing.
 const ACTION_KIND_LABELS = {
-  complete_chore:        "Complete",
-  create_chore:          "Add Chore",
+  complete_chore:        "Complete Chore",
+  create_chore:          "New Chore",
   edit_chore:            "Edit Chore",
-  undo_chore_completion: "Undo",
+  undo_chore_completion: "Undo Chore",
   undo:                  "Undo",
-  add_agenda_item:       (p) => agendaVerb("Add", p),
-  edit_agenda_item:      (p) => agendaVerb("Edit", p),
-  add_list_item:         "Add to List",
+  add_agenda_item:       (p) => agendaKind("New", p),
+  edit_agenda_item:      (p) => agendaKind("Edit", p),
+  add_list_item:         "New List Item",
   edit_list_item:        "Edit List Item",
-  remove_list_item:      "Remove from List",
-  log_event:             "Log",
-  edit_event:            "Edit Log",
-  delete_event:          "Delete Log",
-  schedule_reminder:     "Remind",
+  remove_list_item:      "Remove List Item",
+  log_event:             "New Logged Event",
+  edit_event:            "Edit Logged Event",
+  delete_event:          "Delete Logged Event",
+  schedule_reminder:     "New Reminder",
   cancel_reminder:       "Cancel Reminder",
 };
 

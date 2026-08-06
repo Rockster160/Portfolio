@@ -508,8 +508,16 @@ RSpec.describe Buddy::RemindersController, type: :controller do
         expect(rows.find { |r| r["type"] == "watch" }["expires_on"]).to be_present
       end
 
+      # Their end of day, not the server's. Time.zone is UTC app-wide, so a bare
+      # end_of_day is already tomorrow on a UTC-6 calendar from 6pm onwards —
+      # and the row was right to say "tomorrow", which made this fail every
+      # evening.
       it "says on the row that it stops on its own" do
-        watch!(scope: "item", listener: "item:action:added", expires_at: Time.current.end_of_day)
+        watch!(
+          scope:      "item",
+          listener:   "item:action:added",
+          expires_at: Time.current.in_time_zone(user.timezone).end_of_day,
+        )
 
         get :index
 

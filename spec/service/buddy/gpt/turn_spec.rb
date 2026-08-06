@@ -890,6 +890,175 @@ RSpec.describe Buddy::GPT::Turn do
   # The whole point of paying for the second call: the model learns what the tool
   # actually resolved to BEFORE it writes a word. A chore name matching nothing
   # used to be dropped in silence under prose that had already claimed credit.
+  # An answering tool settles INSIDE the turn. These used to be ordinary
+  # level-1 tools, which meant they executed after the reply was already written
+  # and fed their findings into a whole second turn — so on the turn that
+  # mattered the model held only "Ran immediately. Speak about it as done." and
+  # no data. It filled the gap with a guess. Prod 2710: "No print record for
+  # `game_tray-vase` either", followed four seconds later by prod 2712: "Found
+  # it."
+  describe "a tool that answers in-turn" do
+    def print!(name, at: 2.hours.ago)
+      start = ActionEvent.create!(
+        user: user, name: "PrintStart", notes: name, timestamp: at,
+        data: { estimated_seconds: 2400 }
+      )
+      ActionEvent.create!(
+        user: user, name: "PrintFinish", notes: name, timestamp: at + 40.minutes,
+        data: { start_event_id: start.id, actual_seconds: 2400 }
+      )
+    end
+
+    def output_of(client)
+      JSON.parse(client.calls.last.input.find { |i| i[:type] == :function_call_output }[:output])
+    end
+
+    it "puts the findings in front of the model before it writes a word" do
+      print!("game_tray-vase")
+
+      client = run([
+        { tool_calls: [{ name: :print_history, arguments: { "query" => "game tray" } }] },
+        { text: "That's `game_tray-vase`, finished this morning." },
+      ])
+
+      output = output_of(client)
+      expect(output["status"]).to eq("answered")
+      expect(output["prints"].join).to include("game_tray-vase")
+      expect(reply.body).to include("game_tray-vase")
+    end
+
+    it "says plainly that it found nothing rather than implying it ran" do
+      client = run([
+        { tool_calls: [{ name: :print_history, arguments: { "query" => "nothing like this" } }] },
+        { text: "No print on record for that one." },
+      ])
+
+      output = output_of(client)
+      expect(output["prints"]).to be_empty
+      expect(output["note"]).to include("that IS the outcome")
+    end
+
+    # The results were the whole point; nothing about a lookup belongs in a
+    # checklist or an activity chip, and running it twice would double the query.
+    it "leaves no proposal behind for ProposalBuilder to run again" do
+      print!("game_tray-vase")
+      allow(Buddy::ProposalBuilder).to receive(:create).and_call_original
+
+      run([
+        { tool_calls: [{ name: :print_history, arguments: { "query" => "game tray" } }] },
+        { text: "Found it." },
+      ])
+
+      expect(Buddy::ProposalBuilder).not_to have_received(:create)
+      expect(convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'")).to be_empty
+    end
+
+    # It answered the model in this turn; a second copy of the same reply,
+    # arriving as a push, is what the relay used to produce.
+    it "starts no second turn of its own" do
+      allow(Buddy::CompanionDelivery).to receive(:deliver_prompt)
+      print!("game_tray-vase")
+
+      run([
+        { tool_calls: [{ name: :print_history, arguments: { "query" => "game tray" } }] },
+        { text: "Found it." },
+      ])
+
+      expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
+      expect(convo.byte_messages.where(direction: :inbound).count).to eq(1)
+    end
+  end
+
+  # A turn can spend several rounds on tools before a word of the reply exists,
+  # and all of it used to sit behind one "…". These lines go in its place.
+  describe "saying what it's doing while it does it" do
+    def broadcasts
+      captured = []
+      allow(MonitorChannel).to receive(:broadcast_to) { |_user, payload| captured << payload }
+      yield
+      captured.filter_map { |p| p.dig(:data, :message, :metadata, "steps") }
+    end
+
+    it "pushes a line for each tool call, in the order they happen" do
+      steps = broadcasts {
+        run([
+          { tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
+          { tool_calls: [{ name: :set_timer, arguments: { "minutes" => 5 } }] },
+          { text: "Timer's going." },
+        ])
+      }
+
+      expect(steps.last).to eq(["Checking your day", "Starting the timer"])
+    end
+
+    # The line has to be up BEFORE the tool runs, or the slowest part of the
+    # turn is exactly the part that looks like nothing is happening.
+    it "announces a step before running it, not after" do
+      user.tasks.create!(
+        name: "Print Again", listener: 'function("File" TAB String(""))::String',
+        code: "a = String.new(\"ok\")::String", buddy_enabled: true
+      )
+      ran = []
+      allow(MonitorChannel).to receive(:broadcast_to) { |_u, p|
+        ran << [:said, p.dig(:data, :message, :metadata, "steps")&.last]
+      }
+      allow(Buddy::Reprint).to receive(:call) {
+        ran << [:did, "print"]
+        { file: "x", task: "Print Again", outcome: :started, printer_said: "ok" }
+      }
+
+      run([
+        { tool_calls: [{ name: :print_again, arguments: { "file" => "x" } }] },
+        { text: "Printing." },
+      ])
+
+      expect(ran).to include([:said, "Asking the printer"])
+      expect(ran.index([:said, "Asking the printer"])).to be < ran.index([:did, "print"])
+    end
+
+    it "doesn't stutter when the model repeats itself" do
+      steps = broadcasts {
+        run([
+          { tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
+          { tool_calls: [{ name: :get_context, arguments: { "sections" => ["lists"] } }] },
+          { text: "Here." },
+        ])
+      }
+
+      expect(steps.last).to eq(["Checking your day"])
+    end
+
+    # They describe a turn in flight and mean nothing once it lands, so the row
+    # never holds them and the finished reply is just the reply.
+    it "leaves nothing behind on the message" do
+      run([
+        { tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
+        { text: "All good." },
+      ])
+
+      expect(reply.metadata).not_to have_key("steps")
+      expect(reply.body).to eq("All good.")
+    end
+
+    it "falls back to the tool's own name when it has no phrase of its own" do
+      expect(Buddy::Progress.phrase_for(:some_new_tool)).to eq("Some new tool")
+    end
+
+    # set_mood fires on most turns. A line reading "Set mood" every time is the
+    # noise this whole thing exists to replace.
+    it "says nothing for the housekeeping it does alongside the real work" do
+      steps = broadcasts {
+        run([
+          { tool_calls: [{ name: :set_mood, arguments: { "expression" => "happy" } }] },
+          { tool_calls: [{ name: :get_context, arguments: { "sections" => ["lists"] } }] },
+          { text: "Here." },
+        ])
+      }
+
+      expect(steps.last).to eq(["Checking your day"])
+    end
+  end
+
   describe "resolving the call before the model speaks" do
     it "hands back the resolved summary when the tool lines up" do
       ActionEvent.create!(user: user, name: "Dust shelves", timestamp: Time.current)

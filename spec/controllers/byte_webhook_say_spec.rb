@@ -28,7 +28,7 @@ RSpec.describe WebhooksController, type: :controller do
       expect(response).to have_http_status(:created)
       message = buddy_convo.byte_messages.outbound.last
       expect(message.body).to eq("what's on my agenda?")
-      expect(message).to be_pending
+      expect(message).to be_sent
       expect(BuddyDeliverWorker).to have_received(:perform_async).with(message.id)
     end
 

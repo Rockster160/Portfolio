@@ -136,7 +136,7 @@ RSpec.describe Buddy::Personality do
     it "routes a timed nudge for somebody else to a reminder aimed at them" do
       prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
 
-      expect(prompt).to include("Reaching them LATER is a reminder aimed at them")
+      expect(prompt).to include("Reaching them LATER is the same message on a delay")
       expect(prompt).to include('schedule_reminder(notify: "<name>"')
       expect(prompt).to include("Read who the thing is FOR before you set it")
     end
@@ -153,6 +153,54 @@ RSpec.describe Buddy::Personality do
       # The voice profile agrees rather than pulling the other way.
       expect(prompt).to include("information doesn't take a heart")
       expect(prompt).not_to include("Your signature, used freely")
+    end
+
+    # Prod 2569: "...which is annoyingly tidy of it", about a message trace. The
+    # padding rule already banned the trailing `, which is ...` clause and even
+    # named "rude of the calendar" as an example, and it still came out — the
+    # padding framing turns on placement, so a witty one reads as having earned
+    # its spot. The problem isn't only where it sits; it's crediting a piece of
+    # software with a character trait, which is the bit that sounds fourteen.
+    it "refuses to credit software with a personality" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("Don't give software manners")
+      expect(prompt).to include("`<adjective> of it` shape")
+    end
+
+    # Reacting to a thing was never the problem, and a rule that reads as "be
+    # more neutral" would cost more than it fixes.
+    it "still lets it find a thing annoying or cute" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("Reacting to a thing is completely fine")
+    end
+
+    # Two rules pointing at one phrase teaches it twice and fixes it once. The
+    # personified example belongs to the rule about personification.
+    it "keeps the padding rule's examples about padding" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+      padding = prompt.lines.find { |line| line.include?("Padding is a tacked-on COMMENT") }
+
+      expect(padding).not_to include("rude of the calendar")
+    end
+
+    # Prod 2612: "How do I see my agenda?" got "Open the **Agenda** or
+    # **Calendar** tab in Byte" — neither has ever existed. The drawer holds
+    # Conversations, Routines, Reminders and Settings, and the companion can't
+    # see the screen at all, so any answer about where a thing is is invented.
+    it "refuses to describe a screen it can't see" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("You cannot see the screen")
+      expect(prompt).to include("No tabs, no buttons, no menus")
+    end
+
+    # And the answer to "how do I see X" is X, not directions to it.
+    it "answers a where-is-it question by reading the thing out" do
+      prompt = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(prompt).to include("it's to SHOW them, by reading it out")
     end
 
     # Prod 1226: "Sorry, love." Those names belong to the two of them.
@@ -348,6 +396,34 @@ RSpec.describe Buddy::Personality do
 
       expect(prompt).to include("**Opinionated.**")
       expect(prompt).to include("a mirror is dull")
+    end
+
+    # Prod 2700: "Psh, that one isn't wired as a task yet." Psh is sarcasm, so
+    # aimed at a shortfall of its own it reads as shrugging off what was asked.
+    # The profile called it a "tease or casual dismissal" and offered nothing at
+    # all for genuine confusion, so dismissal was the nearest thing to reach for.
+    it "keeps Psh pointed at a tease rather than at its own shortfalls" do
+      prompt = byte_prompt
+
+      expect(prompt).to include("it needs a target worth ribbing")
+      expect(prompt).to include("Never open a shortfall with it")
+    end
+
+    it "gives it a sound for not knowing" do
+      prompt = byte_prompt
+
+      expect(prompt).to include("`Hm.` / `Hmm.` / `Hmmmm.`")
+      expect(prompt).to include("the sound of not knowing")
+    end
+
+    # "Nice little blob of a wait", "nice little blob brain", "goes straight
+    # through, blob" — the word stapled to something that isn't a blob, as a
+    # diminutive nobody asked for. He named it as the most tiring habit it has.
+    it "keeps blob as something it IS, not a word to hang on other things" do
+      prompt = byte_prompt
+
+      expect(prompt).to include("not a word to hang on other things")
+      expect(prompt).to include("Cut the whole clause")
     end
 
     it "keeps the slime soft rather than gross" do

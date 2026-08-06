@@ -125,13 +125,11 @@ RSpec.describe "Buddy proposal levels" do
       expect(chip.metadata["tool_name"]).to eq("trigger_jil_task")
     end
 
-    # check_weather returns nil on purpose: it answers via a follow-up Buddy
-    # turn, so a chip would just duplicate it. That opt-out has to keep working.
+    # list_reminders returns nil on purpose: the rows it draws in the thread ARE
+    # the output, so a chip would just sit above them saying it drew them. That
+    # opt-out has to keep working.
     it "still honors a deliberate nil-receipt opt-out" do
-      allow(WeatherService).to receive(:summary).and_return("currently 70F.")
-      allow(Buddy::CompanionDelivery).to receive(:deliver_prompt)
-
-      build([{ tool_name: :check_weather, payload: {} }])
+      build([{ tool_name: :list_reminders, payload: {} }])
 
       expect(chip).to be_nil
     end

@@ -34,15 +34,27 @@ class AmazonOrder
 
   def self.reload
     @@all = (MeCache.get(:amazon_deliveries) || []).map { |data| new(data) }
+    # What the list looked like before anybody touched it, for the lifecycle
+    # diff in `save`. Taken HERE because this is the only moment we know
+    # nothing has been changed yet — re-reading the cache at save time would
+    # already be looking at whatever we're about to overwrite.
+    @@snapshot = @@all.map(&:serialize)
+    @@all
   end
 
   def self.save
-    MeCache.set(:amazon_deliveries, serialize)
+    # `serialize` first: on a cold process it loads the list, which is what
+    # sets the snapshot this then diffs against.
+    after  = serialize
+    before = defined?(@@snapshot) ? @@snapshot : nil
+    MeCache.set(:amazon_deliveries, after)
+    DeliveryEvents.fire!(before: before, after: after)
     clear
   end
 
   def self.clear
     @@all = nil
+    @@snapshot = nil
   end
 
   def self.broadcast

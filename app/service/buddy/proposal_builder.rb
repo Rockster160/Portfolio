@@ -46,6 +46,12 @@ module Buddy
         # an unknown one. The model was never offered it, so this only fires on
         # a stale routine or a hand-built marker — either way it must not run.
         next nil unless Buddy::Features.allows_tool?(user, tool)
+        # An answering tool reports to the MODEL, during the turn, and Turn
+        # keeps it out of the proposals for exactly that reason. Reaching here
+        # means a routine saved back when they were ordinary level-1 tools —
+        # and there's no model turn left to report to, so running it now would
+        # either chip a lookup it can't show or start a print nobody watched.
+        next nil if Buddy::Tools.answers?(tool)
 
         payload, errors = Buddy::Tools.validate_payload(tool, m[:payload], zone: Buddy::Day.zone(user))
         next nil if errors.any?
@@ -844,9 +850,10 @@ module Buddy
           text =
             if result[:ok]
               rc = receipt_for(p[:tool], result[:data], ctx)
-              # nil is a deliberate opt-out: the tool relays its own result via a
-              # follow-up Buddy turn (check_weather), so there's no chip to post.
-              # A receipt that RAISED is not an opt-out and must still be seen.
+              # nil is a deliberate opt-out: the tool puts its own result in
+              # front of the person (list_reminders draws the rows), so there's
+              # no chip to post. A receipt that RAISED is not an opt-out and
+              # must still be seen.
               next if rc.nil?
 
               rc.presence || "Done"

@@ -321,30 +321,24 @@ module Buddy
 
     # A cross-user watch ("whenever I add to our Agenda, let Rocco know")
     # delivers to notify_user's companion, framed as coming from the owner.
+    # A watch aimed at somebody ELSE is a message from whoever set it, waiting
+    # on a condition instead of a clock. Same delivery as an immediate relay
+    # and as a cross-user reminder (see Buddy::CompanionRelay#pass_along!):
+    # bridged, so the recipient's copy carries the sender's companion and the
+    # sender gets the copy that says it went.
+    #
+    # WatchMessage.for is what the self path already renders, so the wording -
+    # template, glyph, appended detail - is identical whoever it reaches.
     def fire_cross_user!(watch, payload)
-      notify_user  = watch.notify_user
-      conversation = Buddy::CompanionRelay.conversation_for(notify_user)
+      recipient = watch.notify_user
+      return if recipient.nil?
 
-      Buddy::CompanionDelivery.deliver_prompt(
-        user:         notify_user,
-        conversation: conversation,
-        seed:         cross_user_seed(watch, payload),
-        metadata:     { kind: "buddy_trigger", hidden: true, source: "watch_relay", watch_id: watch.id },
+      Buddy::CompanionRelay.pass_along!(
+        from:              watch.user,
+        to:                recipient,
+        text:              Buddy::WatchMessage.for(watch, payload),
+        from_conversation: watch.byte_conversation,
       )
-    end
-
-    def cross_user_seed(watch, payload)
-      owner  = watch.user.first_name
-      detail = payload.is_a?(Hash) ? payload[:name].to_s.strip.presence : nil
-      # Rendered against the OWNER's context - it's their watch and their
-      # wording, being passed along to someone else.
-      said   = Buddy::Template.render(
-        watch.body, Buddy::WatchMessage.variables(watch, payload),
-        user: watch.user, conversation: watch.byte_conversation
-      )
-      base   = "#{owner} asked me to give #{watch.notify_user.first_name} a heads-up: #{said}."
-      base   = "#{base} (What changed: \"#{detail}\".)" if detail
-      "#{base} Say it warmly, in your own voice - you're passing it along for #{owner}."
     end
   end
 end

@@ -68,7 +68,7 @@ module Buddy
       @loading_tools = false
     end
 
-    def register(name:, description:, args:, confirm:, label:, execute:, receipt:, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, feature: Buddy::Features::CORE, gated_values: {})
+    def register(name:, description:, args:, confirm:, label:, execute:, receipt: nil, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, answers: false, feature: Buddy::Features::CORE, gated_values: {})
       # Confidence level governs how a proposal is presented (see
       # Buddy::ProposalBuilder):
       #   1 — highest confidence (reminders, car/house/light commands): fires
@@ -81,6 +81,15 @@ module Buddy
       #   3 — medium confidence (default): a plain pending checkbox the person
       #       must tap to run.
       resolved_level = (level || (auto ? 1 : 3)).to_i
+      # Settling inside the turn means there is no row to tap, so anything but
+      # level 1 is a contradiction — a checkbox asking permission to look
+      # something up.
+      raise ArgumentError, "answers: only makes sense on a level-1 tool" if answers && resolved_level != 1
+      # ...and for the same reason there's nothing for ProposalBuilder to chip:
+      # the tool has already run and reported by the time the reply exists. One
+      # that still wants a receipt posts its own (see Buddy::ActivityChip).
+      raise ArgumentError, "receipt: is required unless the tool answers in-turn" if receipt.nil? && !answers
+
       spec = {
         name:             name.to_sym,
         description:      description.to_s,
@@ -118,7 +127,25 @@ module Buddy
         # last completion". Those resolve to something different or to nothing
         # at all on the next run, so they're kept out of routines entirely
         # rather than failing quietly halfway through one.
-        routinable:       routinable,
+        routinable:       routinable && !answers,
+        # A tool that reports back to the MODEL, during the turn: it runs while
+        # the model is still deciding, and what it returns becomes the tool
+        # output, so the reply gets written holding the outcome (see
+        # Buddy::GPT::Turn.answer_output).
+        #
+        # Lookups need this because they have nothing else to give. They used to
+        # be ordinary level-1 tools that executed after the reply and fed their
+        # findings into a SECOND turn, so on the turn that mattered the model
+        # held "Ran immediately. Speak about it as done." and no data — and it
+        # did what anyone would with that and made the result up. Prod 2710 said
+        # "No print record for `game_tray-vase` either"; prod 2712, four seconds
+        # later, said "Found it."
+        #
+        # An ACTION needs it when the model has to react to how the action went
+        # rather than merely report it — print_again hands the printer the name
+        # it was given, and a name the printer rejects has to come back in time
+        # for the model to go find the right one.
+        answers:          answers,
         # Enum values that only exist when the person has a given feature, as
         # `{ arg_name => { value => feature } }`. A tool can be core while some
         # of its options aren't: remind_when watching for an arrival is
@@ -137,6 +164,11 @@ module Buddy
     # A tool whose proposal is a form the person fills in.
     def form?(tool)
       tool.is_a?(Hash) && tool[:form].present?
+    end
+
+    # A tool that settles inside the turn and reports back to the model.
+    def answers?(tool)
+      tool.is_a?(Hash) && tool[:answers].present?
     end
 
     # Safe to save into a BuddyRoutine and replay later.

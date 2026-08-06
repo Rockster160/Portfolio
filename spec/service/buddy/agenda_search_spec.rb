@@ -113,36 +113,36 @@ RSpec.describe Buddy::AgendaSearch do
   end
 
   describe "the search_agenda tool" do
-    let(:msg) { convo.byte_messages.create!(user: user, direction: :inbound, state: :delivered, body: "ok") }
-
-    def build(payload)
-      Buddy::ProposalBuilder.create(
-        user: user, byte_message: msg,
-        markers: [{ tool_name: :search_agenda, payload: payload, span: [0, 0] }]
+    def search(payload)
+      Buddy::GPT::Turn.resolve_tool(
+        Buddy::Tools[:search_agenda],
+        { call_id: "call_1", name: :search_agenda, arguments: payload },
+        user: user, conversation: convo,
       )
     end
 
-    it "is registered as an auto read with no checklist row" do
-      expect(Buddy::Tools[:search_agenda][:auto]).to be(true)
-      expect(build(query: "eric")[:action]).to be_nil
+    it "settles in the turn, so it answers the model rather than leaving a row behind" do
+      expect(Buddy::Tools.answers?(Buddy::Tools[:search_agenda])).to be(true)
+      expect(search(query: "eric")[:status]).to eq(:answered)
     end
 
-    it "relays the matches with their ids for the next reply" do
+    it "hands the matches, with their ids, back in the same turn" do
       item = item!("1:1 Rocco <> Eric", at: 40.days.from_now)
 
-      build(query: "eric")
+      result = search(query: "eric")
 
-      expect(seeds.last).to include("1:1 Rocco <> Eric").and include("##{item.id}")
+      expect(result[:items].join("\n")).to include("1:1 Rocco <> Eric").and include("##{item.id}")
+      expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
     end
 
     # The whole failure was answering an absent thing with a nearby one.
     it "tells the model plainly when the calendar has nothing, and not to substitute" do
       item!("Zoom meet with Bri", at: 2.days.from_now)
 
-      build(query: "eric")
+      result = search(query: "eric")
 
-      expect(seeds.last).to include("found NOTHING")
-      expect(seeds.last).to include("Do not offer a nearby item")
+      expect(result[:items]).to be_empty
+      expect(result[:how]).to include("NOTHING").and include("Do not offer a nearby item")
     end
   end
 end

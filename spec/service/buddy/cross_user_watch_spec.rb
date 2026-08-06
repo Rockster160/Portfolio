@@ -19,20 +19,44 @@ RSpec.describe "Buddy cross-user watches" do
     allow(Buddy::CompanionDelivery).to receive(:deliver_plain)
   end
 
+  # A watch aimed at somebody else is a message from whoever set it, waiting on
+  # a condition instead of a clock — so it goes out bridged, exactly like an
+  # immediate message_partner, rather than poking the recipient's companion with
+  # a seed. That's what leaves the sender a copy saying it went.
   describe "WatchMatcher.fire! with a notify_user" do
-    it "delivers to the notify_user's companion, not the owner's" do
-      convo = ByteConversation.create!(user: rocco, mode: :buddy, name: "Buddy2")
+    def fire!
+      convo = ByteConversation.create!(user: chelsea, mode: :buddy, name: "Hers")
       watch = BuddyWatch.create!(
         user: chelsea, notify_user: rocco, byte_conversation: convo,
         kind: "prompt", body: "something landed on the shared agenda",
         trigger_scope: "agenda_item", match: { "action" => "created" }, one_shot: false
       )
-
       Buddy::WatchMatcher.fire!(watch, { name: "Vet appt" })
+      watch
+    end
 
-      expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt)
-        .with(hash_including(user: rocco))
+    it "passes it to the recipient as a message from whoever set it" do
+      watch = fire!
+
+      relay = BuddyRelay.last
+      expect(relay.from_user).to eq(chelsea)
+      expect(relay.to_user).to eq(rocco)
       expect(watch.reload.last_fired_at).to be_present
+    end
+
+    it "carries the same wording a self-fired watch would, detail and all" do
+      fire!
+
+      expect(BuddyRelay.last.body).to include("something landed on the shared agenda")
+      expect(BuddyRelay.last.body).to include("Vet appt")
+    end
+
+    it "leaves the sender the copy that says it went" do
+      fire!
+
+      copy = chelsea.byte_messages.where("metadata->>'source' = 'relay_copy'").last
+      expect(copy).to be_present
+      expect(copy.body).to include("something landed on the shared agenda")
     end
   end
 

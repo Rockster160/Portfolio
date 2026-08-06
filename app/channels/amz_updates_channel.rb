@@ -39,7 +39,10 @@ class AmzUpdatesChannel < ApplicationCable::Channel
       order.tracking_number = meta[:tracking_number] if meta[:tracking_number].present?
 
       order.name ||= "[NONAME]"
-      order.delivery_date ||= Date.current
+      # THEIR today, not the server's. Time.zone is UTC app-wide, so a package
+      # added after 6pm on a UTC-6 calendar was filed under tomorrow and read
+      # back as due tomorrow the moment it saved.
+      order.delivery_date ||= User.me.perceived_today
 
       # Persist the (possibly user-edited) name to the per-ASIN catalog so the
       # next order of the same SKU reuses it without another GPT call.

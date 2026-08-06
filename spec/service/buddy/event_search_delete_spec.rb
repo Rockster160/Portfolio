@@ -16,27 +16,34 @@ RSpec.describe "Buddy event search + delete" do
     Buddy::ProposalBuilder.create(user: user, byte_message: msg, markers: markers)
   end
 
-  it "search_events relays the matching events (with ids) via a follow-up reply" do
+  def search(payload)
+    Buddy::GPT::Turn.resolve_tool(
+      Buddy::Tools[:search_events],
+      { call_id: "call_1", name: :search_events, arguments: payload },
+      user: user, conversation: convo,
+    )
+  end
+
+  it "search_events hands the matching events, with ids, back in the same turn" do
     ActionEvent.create!(user: user, name: "Strawberry Celsius", timestamp: 2.days.ago)
     ActionEvent.create!(user: user, name: "Coffee", timestamp: 1.day.ago)
 
-    result = build([{ tool_name: :search_events, payload: { query: "celsius" }, span: [0, 0] }])
+    result = search(query: "celsius")
 
-    expect(result[:action]).to be_nil # auto, no checklist
-    expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt)
-      .with(hash_including(seed: include("Strawberry Celsius").and(include("`delete_event`"))))
+    expect(result[:status]).to eq(:answered)
+    expect(result[:events].join("\n")).to include("Strawberry Celsius")
+    expect(result[:how]).to include("`delete_event`")
+    expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
   end
 
-  # The seed used to teach `[[propose: delete_event id=N]]`. Markers are retired
-  # — Turn strips a stray one and logs it — so that instruction cost a turn and
-  # left the event sitting there. Nothing that talks to the model may teach it.
+  # The guidance used to teach `[[propose: delete_event id=N]]`. Markers are
+  # retired — Turn strips a stray one and logs it — so that instruction cost a
+  # turn and left the event sitting there. Nothing that talks to the model may
+  # teach it.
   it "search_events does not teach the retired marker protocol" do
     ActionEvent.create!(user: user, name: "Strawberry Celsius", timestamp: 2.days.ago)
 
-    build([{ tool_name: :search_events, payload: { query: "celsius" }, span: [0, 0] }])
-
-    expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
-      .with(hash_including(seed: include("[[propose:")))
+    expect(search(query: "celsius")[:how]).not_to include("[[propose:")
   end
 
   it "delete_event by id is Level 2 - removes immediately, undoable, and restores on undo" do

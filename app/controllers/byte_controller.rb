@@ -690,10 +690,17 @@ class ByteController < ApplicationController
     ).compact
     conversation.update!(metadata: metadata)
 
+    # Worded as the APP reporting, not the companion talking. A slash ack is a
+    # `kind: :system` message that happens to sit in the same bubble the pet
+    # uses, and "Fresh start from here" read as Byte's voice in a Suki thread —
+    # which is nobody's, since Suki didn't say it and Byte isn't in the room.
+    # Naming the companion instead of speaking as one settles whose history it
+    # is without putting words in anybody's mouth.
     ack(
       conversation,
-      "Fresh start from here — #{dropped} #{"turn".pluralize(dropped)} of history won't be sent any more. " \
-      "Everything above is still on screen, and memories, notes, reminders, and watches are all untouched.",
+      "History cleared. The last #{dropped} #{"turn".pluralize(dropped)} won't be sent to " \
+      "**#{conversation.buddy_name}** any more — everything above is still on screen, and " \
+      "memories, notes, reminders, and watches are untouched.",
     )
   end
 

@@ -60,7 +60,7 @@ Buddy::Tools.register(
     values. If nothing on the function list plausibly matches, tell
     them you don't have that wired.
   TXT
-  feature:     :jil,
+  feature:          :jil,
   args:             {
     name:          { type: :string, required: true, description: "Fuzzy function-task name to call" },
     # Declared purely so validate_payload keeps it OUT of the passthrough args -
@@ -165,12 +165,16 @@ Buddy::Tools.register(
         # back "laundry_gate is closed (raw state: off, last changed:
         # 2026-07-30T02:14:14.188937+00:00)" - an internal key, a debug field,
         # and a UTC timestamp, none of which Buddy is allowed to say out loud.
+        #
+        # The timestamp is rewritten to local BEFORE the model sees it. Asking
+        # it to convert one produced prod 2636: 18:58Z read back as "6:58 PM",
+        # the same digits with the offset discarded, six hours out.
         seed:         "You just ran **#{task.name}** to check on something for #{ctx.user.first_name} " \
-                      "and it came back:\n\n#{answer.to_s.strip}\n\n" \
+                      "and it came back:\n\n#{Buddy::RawOutput.localize(answer.to_s.strip, ctx.user)}\n\n" \
                       "That is RAW output - translate it into how they'd actually say it. Internal keys " \
-                      "like `laundry_gate` become \"the laundry gate\", debug fields get dropped, and any " \
-                      "timestamp in there is UTC, so convert it to their local 12-hour time or a relative " \
-                      "phrase (\"since about 8 tonight\"). Lead with the state itself, warm and brief. If " \
+                      "like `laundry_gate` become \"the laundry gate\" and debug fields get dropped. Any " \
+                      "time in there is ALREADY their local time - read it as written, and never shift " \
+                      "it. Lead with the state itself, warm and brief. If " \
                       "it reads like an error or says something is unknown, tell them plainly you couldn't " \
                       "get a reading rather than inventing a state. Don't mention the function or that you " \
                       "ran anything, and don't check again.",

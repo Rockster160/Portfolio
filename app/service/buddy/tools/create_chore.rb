@@ -61,6 +61,17 @@ Buddy::Tools.register(
     due_at = ctx.resolve_due(payload[:due]) if payload[:due].present?
     due_at = nil if due_at == :clear
 
+    # Default it to TODAY. `marked_due_at` is the "appears on Today" stamp (see
+    # ChoreSerializer#today_visible?), and a chore created without one lands
+    # nowhere anybody looks: not on the Today tab, not in Buddy's pending list.
+    # "Add calibrating the printer as a 5p chore" got a cheerful "it's on
+    # there", and it wasn't on anything.
+    #
+    # A SCHEDULE is the user saying otherwise, so a recurring chore is left
+    # alone — the stamp overrides the schedule for Today, and "mow the lawn
+    # every Sunday" asked for on a Wednesday must not demand mowing today.
+    due_at ||= ChoreDay.starts_at(ChoreDay.current(ctx.user), ctx.user) if recurrence.blank?
+
     {
       summary:  "Add new chore: #{payload[:name]}?",
       resolved: {

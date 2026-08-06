@@ -52,7 +52,21 @@ class ByteMessageIntake
       return message
     end
 
-    message = post!(state: :pending)
+    # SENT, not pending: the server has the message the moment this row exists,
+    # and that's the only thing the sender's own bubble is asking about.
+    #
+    # It used to be created `pending` and flipped to `sent` by TurnDispatcher,
+    # which is when the WORKER picks it up. That made the sender's "…" mean "a
+    # Sidekiq job hasn't started yet", and it raced: the HTTP response carries
+    # this snapshot, the worker's flip goes out over the websocket, and whichever
+    # lands second wins. The websocket usually won the race and the stale HTTP
+    # echo then repainted the bubble back to pending — where it stayed, because
+    # nothing broadcasts that message again. Byte would be part-way through
+    # replying above a message still showing as sending.
+    #
+    # The two fast paths below already post as `sent` for the same reason. What's
+    # still to come is Buddy's turn, and the reply bubble is what says so.
+    message = post!(state: :sent)
     dispatch!(message)
     message
   end

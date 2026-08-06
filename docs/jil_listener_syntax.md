@@ -117,6 +117,7 @@ These fire per user, carrying that user's own data.
 | `chore_withdrawal` | pebbles are withdrawn | `action`, `amount_pebbles`, `note` |
 | `chore_transfer` | pebbles move between people | `action`, `amount_pebbles` |
 | `event` | an ActionEvent is logged, edited, or deleted | `action`, `name` |
+| `delivery` | a package is added, changed, arrives, or slips | `action` (`created`/`updated`/`delivered`/`delayed`), `name`, `carrier` (`amazon`/`ups`/`usps`/`fedex`/`manual`), `tracking_number`, `delivery_date`, `previous_date` (on `delayed` only), `delivered`, `amount`, `order_id`, `item_id`, `url` |
 | `agenda_item` | a calendar item is created or changed | `action`, `agenda_id`, `name` |
 | `agenda_schedule` | a recurring schedule changes | `action` |
 | `prompt` | an app prompt is created or answered | `status`, `params:source` |

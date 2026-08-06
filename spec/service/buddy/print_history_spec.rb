@@ -123,6 +123,39 @@ RSpec.describe Buddy::PrintHistory do
       expect(lines.first).to start_with("Wall_mount_phone_holder_v2")
     end
 
+    # Prod 2699-2712. Every printer file name is written with separators where a
+    # person says spaces, so a literal substring test misses all of them: "game
+    # tray" and "game tray vase" both came back empty against thirteen runs of
+    # `game_tray-vase`, and only the typed-out `game_tray-vase` ever matched.
+    context "when they say the name instead of typing it" do
+      before do
+        finished!(started!("game_tray-vase"))
+        finished!(started!("Wall_mount_phone_holder_v2", at: 4.hours.ago), at: 3.hours.ago)
+      end
+
+      ["game tray", "game tray vase", "Game Tray", "game_tray-vase", "tray game"].each do |said|
+        it "finds game_tray-vase from #{said.inspect}" do
+          expect(described_class.call(user: user, query: said).first).to start_with("game_tray-vase")
+        end
+      end
+
+      it "finds the phone holder from a two-word description" do
+        expect(described_class.call(user: user, query: "phone holder").first)
+          .to start_with("Wall_mount_phone_holder_v2")
+      end
+
+      # No name carries "thing", so requiring every word would come back empty
+      # on the exact phrasing the tool exists to serve.
+      it "falls back to the words that do land when one of them is filler" do
+        expect(described_class.call(user: user, query: "that phone thing").first)
+          .to start_with("Wall_mount_phone_holder_v2")
+      end
+
+      it "still comes back empty for a name that shares nothing" do
+        expect(described_class.call(user: user, query: "benchy")).to be_empty
+      end
+    end
+
     it "bounds the window by days" do
       finished!(started!("Old thing", at: 90.days.ago), at: 89.days.ago)
 
@@ -165,54 +198,59 @@ RSpec.describe Buddy::PrintHistory do
   end
 
   describe "the print_history tool" do
-    let(:msg) { convo.byte_messages.create!(user: user, direction: :inbound, state: :delivered, body: "ok") }
-
-    def build(payload={})
-      Buddy::ProposalBuilder.create(
-        user: user, byte_message: msg,
-        markers: [{ tool_name: :print_history, payload: payload, span: [0, 0] }]
+    def read(payload={})
+      Buddy::GPT::Turn.resolve_tool(
+        Buddy::Tools[:print_history],
+        { call_id: "call_1", name: :print_history, arguments: payload },
+        user: user, conversation: convo,
       )
     end
 
-    it "is registered as an auto read with no checklist row" do
-      expect(Buddy::Tools[:print_history][:auto]).to be(true)
-      expect(build[:action]).to be_nil
+    it "settles in the turn, so it answers the model rather than leaving a row behind" do
+      expect(Buddy::Tools.answers?(Buddy::Tools[:print_history])).to be(true)
+      expect(read[:status]).to eq(:answered)
     end
 
-    it "relays the file names for the next reply" do
+    # The whole point of the change. Before, the tool ran AFTER the reply and
+    # seeded a second turn, so the model wrote its answer holding a level-1 ack
+    # that said "done" and nothing else. It filled the gap: prod 2710 said "No
+    # print record for `game_tray-vase` either" and prod 2712 said "Found it."
+    it "hands the file names back in the same turn the model asks for them" do
       finished!(started!("Wall_mount_phone_holder_v2"))
 
-      build(query: "phone")
-
-      expect(seeds.last).to include("Wall_mount_phone_holder_v2")
+      expect(read(query: "phone")[:prints].first).to start_with("Wall_mount_phone_holder_v2")
+      expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
     end
 
-    it "points at the reprint function by its real name when they have one" do
+    it "points back at print_again when they can actually start one" do
       user.tasks.create!(
         name: "Print Again", listener: 'function("File" TAB String(""))::String',
         code: "a = String.new(\"ok\")::String", buddy_enabled: true
       )
       finished!(started!("game_tray-vase"))
 
-      build
-
-      expect(seeds.last).to include("call_jil_function").and include('name="Print Again"')
+      expect(read[:how]).to include("`print_again` with the exact name")
     end
 
-    # call_jil_function raises on a name it can't match, so naming a function
-    # they don't have would spend a turn to arrive nowhere.
+    # print_again refuses outright without a reprint function, so pointing at it
+    # would spend a turn to arrive nowhere.
     it "says nothing about reprinting when no such function exists" do
       finished!(started!("game_tray-vase"))
 
-      build
-
-      expect(seeds.last).not_to include("call_jil_function")
+      expect(read[:how]).not_to include("print_again")
     end
 
     it "asks for another detail when nothing matches" do
-      build(query: "nothing like this")
+      result = read(query: "nothing like this")
 
-      expect(seeds.last).to include("no print on record")
+      expect(result[:prints]).to be_empty
+      expect(result[:how]).to include("no print on record")
+    end
+
+    # An empty result is an ANSWER, and the model has to be told so plainly
+    # enough that it doesn't reach for what it half-remembers instead.
+    it "tells the model to speak from what actually came back" do
+      expect(read[:note]).to include("Speak from what is actually there")
     end
   end
 end

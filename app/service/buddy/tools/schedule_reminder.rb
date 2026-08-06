@@ -9,17 +9,23 @@ Buddy::Tools.register(
     or asked for a TASK, they want a row they can see and check off - that's
     `add_agenda_item`, and a reminder is not a substitute for it.
 
-    `notify` aims it at SOMEBODY ELSE in the house. "Send Chelsea a reminder in
-    10 minutes to...", "remind Eve at 4 that...", "ping mom tonight about..." -
-    name them here, and it arrives on THEIR companion at that time, framed as
-    coming from the person who asked. Read who the reminder is FOR, not just
-    what it says: "send a reminder to Chelsea that we need to X" is for
-    Chelsea, and setting it for yourself instead means the person who was
-    supposed to act never hears about it. The reminder still belongs to whoever
-    asked, so they can see and cancel it. Leave `notify` off for themselves.
+    `notify` aims it at SOMEBODY ELSE in the house, and that makes it a MESSAGE
+    from this person that leaves later. "Send Chelsea a cute note in 10
+    minutes", "remind Eve at 4 that...", "ping mom tonight about..." - name them
+    here and `text` reaches them at that time as words from the person asking,
+    delivered exactly the way `message_partner` delivers one now. So write
+    `text` as the finished note they'll read, not as an instruction about them.
 
-    This is for a nudge at a TIME. To tell someone something right now, that's
-    `message_partner`.
+    Read who it's FOR, not just what it says: "send a reminder to Chelsea that
+    we need to X" is Chelsea's, and setting it for yourself instead means the
+    person who was supposed to act never hears about it. The row still belongs
+    to whoever asked, so they can see and cancel it before it goes. Leave
+    `notify` off for themselves.
+
+    This is the LATER form. To tell someone something right now, that's
+    `message_partner`; to send it when something HAPPENS rather than at a time
+    ("when someone's at the door", "next time a deploy finishes"), that's
+    `remind_when` with its own `notify`.
 
     ONE-SHOT: pass `at` (ISO-8601 datetime with timezone offset).
     Convert natural-language times ("in 30 min", "3pm", "tomorrow
@@ -115,11 +121,14 @@ Buddy::Tools.register(
       raise "#{clash.body.inspect} is already set for #{when_str} - nothing new to add"
     end
 
-    who = notify_user ? notify_user.first_name : "you"
-    summary = if recurrence_hash
-      "Repeating reminder for #{who} starting #{when_str}?"
+    summary = if notify_user && recurrence_hash
+      "Send this to #{notify_user.first_name} repeatedly, starting #{when_str}?"
+    elsif notify_user
+      "Send this to #{notify_user.first_name} at #{when_str}?"
+    elsif recurrence_hash
+      "Repeating reminder for you starting #{when_str}?"
     else
-      "Remind #{who} at #{when_str}?"
+      "Remind you at #{when_str}?"
     end
     {
       summary:  summary,
@@ -135,7 +144,7 @@ Buddy::Tools.register(
     fire_at  = Time.zone.parse(payload[:fire_at_iso].to_s) rescue nil
     when_str = fire_at ? fire_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p") : payload[:at].to_s
     sub      = payload[:recurrence] ? "repeats #{payload[:repeat] || payload.dig(:recurrence, 'kind')}" : when_str
-    sub      = "for #{payload[:recipient_name]} · #{sub}" if payload[:recipient_name].present?
+    sub      = "to #{payload[:recipient_name]} · #{sub}" if payload[:recipient_name].present?
     { title: payload[:text].to_s.truncate(60), sub: sub.presence }
   },
   execute: ->(payload, ctx) {
@@ -166,7 +175,8 @@ Buddy::Tools.register(
   # Who it's for leads the receipt when it isn't them. "Byte will send you a
   # reminder at 12:22pm" was the only visible sign that a reminder meant for
   # Chelsea had been aimed back at the person who asked, and it's easy to read
-  # past (prod 2547).
+  # past (prod 2547). It says "send" rather than "remind" for the same reason
+  # the delivery bridges: aimed at somebody else, this is a note going to them.
   receipt: ->(result, ctx) {
     name    = ctx.buddy_name
     fire_at = (Time.zone.parse(result[:fire_at].to_s) rescue nil)
@@ -177,9 +187,10 @@ Buddy::Tools.register(
       hhmm  = (Time.zone.parse(rec["at"].to_s) rescue nil)
       tstr  = hhmm ? hhmm.strftime("%-I:%M%P").sub(":00", "") : rec["at"].to_s
       ends  = rec["until_on"].present? ? " until #{rec["until_on"]}" : ""
-      "#{name} will remind #{who || "you"} #{Buddy::ReminderPresenter.repeat_phrase(rec)} at #{tstr}#{ends}"
+      verb  = who ? "send this to #{who}" : "remind you"
+      "#{name} will #{verb} #{Buddy::ReminderPresenter.repeat_phrase(rec)} at #{tstr}#{ends}"
     elsif who
-      "#{name} will remind #{who} #{ctx.friendly_future(fire_at)}"
+      "#{name} will send this to #{who} #{ctx.friendly_future(fire_at)}"
     else
       "#{name} will send you a reminder #{ctx.friendly_future(fire_at)}"
     end

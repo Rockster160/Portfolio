@@ -190,8 +190,23 @@ RSpec.describe ByteController, type: :controller do
       compact!
 
       body = response.parsed_body["body"]
-      expect(body).to match(/2 turns of history won't be sent/i)
+      expect(body).to match(/last 2 turns won't be sent/i)
       expect(body).to match(/still on screen/i)
+    end
+
+    # It's a `kind: :system` message sitting in the same bubble the pet uses, so
+    # writing it in a companion's voice makes it the WRONG companion in three
+    # threads out of four. Prod 2615 opened "Fresh start from here" in a Suki
+    # thread, which is Byte's register and nobody who was in the room.
+    it "reports as the app and names the companion instead of speaking as one" do
+      convo.update!(buddy_theme: "suki")
+      say("one")
+
+      compact!
+
+      body = response.parsed_body["body"]
+      expect(body).to include("Suki")
+      expect(body).not_to match(/\AFresh start from here/i)
     end
 
     # `/reset` is the name that describes what it does; the other two are what

@@ -158,7 +158,7 @@ module Buddy
       base = reminder.recurring? ? recurrence_text(reminder) : reminder.fire_at.in_time_zone(user.timezone).strftime("%a %-I:%M %p")
       return base if reminder.notify_user_id.blank?
 
-      "for #{reminder.notify_user&.first_name || "someone else"} · #{base}"
+      "to #{reminder.notify_user&.first_name || "someone else"} · #{base}"
     end
 
     def recurrence_text(reminder)

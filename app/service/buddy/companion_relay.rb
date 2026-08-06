@@ -25,6 +25,32 @@ module Buddy
 
       # ---- delivering a relay to the recipient ----
 
+      # Send text from one person to another, now. The single path a message
+      # between two people takes, whether it was typed a second ago
+      # (message_partner) or set hours earlier and has only just come due (a
+      # reminder or a watch aimed at somebody else).
+      #
+      # Those two used to poke the recipient's companion directly instead, which
+      # delivered the words fine and left NO record on the sender's side. Prod
+      # 2555-2569: a note set for Chelsea two minutes out arrived exactly as
+      # asked, Rocco had no way to see that it had, asked "did it send?", got a
+      # guess for an answer, and a second copy went out for real.
+      def pass_along!(from:, to:, text:, from_conversation: nil)
+        relay = BuddyRelay.create!(
+          from_user:         from,
+          to_user:           to,
+          from_conversation: from_conversation || conversation_for(from),
+          kind:              :notify,
+          body:              text.to_s,
+          status:            :pending,
+        )
+        deliver!(relay)
+        # The row we made, not whatever delivery handed back. The record exists
+        # either way, and a caller that wants its id shouldn't depend on how the
+        # send went.
+        relay
+      end
+
       # Dispatch by kind. Returns the relay.
       def deliver!(relay)
         case relay.kind.to_sym

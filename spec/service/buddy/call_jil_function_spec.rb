@@ -60,19 +60,38 @@ RSpec.describe "call_jil_function tool" do
         hash_including(
           user:         user,
           conversation: convo,
-          seed:         include(real_output).and(include("HASS Sensor State")),
+          seed:         include("laundry_gate is closed").and(include("HASS Sensor State")),
         ),
       )
     end
 
-    it "tells Buddy how to handle the raw internal key and UTC stamp it gets back" do
+    # Prod 2636: handed `18:58:03+00:00` and told to convert it, the model
+    # answered "6:58 PM" — the same digits with the offset thrown away, six
+    # hours out. It reads a clock fine and moves one badly, so the conversion
+    # happens before it ever sees the line (see Buddy::RawOutput).
+    it "hands over a time already in their zone rather than a UTC stamp to convert" do
+      stub_execution(real_output)
+
+      travel_to(Time.utc(2026, 7, 31, 18, 0, 0)) {
+        run({ name: "HASS Sensor State", sensor: "laundry_gate", expect_result: true })
+      }
+
+      seed = nil
+      expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt) { |args| seed = args[:seed] }
+      expect(seed).to include("8:14 PM on Jul 29")
+      expect(seed).not_to include("02:14:14")
+      expect(seed).not_to include("+00:00")
+    end
+
+    it "tells Buddy to drop the internal key, leave the time be, and never invent a state" do
       stub_execution(real_output)
 
       run({ name: "HASS Sensor State", sensor: "laundry_gate", expect_result: true })
 
       seed = nil
       expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt) { |args| seed = args[:seed] }
-      expect(seed).to include("UTC").and include("local 12-hour")
+      expect(seed).to include("`laundry_gate`")
+      expect(seed).to include("ALREADY their local time")
       expect(seed).to include("couldn't get a reading")
     end
 

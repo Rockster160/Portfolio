@@ -46,21 +46,20 @@ RSpec.describe "Buddy chore history" do
   end
 
   describe "chore_progress tool" do
-    it "relays a summary via a follow-up reply (not a raw chip)" do
+    it "hands the per-day summary back in the same turn, with no chip" do
       water = daily("Water")
       complete(water, user.perceived_today)
       convo = user.byte_conversations.create!(mode: :buddy, name: "Buddy", last_message_at: Time.current)
-      msg = convo.byte_messages.create!(user: user, direction: :inbound, state: :delivered, body: "how'd I do?")
 
-      result = Buddy::ProposalBuilder.create(
-        user: user, byte_message: msg,
-        markers: [{ tool_name: :chore_progress, payload: { days: 3 }, span: [0, 0] }]
+      result = Buddy::GPT::Turn.resolve_tool(
+        Buddy::Tools[:chore_progress],
+        { call_id: "call_1", name: :chore_progress, arguments: { days: 3 } },
+        user: user, conversation: convo,
       )
 
-      expect(result[:action]).to be_nil # auto, no checklist
-      expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt)
-        .with(hash_including(seed: include("Water")))
-      # no raw activity chip
+      expect(result[:status]).to eq(:answered)
+      expect(result[:progress].join("\n")).to include("all 1 done")
+      expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
       expect(convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").count).to eq(0)
     end
   end

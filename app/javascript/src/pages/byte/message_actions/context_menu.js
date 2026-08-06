@@ -60,12 +60,24 @@ export function initMessageContextMenu(thread, root) {
   let pressTimer = null;
   let startX = 0;
   let startY = 0;
-  // Set the instant a long-press fires so the click / selection that the OS
-  // synthesises right after doesn't fall through to the bubble.
+  // Set the instant a long-press fires so the click the OS synthesises right
+  // after doesn't fall through to the bubble.
   let longFired = false;
+  // When the selection guard below stops caring. A TIMESTAMP rather than a
+  // flag, because the thing being suppressed is a moment — the selection iOS
+  // starts under the finger — and a flag has to be turned off by something.
+  // Nothing reliably did: `longFired` was only cleared by tapping a bubble or
+  // by a click reaching the thread, so a menu dismissed any other way (a menu
+  // item, Escape, a tap on the composer) left it set, and the guard then
+  // cancelled every selection on the page until you happened to tap a message
+  // again. That is the "can't select anything, anywhere" bug.
+  let guardUntil = 0;
 
   const LONG_PRESS_MS = 480;
   const MOVE_CANCEL_PX = 10;
+  // How long after a long-press fires the selection guard stays up. Only has to
+  // outlast the selection iOS synthesises under the finger, which is immediate.
+  const GUARD_TAIL_MS = 400;
 
   function buildMenu() {
     const el = document.createElement("div");
@@ -190,6 +202,9 @@ export function initMessageContextMenu(thread, root) {
       menu.hidden = true;
       unbindDismiss();
     }
+    // Whatever dismissed it, the gesture is over. Left set, the next click in
+    // the thread gets swallowed for no reason.
+    longFired = false;
   }
 
   function onDocPointerDown() {
@@ -231,15 +246,18 @@ export function initMessageContextMenu(thread, root) {
   // so desktop text-selection drags are never interrupted by a press timer.
   thread.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse") return;
+    // Reset before the pressable check, not after: a press that lands on a
+    // button inside a bubble still ends the previous gesture.
+    longFired = false;
     const node = pressableMessage(e.target);
     if (!node) return;
-    longFired = false;
     startX = e.clientX;
     startY = e.clientY;
     cancelPress();
     pressTimer = setTimeout(() => {
       pressTimer = null;
       longFired = true;
+      guardUntil = Date.now() + GUARD_TAIL_MS;
       openMenu(node, startX, startY);
     }, LONG_PRESS_MS);
   });
@@ -272,10 +290,11 @@ export function initMessageContextMenu(thread, root) {
   );
 
   // Suppress the touch text-selection that would otherwise start under the
-  // finger during a press — only while a press is pending / just fired, so
-  // normal selection elsewhere is untouched.
-  document.addEventListener("selectstart", (e) => {
-    if (pressTimer || longFired) e.preventDefault();
+  // finger during a press. Bound to the THREAD, not the document: a press on a
+  // bubble has no business cancelling a selection in the composer, and this
+  // listener sitting on the document is half of why it did.
+  thread.addEventListener("selectstart", (e) => {
+    if (pressTimer || Date.now() < guardUntil) e.preventDefault();
   });
 
   // Desktop right-click + Android long-press both surface here.

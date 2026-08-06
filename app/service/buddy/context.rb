@@ -304,29 +304,38 @@ module Buddy
         # recent patterns without drifting on old habits.
         typical_hours = compute_typical_hours(user)
 
-        # "Due today" set: chores where TODAY specifically matters -
-        # either the schedule matches (matches_day?), or the user pinned
-        # it (hot pick), or they manually stamped it as due (marked_due).
-        # Lets Buddy distinguish "on the rotation but not scheduled
-        # today" from "actually due today".
-        due_ids = (matches_today_ids + hot_ids + chores.select { |c|
-          c.respond_to?(:marked_due?) && c.marked_due?
-        }.map(&:id)).uniq.to_set
+        # WHEN a chore was stamped due decides which list it belongs on, and
+        # this used to ignore the date entirely: any marked_due chore that
+        # wasn't otherwise on today counted as backlog, so one stamped for TODAY
+        # was announced as overdue the moment it was created. ChoreSerializer
+        # splits Today from Scheduled on exactly this line (see #due_today?),
+        # and a future stamp is off both lists on purpose - that's how a one-off
+        # gets pre-scheduled without cluttering today.
+        window       = ChoreDay.range(today, user)
+        marked       = chores.select { |c| c.respond_to?(:marked_due?) && c.marked_due? }
+        marked_today = marked.select { |c| window.cover?(c.marked_due_at) }.map(&:id)
+        marked_past  = marked.select { |c| c.marked_due_at < window.begin }.map(&:id)
+
+        # "Due today" set: chores where TODAY specifically matters - the
+        # schedule matches (matches_day?), the user pinned it (hot pick), or
+        # they stamped it due today. Lets Buddy distinguish "on the rotation but
+        # not scheduled today" from "actually due today".
+        due_ids = (matches_today_ids + hot_ids + marked_today).uniq.to_set
 
         # PRIMARY today list: what the user actively decided is "for today".
-        # Dailies are the user's personal rotation; hot_picks are explicit
-        # pins. Everything else that just happens to match today's schedule
-        # goes to the secondary scheduled_today bucket so the "pending"
-        # count reflects intent, not schedule-overlap.
-        intentional_ids = (daily_ids + hot_ids).uniq
+        # Dailies are the user's personal rotation, hot_picks are explicit pins,
+        # and a stamp for today is as deliberate as either. Everything else that
+        # just happens to match today's schedule goes to the secondary
+        # scheduled_today bucket so the "pending" count reflects intent, not
+        # schedule-overlap.
+        intentional_ids = (daily_ids + hot_ids + marked_today).uniq
         pending_ids     = intentional_ids.reject { |id| done_today_ids.include?(id) }
         done_ids        = intentional_ids.select { |id| done_today_ids.include?(id) }
         scheduled_ids   = (matches_today_ids - intentional_ids).reject { |id| done_today_ids.include?(id) }
 
-        overdue = chores.select { |c|
-          c.respond_to?(:marked_due?) && c.marked_due? &&
-            intentional_ids.exclude?(c.id) && matches_today_ids.exclude?(c.id)
-        }.map(&:id)
+        overdue = marked_past.reject { |id|
+          intentional_ids.include?(id) || matches_today_ids.include?(id)
+        }
 
         {
           pending_today:   pending_ids.filter_map   { |id| slim_chore(by_id[id], typical_hours[id], due_ids) }.first(20),

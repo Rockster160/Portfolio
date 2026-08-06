@@ -82,33 +82,25 @@ module Buddy
         )
       end
 
-      # A reminder somebody set FOR someone else lands on the recipient's own
-      # companion, in that companion's voice, attributed to whoever asked. Same
-      # shape as a cross-user watch (Buddy::WatchMatcher#fire_cross_user!) -
-      # the row stays with the requester, only the delivery moves.
+      # A reminder aimed at somebody ELSE is a message from the person who set
+      # it, just one that leaves later - so it goes out the way an immediate
+      # message_partner does, bridged. That's what puts the recipient's copy
+      # under the sender's companion and, the half that was missing entirely,
+      # the matching copy in the sender's own thread. The row stays with the
+      # requester either way; only the delivery moves.
       def deliver_cross_user_reminder(reminder)
-        owner     = reminder.user
         recipient = reminder.notify_user
-        said      = Buddy::Template.render(
+        return if recipient.nil?
+
+        owner = reminder.user
+        said  = Buddy::Template.render(
           reminder.body, {}, user: owner, conversation: reminder.byte_conversation
         )
-
-        Buddy::CompanionDelivery.deliver_prompt(
-          user:         recipient,
-          conversation: Buddy::CompanionRelay.conversation_for(recipient),
-          # Quoted and attributed for the same reason the watch relay is: a bare
-          # imperative reads as an instruction to the companion, which answers
-          # "yep, sent it along" instead of saying the thing.
-          seed:         "#{owner.first_name} asked me to remind #{recipient.first_name} " \
-                        "at this time: \"#{said}\". Say it to them warmly, in your own " \
-                        "voice - you're passing it along for #{owner.first_name}, so don't " \
-                        "read the request back as though it were addressed to you.",
-          metadata:     {
-            kind:        "buddy_trigger",
-            hidden:      true,
-            source:      "reminder_relay",
-            reminder_id: reminder.id,
-          },
+        Buddy::CompanionRelay.pass_along!(
+          from:              owner,
+          to:                recipient,
+          text:              said,
+          from_conversation: reminder.byte_conversation,
         )
       end
 

@@ -102,10 +102,13 @@ Buddy::Tools.register(
     template when they've said something a sentence can't do - where the detail
     goes, what to strip off it, or which of two things to say.
 
-    `notify` (optional) redirects the heads-up to a household member instead of
-    the user themselves: "whenever I add to our agenda, let Rocco know" →
-    notify="Rocco". Their companion delivers it. Omit for an ordinary
-    reminder-to-self. Must be someone in the household.
+    `notify` (optional) sends it to a household member instead of the user:
+    "whenever I add to our agenda, let Rocco know" → notify="Rocco". It reaches
+    them as a message FROM this person, delivered the same way `message_partner`
+    delivers one now - so this is also how "message Chelsea when someone's at
+    the door" or "tell her the next time a deploy finishes" gets done, and
+    `text` should be written as the note they'll actually read. Omit for an
+    ordinary reminder-to-self. Must be someone in the household.
 
     ## Doing something instead of saying something
 
