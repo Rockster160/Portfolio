@@ -1,0 +1,276 @@
+<% content_for :title, "Chores · Links" %>
+
+<%# `data-chores-root` with no `data-active-view` is what the icons manage page
+   does: _page_script wires the header's connection dot and service worker, and
+   skips all the grid/store/SPA-router work. Deliberately no _shell_head, so
+   this page stays out of the service worker's cache. %>
+<div class="chores-page record-links-page" data-chores-root data-mode="record-links">
+  <%= render "chores/header", balance: current_user.chore_balance, scope: :total %>
+
+  <div class="record-links-toolbar">
+    <h2>Links</h2>
+    <span class="record-links-count"><%= @links.size %></span>
+  </div>
+
+  <p class="record-links-hint">
+    One record following another, automatically. The cascade only ever runs
+    downhill &mdash; <strong>logged event &rarr; chore &rarr; agenda task &rarr; list item</strong>
+    &mdash; so completing a chore ticks off the agenda task and the list item,
+    but checking something off a list never touches the chore.
+  </p>
+
+  <%# ---- New link ------------------------------------------------------ %>
+  <%# Written as a fill-in-the-blank sentence rather than a stack of labelled
+     fields. The old panel showed "name" / "is exactly" / a box, and reading it
+     told you nothing about what the rule DID. %>
+  <details class="record-link-new" <%= "open" if @new_link.errors.any? %>>
+    <summary>+ Add a link</summary>
+
+    <% if @new_link.errors.any? %>
+      <ul class="record-link-errors">
+        <% @new_link.errors.full_messages.each do |msg| %>
+          <li><%= msg %></li>
+        <% end %>
+      </ul>
+    <% end %>
+
+    <%= form_with url: chores_links_path, method: :post, local: true, html: { class: "record-link-form", data: { link_form: true } } do %>
+      <p class="record-link-clause">
+        <span class="record-link-word">When a</span>
+        <select name="source_kind" data-link-source-kind>
+          <% RecordLink::SOURCE_KINDS.each do |kind| %>
+            <option value="<%= kind %>" <%= "selected" if @new_link.source_kind.to_s == kind.to_s %>>
+              <%= RecordLink::KIND_LABELS[kind.to_s] %>
+            </option>
+          <% end %>
+        </select>
+        <span class="record-link-word">whose name</span>
+        <select name="source_name_match">
+          <% RecordLink::MATCH_LABELS.each do |value, label| %>
+            <option value="<%= value %>" <%= "selected" if @new_link.source_name_match.to_s == value %>><%= label %></option>
+          <% end %>
+        </select>
+        <input type="text" name="source_name" value="<%= @new_link.source_name %>"
+               list="record-link-chore-names" placeholder="name" required>
+      </p>
+
+      <p class="record-link-clause" data-link-when-source="event">
+        <span class="record-link-word">and whose notes</span>
+        <select name="source_scope_match">
+          <% RecordLink::MATCH_LABELS.each do |value, label| %>
+            <option value="<%= value %>" <%= "selected" if @new_link.source_scope_match.to_s == value %>><%= label %></option>
+          <% end %>
+        </select>
+        <input type="text" name="source_scope" value="<%= @new_link.source_scope %>"
+               placeholder="leave blank to match any notes">
+      </p>
+
+      <p class="record-link-clause">
+        <span class="record-link-word">then tick off the</span>
+        <select name="target_kind" data-link-target-kind data-selected="<%= @new_link.target_kind %>"></select>
+        <span class="record-link-word">named</span>
+        <input type="text" name="target_name" value="<%= @new_link.target_name %>"
+               list="record-link-chore-names" placeholder="name" required>
+      </p>
+
+      <p class="record-link-clause" data-link-when-target="list_item">
+        <span class="record-link-word">on the list</span>
+        <input type="text" name="target_scope" value="<%= @new_link.target_scope %>"
+               list="record-link-list-names" placeholder="which list" data-link-list-scope>
+      </p>
+
+      <p class="record-link-clause" data-link-when-target="agenda">
+        <label class="record-link-check">
+          <input type="checkbox" name="target_scope" value="overdue"
+                 <%= "checked" if @new_link.target_scope == "overdue" %>>
+          Also tick off overdue ones, not just today's
+        </label>
+      </p>
+
+      <p class="record-link-clause" data-link-when-target="chore">
+        <label class="record-link-check">
+          <input type="checkbox" name="ask_who" value="1" <%= "checked" if @new_link.ask_who %>>
+          Ask who did it, rather than crediting whoever logged it
+        </label>
+      </p>
+
+      <div class="record-link-form-actions">
+        <button type="submit" class="btn">Add link</button>
+      </div>
+    <% end %>
+  </details>
+
+  <datalist id="record-link-chore-names">
+    <% @chore_names.each do |name| %><option value="<%= name %>"></option><% end %>
+  </datalist>
+  <datalist id="record-link-list-names">
+    <% @list_names.each do |name| %><option value="<%= name %>"></option><% end %>
+  </datalist>
+
+  <%# ---- Existing links ------------------------------------------------ %>
+  <ul class="record-link-list" data-link-list>
+    <% @links.each do |link| %>
+      <%= render "record_links/link", link: link %>
+    <% end %>
+  </ul>
+
+  <p class="record-links-empty <%= "hidden" if @links.any? %>" data-links-empty>
+    Nothing is wired up yet. Add a link above, or just tell Byte
+    &mdash; &ldquo;logging coffee should tick off the coffee chore&rdquo;.
+  </p>
+</div>
+
+<% content_for :after_body do %>
+  <%= render "chores/page_script", mode: "record-links" %>
+<% end %>
+
+<script type="module">
+  // Read CSRF fresh on every request — the shell may have been cached with an
+  // older token, and refreshCsrf() heals it after the first 422.
+  function currentCsrf() {
+    return document.querySelector('meta[name="csrf-token"]')?.content || "";
+  }
+  async function refreshCsrf() {
+    try {
+      const res = await fetch("/chores/csrf", { credentials: "same-origin", headers: { Accept: "application/json" }, redirect: "manual" });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data?.token) {
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) meta.content = data.token;
+        return data.token;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  async function send(url, method, body) {
+    const call = (token) => fetch(url, {
+      method,
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        "X-CSRF-Token": token,
+      },
+      body: body == null ? undefined : JSON.stringify(body),
+    });
+    let res = await call(currentCsrf());
+    if (res.status === 422) {
+      const fresh = await refreshCsrf();
+      if (fresh) res = await call(fresh);
+    }
+    return res;
+  }
+
+  // ---- New-link form: only offer what the cascade allows ----------------
+  // The model refuses an uphill link and refuses a scope on a kind that has no
+  // meaning for one. Rather than let someone fill in a form that can only be
+  // rejected, the target list is rebuilt from the source and the conditional
+  // clauses hide.
+  const CASCADE = <%= raw RecordLink::KINDS.keys.to_json %>;
+  const KIND_LABELS = <%= raw RecordLink::KIND_LABELS.to_json %>;
+
+  const form = document.querySelector("[data-link-form]");
+  if (form) {
+    const sourceKind = form.querySelector("[data-link-source-kind]");
+    const targetKind = form.querySelector("[data-link-target-kind]");
+
+    function rebuildTargets() {
+      const from = CASCADE.indexOf(sourceKind.value);
+      const wanted = targetKind.dataset.selected || targetKind.value;
+      targetKind.innerHTML = CASCADE.slice(from + 1)
+        .map((k) => `<option value="${k}">${KIND_LABELS[k]}</option>`)
+        .join("");
+      if (wanted && CASCADE.indexOf(wanted) > from) targetKind.value = wanted;
+      targetKind.dataset.selected = "";
+    }
+
+    function syncClauses() {
+      form.querySelectorAll("[data-link-when-source]").forEach((el) => {
+        el.hidden = el.dataset.linkWhenSource !== sourceKind.value;
+      });
+      form.querySelectorAll("[data-link-when-target]").forEach((el) => {
+        el.hidden = el.dataset.linkWhenTarget !== targetKind.value;
+      });
+      // A list item without a list matches nothing, so the model requires one.
+      const listScope = form.querySelector("[data-link-list-scope]");
+      if (listScope) listScope.required = targetKind.value === "list_item";
+    }
+
+    sourceKind.addEventListener("change", () => { rebuildTargets(); syncClauses(); });
+    targetKind.addEventListener("change", syncClauses);
+    rebuildTargets();
+    syncClauses();
+  }
+
+  // ---- Existing rows ----------------------------------------------------
+  const list = document.querySelector("[data-link-list]");
+  const empty = document.querySelector("[data-links-empty]");
+
+  function rowError(row, msg) {
+    const el = row.querySelector("[data-link-error]");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.hidden = !msg;
+  }
+
+  async function save(row, body) {
+    rowError(row, "");
+    const res = await send(`/chores/links/${row.dataset.linkId}`, "PATCH", body);
+    if (res.ok) {
+      const updated = await res.json();
+      row.querySelector("[data-link-sentence]").textContent = updated.sentence;
+      row.classList.toggle("is-off", !updated.enabled);
+      const broken = row.querySelector("[data-link-broken]");
+      if (broken) {
+        broken.textContent = updated.broken.length ? `\u26A0 ${updated.broken.join("; ")}` : "";
+        broken.hidden = !updated.broken.length;
+        row.classList.toggle("is-broken", updated.broken.length > 0);
+      }
+      return true;
+    }
+    const err = await res.json().catch(() => ({}));
+    rowError(row, (err.errors || ["Couldn't save that."]).join(", "));
+    return false;
+  }
+
+  list?.addEventListener("change", (e) => {
+    const row = e.target.closest("[data-link-id]");
+    if (!row) return;
+    if (e.target.matches("[data-link-enabled]")) return save(row, { enabled: e.target.checked });
+    if (e.target.matches("[data-link-ask]")) return save(row, { ask_who: e.target.checked });
+    const field = e.target.dataset.linkField;
+    if (field) save(row, { [field]: e.target.value });
+  });
+
+  // Text edits commit on blur, the same as the icons page, so typing doesn't
+  // fire a request per keystroke.
+  list?.addEventListener("focusout", (e) => {
+    const row = e.target.closest("[data-link-id]");
+    if (!row || !e.target.matches("input[type='text'][data-link-field]")) return;
+    if (e.target.value === e.target.defaultValue) return;
+    save(row, { [e.target.dataset.linkField]: e.target.value })
+      .then((ok) => { if (ok) e.target.defaultValue = e.target.value; else e.target.value = e.target.defaultValue; });
+  });
+
+  list?.addEventListener("keydown", (e) => {
+    if (!e.target.matches("input[type='text'][data-link-field]")) return;
+    if (e.key === "Enter") { e.preventDefault(); e.target.blur(); }
+    if (e.key === "Escape") { e.target.value = e.target.defaultValue; e.target.blur(); }
+  });
+
+  list?.addEventListener("click", async (e) => {
+    if (!e.target.matches("[data-link-remove]")) return;
+    const row = e.target.closest("[data-link-id]");
+    const what = row.querySelector("[data-link-sentence]")?.textContent || "this link";
+    if (!window.confirm(`Remove this link?\n\n${what}`)) return;
+
+    const res = await send(`/chores/links/${row.dataset.linkId}`, "DELETE");
+    if (!res.ok) return rowError(row, "Couldn't remove that.");
+    row.remove();
+    const left = list.querySelectorAll("[data-link-id]").length;
+    document.querySelector(".record-links-count").textContent = String(left);
+    if (empty) empty.classList.toggle("hidden", left > 0);
+  });
+</script>

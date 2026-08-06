@@ -80,12 +80,6 @@ Rails.application.routes.draw do
   patch  "/buddy/routines/:id"       => "buddy/routines#update",  as: :buddy_routine
   patch  "/buddy/routines/:id/steps" => "buddy/routines#steps",   as: :buddy_routine_steps
   delete "/buddy/routines/:id"       => "buddy/routines#destroy"
-  # Record links. Read/adjust/delete only — making one is a conversation with
-  # Byte (`link_records`), since picking two endpoints with the right cascade
-  # direction is a poor fit for a form.
-  get    "/buddy/links"     => "buddy/links#index",   as: :buddy_links
-  patch  "/buddy/links/:id" => "buddy/links#update",  as: :buddy_link
-  delete "/buddy/links/:id" => "buddy/links#destroy"
   # Reminders and watches are separate tables but one list to the person, so
   # `type` picks the table and the pair is the identity.
   get    "/buddy/reminders" => "buddy/reminders#index", as: :buddy_reminders
@@ -173,6 +167,12 @@ Rails.application.routes.draw do
   get  "/chores/icons.json"      => "household_icons#index",     as: :chores_icons_index
   get  "/chores/icons/signature" => "household_icons#signature", as: :chores_icons_signature
   get  "/chores/icons"           => "household_icons#manage",    as: :chores_icons_manage
+  # Record links: which record following which has been automated. Managed
+  # here AND by talking to Byte (`link_records` / `unlink_records`).
+  get    "/chores/links"     => "record_links#index",   as: :chores_links
+  post   "/chores/links"     => "record_links#create"
+  patch  "/chores/links/:id" => "record_links#update",  as: :chores_link
+  delete "/chores/links/:id" => "record_links#destroy"
   scope path: "chores", as: :chore_routes do
     resources :icons, only: [:create, :update, :destroy], controller: :household_icons
     get  "/new"          => "chores#new",            as: :new

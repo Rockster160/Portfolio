@@ -58,6 +58,7 @@ module Buddy
         device_states:          device_states(user),          # last known state of every sensor in the house
         trigger_shapes:         trigger_shapes(user),         # what a payload actually looks like when it fires
         record_links:           record_links(user),           # chore <-> event / list item / agenda pairings
+        app_pages:              Buddy::AppPages.for_user(user), # real URLs, for when they ask where something is managed
         routines:               routines(user),                      # saved sequences one phrase runs end to end
       }
     end

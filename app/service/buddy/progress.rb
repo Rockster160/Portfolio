@@ -46,6 +46,7 @@ module Buddy
       "Looking through your tools"   => %i[jil_triggers jil_functions routines trigger_shapes],
       "Checking on the house"        => %i[device_states],
       "Checking how things connect"  => %i[record_links],
+      "Finding the right page"       => %i[app_pages],
       "Counting your pebbles"        => %i[pebble_balance],
     }.freeze
 

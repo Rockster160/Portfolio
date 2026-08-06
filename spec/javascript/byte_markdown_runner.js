@@ -15,6 +15,15 @@ const cases = {
   bold_still_works: "Sent **game_tray-vase** to the printer",
   inline_code_untouched: "the listener is `item:name:/Permission/` there",
   dash_midline_not_a_list: "it went out - and she has it now",
+  md_link: "it's on [your links page](https://ardesian.com/chores/links) now",
+  bare_url: "see https://ardesian.com/chores for that",
+  url_with_underscores: "https://ardesian.com/a_b_c/d_e",
+  url_trailing_period: "it's at https://ardesian.com/chores.",
+  javascript_href: "[tap me](javascript:alert(1))",
+  data_href: "[tap me](data:text/html,<script>alert(1)</script>)",
+  url_in_code_untouched: "run `curl https://ardesian.com/chores` first",
+  link_text_escaped: "[<b>x</b>](https://ardesian.com)",
+  url_query_amp: "https://ardesian.com/s?a=1&b=2",
 };
 
 const out = {};

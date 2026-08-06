@@ -1,0 +1,77 @@
+<%# One link. The sentence is the headline because it's the only part that says
+   what the rule DOES; the fields below it are the same thing, editable. %>
+<li class="record-link-row<%= " is-off" unless link.enabled %><%= " is-broken" if link.broken_ends.any? %>"
+    data-link-id="<%= link.id %>">
+  <div class="record-link-head">
+    <span class="record-link-flow">
+      <%= RecordLink::KIND_ICONS[link.source_kind] %> <%= link.source_name %>
+      <span class="record-link-arrow" aria-hidden="true">&rarr;</span>
+      <%= RecordLink::KIND_ICONS[link.target_kind] %> <%= link.target_name %>
+      <% if link.target_scope.present? %>
+        <span class="record-link-scope"><%= link.target_scope %></span>
+      <% end %>
+    </span>
+    <label class="record-link-toggle">
+      <input type="checkbox" data-link-enabled <%= "checked" if link.enabled %>>
+      <span><%= link.enabled ? "On" : "Off" %></span>
+    </label>
+  </div>
+
+  <p class="record-link-sentence" data-link-sentence><%= link.sentence %></p>
+
+  <p class="record-link-broken" data-link-broken <%= "hidden" if link.broken_ends.empty? %>>
+    <%= "\u26A0 #{link.broken_ends.join("; ")}" if link.broken_ends.any? %>
+  </p>
+
+  <div class="record-link-fields">
+    <label class="record-link-field">
+      <span class="record-link-field-label"><%= RecordLink::KIND_LABELS[link.source_kind] %> name</span>
+      <select data-link-field="source_name_match">
+        <% RecordLink::MATCH_LABELS.each do |value, label| %>
+          <option value="<%= value %>" <%= "selected" if link.source_name_match == value %>><%= label %></option>
+        <% end %>
+      </select>
+      <input type="text" data-link-field="source_name" value="<%= link.source_name %>">
+    </label>
+
+    <% if link.source_event? %>
+      <label class="record-link-field">
+        <span class="record-link-field-label">notes</span>
+        <select data-link-field="source_scope_match">
+          <% RecordLink::MATCH_LABELS.each do |value, label| %>
+            <option value="<%= value %>" <%= "selected" if link.source_scope_match == value %>><%= label %></option>
+          <% end %>
+        </select>
+        <input type="text" data-link-field="source_scope" value="<%= link.source_scope %>"
+               placeholder="any notes">
+      </label>
+    <% end %>
+
+    <label class="record-link-field">
+      <span class="record-link-field-label">ticks off <%= RecordLink::KIND_LABELS[link.target_kind] %></span>
+      <input type="text" data-link-field="target_name" value="<%= link.target_name %>">
+    </label>
+
+    <% if link.target_list_item? %>
+      <label class="record-link-field">
+        <span class="record-link-field-label">on list</span>
+        <input type="text" data-link-field="target_scope" value="<%= link.target_scope %>"
+               list="record-link-list-names">
+      </label>
+    <% end %>
+  </div>
+
+  <p class="record-link-error" data-link-error hidden></p>
+
+  <div class="record-link-actions">
+    <% if link.target_chore? %>
+      <label class="record-link-check">
+        <input type="checkbox" data-link-ask <%= "checked" if link.ask_who %>>
+        Ask who did it
+      </label>
+    <% else %>
+      <span></span>
+    <% end %>
+    <button type="button" class="record-link-remove" data-link-remove>Remove</button>
+  </div>
+</li>

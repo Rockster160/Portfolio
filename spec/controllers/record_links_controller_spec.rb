@@ -1,10 +1,15 @@
 require "rails_helper"
 
-# The links panel. Its reason to exist is that a pairing used to be a Hash
+# The links manager. Its reason to exist is that a pairing used to be a Hash
 # literal inside a Jil task — invisible unless you opened the editor — and a
 # BROKEN one was invisible full stop, since a link that matches nothing looks
 # exactly like one whose condition hasn't happened yet.
-RSpec.describe Buddy::LinksController, type: :controller do
+#
+# It then spent a while as a read-only panel in Byte's drawer, which could show
+# them but not make one. Creating is the point of this page.
+RSpec.describe RecordLinksController, type: :controller do
+  render_views
+
   let(:user)      { User.me }
   let(:household) { user.chore_household }
 
@@ -28,22 +33,12 @@ RSpec.describe Buddy::LinksController, type: :controller do
   end
 
   describe "GET #index" do
-    it "lists each pairing with the whole rule in a sentence" do
+    it "shows each pairing with the whole rule in a sentence" do
       link!
 
       get :index
 
-      row = response.parsed_body["links"].first
-      expect(row["sentence"]).to include("completes chore \"Coffee Run\"")
-      expect(row["source"]["name"]).to eq("Coffee")
-      expect(row["target"]["kind"]).to eq("chore")
-    end
-
-    it "hands over the cascade order and the match modes so the UI can't drift" do
-      get :index
-
-      expect(response.parsed_body["cascade"]).to eq(%w[event chore agenda list_item])
-      expect(response.parsed_body["matches"]).to eq(%w[exactly starts_with contains])
+      expect(response.body).to include("completes chore &quot;Coffee Run&quot;")
     end
 
     it "flags an end pointing at a chore nobody has" do
@@ -51,7 +46,8 @@ RSpec.describe Buddy::LinksController, type: :controller do
 
       get :index
 
-      expect(response.parsed_body["links"].first["broken"].join).to include("Ghost Chore")
+      expect(response.body).to include("no chore called")
+      expect(response.body).to include("Ghost Chore")
     end
 
     it "flags an end pointing at a list nobody has" do
@@ -62,23 +58,104 @@ RSpec.describe Buddy::LinksController, type: :controller do
 
       get :index
 
-      expect(response.parsed_body["links"].first["broken"].join).to include("No Such List")
+      expect(response.body).to include("no list called")
     end
 
-    it "is quiet when both ends resolve" do
-      link!
-
-      get :index
-
-      expect(response.parsed_body["links"].first["broken"]).to be_empty
-    end
-
-    it "lists disabled ones too — off is a state, not a deletion" do
+    it "shows disabled ones too — off is a state, not a deletion" do
       link!(enabled: false)
 
       get :index
 
-      expect(response.parsed_body["links"].first["enabled"]).to be(false)
+      expect(response.body).to include("is-off")
+    end
+
+    # Typing a chore that doesn't exist is the one way to make a link that
+    # silently never runs, so the form offers the real names.
+    it "offers the household's chore names for the form to complete against" do
+      get :index
+
+      expect(response.body).to include(%(<option value="Coffee Run">))
+    end
+
+    it "turns away someone who isn't signed in" do
+      session[:current_user_id] = nil
+      cookies.delete(:current_user_id)
+
+      get :index
+
+      expect(response).to redirect_to(login_path)
+    end
+  end
+
+  describe "POST #create" do
+    def create!(**params)
+      post :create, params: {
+        source_kind: :event,
+        source_name: "Coffee",
+        target_kind: :chore,
+        target_name: "Coffee Run",
+      }.merge(params)
+    end
+
+    it "makes the pairing" do
+      expect { create! }.to change(RecordLink, :count).by(1)
+      expect(RecordLink.last).to have_attributes(source_name: "Coffee", target_name: "Coffee Run")
+    end
+
+    it "belongs to whoever made it" do
+      create!
+      expect(RecordLink.last.user_id).to eq(user.id)
+    end
+
+    it "keeps a looser match when one is asked for" do
+      create!(source_name_match: "contains")
+      expect(RecordLink.last.source_name_match).to eq("contains")
+    end
+
+    it "falls back to an exact match rather than blowing up on a bad mode" do
+      create!(source_name_match: "vibes")
+      expect(RecordLink.last.source_name_match).to eq("exactly")
+    end
+
+    # The cascade runs event -> chore -> agenda -> list item, and only that way.
+    it "refuses an uphill pairing and says why" do
+      expect { create!(source_kind: :chore, target_kind: :event, target_name: "Coffee") }
+        .not_to change(RecordLink, :count)
+      expect(response.body).to include("must come after")
+    end
+
+    it "re-renders with the errors rather than losing what was typed" do
+      create!(source_name: "")
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.body).to include("record-link-errors")
+    end
+
+    # The fields hide and show as the kinds change, so a note typed against an
+    # event source is still in the payload after switching that source to a
+    # chore — and a scope on the wrong kind is a validation error about a field
+    # no longer on screen.
+    it "drops a note that no longer belongs once the source isn't an event" do
+      create!(
+        source_kind: :chore, source_name: "Coffee Run", source_scope: "leftover",
+        target_kind: :agenda, target_name: "Coffee"
+      )
+
+      expect(RecordLink.last.source_scope).to be_nil
+    end
+
+    it "drops ask_who when the target isn't a chore" do
+      create!(
+        source_kind: :chore, source_name: "Coffee Run", target_kind: :agenda,
+        target_name: "Coffee", ask_who: "1"
+      )
+
+      expect(RecordLink.last.ask_who).to be(false)
+    end
+
+    it "keeps ask_who on a chore target" do
+      create!(ask_who: "1")
+      expect(RecordLink.last.ask_who).to be(true)
     end
   end
 

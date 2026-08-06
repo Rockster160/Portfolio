@@ -55,7 +55,6 @@ import { initBuddyHero } from "./buddy/hero";
 import { initBuddyTimers } from "./buddy/timers";
 import { initBuddyRoutines } from "./buddy/routines";
 import { initBuddyReminders } from "./buddy/reminders";
-import { initBuddyLinks } from "./buddy/links";
 import { initBuddyKiosk } from "./buddy/kiosk";
 import { toggleBuddyMuted, isBuddyMuted } from "./buddy/alarm";
 
@@ -1873,9 +1872,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     indexUrl: "/buddy/reminders",
     onCount: paintCount("[data-byte-reminders-count]"),
   });
-  const linksModal = document.querySelector("[data-byte-links-modal]");
-  const buddyLinks = linksModal ? initBuddyLinks(linksModal) : null;
-
   document
     .querySelector("[data-byte-drawer-toggle]")
     ?.addEventListener("click", () => {
@@ -1909,12 +1905,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     "[data-byte-reminders-close]",
     "[data-byte-reminders-modal]",
     buddyReminders,
-  );
-  wireManager(
-    "[data-byte-open-links]",
-    "[data-byte-links-close]",
-    "[data-byte-links-modal]",
-    buddyLinks,
   );
   // No manager to refresh — the only control in here reads its value from the
   // DOM, which applyFontScale already keeps current.

@@ -60,6 +60,60 @@ RSpec.describe "Byte thread markdown" do
     end
   end
 
+  # Byte can hand over a page, and a tap has to leave the app rather than
+  # replacing the conversation with something that has no back button — the
+  # thread is an installed PWA in standalone mode.
+  describe "links" do
+    it "turns markdown link syntax into an anchor" do
+      expect(rendered["md_link"])
+        .to include(%(href="https://ardesian.com/chores/links"), ">your links page</a>")
+    end
+
+    it "opens outside the app rather than in the Byte tab" do
+      expect(rendered["md_link"]).to include(%(target="_blank"), %(rel="noopener noreferrer"))
+    end
+
+    it "links a bare URL too" do
+      expect(rendered["bare_url"]).to include(%(<a class="byte-md-link" href="https://ardesian.com/chores"))
+    end
+
+    # The reason links are stashed before the emphasis rules run.
+    it "leaves underscores in a URL alone" do
+      expect(rendered["url_with_underscores"]).to include("/a_b_c/d_e</a>")
+      expect(rendered["url_with_underscores"]).not_to include("<em>")
+    end
+
+    it "ends the link at the full stop, not after it" do
+      expect(rendered["url_trailing_period"]).to include(%(href="https://ardesian.com/chores"))
+      expect(rendered["url_trailing_period"]).to end_with("</a>.")
+    end
+
+    it "keeps a query string intact" do
+      expect(rendered["url_query_amp"]).to include(%(href="https://ardesian.com/s?a=1&amp;b=2"))
+    end
+
+    # This output goes to innerHTML and the body is model-written, so a scheme
+    # that can execute is a script the model got to choose.
+    it "refuses a javascript: href, leaving the text as written" do
+      expect(rendered["javascript_href"]).not_to include("<a")
+      expect(rendered["javascript_href"]).to include("javascript:alert(1)")
+    end
+
+    it "refuses a data: href" do
+      expect(rendered["data_href"]).not_to include("<a")
+      expect(rendered["data_href"]).not_to include("<script>")
+    end
+
+    it "escapes markup in the link text" do
+      expect(rendered["link_text_escaped"]).to include("&lt;b&gt;x&lt;/b&gt;</a>")
+    end
+
+    it "leaves a URL inside inline code as code" do
+      expect(rendered["url_in_code_untouched"]).not_to include("<a")
+      expect(rendered["url_in_code_untouched"]).to include("byte-md-inline")
+    end
+  end
+
   describe "what already worked" do
     it "still does asterisk italics" do
       expect(rendered["asterisk_em_still_works"]).to include("<em>very</em>")

@@ -36,6 +36,11 @@ class RecordLink < ApplicationRecord
   KINDS = { event: 0, chore: 1, agenda: 2, list_item: 3 }.freeze
   RANK  = KINDS
 
+  # Everything with something below it. A list item is the bottom of the
+  # cascade, so a link sourced from one could never have a valid target — the
+  # manager doesn't offer it rather than offering it and refusing every choice.
+  SOURCE_KINDS = KINDS.keys[0..-2].freeze
+
   enum :source_kind, KINDS, prefix: :source
   enum :target_kind, KINDS, prefix: :target
 
@@ -58,6 +63,13 @@ class RecordLink < ApplicationRecord
     "chore"     => "chore",
     "agenda"    => "agenda task",
     "list_item" => "list item",
+  }.freeze
+
+  KIND_ICONS = {
+    "event"     => "📋",
+    "chore"     => "🧹",
+    "agenda"    => "📅",
+    "list_item" => "📝",
   }.freeze
 
   validates :source_name, :target_name, presence: true

@@ -41,6 +41,7 @@ module Buddy
         device_states
         trigger_shapes
         record_links
+        app_pages
         routines
       ].freeze
 

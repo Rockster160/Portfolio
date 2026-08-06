@@ -393,12 +393,6 @@
         <span class="byte-drawer-link-count" data-byte-reminders-count></span>
         <span class="byte-drawer-link-chev" aria-hidden="true">›</span>
       </button>
-      <button type="button" class="byte-drawer-link" data-byte-open-links>
-        <span class="byte-drawer-link-icon" aria-hidden="true">🔗</span>
-        <span class="byte-drawer-link-name">Links</span>
-        <span class="byte-drawer-link-count" data-byte-links-count></span>
-        <span class="byte-drawer-link-chev" aria-hidden="true">›</span>
-      </button>
       <button type="button" class="byte-drawer-link" data-byte-open-settings>
         <span class="byte-drawer-link-icon" aria-hidden="true">⚙️</span>
         <span class="byte-drawer-link-name">Settings</span>
@@ -481,32 +475,6 @@
         <button type="submit" class="byte-modal-btn byte-modal-btn-primary">Create</button>
       </div>
     </form>
-  </dialog>
-
-  <%# Record links. Read and adjust only — making one is a conversation with %>
-  <%# Byte, since picking two endpoints with the right cascade direction is a %>
-  <%# poor fit for a form. The value here is being able to SEE them, which was %>
-  <%# never possible while they lived as Hash literals inside Jil tasks. %>
-  <dialog class="byte-modal byte-modal-wide" data-byte-links-modal>
-    <div class="byte-modal-form basic">
-      <h3 class="byte-modal-title">Links</h3>
-      <p class="byte-modal-hint">
-        One record following another. These only run downhill —
-        <code>event → chore → agenda → list item</code> — so completing a chore ticks off its
-        agenda task and clears its list item, and nothing ever runs back up.
-        Ask <span data-buddy-name-slot><%= buddy_page_chrome[:name] %></span> to make a new one.
-      </p>
-      <div class="byte-manage-body" data-byte-links>
-        <ul class="byte-link-list" data-byte-link-list></ul>
-        <p class="byte-manage-empty" data-byte-links-empty hidden>
-          Nothing is wired up. Tell <span data-buddy-name-slot><%= buddy_page_chrome[:name] %></span> something like
-          "logging coffee should tick off the coffee chore".
-        </p>
-      </div>
-      <div class="byte-modal-actions">
-        <button type="button" class="byte-modal-btn" data-byte-links-close>Close</button>
-      </div>
-    </div>
   </dialog>
 
   <%# Per-conversation menu (rename/archive/adopt Claude session). %>
