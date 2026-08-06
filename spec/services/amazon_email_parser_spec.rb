@@ -494,6 +494,37 @@ RSpec.describe AmazonEmailParser do
       expect(AmazonOrder.find("114-3295736-0173045", "114-3295736-0173045")).to be_nil
     end
 
+    # Email 51382: "Out for delivery: ⁦1⁩ Lighting & Fans item" - same redacted
+    # shape as the Ordered/Shipped/Delivered ones, but the subject prefix was
+    # missing from the lifecycle list so it fell through to the Jarvis flag.
+    let(:subject_51382) { "Out for delivery: ⁦1⁩ Lighting & Fans item" }
+
+    it "updates the existing item on the order when a redacted 'Out for delivery' email arrives" do
+      lamp = AmazonOrder.create(order_id: "114-7377615-7161007", item_id: "B0LAMP00001", name: "Ceiling Lamp")
+
+      parse(51_382, subject_51382)
+
+      expect(lamp.delivery_date).to eq(Date.current.iso8601) # "Arriving today"
+      expect(lamp.delivered).to be_falsey
+      expect(lamp.email_ids).to include(51_382)
+    end
+
+    it "creates a placeholder named from the subject when no items are known for the order" do
+      parse(51_382, subject_51382)
+
+      placeholder = AmazonOrder.find("114-7377615-7161007", "114-7377615-7161007")
+      expect(placeholder).to be_present
+      expect(placeholder.listed_name).to eq("Lighting & Fans item")
+      expect(placeholder.delivered).to be_falsey
+    end
+
+    it "does not fire the Jarvis 'no order card' fallback for redacted Out for delivery emails" do
+      calls = []
+      allow(Jarvis).to receive(:cmd) { |m| calls << m }
+      parse(51_382, subject_51382)
+      expect(calls).to be_empty
+    end
+
     it "does not create a phantom placeholder when a duplicate redacted delivery notice arrives" do
       # Amazon sometimes sends the same "Delivered: 1 Office item" twice (51049 and 51050).
       # If the first pass already delivered every sibling, the second pass should just

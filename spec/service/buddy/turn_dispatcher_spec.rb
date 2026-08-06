@@ -30,6 +30,43 @@ RSpec.describe Buddy::TurnDispatcher do
     expect(Buddy::GPT::Turn).to have_received(:run!).ordered
   end
 
+  describe "settling held ideas" do
+    before { allow(BuddyIdeaSettleWorker).to receive(:perform_async) }
+
+    # The end of a turn is the only place a topic change is visible: the reply
+    # that answered the new subject has to exist before it reads as one.
+    it "queues a settle after the turn, for the case where they've moved on" do
+      described_class.deliver!(message)
+
+      expect(BuddyIdeaSettleWorker).to have_received(:perform_async).with(convo.id, false)
+    end
+
+    it "queues one that skips the check when a compaction has just truncated history" do
+      allow(Buddy::Compactor).to receive(:should_compact?).and_return(:hard)
+      allow(Buddy::Compactor).to receive(:compact!).and_return("a recap")
+
+      described_class.deliver!(message)
+
+      expect(BuddyIdeaSettleWorker).to have_received(:perform_async).with(convo.id, true)
+    end
+
+    it "doesn't when the compaction failed and nothing was truncated" do
+      allow(Buddy::Compactor).to receive(:should_compact?).and_return(:hard)
+      allow(Buddy::Compactor).to receive(:compact!).and_return(nil)
+
+      described_class.deliver!(message)
+
+      expect(BuddyIdeaSettleWorker).not_to have_received(:perform_async).with(convo.id, true)
+    end
+
+    it "never lets a queueing failure cost them their reply" do
+      allow(BuddyIdeaSettleWorker).to receive(:perform_async).and_raise(Redis::CannotConnectError)
+
+      expect(described_class.deliver!(message)).to be(true)
+      expect(message.reload).to be_sent
+    end
+  end
+
   it "marks the message failed when the turn blows up" do
     allow(Buddy::GPT::Turn).to receive(:run!).and_raise("boom")
 

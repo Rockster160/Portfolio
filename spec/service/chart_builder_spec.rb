@@ -74,6 +74,88 @@ RSpec.describe ChartBuilder do
     end
   end
 
+  describe "invert_sign" do
+    def transactions
+      event("Transaction", at: tz.local(2026, 1, 5, 12),  data: { "amount" => 100.0 })
+      event("Transaction", at: tz.local(2026, 1, 8, 12),  data: { "amount" => 50.0 })
+      event("Transaction", at: tz.local(2026, 1, 20, 12), data: { "amount" => -30.0 })
+    end
+
+    def build(invert)
+      described_class.new(
+        chart(
+          query: "name::Transaction", value_source: :data, data_key: "amount",
+          series_by: :sign, metric: :sum, bucket: :month, chart_type: :bar, unit: "$",
+          invert_sign: invert
+        ),
+        start_at: "2026-01-01", end_at: "2026-01-31",
+      ).call
+    end
+
+    it "moves source-negative values into the Positive arm" do
+      transactions
+      result = build(true)
+
+      positive = result[:datasets].find { |ds| ds[:label] == "Positive" }
+      negative = result[:datasets].find { |ds| ds[:label] == "Negative" }
+      expect(positive[:data]).to eq([30.0])
+      expect(negative[:data]).to eq([150.0])
+    end
+
+    it "swaps the arm colors so the source's charges stay warm" do
+      transactions
+      result = build(true)
+
+      positive = result[:datasets].find { |ds| ds[:label] == "Positive" }
+      negative = result[:datasets].find { |ds| ds[:label] == "Negative" }
+      expect(positive[:color]).to eq(described_class::NEGATIVE_COLOR)
+      expect(negative[:color]).to eq(described_class::POSITIVE_COLOR)
+    end
+
+    it "flips the total and average headline" do
+      transactions
+
+      expect(build(false)[:stats]).to include(total: 120.0, average: 40.0)
+      expect(build(true)[:stats]).to include(total: -120.0, average: -40.0)
+    end
+
+    it "leaves the chart untouched when off" do
+      transactions
+
+      expect(build(false)[:datasets].find { |ds| ds[:label] == "Positive" }[:data]).to eq([150.0])
+      expect(build(false)[:datasets].find { |ds| ds[:label] == "Positive" }[:color])
+        .to eq(described_class::POSITIVE_COLOR)
+    end
+
+    it "does not render zero as -0" do
+      event("Transaction", at: tz.local(2026, 1, 5, 12), data: { "amount" => 0.0 })
+
+      stats = described_class.new(
+        chart(
+          query: "name::Transaction", value_source: :data, data_key: "amount",
+          metric: :sum, bucket: :month, chart_type: :bar, invert_sign: true
+        ),
+        start_at: "2026-01-01", end_at: "2026-01-31",
+      ).call[:stats]
+
+      expect(stats[:total].to_s).to eq("0.0")
+    end
+
+    it "flips a plain single-series chart too" do
+      transactions
+
+      result = described_class.new(
+        chart(
+          query: "name::Transaction", value_source: :data, data_key: "amount",
+          metric: :sum, bucket: :month, chart_type: :bar, invert_sign: true
+        ),
+        start_at: "2026-01-01", end_at: "2026-01-31",
+      ).call
+
+      expect(result[:datasets].first[:data]).to eq([-120.0])
+    end
+  end
+
   describe "gap metric, point mode (nail cadence)" do
     it "plots days between consecutive matching events" do
       event("Shower", at: tz.local(2026, 1, 1, 12),  data: { "actions" => ["Cut Finger Nails"] })

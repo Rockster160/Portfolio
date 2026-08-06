@@ -55,6 +55,12 @@
         </div>
       </div>
 
+      <div class="cc-field cc-field-inline">
+        <%= hidden_field_tag "custom_chart[config][invert_sign]", "0" %>
+        <%= check_box_tag "custom_chart[config][invert_sign]", "1", @chart.invert_sign, id: "cc-invert-sign" %>
+        <%= label_tag "cc-invert-sign", "Invert sign — flip which direction counts as positive" %>
+      </div>
+
       <div class="cc-field cc-form-row">
         <div>
           <%= label_tag nil, "Bucket" %>

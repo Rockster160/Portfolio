@@ -12,6 +12,11 @@ class AmazonEmailParser
   ASIN_REGEX = /(?:%2Fdp%2F|\/dp\/)([A-Z0-9]{10,})/i
   ORDER_ID_REGEX = /\b\d{3}-\d{7}-\d{7}\b/
   ORDER_HEADER_REGEX = /Order\s*#?\s*\d{3}-\d{7}-\d{7}/i
+  # Subject prefixes Amazon uses for the shipment lifecycle. Redacted-category
+  # emails (no product card) are routed by these, so a missing shape means the
+  # notification falls through to the Jarvis "no order card" flag instead of
+  # updating the order.
+  LIFECYCLE_PREFIX_REGEX = /Ordered|Shipped|Delivered|Delivery update|Out for delivery|Arriving/
   DELIVERED_REGEXES = [
     /Your package was delivered/i,
     /Your package has been delivered/i,
@@ -141,14 +146,14 @@ class AmazonEmailParser
   # Turns "Ordered: ⁦1⁩ Pet item" (with unicode directional isolates) into
   # "Pet item". Also handles "Shipped: 1 Pet item" and similar variants.
   def redacted_name_from_subject
-    normalized_subject[/^\s*(?:Ordered|Shipped|Delivered|Delivery update|Arriving)\s*:?\s*\d*\s*(?:x\s*)?(.+?)\s*$/i, 1]&.strip.presence
+    normalized_subject[/^\s*(?:#{LIFECYCLE_PREFIX_REGEX})\s*:?\s*\d*\s*(?:x\s*)?(.+?)\s*$/i, 1]&.strip.presence
   end
 
   # True only for the shipment-lifecycle subject shapes we know how to handle
   # (Ordered/Shipped/Delivered/etc.). Refund, review-request, "Get ready for
   # your delivery" marketing, etc. should fall back to the Jarvis-flag path.
   def shipment_lifecycle_email?
-    normalized_subject.match?(/^\s*(?:Ordered|Shipped|Delivered|Delivery update|Arriving)\b/i)
+    normalized_subject.match?(/^\s*(?:#{LIFECYCLE_PREFIX_REGEX})\b/i)
   end
 
   def normalized_subject

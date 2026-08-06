@@ -120,9 +120,14 @@ class ChartBuilder
     when :sign
       # Plot magnitudes (abs) so the two arms sit on one shared axis and their
       # heights compare directly — never a second/mirrored y-axis.
+      # Colour tracks the source, not the orientation: inverting swaps which arm
+      # is "positive", so swap the colours with it and charges stay warm/red.
+      up, down = (
+        @chart.invert_sign ? [NEGATIVE_COLOR, POSITIVE_COLOR] : [POSITIVE_COLOR, NEGATIVE_COLOR]
+      )
       [
-        { label: "Positive", events: all_events.select { |evt| value_for(evt) >= 0 }, color: POSITIVE_COLOR, abs: true },
-        { label: "Negative", events: all_events.select { |evt| value_for(evt).negative? }, color: NEGATIVE_COLOR, abs: true },
+        { label: "Positive", events: all_events.select { |evt| value_for(evt) >= 0 }, color: up, abs: true },
+        { label: "Negative", events: all_events.select { |evt| value_for(evt).negative? }, color: down, abs: true },
       ]
     else
       [{ label: @chart.name, events: all_events }]
@@ -134,13 +139,20 @@ class ChartBuilder
   def value_for(event, data_key=nil)
     key = data_key || (@chart.value_source == :data ? @chart.data_key : nil)
 
-    if key.present?
-      event.data.is_a?(Hash) ? event.data[key].to_f : 0.0
-    elsif @chart.value_source == :notes
-      event.notes.to_f
-    else
-      1.0
-    end
+    raw = (
+      if key.present?
+        event.data.is_a?(Hash) ? event.data[key].to_f : 0.0
+      elsif @chart.value_source == :notes
+        event.notes.to_f
+      else
+        1.0
+      end
+    )
+
+    # Inverting is the single point where polarity flips — everything downstream
+    # (sign split, magnitudes, stats) reads through here. Zero is left alone so
+    # empty buckets don't render as "-0".
+    @chart.invert_sign && !raw.zero? ? -raw : raw
   end
 
   # --- Point mode (bucket == :none): one mark per event, time x-axis ---

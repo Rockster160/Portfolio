@@ -83,6 +83,7 @@ class CustomChartsController < ApplicationController
         :queries,
         :marker_query,
         :colors,
+        :invert_sign,
       ],
     )
     permitted[:config] = permitted[:config].to_h if permitted[:config].present?

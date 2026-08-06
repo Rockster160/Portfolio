@@ -55,7 +55,12 @@ module Buddy
     end
 
     def run_turn!(message, conversation, user)
-      Buddy::Compactor.compact!(conversation) if Buddy::Compactor.should_compact?(conversation)
+      compacted = Buddy::Compactor.compact!(conversation) if Buddy::Compactor.should_compact?(conversation)
+      # Everything before the recap has just left Buddy's context, so this is
+      # the last turn that could write down a thought this thread was working
+      # on. Only on a compaction that actually happened: a failed one truncates
+      # nothing, and the exchange is still there to be noticed later.
+      settle_ideas(conversation, over: true) if compacted
 
       # Anything that came through ByteMessageIntake is already `sent` — the
       # server had it long before a worker got here. What this still catches is
@@ -69,7 +74,19 @@ module Buddy
         broadcast_message(user, message.reload)
       end
 
-      Buddy::GPT::Turn.run!(message)
+      Buddy::GPT::Turn.run!(message).tap { settle_ideas(conversation) }
+    end
+
+    # A stretch about a held idea ends when the conversation moves off it, and
+    # the end of a turn is the only moment that's visible from — from here the
+    # reply that answered the new subject already exists, so a topic change
+    # looks like one instead of like a single stray question mid-thought.
+    # Queued rather than run: the note is about a thought they've moved on from,
+    # and nothing about it is worth holding this conversation's lock.
+    def settle_ideas(conversation, over: false)
+      BuddyIdeaSettleWorker.perform_async(conversation.id, over)
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy] idea settle enqueue failed: #{e.class}: #{e.message}")
     end
 
     def broadcast_message(user, message)

@@ -17,7 +17,9 @@ class BuddyIdeaNote < ApplicationRecord
   # though the person said it, which is the whole reason the column exists.
   enum :source, { person: 0, companion: 1 }, prefix: :from
 
-  validates :body, presence: true, length: { maximum: 2000 }
+  MAX_BODY = 2_000
+
+  validates :body, presence: true, length: { maximum: MAX_BODY }
 
   scope :ordered, -> { order(created_at: :asc) }
 

@@ -32,7 +32,10 @@ class BuddyUsage < ApplicationRecord
   # has to be recorded, but it must stay separable: a few eval runs can dwarf a
   # day of real use, and folding them into the same total would make the
   # projected bill meaningless.
-  enum :kind, { turn: 0, compaction: 1, eval: 2 }
+  # `idea_note` is Buddy::IdeaDwell settling a stretch of conversation onto the
+  # idea it was about. It bills like a compaction and is just as invisible, but
+  # it's the one kind nobody asked for per-turn, so it stays separable.
+  enum :kind, { turn: 0, compaction: 1, eval: 2, idea_note: 3 }
 
   scope :chronological, -> { order(created_at: :asc) }
   scope :since,         ->(time) { where(created_at: time...) }

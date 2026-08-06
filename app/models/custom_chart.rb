@@ -40,6 +40,7 @@ class CustomChart < ApplicationRecord
     queries:      "",
     marker_query: "",
     colors:       "",
+    invert_sign:  false,
   }.freeze
 
   # A symbolized, default-filled view of the jsonb config.
@@ -58,6 +59,13 @@ class CustomChart < ApplicationRecord
   def range        = settings[:range].to_s
   def unit         = settings[:unit].to_s
   def marker_query = settings[:marker_query].to_s
+
+  # Flips the polarity of every value the chart reads, so a source that stores
+  # the thing you care about as negative (spend positive / deposits negative,
+  # weight lost as a negative delta) reads the way you think about it. Applies
+  # once at the value, so series split, bar heights, tooltip labels and the
+  # total/average headline all agree.
+  def invert_sign = ::ActiveModel::Type::Boolean.new.cast(settings[:invert_sign])
 
   # Per-series color overrides, one per line as "Series label = #hex", matched
   # against dataset labels. Works across every series mode (query, name, data key,
