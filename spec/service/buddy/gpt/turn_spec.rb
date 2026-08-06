@@ -988,7 +988,26 @@ RSpec.describe Buddy::GPT::Turn do
         ])
       }
 
-      expect(steps.last).to eq(["Checking your day", "Starting the timer"])
+      expect(steps.last).to eq(["Going through your chores", "Starting the timer"])
+    end
+
+    # get_context fronts two dozen unrelated sections, so its own name says
+    # nothing useful. Prod showed "Checking your day" while a doorbell watch was
+    # being set up, which touches nothing about the day.
+    it "names what it's actually looking up rather than the tool" do
+      steps = broadcasts {
+        run([
+          { tool_calls: [{ name: :get_context, arguments: { "sections" => %w[jil_triggers jil_functions] } }] },
+          { text: "Set." },
+        ])
+      }
+
+      expect(steps.last).to eq(["Looking through your tools"])
+    end
+
+    it "falls back to something neutral when the sections are unrecognised" do
+      expect(Buddy::Progress.phrase_for(:get_context, { "sections" => ["nonsense"] })).to eq("Looking things up")
+      expect(Buddy::Progress.phrase_for(:get_context, nil)).to eq("Looking things up")
     end
 
     # The line has to be up BEFORE the tool runs, or the slowest part of the
@@ -1019,13 +1038,13 @@ RSpec.describe Buddy::GPT::Turn do
     it "doesn't stutter when the model repeats itself" do
       steps = broadcasts {
         run([
-          { tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
+          { tool_calls: [{ name: :get_context, arguments: { "sections" => ["lists"] } }] },
           { tool_calls: [{ name: :get_context, arguments: { "sections" => ["lists"] } }] },
           { text: "Here." },
         ])
       }
 
-      expect(steps.last).to eq(["Checking your day"])
+      expect(steps.last).to eq(["Checking your lists"])
     end
 
     # They describe a turn in flight and mean nothing once it lands, so the row
@@ -1055,7 +1074,7 @@ RSpec.describe Buddy::GPT::Turn do
         ])
       }
 
-      expect(steps.last).to eq(["Checking your day"])
+      expect(steps.last).to eq(["Checking your lists"])
     end
   end
 
@@ -1168,7 +1187,7 @@ RSpec.describe Buddy::GPT::Turn do
     def trigger_says(text)
       convo.byte_messages.create!(
         user: user, direction: :outbound, state: :sent, body: text,
-        metadata: { "kind" => "buddy_trigger", "hidden" => true, "source" => "watch" },
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "source" => "watch" }
       )
     end
 

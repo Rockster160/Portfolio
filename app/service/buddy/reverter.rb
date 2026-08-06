@@ -17,21 +17,25 @@ module Buddy
     module_function
 
     MODELS = {
-      "ActionEvent"     => "ActionEvent",
-      "AgendaItem"      => "AgendaItem",
+      "ActionEvent"           => "ActionEvent",
+      "AgendaItem"            => "AgendaItem",
       # A recurring add creates the SCHEDULE, not the rows - its occurrences are
       # `dependent: :destroy`, so removing it takes the whole series with it and
       # the undo is as clean as it is for a single item.
-      "AgendaSchedule"  => "AgendaSchedule",
-      "BuddyIdea"       => "BuddyIdea",
+      "AgendaSchedule"        => "AgendaSchedule",
+      "BuddyIdea"             => "BuddyIdea",
       # One addition to a thread. Notes are append-only by design, so undoing
       # one really does delete it — there's no earlier version to fall back to,
       # and leaving a mis-heard note in a thread poisons every later read of it.
-      "BuddyIdeaNote"   => "BuddyIdeaNote",
-      "Chore"           => "Chore",
-      "ChoreCompletion" => "ChoreCompletion",
-      "ChoreWithdrawal" => "ChoreWithdrawal",
-      "ListItem"        => "ListItem",
+      "BuddyIdeaNote"         => "BuddyIdeaNote",
+      # `cancel_reminder` deletes rather than switching off (the panel's toggle
+      # is a separate thing), so undo has to be able to put the whole row back.
+      "BuddyReminder"         => "BuddyReminder",
+      "BuddyWatch"            => "BuddyWatch",
+      "Chore"                 => "Chore",
+      "ChoreCompletion"       => "ChoreCompletion",
+      "ChoreWithdrawal"       => "ChoreWithdrawal",
+      "ListItem"              => "ListItem",
       # Vocabulary. Nothing hangs off a glossary entry, so a plain destroy is
       # the whole undo — and a mis-taught word is exactly the sort of thing
       # somebody unchecks a second after saying it.

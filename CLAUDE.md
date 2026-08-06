@@ -32,6 +32,7 @@ bundle exec rubocop
 bundle exec rubocop -A                 # Auto-correct
 
 # Database (ALWAYS use RAILS_ENV=test — never run in dev)
+RAILS_ENV=test bundle exec rails g migration AddFooToBar   # ALWAYS generate; never hand-name
 RAILS_ENV=test bundle exec rake db:migrate
 bundle exec annotate                   # Update model annotations
 
@@ -83,6 +84,19 @@ Built-in listeners: `monitor`, `email`, `sms`, `websocket`, `event`, `list`, `co
 - `ActionEvent` - Event logging (food, drinks, workouts, etc.)
 - `List`/`ListItem` - Todo lists with real-time sync
 - `Prompt` - Survey/question system for user input
+
+## Migrations
+
+**A migration filename carries the real clock time, always.** Use the generator
+(`rails g migration`), or take the timestamp from the machine
+(`date -u +%Y%m%d%H%M%S`). Never hand-write one, and never round it.
+
+Rounded stamps — `20260806000001`, `20260731230000` — are the tell that a batch
+was named by hand. They collide across branches, they sort by invention order
+rather than the order things actually happened, and a run of them ending
+`000001`…`000006` is unreadable. Several already shipped that way; they are
+applied in prod and must NOT be renamed, because the filename IS the key in
+`schema_migrations`. The rule is for every one after them.
 
 ## Code Style
 
@@ -173,9 +187,37 @@ All new/modified Jil task code MUST go through both steps before deploy:
 1. **Validate** — `Jil::Validator.validate!(code)` in a spec. Catches invalid casts, duplicate variables, undefined references, unknown classes, content-block/positional-arg mismatches (e.g. raw Keyval blocks as Prompt.create data), and bare variables where content blocks are expected.
 2. **Test** — a temporary behavioral spec that runs `Jil::Executor.call(user, code, input_data)` with representative inputs and asserts the EXPECTED RESULT: correct branch taken, correct args passed to downstream `Custom.X` calls (stub `Jil::Methods::Custom#execute` to capture them), correct `Jarvis.command(...)` text (stub `::Jarvis.command`), correct side effects on cache/records, both positive and negative cases. Syntactic validation passes code that is logically broken — type coercions can silently produce nil, branches can be silently skipped, content blocks can wrap unexpectedly. The behavioral spec is what catches these.
 
-**Workflow:** Write the Jil code → validate in a spec → write a behavioral spec → run both → fix any issues → THEN write the prodExec script. Do NOT write the script first. Do NOT put the validator inside the script. Both specs are one-offs — DELETE them as part of pre-deploy cleanup; only specs that test unique behavior of Jil itself should remain in the repo.
+**Workflow:** Write the Jil code → validate in a spec → write a behavioral spec → run both → fix any issues → THEN write the prodExec script. Do NOT write the script first.
+
+**`spec/lib/scripts/` must not exist.** Both specs are scaffolding: they prove the code before it goes near production, and then they are done. DELETE them in the same round you wrote them, once they're green — not "before the deploy", not "once the script has run", and never with a comment saying so. A one-off spec left behind with a note asking someone to remove it later is a chore handed to the person who asked for the feature, and it will still be there months on, failing for reasons nobody remembers. Getting rid of it is part of finishing, not part of deploying.
+
+Anything genuinely worth keeping belongs in a spec for the thing it actually tests — the propagator, the executor, the model — under that thing's own path, written so it stands on its own without the script.
 
 When presenting a prodExec command, confirm both steps: `Tested ✓ Validated ✓ — prodExec lib/scripts/my_script.rb`
+
+### No DRY_RUN flag
+
+**A prodExec script does the thing when you run it.** Never add a `DRY_RUN`
+constant, a `--dry-run` switch, or any other preview mode.
+
+It reads as caution and behaves as a trap: the script runs, prints a tidy list
+of what it *would* do, exits 0, and stamps itself `# PROD: Executed`. Nothing
+distinguishes that from a real run afterwards, so the change is believed to be
+live when it isn't, and the discrepancy only surfaces when something downstream
+breaks. It also isn't safety — it was already established that `DRY_RUN=1
+prodExec` mutated production, because `cap` builds its own ssh command line and
+forwards no local environment.
+
+What to do instead, all of which are real:
+
+- **Make it idempotent and say which branch it took.** Compare against what's
+  already there and print `already applied` or `WROTE <thing>`. Re-running is
+  then the preview, and its output is a fact about production rather than a
+  prediction.
+- **Raise on unmet preconditions.** A missing record or a half-migrated state
+  should abort loudly, not print a warning and carry on.
+- **Verify by reading first.** `.claude/prod-query.sh` answers "what is it now"
+  without writing anything, and that's what a preview was reaching for.
 
 ## Environment
 

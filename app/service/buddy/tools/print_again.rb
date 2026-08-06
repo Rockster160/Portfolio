@@ -30,6 +30,11 @@ Buddy::Tools.register(
   # name, which is the whole reason this doesn't run after the reply like every
   # other level-1 tool.
   answers:     true,
+  acts:        true,
+  # Not a routine step. Omitting `file` means "the last print", which is a
+  # different file every time, and naming one pins a routine to a model they
+  # printed once.
+  routinable:  false,
   confirm:     ->(_payload, ctx) {
     raise "there's no reprint function set up for the printer" if Buddy::PrintHistory.reprint_function(ctx.user).nil?
 

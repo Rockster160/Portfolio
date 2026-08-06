@@ -20,9 +20,43 @@ module Buddy
     # replace, so these pass without a word (see Buddy::SideEffects).
     SILENT = Buddy::SideEffects::NAMES.to_set.freeze
 
+    # `get_context` fronts two dozen unrelated sections, so naming it after any
+    # one of them is wrong most of the time - "Checking your day" showed up
+    # while setting up a doorbell watch, which touches nothing about the day.
+    #
+    # Grouped rather than one line per section: a call asks for several at once
+    # and they're usually all about the same thing, so the group is what the
+    # person would call it. Several groups at once means the phrase for the
+    # first, which is near enough and better than a list.
+    CONTEXT_PHRASES = {
+      "Checking your agenda"         => %i[today_agenda upcoming_agenda],
+      "Going through your chores"    => %i[
+        chores_pending_today
+        chores_done_today
+        chores_hot_picks
+        chores_scheduled_today
+        chores_overdue_backlog
+        chores_all
+      ],
+      "Looking at what you logged"   => %i[recent_events],
+      "Checking your lists"          => %i[lists],
+      "Looking at your reminders"    => %i[upcoming_reminders active_watches running_timers],
+      "Seeing what's waiting on you" => %i[pending_prompts pending_relays active_proposals],
+      "Digging through your ideas"   => %i[stashed_ideas],
+      "Looking through your tools"   => %i[jil_triggers jil_functions routines trigger_shapes],
+      "Checking on the house"        => %i[device_states],
+      "Checking how things connect"  => %i[record_links],
+      "Counting your pebbles"        => %i[pebble_balance],
+    }.freeze
+
+    # Reverse index, built once: section -> phrase.
+    BY_SECTION = CONTEXT_PHRASES.each_with_object({}) { |(phrase, sections), h|
+      sections.each { |s| h[s] = phrase }
+    }.freeze
+
     PHRASES = {
       # Reading
-      get_context:           "Checking your day",
+      get_context:           "Looking things up",
       search_events:         "Digging through what you've logged",
       search_agenda:         "Searching your calendar",
       print_history:         "Looking up what you've printed",
@@ -96,11 +130,20 @@ module Buddy
     # its own name in plain words: underscores out, first letter up, and nothing
     # else, because a guess that tries to be clever reads worse than a plain one
     # that's obviously mechanical.
-    def phrase_for(name)
+    #
+    # `args` is only consulted for the one tool whose subject lives in its
+    # arguments rather than its name.
+    def phrase_for(name, args=nil)
       key = name.to_s.to_sym
       return nil if SILENT.include?(key)
+      return context_phrase(args) if key == :get_context
 
       PHRASES[key] || key.to_s.tr("_", " ").capitalize
+    end
+
+    def context_phrase(args)
+      sections = Array(args.is_a?(Hash) ? (args[:sections] || args["sections"]) : nil)
+      sections.filter_map { |s| BY_SECTION[s.to_s.to_sym] }.first || PHRASES[:get_context]
     end
   end
 end

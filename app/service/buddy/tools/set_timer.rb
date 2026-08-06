@@ -8,12 +8,29 @@ Buddy::Tools.register(
     otherwise. This is for short countdowns the person actively watches - for a
     nudge at a specific clock time, or a recurring one, use schedule_reminder.
 
-    It's also how you WAIT. When they chain steps around a delay - "start the
-    printer, wait a minute, then preheat it" - set the timer with
-    `then_continue: true` and then call the later steps in the same reply. They
-    won't fire now; they're held and run on their own the moment the timer's up.
-    Call all of it in ONE reply, and never offer to do the last step later:
-    that's the part they already asked for.
+    It's also how you WAIT, and it is the ONLY way to make something happen
+    later than right now without pinning it to a clock time. Set the timer with
+    `then_continue: true` and call the delayed steps after it in the SAME reply.
+    They don't fire now; they're held and run on their own the moment the timer
+    is up.
+
+    Two shapes need it, not one:
+
+    - A chain - "start the printer, wait a minute, then preheat it". The first
+      step, then the timer, then the rest.
+    - A single thing put off - **"play the nap sound in 2 minutes", "turn the
+      fan on in a bit", "remind the room to go dark in 10"**. There's no step
+      before the wait, and that does NOT make it an ordinary countdown: the
+      timer comes first, then the one action. Calling the action on its own
+      does it immediately, which is the opposite of what they asked for.
+
+    The test is whether they named something to happen AFTER a delay. If they
+    did, the timer carries `then_continue: true`. A bare "set a timer for 10" -
+    nothing named to follow it - is the ordinary countdown, and that one leaves
+    the flag off.
+
+    Never offer to do the delayed part later; it's the part they already asked
+    for, and the wait already holds it for you.
   TXT
   args:        {
     seconds:       { type: :integer, required: true,  description: "Countdown length in whole seconds" },
@@ -21,10 +38,11 @@ Buddy::Tools.register(
     then_continue: {
       type:        :boolean,
       required:    false,
-      description: "True only when this timer is a WAIT inside a sequence they asked for, and " \
-                   "you are about to call the step that comes after it. Everything you call " \
-                   "after this one is held back and runs when the timer's up. Leave it null " \
-                   "for an ordinary countdown",
+      description: "True whenever they named something to happen AFTER this delay, whether " \
+                   "or not a step came before it - a chain, or a single action put off " \
+                   "(\"play the nap sound in 2 minutes\"). Everything you call after this one " \
+                   "is held back and runs when the timer's up. Leave it null only for a bare " \
+                   "countdown with nothing named to follow",
     },
   },
   # Level 1 (auto): setting a timer is safe + reversible (swipe it away), so it

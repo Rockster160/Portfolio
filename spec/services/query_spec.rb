@@ -138,4 +138,84 @@ RSpec.describe ApplicationRecord, type: :model do
       expect(sql).to eq("(((id = 44045) OR (id = 44063) OR (id = 44119)))")
     end
   end
+
+  describe "generic jsonb key search" do
+    it "matches a key exactly" do
+      sql = query("data:transfer::true")
+      expect(sql).to eq("((data->>'transfer' ILIKE 'true'))")
+    end
+
+    it "matches a key by substring" do
+      sql = query("data:merchant:VENMO")
+      expect(sql).to eq("((data->>'merchant' ILIKE '%VENMO%'))")
+    end
+
+    it "treats a missing key as not-equal so sparse jsonb stays included" do
+      sql = query("data:transfer!::true")
+      expect(sql).to eq("((data->>'transfer' IS NULL OR data->>'transfer' NOT ILIKE 'true'))")
+    end
+
+    it "treats a missing key as not-containing" do
+      sql = query("data:merchant!:VENMO")
+      expect(sql).to eq("((data->>'merchant' IS NULL OR data->>'merchant' NOT ILIKE '%VENMO%'))")
+    end
+
+    it "guards the numeric cast on comparisons" do
+      sql = query("data:amount>100")
+      expect(sql).to eq(
+        "((data->>'amount' ~ '^-?[0-9]+(\\.[0-9]+)?$' AND (data->>'amount')::numeric > 100.0))",
+      )
+    end
+
+    it "combines with a regular column term" do
+      sql = query("name::Transaction data:transfer!::true")
+      expect(sql).to eq(
+        "(((name ILIKE 'Transaction') AND (data->>'transfer' IS NULL OR data->>'transfer' NOT ILIKE 'true')))",
+      )
+    end
+
+    it "composes with OR across keys" do
+      sql = query("data:transfer::true OR data:merchant::VENMO")
+      expect(sql).to eq("(((data->>'transfer' ILIKE 'true') OR (data->>'merchant' ILIKE 'VENMO')))")
+    end
+  end
+
+  describe "generic jsonb key search — records" do
+    let(:user) { User.me }
+
+    let!(:transfer) {
+      user.action_events.create!(name: "Transaction", notes: "CHASE CREDIT CRD", data: {
+        merchant: "CHASE CREDIT CRD", amount: 6383.52, transfer: true
+      })
+    }
+    let!(:purchase) {
+      user.action_events.create!(name: "Transaction", notes: "COSTCO WHSE #1441", data: {
+        merchant: "COSTCO WHSE #1441", amount: 123.45, transfer: false
+      })
+    }
+    # Predates the key entirely.
+    let!(:legacy) {
+      user.action_events.create!(name: "Transaction", notes: "NETFLIX.COM", data: {
+        merchant: "NETFLIX.COM", amount: 21.48
+      })
+    }
+
+    after { [transfer, purchase, legacy].each(&:destroy) }
+
+    it "excludes only the flagged rows, keeping ones with no key" do
+      results = user.action_events.query("name::Transaction data:transfer!::true")
+      expect(results).to include(purchase, legacy)
+      expect(results).not_to include(transfer)
+    end
+
+    it "selects only the flagged rows" do
+      expect(user.action_events.query("data:transfer::true")).to contain_exactly(transfer)
+    end
+
+    it "compares numerically without choking on non-numeric keys in other rows" do
+      user.action_events.create!(name: "Transaction", notes: "odd", data: { amount: "n/a" })
+
+      expect(user.action_events.query("data:amount>1000")).to contain_exactly(transfer)
+    end
+  end
 end

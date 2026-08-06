@@ -48,7 +48,7 @@ module Buddy
         active_proposals:       active_proposals(conversation),
         upcoming_reminders:     upcoming_reminders(conversation, now),
         running_timers:         running_timers(user),                # countdowns on the clock right now, for "how long left" and cancel_timer
-        active_watches:         active_watches(conversation),
+        active_watches:         active_watches(conversation, now),
         conversation_notes:     conversation.buddy_memories,         # this thread's own notes ("keep this strictly work")
         pending_relays:         pending_relays(user),                # open questions from a partner, awaiting THIS user's answer
         pending_prompts:        pending_prompts(user),               # app surveys/questions Buddy can answer or skip on demand
@@ -292,7 +292,12 @@ module Buddy
         actor_names = household_names(credited_to.values.uniq)
 
         daily_ids = ChoreDaily.for_user(user).limit(20).pluck(:chore_id)
-        hot_ids   = ChoreHotPick.for_day(today).where(chore_id: chores.map(&:id)).pluck(:chore_id)
+        # The multiplier rides along, not just the fact of being picked. A 2x is
+        # ordinary and a 5x is the one thing on the day worth actually calling
+        # out, and with only the ids there was no way to tell them apart.
+        hot_mults = ChoreHotPick.for_day(today).where(chore_id: chores.map(&:id))
+          .pluck(:chore_id, :multiplier).to_h
+        hot_ids   = hot_mults.keys
         matches_today_ids = chores.select { |c|
           c.respond_to?(:matches_day?) && c.scheduled? && (safe_matches_day(c, today, user))
         }.map(&:id)
@@ -341,11 +346,15 @@ module Buddy
         }
 
         {
-          pending_today:   pending_ids.filter_map   { |id| slim_chore(by_id[id], typical_hours[id], due_ids) }.first(20),
-          done_today:      done_ids.filter_map      { |id|
-            slim_chore(by_id[id], typical_hours[id], due_ids, by: actor_names[credited_to[id]])
+          pending_today:   pending_ids.filter_map { |id|
+            slim_chore(by_id[id], typical_hours[id], due_ids, hot: hot_mults[id])
           }.first(20),
-          hot_picks:       hot_ids.filter_map       { |id| slim_chore(by_id[id], typical_hours[id], due_ids) }.first(15),
+          done_today:      done_ids.filter_map { |id|
+            slim_chore(by_id[id], typical_hours[id], due_ids, by: actor_names[credited_to[id]], hot: hot_mults[id])
+          }.first(20),
+          hot_picks:       hot_ids.filter_map { |id|
+            slim_chore(by_id[id], typical_hours[id], due_ids, hot: hot_mults[id])
+          }.first(15),
           scheduled_today: scheduled_ids.filter_map { |id| slim_chore(by_id[id], typical_hours[id], due_ids) }.first(20),
           overdue_backlog: overdue.filter_map       { |id| slim_chore(by_id[id], nil, due_ids) }.first(20),
           # The FULL roster of every active (non-archived) chore, names only.
@@ -394,7 +403,7 @@ module Buddy
         { pending_today: [], done_today: [], hot_picks: [], scheduled_today: [], overdue_backlog: [], all_names: [] }
       end
 
-      def slim_chore(chore, typical_hour=nil, due_ids=nil, by: nil)
+      def slim_chore(chore, typical_hour=nil, due_ids=nil, by: nil, hot: nil)
         return nil if chore.nil?
 
         out = {
@@ -403,6 +412,9 @@ module Buddy
         }
         # Present ONLY on a done chore somebody else in the house did.
         out[:by] = by if by.present?
+        # "5x" rather than 5.0 - the label is how it's written on the chores
+        # page, so quoting it back reads as a fact rather than a calculation.
+        out[:hot] = "#{hot.to_f.round(1).to_s.delete_suffix(".0")}x" if hot.present?
         out[:freq] = chore.freq.to_s if chore.respond_to?(:freq) && chore.freq.present?
         if chore.respond_to?(:assigned?) && chore.assigned?
           out[:assigned_to] = chore.assigned_to_user&.first_name
@@ -538,17 +550,41 @@ module Buddy
       def upcoming_reminders(conversation, now)
         return [] unless defined?(BuddyReminder)
 
-        tz = conversation.user.timezone
-        BuddyReminder.upcoming(now, 48).where(byte_conversation_id: conversation.id).limit(15).map { |r|
+        tz   = conversation.user.timezone
+        live = BuddyReminder.upcoming(now, 48).where(byte_conversation_id: conversation.id).limit(15).map { |r|
           {
-            id:      r.id,
-            fire_at: r.fire_at.in_time_zone(tz).strftime("%a %-I:%M %p"),
-            kind:    r.kind,
-            body:    r.body.to_s.first(120),
-          }
+            id:         r.id,
+            fire_at:    r.fire_at.in_time_zone(tz).strftime("%a %-I:%M %p"),
+            kind:       r.kind,
+            body:       r.body.to_s.first(120),
+            # A recurring reminder rolls `fire_at` forward the moment it fires,
+            # so the next occurrence is all that's visible and the one that just
+            # went off looks like it never did. Prod 2761 announced the flower
+            # bed "tomorrow at 8:00 AM" half an hour after it rang that morning.
+            last_fired: (r.last_fired_at && Buddy::TimeParser.friendly(r.last_fired_at, user: conversation.user)),
+          }.compact
         }
+        live + switched_off(BuddyReminder, conversation)
       rescue StandardError => e
         Buddy::Errors.report(section: "context.upcoming_reminders", exception: e, user: conversation.user)
+        []
+      end
+
+      # Rows the person turned OFF from the reminders panel. They still exist,
+      # they're still listed there, they just aren't running.
+      #
+      # Buddy could only ever see live ones, which made a whole class of
+      # question unanswerable. Prod 2822: "I'm still seeing it in the Reminders
+      # list" was TRUE and "I cancelled it" was also true, and with no way to
+      # hold both, the reply argued about whether it was a reminder or a watch.
+      # Marked `status: off` so the difference is a fact rather than an absence.
+      def switched_off(klass, conversation)
+        klass.where(byte_conversation_id: conversation.id, fired_at: nil)
+          .where.not(cancelled_at: nil)
+          .order(cancelled_at: :desc).limit(5).map { |r|
+            { id: r.id, body: r.body.to_s.first(120), status: :off }
+          }
+      rescue StandardError
         []
       end
 
@@ -589,20 +625,23 @@ module Buddy
       # signal - "remind me next time I'm at Costco", "when I brush my
       # teeth". Lets Buddy see what it's already watching so it doesn't
       # set a duplicate, and can reference/cancel them by id.
-      def active_watches(conversation)
+      def active_watches(conversation, _now=Time.current)
         return [] unless defined?(BuddyWatch)
 
-        BuddyWatch.active.where(byte_conversation_id: conversation.id).order(:created_at).limit(15).map { |w|
+        live = BuddyWatch.active.where(byte_conversation_id: conversation.id).order(:created_at).limit(15).map { |w|
           {
-            id:   w.id,
-            when: (w.metadata.is_a?(Hash) ? w.metadata["human_when"].to_s.presence : nil) || w.trigger_scope,
-            body: w.body.to_s.first(120),
+            id:       w.id,
+            when:     (w.metadata.is_a?(Hash) ? w.metadata["human_when"].to_s.presence : nil) || w.trigger_scope,
+            body:     w.body.to_s.first(120),
             # Present only on a hand-written watch. Carried so a "why did that
             # fire" (or a near-duplicate) can be reasoned about from the actual
-            # condition rather than the prose around it.
+            # condition rather than the prose around it. It is also the ONLY
+            # thing separating two watches whose prose is identical - both
+            # doorbell watches in prod 2817 read "🔔 Someone's at the doorbell."
             listener: w.listener,
           }.compact
         }
+        live + switched_off(BuddyWatch, conversation)
       rescue StandardError => e
         Buddy::Errors.report(section: "context.active_watches", exception: e, user: conversation.user)
         []
@@ -691,10 +730,10 @@ module Buddy
         user.buddy_ideas.surfaceable.includes(:notes).order(created_at: :asc).limit(12).map { |i|
           count = i.notes.size
           {
-            id:       i.id,
-            category: i.category,
-            idea:     i.summary.presence || i.body.to_s.first(140),
-            waiting:  i.waiting_label,
+            id:           i.id,
+            category:     i.category,
+            idea:         i.summary.presence || i.body.to_s.first(140),
+            waiting:      i.waiting_label,
             # Only present on a thread. Their absence is the signal that the
             # `idea` line above is the whole of it and nothing needs opening.
             notes:        (count.positive? ? count : nil),

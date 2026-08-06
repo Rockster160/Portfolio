@@ -1,64 +1,67 @@
 Buddy::Tools.register(
   name:        :cancel_reminder,
   description: <<~TXT,
-    Cancel a pending reminder OR a condition-based watch the user
-    previously set. Use when the person says "actually nevermind that
-    reminder", "don't remind me about X anymore", "cancel the vet
-    reminder", "forget reminding me to floss". `match` is a substring of
-    the reminder/watch text OR its numeric id if you can see it in
-    `upcoming_reminders` / `active_watches`.
+    Remove a pending reminder OR a condition-based watch. Use when the person
+    says "nevermind that reminder", "don't remind me about X anymore", "cancel
+    the vet reminder", "stop watching for the doorbell", "delete that one".
+
+    This DELETES it. There's no disabled-but-still-there state, so "cancel it"
+    and "delete it" are the same call and you never have to explain a
+    difference between them.
+
+    `match` is a substring of the text OR the numeric id from
+    `upcoming_reminders` / `active_watches`. **Prefer the id.** Several of these
+    can carry word-for-word identical text - two doorbell watches both reading
+    "Someone's at the doorbell" differ only in what they listen for - and a
+    substring cannot tell those apart. When it can't, this refuses and lists
+    them rather than guessing, and you pick by id.
+
+    Those context sections also show rows the person switched OFF from the
+    panel, marked `status: off`. Those still exist and can still be removed;
+    they just aren't running. Don't describe one as gone, and don't reach for a
+    live one because the off one didn't look like a match.
   TXT
-  args: {
-    match: { type: :string, required: true, description: "Substring to match, or numeric id" },
+  args:        {
+    match: { type: :string, required: true, description: "Numeric id (preferred), or a substring to match" },
   },
   # Cancelling matches whatever is pending right now, which is never the same
   # set twice - a saved copy would retire a reminder they still want.
-  routinable: false,
-  confirm: ->(payload, ctx) {
+  routinable:  false,
+  confirm:     ->(payload, ctx) {
     needle = payload[:match].to_s.strip
-    numeric = needle.match?(/\A\d+\z/)
+    raise "which one?" if needle.empty?
 
-    reminders = BuddyReminder.pending.where(user_id: ctx.user.id)
-    watches   = BuddyWatch.active.where(user_id: ctx.user.id)
+    found = Buddy::PendingLookup.matching(ctx.user, needle)
+    raise "nothing matches #{needle.inspect} - it may already be gone" if found.empty?
 
-    reminder = if numeric
-      reminders.find_by(id: needle.to_i)
-    else
-      reminders.where("LOWER(body) LIKE ?", "%#{needle.downcase}%").order(:fire_at).first
+    # Naming the options beats deleting the wrong one of three.
+    if found.length > 1
+      raise "#{found.length} of those match and they're worded the same - say which by id: " \
+            "#{found.map(&:disambiguated).join("; ")}"
     end
 
-    watch = if reminder
-      nil
-    elsif numeric
-      watches.find_by(id: needle.to_i)
-    else
-      watches.where("LOWER(body) LIKE ?", "%#{needle.downcase}%").order(:created_at).first
-    end
+    row  = found.first
+    note = row.off? ? " (already switched off)" : ""
+    { summary: "Remove #{row.noun} #{row.summary}?#{note}", resolved: { record_type: row.kind, record_id: row.id } }
+  },
+  label:       ->(payload, ctx) {
+    row = Buddy::PendingLookup.find(ctx.user, payload[:record_type], payload[:record_id])
+    next { title: "Remove reminder" } if row.nil?
 
-    raise "no matching pending reminder or watch" if reminder.nil? && watch.nil?
+    # The sub is what makes two identical-looking rows tellable apart on the
+    # card. Prod 2817: three cancel rows in a row all read "Cancel 🔔 Someone's
+    # at the doorbell." and two of them were the wrong watch.
+    { title: "Remove #{row.summary}", sub: row.detail }
+  },
+  execute:     ->(payload, ctx) {
+    row = Buddy::PendingLookup.find(ctx.user, payload[:record_type], payload[:record_id])
+    raise "that one's already gone" if row.nil?
 
-    if reminder
-      when_str = reminder.fire_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p")
-      {
-        summary:  "Cancel the reminder for #{when_str}: #{reminder.body.truncate(50)}?",
-        resolved: { record_type: "reminder", record_id: reminder.id },
-      }
-    else
-      human = watch.metadata.is_a?(Hash) ? watch.metadata["human_when"].to_s.presence : nil
-      {
-        summary:  "Cancel the reminder #{human || 'watch'}: #{watch.body.truncate(50)}?",
-        resolved: { record_type: "watch", record_id: watch.id },
-      }
-    end
+    { noun: row.noun, summary: row.summary, detail: row.detail, revert: row.destroy! }
   },
-  label: ->(payload, _ctx) {
-    record = payload[:record_type].to_s == "watch" ? BuddyWatch.find_by(id: payload[:record_id]) : BuddyReminder.find_by(id: payload[:record_id])
-    record ? "Cancel #{record.body.to_s.truncate(55)}" : "Cancel reminder"
+  receipt:     ->(result, _ctx) {
+    # Naming it is the point. "Reminder cancelled ✓" three times over, for three
+    # different rows, told the person nothing about which one went.
+    ["Removed #{result[:noun]} #{result[:summary]}", result[:detail].presence].compact.join(" · ") + " ✓"
   },
-  execute: ->(payload, _ctx) {
-    record = payload[:record_type].to_s == "watch" ? BuddyWatch.find(payload[:record_id]) : BuddyReminder.find(payload[:record_id])
-    record.update!(cancelled_at: Time.current)
-    { record_type: payload[:record_type], record_id: record.id }
-  },
-  receipt: ->(_result, _ctx) { "Reminder cancelled ✓" },
 )

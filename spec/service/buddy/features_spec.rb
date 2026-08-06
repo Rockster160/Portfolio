@@ -212,7 +212,7 @@ RSpec.describe Buddy::Features do
     it "leads with chores for someone who has them" do
       seed = Buddy::TodayBriefing.send(:seed, user)
 
-      expect(seed).to include("`chores_pending_today` is the primary answer")
+      expect(seed).to include("`chores_pending_today` is the pool")
       expect(seed).to include("`chores_hot_picks`")
     end
 
@@ -226,7 +226,7 @@ RSpec.describe Buddy::Features do
       expect(seed).not_to include("chores_done_today")
       # The rest of the briefing is untouched.
       expect(seed).to include("`today_agenda`")
-      expect(seed).to include("LEAD WITH what still needs to happen today:")
+      expect(seed).to include("LEAD WITH what still needs to happen today")
     end
   end
 

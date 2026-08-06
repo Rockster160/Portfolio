@@ -69,6 +69,49 @@ RSpec.describe Buddy::GPT::History do
       expect(build.first[:content]).to include("Today")
     end
 
+    # Collapsing the seed stopped the instructions being re-taught, but left the
+    # BRIEFINGS - and a run of past briefings is a worked example of how to
+    # write the next one, which is why the same droning list of chore names
+    # survived several rewrites of the rule forbidding it. Prod 2756 did it on a
+    # freshly reset thread, so the seed was at fault there too; this is the
+    # other half.
+    describe "older briefings" do
+      before do
+        tapped("today")
+        said("Old briefing, in the old voice.", direction: :inbound, kind: "buddy")
+        said("thanks")
+        said("Anytime!", direction: :inbound, kind: "buddy")
+        tapped("today")
+        said("Newer briefing.", direction: :inbound, kind: "buddy")
+      end
+
+      it "drops all but the most recent one" do
+        contents = build.pluck(:content)
+
+        expect(contents).not_to include("Old briefing, in the old voice.")
+        expect(contents).to include("Newer briefing.")
+      end
+
+      it "leaves ordinary conversation between them alone" do
+        expect(build.pluck(:content)).to include("thanks", "Anytime!")
+      end
+
+      it "keeps a lone briefing, since there's no pattern in one" do
+        convo.byte_messages.destroy_all
+        tapped("today")
+        said("The only briefing.", direction: :inbound, kind: "buddy")
+
+        expect(build.pluck(:content)).to include("The only briefing.")
+      end
+
+      # The turn being answered is live, not history, however it was started.
+      it "never drops the message being answered" do
+        seed = tapped("today")
+
+        expect(build(upto: seed).last[:content]).to include("Today")
+      end
+    end
+
     it "carries the mood on a check-in, which is the one thing that varies" do
       tapped("checkin", mood: "rough")
 

@@ -26,7 +26,7 @@ module Buddy
 
       Keep it short - three to five lines - but short and warm, not short and clipped. Break it into short paragraphs with a blank line between distinct beats (a greeting, then what's ahead, then any week heads-up) so it renders clean and skimmable - never one smushed block. Enthusiasm and clean breaks are not at odds; you get both. Prose with shape and a pulse, not a field report.
 
-      Still avoid: em dashes (commas or short sentences instead), bullet-listing what I already did, and reciting chores by their record names unless one specific one is your actual recommendation.
+      Still avoid: em dashes (commas or short sentences instead) and bullet-listing what I already did.
 
       Round odd clock times rather than reading them off: "7:54 AM" and "8:19" are what a machine says, "just before 8" is what you say. A time somebody actually scheduled on the hour or half hour ("3:00 PM" → "3") can stay as it is.
 
@@ -82,8 +82,7 @@ module Buddy
 
       [
         "",
-        "- `chores_pending_today` is the primary answer - but it is a POOL TO PICK FROM, never a list to read out. See THREE NAMES below.",
-        "- Give extra weight to items explicitly DUE today that AREN'T daily (a `due_today: true` chore whose `freq` is weekly/monthly/less, or a hot pick). Those are the easy-to-forget ones and the most useful to surface - daily habits I know cold.",
+        "- `chores_pending_today` is the pool those names come out of. Give extra weight to something explicitly DUE today that ISN'T daily (a `due_today: true` chore whose `freq` is weekly/monthly/less). Those are the easy-to-forget ones - daily habits I know cold.",
         "- BATCH related items: several pending chores that are obviously one errand or one theme go out ONCE as the theme, not one by one. A word shared across their names is the giveaway - three chores that all start with the dog's name are \"the dog's round\", the bin ones are \"it's trash day\", all the plant watering is \"watering day\".",
       ].join("\n")
     end
@@ -98,32 +97,39 @@ module Buddy
 
     # The single most common way this goes wrong, and the reason it's stated as
     # a hard number: prod 2528 answered a Today tap with twelve chore names in
-    # one comma-separated run. That is a screenshot of a list I can already
-    # open, and every one of the softer phrasings ("don't recite", "gloss the
-    # dailies") was already in the prompt when it happened.
+    # one comma-separated run, and 2756 with eight, the second of those on a
+    # freshly reset thread with no history to imitate. Every softer phrasing
+    # ("don't recite", "gloss the dailies", "a pool to pick from") was already
+    # in the prompt both times - five of them, which read as five suggestions
+    # rather than one limit. They're gone; this is the only statement left.
     def three_names_block(user)
       return "" unless chores?(user)
 
       block = <<~BLOCK.strip
-        THREE NAMES, TOTAL:
-        - Across the WHOLE briefing you may name at most three specific chores. Not three per paragraph, not three per section. Three.
-        - Each one has to earn its slot: due today and not a daily, a hot pick, a one-off, or the one thing you'd actually recommend I start.
+        THREE NAMES, TOTAL - the hard limit on this whole message:
+        - You may name at most three specific chores. Not three per paragraph, not three per section. Three, across everything you write.
+        - Each has to earn its slot: due today and not a daily, an unusually hot pick, a one-off, or the one thing you'd actually recommend I start.
         - Everything past those three is a count or a theme, or it goes unsaid - "plus the usual dailies", "and the rest of the morning routine". Never a comma-separated run of record names.
-        - If you find yourself writing "Still pending:" followed by a list, stop and delete it. That sentence is the failure mode, however tidy it looks.
+        - If you find yourself writing "Still pending:" followed by a list, stop and delete it. That sentence is the failure mode, however tidy it looks. So is any sentence with four chore names in it, however conversational the joins are - "Cymbalta, water, teeth, puppy fed, the table, exercise, the bed, and the desk are all on deck" is the list wearing a sentence.
       BLOCK
       "\n#{block}"
     end
 
+    # A hot pick is worth naming only when it's unusual. Two-thirds of them are
+    # a routine 2x, and "this one's flagged" about an ordinary 2x spends one of
+    # the three names on nothing.
     def chores_hot_line(user)
       return "" unless chores?(user)
 
-      "\n- `chores_hot_picks` - flagged for attention today."
+      "\n- `chores_hot_picks` - pinned for extra pebbles today, each carrying a `hot` multiplier (\"2x\", \"5x\"). " \
+        "A big one is genuinely worth a mention and a bit of enthusiasm (\"the litter box is a 5x today\"); " \
+        "a plain 2x is ordinary and isn't news."
     end
 
     def chores_secondary_line(user)
       return "" unless chores?(user)
 
-      "\n- `chores_done_today` - do NOT name these. A briefing is about what's ahead, and reading back what's behind is the fastest way to turn it into a status report. When a lot is already done, a half-clause nod is plenty (\"good start already\"); a roll call of it never is. And an entry carrying `by:` was done by someone ELSE in the house, so it is not mine to be congratulated for."
+      "\n- `chores_done_today` - do NOT name these. When a lot is already done, a half-clause nod is plenty (\"good start already\"); a roll call of it never is. And an entry carrying `by:` was done by someone ELSE in the house, so it is not mine to be congratulated for."
     end
 
     # After ~4pm local the day's weather isn't actionable anymore.
@@ -165,10 +171,12 @@ module Buddy
         - Agenda items flagged `passed: true` are DONE for the day - never recite or recap them.#{chores_done_line(user)}
         - If it's evening or later and the day is essentially behind them (most items passed, little pending), DON'T force a full rundown. A day that's over doesn't need a briefing - give whatever is actually left tonight (if anything) and a quick nod to tomorrow, then stop. Short is correct here.
 
-        LEAD WITH what still needs to happen today:#{chores_lead_lines(user)}
+        LEAD WITH what still needs to happen today.
+        #{three_names_block(user)}#{chores_lead_lines(user)}
         - `today_agenda` - today's events / meetings with times. But see UNUSUAL-ONLY below: don't recite the daily-recurring stuff.
         - Agenda items tagged `mine: false` (with an `owner`, e.g. Chelsea) are on a partner's PERSONAL calendar shared with me - awareness only. They are NOT my tasks. Don't list them as mine; usually don't mention them at all. Only bring one up if it actually affects me (a conflict, a hand-off, something I'm part of), and attribute it ("Chelsea's got a thing at 3").#{chores_hot_line(user)}
-        #{three_names_block(user)}
+
+        NAME THE THING, never just its category. Every item in context carries its real name, and the name is usually the entire reason it's worth mentioning. "Tomorrow's got the birthday" tells me nothing I can act on when the item is called `Monica Murton's Birthday` - it's WHOSE birthday that makes it matter, and the answer was right there. Same shape: "a meeting" for `Tech Stand-Up`, "an appointment" for `TMS`, "the thing Friday". If it earns a mention it earns its name.
 
         WHEN referring to a day: say "tomorrow" for the next day, not the weekday name. Weekday names only for two-plus days out.
 
@@ -199,8 +207,7 @@ module Buddy
 
         HARD NO:
         - Never recap yesterday.
-        - Never invent chores/events not in context.
-        - Don't recite my daily / every-weekday repeats line by line. Gloss those. Less-frequent recurrences and one-offs are fair to mention.#{chores_credit_line(user)}
+        - Never invent chores/events not in context.#{chores_credit_line(user)}
         - No filler like "quiet day", "not a bad thing", "in the bag".
         - No "based on what I have" / "your context shows" / any scaffolding-talk.
 

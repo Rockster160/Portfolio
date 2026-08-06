@@ -1,13 +1,16 @@
 require "rails_helper"
 
-# call_jil_function is a level-1 tool: it fires on the spot and normally drops a
-# "Called X ✓" chip. When the person asked a QUESTION rather than giving a
-# command, the function's RETURN VALUE is the answer, so it gets relayed into a
-# fresh Buddy turn (same shape as check_weather) and the chip is suppressed.
+# call_jil_function acts AND reports, inside the turn. The function runs while
+# the model is still deciding what to say, and its return value goes back as the
+# tool output, so the reply is written knowing the outcome.
+#
+# It used to fire after the reply and relay a return value through a whole
+# second turn. Prod 2789 is what that cost: "Close the garage" got "Kk! Garage's
+# closing." written 17 seconds before the call landed, alongside a separate
+# read whose (pre-toggle) answer became the follow-up message.
 RSpec.describe "call_jil_function tool" do
   let(:user)   { create(:user) }
   let!(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy", last_message_at: Time.current) }
-  let(:msg)    { convo.byte_messages.create!(user: user, direction: :inbound, state: :delivered, body: "ok") }
 
   # Mirrors prod task 435: a sensor reader whose whole point is what it returns.
   let!(:sensor_task) {
@@ -22,10 +25,7 @@ RSpec.describe "call_jil_function tool" do
     )
   }
 
-  before do
-    allow(MonitorChannel).to receive(:broadcast_to)
-    allow(Buddy::CompanionDelivery).to receive(:deliver_prompt)
-  end
+  before { allow(MonitorChannel).to receive(:broadcast_to) }
 
   # The Jil executor itself is out of scope here; all this tool cares about is
   # the value coming back off `#result`.
@@ -34,94 +34,104 @@ RSpec.describe "call_jil_function tool" do
       .and_return(instance_double(::Jil::Executor, result: result))
   end
 
+  # The path a level-1 answering tool actually takes: resolved and executed
+  # inside Turn, with the output handed straight back to the model.
   def run(payload)
-    Buddy::ProposalBuilder.create(
-      user: user, byte_message: msg, markers: [{ tool_name: :call_jil_function, payload: payload }],
-    )
+    Buddy::GPT::Turn.resolve_call(
+      Buddy::Tools[:call_jil_function],
+      { name: "call_jil_function", arguments: payload, call_id: "c1" },
+      user: user, conversation: convo,
+    ).first
   end
 
   def chip
     convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
   end
 
-  describe "a status question (expect_result)" do
-    # Verbatim from prod execution 5219077, so the seed is written against what
+  describe "the answer" do
+    # Verbatim from prod execution 5219077, so this is written against what
     # these functions really return rather than a tidied-up guess.
     let(:real_output) { "laundry_gate is closed (raw state: off, last changed: 2026-07-30T02:14:14.188937+00:00)" }
 
-    it "relays what the function returned into a follow-up reply instead of a chip" do
+    it "hands what the function returned back to the model in the same turn" do
       stub_execution(real_output)
 
       result = run({ name: "HASS Sensor State", sensor: "laundry_gate", expect_result: true })
 
-      expect(result[:auto_ran]).to be(true)
-      expect(chip).to be_nil
-      expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt).with(
-        hash_including(
-          user:         user,
-          conversation: convo,
-          seed:         include("laundry_gate is closed").and(include("HASS Sensor State")),
-        ),
-      )
+      expect(result[:status]).to eq(:answered)
+      expect(result[:answer]).to include("laundry_gate is closed")
     end
 
     # Prod 2636: handed `18:58:03+00:00` and told to convert it, the model
     # answered "6:58 PM" — the same digits with the offset thrown away, six
     # hours out. It reads a clock fine and moves one badly, so the conversion
     # happens before it ever sees the line (see Buddy::RawOutput).
-    it "hands over a time already in their zone rather than a UTC stamp to convert" do
+    it "localizes a UTC stamp rather than asking the model to convert one" do
       stub_execution(real_output)
 
-      travel_to(Time.utc(2026, 7, 31, 18, 0, 0)) {
+      result = travel_to(Time.utc(2026, 7, 31, 18, 0, 0)) {
         run({ name: "HASS Sensor State", sensor: "laundry_gate", expect_result: true })
       }
 
-      seed = nil
-      expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt) { |args| seed = args[:seed] }
-      expect(seed).to include("8:14 PM on Jul 29")
-      expect(seed).not_to include("02:14:14")
-      expect(seed).not_to include("+00:00")
+      expect(result[:answer]).to include("8:14 PM on Jul 29")
+      expect(result[:answer]).not_to include("02:14:14")
+      expect(result[:answer]).not_to include("+00:00")
     end
 
-    it "tells Buddy to drop the internal key, leave the time be, and never invent a state" do
+    it "tells the model to drop the internal key, leave the time be, and never invent a state" do
       stub_execution(real_output)
 
-      run({ name: "HASS Sensor State", sensor: "laundry_gate", expect_result: true })
+      result = run({ name: "HASS Sensor State", sensor: "laundry_gate", expect_result: true })
 
-      seed = nil
-      expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt) { |args| seed = args[:seed] }
-      expect(seed).to include("`laundry_gate`")
-      expect(seed).to include("ALREADY their local time")
-      expect(seed).to include("couldn't get a reading")
+      expect(result[:how]).to include("`laundry_gate`")
+      expect(result[:how]).to include("ALREADY their local time")
+      expect(result[:how]).to include("couldn't get a reading")
     end
 
-    it "falls back to the chip when the function came back with nothing to say" do
+    # The 2789 shape: the function reports that it deliberately did nothing.
+    # Byte has to relay that instead of narrating the action it asked for.
+    it "warns the model that a function may report having done nothing" do
+      stub_execution("The garage was already closed, so nothing was sent.")
+
+      result = run({ name: "HASS Sensor State", sensor: "kennel" })
+
+      expect(result[:answer]).to eq("The garage was already closed, so nothing was sent.")
+      expect(result[:how]).to include("already that way")
+    end
+
+    it "says plainly that a silent command returned nothing rather than leaving it open" do
       stub_execution("   ")
 
-      run({ name: "HASS Sensor State", sensor: "laundry_gate", expect_result: true })
+      result = run({ name: "HASS Sensor State", sensor: "kennel" })
 
-      expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
-      expect(chip.body).to eq("Called **HASS Sensor State**")
-      expect(chip.metadata["detail"]).to eq("sensor: laundry_gate")
+      expect(result).not_to have_key(:answer)
+      expect(result[:how]).to include("returned nothing to report")
+      expect(result[:how]).to include("don't invent a result")
     end
   end
 
-  describe "a command (no expect_result)" do
-    it "chips as before and never posts a second message" do
+  describe "the receipt chip" do
+    it "files one for a command, carrying both the args and what came back" do
       stub_execution("ok")
 
       run({ name: "HASS Sensor State", sensor: "kennel" })
 
-      expect(Buddy::CompanionDelivery).not_to have_received(:deliver_prompt)
       expect(chip.body).to eq("Called **HASS Sensor State**")
-      expect(chip.metadata["detail"]).to eq("sensor: kennel")
+      expect(chip.metadata["detail"]).to eq("sensor: kennel\nok")
+      expect(chip.metadata["payload"]).to include("sensor" => "kennel")
     end
 
-    # Regression: the receipt used to read ctx.proposal["payload"], but level-1
-    # tools run through ProposalBuilder#run_auto, which builds a ToolContext
-    # WITHOUT a proposal. That raised NoMethodError on nil, got swallowed by
-    # `safely`, and silently suppressed this chip on every single call.
-    it "still names the task even though level 1 has no proposal in context" do
+    # Buddy is about to speak the state itself, so a pill above it saying the
+    # same thing is noise.
+    it "skips one for a declared lookup" do
+      stub_execution("kennel is closed")
+
+      run({ name: "HASS Sensor State", sensor: "kennel", expect_result: true })
+
+      expect(chip).to be_nil
+    end
+
+    it "still files one when the function returns nothing" do
       stub_execution(nil)
 
       run({ name: "HASS Sensor State", sensor: "kennel" })
@@ -146,13 +156,12 @@ RSpec.describe "call_jil_function tool" do
       )
     }
 
-    it "drops the proposal rather than firing an actuator to satisfy a question" do
+    it "fails the call rather than firing an actuator to satisfy a question" do
       allow_any_instance_of(Task).to receive(:execute).and_raise("should never run")
 
       result = run({ name: "HASS Blinds", action: "position", expect_result: true })
 
-      expect(result[:auto_ran]).to be(false)
-      expect(result[:action]).to be_nil
+      expect(result[:status]).to eq("failed")
       expect(chip).to be_nil
     end
 
@@ -162,15 +171,7 @@ RSpec.describe "call_jil_function tool" do
       run({ name: "HASS Blinds", action: "close" })
 
       expect(chip.body).to eq("Called **HASS Blinds**")
-      expect(chip.metadata["detail"]).to eq("action: close")
-    end
-
-    it "allows a function that describes itself as reporting" do
-      stub_execution("kennel is closed")
-
-      run({ name: "HASS Sensor State", sensor: "kennel", expect_result: true })
-
-      expect(Buddy::CompanionDelivery).to have_received(:deliver_prompt)
+      expect(chip.metadata["detail"]).to include("action: close")
     end
   end
 

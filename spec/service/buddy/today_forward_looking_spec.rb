@@ -41,8 +41,32 @@ RSpec.describe "Buddy Today forward-looking" do
     let(:seed) { Buddy::TodayBriefing.seed(user) }
 
     it "caps how many chores may be named at a hard number" do
-      expect(seed).to include("THREE NAMES, TOTAL:")
+      expect(seed).to include("THREE NAMES, TOTAL")
       expect(seed).to include("at most three specific chores")
+    end
+
+    # Prod 2756 named eight chores in one sentence, on a thread that had just
+    # been reset - so there was no history to imitate and the seed itself was
+    # doing it. Five separate soft phrasings of the cap read as five
+    # suggestions; only one statement of it survives, and it names the shape.
+    it "states the cap exactly once instead of hedging around it four more times" do
+      expect(seed).not_to include("POOL TO PICK FROM")
+      expect(seed).not_to include("reciting chores by their record names")
+      expect(seed).not_to include("Don't recite my daily")
+      expect(seed).to include("the list wearing a sentence")
+    end
+
+    # Prod 2756 called `Monica Murton's Birthday` "the birthday", which drops
+    # the only part of it that meant anything.
+    it "refuses a bare category where the item has a name" do
+      expect(seed).to include("NAME THE THING")
+      expect(seed).to include("WHOSE birthday")
+    end
+
+    # A 2x is most of them; a 5x is the one thing on the day worth pointing at.
+    it "distinguishes an unusual hot pick from a routine one" do
+      expect(seed).to include("`hot` multiplier")
+      expect(seed).to include("a plain 2x is ordinary")
     end
 
     it "no longer offers the skim-list shape it produced" do

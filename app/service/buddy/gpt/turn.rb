@@ -398,6 +398,7 @@ module Buddy
         @deadline = Time.current + TURN_BUDGET_SECONDS
         @failed   = Set.new
         @seen     = Set.new
+        @acted    = false
         # Set to the kind of the turn's FIRST gate (:rows / :forms) once one
         # resolves; everything asked for after that point is queued behind it
         # rather than going out with this reply.
@@ -540,7 +541,7 @@ module Buddy
         # this method, so a line posted afterwards would describe something
         # already finished and the slowest part of the turn would still look
         # like nothing was happening.
-        note_progress(name)
+        note_progress(name, call[:arguments])
         reader = read_tools[name]
         return reader.call(call[:arguments]) if reader
         # Silent tools already ran as their call arrived (see run_round).
@@ -550,7 +551,7 @@ module Buddy
         return JSON.generate({ ok: false, error: "no tool named #{name}" }) if tool.nil?
 
         result, signature, opens = self.class.resolve_call(
-          tool, call, user: @user, conversation: @conversation, gate: @gate_kind,
+          tool, call, user: @user, conversation: @conversation, gate: @gate_kind
         )
 
         if signature && @prior.include?(signature)
@@ -560,6 +561,10 @@ module Buddy
 
         @seen << signature if signature
         @failed << call[:call_id] if result[:status].to_s == "failed"
+        # An acting answering tool already did the thing, right here, and will
+        # never be seen by ProposalBuilder. Recording it is what stops the
+        # retraction from treating a true "Fan's on low now." as unbacked.
+        @acted = true if result[:status].to_s != "failed" && Buddy::Tools.acts?(tool)
         # Set AFTER this call's ack, so the gating call itself isn't described as
         # queued behind itself, and only ONCE — the first gate is the one the
         # person meets, and everything the model asks for after it waits on that,
@@ -763,8 +768,8 @@ module Buddy
           state:     :streaming,
           body:      PLACEHOLDER,
           metadata:  {
-            "kind"        => "buddy",
-            "in_reply_to" => @inbound.id,
+            "kind"           => "buddy",
+            "in_reply_to"    => @inbound.id,
             # Buddy speaking on its OWN initiative rather than answering: a
             # reminder firing, a watch tripping, the morning briefing. Carried
             # onto the reply because by the time ByteNotifier sees it, the hidden
@@ -955,9 +960,11 @@ module Buddy
         )
       end
 
-      # Something genuinely ran: a level-1 tool fired, or a level-2 row came back
-      # executed. A "failed" or "partial" row explicitly does NOT count.
+      # Something genuinely ran: an acting answering tool settled inside the
+      # turn, a level-1 tool fired, or a level-2 row came back executed. A
+      # "failed" or "partial" row explicitly does NOT count.
       def executed_anything?(result)
+        return true if @acted
         return true if result[:auto_ran]
 
         buttons(result).any? { |b| b["status"].to_s == "executed" }
@@ -1039,9 +1046,9 @@ module Buddy
       # nothing once it lands, so they ride on the broadcast only: the reply row
       # never holds them, finalize has nothing to clear, and a reload mid-turn
       # simply shows the placeholder it always did.
-      def note_progress(name)
+      def note_progress(name, args=nil)
         @steps ||= []
-        phrase = Buddy::Progress.phrase_for(name)
+        phrase = Buddy::Progress.phrase_for(name, args)
         return if phrase.nil?
         # A round that repeats a call (the model restating itself) would
         # otherwise stutter the same line twice.

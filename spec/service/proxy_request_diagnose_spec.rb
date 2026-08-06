@@ -11,17 +11,13 @@ RSpec.describe ProxyRequest, "#diagnose" do
     allow(diag).to receive(:http_test).and_return(%({"success":true}))
   end
 
-  def output
-    out = StringIO.new
-    $stdout = out
-    diag.diagnose
-    out.string
-  ensure
-    $stdout = STDOUT
-  end
-
+  # `diagnose` narrates to stdout, and every example below reads that narration
+  # through RSpec's `output` matcher. A helper by that name here shadows the
+  # matcher - `output(/regex/)` resolved to the helper, which takes no
+  # arguments, and all six of those examples died on ArgumentError before
+  # reaching an assertion.
   it "reports all layers healthy when every check passes" do
-    expect(diag.diagnose).to eq(ok: true, failed_at: nil)
+    expect { expect(diag.diagnose).to eq(ok: true, failed_at: nil) }.to output.to_stdout
   end
 
   it "stops at :config when local_ip is unset" do
@@ -62,7 +58,9 @@ RSpec.describe ProxyRequest, "#diagnose" do
 
   it "stops at :http and blames the app behind the socket when /test is wrong" do
     allow(diag).to receive(:http_test).and_return("ERROR: Errno::ECONNRESET: reset")
-    expect { @r = diag.diagnose }.to output(/kickstart BOTH launchd jobs/).to_stdout
+    # Case-insensitive: it's the presence of the remediation being asserted,
+    # not whether the bullet happens to start with a capital.
+    expect { @r = diag.diagnose }.to output(/kickstart BOTH launchd jobs/i).to_stdout
     expect(@r[:failed_at]).to eq(:http)
   end
 end

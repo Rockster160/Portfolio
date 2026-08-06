@@ -58,8 +58,45 @@ module Buddy
       # knows a picture was there and can refer back to it — and can call
       # `view_image` with that id to actually look again when it matters.
       def build(conversation, upto:)
-        rows = scope(conversation, upto)
+        rows = drop_stale_quick_actions(scope(conversation, upto), upto)
         rows.filter_map { |msg| item_for(msg, replay_images: upto.present? && msg.id == upto.id) }
+      end
+
+      # Old quick-action exchanges come out of history entirely.
+      #
+      # Tapping Today isn't a thing anyone SAID, and the briefing that follows
+      # isn't a thing anyone needs remembered - but a thread accumulates them,
+      # and a run of past briefings is a worked example of how to write the
+      # next one. Whatever shape they happen to be in becomes the house style,
+      # which is how the same droning list of chore names survived several
+      # rewrites of the instructions that forbid it.
+      #
+      # The most recent pair stays, so "what was that second thing?" still has
+      # something to point at. Everything older is a template, not a memory.
+      def drop_stale_quick_actions(rows, upto)
+        seeds = rows.each_index.select { |i| quick_action?(rows[i]) }
+        return rows if seeds.length < 2
+
+        # The newest seed survives; so does the turn being answered, however it
+        # was started. Everything each older seed dragged in - its briefing, any
+        # chips under it - runs until the next thing the person said.
+        newest = seeds.last
+        drop   = Set.new
+        seeds[0..-2].each { |start|
+          drop << start
+          ((start + 1)...rows.length).each { |i|
+            break if i == newest || rows[i].direction == "outbound"
+
+            drop << i
+          }
+        }
+
+        rows.each_with_index.reject { |msg, i| drop.include?(i) && !(upto && msg.id == upto.id) }.map(&:first)
+      end
+
+      def quick_action?(message)
+        message.direction == "outbound" && message.metadata.is_a?(Hash) &&
+          message.metadata["buddy_action"].to_s.present?
       end
 
       def scope(conversation, upto)

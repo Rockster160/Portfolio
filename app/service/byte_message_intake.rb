@@ -38,7 +38,12 @@ class ByteMessageIntake
     # bubble still posts; capture! adds the confirmation.
     if buddy? && (category = ::Buddy::Stash.armed_category(@conversation))
       message = post!(state: :sent)
-      ::Buddy::Stash.capture!(@user, @conversation, message, category)
+      return message if ::Buddy::Stash.capture!(@user, @conversation, message, category)
+
+      # It declined - a bare "Thanks!" isn't the thought they armed the latch
+      # for. The latch is already cleared, so fall through and answer it like
+      # any other message rather than filing it and going quiet.
+      dispatch!(message)
       return message
     end
 

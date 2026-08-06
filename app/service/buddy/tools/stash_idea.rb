@@ -20,6 +20,10 @@ Buddy::Tools.register(
   confirm:     ->(payload, _ctx) {
     idea = payload[:idea].to_s.strip
     raise "nothing to hold onto" if idea.empty?
+    # The stash latch already refuses these; this is the other door into the
+    # same pile, and a pile with "Thanks!" in it is worse than one thing
+    # shorter because every later read has to step over it.
+    raise "#{idea.inspect} is manners, not a thought - nothing to hold" if Buddy::Stash.pleasantry?(idea)
 
     { summary: "Hold onto #{idea}?", resolved: { idea: idea } }
   },

@@ -203,14 +203,52 @@ RSpec.describe Buddy::Personality do
       expect(prompt).to include("it's to SHOW them, by reading it out")
     end
 
-    # Prod 1226: "Sorry, love." Those names belong to the two of them.
-    it "puts the couple's terms of address out of reach, in the rules and both profiles" do
+    # Prod 1226 and again 2756: "Good morning, love." The ban on that word had
+    # been in the prompt both times, in four places, spelled out.
+    #
+    # Naming the forbidden words was the problem rather than the fix. It put
+    # them in front of the model on every single turn, next to standing
+    # instructions to reach for a pet name often and to ROTATE them - against
+    # an allow-list two words long. Told to vary across `boss` and `chief` and
+    # handed nine other endearments in the same breath, it varied.
+    #
+    # So the list is closed and positive now, and the words it used to reach
+    # for are not written down anywhere.
+    it "closes the list of terms of address instead of naming the ones to avoid" do
       byte = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
       moss = described_class.for(create(:user), conversation: buddy_convo(create(:user), "moss"))
 
-      expect([byte, moss]).to all(include("Some names are not yours to use").and(include("`love`")))
-      # ...and each voice profile carries the same example in its own words.
-      expect([byte, moss]).to all(include("Sorry, love."))
+      expect([byte, moss]).to all(include("Terms of address are a CLOSED list"))
+      expect([byte, moss]).to all(include("the right move is to use none"))
+    end
+
+    # "I love that you asked" and "love languages" are ordinary English and stay.
+    # What must not appear is any of these as a NAME for the person, in either
+    # shape it used to take: a vocative ("Sorry, love.") or a backticked entry
+    # in a list of things not to say.
+    it "never writes an intimate endearment into the prompt as a name" do
+      prompts = %w[byte moss suki glimmer].map { |theme|
+        u = theme == "byte" ? User.me : create(:user)
+        described_class.for(u, conversation: buddy_convo(u, theme))
+      }
+      words = %w[love babe baby honey hon sweetheart sweetie dear darling cutie]
+
+      words.each { |word|
+        # Clause-final after a comma is what a vocative looks like ("Sorry,
+        # love."); "nice, love that for you" is the verb and stays.
+        vocative = /,\s*#{word}\s*["”]?[.!?]/i
+        listed   = /`#{word}`/i
+        expect(prompts).to all(satisfy { |p| !p.match?(vocative) }), "#{word.inspect} appears as an address"
+        expect(prompts).to all(satisfy { |p| !p.match?(listed) }), "#{word.inspect} is still named in a ban list"
+      }
+    end
+
+    # The pressure that broke the old rule: "rotate your pet names" applied to
+    # a two-item list reads as an instruction to find more.
+    it "exempts terms of address from the instruction to rotate everything" do
+      byte = described_class.for(User.me, conversation: buddy_convo(User.me, "byte"))
+
+      expect(byte).to include("Vary the WORDS around the name, never the name")
     end
 
     # Three of the same failure, so they live under one rule: a reaction word

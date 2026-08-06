@@ -43,10 +43,39 @@ RSpec.describe "Buddy brain-dump (stash)" do
       expect(BuddyDeliverWorker).to have_received(:perform_async)
     end
 
+    # An armed latch swallows whatever comes next, and what comes next is
+    # sometimes just manners. Prod filed "Thanks!" onto Eve's Me pile and told
+    # her so; every later read of that pile then has to step over it.
+    describe "a bare pleasantry" do
+      %w[Thanks! thanks ty Okay ok 👍 Cool Perfect].each { |word|
+        it "declines to file #{word.inspect}" do
+          described_class.arm!(convo, "me")
+
+          expect { described_class.capture!(user, convo, message(word), "me") }
+            .not_to change(BuddyIdea, :count)
+        end
+      }
+
+      it "clears the latch anyway, so they aren't stuck in capture mode" do
+        described_class.arm!(convo, "me")
+        described_class.capture!(user, convo, message("Thanks!"), "me")
+
+        expect(described_class.armed_category(convo.reload)).to be_nil
+      end
+
+      # Gratitude with something attached is still the thought.
+      it "files it when there's anything more to it" do
+        described_class.arm!(convo, "me")
+
+        expect { described_class.capture!(user, convo, message("thanks for the shelf idea"), "me") }
+          .to change(BuddyIdea, :count).by(1)
+      end
+    end
+
     it "applies Buddy's sort from a sort_stash call" do
       idea = BuddyIdea.create!(user: user, body: "garage shelves", status: :active)
       Buddy::SideEffects.call(convo, :sort_stash, {
-        "id" => idea.id, "category" => "home", "summary" => "build garage shelves",
+        "id" => idea.id, "category" => "home", "summary" => "build garage shelves"
       })
 
       expect(idea.reload).to have_attributes(category: "home", summary: "build garage shelves")
@@ -110,7 +139,7 @@ RSpec.describe "Buddy brain-dump (stash)" do
     it "refines just the summary from a talk-through (summary-only call)" do
       idea = BuddyIdea.create!(user: user, category: :home, summary: "shelves", body: "garage shelves", status: :active)
       Buddy::SideEffects.call(convo, :sort_stash, {
-        "id" => idea.id, "summary" => "floating oak shelves over the bench",
+        "id" => idea.id, "summary" => "floating oak shelves over the bench"
       })
 
       expect(idea.reload).to have_attributes(category: "home", summary: "floating oak shelves over the bench")
@@ -190,6 +219,12 @@ RSpec.describe "Buddy brain-dump (stash)" do
       Buddy::ProposalExecutor.undo!(action.id, action.buttons.first["id"])
 
       expect(held.reload.status).to eq("dropped")
+    end
+
+    # The latch refuses these; this is the other door into the same pile, and
+    # it was standing open.
+    it "refuses a bare pleasantry here too" do
+      expect { catch!({ idea: "Thanks!", category: :me }) }.not_to change(BuddyIdea, :count)
     end
 
     it "catches each loose end in a rant separately" do

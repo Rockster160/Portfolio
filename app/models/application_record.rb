@@ -103,9 +103,12 @@ class ApplicationRecord < ActiveRecord::Base
     # json_operators = %i[=> ->]
     # Eventually this should detect that it's a json column and use the jsonb operators
     Array.wrap(node.conditions).map { |value|
-      next search_scope.query_by_node(value, node).stripped_sql if value.is_a?(Tokenizing::Node)
+      if value.is_a?(Tokenizing::Node)
+        next json_node_sql(column, value) if column_data&.type == :jsonb
 
-      next if value.is_a?(Tokenizing::Node)
+        next search_scope.query_by_node(value, node).stripped_sql
+      end
+
       next unless operator.in?(text_operators + numeric_operators)
 
       # rubocop:disable Lint/RedundantSplatExpansion
@@ -149,6 +152,49 @@ class ApplicationRecord < ActiveRecord::Base
     }
   end
   # rubocop:enable Lint/RedundantSplatExpansion
+
+  JSON_NUMERIC_RX = '^-?[0-9]+(\.[0-9]+)?$'.freeze
+
+  # Generic jsonb key search. List a jsonb column in `search_terms` and every
+  # key inside it becomes queryable as `column:key<op>value` — `data:transfer!::true`,
+  # `data:merchant:VENMO`, `data:amount>100` — for any model, no per-key scope.
+  #
+  # Keys are compared as text (`->>`) since a jsonb key carries no declared type;
+  # numeric operators guard the cast with a numeric-shaped check so a stray
+  # string in one row can't blow up the whole query.
+  #
+  # Negative operators are NULL-safe: a row missing the key entirely reads as
+  # "not that value" rather than dropping out. That matters on sparse jsonb,
+  # where most rows predate whatever key you're filtering on. (A leading `-`/`NOT`
+  # is plain boolean negation of the match and stays NULL-sensitive.)
+  def self.json_node_sql(column, node)
+    key = node.field.to_s
+    return if key.blank?
+
+    path = "#{column}->>?"
+
+    Array.wrap(node.conditions).filter_map { |value|
+      next if value.is_a?(Tokenizing::Node)
+
+      case node.operator&.to_sym
+      when :":" then raw_sql("#{path} ILIKE ?", key, "%#{value}%")
+      when :"::", :"=" then raw_sql("#{path} ILIKE ?", key, value)
+      when :"!:" then raw_sql("(#{path} IS NULL OR #{path} NOT ILIKE ?)", key, key, "%#{value}%")
+      when :"!::", :"!=" then raw_sql("(#{path} IS NULL OR #{path} NOT ILIKE ?)", key, key, value)
+      when :<, :>, :<=, :>=
+        # The shape check is bound, not inlined — a `?` inside a SQL literal
+        # would be miscounted as a bind placeholder.
+        raw_sql(
+          "(#{path} ~ ? AND (#{path})::numeric #{node.operator} ?)",
+          key, JSON_NUMERIC_RX, key, value.to_f
+        )
+      end
+    }.then { |values|
+      next values.first unless values.many?
+
+      "((#{values.join(") OR (")}))"
+    }
+  end
 
   scope :assign, ->(data) {
     relation = all

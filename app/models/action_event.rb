@@ -20,7 +20,10 @@ class ActionEvent < ApplicationRecord
 
   before_save { self.timestamp ||= ::Time.current }
 
-  search_terms :id, :name, :notes, :timestamp,
+  # `:data` exposes every jsonb key generically — `data:transfer!::true`,
+  # `data:amount>100`. The aliases below stay for the shapes a bare key lookup
+  # can't express (array containment, multi-source presence).
+  search_terms :id, :name, :notes, :timestamp, :data,
     data_source: :search_data_source,
     action:      :search_data_actions_any,
     merchant:    :search_data_merchant

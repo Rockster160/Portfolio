@@ -7,32 +7,35 @@ Buddy::Tools.register(
     lights with a color, starting the car with a destination and
     temp, adjusting a printer setting, etc.
 
+    **The function runs before you write your reply, and whatever
+    it returns comes straight back to you.** So don't announce what
+    you're about to do and don't predict how it went - wait for the
+    answer and say what actually came back. Many of these report
+    real outcomes, including "that was already the case, so I did
+    nothing", and saying otherwise describes something that never
+    happened.
+
     These also ANSWER QUESTIONS, not just perform commands. A
     function that reads a sensor or device ("is the doggy door
     shut?", "did we leave the laundry gate open?", "what's the
     kennel sensor say?") is the right tool for that question. Set
-    `expect_result: true` on those: the function runs, and what it
-    returns comes BACK to you so you can relay the real state in
-    your next reply. So in THIS reply give only a short lead-in
-    ("let me check") - never guess the state, and never tell them
-    you can't check something that has a function for it.
+    `expect_result: true` on those - it marks the call as a lookup,
+    so no "✓ Called X" receipt is filed for it. Never guess a
+    state, and never tell them you can't check something that has a
+    function for it.
 
-    Two hard limits on answering a question this way:
+    Two hard limits:
 
-    - **Only ever `expect_result` on a function whose description
-      says it CHECKS or REPORTS.** A function that opens, closes,
-      sets, turns, or starts something CHANGES the world, and
-      calling one to satisfy your curiosity can physically move a
-      blind or unlock a door. If the closest match is a command,
-      it is not an answer - say you can't check that one.
+    - **Only ever call a function that CHECKS or REPORTS to answer
+      a question.** One that opens, closes, sets, turns, or starts
+      something CHANGES the world, and reaching for it to satisfy
+      your curiosity can physically move a blind or unlock a door.
+      If the closest match is a command, it is not an answer - say
+      you can't check that one.
     - **Never invent a name.** Call something that is literally on
       the `jil_functions` list. If nothing there reads the thing
       they asked about, say you don't have that wired - guessing a
       plausible-sounding name just fails silently.
-
-    Leave `expect_result` false (or null) for commands. Turning a
-    light on doesn't need its return value relayed, and a pointless
-    second message about it is worse than silence.
 
     Read the file first: each function entry has `{ id, name,
     signature, description }`. The signature is raw Jil (e.g.
@@ -68,8 +71,8 @@ Buddy::Tools.register(
     expect_result: {
       type:        :boolean,
       required:    false,
-      description: "True when the person asked a QUESTION and you need what the function " \
-                   "returns in order to answer. False/null for commands",
+      description: "True when this call is a LOOKUP - the person asked a question and the " \
+                   "function only reads. False/null for commands",
     },
     # All other k=v marker args pass through as function params. Only the two
     # above are declared; passthrough_args keeps the rest through validate_payload.
@@ -77,9 +80,22 @@ Buddy::Tools.register(
   passthrough_args: true,
   # Level 1: car starts / navigation / house + light commands are highest-
   # confidence and fire immediately (the person asked for it to happen, not to
-  # be asked again). A receipt confirms it went — so speaking it as done is
-  # accurate here, unlike a confirm-gated proposal.
+  # be asked again).
   level:            1,
+  # Acts AND reports, in that order, inside the turn.
+  #
+  # Every other level-1 tool runs AFTER the reply is written, which is fine when
+  # the outcome is a foregone conclusion. These aren't: a function can come back
+  # "already closed, nothing sent", or refuse, or report a state nobody could
+  # predict. Prod 2789 is the cost of guessing - Byte said "Garage's closing"
+  # while the call was still in flight, then had to fire a SECOND function to
+  # find out what happened, and reported that read (taken 33ms before its own
+  # toggle) as the outcome.
+  #
+  # Running here means one call answers the request: the return value is in
+  # front of the model before it writes a word, and the relay turn is gone.
+  answers:          true,
+  acts:             true,
   confirm:          ->(payload, ctx) {
     q = payload[:name].to_s.downcase.strip
     scope = ctx.user.accessible_tasks.buddy_visible.functions
@@ -148,54 +164,49 @@ Buddy::Tools.register(
       trigger_scope: "buddy",
     )
 
-    # A function's return value (`Jil::Executor#result`) is the ONLY way a
-    # status question gets answered - "is the gate open" is unanswerable from
-    # context, and the chip alone would just say the call went out. Relay it
-    # through a fresh Buddy turn (same shape as check_weather) so the state
-    # arrives in Buddy's own words instead of as a raw string.
-    answer  = execution.respond_to?(:result) ? execution.result : nil
-    wanted  = ActiveModel::Type::Boolean.new.cast(payload[:expect_result])
-    relayed = wanted && answer.to_s.strip.present? && !ctx.conversation.nil?
+    # The timestamp is rewritten to local BEFORE the model sees it. Asking it to
+    # convert one produced prod 2636: 18:58Z read back as "6:58 PM", the same
+    # digits with the offset discarded, six hours out.
+    raw    = execution.respond_to?(:result) ? execution.result.to_s.strip : ""
+    answer = Buddy::RawOutput.localize(raw, ctx.user) if raw.present?
+    lookup = ActiveModel::Type::Boolean.new.cast(payload[:expect_result])
 
-    if relayed
-      Buddy::CompanionDelivery.deliver_prompt(
-        user:         ctx.user,
+    # An answering tool never reaches ProposalBuilder, so it files its own trace
+    # (see Buddy::ActivityChip). A declared lookup skips it: Buddy is about to
+    # speak the state itself, and a "Called X ✓" pill above that is noise.
+    if ctx.conversation && !lookup
+      Buddy::ActivityChip.post!(
         conversation: ctx.conversation,
-        # Grounded in what these actually return. A real run of task 435 came
-        # back "laundry_gate is closed (raw state: off, last changed:
-        # 2026-07-30T02:14:14.188937+00:00)" - an internal key, a debug field,
-        # and a UTC timestamp, none of which Buddy is allowed to say out loud.
-        #
-        # The timestamp is rewritten to local BEFORE the model sees it. Asking
-        # it to convert one produced prod 2636: 18:58Z read back as "6:58 PM",
-        # the same digits with the offset discarded, six hours out.
-        seed:         "You just ran **#{task.name}** to check on something for #{ctx.user.first_name} " \
-                      "and it came back:\n\n#{Buddy::RawOutput.localize(answer.to_s.strip, ctx.user)}\n\n" \
-                      "That is RAW output - translate it into how they'd actually say it. Internal keys " \
-                      "like `laundry_gate` become \"the laundry gate\" and debug fields get dropped. Any " \
-                      "time in there is ALREADY their local time - read it as written, and never shift " \
-                      "it. Lead with the state itself, warm and brief. If " \
-                      "it reads like an error or says something is unknown, tell them plainly you couldn't " \
-                      "get a reading rather than inventing a state. Don't mention the function or that you " \
-                      "ran anything, and don't check again.",
-        metadata:     { "kind" => "buddy_trigger", "hidden" => true, "source" => "jil_function_result" },
+        user:         ctx.user,
+        tool_name:    :call_jil_function,
+        body:         "Called **#{task.name}**",
+        # What went out AND what came back. The prose above the chip is the
+        # model's reading of the answer; this is the answer.
+        detail:       [fn_args.map { |k, v| "#{k}: #{v}" }.join("\n").presence, answer.presence].compact.join("\n"),
+        payload:      fn_args.merge("task_name" => task.name),
       )
     end
 
-    { fired: true, task_id: task.id, task_name: task.name, answer: answer, relayed: relayed }
-  },
-  # Nil suppresses the chip entirely (see ProposalBuilder#run_auto): when Buddy
-  # is about to speak the answer itself, a "Called X ✓" pill above it is noise.
-  receipt:          ->(result, ctx) {
-    next nil if result.is_a?(Hash) && result[:relayed]
-
-    # Name comes off the execute result first. `ctx.proposal` is nil on the
-    # level-1 path (ProposalBuilder#run_auto builds a context without one), so
-    # reaching into it was raising NoMethodError, getting swallowed by `safely`,
-    # and silently suppressing this chip on every call.
-    name = (result.is_a?(Hash) ? result[:task_name].presence : nil) ||
-           ctx.proposal&.dig("payload", "task_name") ||
-           "function"
-    "Called **#{name}** ✓"
+    {
+      fired:     true,
+      task_id:   task.id,
+      task_name: task.name,
+      answer:    answer,
+      how:       (
+        if answer.blank?
+          "It ran and returned nothing to report, which is normal for a command. Say it's " \
+            "done, briefly, and don't invent a result for it."
+        else
+          "`answer` is what the function itself reported and it is the outcome - say THAT, " \
+            "not what you expected. Some of these come back saying nothing was done because " \
+            "the thing was already that way; when one does, tell them that plainly instead of " \
+            "describing an action. It is RAW output, so internal keys like `laundry_gate` " \
+            "become \"the laundry gate\" and debug fields get dropped. Any time in it is " \
+            "ALREADY their local time - read it as written and never shift it. If it reads " \
+            "like an error or says something is unknown, say you couldn't get a reading rather " \
+            "than inventing one. Don't mention the function or that you ran anything."
+        end
+      ),
+    }.compact
   },
 )

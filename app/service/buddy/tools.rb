@@ -68,7 +68,7 @@ module Buddy
       @loading_tools = false
     end
 
-    def register(name:, description:, args:, confirm:, label:, execute:, receipt: nil, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, answers: false, feature: Buddy::Features::CORE, gated_values: {})
+    def register(name:, description:, args:, confirm:, label:, execute:, receipt: nil, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, answers: false, acts: false, feature: Buddy::Features::CORE, gated_values: {})
       # Confidence level governs how a proposal is presented (see
       # Buddy::ProposalBuilder):
       #   1 — highest confidence (reminders, car/house/light commands): fires
@@ -127,7 +127,14 @@ module Buddy
         # last completion". Those resolve to something different or to nothing
         # at all on the next run, so they're kept out of routines entirely
         # rather than failing quietly halfway through one.
-        routinable:       routinable && !answers,
+        # `!answers` covers the lookups: a saved routine that runs a search does
+        # nothing on replay. An ACTING answering tool is a different thing - it
+        # does real work and belongs in a routine like any other level-1 call -
+        # so it stays eligible and opts out by saying so, the way anything else
+        # would. Without the `acts` clause, adding `answers: true` to
+        # call_jil_function would have quietly dropped every routine step that
+        # fires a house command.
+        routinable:       routinable && (!answers || acts),
         # A tool that reports back to the MODEL, during the turn: it runs while
         # the model is still deciding, and what it returns becomes the tool
         # output, so the reply gets written holding the outcome (see
@@ -146,6 +153,16 @@ module Buddy
         # it was given, and a name the printer rejects has to come back in time
         # for the model to go find the right one.
         answers:          answers,
+        # An answering tool that also CHANGES something. Most don't - they read.
+        #
+        # This exists for the false-claim retraction, which asks "did anything
+        # actually run?" and only ever knew how to answer from ProposalBuilder.
+        # An answering tool never reaches ProposalBuilder, so without this a
+        # correct "Fan's on low now." after a real call reads as unbacked and
+        # gets replaced by the fallback. It has to stay OFF for the lookups: a
+        # search that happens to report "you logged three waters" must not
+        # license a claim that anything was logged.
+        acts:             acts && answers,
         # Enum values that only exist when the person has a given feature, as
         # `{ arg_name => { value => feature } }`. A tool can be core while some
         # of its options aren't: remind_when watching for an arrival is
@@ -169,6 +186,11 @@ module Buddy
     # A tool that settles inside the turn and reports back to the model.
     def answers?(tool)
       tool.is_a?(Hash) && tool[:answers].present?
+    end
+
+    # ...and changed something while it was in there.
+    def acts?(tool)
+      tool.is_a?(Hash) && tool[:acts].present?
     end
 
     # Safe to save into a BuddyRoutine and replay later.

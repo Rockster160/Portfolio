@@ -56,12 +56,31 @@ module Buddy
       conversation.update!(metadata: conversation.metadata.to_h.except("stash_category", "stash_armed_at"))
     end
 
+    # Not a thought. An armed latch swallows whatever comes next, and what comes
+    # next is sometimes just manners - prod filed "Thanks!" onto Eve's Me pile
+    # and cheerfully told her so. A pile with "Thanks!" in it is worse than one
+    # thing shorter, because every later read has to step over it.
+    #
+    # Deliberately narrow: only a bare pleasantry with nothing else in it. Two
+    # words of gratitude ARE sometimes the thought ("thanks for the reminder
+    # idea"), so anything with substance attached still goes in.
+    PLEASANTRY_RX = /\A(?:thanks?(?:\s+you)?|ty|thx|ok(?:ay)?|k|kk|cool|nice|great|got\s+it|sounds?\s+good|
+                        yep|yes|yeah|no|nope|sure|perfect|awesome|lovely|👍|❤️|🙏)
+                     [\s.!?👍❤️🙏😊]*\z/xi
+
+    def pleasantry?(body)
+      body.to_s.strip.match?(PLEASANTRY_RX)
+    end
+
     # Capture the just-sent message as an idea. Clears the latch first (one-shot)
     # so a failure can't leave the person permanently stuck in capture mode.
     def capture!(user, conversation, message, category)
       disarm!(conversation)
       body = message.body.to_s.strip
       return nil if body.empty?
+      # Nothing filed, no chip, and the latch is already cleared - so it falls
+      # through to an ordinary turn and gets an ordinary reply.
+      return nil if pleasantry?(body)
 
       cat  = %w[me home work].include?(category.to_s) ? category.to_s : nil
       idea = BuddyIdea.create!(user: user, category: cat, body: body, status: :active)
