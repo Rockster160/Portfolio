@@ -59,6 +59,37 @@ RSpec.describe "TeslaControl.resolve_destination" do
   end
 end
 
+RSpec.describe "TeslaCommand navigate response" do
+  subject(:response) { TeslaCommand.quick_command(:navigate, "Home Depot") }
+
+  let(:address_book) { instance_double("AddressBook") }
+
+  before do
+    allow(TeslaCommand).to receive(:address_book).and_return(address_book)
+    allow(TeslaCommand).to receive(:broadcast)
+    allow(TeslaCommandWorker).to receive(:perform_async)
+    allow(DataStorage).to receive(:[]).with(:tesla_forbidden).and_return(false)
+    contact = double(primary_address: double(street: "123 Main St"))
+    allow(address_book).to receive(:match_contact).with("Home Depot").and_return(contact)
+  end
+
+  it "includes the drive time in the navigating message" do
+    allow(address_book).to receive(:traveltime_seconds).with("123 Main St").and_return(12.minutes.to_i)
+    expect(response).to eq("Navigating to Home Depot — 12 minutes away")
+  end
+
+  it "still navigates without a drive time when the lookup fails" do
+    allow(address_book).to receive(:traveltime_seconds).with("123 Main St").and_return(nil)
+    expect(response).to eq("Navigating to Home Depot")
+  end
+
+  it "cancels when already at the destination" do
+    allow(address_book).to receive(:traveltime_seconds).with("123 Main St").and_return(30)
+    expect(TeslaCommandWorker).not_to receive(:perform_async)
+    expect(response).to eq("You're already at your destination.")
+  end
+end
+
 RSpec.describe "TeslaControl#add_stop" do
   let(:ctrl) { TeslaControl.new(User.me) }
   let(:address_book) { instance_double("AddressBook") }

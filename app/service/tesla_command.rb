@@ -116,7 +116,7 @@ module TeslaCommand
           @cancel = true
           @response = "You're already at your destination."
         elsif duration
-          @response = "It will take #{distance_of_time_in_words(duration)} to get to #{original_opt.squish}"
+          @response = "Navigating to #{original_opt.squish} — #{distance_of_time_in_words(duration)} away"
         else
           @response = "Navigating to #{original_opt.squish}"
         end
