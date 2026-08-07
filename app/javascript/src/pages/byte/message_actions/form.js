@@ -203,17 +203,31 @@ function buildControl(field, value, locked) {
     const sel = document.createElement("select");
     sel.className = "byte-msg-form-input";
     sel.disabled = locked;
-    const blank = document.createElement("option");
-    blank.value = "";
-    blank.textContent = "—";
-    sel.appendChild(blank);
+    // A required select has no "nothing" to pick, so it doesn't offer one. The
+    // prompt page renders these with no blank option either, which is why the
+    // first choice is what's showing when a "Who did it?" opens there — a
+    // placeholder here made the same form open on "—" and read as unanswered.
+    if (!field.required) {
+      const blank = document.createElement("option");
+      blank.value = "";
+      blank.textContent = "—";
+      sel.appendChild(blank);
+    }
     (field.choices || []).forEach((choice) => {
       const opt = document.createElement("option");
       opt.value = choice;
       opt.textContent = choice;
       sel.appendChild(opt);
     });
-    sel.value = value == null ? "" : String(value);
+    // Assigning "" to a select with no blank option selects NOTHING (index -1)
+    // and draws an empty box, so an unfilled required one is left alone at the
+    // browser's default: the first choice.
+    const wanted = value == null ? "" : String(value);
+    if (wanted !== "") {
+      sel.value = wanted;
+    } else if (!field.required) {
+      sel.value = "";
+    }
     return sel;
   }
 

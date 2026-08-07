@@ -25,7 +25,7 @@ module Buddy
       conversation = conversation_for(user)
       return nil if conversation.nil?
 
-      Buddy::FormAction.post!(
+      action = Buddy::FormAction.post!(
         user:         user,
         conversation: conversation,
         tool:         Buddy::Tools[:answer_prompt],
@@ -34,6 +34,8 @@ module Buddy
         # question in the thread rather than stacking a second copy of it.
         merge_key:    "answer_prompt:#{prompt.id}",
       )
+      notify!(user, action)
+      action
     rescue StandardError => e
       Buddy::Errors.report(
         section:   "prompt_delivery.post",
@@ -42,6 +44,29 @@ module Buddy
         extra:     { prompt_id: prompt&.id },
       )
       nil
+    end
+
+    # Ask out loud. A form posted from a TURN needs no push - they're looking at
+    # the thread, they just spoke to it - but this one fires off an event nobody
+    # is watching for, and a question nobody is told about is a question that
+    # gets answered whenever they next happen to open the app. That's the whole
+    # trade being made by not pushing it from the prompt side.
+    #
+    # Presence is deliberately ignored, same as a reminder or a watch: the chore
+    # happened when it happened.
+    def notify!(user, action)
+      message = action&.byte_message
+      return if message.nil?
+
+      # The message body IS the question ("Who did: Puppy Down?"), and the OS
+      # already shows Byte's name and icon around it, so nothing is added here.
+      WebPushNotifications.send_to_byte(
+        title: message.body.to_s.truncate(160),
+        tag:   "byte-#{message.id}",
+        users: [user],
+      )
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::PromptDelivery] notify failed: #{e.class}: #{e.message}")
     end
 
     def deliverable?(user, prompt)

@@ -47,10 +47,33 @@ RSpec.describe Buddy::PromptDelivery do
       expect(message.metadata.dig("form", "submit")).to eq("Send it")
     end
 
-    it "guesses nothing — the dropdown opens empty for them to choose" do
+    # Nothing is guessed server-side: a stored value would read as Buddy having
+    # decided who did it. The dropdown still OPENS on the first name, because a
+    # required select renders without a blank option — same as the prompt page.
+    it "stores no answer of its own" do
+      action = described_class.post!(user, prompt)
+      who    = action.buttons.find { |f| f["key"] == "Who did it?" }
+
+      expect(who["value"]).to be_blank
+      expect(who["required"]).to be(true)
+    end
+
+    it "pushes it, since nothing else is going to tell them it's there" do
+      allow(WebPushNotifications).to receive(:send_to_byte)
+
       action = described_class.post!(user, prompt)
 
-      expect(action.buttons.find { |f| f["key"] == "Who did it?" }["value"]).to be_blank
+      expect(WebPushNotifications).to have_received(:send_to_byte).with(
+        title: "Who did: Puppy Down?",
+        tag:   "byte-#{action.byte_message.id}",
+        users: [user],
+      )
+    end
+
+    it "still posts the form when the push can't go out" do
+      allow(WebPushNotifications).to receive(:send_to_byte).and_raise("no subscription")
+
+      expect(described_class.post!(user, prompt)).to be_present
     end
 
     # The event bus can deliver `added` twice, and a second copy of one question
