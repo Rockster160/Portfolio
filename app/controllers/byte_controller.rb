@@ -450,14 +450,25 @@ class ByteController < ApplicationController
   # Client pings on visibilitychange → visible, and on a 15s interval
   # while it stays visible. TTL is 30s so a missed heartbeat still
   # falls off within one interval.
+  #
+  # Recorded PER DEVICE, keyed by the push subscription the client is holding.
+  # It used to be one key for the whole person, which meant any visible Byte
+  # anywhere suppressed the push everywhere: a browser tab open at the desk -
+  # a tab with no push subscription at all, that could never have received the
+  # notification - silenced the phone all day. A client that sends no endpoint
+  # is exactly that tab, and it now records nothing, because whether it's open
+  # says nothing about whether the push will be seen.
   def presence
     return head(:forbidden) unless current_user&.me?
 
+    sub = presence_subscription
+    return head(:no_content) if sub.nil?
+
     state = params[:state].to_s
     if state == "visible"
-      Rails.cache.write(presence_key(current_user), Time.current.to_i, expires_in: 30.seconds)
+      Rails.cache.write(self.class.presence_key(current_user, sub), Time.current.to_i, expires_in: 30.seconds)
     elsif state == "hidden"
-      Rails.cache.delete(presence_key(current_user))
+      Rails.cache.delete(self.class.presence_key(current_user, sub))
     end
     head :no_content
   end
@@ -474,12 +485,25 @@ class ByteController < ApplicationController
     render json: { scale: current_user.byte_font_scale }
   end
 
-  def self.presence_key(user)
-    "byte:presence:#{user.id}"
+  # Per device. The subscription-less form is the legacy whole-person key,
+  # which nothing writes anymore — kept so an older caller reads a miss rather
+  # than raising.
+  def self.presence_key(user, subscription=nil)
+    ["byte:presence", user.id, subscription&.id].compact.join(":")
   end
 
-  def presence_key(user)
-    self.class.presence_key(user)
+  def presence_key(user, subscription=nil)
+    self.class.presence_key(user, subscription)
+  end
+
+  # The device this heartbeat is coming from, identified by the push
+  # subscription it holds. Matched on endpoint because that's the only id the
+  # browser has of its own subscription.
+  def presence_subscription
+    endpoint = params[:endpoint].to_s.strip
+    return nil if endpoint.blank?
+
+    current_user.push_subs.for_channel(:byte).find_by(endpoint: endpoint)
   end
 
   # Long-lived PWAs eventually outlive the CSRF token baked into the

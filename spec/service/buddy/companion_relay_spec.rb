@@ -227,33 +227,81 @@ RSpec.describe "Buddy companion relay" do
 
     # Prod Aug 7: Chelsea asked "Are we leaving at 5:30?" on Aug 3. Nobody
     # answered and nothing closed it, so it was still listed as an open
-    # question four days later — and when a stray "Tick" arrived from the CLI,
-    # Buddy did exactly what an open question tells it to do and sent "Tick"
-    # back to her as Rocco's answer.
-    describe "a question nobody ever answered" do
-      let!(:stale) {
+    # question through four days of unrelated conversation — and when a stray
+    # "Tick" arrived from the CLI, Buddy did exactly what an open question tells
+    # it to do and sent "Tick" back to her as Rocco's answer.
+    #
+    # The measure is messages, not minutes: an answer is the next thing they
+    # say, and anything else means the question went by.
+    describe "a question that went unanswered" do
+      let!(:her_convo) {
+        chelsea.byte_conversations.create!(mode: :buddy, name: "Moss", last_message_at: Time.current)
+      }
+      let!(:question) {
         run(:ask_partner, { to: her, question: "Are we leaving at 5:30?" })
-        BuddyRelay.last.tap { |r| r.update!(created_at: (BuddyRelay::ANSWER_WINDOW + 1.day).ago) }
+        BuddyRelay.last
       }
 
-      it "stops being listed as open once the window has passed" do
-        expect(Buddy::Context.send(:pending_relays, chelsea)).to be_empty
-        expect(stale).to be_stale
+      def she_says(body)
+        her_convo.byte_messages.create!(user: chelsea, direction: :outbound, state: :sent, body: body)
+      end
+
+      def open_now
+        Buddy::Context.send(:pending_relays, chelsea, her_convo)
+      end
+
+      it "is open on the very next thing she says" do
+        she_says("Tick")
+
+        expect(open_now).to include(hash_including(id: question.id))
+      end
+
+      it "is gone the moment she has said anything else first" do
+        she_says("what's the weather")
+        she_says("Tick")
+
+        expect(open_now).to be_empty
+      end
+
+      # The boundary, stated exactly: the first message after the question is
+      # the chance to answer it, and the second one has already passed it over.
+      # One is enough — it doesn't take a hundred, or three days.
+      it "closes on the second message, not the first" do
+        she_says("Tick")
+        expect(open_now).not_to be_empty
+
+        she_says("Tick")
+        expect(open_now).to be_empty
       end
 
       it "can no longer be answered, so nothing stray gets passed along" do
+        she_says("what's the weather")
+        she_says("Tick")
         tool = Buddy::Tools[:relay_answer]
-        ctx  = Buddy::ToolContext.new(chelsea)
+        ctx  = Buddy::ToolContext.new(chelsea, conversation: her_convo)
 
-        expect { tool[:confirm].call({ id: stale.id, answer: "Tick" }, ctx) }
+        expect { tool[:confirm].call({ id: question.id, answer: "Tick" }, ctx) }
           .to raise_error(/no open question/)
-        expect(stale.reload.answer).to be_blank
+        expect(question.reload.answer).to be_blank
       end
 
-      it "is still listed while it's inside the window" do
-        stale.update!(created_at: 1.hour.ago)
+      # Days of silence say nothing either way — what matters is whether she
+      # spoke without answering.
+      it "survives a long gap as long as she hasn't spoken since" do
+        question.update!(created_at: 2.weeks.ago)
+        she_says("Tick")
 
-        expect(Buddy::Context.send(:pending_relays, chelsea)).to include(hash_including(id: stale.id))
+        expect(open_now).to include(hash_including(id: question.id))
+      end
+
+      it "doesn't count Buddy's own hidden seeds as her passing it over" do
+        her_convo.byte_messages.create!(
+          user: chelsea, direction: :outbound, state: :sent, body: "[tapped Today]",
+          metadata: { "hidden" => true, "kind" => "buddy_trigger" },
+        )
+        she_says("Tick")
+
+        expect(open_now).to include(hash_including(id: question.id))
       end
     end
   end

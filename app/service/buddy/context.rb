@@ -50,7 +50,7 @@ module Buddy
         running_timers:         running_timers(user),                # countdowns on the clock right now, for "how long left" and cancel_timer
         active_watches:         active_watches(conversation, now),
         conversation_notes:     conversation.buddy_memories,         # this thread's own notes ("keep this strictly work")
-        pending_relays:         pending_relays(user),                # open questions from a partner, awaiting THIS user's answer
+        pending_relays:         pending_relays(user, conversation),                # open questions from a partner, awaiting THIS user's answer
         pending_prompts:        pending_prompts(user),               # app surveys/questions Buddy can answer or skip on demand
         stashed_ideas:          stashed_ideas(user),                 # brain-dump ideas to occasionally resurface
         jil_triggers:           jil_triggers(user),
@@ -839,8 +839,8 @@ module Buddy
       # conversation ("tell them tacos", or just "tacos"), Buddy knows to pass
       # it back via relay_answer. Pick-one/pick-any questions also show tappable
       # buttons; relay_answer still works if the user answers in words instead.
-      def pending_relays(user)
-        BuddyRelay.open_questions_for(user).map { |r|
+      def pending_relays(user, conversation=nil)
+        BuddyRelay.open_questions_for(user, conversation: conversation).map { |r|
           { id: r.id, from: r.from_user.first_name, question: r.body, kind: r.kind }
         }
       rescue StandardError => e

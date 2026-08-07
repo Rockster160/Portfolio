@@ -740,7 +740,7 @@ module Buddy
       end
 
       def open_relay_count
-        BuddyRelay.open_questions_for(@user).count
+        BuddyRelay.open_questions_for(@user, conversation: @conversation).count
       rescue StandardError
         0
       end

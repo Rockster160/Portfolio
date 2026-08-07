@@ -38,24 +38,7 @@ class BuddyRelay < ApplicationRecord
   # cancelled - withdrawn / expired
   enum :status, { pending: 0, delivered: 1, answered: 2, relayed: 3, cancelled: 4 }
 
-  # How long a question stays answerable. Same window the sequence gate uses
-  # (Buddy::ProposalBuilder::AWAIT_TTL), because they are two halves of one
-  # question: the gate gives up after three days and says nobody answered, and
-  # a question the asker has already been told went unanswered is not still
-  # open on the other side.
-  #
-  # Unbounded, it sat in the recipient's context forever waiting to catch
-  # anything. Chelsea asked "Are we leaving at 5:30?" on Aug 3; it was never
-  # answered and never closed, so it was still listed as open FOUR DAYS later
-  # when a stray "Tick" arrived from the CLI - and Buddy, correctly following
-  # its instructions about an open question, passed "Tick" back to her as
-  # Rocco's answer.
-  ANSWER_WINDOW = Buddy::ProposalBuilder::AWAIT_TTL
-
   scope :awaiting_answer, -> { where(status: :delivered).where.not(kind: :notify) }
-  # Still answerable: delivered, a real question, and asked recently enough
-  # that an answer would still be about it.
-  scope :still_open,      ->(now=Time.current) { awaiting_answer.where(created_at: (now - ANSWER_WINDOW)..) }
 
   validates :body, presence: true, length: { maximum: 1000 }
 
@@ -63,13 +46,38 @@ class BuddyRelay < ApplicationRecord
     !notify?
   end
 
-  def stale?(now=Time.current)
-    created_at < now - ANSWER_WINDOW
+  # A question is answerable on the NEXT thing the person says, and nothing
+  # after that. Say anything else and it's been passed over.
+  #
+  # There is deliberately no clock here. Hundreds of messages can go by in three
+  # days, and the length of that gap says nothing about whether an answer is
+  # still owed - what says it is whether they've spoken since without answering.
+  # Chelsea asked "Are we leaving at 5:30?" on Aug 3; it stayed listed as open
+  # through four days of unrelated conversation, and a stray "Tick" from the CLI
+  # got passed back to her as Rocco's answer. One intervening message would have
+  # closed it, and there were hundreds.
+  #
+  # The current turn's message is already saved by the time context is built, so
+  # ONE message after the question is the answering opportunity and TWO means it
+  # was passed over. Something they explicitly bring back up later isn't this
+  # tool's job - that's a fresh message to the person, which is what it would be
+  # anyway once the question has gone cold.
+  def self.open_questions_for(user, conversation: nil)
+    scope  = awaiting_answer.where(to_user_id: user.id).order(created_at: :asc)
+    cutoff = passed_over_cutoff(conversation)
+    cutoff ? scope.where(created_at: cutoff..) : scope
   end
 
-  # The recipient's still-open questions, for the per-turn context block that
-  # lets their Buddy notice "the user just answered one of these".
-  def self.open_questions_for(user)
-    still_open.where(to_user_id: user.id).order(created_at: :asc)
+  # When the person last spoke BEFORE the message being answered right now.
+  # Anything delivered before that has had its turn go by. Nil when they've said
+  # at most one thing, which is the fresh-thread case where nothing has been
+  # passed over yet.
+  def self.passed_over_cutoff(conversation)
+    return nil if conversation.nil?
+
+    conversation.byte_messages
+      .where(direction: :outbound)
+      .where("byte_messages.metadata->>'hidden' IS DISTINCT FROM 'true'")
+      .order(created_at: :desc).limit(2).pluck(:created_at).second
   end
 end

@@ -74,6 +74,20 @@ export async function ensureByteServiceWorker() {
   }
 }
 
+// Which device this is, as far as the server is concerned: the endpoint of the
+// push subscription we hold. The presence heartbeat sends it so "they're
+// looking at Byte" can be answered per device rather than per person — a
+// window with no subscription returns null, because whether IT is open says
+// nothing about whether a notification on the phone gets seen.
+export async function byteSubscriptionEndpoint() {
+  try {
+    const subscription = await getSubscription();
+    return subscription?.endpoint || null;
+  } catch (_) {
+    return null;
+  }
+}
+
 export async function checkByteNotificationStatus() {
   if (!("serviceWorker" in navigator) || !("Notification" in window)) return "unsupported";
   if (Notification.permission === "denied") return "denied";

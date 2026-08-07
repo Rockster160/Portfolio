@@ -23,7 +23,7 @@ module ByteNotifier
     has_proposals = meta["tool_name"] == "buddy_proposals" ||
       (meta["buttons"].is_a?(Array) && meta["buttons"].any?)
 
-    return if user_present?(user) && !always_notify?(meta, has_proposals)
+    return if device_present?(user) && !always_notify?(meta, has_proposals)
 
     title, body = framing(message, meta, has_proposals)
 
@@ -52,10 +52,19 @@ module ByteNotifier
     meta["self_initiated"] == true
   end
 
-  # Is this user's Byte PWA foreground right now? Populated by the
-  # `/byte/presence` heartbeat while the tab/window is visible.
-  def user_present?(user)
-    Rails.cache.read(ByteController.presence_key(user)).present?
+  # Is the device we're about to push to looking at Byte right now? Populated
+  # by the `/byte/presence` heartbeat while that device's window is visible.
+  #
+  # The question has to be about ONE device — the one `send_to` would deliver
+  # to — because that's the only screen this notification would land on.
+  # Suppressing on "any Byte anywhere is open" meant a browser tab at the desk
+  # muted the phone, and a CLI message answered from that desk arrived on the
+  # phone silently every time.
+  def device_present?(user)
+    sub = user.primary_push_sub(channel: :byte)
+    return false if sub.nil?
+
+    Rails.cache.read(ByteController.presence_key(user, sub)).present?
   end
 
   # Push tray shows plain text — strip everything that would look like garbage:

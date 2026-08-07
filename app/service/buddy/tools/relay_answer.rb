@@ -19,14 +19,14 @@ Buddy::Tools.register(
   # One answer to one question that was open at the time.
   routinable:  false,
   confirm:     ->(payload, ctx) {
-    relay = BuddyRelay.open_questions_for(ctx.user).find_by(id: payload[:id])
+    relay = BuddyRelay.open_questions_for(ctx.user, conversation: ctx.conversation).find_by(id: payload[:id])
     raise "no open question with id #{payload[:id]}" if relay.nil?
 
     { summary: "Send answer to #{relay.from_user.first_name}", resolved: { relay_id: relay.id, from_name: relay.from_user.first_name } }
   },
   label:       ->(payload, _ctx) { { title: "Reply to #{payload[:from_name]}", sub: payload[:answer].to_s } },
   execute:     ->(payload, ctx) {
-    relay = BuddyRelay.open_questions_for(ctx.user).find_by(id: payload[:relay_id])
+    relay = BuddyRelay.open_questions_for(ctx.user, conversation: ctx.conversation).find_by(id: payload[:relay_id])
     return { skipped: true } if relay.nil?
 
     Buddy::CompanionRelay.record_answer!(relay, payload[:answer].to_s)

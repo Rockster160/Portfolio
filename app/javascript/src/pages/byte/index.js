@@ -43,6 +43,7 @@ import {
   checkByteNotificationStatus,
   registerByteNotifications,
   unregisterByteNotifications,
+  byteSubscriptionEndpoint,
 } from "./push";
 import { ConversationManager } from "./conversations";
 import { initComposerAttachments } from "./attachments";
@@ -2611,6 +2612,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Push spec's userVisibleOnly forces a notification), so the ONLY
   // reliable way to avoid double-alerts is to not send the push at all.
   let presenceInterval = 0;
+  // Resolved once and reused: it identifies this DEVICE to the presence
+  // endpoint, so a window that can receive pushes can say it is looking and
+  // a window that cannot stays out of the decision entirely.
+  let presenceEndpoint = null;
+  const loadPresenceEndpoint = async () => {
+    presenceEndpoint = await byteSubscriptionEndpoint();
+  };
   const sendPresence = (state) => {
     try {
       const csrf =
@@ -2625,13 +2633,13 @@ document.addEventListener("DOMContentLoaded", async () => {
           Accept: "application/json",
           "X-CSRF-Token": csrf,
         },
-        body: JSON.stringify({ state: state }),
+        body: JSON.stringify({ state: state, endpoint: presenceEndpoint }),
         keepalive: true,
       }).catch(() => {});
     } catch (_) {}
   };
   const startPresence = () => {
-    sendPresence("visible");
+    loadPresenceEndpoint().then(() => sendPresence("visible"));
     if (presenceInterval) clearInterval(presenceInterval);
     // 15s < 30s TTL server-side, so a missed heartbeat still falls off
     // within one interval and pushes resume when we're actually gone.
