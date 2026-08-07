@@ -305,6 +305,10 @@ module RecordLinks
         ],
       )
       ::Jil.trigger(user, :prompt, prompt.with_jil_attrs(state: :create), auth: :link)
+      # Also ask it where they already are. The whole question is one dropdown
+      # over a timestamp that's already correct, and routing that through a
+      # notification into /prompts costs four steps to collect one word.
+      ::Buddy::PromptDelivery.post!(user, prompt)
       true
     rescue StandardError => e
       Rails.logger.warn("[RecordLinks] ask_who #{link.target_name.inspect}: #{e.class}: #{e.message}")
