@@ -224,5 +224,37 @@ RSpec.describe "Buddy companion relay" do
 
       expect(Buddy::Context.send(:pending_relays, chelsea)).to be_empty
     end
+
+    # Prod Aug 7: Chelsea asked "Are we leaving at 5:30?" on Aug 3. Nobody
+    # answered and nothing closed it, so it was still listed as an open
+    # question four days later — and when a stray "Tick" arrived from the CLI,
+    # Buddy did exactly what an open question tells it to do and sent "Tick"
+    # back to her as Rocco's answer.
+    describe "a question nobody ever answered" do
+      let!(:stale) {
+        run(:ask_partner, { to: her, question: "Are we leaving at 5:30?" })
+        BuddyRelay.last.tap { |r| r.update!(created_at: (BuddyRelay::ANSWER_WINDOW + 1.day).ago) }
+      }
+
+      it "stops being listed as open once the window has passed" do
+        expect(Buddy::Context.send(:pending_relays, chelsea)).to be_empty
+        expect(stale).to be_stale
+      end
+
+      it "can no longer be answered, so nothing stray gets passed along" do
+        tool = Buddy::Tools[:relay_answer]
+        ctx  = Buddy::ToolContext.new(chelsea)
+
+        expect { tool[:confirm].call({ id: stale.id, answer: "Tick" }, ctx) }
+          .to raise_error(/no open question/)
+        expect(stale.reload.answer).to be_blank
+      end
+
+      it "is still listed while it's inside the window" do
+        stale.update!(created_at: 1.hour.ago)
+
+        expect(Buddy::Context.send(:pending_relays, chelsea)).to include(hash_including(id: stale.id))
+      end
+    end
   end
 end

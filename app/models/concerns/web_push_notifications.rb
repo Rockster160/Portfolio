@@ -11,7 +11,16 @@ module WebPushNotifications
     return "Failed to push - user not found" if user.blank?
 
     push_sub = user.primary_push_sub(channel: channel)
-    return "Failed to push - push_sub not set up" unless push_sub&.pushable?
+    # Every caller throws this return value away, so a channel with no usable
+    # subscription goes silent and NOTHING says so. One expiry disables the
+    # subscription below (registered_at: nil) and from then on every push is a
+    # no-op until the person happens to open the app and re-register - which
+    # reads, from the outside, as notifications having simply stopped working.
+    # This is the one line that makes that state findable in the log.
+    unless push_sub&.pushable?
+      Rails.logger.warn("[WEBPUSH] dropped #{channel} push for #{user.username} - no registered subscription")
+      return "Failed to push - push_sub not set up"
+    end
 
     # example payload = {
     #   title: "Ardesian",
