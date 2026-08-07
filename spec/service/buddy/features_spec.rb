@@ -212,7 +212,7 @@ RSpec.describe Buddy::Features do
     it "leads with chores for someone who has them" do
       seed = Buddy::TodayBriefing.send(:seed, user)
 
-      expect(seed).to include("`chores_pending_today` is the pool")
+      expect(seed).to include("`chores_pending_today` is sorted")
       expect(seed).to include("`chores_hot_picks`")
     end
 

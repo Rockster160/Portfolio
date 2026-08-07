@@ -187,6 +187,8 @@ module Buddy
       case watch.kind
       when "action"
         run_action!(watch)
+      when "timer"
+        start_timer!(watch)
       when "prompt"
         if templated?(watch)
           announce!(watch, payload)
@@ -261,6 +263,29 @@ module Buddy
 
       ::Jil.trigger(watch.user, scope.to_sym, {}, auth: :buddy, auth_id: watch.user_id)
       action_chip(watch)
+    end
+
+    # A countdown instead of a sentence. The alarm at the end IS the message,
+    # so nothing is said here beyond the chip that says a timer started - and
+    # the label is the watch's own text, which is what puts a name on the
+    # countdown chip rather than an anonymous clock.
+    def start_timer!(watch)
+      seconds = watch.timer_seconds
+      return if seconds < 1
+
+      Buddy::Timers.create!(
+        user:         watch.user,
+        seconds:      seconds,
+        label:        watch.body.to_s.strip.presence,
+        conversation: watch.byte_conversation,
+      )
+    rescue StandardError => e
+      Buddy::Errors.report(
+        section:   "watch_matcher.start_timer",
+        exception: e,
+        user:      watch.user,
+        extra:     { watch_id: watch.id },
+      )
     end
 
     def action_chip(watch)

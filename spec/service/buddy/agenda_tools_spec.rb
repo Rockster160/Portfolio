@@ -89,11 +89,91 @@ RSpec.describe "Buddy agenda tools" do
     end
   end
 
+  # Prod: "Add Help Richard on the agenda tomorrow" landed as a task, then
+  # "let's make it a 3 hour event" got "I can't flip that agenda row from task
+  # to event in place here" — so the row was deleted by hand and re-added. Three
+  # exchanges for one edit, and the tool was right that it had no way to do it.
+  describe "converting between a task and an event" do
+    def task_on(agenda, name: "Help Richard")
+      agenda.agenda_items.create!(name: name, start_at: at, kind: :task, status: :confirmed)
+    end
+
+    it "makes a to-do into an event of the length they asked for" do
+      item = task_on(personal)
+
+      run(:edit_agenda_item, { item: "Help Richard", kind: :event, duration: 180 })
+
+      expect(item.reload).to be_event
+      expect(item.end_at).to eq(item.start_at + 180.minutes)
+    end
+
+    it "gives a conversion with no length the same 30 minutes a new event gets" do
+      item = task_on(personal)
+
+      run(:edit_agenda_item, { item: "Help Richard", kind: :event })
+
+      expect(item.reload.end_at).to eq(item.start_at + 30.minutes)
+    end
+
+    it "drops the span when an event becomes a to-do" do
+      item = costco_on(personal)
+
+      run(:edit_agenda_item, { item: "Costco Run", kind: :task })
+
+      expect(item.reload).to be_task
+      expect(item.end_at).to be_nil
+    end
+
+    it "leaves an ordinary edit's kind alone" do
+      item = task_on(personal)
+
+      run(:edit_agenda_item, { item: "Help Richard", title: "Help Rich" })
+
+      expect(item.reload).to be_task
+      expect(item.end_at).to be_nil
+    end
+
+    it "refuses to reshape an agenda trigger, which fires an automation" do
+      personal.agenda_items.create!(name: "Porch Light", start_at: at, kind: :trigger, status: :confirmed)
+
+      expect {
+        run(:edit_agenda_item, { item: "Porch Light", kind: :event })
+      }.to raise_error(/can't be converted/)
+    end
+
+    it "puts both the kind and the span back on undo" do
+      item = task_on(personal)
+      result, = run(:edit_agenda_item, { item: "Help Richard", kind: :event, duration: 180 })
+
+      Buddy::Reverter.call(result[:revert])
+
+      expect(item.reload).to be_task
+      expect(item.end_at).to be_nil
+    end
+
+    it "says what it became rather than just 'updated'" do
+      task_on(personal)
+      tool = Buddy::Tools[:edit_agenda_item]
+      result, = run(:edit_agenda_item, { item: "Help Richard", kind: :event, duration: 180 })
+
+      expect(tool[:receipt].call(result, ctx)).to eq("Help Richard is an event now - 180m ✓")
+    end
+
+    it "shows the conversion on the confirm row" do
+      task_on(personal)
+      tool    = Buddy::Tools[:edit_agenda_item]
+      payload = { item: "Help Richard", kind: :event, duration: 180 }
+      confirm = tool[:confirm].call(payload, ctx)
+      label   = tool[:label].call(payload.merge(confirm[:resolved]), ctx)
+
+      expect(label[:sub]).to include("task → event")
+    end
+  end
+
   # The checklist row prefixes itself with what tapping it will do, and calling
   # a to-do an "Event" is wrong in the one word that says whether the thing
-  # occupies a span of the day. add_agenda_item takes `kind` as an argument;
-  # editing one doesn't change what it is, so there's no argument to read and
-  # confirm has to carry it off the record.
+  # occupies a span of the day. `kind` in `resolved` is what the row BECOMES,
+  # which is what it already is unless the edit is a conversion.
   describe "telling the row whether it's a task or an event" do
     def task_on(agenda)
       agenda.agenda_items.create!(name: "Shower", start_at: at, kind: :task, status: :confirmed)

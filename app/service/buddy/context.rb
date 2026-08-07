@@ -339,6 +339,14 @@ module Buddy
         # schedule-overlap.
         intentional_ids = (daily_ids + hot_ids + marked_today).uniq
         pending_ids     = intentional_ids.reject { |id| done_today_ids.include?(id) }
+        # Read order, which is not the order they were collected in. Built
+        # dailies-first, the top of this list is exactly what the briefing is
+        # told to gloss ("daily habits I know cold") and the things that only
+        # matter TODAY sat at the bottom, behind up to twenty entries. Both
+        # briefings on Aug 7 read straight down it and named the dailies first.
+        # Nothing is dropped or hidden - the whole list is still here, in the
+        # order somebody would want to hear it.
+        pending_ids     = pending_ids.sort_by { |id| pending_rank(id, daily_ids, marked_today, hot_mults) }
         done_ids        = intentional_ids.select { |id| done_today_ids.include?(id) }
         scheduled_ids   = (matches_today_ids - intentional_ids).reject { |id| done_today_ids.include?(id) }
 
@@ -402,6 +410,19 @@ module Buddy
 
       def default_buckets
         { pending_today: [], done_today: [], hot_picks: [], scheduled_today: [], overdue_backlog: [], all_names: [] }
+      end
+
+      # What a person would want told first. Stamped due today and not a daily
+      # habit is the one nobody remembers on their own; a hot pick is worth
+      # knowing and sorts by how hot; a daily is the thing they know cold, so it
+      # goes last. Ties keep their collected order, which groups by bucket.
+      def pending_rank(id, daily_ids, marked_today, hot_mults)
+        daily = daily_ids.include?(id)
+        return [0, 0] if marked_today.include?(id) && !daily
+        return [1, -hot_mults[id].to_f] if hot_mults.key?(id)
+        return [2, 0] unless daily
+
+        [3, 0]
       end
 
       def slim_chore(chore, typical_hour=nil, due_ids=nil, by: nil, hot: nil)
@@ -640,12 +661,24 @@ module Buddy
             # thing separating two watches whose prose is identical - both
             # doorbell watches in prod 2817 read "🔔 Someone's at the doorbell."
             listener: w.listener,
+            # What it DOES when it trips, on the two kinds that don't say
+            # anything. Without it a watch that starts a timer is indistinguish-
+            # able here from one that sends a message, which is the exact
+            # distinction somebody asking for a timer cared about.
+            does:     watch_does(w),
           }.compact
         }
         live + switched_off(BuddyWatch, conversation)
       rescue StandardError => e
         Buddy::Errors.report(section: "context.active_watches", exception: e, user: conversation.user)
         []
+      end
+
+      def watch_does(watch)
+        return "runs #{watch.run_task_name.presence || watch.run_scope}" if watch.action?
+        return "starts a #{Buddy::Timers.humanize_seconds(watch.timer_seconds)} timer" if watch.timer?
+
+        nil
       end
 
       # Index of Jil tasks that can be fired by scope name via the

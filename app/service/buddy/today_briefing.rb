@@ -82,7 +82,9 @@ module Buddy
 
       [
         "",
-        "- `chores_pending_today` is the pool those names come out of. Give extra weight to something explicitly DUE today that ISN'T daily (a `due_today: true` chore whose `freq` is weekly/monthly/less). Those are the easy-to-forget ones - daily habits I know cold.",
+        "- **The names come from what's DUE today and isn't a daily.** `chores_pending_today` is sorted with those first, then the hot picks, then the dailies last - so the top of that list is what you're looking for and the bottom of it is what I already know. A `due_today: true` chore whose `freq` is weekly/monthly/less is the whole point: it's the one I'd forget on my own.",
+        "- **A daily is never one of your three.** Teeth, water, the pills - I do those without being told, and naming them spends a slot that a once-a-month thing needed. They're a gloss at most (\"plus the usual dailies\"), and most days they don't need saying at all.",
+        "- If nothing is due today beyond the dailies, that IS the answer - say the day's light on chores and move on to the calendar. A short briefing is not a failed one, and padding it back up to length with habit names is the failure this is all about.",
         "- BATCH related items: several pending chores that are obviously one errand or one theme go out ONCE as the theme, not one by one. A word shared across their names is the giveaway - three chores that all start with the dog's name are \"the dog's round\", the bin ones are \"it's trash day\", all the plant watering is \"watering day\".",
       ].join("\n")
     end

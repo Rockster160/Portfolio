@@ -48,6 +48,16 @@ RSpec.describe "Buddy mac_command" do
       expect(tool[:auto]).to be(true)
     end
 
+    # Prod: one reply fired `dark_monitors` twice and left two identical chips
+    # in the thread for one action. These are idempotent state commands, so a
+    # repeat is never a second instruction.
+    it "collapses the same command called twice in one turn" do
+      key = tool[:merge_key]
+
+      expect(key.call({ command: "dark_monitors" })).to eq(key.call({ command: :dark_monitors }))
+      expect(key.call({ command: "dark_monitors" })).not_to eq(key.call({ command: "mac_ping" }))
+    end
+
     it "only offers the commands the Mac actually has" do
       schema = Buddy::Tools.function_schema(tool)
 

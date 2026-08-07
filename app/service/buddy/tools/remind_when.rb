@@ -127,6 +127,15 @@ Buddy::Tools.register(
     if they want to be told, that's `text` as usual. `notify` and `run` don't
     combine - one is a message to a person, the other isn't a message at all.
 
+    `timer` starts a COUNTDOWN each time the condition hits - "set a 1 second
+    timer every time something comes into the Claude list" is `timer: 1` on a
+    custom listener. **When they say timer, they mean a timer.** A reminder is
+    a message they have to be looking at; a timer alarms out loud, which is the
+    whole reason to ask for a one-second one. `set_timer` only counts down from
+    now, and that is not a reason to talk them into a reminder instead - this
+    arg is how a timer hangs off a condition. Like `run`, it says nothing and
+    doesn't combine with `notify`.
+
     IMPORTANT for places (arrive/depart): the system resolves the place from
     the person's contacts and calendar. You do NOT know in advance whether it
     can - so don't state the reminder is set in your own words, and don't
@@ -145,6 +154,7 @@ Buddy::Tools.register(
     notify:      { type: :string,  required: false, description: "Household member to notify instead of the user (optional)" },
     run:         { type: :string,  required: false, description: "Jil task name to FIRE when the condition hits, instead of saying anything. Verbatim from jil_triggers." },
     delay:       { type: :integer, required: false, description: "Seconds to wait after the condition before running it (max 900). With `run` only." },
+    timer:       { type: :integer, required: false, description: "Start a countdown of this many seconds each time the condition hits, instead of saying anything. Use when they say TIMER - a timer alarms out loud, a reminder is a message they have to be looking at." },
     expires:     { type: :string,  required: false, description: "Last day it stays armed: \"today\", \"tomorrow\", \"N days/weeks\", or YYYY-MM-DD. Use whenever they bound it in time." },
   },
   # Watching for an arrival or a deploy is everyone's. The other three reach
@@ -245,6 +255,16 @@ Buddy::Tools.register(
     delay = payload[:delay].to_i.clamp(0, BuddyWatch::MAX_ACTION_DELAY)
     delay = 0 if run_task.nil?
 
+    # A countdown rather than a message. Clamped by the same rule an ordinary
+    # timer is, so a watch can't create one the timer stack would refuse.
+    timer_seconds = payload[:timer].to_i
+    if timer_seconds.positive?
+      raise "a watch either tells someone or sets a timer, not both" if payload[:notify].to_s.strip.present?
+      raise "a watch either runs a task or sets a timer, not both" if run_task
+
+      timer_seconds = timer_seconds.clamp(1, Buddy::Timers::MAX_SECONDS)
+    end
+
     every = ActiveModel::Type::Boolean.new.cast(payload[:repeat])
     human = human.sub(/\Awhen /, "every time ").sub(/\Anext time /, "every time ") if every
 
@@ -269,6 +289,8 @@ Buddy::Tools.register(
 
     framed = if run_task
       "Run #{run_task[:name]}#{" #{delay}s after" if delay.positive?} #{human}"
+    elsif timer_seconds.positive?
+      "Start a #{Buddy::Timers.humanize_seconds(timer_seconds)} timer #{human}"
     elsif to_self
       "Remind you #{human}"
     else
@@ -302,6 +324,7 @@ Buddy::Tools.register(
         run_scope:      run_task&.dig(:scope),
         run_task_name:  run_task&.dig(:name),
         run_delay:      delay,
+        timer_seconds:  timer_seconds,
         expires_at_iso: expires_at&.iso8601,
       },
     }
@@ -326,7 +349,15 @@ Buddy::Tools.register(
       user:              owner,
       byte_conversation: conversation,
       notify_user_id:    payload[:notify_user_id],
-      kind:              payload[:run_scope].present? ? "action" : "prompt",
+      kind:              (
+        if payload[:run_scope].present?
+          "action"
+        elsif payload[:timer_seconds].to_i.positive?
+          "timer"
+        else
+          "prompt"
+        end
+      ),
       body:              payload[:text].to_s.first(500),
       trigger_scope:     payload[:trigger_scope].to_s,
       listener:          payload[:listener].presence,
@@ -338,6 +369,7 @@ Buddy::Tools.register(
         "run_scope"     => payload[:run_scope].presence,
         "run_task_name" => payload[:run_task_name].presence,
         "run_delay"     => payload[:run_delay].to_i,
+        "timer_seconds" => payload[:timer_seconds].to_i.positive? ? payload[:timer_seconds].to_i : nil,
       }.compact,
     )
     {
@@ -348,6 +380,7 @@ Buddy::Tools.register(
       listener:       watch.listener,
       run_task_name:  watch.run_task_name,
       run_delay:      watch.run_delay,
+      timer_seconds:  watch.timer_seconds,
       expires_at:     watch.expires_at&.iso8601,
     }
   },
@@ -363,6 +396,8 @@ Buddy::Tools.register(
       line = if result[:run_task_name].present?
         after = result[:run_delay].to_i.positive? ? ", #{result[:run_delay]}s after" : ""
         "#{name} will run **#{result[:run_task_name]}** #{result[:human_when]}#{after}"
+      elsif result[:timer_seconds].to_i.positive?
+        "#{name} will start a #{Buddy::Timers.humanize_seconds(result[:timer_seconds])} timer #{result[:human_when]}"
       elsif result[:recipient_name].present?
         "#{name} will let #{result[:recipient_name]} know #{result[:human_when]}"
       else

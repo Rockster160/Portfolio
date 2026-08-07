@@ -29,6 +29,12 @@ Buddy::Tools.register(
     { summary: "Run **#{payload[:command]}** on the Mac?", resolved: {} }
   },
   label:       ->(payload, _ctx) { { title: payload[:command].to_s.tr("_", " "), sub: "on the Mac" } },
+  # One command, once. These are idempotent state commands - darkening monitors
+  # that are already dark does nothing - so a second identical call in one turn
+  # is never a second instruction, it's the model reaching for the same lever
+  # twice. Prod fired `dark_monitors` twice in one reply and left two identical
+  # chips in the thread for one action.
+  merge_key:   ->(payload) { "mac_command:#{payload[:command].to_s.downcase.strip}" },
   execute:     ->(payload, _ctx) { ByteLocal.run_command(payload[:command]) },
   # Most of these say nothing (pmset just does it), so the chip is normally just
   # the name. When a command DOES answer, that answer is the entire point of
