@@ -12,9 +12,12 @@
       <% @charts.each do |chart| %>
         <%= link_to custom_chart_path(chart), class: "cc-card" do %>
           <div class="cc-card-name"><%= chart.name %></div>
-          <div class="cc-card-meta">
-            <%= chart.chart_type %> · <%= chart.metric %> · <code><%= chart.query.presence || "all events" %></code>
-          </div>
+          <div class="cc-card-meta"><%= chart.chart_type %> · <%= chart.metric %></div>
+          <% if chart.query.present? %>
+            <code class="cc-card-query"><%= chart.query %></code>
+          <% else %>
+            <div class="cc-card-query cc-card-query-empty">all events</div>
+          <% end %>
         <% end %>
       <% end %>
     </div>
