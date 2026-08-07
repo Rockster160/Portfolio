@@ -45,6 +45,11 @@
   // accent color or the done-green.
   --chores-cooldown: #64748B;
   --chores-cooldown-bg: #1F2937;
+  // Priority flag hues. Deliberately warm and distinct from the hot
+  // green, the cooldown grey, and the accent blue — the flag is about
+  // urgency, not about payout or availability.
+  --chores-priority-critical: #F04438;
+  --chores-priority-high: #F79009;
   // Per-actor accent for the "done" state. Every chore card defaults
   // to the green check color; cards whose last completer is known get
   // a user-specific hue via the [data-actor="..."] rules a few blocks
@@ -363,12 +368,16 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   //   │                                                       │
   //   │                  ICON / GLYPH                         │
   //   │                                                       │
-  //   │ edit-mode ✎    circle-countdown        (reserved)     │   (bottom row of icon)
-  //   │ (bot-LEFT)      (bot-CENTER, fixed)                   │
+  //   │ priority-flag   circle-countdown       state-icon     │   (bottom row of icon)
+  //   │ (bot-LEFT)      (bot-CENTER, fixed)    (bot-RIGHT)    │
   //   └───────────────────────────────────────────────┘
   //   ── permanent count-badge slot (always 14px tall row) ──
   //                  TITLE
   //                  AGO TIMESTAMP
+  //
+  // Edit mode is deliberately NOT in this map. It films the whole tap
+  // target instead of claiming a corner, so it can never collide with a
+  // badge. See the edit-mode block further down for why.
   //
   // EVERY badge has a SINGLE permanent slot. Its position NEVER moves
   // based on what other badges are present, what their content is, or
@@ -380,7 +389,8 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   //   top-LEFT     → .hot-badge          — hot-pick multiplier pill (green)
   //   top-CENTER   → (only inside .icon, see below)
   //   top-RIGHT    → .streak-badge       — streak multiplier pill (actor-color)
-  //   bot-LEFT     → .edit-mode ::after  — pencil chip (only when toolbar edit mode is on)
+  //   bot-LEFT     → .priority-flag      — critical / high urgency mark
+  //   bot-RIGHT    → .circle-state-icon  — Sun / Clock / Hourglass schedule state (circles only)
   //   bot-CENTER   → .card-count-slot / .count-slot — done-today counter (only when done_count_today > 1)
   //                                                    Grid: PERMANENT flex row between icon and title
   //                                                    that always reserves its height (no :empty
@@ -628,12 +638,44 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     background: var(--actor-color);
   }
   // (.cooldown-badge removed — replaced by .circle-countdown pill inside .icon)
-  // Edit Mode (toggled from the toolbar) recolors the Grid: every card
-  // becomes accent-tinted with a small pencil chip in the corner so
-  // it's clear what tapping does. Drag-handle cursor on the body so
-  // users discover reordering too.
+  // ──────────────────────────────────────────────────────────────────
+  // Edit Mode (toggled from the toolbar).
+  //
+  // This is a SURFACE TREATMENT, not a badge. It used to be a small
+  // pencil chip parked in the bot-LEFT slot, which meant a transient
+  // mode was squatting on a permanent per-card slot — and it lost that
+  // argument to `.priority-flag`, which is always true of the chore and
+  // is exactly what you'd have opened edit mode to change. So the chip
+  // is gone: edit mode now films the whole tap target with a light
+  // accent wash and a faint pencil watermark, and occupies NO slot.
+  // Keep it that way. A future badge should never have to negotiate
+  // with edit mode for a corner.
+  //
+  // The wash replaces the old `background: #11264F` swap rather than
+  // stacking on top of it — two blues over each other read as muddy
+  // instead of "lightly filmed". The accent border + glow stay, because
+  // those are what make the mode legible across a whole grid at a
+  // glance even on cards whose surface is busy.
+  //
+  // z-index sits above every badge (grid `.hot-badge` is the highest at
+  // 5) so the film reads as one continuous sheet. On circles the film
+  // is clipped to the disc, so the hot / streak badges — which hang
+  // 6px OUTSIDE it — stay crisp. That asymmetry is intentional.
+  // ──────────────────────────────────────────────────────────────────
+  @mixin edit-mode-film {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-color: #2563EB2E;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='white' fill-opacity='0.22' d='M11.013 1.427a1.45 1.45 0 0 1 2.05 0l1.51 1.51a1.45 1.45 0 0 1 0 2.05L4.953 15.077l-3.927.5.5-3.927L11.013 1.427z'/></svg>");
+    background-size: 40%;
+    background-position: center;
+    background-repeat: no-repeat;
+    pointer-events: none;
+    z-index: 6;
+  }
   &.edit-mode .chore-card {
-    background: #11264F;
     border-color: var(--chores-accent);
     box-shadow:
       0 0 0 1px var(--chores-accent),
@@ -643,29 +685,16 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   &.edit-mode .chore-card:active {
     cursor: grabbing;
   }
+  // Grid: the whole card is the tap target, so the whole card is filmed.
   &.edit-mode .chore-card::after {
-    content: "";
-    position: absolute;
-    bottom: 6px;
-    left: 6px;
-    width: 18px;
-    height: 18px;
-    border-radius: 999px;
-    background: var(--chores-accent);
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='white' d='M11.013 1.427a1.45 1.45 0 0 1 2.05 0l1.51 1.51a1.45 1.45 0 0 1 0 2.05L4.953 15.077l-3.927.5.5-3.927L11.013 1.427z'/></svg>");
-    background-size: 11px;
-    background-position: center;
-    background-repeat: no-repeat;
-    pointer-events: none;
-    z-index: 3;
+    @include edit-mode-film;
   }
   // Today view edit-mode: same accent treatment as Grid so it's
-  // obvious the user can tap a circle to edit. The pencil chip is
-  // anchored to the disc (.circle-inner) rather than the .chore-circle
-  // wrapper because the wrapper extends below the disc to fit the
-  // title.
+  // obvious the user can tap a circle to edit. The film is anchored to
+  // the disc (.circle-inner) rather than the .chore-circle wrapper
+  // because the disc IS the tap target — the wrapper only extends below
+  // it to fit the title, which is a label and not something you tap.
   &.edit-mode .chore-circle .circle-inner {
-    background: #11264F;
     border-color: var(--chores-accent);
     box-shadow:
       0 0 0 1px var(--chores-accent),
@@ -673,20 +702,7 @@ body:has(.env-banner) .chores-page .chores-toolbar {
     cursor: pointer;
   }
   &.edit-mode .chore-circle .circle-inner::after {
-    content: "";
-    position: absolute;
-    bottom: -6px;
-    left: -6px;
-    width: 18px;
-    height: 18px;
-    border-radius: 999px;
-    background: var(--chores-accent);
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='white' d='M11.013 1.427a1.45 1.45 0 0 1 2.05 0l1.51 1.51a1.45 1.45 0 0 1 0 2.05L4.953 15.077l-3.927.5.5-3.927L11.013 1.427z'/></svg>");
-    background-size: 11px;
-    background-position: center;
-    background-repeat: no-repeat;
-    pointer-events: none;
-    z-index: 4;
+    @include edit-mode-film;
   }
   // SortableJS classes during drag
   .chore-card.sortable-ghost {
@@ -1038,6 +1054,29 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   .chore-circle .circle-state-icon.fa-sun-o         { color: #F2C744; }
   .chore-circle .circle-state-icon.fa-clock-o       { color: #6FB1FF; }
   .chore-circle .circle-state-icon.fa-hourglass-half { color: #FF9472; }
+
+  // Priority flag — bottom-LEFT, mirroring the state icon's bottom-RIGHT
+  // placement so the two read as a matched pair of small status marks.
+  // Only :critical and :high ever render one (see priorityFlagFor).
+  .chore-card .priority-flag,
+  .chore-circle .priority-flag {
+    position: absolute;
+    font-size: 12px;
+    line-height: 1;
+    pointer-events: none;
+    text-shadow: 0 1px 3px #000A;
+    z-index: 3;
+  }
+  .chore-card .priority-flag {
+    left: 6px;
+    bottom: 6px;
+  }
+  .chore-circle .priority-flag {
+    left: 6%;
+    bottom: 8%;
+  }
+  .priority-flag.critical { color: var(--chores-priority-critical); }
+  .priority-flag.high     { color: var(--chores-priority-high); }
 
   // ============================================================
   // Today: section headings + pin-toggle

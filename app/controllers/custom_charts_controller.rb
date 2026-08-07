@@ -74,6 +74,7 @@ class CustomChartsController < ApplicationController
       config: [
         :value_source,
         :data_key,
+        :series_key,
         :metric,
         :series_by,
         :bucket,

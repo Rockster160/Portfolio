@@ -18,6 +18,10 @@ RSpec.describe Buddy::PromptDelivery do
 
   before { allow(MonitorChannel).to receive(:broadcast_to) }
 
+  def message_actions(action)
+    action.byte_message.reload.metadata.dig("form", "actions")
+  end
+
   describe ".post!" do
     it "posts the prompt into their Buddy thread as a form" do
       action = described_class.post!(user, prompt)
@@ -44,7 +48,18 @@ RSpec.describe Buddy::PromptDelivery do
 
       expect(message.body).to eq("Who did: Puppy Down?")
       expect(message.metadata.dig("form", "status")).to eq("pending")
-      expect(message.metadata.dig("form", "submit")).to eq("Send it")
+      expect(message.metadata.dig("form", "actions").last["label"]).to eq("Send it")
+    end
+
+    # A prompt that arrives unasked-for needs the answer it usually gets, which
+    # is "not now". Without it the only way out of one Buddy posted was to fill
+    # it in or leave it sitting there.
+    it "offers a way out that isn't answering it" do
+      action = described_class.post!(user, prompt)
+
+      skip_button = message_actions(action).find { |b| b["key"] == "skip" }
+      expect(skip_button["style"]).to eq("danger")
+      expect(message_actions(action).pluck("key")).to eq(%w[skip submit])
     end
 
     # Nothing is guessed server-side: a stored value would read as Buddy having
@@ -141,6 +156,111 @@ RSpec.describe Buddy::PromptDelivery do
 
       expect(result[:ok]).to be(false)
       expect(prompt.reload.response).to be_blank
+    end
+  end
+
+  # The same question exists in two places at once, so answering it in either
+  # has to close it in both. Until this, answering on the prompt's own page left
+  # the thread showing a live form whose only remaining behaviour was to refuse
+  # the tap with "no pending prompt".
+  describe "settling a form answered elsewhere" do
+    def form_of(action)
+      action.byte_message.reload.metadata["form"]
+    end
+
+    # What PromptsController#update does: write the response, fire the trigger.
+    def answer_in_the_app!(answers)
+      prompt.update!(response: answers)
+      described_class.dispatch(user, :prompt, prompt.with_jil_attrs(status: :complete))
+    end
+
+    it "shows what was actually answered and stops being answerable" do
+      action = described_class.post!(user, prompt)
+
+      answer_in_the_app!("Who did it?" => "Eve", "When?" => "2026-08-06T22:01")
+
+      form = form_of(action)
+      expect(form["status"]).to eq("submitted")
+      expect(form["receipt"]).to eq("Answered in the app ✓")
+      expect(form["fields"].find { |f| f["key"] == "Who did it?" }["value"]).to eq("Eve")
+      expect(action.reload).not_to be_pending
+    end
+
+    it "leaves the history in the thread rather than taking the question away" do
+      action  = described_class.post!(user, prompt)
+      message = action.byte_message
+
+      answer_in_the_app!("Who did it?" => "Eve", "When?" => "2026-08-06T22:01")
+
+      expect(ByteMessage.find_by(id: message.id)).to be_present
+      expect(message.reload.body).to eq("Who did: Puppy Down?")
+      expect(form_of(action)["fields"].pluck("key")).to eq(["Who did it?", "When?"])
+    end
+
+    it "closes it as skipped, with nothing filled in, when it's dismissed there" do
+      action = described_class.post!(user, prompt)
+      fields = action.buttons
+
+      prompt.destroy
+      described_class.dispatch(user, :prompt, prompt.with_jil_attrs(status: :skip))
+
+      form = form_of(action)
+      expect(form["status"]).to eq("submitted")
+      expect(form["receipt"]).to eq("Skipped in the app ✓")
+      # No answer exists, so none is invented onto the fields.
+      expect(form["fields"]).to eq(fields)
+    end
+
+    it "leaves it alone while the prompt is only being opened" do
+      action = described_class.post!(user, prompt)
+
+      described_class.dispatch(user, :prompt, prompt.with_jil_attrs(state: :load))
+
+      expect(action.reload).to be_pending
+      expect(form_of(action)["status"]).to eq("pending")
+    end
+
+    it "settles only the form for THAT prompt" do
+      other = user.prompts.create!(question: "How was it?", options: [
+        { type: :text, question: "Notes", default: "" },
+      ])
+      action = described_class.post!(user, prompt)
+      spared = described_class.post!(user, other)
+
+      answer_in_the_app!("Who did it?" => "Eve", "When?" => "2026-08-06T22:01")
+
+      expect(action.reload).not_to be_pending
+      expect(spared.reload).to be_pending
+    end
+
+    # answer_prompt fires `prompt:complete` from inside the submit, so the
+    # settler is handed the very form being submitted. If it took it, both would
+    # claim the deferred queue and run whatever was behind it twice.
+    it "stands down when the thread is the one submitting it" do
+      action = described_class.post!(user, prompt)
+      # The settler reaches this form mid-submit and has to decline. If it
+      # didn't, the submit would land on a row it had already decided — and
+      # both would claim the queue parked behind it.
+      seen = nil
+      allow(Buddy::FormAction).to(receive(:settle!).and_wrap_original { |orig, *args, **kwargs|
+        seen = orig.call(*args, **kwargs)
+      })
+
+      Buddy::FormAction.submit!(action, values: { "Who did it?" => "Eve", "When?" => "2026-08-06T22:01" })
+
+      expect(seen).to be(false)
+      expect(form_of(action)["receipt"]).to eq("Answered it ✓")
+      expect(action.reload.decision["source"]).to eq("user")
+    end
+
+    it "rides the trigger bus, so every door reaches it" do
+      action = described_class.post!(user, prompt)
+
+      prompt.update!(response: { "Who did it?" => "Eve", "When?" => "2026-08-06T22:01" })
+      ::Jil.trigger(user, :prompt, prompt.with_jil_attrs(status: :complete))
+
+      expect(action.reload).not_to be_pending
+      expect(form_of(action)["receipt"]).to eq("Answered in the app ✓")
     end
   end
 end

@@ -82,8 +82,12 @@ export function renderForm(container, message) {
     !superseded &&
     Number.isFinite(expiresAt) &&
     Date.now() > expiresAt;
-  const draft = draftFor(requestId);
   const locked = submitted || superseded || expired;
+  // A settled form shows what was actually recorded, never a local draft. The
+  // answer may have been given somewhere else entirely — the prompt's own page
+  // — in which case a half-typed guess sitting here is pure fiction.
+  if (locked) DRAFTS.delete(requestId);
+  const draft = locked ? {} : draftFor(requestId);
 
   container.innerHTML = "";
   container.className = "byte-msg-form";
@@ -119,18 +123,36 @@ export function renderForm(container, message) {
         : "Expired — ask me again and I'll rebuild it.";
     footer.appendChild(note);
   } else {
-    const submit = document.createElement("button");
-    submit.type = "button";
-    submit.className = "byte-msg-form-submit basic";
-    submit.textContent = form.submit || "Send";
-    submit.addEventListener("click", () =>
-      submitForm(container, requestId, submit, errorEl),
-    );
-    footer.appendChild(submit);
+    footerActions(form).forEach((spec) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "byte-msg-form-btn basic";
+      button.dataset.style = spec.style || "plain";
+      button.dataset.key = spec.key;
+      button.textContent = spec.label;
+      button.addEventListener("click", () =>
+        submitForm(container, requestId, button, errorEl, spec),
+      );
+      footer.appendChild(button);
+    });
   }
 
   container.appendChild(footer);
   return true;
+}
+
+// The footer buttons, in the order the server put them: alternates first, the
+// submit last so the primary sits on the right. Only ONE of them sends the
+// field values — a Skip runs its own thing and never reads the boxes.
+//
+// The fallback is for a form posted before actions existed, which is still
+// sitting live in a thread and carries only `submit`.
+function footerActions(form) {
+  if (Array.isArray(form.actions) && form.actions.length) return form.actions;
+
+  return [
+    { key: "submit", label: form.submit || "Send", style: "primary", sends: true },
+  ];
 }
 
 // One labelled row. Not a <label> wrapper like the checklist uses — that makes
@@ -308,10 +330,15 @@ function readAll(container) {
   return values;
 }
 
-async function submitForm(container, requestId, button, errorEl) {
-  const values = readAll(container);
+async function submitForm(container, requestId, button, errorEl, spec) {
+  // Every button goes down together: they all resolve the same form, so one in
+  // flight has to lock out the rest rather than only itself. Skipping a prompt
+  // mid-send would otherwise race the answer.
+  const buttons = Array.from(container.querySelectorAll(".byte-msg-form-btn"));
   const label = button.textContent;
-  button.disabled = true;
+  buttons.forEach((b) => {
+    b.disabled = true;
+  });
   button.textContent = "…";
   errorEl.hidden = true;
   errorEl.textContent = "";
@@ -320,7 +347,9 @@ async function submitForm(container, requestId, button, errorEl) {
     await apiCall(
       `/byte/actions/${encodeURIComponent(requestId)}/respond`,
       "POST",
-      { form: values },
+      // An alternate acts on what the form was posted with, so sending the
+      // fields alongside it would only invite the server to read them.
+      { form: spec.sends === false ? {} : readAll(container), action_key: spec.key },
     );
     // The server broadcast re-renders this as a read-only summary, so there is
     // nothing to do here but stop holding the draft.
@@ -328,7 +357,9 @@ async function submitForm(container, requestId, button, errorEl) {
   } catch (e) {
     // Everything they typed is still on screen and still in the draft, so the
     // only job left is saying what was wrong.
-    button.disabled = false;
+    buttons.forEach((b) => {
+      b.disabled = false;
+    });
     button.textContent = label;
     const reasons =
       Array.isArray(e?.errors) && e.errors.length

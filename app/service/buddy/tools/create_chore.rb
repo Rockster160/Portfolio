@@ -16,6 +16,9 @@ Buddy::Tools.register(
       after    - another chore name this one should follow (surfaces once that
                  chore is done) - a dependency, not a clock schedule.
       due      - when it should first be due ("today", "tomorrow", a date).
+      priority - how urgent: critical / high / normal / low / none. Only pass
+                 it when the user says so ("this one's urgent", "low priority",
+                 "don't bother flagging it") - otherwise it defaults to normal.
     An icon is chosen automatically from the name.
   TXT
   feature:     :chores,
@@ -28,6 +31,7 @@ Buddy::Tools.register(
     after:    { type: :string, required: false, description: "Chore this one follows (dependency)" },
     due:      { type: :string, required: false, description: "When it's first due - YYYY-MM-DD (from the local date in RIGHT NOW) or an ISO datetime" },
     one_off:  { type: :string, required: false, description: "Pass 'true' for a one-off chore" },
+    priority: { type: :string, required: false, description: "Urgency: critical, high, normal, low, or none. Omit for normal" },
   },
   confirm:     ->(payload, ctx) {
     household = ctx.user.chore_household
@@ -50,6 +54,11 @@ Buddy::Tools.register(
     raise "no parent chore matching #{payload[:parent].inspect}" if payload[:parent].present? && parent.nil?
 
     reward = payload[:reward].present? ? payload[:reward].to_i : Buddy::PebbleGuide.guess(payload[:name])
+
+    priority = Chore.priority_key(payload[:priority]) if payload[:priority].present?
+    if payload[:priority].present? && priority.nil?
+      raise "unknown priority #{payload[:priority].inspect} — use critical, high, normal, low, or none"
+    end
 
     # Never leave the icon blank — fall back to a neutral checklist glyph when
     # the name doesn't score a confident match.
@@ -78,6 +87,7 @@ Buddy::Tools.register(
         assigned_to_user_id: assignee&.id,
         recurrence:          recurrence,
         reward_pebbles:      reward,
+        priority:            priority,
         icon:                icon,
         parent_chore_id:     parent&.id,
         marked_due_at_iso:   due_at&.iso8601,
@@ -94,6 +104,7 @@ Buddy::Tools.register(
     if payload[:assigned_to_user_id].present? && payload[:assigned_to_user_id] != ctx.user.id
       subs << "for #{User.find_by(id: payload[:assigned_to_user_id])&.first_name}"
     end
+    subs << "#{payload[:priority]} priority" if payload[:priority].present?
     subs << "#{payload[:reward_pebbles]}p" if payload[:reward_pebbles].present?
     if payload[:marked_due_at_iso].present?
       subs << "due #{ctx.friendly_future(Time.zone.parse(payload[:marked_due_at_iso].to_s))}"
@@ -120,6 +131,9 @@ Buddy::Tools.register(
       one_off:             payload[:one_off].to_s == "true",
       reward_pebbles:      payload[:reward_pebbles],
       icon:                payload[:icon],
+      # `.compact` in confirm drops the key entirely when the person
+      # didn't say, so the column default (:normal) stands.
+      priority:            payload[:priority] || :normal,
       recurrence:          payload[:recurrence],
       parent_chore_id:     payload[:parent_chore_id],
       marked_due_at:       (Time.zone.parse(payload[:marked_due_at_iso].to_s) if payload[:marked_due_at_iso].present?),

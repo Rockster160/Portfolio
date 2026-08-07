@@ -12,6 +12,7 @@
 #  notes               :text
 #  notes_template      :text
 #  one_off             :boolean          default(FALSE), not null
+#  priority            :integer          default("normal"), not null
 #  recurrence          :jsonb
 #  reward_pebbles      :integer          default(0), not null
 #  sharing_mode        :integer          default("personal"), not null
@@ -97,6 +98,21 @@ class Chore < ApplicationRecord
     household: 1,
   }, default: :personal, prefix: :share
 
+  # How urgent this chore is. Three things read it:
+  #   * Today / Scheduled ordering — sorts above the section's existing
+  #     due-date order, so a critical item is never buried.
+  #   * Hot Pick selection weight (ChoreDailyResetWorker::PRIORITY_WEIGHT)
+  #     — :none scores zero and drops out of the pool entirely.
+  #   * The card's bottom-left flag, shown for :critical / :high only.
+  # Values descend deliberately: `ORDER BY priority DESC` is the sort.
+  enum :priority, {
+    critical: 4,
+    high:     3,
+    normal:   2,
+    low:      1,
+    none:     0,
+  }, default: :normal, prefix: :priority
+
   # Whether this chore can become a Hot Pick:
   #   :when_available — eligible whenever the worker's normal rules permit
   #                     (current behaviour: unscheduled, due-today, or overdue)
@@ -163,6 +179,15 @@ class Chore < ApplicationRecord
   after_update_commit :cascade_archive_to_sub_chores, if: :saved_change_to_archived_at?
 
   def assigned? = assigned_to_user_id.present?
+
+  # Coerce a free-form priority word (what Buddy hears a person say) to a
+  # valid enum key, or nil when it isn't one. Deliberately NOT falling
+  # back to :normal — a caller passing "urgent" should be told it didn't
+  # land, not have the chore quietly come out at the default.
+  def self.priority_key(value)
+    key = value.to_s.strip.downcase
+    key if priorities.key?(key)
+  end
 
   # Grid visibility for a user. Assignment is a separate dimension from
   # sharing mode:
@@ -398,6 +423,7 @@ class Chore < ApplicationRecord
       short_name:          display_short_name,
       icon:                icon,
       reward_pebbles:      reward_pebbles,
+      priority:            priority,
       target_count:        target_count,
       threshold_seconds:   threshold_seconds,
       sharing_mode:        sharing_mode,

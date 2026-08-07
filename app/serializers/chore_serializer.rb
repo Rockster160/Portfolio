@@ -78,6 +78,10 @@ class ChoreSerializer
       notes:                chore.notes.to_s,
       reward_pebbles:       chore.reward_pebbles,
       reward_label:         chore.reward_label,
+      # Urgency. Drives the Today/Scheduled sort, the card's bottom-left
+      # flag (critical / high only), and the Hot Pick selection weight.
+      priority:             chore.priority,
+      priority_rank:        Chore.priorities[chore.priority],
       # Daily target — when > 1, the card's progress ring fills as
       # `done_count_today / target_count` instead of flipping fully on
       # the first tap. `done` state stays binary (any tap counts) so

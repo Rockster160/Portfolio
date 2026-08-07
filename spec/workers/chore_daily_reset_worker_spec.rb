@@ -332,4 +332,56 @@ RSpec.describe ChoreDailyResetWorker do
       expect(picks).not_to include(excluded.id)
     end
   end
+
+  describe "priority weighting" do
+    let(:worker) { described_class.new }
+    let(:day) { ChoreDay.current }
+
+    it "scales the schedule weight by the priority multiplier" do
+      baseline = create(:chore, created_by_user: user, priority: :normal)
+      critical = create(:chore, created_by_user: user, priority: :critical)
+      low      = create(:chore, created_by_user: user, priority: :low)
+      empty    = Set.new
+
+      expect(worker.send(:weight_for, baseline, empty, empty)).to eq(1.0)
+      expect(worker.send(:weight_for, critical, empty, empty)).to eq(2.0)
+      expect(worker.send(:weight_for, low, empty, empty)).to eq(0.5)
+    end
+
+    it "compounds with the due-today schedule weight rather than replacing it" do
+      chore = create(:chore, created_by_user: user, priority: :high)
+
+      expect(worker.send(:weight_for, chore, Set.new([chore.id]), Set.new)).to eq(3.0)   # 2.0 today × 1.5
+      expect(worker.send(:weight_for, chore, Set.new, Set.new([chore.id]))).to eq(2.25)  # 1.5 overdue × 1.5
+    end
+
+    it "zeroes out :none so it never enters the pool" do
+      chore = create(:chore, created_by_user: user, priority: :none)
+      expect(worker.send(:weight_for, chore, Set.new, Set.new)).to eq(0.0)
+    end
+
+    it "never picks a :none chore even when it's the only candidate in its band" do
+      Chore.delete_all
+      skipped = create(:chore, created_by_user: user, reward_pebbles: 2, priority: :none)
+      premium = create(:chore, created_by_user: user, reward_pebbles: 20, priority: :none)
+
+      described_class.new.perform
+
+      picks = ChoreHotPick.where(day_key: day).pluck(:chore_id)
+      expect(picks).to be_empty
+      expect(picks).not_to include(skipped.id, premium.id)
+    end
+
+    it "still fills the low band from the non-:none candidates" do
+      Chore.delete_all
+      eligible = 5.times.map { create(:chore, created_by_user: user, reward_pebbles: 2, priority: :low) }
+      skipped  = create(:chore, created_by_user: user, reward_pebbles: 2, priority: :none)
+
+      described_class.new.perform
+
+      picks = ChoreHotPick.where(day_key: day).pluck(:chore_id)
+      expect(picks).to match_array(eligible.map(&:id))
+      expect(picks).not_to include(skipped.id)
+    end
+  end
 end

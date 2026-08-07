@@ -61,6 +61,11 @@ class Jil::Executor
     # One set lookup for any scope that can't be linked.
     ::RecordLinks::Propagator.dispatch(user, trigger, raw_trigger_data)
 
+    # A prompt Buddy posted into the thread as a form, answered or skipped
+    # somewhere else. Settles that form so the thread stops offering a question
+    # that's already been dealt with. One trigger-name comparison otherwise.
+    ::Buddy::PromptDelivery.dispatch(user, trigger, raw_trigger_data)
+
     user_tasks = user.accessible_tasks.active.enabled.ordered
     stopped = false
     user_tasks.by_listener(trigger).filter_map { |task|

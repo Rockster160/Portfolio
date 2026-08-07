@@ -78,6 +78,14 @@
   <i class="fa circle-state-icon" aria-hidden="true" data-state-icon></i>
 </template>
 
+<%# Priority flag — bottom-LEFT slot, present only for critical / high
+   chores. The builder adds the severity class and the Font Awesome
+   glyph class; the title text is set from JS so screen readers and
+   long-press tooltips get a word rather than a colour. %>
+<template data-template="priority-flag">
+  <i class="fa priority-flag" data-priority-flag></i>
+</template>
+
 <template data-template="corner-badge">
   <div></div>
 </template>

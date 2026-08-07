@@ -41,9 +41,17 @@ RSpec.describe Jil::Methods::Tesla do
       "expected a notification title=#{title_matcher.inspect} body=#{body_matcher.inspect}; got #{@push_payloads.inspect}"
   end
 
-  it "notifies on navigate with the destination in the body" do
+  it "notifies on navigate with the destination in the title and travel time in the body" do
+    allow(user.address_book).to receive(:traveltime_seconds).with("Costco").and_return(12.minutes.to_i)
     expect(tesla.navigate("Costco")).to be(true)
-    expect_notify("Navigating", "Costco")
+    expect_notify("Navigating to Costco", "TT: 12 minutes")
+  end
+
+  it "notifies on navigate with no body when the travel time is unavailable" do
+    allow(user.address_book).to receive(:traveltime_seconds).with("Costco").and_return(nil)
+    expect(tesla.navigate("Costco")).to be(true)
+    expect_notify("Navigating to Costco", nil)
+    expect(@push_payloads.last).not_to have_key(:body)
   end
 
   it "calls TripState.start_for_destination! on every navigate" do

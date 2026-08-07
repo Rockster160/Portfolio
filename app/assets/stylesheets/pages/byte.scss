@@ -4732,11 +4732,15 @@ $suki_expr_aliases: (
     color: #f26b6b;
   }
 
+  // A footer can hold one button or a whole set of options, so it wraps rather
+  // than squeezing them. Right-aligned, which puts the primary — always last —
+  // at the end of the final line, nearest the thumb.
   .byte-msg-form-footer {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
-    gap: 10px;
+    gap: 8px;
   }
 
   .byte-msg-form-receipt {
@@ -4746,17 +4750,31 @@ $suki_expr_aliases: (
 
   // The global button cascade in forms.scss still lands gradient + bold on a
   // bare <button>, so this restates the panel aesthetic outright.
-  button.byte-msg-form-submit {
+  button.byte-msg-form-btn {
     padding: 7px 16px !important;
     border-radius: 8px !important;
     font-size: 13.5px !important;
     font-weight: 600 !important;
-    color: #fff !important;
-    background: var(--byte-accent, #4488ff) !important;
-    border: 1px solid transparent !important;
     box-shadow: none !important;
     text-shadow: none !important;
+    background: var(--bs-panel-soft, rgba(255, 255, 255, 0.06)) !important;
+    border: 1px solid var(--bs-border, rgba(255, 255, 255, 0.14)) !important;
+    color: var(--bs-text, #fff) !important;
     cursor: pointer;
+
+    &[data-style="primary"] {
+      color: #fff !important;
+      background: var(--byte-accent, #4488ff) !important;
+      border-color: transparent !important;
+    }
+
+    // Tinted rather than filled: a Skip is a real choice, not a warning, and
+    // matching the primary's weight would make it read as the way out.
+    &[data-style="danger"] {
+      background: rgba(248, 113, 113, 0.12) !important;
+      border-color: rgba(248, 113, 113, 0.35) !important;
+      color: var(--bs-danger, #f26b6b) !important;
+    }
 
     &:disabled {
       opacity: 0.6;

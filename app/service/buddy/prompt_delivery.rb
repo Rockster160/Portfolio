@@ -16,6 +16,67 @@ module Buddy
   module PromptDelivery
     module_function
 
+    # What a prompt can END as, and what the settled form in the thread says it
+    # was. Every other status (`load` above all, which fires on every page view)
+    # leaves the form alone.
+    ENDINGS = {
+      "complete" => "Answered in the app ✓",
+      "skip"     => "Skipped in the app ✓",
+    }.freeze
+
+    # A prompt Buddy posted can also be answered on its own page, and until it
+    # settles here the thread still shows an open form for a question that has
+    # no answer left to give. Tapping it got a bare "no pending prompt" — the
+    # refusal was right and it arrived far too late to be the explanation.
+    #
+    # Rides the Jil trigger bus rather than a Prompt callback so it covers every
+    # door at once: the controller, a Jil task answering one, Buddy's own tools.
+    # Bails on the trigger name, so it costs one comparison for everything else.
+    def dispatch(user, trigger, payload)
+      return unless trigger.to_s == "prompt"
+
+      status  = jil_attr(payload, :status).to_s
+      receipt = ENDINGS[status]
+      return if receipt.nil?
+
+      id = jil_attr(payload, :id) || payload.try(:id)
+      return if id.blank?
+
+      # A skipped prompt has no answer to fold in, so its form keeps whatever it
+      # was showing and only stops being answerable.
+      values = status == "complete" ? response_of(payload) : nil
+      open_forms(user, id).each { |action| Buddy::FormAction.settle!(action, receipt: receipt, values: values) }
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::PromptDelivery] settle failed: #{e.class}: #{e.message}")
+      nil
+    end
+
+    # Pending forms in ANY of their threads pointing at this prompt. Keyed on
+    # the payload the form was posted with rather than on `merge_key`, which
+    # only gets stored when the tool supersedes.
+    def open_forms(user, prompt_id)
+      user.byte_actions.where(
+        tool_name: Buddy::FormAction::TOOL_NAME,
+        state:     :pending,
+      ).where(
+        "tool_input->>'tool_name' = ? AND tool_input->'payload'->>'id' = ?",
+        "answer_prompt", prompt_id.to_s
+      )
+    end
+
+    # Trigger payloads arrive as the Prompt itself carrying Jil attrs (see
+    # Jilable#[]), and occasionally as a plain hash.
+    def jil_attr(payload, key)
+      return payload[key] || payload[key.to_s] if payload.is_a?(Hash)
+
+      payload.try(:[], key)
+    end
+
+    def response_of(payload)
+      response = payload.is_a?(Hash) ? payload[:response] || payload["response"] : payload.try(:response)
+      response.is_a?(Hash) ? response : nil
+    end
+
     # Post `prompt` as a form in the person's Buddy thread. Returns the
     # ByteAction, or nil when there's nowhere to put it. Never raises: a prompt
     # that doesn't reach the thread is still sitting in the app.

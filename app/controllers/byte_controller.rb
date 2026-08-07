@@ -382,7 +382,9 @@ class ByteController < ApplicationController
   def respond_buddy_form(action)
     values = params[:form]
     values = values.permit!.to_h if values.respond_to?(:permit!)
-    result = Buddy::FormAction.submit!(action, values: values)
+    # `action_key`, not `action` — Rails owns that param. Names which footer
+    # button was tapped; blank is the submit.
+    result = Buddy::FormAction.submit!(action, values: values, key: params[:action_key])
 
     return render json: action.reload.as_wire if result[:ok]
 

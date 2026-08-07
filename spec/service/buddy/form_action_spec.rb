@@ -158,6 +158,90 @@ RSpec.describe Buddy::FormAction do
     end
   end
 
+  # A form's footer is a list of actions, not a lone Send. The other buttons run
+  # a tool of their OWN against the payload the form was posted with, which is
+  # what lets a Skip exist on a form whose every field is required.
+  describe "the other buttons" do
+    it "puts the primary last, so it lands on the right" do
+      action = post_form(calorie_prompt, {})
+
+      footer = form_meta(action)["actions"]
+      expect(footer.pluck("key")).to eq(%w[skip submit])
+      expect(footer.last["label"]).to eq("Send it")
+      expect(footer.first["style"]).to eq("danger")
+    end
+
+    it "skips the prompt without reading a single field" do
+      prompt = calorie_prompt
+      action = post_form(prompt, {})
+
+      # Every field empty — the submit would refuse this outright.
+      result = described_class.submit!(action, values: {}, key: "skip")
+
+      expect(result[:ok]).to be(true)
+      expect(Prompt.find_by(id: prompt.id)).to be_nil
+    end
+
+    it "tells the prompt listeners it was skipped, not answered" do
+      fired = []
+      allow(::Jil).to receive(:trigger) { |_user, scope, payload|
+        fired << [scope, payload.try(:[], :status) || payload.try(:status)]
+        true
+      }
+      action = post_form(calorie_prompt, {})
+
+      described_class.submit!(action, values: {}, key: "skip")
+
+      expect(fired).to include([:prompt, :skip])
+      expect(fired.map(&:last)).not_to include(:complete)
+    end
+
+    it "settles the form as skipped rather than as an answer" do
+      action = post_form(calorie_prompt, { "Calories" => "240" })
+
+      described_class.submit!(action, values: {}, key: "skip")
+
+      meta = form_meta(action)
+      expect(meta["status"]).to eq("submitted")
+      expect(meta["receipt"]).to eq("Skipped it ✓")
+      expect(meta["decided"]).to eq("skip")
+      # The values were never sent, so they are not rewritten to look as if
+      # they were — Calories still shows Buddy's guess.
+      expect(meta["fields"].find { |f| f["key"] == "Calories" }["value"]).to eq("240")
+    end
+
+    it "closes the form, so it cannot then be answered too" do
+      prompt = calorie_prompt
+      action = post_form(prompt, { "Calories" => "240" })
+
+      described_class.submit!(action, values: {}, key: "skip")
+      result = described_class.submit!(action, values: { "Notes" => "x", "Calories" => "240" })
+
+      expect(result[:ok]).to be(false)
+      expect(result[:errors].join).to include("already been sent")
+    end
+
+    it "refuses a button this form was never posted with" do
+      prompt = calorie_prompt
+      action = post_form(prompt, { "Calories" => "240" })
+
+      result = described_class.submit!(action, values: {}, key: "delete_everything")
+
+      expect(result[:ok]).to be(false)
+      expect(action.reload).to be_pending
+      expect(Prompt.find_by(id: prompt.id)).to be_present
+    end
+
+    it "still sends normally when no button is named" do
+      prompt = calorie_prompt
+      action = post_form(prompt, { "Calories" => "240" })
+
+      described_class.submit!(action, values: { "Notes" => "shake", "Calories" => "240" })
+
+      expect(prompt.reload.response["Calories"]).to eq("240")
+    end
+  end
+
   describe Buddy::FormFields do
     def collect(type, raw, **extra)
       fields = [{ key: "F", label: "F", type: type, **extra }]

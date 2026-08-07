@@ -204,6 +204,20 @@
     }
   }
 
+  // Priority ordering. Mirrors the server enum's integer values (higher
+  // = more urgent) so the client sorts identically without shipping a
+  // second ranking table. `priority_rank` comes down on the payload;
+  // the name lookup is the fallback for anything serialized before the
+  // field existed, and both land on `normal` when neither is present.
+  const PRIORITY_RANKS = { critical: 4, high: 3, normal: 2, low: 1, none: 0 };
+  const NORMAL_PRIORITY_RANK = PRIORITY_RANKS.normal;
+  function priorityRank(c) {
+    if (!c) return NORMAL_PRIORITY_RANK;
+    if (Number.isFinite(c.priority_rank)) return c.priority_rank;
+    const named = PRIORITY_RANKS[c.priority];
+    return named == null ? NORMAL_PRIORITY_RANK : named;
+  }
+
   // ============================================================
   // ChoreStore — the data model. Every read derives from here.
   //
@@ -440,17 +454,24 @@
       // on Today), minus dailies. Sits between Dailies and Scheduled and
       // is hidden when empty.
       todayList() {
-        return this.all().filter(c => c.due_today && c.today_visible && !c.archived && !dailyIdSet.has(c.id));
+        const items = this.all().filter(c => c.due_today && c.today_visible && !c.archived && !dailyIdSet.has(c.id));
+        // Priority first; ties keep the store's order, which is the
+        // user's Grid sort_order. `sort` is stable in every engine we
+        // target, so equal-priority items don't shuffle between renders.
+        return items.sort((a, b) => priorityRank(b) - priorityRank(a));
       },
       // Items that today_visible filtering would have put on the old
       // Today screen, minus dailies AND minus the new "due today"
       // section. What's left is overdue carryovers and always-on items.
-      // Sorted by scheduled_due_on descending (most recent due date on
-      // top); items without a derived due date sink to the bottom in
+      // Sorted by priority descending FIRST, then by scheduled_due_on
+      // descending (most recent due date on top); items without a
+      // derived due date sink to the bottom of their priority band in
       // their existing order.
       overdueList() {
         const items = this.all().filter(c => c.today_visible && !c.archived && !dailyIdSet.has(c.id) && !c.due_today);
         return items.sort((a, b) => {
+          const byPriority = priorityRank(b) - priorityRank(a);
+          if (byPriority !== 0) return byPriority;
           const da = a.scheduled_due_on || "";
           const db = b.scheduled_due_on || "";
           if (da === db) return 0;
@@ -578,6 +599,29 @@
     const today = currentChoreDayIso();
     if (c.scheduled_due_on && c.scheduled_due_on > today) return null;
     return "fa-hourglass-half";
+  }
+  // Priority flag classification. Only the two urgent levels get a
+  // mark — normal is the default and low/none are quieter than normal,
+  // so flagging any of them would put a badge on nearly every card and
+  // stop the flag meaning anything.
+  const PRIORITY_FLAGS = {
+    critical: { cls: "fa-exclamation-circle", mod: "critical", title: "Critical priority" },
+    high:     { cls: "fa-angle-double-up",    mod: "high",     title: "High priority" },
+  };
+  function priorityFlagFor(c) {
+    if (!c || c.archived) return null;
+    return PRIORITY_FLAGS[c.priority] || null;
+  }
+  // DOM builder for the priority flag. Returns a detached <i>, or null
+  // when the chore isn't urgent enough to carry one.
+  function buildPriorityFlagNode(c) {
+    const spec = priorityFlagFor(c);
+    if (!spec) return null;
+    const el = cloneTemplate("priority-flag");
+    if (!el) return null;
+    el.classList.add(spec.cls, spec.mod);
+    el.title = spec.title;
+    return el;
   }
   // DOM builder for the state icon (Sun / Clock / Hourglass). Returns
   // a detached <i> ready to append, or null when the chore has no
@@ -997,9 +1041,31 @@
     patchText(el.querySelector(".circle-reward"), c.reward_label);
     patchCountSlot(el.querySelector("[data-count-slot]"), c);
     patchStateIcon(el.querySelector(".circle-inner"), c);
+    patchPriorityFlag(el.querySelector(".circle-inner"), c);
     patchText(el.querySelector(":scope > .title"), c.short_name);
     applyProgressRing(el, c);
     hydrateDataAttrs(el, c);
+  }
+  // Patch the bottom-left priority flag on `host`. Same shape as
+  // patchStateIcon: swap the severity classes in place when one is
+  // already there so the element keeps its DOM identity, add on
+  // first appearance, remove when the chore drops below :high.
+  function patchPriorityFlag(host, c) {
+    if (!host) return;
+    const existing = host.querySelector(":scope > [data-priority-flag]");
+    const spec = priorityFlagFor(c);
+    if (!spec) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (existing) {
+      existing.classList.remove("fa-exclamation-circle", "fa-angle-double-up", "critical", "high");
+      existing.classList.add(spec.cls, spec.mod);
+      if (existing.title !== spec.title) existing.title = spec.title;
+      return;
+    }
+    const node = buildPriorityFlagNode(c);
+    if (node) host.appendChild(node);
   }
   function patchStateIcon(host, c) {
     if (!host) return;
@@ -1030,6 +1096,7 @@
     patchStreakBadge(el, c);
     patchText(el.querySelector(".card-reward"), c.reward_label);
     patchCountSlot(el.querySelector("[data-count-slot]"), c);
+    patchPriorityFlag(el, c);
     patchText(el.querySelector(":scope > .title"), c.name);
     applyProgressRing(el, c);
     hydrateDataAttrs(el, c);
@@ -4199,6 +4266,7 @@
     setField("target_count", 1);
     setCooldownSeconds(0);
     setPillValue("freq", "never");
+    setPillValue("priority", "normal");
     setPillValue("show_on_today_view", "when_scheduled");
     setPillValue("hot_eligibility", "when_available");
     setPillValue("sharing_mode", "household");
@@ -4302,6 +4370,7 @@
     setField("reward_pebbles", reward);
     const oneOffCb = editForm.querySelector('[data-field="one_off"]');
     if (oneOffCb) oneOffCb.checked = !!c.one_off;
+    setPillValue("priority", c.priority || "normal");
     setPillValue("sharing_mode", c.sharing_mode || "household");
     setField("assigned_to_user_id", c.assigned_to_user_id || "");
     setPillValue("show_on_today_view", c.show_on_today_view || "when_scheduled");
@@ -4525,6 +4594,7 @@
         one_off: oneOff,
         starts_on: getField("starts_on") || null,
         marked_due_at: getField("marked_due_at") || null,
+        priority: getField("priority") || "normal",
         show_on_today_view: getField("show_on_today_view") || "when_scheduled",
         hot_eligibility: getField("hot_eligibility") || "when_available",
         sharing_mode: sharingMode,

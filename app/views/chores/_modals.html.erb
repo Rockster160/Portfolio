@@ -108,6 +108,24 @@
                data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-form-type="other">
       </div>
 
+      <%# ----- Priority -----
+        Urgency, independent of payout. Sorts the chore up the Today /
+        Scheduled sections, weights its odds of becoming a Hot Pick, and
+        (critical / high only) puts a flag in the card's bottom-left
+        corner. "None" opts the chore out of Hot Picks entirely. %>
+      <div class="form-section">
+        <label class="field-label">Priority</label>
+        <div class="pill-group" data-pill-group="priority">
+          <button type="button" class="pill" data-value="critical">Critical</button>
+          <button type="button" class="pill" data-value="high">High</button>
+          <button type="button" class="pill active" data-value="normal">Normal</button>
+          <button type="button" class="pill" data-value="low">Low</button>
+          <button type="button" class="pill" data-value="none">None</button>
+        </div>
+        <input type="hidden" data-field="priority" value="normal">
+        <span class="field-hint">Sorts higher on Today and weights Hot Picks. "None" never becomes a Hot Pick.</span>
+      </div>
+
       <%# ----- Single Task toggle (default off). When ON the schedule
         block collapses to just Start Date. ----- %>
       <div class="form-section toggle-row">

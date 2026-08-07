@@ -117,6 +117,8 @@ class ChartBuilder
     when :data_keys
       keys = all_events.flat_map { |evt| evt.data.is_a?(Hash) ? evt.data.keys : [] }.uniq
       keys.map { |key| { label: key, events: all_events, data_key: key } }
+    when :data_value
+      series_by_data_value
     when :sign
       # Plot magnitudes (abs) so the two arms sit on one shared axis and their
       # heights compare directly — never a second/mirrored y-axis.
@@ -132,6 +134,19 @@ class ChartBuilder
     else
       [{ label: @chart.name, events: all_events }]
     end
+  end
+
+  # One series per distinct value of `series_key` — a category, a source, a
+  # status. Ordered biggest-first so the leading (validated) palette colors land
+  # on the series that dominate the chart rather than on whichever value
+  # happened to appear first; per-label overrides in `colors` still win.
+  def series_by_data_value
+    key = @chart.series_key
+    return [{ label: @chart.name, events: all_events }] if key.blank?
+
+    grouped = all_events.group_by { |evt| evt.data.is_a?(Hash) ? evt.data[key].to_s : "" }
+    ordered = grouped.sort_by { |_, evts| -evts.sum { |evt| value_for(evt).abs } }
+    ordered.map { |value, evts| { label: value.presence || "(none)", events: evts } }
   end
 
   # The number a single event contributes. `data_key` (from a data_keys series)

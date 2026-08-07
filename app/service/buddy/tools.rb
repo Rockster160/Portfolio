@@ -111,9 +111,16 @@ module Buddy
         # instead of dropping the undeclared ones on the floor.
         passthrough_args: passthrough_args,
         # Renders as an editable FORM in the thread instead of a checkbox row
-        # (see Buddy::FormAction). `{ arg:, fields:, title:, submit: }` — the
-        # collected values land on the payload under `arg`, and `fields` doubles
-        # as the resolver, raising when the thing being edited is gone.
+        # (see Buddy::FormAction). `{ arg:, fields:, title:, submit:, actions: }`
+        # — the collected values land on the payload under `arg`, and `fields`
+        # doubles as the resolver, raising when the thing being edited is gone.
+        #
+        # `actions:` are the OTHER buttons in the footer, each running a tool of
+        # its own against the payload the form was posted with rather than
+        # against the fields: `{ key:, label:, style:, tool:, payload: }`. A
+        # prompt's Skip is one. They render left of the submit, and `submit:
+        # false` drops the submit entirely for a form that is only its buttons —
+        # a yes/no, or one per option.
         form:             validate_form!(form, resolved_level),
         # Whether a LATER call with the same merge_key replaces an earlier one
         # instead of adding to it (see Buddy::Supersede). True only where the
@@ -501,6 +508,17 @@ module Buddy
         return nil if form.nil?
         raise ArgumentError, "form: needs :arg and :fields" if form[:arg].blank? || !form[:fields].respond_to?(:call)
         raise ArgumentError, "form: only makes sense on a level-3 tool" unless level == 3
+
+        Array(form[:actions]).each { |choice|
+          if choice[:key].blank? || choice[:label].blank? || choice[:tool].blank?
+            raise ArgumentError, "form action: needs :key, :label and :tool"
+          end
+          # "submit" names the button that sends the VALUES (see
+          # Buddy::FormAction::SUBMIT_KEY, spelled out here so registration
+          # doesn't depend on that constant being loaded yet). An alternate
+          # taking that key would shadow it and the form could never be sent.
+          raise ArgumentError, "form action: :submit is reserved" if choice[:key].to_s == "submit"
+        }
 
         form
       end

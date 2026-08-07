@@ -24,13 +24,17 @@ class CustomChart < ApplicationRecord
   # `config` column, so adding an option here never needs a migration.
   VALUE_SOURCES = [:count, :notes, :data].freeze  # :data pairs with data_key
   METRICS       = [:count, :sum, :avg, :min, :max, :gap].freeze
-  SERIES_BYS    = [:none, :name, :notes, :data_keys, :sign].freeze
+  # :data_keys splits on the KEYS present in data; :data_value splits on the
+  # VALUE of one key (series_key), so a jsonb field that holds a label —
+  # category, source, status — becomes one series per distinct label.
+  SERIES_BYS    = [:none, :name, :notes, :data_keys, :data_value, :sign].freeze
   BUCKETS       = [:none, :day, :week, :month, :year].freeze
   CHART_TYPES   = [:bar, :line, :stacked_bar].freeze
 
   DEFAULTS = {
     value_source: :count,
     data_key:     nil,
+    series_key:   nil,
     metric:       :count,
     series_by:    :none,
     bucket:       :month,
@@ -52,6 +56,10 @@ class CustomChart < ApplicationRecord
 
   def value_source = settings[:value_source]
   def data_key     = settings[:data_key].presence
+  # Which data key a :data_value series splits on. Separate from data_key,
+  # which names the key the VALUE is read from — a spend chart sums `amount`
+  # while splitting on `category`.
+  def series_key   = settings[:series_key].presence
   def metric       = settings[:metric]
   def series_by    = settings[:series_by]
   def bucket       = settings[:bucket]

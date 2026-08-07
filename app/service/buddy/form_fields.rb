@@ -31,6 +31,31 @@ module Buddy
     # Carried through untouched: the form posts them, the person never sees them.
     HIDDEN = :hidden
 
+    # The footer, in render order: every alternate first, the submit last, so
+    # the primary action is the rightmost thing on the row and the one closest
+    # to a thumb. A spec can pass `submit: false` for a form that IS its buttons
+    # — a yes/no, or one per option — where a Send would have nothing to send.
+    def buttons(spec)
+      alternates = Array(spec[:actions]).map { |choice|
+        {
+          "key"   => choice[:key].to_s,
+          "label" => choice[:label].to_s,
+          "style" => (choice[:style] || :plain).to_s,
+          # Alternates run their own tool on the payload the form was posted
+          # with; the fields are not theirs to read.
+          "sends" => false,
+        }
+      }
+      return alternates if spec[:submit] == false
+
+      alternates + [{
+        "key"   => Buddy::FormAction::SUBMIT_KEY,
+        "label" => spec[:submit].to_s.presence || "Send",
+        "style" => "primary",
+        "sends" => true,
+      }]
+    end
+
     def normalize(fields)
       Array(fields).filter_map { |raw|
         field = raw.respond_to?(:to_h) ? raw.to_h.symbolize_keys : nil

@@ -112,7 +112,7 @@ class Jil::Methods::Tesla < Jil::Methods::Base
       # leg of an upcoming event. No-op when no candidate is found or a
       # trip is already in flight — see TripState.start_for_destination!.
       ::TripState.start_for_destination!(dest, @jil.user)
-      notify_user("Navigating", dest)
+      notify_user("Navigating to #{dest}", travel_time_body(dest))
     }
   end
 
@@ -212,6 +212,21 @@ class Jil::Methods::Tesla < Jil::Methods::Base
   end
 
   private
+
+  # Notification body for a nav command — the drive time, or nil when we
+  # can't get one (notify_user drops a blank body). Best-effort: the car
+  # already has the command by the time this runs, so a Google miss or an
+  # unresolvable destination costs the travel time rather than failing the
+  # whole call through #wrap.
+  def travel_time_body(dest)
+    seconds = @jil.user&.address_book&.traveltime_seconds(dest)
+    return if seconds.blank?
+
+    "TT: #{::ActionController::Base.helpers.distance_of_time_in_words(seconds)}"
+  rescue StandardError => e
+    ::PrettyLogger.error("[JIL TESLA] travel_time_body: #{e.class}: #{e.message}")
+    nil
+  end
 
   def notify_user(title, body=nil)
     return unless @jil.user

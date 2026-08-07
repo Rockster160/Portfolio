@@ -2,8 +2,14 @@ Buddy::Tools.register(
   name:        :edit_chore,
   description: <<~TXT,
     Edit an existing chore. Use to rename, change the schedule, reassign, set
-    when it's next due, or archive/unarchive a chore the user already has. Only
-    include the fields that are changing.
+    when it's next due, change how urgent it is, or archive/unarchive a chore
+    the user already has. Only include the fields that are changing.
+
+    `priority` is urgency, not payout — it sorts the chore up the Today list,
+    weights its odds of being picked as a Hot Pick, and flags the card when
+    it's critical or high. "Bump the vet thing up", "that one's urgent now",
+    "stop pushing the litter box at me" are all priority edits. The pebble
+    reward is a separate thing; don't reach for one when they meant the other.
 
     `due` vs `schedule` — these are different things and mixing them up is the
     easy mistake. `schedule` is the RECURRENCE, how often it comes back ("every
@@ -20,6 +26,7 @@ Buddy::Tools.register(
     schedule: { type: :string, required: false, description: "New RECURRENCE, e.g. 'every Sunday'" },
     due:      { type: :string, required: false, description: "When it's next due - YYYY-MM-DD or ISO datetime, or 'none' to clear. A one-off, not the recurrence" },
     assignee: { type: :string, required: false, description: "New assignee (household member first name)" },
+    priority: { type: :string, required: false, description: "New urgency: critical, high, normal, low, or none" },
     disabled: { type: :string, required: false, description: "'true' to archive, 'false' to unarchive" },
   },
   confirm:     ->(payload, ctx) {
@@ -36,12 +43,21 @@ Buddy::Tools.register(
     due = ctx.resolve_due(payload[:due]) if payload[:due].present?
     raise "couldn't read #{payload[:due].inspect} as a due date" if payload[:due].present? && due.nil?
 
+    # Same reason as the due date: resolved now so an unrecognized word
+    # comes back as an error the model can act on, rather than an edit
+    # that silently leaves the priority where it was.
+    priority = Chore.priority_key(payload[:priority]) if payload[:priority].present?
+    if payload[:priority].present? && priority.nil?
+      raise "unknown priority #{payload[:priority].inspect} — use critical, high, normal, low, or none"
+    end
+
     {
       summary:  "Edit #{chore.name}?",
       resolved: {
         chore_id:    chore.id,
         assignee_id: assignee_id,
         recurrence:  recurrence,
+        priority:    priority,
         # "clear" is the unset-it sentinel; an absent key means "leave it".
         due_at_iso:  (due == :clear ? "clear" : due&.iso8601),
       },
@@ -58,6 +74,7 @@ Buddy::Tools.register(
     elsif payload[:due_at_iso].present?
       diffs << "due #{ctx.friendly_future(Time.zone.parse(payload[:due_at_iso].to_s))}"
     end
+    diffs << "priority → #{payload[:priority]}" if payload[:priority].present?
     diffs << "assign → #{User.find_by(id: payload[:assignee_id])&.first_name}" if payload[:assignee_id]
     diffs << (payload[:disabled] == "true" ? "archive" : "unarchive") if payload.key?(:disabled)
     { title: base, sub: diffs.join("\n").presence }
@@ -72,6 +89,7 @@ Buddy::Tools.register(
     attrs[:name]                = payload[:name]        if payload[:name].present?
     attrs[:assigned_to_user_id] = payload[:assignee_id] if payload[:assignee_id]
     attrs[:recurrence]          = payload[:recurrence]  if payload[:recurrence].present?
+    attrs[:priority]            = payload[:priority]    if payload[:priority].present?
     if payload[:due_at_iso].present?
       attrs[:marked_due_at] = (Time.zone.parse(payload[:due_at_iso].to_s) unless payload[:due_at_iso] == "clear")
     end

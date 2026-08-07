@@ -338,4 +338,84 @@ RSpec.describe ChartBuilder do
       expect(result[:error]).to be_present
     end
   end
+
+  describe "series_by :data_value" do
+    def spend
+      event(
+        "Transaction", at: tz.local(2026, 1, 5, 12),
+        data: { "amount" => 100.0, "category" => "groceries" }
+      )
+      event(
+        "Transaction", at: tz.local(2026, 1, 8, 12),
+        data: { "amount" => 40.0, "category" => "eat out" }
+      )
+      event(
+        "Transaction", at: tz.local(2026, 1, 20, 12),
+        data: { "amount" => 300.0, "category" => "groceries" }
+      )
+    end
+
+    def build(**overrides)
+      described_class.new(
+        chart(
+          query: "name::Transaction", value_source: :data, data_key: "amount",
+          series_by: :data_value, metric: :sum, bucket: :month, **overrides
+        ),
+        start_at: "2026-01-01", end_at: "2026-01-31",
+      ).call
+    end
+
+    it "splits into one series per distinct value of the series key" do
+      spend
+      labels = build(series_key: "category")[:datasets].pluck(:label)
+
+      expect(labels).to eq(["groceries", "eat out"])
+    end
+
+    it "sums only that series' events into each bucket" do
+      spend
+      datasets = build(series_key: "category")[:datasets]
+
+      expect(datasets.find { |d| d[:label] == "groceries" }[:data]).to eq([400.0])
+      expect(datasets.find { |d| d[:label] == "eat out" }[:data]).to eq([40.0])
+    end
+
+    it "orders biggest first so leading palette colors go to the dominant series" do
+      spend
+      datasets = build(series_key: "category")[:datasets]
+
+      expect(datasets.first[:label]).to eq("groceries")
+      expect(datasets.first[:color]).to eq(described_class::PALETTE.first)
+    end
+
+    it "lets a per-label color override win over the palette" do
+      spend
+      datasets = build(series_key: "category", colors: "groceries = #ff0000")[:datasets]
+
+      expect(datasets.find { |d| d[:label] == "groceries" }[:color]).to eq("#ff0000")
+    end
+
+    it "labels events missing the key rather than dropping them" do
+      event("Transaction", at: tz.local(2026, 1, 5, 12), data: { "amount" => 10.0 })
+      datasets = build(series_key: "category")[:datasets]
+
+      expect(datasets.pluck(:label)).to eq(["(none)"])
+      expect(datasets.first[:data]).to eq([10.0])
+    end
+
+    it "falls back to a single series when no series key is set" do
+      spend
+      datasets = build[:datasets]
+
+      expect(datasets.length).to eq(1)
+      expect(datasets.first[:data]).to eq([440.0])
+    end
+
+    it "reads values through invert_sign like every other series mode" do
+      spend
+      datasets = build(series_key: "category", invert_sign: true)[:datasets]
+
+      expect(datasets.find { |d| d[:label] == "groceries" }[:data]).to eq([-400.0])
+    end
+  end
 end

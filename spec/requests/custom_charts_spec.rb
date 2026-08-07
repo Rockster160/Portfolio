@@ -105,6 +105,19 @@ RSpec.describe "CustomCharts", type: :request do
       expect(user.custom_charts.last.invert_sign).to be(true)
     end
 
+    it "round-trips the series_key field" do
+      post custom_charts_path, params: {
+        custom_chart: {
+          name:   "Spend by category",
+          query:  "name::Transaction",
+          config: { series_by: "data_value", series_key: "category", metric: "sum" },
+        },
+      }
+      created = user.custom_charts.last
+      expect(created.series_by).to eq(:data_value)
+      expect(created.series_key).to eq("category")
+    end
+
     it "reads an unchecked invert_sign as false" do
       post custom_charts_path, params: {
         custom_chart: {

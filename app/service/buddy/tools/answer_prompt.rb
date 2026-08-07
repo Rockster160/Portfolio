@@ -35,10 +35,10 @@ Buddy::Tools.register(
   # form is what lets Buddy guess freely, because every guess is visible and one
   # tap from corrected before anything is written.
   form:        {
-    arg:    :answers,
+    arg:     :answers,
     # Also the resolver: raises if the prompt is gone or unanswerable, which is
     # what Turn checks before the model speaks (nothing is submitted here).
-    fields: ->(payload, ctx) {
+    fields:  ->(payload, ctx) {
       prompt = ctx.user.prompts.unanswered.find_by(id: payload[:id])
       raise "no pending prompt ##{payload[:id]}" if prompt.nil?
 
@@ -50,8 +50,20 @@ Buddy::Tools.register(
       prefilled = form.build_response(payload[:answers] || {})
       form.form_fields.map { |field| field.merge(value: prefilled[field[:key]] || field[:value]) }
     },
-    title:  ->(payload, ctx) { ctx.user.prompts.find_by(id: payload[:id])&.question.to_s },
-    submit: "Send it",
+    title:   ->(payload, ctx) { ctx.user.prompts.find_by(id: payload[:id])&.question.to_s },
+    submit:  "Send it",
+    # The other thing a person does with a survey they didn't ask for. Without
+    # it the only way out of a prompt Buddy posted was to answer it or leave it
+    # sitting in the thread, and skipping meant going back to the app.
+    actions: [
+      {
+        key:     :skip,
+        label:   "Skip",
+        style:   :danger,
+        tool:    :skip_prompt,
+        payload: ->(payload, _ctx) { { id: payload[:id] } },
+      },
+    ],
   },
   confirm:     ->(payload, ctx) {
     prompt = ctx.user.prompts.unanswered.find_by(id: payload[:id])

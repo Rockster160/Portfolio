@@ -438,6 +438,12 @@ module Buddy
         # page, so quoting it back reads as a fact rather than a calculation.
         out[:hot] = "#{hot.to_f.round(1).to_s.delete_suffix(".0")}x" if hot.present?
         out[:freq] = chore.freq.to_s if chore.respond_to?(:freq) && chore.freq.present?
+        # Only when it's NOT the default. Stamping "normal" on every row
+        # spends tokens saying nothing and trains Buddy to read the field
+        # as noise; the levels that carry information are the other four.
+        if chore.respond_to?(:priority) && chore.priority.present? && !chore.priority_normal?
+          out[:priority] = chore.priority.to_s
+        end
         if chore.respond_to?(:assigned?) && chore.assigned?
           out[:assigned_to] = chore.assigned_to_user&.first_name
         end

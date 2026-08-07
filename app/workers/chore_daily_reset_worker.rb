@@ -21,6 +21,17 @@ class ChoreDailyResetWorker
   TODAY_DUE_WEIGHT = 2.0
   OVERDUE_WEIGHT   = 1.5
   BASELINE_WEIGHT  = 1.0
+  # Priority multiplies the schedule weight rather than replacing it, so
+  # "critical and overdue" still outranks "critical and merely available".
+  # `:none` lands on zero, and `weighted_sample` drops any zero-weight
+  # entry from the pool — a none-priority chore is never a Hot Pick.
+  PRIORITY_WEIGHT = {
+    critical: 2.0,
+    high:     1.5,
+    normal:   1.0,
+    low:      0.5,
+    none:     0.0,
+  }.freeze
 
   def perform(day_iso=nil)
     day = day_iso.present? ? Date.parse(day_iso) : ChoreDay.current
@@ -55,7 +66,11 @@ class ChoreDailyResetWorker
 
     # 10% chance: also flag one >Medium item at 2x.
     if rand < PREMIUM_RARE_CHANCE
-      premium = available.select { |c| c.reward_pebbles > MEDIUM_REWARD_RANGE.max }.sample
+      # Weighted like the banded picks above so priority still counts —
+      # a plain `.sample` here would hand a :none chore the premium slot
+      # the banded passes are built to keep it out of.
+      premium_pool = available.select { |c| c.reward_pebbles > MEDIUM_REWARD_RANGE.max }
+      premium = weighted_sample(premium_pool, 1) { |c| weight_for(c, today_ids, overdue_ids) }.first
       picks << { chore: premium, multiplier: STANDARD_MULT } if premium
     end
 
@@ -143,10 +158,18 @@ class ChoreDailyResetWorker
   end
 
   def weight_for(chore, today_ids, overdue_ids)
+    schedule_weight_for(chore, today_ids, overdue_ids) * priority_weight_for(chore)
+  end
+
+  def schedule_weight_for(chore, today_ids, overdue_ids)
     return TODAY_DUE_WEIGHT if today_ids.include?(chore.id)
     return OVERDUE_WEIGHT   if overdue_ids.include?(chore.id)
 
     BASELINE_WEIGHT
+  end
+
+  def priority_weight_for(chore)
+    PRIORITY_WEIGHT.fetch(chore.priority.to_s.to_sym, BASELINE_WEIGHT)
   end
 
   # Cumulative-sum weighted random sample WITHOUT replacement. O(N×K)

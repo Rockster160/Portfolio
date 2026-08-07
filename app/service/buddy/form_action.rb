@@ -21,6 +21,11 @@ module Buddy
 
     TOOL_NAME = "buddy_form".freeze
 
+    # The key of the button that submits the form's VALUES. Every other button
+    # in the footer runs a different tool and ignores the fields entirely — see
+    # `actions:` on a tool's form spec.
+    SUBMIT_KEY = "submit".freeze
+
     # Long, for the same reason a proposal checklist is: this sits in the thread
     # and someone may come back to it. The 10-minute ByteAction default is tuned
     # for a Claude hook blocking on a decision, and made checkboxes silently 409.
@@ -33,12 +38,16 @@ module Buddy
       spec = tool[:form]
       return nil if spec.nil?
 
-      ctx    = Buddy::ToolContext.new(user, conversation: conversation)
-      fields = Buddy::FormFields.normalize(spec[:fields].call(payload, ctx))
-      return nil if fields.empty?
+      ctx     = Buddy::ToolContext.new(user, conversation: conversation)
+      fields  = Buddy::FormFields.normalize(spec[:fields].call(payload, ctx))
+      # A form with no fields is still a real question when its footer carries
+      # the answers — a yes/no, or one button per option. Only a form with
+      # neither fields nor buttons has nothing to ask.
+      return nil if fields.empty? && Array(spec[:actions]).empty?
 
-      title   = call_or_value(spec[:title], payload, ctx).to_s.presence || tool[:name].to_s.tr("_", " ")
-      message = post_message(user, conversation, title)
+      named   = spec[:title]
+      title   = (named.respond_to?(:call) ? named.call(payload, ctx) : named).to_s
+      message = post_message(user, conversation, title.presence || tool[:name].to_s.tr("_", " "))
 
       action = ByteAction.create!(
         user:              user,
@@ -73,14 +82,24 @@ module Buddy
 
     # Run the tool with what the person actually sent.
     #
+    # `key` names which footer button was tapped. The default one submits the
+    # VALUES and runs the form's own tool; any other runs the tool that button
+    # declares and never looks at the fields — a Skip must not fail validation
+    # on the boxes it exists to leave empty.
+    #
     # Returns { ok:, errors: } — errors render under the form so they can fix and
     # resend rather than losing what they typed.
-    def submit!(action, values:)
+    def submit!(action, values:, key: nil)
       return { ok: false, errors: ["That form's already been sent."] } unless action.pending?
       return { ok: false, errors: ["That form has expired."] } if action.expires_at&.past?
 
       tool = Buddy::Tools[action.tool_input["tool_name"].to_s.to_sym]
       return { ok: false, errors: ["I can't run that one anymore."] } if tool.nil?
+
+      # Resolved from the TOOL, like the fields are, so a forged key can only
+      # ever name a button this form was actually posted with.
+      choice = alternate(tool, key)
+      return { ok: false, errors: ["I don't know that button."] } if choice.nil? && !primary?(key)
 
       user     = action.user
       deferred = []
@@ -91,12 +110,16 @@ module Buddy
         action.reload
         next unless action.pending?
 
-        outcome = run(action, tool, values, user)
+        outcome = while_submitting(action) {
+          choice ? run_alternate(action, choice, user) : run(action, tool, values, user)
+        }
         if outcome[:ok]
           action.state      = :decided
           action.decided_at = Time.current
-          action.decision   = { "value" => outcome[:collected], "source" => "user" }
-          action.buttons    = outcome[:fields].map { |f| f.transform_keys(&:to_s) }
+          action.decision   = { "value" => outcome[:collected], "source" => "user", "action" => outcome[:key] }
+          # An alternate leaves the fields alone — it didn't submit them, and
+          # rewriting them would show a skipped prompt as if it were answered.
+          action.buttons    = outcome[:fields].map { |f| f.transform_keys(&:to_s) } if outcome[:fields]
           deferred          = Buddy::ProposalBuilder.claim_deferred(action)
           action.save!
         end
@@ -117,8 +140,116 @@ module Buddy
       outcome.slice(:ok, :errors)
     end
 
+    # Forms whose tool is running RIGHT NOW on this thread.
+    #
+    # `answer_prompt` fires the very same `prompt:complete` trigger the app's own
+    # page fires, from inside the submit — so the external settler below comes
+    # straight back at the form being submitted. Left alone, both would claim its
+    # deferred queue off two copies of the row and run whatever was waiting
+    # behind it twice. The submit is already settling it, so the settler stands
+    # down.
+    SUBMITTING = :buddy_form_submitting
+
+    def while_submitting(action)
+      open = Array(Thread.current[SUBMITTING])
+      Thread.current[SUBMITTING] = open + [action.id]
+      yield
+    ensure
+      Thread.current[SUBMITTING] = open
+    end
+
+    def submitting?(action)
+      Array(Thread.current[SUBMITTING]).include?(action.id)
+    end
+
+    # Close a form because the thing it was asking about got settled somewhere
+    # ELSE — the same prompt answered on its own page, say. Nothing runs here;
+    # the work has already happened, and this only brings the copy in the thread
+    # into line with it.
+    #
+    # `values` are what the thing ended up holding, folded onto the fields so
+    # the bubble shows the real answer rather than Buddy's guess. Omit them and
+    # the fields are left exactly as they were, which is right for a skip: there
+    # is no answer to show.
+    #
+    # Returns true if this closed it, false if it was already settled.
+    def settle!(action, receipt:, values: nil, key: nil)
+      return false unless action&.pending?
+      return false if submitting?(action)
+
+      fields   = nil
+      deferred = []
+      settled  = false
+
+      action.with_lock do
+        action.reload
+        next unless action.pending?
+
+        fields            = Buddy::FormFields.apply_values(action.buttons, values) if values
+        action.state      = :decided
+        action.decided_at = Time.current
+        action.decision   = { "value" => values || {}, "source" => "app", "action" => key.to_s.presence }
+        action.buttons    = fields.map { |f| f.transform_keys(&:to_s) } if fields
+        deferred          = Buddy::ProposalBuilder.claim_deferred(action)
+        action.save!
+        settled = true
+      end
+      return false unless settled
+
+      finish!(action, { key: key.to_s.presence, receipt: receipt, fields: fields })
+      # Whatever was queued behind this form was waiting for the question to be
+      # answered, not for the tap specifically. It has been.
+      Buddy::ProposalBuilder.advance_queue!(action, deferred, executed: true, captured: {}) if deferred.any?
+      true
+    rescue StandardError => e
+      Buddy::Errors.report(section: "form_action.settle", exception: e, user: action&.user)
+      false
+    end
+
     class << self
       private
+
+      def primary?(key)
+        key.blank? || key.to_s == SUBMIT_KEY
+      end
+
+      def alternate(tool, key)
+        return nil if primary?(key)
+
+        Array(tool.dig(:form, :actions)).find { |choice| choice[:key].to_s == key.to_s }
+      end
+
+      # A footer button that isn't the submit. It runs a DIFFERENT tool against
+      # the payload this form was posted with — skip_prompt against the prompt
+      # id the form is for — so the fields play no part, and neither does
+      # whatever the browser sent along with the tap.
+      def run_alternate(action, choice, user)
+        tool = Buddy::Tools[choice[:tool].to_sym]
+        return { ok: false, errors: ["I can't run that one anymore."] } if tool.nil?
+
+        payload = (action.tool_input["payload"] || {}).symbolize_keys
+        ctx     = Buddy::ToolContext.new(user, conversation: action.byte_conversation)
+        args    = choice[:payload].respond_to?(:call) ? choice[:payload].call(payload, ctx) : payload
+
+        confirm  = tool[:confirm].call(args, ctx)
+        resolved = args.merge(confirm[:resolved] || {})
+
+        proposal = { "id" => nil, "payload" => stringify(resolved), "tool_name" => tool[:name].to_s }
+        exec_ctx = Buddy::ToolContext.new(user, proposal: proposal, conversation: action.byte_conversation)
+        result   = Buddy::Tools.dispatch(tool, resolved, exec_ctx)
+        return { ok: false, errors: [result[:error].to_s.presence || "That didn't go through."] } unless result[:ok]
+
+        {
+          ok:        true,
+          key:       choice[:key].to_s,
+          collected: {},
+          captured:  {},
+          receipt:   safely { tool[:receipt].call(result[:data], exec_ctx) }.to_s.presence || "Done ✓",
+        }
+      rescue StandardError => e
+        Rails.logger.warn("[Buddy::FormAction] #{choice[:key]} failed: #{e.class}: #{e.message}")
+        { ok: false, errors: [e.message.to_s.truncate(200)] }
+      end
 
       # Rebuild the field list from the TOOL, never from what was posted, then
       # validate against that. The browser's copy is a rendering of the form, not
@@ -145,6 +276,7 @@ module Buddy
 
         {
           ok:        true,
+          key:       SUBMIT_KEY,
           collected: collected,
           # A tool that exists to collect a value says so by returning
           # `captured:` from its execute; everything else returns nothing here
@@ -164,10 +296,13 @@ module Buddy
         return if message.nil?
 
         form = (message.metadata["form"] || {}).merge(
-          "fields"  => outcome[:fields].map { |f| f.transform_keys(&:to_s) },
           "status"  => "submitted",
           "receipt" => outcome[:receipt],
+          # Which button ended it, so the summary can say "Skipped it ✓" over
+          # the values that never got sent rather than implying they were.
+          "decided" => outcome[:key],
         )
+        form["fields"] = outcome[:fields].map { |f| f.transform_keys(&:to_s) } if outcome[:fields]
         message.update!(metadata: message.metadata.merge("form" => form, "action_state" => "decided"))
         broadcast(action.user, message.reload)
       end
@@ -180,9 +315,9 @@ module Buddy
           "action_state"      => "pending",
           "action_expires_at" => action.expires_at&.iso8601,
           "form"              => {
-            "fields" => fields.map { |f| f.transform_keys(&:to_s) },
-            "submit" => spec[:submit].to_s.presence || "Send",
-            "status" => "pending",
+            "fields"  => fields.map { |f| f.transform_keys(&:to_s) },
+            "actions" => Buddy::FormFields.buttons(spec),
+            "status"  => "pending",
           },
         }
       end
@@ -196,10 +331,6 @@ module Buddy
           metadata:     { "kind" => "buddy_reply", "source" => "form" },
           delivered_at: Time.current,
         )
-      end
-
-      def call_or_value(thing, payload, ctx)
-        thing.respond_to?(:call) ? thing.call(payload, ctx) : thing
       end
 
       def stringify(hash)
