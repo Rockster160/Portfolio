@@ -424,6 +424,18 @@ RSpec.describe RecordLinks::Propagator do
       expect(user.prompts.count).to eq(1)
     end
 
+    # `datetime-local` renders an EMPTY box for a value it can't read, and an
+    # offset on the end is enough to make it unreadable. The question arrives
+    # with the time already rubbed off it, which is worse than not defaulting.
+    it "defaults When to the event's local time, in the format the input reads" do
+      at = Time.utc(2026, 8, 6, 19, 44)
+      log_event!("Whisper", notes: "Down", at: at)
+
+      when_field = user.prompts.last.options.find { |o| o["question"] == "When?" }
+      expect(when_field["default"]).to eq(at.in_time_zone(user.timezone).strftime("%Y-%m-%dT%H:%M"))
+      expect(when_field["default"]).to match(/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}\z/)
+    end
+
     it "completes for whoever was named when the answer comes back" do
       log_event!("Whisper", notes: "Down")
       prompt = user.prompts.last

@@ -301,7 +301,7 @@ module RecordLinks
         params:   { source: "ambiguous_chore", chore_name: link.target_name, event_id: event.id },
         options:  [
           { type: :select, question: WHO_QUESTION, choices: names, default: "" },
-          { type: :datetime, question: WHEN_QUESTION, default: event.timestamp&.iso8601 },
+          { type: :datetime, question: WHEN_QUESTION, default: local_datetime(user, event.timestamp) },
         ],
       )
       ::Jil.trigger(user, :prompt, prompt.with_jil_attrs(state: :create), auth: :link)
@@ -309,6 +309,17 @@ module RecordLinks
     rescue StandardError => e
       Rails.logger.warn("[RecordLinks] ask_who #{link.target_name.inspect}: #{e.class}: #{e.message}")
       false
+    end
+
+    # The field this lands in is `<input type="datetime-local">`, which accepts a
+    # local date and time and NOTHING else. `iso8601` ends in an offset, which
+    # makes the value invalid, and an invalid value renders as an EMPTY box —
+    # no error, just a question with the answer rubbed off it. Task 365 wrote
+    # minutes-precision local time and that is what has to come back.
+    def local_datetime(user, time)
+      return nil if time.blank?
+
+      time.in_time_zone(user.timezone).strftime("%Y-%m-%dT%H:%M")
     end
 
     def asked_about?(user, event)
