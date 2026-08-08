@@ -149,7 +149,19 @@ class ChartBuilder
     taken = @chart.colors.values.map { |hex| hex.to_s.downcase }
     ordered.map { |value, evts|
       label = value.presence || "(none)"
-      { label: label, events: evts, color: auto_color(label, taken) }
+      # Money in and money out get their own stack, so they stand side by side
+      # instead of one column crossing zero — where the two halves can only be
+      # compared by carrying your eye across the axis, and neither reads as a
+      # whole. Magnitudes, so both grow upward on the one shared scale (never a
+      # second or mirrored y-axis). A set of series that all point the same way
+      # lands in a single group and stacks exactly as before.
+      {
+        label:  label,
+        events: evts,
+        color:  auto_color(label, taken),
+        group:  (evts.sum { |evt| value_for(evt) }.negative? ? "out" : "in"),
+        abs:    true,
+      }
     }
   end
 

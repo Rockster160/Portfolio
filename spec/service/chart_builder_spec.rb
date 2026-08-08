@@ -468,11 +468,64 @@ RSpec.describe ChartBuilder do
       expect(datasets.first[:data]).to eq([440.0])
     end
 
-    it "reads values through invert_sign like every other series mode" do
+    it "puts money in and money out in separate stacks, side by side" do
       spend
+      event(
+        "Transaction", at: tz.local(2026, 1, 2, 12),
+        data: { "amount" => -2_000.0, "category" => "pay check" }
+      )
+      datasets = build(series_key: "category", invert_sign: true)[:datasets]
+      by_label = datasets.index_by { |d| d[:label] }
+
+      expect(by_label["pay check"][:stack]).to eq("in")
+      expect(by_label["groceries"][:stack]).to eq("out")
+      expect(by_label["eat out"][:stack]).to eq("out")
+    end
+
+    it "plots both stacks as magnitudes so neither hangs below zero" do
+      spend
+      event(
+        "Transaction", at: tz.local(2026, 1, 2, 12),
+        data: { "amount" => -2_000.0, "category" => "pay check" }
+      )
       datasets = build(series_key: "category", invert_sign: true)[:datasets]
 
-      expect(datasets.find { |d| d[:label] == "groceries" }[:data]).to eq([-400.0])
+      expect(datasets.flat_map { |d| d[:data] }).to all(be >= 0)
+      expect(datasets.find { |d| d[:label] == "pay check" }[:data]).to eq([2_000.0])
+      expect(datasets.find { |d| d[:label] == "groceries" }[:data]).to eq([400.0])
+    end
+
+    it "leaves the headline net signed even though the bars are magnitudes" do
+      spend
+      event(
+        "Transaction", at: tz.local(2026, 1, 2, 12),
+        data: { "amount" => -2_000.0, "category" => "pay check" }
+      )
+
+      # 2000 in, 440 out, inverted → net +1560.
+      expect(build(series_key: "category", invert_sign: true)[:stats][:total]).to eq(1_560.0)
+    end
+
+    it "keeps a single stack when every series points the same way" do
+      spend
+      datasets = build(series_key: "category")[:datasets]
+
+      expect(datasets.pluck(:stack).uniq).to eq(["in"])
+    end
+
+    it "reads values through invert_sign, which now shows up as the stack chosen" do
+      spend
+
+      # Source-positive spend reads as money OUT once inverted, so it moves stacks
+      # while the bar height (a magnitude) stays put.
+      plain_sets = build(series_key: "category")[:datasets]
+      inverted_sets = build(series_key: "category", invert_sign: true)[:datasets]
+      plain = plain_sets.find { |d| d[:label] == "groceries" }
+      inverted = inverted_sets.find { |d| d[:label] == "groceries" }
+
+      expect(plain[:stack]).to eq("in")
+      expect(inverted[:stack]).to eq("out")
+      expect(inverted[:data]).to eq([400.0])
     end
   end
 end
