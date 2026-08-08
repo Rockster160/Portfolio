@@ -380,12 +380,69 @@ RSpec.describe ChartBuilder do
       expect(datasets.find { |d| d[:label] == "eat out" }[:data]).to eq([40.0])
     end
 
-    it "orders biggest first so leading palette colors go to the dominant series" do
+    it "orders biggest first" do
       spend
       datasets = build(series_key: "category")[:datasets]
 
       expect(datasets.first[:label]).to eq("groceries")
-      expect(datasets.first[:color]).to eq(described_class::PALETTE.first)
+    end
+
+    it "keeps a series' color when the ordering changes" do
+      spend
+      before = build(series_key: "category")[:datasets]
+      groceries_color = before.find { |d| d[:label] == "groceries" }[:color]
+
+      # Push "eat out" past "groceries" so the two swap places in the dataset list.
+      event(
+        "Transaction", at: tz.local(2026, 1, 25, 12),
+        data: { "amount" => 5_000.0, "category" => "eat out" }
+      )
+      after = build(series_key: "category")[:datasets]
+
+      expect(after.first[:label]).to eq("eat out")
+      expect(after.find { |d| d[:label] == "groceries" }[:color]).to eq(groceries_color)
+    end
+
+    it "gives a brand new category a color without any configuration" do
+      spend
+      event(
+        "Transaction", at: tz.local(2026, 1, 26, 12),
+        data: { "amount" => 60.0, "category" => "childcare" }
+      )
+      datasets = build(series_key: "category", colors: "groceries = #ff0000")[:datasets]
+      childcare = datasets.find { |d| d[:label] == "childcare" }
+
+      expect(described_class::PALETTE).to include(childcare[:color])
+    end
+
+    it "never auto-assigns a color the chart already spent on an override" do
+      spend
+      event(
+        "Transaction", at: tz.local(2026, 1, 26, 12),
+        data: { "amount" => 60.0, "category" => "childcare" }
+      )
+      # Claim the whole palette, the way a fully-seeded category chart does.
+      seeded = described_class::PALETTE.each_with_index.map { |hex, i| "cat#{i} = #{hex}" }
+      datasets = build(series_key: "category", colors: seeded.join("\n"))[:datasets]
+
+      expect(datasets.pluck(:color)).to all(satisfy { |c| described_class::PALETTE.exclude?(c) })
+      expect(datasets.pluck(:color).uniq.length).to eq(datasets.length)
+    end
+
+    it "keeps an overflow color stable and legible" do
+      spend
+      event(
+        "Transaction", at: tz.local(2026, 1, 26, 12),
+        data: { "amount" => 60.0, "category" => "childcare" }
+      )
+      seeded = described_class::PALETTE.each_with_index.map { |hex, i| "cat#{i} = #{hex}" }
+      colors = 2.times.map {
+        datasets = build(series_key: "category", colors: seeded.join("\n"))[:datasets]
+        datasets.find { |d| d[:label] == "childcare" }[:color]
+      }
+
+      expect(colors.first).to match(/\A#[0-9a-f]{6}\z/)
+      expect(colors.uniq.length).to eq(1)
     end
 
     it "lets a per-label color override win over the palette" do

@@ -146,7 +146,53 @@ class ChartBuilder
 
     grouped = all_events.group_by { |evt| evt.data.is_a?(Hash) ? evt.data[key].to_s : "" }
     ordered = grouped.sort_by { |_, evts| -evts.sum { |evt| value_for(evt).abs } }
-    ordered.map { |value, evts| { label: value.presence || "(none)", events: evts } }
+    taken = @chart.colors.values.map { |hex| hex.to_s.downcase }
+    ordered.map { |value, evts|
+      label = value.presence || "(none)"
+      { label: label, events: evts, color: auto_color(label, taken) }
+    }
+  end
+
+  # Colour for a value-split series the chart has no explicit override for.
+  #
+  # Derived from the LABEL, never the position. These series are ordered by
+  # magnitude, so a position-based colour would hand two categories each other's
+  # colour the moment one overtook the other, and the chart would appear to change
+  # meaning between date ranges. CRC32 rather than String#hash, which is seeded per
+  # process and so would differ between web workers.
+  #
+  # Only draws from palette entries the chart hasn't already spent on an override —
+  # otherwise a newly added category lands on a colour another series is already
+  # wearing, which is exactly the case where nobody has told it what to use.
+  def auto_color(label, taken)
+    free = PALETTE - taken
+    return free[::Zlib.crc32(label.to_s) % free.size] if free.any?
+
+    generated_color(label)
+  end
+
+  # Overflow once every palette colour is spoken for, so a chart can carry more
+  # categories than the palette has entries. A hue spun off the label at fixed
+  # saturation/lightness, so it still reads against the dark surface rather than
+  # coming out near-black or washed out.
+  def generated_color(label)
+    hue = (::Zlib.crc32("#{label}-overflow") % 360) / 360.0
+    chroma = (1 - ((2 * 0.62) - 1).abs) * 0.55
+    second = chroma * (1 - (((hue * 6) % 2) - 1).abs)
+    base = 0.62 - (chroma / 2)
+
+    triple = (
+      case (hue * 6).floor % 6
+      when 0 then [chroma, second, 0]
+      when 1 then [second, chroma, 0]
+      when 2 then [0, chroma, second]
+      when 3 then [0, second, chroma]
+      when 4 then [second, 0, chroma]
+      else [chroma, 0, second]
+      end
+    )
+    red, green, blue = triple.map { |part| ((part + base) * 255).round }
+    format("#%<red>02x%<green>02x%<blue>02x", red: red, green: green, blue: blue)
   end
 
   # The number a single event contributes. `data_key` (from a data_keys series)
