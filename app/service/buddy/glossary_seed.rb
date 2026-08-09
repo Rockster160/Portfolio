@@ -109,6 +109,14 @@ module Buddy
         aliases: ["my dailies"],
         kind:    :shorthand,
       },
+      {
+        term:    "Quiet time",
+        meaning: "Whisper's quiet mode - the window where the dog is settled and nothing should make noise.",
+        aliases: ["quiet mode", "quiet hours"],
+        kind:    :activity,
+        notes:   "Set it with the \"Whisper Quiet For\" function, never a timer. \"Quiet time for an hour\" " \
+                 "means quiet until an hour from now - a countdown named \"quiet time\" does nothing at all.",
+      },
 
       # Devices are the one kind where `meaning` is load-bearing rather than
       # explanatory: Buddy::DeviceStates reads it as the name the sensor

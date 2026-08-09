@@ -96,6 +96,17 @@ RSpec.describe HouseholdGlossaryTerm do
       expect(HouseholdGlossaryTerm.lookup(household, "now now").meaning).to include("NOT immediately")
     end
 
+    # "Set quiet time for an hour" got a 60-minute countdown named "quiet time",
+    # which does nothing - the real thing is Whisper's quiet mode, and only the
+    # word "Whisper" was making the difference.
+    it "carries quiet time, pointed at the function rather than a timer" do
+      quiet = HouseholdGlossaryTerm.lookup(household, "quiet time")
+
+      expect(quiet.meaning).to include("Whisper's quiet mode")
+      expect(quiet.notes).to include("never a timer")
+      expect(HouseholdGlossaryTerm.lookup(household, "set quiet mode for an hour")).to eq(quiet)
+    end
+
     it "leaves a term the household already edited alone" do
       HouseholdGlossaryTerm.where(chore_household: household).delete_all
       mine = HouseholdGlossaryTerm.create!(chore_household: household, term: "Muti", meaning: "My own wording.")

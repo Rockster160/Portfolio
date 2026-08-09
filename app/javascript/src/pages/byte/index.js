@@ -328,7 +328,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // mounted a second one beside it. Prod 2513: two identical bubbles, one row.
   function adoptSendResponse(entry, message) {
     if (message?.direction === "outbound") {
-      message.metadata = { ...(message.metadata || {}), local_id: entry.local_id };
+      message.metadata = {
+        ...(message.metadata || {}),
+        local_id: entry.local_id,
+      };
       return message;
     }
     // Not an echo. The command left no bubble of its own on purpose, so drop
@@ -593,7 +596,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // landing on these.
   function renderSteps(steps) {
     const list = Array.isArray(steps) ? steps.filter(Boolean) : [];
-    if (list.length === 0) return `<span class="byte-think-step byte-think-now">Thinking</span>`;
+    if (list.length === 0)
+      return `<span class="byte-think-step byte-think-now">Thinking</span>`;
 
     return list
       .map((s, i) => {
@@ -1061,7 +1065,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       // orphaned placeholder — a "…" the Mac started streaming but never
       // finalized because the turn errored — loses that class and must fall
       // back to its chronological slot, not stay pinned below newer replies.
-      if (kind === "streaming" && n.classList.contains("byte-msg-live")) streaming.push(n);
+      if (kind === "streaming" && n.classList.contains("byte-msg-live"))
+        streaming.push(n);
       else if (kind === "pending") pending.push(n);
       else settled.push(n);
     }
@@ -1312,7 +1317,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // While composing, pin even if the atBottom heuristic momentarily reads
     // false (a long message rendering while the keyboard animates) — otherwise
     // its tail strands below the fold.
-    if ((!atBottom && !composerFocused() && !stickThroughLoad) || pinRaf) return;
+    if ((!atBottom && !composerFocused() && !stickThroughLoad) || pinRaf)
+      return;
     pinRaf = requestAnimationFrame(() => {
       pinRaf = 0;
       if (atBottom || composerFocused() || stickThroughLoad)
@@ -1474,7 +1480,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // keep whatever the PREVIOUS thread was wearing, because this only
     // assigned when the incoming conversation had one.
     const expr = convo.buddy_expression;
-    buddyWakeExpr = expr && expr !== "sleeping" ? expr : DEFAULT_WAKE_EXPRESSION;
+    buddyWakeExpr =
+      expr && expr !== "sleeping" ? expr : DEFAULT_WAKE_EXPRESSION;
     if (!sleepUntil) buddyHero?.setExpression(buddyWakeExpr);
   }
 
@@ -1892,7 +1899,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (typeof modal.showModal === "function") modal.showModal();
       else modal.setAttribute("open", "");
     });
-    document.querySelector(closeSel)?.addEventListener("click", () => modal.close());
+    document
+      .querySelector(closeSel)
+      ?.addEventListener("click", () => modal.close());
   }
 
   wireManager(
@@ -2183,7 +2192,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   // composer; interactive elements and active text selections are left alone.
   thread.addEventListener("click", (e) => {
     if (!hasFinePointer()) return;
-    if (e.target.closest("button, a, input, textarea, label, [role='button']")) return;
+    // `select` belongs here for the same reason every other control does, and
+    // its absence was invisible until forms in the thread started carrying
+    // dropdowns. On desktop the click bubbled up, the composer took focus, and
+    // the native popup closed in the same frame it opened — so a "Who did it?"
+    // could be opened and never picked from. isEditableTarget above has always
+    // counted SELECT; this list simply didn't.
+    if (
+      e.target.closest(
+        "button, a, input, select, textarea, label, [role='button']",
+      )
+    )
+      return;
     const sel = window.getSelection && window.getSelection();
     if (sel && sel.toString().length > 0) return; // don't steal focus mid-selection
     input.focus();
@@ -2263,7 +2283,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
-          "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "",
+          "X-CSRF-Token":
+            document
+              .querySelector('meta[name="csrf-token"]')
+              ?.getAttribute("content") || "",
         },
         body: JSON.stringify({ scale: next }),
       });
@@ -2274,9 +2297,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   applyFontScale(app.dataset.fontScale || 100);
-  document.querySelector("[data-byte-font-smaller]")
+  document
+    .querySelector("[data-byte-font-smaller]")
     ?.addEventListener("click", () => nudgeFontScale(-FONT_STEP));
-  document.querySelector("[data-byte-font-bigger]")
+  document
+    .querySelector("[data-byte-font-bigger]")
     ?.addEventListener("click", () => nudgeFontScale(FONT_STEP));
 
   // Any focused editable, not just the composer — a form field inside a
@@ -2286,7 +2311,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const el = document.activeElement;
     if (!el || el === document.body) return false;
 
-    return el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName);
+    return (
+      el.isContentEditable ||
+      ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)
+    );
   };
 
   let rafH = 0;
@@ -2311,7 +2339,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       // shorter than the window is a stale reading and the window wins. The
       // threshold is well past any URL bar (~100px) and well under any
       // keyboard (~300px), so this only ever fires on the stale case.
-      const stale = vvh != null && !typingSomewhere() && wh - vvh > STALE_VIEWPORT_GAP;
+      const stale =
+        vvh != null && !typingSomewhere() && wh - vvh > STALE_VIEWPORT_GAP;
       const h = (stale ? wh : vvh) || wh;
       document.documentElement.style.setProperty("--byte-app-h", `${h}px`);
       // Debug: publish to the drawer footer so misreports are visible.
@@ -2456,7 +2485,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         // A live theme swap (`/buddy suki`) on the thread on screen has to
         // repaint the surface + pet now — applyBroadcast only touches the list.
         const convo = data.conversation;
-        if (convo && convo.id === currentConversationId && convo.mode === "buddy") {
+        if (
+          convo &&
+          convo.id === currentConversationId &&
+          convo.mode === "buddy"
+        ) {
           applyBuddyTheme(convo);
         }
         return;
@@ -2465,7 +2498,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Mood is per-conversation now. Ignore a face broadcast for a thread
         // that isn't the one on screen — otherwise conversation A's mood would
         // paint over conversation B's pet.
-        if (data.conversation_id != null && data.conversation_id !== currentConversationId) return;
+        if (
+          data.conversation_id != null &&
+          data.conversation_id !== currentConversationId
+        )
+          return;
         if (data.transient) {
           // A transient overlay (e.g. "thinking"). Show it, but DON'T remember
           // it as the mood — when it clears we fall back to the real face.
@@ -2771,7 +2808,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     // "Reload" — an update may well still be queued behind this.
     const title = reloadBtn.getAttribute("title");
     reloadBtn.classList.add("is-stalled");
-    reloadBtn.setAttribute("title", "Reload didn't go through - tap to try again");
+    reloadBtn.setAttribute(
+      "title",
+      "Reload didn't go through - tap to try again",
+    );
     setTimeout(() => {
       reloadBtn.classList.remove("is-stalled");
       reloadBtn.setAttribute("title", title);

@@ -24,6 +24,10 @@ module Buddy
 
       So keep the reaction, cut the commentary: warmth belongs at the FRONT of a line as a genuine reaction to something specific, not on the end as a wry observation. A joke that's actually good is worth sending; a joke that's only there because the line felt bare is the one to drop. If you're torn between flatter and warmer, go warmer - this should sound like someone who likes me, not someone filing a report.
 
+      That rule is about the PADDING, not about where it sits. Moving the same empty flourish into the middle of the sentence doesn't retire it, it just hides it - and that is exactly what keeps happening: "sitting there all day like a birthday-shaped background process", "the fun little gremlin of the bunch", "a pretty chunky day on deck, but it's not a sneaky one", "hanging out for late evening". Every one of those is a comparison invented for the rhythm of the line, carrying no fact I didn't already have. The test is subtraction: cut the clause, and if the sentence still tells me everything it told me before, the clause was decoration. One genuinely funny observation in a message is yours to keep. A metaphor attached to each item in turn is a tic, and it is the single loudest way this stops sounding like you.
+
+      Do not narrate the SHAPE of the message. "On the chore side...", "On the calendar...", "The big thing in the morning is..." are section headers with the formatting filed off - the same report, read aloud. A friend doesn't announce which part of the day they're about to cover, they just say the thing. Two briefings in a row opening their second sentence with "On the chore(s) side" is the tell that this is being assembled from a template instead of said.
+
       Keep it short - three to five lines - but short and warm, not short and clipped. Break it into short paragraphs with a blank line between distinct beats (a greeting, then what's ahead, then any week heads-up) so it renders clean and skimmable - never one smushed block. Enthusiasm and clean breaks are not at odds; you get both. Prose with shape and a pulse, not a field report.
 
       Still avoid: em dashes (commas or short sentences instead) and bullet-listing what I already did.
@@ -82,10 +86,10 @@ module Buddy
 
       [
         "",
-        "- **The names come from what's DUE today and isn't a daily.** `chores_pending_today` is sorted with those first, then the hot picks, then the dailies last - so the top of that list is what you're looking for and the bottom of it is what I already know. A `due_today: true` chore whose `freq` is weekly/monthly/less is the whole point: it's the one I'd forget on my own.",
-        "- **A daily is never one of your three.** Teeth, water, the pills - I do those without being told, and naming them spends a slot that a once-a-month thing needed. They're a gloss at most (\"plus the usual dailies\"), and most days they don't need saying at all.",
-        "- If nothing is due today beyond the dailies, that IS the answer - say the day's light on chores and move on to the calendar. A short briefing is not a failed one, and padding it back up to length with habit names is the failure this is all about.",
-        "- BATCH related items: several pending chores that are obviously one errand or one theme go out ONCE as the theme, not one by one. A word shared across their names is the giveaway - three chores that all start with the dog's name are \"the dog's round\", the bin ones are \"it's trash day\", all the plant watering is \"watering day\".",
+        "- **`chores_due_today` is the ONLY list you name chores from.** It is already exactly what it sounds like: due today, dailies removed. Everything in it earned its place; nothing outside it is a candidate, however pending it looks.",
+        "- **`chores_pending_today` is NOT for this.** It's the full roster - every daily habit alongside the real ones - and it's here so I can ask about it directly, not so it can be read out. Teeth, water, the pills: I do those without being told, and naming one spends a slot a once-a-month thing needed. A gloss covers all of them at once (\"plus the usual dailies\") and most days they don't need saying at all.",
+        "- If `chores_due_today` is EMPTY, that IS the answer - say the day's light on chores and move to the calendar. Do not go looking through the other chore sections for something to say instead. A short briefing is not a failed one, and filling it back out with habit names is the exact failure this is about.",
+        "- BATCH related items: several chores that are obviously one errand or one theme go out ONCE as the theme, not one by one. A word shared across their names is the giveaway - three chores that all start with the dog's name are \"the dog's round\", the bin ones are \"it's trash day\", all the plant watering is \"watering day\".",
       ].join("\n")
     end
 
@@ -109,8 +113,9 @@ module Buddy
 
       block = <<~BLOCK.strip
         THREE NAMES, TOTAL - the hard limit on this whole message:
-        - You may name at most three specific chores. Not three per paragraph, not three per section. Three, across everything you write.
-        - Each has to earn its slot: due today and not a daily, an unusually hot pick, a one-off, or the one thing you'd actually recommend I start.
+        - A name has to be there for a REASON - it's due and I'd forget it, it's a big hot pick, it's the one I'd start with. A name with no reason behind it is the whole problem: a bare run of chore names is a worse version of a screen I can open myself, and getting one every single day is how a briefing stops being read at all.
+        - You may name at most three specific chores, and all three come from `chores_due_today`. Not three per paragraph, not three per section. Three, across everything you write.
+        - If that list holds fewer than three, you name fewer than three. It is a ceiling, never a quota, and there is nowhere else to go shopping for a third.
         - Everything past those three is a count or a theme, or it goes unsaid - "plus the usual dailies", "and the rest of the morning routine". Never a comma-separated run of record names.
         - If you find yourself writing "Still pending:" followed by a list, stop and delete it. That sentence is the failure mode, however tidy it looks. So is any sentence with four chore names in it, however conversational the joins are - "Cymbalta, water, teeth, puppy fed, the table, exercise, the bed, and the desk are all on deck" is the list wearing a sentence.
       BLOCK
@@ -187,7 +192,7 @@ module Buddy
         - Less-frequent cadences ("weekly", "monthly", "yearly", "every 6 days") I may NOT have top of mind - a light touch helps ("your monthly 1:1 with Eric is this afternoon"). Touch on it, don't dive into details.
         - No `cadence` at all = a one-off (vet appt, dinner). Always worth surfacing.
         - DO call out a routine that's NOT happening: a `cancelled` item, especially a recurring one, is a real heads-up ("no standup tomorrow"). A normal thing missing beats a normal thing present.
-        - If a soon item has `drive_min`, you can work in the drive ("~25 min drive, so leave-ish soon"). Only when it's close enough to matter.
+        - `drive_min` on a soon item is a NUMBER OF MINUTES, and the number is the entire reason to bring it up. Say it: "about 20 minutes out, so leave by 7:40". Never mention that a drive exists without saying how long it is - "Ketamine at 8, with a drive time" tells me something I already know and withholds the one thing I asked for. If you're not going to give the minutes, don't raise the drive at all. Only worth raising when it's close enough to act on.
 
         REST OF THE WEEK (`upcoming_agenda`, tomorrow onward):
         - Weight by proximity - the closer, the more worth mentioning. Tomorrow's oddity matters more than something 6 days out; only a genuinely notable thing a week out earns a mention.

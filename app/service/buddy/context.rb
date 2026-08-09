@@ -21,9 +21,15 @@ module Buddy
     def full(user, conversation)
       tz = user.timezone
       now = Time.current.in_time_zone(tz)
-      today = user.perceived_today
 
-      chore_buckets = build_chore_buckets(user, today)
+      # The CHORE day, not the perceived day. They disagree for an hour every
+      # morning: User#perceived_today rolls at 3am and ChoreDay at 4am, and
+      # everything the chore buckets touch - completion `day_key`, hot pick
+      # `day_key`, the marked-due window - is keyed the ChoreDay way. Handed the
+      # perceived date between 3 and 4am, the lookups all missed by a day: a
+      # chore finished in that hour read as still pending, that morning's hot
+      # picks vanished, and anything stamped due read as overdue backlog.
+      chore_buckets = build_chore_buckets(user, ChoreDay.current(user))
 
       {
         now_local:              now.strftime("%a %Y-%m-%d %-I:%M %p %Z"),
@@ -36,6 +42,7 @@ module Buddy
         # Buddy can never confuse "what's left" with "what's finished".
         # The previous mixed-list-with-done_today-flag was getting
         # glossed over (LLM reads the list, ignores the flag).
+        chores_due_today:       chore_buckets[:due_today],        # due TODAY and not a daily - the short list a briefing names from
         chores_pending_today:   chore_buckets[:pending_today],
         chores_done_today:      chore_buckets[:done_today],
         chores_hot_picks:       chore_buckets[:hot_picks],       # attention items
@@ -252,6 +259,9 @@ module Buddy
       #   done_today          — anything from pending_today already done.
       #   hot_picks           — flagged for attention today (subset lens).
       #   overdue_backlog     — marked_due, NOT in any of the above.
+      # `today` here is a CHORE day (ChoreDay.current), which is not the same
+      # date as User#perceived_today for an hour every morning. Every lookup
+      # below is keyed that way; see the caller.
       def build_chore_buckets(user, today)
         return default_buckets unless user.respond_to?(:accessible_chores) && user.chore_household_id
 
@@ -354,7 +364,20 @@ module Buddy
           intentional_ids.include?(id) || matches_today_ids.include?(id)
         }
 
+        # The short list: pending, due TODAY specifically, and not a daily
+        # habit. This is the answer to "what would I forget on my own", and it's
+        # separate from pending_today because a model handed twenty names writes
+        # twenty names — the Aug 7 and Aug 8 briefings both read the dailies out
+        # in full under a prompt that said at most three, and sorting them to
+        # the bottom didn't stop it. Nothing is hidden: the full roster is still
+        # `chores_pending_today` right below, which is what a direct question
+        # about chores gets answered from.
+        due_today_ids = pending_ids.select { |id| due_ids.include?(id) && !daily_ids.include?(id) }
+
         {
+          due_today:       due_today_ids.filter_map { |id|
+            slim_chore(by_id[id], typical_hours[id], due_ids, hot: hot_mults[id])
+          }.first(20),
           pending_today:   pending_ids.filter_map { |id|
             slim_chore(by_id[id], typical_hours[id], due_ids, hot: hot_mults[id])
           }.first(20),
@@ -409,7 +432,15 @@ module Buddy
       end
 
       def default_buckets
-        { pending_today: [], done_today: [], hot_picks: [], scheduled_today: [], overdue_backlog: [], all_names: [] }
+        {
+          due_today:       [],
+          pending_today:   [],
+          done_today:      [],
+          hot_picks:       [],
+          scheduled_today: [],
+          overdue_backlog: [],
+          all_names:       [],
+        }
       end
 
       # What a person would want told first. Stamped due today and not a daily
