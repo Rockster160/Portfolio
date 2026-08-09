@@ -528,7 +528,7 @@ module Buddy
       # never put a checkbox in front of anyone.
       def read_tools
         @read_tools ||= {
-          ContextTool::NAME  => ContextTool.new(@user, @conversation),
+          ContextTool::NAME  => ContextTool.new(@user, @conversation, briefing: today_briefing?),
           PromptTool::NAME   => PromptTool.new(@user, @conversation),
           ImageTool::NAME    => ImageTool.new(@user, @conversation),
           ListenerTool::NAME => ListenerTool.new(@user, @conversation),
@@ -712,9 +712,20 @@ module Buddy
         )
       end
 
+      # Is this turn the Today briefing? Only that seed carries the marker (see
+      # Buddy::TodayBriefing.deliver! and QuickActionsController#dispatch_trigger),
+      # so an ordinary question about chores is untouched by it - ask "what
+      # chores do I have" and you still get the whole list, because that time
+      # you asked for it.
+      def today_briefing?
+        return false unless @inbound.metadata.is_a?(Hash)
+
+        @inbound.metadata["buddy_action"].to_s == "today"
+      end
+
       def tools
         @tools ||= [
-          ContextTool.schema(user: @user),
+          ContextTool.schema(user: @user, briefing: today_briefing?),
           PromptTool.schema,
           ImageTool.schema,
           ListenerTool.schema,

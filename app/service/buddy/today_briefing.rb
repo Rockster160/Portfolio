@@ -75,51 +75,28 @@ module Buddy
       user.present? && Buddy::Features.enabled?(user, :chores)
     end
 
-    def chores_done_line(user)
-      return "" unless chores?(user)
-
-      "\n- `chores_done_today` is finished business - don't report it as an update and don't read the names back."
-    end
-
+    # `chores_due_today` is the only chore section this turn can reach at all —
+    # Buddy::GPT::ContextTool withholds the rest of them for a briefing (see
+    # BRIEFING_WITHHELD). So this stopped needing to argue anyone out of the
+    # full roster and only has to say what to do with the short list.
+    #
+    # Every earlier version of these bullets fought that battle in prose and
+    # lost: a hard "THREE NAMES, TOTAL", an explicit "a daily is never one of
+    # your three", a re-sorted bucket. Aug 7 named six, Aug 8 named six. Wording
+    # does not beat a list that is sitting right there.
     def chores_lead_lines(user)
       return "" unless chores?(user)
 
       [
         "",
-        "- **`chores_due_today` is the ONLY list you name chores from.** It is already exactly what it sounds like: due today, dailies removed. Everything in it earned its place; nothing outside it is a candidate, however pending it looks.",
-        "- **`chores_pending_today` is NOT for this.** It's the full roster - every daily habit alongside the real ones - and it's here so I can ask about it directly, not so it can be read out. Teeth, water, the pills: I do those without being told, and naming one spends a slot a once-a-month thing needed. A gloss covers all of them at once (\"plus the usual dailies\") and most days they don't need saying at all.",
-        "- If `chores_due_today` is EMPTY, that IS the answer - say the day's light on chores and move to the calendar. Do not go looking through the other chore sections for something to say instead. A short briefing is not a failed one, and filling it back out with habit names is the exact failure this is about.",
+        "- `chores_due_today` is due today and isn't a daily habit - the stuff I'd forget on my own. It is the ONLY place chores come from, and it's the whole chore section of your context: there is no fuller list to fall back on, by design.",
+        "- Name at most three of them, and only where the name has a REASON behind it: it's the one I'd start with, it's a big `hot` multiplier, it's an odd one-off. A run of names with no reason attached is a worse version of a screen I can open myself, and getting one every day is how a briefing stops being read.",
+        "- Fewer than three is normal. It's a ceiling, never a quota.",
+        "- If it's EMPTY, say nothing about chores at all and go to the calendar. Not \"nothing much on the chore front\", not a count, not the dailies - chores simply don't come up that day. A short briefing is not a failed one.",
         "- BATCH related items: several chores that are obviously one errand or one theme go out ONCE as the theme, not one by one. A word shared across their names is the giveaway - three chores that all start with the dog's name are \"the dog's round\", the bin ones are \"it's trash day\", all the plant watering is \"watering day\".",
+        "- Never tell me I DID something. You can't see completions on this turn at all, and a shared chore counts the moment ANYONE in the house does it, so \"you knocked out X\" is a guess that's wrong often enough to matter.",
+        "- A chore that isn't in that list does not exist for this message. Don't reach back for one you saw earlier in the thread, and don't write \"Still pending:\" followed by anything - that sentence is the failure mode however tidy it looks.",
       ].join("\n")
-    end
-
-    def chores_credit_line(user)
-      return "" unless chores?(user)
-
-      "\n- Never tell me I did something. A shared chore lands in `chores_done_today` the moment " \
-        "ANYONE in the house does it, so \"you knocked out X\" is a guess, and it is wrong often " \
-        "enough to matter."
-    end
-
-    # The single most common way this goes wrong, and the reason it's stated as
-    # a hard number: prod 2528 answered a Today tap with twelve chore names in
-    # one comma-separated run, and 2756 with eight, the second of those on a
-    # freshly reset thread with no history to imitate. Every softer phrasing
-    # ("don't recite", "gloss the dailies", "a pool to pick from") was already
-    # in the prompt both times - five of them, which read as five suggestions
-    # rather than one limit. They're gone; this is the only statement left.
-    def three_names_block(user)
-      return "" unless chores?(user)
-
-      block = <<~BLOCK.strip
-        THREE NAMES, TOTAL - the hard limit on this whole message:
-        - A name has to be there for a REASON - it's due and I'd forget it, it's a big hot pick, it's the one I'd start with. A name with no reason behind it is the whole problem: a bare run of chore names is a worse version of a screen I can open myself, and getting one every single day is how a briefing stops being read at all.
-        - You may name at most three specific chores, and all three come from `chores_due_today`. Not three per paragraph, not three per section. Three, across everything you write.
-        - If that list holds fewer than three, you name fewer than three. It is a ceiling, never a quota, and there is nowhere else to go shopping for a third.
-        - Everything past those three is a count or a theme, or it goes unsaid - "plus the usual dailies", "and the rest of the morning routine". Never a comma-separated run of record names.
-        - If you find yourself writing "Still pending:" followed by a list, stop and delete it. That sentence is the failure mode, however tidy it looks. So is any sentence with four chore names in it, however conversational the joins are - "Cymbalta, water, teeth, puppy fed, the table, exercise, the bed, and the desk are all on deck" is the list wearing a sentence.
-      BLOCK
-      "\n#{block}"
     end
 
     # A hot pick is worth naming only when it's unusual. Two-thirds of them are
@@ -128,15 +105,9 @@ module Buddy
     def chores_hot_line(user)
       return "" unless chores?(user)
 
-      "\n- `chores_hot_picks` - pinned for extra pebbles today, each carrying a `hot` multiplier (\"2x\", \"5x\"). " \
+      "\n- A `hot` multiplier on one of them (\"2x\", \"5x\") means extra pebbles today. " \
         "A big one is genuinely worth a mention and a bit of enthusiasm (\"the litter box is a 5x today\"); " \
         "a plain 2x is ordinary and isn't news."
-    end
-
-    def chores_secondary_line(user)
-      return "" unless chores?(user)
-
-      "\n- `chores_done_today` - do NOT name these. When a lot is already done, a half-clause nod is plenty (\"good start already\"); a roll call of it never is. And an entry carrying `by:` was done by someone ELSE in the house, so it is not mine to be congratulated for."
     end
 
     # After ~4pm local the day's weather isn't actionable anymore.
@@ -175,11 +146,11 @@ module Buddy
         #{weather_block(user)}#{plunge_block(user)}
 
         FORWARD-LOOKING ONLY. Only surface what's STILL AHEAD from `now_local`. Anything already over is not news:
-        - Agenda items flagged `passed: true` are DONE for the day - never recite or recap them.#{chores_done_line(user)}
+        - Agenda items flagged `passed: true` are DONE for the day - never recite or recap them.
         - If it's evening or later and the day is essentially behind them (most items passed, little pending), DON'T force a full rundown. A day that's over doesn't need a briefing - give whatever is actually left tonight (if anything) and a quick nod to tomorrow, then stop. Short is correct here.
 
         LEAD WITH what still needs to happen today.
-        #{three_names_block(user)}#{chores_lead_lines(user)}
+        #{chores_lead_lines(user)}
         - `today_agenda` - today's events / meetings with times. But see UNUSUAL-ONLY below: don't recite the daily-recurring stuff.
         - Agenda items tagged `mine: false` (with an `owner`, e.g. Chelsea) are on a partner's PERSONAL calendar shared with me - awareness only. They are NOT my tasks. Don't list them as mine; usually don't mention them at all. Only bring one up if it actually affects me (a conflict, a hand-off, something I'm part of), and attribute it ("Chelsea's got a thing at 3").#{chores_hot_line(user)}
 
@@ -199,7 +170,7 @@ module Buddy
         - Same cadence weighting: gloss/skip the daily-and-weekday repeats, lightly flag the less-common recurrences and one-offs, call out cancelled routines. On a weekend, a unique Monday thing is fair game ("heads up, dentist Monday morning").
         - At most a line. If nothing worth noting is coming, say nothing about the week.
 
-        SECONDARY (mention only if clearly relevant):#{chores_secondary_line(user)}
+        SECONDARY (mention only if clearly relevant):
         - `stashed_ideas` - OCCASIONALLY (not most days) float ONE idea I brain-dumped, if it fits the moment. Light, one at a time, easy to wave off. Skip it entirely most of the time.
 
         DO NOT USE:
@@ -210,11 +181,11 @@ module Buddy
         HOW TO ANSWER:
         - Lead with pending / unusual-upcoming. Be specific about the few things you do name - vague gestures are the opposite failure and just as bad.
         - Prose, in short paragraphs. This is you talking, so it reads as sentences about my day, not as fields with values after them.
-        - If the day looks empty AND there are no dailies or scheduled items, keep it short and warm - a "not much on deck today, what are you thinking?" not a recap of yesterday.
+        - If the day looks empty, keep it short and warm - a "not much on deck today, what are you thinking?" not a recap of yesterday.
 
         HARD NO:
         - Never recap yesterday.
-        - Never invent chores/events not in context.#{chores_credit_line(user)}
+        - Never invent chores/events not in context.
         - No filler like "quiet day", "not a bad thing", "in the bag".
         - No "based on what I have" / "your context shows" / any scaffolding-talk.
 

@@ -41,19 +41,25 @@ RSpec.describe "Buddy Today forward-looking" do
     let(:seed) { Buddy::TodayBriefing.seed(user) }
 
     it "caps how many chores may be named at a hard number" do
-      expect(seed).to include("THREE NAMES, TOTAL")
-      expect(seed).to include("at most three specific chores")
+      expect(seed).to include("Name at most three of them")
+      expect(seed).to include("Fewer than three is normal")
     end
 
-    # Prod 2756 named eight chores in one sentence, on a thread that had just
-    # been reset - so there was no history to imitate and the seed itself was
-    # doing it. Five separate soft phrasings of the cap read as five
-    # suggestions; only one statement of it survives, and it names the shape.
-    it "states the cap exactly once instead of hedging around it four more times" do
-      expect(seed).not_to include("POOL TO PICK FROM")
-      expect(seed).not_to include("reciting chores by their record names")
-      expect(seed).not_to include("Don't recite my daily")
-      expect(seed).to include("the list wearing a sentence")
+    # Every version of the cap that argued with the model in prose lost: a hard
+    # "THREE NAMES, TOTAL", "a daily is never one of your three", a re-sorted
+    # bucket. Aug 7 named six and Aug 8 named six. The roster is withheld from
+    # the turn now (ContextTool::BRIEFING_WITHHELD), so the seed stops arguing
+    # about lists it can no longer reach - a rule pointing at an absent section
+    # is how a model ends up explaining an absence or inventing a filler.
+    it "stops arguing with sections this turn cannot see" do
+      expect(seed).not_to include("chores_pending_today")
+      expect(seed).not_to include("chores_done_today")
+      expect(seed).not_to include("chores_hot_picks")
+      expect(seed).to include("it's the whole chore section of your context")
+    end
+
+    it "says to drop chores entirely on a day with nothing due" do
+      expect(seed).to include("say nothing about chores at all")
     end
 
     # Prod 2756 called `Monica Murton's Birthday` "the birthday", which drops
@@ -71,12 +77,14 @@ RSpec.describe "Buddy Today forward-looking" do
 
     it "no longer offers the skim-list shape it produced" do
       expect(seed).not_to include("Still pending: X, Y, Z")
-      expect(seed).to include('If you find yourself writing "Still pending:"')
+      expect(seed).to include('don\'t write "Still pending:" followed by anything')
     end
 
+    # The completions section is withheld from this turn, so the danger isn't
+    # miscrediting what it can see - it's inventing a completion it can't.
     it "refuses to hand the person credit for a chore the house did" do
-      expect(seed).to include("Never tell me I did something")
-      expect(seed).to include("`by:`")
+      expect(seed).to include("Never tell me I DID something")
+      expect(seed).to include("ANYONE in the house")
     end
 
     it "asks for an emoji that's about something" do

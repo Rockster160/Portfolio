@@ -26,6 +26,52 @@ RSpec.describe Buddy::GPT::Turn do
     convo.byte_messages.where(direction: :inbound).order(:created_at).last
   end
 
+  # The Today seed carries `buddy_action: "today"`, and that marker is the only
+  # thing standing between the briefing and the full chore roster. Wiring it
+  # through was the entire fix, so it gets asserted at the turn rather than
+  # only on the tool: the previous attempt added `chores_due_today` to the
+  # context and never exposed it through get_context, so nothing changed at all.
+  describe "the Today briefing turn" do
+    def turn_for(metadata)
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: "what's on today", metadata: metadata,
+      )
+      described_class.new(message, client: FakeBuddyClient.new([]))
+    end
+
+    def offered_sections(turn)
+      turn.send(:tools).first.dig(:parameters, :properties, :sections, :items, :enum)
+    end
+
+    it "offers the briefing only the due-today chores" do
+      turn = turn_for({ "kind" => "buddy_trigger", "buddy_action" => "today" })
+
+      expect(offered_sections(turn).grep(/\Achores_/)).to eq([:chores_due_today])
+    end
+
+    it "hands the same narrowing to the tool that answers the call" do
+      turn = turn_for({ "kind" => "buddy_trigger", "buddy_action" => "today" })
+
+      returned = JSON.parse(turn.send(:read_tools)[Buddy::GPT::ContextTool::NAME].call({}))
+
+      expect(returned.keys.grep(/\Achores_/)).to eq(["chores_due_today"])
+    end
+
+    it "leaves an ordinary message with the whole roster" do
+      turn = turn_for({})
+
+      expect(offered_sections(turn)).to include(:chores_pending_today, :chores_all)
+    end
+
+    # A different quick action is not a briefing, and narrowing one would be a
+    # silent hole in whatever it was asked to do.
+    it "leaves another quick action alone" do
+      turn = turn_for({ "kind" => "buddy_trigger", "buddy_action" => "checkin" })
+
+      expect(offered_sections(turn)).to include(:chores_pending_today)
+    end
+  end
+
   describe "the reply bubble" do
     it "streams into one bubble and settles it to delivered" do
       run([{ text: "Hey there, good to hear from you." }])

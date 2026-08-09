@@ -20,6 +20,7 @@ module Buddy
       SECTIONS = %i[
         today_agenda
         upcoming_agenda
+        chores_due_today
         chores_pending_today
         chores_done_today
         chores_hot_picks
@@ -44,6 +45,33 @@ module Buddy
         app_pages
         routines
       ].freeze
+
+      # The one chore section a Today briefing is allowed to see.
+      #
+      # A briefing names what's due today and isn't a daily habit, or it says
+      # nothing about chores at all. Everything else is WITHHELD rather than
+      # sorted, softened, or capped: three rounds of prompt wording - a hard
+      # "THREE NAMES, TOTAL", an explicit "a daily is never one of your three",
+      # a re-ordered bucket - all failed against twenty names sitting in front
+      # of the model, because a list in context is a list that gets read out.
+      # The only thing that reliably stops it is not being there.
+      BRIEFING_SECTION = :chores_due_today
+
+      BRIEFING_WITHHELD = %i[
+        chores_pending_today
+        chores_done_today
+        chores_hot_picks
+        chores_scheduled_today
+        chores_overdue_backlog
+        chores_all
+      ].freeze
+
+      # Sections this turn may not have, for any reason: a feature the person
+      # doesn't use, or a briefing that has no business with the full roster.
+      def self.withheld(user, briefing: false)
+        hidden = Buddy::Features.hidden_sections(user)
+        briefing ? (hidden | BRIEFING_WITHHELD) : hidden
+      end
 
       DESCRIPTION = <<~TXT.freeze
         Look up the person's live state. Call this when their message touches
@@ -85,8 +113,8 @@ module Buddy
       # `user:` narrows the enum to sections this person actually has, so a
       # feature that's switched off isn't even nameable — the model can't ask
       # for chores and then have to explain the empty answer.
-      def self.schema(user: nil)
-        offered = SECTIONS - Buddy::Features.hidden_sections(user)
+      def self.schema(user: nil, briefing: false)
+        offered = SECTIONS - withheld(user, briefing: briefing)
         {
           type:        :function,
           name:        NAME,
@@ -108,16 +136,21 @@ module Buddy
         }
       end
 
-      def initialize(user, conversation)
+      def initialize(user, conversation, briefing: false)
         @user         = user
         @conversation = conversation
+        @briefing     = briefing
       end
 
       # Returns the JSON string handed back as the function_call_output.
       def call(args)
-        requested = requested_sections(args)
-        payload   = requested.empty? ? context : context.slice(*requested)
-        JSON.generate(payload)
+        # "Asked for nothing" and "asked only for things this turn can't have"
+        # are different, and collapsing them answered a refused request with the
+        # entire context: a briefing that asked for chores_all got every section
+        # there is, which is the opposite of withholding one.
+        payload = named_sections(args).empty? ? context : context.slice(*requested_sections(args))
+        # Applied to the everything path too, which is the one a briefing takes.
+        JSON.generate(payload.except(*self.class.withheld(@user, briefing: @briefing)))
       rescue StandardError => e
         Buddy::Errors.report(
           section:   "gpt.context_tool",
@@ -139,9 +172,14 @@ module Buddy
 
       JIL_SECTIONS = %i[jil_triggers jil_functions].freeze
 
-      def requested_sections(args)
+      # Whatever the model actually named, before any filtering.
+      def named_sections(args)
         raw = args.is_a?(Hash) ? (args["sections"] || args[:sections]) : nil
-        sections = Array(raw).map { |s| s.to_s.to_sym } & (SECTIONS - Buddy::Features.hidden_sections(@user))
+        Array(raw).map { |s| s.to_s.to_sym }
+      end
+
+      def requested_sections(args)
+        sections = named_sections(args) & (SECTIONS - self.class.withheld(@user, briefing: @briefing))
         # Whether an automation is a trigger or a function is OUR filing system,
         # not something the person's request tells you. Asked to "turn the fan to
         # low", the model looked in jil_triggers, found only "Fan High", and said

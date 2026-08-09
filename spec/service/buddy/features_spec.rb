@@ -212,8 +212,8 @@ RSpec.describe Buddy::Features do
     it "leads with chores for someone who has them" do
       seed = Buddy::TodayBriefing.send(:seed, user)
 
-      expect(seed).to include("`chores_due_today` is the ONLY list you name chores from")
-      expect(seed).to include("`chores_hot_picks`")
+      expect(seed).to include("`chores_due_today` is due today and isn't a daily habit")
+      expect(seed).to include("`hot` multiplier")
     end
 
     it "drops the chore guidance entirely rather than softening it" do

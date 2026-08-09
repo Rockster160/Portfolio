@@ -32,6 +32,7 @@ module Buddy
     # Anything not listed here belongs to CORE and always ships.
     SECTIONS = {
       chores:     %i[
+        chores_due_today
         chores_pending_today
         chores_done_today
         chores_hot_picks
