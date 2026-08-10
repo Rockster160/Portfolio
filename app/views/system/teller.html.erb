@@ -33,16 +33,21 @@
           output.textContent = label + "\n\n" + JSON.stringify(data, null, 2);
         }
 
-        var teller = TellerConnect.setup({
-          applicationId: <%= raw @app_id.to_json %>,
-          environment: <%= raw @environment.to_s.to_json %>,
-          products: <%= raw @products.map(&:to_s).to_json %>,
-          onSuccess: function (enrollment) { show("SUCCESS", enrollment); },
-          onFailure: function (failure) { show("FAILURE", failure); },
-          onExit: function () { show("EXIT - closed before finishing", {}); },
-        });
+        // A Connect instance is single-use. Reopening one that has already run
+        // a flow fails instantly with a generic "unable to process your
+        // request" and no network request, so every attempt gets a fresh one.
+        button.addEventListener("click", function () {
+          var teller = TellerConnect.setup({
+            applicationId: <%= raw @app_id.to_json %>,
+            environment: <%= raw @environment.to_s.to_json %>,
+            products: <%= raw @products.map(&:to_s).to_json %>,
+            onSuccess: function (enrollment) { show("SUCCESS", enrollment); },
+            onFailure: function (failure) { show("FAILURE", failure); },
+            onExit: function () { show("EXIT - closed before finishing", {}); },
+          });
 
-        button.addEventListener("click", function () { teller.open(); });
+          teller.open();
+        });
       })();
     </script>
   <% end %>
