@@ -189,6 +189,8 @@ module Buddy
         run_action!(watch)
       when "timer"
         start_timer!(watch)
+      when "alarm"
+        sound_alarm!(watch)
       when "prompt"
         if templated?(watch)
           announce!(watch, payload)
@@ -282,6 +284,20 @@ module Buddy
     rescue StandardError => e
       Buddy::Errors.report(
         section:   "watch_matcher.start_timer",
+        exception: e,
+        user:      watch.user,
+        extra:     { watch_id: watch.id },
+      )
+    end
+
+    # Rings rather than counting down. Nothing is posted here: the alarm speaks
+    # for itself when it goes off a second later (Buddy::Timers.on_fired), and
+    # saying it twice would put the notification in the thread before the noise.
+    def sound_alarm!(watch)
+      Buddy::Alarms.ring!(watch)
+    rescue StandardError => e
+      Buddy::Errors.report(
+        section:   "watch_matcher.sound_alarm",
         exception: e,
         user:      watch.user,
         extra:     { watch_id: watch.id },

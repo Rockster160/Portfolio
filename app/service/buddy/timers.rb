@@ -173,7 +173,7 @@ module Buddy
 
     # Create + start a countdown. Broadcasts :created so the hero picks it up
     # live (the model only broadcasts on fire/confirm/chain on its own).
-    def create!(user:, seconds:, label: nil, conversation: nil)
+    def create!(user:, seconds:, label: nil, conversation: nil, metadata: {})
       secs  = seconds.to_i.clamp(1, MAX_SECONDS)
       clean = label.to_s.strip.first(60)
       page  = page_for(user)
@@ -191,6 +191,7 @@ module Buddy
           duration_ms: secs * 1000,
           name:        clean,
           timer_page:  page,
+          metadata:    metadata.to_h,
         )
         # Anchor to WHEN THE PERSON ASKED, not when the turn finished, so a slow
         # turn doesn't quietly shave time off a "3 minute" timer.
@@ -250,18 +251,24 @@ module Buddy
       conversation = Buddy::CompanionRelay.conversation_for(timer.user)
       return if conversation.nil?
 
+      # An ALARM is a moment arriving, not time running out — the countdown is
+      # only how the noise gets made (see Buddy::Alarms). It says the thing it
+      # was set for; announcing the mechanism is what "your Washer's done
+      # timer's done" was.
+      alarm = Buddy::Alarms.alarm?(timer)
+
       # A WAIT is Buddy holding the middle of a sequence the person asked for
       # ("start the printer, wait a minute, then preheat it"), not a countdown
       # they're watching. Say what's happening rather than that time is up — the
       # step it was holding lands directly underneath.
       label   = timer.name.to_s.strip
-      waiting = Buddy::ProposalBuilder.waiting_on?(timer)
+      waiting = !alarm && Buddy::ProposalBuilder.waiting_on?(timer)
       Buddy::CompanionDelivery.deliver_plain(
         user:         timer.user,
         conversation: conversation,
-        text:         fired_text(label, waiting: waiting),
-        metadata:     { "kind" => "buddy", "source" => "timer", "timer_id" => timer.id },
-        push_title:   fired_title(label, waiting: waiting),
+        text:         alarm ? Buddy::Alarms.fired_text(timer) : fired_text(label, waiting: waiting),
+        metadata:     { "kind" => "buddy", "source" => alarm ? "alarm" : "timer", "timer_id" => timer.id },
+        push_title:   alarm ? Buddy::Alarms.fired_title(timer) : fired_title(label, waiting: waiting),
       )
       Buddy::ProposalBuilder.resume_after!(timer) if waiting
     rescue StandardError => e

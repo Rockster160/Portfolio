@@ -27,6 +27,11 @@ Buddy::Tools.register(
     ("when someone's at the door", "next time a deploy finishes"), that's
     `remind_when` with its own `notify`.
 
+    A reminder is a message they have to be LOOKING at. If they said ALARM, or
+    the whole point is being interrupted - waking up, leaving on time - use
+    `alarm`, which rings out loud until it's acknowledged. It reaches 24 hours
+    ahead; further out, or on a recurrence, this is still the tool.
+
     ONE-SHOT: pass `at` (ISO-8601 datetime with timezone offset).
     Convert natural-language times ("in 30 min", "3pm", "tomorrow
     morning") into ISO using the local time in RIGHT NOW block.

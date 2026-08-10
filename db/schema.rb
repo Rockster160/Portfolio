@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_07_225232) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_10_221511) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1534,6 +1534,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_07_225232) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.boolean "disabled", default: false, null: false
+    t.jsonb "metadata", default: {}, null: false
     t.index ["end_at"], name: "index_timers_pending_fire", where: "((end_at IS NOT NULL) AND (fired_at IS NULL))"
     t.index ["fire_jid"], name: "index_timers_on_fire_jid", unique: true, where: "(fire_jid IS NOT NULL)"
     t.index ["timer_page_id"], name: "index_timers_on_timer_page_id"

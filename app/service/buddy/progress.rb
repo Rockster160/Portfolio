@@ -88,6 +88,7 @@ module Buddy
       move_reminder:         "Moving the reminder",
       cancel_reminder:       "Cancelling the reminder",
       remind_when:           "Setting up the watch",
+      alarm:                 "Setting the alarm",
 
       # Calendar + lists
       add_agenda_item:       "Putting it on your calendar",

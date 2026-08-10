@@ -773,6 +773,7 @@ module Buddy
       def watch_does(watch)
         return "runs #{watch.run_task_name.presence || watch.run_scope}" if watch.action?
         return "starts a #{Buddy::Timers.humanize_seconds(watch.timer_seconds)} timer" if watch.timer?
+        return "sounds an alarm" if watch.alarm?
 
         nil
       end

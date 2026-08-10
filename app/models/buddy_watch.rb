@@ -41,7 +41,15 @@ class BuddyWatch < ApplicationRecord
   # second one. Buddy answered that ask with a reminder watch, was told "No. I
   # said set a TIMER", and replied that a timer only runs from now - true of
   # `set_timer`, and the reason this exists.
-  KINDS = %w[reminder prompt action timer].freeze
+  #
+  # `alarm` rings AT the condition rather than counting down from it. It exists
+  # because a one-second `timer` watch was how that got expressed, and the
+  # result read as one: the receipt said "Byte will start a 1 second timer", the
+  # reminders list said "starts a 1 sec timer", and the thing that went off
+  # announced itself as a timer finishing. What the person asked for was an
+  # alarm for when the washer is done, and every surface named the mechanism
+  # instead of the thing.
+  KINDS = %w[reminder prompt action timer alarm].freeze
 
   # How long a delayed action may hold. Long enough for "a couple of minutes
   # after", short enough that a queue backed up behind one is a bug rather than
@@ -54,6 +62,10 @@ class BuddyWatch < ApplicationRecord
 
   def timer?
     kind.to_s == "timer"
+  end
+
+  def alarm?
+    kind.to_s == "alarm"
   end
 
   # The Jil scope this watch fires, the task name it was resolved from (for the

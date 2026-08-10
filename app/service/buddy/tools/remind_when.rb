@@ -146,7 +146,7 @@ Buddy::Tools.register(
   TXT
   args: {
     text:        { type: :string,  required: true,  description: "What to remind them of" },
-    trigger:     { type: :enum,    required: true,  values: %i[arrive depart chore event agenda deploy custom], description: "Condition type" },
+    trigger:     { type: :enum,    required: true,  values: Buddy::WatchCondition::TRIGGERS, description: "Condition type" },
     target:      { type: :string,  required: false, description: "Place / chore / event / calendar name the condition is about (omit for deploy and custom)" },
     listener:    { type: :string,  required: false, description: "Jil listener string. Required for trigger=custom, ignored otherwise. Read read_listener_guide first." },
     when_phrase: { type: :string,  required: false, description: "Plain-language meaning of the listener (\"when something is added to the Claude list\"). Required for trigger=custom." },
@@ -154,85 +154,25 @@ Buddy::Tools.register(
     notify:      { type: :string,  required: false, description: "Household member to notify instead of the user (optional)" },
     run:         { type: :string,  required: false, description: "Jil task name to FIRE when the condition hits, instead of saying anything. Verbatim from jil_triggers." },
     delay:       { type: :integer, required: false, description: "Seconds to wait after the condition before running it (max 900). With `run` only." },
-    timer:       { type: :integer, required: false, description: "Start a countdown of this many seconds each time the condition hits, instead of saying anything. Use when they say TIMER - a timer alarms out loud, a reminder is a message they have to be looking at." },
+    timer:       { type: :integer, required: false, description: "Start a countdown of this many seconds each time the condition hits, instead of saying anything. Only for a real WAIT after the condition (\"start a 10 minute timer when I get home\") - to ring the moment it happens, use the `alarm` tool instead of a 1-second countdown." },
     expires:     { type: :string,  required: false, description: "Last day it stays armed: \"today\", \"tomorrow\", \"N days/weeks\", or YYYY-MM-DD. Use whenever they bound it in time." },
   },
   # Watching for an arrival or a deploy is everyone's. The other three reach
   # into a feature: a chore watch would tell someone without chores when the
   # rest of the household finished theirs, which is exactly the visibility the
   # block exists to prevent.
-  gated_values: { trigger: { chore: :chores, event: :events, agenda: :agenda } },
+  gated_values: { trigger: Buddy::WatchCondition::GATED },
   confirm: ->(payload, ctx) {
-    trigger = payload[:trigger].to_s
-    target  = payload[:target].to_s.strip
-
-    # Most scopes fire for the user themselves; :agenda_item fires for the
-    # calendar's OWNER (AgendaItem#user delegates to its agenda), so an agenda
-    # watch must be owned by that person to ever fire.
-    owner = ctx.user
-
-    scope, match, human, place_known, place_name = case trigger
-    when "arrive"
-      place = ctx.resolve_place_location(target)
-      raise "arrive needs a place (target)" if place["name"].blank?
-      ["travel", { "action" => "arrived", "place" => place.except("known") }, "when you get to #{place["name"]}", place["known"], place["name"]]
-    when "depart"
-      place = ctx.resolve_place_location(target)
-      raise "depart needs a place (target)" if place["name"].blank?
-      ["travel", { "action" => "departed", "place" => place.except("known") }, "when you leave #{place["name"]}", place["known"], place["name"]]
-    when "chore"
-      raise "chore needs a chore name (target)" if target.blank?
-      name = ctx.resolve_chore(target)&.name || target
-      ["chore_completion", { "action" => "completed", "chore_name" => name }, "next time you finish #{name}", true, name]
-    when "event"
-      raise "event needs an event name (target)" if target.blank?
-      ["event", { "action" => "added", "name" => target }, "next time you log #{target}", true, target]
-    when "agenda"
-      raise "agenda needs a calendar name (target)" if target.blank?
-      agenda = ctx.resolve_writable_agenda(target)
-      raise "not sure which calendar #{target} is" if agenda.nil?
-      owner  = agenda.user
-      ["agenda_item", { "action" => "created", "agenda_id" => agenda.id }, "when something's added to #{agenda.name}", true, agenda.name]
-    when "deploy"
-      # Phrased without "next" so the repeating form reads "every time a deploy
-      # finishes" rather than "every time the NEXT deploy finishes".
-      ["deploy", {}, "when a deploy finishes", true, nil]
-    when "custom"
-      listener = payload[:listener].to_s.strip
-      raise "custom needs a `listener` - read read_listener_guide first" if listener.blank?
-
-      unless ::Jil::ListenerMatch.valid?(listener, user: ctx.user)
-        named = ::Jil::ListenerMatch.scope_of(listener)
-        raise(
-          if named && !::Jil::ListenerMatch.known_scope?(named, user: ctx.user)
-            "nothing here has ever fired a #{named.inspect} trigger, so that listener could " \
-              "never fire - call read_listener_guide and use a scope off the real list"
-          else
-            "#{listener.inspect} isn't a listener that could ever fire"
-          end,
-        )
-      end
-
-      # Valid shape, real scope, and still pointed at nothing. A watch that
-      # names a list nobody has fails by being silent forever while they think
-      # it's set, so it's refused here rather than saved (prod: a daily
-      # flower-bed check watching a list that never existed).
-      if (gap = Buddy::ListenerTargets.missing(listener, user: ctx.user))
-        raise "#{gap}, so that watch could never fire - if they wanted something on a CLOCK " \
-              "(\"daily\", \"every morning\"), that's a recurring agenda task, not a watch"
-      end
-
-      # The person reads the plain phrasing; the listener rides underneath as
-      # detail (see `listener` on the resolved payload). Showing them the raw
-      # syntax as the whole description tells them nothing they asked about,
-      # but dropping it entirely makes an unexpected fire unexplainable.
-      phrase = payload[:when_phrase].to_s.strip
-      raise "custom needs a `when_phrase` saying what that listener means in their words" if phrase.blank?
-
-      [::Jil::ListenerMatch.scope_of(listener), {}, phrase.sub(/\A(when|whenever)\s+/i, "when "), true, nil]
-    else
-      raise "unknown trigger #{trigger.inspect}"
-    end
+    # The condition - place, chore, calendar, listener - is shared with `alarm`
+    # and lives in Buddy::WatchCondition. What's left here is what a REMINDER
+    # does with it.
+    condition   = Buddy::WatchCondition.resolve(payload, ctx)
+    scope       = condition.scope
+    match       = condition.match
+    human       = condition.human
+    owner       = condition.owner
+    place_known = condition.place_known
+    place_name  = condition.place_name
 
     # An action watch resolves its task NOW, not at fire time. The whole point
     # of this shape is that nothing has to think when the sensor trips, so a
@@ -266,7 +206,7 @@ Buddy::Tools.register(
     end
 
     every = ActiveModel::Type::Boolean.new.cast(payload[:repeat])
-    human = human.sub(/\Awhen /, "every time ").sub(/\Anext time /, "every time ") if every
+    human = Buddy::WatchCondition.repeating_phrase(human) if every
 
     # Who gets the heads-up. An explicit `notify` wins; otherwise, if the watch
     # has to be owned by someone else (an agenda the user doesn't own), the
@@ -303,7 +243,7 @@ Buddy::Tools.register(
     # that hurts is the one they forgot - a stale deploy watch nobody remembered
     # sat behind a fresh one and a single deploy pinged twice. This runs before
     # the model writes a word, so it can mention it in the same turn.
-    twin    = ctx.existing_watch_twin(scope, match, owner: owner, listener: (payload[:listener].to_s.strip.presence if trigger == "custom"))
+    twin    = ctx.existing_watch_twin(scope, match, owner: owner, listener: condition.listener)
     warning = twin && "One is ALREADY listening for this: #{twin.body.to_s.truncate(60).inspect}. " \
                       "Setting this leaves both, so both will fire. Say that plainly and offer to " \
                       "retire the old one (cancel_reminder) - don't add a second one silently."
@@ -313,7 +253,7 @@ Buddy::Tools.register(
       resolved: {
         trigger_scope:  scope,
         match:          match,
-        listener:       (payload[:listener].to_s.strip.presence if trigger == "custom"),
+        listener:       condition.listener,
         human_when:     human,
         recipient_name: (to_self ? nil : recipient.first_name),
         one_shot:       !every,

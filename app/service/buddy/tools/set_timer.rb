@@ -6,7 +6,12 @@ Buddy::Tools.register(
     me in 90 seconds". Convert the duration to whole SECONDS. Give a short
     `label` when the person names what it's for ("pasta", "tea"); omit it
     otherwise. This is for short countdowns the person actively watches - for a
-    nudge at a specific clock time, or a recurring one, use schedule_reminder.
+    recurring nudge, use schedule_reminder.
+
+    When they say ALARM, use `alarm`. It reaches a clock time as well as a
+    duration, and what goes off says what it was set for rather than that a
+    timer is up - "Wake up" instead of "your Wake up timer's done". Follow the
+    word they used; "timer" is this one.
 
     It's also how you WAIT, and it is the ONLY way to make something happen
     later than right now without pinning it to a clock time. Set the timer with
