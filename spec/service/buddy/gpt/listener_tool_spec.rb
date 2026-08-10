@@ -57,8 +57,46 @@ RSpec.describe Buddy::GPT::ListenerTool do
     expect(call["examples"].pluck("listener")).to eq(["item:action:added"])
   end
 
-  it "tells the model to copy key paths rather than invent them" do
-    expect(call["next"]).to match(/rather than inventing them/)
+  it "points the model at the observed payloads rather than at invention" do
+    expect(call["next"]).to match(/payloads/)
+    expect(call["next"]).to match(/never fires/)
+  end
+
+  # The examples are a THIN source, and they were the only one. Every appliance
+  # in the house arrives on a task whose whole listener is the bare word
+  # `hass-trigger`, so no example contains the word "dryer" or the keys it's
+  # told apart by — and asked to watch the dryer, the model found the `laundry`
+  # scope (a button, which only ever fires a start) and wrote a dead watch.
+  describe "what the triggers really carry" do
+    before do
+      Rails.cache.clear
+      Buddy::TriggerShapes.observe(user, "hass-trigger", { "device_name" => "Dryer", "type" => "stop" })
+      Rails.cache.delete("buddy:shape:#{user.id}:hass-trigger")
+      Buddy::TriggerShapes.observe(user, "hass-trigger", { "device_name" => "Washer", "type" => "start" })
+    end
+
+    it "lists each scope's real fields" do
+      expect(call["payloads"]["hass-trigger"]).to include("device_name (string: Dryer | Washer)")
+    end
+
+    it "lists the values a field actually takes, so a plausible one isn't guessed" do
+      expect(call["payloads"]["hass-trigger"]).to include("type (string: start | stop)")
+    end
+
+    it "names the house devices, which appear in no task and no example" do
+      allow(Buddy::DeviceStates).to receive(:for_user).and_return([
+        { device: "Dryer", state: "stop" },
+        { device: "Washer", state: "stop" },
+      ])
+
+      expect(call["devices"]["names"]).to eq(%w[Dryer Washer])
+    end
+
+    it "leaves devices out entirely when the house has never reported" do
+      allow(Buddy::DeviceStates).to receive(:for_user).and_return([])
+
+      expect(call).not_to have_key("devices")
+    end
   end
 
   # The scope index and the search are the discovery half. A scope fed by an

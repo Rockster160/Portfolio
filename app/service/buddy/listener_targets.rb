@@ -9,6 +9,15 @@ module Buddy
   # `item:list:name:/^Daily front flower bed check$/`. Well-formed, valid scope,
   # no such list. It sat there looking set and could never fire.
   #
+  # The same failure has a second shape, and it's worse because the listener
+  # points at a real key. `laundry:action:stop` names a scope that fires and an
+  # `action` key that exists — and `laundry` has only ever been fired with
+  # `action: "start"`, by a button press and a spoken command. Twice in one day
+  # a watch was written on it (the washer, then the dryer), and both times it
+  # validated and then sat silent. What the appliances actually report is
+  # `hass-trigger`. So a value the scope has never once fired with is refused
+  # too, off Buddy::TriggerShapes' observed values.
+  #
   # Only names we can pin to ONE literal are checked. A loose pattern is a
   # pattern and gets the benefit of the doubt.
   module ListenerTargets
@@ -29,10 +38,53 @@ module Buddy
     def missing(listener, user:)
       return nil if listener.blank? || user.nil?
 
-      Jil::ListenerMatch.terms(listener).filter_map { |term| gap_in(term, user) }.first
+      scope = Jil::ListenerMatch.scope_of(listener)
+      terms = Jil::ListenerMatch.terms(listener)
+      terms.filter_map { |term| gap_in(term, user) || dead_value(term, scope, user) }.first
     rescue StandardError => e
       Rails.logger.warn("[Buddy::ListenerTargets] check failed: #{e.class}: #{e.message}")
       nil
+    end
+
+    # A term filtering on a value this scope has never once fired with.
+    #
+    # Refuses only on positive evidence: `known_values` returns nil for a key
+    # never recorded, or one with too many values to be an enum, and either way
+    # the term passes. The whole point is that a wrong guess should FAIL LOUDLY
+    # while there's still someone in the conversation to tell, instead of
+    # looking set for a month.
+    def dead_value(term, scope, user)
+      text = term.to_s.strip
+      # A regex or an ANY() set names a pattern, not a value.
+      return nil if text.include?("/") || text.match?(/\bany\(/i)
+
+      path, value = path_and_value(text, scope)
+      return nil if path.blank? || value.blank?
+
+      known = Buddy::TriggerShapes.known_values(user, scope, path)
+      return nil if known.nil?
+      # Lenient on purpose, and in the safe direction: a single colon compares
+      # as a case-insensitive SUBSTRING, so anything that could satisfy either
+      # comparison is left alone. Only a value that can match nothing is called.
+      return nil if known.any? { |seen| matchable?(seen.to_s, value) }
+
+      "#{scope} has only ever fired with #{path} of #{known.map(&:inspect).join(", ")}, " \
+        "so nothing would ever match #{value.inspect}"
+    end
+
+    # `hass-trigger:device_name::Washer` -> ["device_name", "Washer"], and a
+    # trailing term like `type::stop` -> ["type", "stop"]. Nested paths join up
+    # the way Buddy::TriggerShapes records them (`list.name`).
+    def path_and_value(term, scope)
+      parts = term.split(/:+/).compact_blank
+      parts.shift if parts.first.to_s.casecmp?(scope.to_s)
+      return [nil, nil] if parts.length < 2
+
+      [parts[0..-2].join("."), parts.last]
+    end
+
+    def matchable?(seen, value)
+      seen.casecmp?(value) || seen.downcase.include?(value.downcase)
     end
 
     def gap_in(term, user)

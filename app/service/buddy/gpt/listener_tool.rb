@@ -14,9 +14,22 @@ module Buddy
     # invisible and gets answered with "I don't have that wired" (prod 1479).
     #
     # HOW TO WRITE ONE. What stops a listener from parsing cleanly and then
-    # never firing is using a key that doesn't exist in that scope's payload,
-    # and the only reliable source for real key paths is listeners that are
-    # already working.
+    # never firing is using a key that doesn't exist in that scope's payload -
+    # or a VALUE the scope has never fired with, which is the same silence one
+    # level deeper.
+    #
+    # Worked examples off the person's own tasks were the only source for
+    # either, and they're a thin one: the appliances all arrive on a task whose
+    # entire listener is the bare word `hass-trigger`, so no example anywhere
+    # contains the word "washer", "dryer", or the keys they're told apart by.
+    # Asked to watch the dryer, the model searched, found the `laundry` scope
+    # (which is a BUTTON, and only ever fires a start), and wrote a watch that
+    # could never fire. Twice.
+    #
+    # So the observed payloads go in the answer as well: `payloads` is what each
+    # scope really carries, keys and known values both, learned off the live bus
+    # by Buddy::TriggerShapes. `devices` is the house roster, because a device
+    # NAME is a value rather than a key and appears nowhere in any task.
     #
     # A ROUND-TRIP tool like ContextTool and PromptTool. Deliberately not in the
     # always-on prompt: the guide is a few thousand tokens and matters on the
@@ -37,8 +50,11 @@ module Buddy
       # Words that match everything and therefore mean nothing as search terms.
       STOPWORDS = %w[the a an my our is are was when if of at on in to for and or me].freeze
 
-      COPY_KEYS = "Copy the key paths from an example on the same scope rather than inventing " \
-                  "them - a listener with a made-up key parses fine and never fires.".freeze
+      COPY_KEYS = "Build the listener out of `payloads` for the scope you picked - those are the " \
+                  "keys and values the trigger REALLY carries. A key or a value that isn't there " \
+                  "parses fine and never fires. Where a field lists its values, use one of them " \
+                  "verbatim; a scope named after the thing is not evidence it reports what you " \
+                  "want, and a plausible-sounding value is the commonest dead watch there is.".freeze
 
       UNSEARCHED = "If nothing here uses the scope you need, ask what the thing you're watching " \
                    "is called instead of guessing.".freeze
@@ -67,11 +83,19 @@ module Buddy
            none of it is listed anywhere else you can see. **So call this before
            telling anyone you can't watch something.** "I don't have a doorbell
            watch to hook into" was wrong - there are three.
-        2. **Writing the listener once you know it's there.** A listener naming
-           a key the payload doesn't have parses fine and then never fires, and
-           they'd have no way to know, so copy key paths from a real example on
-           the same scope instead of guessing. Call this before every
-           `remind_when` with trigger="custom".
+        2. **Writing the listener once you know it's there.** `payloads` is
+           what each kind of event REALLY carries - its fields, and for the
+           fields with a knowable set, the exact values they take
+           (`type (string: start | stop)`). Build the listener out of that.
+           A key or a value that isn't in there parses fine and then never
+           fires, and they'd have no way to know. `devices` is the house
+           roster: an appliance or sensor is named in a listener as a VALUE,
+           so that's the only place its name appears. Call this before every
+           `remind_when` or `alarm` with trigger="custom".
+
+           A scope named after the thing you want is NOT evidence it reports
+           what you want. "The washer finished" is not `laundry` - that scope
+           is a button and has only ever fired a start.
 
         `scope` pulls one kind of event's examples to the front when you already
         know which you want ("item" for lists, "hass-sensor" for house sensors).
@@ -118,6 +142,8 @@ module Buddy
         JSON.generate({
           syntax:   guide,
           scopes:   scope_index(rows),
+          payloads: payloads,
+          devices:  devices,
           matches:  (matches(rows, about) if about),
           examples: examples(rows, scope),
           next:     next_step(about),
@@ -186,6 +212,33 @@ module Buddy
 
       def describe(task)
         { listener: task.listener, does: task.description.presence || task.name }
+      end
+
+      # What each scope's payload really looks like, off the live bus. This is
+      # the authoritative half of the answer - the worked examples show the
+      # SHAPE of the syntax, this shows the fields that exist and, where a field
+      # has a knowable set, the values it takes: `type (start | stop)`.
+      def payloads
+        Buddy::TriggerShapes.for_user(@user).to_h { |row| [row[:scope], row[:fields]] }
+      rescue StandardError
+        {}
+      end
+
+      # The house roster. A device is identified in a listener by its NAME,
+      # which is a value and so appears in no task, no scope index and no
+      # example - the one place it exists is what the sensors have reported.
+      # Without this, "the dryer" is unfindable and gets guessed at.
+      def devices
+        rows = Buddy::DeviceStates.for_user(@user)
+        return nil if rows.empty?
+
+        {
+          names: rows.pluck(:device).sort,
+          note:  "House devices report under these names. A listener names one as a VALUE - " \
+                 "check `payloads` for which scope and key carries it.",
+        }
+      rescue StandardError
+        nil
       end
 
       # Same-scope listeners first: they're the ones whose key paths transfer.

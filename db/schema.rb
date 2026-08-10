@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_10_221511) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_10_234246) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1004,6 +1004,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_10_221511) do
     t.datetime "last_seen_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "observed_values", default: {}, null: false
     t.index ["user_id", "scope"], name: "index_jil_trigger_shapes_on_user_id_and_scope", unique: true
   end
 

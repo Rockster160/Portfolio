@@ -110,7 +110,11 @@ RSpec.describe Buddy::TriggerShapes do
       described_class.observe(user, :chore, { "name" => "Dishes", "marked_due_at" => Time.current, "one_off" => false })
 
       entry = described_class.for_user(user).find { |e| e[:scope] == "chore" }
-      expect(entry[:fields]).to include("name (string)", "marked_due_at (time)", "one_off (boolean)")
+      expect(entry[:fields]).to include("marked_due_at (time)")
+      # A key with a knowable set keeps its TYPE and gains the values. Losing
+      # the type would lose the boolean warning above; losing the values would
+      # be back to a listener filtering on something that never occurs.
+      expect(entry[:fields]).to include("name (string: Dishes)", "one_off (boolean: false)")
     end
 
     it "is empty for someone whose bus has never fired" do
@@ -136,7 +140,7 @@ RSpec.describe Buddy::TriggerShapes do
 
       section = Buddy::Context.full(user, convo)[:trigger_shapes]
 
-      expect(section.find { |e| e[:scope] == "item" }[:fields]).to include("list.name (string)")
+      expect(section.find { |e| e[:scope] == "item" }[:fields]).to include("list.name (string: Shopping)")
       expect(Buddy::GPT::ContextTool::SECTIONS).to include(:trigger_shapes)
       expect(Buddy::Features::SECTIONS[:jil]).to include(:trigger_shapes)
     end
