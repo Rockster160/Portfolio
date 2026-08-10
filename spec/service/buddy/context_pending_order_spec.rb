@@ -93,7 +93,7 @@ RSpec.describe "Buddy pending chore order" do
       expect(due_today_names).to eq(["Gutters"])
     end
 
-    it "counts a hot pick, since pinning it for today is what due today means" do
+    it "counts an unusually hot pick, which is real news" do
       hot(create(:chore, name: "Litter", created_by_user: user), 5)
 
       expect(due_today_names).to eq(["Litter"])
@@ -103,6 +103,35 @@ RSpec.describe "Buddy pending chore order" do
       hot(daily("Wipe"), 5)
 
       expect(due_today_names).to be_empty
+    end
+
+    # Seven chores get auto-pinned at 2x every single morning - 144 of them in
+    # the three weeks to Aug 10, against three 5x ever. So a plain 2x is the
+    # rotation, not a reason to say anything. Aug 10's briefing named six of
+    # them in a row; every one was a 2x pin.
+    it "ignores the everyday 2x pins, which are the routine wearing a new name" do
+      %w[Dishes Mail Espresso].each { |name| hot(create(:chore, name: name, created_by_user: user), 2) }
+
+      expect(due_today_names).to be_empty
+    end
+
+    it "keeps a stamped one-off next to a big pick, and drops the 2x beside them" do
+      due_today("Gutters")
+      hot(create(:chore, name: "Litter", created_by_user: user), 5)
+      hot(create(:chore, name: "Dishes", created_by_user: user), 2)
+
+      expect(due_today_names).to contain_exactly("Gutters", "Litter")
+    end
+
+    # Deliberately uncapped. A ceiling was tried and either got ignored while
+    # the full list sat in front of the model, or lopped the tail off a day that
+    # genuinely had a lot on. Being right about what belongs here is what keeps
+    # it short; if six separate one-offs really are stamped for today, six is
+    # the honest answer.
+    it "hands over everything that qualifies, however many that is" do
+      6.times { |i| due_today("Job #{i}") }
+
+      expect(due_today_names.length).to eq(6)
     end
 
     it "comes back empty on a day that's only habits, rather than reaching for one" do

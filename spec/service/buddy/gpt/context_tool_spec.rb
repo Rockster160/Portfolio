@@ -69,8 +69,19 @@ RSpec.describe Buddy::GPT::ContextTool do
       expect(enum.grep(/\Achores_/)).to eq([:chores_due_today])
     end
 
-    it "leaves everything that isn't a chore alone" do
-      expect(briefing_sections(["today_agenda"])).to eq(["today_agenda"])
+    # The calendar's standing repeats are withheld for the same reason the
+    # chore roster is: they describe an ordinary week, and whatever list is
+    # present gets read out. What's left is the part of the day that differs.
+    it "swaps the full calendar for the notable view" do
+      returned = briefing_sections([])
+
+      expect(returned).to include("today_notable", "upcoming_notable")
+      expect(returned).not_to include("today_agenda", "upcoming_agenda")
+    end
+
+    it "leaves everything that isn't routine alone" do
+      expect(briefing_sections(["today_notable"])).to eq(["today_notable"])
+      expect(briefing_sections(["lists"])).to eq(["lists"])
     end
 
     # Asking about chores directly is a different thing entirely, and still

@@ -89,10 +89,12 @@ module RecordLinks
     ].freeze
 
     # event -> agenda. "overdue" reproduces task 370, which swept overdue Shower
-    # items as well as today's; 374 did today only.
+    # items as well as today's; 374 did today only. The medication carries the
+    # same loose match as its chore pairing, for the same reason: it's logged
+    # with a dosage, and the formulation itself gets re-typed ("D-AmphetamineXR").
     EVENT_AGENDA = [
-      ["Shower",        "Shower", "overdue"],
-      ["D-Amphetamine", "Focus",  nil],
+      { event: "Shower",        agenda: "Shower", scope: "overdue" },
+      { event: "D-Amphetamine", agenda: "Focus",  name_match: :starts_with },
     ].freeze
 
     # Idempotent. A pairing that already exists keeps whatever it has now, since
@@ -121,13 +123,14 @@ module RecordLinks
           target_scope: list,
         }
       }
-      rows += EVENT_AGENDA.map { |event, item, scope|
+      rows += EVENT_AGENDA.map { |e|
         {
-          source_kind:  :event,
-          source_name:  event,
-          target_kind:  :agenda,
-          target_name:  item,
-          target_scope: scope,
+          source_kind:       :event,
+          source_name:       e[:event],
+          source_name_match: e[:name_match] || :exactly,
+          target_kind:       :agenda,
+          target_name:       e[:agenda],
+          target_scope:      e[:scope],
         }
       }
 

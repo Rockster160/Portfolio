@@ -40,51 +40,63 @@ RSpec.describe "Buddy Today forward-looking" do
   describe "the briefing it asks for" do
     let(:seed) { Buddy::TodayBriefing.seed(user) }
 
-    it "caps how many chores may be named at a hard number" do
-      expect(seed).to include("Name at most three of them")
-      expect(seed).to include("Fewer than three is normal")
+    # THE rule for this file, and the reason most of what used to be asserted
+    # here is gone. Every concrete example ever written into this prompt came
+    # back out of it: two agenda items were named here purely as what-NOT-to-say
+    # illustrations, and both were then read out by name on the days they came
+    # round. Naming a thing in order to forbid it still puts the name in front
+    # of the model. So the seed carries no record names, and no quoted sample
+    # sentences for it to borrow either.
+    it "hands the model no concrete example it can echo" do
+      backticked = seed.scan(/`([A-Z][A-Za-z0-9' .-]{3,40})`/).flatten.uniq
+
+      # `Part of day` is a context field label, not a record.
+      expect(backticked - ["Part of day"]).to be_empty
+      # Sample phrasing in quotes is the same trap in a different costume.
+      # Bounded to a single line so the match can't run between two unrelated
+      # short quotes and report the prose in between.
+      expect(seed.scan(/"[^"\n]{25,}"/)).to be_empty
     end
 
-    # Every version of the cap that argued with the model in prose lost: a hard
-    # "THREE NAMES, TOTAL", "a daily is never one of your three", a re-sorted
-    # bucket. Aug 7 named six and Aug 8 named six. The roster is withheld from
-    # the turn now (ContextTool::BRIEFING_WITHHELD), so the seed stops arguing
-    # about lists it can no longer reach - a rule pointing at an absent section
-    # is how a model ends up explaining an absence or inventing a filler.
-    it "stops arguing with sections this turn cannot see" do
-      expect(seed).not_to include("chores_pending_today")
-      expect(seed).not_to include("chores_done_today")
-      expect(seed).not_to include("chores_hot_picks")
-      expect(seed).to include("it's the whole chore section of your context")
+    it "tells it the filtering is already done rather than how to do it" do
+      expect(seed).to include("the filtering is done and none of it is yours to redo")
+      expect(seed).to include("Naming none of them is a perfectly good briefing")
     end
 
-    it "says to drop chores entirely on a day with nothing due" do
-      expect(seed).to include("say nothing about chores at all")
+    # The routine sections are withheld from this turn outright
+    # (ContextTool::BRIEFING_WITHHELD), so the seed must not reference them: a
+    # rule about an absent section makes the model explain an absence or invent
+    # a filler to fill it.
+    it "never mentions a section this turn cannot see" do
+      Buddy::GPT::ContextTool::BRIEFING_WITHHELD.each do |section|
+        expect(seed).not_to include(section.to_s)
+      end
     end
 
-    # Prod 2756 called `Monica Murton's Birthday` "the birthday", which drops
-    # the only part of it that meant anything.
+    it "points at the notable views instead" do
+      expect(seed).to include("`today_notable`")
+      expect(seed).to include("`upcoming_notable`")
+    end
+
+    it "says an empty day is a correct briefing, not one to pad out" do
+      expect(seed).to include("That is a correct briefing, not a failed one")
+    end
+
+    # A brief mention still has to be specific: compressing an item to its
+    # category strips the only part that couldn't have been guessed.
     it "refuses a bare category where the item has a name" do
       expect(seed).to include("NAME THE THING")
-      expect(seed).to include("WHOSE birthday")
+      expect(seed).to include("Being brief means mentioning FEWER things")
     end
 
-    # A 2x is most of them; a 5x is the one thing on the day worth pointing at.
-    it "distinguishes an unusual hot pick from a routine one" do
+    it "treats a hot multiplier as already-rare rather than something to weigh" do
       expect(seed).to include("`hot` multiplier")
-      expect(seed).to include("a plain 2x is ordinary")
+      expect(seed).to include("Only the exceptional ones reach you")
     end
 
-    it "no longer offers the skim-list shape it produced" do
-      expect(seed).not_to include("Still pending: X, Y, Z")
-      expect(seed).to include('don\'t write "Still pending:" followed by anything')
-    end
-
-    # The completions section is withheld from this turn, so the danger isn't
-    # miscrediting what it can see - it's inventing a completion it can't.
     it "refuses to hand the person credit for a chore the house did" do
       expect(seed).to include("Never tell me I DID something")
-      expect(seed).to include("ANYONE in the house")
+      expect(seed).to include("crediting me for one is a guess")
     end
 
     it "asks for an emoji that's about something" do
@@ -92,7 +104,7 @@ RSpec.describe "Buddy Today forward-looking" do
     end
 
     it "asks for odd clock times to be rounded" do
-      expect(seed).to include("just before 8")
+      expect(seed).to include("Round odd clock times")
     end
 
     # The chore rules come out entirely for someone who doesn't have chores,

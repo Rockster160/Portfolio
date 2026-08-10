@@ -428,6 +428,39 @@
       setMultPill(kind, next);
     });
   });
+  // Payout pill. `skipped` is the flag the row carries; `reason` is the
+  // server's explanation for it (cooldown, outside-household, hand-set)
+  // and is shown only while the flag is on. A skipped completion pays
+  // nothing by definition — the server forces paid_pebbles to 0 — so
+  // the amount field goes read-only rather than accepting a number the
+  // save would silently discard.
+  function setSkippedPill(skipped, reason) {
+    modal.querySelector('[data-modal-skipped]').value = skipped ? "true" : "false";
+    const pill = modal.querySelector('[data-modal-skipped-toggle]');
+    pill.classList.toggle("skipped", skipped);
+    pill.classList.toggle("paid", !skipped);
+    modal.querySelector('[data-modal-skipped-label]').textContent = skipped ? "Skipped" : "Paid";
+    const reasonEl = modal.querySelector('[data-modal-skipped-reason]');
+    reasonEl.textContent = skipped ? (reason || "") : "";
+    reasonEl.hidden = !(skipped && reason);
+    modal.querySelector('[data-modal-amount]').disabled = skipped;
+  }
+  modal.querySelector('[data-modal-skipped-toggle]')?.addEventListener("click", () => {
+    const next = modal.querySelector('[data-modal-skipped]').value !== "true";
+    const amountEl = modal.querySelector('[data-modal-amount]');
+    // Restoring a payout puts back what the multipliers say the tap
+    // earned, so the manager isn't left deriving it by hand. Only when
+    // the amount is still the skipped 0 — a number they typed stands.
+    if (next) {
+      amountEl.value = "0";
+    } else if ((parseInt(amountEl.value, 10) || 0) === 0) {
+      const base   = parseInt(modal.querySelector('[data-modal-base]').textContent, 10) || 0;
+      const hot    = parseFloat(modal.querySelector('[data-modal-hot-mult]').value) || 1;
+      const streak = parseFloat(modal.querySelector('[data-modal-streak-mult]').value) || 1;
+      amountEl.value = String(Math.round(base * hot * streak));
+    }
+    setSkippedPill(next, currentEditTarget?.row?.dataset.skippedReason);
+  });
   function openCommittedModal(row) {
     currentEditTarget = { kind: "committed", row };
     const ds = row.dataset;
@@ -443,13 +476,8 @@
     setMultPill("hot",    parseFloat(ds.hotMultiplier    || "1"));
     setMultPill("streak", parseFloat(ds.streakMultiplier || "1"));
     modal.querySelector('[data-modal-note]').value = ds.note || "";
-    const skippedRow = modal.querySelector('[data-modal-skipped-row]');
-    if (ds.skipped === "true") {
-      skippedRow.removeAttribute("hidden");
-      modal.querySelector('[data-modal-skipped-reason]').textContent = ds.skippedReason || "Cooldown";
-    } else {
-      skippedRow.setAttribute("hidden", "");
-    }
+    modal.querySelector('[data-modal-skipped-row]').removeAttribute("hidden");
+    setSkippedPill(ds.skipped === "true", ds.skippedReason);
     const sourceIcon = row.querySelector(".history-icon");
     const modalIcon = modal.querySelector('[data-modal-icon]');
     if (modalIcon) {
@@ -467,6 +495,10 @@
       if (visible) el.removeAttribute("hidden");
       else         el.setAttribute("hidden", "");
     });
+    // Only a committed completion can be skipped; every other subject
+    // (withdrawal, transfer, pending push) owns its amount outright.
+    // openCommittedModal re-applies the real state right after.
+    if (!visible) modal.querySelector('[data-modal-amount]').disabled = false;
   }
   function openWithdrawalModal(row) {
     currentEditTarget = { kind: "withdrawal", row };
@@ -528,6 +560,7 @@
     setMultPill("streak", streakMult0);
     modal.querySelector('[data-modal-note]').value = body.note || "";
     modal.querySelector('[data-modal-skipped-row]').setAttribute("hidden", "");
+    modal.querySelector('[data-modal-amount]').disabled = false;
     const sourceIcon = row.querySelector(".history-icon");
     const modalIcon = modal.querySelector('[data-modal-icon]');
     if (modalIcon) {
@@ -625,6 +658,7 @@
         note: note,
         hot_multiplier: Number.isFinite(hotMult) ? hotMult : 1,
         streak_multiplier: Number.isFinite(streakMult) ? streakMult : 1,
+        payout_skipped: modal.querySelector('[data-modal-skipped]').value === "true",
       },
     };
     if (completedIso) payload.chore_completion.completed_at = completedIso;

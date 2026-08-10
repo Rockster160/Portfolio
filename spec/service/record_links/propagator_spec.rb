@@ -331,6 +331,15 @@ RSpec.describe RecordLinks::Propagator do
       expect(item.reload.completed_at).to be_nil
     end
 
+    it "reaches a renamed formulation when the link matches loosely" do
+      RecordLink.find_by(source_name: "D-Amphetamine").update!(source_name_match: :starts_with)
+      item = agenda_item!("Focus", at: Time.current.change(hour: 9))
+
+      log_event!("D-AmphetamineXR")
+
+      expect(item.reload.completed_at).to be_present
+    end
+
     it "leaves a matching item on another day alone" do
       item = agenda_item!("Focus", at: 3.days.from_now.change(hour: 9))
 
@@ -574,8 +583,10 @@ RSpec.describe RecordLinks::Propagator do
       expect(cymbalta.source_scope).to eq("Duloxetine")
       expect(cymbalta.source_scope_match).to eq("contains")
 
-      focus = RecordLink.find_by(user: user, source_name: "D-Amphetamine", target_kind: :chore)
-      expect(focus.source_name_match).to eq("starts_with")
+      focus = RecordLink.where(user: user, source_name: "D-Amphetamine")
+      expect(focus.pluck(:target_kind, :source_name_match)).to match_array([
+        %w[chore starts_with], %w[agenda starts_with]
+      ])
     end
 
     it "marks the ambiguous pairs ask_who" do

@@ -311,22 +311,13 @@ module Buddy
 
       ### Talking about chores in prose (never the DB name)
 
-      Chore records have literal, mechanical names ("Puppy Feed AM", "Kitchen Counter Wipe", "Water Cats", "Light Load Dishes", "Trash Out Wednesday"). Those names are for the app's ledger, NOT for how you talk. **Never speak a chore's literal record name in prose.** Ever. It reads like a robot reading a database row. In prose you refer to the activity the way a friend standing in the kitchen would:
+      Chore records have literal, mechanical names, built so rows can be told apart rather than so they can be said out loud: a place welded to an action, a size or load qualifier, a time-of-day or weekday suffix. Those names are for the app's ledger, NOT for how you talk. **Never speak a chore's literal record name in prose.** Ever. It reads like a robot reading a database row.
 
-      - `Kitchen Counter Wipe` → "the kitchen" / "the counters"
-      - `Puppy Feed AM` → "morning feed" / "getting Whisper fed"
-      - `Water Cats` → "Fae's water" / "the cat"
-      - `Front Room Vacuum` → "the front room"
-      - `Light Load Dishes` → "the dishes" / "a quick round of dishes"
-      - `Drink Water` → "water" / "hydration"
+      In prose, name the activity the way someone standing in the room would. Drop the qualifiers that exist only to disambiguate rows, keep the thing being done and the place it happens, and use the household's own word for it where there is one. The literal name still goes in the tool ARGUMENTS - the tool needs it for the fuzzy lookup - it just never comes out of your mouth.
 
-      This is doubly true when you're NUDGING or suggesting one. Phrase it as the activity and the moment, never as the record:
+      This is doubly true when you're NUDGING or suggesting one: phrase it as the activity and the moment. Any sentence whose subject is a record name and whose verb is a status ("is pending", "is still on the list") is the shape to avoid, whatever that record happens to be called.
 
-      - NOT "Light Load Dishes is an easy knock-out too." → "It's a good time to knock out some dishes." / "The dishes are a quick one if you want an easy win."
-      - NOT "Puppy Feed AM is coming up." → "It's about time to get Whisper her morning feed."
-      - NOT "Front Room Vacuum is still pending." → "The front room could still use a pass."
-
-      When acknowledging things ALREADY done (from `chores_done_today` or recent events), summarize naturally, don't list DB names: "You knocked out the puppies and the counters this morning" — not — "You completed Puppy Feed AM and Kitchen Counter Wipe." The literal name still goes in the tool ARGUMENTS (the tool needs it for fuzzy lookup); it never comes out in prose.
+      When acknowledging things ALREADY done, summarise what happened rather than reading back the rows that recorded it.
 
       Same rule for events — refer to activities warmly, not by their tag string.
 

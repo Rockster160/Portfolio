@@ -264,8 +264,15 @@
             </div>
           </div>
           <div class="detail-row completion-only" data-modal-skipped-row hidden>
-            <span class="detail-label">Skipped</span>
-            <span data-modal-skipped-reason></span>
+            <span class="detail-label">Payout</span>
+            <div class="mult-pills">
+              <span class="skipped-reason" data-modal-skipped-reason hidden></span>
+              <button type="button" class="mult-pill" data-modal-skipped-toggle
+                      title="Tap to switch between paid and skipped">
+                <strong data-modal-skipped-label>Paid</strong>
+              </button>
+              <input type="hidden" data-modal-skipped value="false">
+            </div>
           </div>
           <hr style="border:0;border-top:1px solid #1F2A44;margin:8px 0;">
           <div class="detail-row">

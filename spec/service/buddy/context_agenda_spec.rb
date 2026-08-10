@@ -58,6 +58,94 @@ RSpec.describe Buddy::Context, ".build agenda" do
     expect(upcoming.find { |i| i[:title] == "Dentist" }[:day]).to be_present
   end
 
+  # "The weekend has a pickup Saturday" was `Pickup B and Saya`, 4pm, at the
+  # airport — so the one useful fact, who was being collected, went missing
+  # along with where. The name was in context; the place was not, and a briefing
+  # can only be as specific as what it was handed.
+  it "carries where an item is, not just what it's called" do
+    item(name: "Pickup B and Saya", start_at: Time.current + 5.days, location: "airport")
+
+    built = described_class.build(user, conversation)
+    pickup = built[:upcoming_agenda].find { |i| i[:title] == "Pickup B and Saya" }
+
+    expect(pickup[:where]).to eq("airport")
+  end
+
+  it "carries it for today's items too" do
+    item(name: "Lunch", start_at: Time.current + 2.hours, location: "The Rose Establishment")
+
+    today = described_class.build(user, conversation)[:today_agenda]
+
+    expect(today.find { |i| i[:title] == "Lunch" }[:where]).to eq("The Rose Establishment")
+  end
+
+  it "leaves the key off entirely when there's no location to give" do
+    item(name: "Dentist", start_at: Time.current + 3.days)
+
+    upcoming = described_class.build(user, conversation)[:upcoming_agenda]
+
+    expect(upcoming.find { |i| i[:title] == "Dentist" }).not_to have_key(:where)
+  end
+
+  # The agenda half of the list problem. Aug 10's briefing opened with two
+  # weekday-recurring meetings and put the day's only one-off third — the
+  # routine outnumbered the notable, so the routine is what got read out. The
+  # briefing is handed only the items that make the day unlike any other.
+  describe "the notable-only view a briefing gets" do
+    def weekdays_schedule
+      create(:agenda_schedule, agenda: agenda, recurrence: { "freq" => "weekdays" })
+    end
+
+    it "drops the standing weekday repeats and keeps the one-off" do
+      item(name: "Standup", start_at: Time.current + 1.hour, agenda_schedule: weekdays_schedule)
+      item(name: "Launch Readiness", start_at: Time.current + 3.hours)
+
+      notable = described_class.build(user, conversation)[:today_notable]
+
+      expect(notable.pluck(:title)).to eq(["Launch Readiness"])
+    end
+
+    it "keeps a rarely-recurring one, which isn't top of mind" do
+      monthly = create(:agenda_schedule, agenda: agenda, recurrence: { "freq" => "monthly" })
+      item(name: "One on one", start_at: Time.current + 2.hours, agenda_schedule: monthly)
+
+      notable = described_class.build(user, conversation)[:today_notable]
+
+      expect(notable.pluck(:title)).to include("One on one")
+    end
+
+    # A normal thing missing beats a normal thing present.
+    it "keeps a routine that ISN'T happening" do
+      item(
+        name: "Standup", start_at: Time.current + 1.hour,
+        agenda_schedule: weekdays_schedule, status: :cancelled,
+      )
+
+      notable = described_class.build(user, conversation)[:today_notable]
+
+      expect(notable.pluck(:title)).to include("Standup")
+    end
+
+    it "filters the week the same way" do
+      item(name: "Standup", start_at: Time.current + 2.days, agenda_schedule: weekdays_schedule)
+      item(name: "Dentist", start_at: Time.current + 2.days)
+
+      notable = described_class.build(user, conversation)[:upcoming_notable]
+
+      expect(notable.pluck(:title)).to eq(["Dentist"])
+    end
+
+    # Withheld from the briefing, not deleted — a direct question about the
+    # calendar still gets the whole thing.
+    it "leaves the full lists in place for everyone else" do
+      item(name: "Standup", start_at: Time.current + 1.hour, agenda_schedule: weekdays_schedule)
+
+      built = described_class.build(user, conversation)
+
+      expect(built[:today_agenda].pluck(:title)).to include("Standup")
+    end
+  end
+
   it "does NOT put a tomorrow all-day event in today (the birthday-shows-today bug)" do
     # An all-day event is stored at the LOCAL midnight of its date. The old
     # today window (`now .. now+24h`) reached into tomorrow, so a tomorrow

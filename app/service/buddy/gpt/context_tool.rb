@@ -20,6 +20,8 @@ module Buddy
       SECTIONS = %i[
         today_agenda
         upcoming_agenda
+        today_notable
+        upcoming_notable
         chores_due_today
         chores_pending_today
         chores_done_today
@@ -46,18 +48,23 @@ module Buddy
         routines
       ].freeze
 
-      # The one chore section a Today briefing is allowed to see.
+      # What a Today briefing does NOT get to see.
       #
-      # A briefing names what's due today and isn't a daily habit, or it says
-      # nothing about chores at all. Everything else is WITHHELD rather than
-      # sorted, softened, or capped: three rounds of prompt wording - a hard
-      # "THREE NAMES, TOTAL", an explicit "a daily is never one of your three",
-      # a re-ordered bucket - all failed against twenty names sitting in front
-      # of the model, because a list in context is a list that gets read out.
-      # The only thing that reliably stops it is not being there.
-      BRIEFING_SECTION = :chores_due_today
-
+      # A briefing exists to say what is different about this day. Everything
+      # withheld here describes the ordinary week instead: the full chore
+      # roster, the habits, and the calendar's standing repeats. It is taken
+      # away rather than sorted, softened or capped, because every attempt to
+      # describe the difference in words failed while both were in front of the
+      # model - it read out whatever list it had, and the one unusual thing came
+      # last or not at all.
+      #
+      # The briefing sees `chores_due_today`, `today_notable` and
+      # `upcoming_notable`. Those are already only the exceptional rows, so
+      # there is no filtering left for the model to get wrong and no count to
+      # enforce.
       BRIEFING_WITHHELD = %i[
+        today_agenda
+        upcoming_agenda
         chores_pending_today
         chores_done_today
         chores_hot_picks

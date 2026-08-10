@@ -10,6 +10,15 @@ module Buddy
     # still lands in the window.
     UPCOMING_WEEK_WINDOW = 8.days
 
+    # The multiplier every auto-pinned hot pick carries. At or below this, being
+    # "hot" says nothing about today — see build_chore_buckets.
+    ROUTINE_HOT_MULTIPLIER = 2
+
+    # Cadences frequent enough that the person knows them cold. An agenda item
+    # repeating on one of these is the shape of an ordinary week, not news about
+    # this particular day — see notable?.
+    ROUTINE_CADENCES = ["daily", "every weekday"].freeze
+
     # Sections belonging to a feature this person doesn't have are dropped
     # rather than returned empty — an empty `chores_pending_today` reads as "you
     # have nothing due today", which is a different (and wrong) statement from
@@ -30,14 +39,21 @@ module Buddy
       # chore finished in that hour read as still pending, that morning's hot
       # picks vanished, and anything stamped due read as overdue backlog.
       chore_buckets = build_chore_buckets(user, ChoreDay.current(user))
+      today         = today_agenda(user, now)
+      upcoming      = upcoming_agenda(user, now)
 
       {
         now_local:              now.strftime("%a %Y-%m-%d %-I:%M %p %Z"),
         timezone:               tz,
         user_first_name:        user.first_name,
         emotional_state:        emotional_state(conversation, now),  # current mood + pet expression
-        today_agenda:           today_agenda(user, now),
-        upcoming_agenda:        upcoming_agenda(user, now),          # rest-of-week, unusual-first
+        today_agenda:           today,
+        upcoming_agenda:        upcoming,                            # rest-of-week, unusual-first
+        # The same items with the ordinary week taken out - see notable?. A
+        # briefing gets these INSTEAD of the two above, because what it's for is
+        # the part of the day that isn't like every other day.
+        today_notable:          today.select { |i| notable?(i) },
+        upcoming_notable:       upcoming.select { |i| notable?(i) },
         # Two explicit lists per bucket - PENDING and DONE_TODAY - so
         # Buddy can never confuse "what's left" with "what's finished".
         # The previous mixed-list-with-done_today-flag was getting
@@ -131,8 +147,12 @@ module Buddy
         # local midnight) out of today. See Buddy::Day.
         day_start = Buddy::Day.at(user, hour: 0, now: now)
         day_end   = day_start + 1.day
+        # A cancelled RECURRING instance is kept, the same way the week view
+        # keeps one: a standing thing not happening today is a real heads-up,
+        # and usually a more useful one than anything that is. A cancelled
+        # one-off is just gone and stays out.
         AgendaItem.where(agenda_id: sources.keys)
-          .where.not(status: :cancelled)
+          .where("status != ? OR agenda_schedule_id IS NOT NULL", AgendaItem.statuses[:cancelled])
           .where(start_at: day_start.utc...day_end.utc)
           .includes(:agenda, :agenda_schedule)
           .order(:start_at)
@@ -143,6 +163,8 @@ module Buddy
                 id:        i.id,
                 time:      (i.all_day ? "all day" : i.start_at.in_time_zone(user.timezone).strftime("%-I:%M %p")),
                 title:     i.name,
+                where:     i.location.to_s.strip.presence,
+                cancelled: (true if i.cancelled?),
                 cal:       i.agenda&.name,
                 kind:      i.kind,
                 cadence:   schedule_cadence(i),  # nil = one-off; "every weekday" / "monthly" / ...
@@ -186,6 +208,10 @@ module Buddy
                 day:       day_label(local, user, now),
                 time:      (i.all_day ? "all day" : local.strftime("%-I:%M %p")),
                 title:     i.name,
+                # Often the difference between a mention that means something
+                # and one that doesn't: "a pickup Saturday" was `Pickup B and
+                # Saya`, 4pm, at the airport.
+                where:     i.location.to_s.strip.presence,
                 cadence:   schedule_cadence(i),  # nil = one-off
                 cancelled: i.cancelled?,
                 cal:       i.agenda&.name,
@@ -215,6 +241,22 @@ module Buddy
       # briefing tell the "every weekday" stuff it knows cold (gloss it) from
       # a monthly/yearly/every-few-days repeat it may NOT have top of mind
       # (worth a light touch).
+      # Is this item something about TODAY, rather than something about every
+      # week? A one-off is. So is a rarely-recurring thing, and so is a routine
+      # that ISN'T happening - a normal thing missing is a real heads-up. A
+      # weekday standup is not, however early it sits in the day.
+      #
+      # This is the agenda half of the same problem the chore buckets have: the
+      # routine items outnumber the notable ones, so whatever holds both gets
+      # read out as a schedule, and the one thing that made the day different
+      # ends up last or dropped.
+      def notable?(item)
+        return true if item[:cancelled]
+
+        cadence = item[:cadence]
+        cadence.blank? || ROUTINE_CADENCES.exclude?(cadence)
+      end
+
       def schedule_cadence(item)
         sched = item.agenda_schedule
         return nil unless sched
@@ -364,15 +406,32 @@ module Buddy
           intentional_ids.include?(id) || matches_today_ids.include?(id)
         }
 
-        # The short list: pending, due TODAY specifically, and not a daily
-        # habit. This is the answer to "what would I forget on my own", and it's
-        # separate from pending_today because a model handed twenty names writes
-        # twenty names — the Aug 7 and Aug 8 briefings both read the dailies out
-        # in full under a prompt that said at most three, and sorting them to
-        # the bottom didn't stop it. Nothing is hidden: the full roster is still
-        # `chores_pending_today` right below, which is what a direct question
-        # about chores gets answered from.
-        due_today_ids = pending_ids.select { |id| due_ids.include?(id) && !daily_ids.include?(id) }
+        # The short list, and the ONLY chores a Today briefing can see (see
+        # Buddy::GPT::ContextTool::BRIEFING_WITHHELD). Whatever lands here gets
+        # read out loud, so the bar is "worth interrupting someone with", not
+        # "technically on today".
+        #
+        # Two things clear it. A chore STAMPED due today and not a daily habit
+        # is the one nobody remembers on their own. And a hot pick ABOVE the
+        # routine multiplier is real news.
+        #
+        # A plain 2x hot pick is not. Seven chores get pinned at 2x every single
+        # day - 144 of them across the three weeks to Aug 10, against three 5x
+        # ever - so that set IS the daily rotation wearing a different name each
+        # morning. Handing all seven over rebuilt the exact list this was meant
+        # to kill: Aug 10's briefing named six of them in a row, having been
+        # told in the same breath that a plain 2x isn't news.
+        # No cap on the result. A count is not what makes a briefing readable -
+        # being right about what belongs in it is - and every ceiling tried here
+        # either got ignored while the list was in front of the model, or cut
+        # the tail off a day that genuinely had a lot going on. If eight
+        # different one-off jobs are stamped for today, eight is the honest
+        # answer and the day really is like that.
+        due_today_ids = pending_ids.select { |id|
+          next false if daily_ids.include?(id)
+
+          marked_today.include?(id) || hot_mults[id].to_f > ROUTINE_HOT_MULTIPLIER
+        }
 
         {
           due_today:       due_today_ids.filter_map { |id|

@@ -91,6 +91,7 @@ class FitnessBroadcast
       "Vitamins",
       "Trintellix",
       "D-Amphetamine",
+      "D-AmphetamineXR",
     ].map { |name| "name::\"#{name}\"" }.join(" OR ")
     row("💊", names, want)
   end

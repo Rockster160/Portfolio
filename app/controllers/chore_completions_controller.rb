@@ -107,6 +107,13 @@ class ChoreCompletionsController < ApplicationController
       flag = ActiveModel::Type::Boolean.new.cast(raw[:hot_pick])
       attrs[:metadata] = (completion.metadata || {}).merge("hot_pick" => flag)
     end
+    # `skipped_reason` is the system's explanation for the flag, never
+    # client text: restoring a payout drops the stale reason ("Cooldown
+    # — resets at end of day" on a row that now paid out reads as a
+    # lie), and skipping by hand from the History modal says so.
+    if attrs.key?(:payout_skipped) && attrs[:payout_skipped] != prev_payout_skipped
+      attrs[:skipped_reason] = (attrs[:payout_skipped] ? "Skipped by hand" : nil)
+    end
     if completion.update(attrs)
       # Moving a completion across days (e.g. History edit: today→yesterday)
       # or flipping payout_skipped invalidates the streak counter — rebuild
@@ -273,6 +280,13 @@ class ChoreCompletionsController < ApplicationController
       perms[:streak_multiplier] = perms.delete(:total_multiplier)
     else
       perms.delete(:total_multiplier)
+    end
+    # A skipped completion pays nothing — the balance is a plain
+    # SUM(paid_pebbles), so a skipped row carrying an amount would pay
+    # out while the history renders it as "(skipped)".
+    if perms.key?(:payout_skipped)
+      perms[:payout_skipped] = ActiveModel::Type::Boolean.new.cast(perms[:payout_skipped])
+      perms[:paid_pebbles] = 0 if perms[:payout_skipped]
     end
     # If user changed the timestamp, recompute the chore-day key so
     # streaks / hot-pick joins all stay correct.

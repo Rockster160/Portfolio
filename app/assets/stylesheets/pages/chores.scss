@@ -2131,6 +2131,20 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   .completion-details .mult-pill.active strong {
     color: #FFF;
   }
+  // Payout toggle — same pill shape as the multipliers, but the two
+  // states carry the same colors the history rows use for the amount
+  // so "paid" / "skipped" reads identically in the list and the modal.
+  .completion-details .mult-pill.paid strong {
+    color: #34D399;
+  }
+  .completion-details .mult-pill.skipped strong {
+    color: #9CA3AF;
+  }
+  .completion-details .skipped-reason {
+    color: var(--chores-muted);
+    font-size: 12px;
+    align-self: center;
+  }
   .history-row .history-note {
     color: var(--chores-muted);
     font-size: 12px;

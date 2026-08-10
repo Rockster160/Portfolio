@@ -41,7 +41,7 @@ module Buddy
         chores_all
         pebble_balance
       ],
-      agenda:     %i[today_agenda upcoming_agenda],
+      agenda:     %i[today_agenda upcoming_agenda today_notable upcoming_notable],
       lists:      %i[lists],
       events:     %i[recent_events],
       jil:        %i[jil_triggers jil_functions trigger_shapes],
