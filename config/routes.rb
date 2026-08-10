@@ -550,6 +550,7 @@ Rails.application.routes.draw do
     get "/system" => "system#index", as: :system
     get "/system/connections" => "system#connections", as: :system_connections
     get "/system/gpt_spending" => "system#gpt_spending", as: :system_gpt_spending
+    get "/system/teller" => "system#teller", as: :system_teller
   end
   mount ::ActionCable.server => "/cable"
 end

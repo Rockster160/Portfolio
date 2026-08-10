@@ -7,6 +7,9 @@ class SystemController < ApplicationController
   # A window of 1 means "last 24 hours, hour by hour"; the rest are rolling day windows.
   SPEND_WINDOWS = [1, 7, 30, 90].freeze
   SPEND_DEFAULT_DAYS = 30
+  # Teller Connect environments. `sandbox` is fake data; `development` and
+  # `production` both hit real banks.
+  TELLER_ENVIRONMENTS = [:sandbox, :development, :production].freeze
   # Dark-theme palette, assigned to users by spend rank.
   SPEND_PALETTE = %w[
     #5DADE2 #58D68D #F5B041 #AF7AC5 #EC7063 #48C9B0 #F7DC6F #5499C7
@@ -43,6 +46,19 @@ class SystemController < ApplicationController
     @avg_micros = divisor.positive? ? @total_micros / divisor : 0
     @total_label = @hourly ? "Total, last 24h" : "Total, last #{@days} days"
     @avg_label = @hourly ? "Per hour (avg)" : "Per day (avg)"
+  end
+
+  # Probe for the Teller integration: runs Teller Connect so a real bank
+  # enrollment can be attempted and the resulting token read off the page.
+  # Nothing is persisted — whether Chase enrolls and returns live balances is
+  # the open question, and there's no point modelling an enrollment until it
+  # answers yes. The environment is a query param so sandbox and development
+  # can be compared without a deploy.
+  def teller
+    @app_id = ::ENV["PORTFOLIO_TELLER_APP_ID"].presence
+    @environment = TELLER_ENVIRONMENTS.detect { |env|
+      env.to_s == params[:env].to_s
+    } || :sandbox
   end
 
   def connections

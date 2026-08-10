@@ -1,0 +1,47 @@
+<% content_for :title, "Teller" %>
+
+<h1>Teller</h1>
+
+<% if @app_id.blank? %>
+  <p>PORTFOLIO_TELLER_APP_ID is not set in this environment.</p>
+<% else %>
+  <p>
+    Environment:
+    <% SystemController::TELLER_ENVIRONMENTS.each do |env| %>
+      <%= link_to_unless(env == @environment, env, system_teller_path(env: env)) %>
+    <% end %>
+  </p>
+
+  <p>
+    <button type="button" data-teller-open>Connect a bank</button>
+  </p>
+
+  <pre data-teller-result class="hidden"></pre>
+
+  <% content_for :after_body do %>
+    <script src="https://cdn.teller.io/connect/connect.js"></script>
+    <script>
+      (function () {
+        var button = document.querySelector("[data-teller-open]");
+        var output = document.querySelector("[data-teller-result]");
+        if (!button || typeof TellerConnect === "undefined") { return; }
+
+        function show(label, data) {
+          output.classList.remove("hidden");
+          output.textContent = label + "\n\n" + JSON.stringify(data, null, 2);
+        }
+
+        var teller = TellerConnect.setup({
+          applicationId: <%= raw @app_id.to_json %>,
+          environment: <%= raw @environment.to_s.to_json %>,
+          products: ["balance", "transactions"],
+          onSuccess: function (enrollment) { show("SUCCESS", enrollment); },
+          onFailure: function (failure) { show("FAILURE", failure); },
+          onExit: function () { show("EXIT - closed before finishing", {}); },
+        });
+
+        button.addEventListener("click", function () { teller.open(); });
+      })();
+    </script>
+  <% end %>
+<% end %>
