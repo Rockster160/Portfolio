@@ -29,7 +29,7 @@ RSpec.describe WebhooksController, type: :controller do
   before { allow(ENV).to receive(:[]).and_call_original }
 
   context "when the signing secret is configured" do
-    before { allow(ENV).to receive(:[]).with("PORTFOLIO_TELLER_SIGNING_SECRET").and_return(secret) }
+    before { allow(ENV).to receive(:[]).with("PORTFOLIO_TELLER_SIGN_SECRET").and_return(secret) }
 
     it "stores a correctly signed event as an ActionEvent" do
       expect { post_hook }.to change(ActionEvent, :count).by(1)
@@ -99,7 +99,7 @@ RSpec.describe WebhooksController, type: :controller do
   end
 
   context "when the signing secret is missing" do
-    before { allow(ENV).to receive(:[]).with("PORTFOLIO_TELLER_SIGNING_SECRET").and_return(nil) }
+    before { allow(ENV).to receive(:[]).with("PORTFOLIO_TELLER_SIGN_SECRET").and_return(nil) }
 
     it "refuses to record anything rather than trusting the request" do
       expect { post_hook }.not_to change(ActionEvent, :count)

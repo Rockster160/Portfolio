@@ -23,7 +23,7 @@ module Teller
       end
 
       def signing_secret
-        ::ENV["PORTFOLIO_TELLER_SIGNING_SECRET"].presence
+        ::ENV["PORTFOLIO_TELLER_SIGN_SECRET"].presence
       end
 
       private
