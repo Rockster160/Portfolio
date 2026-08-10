@@ -12,6 +12,8 @@
     <% end %>
   </p>
 
+  <p>Products: <%= @products.join(", ") %></p>
+
   <p>
     <button type="button" data-teller-open>Connect a bank</button>
   </p>
@@ -34,7 +36,7 @@
         var teller = TellerConnect.setup({
           applicationId: <%= raw @app_id.to_json %>,
           environment: <%= raw @environment.to_s.to_json %>,
-          products: ["balance", "transactions"],
+          products: <%= raw @products.map(&:to_s).to_json %>,
           onSuccess: function (enrollment) { show("SUCCESS", enrollment); },
           onFailure: function (failure) { show("FAILURE", failure); },
           onExit: function () { show("EXIT - closed before finishing", {}); },

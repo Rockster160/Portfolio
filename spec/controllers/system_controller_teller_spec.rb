@@ -47,6 +47,27 @@ RSpec.describe SystemController, type: :controller do
         expect(response.body).not_to include(%(environment: "wire-me-money"))
       end
 
+      it "requests balance and transactions by default" do
+        get :teller
+        expect(response.body).to include(%(products: ["balance","transactions"]))
+      end
+
+      it "narrows the products when asked" do
+        get :teller, params: { products: "balance" }
+        expect(response.body).to include(%(products: ["balance"]))
+      end
+
+      it "ignores unknown products rather than passing them to Connect" do
+        get :teller, params: { products: "balance,not_a_product" }
+        expect(response.body).to include(%(products: ["balance"]))
+        expect(response.body).not_to match(/products: \[[^\]]*not_a_product/)
+      end
+
+      it "falls back to the default when no product is recognised" do
+        get :teller, params: { products: "nonsense" }
+        expect(response.body).to include(%(products: ["balance","transactions"]))
+      end
+
       it "says so when the app id is missing rather than rendering Connect" do
         allow(ENV).to receive(:[]).with("PORTFOLIO_TELLER_APP_ID").and_return(nil)
 

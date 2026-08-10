@@ -10,6 +10,10 @@ class SystemController < ApplicationController
   # Teller Connect environments. `sandbox` is fake data; `development` and
   # `production` both hit real banks.
   TELLER_ENVIRONMENTS = [:sandbox, :development, :production].freeze
+  # Requesting a product the application isn't enabled for fails the enrollment
+  # at submit, so `?products=` narrows the ask while that's being ruled out.
+  TELLER_PRODUCTS = [:verify, :balance, :transactions, :identity, :payments].freeze
+  TELLER_DEFAULT_PRODUCTS = [:balance, :transactions].freeze
   # Dark-theme palette, assigned to users by spend rank.
   SPEND_PALETTE = %w[
     #5DADE2 #58D68D #F5B041 #AF7AC5 #EC7063 #48C9B0 #F7DC6F #5499C7
@@ -59,6 +63,10 @@ class SystemController < ApplicationController
     @environment = TELLER_ENVIRONMENTS.detect { |env|
       env.to_s == params[:env].to_s
     } || :sandbox
+    requested = params[:products].to_s.split(",").map(&:strip)
+    @products = TELLER_PRODUCTS.select { |product|
+      requested.include?(product.to_s)
+    }.presence || TELLER_DEFAULT_PRODUCTS
   end
 
   def connections
