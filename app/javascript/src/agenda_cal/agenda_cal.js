@@ -2452,24 +2452,33 @@
   }
 
   // ============================================================
-  // MOBILE MONTH VIEW (iOS-style continuous + lazy forward scroll)
+  // MOBILE MONTH VIEW (iOS-style continuous scroll, both directions)
   // ============================================================
   // Below the mobile breakpoint, the month view is a continuous
   // vertical stack of months. Activate seeds just three blocks:
   //   - 1 prior month  (one month of back-context)
   //   - the center     (server-rendered current month)
   //   - 1 next month   (smooths the first forward-scroll)
-  // Forward scroll is infinite — the down-loader appends one month
-  // at a time as the user approaches the bottom. Back-scroll is NOT
-  // dynamic — the up-loader has been removed. The user explicitly
-  // accepted "prior month + current is sufficient" because every
-  // dynamic-prepend implementation had subtle jump-to-month bugs
-  // (scrollTop compensation drifts when async data fills cells above
-  // the viewport, and the freeze on initial load was caused by the
-  // wide ±6 range fetching + rendering thousands of recurring
-  // phantoms upfront).
+  // Scroll is infinite in BOTH directions — the edge loader appends
+  // or prepends one month at a time as the user approaches either
+  // end. The seeded window is only a head start, not a limit.
   //
-  // Three guards still protect the down-loader from cascading:
+  // Scrolling is the ONLY month navigation on mobile: the prev/next
+  // arrows are hidden at this breakpoint (agenda_cal.scss). A
+  // forward-only stack therefore meant the view could be scrolled
+  // into a month with no way back short of the Today button, which
+  // is what made the current month unreachable.
+  //
+  // Prepending used to drift, hence the earlier removal. The cause
+  // was compensating with a `scrollHeight` delta: scrollHeight is
+  // floored at clientHeight, so it understates the inserted height
+  // whenever the stack is shorter than the viewport, and it can't
+  // account for cells that grow later when the async range load
+  // lands. `keepInPlace` pins a real element's viewport offset
+  // instead and re-applies once layout has settled, which is exact
+  // in both cases.
+  //
+  // Three guards protect the loader from cascading:
   //   - userInteracted gate: inert until the user has actually
   //     touched / wheel'd / scrolled the grid. The initial layout's
   //     programmatic scroll-to-today never triggers loads.
@@ -2481,6 +2490,20 @@
   const MOBILE_INITIAL_NEXT = 1;
   const EDGE_THRESHOLD_PX = 1500;
   const LOAD_COOLDOWN_MS = 250;
+
+  // Pin `el`'s position in the viewport across a mutation. Measure
+  // before, call the returned fn after — it corrects scrollTop by
+  // however far `el` moved. Safe to call the fn more than once: it
+  // always compares against the ORIGINAL offset, so a later call
+  // undoes drift introduced after the first correction (cells above
+  // the viewport growing when their items arrive from the store).
+  function keepInPlace(grid, el) {
+    const before = el.getBoundingClientRect().top;
+    return () => {
+      const delta = el.getBoundingClientRect().top - before;
+      if (delta) grid.scrollTop += delta;
+    };
+  }
 
   function activateMobileMonthInfinite(root) {
     if (!root) return;
@@ -2514,9 +2537,8 @@
 
     // Build the initial sibling window in a detached fragment first,
     // then insert in two batches. Tiny initial range keeps the first
-    // paint fast; the down-loader extends forward as the user
-    // scrolls. There is no up-loader, so MOBILE_INITIAL_PRIOR is the
-    // hard cap on how far back the user can scroll.
+    // paint fast; the edge loader extends the stack in whichever
+    // direction the user scrolls.
     const priorFrag = document.createDocumentFragment();
     for (let i = MOBILE_INITIAL_PRIOR; i >= 1; i--) {
       const b = buildMonthBlockNode(addMonthsISO(centerISO, -i));
@@ -2528,15 +2550,12 @@
       if (b) nextFrag.appendChild(b);
     }
 
-    // Bulk insert. Prior fragment goes above the center; record the
-    // height delta and compensate scrollTop in one shot. Direct
-    // scrollTop assignment (not scrollTo) sidesteps any pending
-    // browser smooth-scroll behavior.
-    const beforeH = grid.scrollHeight;
-    const beforeTop = grid.scrollTop;
+    // Bulk insert. The prior fragment goes above the center, so pin
+    // the center in place across the insert — otherwise the months
+    // we just added above shove it down the viewport.
+    const restoreCenter = keepInPlace(grid, center);
     stack.insertBefore(priorFrag, center);
-    const afterH = grid.scrollHeight;
-    grid.scrollTop = beforeTop + (afterH - beforeH);
+    restoreCenter();
 
     const downLoader = stack.querySelector('[data-month-loader="down"]');
     if (downLoader) stack.insertBefore(nextFrag, downLoader);
@@ -2556,8 +2575,16 @@
     // further scroll motion is the user's, not ours.
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
+        // Anchor on today ONLY when the center block IS today's month.
+        // The seeded siblings mean today's cell is usually somewhere in
+        // the stack even when the user asked for a different month
+        // (`?month=`, a prev/next click, a jump-to-created-event), and
+        // anchoring on it there would silently drag them back to the
+        // current month — the requested month would flash and vanish.
         const todayISO = toISO(new Date());
-        const todayCell = grid.querySelector(`.cal-month-cell[data-date="${cssEscape(todayISO)}"]`);
+        const todayCell = (centerISO === todayMonthISO())
+          ? grid.querySelector(`.cal-month-cell[data-date="${cssEscape(todayISO)}"]`)
+          : null;
         const gridRect = grid.getBoundingClientRect();
         const weekdaysH = grid.querySelector(".cal-month-weekdays")?.getBoundingClientRect().height || 32;
         let target;
@@ -2565,8 +2592,12 @@
           const cellRect = todayCell.getBoundingClientRect();
           target = grid.scrollTop + (cellRect.top - gridRect.top) - weekdaysH - 8;
         } else {
+          // Same `- weekdaysH` as the today branch: the weekday row is
+          // `position: sticky; top: 0` inside the grid, so aligning the
+          // block flush with the grid's top edge would park its first
+          // week underneath it.
           const centerRect = center.getBoundingClientRect();
-          target = grid.scrollTop + (centerRect.top - gridRect.top);
+          target = grid.scrollTop + (centerRect.top - gridRect.top) - weekdaysH - 8;
         }
         grid.scrollTop = Math.max(0, target);
         bindMobileObservers(root, grid, stack);
@@ -2614,6 +2645,46 @@
     else stack.appendChild(block);
     expandGridRangeMarkers(grid);
     repaintAfterMutation(grid);
+    return block;
+  }
+
+  // Backward counterpart. Everything the user is currently reading sits
+  // BELOW the insertion point, so the whole viewport would jump by the
+  // new block's height without compensation — pin the old first block
+  // and correct scrollTop by exactly how far it moved.
+  function prependMonthBlock(grid, monthISO) {
+    const stack = grid.querySelector("[data-month-stack]");
+    if (!stack) return null;
+    if (stack.querySelector(`[data-month-block][data-month-iso="${cssEscape(monthISO)}"]`)) return null;
+    const first = stack.querySelector("[data-month-block]");
+    if (!first) return null;
+    const block = buildMonthBlockNode(monthISO);
+    if (!block) return null;
+
+    const restore = keepInPlace(grid, first);
+    stack.insertBefore(block, first);
+    restore();
+    expandGridRangeMarkers(grid);
+    repaintAfterMutation(grid);
+
+    // repaintAfterMutation kicks off an async range load. When those
+    // items land, the cells we just inserted above the viewport grow and
+    // push the reading position down again — re-run the same correction
+    // once layout has settled. This is the drift that sank the previous
+    // scrollHeight-delta implementation.
+    //
+    // Guarded on scrollTop being untouched: content growing above the
+    // viewport moves elements WITHOUT moving scrollTop, so an unchanged
+    // scrollTop means the shift was ours to correct. A changed one means
+    // the user scrolled in the interim, and correcting then would drag
+    // them backwards mid-gesture.
+    const settled = grid.scrollTop;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (grid.scrollTop !== settled) return;
+        restore();
+      });
+    });
     return block;
   }
 
@@ -2720,17 +2791,22 @@
       const now = performance.now();
       if (now - mobileInfinite.lastLoadAt < LOAD_COOLDOWN_MS) return;
 
-      // DOWN-only loader. Back-scroll is fixed at activate
-      // (MOBILE_INITIAL_PRIOR months); we never prepend during
-      // scroll. This eliminates the jump-to-month bug that came from
-      // scrollTop compensation drifting when async data filled cells
-      // above the viewport.
+      // Whichever edge the user is near. Top wins when BOTH match —
+      // which happens only while the stack is shorter than 2× the
+      // threshold, i.e. the first couple of loads after activate.
+      // Back-context is the direction with no other affordance on
+      // mobile, so it gets priority; forward loading resumes a cycle
+      // or two later, hidden behind the down-loader's 1500px of
+      // runway. Prepends are self-limiting: each one pushes scrollTop
+      // down by the block's own height (see `keepInPlace`), so
+      // `nearTop` stops matching on its own. Nothing to cap.
+      const nearTop = grid.scrollTop < EDGE_THRESHOLD_PX;
       const distToBottom = grid.scrollHeight - (grid.scrollTop + grid.clientHeight);
-      if (distToBottom >= EDGE_THRESHOLD_PX) return;
+      const nearBottom = distToBottom < EDGE_THRESHOLD_PX;
+      if (!nearTop && !nearBottom) return;
 
       const blocks = $$("[data-month-block]", stack);
       if (blocks.length === 0) return;
-      const lastISO = blocks[blocks.length - 1].dataset.monthIso;
 
       // ONE block per fire — bounds the JS work to ~30ms so the
       // thread stays responsive. The cooldown caps load frequency
@@ -2738,8 +2814,13 @@
       // inertial-scroll velocity (~600px/month × 4 = 2400 px/sec).
       mobileInfinite.loading = true;
       mobileInfinite.lastLoadAt = now;
-      try { appendMonthBlock(grid, addMonthsISO(lastISO, +1)); }
-      finally { mobileInfinite.loading = false; }
+      try {
+        if (nearTop) {
+          prependMonthBlock(grid, addMonthsISO(blocks[0].dataset.monthIso, -1));
+        } else {
+          appendMonthBlock(grid, addMonthsISO(blocks[blocks.length - 1].dataset.monthIso, +1));
+        }
+      } finally { mobileInfinite.loading = false; }
     };
 
     let scrollScheduled = false;
