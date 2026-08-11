@@ -197,7 +197,7 @@ RSpec.describe SystemController, type: :controller do
 
       get :banking
       expect(response.body).to include("Spending by category")
-      # The category's established colour, reused so it matches CustomChart 4.
+      # The category's established color, reused so it matches CustomChart 4.
       expect(response.body).to include("#D95926")
     end
 
@@ -225,7 +225,7 @@ RSpec.describe SystemController, type: :controller do
       expect(response.body).not_to include(%(<input type="text" data-memo))
     end
 
-    it "colours a negative amount" do
+    it "colors a negative amount" do
       linked_transaction(cents: -500, category: "fun", payee: "Arcade")
 
       get :banking
@@ -257,7 +257,7 @@ RSpec.describe SystemController, type: :controller do
       )
     }
 
-    it "sets one row's category and answers with its colour" do
+    it "sets one row's category and answers with its color" do
       patch :update_transaction, params: { id: linked.id, category: "subscriptions" }
 
       expect(linked.reload.category).to eq("subscriptions")
@@ -340,7 +340,7 @@ RSpec.describe SystemController, type: :controller do
       )
     }
 
-    it "categorises the selected rows" do
+    it "categorizes the selected rows" do
       patch :bulk_update_transactions, params: {
         transaction_ids: [linked.id], category: "subscriptions"
       }
@@ -358,7 +358,7 @@ RSpec.describe SystemController, type: :controller do
 
     # `txn.category = x` would evaluate to x regardless of the method's return,
     # so the skip count would silently read zero.
-    it "counts rows it could not categorise" do
+    it "counts rows it could not categorize" do
       patch :bulk_update_transactions, params: {
         transaction_ids: [linked.id, unlinked.id], category: "subscriptions"
       }

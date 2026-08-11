@@ -79,7 +79,7 @@
 
     <% if @stray_categories.any? %>
       <p class="bank-warn">
-        Categories outside the vocabulary, uncoloured on the chart:
+        Categories outside the vocabulary, uncolored on the chart:
         <%= @stray_categories.join(", ") %>
       </p>
     <% end %>
@@ -300,11 +300,11 @@
 
         if (memo) {
           var saved = memo.textContent.trim();
-          var cancelled = false;
+          var canceled = false;
 
           memo.addEventListener("focus", function () {
             saved = memo.textContent.trim();
-            cancelled = false;
+            canceled = false;
           });
 
           // Escape abandons the edit outright — the point is that brushing a
@@ -313,7 +313,7 @@
           memo.addEventListener("keydown", function (event) {
             if (event.key === "Escape") {
               event.preventDefault();
-              cancelled = true;
+              canceled = true;
               memo.textContent = saved;
               memo.blur();
             } else if (event.key === "Enter") {
@@ -323,7 +323,7 @@
           });
 
           memo.addEventListener("blur", function () {
-            if (cancelled) { cancelled = false; return; }
+            if (canceled) { canceled = false; return; }
 
             var value = memo.textContent.trim();
             if (value === saved) { memo.textContent = value; return; }

@@ -9,7 +9,7 @@ module SimpleFin
   #
   # Writes only the primary checking account. If none is designated the key is
   # left completely alone: showing a card or mortgage balance in the slot
-  # labelled with a bank icon would be worse than showing nothing, and the
+  # labeled with a bank icon would be worse than showing nothing, and the
   # cell already renders "?" gracefully.
   module DashboardCache
     CACHE_KEY = :bank
@@ -37,7 +37,7 @@ module SimpleFin
       # is what SimpleFinBalanceChaseWorker watches for a change in.
       #
       # Integer division floors toward negative infinity in Ruby, which is the
-      # behaviour wanted here: an overdrawn account reads one lower, not one
+      # behavior wanted here: an overdrawn account reads one lower, not one
       # closer to zero.
       def thousands(account=primary)
         return nil if account.nil? || account.balance_cents.nil?

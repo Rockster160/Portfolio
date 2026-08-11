@@ -119,12 +119,36 @@ module ByteDailyAudit
     TXT
   end
 
+  # Kick a run by hand:
+  #
+  #   ByteDailyAudit.kick!                      # the last two days, right now
+  #   ByteDailyAudit.kick!(now: 3.days.ago)     # some other two-day window
+  #
+  # Two deliberate differences from the scheduled path, both because a person
+  # asked for this one on purpose:
+  #
+  #   * "already ran today" is ignored. That guard is there for a cron that can
+  #     fire twice across a restart, and applying it to a console call would
+  #     silently do nothing at the exact moment someone is watching.
+  #   * A sleeping Mac RAISES rather than rescheduling. At a console the useful
+  #     answer is "this isn't going to work", not a job that lands at 2am.
+  #
+  # Returns as soon as the message is posted — the Mac does the actual work and
+  # streams the report into the thread, same as any other Claude turn.
+  def kick!(user=User.me, now: Time.current)
+    unless ByteLocal.awake?
+      raise "the Mac isn't answering - `claude -p` runs there, so nothing can happen until it's up"
+    end
+
+    run!(user, now: now, force: true)
+  end
+
   # Post the day's prompt. Assumes the Mac is up — DailyAuditWorker checks that
   # first, because a message posted at a sleeping Mac is a `failed` bubble
   # nobody asked for.
-  def run!(user, now: Time.current)
+  def run!(user, now: Time.current, force: false)
     convo = conversation(user)
-    return :already_ran if already_ran?(user, convo, now: now)
+    return :already_ran if !force && already_ran?(user, convo, now: now)
 
     # Fresh session, and it has to land before the prompt does.
     ByteLocal.reset_claude_session(conversation_id: convo.id)

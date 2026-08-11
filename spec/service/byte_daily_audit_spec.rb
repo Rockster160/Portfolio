@@ -9,6 +9,39 @@ RSpec.describe ByteDailyAudit do
     allow(BuddyDeliverWorker).to receive(:perform_async)
   end
 
+  # The console entry point. Someone typing this is watching for a result, so
+  # the two cron-shaped behaviours (skip if already run, wait for the Mac) are
+  # both wrong here.
+  describe ".kick!" do
+    before { allow(ByteLocal).to receive(:awake?).and_return(true) }
+
+    it "runs even when tonight's scheduled one already went" do
+      described_class.run!(user)
+
+      expect(described_class.kick!(user)).to eq(:sent)
+    end
+
+    it "defaults to User.me so the console call needs no argument" do
+      expect { described_class.kick! }.to change { described_class.conversation(user).byte_messages.count }.by(1)
+    end
+
+    it "can be pointed at an older two-day window" do
+      described_class.kick!(user, now: Time.zone.parse("2026-08-05 22:00:00"))
+      posted = described_class.conversation(user).byte_messages.order(:created_at).last
+
+      expect(posted.body).to include("Tuesday August 4, 2026")
+      expect(posted.body).to include("Wednesday August 5, 2026")
+    end
+
+    # A failed bubble hours later is a worse answer than an error right now.
+    it "says so immediately when the Mac is asleep, rather than posting" do
+      allow(ByteLocal).to receive(:awake?).and_return(false)
+
+      expect { described_class.kick!(user) }.to raise_error(/Mac isn't answering/)
+      expect(described_class.conversation(user).byte_messages.count).to eq(0)
+    end
+  end
+
   describe ".window" do
     it "covers yesterday and today, so a fix can be seen next to the failure" do
       days = described_class.window(user, now: Time.zone.parse("2026-08-12 22:00:00"))
@@ -126,6 +159,12 @@ RSpec.describe ByteDailyAudit do
       described_class.run!(user)
 
       expect(described_class.run!(user)).to eq(:already_ran)
+    end
+
+    it "runs anyway when forced" do
+      described_class.run!(user)
+
+      expect(described_class.run!(user, force: true)).to eq(:sent)
     end
 
     it "runs again the next day" do

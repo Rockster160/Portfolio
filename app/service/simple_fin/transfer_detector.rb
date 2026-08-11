@@ -14,7 +14,7 @@ module SimpleFin
   #   * neither side already paired
   #
   # And it must be UNAMBIGUOUS. If a leaving row could equally be explained by
-  # two arriving rows, nothing is paired — mislabelling a real expense as a
+  # two arriving rows, nothing is paired — mislabeling a real expense as a
   # transfer erases it from spending entirely, which is a worse and quieter
   # error than leaving a transfer counted.
   class TransferDetector

@@ -78,8 +78,20 @@ class ApplicationRecord < ActiveRecord::Base
   end
 
   def self.node_sql(node, parent_node=nil)
-    field = (parent_node&.field || node.field).to_sym
+    field = (parent_node&.field || node.field)&.to_sym
+    return if field.nil?
     return search_scope.search(field).stripped_sql unless search_terms.key?(field)
+
+    # A bare word parses as a field with NO operator and no conditions. When
+    # that word happens to also be a search-term name it slipped past the
+    # check above and hit `.to_sym` on a nil operator below, taking the whole
+    # search down with a NoMethodError — searching ActionEvents for "notes",
+    # or bank transactions for "transfer", raised rather than searching.
+    #
+    # A word on its own is free text whatever it is named, so fall through to
+    # the same search any other bare word gets.
+    operator = (parent_node&.operator || node.operator)&.to_sym
+    return search_scope.search(field).stripped_sql if operator.nil?
 
     column = search_terms[field]
     column_data = nil
@@ -95,8 +107,6 @@ class ApplicationRecord < ActiveRecord::Base
       column_data = columns.find { |c| c.name == column.to_s }
     end
     column = "#{table_name}.#{column}" if column.is_a?(Symbol)
-
-    operator = (parent_node&.operator || node.operator).to_sym
 
     text_operators = %i[: :: !: !::] # ~ !~
     numeric_operators = %i[= != < > <= >=]

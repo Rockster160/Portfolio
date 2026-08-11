@@ -17,7 +17,7 @@ class ActionEventNotifier
 
     # A SimpleFIN bank row may already be waiting for this event. The usual
     # order is alert-then-sync, but a charge synced before its alert was
-    # categorised, a hand-edited event, or any backfill inverts it — and
+    # categorized, a hand-edited event, or any backfill inverts it — and
     # without this the link would only ever happen in one direction. Exits
     # immediately for anything that is not a Transaction event.
     ::SimpleFin::EventMatcher.link_event(event) unless action == :removed

@@ -8,7 +8,7 @@ module SimpleFin
   #                       SimpleFIN reports the charge up to a day later, so a
   #                       new bank row looks backwards. `call`.
   #   event -> bank row   the inverted case. A charge synced before its alert
-  #                       was categorised, an event edited or created by hand
+  #                       was categorized, an event edited or created by hand
   #                       afterwards, or any backfill. `link_event`, driven
   #                       from ActionEventNotifier so every creation path is
   #                       covered.

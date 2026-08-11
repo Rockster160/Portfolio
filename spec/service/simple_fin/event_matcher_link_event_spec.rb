@@ -1,7 +1,7 @@
 require "rails_helper"
 
 # The inverted order: the bank row exists first and the ActionEvent arrives
-# afterwards. Happens when a charge syncs before its alert is categorised, when
+# afterwards. Happens when a charge syncs before its alert is categorized, when
 # an event is created or edited by hand, and on any backfill.
 RSpec.describe SimpleFin::EventMatcher, ".link_event" do
   let(:user) { User.me }

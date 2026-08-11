@@ -414,6 +414,11 @@
 [Icon]
   #suggest(String:Title)::String
   #search(String:Query)::Array
+[TransactionCategory]
+  #all::Array
+  #colors::Hash
+  #valid(String:Category)::Boolean
+  #default::String
 [Prompt]
   #find(String|Numeric)
   #all("complete?" Boolean(false))::Array

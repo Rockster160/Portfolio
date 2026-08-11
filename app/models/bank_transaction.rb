@@ -21,7 +21,7 @@
 #
 class BankTransaction < ApplicationRecord
   belongs_to :bank_account
-  # The instant, hand-categorised counterpart from the Chase alert email.
+  # The instant, hand-categorized counterpart from the Chase alert email.
   # Absent until the matcher finds it, and permanently absent for anything
   # email never covered — mortgage payments, most checking activity.
   # The FK is ON DELETE SET NULL: the bank row outlives its annotation.
@@ -100,7 +100,7 @@ class BankTransaction < ApplicationRecord
     where(bank_account_id: accounts.select(:id))
   }
 
-  # Category lives on the linked event, so an uncategorised row correctly
+  # Category lives on the linked event, so an uncategorized row correctly
   # matches no category at all.
   scope :search_category, ->(*qs) {
     terms = like_terms(qs)
@@ -157,7 +157,7 @@ class BankTransaction < ApplicationRecord
   end
 
   # Category lives on the ActionEvent — it is the surface that has been
-  # categorised for 2,560 rows and drives the existing chart. Duplicating it
+  # categorized for 2,560 rows and drives the existing chart. Duplicating it
   # here would create two answers to the same question.
   def category
     action_event&.data&.dig("category")

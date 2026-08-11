@@ -162,7 +162,7 @@ RSpec.describe BankTransaction, ".query" do
     expect(found("payee:costco OR payee:dutch")).to contain_exactly(groceries, coffee)
   end
 
-  # An uncategorised row has no category to match, rather than matching all.
+  # An uncategorized row has no category to match, rather than matching all.
   it "excludes unlinked rows from a category filter" do
     expect(found("category:eat")).not_to include(orphan)
   end

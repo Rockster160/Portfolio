@@ -1,85 +1,50 @@
-# The category vocabulary for spending.
+# The single source of truth for the spending-category vocabulary.
 #
-# CAUTION — this is the fourth copy of this list, not the first. It also lives
-# in:
+# It used to live in four places that had to be edited together — this module,
+# Jil task 453's merchant rules, the `choices` on the categorization Prompt,
+# and CustomChart 4's color map. Adding a category meant remembering all four,
+# and `Extra Expense` is in the data exactly once because someone did not.
 #
-#   * Jil task 453 "Transaction Category Rules", as the Keyval keys of the
-#     merchant-pattern rules. That task is what actually auto-assigns a
-#     category from a merchant string.
-#   * The `choices` on the categorization Prompt each Chase alert raises.
-#   * CustomChart 4 "Transactions", as the keys of its color map — a category
-#     missing from there renders as an uncolored series.
-#
-# Rails had no source for it at all, and constraining the UI needs one, so
-# this is it for the app side. Adding a category means touching all four.
-# Worth unifying — task 453 is the natural owner, since it already holds the
-# rules — but that is a change to a live Jil task and belongs in its own pass.
+# Now Rails owns it and everything else derives: Jil reads it through
+# `TransactionCategory.all()` / `.colors()` (see Jil::Methods::TransactionCategory)
+# so the tasks no longer carry a copy, and the chart's color map is generated
+# from `chart_color_config` rather than maintained alongside it.
 module TransactionCategory
-  # Ordered as the Prompt presents them, which is roughly fixed-costs first
-  # then discretionary. Kept in that order so the select matches the muscle
-  # memory of answering the Prompt.
-  ALL = [
-    :mortgage,
-    :"pay check",
-    :"card payment",
-    :insurance,
-    :taxes,
-    :hosting,
-    :subscriptions,
-    :groceries,
-    :alcohol,
-    :"eat out",
-    :utilities,
-    :home,
-    :car,
-    :pets,
-    :health,
-    :medical,
-    :hobby,
-    :travel,
-    :fun,
-    :people,
-    :shopping,
-    :other,
-  ].freeze
-
-  DEFAULT = :other
-
-  # Mirrored from CustomChart 4's color map so a category is the same color
-  # everywhere it appears. Not a validated categorical palette and cannot be —
-  # 22 hues are not mutually separable, and the validator fails it on lightness
-  # band, chroma floor, and CVD separation (worst adjacent pair ΔE 1.9 protan).
+  # ONE hash: the category and the color it is drawn in. The list and the
+  # palette are the same thing, so keeping them as separate constants meant
+  # writing all 22 names twice and having no way to notice when they drifted.
   #
-  # That is acceptable ONLY because nothing here identifies a category by
-  # color alone: every bar carries its own name and value. Color is
-  # redundant reinforcement. Do not reuse this map anywhere identity depends
-  # on the hue, and do not re-step it without also updating CustomChart 4 —
-  # they would drift and the same category would be two colors.
-  COLORS = {
-    mortgage:       "#E66767",
-    "pay check":    "#008300",
-    "card payment": "#6E7681",
-    insurance:      "#DCA3B1",
-    taxes:          "#C91DC9",
-    hosting:        "#A8E6CF",
-    subscriptions:  "#9085E9",
-    groceries:      "#3987E5",
+  # Alphabetical, and `ALL` re-sorts rather than trusting this to stay that
+  # way — adding one in the wrong place should not reorder the UI.
+  CATEGORIES = {
     alcohol:        "#CBB994",
-    "eat out":      "#D95926",
-    utilities:      "#199E70",
-    home:           "#C98500",
     car:            "#8A6D3B",
-    pets:           "#B07CC6",
-    health:         "#59C26A",
-    medical:        "#1DC91D",
-    hobby:          "#45B6D4",
-    travel:         "#9EC91D",
+    "card payment": "#6E7681",
+    "eat out":      "#D95926",
     fun:            "#F5D67B",
-    people:         "#14C8B4",
-    shopping:       "#D55181",
+    groceries:      "#3987E5",
+    health:         "#59C26A",
+    hobby:          "#45B6D4",
+    home:           "#C98500",
+    hosting:        "#A8E6CF",
+    insurance:      "#DCA3B1",
+    medical:        "#1DC91D",
+    mortgage:       "#E66767",
     other:          "#AEB6C2",
+    "pay check":    "#008300",
+    people:         "#14C8B4",
+    pets:           "#B07CC6",
+    shopping:       "#D55181",
+    subscriptions:  "#9085E9",
+    taxes:          "#C91DC9",
+    travel:         "#9EC91D",
+    utilities:      "#199E70",
   }.freeze
 
+  ALL = CATEGORIES.keys.sort_by(&:to_s).freeze
+  DEFAULT = :other
+  # Strays render in a neutral gray rather than borrowing a real category's
+  # color, so "this is not a real category" is visible on the chart.
   FALLBACK_COLOR = "#475569".freeze
 
   class << self
@@ -93,27 +58,31 @@ module TransactionCategory
       category.to_s.titleize
     end
 
-    # Strays render in a neutral grey rather than borrowing another category's
-    # color, so "this is not a real category" is visible on the chart.
     def color(category)
-      COLORS[category.to_s.to_sym] || FALLBACK_COLOR
+      CATEGORIES[category.to_s.to_sym] || FALLBACK_COLOR
     end
 
     def valid?(category)
-      ALL.any? { |known| known.to_s == category.to_s }
+      CATEGORIES.key?(category.to_s.to_sym)
     end
 
     # Nil rather than DEFAULT on an unknown value: silently rewriting an
-    # unrecognised category to "other" would erase the fact that something
+    # unrecognized category to "other" would erase the fact that something
     # wrote a category nothing knows about. `Extra Expense` is in the data
     # exactly once for that reason.
     def cast(category)
       ALL.detect { |known| known.to_s == category.to_s }
     end
 
-    # Categories present in the data but not in the vocabulary. These render
-    # uncolored on the chart and are what the page's cleanup surface exists
-    # to catch.
+    # The color map in the exact shape CustomChart 4's config expects, so the
+    # chart is GENERATED from this rather than kept in step with it by hand.
+    def chart_color_config
+      ALL.map { |category| "#{category} = #{CATEGORIES[category]}" }.join("\n")
+    end
+
+    # Categories present in the data but outside the vocabulary. These render
+    # uncolored on the chart and are what the banking page's cleanup surface
+    # exists to catch.
     def unknown_in_use
       used = ::ActionEvent.where(name: "Transaction").distinct.pluck(Arel.sql("data->>'category'"))
       used.compact.reject { |category| valid?(category) }

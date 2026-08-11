@@ -94,7 +94,7 @@ RSpec.describe SimpleFin::Client do
           .not_to have_been_made
       end
 
-      # Captured before WebMock sees it. WebMock normalises `request.uri` —
+      # Captured before WebMock sees it. WebMock normalizes `request.uri` —
       # params get sorted and duplicate keys collapse to the last value — so
       # asserting through it would hide the very thing being tested.
       it "sends a repeated account parameter for each id" do
