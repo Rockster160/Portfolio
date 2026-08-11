@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_11_034853) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_11_052430) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -277,8 +277,10 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_11_034853) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "action_event_id"
+    t.virtual "amount_abs", type: :decimal, as: "((abs(amount_cents))::numeric / (100)::numeric)", stored: true
     t.index ["action_event_id"], name: "index_bank_transactions_on_action_event_id"
     t.index ["action_event_id"], name: "index_bank_transactions_on_claimed_action_event", unique: true, where: "(action_event_id IS NOT NULL)"
+    t.index ["amount_abs"], name: "index_bank_transactions_on_amount_abs"
     t.index ["bank_account_id", "posted_at"], name: "index_bank_transactions_on_bank_account_id_and_posted_at"
     t.index ["bank_account_id"], name: "index_bank_transactions_on_bank_account_id"
     t.index ["simplefin_id"], name: "index_bank_transactions_on_simplefin_id", unique: true
@@ -1676,7 +1678,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_11_034853) do
   add_foreign_key "agenda_shares", "users"
   add_foreign_key "agendas", "google_accounts"
   add_foreign_key "agendas", "users"
-  add_foreign_key "bank_transactions", "action_events"
+  add_foreign_key "bank_transactions", "action_events", on_delete: :nullify
   add_foreign_key "bank_transactions", "bank_accounts"
   add_foreign_key "boxes", "users"
   add_foreign_key "buddy_ideas", "users"

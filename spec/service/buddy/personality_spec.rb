@@ -486,6 +486,53 @@ RSpec.describe Buddy::Personality do
     end
   end
 
+  # The persona used to argue with the tone profile it's supposed to speak in.
+  # It mandated a terminal period and banned exclamation points while
+  # chelsea.md calls `!` the terminal mark and `Okie!` her most common yes, and
+  # the persona is the more specific instruction - so it won. Prod: "Done.",
+  # "Sent.", "Done. I extended the art fest to 2:00 PM."
+  describe ".for Moss's cuteness (Chelsea)" do
+    def moss_prompt
+      described_class.for(create(:user), conversation: buddy_convo(create(:user), "moss"))
+    end
+
+    it "no longer contradicts the tone profile on punctuation" do
+      prompt = moss_prompt
+
+      expect(prompt).not_to include("No exclamation points")
+      expect(prompt).not_to include("ends with a period")
+    end
+
+    it "hands her the acks by name instead of leaving her to invent them" do
+      prompt = moss_prompt
+
+      expect(prompt).to include("Okie!").and include("Got it!")
+      expect(prompt).to include("Rotate your acks")
+    end
+
+    it "names the bare receipt as the failure" do
+      expect(moss_prompt).to include("A bare `Done.` is the single most wrong thing you can say")
+    end
+
+    it "keeps the stretched vowels that carry her warmth" do
+      expect(moss_prompt).to include("Stretched vowels")
+    end
+
+    # Cute is not the same as loud. Moss is Chelsea's register, and calm is the
+    # one thing the old persona had right.
+    it "stays gentle rather than turning into Suki" do
+      prompt = moss_prompt
+
+      expect(prompt).to include("Cute and calm are not opposites")
+      expect(prompt).not_to include("sunbird")
+    end
+
+    # The tone profile says warmth comes from the words, not a label.
+    it "drops the pet name the profile says she doesn't use" do
+      expect(moss_prompt).not_to include(%(address Chelsea as **"friend"**))
+    end
+  end
+
   describe ".for Suki's character (Eve)" do
     def suki_prompt
       described_class.for(create(:user), conversation: buddy_convo(create(:user), "suki"))

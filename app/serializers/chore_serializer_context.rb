@@ -203,16 +203,21 @@ class ChoreSerializerContext
 
   # Build the {B.id => A's max credited day_key} hash.
   #
-  # The personal-vs-household split mirrors the rest of preload!: a
-  # household-shared B looks at every household member's A
-  # completions; a personal B only looks at the viewer's. We can't do
-  # one global query because A's user-scope filter depends on B's
-  # sharing mode.
+  # The personal-vs-household split is decided by A (the ANCHOR), not by
+  # B: "when was A last done?" is a question about A, so a household A
+  # counts every member's completions even when the B reacting to it is
+  # personal. Keying it off B instead meant a personal B behind a
+  # household A only ever saw the viewer's own taps — B never fired when
+  # the other person did A. We still can't do one global query, because
+  # the user-scope filter differs per anchor.
   def bulk_anchor_last_days
     followers = @chores_by_id.values.select { |c| c.after_chore? && c.anchor_chore_id.present? }
     return {} if followers.empty?
 
-    by_user_scope = followers.group_by { |c| c.share_household? ? :household : :personal }
+    anchors = anchor_chores_by_id(followers.map(&:anchor_chore_id).uniq)
+    by_user_scope = followers.group_by { |c|
+      anchors[c.anchor_chore_id]&.share_household? ? :household : :personal
+    }
     out = {}
 
     [:household, :personal].each { |scope|
@@ -240,5 +245,17 @@ class ChoreSerializerContext
     }
 
     out
+  end
+
+  # Anchors are usually already in the preloaded set, but an anchor the
+  # viewer can't see (personal + assigned to someone else) still governs
+  # the scope, so fall back to a single query for the stragglers rather
+  # than silently treating them as personal.
+  def anchor_chores_by_id(ids)
+    known = @chores_by_id.slice(*ids)
+    missing = ids - known.keys
+    return known if missing.empty?
+
+    known.merge(Chore.where(id: missing).index_by(&:id))
   end
 end

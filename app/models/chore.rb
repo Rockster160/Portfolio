@@ -371,15 +371,26 @@ class Chore < ApplicationRecord
   end
 
   # Returns the anchor chore's most recent credited completion `day_key`
-  # under `user`'s cooldown scope (or nil). Bulk callers should use
+  # (or nil). Bulk callers should use
   # `ChoreSerializerContext#anchor_last_day_by_chore` instead — this is
   # the per-record fallback.
+  #
+  # The user scope comes from the ANCHOR, not from self: "when was the
+  # mail last got?" is a question about the anchor chore, so a household
+  # anchor has to count everyone's taps even when the follower reacting
+  # to it is personal. Scoping by self meant a personal follower behind a
+  # household anchor only ever saw its own user's completions and never
+  # fired for anybody else. Family-aware for the same reason the bulk
+  # path is — a parent-anchored follower fires when any sub-chore of the
+  # parent is credited.
   def lookup_anchor_last_day(user)
     return nil if anchor_chore_id.blank?
     return nil if user.nil?
+    return nil if anchor_chore.nil?
 
     ChoreCompletion.credited
-      .where(chore_id: anchor_chore_id, user_id: cooldown_scope_user_ids(user))
+      .where(user_id: anchor_chore.cooldown_scope_user_ids(user))
+      .where("chore_id = :id OR parent_chore_id = :id", id: anchor_chore_id)
       .maximum(:day_key)
   end
 

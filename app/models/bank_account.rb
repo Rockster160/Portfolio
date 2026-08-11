@@ -54,6 +54,16 @@ class BankAccount < ApplicationRecord
     friendly_name.presence || name
   end
 
+  # Enum values are storage identifiers; "checking" is not what a page should
+  # render. Titleized so multi-word kinds read properly if any are added.
+  def kind_label
+    kind.to_s.titleize
+  end
+
+  def self.kind_options
+    kinds.keys.map { |value| [value.titleize, value] }
+  end
+
   scope :assets, -> { where(kind: ASSET_KINDS) }
   scope :debts, -> { where(kind: DEBT_KINDS) }
   scope :classified, -> { where.not(kind: :unknown) }

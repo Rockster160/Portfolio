@@ -965,11 +965,27 @@ module Buddy
       # it's sitting right there: an imperative orders a thing to happen, and a
       # question doesn't. So this arm reads the REQUEST, and only then asks
       # whether the reply behaved like one that did it.
+      #
+      # The verb list is the part that has to keep earning its place. It started
+      # as house-device vocabulary, and prod 3236 walked past it: "print again"
+      # got "Yessss, the printer's running the last file again." off a single
+      # call with nothing run — the THIRD time that same request has been
+      # answered with a fabricated receipt (prod 2054 is the other two). Each of
+      # the earlier rounds patched the claim regex below instead, and each time
+      # the next occurrence dodged it by naming a different noun ("it's running"
+      # → "the printer's running"). The request side can't be dodged that way:
+      # "print again" is an imperative no matter how the reply is worded.
+      #
+      # So the verbs here are the ones that ONLY read as orders in this app,
+      # each tied to a real tool. Anything with an everyday non-command sense
+      # ("tell me...", "save it for later") stays out — a false positive here
+      # rewrites a good reply, which is worse than a missed catch.
       COMMAND_REQUEST_RX = /
         \A\s*(?:hey[\s,]+\w+[\s,]+)?
         (?:(?:please|can\s+you|could\s+you|would\s+you|go\s+ahead\s+and|go|just)\s+)*
         (?:turn|switch|toggle|set|start|stop|shut|open|close|lock|unlock|play|pause|
-           resume|dim|brighten|run|fire|launch|restart|reboot|enable|disable|mute|unmute)
+           resume|dim|brighten|run|fire|launch|restart|reboot|enable|disable|mute|unmute|
+           print|reprint|queue|preheat|cancel|remind|schedule|undo)
         # An object, not a preposition. "start with the milk" and "run by me
         # first" open with a command verb and are conversation, so the thing
         # right after the verb is what separates an order from a turn of phrase.
@@ -985,19 +1001,43 @@ module Buddy
         | \b(?:isn(?:'|’)?t|not)\s+(?:wired|set\s+up|hooked|connected|available)\b
       /xi
 
+      # Byte's own sound effect for having just flipped something physical. In
+      # every one of the 18 times it has appeared in prod it sat on a claim
+      # about a device — lights, monitors, blinds, the printer — and never on
+      # ordinary conversation. It is the one completion marker the persona OWNS
+      # rather than one a regex has to guess at, so it can't be dodged by
+      # renaming the noun, which is how the claim regex keeps getting walked
+      # past. Prod 3128 is what it catches: "Good night" is not an imperative
+      # and has no verb to match, but it got "Total darkness, and the monitors
+      # are out. *click* 💙" off a single call with nothing run.
+      CLICK_RX = /\*click\*/i
+
+      # It belongs HERE and not in COMPLETION_CLAIM_RX because the same sentence
+      # is the right answer to "did you turn the lights off?" — reporting a
+      # state Buddy set earlier, with correctly nothing running this turn.
+      # Asking is the whole difference, and unlike the reply, the question is
+      # unambiguous.
+      QUESTION_RX = /
+        \?
+        | \A\s*(?:is|are|was|were|did|do|does|can|could|will|would|has|have|had|
+                  how|what|when|where|why|which|who)\b
+      /xi
+
       # Did they order something done, and did the reply act like it happened?
       #
-      # Only the request being an imperative is asserted here; whether anything
-      # actually RAN is the caller's half, and it's the same three-part test the
-      # reply-text guard uses. A reply that asks a question back or says it can't
-      # is doing the right thing with a command it couldn't carry out.
+      # Two ways in. Either the REQUEST was an imperative, or the reply carries
+      # Buddy's own tell for having done a physical thing and the request wasn't
+      # a question. Whether anything actually RAN is the caller's half, and it's
+      # the same three-part test the reply-text guard uses. A reply that asks a
+      # question back or says it can't is doing the right thing with a command
+      # it couldn't carry out.
       def commanded_action_unanswered?(body)
         return false if self_initiated?
-        return false unless @inbound.body.to_s.match?(COMMAND_REQUEST_RX)
         return false if body.to_s.strip.empty?
         return false if body.match?(SOLICITS_INFO_RX) || body.match?(DENIAL_RX)
+        return true if @inbound.body.to_s.match?(COMMAND_REQUEST_RX)
 
-        true
+        body.match?(CLICK_RX) && !@inbound.body.to_s.match?(QUESTION_RX)
       end
 
       # HARD CHECK: never let a reply claim it did something when nothing ran.

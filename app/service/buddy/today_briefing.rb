@@ -38,6 +38,51 @@ module Buddy
       An emoji, if you use one, has to be ABOUT something in the message: warmth you actually feel, or a reaction to one specific thing. If it could move to a different day's briefing unchanged, it isn't doing anything and it shouldn't be there.
     TONE
 
+    # How long since the person last said something for the briefing to still
+    # count as arriving out of the blue. A scheduled 8:30am broadcast almost
+    # always is; the chip tapped in the middle of a conversation is not.
+    GREET_GAP = 30.minutes
+
+    # Whether to greet is a FACT ABOUT THE THREAD, so Rails answers it.
+    #
+    # This used to be four paragraphs of instruction opening with "OPEN with a
+    # warm greeting WHEN IT FITS", and over two days four of seven briefings
+    # either skipped the greeting entirely or landed it on the flat period the
+    # prompt spends a whole paragraph forbidding. That isn't a wording problem.
+    # It's the same failure the part-of-day line already ran into - "a paragraph
+    # of rules for reading a clock loses to one bad guess" - with an escape
+    # hatch on top: "skip it when we just talked a moment ago" is a licensed
+    # reason to skip, and a model reading a thread that still holds yesterday's
+    # messages will take it.
+    #
+    # So the judgement is made here, where the timestamps are, and what reaches
+    # the model is an instruction with no branch left in it.
+    def greeting_block(conversation=nil)
+      return greet_lines if conversation.nil?
+
+      last = conversation.byte_messages
+        .where(direction: :outbound)
+        .where("byte_messages.metadata ->> 'hidden' IS DISTINCT FROM 'true'")
+        .maximum(:created_at)
+
+      return greet_lines if last.nil? || last < GREET_GAP.ago
+
+      "DON'T GREET. We were talking a few minutes ago, so a hello here would be the second one in this thread. Go straight into the day."
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::TodayBriefing] greeting block failed: #{e.class}: #{e.message}")
+      greet_lines
+    end
+
+    def greet_lines
+      [
+        "OPEN WITH A GREETING. Not optional, and not a judgement call - this briefing is arriving out of the blue and a hello is how it stops reading like a notification.",
+        "",
+        "Take the half of the day from `Part of day` at the top of your prompt, never from the shape of this request: a briefing is not a morning thing, I ask for these at all hours, and greeting me with the wrong half is one of the most obviously broken things you can do. The WORDS are yours: vary the opener, make it interesting, never the same hello twice running.",
+        "",
+        "**It has to land warm and lifted - end it on a `!`, a stretched vowel, or real warmth, never on a flat period.** A hello that stops on a period reads deadpan, and the line after it inherits that flatness for the whole briefing. The same words can do either job; the punctuation and the energy decide which.",
+      ].join("\n")
+    end
+
     # Comfort bands mirror the dashboard weather cell's colour scale. Woven into
     # the seed so the briefing frames weather the way we read it at a glance.
     # Time-aware: past ~4pm the day's high/comfort read is no longer actionable,
@@ -122,17 +167,11 @@ module Buddy
       ""
     end
 
-    def seed(user=nil)
+    def seed(user=nil, conversation: nil)
       prompt = <<~PROMPT.strip
         What's on for TODAY, forward-looking. This is a briefing about the day ahead, NOT a recap of yesterday or a review of what's already done.
 
-        OPEN with a warm greeting when it fits. Take the half of the day from `Part of day` at the very top of your prompt - not the shape of this request, and not what a briefing usually sounds like (a briefing is not a morning thing; I ask for these at all hours). Match that part of day, but the WORDS are yours: vary the opener and make it interesting, never falling back to the same greeting every time.
-
-        **Greeting me with the wrong part of the day is one of the most obviously broken things you can do.** Keep the half of the day it names; phrase it however you like, clipped or full.
-
-        Lean into the greeting when it lands: the first check of the day, or when we haven't talked in a while. Skip it when we just talked a moment ago - don't greet twice in one thread.
-
-        **Land the greeting warm and lifted, not on a flat period.** A hello that stops on a period reads deadpan, and the line after it inherits that flatness for the rest of the briefing. Give it a lift, real warmth, so it sounds happy to see me. The same words can do either job; the punctuation and the energy are what decide which.
+        #{greeting_block(conversation)}
 
         Never address me as "you" in place of a name. That lands too intimate. Use my name, a plain greeting, or just dive in.
         #{weather_block(user)}#{plunge_block(user)}
@@ -198,7 +237,7 @@ module Buddy
         user:      user,
         direction: :outbound,
         state:     :pending,
-        body:      seed(user),
+        body:      seed(user, conversation: conversation),
         metadata:  {
           "kind"         => "buddy_trigger",
           "hidden"       => true,

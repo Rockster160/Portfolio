@@ -1,12 +1,15 @@
 <%= meta_title "System Banking", include_name: false %>
-<%= meta_description "SimpleFIN accounts and recent transactions." %>
+<%= meta_description "SimpleFIN accounts and transactions." %>
 
 <%
+  # number_to_currency handles both asks at once: thousands delimiters and a
+  # fixed 2dp, so 9.7 renders "$9.70" rather than "$9.7".
   money = ->(decimal) {
     next "—" if decimal.nil?
-    negative = decimal.negative?
-    "#{negative ? "-" : ""}$#{decimal.abs.round(2).to_s("F")}"
+    number_to_currency(decimal, unit: "$", delimiter: ",", precision: 2)
   }
+  cents = ->(amount) { money.call(BigDecimal(amount.to_i) / 100) }
+  sign_class = ->(value) { value.to_i.negative? ? "neg" : "pos" }
 %>
 
 <div class="system-page">
@@ -27,11 +30,11 @@
     <% if @unclassified.any? %>
       <p class="bank-warn">
         <%= pluralize(@unclassified.size, "account") %> still unclassified.
-        The dashboard balance stays blank until one is set to <strong>checking</strong>.
+        The dashboard balance stays blank until one is set to <strong>Checking</strong>.
       </p>
     <% elsif @primary.blank? %>
       <p class="bank-warn">
-        No account is set to <strong>checking</strong>, so the dashboard balance has nothing to read.
+        No account is set to <strong>Checking</strong>, so the dashboard balance has nothing to read.
       </p>
     <% end %>
 
@@ -39,8 +42,8 @@
       <%= form_with(url: system_bank_account_path(account), method: :patch, class: "basic bank-row") do |f| %>
         <div class="bank-row-head">
           <span class="bank-row-name"><%= account.display_name %></span>
-          <span class="bank-row-balance <%= account.balance_cents.to_i.negative? ? "neg" : "pos" %>">
-            <%= money.call(account.balance) %>
+          <span class="bank-row-balance <%= sign_class.call(account.balance_cents) %>">
+            <%= cents.call(account.balance_cents) %>
           </span>
         </div>
 
@@ -61,14 +64,14 @@
           <%= f.text_field(:"bank_account[friendly_name]",
                 value: account.friendly_name, placeholder: "Friendly name") %>
           <%= f.select(:"bank_account[kind]",
-                options_for_select(BankAccount.kinds.keys, account.kind)) %>
+                options_for_select(BankAccount.kind_options, account.kind)) %>
           <%= f.submit("Save", class: "btn") %>
         </div>
       <% end %>
     <% end %>
 
     <div class="lists-title bank-section">
-      <small>Recent</small> Transactions
+      <small>Transactions</small>
       <% if @unlinked_count.positive? %>
         <span class="bank-warn-inline"><%= @unlinked_count %> unlinked</span>
       <% end %>
@@ -81,13 +84,93 @@
       </p>
     <% end %>
 
+    <%= form_with(url: system_banking_path, method: :get, class: "basic bank-search") do %>
+      <input type="search" name="q" value="<%= @query %>"
+             placeholder="payee:amazon category:groceries amount&gt;50 direction:withdrawal">
+      <button type="submit" class="btn">Search</button>
+      <% if @query.present? %>
+        <a class="btn" href="<%= system_banking_path %>">Clear</a>
+      <% end %>
+    <% end %>
+
+    <p class="bank-hint">
+      Same syntax as events: <code>field:contains</code>, <code>field::exact</code>,
+      <code>&gt;</code> <code>&lt;</code> on numbers and dates, <code>-</code> or
+      <code>NOT</code> to negate, <code>AND</code> / <code>OR</code>. Fields:
+      payee, description, memo, mcc, <code>amount</code>, posted_at,
+      transacted_at, account, category, pending, linked,
+      <code>direction</code>.
+      <br>
+      <code>amount</code> is in dollars and always positive — a $40 charge and a
+      $40 deposit both match <code>amount::40</code>. Use
+      <code>direction:withdrawal</code> or <code>direction:deposit</code> for the
+      sign, since a leading <code>-</code> is the negation prefix.
+    </p>
+
+    <% if @search_error.present? %>
+      <p class="bank-error">Could not parse that search: <%= @search_error %></p>
+    <% end %>
+
+    <div class="bank-totals">
+      <div><span class="bank-totals-label">Results</span><%= number_with_delimiter(@result_count) %></div>
+      <div><span class="bank-totals-label">Spent</span>
+        <span class="neg"><%= cents.call(@spend_cents) %></span></div>
+      <div><span class="bank-totals-label">In</span>
+        <span class="pos"><%= cents.call(@income_cents) %></span></div>
+      <div><span class="bank-totals-label">Net</span>
+        <span class="<%= sign_class.call(@spend_cents + @income_cents) %>">
+          <%= cents.call(@spend_cents + @income_cents) %></span></div>
+    </div>
+
+    <% if @category_totals.any? %>
+      <%
+        chart_max = @category_totals.first.last.to_f
+      %>
+      <div class="bank-chart">
+        <div class="bank-chart-title">Spending by category<%= " · matching search" if @query.present? %></div>
+        <% @category_totals.each do |category, total| %>
+          <%
+            width = chart_max.positive? ? ((total / chart_max) * 100).round(1) : 0
+            known = TransactionCategory.valid?(category)
+          %>
+          <div class="bank-bar-row" title="<%= TransactionCategory.label(category) %>: <%= cents.call(total) %>">
+            <div class="bank-bar-label">
+              <%= TransactionCategory.label(category) %><%= " (unknown)" unless known %>
+            </div>
+            <div class="bank-bar-track">
+              <div class="bank-bar-fill"
+                   style="width: <%= width %>%; background: <%= TransactionCategory.color(category) %>;"></div>
+            </div>
+            <div class="bank-bar-value"><%= cents.call(total) %></div>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+
     <% if @transactions.none? %>
-      <p class="bank-empty">No transactions synced yet.</p>
+      <p class="bank-empty">
+        <%= @query.present? ? "Nothing matched that search." : "No transactions synced yet." %>
+      </p>
     <% else %>
+      <%= form_with(url: system_bank_transactions_bulk_path, method: :patch, class: "basic bank-bulk") do %>
+        <input type="hidden" name="q" value="<%= @query %>">
+        <span class="bank-bulk-label">Set category on selected</span>
+        <%= select_tag(:category, options_for_select(TransactionCategory.options),
+              include_blank: "Choose…") %>
+        <button type="submit" class="btn">Apply</button>
+        <button type="submit" class="btn" name="apply_to_search" value="1"
+                data-confirm-count="<%= @result_count %>">
+          Apply to all <%= number_with_delimiter(@result_count) %> matching
+        </button>
+      <% end %>
+
+      <div class="bank-page-info"><%= page_entries_info @transactions %></div>
+
       <table class="bank-table">
         <thead>
           <tr>
-            <th>Date</th>
+            <th class="tick"><input type="checkbox" data-check-all></th>
+            <th>When</th>
             <th>Payee</th>
             <th>Account</th>
             <th>Category</th>
@@ -97,29 +180,73 @@
         <tbody>
           <% @transactions.each do |transaction| %>
             <tr>
-              <td><%= transaction.occurred_at&.strftime("%b %-d") %></td>
+              <td class="tick">
+                <input type="checkbox" name="transaction_ids[]"
+                       value="<%= transaction.id %>" form="bank-bulk-form">
+              </td>
+              <td class="when">
+                <%= transaction.occurred_local&.strftime("%b %-d, %Y") %>
+                <span class="bank-muted"><%= transaction.occurred_local&.strftime("%-I:%M %p") %></span>
+              </td>
               <td>
-                <%= transaction.payee.presence || transaction.description %>
+                <%= transaction.display_payee %>
                 <% if transaction.pending? %><em>pending</em><% end %>
               </td>
               <td><%= transaction.bank_account.display_name %></td>
               <td>
                 <% if transaction.category.present? %>
-                  <%= transaction.category %>
+                  <span class="bank-cat">
+                    <span class="bank-cat-dot"
+                          style="background: <%= TransactionCategory.color(transaction.category) %>;"></span>
+                    <%= TransactionCategory.label(transaction.category) %>
+                  </span>
                 <% else %>
                   <span class="bank-muted">unlinked</span>
                 <% end %>
               </td>
-              <td class="right <%= transaction.amount_cents.negative? ? "neg" : "pos" %>">
-                <%= money.call(transaction.amount) %>
+              <td class="right <%= sign_class.call(transaction.amount_cents) %>">
+                <%= cents.call(transaction.amount_cents) %>
               </td>
             </tr>
           <% end %>
         </tbody>
       </table>
+
+      <div class="bank-pagination"><%= paginate @transactions %></div>
     <% end %>
   <% end %>
 </div>
+
+<%= content_for :after_body do %>
+  <script>
+    (function () {
+      // The checkboxes live inside the table, not the bulk form, so they are
+      // associated by `form=`. Give that form the id the inputs point at.
+      var bulk = document.querySelector(".bank-bulk");
+      if (bulk) { bulk.id = "bank-bulk-form"; }
+
+      var all = document.querySelector("[data-check-all]");
+      if (all) {
+        all.addEventListener("change", function () {
+          document.querySelectorAll('input[name="transaction_ids[]"]').forEach(function (box) {
+            box.checked = all.checked;
+          });
+        });
+      }
+
+      // Applying to a whole search can touch far more than is on screen.
+      var wide = document.querySelector("[data-confirm-count]");
+      if (wide) {
+        wide.addEventListener("click", function (event) {
+          var count = wide.getAttribute("data-confirm-count");
+          if (!window.confirm("Set the category on all " + count + " matching transactions?")) {
+            event.preventDefault();
+          }
+        });
+      }
+    })();
+  </script>
+<% end %>
 
 <%= content_for :head do %>
   <style>
@@ -127,50 +254,71 @@
     .system-page .lists-title { font-size: 24px; margin-bottom: 16px; color: #E2E8F0; }
     .bank-section { margin-top: 36px; }
 
-    .bank-empty, .bank-warn { color: #94A3B8; margin: 12px 0; }
+    .bank-empty, .bank-warn, .bank-hint, .bank-error { margin: 12px 0; color: #94A3B8; }
     .bank-warn { color: #F5B041; }
+    .bank-error { color: #EC7063; }
+    .bank-hint { font-size: 12px; }
+    .bank-hint code { color: #CBD5E1; }
     .bank-warn-inline { font-size: 14px; color: #F5B041; margin-left: 8px; }
     .bank-muted { color: #64748B; }
 
     .bank-row {
-      background: #1E293B;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      padding: 14px 16px;
-      margin-bottom: 12px;
+      background: #1E293B; border: 1px solid #334155;
+      border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;
     }
     .bank-row-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
     .bank-row-name { font-size: 18px; color: #E2E8F0; }
     .bank-row-balance { font-size: 18px; font-variant-numeric: tabular-nums; }
     .bank-row-meta { font-size: 13px; color: #94A3B8; margin-top: 4px; }
     .bank-primary { color: #58D68D; }
-
-    .bank-row-fields {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 12px;
-    }
+    .bank-row-fields { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
     .bank-row-fields input[type="text"] { flex: 1 1 220px; min-width: 0; }
-    .bank-row-fields select { flex: 0 1 160px; }
-    .bank-row-fields .btn { flex: 0 0 auto; }
+    .bank-row-fields select { flex: 0 1 180px; }
+
+    .bank-search { display: flex; gap: 8px; margin-bottom: 6px; }
+    .bank-search input[type="search"] { flex: 1 1 auto; min-width: 0; }
+
+    .bank-totals { display: flex; flex-wrap: wrap; gap: 24px; margin: 16px 0; }
+    .bank-totals > div { font-size: 16px; font-variant-numeric: tabular-nums; color: #E2E8F0; }
+    .bank-totals-label { display: block; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #64748B; }
+
+    .bank-chart { margin: 20px 0 28px; }
+    .bank-chart-title { font-size: 13px; color: #94A3B8; margin-bottom: 10px; }
+    .bank-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+    .bank-bar-label { flex: 0 0 130px; font-size: 13px; color: #CBD5E1; text-align: right; }
+    .bank-bar-track { flex: 1 1 auto; min-width: 0; }
+    /* Rounded data-end, anchored flat to the baseline it grows from. */
+    .bank-bar-fill { height: 12px; border-radius: 0 4px 4px 0; min-width: 2px; }
+    .bank-bar-value { flex: 0 0 110px; font-size: 13px; color: #94A3B8;
+      font-variant-numeric: tabular-nums; }
+
+    .bank-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+    .bank-bulk-label { font-size: 13px; color: #94A3B8; }
+    .bank-page-info { font-size: 12px; color: #64748B; margin: 8px 0; }
+    .bank-pagination { margin-top: 12px; }
 
     .bank-table { width: 100%; border-collapse: collapse; font-size: 14px; }
     .bank-table th, .bank-table td {
-      text-align: left;
-      padding: 8px 10px;
-      border-bottom: 1px solid #1E293B;
+      text-align: left; padding: 8px 10px; border-bottom: 1px solid #1E293B;
     }
     .bank-table th { color: #94A3B8; font-weight: normal; }
     .bank-table td { color: #CBD5E1; }
     .bank-table .right { text-align: right; font-variant-numeric: tabular-nums; }
+    .bank-table .tick { width: 28px; }
+    .bank-table .when { white-space: nowrap; }
     .bank-table em { color: #F5B041; font-style: normal; font-size: 12px; }
+
+    .bank-cat { display: inline-flex; align-items: center; gap: 6px; }
+    .bank-cat-dot { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
 
     .pos { color: #58D68D; }
     .neg { color: #EC7063; }
 
-    @media (max-width: 640px) {
-      .bank-table th:nth-child(3), .bank-table td:nth-child(3) { display: none; }
+    @media (max-width: 720px) {
+      .bank-table th:nth-child(4), .bank-table td:nth-child(4) { display: none; }
+      .bank-bar-label { flex-basis: 90px; }
+      .bank-bar-value { flex-basis: 90px; }
     }
   </style>
 <% end %>

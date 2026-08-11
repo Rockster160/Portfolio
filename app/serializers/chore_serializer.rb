@@ -88,10 +88,11 @@ class ChoreSerializer
       # streaks, Today carryover, and Jil :completed are unchanged.
       target_count:         chore.target_count,
       progress_count:       done_count_today,
-      # Cooldown / sharing-mode / hot-eligibility belong to the parent
-      # for sub-chores — sub-chore taps credit the parent, so the
-      # client must show parent's cooldown semantics to stay coherent.
-      threshold_seconds:    effective_chore.threshold_seconds,
+      # Sharing-mode belongs to the parent for sub-chores — sub-chore
+      # taps credit the parent, so the client must show the parent's
+      # semantics to stay coherent. The cooldown VALUE is a sub-chore
+      # override, not a straight inherit — see `effective_threshold`.
+      threshold_seconds:    effective_threshold,
       cooldown_kind:        cooldown_kind, # "none" | "fixed" | "day_reset"
       one_off:              chore.one_off,
       sharing_mode:         effective_chore.sharing_mode,
@@ -207,9 +208,19 @@ class ChoreSerializer
     end
   end
 
+  # The cooldown a tap on THIS chore will actually be measured against.
+  # Mirrors ChoreCompleter#apply_threshold! exactly: a sub-chore's own
+  # value wins when set, and only a nil falls through to the parent.
+  # Reading the parent unconditionally would render "no cooldown" on a
+  # sub-chore that carries its own — the card would contradict the
+  # cooldown the completer goes on to enforce.
+  def effective_threshold
+    chore.threshold_seconds.presence || effective_chore.threshold_seconds
+  end
+
   def cooldown_kind
-    return :day_reset if effective_chore.threshold_seconds == Chore::THRESHOLD_DAY_RESET
-    return :fixed     if effective_chore.threshold_seconds.to_i.positive?
+    return :day_reset if effective_threshold == Chore::THRESHOLD_DAY_RESET
+    return :fixed     if effective_threshold.to_i.positive?
 
     :none
   end

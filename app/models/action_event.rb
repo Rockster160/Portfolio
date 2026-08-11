@@ -44,10 +44,16 @@ class ActionEvent < ApplicationRecord
     where("data @> ?", { actions: Array.wrap(qs).flatten.compact }.to_json)
   }
   # Substring match on the `merchant` string stored in `data` (transactions).
+  #
+  # OR'd ILIKE rather than `ILIKE ANY (array[...])`: the search pipeline strips
+  # the parentheses around the array when it extracts this scope's WHERE
+  # clause, leaving `ILIKE ANY array[...]` — invalid SQL. `merchant:` raised
+  # PG::SyntaxError for every query until this was rewritten. The sibling
+  # scopes above are unaffected; their `?|` form has no wrapping parens.
   scope :search_data_merchant, ->(*qs) {
-    where(
-      "data->>'merchant' ILIKE ANY (array[:merchants])",
-      merchants: Array.wrap(qs).flatten.compact.map { |q| "%#{q}%" },
-    )
+    terms = Array.wrap(qs).flatten.compact_blank.map { |q| "%#{q}%" }
+    next none if terms.empty?
+
+    where(terms.map { "data->>'merchant' ILIKE ?" }.join(" OR "), *terms)
   }
 end

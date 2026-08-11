@@ -69,6 +69,7 @@ module Buddy
         recent_events:          recent_events(user, now),
         lists:                  lists(user),                    # the person's lists + each one's sections, for filing items in the right place
         active_proposals:       active_proposals(conversation),
+        recent_actions:         recent_actions(conversation, now),    # what actually RAN, for "did you do that?"
         upcoming_reminders:     upcoming_reminders(conversation, now),
         running_timers:         running_timers(user),                # countdowns on the clock right now, for "how long left" and cancel_timer
         active_watches:         active_watches(conversation, now),
@@ -910,6 +911,44 @@ module Buddy
         }
       rescue StandardError => e
         Buddy::Errors.report(section: "context.record_links", exception: e, user: user)
+        []
+      end
+
+      # What actually ran in this thread, most recent first.
+      #
+      # Buddy::GPT::History deliberately leaves the `buddy_activity` receipt
+      # chips OUT of the transcript, and it's right to: replayed as assistant
+      # turns they teach Buddy to narrate receipts instead of talking. The cost
+      # was that Buddy had no record of its own actions at all, so when it was
+      # told it hadn't done something it could only argue from its own prose.
+      # Prod 3129 - "Oh you didn't do anything" - got "Ahh, nope, I did." when
+      # nothing had run. Prod 3208 - "That's not correct. That's the laundry
+      # button being pressed." - got "I've got a watch on the dryer stop call
+      # already, not the button press.", and the watch really was on the button.
+      # Both were confident, both were wrong, and both were checkable.
+      #
+      # Context is where that belongs rather than history: here it is a FACT to
+      # read, not a turn to imitate, so the receipt-narration problem stays
+      # solved. Short window on purpose - this answers "did you just do that?",
+      # not "what have you ever done".
+      def recent_actions(conversation, now)
+        rows = conversation.byte_messages
+          .where("byte_messages.created_at > ?", now - 3.hours)
+          .where("byte_messages.metadata ->> 'kind' = ?", "buddy_activity")
+          .order(created_at: :desc)
+          .limit(8)
+
+        rows.map { |msg|
+          meta = msg.metadata.to_h
+          {
+            at:   msg.created_at.in_time_zone(conversation.user.timezone).strftime("%-I:%M %p"),
+            did:  msg.body.to_s.gsub(/\*\*/, ""),
+            tool: meta["tool_name"],
+            ok:   meta["ok"] != false,
+          }.compact
+        }
+      rescue StandardError => e
+        Buddy::Errors.report(section: "context.recent_actions", exception: e, user: conversation.user)
         []
       end
 

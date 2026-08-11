@@ -486,6 +486,75 @@ RSpec.describe ChoreSerializer, type: :serializer do
         expect(render(f)[:today_visible]).to be(false)
       end
 
+      # The anchor decides the user scope, not the follower. "Go get mail"
+      # is household — either person fetching it has to surface everyone's
+      # personal "Go through mail". Scoping by the follower meant the
+      # person who never fetches the mail never got the follow-up.
+      context "with a HOUSEHOLD anchor and a PERSONAL follower" do
+        let(:housemate) { create(:user) }
+        let!(:home) { create(:chore_household, owner_user: user) }
+        let(:mail_run) {
+          create(
+            :chore, created_by_user: user, chore_household: home, name: "Go get mail",
+            sharing_mode: :household, show_on_today_view: :when_scheduled,
+            recurrence: { freq: :never }
+          )
+        }
+
+        def sort_mail(owner)
+          create(
+            :chore, created_by_user: owner, chore_household: home,
+            name: "Go through mail", sharing_mode: :personal,
+            assigned_to_user_id: owner.id, show_on_today_view: :when_scheduled,
+            recurrence: { freq: :after_chore, anchor_chore_id: mail_run.id, interval: 0, unit: :day }
+          )
+        end
+
+        # Only the housemate ever fetches the mail — mirrors prod, where
+        # one person does it 12/0.
+        def housemate_fetches_mail!
+          create(
+            :chore_completion, chore: mail_run, user: housemate, paid_pebbles: 1,
+            completed_at: 2.hours.ago, day_key: today
+          )
+        end
+
+        before do
+          create(:chore_household_membership, chore_household: home, user: housemate)
+          [user, housemate].each(&:reload)
+        end
+
+        it "surfaces the OTHER person's follower when either one completes the anchor" do
+          mine = sort_mail(user)
+          theirs = sort_mail(housemate)
+          housemate_fetches_mail!
+
+          expect(render(mine)[:today_visible]).to be(true)
+          expect(render(mine)[:due_today]).to be(true)
+
+          theirs_json = described_class.new(
+            theirs, viewer: housemate, ctx: ChoreSerializerContext.for_user(housemate)
+          ).as_json
+          expect(theirs_json[:today_visible]).to be(true)
+        end
+
+        it "agrees with the ctx-less fallback path" do
+          mine = sort_mail(user)
+          housemate_fetches_mail!
+
+          expect(mine.lookup_anchor_last_day(user)).to eq(today)
+          expect(described_class.new(mine, viewer: user).as_json[:today_visible]).to be(true)
+        end
+
+        it "a PERSONAL anchor still scopes to the viewer alone" do
+          mail_run.update!(sharing_mode: :personal)
+          mine = sort_mail(user)
+          housemate_fetches_mail!
+
+          expect(render(mine)[:today_visible]).to be(false)
+        end
+      end
+
       it "save with self-anchor is rejected" do
         # Build a chore and try to point its anchor at itself.
         c = create(:chore, created_by_user: user, name: "X",

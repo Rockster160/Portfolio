@@ -55,10 +55,18 @@ class SystemController < ApplicationController
     @unclassified = @accounts.select(&:unknown?)
     @primary = ::SimpleFin::DashboardCache.primary
     @stray_categories = ::TransactionCategory.unknown_in_use
-
-    @transactions = ::BankTransaction.includes(:bank_account, :action_event)
-    @transactions = @transactions.recent_first.limit(TRANSACTION_PAGE)
     @unlinked_count = ::BankTransaction.unlinked.count
+
+    @query = params[:q].to_s.strip
+    scope = filtered_transactions
+
+    @spend_cents = scope.spending.sum(:amount_cents)
+    @income_cents = scope.income.sum(:amount_cents)
+    @result_count = scope.count
+    @category_totals = category_totals(scope)
+
+    listing = scope.includes(:bank_account, :action_event).recent_first
+    @transactions = listing.page(params[:page]).per(TRANSACTION_PAGE)
   end
 
   def update_bank_account
@@ -69,6 +77,39 @@ class SystemController < ApplicationController
     ::SimpleFin::DashboardCache.refresh!
 
     redirect_to(system_banking_path, notice: "Updated #{account.display_name}.")
+  end
+
+  # Applies one category across a checkbox selection, or across every row the
+  # current search matched — which is the point of the search syntax being
+  # here at all.
+  def bulk_update_transactions
+    category = ::TransactionCategory.cast(params[:category])
+    if category.nil?
+      return redirect_to(system_banking_path(q: params[:q]), alert: "Unknown category.")
+    end
+
+    @query = params[:q].to_s.strip
+    scope = (
+      if params[:apply_to_search].present?
+        filtered_transactions
+      else
+        ::BankTransaction.where(id: Array.wrap(params[:transaction_ids]))
+      end
+    )
+
+    updated = 0
+    skipped = 0
+    # No ActionEventNotifier here on purpose: it fires a :event Jil trigger per
+    # event, and a bulk recategorise of a whole search would stampede every
+    # watch and automation listening for one. ActionEventNotifier exists so
+    # bulk paths can opt out — this is one.
+    scope.includes(:action_event).find_each { |transaction|
+      transaction.apply_category(category) ? updated += 1 : skipped += 1
+    }
+
+    notice = "Categorised #{updated} as #{::TransactionCategory.label(category)}."
+    notice += " #{skipped} skipped (no linked event to hold a category)." if skipped.positive?
+    redirect_to(system_banking_path(q: params[:q].presence), notice: notice)
   end
 
   def connections
@@ -83,6 +124,31 @@ class SystemController < ApplicationController
 
   def bank_account_params
     params.require(:bank_account).permit(:friendly_name, :kind)
+  end
+
+  # A malformed query is a typo, not a 500. Surfaces the parser's own message
+  # and shows nothing, rather than silently falling back to every row — which
+  # would read as "your filter matched everything".
+  def filtered_transactions
+    return ::BankTransaction.all if @query.blank?
+
+    ::BankTransaction.query(@query)
+  rescue ::StandardError => e
+    @search_error = e.message
+    ::BankTransaction.none
+  end
+
+  # Spending only. Income and refunds in the same bars would net categories
+  # against each other and make a bar mean two different things.
+  def category_totals(scope)
+    totals = scope.spending.joins(:action_event)
+    totals = totals.group(::Arel.sql("action_events.data->>'category'"))
+    totals = totals.sum(:amount_cents)
+    totals.filter_map { |category, cents|
+      next if category.blank?
+
+      [category, cents.abs]
+    }.sort_by { |_category, cents| -cents }
   end
 
   # ActiveRecord's own view of THIS process's pool: how many connections are

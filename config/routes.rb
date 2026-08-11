@@ -550,6 +550,9 @@ Rails.application.routes.draw do
     get "/system/connections" => "system#connections", as: :system_connections
     get "/system/gpt_spending" => "system#gpt_spending", as: :system_gpt_spending
     get "/system/banking" => "system#banking", as: :system_banking
+    # Above the `:id` patch so "transactions" can't be read as an account id.
+    patch "/system/banking/transactions" => "system#bulk_update_transactions",
+      as: :system_bank_transactions_bulk
     patch "/system/banking/:id" => "system#update_bank_account", as: :system_bank_account
   end
   mount ::ActionCable.server => "/cable"

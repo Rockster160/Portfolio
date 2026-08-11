@@ -40,8 +40,8 @@ RSpec.describe SystemController, type: :controller do
         get :banking
 
         expect(response.body).to include("PREMIER PLUS CKG (2363)")
-        expect(response.body).to include("$18320.24")
-        expect(response.body).to include("-$1988.53")
+        expect(response.body).to include("$18,320.24")
+        expect(response.body).to include("-$1,988.53")
       end
 
       it "warns while an account is still unclassified" do
@@ -53,7 +53,7 @@ RSpec.describe SystemController, type: :controller do
         checking.update!(kind: :checking)
 
         get :banking
-        expect(response.body).to include("$18320.24 available")
+        expect(response.body).to include("$18,320.24 available")
         expect(response.body).not_to include("$0.0 available")
       end
 
@@ -104,6 +104,213 @@ RSpec.describe SystemController, type: :controller do
         get :banking
         expect(response.body).to include("Extra Expense")
       end
+    end
+  end
+
+  describe "GET #banking formatting and search" do
+    render_views
+    before { sign_in me }
+
+    def linked_transaction(cents:, category:, payee:, id: "TRN-A", at: Time.utc(2026, 8, 10, 21, 15))
+      event = ActionEvent.create!(
+        user: me, name: "Transaction", timestamp: at,
+        data: { amount: (cents.abs / 100.0), account: "(...7283)", category: category }
+      )
+      BankTransaction.create!(
+        simplefin_id: id, bank_account: card, action_event: event,
+        posted_at: at, transacted_at: at, amount_cents: cents, payee: payee
+      )
+    end
+
+    it "renders cents to two places, never truncated" do
+      linked_transaction(cents: -970, category: "fun", payee: "Arcade")
+
+      get :banking
+      expect(response.body).to include("-$9.70")
+      expect(response.body).not_to include("-$9.7<")
+    end
+
+    it "delimits thousands" do
+      linked_transaction(cents: -1_234_567, category: "home", payee: "Roofer")
+
+      get :banking
+      expect(response.body).to include("-$12,345.67")
+    end
+
+    it "shows the local time alongside the date" do
+      linked_transaction(cents: -500, category: "fun", payee: "Arcade")
+
+      get :banking
+      # 21:15 UTC is 3:15 PM Mountain.
+      expect(response.body).to include("Aug 10, 2026")
+      expect(response.body).to include("3:15 PM")
+    end
+
+    it "renders account kinds titleized rather than as enum values" do
+      checking.update!(kind: :checking)
+
+      get :banking
+      expect(response.body).to include("Checking")
+    end
+
+    it "renders categories titleized" do
+      linked_transaction(cents: -2148, category: "eat out", payee: "Subway")
+
+      get :banking
+      expect(response.body).to include("Eat Out")
+    end
+
+    it "narrows the list with a search" do
+      linked_transaction(cents: -2148, category: "eat out", payee: "Subway", id: "TRN-A")
+      linked_transaction(
+        cents: -999, category: "groceries", payee: "Costco",
+        id: "TRN-B", at: Time.utc(2026, 8, 9, 18, 0)
+      )
+
+      get :banking, params: { q: "payee:subway" }
+      expect(response.body).to include("Subway")
+      expect(response.body).not_to include("Costco")
+    end
+
+    # The tokenizer is lenient and rarely raises, so this drives the rescue
+    # directly. What matters is that a query which DOES blow up surfaces the
+    # message and shows nothing — falling back to every row would read as
+    # "your filter matched everything".
+    it "reports a failed search instead of returning everything" do
+      linked_transaction(cents: -2148, category: "eat out", payee: "Subway")
+      allow(BankTransaction).to receive(:query).and_raise(StandardError, "bad token")
+
+      get :banking, params: { q: "payee:whatever" }
+      expect(response.body).to include("Could not parse that search", "bad token")
+      expect(response.body).not_to include("Subway")
+    end
+
+    it "totals the filtered set" do
+      linked_transaction(cents: -2148, category: "eat out", payee: "Subway")
+
+      get :banking
+      expect(response.body).to include("Spent")
+    end
+
+    it "charts spending by category" do
+      linked_transaction(cents: -2148, category: "eat out", payee: "Subway")
+
+      get :banking
+      expect(response.body).to include("Spending by category")
+      # The category's established colour, reused so it matches CustomChart 4.
+      expect(response.body).to include("#D95926")
+    end
+
+    it "paginates rather than dumping everything" do
+      get :banking
+      expect(response.body).to include("bank-pagination")
+    end
+  end
+
+  describe "PATCH #bulk_update_transactions" do
+    before { sign_in me }
+
+    let(:event) {
+      ActionEvent.create!(
+        user: me, name: "Transaction", timestamp: 1.day.ago,
+        data: { amount: 21.48, account: "(...7283)", category: "other" }
+      )
+    }
+    let(:linked) {
+      BankTransaction.create!(
+        simplefin_id: "TRN-A", bank_account: card, action_event: event,
+        posted_at: 1.day.ago, amount_cents: -2148, payee: "Netflix"
+      )
+    }
+    let(:unlinked) {
+      BankTransaction.create!(
+        simplefin_id: "TRN-B", bank_account: card,
+        posted_at: 1.day.ago, amount_cents: -300, payee: "Mystery"
+      )
+    }
+
+    it "categorises the selected rows" do
+      patch :bulk_update_transactions, params: {
+        transaction_ids: [linked.id], category: "subscriptions"
+      }
+
+      expect(linked.reload.category).to eq("subscriptions")
+    end
+
+    it "writes through to the ActionEvent, not a second copy" do
+      patch :bulk_update_transactions, params: {
+        transaction_ids: [linked.id], category: "subscriptions"
+      }
+
+      expect(event.reload.data["category"]).to eq("subscriptions")
+    end
+
+    # `txn.category = x` would evaluate to x regardless of the method's return,
+    # so the skip count would silently read zero.
+    it "counts rows it could not categorise" do
+      patch :bulk_update_transactions, params: {
+        transaction_ids: [linked.id, unlinked.id], category: "subscriptions"
+      }
+
+      expect(flash[:notice]).to include("Categorised 1")
+      expect(flash[:notice]).to include("1 skipped")
+    end
+
+    it "refuses a category outside the vocabulary" do
+      patch :bulk_update_transactions, params: {
+        transaction_ids: [linked.id], category: "Extra Expense"
+      }
+
+      expect(flash[:alert]).to eq("Unknown category.")
+      expect(linked.reload.category).to eq("other")
+    end
+
+    it "applies across a whole search when asked" do
+      linked
+      other_event = ActionEvent.create!(
+        user: me, name: "Transaction", timestamp: 1.day.ago,
+        data: { amount: 5.0, account: "(...7283)", category: "other" }
+      )
+      BankTransaction.create!(
+        simplefin_id: "TRN-C", bank_account: card, action_event: other_event,
+        posted_at: 1.day.ago, amount_cents: -500, payee: "Netflix Extra"
+      )
+
+      patch :bulk_update_transactions, params: {
+        q: "payee:netflix", apply_to_search: "1", category: "subscriptions"
+      }
+
+      expect(linked.reload.category).to eq("subscriptions")
+      expect(other_event.reload.data["category"]).to eq("subscriptions")
+    end
+
+    it "leaves rows outside the search alone" do
+      linked
+      untouched_event = ActionEvent.create!(
+        user: me, name: "Transaction", timestamp: 1.day.ago,
+        data: { amount: 5.0, account: "(...7283)", category: "groceries" }
+      )
+      BankTransaction.create!(
+        simplefin_id: "TRN-D", bank_account: card, action_event: untouched_event,
+        posted_at: 1.day.ago, amount_cents: -500, payee: "Costco"
+      )
+
+      patch :bulk_update_transactions, params: {
+        q: "payee:netflix", apply_to_search: "1", category: "subscriptions"
+      }
+
+      expect(untouched_event.reload.data["category"]).to eq("groceries")
+    end
+
+    it "is not reachable by a standard user" do
+      sign_in standard
+
+      patch :bulk_update_transactions, params: {
+        transaction_ids: [linked.id], category: "subscriptions"
+      }
+
+      expect(response).to have_http_status(:not_found)
+      expect(linked.reload.category).to eq("other")
     end
   end
 

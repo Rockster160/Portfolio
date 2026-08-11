@@ -73,6 +73,58 @@ RSpec.describe Buddy::Context do
     end
   end
 
+  # Prod 3129 and 3208: told it hadn't done a thing, Buddy argued and was wrong
+  # both times. The receipts are kept out of the transcript on purpose, so this
+  # is the only record of its own doing it can consult.
+  describe "recent_actions" do
+    def chip(body, at:, tool: "call_jil_function", ok: true)
+      conversation.byte_messages.create!(
+        user:       user,
+        direction:  :inbound,
+        state:      :delivered,
+        body:       body,
+        created_at: at,
+        metadata:   { "kind" => "buddy_activity", "tool_name" => tool, "ok" => ok },
+      )
+    end
+
+    it "reports what ran, newest first, with the tool that ran it" do
+      chip("Called **HASS Blinds**", at: 20.minutes.ago)
+      chip("Dark monitors", at: 2.minutes.ago, tool: "mac_command")
+
+      actions = described_class.build(user, conversation)[:recent_actions]
+
+      expect(actions.pluck(:did)).to eq(["Dark monitors", "Called HASS Blinds"])
+      expect(actions.first[:tool]).to eq("mac_command")
+      expect(actions.first[:at]).to be_present
+    end
+
+    it "leaves out prose, so only things that really ran are evidence" do
+      conversation.byte_messages.create!(
+        user: user, direction: :inbound, state: :delivered,
+        body: "Kk! Monitors are out. *click*", metadata: { "kind" => "buddy" }
+      )
+
+      expect(described_class.build(user, conversation)[:recent_actions]).to be_empty
+    end
+
+    it "does not reach back past the window, so it answers 'did you just'" do
+      chip("Called **HASS Light**", at: 5.hours.ago)
+
+      expect(described_class.build(user, conversation)[:recent_actions]).to be_empty
+    end
+
+    it "keeps a failed call, which is its own answer" do
+      chip("Called **HASS TV**", at: 1.minute.ago, ok: false)
+
+      expect(described_class.build(user, conversation)[:recent_actions].first[:ok]).to be(false)
+    end
+
+    it "is nameable through get_context, or Buddy can never ask for it" do
+      expect(Buddy::GPT::ContextTool::SECTIONS).to include(:recent_actions)
+    end
+  end
+
   describe "member_user_ids regression guard" do
     it "calls a method that actually exists on ChoreHousehold" do
       expect(household).to respond_to(:member_user_ids)

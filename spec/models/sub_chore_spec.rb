@@ -140,10 +140,32 @@ RSpec.describe "SubChore behavior" do
 
     it "exposes the parent's threshold / sharing_mode and surfaces parent_chore_id" do
       parent.update!(threshold_seconds: 7200, sharing_mode: :household)
+      sub.update!(threshold_seconds: nil)
       json = ChoreSerializer.new(sub, viewer: user).as_json
       expect(json[:threshold_seconds]).to eq(7200)
       expect(json[:sharing_mode]).to eq("household")
       expect(json[:parent_chore_id]).to eq(parent.id)
+    end
+
+    # The card must show the cooldown the completer will actually
+    # enforce. ChoreCompleter resolves `tapped.threshold_seconds.presence
+    # || credit.threshold_seconds`, so a sub-chore that carries its own
+    # value keeps it — inheriting the parent's here would render "no
+    # cooldown" on a sub the completer still gates.
+    it "prefers the sub-chore's OWN threshold over the parent's when set" do
+      parent.update!(threshold_seconds: nil)
+      sub.update!(threshold_seconds: 43_200)
+      json = ChoreSerializer.new(sub, viewer: user).as_json
+      expect(json[:threshold_seconds]).to eq(43_200)
+      expect(json[:cooldown_kind]).to eq(:fixed)
+    end
+
+    it "falls through to the parent's day-reset sentinel when the sub has none" do
+      parent.update!(threshold_seconds: Chore::THRESHOLD_DAY_RESET)
+      sub.update!(threshold_seconds: nil)
+      json = ChoreSerializer.new(sub, viewer: user).as_json
+      expect(json[:threshold_seconds]).to eq(Chore::THRESHOLD_DAY_RESET)
+      expect(json[:cooldown_kind]).to eq(:day_reset)
     end
   end
 

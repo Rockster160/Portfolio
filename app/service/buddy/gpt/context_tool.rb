@@ -33,6 +33,7 @@ module Buddy
         recent_events
         lists
         active_proposals
+        recent_actions
         upcoming_reminders
         running_timers
         active_watches
@@ -115,6 +116,10 @@ module Buddy
           thing. Check here whenever a request sounds like a thing they'd have
           set up ("prep my printer", "wind down"), and run the match with
           run_routine rather than doing the steps yourself.
+        - recent_actions: what you actually RAN in this thread, newest first.
+          Request it the moment they say you didn't do something, or ask
+          whether you did - your own words are not evidence, and this is. If
+          the thing isn't listed, it didn't happen: say so and do it.
       TXT
 
       # `user:` narrows the enum to sections this person actually has, so a

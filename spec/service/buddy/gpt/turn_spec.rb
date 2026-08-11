@@ -709,6 +709,79 @@ RSpec.describe Buddy::GPT::Turn do
 
       expect(reply.body).to eq(said)
     end
+
+    # Prod 3236, and prod 2054 twice before it. Every earlier round patched the
+    # claim regex and the next occurrence dodged it by renaming the noun, so
+    # this is asserted from the REQUEST side, which can't be reworded away.
+    it "catches a print that never ran, however the reply phrases it" do
+      said = "Yessss, the printer’s running the last file again. `game_tray-vase-40M.gcode`."
+      run([{ text: said }, { text: said }], text: "print again")
+
+      expect(reply.body).to eq(described_class::UNDONE_BODY)
+    end
+
+    it "catches the other wording of the same fabricated receipt" do
+      run(
+        [{ text: "Printing `game_tray-vase-40M.gcode` again." }] * 2,
+        text: "Print game tray",
+      )
+
+      expect(reply.body).to eq(described_class::UNDONE_BODY)
+    end
+
+    it "leaves an ordinary sentence about printing alone when they didn't order one" do
+      said = "Sounds like the printer’s been busy!"
+      run([{ text: said }], text: "the printer has been going all day")
+
+      expect(reply.body).to eq(said)
+    end
+  end
+
+  # Prod 3128: "Good night" got "Total darkness, and the monitors are out.
+  # *click* 💙" off a single call with nothing run. No verb to catch on the
+  # request side, and no noun the claim regex knew — but the sound effect is
+  # Byte's own, and in every one of its 18 prod appearances it sat on a claim
+  # about a device.
+  describe "the *click*" do
+    before { allow(described_class).to receive(:resolve_call).and_return([{ status: "proposed" }, nil]) }
+
+    it "gets retracted when nothing ran" do
+      said = "Good night! Total darkness, and the monitors are out. *click* 💙"
+      run([{ text: said }, { text: said }], text: "Good night")
+
+      expect(reply.body).to eq(described_class::UNDONE_BODY)
+      expect(reply.metadata["retracted_claim"]).to be(true)
+    end
+
+    # The same sentence, correctly, with nothing run: they asked what the state
+    # was rather than telling Buddy to change it.
+    it "stands when they only asked whether it was done" do
+      said = "Yep — lights are off. *click*"
+      run([{ text: said }], text: "did you turn the lights off?")
+
+      expect(reply.body).to eq(said)
+    end
+
+    it "stands on a bare state question with no question mark" do
+      said = "Monitors are out. *click*"
+      run([{ text: said }], text: "are the monitors off")
+
+      expect(reply.body).to eq(said)
+    end
+
+    it "stands when the thing actually ran" do
+      allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+      said = "Kk! Monitors are out. *click*"
+      run(
+        [
+          { tool_calls: [{ name: :mac_command, arguments: { "command" => "dark_monitors" } }] },
+          { text: said },
+        ],
+        text: "Good night",
+      )
+
+      expect(reply.body).to eq(said)
+    end
   end
 
   # Prod 3229 again, the other half: the same sentence twice in one bubble.

@@ -32,6 +32,72 @@ RSpec.describe "Buddy Today forward-looking" do
     end
   end
 
+  # Four of seven briefings over two days either skipped the greeting or landed
+  # it flat, with four paragraphs of the seed spent on it. One of those
+  # paragraphs was a licensed reason to skip ("when we just talked a moment
+  # ago"), and whether that applies is a fact about the thread rather than
+  # anything the model should be weighing.
+  describe "whether to greet at all" do
+    let(:conversation) { user.byte_conversations.create!(mode: :buddy, name: "Byte") }
+
+    def person_said(text, at:)
+      conversation.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: text, created_at: at,
+      )
+    end
+
+    it "orders a greeting when the briefing arrives out of the blue" do
+      person_said("night", at: 9.hours.ago)
+
+      expect(Buddy::TodayBriefing.seed(user, conversation: conversation))
+        .to include("OPEN WITH A GREETING").and include("warm and lifted")
+    end
+
+    it "orders one on a thread that has never been spoken in" do
+      expect(Buddy::TodayBriefing.seed(user, conversation: conversation)).to include("OPEN WITH A GREETING")
+    end
+
+    it "forbids one when they were talking a moment ago" do
+      person_said("what's up", at: 2.minutes.ago)
+
+      seed = Buddy::TodayBriefing.seed(user, conversation: conversation)
+      expect(seed).to include("DON'T GREET")
+      expect(seed).not_to include("OPEN WITH A GREETING")
+    end
+
+    # The hidden seed row is the briefing's own prompt, not the person talking -
+    # counting it would suppress the greeting on every scheduled briefing after
+    # the first.
+    it "does not count a hidden trigger seed as them talking" do
+      conversation.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: "what's on today",
+        created_at: 1.minute.ago, metadata: { "hidden" => true, "kind" => "buddy_trigger" }
+      )
+
+      expect(Buddy::TodayBriefing.seed(user, conversation: conversation)).to include("OPEN WITH A GREETING")
+    end
+
+    it "leaves the model no branch to take either way" do
+      person_said("hey", at: 2.minutes.ago)
+      quiet = Buddy::TodayBriefing.seed(user)
+      busy  = Buddy::TodayBriefing.seed(user, conversation: conversation)
+
+      [quiet, busy].each { |seed| expect(seed).not_to include("when it fits") }
+      expect(busy).not_to include("Skip it when")
+    end
+
+    # deliver! is the scheduled path, and it's the one the misses came from.
+    it "carries the thread through the scheduled delivery" do
+      person_said("still up", at: 3.minutes.ago)
+      allow(MonitorChannel).to receive(:broadcast_to)
+      allow(BuddyDeliverWorker).to receive(:perform_async)
+
+      msg = Buddy::TodayBriefing.deliver!(user, conversation)
+
+      expect(msg.body).to include("DON'T GREET")
+    end
+  end
+
   # Prod 2528 answered a Today tap with twelve chore names in one comma-run,
   # credited Rocco for a chore recorded for someone else, and closed on a 💙
   # that wasn't about anything. Every soft version of "don't recite" was already
