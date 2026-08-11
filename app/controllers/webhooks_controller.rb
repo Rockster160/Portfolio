@@ -193,34 +193,6 @@ class WebhooksController < ApplicationController
     head :no_content
   end
 
-  # Teller sends no API key, so the `Teller-Signature` HMAC IS the auth —
-  # this action must stay out of `none_unless_admin`. Every verified event is
-  # parked on an ActionEvent named "TellerWebhook" (deliberately not a
-  # transaction) so the real payload shapes can be read back before anything
-  # is modelled around them.
-  def teller
-    body = request.raw_post
-    return head :service_unavailable if ::Teller::Webhook.signing_secret.blank?
-    return head :unauthorized unless ::Teller::Webhook.verify(
-      request.headers["Teller-Signature"], body
-    )
-
-    payload = ::JSON.parse(body, symbolize_names: true)
-    ::User.me.action_events.create!(
-      name:      "TellerWebhook",
-      notes:     payload[:type],
-      timestamp: payload[:timestamp].presence&.then { |t| ::Time.zone.parse(t) },
-      data:      {
-        teller:     true,
-        type:       payload[:type],
-        webhook_id: payload[:id],
-        payload:    payload[:payload],
-      },
-    )
-
-    head :no_content
-  end
-
   def battery
     data = params.slice(:Phone, :iPad, :Watch, :Pencil, :Trackpad).transform_values { |v|
       { val: v, time: Time.current.to_i }

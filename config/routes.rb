@@ -260,7 +260,6 @@ Rails.application.routes.draw do
   post "webhooks/post" => "webhooks#post"
   post "webhooks/email" => "webhooks#email"
   post "webhooks/sms" => "webhooks#sms"
-  post "webhooks/teller" => "webhooks#teller"
   post "webhooks/speak" => "webhooks#speak"
   post  "webhooks/byte"                  => "webhooks#byte_create"
   # Above the `:id` patch/post pair so "say" can't be read as a message id.
@@ -550,7 +549,6 @@ Rails.application.routes.draw do
     get "/system" => "system#index", as: :system
     get "/system/connections" => "system#connections", as: :system_connections
     get "/system/gpt_spending" => "system#gpt_spending", as: :system_gpt_spending
-    get "/system/teller" => "system#teller", as: :system_teller
   end
   mount ::ActionCable.server => "/cable"
 end

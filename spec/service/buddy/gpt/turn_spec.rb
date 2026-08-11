@@ -620,6 +620,121 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
+  # The reply's own words cannot settle this one. Prod 3229: "Turn the tv off"
+  # was answered "Kk! TV's off." with no tool call and nothing run, and no rule
+  # above fires on that sentence — because it is ALSO the correct answer to "is
+  # the TV on?", where nothing should have run. What tells them apart is the
+  # request: an imperative orders a thing to happen; a question doesn't.
+  describe "a command that nothing was called for" do
+    before { allow(described_class).to receive(:resolve_call).and_return([{ status: "proposed" }, nil]) }
+
+    it "gets one corrective round, so the thing might still get done" do
+      client = run(
+        [
+          { text: "Kk! TV’s off." },
+          { tool_calls: [{ name: :call_jil_function, arguments: { "name" => "HASS TV", "args" => ["off"] } }] },
+          { text: "Kk! TV’s off." },
+        ],
+        text: "Turn the tv off",
+      )
+
+      expect(client.calls.length).to be >= 2
+      expect(reply.body).to eq("Kk! TV’s off.")
+    end
+
+    it "owns it plainly when the corrective round still calls nothing" do
+      run([{ text: "Kk! TV’s off." }, { text: "Kk! TV’s off." }], text: "Turn the tv off")
+
+      expect(reply.body).to eq(described_class::UNDONE_BODY)
+      expect(reply.metadata["retracted_claim"]).to be(true)
+    end
+
+    it "says it didn't happen rather than that it didn't understand" do
+      run([{ text: "Kk! lights are off." }, { text: "Kk! lights are off." }], text: "turn the lights off")
+
+      expect(reply.body).not_to eq(described_class::FALLBACK_BODY)
+      expect(reply.body).to include("wasn't")
+    end
+
+    # The three ways a command legitimately ends with nothing run.
+    it "leaves an honest refusal alone" do
+      said = "I can't reach the TV from here - it isn't wired up to anything I can call."
+      run([{ text: said }], text: "Turn the tv off")
+
+      expect(reply.body).to eq(said)
+    end
+
+    it "leaves a clarifying question alone" do
+      said = "Which one - the living room TV or the bedroom one?"
+      run([{ text: said }], text: "Turn the tv off")
+
+      expect(reply.body).to eq(said)
+    end
+
+    it "does not fire when the command was actually carried out" do
+      allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+
+      run(
+        [
+          { tool_calls: [{ name: :call_jil_function, arguments: { "name" => "HASS TV", "args" => ["off"] } }] },
+          { text: "Kk! TV’s off." },
+        ],
+        text: "Turn the tv off",
+      )
+
+      expect(reply.body).to eq("Kk! TV’s off.")
+    end
+
+    # A QUESTION about the same device reads identically in the reply, and
+    # nothing running is the correct outcome. This is the case that stops the
+    # claim regex being widened instead.
+    it "leaves the same sentence alone when they only asked" do
+      run([{ text: "Kk! TV’s off." }], text: "is the tv on?")
+
+      expect(reply.body).to eq("Kk! TV’s off.")
+    end
+
+    it "leaves a statement that merely mentions a command word alone" do
+      said = "Ha, fair. Mornings are rough."
+      run([{ text: said }], text: "I need to start running again")
+
+      expect(reply.body).to eq(said)
+    end
+
+    # Opens with a command verb and is a turn of phrase. What follows the verb
+    # is the difference: an order names a thing, this names a preposition.
+    it "leaves conversational phrasing that opens with a command verb alone" do
+      said = "Sounds good, the milk first then."
+      run([{ text: said }], text: "start with the milk")
+
+      expect(reply.body).to eq(said)
+    end
+  end
+
+  # Prod 3229 again, the other half: the same sentence twice in one bubble.
+  describe "a reply that repeats itself" do
+    it "says it once when the model wrote it twice in one part" do
+      run([{ text: "Kk! TV’s off.\n\nKk! TV’s off." }], text: "what's up")
+
+      expect(reply.body).to eq("Kk! TV’s off.")
+    end
+
+    # The client already drops a verbatim repeat across message parts, but it
+    # compares them BEFORE the mood marker is stripped — so this pair got past
+    # it and only became identical on the way to the screen.
+    it "says it once when the copies differed only by a mood marker" do
+      run([{ text: "[[mood:uwu]]Kk! TV’s off.\n\nKk! TV’s off." }], text: "what's up")
+
+      expect(reply.body).to eq("Kk! TV’s off.")
+    end
+
+    it "keeps two paragraphs that actually say different things" do
+      run([{ text: "First thing.\n\nSecond thing." }], text: "what's up")
+
+      expect(reply.body).to eq("First thing.\n\nSecond thing.")
+    end
+  end
+
   describe "malformed and unknown tool calls" do
     it "discards an unknown tool without losing the prose" do
       run([{

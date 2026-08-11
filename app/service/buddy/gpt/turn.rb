@@ -321,6 +321,13 @@ module Buddy
 
       FALLBACK_BODY = "Hmm, I don't quite follow - can you give me a little more to go on?".freeze
 
+      # What to say instead when a COMMAND went unanswered. The generic fallback
+      # is wrong here: it reads as not having understood, and the request was
+      # perfectly clear - we just didn't do it. Owning that is the whole point,
+      # since the alternative is them believing the TV is off.
+      UNDONE_BODY = "Ah - I said that like it was done, and it wasn't. Nothing actually ran. " \
+                    "Want me to have another go at it?".freeze
+
       # The model leads a reply with `[[mood:NAME]]` to set its face as the words
       # land (see the persona's "Your face"). Only a LEADING mood marker is the
       # supported protocol; it's parsed, applied, and stripped in finalize before
@@ -663,6 +670,10 @@ module Buddy
         return nil if rounds >= MAX_ROUNDS || Time.current > @deadline
         return NOTIFY_NUDGE if self_initiated? && spoken.to_s.match?(DISMISSAL_RX)
         return RETRY_NUDGE if unbacked_claim(spoken.to_s).present?
+        # They asked for a thing to happen and nothing was called. Worth the
+        # corrective round on its own — this is the half that gets the TV
+        # actually turned off, rather than only stopping the lie about it.
+        return RETRY_NUDGE if commanded_action_unanswered?(spoken.to_s)
         return POINTER_NUDGE if spoken.to_s.strip.match?(DANGLING_POINTER_RX)
 
         nil
@@ -940,6 +951,55 @@ module Buddy
         | \b(?:tell\s+me|let\s+me\s+know|which\s+(?:one|item|chore|list)|remind\s+me\s+which)\b
       /xi
 
+      # ---- the claim the reply's own words can't give away --------------------
+      #
+      # Everything above reads the REPLY, which is deliberate and usually right.
+      # It cannot settle the plainest device answer there is. Prod 3229: "Turn
+      # the tv off" was answered "Kk! TV's off." with no tool call and nothing
+      # run, and no rule here fires on it — because that exact sentence is also
+      # the correct answer to "is the TV on?", where nothing SHOULD have run.
+      # The claim arm above dodges the ambiguity by demanding a trailing "now" or
+      # "low" ("the fan is on low now"), so the bare form walks straight past.
+      #
+      # The words can't tell those two apart. What the person ASKED for can, and
+      # it's sitting right there: an imperative orders a thing to happen, and a
+      # question doesn't. So this arm reads the REQUEST, and only then asks
+      # whether the reply behaved like one that did it.
+      COMMAND_REQUEST_RX = /
+        \A\s*(?:hey[\s,]+\w+[\s,]+)?
+        (?:(?:please|can\s+you|could\s+you|would\s+you|go\s+ahead\s+and|go|just)\s+)*
+        (?:turn|switch|toggle|set|start|stop|shut|open|close|lock|unlock|play|pause|
+           resume|dim|brighten|run|fire|launch|restart|reboot|enable|disable|mute|unmute)
+        # An object, not a preposition. "start with the milk" and "run by me
+        # first" open with a command verb and are conversation, so the thing
+        # right after the verb is what separates an order from a turn of phrase.
+        \b(?!\s+(?:with|by|from|about)\b)
+      /xi
+
+      # A reply that DECLINES is honest and must survive. "I can't reach the TV
+      # from here" is the right answer when nothing ran, and retracting it would
+      # replace a real answer with a shrug.
+      DENIAL_RX = /
+        \b(?:can(?:'|’)?t|cannot|couldn(?:'|’)?t|won(?:'|’)?t|unable|no\s+way\s+to)\b
+        | \b(?:don(?:'|’)?t|do\s+not|didn(?:'|’)?t)\s+(?:have|see|find)\b
+        | \b(?:isn(?:'|’)?t|not)\s+(?:wired|set\s+up|hooked|connected|available)\b
+      /xi
+
+      # Did they order something done, and did the reply act like it happened?
+      #
+      # Only the request being an imperative is asserted here; whether anything
+      # actually RAN is the caller's half, and it's the same three-part test the
+      # reply-text guard uses. A reply that asks a question back or says it can't
+      # is doing the right thing with a command it couldn't carry out.
+      def commanded_action_unanswered?(body)
+        return false if self_initiated?
+        return false unless @inbound.body.to_s.match?(COMMAND_REQUEST_RX)
+        return false if body.to_s.strip.empty?
+        return false if body.match?(SOLICITS_INFO_RX) || body.match?(DENIAL_RX)
+
+        true
+      end
+
       # HARD CHECK: never let a reply claim it did something when nothing ran.
       #
       # The prompt covers this at length (tense discipline, the three levels), but
@@ -956,7 +1016,7 @@ module Buddy
       # bug the prompt can own; this is for claims backed by nothing at all.
       def retract_false_claim!(result)
         body = @reply.body.to_s
-        kind = unbacked_claim(body)
+        kind = unbacked_claim(body) || (:commanded if commanded_action_unanswered?(body))
         return if kind.nil?
         return if executed_anything?(result)
         return if pending_rows?(result)
@@ -966,7 +1026,7 @@ module Buddy
           "user=#{@user.id}: #{body.truncate(160).inspect}",
         )
         @reply.update!(
-          body:     FALLBACK_BODY,
+          body:     kind == :commanded ? UNDONE_BODY : FALLBACK_BODY,
           metadata: (@reply.metadata || {}).merge("retracted_claim" => true),
         )
       end
@@ -1043,10 +1103,35 @@ module Buddy
       def display_body(text)
         raw   = text.to_s
         stray = { marker: STRAY_MARKER_RX, relay: RELAY_FRAMING_RX }.select { |_kind, rx| raw.match?(rx) }
-        return raw.strip if stray.empty?
-
         stray.each { |kind, rx| Rails.logger.warn("[Buddy::GPT::Turn] stray #{kind} in output: #{raw[rx]}") }
-        stray.each_value.reduce(raw) { |body, rx| body.gsub(rx, "") }.gsub(/\n{3,}/, "\n\n").strip
+
+        cleaned = stray.each_value.reduce(raw) { |body, rx| body.gsub(rx, "") }
+        dedupe_paragraphs(cleaned.gsub(/\n{3,}/, "\n\n").strip)
+      end
+
+      # Drop a paragraph that repeats one already said.
+      #
+      # Buddy::GPT::Client does this too, across the message parts of a response
+      # — but it compares them BEFORE the markers come off, and a response whose
+      # parts differ only by a `[[mood:...]]` prefix therefore isn't caught.
+      # Prod 3229: "Turn the tv off" came back as "Kk! TV's off." twice, the two
+      # parts identical except that the first carried a mood marker that is
+      # stripped four lines above this. Once it's gone they're the same sentence,
+      # and the person reads it, reads it again, and learns nothing the second
+      # time.
+      #
+      # So the check belongs HERE as well, after every normalization, which is
+      # also the last point before the body is broadcast. A single part that
+      # simply repeats itself is caught by the same pass.
+      def dedupe_paragraphs(body)
+        kept = Set.new
+        body.split(/\n{2,}/).filter_map { |para|
+          para = para.strip
+          next nil if para.empty?
+          next nil unless kept.add?(para.downcase)
+
+          para
+        }.join("\n\n")
       end
 
       # ---- progress ----------------------------------------------------------

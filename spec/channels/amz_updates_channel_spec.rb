@@ -17,7 +17,7 @@ RSpec.describe AmzUpdatesChannel, type: :channel do
       AmazonOrder.create(
         order_id: "UPS", item_id: "1Z16D56V0310080972", name: "NINGBO DEYI SAM",
         carrier: :ups, tracking_number: "1Z16D56V0310080972", source: "NINGBO DEYI SAM",
-        delivery_date: "2026-08-03", delivered: false, email_ids: [2],
+        delivery_date: "2026-08-03", delivered: false, email_ids: [2]
       )
 
       perform :change, {
@@ -56,26 +56,33 @@ RSpec.describe AmzUpdatesChannel, type: :channel do
     it "creates a manual-carrier item" do
       perform :change, { "add" => "Birthday gift" }
 
-      created = AmazonOrder.all.last
+      created = AmazonOrder.last
       expect(created.name).to eq("Birthday gift")
       expect(created.carrier).to eq(:manual)
     end
 
+    # Pinned to a date before Aug 7 so the parse is deterministic. Unpinned,
+    # this passed until Aug 7 and then failed every day after — a bare
+    # "Month day" that has already passed does NOT roll to next year, it walks
+    # forward in 12-hour steps to today (Jarvis::Times.safe_date_parse). That
+    # is a real defect in the parser, but it is not what this example is for.
     it "parses an inline metadata block: name, date, and custom url" do
-      url = "https://www.wayfair.com/session/secure/account/order_search.php?csnid=978882AB&_emr=fac652f5&wfcs=cs7"
-      perform :change, { "add" => %(Computer Desk on Aug 7 { url: "#{url}" }) }
+      travel_to(Time.zone.local(2026, 8, 1, 12, 0)) do
+        url = "https://www.wayfair.com/session/secure/account/order_search.php?csnid=978882AB&_emr=fac652f5&wfcs=cs7"
+        perform :change, { "add" => %(Computer Desk on Aug 7 { url: "#{url}" }) }
 
-      created = AmazonOrder.all.last
-      expect(created.name).to eq("Computer Desk")
-      expect(created.custom_url).to eq(url)
-      expect(created.delivery_date).to eq(Date.new(Date.current.year + (Date.current.month > 8 ? 1 : 0), 8, 7).iso8601)
-      # The URL's digits must not leak into the name.
-      expect(created.name).not_to match(/\d/)
+        created = AmazonOrder.last
+        expect(created.name).to eq("Computer Desk")
+        expect(created.custom_url).to eq(url)
+        expect(created.delivery_date).to eq(Date.new(2026, 8, 7).iso8601)
+        # The URL's digits must not leak into the name.
+        expect(created.name).not_to match(/\d/)
+      end
     end
 
     it "seeds a tracking number from metadata so a later carrier update auto-connects" do
       perform :change, { "add" => %(Desk { tracking_number: "9200190267338000065163052", source: "Wayfair" }) }
-      seeded = AmazonOrder.all.last
+      seeded = AmazonOrder.last
       expect(seeded.tracking_number).to eq("9200190267338000065163052")
       expect(seeded.source).to eq("Wayfair")
 
@@ -90,8 +97,11 @@ RSpec.describe AmzUpdatesChannel, type: :channel do
       AmazonOrder.create(order_id: "UPS", item_id: "1Zdesk", name: "NINGBO", carrier: :ups, tracking_number: "1Zdesk")
 
       perform :change, {
-        "merge" => true, "order_id" => "CUSTOM", "item_id" => "CUSTOM-9",
-        "from_order_id" => "UPS", "from_item_id" => "1Zdesk",
+        "merge"         => true,
+        "order_id"      => "CUSTOM",
+        "item_id"       => "CUSTOM-9",
+        "from_order_id" => "UPS",
+        "from_item_id"  => "1Zdesk",
       }
 
       expect(target.custom_url).to eq("https://wayfair.com/x") # kept
