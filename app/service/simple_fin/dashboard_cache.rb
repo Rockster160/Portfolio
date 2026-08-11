@@ -21,7 +21,9 @@ module SimpleFin
         return nil if account.nil? || account.balance_cents.nil?
 
         amount = account.balance
+        previous = user.caches.dig(CACHE_KEY, AMOUNT)
         user.caches.dig_set(CACHE_KEY, AMOUNT, amount.to_s("F"))
+        announce_change(previous, amount)
         amount
       end
 
@@ -39,6 +41,29 @@ module SimpleFin
       # Integer division floors toward negative infinity in Ruby, which is the
       # behavior wanted here: an overdrawn account reads one lower, not one
       # closer to zero.
+      # Announced from here rather than from either worker, because this is the
+      # one place the published figure actually changes — the scheduled sync
+      # and the chase job both land here and neither has to remember.
+      #
+      # Fires on the DISPLAYED figure, not the raw balance: almost every sync
+      # moves the balance by some amount, and a notification on each of those
+      # would be constant noise. It says nothing about the amount or the value,
+      # only that the number on the dashboard is not what it was.
+      def announce_change(previous_raw, amount)
+        # Nothing to compare against on the very first write, and "it changed"
+        # is meaningless when there was no previous number.
+        return if previous_raw.blank?
+
+        before = (BigDecimal(previous_raw.to_s) / 1000).floor
+        after = (amount / 1000).floor
+        return if before == after
+
+        ::Jarvis.say("Checking balance changed.")
+      rescue ::ArgumentError
+        # A previous value that will not parse is not worth failing a sync over.
+        nil
+      end
+
       def thousands(account=primary)
         return nil if account.nil? || account.balance_cents.nil?
 

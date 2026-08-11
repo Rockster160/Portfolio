@@ -55,6 +55,65 @@ RSpec.describe SimpleFin::DashboardCache do
     end
   end
 
+  # Fires on the DISPLAYED figure, not the raw balance — nearly every sync
+  # moves the balance a little, and announcing each would be constant noise.
+  describe "announcing a change" do
+    before { allow(Jarvis).to receive(:say) }
+
+    it "says so when the displayed figure moves" do
+      acct = account(kind: :checking, cents: 203_400)
+      described_class.refresh!(user: user)
+
+      acct.update!(balance_cents: 199_900)
+      described_class.refresh!(user: user)
+
+      expect(Jarvis).to have_received(:say).once.with(/Checking balance changed/)
+    end
+
+    it "stays quiet when the balance moved but the figure did not" do
+      acct = account(kind: :checking, cents: 203_400)
+      described_class.refresh!(user: user)
+
+      acct.update!(balance_cents: 201_100)
+      described_class.refresh!(user: user)
+
+      expect(Jarvis).not_to have_received(:say)
+    end
+
+    it "says nothing on the very first write, when there is no previous number" do
+      account(kind: :checking, cents: 203_400)
+
+      described_class.refresh!(user: user)
+
+      expect(Jarvis).not_to have_received(:say)
+    end
+
+    it "stays quiet when nothing changed at all" do
+      account(kind: :checking, cents: 203_400)
+      2.times { described_class.refresh!(user: user) }
+
+      expect(Jarvis).not_to have_received(:say)
+    end
+
+    it "gives away neither the amount nor the change" do
+      acct = account(kind: :checking, cents: 203_400)
+      described_class.refresh!(user: user)
+      acct.update!(balance_cents: 199_900)
+      described_class.refresh!(user: user)
+
+      expect(Jarvis).to have_received(:say) { |message|
+        expect(message).not_to match(/\d/)
+      }
+    end
+
+    it "does not fail a sync over an unparseable previous value" do
+      account(kind: :checking, cents: 203_400)
+      user.caches.dig_set(described_class::CACHE_KEY, described_class::AMOUNT, "not a number")
+
+      expect { described_class.refresh!(user: user) }.not_to raise_error
+    end
+  end
+
   describe ".primary" do
     it "picks the checking account" do
       account(kind: :credit, cents: -1, id: "ACT-0002", name: "AMZ Prime (7283)")
