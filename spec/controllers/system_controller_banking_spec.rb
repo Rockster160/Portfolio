@@ -235,23 +235,84 @@ RSpec.describe SystemController, type: :controller do
       expect(response.body).not_to include("<th>Account</th>")
     end
 
-    it "marks a transfer as a tag, distinct from the account text" do
-      other = BankAccount.create!(
-        simplefin_id: "ACT-9", name: "MORTGAGE LOAN (7153)", last4: "7153"
-      )
-      out = BankTransaction.create!(
-        simplefin_id: "TRN-OUT", bank_account: card,
-        posted_at: 1.day.ago, transacted_at: 1.day.ago, amount_cents: -139_325
-      )
-      BankTransaction.create!(
-        simplefin_id: "TRN-IN", bank_account: other,
-        posted_at: 1.day.ago, transacted_at: 1.day.ago, amount_cents: 139_325
-      )
-      SimpleFin::TransferDetector.call
-      expect(out.reload).to be_transfer
+    # Both halves of a pair are the same money. Listed twice they read as a
+    # spend and a deposit that never happened.
+    context "with a transfer pair" do
+      let!(:mortgage) {
+        BankAccount.create!(
+          simplefin_id: "ACT-9", name: "MORTGAGE LOAN (7153)", last4: "7153",
+          friendly_name: "Mortgage"
+        )
+      }
+      let!(:out) {
+        BankTransaction.create!(
+          simplefin_id: "TRN-OUT", bank_account: card, payee: "Payment Sent",
+          posted_at: 1.day.ago, transacted_at: 1.day.ago, amount_cents: -139_325
+        )
+      }
+      let!(:incoming) {
+        BankTransaction.create!(
+          simplefin_id: "TRN-IN", bank_account: mortgage, payee: "Payment Received",
+          posted_at: 1.day.ago, transacted_at: 1.day.ago, amount_cents: 139_325
+        )
+      }
 
-      get :banking
-      expect(response.body).to include(%(<em class="tag xfer"))
+      before do
+        card.update!(friendly_name: "Prime")
+        SimpleFin::TransferDetector.call
+      end
+
+      it "pairs the two halves" do
+        expect(out.reload.transfer_counterpart).to eq(incoming)
+        expect(out).to be_transfer_source
+      end
+
+      # Both ends, not just the destination. Asserted as one string so a route
+      # that renders the institution's own name on either side fails here —
+      # "AMZ Prime (7283) → Mortgage" is exactly the mismatch this catches.
+      it "shows the route in friendly names, on the leaving side" do
+        get :banking
+
+        expect(response.body).to include(%(Prime<span class="arrow">→</span>Mortgage))
+        expect(response.body).not_to include("AMZ Prime (7283)<span")
+        expect(response.body).not_to include(%(<em class="tag xfer"))
+      end
+
+      it "hides the arriving half" do
+        get :banking
+
+        expect(response.body).to include("Payment Sent")
+        expect(response.body).not_to include("Payment Received")
+      end
+
+      it "counts the pair once" do
+        get :banking
+        expect(response.body).to include(%(<span class="bank-totals-label">Results</span>1</div>))
+      end
+
+      # Hiding a row must not make it unfindable — the only row left showing
+      # the mortgage payment is the one on the card.
+      it "finds the pair by the account it went to" do
+        get :banking, params: { q: "account:mortgage" }
+
+        expect(response.body).to include("Payment Sent")
+        expect(response.body).to include(%(<span class="bank-totals-label">Results</span>1</div>))
+      end
+
+      # No counterpart to name, so the chip is still the only thing to show.
+      it "keeps the tag on a hand-flagged transfer" do
+        event = ActionEvent.create!(
+          user: me, name: "Transaction", timestamp: 1.day.ago,
+          data: { amount: 40, account: "(...7283)", transfer: true }
+        )
+        BankTransaction.create!(
+          simplefin_id: "TRN-FLAG", bank_account: card, action_event: event,
+          posted_at: 2.days.ago, transacted_at: 2.days.ago, amount_cents: -4_000
+        )
+
+        get :banking
+        expect(response.body).to include(%(<em class="tag xfer"))
+      end
     end
 
     it "colors a negative amount" do

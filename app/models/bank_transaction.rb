@@ -67,6 +67,12 @@ class BankTransaction < ApplicationRecord
   scope :paired, -> { where.not(transfer_counterpart_id: nil) }
   scope :unpaired, -> { where(transfer_counterpart_id: nil) }
 
+  # One movement, listed once. Both halves of a pair describe the same money,
+  # so showing both reads as a spend AND a deposit that never happened. The
+  # leaving side is the one kept: it is the side that names a destination, so
+  # "Checking → Mortgage" says everything the arriving row would have.
+  scope :without_transfer_mirror, -> { unpaired.or(spending) }
+
   # Both halves of a self-transfer, plus anything hand-flagged `transfer: true`
   # on its alert — 92 events already carry that flag and it is the user's own
   # judgement, which beats any inference here.
@@ -88,6 +94,10 @@ class BankTransaction < ApplicationRecord
   #    around the array, producing `ILIKE ANY array[...]` — a PG syntax error.
   #    ActionEvent's own `search_data_merchant` has this defect and raises
   #    today. Plain OR'd ILIKE survives intact.
+  # Matches the row's own account, and also the row whose transfer counterpart
+  # sits in that account. The listing hides the arriving half of a pair, so
+  # without the second clause a mortgage payment would be unfindable by
+  # `account:mortgage` — the only row left showing it is the one on checking.
   scope :search_account, ->(*qs) {
     terms = like_terms(qs)
     next none if terms.empty?
@@ -97,7 +107,10 @@ class BankTransaction < ApplicationRecord
         "OR bank_accounts.last4 ILIKE ?)"
     }.join(" OR ")
     accounts = ::BankAccount.where(clause, *terms.flat_map { |t| [t, t, t] })
-    where(bank_account_id: accounts.select(:id))
+    counterparts = ::BankTransaction.where(bank_account_id: accounts.select(:id))
+    where(bank_account_id: accounts.select(:id)).or(
+      where(id: counterparts.select(:transfer_counterpart_id)),
+    )
   }
 
   # Category lives on the linked event, so an uncategorized row correctly
@@ -216,6 +229,20 @@ class BankTransaction < ApplicationRecord
 
   def transfer?
     transfer_counterpart_id.present? || action_event&.data&.dig("transfer") == true
+  end
+
+  # The half the money left from — the one the listing keeps.
+  def transfer_source?
+    transfer_counterpart_id.present? && amount_cents.negative?
+  end
+
+  # Where it went: "Mortgage" for the checking row that paid it. Nil on
+  # anything that is not the leaving half of a pair, including the hand-flagged
+  # transfers that have no counterpart to name.
+  def transfer_destination
+    return unless transfer_source?
+
+    transfer_counterpart.bank_account.display_name
   end
 
   private

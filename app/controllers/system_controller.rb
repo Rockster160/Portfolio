@@ -58,7 +58,9 @@ class SystemController < ApplicationController
     @unlinked_count = ::BankTransaction.unlinked.count
 
     @query = params[:q].to_s.strip
-    scope = filtered_transactions
+    # Collapsed before anything counts it, so the result count, the pagination
+    # and the bulk button all agree with the rows actually on screen.
+    scope = filtered_transactions.without_transfer_mirror
 
     # Totals and the chart run on real money only. A self-transfer is the same
     # money seen twice — counting it inflates BOTH spend and income by the same
@@ -70,7 +72,8 @@ class SystemController < ApplicationController
     @transfer_count = scope.count - real.count
     @category_totals = category_totals(real)
 
-    listing = scope.includes(:bank_account, :action_event).recent_first
+    listing = scope.includes(:bank_account, :action_event, transfer_counterpart: :bank_account)
+    listing = listing.recent_first
     @transactions = listing.page(params[:page]).per(TRANSACTION_PAGE)
   end
 
@@ -121,7 +124,9 @@ class SystemController < ApplicationController
     @query = params[:q].to_s.strip
     scope = (
       if params[:apply_to_search].present?
-        filtered_transactions
+        # The same collapse the listing applies, so "all N matching" touches
+        # the N the button counted.
+        filtered_transactions.without_transfer_mirror
       else
         ::BankTransaction.where(id: Array.wrap(params[:transaction_ids]))
       end

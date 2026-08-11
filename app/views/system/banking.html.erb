@@ -197,11 +197,20 @@
               <td class="payee">
                 <span class="name"><%= transaction.display_payee %></span>
                 <span class="sub">
-                  <span class="acct"><%= transaction.bank_account.display_name %></span>
+                  <% if transaction.transfer_destination.present? %>
+                    <span class="acct route"
+                          title="Moved between your own accounts — listed once, and not counted as spending or income">
+                      <%= transaction.bank_account.display_name %><span class="arrow">→</span><%= transaction.transfer_destination %>
+                    </span>
+                  <% else %>
+                    <span class="acct"><%= transaction.bank_account.display_name %></span>
+                  <% end %>
                   <% if transaction.pending? %>
                     <em class="tag pending">pending</em>
                   <% end %>
-                  <% if transaction.transfer? %>
+                  <%# The arrow already says "transfer", and says where to. The chip is
+                      for the hand-flagged ones, which have no counterpart to point at. %>
+                  <% if transaction.transfer? && transaction.transfer_destination.blank? %>
                     <em class="tag xfer"
                         title="Between your own accounts — not counted as spending or income">transfer</em>
                   <% end %>
@@ -444,6 +453,10 @@
        SHAPE, not just color — two grays side by side would read as one thing,
        and "Sapphire" is not a state. */
     .bank-table td.payee .acct { font-size: 11px; color: #64748B; }
+    /* A transfer names both ends. The arrow is the direction AND the fact that
+       it is a transfer, so the row needs no chip repeating it. */
+    .bank-table td.payee .acct.route { white-space: nowrap; }
+    .bank-table td.payee .acct .arrow { color: #475569; padding: 0 4px; }
     .bank-table td.payee .tag {
       font-style: normal;
       font-size: 9px;
