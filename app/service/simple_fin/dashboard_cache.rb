@@ -28,10 +28,36 @@ module SimpleFin
         return nil if cents.nil?
 
         amount = BigDecimal(cents) / 100
+        published = amount.to_s("F")
         previous = user.caches.dig(CACHE_KEY, AMOUNT)
-        user.caches.dig_set(CACHE_KEY, AMOUNT, amount.to_s("F"))
-        announce_change(previous, amount)
+        user.caches.dig_set(CACHE_KEY, AMOUNT, published)
+
+        if previous.to_s != published
+          announce_change(previous, amount)
+          publish!(user)
+        end
+
         amount
+      end
+
+      # Writing the cache key moves nothing on screen by itself. Jil task 439
+      # "Home Extras Cell" listens on `monitor::home_extras`, and IT is what
+      # reads the key and broadcasts — so the cell only picked up a new balance
+      # the next time the dashboard asked for the channel, which for a page
+      # left open all day is never.
+      #
+      # Triggering the listener rather than broadcasting from here keeps the
+      # Jil task the owner of what the dashboard displays, which is the whole
+      # reason this writes a cache key instead of talking to the cell.
+      # `auth:` is passed explicitly even though :trigger is the default, so the
+      # data hash is not the trailing argument — a bare trailing hash here is
+      # read as keyword arguments and raises.
+      def publish!(user)
+        ::Jil.trigger(user, :monitor, { channel: :home_extras, refresh: true }, auth: :trigger)
+      rescue ::StandardError => e
+        # The number is already stored and correct. A task that fails while
+        # re-rendering the cell must not take a sync down with it.
+        ::Rails.logger.warn("[SimpleFin::DashboardCache] home_extras refresh failed: #{e.message}")
       end
 
       # Everything the reported figure is made of. Unclassified accounts are

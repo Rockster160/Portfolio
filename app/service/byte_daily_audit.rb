@@ -102,14 +102,23 @@ module ByteDailyAudit
 
       WHAT TO PRODUCE
       1. **Counts.** Messages per conversation AND per direction, so each companion's inbound/outbound is visible separately, **split by day** so the two are comparable. Name the companion, not the id.
-      2. **What misfired.** Anything that didn't do what the person plainly asked, answered a question wrongly, claimed something it hadn't done, fired twice, or fired never. Cite the message id for every single one - a claim without an id is not usable. Say what should have happened instead.
+      2. **What misfired.** Anything that didn't do what the person plainly asked, answered a question wrongly, claimed something it hadn't done, fired twice, or fired never. Cite the message id for every single one - a claim without an id is not usable. Say what should have happened instead. **One section per problem, and each one opens with its status marker** - see the next point for which.
       3. **Deploys, and what they already fixed.** List which went out and when across both days. Then reconcile: **for every problem you find on the first day, check whether a deploy since then addressed it, and check the traffic after that deploy to see whether it actually took.**
-         - Fixed, and the later traffic proves it: one line saying so, in a "resolved since" list. Not a finding, and no suggested change.
-         - A deploy that was clearly aimed at it and the thing still happened afterwards: that is the most important item in the whole report. Say what shipped, and what still went wrong after it.
-         - No deploy touched it: an ordinary finding.
+
+         **The verdict goes in the HEADLINE of that problem's own section, as the first thing in it.** Lead every finding with one of these:
+         - `✅` - fixed, and the traffic after the deploy proves it. Keep it to a line or two: what broke, what shipped, done. No suggested change.
+         - `⚠️` - a deploy was clearly aimed at it and the thing still happened afterwards. The most important kind of item in the report. Say what shipped and what still went wrong after it.
+         - `🔲` - still open. Nothing has been deployed for it.
+
+         **There is no separate "resolved since" section, and never a second pass over the same problems at the end.** One section per problem, its status on the front of it, and that is the only place that problem is discussed. Splitting the verdicts out from the findings means re-reading the same list twice to work out which is which, and it breaks a reply written by working down the list in order.
+
+         Order them `⚠️` then `🔲` then `✅`, so the ones that still need something come first and the settled ones don't sit between them.
+
          You have no memory of previous reports - a fresh session runs each night - so this reconciliation is the ONLY thing stopping you from handing back a problem that was solved this morning. Do it before you write anything up.
       4. **Backfills.** Data that should have been written and wasn't - a watch that never fired, a chore that never advanced, a record left half-linked. Say which rows, and what the corrected value would be. Do not write them.
-      5. **Suggested changes**, ordered by how much they actually cost the person. Be specific about the file and the mechanism. Distinguish something that has now failed more than once from a one-off.
+      5. **What to do about it lives WITH the problem**, in that problem's own section, right under the evidence: the file, the mechanism, and whether this is a one-off or something that has now failed more than once. Not gathered into a list at the end - the whole point of one-section-per-problem is that I can read a problem and reply to it in place.
+
+         Close with a bare **priority order** if it's worth one: the open items by name, worst first, one line. A ranking, not a second telling.
 
       HARD RULES
       - **Never suggest compacting, debouncing, batching, deduping or collapsing messages or notifications. Ever.** Each notification is a real event and the person wants all of them. This is not a tradeoff to re-litigate; do not raise it in any form.

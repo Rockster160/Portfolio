@@ -333,16 +333,51 @@ RSpec.describe Buddy::GPT::Turn do
       end
     end
 
-    it "leaves it alone when a pending row is visible, since the person can see it" do
-      action = instance_double(ByteAction, buttons: [{ "status" => "pending" }])
-      allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: action, auto_ran: false)
+    # Prod 3171: "I pulled the front flower bed reminder down so it won't keep
+    # bugging you!" over an untapped cancel_reminder. A pending row used to
+    # exempt the claim entirely on the grounds that the checkbox speaks for
+    # itself - but a sentence saying it's already handled is the reason nobody
+    # looks at the checkbox. It fired again at 8am the next morning.
+    describe "a claim standing over a row that is only PROPOSED" do
+      let(:action) { instance_double(ByteAction, buttons: [{ "status" => "pending" }]) }
 
-      run([
-        { tool_calls: [{ name: :create_chore, arguments: { "name" => "Mow" } }] },
-        { text: "Logged that for you." },
-      ])
+      before { allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: action, auto_ran: false) }
 
-      expect(reply.body).to eq("Logged that for you.")
+      it "corrects the tense instead of letting it stand" do
+        run([
+          { tool_calls: [{ name: :create_chore, arguments: { "name" => "Mow" } }] },
+          { text: "Logged that for you." },
+        ])
+
+        expect(reply.body).to eq(described_class::PENDING_BODY)
+        expect(reply.metadata["retracted_claim"]).to be(true)
+      end
+
+      it "points at the row rather than saying nothing ran, since something is there" do
+        run([
+          { tool_calls: [{ name: :cancel_reminder, arguments: { "match" => "26" } }] },
+          { text: "Aroo, perfect call then!! I pulled the front flower bed reminder down so it won't keep bugging you!" },
+        ])
+
+        expect(reply.body).to eq(described_class::PENDING_BODY)
+        expect(reply.body).not_to eq(described_class::UNDONE_BODY)
+      end
+
+      # The :commanded arm infers the failure from the REQUEST being an
+      # imperative. A proposal waiting on screen IS an answer to one, so an
+      # honest reply offering it must survive untouched.
+      it "leaves an honest offer alone" do
+        run(
+          [
+            { tool_calls: [{ name: :cancel_reminder, arguments: { "match" => "26" } }] },
+            { text: "Kk! Here's that one ready to go, tap it below." },
+          ],
+          text: "cancel my 8am reminder",
+        )
+
+        expect(reply.body).to eq("Kk! Here's that one ready to go, tap it below.")
+        expect(reply.metadata["retracted_claim"]).to be_nil
+      end
     end
 
     it "retracts when the row came back failed rather than executed" do
@@ -500,6 +535,61 @@ RSpec.describe Buddy::GPT::Turn do
         "someone else's verb" => "Looks like the printer is running the last job.",
         "a past observation"  => "That’s still running from earlier, want me to check?",
         "an offer"            => "Want me to run that again?",
+      }.each do |label, text|
+        it "leaves #{label} alone" do
+          run([{ text: text }])
+
+          expect(reply.body).to eq(text)
+        end
+      end
+    end
+
+    # Everything else in the claim pattern is about a thing being added, set,
+    # logged or run. Taking a thing AWAY had no coverage at all, and it's the
+    # half nobody notices has failed: an unwanted reminder that keeps arriving
+    # reads as the system working normally. Prod 3171 is the one that got out.
+    describe "a claim to have cancelled something" do
+      {
+        "the one from prod" => "I pulled the front flower bed reminder down so it won't keep bugging you!",
+        "a plain cancel"    => "Cancelled that for you.",
+        "a removal"         => "Removed it from your reminders.",
+        "took it off"       => "Took that off the schedule.",
+        "a named removal"   => "I pulled the 8am reminder off for you.",
+        "it's cancelled"    => "That’s cancelled now.",
+        "the reassurance"   => "It won’t bug you again.",
+      }.each do |label, text|
+        it "retracts #{label}" do
+          run([{ text: text }])
+
+          expect(reply.body).to eq(described_class::FALLBACK_BODY)
+          expect(reply.metadata["retracted_claim"]).to be(true)
+        end
+      end
+
+      it "leaves it alone once the cancel actually ran" do
+        allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+
+        run([
+          { tool_calls: [{ name: :cancel_reminder, arguments: { "match" => "26" } }] },
+          { text: "Cancelled that for you." },
+        ])
+
+        expect(reply.body).to eq("Cancelled that for you.")
+      end
+
+      # An offer to remove something is the normal way this conversation starts,
+      # and rewriting one would replace a good reply with a shrug.
+      {
+        "an offer"          => "Want me to cancel that one?",
+        "a capability"      => "I can remove that if you'd rather.",
+        "a question back"   => "Which reminder should I delete?",
+        "reading something" => "I pulled up your reminders, there are three.",
+        "an ordinary pull"  => "I pulled the numbers for last month.",
+        # The one that broke the prompt-tools spec: `the` plus any noun plus a
+        # particle is far too much of the language to claim.
+        "an errand"         => "Eve took the puppy out - check it over and send it.",
+        "a plain removal"   => "Chelsea took the trash out already.",
+        "an honest limit"   => "I won’t remind you unless you ask me to.",
       }.each do |label, text|
         it "leaves #{label} alone" do
           run([{ text: text }])

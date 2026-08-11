@@ -328,6 +328,13 @@ module Buddy
       UNDONE_BODY = "Ah - I said that like it was done, and it wasn't. Nothing actually ran. " \
                     "Want me to have another go at it?".freeze
 
+      # What to say when the row is REAL and only the tense was wrong.
+      #
+      # Distinct from UNDONE_BODY on purpose: nothing was fabricated here, the
+      # thing is built and sitting on screen waiting to be tapped, so throwing
+      # the reply away would be as wrong as leaving the claim standing.
+      PENDING_BODY = "Almost - I've got that ready right below, it just needs your tap.".freeze
+
       # The model leads a reply with `[[mood:NAME]]` to set its face as the words
       # land (see the persona's "Your face"). Only a LEADING mood marker is the
       # supported protocol; it's parsed, applied, and stripped in finalize before
@@ -953,6 +960,35 @@ module Buddy
         | \b(?:it|that)(?:'|’)?s\s+(?:running|firing)\s+(?:again|now)\b
         | \bi(?:'|’)?m\s+(?:running|re-?running|firing)\s+(?:it|that|the|your)\b
         | \b(?:counted|counting)\s+(?:it|that|those|them|\*\*|\d)
+        # The CANCELLATION shape, from prod 3171. "I don't need to water the
+        # front flower bed" got "I pulled the front flower bed reminder down so
+        # it won't keep bugging you!" over a cancel_reminder that was only ever
+        # PROPOSED. She read it as handled, never tapped, and the reminder went
+        # off again at 8am the next morning and every morning after.
+        #
+        # Every alternative above is about a thing being added, set, logged or
+        # run. Not one of them covers a thing being taken AWAY, which is half of
+        # what gets asked for and the half nobody notices has failed - an
+        # unwanted reminder that keeps arriving reads as the system working.
+        #
+        # Past tense only, and each one needs an object. "want me to remove
+        # that?" and "I can cancel it" are offers and must survive.
+        | \b(?:cancell?ed|removed|deleted|unscheduled)\s+(?:it|that|those|them|the|your|this)\b
+        # "pulled the reminder down", "took it off". The particle is what makes
+        # it a removal - a bare "pulled up your calendar" is not a claim of one.
+        #
+        # Split in two because `the` plus an arbitrary noun is where this bites:
+        # "Eve took the puppy out" is an ordinary sentence and the first draft
+        # retracted it. A pronoun can be trusted with the particle alone; a noun
+        # has to be one of the things that actually gets scheduled.
+        | \b(?:pulled|took)\s+(?:it|that|this|those|them)\s+(?:down|off)\b
+        | \b(?:pulled|took)\s+(?:the|your)[^.!?\n]{0,40}?
+            \b(?:reminder|alarm|timer|watch|event|chore|item|task|notification)s?\s+(?:down|off)\b
+        | \b(?:it|that)(?:'|’)?s\s+(?:cancell?ed|removed|deleted|off\s+the\s+list)\b
+        # The reassurance that comes WITH a cancellation and says the same thing.
+        # `remind` is deliberately absent: "I won't remind you unless you ask" is
+        # an honest description of what it does, not a claim to have stopped.
+        | \bwon(?:'|’)?t\s+(?:keep\s+)?(?:bug|bugg?ing|bother(?:ing)?|nag(?:ging)?|pester(?:ing)?)\s+you\b
         | \A\s*sent\b[.!,]
         | \b(?:passed|sent)\s+(?:it|that|this|them|those)\s+(?:along|on|over|to)\b
         | \b(?:told|messaged|pinged|texted)\s+(?:her|him|them)\b
@@ -1103,25 +1139,44 @@ module Buddy
       # something whose job is keeping a record, because there's no signal that
       # anything went wrong.
       #
-      # Scope is deliberately the unambiguous case: the reply asserts completion,
-      # AND nothing executed, AND there is no pending row the person can see. A
-      # pending checkbox is visible on its own, so a wrong tense there is a tone
-      # bug the prompt can own; this is for claims backed by nothing at all.
+      # The reply asserts completion AND nothing executed. What a pending row
+      # changes is the CORRECTION, not whether one is needed.
+      #
+      # This used to bail out entirely on a pending row, reasoning that a
+      # checkbox is visible on its own so a wrong tense above it is only a tone
+      # bug. Prod 3171 is what that costs: "I pulled the front flower bed
+      # reminder down so it won't keep bugging you!" sat above an untapped
+      # cancel_reminder. A checkbox is only visible to someone still looking for
+      # one, and a sentence saying the thing is already handled is precisely the
+      # instruction to stop looking. She didn't tap it, and it fired again the
+      # next morning.
+      #
+      # So a pending row earns PENDING_BODY instead of an exemption. The
+      # :commanded arm is the one that still steps aside for it: that arm infers
+      # a failure from the REQUEST being an imperative, and a proposal waiting on
+      # screen is an answer to one, so "here's that ready to go" must survive.
       def retract_false_claim!(result)
-        body = @reply.body.to_s
-        kind = unbacked_claim(body) || (:commanded if commanded_action_unanswered?(body))
+        body    = @reply.body.to_s
+        pending = pending_rows?(result)
+        kind    = unbacked_claim(body) || (:commanded if !pending && commanded_action_unanswered?(body))
         return if kind.nil?
         return if executed_anything?(result)
-        return if pending_rows?(result)
 
         Rails.logger.warn(
-          "[Buddy::GPT::Turn] retracted unbacked #{kind} on message=#{@reply.id} " \
-          "user=#{@user.id}: #{body.truncate(160).inspect}",
+          "[Buddy::GPT::Turn] retracted unbacked #{kind}#{" over a pending row" if pending} " \
+          "on message=#{@reply.id} user=#{@user.id}: #{body.truncate(160).inspect}",
         )
         @reply.update!(
-          body:     kind == :commanded ? UNDONE_BODY : FALLBACK_BODY,
+          body:     retraction_body(kind, pending),
           metadata: (@reply.metadata || {}).merge("retracted_claim" => true),
         )
+      end
+
+      def retraction_body(kind, pending)
+        return PENDING_BODY if pending
+        return UNDONE_BODY if kind == :commanded
+
+        FALLBACK_BODY
       end
 
       # Something genuinely ran: an acting answering tool settled inside the

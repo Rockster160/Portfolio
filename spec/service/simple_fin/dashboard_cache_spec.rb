@@ -111,6 +111,78 @@ RSpec.describe SimpleFin::DashboardCache do
     end
   end
 
+  # The cache key is inert on its own — Jil task 439 listens on
+  # `monitor::home_extras` and is what reads it and broadcasts.
+  describe "pushing the new figure to the dashboard" do
+    before { allow(Jil).to receive(:trigger) }
+
+    it "asks the home_extras task to re-render when the figure moves" do
+      acct = account(kind: :checking, cents: 203_400)
+      described_class.refresh!(user: user)
+
+      acct.update!(balance_cents: 199_900)
+      described_class.refresh!(user: user)
+
+      expect(Jil).to have_received(:trigger).twice.with(
+        user, :monitor, { channel: :home_extras, refresh: true }, auth: :trigger
+      )
+    end
+
+    it "pushes the very first write, so the cell stops showing a question mark" do
+      account(kind: :checking, cents: 203_400)
+
+      described_class.refresh!(user: user)
+
+      expect(Jil).to have_received(:trigger).once
+    end
+
+    # Nothing changed, so there is nothing to tell the cell. Not a debounce —
+    # a re-render of an identical value is not an event.
+    it "stays quiet when the balance is unchanged" do
+      account(kind: :checking, cents: 203_400)
+      described_class.refresh!(user: user)
+
+      described_class.refresh!(user: user)
+
+      expect(Jil).to have_received(:trigger).once
+    end
+
+    # Even a change too small to move the displayed "2k" is a change to the
+    # stored figure, and the cell is free to render it more precisely later.
+    it "pushes a change the thousands figure hides" do
+      acct = account(kind: :checking, cents: 203_400)
+      described_class.refresh!(user: user)
+
+      acct.update!(balance_cents: 201_100)
+      described_class.refresh!(user: user)
+
+      expect(Jil).to have_received(:trigger).twice
+    end
+
+    # The stub above proves the call is made; this proves the call reaches a
+    # task listening the way task 439 listens. A trigger on the wrong scope or
+    # with the wrong key would satisfy every expectation above and still leave
+    # the cell showing yesterday's number.
+    it "reaches a task listening on monitor::home_extras" do
+      allow(Jil).to receive(:trigger).and_call_original
+      task = user.tasks.create!(
+        name: "Home Extras Cell", listener: "monitor::home_extras",
+        code: 'result = Text.set("ok")::Text', enabled: true
+      )
+      account(kind: :checking, cents: 203_400)
+
+      expect { described_class.refresh!(user: user) }.to(change { task.reload.last_trigger_at })
+    end
+
+    it "does not take a sync down when the task fails" do
+      allow(Jil).to receive(:trigger).and_raise(StandardError, "boom")
+      account(kind: :checking, cents: 203_400)
+
+      expect { described_class.refresh!(user: user) }.not_to raise_error
+      expect(user.caches.dig(:bank, :amount)).to eq("2034.0")
+    end
+  end
+
   describe ".available_cents" do
     def with_available(kind:, cents:, available:, id: "ACT-0001", name: "PREMIER PLUS CKG (2363)")
       BankAccount.create!(

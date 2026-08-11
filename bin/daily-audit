@@ -49,18 +49,30 @@ fi
 # database, while the audit conversation — and the id state.json is keyed by —
 # only exists in prod. A local lookup would quietly answer about the wrong
 # database.
-CONVO_ID="$(
+lookup_convo_id() {
   cd "$ROOT" && bash .claude/prod-query.sh \
     "COPY (SELECT id FROM byte_conversations
            WHERE name = '$CONVO_NAME' ORDER BY id LIMIT 1) TO STDOUT;" 2>/dev/null | tr -d '[:space:]'
-)"
+}
 
-# Anything that isn't a bare id is an error message from psql, and treating one
-# as an id produces a nonsense lookup and a misleading "no session yet".
+# Retried once, because prod-query.sh opens its own SSH tunnel on a random port
+# and two runs close together can collide. Without this a transient tunnel
+# failure comes out as "no conversation yet", which is a different problem with
+# a different fix and sends you looking in the wrong place.
+# `|| true` on both: under `set -e` a non-zero from the lookup (missing script,
+# no route to prod) aborts the whole thing right here with NO output at all,
+# which is the worst possible version of this failure. Let it return empty and
+# fall through to the message below that says what to check.
+CONVO_ID="$(lookup_convo_id || true)"
+case "$CONVO_ID" in
+  ''|*[!0-9]*) sleep 1; CONVO_ID="$(lookup_convo_id || true)" ;;
+esac
+
 case "$CONVO_ID" in
   ''|*[!0-9]*)
-    echo "No \"$CONVO_NAME\" conversation in production yet." >&2
-    echo "It appears after the first run. Kick one off with:  ByteDailyAudit.kick!" >&2
+    echo "Couldn't find a \"$CONVO_NAME\" conversation in production." >&2
+    echo "If the audit has never run, kick one off with:  ByteDailyAudit.kick!" >&2
+    echo "Otherwise check the tunnel:  bash .claude/prod-query.sh 'SELECT 1'" >&2
     exit 1
     ;;
 esac

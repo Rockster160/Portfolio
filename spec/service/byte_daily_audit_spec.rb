@@ -98,8 +98,37 @@ RSpec.describe ByteDailyAudit do
     # the overlap is the only thing that lets it see this morning's fix.
     it "makes it reconcile the older day against what shipped since" do
       expect(prompt).to include("check whether a deploy since then addressed it")
-      expect(prompt).to include("resolved since")
       expect(prompt).to include("no memory of previous reports")
+    end
+
+    # The report is read by working down it and replying to each item in place.
+    # A separate "here's what got resolved" pass at the end means re-reading the
+    # same list twice to work out which is which.
+    describe "the verdict on each problem" do
+      it "goes in that problem's own headline, with a marker to scan for" do
+        expect(prompt).to include("The verdict goes in the HEADLINE")
+        expect(prompt).to include("✅").and include("⚠️").and include("🔲")
+      end
+
+      it "forbids a second pass over the same findings" do
+        expect(prompt).to include(%(There is no separate "resolved since" section))
+        expect(prompt).to include("never a second pass over the same problems")
+      end
+
+      it "keeps the fix with the problem rather than in a list at the end" do
+        expect(prompt).to include("lives WITH the problem")
+        expect(prompt).to include("A ranking, not a second telling")
+      end
+
+      it "ties the marker to the findings section, not just the deploy one" do
+        expect(prompt).to include("each one opens with its status marker")
+      end
+
+      # Read top to bottom and replied to in order, so the settled ones must not
+      # sit between the ones that still need something.
+      it "puts what still needs doing first" do
+        expect(prompt).to include("Order them `⚠️` then `🔲` then `✅`")
+      end
     end
 
     it "splits the counts by day so the two are comparable" do
