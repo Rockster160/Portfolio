@@ -7,6 +7,7 @@ class SystemController < ApplicationController
   # A window of 1 means "last 24 hours, hour by hour"; the rest are rolling day windows.
   SPEND_WINDOWS = [1, 7, 30, 90].freeze
   SPEND_DEFAULT_DAYS = 30
+  TRANSACTION_PAGE = 100
   # Dark-theme palette, assigned to users by spend rank.
   SPEND_PALETTE = %w[
     #5DADE2 #58D68D #F5B041 #AF7AC5 #EC7063 #48C9B0 #F7DC6F #5499C7
@@ -45,6 +46,31 @@ class SystemController < ApplicationController
     @avg_label = @hourly ? "Per hour (avg)" : "Per day (avg)"
   end
 
+  # Accounts and recent transactions from SimpleFIN. `kind` and
+  # `friendly_name` are set here because nothing else can set them — SimpleFIN
+  # reports no account type, and until a checking account is designated the
+  # dashboard has no balance to show.
+  def banking
+    @accounts = ::BankAccount.order(:kind, :name)
+    @unclassified = @accounts.select(&:unknown?)
+    @primary = ::SimpleFin::DashboardCache.primary
+    @stray_categories = ::TransactionCategory.unknown_in_use
+
+    @transactions = ::BankTransaction.includes(:bank_account, :action_event)
+    @transactions = @transactions.recent_first.limit(TRANSACTION_PAGE)
+    @unlinked_count = ::BankTransaction.unlinked.count
+  end
+
+  def update_bank_account
+    account = ::BankAccount.find(params[:id])
+    account.update!(bank_account_params)
+    # The headline balance follows whichever account is currently checking, so
+    # re-publish whenever a kind changes.
+    ::SimpleFin::DashboardCache.refresh!
+
+    redirect_to(system_banking_path, notice: "Updated #{account.display_name}.")
+  end
+
   def connections
     @pool_stat = load_pool_stat
     @db_connections = load_db_connections
@@ -54,6 +80,10 @@ class SystemController < ApplicationController
   end
 
   private
+
+  def bank_account_params
+    params.require(:bank_account).permit(:friendly_name, :kind)
+  end
 
   # ActiveRecord's own view of THIS process's pool: how many connections are
   # checked out (busy) vs waiting threads blocked for one. `waiting` climbing

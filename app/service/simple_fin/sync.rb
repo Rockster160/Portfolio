@@ -34,6 +34,10 @@ module SimpleFin
         ::Rails.logger.warn("[SimpleFin::Sync] #{errors.size} upstream error(s): #{errors.inspect}")
       end
 
+      # Kept in lockstep with the rows deliberately — a dashboard reading a
+      # balance the tables no longer agree with is the failure worth avoiding.
+      ::SimpleFin::DashboardCache.refresh!
+
       Result.new(accounts: accounts.size, transactions: @transaction_count, errors: errors)
     end
 

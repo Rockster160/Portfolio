@@ -1,0 +1,176 @@
+<%= meta_title "System Banking", include_name: false %>
+<%= meta_description "SimpleFIN accounts and recent transactions." %>
+
+<%
+  money = ->(decimal) {
+    next "—" if decimal.nil?
+    negative = decimal.negative?
+    "#{negative ? "-" : ""}$#{decimal.abs.round(2).to_s("F")}"
+  }
+%>
+
+<div class="system-page">
+  <div class="btn-container">
+    <a href="<%= system_path %>" class="btn">System Index</a>
+    <a href="<%= request.path %>" class="btn btn-refresh">Refresh</a>
+  </div>
+
+  <div class="lists-title">
+    <small>System:</small> Banking
+  </div>
+
+  <% if @accounts.none? %>
+    <p class="bank-empty">
+      No accounts yet. Run <code>prodExec lib/scripts/sync_simplefin.rb</code> to pull them in.
+    </p>
+  <% else %>
+    <% if @unclassified.any? %>
+      <p class="bank-warn">
+        <%= pluralize(@unclassified.size, "account") %> still unclassified.
+        The dashboard balance stays blank until one is set to <strong>checking</strong>.
+      </p>
+    <% elsif @primary.blank? %>
+      <p class="bank-warn">
+        No account is set to <strong>checking</strong>, so the dashboard balance has nothing to read.
+      </p>
+    <% end %>
+
+    <% @accounts.each do |account| %>
+      <%= form_with(url: system_bank_account_path(account), method: :patch, class: "basic bank-row") do |f| %>
+        <div class="bank-row-head">
+          <span class="bank-row-name"><%= account.display_name %></span>
+          <span class="bank-row-balance <%= account.balance_cents.to_i.negative? ? "neg" : "pos" %>">
+            <%= money.call(account.balance) %>
+          </span>
+        </div>
+
+        <div class="bank-row-meta">
+          <span><%= account.name %></span>
+          <% if account.available_balance.present? %>
+            <span>· <%= money.call(account.available_balance) %> available</span>
+          <% end %>
+          <% if account.balance_date.present? %>
+            <span>· as of <%= time_ago_in_words(account.balance_date) %> ago</span>
+          <% end %>
+          <% if account == @primary %>
+            <span class="bank-primary">· dashboard balance</span>
+          <% end %>
+        </div>
+
+        <div class="bank-row-fields">
+          <%= f.text_field(:"bank_account[friendly_name]",
+                value: account.friendly_name, placeholder: "Friendly name") %>
+          <%= f.select(:"bank_account[kind]",
+                options_for_select(BankAccount.kinds.keys, account.kind)) %>
+          <%= f.submit("Save", class: "btn") %>
+        </div>
+      <% end %>
+    <% end %>
+
+    <div class="lists-title bank-section">
+      <small>Recent</small> Transactions
+      <% if @unlinked_count.positive? %>
+        <span class="bank-warn-inline"><%= @unlinked_count %> unlinked</span>
+      <% end %>
+    </div>
+
+    <% if @stray_categories.any? %>
+      <p class="bank-warn">
+        Categories outside the vocabulary, uncoloured on the chart:
+        <%= @stray_categories.join(", ") %>
+      </p>
+    <% end %>
+
+    <% if @transactions.none? %>
+      <p class="bank-empty">No transactions synced yet.</p>
+    <% else %>
+      <table class="bank-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Payee</th>
+            <th>Account</th>
+            <th>Category</th>
+            <th class="right">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @transactions.each do |transaction| %>
+            <tr>
+              <td><%= transaction.occurred_at&.strftime("%b %-d") %></td>
+              <td>
+                <%= transaction.payee.presence || transaction.description %>
+                <% if transaction.pending? %><em>pending</em><% end %>
+              </td>
+              <td><%= transaction.bank_account.display_name %></td>
+              <td>
+                <% if transaction.category.present? %>
+                  <%= transaction.category %>
+                <% else %>
+                  <span class="bank-muted">unlinked</span>
+                <% end %>
+              </td>
+              <td class="right <%= transaction.amount_cents.negative? ? "neg" : "pos" %>">
+                <%= money.call(transaction.amount) %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% end %>
+  <% end %>
+</div>
+
+<%= content_for :head do %>
+  <style>
+    .system-page { max-width: 1200px; width: 95%; margin: 0 auto; padding: 20px; }
+    .system-page .lists-title { font-size: 24px; margin-bottom: 16px; color: #E2E8F0; }
+    .bank-section { margin-top: 36px; }
+
+    .bank-empty, .bank-warn { color: #94A3B8; margin: 12px 0; }
+    .bank-warn { color: #F5B041; }
+    .bank-warn-inline { font-size: 14px; color: #F5B041; margin-left: 8px; }
+    .bank-muted { color: #64748B; }
+
+    .bank-row {
+      background: #1E293B;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+    }
+    .bank-row-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+    .bank-row-name { font-size: 18px; color: #E2E8F0; }
+    .bank-row-balance { font-size: 18px; font-variant-numeric: tabular-nums; }
+    .bank-row-meta { font-size: 13px; color: #94A3B8; margin-top: 4px; }
+    .bank-primary { color: #58D68D; }
+
+    .bank-row-fields {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .bank-row-fields input[type="text"] { flex: 1 1 220px; min-width: 0; }
+    .bank-row-fields select { flex: 0 1 160px; }
+    .bank-row-fields .btn { flex: 0 0 auto; }
+
+    .bank-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .bank-table th, .bank-table td {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid #1E293B;
+    }
+    .bank-table th { color: #94A3B8; font-weight: normal; }
+    .bank-table td { color: #CBD5E1; }
+    .bank-table .right { text-align: right; font-variant-numeric: tabular-nums; }
+    .bank-table em { color: #F5B041; font-style: normal; font-size: 12px; }
+
+    .pos { color: #58D68D; }
+    .neg { color: #EC7063; }
+
+    @media (max-width: 640px) {
+      .bank-table th:nth-child(3), .bank-table td:nth-child(3) { display: none; }
+    }
+  </style>
+<% end %>

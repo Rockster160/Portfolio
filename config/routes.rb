@@ -549,6 +549,8 @@ Rails.application.routes.draw do
     get "/system" => "system#index", as: :system
     get "/system/connections" => "system#connections", as: :system_connections
     get "/system/gpt_spending" => "system#gpt_spending", as: :system_gpt_spending
+    get "/system/banking" => "system#banking", as: :system_banking
+    patch "/system/banking/:id" => "system#update_bank_account", as: :system_bank_account
   end
   mount ::ActionCable.server => "/cable"
 end

@@ -1,5 +1,10 @@
 require "rails_helper"
 
+# AmazonOrder is a cache-backed plain class, NOT ActiveRecord — `.all` returns
+# an Array and there is no `.last` on the class. Rails/RedundantActiveRecordAllMethod
+# assumes otherwise and autocorrects `.all.last` to `.last`, which raises
+# NoMethodError. Disabled for the file so a stray `rubocop -A` cannot re-break it.
+# rubocop:disable Rails/RedundantActiveRecordAllMethod
 RSpec.describe AmzUpdatesChannel, type: :channel do
   before do
     AmazonOrder.clear
@@ -56,7 +61,7 @@ RSpec.describe AmzUpdatesChannel, type: :channel do
     it "creates a manual-carrier item" do
       perform :change, { "add" => "Birthday gift" }
 
-      created = AmazonOrder.last
+      created = AmazonOrder.all.last
       expect(created.name).to eq("Birthday gift")
       expect(created.carrier).to eq(:manual)
     end
@@ -71,7 +76,7 @@ RSpec.describe AmzUpdatesChannel, type: :channel do
         url = "https://www.wayfair.com/session/secure/account/order_search.php?csnid=978882AB&_emr=fac652f5&wfcs=cs7"
         perform :change, { "add" => %(Computer Desk on Aug 7 { url: "#{url}" }) }
 
-        created = AmazonOrder.last
+        created = AmazonOrder.all.last
         expect(created.name).to eq("Computer Desk")
         expect(created.custom_url).to eq(url)
         expect(created.delivery_date).to eq(Date.new(2026, 8, 7).iso8601)
@@ -82,7 +87,7 @@ RSpec.describe AmzUpdatesChannel, type: :channel do
 
     it "seeds a tracking number from metadata so a later carrier update auto-connects" do
       perform :change, { "add" => %(Desk { tracking_number: "9200190267338000065163052", source: "Wayfair" }) }
-      seeded = AmazonOrder.last
+      seeded = AmazonOrder.all.last
       expect(seeded.tracking_number).to eq("9200190267338000065163052")
       expect(seeded.source).to eq("Wayfair")
 
@@ -110,3 +115,4 @@ RSpec.describe AmzUpdatesChannel, type: :channel do
     end
   end
 end
+# rubocop:enable Rails/RedundantActiveRecordAllMethod
