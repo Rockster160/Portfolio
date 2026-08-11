@@ -84,6 +84,7 @@ class CustomChartsController < ApplicationController
         :queries,
         :marker_query,
         :colors,
+        :colors_task,
         :invert_sign,
       ],
     )

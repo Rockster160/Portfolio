@@ -26,7 +26,12 @@
       </div>
 
       <div class="cc-field">
-        <%= label_tag nil, "Colors — one per line: Series label = #hex" %>
+        <%= label_tag nil, "Colors from a Jil function — name of a function()::Hash task returning { label => #hex }" %>
+        <%= text_field_tag "custom_chart[config][colors_task]", @chart.settings[:colors_task], placeholder: "Transaction Category Colors" %>
+      </div>
+
+      <div class="cc-field">
+        <%= label_tag nil, "Colors — one per line: Series label = #hex (overrides the task above)" %>
         <%= text_area_tag "custom_chart[config][colors]", @chart.settings[:colors], rows: 2, placeholder: "X = #e66767\nZ = #3987e5" %>
       </div>
 
