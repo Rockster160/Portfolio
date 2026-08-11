@@ -77,14 +77,40 @@ class SystemController < ApplicationController
     @transactions = listing.page(params[:page]).per(TRANSACTION_PAGE)
   end
 
+  # One field, answered as JSON, exactly as a transaction row is. The accounts
+  # edit in place, so a redirect would throw the whole page away to rename one
+  # thing.
   def update_bank_account
     account = ::BankAccount.find(params[:id])
-    account.update!(bank_account_params)
-    # The headline balance follows whichever account is currently checking, so
-    # re-publish whenever a kind changes.
-    ::SimpleFin::DashboardCache.refresh!
+    changed = {}
 
-    redirect_to(system_banking_path, notice: "Updated #{account.display_name}.")
+    if params.key?(:friendly_name)
+      account.update!(friendly_name: params[:friendly_name].to_s.strip.presence)
+      # Blank means "no chosen name", and the row shows the placeholder rather
+      # than echoing the institution name it already prints underneath.
+      changed[:friendly_name] = account.friendly_name.to_s
+      changed[:display_name] = account.display_name
+    end
+
+    if params.key?(:kind)
+      kind = params[:kind].to_s
+      # `update!` on an unknown enum value raises ArgumentError, which is a 500
+      # and unparseable to the row's error handler. Answer it as a rejection.
+      unless ::BankAccount.kinds.key?(kind)
+        return render(
+          json:   { error: "#{kind} is not an account kind." },
+          status: :unprocessable_entity,
+        )
+      end
+
+      account.update!(kind: kind)
+      # The headline balance follows whichever account is currently checking,
+      # so re-publish whenever a kind changes.
+      ::SimpleFin::DashboardCache.refresh!
+      changed[:kind] = account.kind
+    end
+
+    render(json: changed)
   end
 
   # One row, one field, answered as JSON so the row updates in place. A full
@@ -156,10 +182,6 @@ class SystemController < ApplicationController
   end
 
   private
-
-  def bank_account_params
-    params.require(:bank_account).permit(:friendly_name, :kind)
-  end
 
   # Category is stored on the linked event, so an unlinked row has nowhere to
   # put one. Say which of the two it is rather than a generic failure.

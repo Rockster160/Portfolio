@@ -97,6 +97,24 @@ class CustomChart < ApplicationRecord
     @colors ||= task_colors.merge(literal_colors)
   end
 
+  # Series labels are rendered the way a person reads them ("Eat Out") while
+  # the maps that supply colors are keyed by the stored value ("eat out").
+  # Matching on a normalized form means either spelling finds the other, so
+  # titleizing a label can never quietly cost it its color.
+  def color_for(label)
+    return if label.blank?
+
+    normalized_colors[self.class.normalize_label(label)]
+  end
+
+  def normalized_colors
+    @normalized_colors ||= colors.transform_keys { |key| self.class.normalize_label(key) }
+  end
+
+  def self.normalize_label(value)
+    value.to_s.downcase.gsub(/[^a-z0-9]+/, " ").strip
+  end
+
   def literal_colors
     settings[:colors].to_s.lines.each_with_object({}) { |line, map|
       line = line.strip

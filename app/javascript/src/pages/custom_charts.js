@@ -150,6 +150,19 @@ $(document).ready(function() {
         plugins: {
           legend: { display: false },
           tooltip: {
+            // Biggest first, matching the legend. A 22-series chart's readout
+            // runs off the canvas, so whatever gets cut has to be the part
+            // that matters least — in dataset order that was arbitrary.
+            // Magnitude, so a burn series sorts by how much it moved rather
+            // than by sitting below zero.
+            itemSort: function(a, b) { return Math.abs(b.parsed.y) - Math.abs(a.parsed.y) },
+            // A stacked segment worth zero draws nothing in the bar being
+            // hovered, so listing it describes something that isn't there —
+            // and in a month that used four categories, it is eighteen lines
+            // of "$0.00" pushing the four real ones off the bottom. Stacked
+            // only: on a line or plain bar a zero is a measurement that was
+            // taken, and belongs in the readout.
+            filter: stacked ? function(ctx) { return !!ctx.parsed.y } : undefined,
             callbacks: {
               label: function(ctx) { return ctx.dataset.label + ": " + fmtValue(ctx.parsed.y, unit) },
             },

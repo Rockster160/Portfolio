@@ -38,37 +38,50 @@
       </p>
     <% end %>
 
-    <% @accounts.each do |account| %>
-      <%= form_with(url: system_bank_account_path(account), method: :patch, class: "basic bank-row") do |f| %>
-        <div class="bank-row-head">
-          <span class="bank-row-name"><%= account.display_name %></span>
-          <span class="bank-row-balance <%= sign_class.call(account.balance_cents) %>">
-            <%= cents.call(account.balance_cents) %>
-          </span>
-        </div>
-
-        <div class="bank-row-meta">
-          <span><%= account.name %></span>
-          <% if account.available_balance.present? %>
-            <span>· <%= money.call(account.available_balance) %> available</span>
-          <% end %>
-          <% if account.balance_date.present? %>
-            <span>· as of <%= time_ago_in_words(account.balance_date) %> ago</span>
-          <% end %>
-          <% if account == @primary %>
-            <span class="bank-primary">· dashboard balance</span>
-          <% end %>
-        </div>
-
-        <div class="bank-row-fields">
-          <%= f.text_field(:"bank_account[friendly_name]",
-                value: account.friendly_name, placeholder: "Friendly name") %>
-          <%= f.select(:"bank_account[kind]",
-                options_for_select(BankAccount.kind_options, account.kind)) %>
-          <%= f.submit("Save", class: "btn") %>
-        </div>
-      <% end %>
-    <% end %>
+    <table class="bank-table bank-accounts">
+      <thead>
+        <tr>
+          <th>Account</th>
+          <th>Kind</th>
+          <th class="right">Balance</th>
+          <th>Reported</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% @accounts.each do |account| %>
+          <tr data-row data-url="<%= system_bank_account_path(account) %>">
+            <td class="acct-name">
+              <%# The chosen name is the editable line; the institution's own
+                  name sits under it as the thing that never changes. %>
+              <span class="edit-text" data-text data-field="friendly_name" contenteditable="true"
+                    spellcheck="false"
+                    title="Click to edit · Enter saves · Esc cancels"><%= account.friendly_name %></span>
+              <span class="sub"><%= account.name %></span>
+            </td>
+            <td class="kind">
+              <%= select_tag(:kind, options_for_select(BankAccount.kind_options, account.kind),
+                    id: nil, class: "inline-select", data: { select: true, field: :kind }) %>
+            </td>
+            <td class="right <%= sign_class.call(account.balance_cents) %>">
+              <%= cents.call(account.balance_cents) %>
+            </td>
+            <td class="meta">
+              <span class="age">
+                <%= account.balance_date.present? ? "#{time_ago_in_words(account.balance_date)} ago" : "—" %>
+              </span>
+              <span class="sub">
+                <% if account.available_balance.present? %>
+                  <%= money.call(account.available_balance) %> available
+                <% end %>
+                <% if account == @primary %>
+                  <em class="tag primary" title="The balance the dashboard reads">dashboard</em>
+                <% end %>
+              </span>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
 
     <div class="lists-title bank-section">
       <small>Transactions</small>
@@ -217,7 +230,8 @@
                 </span>
               </td>
               <td class="memo">
-                <span class="memo-text" data-memo contenteditable="true" spellcheck="false"
+                <span class="edit-text" data-text data-field="memo" contenteditable="true"
+                      spellcheck="false"
                       title="Click to edit · Enter saves · Esc cancels"><%= transaction.display_memo %></span>
               </td>
               <td class="cat">
@@ -227,7 +241,8 @@
                   <%= select_tag(:category,
                         options_for_select(TransactionCategory.options, transaction.category),
                         include_blank: transaction.category.blank?,
-                        data: { category: true }) %>
+                        id: nil, class: "inline-select",
+                        data: { select: true, field: :category }) %>
                 <% else %>
                   <span class="bank-muted" title="No linked alert to hold a category">unlinked</span>
                 <% end %>
@@ -291,15 +306,22 @@
         });
       }
 
+      // Both tables edit the same way, so the handlers are driven by
+      // `data-field` rather than written once per field. An account rename and
+      // a transaction memo are the same interaction; two copies of the Escape
+      // and paste handling would only be two places to fix it.
       document.querySelectorAll("[data-row]").forEach(function (row) {
-        var select = row.querySelector("[data-category]");
         var dot = row.querySelector("[data-dot]");
-        var memo = row.querySelector("[data-memo]");
 
-        if (select) {
+        row.querySelectorAll("[data-select]").forEach(function (select) {
+          var field = select.getAttribute("data-field");
           var previous = select.value;
+
           select.addEventListener("change", function () {
-            save(row, { category: select.value }).then(function (data) {
+            var body = {};
+            body[field] = select.value;
+
+            save(row, body).then(function (data) {
               if (dot && data.color) { dot.style.background = data.color; }
               previous = select.value;
               flash(row, true);
@@ -309,58 +331,62 @@
               window.alert(err.message);
             });
           });
-        }
+        });
 
-        if (memo) {
-          var saved = memo.textContent.trim();
+        row.querySelectorAll("[data-text]").forEach(function (cell) {
+          var field = cell.getAttribute("data-field");
+          var saved = cell.textContent.trim();
           var canceled = false;
 
-          memo.addEventListener("focus", function () {
-            saved = memo.textContent.trim();
+          cell.addEventListener("focus", function () {
+            saved = cell.textContent.trim();
             canceled = false;
           });
 
           // Escape abandons the edit outright — the point is that brushing a
           // row and typing into it by accident costs nothing. The flag is
           // needed because blur() fires the save handler straight after.
-          memo.addEventListener("keydown", function (event) {
+          cell.addEventListener("keydown", function (event) {
             if (event.key === "Escape") {
               event.preventDefault();
               canceled = true;
-              memo.textContent = saved;
-              memo.blur();
+              cell.textContent = saved;
+              cell.blur();
             } else if (event.key === "Enter") {
               event.preventDefault();
-              memo.blur();
+              cell.blur();
             }
           });
 
-          memo.addEventListener("blur", function () {
+          cell.addEventListener("blur", function () {
             if (canceled) { canceled = false; return; }
 
-            var value = memo.textContent.trim();
-            if (value === saved) { memo.textContent = value; return; }
+            var value = cell.textContent.trim();
+            if (value === saved) { cell.textContent = value; return; }
 
-            save(row, { memo: value }).then(function (data) {
-              // Answer with what was stored, which may be the inherited note
-              // again if the memo was cleared.
-              memo.textContent = data.memo || "";
-              saved = memo.textContent.trim();
+            var body = {};
+            body[field] = value;
+
+            save(row, body).then(function (data) {
+              // Answer with what was stored, which may differ from what was
+              // typed — a cleared memo falls back to the linked note.
+              cell.textContent = data[field] || "";
+              saved = cell.textContent.trim();
               flash(row, true);
             }).catch(function (err) {
-              memo.textContent = saved;
+              cell.textContent = saved;
               flash(row, false);
               window.alert(err.message);
             });
           });
 
           // Paste as text — a copied cell would otherwise drag markup in.
-          memo.addEventListener("paste", function (event) {
+          cell.addEventListener("paste", function (event) {
             event.preventDefault();
             var text = (event.clipboardData || window.clipboardData).getData("text");
             document.execCommand("insertText", false, text.replace(/\s+/g, " "));
           });
-        }
+        });
       });
 
       // Applying to a whole search can touch far more than is on screen.
@@ -391,18 +417,20 @@
     .bank-warn-inline { font-size: 14px; color: #F5B041; margin-left: 8px; }
     .bank-muted { color: #64748B; }
 
-    .bank-row {
-      background: #1E293B; border: 1px solid #334155;
-      border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;
+    /* Four accounts do not need four cards. Same table shape as the
+       transactions below, so the page reads as one list of rows rather than a
+       stack of panels above a table. */
+    .bank-accounts { margin-bottom: 8px; }
+    .bank-accounts td.acct-name { min-width: 180px; }
+    .bank-accounts td.meta .age { display: block; white-space: nowrap; }
+    .bank-accounts .tag.primary { color: #58D68D; background: rgba(88, 214, 141, 0.13); }
+
+    /* The line under an editable value: the institution's own account name,
+       and whatever else is context rather than content. Scoped to these two
+       cells — td.payee has its own .sub, laid out as a flex row of chips. */
+    .bank-accounts td.acct-name .sub, .bank-accounts td.meta .sub {
+      display: block; font-size: 11px; color: #64748B; line-height: 1.3; margin-top: 2px;
     }
-    .bank-row-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-    .bank-row-name { font-size: 18px; color: #E2E8F0; }
-    .bank-row-balance { font-size: 18px; font-variant-numeric: tabular-nums; }
-    .bank-row-meta { font-size: 13px; color: #94A3B8; margin-top: 4px; }
-    .bank-primary { color: #58D68D; }
-    .bank-row-fields { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    .bank-row-fields input[type="text"] { flex: 1 1 220px; min-width: 0; }
-    .bank-row-fields select { flex: 0 1 180px; }
 
     .bank-search { display: flex; gap: 8px; margin-bottom: 6px; }
     .bank-search input[type="search"] { flex: 1 1 auto; min-width: 0; }
@@ -457,7 +485,7 @@
        it is a transfer, so the row needs no chip repeating it. */
     .bank-table td.payee .acct.route { white-space: nowrap; }
     .bank-table td.payee .acct .arrow { color: #475569; padding: 0 4px; }
-    .bank-table td.payee .tag {
+    .bank-table .tag {
       font-style: normal;
       font-size: 9px;
       text-transform: uppercase;
@@ -480,33 +508,35 @@
        instead: it reads as plain text until clicked into, and no global form
        styling can reach it. */
     .bank-table td.memo { max-width: 260px; }
-    .bank-table td.memo .memo-text {
+    .bank-table .edit-text {
       display: block; min-height: 1.2em; outline: none; cursor: text;
       border-bottom: 1px solid transparent;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-    .bank-table td.memo .memo-text:hover { border-bottom-color: #334155; }
-    .bank-table td.memo .memo-text:focus {
+    .bank-table .edit-text:hover { border-bottom-color: #334155; }
+    .bank-table .edit-text:focus {
       border-bottom-color: #58D68D; color: #E2E8F0; white-space: normal;
     }
-    /* Only a genuinely empty memo shows a placeholder. An inherited note is a
+    /* Only a genuinely empty value shows a placeholder. An inherited note is a
        real value and reads as one — styling it faintly was what made every
        row look unset. */
-    .bank-table td.memo .memo-text:empty::before { content: "\2014"; color: #475569; }
-    .bank-table tr.saved td.memo .memo-text { border-bottom-color: #58D68D; }
-    .bank-table tr.failed td.memo .memo-text { border-bottom-color: #EC7063; }
+    .bank-table .edit-text:empty::before { content: "\2014"; color: #475569; }
+    .bank-table tr.saved .edit-text { border-bottom-color: #58D68D; }
+    .bank-table tr.failed .edit-text { border-bottom-color: #EC7063; }
 
     /* Dot inline with the label. `nowrap` on the cell is what stops the select
        wrapping onto its own line under the dot. */
-    .bank-table td.cat { white-space: nowrap; }
-    .bank-table td.cat select {
+    .bank-table td.cat, .bank-table td.kind { white-space: nowrap; }
+    /* Beats the bare `select` in forms.scss, which paints a white box with a
+       2px border and forces width:100%. */
+    .bank-table select.inline-select {
       background: transparent; border: 1px solid transparent; color: #CBD5E1;
-      padding: 1px 2px; height: auto; width: auto; max-width: 140px;
+      margin: 0; padding: 1px 2px; height: auto; width: auto; max-width: 140px;
       font-size: 14px; line-height: normal; vertical-align: middle;
     }
-    .bank-table td.cat select:hover { border-color: #334155; }
-    .bank-table tr.saved td.cat select { border-color: #58D68D; }
-    .bank-table tr.failed td.cat select { border-color: #EC7063; }
+    .bank-table select.inline-select:hover { border-color: #334155; }
+    .bank-table tr.saved select.inline-select { border-color: #58D68D; }
+    .bank-table tr.failed select.inline-select { border-color: #EC7063; }
 
     /* `.bank-table td` is (0,1,1) and beats a bare `.neg` (0,1,0), which is why
        every amount rendered white. Matching the element makes these win. */

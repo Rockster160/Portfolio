@@ -369,28 +369,47 @@ RSpec.describe ChartBuilder do
       spend
       labels = build(series_key: "category")[:datasets].pluck(:label)
 
-      expect(labels).to eq(["groceries", "eat out"])
+      expect(labels).to eq(["Groceries", "Eat Out"])
+    end
+
+    # The stored value is a storage identifier — "eat out", "pay check". A
+    # legend is not where those belong.
+    it "titleizes the label without touching the stored value" do
+      spend
+      labels = build(series_key: "category")[:datasets].pluck(:label)
+
+      expect(labels).to all(match(/\A[A-Z]/))
+      expect(ActionEvent.pluck(Arel.sql("data->>'category'"))).to include("eat out")
+    end
+
+    # The color map is keyed by the stored value, so titleizing the label would
+    # silently cost every category its color if the lookup were exact.
+    it "still finds a color keyed by the stored value" do
+      spend
+      datasets = build(series_key: "category", colors: "eat out = #ff0000")[:datasets]
+
+      expect(datasets.find { |d| d[:label] == "Eat Out" }[:color]).to eq("#ff0000")
     end
 
     it "sums only that series' events into each bucket" do
       spend
       datasets = build(series_key: "category")[:datasets]
 
-      expect(datasets.find { |d| d[:label] == "groceries" }[:data]).to eq([400.0])
-      expect(datasets.find { |d| d[:label] == "eat out" }[:data]).to eq([40.0])
+      expect(datasets.find { |d| d[:label] == "Groceries" }[:data]).to eq([400.0])
+      expect(datasets.find { |d| d[:label] == "Eat Out" }[:data]).to eq([40.0])
     end
 
     it "orders biggest first" do
       spend
       datasets = build(series_key: "category")[:datasets]
 
-      expect(datasets.first[:label]).to eq("groceries")
+      expect(datasets.first[:label]).to eq("Groceries")
     end
 
     it "keeps a series' color when the ordering changes" do
       spend
       before = build(series_key: "category")[:datasets]
-      groceries_color = before.find { |d| d[:label] == "groceries" }[:color]
+      groceries_color = before.find { |d| d[:label] == "Groceries" }[:color]
 
       # Push "eat out" past "groceries" so the two swap places in the dataset list.
       event(
@@ -399,8 +418,8 @@ RSpec.describe ChartBuilder do
       )
       after = build(series_key: "category")[:datasets]
 
-      expect(after.first[:label]).to eq("eat out")
-      expect(after.find { |d| d[:label] == "groceries" }[:color]).to eq(groceries_color)
+      expect(after.first[:label]).to eq("Eat Out")
+      expect(after.find { |d| d[:label] == "Groceries" }[:color]).to eq(groceries_color)
     end
 
     it "gives a brand new category a color without any configuration" do
@@ -410,7 +429,7 @@ RSpec.describe ChartBuilder do
         data: { "amount" => 60.0, "category" => "childcare" }
       )
       datasets = build(series_key: "category", colors: "groceries = #ff0000")[:datasets]
-      childcare = datasets.find { |d| d[:label] == "childcare" }
+      childcare = datasets.find { |d| d[:label] == "Childcare" }
 
       expect(described_class::PALETTE).to include(childcare[:color])
     end
@@ -438,7 +457,7 @@ RSpec.describe ChartBuilder do
       seeded = described_class::PALETTE.each_with_index.map { |hex, i| "cat#{i} = #{hex}" }
       colors = 2.times.map {
         datasets = build(series_key: "category", colors: seeded.join("\n"))[:datasets]
-        datasets.find { |d| d[:label] == "childcare" }[:color]
+        datasets.find { |d| d[:label] == "Childcare" }[:color]
       }
 
       expect(colors.first).to match(/\A#[0-9a-f]{6}\z/)
@@ -449,7 +468,7 @@ RSpec.describe ChartBuilder do
       spend
       datasets = build(series_key: "category", colors: "groceries = #ff0000")[:datasets]
 
-      expect(datasets.find { |d| d[:label] == "groceries" }[:color]).to eq("#ff0000")
+      expect(datasets.find { |d| d[:label] == "Groceries" }[:color]).to eq("#ff0000")
     end
 
     it "labels events missing the key rather than dropping them" do
@@ -477,9 +496,9 @@ RSpec.describe ChartBuilder do
       datasets = build(series_key: "category", invert_sign: true)[:datasets]
       by_label = datasets.index_by { |d| d[:label] }
 
-      expect(by_label["pay check"][:stack]).to eq("in")
-      expect(by_label["groceries"][:stack]).to eq("out")
-      expect(by_label["eat out"][:stack]).to eq("out")
+      expect(by_label["Pay Check"][:stack]).to eq("in")
+      expect(by_label["Groceries"][:stack]).to eq("out")
+      expect(by_label["Eat Out"][:stack]).to eq("out")
     end
 
     it "plots both stacks as magnitudes so neither hangs below zero" do
@@ -491,8 +510,8 @@ RSpec.describe ChartBuilder do
       datasets = build(series_key: "category", invert_sign: true)[:datasets]
 
       expect(datasets.flat_map { |d| d[:data] }).to all(be >= 0)
-      expect(datasets.find { |d| d[:label] == "pay check" }[:data]).to eq([2_000.0])
-      expect(datasets.find { |d| d[:label] == "groceries" }[:data]).to eq([400.0])
+      expect(datasets.find { |d| d[:label] == "Pay Check" }[:data]).to eq([2_000.0])
+      expect(datasets.find { |d| d[:label] == "Groceries" }[:data]).to eq([400.0])
     end
 
     it "leaves the headline net signed even though the bars are magnitudes" do
@@ -520,8 +539,8 @@ RSpec.describe ChartBuilder do
       # while the bar height (a magnitude) stays put.
       plain_sets = build(series_key: "category")[:datasets]
       inverted_sets = build(series_key: "category", invert_sign: true)[:datasets]
-      plain = plain_sets.find { |d| d[:label] == "groceries" }
-      inverted = inverted_sets.find { |d| d[:label] == "groceries" }
+      plain = plain_sets.find { |d| d[:label] == "Groceries" }
+      inverted = inverted_sets.find { |d| d[:label] == "Groceries" }
 
       expect(plain[:stack]).to eq("in")
       expect(inverted[:stack]).to eq("out")

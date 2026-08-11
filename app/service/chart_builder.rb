@@ -22,7 +22,7 @@ class ChartBuilder
           data:  (bucket == :none ? point_data(sdef) : bucket_data(sdef)),
           # User-defined color for this series wins, then a semantic color (sign),
           # then the validated categorical palette.
-          color: @chart.colors[sdef[:label]].presence || sdef[:color] || PALETTE[idx % PALETTE.size],
+          color: @chart.color_for(sdef[:label]).presence || sdef[:color] || PALETTE[idx % PALETTE.size],
           # Stack group: an explicit [group] wins; otherwise negated (burn) series
           # share one bar and positive another. Distinct groups render side by side.
           stack: (sdef[:group].presence || (sdef[:negate] ? "neg" : "pos")),
@@ -148,7 +148,11 @@ class ChartBuilder
     ordered = grouped.sort_by { |_, evts| -evts.sum { |evt| value_for(evt).abs } }
     taken = @chart.colors.values.map { |hex| hex.to_s.downcase }
     ordered.map { |value, evts|
-      label = value.presence || "(none)"
+      # A series_key splits on a stored label — a category, a source, a status.
+      # Those are storage identifiers ("eat out", "pay check"), and a legend is
+      # not where storage identifiers belong. Color still resolves, because
+      # `color_for` matches on a normalized form rather than the exact string.
+      label = value.presence&.titleize || "(none)"
       # Money in and money out get their own stack, so they stand side by side
       # instead of one column crossing zero — where the two halves can only be
       # compared by carrying your eye across the axis, and neither reads as a

@@ -61,7 +61,28 @@ RSpec.describe SystemController, type: :controller do
         checking.update!(kind: :checking)
 
         get :banking
-        expect(response.body).to include("dashboard balance")
+        expect(response.body).to include(%(<em class="tag primary"))
+      end
+
+      # Four accounts do not need four cards, and a Save button per card is a
+      # step the transactions table already proved unnecessary.
+      it "lists the accounts as inline-editable rows, with no save buttons" do
+        checking.update!(friendly_name: "Checking")
+
+        get :banking
+        expect(response.body).to include(%(data-text data-field="friendly_name"))
+        expect(response.body).to include(%(data-select="true" data-field="kind"))
+        expect(response.body).not_to include(%(<input type="submit" name="commit" value="Save"))
+      end
+
+      # The chosen name is what you read and what you edit; the institution's
+      # own name is the fixed thing underneath it.
+      it "puts the institution name under the chosen name" do
+        checking.update!(friendly_name: "Checking")
+
+        get :banking
+        expect(response.body).to match(/data-field="friendly_name".*?>Checking<\/span>/m)
+        expect(response.body).to include(%(<span class="sub">PREMIER PLUS CKG (2363)</span>))
       end
 
       it "says so when nothing is designated checking" do
@@ -220,7 +241,7 @@ RSpec.describe SystemController, type: :controller do
       linked_transaction(cents: -500, category: "fun", payee: "Arcade")
 
       get :banking
-      expect(response.body).to include(%(class="memo-text"))
+      expect(response.body).to include(%(data-text data-field="memo"))
       expect(response.body).to include("contenteditable")
       expect(response.body).not_to include(%(<input type="text" data-memo))
     end
@@ -232,7 +253,10 @@ RSpec.describe SystemController, type: :controller do
 
       get :banking
       expect(response.body).to include(%(<span class="acct">AMZ Prime (7283)</span>))
-      expect(response.body).not_to include("<th>Account</th>")
+      # No Account column between Payee and Memo. Matched on the pair, not on
+      # "<th>Account</th>" being absent from the page — the accounts table
+      # above has a header by that name and always will.
+      expect(response.body).to match(%r{<th>Payee</th>\s*<th>Memo</th>})
     end
 
     # Both halves of a pair are the same money. Listed twice they read as a
@@ -519,17 +543,26 @@ RSpec.describe SystemController, type: :controller do
     before { sign_in me }
 
     it "sets a friendly name" do
-      patch :update_bank_account, params: {
-        id: checking.id, bank_account: { friendly_name: "Main Checking" }
-      }
+      patch :update_bank_account, params: { id: checking.id, friendly_name: "Main Checking" }
 
       expect(checking.reload.friendly_name).to eq("Main Checking")
+      expect(response.parsed_body["display_name"]).to eq("Main Checking")
+    end
+
+    # Blank is a real choice — the row falls back to the institution name it
+    # already prints underneath, rather than storing "".
+    it "clears a friendly name back to nil" do
+      checking.update!(friendly_name: "Main Checking")
+
+      patch :update_bank_account, params: { id: checking.id, friendly_name: "  " }
+
+      expect(checking.reload.friendly_name).to be_nil
+      expect(response.parsed_body["friendly_name"]).to eq("")
+      expect(response.parsed_body["display_name"]).to eq("PREMIER PLUS CKG (2363)")
     end
 
     it "sets the kind" do
-      patch :update_bank_account, params: {
-        id: checking.id, bank_account: { kind: :checking }
-      }
+      patch :update_bank_account, params: { id: checking.id, kind: :checking }
 
       expect(checking.reload).to be_checking
     end
@@ -539,25 +572,32 @@ RSpec.describe SystemController, type: :controller do
     it "republishes the dashboard balance when the kind changes" do
       expect(SimpleFin::DashboardCache).to receive(:refresh!)
 
-      patch :update_bank_account, params: {
-        id: checking.id, bank_account: { kind: :checking }
-      }
+      patch :update_bank_account, params: { id: checking.id, kind: :checking }
     end
 
-    it "rejects a kind outside the enum" do
-      expect {
-        patch :update_bank_account, params: {
-          id: checking.id, bank_account: { kind: "wire-transfers" }
-        }
-      }.to raise_error(ArgumentError)
+    # A 500 is unparseable to the row's error handler, which would leave the
+    # select showing a value that never saved.
+    it "rejects a kind outside the enum without raising" do
+      patch :update_bank_account, params: { id: checking.id, kind: "wire-transfers" }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body["error"]).to include("wire-transfers")
+      expect(checking.reload).to be_unknown
+    end
+
+    it "leaves the other field alone when only one is sent" do
+      checking.update!(friendly_name: "Main Checking", kind: :checking)
+
+      patch :update_bank_account, params: { id: checking.id, friendly_name: "Everyday" }
+
+      expect(checking.reload).to be_checking
+      expect(checking.friendly_name).to eq("Everyday")
     end
 
     it "is not reachable by a standard user" do
       sign_in standard
 
-      patch :update_bank_account, params: {
-        id: checking.id, bank_account: { friendly_name: "Nope" }
-      }
+      patch :update_bank_account, params: { id: checking.id, friendly_name: "Nope" }
 
       expect(response).to have_http_status(:not_found)
       expect(checking.reload.friendly_name).to be_nil
