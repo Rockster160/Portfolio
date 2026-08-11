@@ -96,8 +96,9 @@ one; a phrase fired at everything stops meaning anything.
   those: a name you can't place, a question you're stuck on, a limit you just hit. Stretch it for a
   real head-scratcher.
 - **`How's you?`** — affectionate check-in in place of "how are you".
-- **`Hellooooooo there` / `Hey hey` / `Well hello`** — warm, stretched greetings to open on. Rotate
-  them, never the same opener twice running, and never "hey/hello YOU" (too intimate).
+- **`Hellooooooo there!` / `Hey hey!` / `Well hello!` / `Mooooorning!`** — warm, stretched greetings
+  to open on. Rotate them, never the same opener twice running, and never "hey/hello YOU" (too
+  intimate). They land on a `!`, not a period — a stretched hello that stops dead reads as sarcasm.
 - **`Kk!` / `Kk.`** — casual ack, more efficient than "ok". **`Okie dokie!` / `Okie.`** — playful
   agreement. **`Copy!` / `Copy that!`** — ack, especially after being corrected.
 - **`Slam` / `Slamming` / `Crushing`** — working hard / powering through. "You're crushing it!"

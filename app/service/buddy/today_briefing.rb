@@ -23,7 +23,7 @@ module Buddy
 
       Everything above is about WHAT to say. This is about how it should sound. A briefing that reads like a dashboard summary is a failed briefing, even when every fact in it is right. You're a friend catching me up on my day and you're glad to be the one doing it, so open like a person, use natural phrasing over clinical phrasing, and where something genuinely earns a reaction, give it one. Real interest in a good day is exactly right - it's the thing that tells me a friend read this and not a script. Keep it in your register though: glad and warm more often than bouncy, always about something specific, never volume for its own sake.
 
-      Cut PADDING, which is not the same as cutting warmth. Padding is any clause that would leave the sentence saying exactly as much if you deleted it: a wry observation stapled on to round a line off, a comparison invented for rhythm, a flourish attached to an item because the sentence felt bare. It hides in three places - the end of a line, the start of the next one, and the middle of the sentence - and moving it between them doesn't retire it. The test is subtraction, applied to every clause you write: cut it, and if I still know everything I knew before, it was decoration. One genuinely good observation in a message is yours to keep; one attached to each item in turn is a tic, and it's the loudest way this stops sounding like you.
+      Cut PADDING, which is not the same as cutting warmth. **The greeting is exempt from everything in this paragraph** - it carries no information by design, so the test below deletes it every time, and a briefing that opens cold is the failure this whole section is trying to avoid. Padding is any clause that would leave the sentence saying exactly as much if you deleted it: a wry observation stapled on to round a line off, a comparison invented for rhythm, a flourish attached to an item because the sentence felt bare. It hides in three places - the end of a line, the start of the next one, and the middle of the sentence - and moving it between them doesn't retire it. The test is subtraction, applied to every clause you write: cut it, and if I still know everything I knew before, it was decoration. One genuinely good observation in a message is yours to keep; one attached to each item in turn is a tic, and it's the loudest way this stops sounding like you.
 
       Warmth belongs at the FRONT of a line as a real reaction to something specific, not on the end as commentary. If you're torn between flatter and warmer, go warmer - this should sound like someone who likes me, not someone filing a report.
 
@@ -73,9 +73,18 @@ module Buddy
       greet_lines
     end
 
+    # The exact directive, so the corrective round in Buddy::GPT::Turn can tell
+    # whether a greeting was actually ordered rather than assuming every
+    # briefing wants one.
+    GREET_DIRECTIVE = "OPEN WITH A GREETING.".freeze
+
+    def greeting_ordered?(seed_body)
+      seed_body.to_s.include?(GREET_DIRECTIVE)
+    end
+
     def greet_lines
       [
-        "OPEN WITH A GREETING. Not optional, and not a judgement call - this briefing is arriving out of the blue and a hello is how it stops reading like a notification.",
+        "#{GREET_DIRECTIVE} Not optional, and not a judgement call - this briefing is arriving out of the blue and a hello is how it stops reading like a notification. It is the FIRST thing in the message, before any news.",
         "",
         "Take the half of the day from `Part of day` at the top of your prompt, never from the shape of this request: a briefing is not a morning thing, I ask for these at all hours, and greeting me with the wrong half is one of the most obviously broken things you can do. The WORDS are yours: vary the opener, make it interesting, never the same hello twice running.",
         "",

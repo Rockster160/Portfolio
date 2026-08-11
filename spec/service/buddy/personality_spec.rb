@@ -477,6 +477,15 @@ RSpec.describe Buddy::Personality do
       expect(prompt).to include("never a lecture")
     end
 
+    # The stretched hello is Byte's too, and it has to model landing on a "!" -
+    # it was listed without one while Byte was opening briefings flat.
+    it "gives Byte the same stretched greetings, landing lifted" do
+      byte = described_class.for(create(:user), conversation: buddy_convo(create(:user), "byte"))
+
+      expect(byte).to include("Hellooooooo there!")
+      expect(byte).to include("reads as sarcasm")
+    end
+
     # Moss has her own voice; the slime vocabulary is Byte's alone.
     it "keeps the computerisms and slime-isms out of Moss" do
       moss = described_class.for(create(:user), conversation: buddy_convo(create(:user), "moss"))
@@ -552,6 +561,15 @@ RSpec.describe Buddy::Personality do
       expect(prompt).to include("Exclamation is her baseline")
       expect(prompt).to include("Ag shame, then a remedy")
       expect(prompt).to include("Never nag")
+    end
+
+    # She had an ack list and no greeting list at all, so every hello was
+    # improvised from scratch.
+    it "hands her the stretched greetings by name" do
+      prompt = suki_prompt
+
+      expect(prompt).to include("Hellooooooo there!")
+      expect(prompt).to include("Greetings - rotate these the same way")
     end
 
     it "pulls in Eve's voice profile, not Rocco's or Chelsea's" do

@@ -661,15 +661,68 @@ module Buddy
         \z
       /xi
 
+      GREETING_NUDGE = <<~TXT.freeze
+        STOP. Your briefing was told to open with a greeting and it doesn't - it
+        starts on the news. Arriving unannounced with no hello is what makes this
+        read like a notification instead of you.
+
+        Write it again with a greeting on the front. Match the half of the day in
+        `Part of day`, make the words your own, and land it warm - a "!", a
+        stretched vowel, real warmth, never a flat period.
+
+        Everything after the greeting can stay as it was.
+      TXT
+
+      # Does the reply actually open with a hello?
+      #
+      # Deliberately generous — a false "missing" costs one extra round, while
+      # being strict about the wording would fight the instruction to vary it.
+      # Leading emoji and punctuation are skipped; the stretched spellings the
+      # tone profiles ask for (`Mooooorning!`, `Hellooooooo`, `Hiii`) all have to
+      # pass, which is why every vowel here is repeatable.
+      GREETING_OPENER_RX = /
+        # Skip anything that isn't a letter rather than naming the categories:
+        # a leading "☀️" is a symbol AND a variation selector, and listing the
+        # parts of an emoji is a losing game.
+        \A\P{L}*
+        # "Well hello" is on Byte's own list of openers, so a short lead-in word
+        # in front of the hello can't disqualify it.
+        (?:(?:well|ah+|oh+|ok(?:ay)?)[\s,]+)?
+        (?:
+            (?:good\s+)? m+o+r+n+i+n+g+
+          | (?:good\s+)? (?:afternoon|evening|night)
+          | h+e+y+
+          | h+i+\b
+          | h+e+l+l+o+
+          | howdy | greetings | welcome\s+back | ah+oy | yo\b
+          | happy\s+\w+
+        )
+      /xi
+
+      # Only on a briefing that was ORDERED to greet. Buddy::TodayBriefing
+      # decides that from the thread, and when it decides not to, a reply with no
+      # hello is exactly right — so this must never fire on that half.
+      def greeting_missing?(body)
+        return false unless today_briefing?
+        return false if body.strip.empty?
+        return false unless Buddy::TodayBriefing.greeting_ordered?(@inbound.body.to_s)
+
+        !body.sub(LEADING_MOOD_RX, "").match?(GREETING_OPENER_RX)
+      end
+
       # Worth a corrective round: nothing was proposed, we haven't already spent
       # the one retry we allow, and the reply either claims an action, points at
-      # output that isn't there, or waves off news nobody has heard yet. Returns
-      # the nudge to send, or nil.
+      # output that isn't there, waves off news nobody has heard yet, or opened a
+      # briefing cold. Returns the nudge to send, or nil.
       def nudge_for(proposals, spoken, nudged, rounds)
         return nil if nudged || proposals.any?
         return nil if rounds >= MAX_ROUNDS || Time.current > @deadline
         return NOTIFY_NUDGE if self_initiated? && spoken.to_s.match?(DISMISSAL_RX)
         return RETRY_NUDGE if unbacked_claim(spoken.to_s).present?
+        # Three rounds of prompt wording have failed to make the greeting stick,
+        # including one that said "not optional" in capitals. It is a cheap thing
+        # to check and a cheap thing to ask again for.
+        return GREETING_NUDGE if greeting_missing?(spoken.to_s)
         # They asked for a thing to happen and nothing was called. Worth the
         # corrective round on its own — this is the half that gets the TV
         # actually turned off, rather than only stopping the lie about it.

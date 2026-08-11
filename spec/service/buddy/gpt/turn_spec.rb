@@ -784,6 +784,91 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
+  # Aug 11: Suki opened "Mooooorning!" and Moss "Good morning!", and Byte, off
+  # the identical seed, opened "Pretty quiet day on your side." Three rounds of
+  # prompt wording have failed to make the greeting stick, the last of them
+  # saying "not optional" in capitals, so it gets checked instead of asked for.
+  describe "a briefing that opens cold" do
+    def briefing(rounds, seed: Buddy::TodayBriefing.seed(user))
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: seed,
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+      )
+      client = FakeBuddyClient.new(rounds)
+      described_class.run!(message, client: client)
+      client
+    end
+
+    it "gets a corrective round and the greeting arrives" do
+      client = briefing([
+        { text: "Pretty quiet day on your side. The only thing I see is a noon supply run." },
+        { text: "Mooooorning! Pretty quiet day - just a noon supply run." },
+      ])
+
+      expect(client.calls.length).to eq(2)
+      expect(reply.body).to start_with("Mooooorning!")
+    end
+
+    it "leaves a briefing that already greeted alone" do
+      client = briefing([{ text: "Hey hey, Rocco! Quiet one today, just the noon run." }])
+
+      expect(client.calls.length).to eq(1)
+      expect(reply.body).to start_with("Hey hey, Rocco!")
+    end
+
+    # The other half of the same decision: when Rails works out that they were
+    # talking a moment ago, no hello is the CORRECT reply and must not be nudged.
+    it "does not chase a greeting that was never ordered" do
+      convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: "what's up", created_at: 2.minutes.ago,
+      )
+      seed = Buddy::TodayBriefing.seed(user, conversation: convo)
+      client = briefing([{ text: "Quiet one today, just the noon run." }], seed: seed)
+
+      expect(seed).to include("DON'T GREET")
+      expect(client.calls.length).to eq(1)
+    end
+
+    it "leaves ordinary turns alone" do
+      client = run([{ text: "Quiet one today." }], text: "how's the day looking")
+
+      expect(client.calls.length).to eq(1)
+    end
+
+    # The tone profiles ask for stretched, varied openers, so the check has to
+    # accept them or it would fight the instruction it's enforcing.
+    it "accepts every shape of hello the personas actually write" do
+      [
+        "Mooooorning! ",
+        "Good morning! ",
+        "Morning! ",
+        "Hey hey, Rocco! ",
+        "Hellooooooo there. ",
+        "Hiii! ",
+        "Well hello! ",
+        "Good evening. ",
+        "Howdy! ",
+        "☀️ Morning! ",
+        "Happy Tuesday! ",
+        "[[mood:happy]]Hey there! ",
+      ].each { |opener|
+        body = opener.sub(described_class::LEADING_MOOD_RX, "")
+        expect(body).to match(described_class::GREETING_OPENER_RX), "expected #{opener.inspect} to read as a greeting"
+      }
+    end
+
+    it "does not mistake the news for a hello" do
+      [
+        "Pretty quiet day on your side.",
+        "You've got a few chores sitting up today.",
+        "Good little start. The big one on deck is Cymbalta.",
+        "Nothing pressing today.",
+      ].each { |body|
+        expect(body).not_to match(described_class::GREETING_OPENER_RX)
+      }
+    end
+  end
+
   # Prod 3229 again, the other half: the same sentence twice in one bubble.
   describe "a reply that repeats itself" do
     it "says it once when the model wrote it twice in one part" do
