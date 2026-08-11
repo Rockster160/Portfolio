@@ -192,8 +192,8 @@
                        value="<%= transaction.id %>" form="bank-bulk-form">
               </td>
               <td class="when">
-                <%= transaction.occurred_local&.strftime("%b %-d, %Y") %>
-                <span class="bank-muted"><%= transaction.occurred_local&.strftime("%-I:%M %p") %></span>
+                <span class="date"><%= transaction.occurred_local&.strftime("%b %-d, %Y") %></span>
+                <span class="time"><%= transaction.occurred_local&.strftime("%-I:%M %p") %></span>
               </td>
               <td>
                 <%= transaction.display_payee %>
@@ -203,11 +203,8 @@
                 <% end %>
               </td>
               <td class="memo">
-                <input type="text" data-memo
-                       class="<%= "inherited" if transaction.memo_from_event? %>"
-                       value="<%= transaction.display_memo %>"
-                       placeholder="—"
-                       title="<%= "From the alert's note" if transaction.memo_from_event? %>">
+                <span class="memo-text" data-memo contenteditable="true" spellcheck="false"
+                      title="Click to edit · Enter saves · Esc cancels"><%= transaction.display_memo %></span>
               </td>
               <td><%= transaction.bank_account.display_name %></td>
               <td class="cat">
@@ -302,22 +299,53 @@
         }
 
         if (memo) {
-          var saved = memo.value;
-          var commit = function () {
-            if (memo.value === saved) { return; }
-            save(row, { memo: memo.value }).then(function (data) {
-              saved = memo.value;
-              memo.classList.toggle("inherited", !!data.from_event);
+          var saved = memo.textContent.trim();
+          var cancelled = false;
+
+          memo.addEventListener("focus", function () {
+            saved = memo.textContent.trim();
+            cancelled = false;
+          });
+
+          // Escape abandons the edit outright — the point is that brushing a
+          // row and typing into it by accident costs nothing. The flag is
+          // needed because blur() fires the save handler straight after.
+          memo.addEventListener("keydown", function (event) {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              cancelled = true;
+              memo.textContent = saved;
+              memo.blur();
+            } else if (event.key === "Enter") {
+              event.preventDefault();
+              memo.blur();
+            }
+          });
+
+          memo.addEventListener("blur", function () {
+            if (cancelled) { cancelled = false; return; }
+
+            var value = memo.textContent.trim();
+            if (value === saved) { memo.textContent = value; return; }
+
+            save(row, { memo: value }).then(function (data) {
+              // Answer with what was stored, which may be the inherited note
+              // again if the memo was cleared.
+              memo.textContent = data.memo || "";
+              saved = memo.textContent.trim();
               flash(row, true);
             }).catch(function (err) {
-              memo.value = saved;
+              memo.textContent = saved;
               flash(row, false);
               window.alert(err.message);
             });
-          };
-          memo.addEventListener("blur", commit);
-          memo.addEventListener("keydown", function (event) {
-            if (event.key === "Enter") { event.preventDefault(); memo.blur(); }
+          });
+
+          // Paste as text — a copied cell would otherwise drag markup in.
+          memo.addEventListener("paste", function (event) {
+            event.preventDefault();
+            var text = (event.clipboardData || window.clipboardData).getData("text");
+            document.execCommand("insertText", false, text.replace(/\s+/g, " "));
           });
         }
       });
@@ -391,10 +419,15 @@
       text-align: left; padding: 8px 10px; border-bottom: 1px solid #1E293B;
     }
     .bank-table th { color: #94A3B8; font-weight: normal; }
-    .bank-table td { color: #CBD5E1; }
+    .bank-table td { color: #CBD5E1; vertical-align: top; }
+
+    /* Date on top, time tucked under it small and tight — two lines in less
+       vertical space than the one line was taking. */
+    .bank-table td.when { white-space: nowrap; line-height: 1.15; }
+    .bank-table td.when .date { display: block; }
+    .bank-table td.when .time { display: block; font-size: 11px; color: #64748B; }
     .bank-table .right { text-align: right; font-variant-numeric: tabular-nums; }
     .bank-table .tick { width: 28px; }
-    .bank-table .when { white-space: nowrap; }
     .bank-table em { color: #F5B041; font-style: normal; font-size: 12px; }
     .bank-table em.xfer { color: #6E7681; }
 
@@ -403,24 +436,39 @@
       display: inline-block; vertical-align: middle; margin-right: 6px;
     }
 
+    /* The global `input[type=text]:not(.basic,.invisi-field)` rule forces
+       18px / 2px border / 8px padding / width:100%, which is why the memo
+       fields rendered as huge boxes. Editing is a contenteditable span
+       instead: it reads as plain text until clicked into, and no global form
+       styling can reach it. */
+    .bank-table td.memo { max-width: 260px; }
+    .bank-table td.memo .memo-text {
+      display: block; min-height: 1.2em; outline: none; cursor: text;
+      border-bottom: 1px solid transparent;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .bank-table td.memo .memo-text:hover { border-bottom-color: #334155; }
+    .bank-table td.memo .memo-text:focus {
+      border-bottom-color: #58D68D; color: #E2E8F0; white-space: normal;
+    }
+    /* Only a genuinely empty memo shows a placeholder. An inherited note is a
+       real value and reads as one — styling it faintly was what made every
+       row look unset. */
+    .bank-table td.memo .memo-text:empty::before { content: "\2014"; color: #475569; }
+    .bank-table tr.saved td.memo .memo-text { border-bottom-color: #58D68D; }
+    .bank-table tr.failed td.memo .memo-text { border-bottom-color: #EC7063; }
+
+    /* Dot inline with the label. `nowrap` on the cell is what stops the select
+       wrapping onto its own line under the dot. */
+    .bank-table td.cat { white-space: nowrap; }
     .bank-table td.cat select {
       background: transparent; border: 1px solid transparent; color: #CBD5E1;
-      padding: 2px 4px; max-width: 150px;
+      padding: 1px 2px; height: auto; width: auto; max-width: 140px;
+      font-size: 14px; line-height: normal; vertical-align: middle;
     }
     .bank-table td.cat select:hover { border-color: #334155; }
-    .bank-table td.memo input {
-      background: transparent; border: 1px solid transparent; color: #CBD5E1;
-      padding: 2px 4px; width: 100%; min-width: 120px;
-    }
-    .bank-table td.memo input:hover { border-color: #334155; }
-    /* Shown in muted italic while it is still the alert's note rather than
-       something typed here — so "inherited" and "edited" are distinguishable. */
-    .bank-table td.memo input.inherited { color: #94A3B8; font-style: italic; }
-    .bank-table td.memo input:focus { font-style: normal; color: #E2E8F0; }
-    .bank-table tr.saved td.cat select,
-    .bank-table tr.saved td.memo input { border-color: #58D68D; }
-    .bank-table tr.failed td.cat select,
-    .bank-table tr.failed td.memo input { border-color: #EC7063; }
+    .bank-table tr.saved td.cat select { border-color: #58D68D; }
+    .bank-table tr.failed td.cat select { border-color: #EC7063; }
 
     /* `.bank-table td` is (0,1,1) and beats a bare `.neg` (0,1,0), which is why
        every amount rendered white. Matching the element makes these win. */

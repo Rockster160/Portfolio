@@ -22,6 +22,13 @@ class ActionEventNotifier
     # immediately for anything that is not a Transaction event.
     ::SimpleFin::EventMatcher.link_event(event) unless action == :removed
 
+    # An alert is the only real-time signal there is — SimpleFIN is polled and
+    # can be a day behind. If this charge would tip the dashboard's floored
+    # balance into a different thousand, go and fetch the new figure rather
+    # than showing a confidently wrong one until the next scheduled sync.
+    # No-ops for anything that isn't a boundary-crossing checking charge.
+    ::SimpleFin::BalanceWatch.consider(event) if action == :added
+
     ActionEventBroadcastWorker.perform_async(event.id, update_streak)
     event
   end

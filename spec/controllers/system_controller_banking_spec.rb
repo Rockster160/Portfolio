@@ -205,6 +205,33 @@ RSpec.describe SystemController, type: :controller do
       get :banking
       expect(response.body).to include("bank-pagination")
     end
+
+    it "stacks the date and time as separate spans" do
+      linked_transaction(cents: -500, category: "fun", payee: "Arcade")
+
+      get :banking
+      expect(response.body).to include(%(<span class="date">Aug 10, 2026</span>))
+      expect(response.body).to include(%(<span class="time">3:15 PM</span>))
+    end
+
+    # A text input here inherits the global 18px/2px-border/full-width rule and
+    # renders as a large box; a contenteditable span reads as plain text.
+    it "edits the memo in place rather than with a form input" do
+      linked_transaction(cents: -500, category: "fun", payee: "Arcade")
+
+      get :banking
+      expect(response.body).to include(%(class="memo-text"))
+      expect(response.body).to include("contenteditable")
+      expect(response.body).not_to include(%(<input type="text" data-memo))
+    end
+
+    it "colours a negative amount" do
+      linked_transaction(cents: -500, category: "fun", payee: "Arcade")
+
+      get :banking
+      expect(response.body).to include(%(class="right neg"))
+      expect(response.body).to include(".bank-table td.neg")
+    end
   end
 
   describe "PATCH #update_transaction" do

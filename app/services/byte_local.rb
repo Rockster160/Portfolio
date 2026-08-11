@@ -193,6 +193,51 @@ module ByteLocal
     false
   end
 
+  # Rails → Mac: drop a conversation's Claude session so the next turn starts
+  # clean. What `/reset` does, without having to send a message to do it.
+  #
+  # Needed because the session id lives in the Mac's own state file and Rails
+  # can't reach it — clearing `claude_session_id` off the conversation record
+  # only removes the FALLBACK, and the Mac prefers its own copy.
+  #
+  # Sending `/reset` as a message instead would race: /byte/incoming answers 202
+  # and runs the turn on a thread, so a prompt posted straight after can win and
+  # land in the session that was supposed to be gone. This answers before it
+  # returns.
+  #
+  # Returns false rather than raising when the Mac is asleep. The caller's next
+  # move is to wait for the Mac either way, and a stale session is a worse turn,
+  # not a broken one.
+  def reset_claude_session(conversation_id:)
+    uri = URI.join(base_url, "/byte/reset_session")
+    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
+    req.body = JSON.generate({ conversation_id: conversation_id.to_i })
+
+    res = Net::HTTP.start(uri.hostname, uri.port,
+      use_ssl: uri.scheme == "https", open_timeout: TIMEOUT_SECONDS, read_timeout: TIMEOUT_SECONDS,
+    ) { |http| http.request(req) }
+
+    res.is_a?(Net::HTTPSuccess)
+  rescue => e
+    Rails.logger.warn("[Byte] reset_claude_session failed: #{e.class}: #{e.message}")
+    false
+  end
+
+  # Is the Mac actually up right now? Used before scheduling work onto it, so a
+  # sleeping machine becomes "try again later" rather than a failed message
+  # sitting in a thread.
+  def awake?
+    uri = URI.join(base_url, "/health")
+    res = Net::HTTP.start(uri.hostname, uri.port,
+      use_ssl: uri.scheme == "https", open_timeout: TIMEOUT_SECONDS, read_timeout: TIMEOUT_SECONDS,
+    ) { |http| http.request(Net::HTTP::Get.new(uri)) }
+
+    res.is_a?(Net::HTTPSuccess) && res.body.to_s.include?("\"ok\":true")
+  rescue => e
+    Rails.logger.warn("[Byte] health check failed: #{e.class}: #{e.message}")
+    false
+  end
+
   def conversation_payload(conversation)
     {
       id:       conversation.id,

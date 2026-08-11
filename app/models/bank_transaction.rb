@@ -2,21 +2,22 @@
 #
 # Table name: bank_transactions
 #
-#  id              :bigint           not null, primary key
-#  amount_abs      :decimal(, )      not null
-#  amount_cents    :bigint           not null
-#  description     :text
-#  mcc             :string
-#  memo            :text
-#  payee           :string
-#  pending         :boolean          default(FALSE), not null
-#  posted_at       :datetime         not null
-#  transacted_at   :datetime
-#  created_at      :datetime         not null
-#  updated_at      :datetime         not null
-#  action_event_id :bigint
-#  bank_account_id :bigint           not null
-#  simplefin_id    :string           not null
+#  id                      :bigint           not null, primary key
+#  amount_abs              :decimal(, )      not null
+#  amount_cents            :bigint           not null
+#  description             :text
+#  mcc                     :string
+#  memo                    :text
+#  payee                   :string
+#  pending                 :boolean          default(FALSE), not null
+#  posted_at               :datetime         not null
+#  transacted_at           :datetime
+#  created_at              :datetime         not null
+#  updated_at              :datetime         not null
+#  action_event_id         :bigint
+#  bank_account_id         :bigint           not null
+#  simplefin_id            :string           not null
+#  transfer_counterpart_id :bigint
 #
 class BankTransaction < ApplicationRecord
   belongs_to :bank_account

@@ -30,6 +30,20 @@ module SimpleFin
       def primary
         ::BankAccount.checking.order(:id).first
       end
+
+      # The figure the dashboard actually renders — home.js floors to the
+      # thousand and prints "18k". That flooring is why a small charge can be
+      # invisible for hours and then move the display by a whole unit, and it
+      # is what SimpleFinBalanceChaseWorker watches for a change in.
+      #
+      # Integer division floors toward negative infinity in Ruby, which is the
+      # behaviour wanted here: an overdrawn account reads one lower, not one
+      # closer to zero.
+      def thousands(account=primary)
+        return nil if account.nil? || account.balance_cents.nil?
+
+        account.balance_cents / 100_000
+      end
     end
   end
 end

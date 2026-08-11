@@ -25,11 +25,12 @@ return if Rails.const_defined?("Rails::Command::RunnerCommand")
 every_minute = "* * * * *"
 every_5_minutes = "*/5 * * * *"
 every_hour = "0 * * * *"
-every_2_hours = "0 */2 * * *"
+every_4_hours = "0 */4 * * *"
 every_3_daylight_hours = "0 5-21/3 * * * MST"
 daily_3am = "0 3 * * * MST"
 daily_4am = "0 4 * * * MST"
 daily_9pm = "0 21 * * * MST"
+daily_10pm = "0 22 * * * MST"
 thursdays_at_noon = "0 12 * * 4 MST"
 mondays_at_noon = "0 12 * * 1 MST"
 monthly_5th_at_11am = "0 11 5 * * MST"
@@ -116,11 +117,22 @@ cron_jobs = [
     cron:  daily_3am,
   },
   {
-    # SimpleFIN is poll-only and budgets ~24 requests/day; twelve leaves room
-    # for a manual run. See SimpleFinSyncWorker.
+    # SimpleFIN is poll-only and budgets ~24 requests/day. Six scheduled runs
+    # leaves room for SimpleFinBalanceChaseWorker (up to six more, only when a
+    # charge is expected to move the dashboard figure) and a manual run.
     name:  "Sync SimpleFIN Balances And Transactions",
     class: "SimpleFinSyncWorker",
-    cron:  every_2_hours,
+    cron:  every_4_hours,
+  },
+  {
+    # Late enough to have the whole day in it, early enough that the Mac is
+    # still up. Reviews a TWO-day window, so a problem from yesterday is read
+    # alongside whatever shipped today — see ByteDailyAudit#window. The work
+    # happens on the Mac (`claude -p`), so this one reschedules itself while the
+    # machine is asleep — see DailyAuditWorker.
+    name:  "Daily Byte Audit",
+    class: "DailyAuditWorker",
+    cron:  daily_10pm,
   },
 ]
 
