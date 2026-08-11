@@ -31,15 +31,45 @@ export function countsAsUnread(msg) {
   return true;
 }
 
-// Per-conversation sets of unread message ids.
+// Per-conversation unread, as a server-given BASE plus a set of live ids.
 //
-// A SET, not a tally: the same message can be broadcast many times (it streams,
-// then it settles, and a late edit re-broadcasts it again), and every one of
-// those is the same one thing to read.
+// The base is what the server counted from `last_read_at`. It's what makes the
+// number survive a reload, and the only thing that can know about messages that
+// arrived while the app was closed — those never produce a broadcast, so a
+// purely live counter is blind to them and starts every session at zero.
+//
+// The live half is a SET, not a tally: the same message is broadcast many times
+// (it streams, it settles, a late edit re-broadcasts it), and all of those are
+// one thing to read.
 export class UnreadTracker {
   constructor({ onChange } = {}) {
     this.byConversation = new Map();
+    this.base = new Map();
     this.onChange = onChange || (() => {});
+  }
+
+  // Take the server's count for a conversation.
+  //
+  // Skipped when live ids are already held for that thread: the server's number
+  // was computed before those arrived, so adopting it would drop them. Letting
+  // the base stand and keeping the live set is right either way, because the
+  // next read clears both.
+  seed(convId, count) {
+    if (convId == null) return;
+    if ((this.byConversation.get(convId)?.size || 0) > 0) return;
+
+    const n = Math.max(0, Number(count) || 0);
+    if (this.base.get(convId) === n) return;
+
+    this.base.set(convId, n);
+    this.onChange();
+  }
+
+  seedAll(conversations, { except } = {}) {
+    (conversations || []).forEach((c) => {
+      if (c.id === except) return;
+      this.seed(c.id, c.unread_count);
+    });
   }
 
   // Returns true only when this is genuinely new — the caller uses that to
@@ -60,29 +90,35 @@ export class UnreadTracker {
   }
 
   countFor(convId) {
-    return this.byConversation.get(convId)?.size || 0;
+    return (this.base.get(convId) || 0) + (this.byConversation.get(convId)?.size || 0);
   }
 
   total() {
     let n = 0;
-    this.byConversation.forEach((ids) => {
-      n += ids.size;
+    const ids = new Set([...this.base.keys(), ...this.byConversation.keys()]);
+    ids.forEach((convId) => {
+      n += this.countFor(convId);
     });
     return n;
   }
 
   conversationCount() {
     let n = 0;
-    this.byConversation.forEach((ids) => {
-      if (ids.size > 0) n += 1;
+    const ids = new Set([...this.base.keys(), ...this.byConversation.keys()]);
+    ids.forEach((convId) => {
+      if (this.countFor(convId) > 0) n += 1;
     });
     return n;
   }
 
+  // Reading a thread clears BOTH halves — the server's marker moves at the same
+  // moment (POST .../read), so leaving the base behind would double-count
+  // everything in it the next time the list is seeded.
   clear(convId) {
-    if (!this.byConversation.has(convId)) return;
+    const had = this.countFor(convId) > 0;
     this.byConversation.delete(convId);
-    this.onChange();
+    this.base.delete(convId);
+    if (had) this.onChange();
   }
 }
 
@@ -116,6 +152,23 @@ export function paintDrawerBadge(el, total) {
   if (!el) return;
   el.textContent = total > 99 ? "99+" : String(total);
   el.hidden = total <= 0;
+}
+
+// The number on the installed app's icon.
+//
+// Only means anything for a PWA added to the home screen, and throws outright
+// where it isn't supported — hence the guard and the swallow. While the app is
+// OPEN this is the only thing that keeps the icon honest; while it's closed the
+// push carries a count and `byte_worker.js` sets it from there.
+export function paintAppBadge(total) {
+  if (typeof navigator === "undefined") return;
+
+  try {
+    if (total > 0) navigator.setAppBadge?.(total);
+    else navigator.clearAppBadge?.();
+  } catch (e) {
+    /* unsupported, or denied — the in-page badge still tells the story */
+  }
 }
 
 // A message landed in a thread that isn't on screen.

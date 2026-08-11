@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_11_170642) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_11_213508) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -592,6 +592,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_11_170642) do
     t.string "buddy_expression", default: "neutral", null: false
     t.datetime "buddy_sleep_until"
     t.text "buddy_memories"
+    t.datetime "last_read_at"
     t.index ["user_id", "archived", "last_message_at"], name: "index_byte_conversations_on_user_bucket_activity"
     t.index ["user_id"], name: "index_byte_conversations_on_user_id"
   end

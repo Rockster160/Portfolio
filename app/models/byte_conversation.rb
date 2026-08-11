@@ -128,12 +128,44 @@ class ByteConversation < ApplicationRecord
     self.class.display_name_for(buddy_theme)
   end
 
+  # Messages that landed after the last time this thread was looked at.
+  #
+  # Server-side because it's the only place that can answer it. The count used
+  # to live in the page, which meant a reload wiped it and — worse — anything
+  # that arrived while the app was closed was never counted at all, since
+  # counting only happened in response to a live broadcast.
+  def unread_count
+    return 0 if last_read_at.nil?
+
+    byte_messages.readable.where("byte_messages.created_at > ?", last_read_at).count
+  end
+
+  # Opening a thread IS reading it.
+  #
+  # `update_columns` rather than `update!`: this fires on every conversation
+  # switch, it touches one column nothing validates, and going through
+  # callbacks would bump `updated_at` and shuffle the drawer ordering on a
+  # plain read.
+  def mark_read!(at=Time.current)
+    return if last_read_at && last_read_at >= at
+
+    update_columns(last_read_at: at)
+  end
+
+  # Everything waiting for this person, across every thread they can see. What
+  # the iOS home-screen badge shows, and what rides on the push so the badge is
+  # still right when the app has been closed for hours.
+  def self.unread_total_for(user)
+    where(user_id: user.id, archived: false).sum(&:unread_count)
+  end
+
   def as_wire
     {
       id:               id,
       name:             display_name,
       mode:             mode,
       archived:         archived,
+      unread_count:     unread_count,
       last_message_at:  last_message_at&.iso8601(3),
       created_at:       created_at.iso8601(3),
       metadata:         metadata,

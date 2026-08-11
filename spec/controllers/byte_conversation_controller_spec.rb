@@ -24,6 +24,72 @@ RSpec.describe ByteController, type: :controller do
     end
   end
 
+  describe "POST #read_conversation" do
+    let(:convo) {
+      rocco.byte_conversations.create!(name: "one", mode: :buddy, last_read_at: 1.hour.ago)
+    }
+
+    def landed
+      convo.byte_messages.create!(user: rocco, direction: :inbound, state: :delivered, body: "hi")
+    end
+
+    it "clears that thread's count and reports the new total" do
+      landed
+      landed
+
+      post :read_conversation, params: { id: convo.id }
+
+      expect(response).to be_successful
+      payload = JSON.parse(response.body)
+      expect(payload["unread_count"]).to eq(0)
+      expect(payload["unread_total"]).to eq(0)
+      expect(convo.reload.unread_count).to eq(0)
+    end
+
+    it "leaves other threads counting" do
+      other = rocco.byte_conversations.create!(name: "two", mode: :claude, last_read_at: 1.hour.ago)
+      other.byte_messages.create!(user: rocco, direction: :inbound, state: :delivered, body: "x")
+      landed
+
+      post :read_conversation, params: { id: convo.id }
+
+      expect(JSON.parse(response.body)["unread_total"]).to eq(1)
+    end
+
+    # A read is a fact about ONE device's screen. Broadcasting it would take the
+    # badge off a phone because a browser at the desk opened the thread.
+    it "does not broadcast the change to other clients" do
+      expect(controller).not_to receive(:broadcast_convo_change)
+
+      post :read_conversation, params: { id: convo.id }
+    end
+
+    it "404s on someone else's conversation" do
+      stranger = User.create!(
+        username:              "stranger-#{SecureRandom.hex(4)}",
+        password:              "abcd1234!",
+        password_confirmation: "abcd1234!",
+      )
+      theirs = stranger.byte_conversations.create!(name: "nope", mode: :buddy)
+
+      post :read_conversation, params: { id: theirs.id }
+
+      expect(response).to have_http_status(:not_found)
+    end
+  end
+
+  describe "GET #list_conversations unread" do
+    it "carries the server-side count, so a reload doesn't start at zero" do
+      convo = rocco.byte_conversations.create!(name: "one", mode: :buddy, last_read_at: 1.hour.ago)
+      convo.byte_messages.create!(user: rocco, direction: :inbound, state: :delivered, body: "hi")
+
+      get :list_conversations
+
+      row = JSON.parse(response.body)["conversations"].find { |c| c["id"] == convo.id }
+      expect(row["unread_count"]).to eq(1)
+    end
+  end
+
   describe "POST #create_conversation" do
     it "creates a claude-mode conversation by default" do
       expect {

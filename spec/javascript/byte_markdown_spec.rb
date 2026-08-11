@@ -114,6 +114,88 @@ RSpec.describe "Byte thread markdown" do
     end
   end
 
+  # The daily audit is a structured report delivered into a chat thread, so it
+  # writes `## Counts` and pipe tables. Both used to arrive as literal
+  # punctuation — headings and tables were an explicit non-goal here until a
+  # message shape existed that genuinely wanted them.
+  describe "headings" do
+    it "renders a level-two heading" do
+      expect(rendered["heading_h2"]).to include("<h4 class=\"byte-md-h byte-md-h2\">Counts</h4>")
+    end
+
+    it "renders levels one and three too" do
+      expect(rendered["heading_h1"]).to include("<h3 class=\"byte-md-h byte-md-h1\">Daily Audit</h3>")
+      expect(rendered["heading_h3"]).to include("<h5 class=\"byte-md-h byte-md-h3\">Backfills</h5>")
+    end
+
+    it "keeps inline formatting inside the heading" do
+      expect(rendered["heading_with_bold"]).to include("<strong>Counts</strong> for today</h4>")
+    end
+
+    it "drops closing hashes" do
+      expect(rendered["heading_closing_hashes"]).to include(">Counts</h4>")
+    end
+
+    # A heading is a block; a <br> after it would open a gap.
+    it "does not leave a break after itself" do
+      expect(rendered["heading_h2"]).not_to include("</h4><br>")
+    end
+
+    it "needs a space, so #nothashtag is left alone" do
+      expect(rendered["hash_no_space_not_a_heading"]).to eq("#nothashtag stays")
+    end
+
+    it "only starts a line, so a mid-sentence # is left alone" do
+      expect(rendered["hash_midline_not_a_heading"]).to eq("the count is #4 today")
+    end
+  end
+
+  describe "tables" do
+    it "builds a header and body" do
+      html = rendered["table_basic"]
+
+      expect(html).to include("<th>Thread</th><th>In</th><th>Out</th>")
+      expect(html).to include("<tr><td>Byte</td><td>40</td><td>21</td></tr>")
+      expect(html).to include("<tr><td>Moss</td><td>6</td><td>4</td></tr>")
+    end
+
+    # A wide table must scroll inside itself; the thread must never scroll
+    # sideways.
+    it "wraps the table in its own scroller" do
+      expect(rendered["table_basic"]).to include("<div class=\"byte-md-table-wrap\">")
+    end
+
+    it "honours alignment colons" do
+      expect(rendered["table_aligned"]).to include("<th class=\"is-right\">Count</th>")
+    end
+
+    it "keeps inline formatting inside cells" do
+      html = rendered["table_with_inline"]
+
+      expect(html).to include("<td><strong>Byte</strong></td>")
+      expect(html).to include("byte-md-inline")
+    end
+
+    it "doesn't swallow the line after it" do
+      expect(rendered["table_then_text"]).to end_with("after the table")
+      expect(rendered["table_then_text"]).not_to include("<br>after")
+    end
+
+    # The separator row is what makes it a table. Without it, an ordinary
+    # sentence containing a pipe would start eating the lines below it.
+    it "leaves pipes alone when there is no separator row" do
+      expect(rendered["pipes_without_separator"]).not_to include("<table")
+    end
+
+    it "works straight after a heading" do
+      html = rendered["table_after_heading"]
+
+      expect(html).to include("</h4>")
+      expect(html).to include("<table class=\"byte-md-table\">")
+      expect(html).not_to include("<br>")
+    end
+  end
+
   describe "what already worked" do
     it "still does asterisk italics" do
       expect(rendered["asterisk_em_still_works"]).to include("<em>very</em>")

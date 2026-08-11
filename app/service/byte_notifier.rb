@@ -23,15 +23,35 @@ module ByteNotifier
     has_proposals = meta["tool_name"] == "buddy_proposals" ||
       (meta["buttons"].is_a?(Array) && meta["buttons"].any?)
 
-    return if device_present?(user) && !always_notify?(meta, has_proposals)
+    # Presence mutes the SCREEN THEY'RE READING, not the person.
+    #
+    # It used to be a single yes/no for the whole account, checked against the
+    # newest-registered subscription — so a Byte tab open on the Mac suppressed
+    # the push outright and the phone in their pocket got nothing. Every device
+    # is offered the notification now; only the ones actually looking at Byte
+    # right now are dropped.
+    subs    = push_subs(user)
+    targets = always_notify?(meta, has_proposals) ? subs : absent_subs(user)
+    # Bail only when there WERE devices and every one of them is already
+    # looking. With no subscriptions at all we carry on, so `send_to` logs the
+    # "no registered subscription" warning — the one line that makes a silently
+    # unregistered device findable.
+    return if subs.any? && targets.empty?
 
     title, body = framing(message, meta, has_proposals)
 
     WebPushNotifications.send_to_byte(
-      title: title,
-      body:  body,
-      tag:   "byte-#{message.id}",
-      users: [user],
+      title:         title,
+      body:          body,
+      tag:           "byte-#{message.id}",
+      users:         [user],
+      subscriptions: targets,
+      # The iOS home-screen badge. `byte_worker.js` has always read
+      # `data.count` and called `setAppBadge`; nothing ever sent it, so the
+      # number on the app icon was permanently absent. It has to ride the PUSH
+      # because that's the only thing that runs while the app is closed, which
+      # is exactly when a badge is the whole point.
+      data:          { count: ByteConversation.unread_total_for(user) },
     )
   end
 
@@ -52,19 +72,26 @@ module ByteNotifier
     meta["self_initiated"] == true
   end
 
-  # Is the device we're about to push to looking at Byte right now? Populated
+  def push_subs(user)
+    user.all_push_subs_for_channel(:byte).to_a
+  end
+
+  # The devices NOT looking at Byte right now. Presence is populated per device
   # by the `/byte/presence` heartbeat while that device's window is visible.
   #
-  # The question has to be about ONE device — the one `send_to` would deliver
-  # to — because that's the only screen this notification would land on.
-  # Suppressing on "any Byte anywhere is open" meant a browser tab at the desk
-  # muted the phone, and a CLI message answered from that desk arrived on the
-  # phone silently every time.
-  def device_present?(user)
-    sub = user.primary_push_sub(channel: :byte)
-    return false if sub.nil?
+  # Per device, and per device only. "Any Byte anywhere is open" meant a browser
+  # tab at the desk muted the phone; checking just the newest-registered
+  # subscription had the same effect for a different reason, because that one
+  # subscription was also the only one `send_to` ever delivered to.
+  def absent_subs(user)
+    push_subs(user).reject { |sub| Rails.cache.read(ByteController.presence_key(user, sub)).present? }
+  end
 
-    Rails.cache.read(ByteController.presence_key(user, sub)).present?
+  # Kept for callers and specs that ask the old yes/no question: is the person
+  # looking at Byte on the device this would have gone to?
+  def device_present?(user)
+    subs = push_subs(user)
+    subs.any? && absent_subs(user).empty?
   end
 
   # Push tray shows plain text — strip everything that would look like garbage:

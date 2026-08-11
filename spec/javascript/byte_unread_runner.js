@@ -81,6 +81,56 @@ out.counts = {
   out.change_events = changes;
 }
 
+// ---- the server's counts surviving a reload -------------------------------
+{
+  const t = new UnreadTracker();
+  t.seedAll(
+    [
+      { id: 1, unread_count: 3 },
+      { id: 2, unread_count: 1 },
+      { id: 3, unread_count: 0 },
+      { id: 4, unread_count: 9 },
+    ],
+    { except: 4 },
+  );
+  out.seeded = {
+    one: t.countFor(1),
+    two: t.countFor(2),
+    three: t.countFor(3),
+    current_skipped: t.countFor(4),
+    total: t.total(),
+    conversations: t.conversationCount(),
+  };
+
+  // Live arrivals stack on top of what the server already counted.
+  t.add(1, msg({ id: 500 }));
+  out.seed_plus_live = t.countFor(1);
+
+  // Reading it clears BOTH halves — the server's marker moved at the same time,
+  // so leaving the base behind would double-count on the next seed.
+  t.clear(1);
+  out.after_read = { one: t.countFor(1), total: t.total() };
+}
+
+// A re-seed must not clobber live arrivals: the server's number was computed
+// before they landed.
+{
+  const t = new UnreadTracker();
+  t.seedAll([{ id: 1, unread_count: 2 }]);
+  t.add(1, msg({ id: 600 }));
+  t.seedAll([{ id: 1, unread_count: 2 }]); // stale count arrives
+  out.reseed_keeps_live = t.countFor(1);
+}
+
+// ...but a thread with nothing live DOES take the newer number, which is how a
+// backgrounded session catches up on what it never saw broadcast.
+{
+  const t = new UnreadTracker();
+  t.seedAll([{ id: 1, unread_count: 2 }]);
+  t.seedAll([{ id: 1, unread_count: 5 }]);
+  out.reseed_catches_up = t.countFor(1);
+}
+
 // ---- preview --------------------------------------------------------------
 out.preview = {
   markdown: previewOf(msg({ body: "Sent **game_tray-vase** to the printer" })),

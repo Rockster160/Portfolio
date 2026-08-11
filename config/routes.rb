@@ -61,6 +61,7 @@ Rails.application.routes.draw do
   get    "/byte/conversations"     => "byte#list_conversations",   as: :byte_conversations
   post   "/byte/conversations"     => "byte#create_conversation",  as: :byte_create_conversation
   patch  "/byte/conversations/:id" => "byte#update_conversation",  as: :byte_conversation
+  post   "/byte/conversations/:id/read" => "byte#read_conversation", as: :byte_read_conversation
   delete "/byte/conversations/:id" => "byte#archive_conversation"
   get    "/byte/claude_sessions"   => "byte#claude_sessions",      as: :byte_claude_sessions
   get    "/byte/workspaces"        => "byte#workspaces",           as: :byte_workspaces

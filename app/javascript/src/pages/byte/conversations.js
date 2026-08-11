@@ -114,6 +114,7 @@ export class ConversationManager {
     prefillComposer,
     sendCommand,
     unreadFor,
+    onConversations,
   }) {
     this.conversationsUrl   = conversationsUrl;
     this.claudeSessionsUrl  = claudeSessionsUrl;
@@ -128,6 +129,7 @@ export class ConversationManager {
     // Read-only accessor for the current unread count per conversation
     // (Map-backed in index.js). Rendered as a badge on each row.
     this.unreadFor          = unreadFor || (() => 0);
+    this.onConversations    = onConversations || null;
     this.conversations      = initialConversations && initialConversations.length
       ? initialConversations
       : loadCachedList();
@@ -227,6 +229,11 @@ export class ConversationManager {
         if (!this.currentConversation() && data.default_id) {
           this.switchTo(data.default_id);
         }
+        // Fresh server-side unread counts came with that list. This is what
+        // catches up a session that was backgrounded — no broadcast arrives
+        // while the page is asleep, so live counting alone would miss
+        // everything that landed in the meantime.
+        this.onConversations?.(this.conversations);
         this.render();
       }
     } catch (e) {}

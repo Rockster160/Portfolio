@@ -50,6 +50,28 @@ class ByteMessage < ApplicationRecord
   scope :recent,        -> { order(created_at: :desc) }
   scope :chronological, -> { order(created_at: :asc) }
 
+  # States where the message has stopped moving. `streaming`, `pending` and
+  # `queued` are all mid-flight: a Claude turn re-broadcasts the same row every
+  # time its text grows, so anything that counts those counts one reply many
+  # times over. `failed` is terminal and does count — it's something to see.
+  SETTLED_STATES = %i[sent delivered failed].freeze
+
+  # Receipt chips, tapped-action pills and hidden trigger seeds ride the same
+  # table as real messages and are not things anyone reads.
+  SILENT_KINDS = %w[buddy_activity action_chip buddy_trigger].freeze
+
+  # What counts as something the person still has to look at. ONE definition,
+  # shared by the drawer badge, the hamburger badge, the iOS home-screen badge
+  # and the push payload's count — four surfaces that would otherwise disagree
+  # about the same number. The client mirrors this in
+  # `app/javascript/src/pages/byte/unread.js` for the live path; keep them
+  # together.
+  scope :readable, -> {
+    where(direction: :inbound, state: SETTLED_STATES)
+      .where("byte_messages.metadata ->> 'kind' IS NULL OR byte_messages.metadata ->> 'kind' NOT IN (?)", SILENT_KINDS)
+      .where("byte_messages.metadata ->> 'hidden' IS DISTINCT FROM 'true'")
+  }
+
   # Fallback so callers that create messages via `user.byte_messages.create!`
   # (without an explicit conversation) still work — attaches to the user's
   # default conversation. Production callers always pass one explicitly.

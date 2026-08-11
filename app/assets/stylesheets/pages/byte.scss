@@ -1024,6 +1024,77 @@ html.html-ctr-byte body {
         line-height: 1.35;
       }
     }
+
+    // Headings. Three visual levels off six markdown ones — a bubble has no
+    // use for more. Sized by ratio against the thread's own scale rather than
+    // fixed px, so they still track the font-size setting.
+    .byte-md-h {
+      margin: 10px 0 4px;
+      font-weight: 700;
+      line-height: 1.25;
+      color: var(--bs-text);
+
+      // The first thing in a bubble shouldn't push itself off the top.
+      &:first-child {
+        margin-top: 0;
+      }
+    }
+
+    .byte-md-h1 {
+      font-size: 1.3em;
+    }
+
+    .byte-md-h2 {
+      font-size: 1.15em;
+    }
+
+    .byte-md-h3 {
+      font-size: 1.05em;
+      color: var(--bs-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    // The WRAPPER scrolls, never the thread. A report's table is wider than a
+    // phone and the bubble is not allowed to push the page sideways.
+    .byte-md-table-wrap {
+      margin: 8px 0;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border: 1px solid var(--bs-border);
+      border-radius: 8px;
+    }
+
+    .byte-md-table {
+      border-collapse: collapse;
+      width: 100%;
+      white-space: nowrap;
+      font-size: 0.92em;
+
+      th,
+      td {
+        padding: 5px 9px;
+        text-align: left;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+
+        &.is-right {
+          text-align: right;
+        }
+
+        &.is-center {
+          text-align: center;
+        }
+      }
+
+      th {
+        font-weight: 700;
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+    }
   }
 
   // Claude gets a subtle left-edge accent to differentiate from system

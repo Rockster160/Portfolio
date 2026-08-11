@@ -6,18 +6,31 @@
 module WebPushNotifications
   module_function
 
-  def send_to(user, payload={}, channel: :jarvis)
+  # Push to EVERY registered device on the channel, not just the newest one.
+  #
+  # It used to send to `primary_push_sub` alone — the most recently registered
+  # subscription — which meant a person with a phone and a desktop PWA got their
+  # notifications on exactly one of them, whichever they had most recently
+  # opened. Opening Byte on the Mac silently took the phone off the list, and
+  # relay messages ("Chelsea says…") stopped arriving on the device that
+  # actually goes everywhere with them.
+  #
+  # `subscriptions:` narrows the fan-out. ByteNotifier uses it to drop the
+  # device that's already looking at the thread while still reaching the others,
+  # which is the whole point of presence: mute the screen you're reading, not
+  # the phone in your pocket.
+  def send_to(user, payload={}, channel: :jarvis, subscriptions: nil)
     return puts("\e[33m[WEBPUSH][#{user.username}] #{payload.inspect}\e[0m") if Rails.env.development?
     return "Failed to push - user not found" if user.blank?
 
-    push_sub = user.primary_push_sub(channel: channel)
+    subs = (subscriptions || user.all_push_subs_for_channel(channel)).select(&:pushable?)
     # Every caller throws this return value away, so a channel with no usable
-    # subscription goes silent and NOTHING says so. One expiry disables the
-    # subscription below (registered_at: nil) and from then on every push is a
-    # no-op until the person happens to open the app and re-register - which
-    # reads, from the outside, as notifications having simply stopped working.
-    # This is the one line that makes that state findable in the log.
-    unless push_sub&.pushable?
+    # subscription goes silent and NOTHING says so. An expiry disables that
+    # subscription below (registered_at: nil) and from then on it's a no-op
+    # until the person happens to open the app and re-register - which reads,
+    # from the outside, as notifications having simply stopped working. This is
+    # the one line that makes that state findable in the log.
+    if subs.empty?
       Rails.logger.warn("[WEBPUSH] dropped #{channel} push for #{user.username} - no registered subscription")
       return "Failed to push - push_sub not set up"
     end
@@ -33,8 +46,17 @@ module WebPushNotifications
     payload = payload.deep_symbolize_keys
     return if payload[:title].blank? && !payload[:dismiss]
 
+    message = format_payload(user, payload, channel).to_json
+    # One device failing must not cost the others their notification, so each
+    # send is isolated. A dead subscription is retired on the spot.
+    results = subs.map { |sub| deliver_push(user, sub, message, channel) }
+
+    results.include?("Push success") ? "Push success" : results.first
+  end
+
+  def deliver_push(user, push_sub, message, channel)
     WebPush.payload_send(
-      message:  format_payload(user, payload, channel).to_json,
+      message:  message,
       endpoint: push_sub.endpoint,
       p256dh:   push_sub.p256dh,
       auth:     push_sub.auth,
@@ -44,7 +66,7 @@ module WebPushNotifications
         private_key: ENV.fetch("PORTFOLIO_VAPID_SEC", nil),
       },
     )
-    return "Push success"
+    "Push success"
   rescue WebPush::ExpiredSubscription, WebPush::InvalidSubscription => e
     # Subscription is no longer valid (410 Gone or 404 Not Found)
     # Mark it as unregistered so we don't keep trying
@@ -110,7 +132,10 @@ module WebPushNotifications
 
   # Broadcast to multiple users on a specific channel
   def broadcast_to_channel(users, payload={}, channel:)
-    Array.wrap(users).map { |user| send_to(user, payload, channel: channel) }
+    subscriptions = payload.delete(:subscriptions)
+    Array.wrap(users).map { |user|
+      send_to(user, payload, channel: channel, subscriptions: subscriptions)
+    }
   end
 
   # Convenience method for Whisper notifications - sends to all whisper subscribers by default

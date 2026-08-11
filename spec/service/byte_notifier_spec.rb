@@ -7,16 +7,33 @@ RSpec.describe ByteNotifier do
   let(:user)  { create(:user) }
   let(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy") }
 
+  # A real subscription, because "which devices get this" is now part of the
+  # answer — notify picks the devices to send to rather than deciding a single
+  # yes/no for the whole account.
+  let!(:device) {
+    UserPushSubscription.create!(
+      user: user, channel: :byte, endpoint: "https://web.push.apple.com/only",
+      p256dh: "key", auth: "auth", registered_at: Time.current
+    )
+  }
+
   before do
     allow(WebPushNotifications).to receive(:send_to_byte)
-    # Stubbed rather than written to the cache: the test store doesn't persist,
-    # and the branch being pinned down here is "what is exempt from presence",
-    # not how presence itself is recorded.
-    allow(described_class).to receive(:device_present?).and_return(false)
+    # Presence is stubbed at the cache rather than at a predicate: the test
+    # store doesn't persist, and the thing being pinned down is which devices
+    # come out of it.
+    allow(Rails.cache).to receive(:read).and_return(nil)
+  end
+
+  def looking(*subs)
+    subs.each { |sub|
+      allow(Rails.cache).to receive(:read)
+        .with(ByteController.presence_key(user, sub)).and_return(Time.current.to_i)
+    }
   end
 
   def present!
-    allow(described_class).to receive(:device_present?).and_return(true)
+    looking(device)
   end
 
   def deliver(metadata, body: "hey", state: :delivered)
@@ -31,6 +48,31 @@ RSpec.describe ByteNotifier do
     deliver({ "kind" => "buddy" })
 
     expect(WebPushNotifications).to have_received(:send_to_byte)
+  end
+
+  # `byte_worker.js` has always read `data.count` and called `setAppBadge`;
+  # nothing ever sent it, so the number on the iOS home-screen icon was
+  # permanently absent. The push is the only thing that runs while the app is
+  # closed, which is exactly when the badge is the whole point.
+  describe "the home-screen badge count" do
+    it "rides along with every push" do
+      convo.update!(last_read_at: 1.hour.ago)
+      deliver({ "kind" => "buddy" })
+
+      expect(WebPushNotifications).to have_received(:send_to_byte)
+        .with(hash_including(data: { count: 1 }))
+    end
+
+    it "counts every thread, not just the one that fired" do
+      convo.update!(last_read_at: 1.hour.ago)
+      other = user.byte_conversations.create!(mode: :claude, name: "Work", last_read_at: 1.hour.ago)
+      other.byte_messages.create!(user: user, direction: :inbound, state: :delivered, body: "x")
+
+      deliver({ "kind" => "buddy" })
+
+      expect(WebPushNotifications).to have_received(:send_to_byte)
+        .with(hash_including(data: { count: 2 }))
+    end
   end
 
   it "stays quiet on an ordinary reply while the app is open" do
@@ -77,52 +119,63 @@ RSpec.describe ByteNotifier do
   # subscription, that could never have shown the notification — silenced the
   # phone. Prod Aug 7: a "Tick" typed from the CLI got a reply that never
   # notified, while a push sent directly to the same subscription arrived fine.
-  describe "which device counts as present" do
-    let!(:phone) {
+  # A phone and a desktop, the shape that was broken: `send_to` only ever
+  # delivered to the newest-registered subscription, so opening Byte on the Mac
+  # silently took the phone off the list entirely.
+  describe "with more than one device" do
+    let!(:desk) {
       UserPushSubscription.create!(
-        user: user, channel: :byte, endpoint: "https://web.push.apple.com/phone",
-        p256dh: "key", auth: "auth", registered_at: Time.current,
+        user: user, channel: :byte, endpoint: "https://web.push.apple.com/desk",
+        p256dh: "key", auth: "auth", registered_at: Time.current
       )
     }
 
-    before { allow(described_class).to receive(:device_present?).and_call_original }
+    let(:pushes) { [] }
 
-    def looking(sub)
-      allow(Rails.cache).to receive(:read).and_return(nil)
-      allow(Rails.cache).to receive(:read)
-        .with(ByteController.presence_key(user, sub)).and_return(Time.current.to_i)
+    before { allow(WebPushNotifications).to receive(:send_to_byte) { |args| pushes << args } }
+
+    def sent_subscriptions
+      pushes.last&.dig(:subscriptions)
     end
 
-    it "stays quiet when the device that would receive it is the one looking" do
-      looking(phone)
+    # The reported miss: PWA open on the Mac, nothing arriving on the phone.
+    it "still reaches the phone while the desktop is the one being looked at" do
+      looking(desk)
+
+      deliver({ "kind" => "buddy" })
+
+      expect(WebPushNotifications).to have_received(:send_to_byte)
+      expect(sent_subscriptions).to contain_exactly(device)
+    end
+
+    it "reaches both when neither is being looked at" do
+      deliver({ "kind" => "buddy" })
+
+      expect(sent_subscriptions).to contain_exactly(device, desk)
+    end
+
+    it "stays quiet only when every device is looking" do
+      looking(device, desk)
 
       deliver({ "kind" => "buddy" })
 
       expect(WebPushNotifications).not_to have_received(:send_to_byte)
     end
 
-    it "still pushes when some OTHER window is the one that's open" do
-      desk = UserPushSubscription.create!(
-        user: user, channel: :byte, endpoint: "https://web.push.apple.com/desk",
-        p256dh: "key", auth: "auth", registered_at: 1.day.ago,
-      )
-      looking(desk)
+    # A reminder or a relay goes everywhere regardless — being sat in front of
+    # one screen says nothing about whether they'll see something they never
+    # asked for.
+    it "reaches every device for a self-initiated nudge, present or not" do
+      looking(device, desk)
 
-      deliver({ "kind" => "buddy" })
+      deliver({ "kind" => "buddy", "self_initiated" => true }, body: "⏰ time to go")
 
-      expect(WebPushNotifications).to have_received(:send_to_byte)
-    end
-
-    it "pushes when nothing is looking at all" do
-      allow(Rails.cache).to receive(:read).and_return(nil)
-
-      deliver({ "kind" => "buddy" })
-
-      expect(WebPushNotifications).to have_received(:send_to_byte)
+      expect(sent_subscriptions).to contain_exactly(device, desk)
     end
 
     it "doesn't claim presence for someone with no Byte subscription" do
-      phone.destroy!
+      device.destroy!
+      desk.destroy!
       allow(Rails.cache).to receive(:read).and_return(Time.current.to_i)
 
       expect(described_class.send(:device_present?, user)).to be(false)

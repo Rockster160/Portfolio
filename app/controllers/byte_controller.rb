@@ -243,6 +243,24 @@ class ByteController < ApplicationController
     render json: convo.as_wire, status: :created
   end
 
+  # Opening a thread marks it read. Separate from update_conversation on
+  # purpose: that one broadcasts a change to every client, and a read is a fact
+  # about ONE device's screen — telling the others to repaint over it would take
+  # the badge off a phone because a desk browser looked at the thread.
+  #
+  # Returns the new totals so the caller can repaint without a second fetch.
+  def read_conversation
+    convo = current_user.byte_conversations.find_by(id: params[:id])
+    return head(:not_found) if convo.nil?
+
+    convo.mark_read!
+    render json: {
+      id:           convo.id,
+      unread_count: 0,
+      unread_total: ByteConversation.unread_total_for(current_user),
+    }
+  end
+
   def update_conversation
     convo = current_user.byte_conversations.find_by(id: params[:id])
     return head(:not_found) if convo.nil?

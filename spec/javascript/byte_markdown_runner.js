@@ -24,6 +24,22 @@ const cases = {
   url_in_code_untouched: "run `curl https://ardesian.com/chores` first",
   link_text_escaped: "[<b>x</b>](https://ardesian.com)",
   url_query_amp: "https://ardesian.com/s?a=1&b=2",
+
+  // The daily audit writes `## Counts` and pipe tables — both arrived as
+  // literal punctuation before these were added.
+  heading_h2: "## Counts\nByte had 40 messages.",
+  heading_h1: "# Daily Audit",
+  heading_h3: "### Backfills\nnothing to do",
+  heading_with_bold: "## **Counts** for today",
+  heading_closing_hashes: "## Counts ##\nafter",
+  hash_no_space_not_a_heading: "#nothashtag stays",
+  hash_midline_not_a_heading: "the count is #4 today",
+  table_basic: "| Thread | In | Out |\n|---|---|---|\n| Byte | 40 | 21 |\n| Moss | 6 | 4 |",
+  table_aligned: "| Thread | Count |\n|:--|--:|\n| Byte | 40 |",
+  table_with_inline: "| Thread | Note |\n|---|---|\n| **Byte** | see `turn.rb` |",
+  table_then_text: "| a | b |\n|---|---|\n| 1 | 2 |\nafter the table",
+  pipes_without_separator: "a | b\nc | d",
+  table_after_heading: "## Counts\n| a | b |\n|---|---|\n| 1 | 2 |",
 };
 
 const out = {};

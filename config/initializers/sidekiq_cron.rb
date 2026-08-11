@@ -28,6 +28,9 @@ every_hour = "0 * * * *"
 every_4_hours = "0 */4 * * *"
 every_3_daylight_hours = "0 5-21/3 * * * MST"
 daily_3am = "0 3 * * * MST"
+# :37 rather than :00 — the Bridge asks that requests be staggered off the
+# hour, and the 4-hourly sync already owns that slot.
+every_3_hours_staggered = "37 */3 * * *"
 daily_4am = "0 4 * * * MST"
 daily_9pm = "0 21 * * * MST"
 daily_10pm = "0 22 * * * MST"
@@ -123,6 +126,22 @@ cron_jobs = [
     name:  "Sync SimpleFIN Balances And Transactions",
     class: "SimpleFinSyncWorker",
     cron:  every_4_hours,
+  },
+  {
+    # Eight historical windows a day, walking backwards until the history runs
+    # out — about a week to cover seven years, where one a day would have taken
+    # seven weeks.
+    #
+    # The budget takes it: 6 scheduled syncs + up to 4 chases + 8 here is 18 of
+    # the Bridge's 24, worst case, leaving room for a manual run. Spread rather
+    # than burst on purpose — the quota replenishes through the day, so eight
+    # requests three hours apart sit far more comfortably than eight at once.
+    #
+    # Costs nothing once the walk is finished: it returns :done without making
+    # a request.
+    name:  "Backfill SimpleFIN History",
+    class: "SimpleFinBackfillWorker",
+    cron:  every_3_hours_staggered,
   },
   {
     # Late enough to have the whole day in it, early enough that the Mac is

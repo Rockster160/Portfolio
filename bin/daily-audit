@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+#
+# bin/daily-audit — open today's Daily Audit Claude session in this terminal.
+#
+# The nightly audit (ByteDailyAudit / DailyAuditWorker) runs as an ordinary
+# Claude-mode Byte conversation, so it leaves a real Claude Code session on
+# disk. This resumes it, which means you land in the same session that wrote the
+# report: the whole thing is already in context and you can just say "do the
+# first one" without pasting anything.
+#
+# The session id CHANGES EVERY NIGHT, on purpose — the audit resets its session
+# each run so a month of reports doesn't accumulate into one context. That's why
+# this resolves the id at run time rather than you keeping a note of it, and why
+# naming the session wouldn't help much: you'd still be picking a different one
+# out of the list each day.
+#
+# Usage:
+#   bin/daily-audit            Resume today's audit session
+#   bin/daily-audit --id       Print the session id and exit
+#   bin/daily-audit --help     Show this help
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+STATE="$HOME/Library/Application Support/byte/state.json"
+CONVO_NAME="Daily Audit"
+
+# Byte runs `claude -p` with CLAUDE_CONFIG_DIR pinned to a per-profile directory
+# (~/code/.claude-personal for this repo), and sessions live under it. Resuming
+# without the same value sends `claude` looking in the default config dir, where
+# the session simply isn't — which surfaces as the very unhelpful
+# "No conversation found with session ID". Mirrors Byte's claude.rb.
+export CLAUDE_CONFIG_DIR="${BYTE_CLAUDE_CONFIG_DIR:-$HOME/code/.claude-personal}"
+
+usage() { sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; }
+
+case "${1:-}" in
+  --help|-h) usage; exit 0 ;;
+esac
+
+if [ ! -f "$STATE" ]; then
+  echo "No Byte state file at $STATE — has the Mac server ever run?" >&2
+  exit 1
+fi
+
+# Which conversation is the audit? Ask PRODUCTION by name.
+#
+# Not `rails runner`: this box runs the checkout in DEVELOPMENT against a local
+# database, while the audit conversation — and the id state.json is keyed by —
+# only exists in prod. A local lookup would quietly answer about the wrong
+# database.
+CONVO_ID="$(
+  cd "$ROOT" && bash .claude/prod-query.sh \
+    "COPY (SELECT id FROM byte_conversations
+           WHERE name = '$CONVO_NAME' ORDER BY id LIMIT 1) TO STDOUT;" 2>/dev/null | tr -d '[:space:]'
+)"
+
+# Anything that isn't a bare id is an error message from psql, and treating one
+# as an id produces a nonsense lookup and a misleading "no session yet".
+case "$CONVO_ID" in
+  ''|*[!0-9]*)
+    echo "No \"$CONVO_NAME\" conversation in production yet." >&2
+    echo "It appears after the first run. Kick one off with:  ByteDailyAudit.kick!" >&2
+    exit 1
+    ;;
+esac
+
+# The session id lives in the Mac's own state file and NOT in the conversation
+# record: Rails only learns it on a `/switch` or `/adopt`, so the metadata
+# column is null for a thread that has simply been running normally.
+SESSION_ID="$(
+  python3 -c "
+import json, sys
+state = json.load(open(sys.argv[1]))
+convo = (state.get('conversations') or {}).get(sys.argv[2]) or {}
+print(convo.get('claude_session_id') or '')
+" "$STATE" "$CONVO_ID"
+)"
+
+if [ -z "$SESSION_ID" ]; then
+  echo "Conversation $CONVO_ID has no Claude session yet." >&2
+  echo "That's normal before the first audit has run." >&2
+  exit 1
+fi
+
+if [ "${1:-}" = "--id" ]; then
+  echo "$SESSION_ID"
+  exit 0
+fi
+
+TRANSCRIPT="$CLAUDE_CONFIG_DIR/projects/$(echo "$ROOT" | tr '/' '-')/$SESSION_ID.jsonl"
+if [ ! -f "$TRANSCRIPT" ]; then
+  echo "Byte points at session $SESSION_ID but no transcript exists at:" >&2
+  echo "  $TRANSCRIPT" >&2
+  echo "Check CLAUDE_CONFIG_DIR — Byte writes sessions under its own profile dir." >&2
+  exit 1
+fi
+
+echo "Resuming Daily Audit (conversation $CONVO_ID, session ${SESSION_ID:0:8}…)"
+cd "$ROOT"
+exec claude --resume "$SESSION_ID"

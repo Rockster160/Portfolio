@@ -1,9 +1,14 @@
 // The markdown-lite the Byte thread renders.
 //
 // Deliberately not a markdown library: bubbles are short, the input is trusted
-// only as far as escaping makes it, and a full parser would bring block
-// semantics (headings, tables, nested lists) that don't belong in a chat line.
-// What's here is what companions and Claude actually emit.
+// only as far as escaping makes it, and a full parser would bring semantics
+// nobody here emits. What's here is what companions and Claude actually write.
+//
+// Headings and tables were on the "doesn't belong in a chat line" list, and the
+// daily audit made that wrong: it's a structured report delivered into a
+// thread, and it writes `## Counts` and pipe tables because that IS the right
+// shape for one. Unrendered, they arrived as literal `##` and rows of pipes.
+// Nested lists stay out — nothing writes them.
 //
 // Extracted from index.js so the regexes can be tested. They have real edge
 // cases — `_glue_` is emphasis and `game_tray-vase` is a filename — and that
@@ -28,6 +33,27 @@ const SAFE_URL = /^https?:\/\/[^\s<>"']+$/i;
 // Punctuation that ends the sentence rather than the address. "see https://x.com."
 // should link the site, not a URL with a full stop welded on.
 const TRAILING_PUNCT = /[.,;:!?]+$/;
+
+// A GFM pipe table: one header row, a separator row of dashes (with optional
+// alignment colons), then any number of body rows. The separator is what
+// distinguishes a table from a sentence containing pipes, so it's mandatory —
+// without it, `a | b` in ordinary prose would start eating lines.
+const TABLE_ROW = String.raw`[ \t]*\|[^\n]*\|[ \t]*`;
+const TABLE_SEP = String.raw`[ \t]*\|(?:[ \t]*:?-+:?[ \t]*\|)+[ \t]*`;
+const TABLE_RX = new RegExp(
+  String.raw`(?:^|\n)(${TABLE_ROW}\n${TABLE_SEP}(?:\n${TABLE_ROW})*)(?:\n|$)`,
+  "g",
+);
+
+// `| a | b |` -> ["a", "b"]. The outer pipes are framing, not cells.
+function splitRow(row) {
+  return row
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
 
 export function renderMarkdown(raw) {
   const stash = [];
@@ -72,6 +98,51 @@ export function renderMarkdown(raw) {
   // constantly here, and the naive pattern italicises the middle of them.
   // Bold runs first so `__both__` doesn't half-match.
   t = t.replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,!?;:]|$)/g, "$1<em>$2</em>");
+  // Tables, before the bullet grouping and well before newlines become <br>:
+  // every block construct here has to consume its own line breaks or it ends up
+  // wrapped in stray <br>s.
+  //
+  // A table is a header row, a separator row, then body rows — the separator is
+  // what makes it a table rather than a line that happens to contain pipes, so
+  // it's required. Cell contents have already been through escaping and the
+  // inline rules above, so **bold** and `code` inside a cell just work.
+  t = t.replace(TABLE_RX, (_m, block) => {
+    const rows = block.trim().split("\n");
+    const aligns = splitRow(rows[1]).map((spec) => {
+      const left = spec.startsWith(":");
+      const right = spec.endsWith(":");
+      if (left && right) return " class=\"is-center\"";
+      return right ? " class=\"is-right\"" : "";
+    });
+    const cells = (row, tag) =>
+      splitRow(row)
+        .map((cell, i) => `<${tag}${aligns[i] || ""}>${cell}</${tag}>`)
+        .join("");
+
+    const head = `<thead><tr>${cells(rows[0], "th")}</tr></thead>`;
+    const body = rows
+      .slice(2)
+      .map((row) => `<tr>${cells(row, "td")}</tr>`)
+      .join("");
+
+    // The wrapper is what scrolls. A wide table must never make the whole
+    // thread scroll sideways.
+    return `<div class="byte-md-table-wrap"><table class="byte-md-table">${head}<tbody>${body}</tbody></table></div>`;
+  });
+  t = t.replace(/<\/div>\n+/g, "</div>");
+
+  // Headings. `#` through `######`, collapsed onto three visual levels — a
+  // chat bubble has no use for six, and the report only writes two.
+  //
+  // The tags start at h3 because a message is nested inside a page that owns
+  // its own h1/h2; the CLASS carries the visual level. Trailing newlines are
+  // eaten with the match: a heading is a block and doesn't want a <br> after it.
+  t = t.replace(/(?:^|\n)[ \t]*(#{1,6})[ \t]+([^\n]+?)[ \t]*#*[ \t]*(?:\n+|$)/g, (_m, hashes, text) => {
+    const level = Math.min(hashes.length, 3);
+    const tag = ["h3", "h4", "h5"][level - 1];
+    return `<${tag} class="byte-md-h byte-md-h${level}">${text}</${tag}>`;
+  });
+
   // Bullet lists, grouped BEFORE newlines become <br>: a <ul> brings its own
   // line breaks, and leaving the surrounding ones in stacks a blank gap on
   // either side of every list.

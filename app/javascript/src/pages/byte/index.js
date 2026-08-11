@@ -61,6 +61,7 @@ import { toggleBuddyMuted, isBuddyMuted } from "./buddy/alarm";
 import {
   UnreadTracker,
   paintDrawerBadge,
+  paintAppBadge,
   initUnreadNotices,
   previewOf,
 } from "./unread";
@@ -243,7 +244,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // tally ran away during a long Claude turn.
   const drawerBadge = document.querySelector("[data-byte-drawer-badge]");
   const drawerUnread = new UnreadTracker({
-    onChange: () => paintDrawerBadge(drawerBadge, drawerUnread.total()),
+    onChange: () => {
+      const total = drawerUnread.total();
+      paintDrawerBadge(drawerBadge, total);
+      paintAppBadge(total);
+    },
   });
   // The kiosk is a pinned single-conversation display with no thread and no
   // header, and it can't be switched away from — a card about another
@@ -279,6 +284,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     // the user is currently viewing a different one.
     sendCommand: (convId, body) => sendMessageTo(convId, body),
     unreadFor: (id) => drawerUnread.countFor(id),
+    // Every refetch of the list carries fresh server-side counts. Re-seeding
+    // from them is what catches a session up after it's been backgrounded.
+    onConversations: (list) =>
+      drawerUnread.seedAll(list, { except: currentConversationId }),
   });
 
   // ConversationManager may pick a different currentId from localStorage
@@ -295,6 +304,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       : [];
 
   migrateLegacy(initialConversationId);
+
+  // Seed the badges from what the server counted, BEFORE hydrating — hydrate
+  // clears the thread being opened, and seeding after it would put a count back
+  // on the one conversation that's being read right now.
+  //
+  // This is the half that was missing: unread lived only in the page, so a
+  // reload started at zero and anything that arrived while the app was closed
+  // was never counted at all.
+  drawerUnread.seedAll(convoManager.conversations, { except: currentConversationId });
 
   hydrateForConversation(currentConversationId, bootstrapMessages);
 
@@ -1398,7 +1416,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     oldestLoadedId = messages[0]?.id ?? null;
     hasMore = true;
     unreadCount = 0;
+    // Local first so the badge clears on the tap rather than on the round trip,
+    // then tell the server so it survives the next reload.
     drawerUnread.clear(convId);
+    markConversationRead(convId);
     // Repaint the drawer so its badge for this row clears immediately.
     convoManager?.render();
     updateJumpBtn();
@@ -1685,6 +1706,27 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (p?.url && String(p.url).startsWith("blob:"))
         URL.revokeObjectURL(p.url);
     });
+  }
+
+  // Tell the server this thread has been looked at, so the count survives a
+  // reload and the home-screen badge drops with it.
+  //
+  // Fire-and-forget: the local badge already cleared on the tap, and a failed
+  // read-marker is self-healing — the next time this conversation is opened it
+  // gets marked again. Nothing here is worth blocking a switch on, and offline
+  // is a normal state for this app.
+  function markConversationRead(convId) {
+    if (convId == null || !conversationsUrl) return;
+
+    fetch(`${conversationsUrl}/${convId}/read`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token":
+          document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "",
+      },
+    }).catch(() => {});
   }
 
   function sendMessageTo(convId, body, pending = null) {

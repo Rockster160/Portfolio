@@ -95,6 +95,43 @@ RSpec.describe "Byte unread counting" do
     end
   end
 
+  # The counter lived only in the page, so a reload started it at zero and a
+  # message that arrived while the app was closed was never counted at all —
+  # nothing broadcasts to a page that isn't running.
+  describe "surviving a reload" do
+    it "takes the server's count for each thread" do
+      expect(result["seeded"]).to include("one" => 3, "two" => 1, "three" => 0)
+    end
+
+    it "skips the thread being opened, which is being read right now" do
+      expect(result["seeded"]["current_skipped"]).to eq(0)
+    end
+
+    it "totals them for the burger and home-screen badges" do
+      expect(result["seeded"]["total"]).to eq(4)
+      expect(result["seeded"]["conversations"]).to eq(2)
+    end
+
+    it "stacks live arrivals on top of the seeded count" do
+      expect(result["seed_plus_live"]).to eq(4)
+    end
+
+    it "clears both halves when the thread is read" do
+      expect(result["after_read"]).to eq("one" => 0, "total" => 1)
+    end
+
+    # The server's number is computed before a live message lands, so adopting
+    # it blindly would drop one.
+    it "does not let a stale re-seed clobber live arrivals" do
+      expect(result["reseed_keeps_live"]).to eq(3)
+    end
+
+    # How a backgrounded session catches up on what it never saw broadcast.
+    it "does take a newer count for a thread with nothing live" do
+      expect(result["reseed_catches_up"]).to eq(5)
+    end
+  end
+
   describe "the notice preview" do
     it "strips markdown, code and shell HTML" do
       preview = result["preview"]

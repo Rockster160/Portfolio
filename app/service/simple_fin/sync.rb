@@ -6,7 +6,12 @@ module SimpleFin
   # because a transaction's `posted` timestamp and description can both change
   # after it first appears, while pending clears.
   class Sync
-    Result = Struct.new(:accounts, :transactions, :errors, keyword_init: true) do
+    # `transactions` counts everything the payload carried; `created` counts
+    # only the rows that did not already exist. The backfill needs the
+    # difference — re-fetching an overlapping window reports plenty of
+    # transactions and no new history, and it is `created` that says whether
+    # there is anything older left to find.
+    Result = Struct.new(:accounts, :transactions, :created, :errors, keyword_init: true) do
       def errors? = errors.present?
     end
 
@@ -19,6 +24,7 @@ module SimpleFin
     def initialize(payload)
       @payload = payload || {}
       @transaction_count = 0
+      @created_count = 0
     end
 
     def call
@@ -38,7 +44,12 @@ module SimpleFin
       # balance the tables no longer agree with is the failure worth avoiding.
       ::SimpleFin::DashboardCache.refresh!
 
-      Result.new(accounts: accounts.size, transactions: @transaction_count, errors: errors)
+      Result.new(
+        accounts:     accounts.size,
+        transactions: @transaction_count,
+        created:      @created_count,
+        errors:       errors,
+      )
     end
 
     private
@@ -64,6 +75,7 @@ module SimpleFin
 
     def upsert_transaction(account, row)
       transaction = ::BankTransaction.find_or_initialize_by(simplefin_id: row["id"])
+      created = transaction.new_record?
       transaction.assign_attributes(
         bank_account:  account,
         posted_at:     timestamp(row["posted"]),
@@ -77,6 +89,7 @@ module SimpleFin
       )
       transaction.save!
       @transaction_count += 1
+      @created_count += 1 if created
     end
 
     # Amounts arrive as numeric strings. BigDecimal, never to_f — a float
