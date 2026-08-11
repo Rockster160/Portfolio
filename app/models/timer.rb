@@ -18,6 +18,7 @@
 #  height              :integer          default(0), not null
 #  kind                :integer          default("countdown"), not null
 #  max_value           :integer
+#  metadata            :jsonb            not null
 #  min_value           :integer
 #  name                :text             default(""), not null
 #  paused_at           :datetime

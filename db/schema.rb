@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_10_234246) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_11_034853) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -243,6 +243,45 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_10_234246) do
     t.integer "uuid", null: false
     t.boolean "from_session"
     t.index ["user_id"], name: "index_avatars_on_user_id"
+  end
+
+  create_table "bank_accounts", force: :cascade do |t|
+    t.string "simplefin_id", null: false
+    t.string "conn_id"
+    t.string "name", null: false
+    t.string "currency", default: "USD", null: false
+    t.integer "kind", default: 0, null: false
+    t.bigint "balance_cents"
+    t.bigint "available_balance_cents"
+    t.datetime "balance_date"
+    t.datetime "last_synced_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "friendly_name"
+    t.string "last4"
+    t.index ["last4"], name: "index_bank_accounts_on_last4"
+    t.index ["simplefin_id"], name: "index_bank_accounts_on_simplefin_id", unique: true
+  end
+
+  create_table "bank_transactions", force: :cascade do |t|
+    t.string "simplefin_id", null: false
+    t.bigint "bank_account_id", null: false
+    t.datetime "posted_at", null: false
+    t.datetime "transacted_at"
+    t.bigint "amount_cents", null: false
+    t.text "description"
+    t.string "payee"
+    t.text "memo"
+    t.string "mcc"
+    t.boolean "pending", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "action_event_id"
+    t.index ["action_event_id"], name: "index_bank_transactions_on_action_event_id"
+    t.index ["action_event_id"], name: "index_bank_transactions_on_claimed_action_event", unique: true, where: "(action_event_id IS NOT NULL)"
+    t.index ["bank_account_id", "posted_at"], name: "index_bank_transactions_on_bank_account_id_and_posted_at"
+    t.index ["bank_account_id"], name: "index_bank_transactions_on_bank_account_id"
+    t.index ["simplefin_id"], name: "index_bank_transactions_on_simplefin_id", unique: true
   end
 
   create_table "banned_ips", force: :cascade do |t|
@@ -1637,6 +1676,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_10_234246) do
   add_foreign_key "agenda_shares", "users"
   add_foreign_key "agendas", "google_accounts"
   add_foreign_key "agendas", "users"
+  add_foreign_key "bank_transactions", "action_events"
+  add_foreign_key "bank_transactions", "bank_accounts"
   add_foreign_key "boxes", "users"
   add_foreign_key "buddy_ideas", "users"
   add_foreign_key "buddy_memories", "users"

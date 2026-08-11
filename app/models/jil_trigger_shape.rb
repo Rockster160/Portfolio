@@ -2,15 +2,16 @@
 #
 # Table name: jil_trigger_shapes
 #
-#  id           :bigint           not null, primary key
-#  user_id      :bigint           not null
-#  scope        :text             not null
-#  keys         :jsonb            not null
-#  sample       :jsonb            not null
-#  seen_count   :integer          default(0), not null
-#  last_seen_at :datetime
-#  created_at   :datetime         not null
-#  updated_at   :datetime         not null
+#  id              :bigint           not null, primary key
+#  keys            :jsonb            not null
+#  last_seen_at    :datetime
+#  observed_values :jsonb            not null
+#  sample          :jsonb            not null
+#  scope           :text             not null
+#  seen_count      :integer          default(0), not null
+#  created_at      :datetime         not null
+#  updated_at      :datetime         not null
+#  user_id         :bigint           not null
 #
 class JilTriggerShape < ApplicationRecord
   belongs_to :user
