@@ -3,7 +3,7 @@
 # Table name: bank_transactions
 #
 #  id              :bigint           not null, primary key
-#  amount_abs      :decimal(, )
+#  amount_abs      :decimal(, )      not null
 #  amount_cents    :bigint           not null
 #  description     :text
 #  mcc             :string
@@ -30,13 +30,20 @@ class BankTransaction < ApplicationRecord
   validates :posted_at, presence: true
   validates :amount_cents, presence: true
 
+  # `amount_abs` would be a generated column if production were not on
+  # PostgreSQL 9.5 (generated columns landed in 12). Derived here instead, on
+  # every save, so it cannot fall out of step with amount_cents. It exists
+  # solely so `amount>50` can use the numeric-comparison path — see the
+  # search_terms note below.
+  before_save :derive_amount_abs
+
   # Same query syntax as ActionEvent — `payee:amazon category:groceries
   # posted_at>2026-07-01 amount>50 direction:withdrawal`, with AND/OR/NOT.
   #
-  # `amount` is MAGNITUDE in dollars, backed by the generated `amount_abs`
-  # column. Sign is a separate axis (`direction:`) rather than part of the
-  # number, because a leading `-` is the tokenizer's negation prefix —
-  # `amount<-50` does not mean what it looks like, and never could.
+  # `amount` is MAGNITUDE in dollars, backed by the `amount_abs` column. Sign
+  # is a separate axis (`direction:`) rather than part of the number, because a
+  # leading `-` is the tokenizer's negation prefix — `amount<-50` does not mean
+  # what it looks like, and never could.
   search_terms :id, :simplefin_id, :payee, :description, :memo, :mcc,
     :posted_at, :transacted_at,
     amount:    :amount_abs,
@@ -166,5 +173,11 @@ class BankTransaction < ApplicationRecord
 
   def display_payee
     payee.presence || description.presence || "—"
+  end
+
+  private
+
+  def derive_amount_abs
+    self.amount_abs = amount_cents.nil? ? nil : (BigDecimal(amount_cents.abs) / 100)
   end
 end

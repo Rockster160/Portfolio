@@ -74,6 +74,17 @@ RSpec.describe BankTransaction, ".query" do
   end
 
   describe "amount" do
+    # It is a plain column derived on save, not a generated one — production
+    # is PostgreSQL 9.5. These two are what would catch it drifting.
+    it "is derived on create" do
+      expect(payday.reload.amount_abs).to eq(BigDecimal("4370.70"))
+    end
+
+    it "follows amount_cents on update, including a sign flip" do
+      payday.update!(amount_cents: -1234)
+      expect(payday.reload.amount_abs).to eq(BigDecimal("12.34"))
+    end
+
     # Magnitude, in dollars. Sign is `direction:` — it deliberately is not part
     # of the number, because a leading `-` is the tokenizer's negation prefix.
     it "is absolute, so a spend and a deposit of the same size both match" do

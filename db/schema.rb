@@ -277,7 +277,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_11_052430) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "action_event_id"
-    t.virtual "amount_abs", type: :decimal, as: "((abs(amount_cents))::numeric / (100)::numeric)", stored: true
+    t.decimal "amount_abs", null: false
     t.index ["action_event_id"], name: "index_bank_transactions_on_action_event_id"
     t.index ["action_event_id"], name: "index_bank_transactions_on_claimed_action_event", unique: true, where: "(action_event_id IS NOT NULL)"
     t.index ["amount_abs"], name: "index_bank_transactions_on_amount_abs"

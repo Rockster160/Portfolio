@@ -1,6 +1,20 @@
 return if ENV["RAILS_CONSOLE"] == "true"
 return if ENV["LOCAL_QUEUE"] == "true"
+# `defined?(Puma)` does NOT mean "running under Puma" — Bundler.require loads
+# the gem in every process, rake tasks included, so this guard has never
+# excluded anything. Kept because it still rules out environments where the
+# gem genuinely is absent.
 return unless defined?(Puma)
+
+# The one that actually catches `rake db:migrate`. Registering the whole cron
+# schedule as a side effect of a migration is surprising locally, and on a
+# deploy it means the release being swapped in re-registers every job from a
+# task rather than from the server that will run them.
+# `respond_to?` guard because `Rake` can be a partially-loaded module — under
+# RSpec it is defined without `.application` at all.
+if defined?(::Rake) && ::Rake.respond_to?(:application)
+  return if ::Rake.application.top_level_tasks.present?
+end
 return if Rails.env.test?
 return if Rails.const_defined?("Console")
 return if Rails.const_defined?("Rails::Command::RunnerCommand")
