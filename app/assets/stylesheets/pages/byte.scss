@@ -110,13 +110,21 @@ html.html-ctr-byte body {
   .byte-drawer *,
   .byte-drawer-backdrop,
   .byte-modal,
-  .byte-modal * {
+  .byte-modal *,
+  .byte-notices,
+  .byte-notices * {
     box-sizing: border-box;
   }
 
+  // `.byte-notices` is a SIBLING of `.byte-app`, same as the drawer and the
+  // modals — it's `position: fixed` and has no reason to live inside the
+  // layout. That also means it needs listing here explicitly, or its cards
+  // (which are `<button>`s) come out of the app-wide cascade blue, bold and
+  // Arial with `color: white !important`.
   .byte-app,
   .byte-drawer,
-  .byte-modal {
+  .byte-modal,
+  .byte-notices {
     button,
     input[type="button"],
     input[type="submit"],
@@ -1745,6 +1753,10 @@ html.html-ctr-byte body {
   justify-content: center;
   color: var(--bs-muted);
   border-radius: 8px;
+  // Anchor for the unread badge. NOT `position: relative` on :active — see
+  // forms.scss:201, which moves any positioned button on mousedown and would
+  // take the badge with it.
+  position: relative;
   transition:
     background 0.15s,
     color 0.15s;
@@ -1752,6 +1764,31 @@ html.html-ctr-byte body {
   &:hover {
     background: rgba(255, 255, 255, 0.05);
     color: var(--bs-text);
+  }
+}
+
+// Count of unread messages across every conversation that isn't open. Rides the
+// corner of the hamburger rather than sitting beside it, so the header layout
+// doesn't shift when it appears.
+.ctr-byte .byte-app .byte-drawer-badge {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  min-width: 16px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--bs-accent);
+  color: #FFF;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+  pointer-events: none;
+  // Author `display` beats `[hidden]`, so the attribute has to be handled
+  // explicitly or the badge shows with an empty pill at zero.
+  &[hidden] {
+    display: none;
   }
 }
 
@@ -2344,6 +2381,105 @@ dialog.byte-modal {
 
 // Unread badge inside the drawer conversation row — tiny pill sitting
 // where the relative-time normally is. Only rendered when count > 0.
+// Unread notices for conversations that aren't on screen.
+//
+// TOP-LEFT, tucked under the header and lined up with the hamburger whose badge
+// is counting the same thing. The bottom of the screen is not available: on a
+// phone that's the composer and the send button, and with the keyboard up it's
+// the keyboard — a card that lands there is either covered or stealing the tap
+// the person was already making.
+//
+// The container is pointer-transparent and only the cards are tappable, so even
+// while one is on screen the header underneath it stays reachable.
+.ctr-byte .byte-notices {
+  position: fixed;
+  left: 12px;
+  // Clears the header in both modes. In claude mode it overlaps the pwd bar for
+  // the few seconds it's up, which is the right trade — a transient card should
+  // not push itself further from the thing it's about.
+  top: calc(env(safe-area-inset-top) + 64px);
+  z-index: 40;
+  display: flex;
+  // Newest directly under the header rather than at the bottom of a growing
+  // stack, so the one most worth reading is always in the same place.
+  flex-direction: column-reverse;
+  gap: 8px;
+  align-items: flex-start;
+  pointer-events: none;
+  // Not `min(340px, ...)` — libsass reads `min()` as its own Sass function and
+  // refuses a `calc()` argument. Width + max-width does the same job.
+  width: 320px;
+  max-width: calc(100vw - 24px);
+}
+
+.ctr-byte .byte-notice {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--bs-border);
+  border-radius: 12px;
+  background: var(--bs-panel, #1b1b22);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  text-align: left;
+  // Drops IN from the header it sits under, and lifts back out the same way.
+  opacity: 0;
+  transform: translateY(-8px);
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+
+  &.is-in {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  &.is-leaving {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+// The face is the fastest read on the card — it says which companion before any
+// of the words do.
+.ctr-byte .byte-notice-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.ctr-byte .byte-notice-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.ctr-byte .byte-notice-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bs-text);
+}
+
+.ctr-byte .byte-notice-body {
+  font-size: 11px;
+  color: var(--bs-muted);
+  // One line, clipped — the whole thing is a pointer at the thread, not the
+  // message itself.
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctr-byte .byte-notice {
+    transition: none;
+  }
+}
+
 .byte-convo-time .byte-convo-unread {
   display: inline-block;
   margin-left: 6px;

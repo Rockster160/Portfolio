@@ -80,10 +80,13 @@
   <header class="byte-header">
     <%# Drawer trigger — sits before the avatar so it lands in the natural %>
     <%# top-left slot the user's thumb reaches for. %>
+    <%# The badge counts unread across every OTHER conversation, so the drawer %>
+    <%# is worth opening without having to open it to find out. %>
     <button type="button" class="byte-drawer-toggle" data-byte-drawer-toggle title="Conversations" aria-label="Open conversations">
       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
         <path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/>
       </svg>
+      <span class="byte-drawer-badge" data-byte-drawer-badge hidden></span>
     </button>
     <span class="byte-avatar">
       <%# `data-byte-pet-avatar` marks every image that has to follow the open %>
@@ -366,6 +369,12 @@
     </button>
   </form>
 </div>
+
+  <%# Unread notices for OTHER conversations. Stacked, one per message, never %>
+  <%# merged — a run of them is a run of real events. Top-left under the %>
+  <%# header, by the hamburger badge counting the same thing; the bottom of %>
+  <%# the screen belongs to the composer and the keyboard. %>
+  <div class="byte-notices" data-byte-notices aria-live="polite"></div>
 
   <%# Slide-in conversations drawer + backdrop. Hidden by default; %>
   <%# .open on both elements when active. %>

@@ -58,6 +58,12 @@ import { initBuddyRoutines } from "./buddy/routines";
 import { initBuddyReminders } from "./buddy/reminders";
 import { initBuddyKiosk } from "./buddy/kiosk";
 import { toggleBuddyMuted, isBuddyMuted } from "./buddy/alarm";
+import {
+  UnreadTracker,
+  paintDrawerBadge,
+  initUnreadNotices,
+  previewOf,
+} from "./unread";
 
 document.addEventListener("DOMContentLoaded", async () => {
   const app = document.querySelector(".byte-app");
@@ -232,7 +238,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Per-conversation unread-in-drawer counters. Only tracks conversations
   // OTHER than the currently visible one — the visible one uses
   // `unreadCount` (bottom-of-thread jump button) instead.
-  const drawerUnread = new Map();
+  //
+  // Counts settled message IDS, not broadcasts: see unread.js for why a plain
+  // tally ran away during a long Claude turn.
+  const drawerBadge = document.querySelector("[data-byte-drawer-badge]");
+  const drawerUnread = new UnreadTracker({
+    onChange: () => paintDrawerBadge(drawerBadge, drawerUnread.total()),
+  });
+  // The kiosk is a pinned single-conversation display with no thread and no
+  // header, and it can't be switched away from — a card about another
+  // conversation there is something nobody can act on. `initUnreadNotices`
+  // with no root returns a no-op notifier, which is exactly right.
+  const unreadNotices = initUnreadNotices({
+    root: isKiosk ? null : document.querySelector("[data-byte-notices]"),
+    onOpen: (convId) => convoManager?.switchTo(convId),
+  });
 
   const convoManager = new ConversationManager({
     conversationsUrl,
@@ -258,7 +278,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // conversation id so the command lands in the right thread even if
     // the user is currently viewing a different one.
     sendCommand: (convId, body) => sendMessageTo(convId, body),
-    unreadFor: (id) => drawerUnread.get(id) || 0,
+    unreadFor: (id) => drawerUnread.countFor(id),
   });
 
   // ConversationManager may pick a different currentId from localStorage
@@ -1378,7 +1398,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     oldestLoadedId = messages[0]?.id ?? null;
     hasMore = true;
     unreadCount = 0;
-    drawerUnread.delete(convId);
+    drawerUnread.clear(convId);
     // Repaint the drawer so its badge for this row clears immediately.
     convoManager?.render();
     updateJumpBtn();
@@ -2586,9 +2606,17 @@ document.addEventListener("DOMContentLoaded", async () => {
           // the pet or the question card over the buttons.
           buddyKiosk?.onLive(msg);
           armIdleFaceReset(); // a new message is activity
-        } else if (msg.direction === "inbound") {
-          const prev = drawerUnread.get(convId) || 0;
-          drawerUnread.set(convId, prev + 1);
+        } else if (drawerUnread.add(convId, msg)) {
+          // Genuinely new and genuinely settled — `add` returns false for a
+          // re-broadcast of something already counted, and for anything still
+          // streaming, so a working Claude turn stays silent until it speaks.
+          const chrome = convoManager.chromeFor(convId);
+          unreadNotices.notify({
+            convId,
+            title: chrome?.name || "New message",
+            body: previewOf(msg),
+            icon: chrome?.icon || null,
+          });
         }
         if (msg.created_at) convoManager.bumpActivity(convId, msg.created_at);
       }

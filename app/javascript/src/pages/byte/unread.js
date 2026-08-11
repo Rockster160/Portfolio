@@ -1,0 +1,180 @@
+// Unread tracking for conversations the user isn't looking at, plus the
+// in-app notice that one arrived.
+//
+// The counter used to be a plain `Map<convId, number>` incremented once per
+// BROADCAST, which is not once per message. A Claude turn re-broadcasts the
+// same row every time its text grows (RailsClient.update_message on a throttle,
+// state "streaming"), so one reply working through a long task pushed the badge
+// up by dozens while nothing had actually been said yet. Two things fix it:
+// counting message IDS rather than events, and only counting a message once it
+// has SETTLED.
+
+// States where the message is done moving. `streaming` / `pending` / `queued`
+// are all mid-flight and must never count. `failed` does count — it's terminal
+// and it's something the person needs to see.
+const SETTLED_STATES = new Set(["delivered", "sent", "failed"]);
+
+// Receipt chips, tapped-action pills and the hidden trigger seeds are not
+// things anyone reads. They ride the same broadcast as real messages, and
+// they're the other half of why a working Claude session ran the badge up:
+// every tool call posts one.
+const SILENT_KINDS = new Set(["buddy_activity", "action_chip", "buddy_trigger"]);
+
+export function countsAsUnread(msg) {
+  if (!msg || msg.direction !== "inbound") return false;
+  if (!SETTLED_STATES.has(String(msg.state))) return false;
+
+  const meta = msg.metadata || {};
+  if (meta.hidden === true) return false;
+  if (SILENT_KINDS.has(String(meta.kind))) return false;
+
+  return true;
+}
+
+// Per-conversation sets of unread message ids.
+//
+// A SET, not a tally: the same message can be broadcast many times (it streams,
+// then it settles, and a late edit re-broadcasts it again), and every one of
+// those is the same one thing to read.
+export class UnreadTracker {
+  constructor({ onChange } = {}) {
+    this.byConversation = new Map();
+    this.onChange = onChange || (() => {});
+  }
+
+  // Returns true only when this is genuinely new — the caller uses that to
+  // decide whether to raise a notice, so a re-broadcast stays silent.
+  add(convId, msg) {
+    if (convId == null || !countsAsUnread(msg) || msg.id == null) return false;
+
+    let ids = this.byConversation.get(convId);
+    if (!ids) {
+      ids = new Set();
+      this.byConversation.set(convId, ids);
+    }
+    if (ids.has(msg.id)) return false;
+
+    ids.add(msg.id);
+    this.onChange();
+    return true;
+  }
+
+  countFor(convId) {
+    return this.byConversation.get(convId)?.size || 0;
+  }
+
+  total() {
+    let n = 0;
+    this.byConversation.forEach((ids) => {
+      n += ids.size;
+    });
+    return n;
+  }
+
+  conversationCount() {
+    let n = 0;
+    this.byConversation.forEach((ids) => {
+      if (ids.size > 0) n += 1;
+    });
+    return n;
+  }
+
+  clear(convId) {
+    if (!this.byConversation.has(convId)) return;
+    this.byConversation.delete(convId);
+    this.onChange();
+  }
+}
+
+// One line of plain text for the notice.
+//
+// Mirrors ByteNotifier#clean_body on the server, which does the same job for
+// the push tray — a shell bubble carries ANSI-styled `<span>`s and Buddy writes
+// markdown, and both look like garbage rendered as-is in a small strip.
+const PREVIEW_LIMIT = 90;
+
+export function previewOf(msg) {
+  const text = String(msg?.body || "")
+    .replace(/```[a-z]*\n?/gi, "")
+    .replace(/```/g, "")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/<[^>]+>/g, "")
+    .replace(/^>\s?/gm, "")
+    .replace(/\[\[[^\]]*\]\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!text) return "(attachment)";
+  return text.length > PREVIEW_LIMIT ? `${text.slice(0, PREVIEW_LIMIT - 1)}…` : text;
+}
+
+// The badge on the drawer toggle. Its whole job is "there is something over
+// here you haven't seen", so it's the total across every conversation the
+// person isn't currently in.
+export function paintDrawerBadge(el, total) {
+  if (!el) return;
+  el.textContent = total > 99 ? "99+" : String(total);
+  el.hidden = total <= 0;
+}
+
+// A message landed in a thread that isn't on screen.
+//
+// One notice per message, stacked, never merged. A run of them is a run of real
+// events and collapsing them into "3 new messages" would throw away the only
+// part worth reading. They sit in a corner and time out on their own — nothing
+// here takes the tap target away from what the person was already doing.
+const NOTICE_TTL_MS = 8000;
+const MAX_VISIBLE = 4;
+
+export function initUnreadNotices({ root, onOpen }) {
+  if (!root) return { notify: () => {} };
+
+  function dismiss(node) {
+    if (!node.isConnected) return;
+    node.classList.add("is-leaving");
+    node.addEventListener("transitionend", () => node.remove(), { once: true });
+    // Belt and braces: if the element never transitions (reduced motion, or a
+    // display change mid-flight) it would otherwise sit there forever.
+    setTimeout(() => node.remove(), 400);
+  }
+
+  function notify({ convId, title, body, icon }) {
+    const node = document.createElement("button");
+    node.type = "button";
+    node.className = "byte-notice";
+    node.dataset.conversationId = String(convId);
+
+    const iconHtml = icon
+      ? `<img class="byte-notice-icon" src="${icon}" alt="" />`
+      : "";
+    node.innerHTML = `
+      ${iconHtml}
+      <span class="byte-notice-text">
+        <span class="byte-notice-title"></span>
+        <span class="byte-notice-body"></span>
+      </span>
+    `;
+    node.querySelector(".byte-notice-title").textContent = title || "New message";
+    node.querySelector(".byte-notice-body").textContent = body || "";
+
+    node.addEventListener("click", () => {
+      dismiss(node);
+      onOpen?.(convId);
+    });
+
+    root.appendChild(node);
+    // Next frame, so the entry transition has a start state to move from.
+    requestAnimationFrame(() => node.classList.add("is-in"));
+
+    // Trim the OLDEST once the stack is deep. querySelectorAll is DOM order,
+    // which is oldest-first — and the stack renders `column-reverse`, so those
+    // are the ones furthest from the header and least likely to be read.
+    const all = Array.from(root.querySelectorAll(".byte-notice:not(.is-leaving)"));
+    all.slice(0, Math.max(0, all.length - MAX_VISIBLE)).forEach(dismiss);
+
+    setTimeout(() => dismiss(node), NOTICE_TTL_MS);
+  }
+
+  return { notify };
+}

@@ -202,6 +202,18 @@ export class ConversationManager {
     return this.conversations.find((c) => c.id === this.currentId) || null;
   }
 
+  // Name + face for one conversation, for anything OUTSIDE the drawer that has
+  // to say which thread something happened in. Goes through the same label
+  // fallback and the same theme table the rows do, so an unread notice can't
+  // end up calling a thread something the list doesn't.
+  chromeFor(id) {
+    const convo = this.conversations.find((c) => c.id === id);
+    if (!convo) return null;
+
+    const chrome = convo.mode === "buddy" && buddyThemes()[convo.buddy_theme];
+    return { name: convoLabel(convo), icon: chrome ? chrome.avatar : null };
+  }
+
   // ---------- server sync ----------
 
   async refresh() {
