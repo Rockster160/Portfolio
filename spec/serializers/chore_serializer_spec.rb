@@ -461,12 +461,34 @@ RSpec.describe ChoreSerializer, type: :serializer do
         expect(render(f)[:due_today]).to be(true)
       end
 
-      it "anonymous anchor completion does not surface follower" do
+      # Anonymous means the work happened, just uncredited — laundry
+      # marked done by someone outside the household still has to be
+      # folded. Anonymous already counts for cooldown and for household
+      # carryover; the anchor path used to be the one place it didn't.
+      it "anonymous anchor completion DOES surface the follower" do
         f = follower
-        create(:chore_completion, chore: anchor, user: user,
+        create(
+          :chore_completion, chore: anchor, user: user,
           completed_at: 2.hours.ago, day_key: today, anonymous: true,
-          payout_skipped: true, paid_pebbles: 0, skipped_reason: :anonymous_credit)
-        expect(render(f)[:today_visible]).to be(false)
+          payout_skipped: true, paid_pebbles: 0, skipped_reason: :anonymous_credit
+        )
+        expect(render(f)[:today_visible]).to be(true)
+        expect(render(f)[:due_today]).to be(true)
+      end
+
+      # The consumers of "did this chore get done" must agree.
+      it "agrees with the cooldown path about an anonymous completion" do
+        anchor.update!(threshold_seconds: Chore::THRESHOLD_DAY_RESET)
+        f = follower
+        create(
+          :chore_completion, chore: anchor, user: user,
+          completed_at: 2.hours.ago, day_key: today, anonymous: true,
+          payout_skipped: true, paid_pebbles: 0, skipped_reason: :anonymous_credit
+        )
+        # Holds the anchor's own cooldown...
+        expect(anchor.reload.cooldown_elapsed?(user)).to be(false)
+        # ...and now also surfaces the follower. Previously only the first.
+        expect(render(f)[:today_visible]).to be(true)
       end
 
       it "follower completed today after anchor → stays visible today (B's mid-day completion never removes)" do

@@ -383,12 +383,19 @@ class Chore < ApplicationRecord
   # fired for anybody else. Family-aware for the same reason the bulk
   # path is — a parent-anchored follower fires when any sub-chore of the
   # parent is credited.
+  #
+  # EVERY completion counts, including anonymous ones. The question is
+  # "did A get done", not "who earned it": laundry marked done by someone
+  # outside the household still has to be folded. Filtering to `.credited`
+  # here made anonymous mean done-for-cooldown (see `cooldown_elapsed?`)
+  # and done-for-carryover but not-done-for-followers, which is the one
+  # place the three disagreed.
   def lookup_anchor_last_day(user)
     return nil if anchor_chore_id.blank?
     return nil if user.nil?
     return nil if anchor_chore.nil?
 
-    ChoreCompletion.credited
+    ChoreCompletion
       .where(user_id: anchor_chore.cooldown_scope_user_ids(user))
       .where("chore_id = :id OR parent_chore_id = :id", id: anchor_chore_id)
       .maximum(:day_key)

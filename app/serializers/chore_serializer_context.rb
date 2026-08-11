@@ -227,9 +227,11 @@ class ChoreSerializerContext
       anchor_ids = group.map(&:anchor_chore_id).uniq
       user_ids = scope == :household ? household_user_ids : [viewer.id]
       # Anchor completions can be sub-chore taps too — a parent-anchored
-      # follower fires when ANY sub-chore of the parent is credited.
-      # Same family-aware OR as the other lookups.
-      last_days = ChoreCompletion.credited
+      # follower fires when ANY sub-chore of the parent is completed.
+      # Same family-aware OR as the other lookups. Anonymous completions
+      # count: the question is "did A get done", not "who earned it".
+      # See Chore#lookup_anchor_last_day, which must stay in step.
+      last_days = ChoreCompletion
         .where(user_id: user_ids)
         .where("chore_id IN (:ids) OR parent_chore_id IN (:ids)", ids: anchor_ids)
         .pluck(:chore_id, :parent_chore_id, :day_key)
