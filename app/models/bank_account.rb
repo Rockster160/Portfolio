@@ -81,6 +81,16 @@ class BankAccount < ApplicationRecord
     cents_to_decimal(available_balance_cents)
   end
 
+  # What this account contributes to what is actually spendable. Institutions
+  # report an available figure on asset accounts only — a card sends "0.00",
+  # which is a placeholder rather than its headroom — so a card falls back to
+  # its balance, which is the debt it takes off what you can spend.
+  def spendable_cents
+    return balance_cents unless ASSET_KINDS.include?(kind&.to_sym)
+
+    available_balance_cents || balance_cents
+  end
+
   # How old the institution's own figure is, NOT how recently we polled. A
   # refresh that failed upstream still returns 200 with a stale balance-date.
   def balance_age

@@ -85,11 +85,49 @@ RSpec.describe SystemController, type: :controller do
         expect(response.body).to include(%(<span class="sub">PREMIER PLUS CKG (2363)</span>))
       end
 
-      it "says so when nothing is designated checking" do
-        checking.update!(kind: :savings)
+      it "says so when nothing feeds the dashboard figure" do
+        checking.update!(kind: :loan)
+        card.update!(kind: :loan)
         get :banking
 
         expect(response.body).to include("has nothing to read")
+      end
+
+      # The dashboard reads a sum that appears on no single row, so the page
+      # has to show it or the number is only derivable by adding them up.
+      it "shows the cumulative figure, with loans left out" do
+        checking.update!(kind: :checking)
+        BankAccount.create!(
+          simplefin_id: "ACT-M", name: "MORTGAGE LOAN (7153)", last4: "7153",
+          kind: :loan, balance_cents: -33_718_397
+        )
+
+        get :banking
+        # 18,320.24 - 1,988.53
+        expect(response.body).to include("Dashboard figure")
+        expect(response.body).to include("$16,331.71")
+      end
+
+      # The available column reads down to its own total rather than stopping
+      # at the rows, and it is netted against the cards the same way.
+      it "totals the available column too" do
+        checking.update!(kind: :checking, available_balance_cents: 1_800_000)
+
+        get :banking
+        # 18,000.00 - 1,988.53
+        expect(response.body).to include("$16,011.47 available")
+      end
+
+      it "marks every account that counts toward the figure" do
+        checking.update!(kind: :checking)
+        loan = BankAccount.create!(
+          simplefin_id: "ACT-M", name: "MORTGAGE LOAN (7153)", last4: "7153",
+          kind: :loan, balance_cents: -33_718_397
+        )
+
+        get :banking
+        expect(response.body.scan(%r{<em class="tag primary"}).size).to eq(2)
+        expect(SimpleFin::DashboardCache.included?(loan)).to be(false)
       end
 
       it "shows a transaction with the category from its linked event" do

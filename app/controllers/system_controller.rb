@@ -53,7 +53,8 @@ class SystemController < ApplicationController
   def banking
     @accounts = ::BankAccount.order(:kind, :name)
     @unclassified = @accounts.select(&:unknown?)
-    @primary = ::SimpleFin::DashboardCache.primary
+    @dashboard_cents = ::SimpleFin::DashboardCache.balance_cents
+    @dashboard_available = ::SimpleFin::DashboardCache.available_cents
     @stray_categories = ::TransactionCategory.unknown_in_use
     @unlinked_count = ::BankTransaction.unlinked.count
 

@@ -29,12 +29,13 @@
   <% else %>
     <% if @unclassified.any? %>
       <p class="bank-warn">
-        <%= pluralize(@unclassified.size, "account") %> still unclassified.
-        The dashboard balance stays blank until one is set to <strong>Checking</strong>.
+        <%= pluralize(@unclassified.size, "account") %> still unclassified, and left out of the
+        dashboard figure until a kind is set.
       </p>
-    <% elsif @primary.blank? %>
+    <% end %>
+    <% if @dashboard_cents.blank? %>
       <p class="bank-warn">
-        No account is set to <strong>Checking</strong>, so the dashboard balance has nothing to read.
+        No classified account outside a loan, so the dashboard figure has nothing to read.
       </p>
     <% end %>
 
@@ -73,14 +74,34 @@
                 <% if account.available_balance.present? %>
                   <%= money.call(account.available_balance) %> available
                 <% end %>
-                <% if account == @primary %>
-                  <em class="tag primary" title="The balance the dashboard reads">dashboard</em>
+                <% if SimpleFin::DashboardCache.included?(account) %>
+                  <em class="tag primary" title="Counted in the dashboard figure">dashboard</em>
                 <% end %>
               </span>
             </td>
           </tr>
         <% end %>
       </tbody>
+      <%# The dashboard reads a sum that appears on no single row, so show it
+          here rather than leaving it derivable only by adding them up. %>
+      <tfoot>
+        <tr>
+          <td colspan="2" class="total-label">
+            Dashboard figure
+            <span class="sub">Cumulative, excluding loans and unclassified</span>
+          </td>
+          <td class="right <%= sign_class.call(@dashboard_cents) if @dashboard_cents.present? %>">
+            <%= @dashboard_cents.present? ? cents.call(@dashboard_cents) : "—" %>
+          </td>
+          <%# Same cell the per-account available sits in, so the column reads
+              down to its own total rather than stopping at the rows. %>
+          <td class="meta">
+            <span class="sub">
+              <%= @dashboard_available.present? ? "#{cents.call(@dashboard_available)} available" : "" %>
+            </span>
+          </td>
+        </tr>
+      </tfoot>
     </table>
 
     <div class="lists-title bank-section">
@@ -424,11 +445,14 @@
     .bank-accounts td.acct-name { min-width: 180px; }
     .bank-accounts td.meta .age { display: block; white-space: nowrap; }
     .bank-accounts .tag.primary { color: #58D68D; background: rgba(88, 214, 141, 0.13); }
+    .bank-accounts tfoot td { border-bottom: none; border-top: 1px solid #334155; color: #E2E8F0; }
+    .bank-accounts tfoot .total-label { color: #94A3B8; }
 
     /* The line under an editable value: the institution's own account name,
        and whatever else is context rather than content. Scoped to these two
        cells — td.payee has its own .sub, laid out as a flex row of chips. */
-    .bank-accounts td.acct-name .sub, .bank-accounts td.meta .sub {
+    .bank-accounts td.acct-name .sub, .bank-accounts td.meta .sub,
+    .bank-accounts .total-label .sub {
       display: block; font-size: 11px; color: #64748B; line-height: 1.3; margin-top: 2px;
     }
 
