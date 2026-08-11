@@ -207,6 +207,90 @@ RSpec.describe SystemController, type: :controller do
     end
   end
 
+  describe "PATCH #update_transaction" do
+    before { sign_in me }
+
+    let(:event) {
+      ActionEvent.create!(
+        user: me, name: "Transaction", timestamp: 1.day.ago,
+        notes: "Mom Solder Iron",
+        data: { amount: 21.48, account: "(...7283)", category: "other" }
+      )
+    }
+    let(:linked) {
+      BankTransaction.create!(
+        simplefin_id: "TRN-A", bank_account: card, action_event: event,
+        posted_at: 1.day.ago, amount_cents: -2148, payee: "Netflix"
+      )
+    }
+    let(:unlinked) {
+      BankTransaction.create!(
+        simplefin_id: "TRN-B", bank_account: card,
+        posted_at: 1.day.ago, amount_cents: -300, payee: "Mystery"
+      )
+    }
+
+    it "sets one row's category and answers with its colour" do
+      patch :update_transaction, params: { id: linked.id, category: "subscriptions" }
+
+      expect(linked.reload.category).to eq("subscriptions")
+      expect(response.parsed_body["color"]).to eq(TransactionCategory.color("subscriptions"))
+    end
+
+    it "refuses a category outside the vocabulary" do
+      patch :update_transaction, params: { id: linked.id, category: "Extra Expense" }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body["error"]).to match(/not one of the 22/)
+      expect(linked.reload.category).to eq("other")
+    end
+
+    it "explains that an unlinked row has nowhere to hold a category" do
+      patch :update_transaction, params: { id: unlinked.id, category: "groceries" }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body["error"]).to match(/No linked event/)
+    end
+
+    it "shows the alert's note as the memo when the row has none" do
+      expect(linked.display_memo).to eq("Mom Solder Iron")
+      expect(linked).to be_memo_from_event
+    end
+
+    it "saves an edited memo onto the row, overriding the inherited note" do
+      patch :update_transaction, params: { id: linked.id, memo: "Soldering iron for Mum" }
+
+      expect(linked.reload.memo).to eq("Soldering iron for Mum")
+      expect(linked.display_memo).to eq("Soldering iron for Mum")
+      expect(linked).not_to be_memo_from_event
+      expect(event.reload.notes).to eq("Mom Solder Iron")
+    end
+
+    it "falls back to the alert's note when the memo is cleared" do
+      linked.update!(memo: "typed")
+
+      patch :update_transaction, params: { id: linked.id, memo: "  " }
+
+      expect(linked.reload.memo).to be_nil
+      expect(linked.display_memo).to eq("Mom Solder Iron")
+    end
+
+    it "saves a memo on an unlinked row, which has no event to write to" do
+      patch :update_transaction, params: { id: unlinked.id, memo: "Cash withdrawal" }
+
+      expect(unlinked.reload.display_memo).to eq("Cash withdrawal")
+    end
+
+    it "is not reachable by a standard user" do
+      sign_in standard
+
+      patch :update_transaction, params: { id: linked.id, category: "groceries" }
+
+      expect(response).to have_http_status(:not_found)
+      expect(linked.reload.category).to eq("other")
+    end
+  end
+
   describe "PATCH #bulk_update_transactions" do
     before { sign_in me }
 

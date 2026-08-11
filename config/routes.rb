@@ -553,6 +553,8 @@ Rails.application.routes.draw do
     # Above the `:id` patch so "transactions" can't be read as an account id.
     patch "/system/banking/transactions" => "system#bulk_update_transactions",
       as: :system_bank_transactions_bulk
+    patch "/system/banking/transactions/:id" => "system#update_transaction",
+      as: :system_bank_transaction
     patch "/system/banking/:id" => "system#update_bank_account", as: :system_bank_account
   end
   mount ::ActionCable.server => "/cable"

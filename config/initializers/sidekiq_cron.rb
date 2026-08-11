@@ -25,6 +25,7 @@ return if Rails.const_defined?("Rails::Command::RunnerCommand")
 every_minute = "* * * * *"
 every_5_minutes = "*/5 * * * *"
 every_hour = "0 * * * *"
+every_2_hours = "0 */2 * * *"
 every_3_daylight_hours = "0 5-21/3 * * * MST"
 daily_3am = "0 3 * * * MST"
 daily_4am = "0 4 * * * MST"
@@ -113,6 +114,13 @@ cron_jobs = [
     name:  "Archive Aged Executions",
     class: "ExecutionArchiveWorker",
     cron:  daily_3am,
+  },
+  {
+    # SimpleFIN is poll-only and budgets ~24 requests/day; twelve leaves room
+    # for a manual run. See SimpleFinSyncWorker.
+    name:  "Sync SimpleFIN Balances And Transactions",
+    class: "SimpleFinSyncWorker",
+    cron:  every_2_hours,
   },
 ]
 

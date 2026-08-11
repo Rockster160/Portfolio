@@ -99,7 +99,7 @@
       <code>NOT</code> to negate, <code>AND</code> / <code>OR</code>. Fields:
       payee, description, memo, mcc, <code>amount</code>, posted_at,
       transacted_at, account, category, pending, linked,
-      <code>direction</code>.
+      <code>direction</code>, <code>transfer</code>.
       <br>
       <code>amount</code> is in dollars and always positive — a $40 charge and a
       $40 deposit both match <code>amount::40</code>. Use
@@ -120,6 +120,12 @@
       <div><span class="bank-totals-label">Net</span>
         <span class="<%= sign_class.call(@spend_cents + @income_cents) %>">
           <%= cents.call(@spend_cents + @income_cents) %></span></div>
+      <% if @transfer_count.positive? %>
+        <div title="Money moved between your own accounts — excluded from the figures above so it isn't counted twice">
+          <span class="bank-totals-label">Transfers</span>
+          <span class="bank-muted"><%= @transfer_count %> excluded</span>
+        </div>
+      <% end %>
     </div>
 
     <% if @category_totals.any? %>
@@ -172,6 +178,7 @@
             <th class="tick"><input type="checkbox" data-check-all></th>
             <th>When</th>
             <th>Payee</th>
+            <th>Memo</th>
             <th>Account</th>
             <th>Category</th>
             <th class="right">Amount</th>
@@ -179,7 +186,7 @@
         </thead>
         <tbody>
           <% @transactions.each do |transaction| %>
-            <tr>
+            <tr data-row data-url="<%= system_bank_transaction_path(transaction) %>">
               <td class="tick">
                 <input type="checkbox" name="transaction_ids[]"
                        value="<%= transaction.id %>" form="bank-bulk-form">
@@ -191,17 +198,28 @@
               <td>
                 <%= transaction.display_payee %>
                 <% if transaction.pending? %><em>pending</em><% end %>
+                <% if transaction.transfer? %>
+                  <em class="xfer" title="Between your own accounts — not counted as spending or income">transfer</em>
+                <% end %>
+              </td>
+              <td class="memo">
+                <input type="text" data-memo
+                       class="<%= "inherited" if transaction.memo_from_event? %>"
+                       value="<%= transaction.display_memo %>"
+                       placeholder="—"
+                       title="<%= "From the alert's note" if transaction.memo_from_event? %>">
               </td>
               <td><%= transaction.bank_account.display_name %></td>
-              <td>
-                <% if transaction.category.present? %>
-                  <span class="bank-cat">
-                    <span class="bank-cat-dot"
-                          style="background: <%= TransactionCategory.color(transaction.category) %>;"></span>
-                    <%= TransactionCategory.label(transaction.category) %>
-                  </span>
+              <td class="cat">
+                <% if transaction.action_event.present? %>
+                  <span class="bank-cat-dot" data-dot
+                        style="background: <%= TransactionCategory.color(transaction.category) %>;"></span>
+                  <%= select_tag(:category,
+                        options_for_select(TransactionCategory.options, transaction.category),
+                        include_blank: transaction.category.blank?,
+                        data: { category: true }) %>
                 <% else %>
-                  <span class="bank-muted">unlinked</span>
+                  <span class="bank-muted" title="No linked alert to hold a category">unlinked</span>
                 <% end %>
               </td>
               <td class="right <%= sign_class.call(transaction.amount_cents) %>">
@@ -233,6 +251,76 @@
           });
         });
       }
+
+      // Inline edits save one field on one row and patch the row in place.
+      // Reloading after every category pick would lose scroll position on a
+      // hundred-row table.
+      var token = document.querySelector('meta[name="csrf-token"]');
+
+      function flash(row, ok) {
+        row.classList.remove("saved", "failed");
+        row.classList.add(ok ? "saved" : "failed");
+        window.setTimeout(function () { row.classList.remove("saved", "failed"); }, 1200);
+      }
+
+      function save(row, body) {
+        return window.fetch(row.getAttribute("data-url"), {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "X-CSRF-Token": token ? token.getAttribute("content") : "",
+          },
+          credentials: "same-origin",
+          body: JSON.stringify(body),
+        }).then(function (res) {
+          return res.json().then(function (data) {
+            if (!res.ok) { throw new Error(data.error || "Save failed"); }
+            return data;
+          });
+        });
+      }
+
+      document.querySelectorAll("[data-row]").forEach(function (row) {
+        var select = row.querySelector("[data-category]");
+        var dot = row.querySelector("[data-dot]");
+        var memo = row.querySelector("[data-memo]");
+
+        if (select) {
+          var previous = select.value;
+          select.addEventListener("change", function () {
+            save(row, { category: select.value }).then(function (data) {
+              if (dot && data.color) { dot.style.background = data.color; }
+              previous = select.value;
+              flash(row, true);
+            }).catch(function (err) {
+              select.value = previous; // never leave a value showing that didn't save
+              flash(row, false);
+              window.alert(err.message);
+            });
+          });
+        }
+
+        if (memo) {
+          var saved = memo.value;
+          var commit = function () {
+            if (memo.value === saved) { return; }
+            save(row, { memo: memo.value }).then(function (data) {
+              saved = memo.value;
+              memo.classList.toggle("inherited", !!data.from_event);
+              flash(row, true);
+            }).catch(function (err) {
+              memo.value = saved;
+              flash(row, false);
+              window.alert(err.message);
+            });
+          };
+          memo.addEventListener("blur", commit);
+          memo.addEventListener("keydown", function (event) {
+            if (event.key === "Enter") { event.preventDefault(); memo.blur(); }
+          });
+        }
+      });
 
       // Applying to a whole search can touch far more than is on screen.
       var wide = document.querySelector("[data-confirm-count]");
@@ -308,15 +396,39 @@
     .bank-table .tick { width: 28px; }
     .bank-table .when { white-space: nowrap; }
     .bank-table em { color: #F5B041; font-style: normal; font-size: 12px; }
+    .bank-table em.xfer { color: #6E7681; }
 
-    .bank-cat { display: inline-flex; align-items: center; gap: 6px; }
-    .bank-cat-dot { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
+    .bank-cat-dot {
+      width: 8px; height: 8px; border-radius: 2px;
+      display: inline-block; vertical-align: middle; margin-right: 6px;
+    }
 
-    .pos { color: #58D68D; }
-    .neg { color: #EC7063; }
+    .bank-table td.cat select {
+      background: transparent; border: 1px solid transparent; color: #CBD5E1;
+      padding: 2px 4px; max-width: 150px;
+    }
+    .bank-table td.cat select:hover { border-color: #334155; }
+    .bank-table td.memo input {
+      background: transparent; border: 1px solid transparent; color: #CBD5E1;
+      padding: 2px 4px; width: 100%; min-width: 120px;
+    }
+    .bank-table td.memo input:hover { border-color: #334155; }
+    /* Shown in muted italic while it is still the alert's note rather than
+       something typed here — so "inherited" and "edited" are distinguishable. */
+    .bank-table td.memo input.inherited { color: #94A3B8; font-style: italic; }
+    .bank-table td.memo input:focus { font-style: normal; color: #E2E8F0; }
+    .bank-table tr.saved td.cat select,
+    .bank-table tr.saved td.memo input { border-color: #58D68D; }
+    .bank-table tr.failed td.cat select,
+    .bank-table tr.failed td.memo input { border-color: #EC7063; }
+
+    /* `.bank-table td` is (0,1,1) and beats a bare `.neg` (0,1,0), which is why
+       every amount rendered white. Matching the element makes these win. */
+    .pos, .bank-table td.pos { color: #58D68D; }
+    .neg, .bank-table td.neg { color: #EC7063; }
 
     @media (max-width: 720px) {
-      .bank-table th:nth-child(4), .bank-table td:nth-child(4) { display: none; }
+      .bank-table th:nth-child(5), .bank-table td:nth-child(5) { display: none; }
       .bank-bar-label { flex-basis: 90px; }
       .bank-bar-value { flex-basis: 90px; }
     }

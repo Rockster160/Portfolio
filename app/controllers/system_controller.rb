@@ -60,10 +60,15 @@ class SystemController < ApplicationController
     @query = params[:q].to_s.strip
     scope = filtered_transactions
 
-    @spend_cents = scope.spending.sum(:amount_cents)
-    @income_cents = scope.income.sum(:amount_cents)
+    # Totals and the chart run on real money only. A self-transfer is the same
+    # money seen twice — counting it inflates BOTH spend and income by the same
+    # amount, so a card payoff reads as if the purchase happened twice.
+    real = scope.real_money
+    @spend_cents = real.spending.sum(:amount_cents)
+    @income_cents = real.income.sum(:amount_cents)
     @result_count = scope.count
-    @category_totals = category_totals(scope)
+    @transfer_count = scope.count - real.count
+    @category_totals = category_totals(real)
 
     listing = scope.includes(:bank_account, :action_event).recent_first
     @transactions = listing.page(params[:page]).per(TRANSACTION_PAGE)
@@ -77,6 +82,31 @@ class SystemController < ApplicationController
     ::SimpleFin::DashboardCache.refresh!
 
     redirect_to(system_banking_path, notice: "Updated #{account.display_name}.")
+  end
+
+  # One row, one field, answered as JSON so the row updates in place. A full
+  # reload after every category pick would throw away scroll position on a
+  # hundred-row table.
+  def update_transaction
+    transaction = ::BankTransaction.find(params[:id])
+    changed = {}
+
+    if params.key?(:category)
+      unless transaction.apply_category(params[:category])
+        return render(json: { error: category_error(transaction) }, status: :unprocessable_entity)
+      end
+
+      changed[:category] = transaction.category
+      changed[:color] = ::TransactionCategory.color(transaction.category)
+    end
+
+    if params.key?(:memo)
+      transaction.update!(memo: params[:memo].to_s.strip.presence)
+      changed[:memo] = transaction.display_memo
+      changed[:from_event] = transaction.memo_from_event?
+    end
+
+    render(json: changed)
   end
 
   # Applies one category across a checkbox selection, or across every row the
@@ -124,6 +154,14 @@ class SystemController < ApplicationController
 
   def bank_account_params
     params.require(:bank_account).permit(:friendly_name, :kind)
+  end
+
+  # Category is stored on the linked event, so an unlinked row has nowhere to
+  # put one. Say which of the two it is rather than a generic failure.
+  def category_error(transaction)
+    return "No linked event to hold a category." if transaction.action_event.blank?
+
+    "#{params[:category]} is not one of the #{::TransactionCategory::ALL.size} categories."
   end
 
   # A malformed query is a typo, not a 500. Surfaces the parser's own message

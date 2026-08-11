@@ -25,6 +25,9 @@ class BankTransaction < ApplicationRecord
   # email never covered — mortgage payments, most checking activity.
   # The FK is ON DELETE SET NULL: the bank row outlives its annotation.
   belongs_to :action_event, optional: true
+  # The other half of a movement between two of your own accounts. Symmetric —
+  # both rows point at each other — so a pair reads the same from either side.
+  belongs_to :transfer_counterpart, class_name: "BankTransaction", optional: true
 
   validates :simplefin_id, presence: true, uniqueness: true
   validates :posted_at, presence: true
@@ -51,7 +54,8 @@ class BankTransaction < ApplicationRecord
     account:   :search_account,
     category:  :search_category,
     pending:   :search_pending,
-    linked:    :search_linked
+    linked:    :search_linked,
+    transfer:  :search_transfer
 
   scope :posted_between, ->(from, to) { where(posted_at: from..to) }
   scope :recent_first, -> { order(posted_at: :desc) }
@@ -59,6 +63,20 @@ class BankTransaction < ApplicationRecord
   scope :income, -> { where(amount_cents: 1..) }
   scope :linked, -> { where.not(action_event_id: nil) }
   scope :unlinked, -> { where(action_event_id: nil) }
+  scope :paired, -> { where.not(transfer_counterpart_id: nil) }
+  scope :unpaired, -> { where(transfer_counterpart_id: nil) }
+
+  # Both halves of a self-transfer, plus anything hand-flagged `transfer: true`
+  # on its alert — 92 events already carry that flag and it is the user's own
+  # judgement, which beats any inference here.
+  scope :transfers, -> {
+    where(id: paired.select(:id)).or(
+      where(action_event_id: ::ActionEvent.where("data->>'transfer' = 'true'").select(:id)),
+    )
+  }
+  # What totals and the category chart run on: a transfer is not spending and
+  # not income, it is the same money seen twice.
+  scope :real_money, -> { where.not(id: transfers.select(:id)) }
 
   # Two constraints shape these, both learned the hard way:
   #
@@ -119,6 +137,10 @@ class BankTransaction < ApplicationRecord
     boolean_terms(qs).include?(true) ? linked : unlinked
   }
 
+  scope :search_transfer, ->(*qs) {
+    boolean_terms(qs).include?(true) ? transfers : real_money
+  }
+
   def self.like_terms(values)
     Array.wrap(values).flatten.compact_blank.map { |q| "%#{q}%" }
   end
@@ -173,6 +195,26 @@ class BankTransaction < ApplicationRecord
 
   def display_payee
     payee.presence || description.presence || "—"
+  end
+
+  # SimpleFIN sends `memo` as an empty string on every Chase row, so the note
+  # worth showing is the one typed into the Prompt the alert raises — it lands
+  # on the ActionEvent as `notes` ("Mom Solder Iron", "Puppy Bed Treats"), and
+  # 2,539 of 2,560 events have one.
+  #
+  # The row's own `memo` wins when set, which is what editing writes to. That
+  # keeps editing predictable: it always works, including on an unlinked row
+  # that has no event to write to, and what you typed is always what you see.
+  def display_memo
+    memo.presence || action_event&.notes.presence
+  end
+
+  def memo_from_event?
+    memo.blank? && action_event&.notes.present?
+  end
+
+  def transfer?
+    transfer_counterpart_id.present? || action_event&.data&.dig("transfer") == true
   end
 
   private
