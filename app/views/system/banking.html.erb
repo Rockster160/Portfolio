@@ -179,7 +179,6 @@
             <th>When</th>
             <th>Payee</th>
             <th>Memo</th>
-            <th>Account</th>
             <th>Category</th>
             <th class="right">Amount</th>
           </tr>
@@ -195,18 +194,23 @@
                 <span class="date"><%= transaction.occurred_local&.strftime("%b %-d, %Y") %></span>
                 <span class="time"><%= transaction.occurred_local&.strftime("%-I:%M %p") %></span>
               </td>
-              <td>
-                <%= transaction.display_payee %>
-                <% if transaction.pending? %><em>pending</em><% end %>
-                <% if transaction.transfer? %>
-                  <em class="xfer" title="Between your own accounts — not counted as spending or income">transfer</em>
-                <% end %>
+              <td class="payee">
+                <span class="name"><%= transaction.display_payee %></span>
+                <span class="sub">
+                  <span class="acct"><%= transaction.bank_account.display_name %></span>
+                  <% if transaction.pending? %>
+                    <em class="tag pending">pending</em>
+                  <% end %>
+                  <% if transaction.transfer? %>
+                    <em class="tag xfer"
+                        title="Between your own accounts — not counted as spending or income">transfer</em>
+                  <% end %>
+                </span>
               </td>
               <td class="memo">
                 <span class="memo-text" data-memo contenteditable="true" spellcheck="false"
                       title="Click to edit · Enter saves · Esc cancels"><%= transaction.display_memo %></span>
               </td>
-              <td><%= transaction.bank_account.display_name %></td>
               <td class="cat">
                 <% if transaction.action_event.present? %>
                   <span class="bank-cat-dot" data-dot
@@ -428,8 +432,29 @@
     .bank-table td.when .time { display: block; font-size: 11px; color: #64748B; }
     .bank-table .right { text-align: right; font-variant-numeric: tabular-nums; }
     .bank-table .tick { width: 28px; }
-    .bank-table em { color: #F5B041; font-style: normal; font-size: 12px; }
-    .bank-table em.xfer { color: #6E7681; }
+
+    /* Payee stacks the same way the date does: name on top, context under it.
+       That reclaims the whole Account column for the columns that need width. */
+    .bank-table td.payee { line-height: 1.15; }
+    .bank-table td.payee .name { display: block; }
+    .bank-table td.payee .sub {
+      display: flex; align-items: center; gap: 6px; margin-top: 2px;
+    }
+    /* The account is plain muted text; states are chips. Distinguished by
+       SHAPE, not just color — two grays side by side would read as one thing,
+       and "Sapphire" is not a state. */
+    .bank-table td.payee .acct { font-size: 11px; color: #64748B; }
+    .bank-table td.payee .tag {
+      font-style: normal;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 1px 5px;
+      border-radius: 3px;
+      white-space: nowrap;
+    }
+    .bank-table td.payee .tag.pending { color: #F5B041; background: rgba(245, 176, 65, 0.13); }
+    .bank-table td.payee .tag.xfer { color: #94A3B8; background: rgba(148, 163, 184, 0.13); }
 
     .bank-cat-dot {
       width: 8px; height: 8px; border-radius: 2px;
@@ -476,7 +501,10 @@
     .neg, .bank-table td.neg { color: #EC7063; }
 
     @media (max-width: 720px) {
-      .bank-table th:nth-child(5), .bank-table td:nth-child(5) { display: none; }
+      /* Memo, not column 5 — that used to be Account and is now Category,
+         which carries the dropdown and must not disappear. Memo is the widest
+         and the least useful for scanning. */
+      .bank-table th:nth-child(4), .bank-table td:nth-child(4) { display: none; }
       .bank-bar-label { flex-basis: 90px; }
       .bank-bar-value { flex-basis: 90px; }
     }

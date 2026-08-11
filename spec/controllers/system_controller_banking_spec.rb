@@ -225,6 +225,35 @@ RSpec.describe SystemController, type: :controller do
       expect(response.body).not_to include(%(<input type="text" data-memo))
     end
 
+    # Account moved under the payee and its own column went away, so the row
+    # has one fewer cell and the responsive rule had to move with it.
+    it "stacks the account under the payee instead of in its own column" do
+      linked_transaction(cents: -500, category: "fun", payee: "Arcade")
+
+      get :banking
+      expect(response.body).to include(%(<span class="acct">AMZ Prime (7283)</span>))
+      expect(response.body).not_to include("<th>Account</th>")
+    end
+
+    it "marks a transfer as a tag, distinct from the account text" do
+      other = BankAccount.create!(
+        simplefin_id: "ACT-9", name: "MORTGAGE LOAN (7153)", last4: "7153"
+      )
+      out = BankTransaction.create!(
+        simplefin_id: "TRN-OUT", bank_account: card,
+        posted_at: 1.day.ago, transacted_at: 1.day.ago, amount_cents: -139_325
+      )
+      BankTransaction.create!(
+        simplefin_id: "TRN-IN", bank_account: other,
+        posted_at: 1.day.ago, transacted_at: 1.day.ago, amount_cents: 139_325
+      )
+      SimpleFin::TransferDetector.call
+      expect(out.reload).to be_transfer
+
+      get :banking
+      expect(response.body).to include(%(<em class="tag xfer"))
+    end
+
     it "colors a negative amount" do
       linked_transaction(cents: -500, category: "fun", payee: "Arcade")
 
