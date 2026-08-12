@@ -5,6 +5,19 @@ class WhisperController < ApplicationController
   OWNER_IDS = [1, CHELSEA_ID].freeze
   CARETAKER_IDS = [EVE_ID].freeze
 
+  # NOTE! When adding one, share the task with Chelsea — otherwise it renders
+  # blank on her iPad and never receives its broadcast.
+  BUTTON_MONITORS = [
+    :fed,
+    :water,
+    :"nap-toggle",
+    :"home-toggle",
+    :sleep,
+    :outside,
+    :quiet,
+    :"nap-sound",
+  ].freeze
+
   before_action :authorize_user
   before_action :authorize_whisper_viewer, only: :show
   before_action :authorize_whisper_owner, only: :log_vomit
@@ -13,23 +26,10 @@ class WhisperController < ApplicationController
     return unless whisper_owner?
 
     @list = current_user.ordered_lists.find(360)
-    # @list.users << chels test
 
-    task_ids = [
-      220, # Fed
-      221, # Nap Toggle
-      230, # Gone Toggle
-      225, # Sleep
-      275, # Outside Toggle
-      # TODO: Replace with new task IDs after running prodExec whisper_new_buttons.rb
-      311, # Quiet Btn
-      312, # Nap Sound Btn
-      413, # Fae Probiotic
-      # NOTE! When adding new tasks, ensure they are shared!
-    ]
-    # chels = User.find(58128)
-    # task_ids.each { SharedTask.find_or_create_by(user: chels, task_id: _1) }
-    @tasks = current_user.accessible_tasks.where(id: task_ids).sort_by { |t| task_ids.index(t.id) }
+    listeners = BUTTON_MONITORS.map { |monitor| "monitor::whisper-btn-#{monitor}" }
+    tasks = current_user.accessible_tasks.where(listener: listeners).index_by(&:listener)
+    @tasks = listeners.filter_map { |listener| tasks[listener] }
   end
 
   def log_vomit
