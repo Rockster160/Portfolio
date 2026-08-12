@@ -15,6 +15,7 @@ module ByteNotifier
 
   def notify(user, message)
     return unless message.state == "delivered"
+    return if kiosk?(message)
 
     meta = message.metadata.is_a?(Hash) ? message.metadata : {}
 
@@ -53,6 +54,19 @@ module ByteNotifier
       # is exactly when a badge is the whole point.
       data:          { count: ByteConversation.unread_total_for(user) },
     )
+  end
+
+  # The wall tablet never pushes, and no exception in `always_notify?` gets to
+  # override it. It's a screen that is always on and always in one room: it
+  # renders everything live over the socket, so a push adds nothing THERE, and
+  # what it would actually do is buzz the phone in somebody's pocket every time
+  # a person standing in the kitchen taps a routine.
+  #
+  # A pinned thread is the whole test. There's no device-level way to ask this:
+  # a push goes to every subscription on the account, and the tablet's browser
+  # isn't a subscription anyone registered.
+  def kiosk?(message)
+    message.byte_conversation&.kiosk?
   end
 
   # Presence suppression assumes "the app is open" means "they'll see it". That

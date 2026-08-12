@@ -153,4 +153,48 @@ RSpec.describe SimpleFin::EventMatcher do
     described_class.call(BankTransaction.where(simplefin_id: "nope"))
     expect(row.reload.action_event).to be_nil
   end
+
+  # The historical backfill produces years of rows that predate the alerts and
+  # can never match. Re-examining them on every sync is a scan that grows with
+  # the backfill rather than with the work.
+  describe ".matchable" do
+    it "skips a row from before the first alert" do
+      event(amount: 29.72, at: 2.days.ago)
+      old = transaction(amount_cents: -2972, at: 3.years.ago, simplefin_id: "TRN-OLD")
+      recent = transaction(amount_cents: -1000, at: 1.day.ago, simplefin_id: "TRN-NEW")
+
+      expect(described_class.matchable).to include(recent)
+      expect(described_class.matchable).not_to include(old)
+    end
+
+    # A charge is matched on `transacted_at`, which can precede the alert it
+    # belongs to. The bound has to leave room for that or the filter would cut
+    # off the very rows at the start of the history.
+    it "keeps a row whose charge sits just before the first alert" do
+      first = event(amount: 29.72, at: 2.days.ago)
+      edge = transaction(
+        amount_cents: -2972, at: first.timestamp - 2.days, simplefin_id: "TRN-EDGE",
+      )
+
+      expect(described_class.matchable).to include(edge)
+
+      described_class.call
+      expect(edge.reload.action_event).to eq(first)
+    end
+
+    # Nothing to bound against yet — better every row than none.
+    it "falls back to every unlinked row when there are no alerts at all" do
+      row = transaction(amount_cents: -2972, at: 3.years.ago)
+
+      expect(described_class.matchable).to include(row)
+    end
+
+    it "leaves a linked row out either way" do
+      first = event(amount: 29.72, at: 2.days.ago)
+      row = transaction(amount_cents: -2972, at: 1.day.ago)
+      row.update!(action_event: first)
+
+      expect(described_class.matchable).not_to include(row)
+    end
+  end
 end

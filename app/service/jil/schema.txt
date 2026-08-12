@@ -318,7 +318,7 @@
   #add(content(ChoreData))::Chore
   #update(String:Name content(ChoreData))::Chore
   #complete(String:Name content(ChoreCompletionData))::ChoreCompletion
-  #complete_for(String:Name String:"Username" Date?:Timestamp)::ChoreCompletion
+  #complete_for(String|Numeric:Name String:"Username" Date?:Timestamp)::ChoreCompletion
   #uncomplete(String:Name)::Boolean
   #mark_due(String:Name)::Chore
   #unmark_due(String:Name)::Chore

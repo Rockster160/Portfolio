@@ -27,7 +27,29 @@ module SimpleFin
     Result = Struct.new(:linked, :ambiguous, :unmatched, keyword_init: true)
 
     class << self
-      def call(scope=::BankTransaction.unlinked) = new(scope).call
+      def call(scope=matchable) = new(scope).call
+
+      # Unlinked rows that could actually find something.
+      #
+      # A bank row from before the first Chase alert has nothing it can ever
+      # match, and the historical backfill produces years of them. Left in the
+      # default scope they would be re-examined on every sync — fourteen times
+      # a day, forever — to reach the same answer, and the scan grows with the
+      # backfill rather than with the work.
+      #
+      # Derived from the data rather than configured, so it widens by itself
+      # if older alerts ever appear.
+      #
+      # Filtered on `posted_at` because `occurred_at` is a Ruby fallback, not a
+      # column. That is safe in the only direction that matters: a row is
+      # matched on `transacted_at`, which never runs later than `posted_at`, so
+      # nothing inside the window can sit outside this filter.
+      def matchable
+        earliest = ::ActionEvent.where(name: EVENT_NAME).minimum(:timestamp)
+        return ::BankTransaction.unlinked if earliest.nil?
+
+        ::BankTransaction.unlinked.where(posted_at: (earliest - WINDOW)..)
+      end
 
       # Reverse direction, for one event. Returns the transaction it linked, or
       # nil. Idempotent and safe to call on every event: it exits immediately

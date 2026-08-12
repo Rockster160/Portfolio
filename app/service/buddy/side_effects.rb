@@ -12,6 +12,14 @@ module Buddy
   #   1. Add a SCHEMAS entry (name, description, args).
   #   2. Add a `when :name` branch in `call`.
   #   3. Teach it in the persona's Rules of the House if it needs nuance.
+  #   4. If it can CHANGE A RECORD, decide what evidence it leaves. "Silent"
+  #      here means no prose and no checklist row — it was never meant to mean
+  #      no trace. A mutation with no chip is invisible twice over: the person
+  #      has nothing to point at, and Buddy has nothing to find in
+  #      `recent_actions`, which the persona tells it to read as proof that
+  #      something didn't happen. Post a Buddy::ActivityChip and report true
+  #      from `call`, or you get prod 3332-3337, where a refile that really
+  #      worked got talked out of having happened.
   module SideEffects
     module_function
 
@@ -25,18 +33,37 @@ module Buddy
 
     # Dispatch one structured tool call. Failures are logged and swallowed: a
     # bad side effect must never cost the person the rest of a good reply.
+    #
+    # Returns whether this call CHANGED SOMETHING IN THE WORLD, which is a
+    # different question from whether it succeeded. Silent is not the same as
+    # inconsequential — `sort_stash` refiles an idea — and a reply that says so
+    # is telling the truth. Until this reported anything, the retraction guard
+    # in Turn could see no evidence for such a claim and stood ready to erase a
+    # true sentence as unbacked.
+    #
+    # Only `sort_stash` answers it so far, because only it can answer honestly:
+    # it knows whether the row actually moved. The rest return false meaning
+    # NOT REPORTED rather than nothing-happened, and `remember`/`forget`/
+    # `add_note` would each need to distinguish a write from a no-op before
+    # they could join in. Under-reporting is the safe direction: it leaves
+    # today's behaviour exactly as it was, where over-reporting would hand a
+    # fabricated claim a free pass.
     def call(conversation, name, args)
       user = conversation.user
       args = (args || {}).transform_keys(&:to_sym)
 
       case name.to_sym
-      when :set_mood   then apply_mood(conversation, args[:expression])
-      when :add_note   then apply_note(conversation, args[:fact])
-      when :remember   then apply_remember(user, args[:fact], args[:expires_in])
-      when :forget     then apply_forget(user, args[:match])
-      when :sort_stash then Buddy::Stash.apply_sort(user, args)
+      when :sort_stash
+        Buddy::Stash.apply_sort(user, args, conversation: conversation)
+      else
+        case name.to_sym
+        when :set_mood then apply_mood(conversation, args[:expression])
+        when :add_note then apply_note(conversation, args[:fact])
+        when :remember then apply_remember(user, args[:fact], args[:expires_in])
+        when :forget   then apply_forget(user, args[:match])
+        end
+        false
       end
-      true
     rescue StandardError => e
       Rails.logger.warn("[Buddy::SideEffects] #{name} failed: #{e.class}: #{e.message}")
       false
@@ -93,10 +120,12 @@ module Buddy
         ),
         schema(
           :sort_stash,
-          "File or refine a brain-dumped idea. Pass category when first sorting it; pass summary " \
-          "alone to sharpen an existing note as the idea gets clearer. Pass drop when what they " \
-          "dumped wasn't a thought to hold at all and you have ALREADY put it where it belongs - " \
-          "on a list, or as a reminder - so it doesn't sit in two places. Silent.",
+          "File a JUST-DUMPED idea for the first time, or refine one. Pass category only when the " \
+          "idea has no bucket yet; refiling one that is ALREADY in a bucket because they told you " \
+          "it belongs somewhere else is `move_idea`, not this. Pass summary alone to sharpen an " \
+          "existing note as the idea gets clearer. Pass drop when what they dumped wasn't a " \
+          "thought to hold at all and you have ALREADY put it where it belongs - on a list, or as " \
+          "a reminder - so it doesn't sit in two places. Silent.",
           {
             id:       { type: :integer, required: true,  description: "Idea id from stashed_ideas" },
             category: { type: :enum,    required: false, values: %i[me home work], description: "Which bucket it belongs in" },

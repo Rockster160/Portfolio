@@ -118,6 +118,9 @@ module Buddy
     def notify!(user, action)
       message = action&.byte_message
       return if message.nil?
+      # A form on the wall is answered by tapping the wall. Same rule as
+      # ByteNotifier: the kiosk never pushes.
+      return if message.byte_conversation&.kiosk?
 
       # The message body IS the question ("Who did: Puppy Down?"), and the OS
       # already shows Byte's name and icon around it, so nothing is added here.
@@ -141,7 +144,7 @@ module Buddy
     # no point starting a thread for it either - somebody with no companion is
     # answering this in the app.
     def conversation_for(user)
-      user.byte_conversations.active.buddy.ordered.first
+      ByteConversation.for_self_initiated(user)
     end
   end
 end

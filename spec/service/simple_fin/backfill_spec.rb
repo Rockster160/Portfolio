@@ -209,6 +209,34 @@ RSpec.describe SimpleFin::Backfill do
 
       expect { described_class.call }.to change(BankTransaction, :count).by(4)
     end
+
+    # A backfilled row is exactly the inverted case EventMatcher exists for:
+    # the alert has been sitting there categorized for a year, and the bank row
+    # only just arrived.
+    it "links a backfilled row to the Chase alert that already described it" do
+      transaction("TRN-A", anchor)
+      stub_fetch(created: 1)
+      # The window is [anchor - 87d, anchor + 3d]; the stub posts its row one
+      # day into it. $10.00, matching the payload.
+      posted = anchor - 86.days
+      event = ActionEvent.create!(
+        user: User.me, name: "Transaction", timestamp: posted, notes: "Old thing",
+        data: { amount: 10.0, account: "(...2363)", category: "groceries" }
+      )
+
+      described_class.call
+
+      expect(BankTransaction.find_by(action_event_id: event.id)).to be_present
+    end
+
+    # Nothing to link to before the alerts start, and that is not a failure —
+    # the row is still worth having.
+    it "keeps a row from before the alerts, unlinked" do
+      transaction("TRN-A", anchor)
+      stub_fetch(created: 1)
+
+      expect { described_class.call }.to change(BankTransaction.unlinked, :count).by(1)
+    end
   end
 
   describe ".reset!" do

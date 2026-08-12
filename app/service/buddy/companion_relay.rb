@@ -18,8 +18,11 @@ module Buddy
     class << self
       # ---- resolving the recipient + their conversation ----
 
+      # The shared "where do unasked-for things go" picker — timers, alarms,
+      # remind_when, the Jil buddy methods and agenda notify-others all resolve
+      # their destination through here.
       def conversation_for(user)
-        user.byte_conversations.where(mode: :buddy).order(last_message_at: :desc).first ||
+        ByteConversation.for_self_initiated(user) ||
           user.byte_conversations.create!(mode: :buddy)
       end
 
@@ -217,7 +220,7 @@ module Buddy
         # up whenever the thread next happens to redraw.
         yield to_msg if block_given?
         broadcast(to_user, to_msg)
-        push(to_user, "#{sender["name"]}: #{text}")
+        push(to_user, "#{sender["name"]}: #{text}", conversation: to_convo)
 
         from_msg = from_convo.byte_messages.create!(
           user:         from_user,
@@ -308,7 +311,12 @@ module Buddy
         })
       end
 
-      def push(user, title)
+      def push(user, title, conversation: nil)
+        # Same rule as ByteNotifier — a relay that landed on the wall stays on
+        # the wall. Reachable even though `conversation_for` now avoids the
+        # kiosk, because a caller can hand over an explicit `to_conversation`.
+        return if conversation&.kiosk?
+
         WebPushNotifications.send_to_byte(
           title: "💬 #{title.to_s.truncate(160)}",
           tag:   "byte-relay-#{user.id}-#{Time.current.to_i}",

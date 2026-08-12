@@ -77,10 +77,10 @@ module Buddy
     end
 
     # Their newest Buddy thread, which is the one they're actually reading. A
-    # notification into an archived thread is a notification nobody sees.
+    # notification into an archived thread is a notification nobody sees, and
+    # one onto the wall tablet is one only the kitchen sees.
     def conversation_for(user)
-      user.byte_conversations.active.buddy.ordered.first ||
-        ByteConversation.default_for(user)
+      ByteConversation.for_self_initiated(user) || ByteConversation.default_for(user)
     end
 
     def generate(user, convo, briefing, notes, io: $stdout)

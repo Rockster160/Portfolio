@@ -75,6 +75,11 @@ module Buddy
       # Self-initiated pushes ignore presence - a reminder/watch fires when
       # it fires, regardless of whether the PWA thinks the user is looking.
       def notify(user, message, push_title:)
+        # The wall tablet is a screen in a room, not a device that follows
+        # anyone. It has the socket; a push here would only buzz a phone
+        # elsewhere in the house. Same rule as ByteNotifier.
+        return if message.byte_conversation&.kiosk?
+
         # OS shows the app name (Byte) and its icon, so the title is whatever
         # the caller hands over, unchanged. This used to staple a ⏰ onto every
         # one of them regardless of content - a glyph that leads EVERY

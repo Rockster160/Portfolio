@@ -25,7 +25,11 @@ module Buddy
     end
 
     def maybe_deliver(user, now)
-      conversation = ByteConversation.where(user_id: user.id, mode: :buddy).order(last_message_at: :desc).first
+      # Their own thread, never the wall tablet. The briefing is the clearest
+      # case of the whole rule: it's addressed to one person, it's the first
+      # thing they read, and on a kiosk it would be read by whoever walked into
+      # the kitchen — while the person it was written for got nothing.
+      conversation = ByteConversation.for_self_initiated(user)
       return if conversation.nil?
       return if defined?(Buddy::SleepGuard) && Buddy::SleepGuard.sleeping?(user)
 

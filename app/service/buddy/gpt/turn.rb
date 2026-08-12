@@ -500,7 +500,12 @@ module Buddy
           next unless event[:type] == :tool_call
           next unless Buddy::SideEffects.handles?(event[:name])
 
-          Buddy::SideEffects.call(@conversation, event[:name], event[:arguments])
+          # A side effect that really moved something counts as having acted,
+          # exactly like an acting answering tool. Without this, `sort_stash`
+          # refiling a stashed idea was invisible to the retraction guard, and
+          # a truthful "moved it to home" was one regex away from being wiped
+          # as an unbacked claim.
+          @acted = true if Buddy::SideEffects.call(@conversation, event[:name], event[:arguments])
         }
       end
 
@@ -1271,15 +1276,49 @@ module Buddy
       # So the check belongs HERE as well, after every normalization, which is
       # also the last point before the body is broadcast. A single part that
       # simply repeats itself is caught by the same pass.
+      #
+      # Exact match is not enough on its own. Prod 3337 came back as the same
+      # retraction twice, reworded in the middle: "it's still sitting in home
+      # already, so there wasn't anything to move" and "it's already in home,
+      # so there wasn't anything to move", opening and closing identically. To
+      # a reader that is one sentence said twice; to `==` it is two sentences.
+      # A model redrafting mid-response produces exactly this shape.
       def dedupe_paragraphs(body)
-        kept = Set.new
+        kept = []
         body.split(/\n{2,}/).filter_map { |para|
           para = para.strip
           next nil if para.empty?
-          next nil unless kept.add?(para.downcase)
+          next nil if kept.any? { |seen| restatement?(seen, para) }
 
+          kept << para
           para
         }.join("\n\n")
+      end
+
+      # Two paragraphs saying the same thing. Word-level Sørensen–Dice over the
+      # bare words, so punctuation, casing and a few swapped words don't hide a
+      # repeat.
+      #
+      # The threshold is deliberately high and the floor deliberately exists:
+      # short replies ARE mostly stock phrases, and "Okie!" against "Ok!" or
+      # "Done." against "Done!" must stay two separate things whenever Buddy
+      # genuinely meant both. Below eight words this stays out of the way and
+      # exact match (which already ran) does the work.
+      SIMILAR_ENOUGH = 0.8
+      MIN_COMPARABLE = 8
+
+      def restatement?(a, b)
+        return true if a.casecmp?(b)
+
+        left, right = words_of(a), words_of(b)
+        return false if left.size < MIN_COMPARABLE || right.size < MIN_COMPARABLE
+
+        overlap = left.tally.sum { |word, n| [n, right.count(word)].min }
+        (2.0 * overlap / (left.size + right.size)) >= SIMILAR_ENOUGH
+      end
+
+      def words_of(para)
+        para.downcase.scan(/[\p{L}\p{N}']+/)
       end
 
       # ---- progress ----------------------------------------------------------

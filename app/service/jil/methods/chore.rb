@@ -186,7 +186,7 @@ class Jil::Methods::Chore < Jil::Methods::Base
   # Backward-compat alias for prod Jil tasks that pre-date the
   # show_on_daily_view → show_on_today_view rename. New tasks should
   # use the canonical name.
-  alias_method :show_on_daily_view, :show_on_today_view
+  alias show_on_daily_view show_on_today_view
 
   # ---- [ChoreCompletionData] builders (used inside content(ChoreCompletionData)
   # blocks for Chore.complete). Mirrors ActionEventData shape.
@@ -228,7 +228,7 @@ class Jil::Methods::Chore < Jil::Methods::Base
     result = ::ChoreCompleter.new(
       chore, @jil.user,
       at:   sanitize_time(attrs[:timestamp]) || Time.current,
-      note: attrs[:note],
+      note: attrs[:note]
     ).call
     result.completion
   end
@@ -237,12 +237,19 @@ class Jil::Methods::Chore < Jil::Methods::Base
   # behalf of another user (resolved via load_user). Mirrors `#complete`
   # but credits the chosen user with the pebbles. Returns the
   # ChoreCompletion, or nil if the chore or user couldn't be resolved.
+  #
+  # The chore is resolved in the CREDITED user's scope, not the task
+  # owner's: "credit her for her chore" has to be able to see her
+  # personal chores, which `visible_to_user` hides from everyone else.
+  # Restricted to the task owner's own household so this can't reach
+  # across into a stranger's chores.
   def complete_for(name_or_chore, as_user, timestamp=nil)
-    chore = load_chore(name_or_chore)
-    return nil if chore.nil?
-
     user = load_user(as_user)
     return nil if user.nil?
+    return nil unless same_household?(user)
+
+    chore = find_for_user(name_or_chore, user)
+    return nil if chore.nil?
 
     at = sanitize_time(timestamp) || Time.current
     ::ChoreCompleter.new(chore, user, at: at).call.completion
@@ -531,6 +538,36 @@ class Jil::Methods::Chore < Jil::Methods::Base
     cast(value)
   end
 
+  # Same resolution as `cast`, but against another household member's
+  # visible set. Only `complete_for` uses it — see the note there.
+  def find_for_user(value, user)
+    return value if value.is_a?(::Chore)
+
+    scope = user.accessible_chores
+    case value
+    when ::Numeric then scope.find_by(id: value)
+    when ::String  then find_named_for(value, scope)
+    when ::Hash    then find_hashed_for(value.with_indifferent_access, scope)
+    end
+  end
+
+  def find_hashed_for(hash, scope)
+    return scope.find_by(id: hash[:id]) if hash[:id].present?
+
+    find_named_for(hash[:name], scope)
+  end
+
+  def find_named_for(name, scope)
+    return nil if name.to_s.strip.empty?
+
+    scope.where("chores.name ILIKE :q OR chores.short_name ILIKE :q", q: "%#{name}%").first
+  end
+
+  def same_household?(user)
+    household_id = @jil.user.chore_household_id
+    household_id.present? && user.chore_household_id == household_id
+  end
+
   def parse_time(value)
     return nil if value.nil?
     return value if value.is_a?(Time) || value.is_a?(DateTime) || value.is_a?(Date)
@@ -764,7 +801,7 @@ end
 #   #add(content(ChoreData))::Chore
 #   #update(String:Name content(ChoreData))::Chore
 #   #complete(String:Name Date?:Timestamp)::ChoreCompletion
-#   #complete_for(String:Name String:"Username" Date?:Timestamp)::ChoreCompletion
+#   #complete_for(String|Numeric:Name String:"Username" Date?:Timestamp)::ChoreCompletion
 #   #uncomplete(String)::Boolean
 #   #sync_event(String:"Chore Name" ActionEvent Hash?:"Event Attrs")::Boolean
 #   #sync_completion(String:"Chore Name" Hash|ChoreCompletion Hash:"Event Attrs")::Boolean

@@ -178,6 +178,44 @@ RSpec.describe Jil::Methods::Chore, type: :service do
     it "returns nil for an unknown chore" do
       expect(methods.complete_for("nope", other.username)).to be_nil
     end
+
+    it "resolves a chore by id" do
+      methods.complete_for(vitamins.id, other.username)
+      expect(ChoreCompletion.order(:id).last.chore_id).to eq(vitamins.id)
+    end
+
+    # The chore is looked up in the CREDITED user's scope, not the running
+    # user's — otherwise "credit her for her chore" can never reach a chore
+    # `visible_to_user` hides from everyone but her.
+    it "reaches the credited user's personal chore, which the caller cannot see" do
+      hers = create(
+        :chore,
+        created_by_user:     other,
+        chore_household:     other.chore_household,
+        name:                "Her Laundry",
+        assigned_to_user_id: other.id,
+        sharing_mode:        :personal,
+      )
+      expect(user.reload.accessible_chores).not_to include(hers)
+
+      expect { methods.complete_for(hers.id, other.username) }
+        .to change { other.chore_completions.count }.by(1)
+      expect(ChoreCompletion.order(:id).last.chore_id).to eq(hers.id)
+    end
+
+    it "refuses a user outside the running user's household" do
+      outsider = create(:user, username: "Outsider")
+      create(:chore_household, owner_user: outsider)
+
+      expect { methods.complete_for(vitamins, outsider.reload.username) }
+        .not_to change(ChoreCompletion, :count)
+      expect(methods.complete_for(vitamins, outsider.username)).to be_nil
+    end
+
+    it "refuses a user with no household at all" do
+      loner = create(:user, username: "Loner")
+      expect(methods.complete_for(vitamins, loner.username)).to be_nil
+    end
   end
 
   describe "#add" do

@@ -93,24 +93,67 @@ module Buddy
     end
 
     # Apply the LLM's sort decision from a `sort_stash` side-effect. Only
-    # touches the person's own ideas.
-    def apply_sort(user, args)
+    # touches the person's own ideas. Returns true when something really moved,
+    # which is what lets the turn tell a true "moved it to home" from an
+    # invented one.
+    def apply_sort(user, args, conversation: nil)
       idea = user.buddy_ideas.find_by(id: args[:id])
-      return if idea.nil?
+      return false if idea.nil?
 
       # It went somewhere it can actually be acted on, so it comes off the pile
       # rather than living in both places. Dropped rather than destroyed: it
       # wasn't DONE, it was re-filed, and the row is the record of that.
-      return idea.update!(status: :dropped) if truthy?(args[:drop])
+      if truthy?(args[:drop])
+        idea.update!(status: :dropped)
+        receipt(user, conversation, "Took #{label_for(idea)} off the pile")
+        return true
+      end
 
       attrs = {}
       attrs[:category] = args[:category] if %w[me home work].include?(args[:category].to_s)
       attrs[:summary]  = args[:summary].to_s.first(200) if args[:summary].present?
-      idea.update!(attrs) if attrs.any?
+      return false if attrs.empty?
+
+      # A REFILE, not a first sort: this idea was already in a bucket and is
+      # being moved out of it. That's the only case that earns a receipt.
+      #
+      # The first sort stays silent because the stash chip above already said
+      # where it landed, and sharpening a summary stays silent because the
+      # persona promises it will ("Never announce that you're updating it").
+      # Moving one is neither. Prod 3332-3337: "that's actually more of a home
+      # one" really did refile idea 36 out of Work, silently — so the only
+      # trace was the sentence "Kk! Moved it to home", and a sentence is
+      # precisely what can't be trusted about whether something happened. Told
+      # it was lying, Buddy had nothing to check either, agreed, and invented
+      # "it's already in home, so there wasn't anything to move" — which
+      # contradicted its own Work receipt from five messages earlier.
+      moved = attrs.key?(:category) && idea.category.present? && idea.category != attrs[:category]
+      idea.update!(attrs)
+      receipt(user, conversation, "Moved #{label_for(idea)} to #{idea.category_label}") if moved
+      true
     end
 
     def truthy?(value)
       ActiveModel::Type::Boolean.new.cast(value).present?
+    end
+
+    # The durable record that a silent side-effect really changed something.
+    # Same chip every acting tool leaves, for the same reason: it's what the
+    # person can point at, and it's what `recent_actions` reads back when they
+    # ask whether it happened.
+    def receipt(user, conversation, text)
+      return if conversation.nil?
+
+      Buddy::ActivityChip.post!(
+        conversation: conversation,
+        user:         user,
+        tool_name:    :sort_stash,
+        body:         text,
+      )
+    end
+
+    def label_for(idea)
+      idea.summary.presence || idea.body.to_s.truncate(60)
     end
 
     class << self

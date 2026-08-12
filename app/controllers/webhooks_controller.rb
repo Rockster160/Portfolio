@@ -562,8 +562,9 @@ class WebhooksController < ApplicationController
 
     # `ordered` rather than a bare last_message_at DESC: Postgres sorts NULLs
     # FIRST on a descending order, so a Buddy thread that was created and never
-    # used would quietly capture every message sent this way.
-    user.byte_conversations.buddy.active.real.ordered.first || ByteConversation.default_for(user)
+    # used would quietly capture every message sent this way. The wall tablet
+    # captures it for the same reason and is excluded for the same reason.
+    ByteConversation.for_self_initiated(user) || ByteConversation.default_for(user)
   end
 
   # Weather passthrough for Buddy — server holds WEATHER_APIKEY.

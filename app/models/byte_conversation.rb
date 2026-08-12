@@ -65,6 +65,13 @@ class ByteConversation < ApplicationRecord
   # palette, the persona it answers in) follows from the thread's own theme.
   scope :kiosk, -> { where("metadata->>'kiosk' = 'true'") }
 
+  # Everything that ISN'T the wall. The complement matters more than the scope
+  # itself: a tablet on a table is used constantly and by whoever walks past,
+  # so "newest Buddy thread" — how every self-initiated message picks its
+  # destination — silently becomes "the wall" the moment somebody taps a
+  # routine on it.
+  scope :not_kiosk, -> { where("metadata->>'kiosk' IS DISTINCT FROM 'true'") }
+
   def eval?
     metadata.is_a?(Hash) && metadata["eval"].to_s == "true"
   end
@@ -84,6 +91,25 @@ class ByteConversation < ApplicationRecord
       conversation.update!(metadata: conversation.metadata.merge("kiosk" => true))
     }
     conversation
+  end
+
+  # Where a message NOBODY ASKED FOR goes: the morning briefing, a reminder
+  # firing, a watch tripping, a relay from the other person, a chore's prompt.
+  #
+  # Their newest live Buddy thread, except the wall tablet and except an eval
+  # thread. Both fail the same way and for the same reason — `ordered` means
+  # "most recently active", and both of them are active without anyone
+  # personally reading them. The wall is a screen in a room: a briefing
+  # delivered there is read by whoever happens to be standing in the kitchen,
+  # which is not the same as being read by the person it was for.
+  #
+  # Falls back to the excluded thread when it's the only one, because a
+  # briefing on the wall still beats a briefing nowhere. That fallback is safe
+  # precisely because the push is suppressed independently — see ByteNotifier —
+  # so the worst case is that it shows up silently rather than not at all.
+  def self.for_self_initiated(user)
+    scope = user.byte_conversations.active.buddy
+    scope.not_kiosk.real.ordered.first || scope.ordered.first
   end
 
   # Set by any caller that let a person CHOOSE the pet — today that's the
@@ -155,8 +181,14 @@ class ByteConversation < ApplicationRecord
   # Everything waiting for this person, across every thread they can see. What
   # the iOS home-screen badge shows, and what rides on the push so the badge is
   # still right when the app has been closed for hours.
+  #
+  # The wall is left out. A number on the phone's home screen says "something
+  # is waiting for you", and a routine somebody tapped on the tablet in the
+  # kitchen is not waiting for anyone — it already happened, in front of them.
+  # The per-thread count in the drawer still shows it, so nothing is hidden;
+  # it just doesn't follow anyone out of the house.
   def self.unread_total_for(user)
-    where(user_id: user.id, archived: false).sum(&:unread_count)
+    where(user_id: user.id, archived: false).not_kiosk.sum(&:unread_count)
   end
 
   def as_wire
