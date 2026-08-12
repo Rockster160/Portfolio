@@ -86,4 +86,8 @@ Buddy::Tools.register(
       ),
     }.compact
   },
+  # Deliberate opt-out — `execute` files its own chip (and files one for a
+  # refusal too). Same reason as call_jil_function: a receipt here would double
+  # up under it whenever a routine runs this.
+  receipt:     ->(_result, _ctx) {},
 )

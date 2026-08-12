@@ -209,4 +209,10 @@ Buddy::Tools.register(
       ),
     }.compact
   },
+  # Deliberate opt-out, not a missing receipt. `execute` above files its own
+  # ActivityChip with the function's actual answer on it, which is strictly
+  # better than anything this could say — and when a routine runs this through
+  # ProposalBuilder#run_auto, a receipt here would put a second, vaguer chip
+  # directly under the first one.
+  receipt:          ->(_result, _ctx) {},
 )

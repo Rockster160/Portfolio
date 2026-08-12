@@ -47,11 +47,24 @@ module Buddy
         # a stale routine or a hand-built marker — either way it must not run.
         next nil unless Buddy::Features.allows_tool?(user, tool)
         # An answering tool reports to the MODEL, during the turn, and Turn
-        # keeps it out of the proposals for exactly that reason. Reaching here
-        # means a routine saved back when they were ordinary level-1 tools —
-        # and there's no model turn left to report to, so running it now would
-        # either chip a lookup it can't show or start a print nobody watched.
-        next nil if Buddy::Tools.answers?(tool)
+        # keeps it out of the proposals for exactly that reason (see
+        # Turn#proposal?), so reaching here means a ROUTINE — a saved step, run
+        # by a button press, with no model turn behind it.
+        #
+        # Only the ones that answer and do NOTHING ELSE are dropped. A lookup
+        # has nobody to report to here, and running it would chip a query
+        # nobody can read. But `call_jil_function` and `print_again` also ACT,
+        # and a routine is exactly the case where that's the whole point: the
+        # person tapped a button labelled "Yoga Lamp" and meant the lamp.
+        #
+        # Dropping those was silent and total. Chelsea's kiosk routine had one
+        # step, `call_jil_function`, so every tap dropped every step and the
+        # only reply was "Nothing in it could run just now - what it points at
+        # might be gone", which pointed at the lamp instead of at this line.
+        # The tools didn't change under it either; they gained `answers: true`
+        # so they could report mid-turn, and that quietly retired every routine
+        # built on them.
+        next nil if Buddy::Tools.answers?(tool) && !Buddy::Tools.acts?(tool)
 
         payload, errors = Buddy::Tools.validate_payload(tool, m[:payload], zone: Buddy::Day.zone(user))
         next nil if errors.any?

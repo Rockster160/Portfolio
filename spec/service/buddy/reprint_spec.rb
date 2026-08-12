@@ -184,9 +184,27 @@ RSpec.describe Buddy::Reprint do
       expect(chips).to be_empty
     end
 
-    # Level-1 tools normally execute in ProposalBuilder after the reply. This
-    # one already ran, and running it again would start a second print.
-    it "never reaches ProposalBuilder" do
+    # Level-1 tools normally execute in ProposalBuilder after the reply. In a
+    # TURN this one has already run inside tool_output, and running it again
+    # would start a second print — so it must never be collected as a marker.
+    #
+    # That guard is Turn#proposal?, asserted here against the real method.
+    # ProposalBuilder used to refuse answering tools a second time as well,
+    # which read as belt-and-braces and was load-bearing in the wrong
+    # direction: it also refused ROUTINES, where nothing has run yet and a
+    # button press is the entire request. See routine_answering_tools_spec.
+    it "is never collected as a proposal during a turn" do
+      turn = Buddy::GPT::Turn.new(
+        convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "print it again"),
+        client: FakeBuddyClient.new([]),
+      )
+
+      expect(turn.send(:proposal?, :print_again)).to be(false)
+    end
+
+    # A routine has no turn behind it, so nothing has run and the tap IS the
+    # request. One chip, filed by the tool itself.
+    it "does run when a routine asks for it" do
       printer_says("Printing game_tray-vase.")
 
       result = Buddy::ProposalBuilder.create(
@@ -194,8 +212,8 @@ RSpec.describe Buddy::Reprint do
         markers: [{ tool_name: :print_again, payload: { file: "game_tray-vase" } }]
       )
 
-      expect(result[:auto_ran]).to be(false)
-      expect(chips).to be_empty
+      expect(result[:auto_ran]).to be(true)
+      expect(chips.count).to eq(1)
     end
   end
 end
