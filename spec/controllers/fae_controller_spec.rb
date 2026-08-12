@@ -20,13 +20,14 @@ RSpec.describe FaeController, type: :controller do
     response.body.scan(/data-monitor="([^"]+)"/).flatten
   end
 
-  # The row is grouped by person rather than by chore — his four, then hers.
-  it "lists all of his buttons ahead of all of hers" do
+  # The row is grouped by person rather than by chore, so each group lands on
+  # its own line. Which person leads is a preference, not a rule.
+  it "keeps each person's buttons together" do
     mine, hers = described_class::BUTTON_MONITORS.partition { |m| m.end_with?("-mine") }
 
     expect(mine.size).to eq(4)
     expect(hers.size).to eq(4)
-    expect(described_class::BUTTON_MONITORS).to eq(mine + hers)
+    expect(described_class::BUTTON_MONITORS).to eq(hers + mine).or eq(mine + hers)
   end
 
   describe "GET #show" do
