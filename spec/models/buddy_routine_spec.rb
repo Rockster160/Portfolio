@@ -148,6 +148,33 @@ RSpec.describe BuddyRoutine do
     end
   end
 
+  # A monitor key is what makes a kiosk button LIVE — the pad subscribes to it
+  # and paints the broadcast `text`/`color` instead of the saved name. Every
+  # routine that hasn't opted in has to keep painting its name, so absence has
+  # to read as nil rather than "".
+  describe "#monitor" do
+    it "is nil for an ordinary routine" do
+      expect(build_routine([tell("night")]).monitor).to be_nil
+    end
+
+    it "reads the key out of metadata" do
+      routine = build_routine([tell("night")])
+      routine.metadata = { "monitor" => "yoga-lights" }
+
+      expect(routine.monitor).to eq("yoga-lights")
+      expect(routine.serialize_for_client[:monitor]).to eq("yoga-lights")
+    end
+
+    it "treats a blank key as no key rather than subscribing to nothing" do
+      routine = build_routine([tell("night")])
+
+      ["", "   ", nil].each do |blank|
+        routine.metadata = { "monitor" => blank }
+        expect(routine.monitor).to be_nil
+      end
+    end
+  end
+
   describe "#markers" do
     it "produces the shape ProposalBuilder takes, symbol keys and all" do
       routine = build_routine([tell("night")])

@@ -109,10 +109,26 @@ class BuddyRoutine < ApplicationRecord
     update_columns(run_count: run_count + 1, last_run_at: Time.current, updated_at: Time.current)
   end
 
+  # A monitor key makes the button LIVE, the same way the Fae, Whisper and list
+  # trigger buttons are: a Jil task on `monitor::<key>` broadcasts `text` and
+  # `color`, and the pad paints whatever comes back rather than the saved name.
+  # The wall then tells the truth about state it doesn't own — a lamp somebody
+  # turned off with a scene, a door that opened — instead of showing a label
+  # that was only correct when the routine was saved.
+  #
+  # Presentational only. The tap still runs the routine's own steps; this is
+  # what the button SAYS, never what it does. A routine without one paints its
+  # name, which is every routine today.
+  def monitor
+    key = metadata.is_a?(Hash) ? metadata["monitor"] : nil
+    key.to_s.strip.presence
+  end
+
   def serialize_for_client
     {
       id:          id,
       name:        name,
+      monitor:     monitor,
       description: description,
       enabled:     enabled,
       steps:       Array(steps),

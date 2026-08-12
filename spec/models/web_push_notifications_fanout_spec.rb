@@ -105,4 +105,46 @@ RSpec.describe WebPushNotifications do
     expect(Rails.logger).to receive(:warn).with(/no registered subscription/)
     described_class.send_to(user, { title: "hi" }, channel: :byte)
   end
+
+  # Every endpoint here is web.push.apple.com, where a normal-urgency push is
+  # one Apple may hold until the phone next wakes on its own. The gem defaults
+  # to normal and nothing overrode it, so a message could sit delivered in the
+  # thread for minutes before the buzz — and from this end the send looked
+  # instant and successful, because it was.
+  describe "urgency" do
+    def sent_with
+      captured = []
+      allow(WebPush).to receive(:payload_send) { |args| captured << args }
+      yield
+      captured
+    end
+
+    it "marks a message as high, because somebody is waiting on it" do
+      sent = sent_with { described_class.send_to(user, { title: "hi" }, channel: :byte) }
+
+      expect(sent.pluck(:urgency)).to all(eq("high"))
+    end
+
+    # Nobody waits on a notification being taken away.
+    it "lets a dismissal go at low urgency" do
+      sent = sent_with { described_class.dismiss(user, "byte-1", channel: :byte) }
+
+      expect(sent.pluck(:urgency)).to all(eq("low"))
+    end
+
+    # These sends are serial: one push service that accepts the connection and
+    # never answers used to hold every device behind it, indefinitely.
+    it "gives every send a finite deadline" do
+      sent = sent_with { described_class.send_to(user, { title: "hi" }, channel: :byte) }
+
+      expect(sent).to all(include(open_timeout: be_positive, read_timeout: be_positive))
+    end
+
+    it "keeps a timed-out device registered, since a timeout proves nothing" do
+      allow(WebPush).to receive(:payload_send).and_raise(Net::ReadTimeout)
+
+      expect { described_class.send_to(user, { title: "hi" }, channel: :byte) }.not_to raise_error
+      expect(phone.reload.registered_at).to be_present
+    end
+  end
 end

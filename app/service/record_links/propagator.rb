@@ -194,6 +194,13 @@ module RecordLinks
     # ---- chore completions ----
 
     def upsert_completion(user, chore, event, prev_at: nil)
+      # Down one level when this chore has been split per person. A link names
+      # a chore, and once "Teeth" becomes a container holding one Teeth each,
+      # the name still resolves to the container while the thing that needs
+      # ticking is theirs. Resolved here rather than in `find_chore` because
+      # the actor is only known at the write: `answered` completes for whoever
+      # the prompt named, who is usually not the person whose links these are.
+      chore = chore.completion_leaf_for(user)
       at   = parse_time(event.timestamp) || Time.current
       note = event.notes.to_s.presence
       partner = completion_partner(user, chore, prev_at) || completion_partner(user, chore, at)
@@ -212,7 +219,9 @@ module RecordLinks
     end
 
     def destroy_completion(user, chore, at)
-      partner = completion_partner(user, chore, at)
+      # Same redirect as the write, or a deleted event hunts for its partner on
+      # the container and never finds the row it made on the leaf.
+      partner = completion_partner(user, chore.completion_leaf_for(user), at)
       return false if partner.nil?
 
       partner.destroy!
@@ -358,7 +367,9 @@ module RecordLinks
       return false if chore.nil?
 
       who = ::User.find_by(username: completer) || user
-      complete_once(chore, who, at || Time.current)
+      # For WHO did it, not for whose links these are - the whole point of the
+      # question is that it wasn't necessarily the person who logged it.
+      complete_once(chore.completion_leaf_for(who), who, at || Time.current)
       # The event keeps its row and takes the answered time. Under Jil this
       # branch sometimes DESTROYED it, to undo a completion task 362 had already
       # made from the same log. One link per pairing means there's nothing to

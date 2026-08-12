@@ -233,6 +233,32 @@ class Chore < ApplicationRecord
   # `parent_chore_id.present?` everywhere.
   def sub_chore? = parent_chore_id.present?
 
+  # The chore THIS PERSON actually does, when this one has been split into
+  # per-person sub-chores.
+  #
+  # A container isn't a thing anybody does. "Teeth" holding Rocco's Teeth and
+  # Chelsea's Teeth is a family, and a completion written against the family
+  # credits neither of them: a parent's card counts `chore_id OR
+  # parent_chore_id`, a leaf's counts `chore_id` alone (see
+  # ChoreSerializerContext), so the leaf still reads as not done. Splitting a
+  # chore in two therefore silently broke every automation that had been
+  # completing it by name — the row landed on the container, which is usually
+  # `show_on_today_view: never` and so not even on screen to look wrong.
+  #
+  # Deliberately narrow: an ASSIGNED sub-chore and nothing else. A parent whose
+  # children are per-item rather than per-person (Supplements → Focus,
+  # Cymbalta) has nothing assigned to anybody, and guessing which child was
+  # meant is how you log the wrong medication. No assignment for this person,
+  # no redirect.
+  #
+  # Only for a write made on somebody's behalf from a NAME. An explicit tap
+  # carries the id the person chose and must be honoured exactly.
+  def completion_leaf_for(user)
+    return self if user.nil? || sub_chore?
+
+    sub_chores.detect { |sub| sub.assigned_to_user_id == user.id } || self
+  end
+
   # User-stamped "this needs to get done" flag. While set, the chore
   # appears on Today (if stamped during the current chore-day) or in
   # the Scheduled/overdue section (if stamped on a prior chore-day).

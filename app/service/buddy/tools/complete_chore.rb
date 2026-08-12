@@ -26,6 +26,12 @@ Buddy::Tools.register(
     chore = ctx.resolve_chore(payload[:chore])
     raise "no chore matching #{payload[:chore].inspect}" if chore.nil?
 
+    # A fuzzy name lands on the container when a chore has been split per
+    # person ("Teeth" holding one Teeth each), and a completion on the
+    # container ticks nobody's card. Down one level HERE, so the id every stage
+    # after this one reads - label, merge key, execute, receipt, undo - is the
+    # chore that actually gets the row.
+    chore = chore.completion_leaf_for(ctx.user)
     resolved = { chore_id: chore.id }
     if payload[:at].present?
       parsed = Buddy::TimeParser.parse_past(payload[:at], user: ctx.user)

@@ -236,10 +236,79 @@ export function initBuddyKiosk({
       btn.type = "button";
       btn.className = "byte-kiosk-btn";
       btn.dataset.kioskRoutine = String(routine.id);
+      if (routine.monitor) btn.dataset.kioskMonitor = routine.monitor;
       btn.title = routine.description || routine.name;
       btn.textContent = routine.name;
       padEl.appendChild(btn);
     });
+    bindMonitors();
+  }
+
+  // ---- live buttons ----
+  //
+  // Same contract the Fae, Whisper and list trigger buttons run on (see
+  // pages/triggers.js): a Jil task listening on `monitor::<key>` broadcasts
+  // `text` and `color`, and the button paints whatever arrives. The saved name
+  // is only the placeholder until the first broadcast lands.
+  //
+  // What this buys on a wall is that the label stays true to state the button
+  // doesn't own. A lamp turned off by a scene, by Alexa, or from a phone
+  // rebroadcasts on the same key, and the tablet across the room relabels
+  // itself without anyone touching it.
+  const monitors = new Map();
+
+  function applyMonitorData(btn, data) {
+    if (!data) return;
+    if (data.text) {
+      btn.textContent = data.text;
+      // The tooltip is the routine's description everywhere else; once a button
+      // is live, the label IS the state and the stale description reads as a
+      // contradiction on hover.
+      btn.title = data.text;
+    }
+    // An empty colour is how a button gets its default back — the alternative
+    // is that whichever state paints a colour first is the last colour it ever
+    // has, so the lamp goes amber when it comes on and stays amber.
+    if ("color" in data) {
+      if (data.color) btn.style.setProperty("--kiosk-btn-color", data.color);
+      else btn.style.removeProperty("--kiosk-btn-color");
+    }
+  }
+
+  // Repaint replaces every node, so the old subscriptions point at buttons that
+  // are no longer in the document. Dropped rather than reused: a routine can be
+  // unpinned or have its key changed between paints, and a stale subscription
+  // writing into a detached node is invisible until the key is reused.
+  function bindMonitors() {
+    monitors.forEach((monitor) => monitor.unsubscribe?.());
+    monitors.clear();
+
+    if (typeof window.Monitor === "undefined") return;
+
+    padEl.querySelectorAll("[data-kiosk-monitor]").forEach((btn) => {
+      const key = btn.dataset.kioskMonitor;
+      monitors.set(
+        key,
+        window.Monitor.subscribe(key, {
+          // Ask on connect, the way the trigger buttons do — a tablet that has
+          // been asleep has no idea what changed while it was out. The task
+          // runs read-only: only `execute` makes one act, and neither resync
+          // nor refresh sets it.
+          connected: function () {
+            this.resync();
+          },
+          received: (json) => applyMonitorData(btn, json?.data),
+        }),
+      );
+    });
+  }
+
+  // After a routine acts, the state it reports on has just changed. `refresh`
+  // rather than `resync`: the point is to go and look again, not to replay the
+  // answer from before the tap.
+  function refreshMonitor(btn) {
+    const key = btn.dataset.kioskMonitor;
+    if (key) monitors.get(key)?.refresh();
   }
 
   // The pad is server-rendered for first paint (a cold boot off the cached
@@ -271,6 +340,7 @@ export function initBuddyKiosk({
       say({ direction: "inbound", body: "Couldn't start that one just now." });
     } finally {
       delete btn.dataset.running;
+      refreshMonitor(btn);
     }
   }
 

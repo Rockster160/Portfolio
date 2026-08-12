@@ -6,6 +6,31 @@
 module WebPushNotifications
   module_function
 
+  # Everything this app pushes is somebody waiting on it: a message from their
+  # companion, a prompt, a reminder coming due, the cat wanting feeding. None
+  # of it is background sync, and none of it is worth holding back.
+  #
+  # The gem's default is `Urgency: normal` and nothing overrode it. Every
+  # endpoint here is `web.push.apple.com`, and a non-high urgency is an
+  # explicit hint that the push may be held until the device next wakes on its
+  # own — which is why a message can be written, broadcast, and sitting in the
+  # thread for minutes before the phone buzzes about it. It is invisible from
+  # this end: the send succeeded, immediately, long before anyone was told.
+  #
+  # The cost is battery, knowingly. A companion that answers you in a minute
+  # and a half is not a companion.
+  URGENCY = "high".freeze
+
+  # The exception, and the only one: a dismissal has nobody waiting by
+  # definition — it's tidying away a notification already dealt with.
+  DISMISS_URGENCY = "low".freeze
+
+  # A push service that accepts the connection and then never answers used to
+  # hold the thread indefinitely, and these sends are SERIAL: one stuck device
+  # delays every other device on the account behind it. Generous, but finite.
+  OPEN_TIMEOUT = 5
+  READ_TIMEOUT = 10
+
   # Push to EVERY registered device on the channel, not just the newest one.
   #
   # It used to send to `primary_push_sub` alone — the most recently registered
@@ -47,26 +72,38 @@ module WebPushNotifications
     return if payload[:title].blank? && !payload[:dismiss]
 
     message = format_payload(user, payload, channel).to_json
+    urgency = payload[:dismiss] ? DISMISS_URGENCY : URGENCY
     # One device failing must not cost the others their notification, so each
     # send is isolated. A dead subscription is retired on the spot.
-    results = subs.map { |sub| deliver_push(user, sub, message, channel) }
+    results = subs.map { |sub| deliver_push(user, sub, message, channel, urgency: urgency) }
 
     results.include?("Push success") ? "Push success" : results.first
   end
 
-  def deliver_push(user, push_sub, message, channel)
+  def deliver_push(user, push_sub, message, channel, urgency: URGENCY)
     WebPush.payload_send(
-      message:  message,
-      endpoint: push_sub.endpoint,
-      p256dh:   push_sub.p256dh,
-      auth:     push_sub.auth,
-      vapid:    {
+      message:      message,
+      endpoint:     push_sub.endpoint,
+      p256dh:       push_sub.p256dh,
+      auth:         push_sub.auth,
+      urgency:      urgency,
+      open_timeout: OPEN_TIMEOUT,
+      read_timeout: READ_TIMEOUT,
+      vapid:        {
         subject:     "mailto:rocco@ardesian.com",
         public_key:  ENV.fetch("PORTFOLIO_VAPID_PUB", nil),
         private_key: ENV.fetch("PORTFOLIO_VAPID_SEC", nil),
       },
     )
     "Push success"
+  # A timeout says nothing about whether the subscription is still good, so it
+  # is NOT retired — that's reserved for the push service telling us it's gone.
+  # Left unrescued it would take the whole fan-out, and with it the turn that
+  # was only trying to say a notification had been sent.
+  # Net::OpenTimeout and Net::ReadTimeout are both Timeout::Error.
+  rescue Timeout::Error => e
+    Rails.logger.warn("[WEBPUSH] timed out for #{user.username} (#{channel}): #{e.class}")
+    "Failed to push - timed out"
   rescue WebPush::ExpiredSubscription, WebPush::InvalidSubscription => e
     # Subscription is no longer valid (410 Gone or 404 Not Found)
     # Mark it as unregistered so we don't keep trying

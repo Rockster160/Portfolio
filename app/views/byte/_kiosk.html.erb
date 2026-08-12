@@ -33,7 +33,11 @@
     <% Array(@routines).each do |routine| %>
       <%# Title only - see paintPad in kiosk.js, which this has to match or the %>
       <%# first paint changes shape the moment the pad refreshes. %>
+      <%# A monitored routine paints its saved name here and is relabelled by the %>
+      <%# first broadcast. The name is what a cold boot shows for the beat before %>
+      <%# the socket answers, so it wants to read as a sensible default. %>
       <button type="button" class="byte-kiosk-btn" data-kiosk-routine="<%= routine.id %>"
+              <%= tag.attributes(data: { kiosk_monitor: routine.monitor }) if routine.monitor %>
               title="<%= routine.description.presence || routine.name %>"><%= routine.name %></button>
     <% end %>
     <% if Array(@routines).empty? %>

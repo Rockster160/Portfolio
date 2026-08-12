@@ -234,13 +234,14 @@ RSpec.describe ByteController, type: :controller do
   describe "GET #kiosk" do
     render_views
 
-    def routine!(name, position: nil, enabled: true, description: nil)
+    def routine!(name, position: nil, enabled: true, description: nil, monitor: nil)
       BuddyRoutine.create!(
         user:        rocco,
         name:        name,
         description: description,
         position:    position,
         enabled:     enabled,
+        metadata:    monitor ? { "monitor" => monitor } : {},
         steps:       [BuddyRoutine.step(:message_partner, { to: "someone", message: "night" })],
       )
     end
@@ -282,6 +283,28 @@ RSpec.describe ByteController, type: :controller do
       expect(response.body).not_to include("byte-kiosk-btn-sub")
       # Still reachable on a long-press / hover, just not taking up the face.
       expect(response.body).to include('title="Powers it on, waits, then preheats"')
+    end
+
+    # A routine carrying a monitor key gets a LIVE button: kiosk.js subscribes
+    # to the key and repaints the label and colour from whatever the Jil task
+    # broadcasts, the same contract the Fae, Whisper and list trigger buttons
+    # run on. The saved name is only what shows for the beat before the socket
+    # answers, so the server still has to render it.
+    it "marks a monitored routine's button so the pad subscribes to it" do
+      routine!("Yoga Lights", position: 0, monitor: "yoga-lights")
+
+      get :kiosk
+
+      expect(response.body).to include('data-kiosk-monitor="yoga-lights"')
+      expect(button_names).to eq(["Yoga Lights"])
+    end
+
+    it "leaves an ordinary routine's button unsubscribed" do
+      routine!("Prep Printer", position: 0)
+
+      get :kiosk
+
+      expect(response.body).not_to include("data-kiosk-monitor")
     end
 
     # A matter of space, not principle. Quick is a popover you open, scan and

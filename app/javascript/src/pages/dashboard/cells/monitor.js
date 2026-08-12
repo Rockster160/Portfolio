@@ -45,6 +45,23 @@ export class Monitor {
     Monitor.socket.perform("broadcast", data);
   }
 
+  // Drop this listener. The socket is shared and stays open — every other
+  // subscriber on this channel is untouched.
+  //
+  // Needed by anything that REPAINTS its subscribed elements rather than
+  // binding them once on load. The trigger buttons guard on `wrapper.monitor`
+  // and are never redrawn, so they never needed it; the kiosk pad rebuilds its
+  // buttons whenever the routine list changes, and without this each rebuild
+  // left the previous subscription in the registry, still receiving into a
+  // node that had left the document.
+  unsubscribe() {
+    const list = Monitor.#monitors[this.channel];
+    if (!list) return;
+
+    const idx = list.indexOf(this);
+    if (idx !== -1) list.splice(idx, 1);
+  }
+
   static byUUID(channel) {
     return Monitor.#monitors[channel] || [];
   }

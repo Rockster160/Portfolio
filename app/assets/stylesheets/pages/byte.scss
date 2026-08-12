@@ -4444,7 +4444,11 @@ $suki_expr_aliases: (
   overflow-wrap: anywhere;
   border-radius: 18px;
   border: 1px solid var(--bs-border);
-  background: var(--bs-accent-grad);
+  // A live button (one backed by a `monitor::` task) can broadcast a colour
+  // with its label, the way the Fae and Whisper trigger buttons do — that's how
+  // "the lamp is on" reads from across a room without stopping to read the
+  // word. Unset for every other routine, which falls through to the accent.
+  background: var(--kiosk-btn-color, var(--bs-accent-grad));
   color: #FFFFFF !important;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.12) inset,
