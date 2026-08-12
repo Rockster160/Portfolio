@@ -979,7 +979,7 @@ module Buddy
         end
 
         stamp_usage_rollup
-        settle_expression
+        settle_expression(acted: executed_anything?(result))
         broadcast(@reply.reload)
         ByteNotifier.notify(@user, @reply)
       end
@@ -1311,7 +1311,13 @@ module Buddy
       # called set_mood this turn, SideEffects already persisted and broadcast
       # it; settle just re-asserts the stored mood so the overlay drops without
       # changing the face.
-      def settle_expression
+      #
+      # `acted` is a turn that DID something. React first: a pet still resting
+      # on neutral after doing something for someone is the flat-faced machine
+      # the persona's face rules are trying to avoid. react! leaves a mood the
+      # model chose alone, so this only fills a silence.
+      def settle_expression(acted: false)
+        Buddy::ExpressionState.react!(@conversation) if acted
         Buddy::ExpressionState.settle!(@conversation)
       rescue StandardError => e
         Rails.logger.warn("[Buddy::GPT::Turn] settle failed: #{e.class}: #{e.message}")

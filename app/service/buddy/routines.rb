@@ -80,13 +80,25 @@ module Buddy
     # Same replay through ProposalBuilder that a spoken "run my wind-down" gets;
     # the only thing skipped is the model deciding to call `run_routine`, which
     # on a button has already been decided.
+    #
+    # Nobody writes the line over it either, so it comes from Buddy::VoiceLines
+    # in the pet's own register - "Running **Yoga Lamp**" was every companion
+    # sounding like the same job scheduler. The face moves FIRST, so the
+    # expression is already there as the words land rather than catching up a
+    # beat behind them (same ordering as a `[[mood:]]` marker on a real reply).
     def run!(routine, conversation:)
       routine.touch_run!
+      line = Buddy::VoiceLines.pick(
+        conversation&.buddy_theme, :routine_run,
+        avoid: conversation&.buddy_expression, name: routine.name
+      )
+      Buddy::SideEffects.apply_mood(conversation, line[:mood]) if line[:mood]
+
       Buddy::ProposalBuilder.run_markers!(
         user:         routine.user,
         conversation: conversation,
         markers:      routine.markers,
-        body:         "Running **#{routine.name}**",
+        body:         line[:text],
       )
     end
 

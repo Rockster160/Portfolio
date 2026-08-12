@@ -29,8 +29,14 @@ RSpec.describe "Routines that call answering tools" do
 
   def run(markers)
     Buddy::ProposalBuilder.run_markers!(
-      user: user, conversation: convo, markers: markers, body: "Running **Yoga Lamp**",
+      user: user, conversation: convo, markers: markers, body: "Lighting up **Yoga Lamp**",
     )
+  end
+
+  # "nothing in it ran" is the pet's own line now (Buddy::VoiceLines), one of
+  # several per theme, so ask the table rather than pinning a phrasing.
+  def gave_up?(body)
+    Buddy::VoiceLines.lines_for(convo.buddy_theme, :routine_empty).any? { |line| body.include?(line[:say]) }
   end
 
   def reply
@@ -65,7 +71,7 @@ RSpec.describe "Routines that call answering tools" do
     it "does not report that there was nothing to do" do
       run(markers)
 
-      expect(reply.body).not_to include("Nothing in it could run")
+      expect(gave_up?(reply.body)).to be(false)
     end
 
     # The tool posts its own chip from inside `execute`, carrying the answer the
@@ -87,7 +93,7 @@ RSpec.describe "Routines that call answering tools" do
     it "is still dropped" do
       run(markers)
 
-      expect(reply.body).to include("Nothing in it could run")
+      expect(gave_up?(reply.body)).to be(true)
     end
 
     it "leaves no receipt behind" do

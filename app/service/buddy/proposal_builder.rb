@@ -210,9 +210,15 @@ module Buddy
       result = create(user: user, byte_message: msg, markers: markers)
       # Every step dropped out - each one's target is gone, or the whole thing is
       # feature-gated away. Say so on the same message rather than leaving a
-      # bare heading over nothing.
+      # bare heading over nothing, in the same voice the heading was written in
+      # (Buddy::VoiceLines), and drop the face out of the pleased-to-help
+      # expression the announcement just put it in.
       if result[:action].nil? && !result[:auto_ran] && result[:forms].blank?
-        msg.update!(body: "#{body}\n\nNothing in it could run just now - what it points at might be gone.")
+        line = Buddy::VoiceLines.pick(
+          conversation.buddy_theme, :routine_empty, avoid: conversation.buddy_expression,
+        )
+        Buddy::SideEffects.apply_mood(conversation, line[:mood]) if line[:mood]
+        msg.update!(body: "#{body}\n\n#{line[:text]}")
       end
 
       broadcast_message(user, msg.reload)

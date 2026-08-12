@@ -9,6 +9,15 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
 
   before { sign_in user }
 
+  # Every line this pet could have reached for, as one pattern. What a routine
+  # says is the companion's own voice (Buddy::VoiceLines) and there are several
+  # of each, so a spec pins the SET rather than a phrasing nobody promised.
+  def one_of(kind, theme, **vars)
+    Regexp.union(
+      Buddy::VoiceLines.lines_for(theme, kind).map { |line| Buddy::VoiceLines.render(line[:say], vars) },
+    )
+  end
+
   def routine!(name, enabled: true)
     BuddyRoutine.create!(
       user:    user,
@@ -193,12 +202,17 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
       expect(routine.reload.run_count).to eq(1)
     end
 
+    # The line is the pet's own (Buddy::VoiceLines), so it's asserted as "one of
+    # the things this theme says" rather than pinned to one phrasing — but it
+    # always names the routine, which is the part that has to be there.
     it "hangs the steps under a line saying what ran" do
       routine = nightly!
 
       post :run, params: { id: routine.id, conversation_id: convo.id }
 
-      expect(convo.byte_messages.pluck(:body)).to include("Running **Nightly**")
+      said = convo.byte_messages.pluck(:body)
+      expect(said).to include(a_string_including("**Nightly**"))
+      expect(said).to include(a_string_matching(one_of(:routine_run, convo.buddy_theme, name: "Nightly")))
     end
 
     # A bare heading over nothing reads as the routine having worked.
@@ -207,7 +221,7 @@ RSpec.describe Buddy::RoutinesController, type: :controller do
 
       post :run, params: { id: routine.id, conversation_id: convo.id }
 
-      expect(convo.byte_messages.last.body).to include("Nothing in it could run")
+      expect(convo.byte_messages.last.body).to match(one_of(:routine_empty, convo.buddy_theme))
     end
 
     it "refuses one that's turned off" do

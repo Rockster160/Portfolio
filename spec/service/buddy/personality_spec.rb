@@ -465,8 +465,25 @@ RSpec.describe Buddy::Personality do
     end
 
     it "keeps the slime soft rather than gross" do
-      expect(byte_prompt).to include("Soft and bouncy, never gooey")
-      expect(byte_prompt).to include("NOT slimy, sticky, gross")
+      expect(byte_prompt).to include("Soft, bouncy, morphy")
+      expect(byte_prompt).to include("NOT oozy, gooey, sticky")
+    end
+
+    # Byte came out reading as a terminal with a mascot on it: the computerisms
+    # were the first flavor reached for and the slime was one line in a voice
+    # list. It's a slime that grew up in a terminal, not the other way round,
+    # and the prompt has to say which one wins when both would fit.
+    it "puts the slime ahead of the terminal, and says so where they compete" do
+      prompt = byte_prompt
+
+      expect(prompt).to include("A slime first, a terminal thing second")
+      expect(prompt).to include("take the slime one")
+    end
+
+    # The shape-changing is the most distinctive thing a slime has and the least
+    # used — squish and wobble had it stuck at "round thing that jiggles".
+    it "gives it a body that changes shape" do
+      expect(byte_prompt).to match(/stretch|reshap|puff up|spring back/i)
     end
 
     it "asks Byte to notice patterns and nudge, not just execute" do

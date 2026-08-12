@@ -53,6 +53,25 @@ module Buddy
       broadcast(conversation, expression, transient: false)
     end
 
+    # Something actually RAN this turn, so the pet reacts to it.
+    #
+    # A companion that does the thing and keeps a flat face reads as a machine
+    # accepting a command. Doing something for someone is the most expressive
+    # moment there is, so an action never leaves the pet on `neutral`.
+    #
+    # Only ever moves a pet that's RESTING. A face the model chose this turn is
+    # a deliberate read of the room - sitting with something heavy while it
+    # quietly cancels an alarm - and a generic pleased-with-itself face
+    # stamped over the top of that is the "face changed on its own" glitch this
+    # module exists to prevent. So this is a FLOOR, not an override.
+    def react!(conversation)
+      return if conversation.nil?
+      return unless [nil, "", Buddy::Faces.default.to_s].include?(conversation.buddy_expression)
+
+      mood = Buddy::VoiceLines.acted_mood(conversation.buddy_theme)
+      set(conversation, mood) if mood
+    end
+
     # Back to resting after a stretch of silence (BuddyExpressionResetWorker).
     #
     # The mood is deliberately persistent — it stays where a check-in, a marker,

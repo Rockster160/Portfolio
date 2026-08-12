@@ -2078,12 +2078,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   // expression so a reconnect restores the right face.
   let buddyWakeExpr = DEFAULT_WAKE_EXPRESSION;
 
-  // Idle face reset: after 10 minutes of no activity, let Buddy's face settle
-  // back to its neutral resting default (a mood shouldn't linger forever with
-  // nothing happening). Re-armed on every message, expression change, or
+  // Idle face reset: after a couple of minutes of no activity, let Buddy's face
+  // settle back to its neutral resting default (a mood shouldn't linger forever
+  // with nothing happening). Re-armed on every message, expression change, or
   // interaction; firing also updates buddyWakeExpr so a reconnect doesn't
   // restore the stale mood.
-  const IDLE_FACE_MS = 10 * 60 * 1000;
+  //
+  // Mirrors BuddyExpressionResetWorker::IDLE_AFTER, which is the authoritative
+  // one — it writes the column and broadcasts, and this only paints. Keeping
+  // the two the same means a tablet with a live socket and one that lost it
+  // rest at the same moment instead of minutes apart.
+  const IDLE_FACE_MS = 2 * 60 * 1000;
   let idleFaceTimer = 0;
   const armIdleFaceReset = () => {
     if (idleFaceTimer) clearTimeout(idleFaceTimer);

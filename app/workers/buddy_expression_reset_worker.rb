@@ -17,7 +17,13 @@ class BuddyExpressionResetWorker
 
   sidekiq_options queue: :default, retry: 1
 
-  IDLE_AFTER = 5.minutes
+  # Short, because the face now MOVES on every action (Buddy::ExpressionState
+  # #react!) rather than only when the model picks one — an expression that
+  # arrives more often has to clear more often, or the pet just accumulates the
+  # last thing that happened to it. Mid-exchange is protected by what this is
+  # keyed on rather than by the length: anything either of them says bumps
+  # `last_message_at`, so this can only fire on a thread nobody is using.
+  IDLE_AFTER = 2.minutes
 
   def perform
     cutoff = IDLE_AFTER.ago
