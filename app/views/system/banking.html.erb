@@ -106,8 +106,13 @@
 
     <div class="lists-title bank-section">
       <small>Transactions</small>
-      <% if @unlinked_count.positive? %>
-        <span class="bank-warn-inline"><%= @unlinked_count %> unlinked</span>
+      <%# Uncategorized, not unlinked. Whether an alert happened to arrive for a
+          row stopped mattering once the category moved onto the row itself —
+          what's actionable is how many still have none, and that is a link
+          straight to them. %>
+      <% if @uncategorized_count.positive? %>
+        <%= link_to("#{@uncategorized_count} uncategorized", system_banking_path(q: "category:none"),
+              class: "bank-warn-inline") %>
       <% end %>
     </div>
 
@@ -164,6 +169,10 @@
       $40 deposit both match <code>amount::40</code>. Use
       <code>direction:withdrawal</code> or <code>direction:deposit</code> for the
       sign, since a leading <code>-</code> is the negation prefix.
+      <br>
+      <code>category:none</code> lists everything not categorized yet.
+      <code>linked</code> is whether a Chase alert email backs the row, which is
+      no longer what decides whether it can hold a category.
     </p>
 
     <p class="bank-hint">
@@ -282,10 +291,15 @@
                   <% if transaction.transfer_destination.present? %>
                     <span class="acct route"
                           title="Moved between your own accounts — listed once, and not counted as spending or income">
-                      <%= transaction.bank_account.display_name %><span class="arrow">→</span><%= transaction.transfer_destination %>
+                      <%= transaction.display_account %><span class="arrow">→</span><%= transaction.transfer_destination %>
                     </span>
                   <% else %>
-                    <span class="acct"><%= transaction.bank_account.display_name %></span>
+                    <%# An alert-sourced row can name no account at all. It says so
+                        rather than borrowing the likeliest one. %>
+                    <% unattributed = transaction.bank_account.blank? %>
+                    <%= tag.span(transaction.display_account,
+                          class: ["acct", ("unattributed" if unattributed)],
+                          title: ("The alert this came from named no account" if unattributed)) %>
                   <% end %>
                   <% if transaction.pending? %>
                     <em class="tag pending">pending</em>
@@ -303,18 +317,16 @@
                       spellcheck="false"
                       title="Click to edit · Enter saves · Esc cancels"><%= transaction.display_memo %></span>
               </td>
+              <%# Every row holds its own category now, including the ones no alert
+                  ever covered — which is the whole point of the column. %>
               <td class="cat">
-                <% if transaction.action_event.present? %>
-                  <span class="bank-cat-dot" data-dot
-                        style="background: <%= TransactionCategory.color(transaction.category) %>;"></span>
-                  <%= select_tag(:category,
-                        options_for_select(TransactionCategory.options, transaction.category),
-                        include_blank: transaction.category.blank?,
-                        id: nil, class: "inline-select",
-                        data: { select: true, field: :category }) %>
-                <% else %>
-                  <span class="bank-muted" title="No linked alert to hold a category">unlinked</span>
-                <% end %>
+                <span class="bank-cat-dot<%= " empty" if transaction.category.blank? %>" data-dot
+                      style="background: <%= TransactionCategory.color(transaction.category) %>;"></span>
+                <%= select_tag(:category,
+                      options_for_select(TransactionCategory.options, transaction.category),
+                      include_blank: transaction.category.blank?,
+                      id: nil, class: "inline-select",
+                      data: { select: true, field: :category }) %>
               </td>
               <td class="right <%= sign_class.call(transaction.amount_cents) %>">
                 <%= cents.call(transaction.amount_cents) %>
@@ -391,7 +403,11 @@
             body[field] = select.value;
 
             save(row, body).then(function (data) {
-              if (dot && data.color) { dot.style.background = data.color; }
+              if (dot && data.color) {
+                dot.style.background = data.color;
+                // Was an outlined hole; it now holds a real category.
+                dot.classList.remove("empty");
+              }
               previous = select.value;
               flash(row, true);
             }).catch(function (err) {
@@ -581,6 +597,8 @@
        it is a transfer, so the row needs no chip repeating it. */
     .bank-table td.payee .acct.route { white-space: nowrap; }
     .bank-table td.payee .acct .arrow { color: #475569; padding: 0 4px; }
+    /* Dimmer than a named account, so "we don't know" doesn't read as a name. */
+    .bank-table td.payee .acct.unattributed { color: #475569; }
     .bank-table .tag {
       font-style: normal;
       font-size: 9px;
@@ -597,6 +615,10 @@
       width: 8px; height: 8px; border-radius: 2px;
       display: inline-block; vertical-align: middle; margin-right: 6px;
     }
+    /* An outline rather than a filled gray chip: no category yet is a hole,
+       and a solid swatch would read as a category whose color happens to be
+       gray — which is what an out-of-vocabulary one actually looks like. */
+    .bank-cat-dot.empty { background: none !important; box-shadow: inset 0 0 0 1px #334155; }
 
     /* The global `input[type=text]:not(.basic,.invisi-field)` rule forces
        18px / 2px border / 8px padding / width:100%, which is why the memo

@@ -20,6 +20,18 @@ RSpec.describe SimpleFin::Backfill do
     )
   end
 
+  # A row a Chase alert produced: held already, and never fetched from the
+  # Bridge. It says nothing about how far back the walk has asked.
+  def alert_row(at)
+    BankTransaction.create!(
+      action_event: ActionEvent.create!(
+        user: User.me, name: "Transaction", timestamp: at,
+        data: { amount: 10, account: "(...2363)", category: "home" }
+      ),
+      bank_account: account, transacted_at: at, amount_cents: -1_000, category: "home"
+    )
+  end
+
   # Captures what the client was asked for, and answers with however many
   # transactions the case needs.
   def stub_fetch(created: 0)
@@ -236,6 +248,35 @@ RSpec.describe SimpleFin::Backfill do
       stub_fetch(created: 1)
 
       expect { described_class.call }.to change(BankTransaction.unlinked, :count).by(1)
+    end
+  end
+
+  # Chase alerts reach back to October 2024 while the Bridge has only been
+  # asked as far as May 2026. Anchoring on any row rather than a bank-reported
+  # one would move the cursor nineteen months in a single step and mark that
+  # whole span fetched, skipping it for good.
+  describe "alert-sourced rows" do
+    it "does not let one move the cursor back" do
+      transaction("TRN-A", anchor)
+      alert_row(anchor - 400.days)
+      requests = stub_fetch(created: 1)
+
+      described_class.call
+
+      expect(requests.last[:end_date].to_date).to eq((anchor + 3.days).to_date)
+    end
+
+    it "is not counted as history the walk has covered" do
+      transaction("TRN-A", anchor)
+      alert_row(anchor - 400.days)
+
+      expect(described_class.progress.oldest_row.to_date).to eq(anchor.to_date)
+    end
+
+    it "cannot anchor the walk on its own" do
+      alert_row(anchor)
+
+      expect(described_class.call.status).to eq(:idle)
     end
   end
 

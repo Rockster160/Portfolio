@@ -35,7 +35,8 @@ RSpec.describe BankTransaction, ".query" do
     )
     BankTransaction.create!(
       simplefin_id: "T1", bank_account: checking, action_event: event,
-      posted_at: 3.days.ago, amount_cents: -8210, payee: "Costco Wholesale"
+      posted_at: 3.days.ago, amount_cents: -8210, payee: "Costco Wholesale",
+      category: "groceries"
     )
   }
   let!(:coffee) {
@@ -45,7 +46,8 @@ RSpec.describe BankTransaction, ".query" do
     )
     BankTransaction.create!(
       simplefin_id: "T2", bank_account: card, action_event: event,
-      posted_at: 1.day.ago, amount_cents: -640, payee: "Dutch Bros"
+      posted_at: 1.day.ago, amount_cents: -640, payee: "Dutch Bros",
+      category: "eat out"
     )
   }
   let!(:orphan) {
@@ -61,8 +63,14 @@ RSpec.describe BankTransaction, ".query" do
     expect(found("payee:costco")).to contain_exactly(groceries)
   end
 
-  it "matches a category through the linked event" do
+  it "matches a category" do
     expect(found("category:groceries")).to contain_exactly(groceries)
+  end
+
+  # The row that no alert covered is the one you most want to list, and an
+  # ILIKE against NULL would never find it.
+  it "lists what has no category at all" do
+    expect(found("category:none")).to contain_exactly(orphan, payday)
   end
 
   it "matches an account by friendly name" do

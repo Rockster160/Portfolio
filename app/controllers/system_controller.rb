@@ -57,7 +57,9 @@ class SystemController < ApplicationController
     @dashboard_cents = ::SimpleFin::DashboardCache.balance_cents
     @dashboard_available = ::SimpleFin::DashboardCache.available_cents
     @stray_categories = ::TransactionCategory.unknown_in_use
-    @unlinked_count = ::BankTransaction.unlinked.count
+    # Collapsed the same way the listing is, so the count matches the rows the
+    # `category:none` link it points at will actually show.
+    @uncategorized_count = ::BankTransaction.without_transfer_mirror.uncategorized.count
     @backfill = ::SimpleFin::Backfill.progress
 
     @query = params[:q].to_s.strip
@@ -162,17 +164,15 @@ class SystemController < ApplicationController
     )
 
     updated = 0
-    skipped = 0
     # No ActionEventNotifier here on purpose: it fires a :event Jil trigger per
     # event, and a bulk recategorise of a whole search would stampede every
     # watch and automation listening for one. ActionEventNotifier exists so
     # bulk paths can opt out — this is one.
     scope.includes(:action_event).find_each { |transaction|
-      transaction.apply_category(category) ? updated += 1 : skipped += 1
+      updated += 1 if transaction.apply_category(category)
     }
 
     notice = "Categorised #{updated} as #{::TransactionCategory.label(category)}."
-    notice += " #{skipped} skipped (no linked event to hold a category)." if skipped.positive?
     redirect_to(system_banking_path(q: params[:q].presence), notice: notice)
   end
 
@@ -186,11 +186,9 @@ class SystemController < ApplicationController
 
   private
 
-  # Category is stored on the linked event, so an unlinked row has nowhere to
-  # put one. Say which of the two it is rather than a generic failure.
-  def category_error(transaction)
-    return "No linked event to hold a category." if transaction.action_event.blank?
-
+  # Every row can hold a category now, so the only way this fails is a value
+  # outside the vocabulary.
+  def category_error(_transaction)
     "#{params[:category]} is not one of the #{::TransactionCategory::ALL.size} categories."
   end
 
@@ -208,10 +206,13 @@ class SystemController < ApplicationController
 
   # Spending only. Income and refunds in the same bars would net categories
   # against each other and make a bar mean two different things.
+  #
+  # Reads the column rather than joining action_events, which is the point of
+  # the column existing: the join silently dropped every row without an alert
+  # behind it, so the chart described only the part of your spending that
+  # happened to arrive by email.
   def category_totals(scope)
-    totals = scope.spending.joins(:action_event)
-    totals = totals.group(::Arel.sql("action_events.data->>'category'"))
-    totals = totals.sum(:amount_cents)
+    totals = scope.spending.group(:category).sum(:amount_cents)
     totals.filter_map { |category, cents|
       next if category.blank?
 
@@ -320,23 +321,23 @@ class SystemController < ApplicationController
       }
       http_headers = env.select { |k, _| k.is_a?(String) && k.start_with?("HTTP_") }
       {
-        object_id:           conn.object_id,
-        user_id:             user&.id,
-        username:            user.respond_to?(:username) ? user&.username : nil,
-        identifier:          conn.connection_identifier,
-        started_at:          stats[:started_at] || conn.instance_variable_get(:@started_at),
-        request_id:          stats[:request_id],
-        remote_ip:           env["HTTP_X_FORWARDED_FOR"].to_s.split(",").first&.strip.presence || env["REMOTE_ADDR"],
-        user_agent:          env["HTTP_USER_AGENT"],
-        referer:             env["HTTP_REFERER"],
-        origin:              env["HTTP_ORIGIN"],
-        http_headers:        http_headers,
-        last_transmitted_at: conn.respond_to?(:last_transmitted_at) ? conn.last_transmitted_at : nil,
-        transmissions_count: conn.respond_to?(:transmissions_count) ? conn.transmissions_count : nil,
-        pings_count:         conn.respond_to?(:pings_count) ? conn.pings_count.to_i : 0,
+        object_id:            conn.object_id,
+        user_id:              user&.id,
+        username:             user.respond_to?(:username) ? user&.username : nil,
+        identifier:           conn.connection_identifier,
+        started_at:           stats[:started_at] || conn.instance_variable_get(:@started_at),
+        request_id:           stats[:request_id],
+        remote_ip:            env["HTTP_X_FORWARDED_FOR"].to_s.split(",").first&.strip.presence || env["REMOTE_ADDR"],
+        user_agent:           env["HTTP_USER_AGENT"],
+        referer:              env["HTTP_REFERER"],
+        origin:               env["HTTP_ORIGIN"],
+        http_headers:         http_headers,
+        last_transmitted_at:  conn.respond_to?(:last_transmitted_at) ? conn.last_transmitted_at : nil,
+        transmissions_count:  conn.respond_to?(:transmissions_count) ? conn.transmissions_count : nil,
+        pings_count:          conn.respond_to?(:pings_count) ? conn.pings_count.to_i : 0,
         last_message_summary: conn.respond_to?(:last_message_summary) ? conn.last_message_summary : nil,
-        recent_ids:          conn.respond_to?(:recent_ids) ? (conn.recent_ids || []) : [],
-        subscriptions:       subs,
+        recent_ids:           conn.respond_to?(:recent_ids) ? (conn.recent_ids || []) : [],
+        subscriptions:        subs,
       }
     }
   rescue StandardError => e

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_12_174626) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_12_180505) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -246,7 +246,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_12_174626) do
   end
 
   create_table "bank_accounts", force: :cascade do |t|
-    t.string "simplefin_id", null: false
+    t.string "simplefin_id"
     t.string "conn_id"
     t.string "name", null: false
     t.string "currency", default: "USD", null: false
@@ -276,9 +276,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_12_174626) do
   end
 
   create_table "bank_transactions", force: :cascade do |t|
-    t.string "simplefin_id", null: false
-    t.bigint "bank_account_id", null: false
-    t.datetime "posted_at", null: false
+    t.string "simplefin_id"
+    t.bigint "bank_account_id"
+    t.datetime "posted_at"
     t.datetime "transacted_at"
     t.bigint "amount_cents", null: false
     t.text "description"
@@ -292,11 +292,13 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_12_174626) do
     t.decimal "amount_abs", null: false
     t.bigint "transfer_counterpart_id"
     t.datetime "occurred_at", null: false
+    t.string "category"
     t.index ["action_event_id"], name: "index_bank_transactions_on_action_event_id"
     t.index ["action_event_id"], name: "index_bank_transactions_on_claimed_action_event", unique: true, where: "(action_event_id IS NOT NULL)"
     t.index ["amount_abs"], name: "index_bank_transactions_on_amount_abs"
     t.index ["bank_account_id", "posted_at"], name: "index_bank_transactions_on_bank_account_id_and_posted_at"
     t.index ["bank_account_id"], name: "index_bank_transactions_on_bank_account_id"
+    t.index ["category"], name: "index_bank_transactions_on_category"
     t.index ["occurred_at"], name: "index_bank_transactions_on_occurred_at"
     t.index ["simplefin_id"], name: "index_bank_transactions_on_simplefin_id", unique: true
     t.index ["transfer_counterpart_id"], name: "index_bank_transactions_on_claimed_transfer", unique: true, where: "(transfer_counterpart_id IS NOT NULL)"

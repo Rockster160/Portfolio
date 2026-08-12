@@ -111,12 +111,38 @@ RSpec.describe SimpleFin::EventMatcher, ".link_event" do
     expect(described_class.link_event(event)).to be_nil
   end
 
-  it "tolerates an event with no account label" do
-    transaction(amount_cents: -2972, at: 1.day.ago)
-    event = build_event(amount: 29.72, at: 2.days.ago, label: "")
-    event.save!
+  # 433 alerts come from a format that names no account. Refusing to match
+  # them at all is what left every one of them — most of the checking-account
+  # spending — with no bank row and no category.
+  describe "an event with no account label" do
+    it "matches on amount and timing alone when only one row can be meant" do
+      row = transaction(amount_cents: -2972, at: 1.day.ago)
+      event = build_event(amount: 29.72, at: 2.days.ago, label: "")
+      event.save!
 
-    expect(described_class.link_event(event)).to be_nil
+      expect(described_class.link_event(event)).to eq(row)
+    end
+
+    # With no account to narrow on, more of these land ambiguous — and
+    # ambiguous has to stay a second row rather than a guess.
+    it "refuses to choose between two rows of the same size" do
+      transaction(amount_cents: -2972, at: 1.day.ago, simplefin_id: "TRN-X")
+      transaction(amount_cents: -2972, at: 2.days.ago, simplefin_id: "TRN-Y")
+      event = build_event(amount: 29.72, at: 2.days.ago, label: "")
+      event.save!
+
+      expect(described_class.link_event(event)).to be_nil
+    end
+
+    # Signed, not magnitude: without an account to separate them, a refund
+    # would otherwise match the charge it reverses.
+    it "does not match a refund to the charge it reverses" do
+      transaction(amount_cents: 2972, at: 1.day.ago)
+      event = build_event(amount: 29.72, at: 2.days.ago, label: "")
+      event.save!
+
+      expect(described_class.link_event(event)).to be_nil
+    end
   end
 
   # The bank row is the authoritative record; the annotation is not.

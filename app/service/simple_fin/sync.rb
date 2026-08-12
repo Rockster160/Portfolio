@@ -80,14 +80,24 @@ module SimpleFin
 
     def upsert_transaction(account, row)
       transaction = ::BankTransaction.find_or_initialize_by(simplefin_id: row["id"])
+      # A Chase alert may already have landed this purchase, minutes after it
+      # was made and up to a day before the bank cleared it. That row is the
+      # same transaction, carrying the category it was given at the time, so
+      # the bank's version merges INTO it rather than appearing beside it.
+      transaction = adopt(account, row) || transaction if transaction.new_record?
       created = transaction.new_record?
       transaction.assign_attributes(
+        # Set here rather than left to find_or_initialize_by, because an
+        # adopted row was found by other means and still has none.
+        simplefin_id:  row["id"],
         bank_account:  account,
         posted_at:     timestamp(row["posted"]),
         transacted_at: timestamp(row["transacted_at"]),
         amount_cents:  cents(row["amount"]),
         description:   row["description"],
-        payee:         row["payee"],
+        # The bank's name for the merchant wins, but not a blank one — an
+        # adopted row already carries the name the alert gave it.
+        payee:         row["payee"].presence || transaction.payee,
         memo:          row["memo"],
         mcc:           row["mcc"],
         pending:       row["pending"].present?,
@@ -95,6 +105,17 @@ module SimpleFin
       transaction.save!
       @transaction_count += 1
       @created_count += 1 if created
+    end
+
+    # Matched on the transacted timestamp when the payload carries one, since
+    # that is the same instant the alert fired on. `posted` can trail it by
+    # days, which would push a genuine pair outside the merge window.
+    def adopt(account, row)
+      ::SimpleFin::EventTransaction.claim(
+        bank_account: account,
+        amount_cents: cents(row["amount"]),
+        occurred_at:  timestamp(row["transacted_at"]) || timestamp(row["posted"]),
+      )
     end
 
     # Amounts arrive as numeric strings. BigDecimal, never to_f — a float

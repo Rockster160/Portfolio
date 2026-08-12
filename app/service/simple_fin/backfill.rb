@@ -96,12 +96,14 @@ module SimpleFin
       def progress
         current = load_state
         cursor = oldest_asked(current)
-        newest = ::BankTransaction.maximum(:occurred_at)
+        # Bank-confirmed on both ends, because this bar is about the SimpleFIN
+        # walk. Alert-sourced rows are held already and were never fetched.
+        newest = ::BankTransaction.bank_confirmed.maximum(:occurred_at)
 
         Progress.new(
           cursor:            cursor,
           done:              current[:done],
-          oldest_row:        ::BankTransaction.minimum(:occurred_at),
+          oldest_row:        ::BankTransaction.bank_confirmed.minimum(:occurred_at),
           newest_row:        newest,
           windows_remaining: windows_remaining(cursor, current[:done]),
           percent:           percent_covered(cursor, newest, current[:done]),
@@ -119,8 +121,13 @@ module SimpleFin
       # for a date-only row the two are a whole calendar day apart. It also
       # errs the safe way: occurred_at is never later than posted_at, so the
       # anchor can only reach further back, never skip.
+      #
+      # BANK-CONFIRMED rows only. Alert-sourced rows reach back to October 2024
+      # while SimpleFIN has only been asked as far as May 2026 — counting them
+      # would move the cursor nineteen months back in one step and declare that
+      # whole span already fetched, skipping it permanently.
       def oldest_asked(state)
-        [state[:cursor], ::BankTransaction.minimum(:occurred_at)].compact.min
+        [state[:cursor], ::BankTransaction.bank_confirmed.minimum(:occurred_at)].compact.min
       end
 
       # How much of the fetchable span is held: everything between the newest

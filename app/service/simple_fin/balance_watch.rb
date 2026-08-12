@@ -15,9 +15,14 @@ module SimpleFin
       # rubocop:disable Naming/PredicateMethod -- it enqueues; `?` would imply a query
       def consider(event)
         return false if event.blank? || event.name.to_s != EVENT_NAME
-        # Already synced: if a bank row exists for this alert, SimpleFIN has
-        # seen the charge and the balance it reported already accounts for it.
-        return false if ::BankTransaction.exists?(action_event_id: event.id)
+        # Already synced: if SimpleFIN has reported this charge, the balance it
+        # sent alongside already accounts for it and there is nothing to chase.
+        #
+        # BANK-CONFIRMED, not merely present. Every alert now lands a row of its
+        # own the moment it arrives — and it arrives before this runs — so a
+        # bare existence check answers "did we just create it", which is always
+        # yes, and no chase would ever fire again.
+        return false if ::BankTransaction.bank_confirmed.exists?(action_event_id: event.id)
 
         # Any account in the reported figure, not just checking — the number
         # is cumulative now, so a card charge moves it exactly as a checking

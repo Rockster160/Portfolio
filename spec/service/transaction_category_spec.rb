@@ -8,6 +8,53 @@ RSpec.describe TransactionCategory do
     expect(described_class::ALL).to include(:mortgage, :"eat out", :"pay check", :other)
   end
 
+  # Ported from Jil task 453 on 2026-08-12. Checked against all 456 distinct
+  # merchant names in production: 383 matched the stored category exactly and
+  # every disagreement was a human override in the prompt, not a rule.
+  describe ".for_merchant" do
+    it "names a category for a merchant it knows" do
+      expect(described_class.for_merchant("COSTCO WHSE #1043")).to eq(:groceries)
+      expect(described_class.for_merchant("CHIPOTLE 2394")).to eq(:"eat out")
+    end
+
+    # The reason MERCHANT_RULES is ordered rather than alphabetical. Re-sorting
+    # it silently recategorizes spending, and nothing else would notice.
+    it "lets the specific rule beat the general one" do
+      expect(described_class.for_merchant("AMAZON WEB SERVICES")).to eq(:hosting)
+      expect(described_class.for_merchant("AMAZON MKTPLACE PMTS")).to eq(:shopping)
+      expect(described_class.for_merchant("AMZN Mktp US*PRIME VIDEO")).to eq(:subscriptions)
+    end
+
+    # Jil compiled every rule with Regexp::IGNORECASE. Losing that would break
+    # the two lowercase rules — and pay checks with them.
+    it "ignores case, as the Jil rules did" do
+      expect(described_class.for_merchant("direct deposit")).to eq(:"pay check")
+      expect(described_class.for_merchant("DIRECT DEPOSIT")).to eq(:"pay check")
+      expect(described_class.for_merchant("costco")).to eq(:groceries)
+    end
+
+    # "JPMORGAN CHASE" alone is the mortgage payment. Unanchored it would also
+    # swallow every other Chase line item on the statement.
+    it "honours the anchored rules" do
+      expect(described_class.for_merchant("JPMORGAN CHASE")).to eq(:mortgage)
+      expect(described_class.for_merchant("JPMORGAN CHASE CREDIT CRD")).not_to eq(:mortgage)
+      expect(described_class.for_merchant("VENMO")).to eq(:people)
+      expect(described_class.for_merchant("VENMO PAYMENT 4029")).not_to eq(:people)
+    end
+
+    # Nil, not "other". Applied unattended to thousands of rows, a confident
+    # "other" buries every merchant nobody has written a rule for yet.
+    it "answers nil when no rule claims it" do
+      expect(described_class.for_merchant("SOME PLACE NOBODY HAS SEEN")).to be_nil
+      expect(described_class.for_merchant("")).to be_nil
+      expect(described_class.for_merchant(nil)).to be_nil
+    end
+
+    it "only ever names a category that exists" do
+      expect(described_class::MERCHANT_RULES.keys).to all(satisfy { |c| described_class.valid?(c) })
+    end
+  end
+
   describe ".valid?" do
     it "accepts a known category as a string" do
       expect(described_class).to be_valid("eat out")
@@ -38,25 +85,32 @@ RSpec.describe TransactionCategory do
     end
   end
 
+  # Reads bank_transactions, which is where a category lives now. The events it
+  # used to read still carry a mirrored copy, but only for the fraction of
+  # transactions a Chase alert email ever arrived for.
   describe ".unknown_in_use" do
+    let!(:account) {
+      BankAccount.create!(
+        simplefin_id: "A1", name: "AMZ Prime (7283)", last4: "7283", kind: :credit,
+      )
+    }
+
+    def transaction(id, category)
+      BankTransaction.create!(
+        simplefin_id: id, bank_account: account, posted_at: 1.day.ago,
+        amount_cents: -100, category: category
+      )
+    end
+
     it "finds categories in the data that are outside the vocabulary" do
-      ActionEvent.create!(
-        user: user, name: "Transaction", timestamp: Time.current,
-        data: { amount: 1, category: "Extra Expense" }
-      )
-      ActionEvent.create!(
-        user: user, name: "Transaction", timestamp: Time.current,
-        data: { amount: 1, category: "groceries" }
-      )
+      transaction("T1", "Extra Expense")
+      transaction("T2", "groceries")
 
       expect(described_class.unknown_in_use).to eq(["Extra Expense"])
     end
 
-    it "ignores events that are not transactions" do
-      ActionEvent.create!(
-        user: user, name: "Whisper", timestamp: Time.current,
-        data: { category: "nonsense" }
-      )
+    it "says nothing about a row that simply has no category yet" do
+      transaction("T1", nil)
 
       expect(described_class.unknown_in_use).to be_empty
     end

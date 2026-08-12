@@ -417,6 +417,7 @@
 [TransactionCategory]
   #all::Array
   #colors::Hash
+  #match(String:Merchant)::String
   #valid(String:Category)::Boolean
   #default::String
 [Prompt]

@@ -37,4 +37,16 @@ class Jil::Methods::TransactionCategory < Jil::Methods::Base
   def default
     ::TransactionCategory::DEFAULT.to_s
   end
+
+  # The merchant rules, which task 453 held until 2026-08-12 and Rails owns
+  # now. Task 454 is a one-line wrapper over this so `Custom.TransactionCategory`
+  # keeps working for its callers.
+  #
+  # Falls back to "other" rather than "" deliberately: that IS what task 454
+  # returned, and the value goes straight into a prompt a human is about to
+  # confirm. `::TransactionCategory.for_merchant` answers nil for the unattended
+  # callers, where a confident "other" would be worse than no answer.
+  def match(merchant)
+    ::TransactionCategory.for_merchant(merchant)&.to_s.presence || default
+  end
 end

@@ -144,20 +144,39 @@ RSpec.describe SystemController, type: :controller do
         expect(response.body).to include("Netflix", "subscriptions")
       end
 
-      it "flags an unlinked transaction rather than showing a blank category" do
+      # A row with no alert behind it used to be told it could not hold a
+      # category at all. Now it offers the same picker every other row does —
+      # which is what makes the historical backfill categorizable.
+      it "offers a category picker on a row no alert ever covered" do
         BankTransaction.create!(
           simplefin_id: "TRN-0002", bank_account: card,
           posted_at: 1.day.ago, amount_cents: -500, payee: "Mystery"
         )
 
         get :banking
-        expect(response.body).to include("unlinked")
+        expect(response.body).to include("Mystery")
+        expect(response.body).not_to include("No linked alert")
+        expect(response.body).to include(%(data-field="category"))
       end
 
+      it "counts what is still uncategorized and links straight to it" do
+        BankTransaction.create!(
+          simplefin_id: "TRN-0002", bank_account: card,
+          posted_at: 1.day.ago, amount_cents: -500, payee: "Mystery"
+        )
+
+        get :banking
+        expect(response.body).to include("1 uncategorized")
+        expect(response.body).to include("q=category%3Anone")
+      end
+
+      # Read off the transactions now, not the events — the events only cover
+      # the fraction of rows an alert email arrived for.
       it "surfaces categories outside the vocabulary" do
-        ActionEvent.create!(
-          user: me, name: "Transaction", timestamp: 1.day.ago,
-          data: { amount: 1, category: "Extra Expense" }
+        BankTransaction.create!(
+          simplefin_id: "TRN-0003", bank_account: card,
+          posted_at: 1.day.ago, amount_cents: -100, payee: "Odd",
+          category: "Extra Expense"
         )
 
         get :banking
@@ -177,7 +196,8 @@ RSpec.describe SystemController, type: :controller do
       )
       BankTransaction.create!(
         simplefin_id: id, bank_account: card, action_event: event,
-        posted_at: at, transacted_at: at, amount_cents: cents, payee: payee
+        posted_at: at, transacted_at: at, amount_cents: cents, payee: payee,
+        category: category
       )
     end
 
@@ -490,7 +510,8 @@ RSpec.describe SystemController, type: :controller do
     let(:linked) {
       BankTransaction.create!(
         simplefin_id: "TRN-A", bank_account: card, action_event: event,
-        posted_at: 1.day.ago, amount_cents: -2148, payee: "Netflix"
+        posted_at: 1.day.ago, amount_cents: -2148, payee: "Netflix",
+        category: "other"
       )
     }
     let(:unlinked) {
@@ -515,11 +536,13 @@ RSpec.describe SystemController, type: :controller do
       expect(linked.reload.category).to eq("other")
     end
 
-    it "explains that an unlinked row has nowhere to hold a category" do
+    # The point of the column: a row the bank reported and no alert ever
+    # described is categorizable like any other.
+    it "categorizes a row that has no linked event" do
       patch :update_transaction, params: { id: unlinked.id, category: "groceries" }
 
-      expect(response).to have_http_status(:unprocessable_entity)
-      expect(response.parsed_body["error"]).to match(/No linked event/)
+      expect(response).to have_http_status(:ok)
+      expect(unlinked.reload.category).to eq("groceries")
     end
 
     it "shows the alert's note as the memo when the row has none" do
@@ -573,7 +596,8 @@ RSpec.describe SystemController, type: :controller do
     let(:linked) {
       BankTransaction.create!(
         simplefin_id: "TRN-A", bank_account: card, action_event: event,
-        posted_at: 1.day.ago, amount_cents: -2148, payee: "Netflix"
+        posted_at: 1.day.ago, amount_cents: -2148, payee: "Netflix",
+        category: "other"
       )
     }
     let(:unlinked) {
@@ -599,15 +623,16 @@ RSpec.describe SystemController, type: :controller do
       expect(event.reload.data["category"]).to eq("subscriptions")
     end
 
-    # `txn.category = x` would evaluate to x regardless of the method's return,
-    # so the skip count would silently read zero.
-    it "counts rows it could not categorize" do
+    # Nothing gets skipped any more — an unlinked row holds its own category,
+    # so a bulk pick reaches every row in the selection.
+    it "categorizes linked and unlinked rows alike" do
       patch :bulk_update_transactions, params: {
         transaction_ids: [linked.id, unlinked.id], category: "subscriptions"
       }
 
-      expect(flash[:notice]).to include("Categorised 1")
-      expect(flash[:notice]).to include("1 skipped")
+      expect(flash[:notice]).to include("Categorised 2")
+      expect(flash[:notice]).not_to include("skipped")
+      expect(unlinked.reload.category).to eq("subscriptions")
     end
 
     it "refuses a category outside the vocabulary" do

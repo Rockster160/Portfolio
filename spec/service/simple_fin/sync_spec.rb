@@ -171,4 +171,73 @@ RSpec.describe SimpleFin::Sync do
       expect(BankAccount.count).to eq(1)
     end
   end
+
+  # The alert arrives first and the bank clears the same purchase up to four
+  # days later. Both describe one transaction, and it must end up as one row.
+  describe "merging with a Chase alert that got there first" do
+    let(:posted) { 1_786_104_000 }
+    let(:transacted) { 1_785_931_200 }
+
+    def alert!
+      event = ActionEvent.create!(
+        user: User.me, name: "Transaction", timestamp: Time.at(transacted).utc,
+        notes: "Deck boards",
+        data: {
+          amount: 238.42, account: "(...2363)", category: "home", merchant: "LOWES"
+        }
+      )
+      SimpleFin::EventTransaction.sync(event)
+    end
+
+    before { described_class.call(payload([account_data])) } # lays down the account
+
+    it "folds the bank's version into the row the alert made" do
+      row = alert!
+
+      described_class.call(payload([account_data("transactions" => [transaction_data])]))
+
+      expect(BankTransaction.count).to eq(1)
+      expect(row.reload.simplefin_id).to eq("TRN-0001")
+    end
+
+    it "keeps the category the alert was given" do
+      alert!
+
+      described_class.call(payload([account_data("transactions" => [transaction_data])]))
+
+      expect(BankTransaction.first.category).to eq("home")
+    end
+
+    it "takes the bank's figures over the alert's" do
+      alert!
+
+      described_class.call(payload([account_data("transactions" => [transaction_data])]))
+
+      row = BankTransaction.first
+      expect(row.payee).to eq("Lowe's Credit Card by Synchrony")
+      expect(row.posted_at).to eq(Time.at(posted).utc)
+      expect(row.amount_cents).to eq(-23_842)
+    end
+
+    # A merge is not new history. The backfill reads `created` to decide
+    # whether there is anything older left to fetch, and counting a row it
+    # already held would keep the walk going against an empty window.
+    it "does not count a merge as a row created" do
+      alert!
+
+      result = described_class.call(payload([account_data("transactions" => [transaction_data])]))
+
+      expect(result.created).to be_zero
+    end
+
+    it "leaves an unrelated charge of a different size alone" do
+      alert!
+
+      described_class.call(
+        payload([account_data("transactions" => [transaction_data("amount" => "-99.00")])]),
+      )
+
+      expect(BankTransaction.count).to eq(2)
+    end
+  end
 end

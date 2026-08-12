@@ -58,15 +58,33 @@ module SimpleFin
         return nil if event.blank? || event.name.to_s != EVENT_NAME
         return nil if ::BankTransaction.exists?(action_event_id: event.id)
 
-        last4 = ::BankAccount.last4_from(event.data&.dig("account"))
         cents = event_amount_cents(event)
-        return nil if last4.blank? || cents.nil? || event.timestamp.blank?
+        return nil if cents.nil? || event.timestamp.blank?
 
-        candidates = candidates_for(last4, cents)
+        last4 = ::BankAccount.last4_from(event.data&.dig("account"))
+        candidates = (
+          if last4.present?
+            candidates_for(last4, cents)
+          else
+            unattributed_candidates_for(event)
+          end
+        )
         candidates = candidates.select { |row| within_window?(event, row) }
         return nil unless candidates.one?
 
-        candidates.first.tap { |row| row.update!(action_event: event) }
+        candidates.first.tap { |row| attach!(row, event) }
+      end
+
+      # The link and the category land together, in both directions. Attaching
+      # an event without copying what it says would leave the row's category
+      # depending on which way round the match happened — a bank row matched by
+      # `call` would stay blank while the same row matched by `link_event` came
+      # out categorized.
+      def attach!(transaction, event)
+        transaction.update!(
+          action_event: event,
+          category:     ::SimpleFin::EventTransaction.category_for(event) || transaction.category,
+        )
       end
 
       # Events store the amount unsigned; bank rows are signed. Compared on
@@ -93,6 +111,24 @@ module SimpleFin
         accounts = ::BankAccount.where(last4: last4).select(:id)
         scope = ::BankTransaction.unlinked.where(bank_account_id: accounts)
         scope.where(amount_cents: [cents, -cents]).to_a
+      end
+
+      # 433 alerts come from a format that names no account, so account is not
+      # available to narrow on and every account has to be searched. Two things
+      # make that safe enough to do:
+      #
+      #   * SIGNED amounts, not magnitude. Without an account to separate them,
+      #     magnitude would let a refund match the charge it reverses.
+      #   * the same `one?` rule as everywhere else — with a weaker key, more
+      #     of these land ambiguous, and ambiguous means a second row rather
+      #     than a guess. A duplicate is visible on the page and mergeable; a
+      #     wrong attachment moves one purchase's category onto another and
+      #     nothing ever shows that it happened.
+      def unattributed_candidates_for(event)
+        cents = ::SimpleFin::EventTransaction.amount_cents_for(event)
+        return [] if cents.nil?
+
+        ::BankTransaction.unlinked.where(amount_cents: cents).to_a
       end
     end
 
@@ -133,7 +169,7 @@ module SimpleFin
       case candidates.size
       when 0 then @unmatched += 1
       when 1
-        transaction.update!(action_event: candidates.first)
+        self.class.attach!(transaction, candidates.first)
         claimed << candidates.first.id
         @linked += 1
       else @ambiguous += 1

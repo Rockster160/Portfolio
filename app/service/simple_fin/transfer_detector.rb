@@ -72,6 +72,11 @@ module SimpleFin
     end
 
     def plausible?(row, other)
+      # "Two DIFFERENT accounts, both yours" is the rule, and a row that names
+      # no account satisfies neither half of it. Alert-sourced rows can arrive
+      # without one, and pairing on amount alone would let an ordinary purchase
+      # cancel out a same-sized deposit and vanish from spending entirely.
+      return false if row.bank_account_id.nil? || other.bank_account_id.nil?
       return false if other.bank_account_id == row.bank_account_id
       return false if row.transfer_counterpart_id.present? || other.transfer_counterpart_id.present?
 

@@ -21,29 +21,42 @@
 #  transfer_counterpart_id :bigint
 #
 class BankTransaction < ApplicationRecord
-  belongs_to :bank_account
+  # Absent on a row the bank has not reported. A Chase alert names an account
+  # in a form we can resolve most of the time, but 433 of 2,563 events come
+  # from an alert format that names none at all — those rows say so rather than
+  # guessing at the likeliest one.
+  belongs_to :bank_account, optional: true
   # The instant, hand-categorized counterpart from the Chase alert email.
-  # Absent until the matcher finds it, and permanently absent for anything
-  # email never covered — mortgage payments, most checking activity.
+  # Absent on anything email never covered — most of the historical backfill.
   # The FK is ON DELETE SET NULL: the bank row outlives its annotation.
   belongs_to :action_event, optional: true
   # The other half of a movement between two of your own accounts. Symmetric —
   # both rows point at each other — so a pair reads the same from either side.
   belongs_to :transfer_counterpart, class_name: "BankTransaction", optional: true
 
-  validates :simplefin_id, presence: true, uniqueness: true
-  validates :posted_at, presence: true
+  # A row sourced from an alert has no SimpleFIN id until the bank reports the
+  # same purchase and the two are merged. Uniqueness still holds for the ones
+  # that have one — Postgres treats NULLs as distinct.
+  validates :simplefin_id, uniqueness: true, allow_nil: true
   validates :amount_cents, presence: true
+  # The one timestamp every row is guaranteed to carry, whichever side it came
+  # from. `posted_at` cannot be it: an alert fires when the purchase is made
+  # and says nothing about when it will clear.
+  validates :occurred_at, presence: true
 
   # `amount_abs` would be a generated column if production were not on
   # PostgreSQL 9.5 (generated columns landed in 12). Derived here instead, on
   # every save, so it cannot fall out of step with amount_cents. It exists
   # solely so `amount>50` can use the numeric-comparison path — see the
   # search_terms note below.
-  before_save :derive_amount_abs
+  #
+  # Both run before VALIDATION rather than before save, so `occurred_at` is
+  # populated by the time its presence is checked — otherwise every new record
+  # would fail on a column it derives for itself.
+  before_validation :derive_amount_abs
   # Same story as amount_abs, for the same reason — see the migration. It backs
   # the `timestamp` search term, which needs a real column to get `>=` and `<`.
-  before_save :derive_occurred_at
+  before_validation :derive_occurred_at
 
   # Same query syntax as ActionEvent — `payee:amazon category:groceries
   # posted_at>2026-07-01 amount>50 direction:withdrawal`, with AND/OR/NOT.
@@ -81,6 +94,13 @@ class BankTransaction < ApplicationRecord
   scope :income, -> { where(amount_cents: 1..) }
   scope :linked, -> { where.not(action_event_id: nil) }
   scope :unlinked, -> { where(action_event_id: nil) }
+  scope :categorized, -> { where.not(category: nil) }
+  scope :uncategorized, -> { where(category: nil) }
+  # Reported by the bank, as opposed to built from an alert and still waiting
+  # for the bank to catch up. The merge sets `simplefin_id`, so this is also
+  # what says whether a row has been confirmed by anyone but the alert email.
+  scope :bank_confirmed, -> { where.not(simplefin_id: nil) }
+  scope :event_sourced, -> { where(simplefin_id: nil) }
   scope :paired, -> { where.not(transfer_counterpart_id: nil) }
   scope :unpaired, -> { where(transfer_counterpart_id: nil) }
 
@@ -130,15 +150,19 @@ class BankTransaction < ApplicationRecord
     )
   }
 
-  # Category lives on the linked event, so an uncategorized row correctly
-  # matches no category at all.
+  NONE_WORDS = %w[none nil null uncategorized uncategorised].freeze
+
+  # A column now, not a read-through to the linked event. `category:none` is
+  # spelled out because an uncategorized row is the thing you most want to
+  # list, and an ILIKE on NULL matches nothing.
   scope :search_category, ->(*qs) {
-    terms = like_terms(qs)
+    words = ::Array.wrap(qs).flatten.compact_blank.map { |q| q.to_s.downcase.strip }
+    next uncategorized if words.any? { |w| NONE_WORDS.include?(w) }
+
+    terms = like_terms(words)
     next none if terms.empty?
 
-    clause = terms.map { "action_events.data->>'category' ILIKE ?" }.join(" OR ")
-    events = ::ActionEvent.where(clause, *terms)
-    where(action_event_id: events.select(:id))
+    where(terms.map { "category ILIKE ?" }.join(" OR "), *terms)
   }
 
   # Money in vs money out, from the account's point of view — a card purchase
@@ -186,29 +210,29 @@ class BankTransaction < ApplicationRecord
     BigDecimal(amount_cents) / 100
   end
 
-  # Category lives on the ActionEvent — it is the surface that has been
-  # categorized for 2,560 rows and drives the existing chart. Duplicating it
-  # here would create two answers to the same question.
-  def category
-    action_event&.data&.dig("category")
-  end
-
-  # Writes through to the linked event, the only place a category is stored.
-  # Returns true when it wrote, false when there was nowhere to write or the
-  # value is outside the vocabulary.
+  # Writes the category, and mirrors it onto the linked event when there is
+  # one. Returns true when it wrote, false when the value is outside the
+  # vocabulary.
+  #
+  # The column is the answer; the event is a copy kept in step. That direction
+  # matters: an event exists for a fraction of rows and can never exist for the
+  # historical backfill, so storing it only there is what made most of the
+  # table uncategorizable. The mirror stays because the event is still what
+  # Jil's rules and the category chart read, and a row and its own alert
+  # disagreeing about what a purchase was is the kind of split-brain that only
+  # shows up as a wrong chart months later.
   #
   # Deliberately NOT a `category=` setter: Ruby's assignment expressions
   # evaluate to the right-hand side regardless of what the method returns, so
-  # `if txn.category = x` is always truthy and the skip count would silently
+  # `if txn.category = x` is always truthy and the reject count would silently
   # read zero.
   # rubocop:disable Naming/PredicateMethod -- it writes; `?` would imply a query
   def apply_category(value)
-    return false if action_event.blank?
-
     canonical = ::TransactionCategory.cast(value)
     return false if canonical.nil?
 
-    action_event.update!(data: action_event.data.to_h.merge("category" => canonical.to_s))
+    update!(category: canonical.to_s)
+    mirror_category_to_event(canonical)
     true
   end
   # rubocop:enable Naming/PredicateMethod
@@ -265,10 +289,23 @@ class BankTransaction < ApplicationRecord
   def transfer_destination
     return unless transfer_source?
 
-    transfer_counterpart.bank_account.display_name
+    transfer_counterpart.bank_account&.display_name
+  end
+
+  # What the alert said, when the bank has not named an account. Kept separate
+  # from `bank_account` so nothing mistakes it for a resolved one.
+  def display_account
+    bank_account&.display_name || "—"
   end
 
   private
+
+  def mirror_category_to_event(canonical)
+    return if action_event.blank?
+    return if action_event.data.to_h["category"] == canonical.to_s
+
+    action_event.update!(data: action_event.data.to_h.merge("category" => canonical.to_s))
+  end
 
   def derive_amount_abs
     self.amount_abs = amount_cents.nil? ? nil : (BigDecimal(amount_cents.abs) / 100)

@@ -1,4 +1,10 @@
 class Jil::Methods::Custom < Jil::Methods::Base
+  # Every hardcoded case below ALSO needs a companion `function(...)` task
+  # declaring its signature (see task 99, `distance`, whose body is a single
+  # comment). The case here is what actually runs — it returns before the
+  # function lookup — but `Task.schema` builds the editor's [Custom] block
+  # purely from the user's enabled function tasks, so without one the Jil
+  # editor reports the method doesn't exist and can drop the line on save.
   def cast(value)
     value
   end

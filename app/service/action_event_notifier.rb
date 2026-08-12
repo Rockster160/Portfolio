@@ -15,12 +15,17 @@ class ActionEventNotifier
 
     reset_following_streak(event) if action == :removed
 
-    # A SimpleFIN bank row may already be waiting for this event. The usual
-    # order is alert-then-sync, but a charge synced before its alert was
-    # categorized, a hand-edited event, or any backfill inverts it — and
-    # without this the link would only ever happen in one direction. Exits
-    # immediately for anything that is not a Transaction event.
-    ::SimpleFin::EventMatcher.link_event(event) unless action == :removed
+    # Every Transaction event gets a bank_transactions row, so that table is
+    # the only one anything has to query. It links to a SimpleFIN row already
+    # waiting for it, and creates one when none is — a purchase is then visible
+    # and categorized the moment the alert arrives, rather than whenever the
+    # bank next clears and reports it. Exits immediately for anything that is
+    # not a Transaction event.
+    if action == :removed
+      ::SimpleFin::EventTransaction.forget(event)
+    else
+      ::SimpleFin::EventTransaction.sync(event)
+    end
 
     # An alert is the only real-time signal there is — SimpleFIN is polled and
     # can be a day behind. If this charge would tip the dashboard's floored

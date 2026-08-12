@@ -42,7 +42,11 @@ class BankAccount < ApplicationRecord
   ASSET_KINDS = [:checking, :savings, :investment].freeze
   DEBT_KINDS = [:credit, :loan].freeze
 
-  validates :simplefin_id, presence: true, uniqueness: true
+  # Absent on an account the alert emails name but SimpleFIN will never report
+  # — two closed Chase cards. Inventing an id to satisfy a constraint would be
+  # storing a fiction, and Postgres keeps the real ones unique regardless,
+  # since it treats NULLs as distinct.
+  validates :simplefin_id, uniqueness: true, allow_nil: true
   validates :name, presence: true
 
   # Institutions bury the last four in the reported name — "(2363)" from
