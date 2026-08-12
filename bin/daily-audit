@@ -83,12 +83,12 @@ PROJECT_DIR="$CLAUDE_CONFIG_DIR/projects/$(echo "$ROOT" | tr '/' '-')"
 # record: Rails only learns it on a `/switch` or `/adopt`, so the metadata
 # column is null for a thread that has simply been running normally.
 #
-# Authoritative when it's there, and there is a window every night when it
+# Authoritative when it's there, and there is a window every morning when it
 # isn't. ByteDailyAudit.run! CLEARS this key before posting (a fresh session
-# each night is the point), and the Mac only writes the new one once the turn
-# finishes — which for an audit that reads two days of traffic is several
-# minutes. Run this script inside that window and the key is legitimately
-# absent while the audit is very much running.
+# each run is the point), and the Mac only writes the new one once the turn
+# finishes — which for an audit that reads a day of traffic is several minutes.
+# Run this script inside that window and the key is legitimately absent while
+# the audit is very much running.
 SESSION_ID="$(
   python3 -c "
 import json, sys

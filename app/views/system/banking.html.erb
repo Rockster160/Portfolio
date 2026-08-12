@@ -24,7 +24,7 @@
 
   <% if @accounts.none? %>
     <p class="bank-empty">
-      No accounts yet. Run <code>prodExec lib/scripts/sync_simplefin.rb</code> to pull them in.
+      No accounts yet.
     </p>
   <% else %>
     <% if @unclassified.any? %>
@@ -110,6 +110,31 @@
         <span class="bank-warn-inline"><%= @unlinked_count %> unlinked</span>
       <% end %>
     </div>
+
+    <%# How far back the history walk has reached. Otherwise the only way to
+        know is SimpleFin::Backfill.state in a console. %>
+    <% unless @backfill.idle? %>
+      <div class="bank-progress">
+        <div class="bank-progress-row">
+          <div class="bank-progress-label">History</div>
+          <div class="bank-progress-track">
+            <div class="bank-progress-fill<%= " done" if @backfill.done %>"
+                 style="width: <%= @backfill.percent %>%;"></div>
+          </div>
+          <div class="bank-progress-value"><%= @backfill.percent %>%</div>
+        </div>
+        <div class="bank-progress-note">
+          <% if @backfill.done %>
+            Complete — nothing older to fetch.
+          <% else %>
+            <%# .utc.to_date, not .to_date — the cursor is UTC and the request
+                renders in Mountain, where a bare to_date lands a day early. %>
+            Back to <strong><%= @backfill.cursor.utc.to_date.strftime("%b %-d, %Y") %></strong>,
+            up to <%= pluralize(@backfill.windows_remaining, "window") %> to go.
+          <% end %>
+        </div>
+      </div>
+    <% end %>
 
     <% if @stray_categories.any? %>
       <p class="bank-warn">
@@ -245,7 +270,11 @@
               </td>
               <td class="when">
                 <span class="date"><%= transaction.occurred_local&.strftime("%b %-d, %Y") %></span>
-                <span class="time"><%= transaction.occurred_local&.strftime("%-I:%M %p") %></span>
+                <%# Only when the bank actually gave a clock time — see
+                    occurred_time_known?. A third of rows are date-only. %>
+                <% if transaction.occurred_time_known? %>
+                  <span class="time"><%= transaction.occurred_local.strftime("%-I:%M %p") %></span>
+                <% end %>
               </td>
               <td class="payee">
                 <span class="name"><%= transaction.display_payee %></span>
@@ -482,6 +511,30 @@
     .bank-totals > div { font-size: 16px; font-variant-numeric: tabular-nums; color: #E2E8F0; }
     .bank-totals-label { display: block; font-size: 11px; text-transform: uppercase;
       letter-spacing: 0.06em; color: #64748B; }
+
+    /* Same row shape as the category bars, but with a visible track: this one
+       is a fraction of a whole, so the part not yet done has to be there to
+       read the part that is. */
+    .bank-progress { margin: 10px 0 16px; }
+    .bank-progress-row { display: flex; align-items: center; gap: 10px; }
+    .bank-progress-label {
+      flex: 0 0 60px; font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: #64748B;
+    }
+    .bank-progress-track {
+      flex: 1 1 auto; min-width: 0; height: 8px;
+      background: #1E293B; border-radius: 4px; overflow: hidden;
+    }
+    .bank-progress-fill {
+      height: 100%; background: #5DADE2; border-radius: 4px;
+      min-width: 2px; transition: width 0.3s ease;
+    }
+    .bank-progress-fill.done { background: #58D68D; }
+    .bank-progress-value {
+      flex: 0 0 44px; text-align: right; font-size: 12px; color: #94A3B8;
+      font-variant-numeric: tabular-nums;
+    }
+    .bank-progress-note { font-size: 11px; color: #64748B; margin: 4px 0 0 70px; }
 
     .bank-chart { margin: 20px 0 28px; }
     .bank-chart-title { font-size: 13px; color: #94A3B8; margin-bottom: 10px; }

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_12_014924) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_12_174626) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -261,6 +261,18 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_12_014924) do
     t.string "last4"
     t.index ["last4"], name: "index_bank_accounts_on_last4"
     t.index ["simplefin_id"], name: "index_bank_accounts_on_simplefin_id", unique: true
+  end
+
+  create_table "bank_balance_snapshots", force: :cascade do |t|
+    t.bigint "bank_account_id", null: false
+    t.date "captured_on", null: false
+    t.bigint "balance_cents", null: false
+    t.bigint "available_balance_cents"
+    t.datetime "balance_date"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["bank_account_id", "captured_on"], name: "idx_on_bank_account_id_captured_on_bb86f1c747", unique: true
+    t.index ["captured_on"], name: "index_bank_balance_snapshots_on_captured_on"
   end
 
   create_table "bank_transactions", force: :cascade do |t|
@@ -1696,6 +1708,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_12_014924) do
   add_foreign_key "agenda_shares", "users"
   add_foreign_key "agendas", "google_accounts"
   add_foreign_key "agendas", "users"
+  add_foreign_key "bank_balance_snapshots", "bank_accounts"
   add_foreign_key "bank_transactions", "action_events", on_delete: :nullify
   add_foreign_key "bank_transactions", "bank_accounts"
   add_foreign_key "bank_transactions", "bank_transactions", column: "transfer_counterpart_id", on_delete: :nullify

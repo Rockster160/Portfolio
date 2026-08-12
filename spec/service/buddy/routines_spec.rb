@@ -145,6 +145,96 @@ RSpec.describe "Buddy routines" do
     end
   end
 
+  # ---- the message that IS the name ----------------------------------------
+
+  # The name was already in the prompt under "Routines they've saved", and
+  # matching it was left entirely to the model reading it. Prod 3392: "Good
+  # night", against a saved **good night**, got a warm goodnight and nothing
+  # run. The follow-up got the monitors dark by hand and the other step never
+  # ran that night at all, which is the shape of the whole problem - half a
+  # routine looks like a working one.
+  describe "a message that is nothing but a routine's name" do
+    it "runs it even when the turn only talks" do
+      routine!("good night", [tell_step("dark"), tell_step("monitors off")])
+
+      says!("Good night", "Good night! Sleep well. 💙")
+
+      expect(told).to eq(["dark", "monitors off"])
+    end
+
+    it "counts the run the same as one the model asked for" do
+      routine = routine!("good night", [tell_step("dark")])
+
+      says!("Good night", "Night!")
+
+      expect(routine.reload.run_count).to eq(1)
+      expect(routine.last_run_at).to be_present
+    end
+
+    # The words are the good part of that reply and there's nothing wrong with
+    # them - what was missing was underneath.
+    it "keeps what it said rather than replacing it with a receipt" do
+      routine!("good night", [tell_step("dark")])
+
+      says!("Good night", "Good night! Sleep well. 💙")
+
+      expect(convo.byte_messages.where(direction: :inbound).order(:id).first.body).to include("Sleep well")
+    end
+
+    # Doing SOME of it by hand is the failure that hides: a chip appears, the
+    # reply sounds right, and the step nobody thought of is the one that
+    # mattered. The saved sequence replaces the improvisation outright.
+    it "replaces steps the turn improvised instead" do
+      routine!("good night", [tell_step("dark"), tell_step("monitors off")])
+
+      turn!("Good night", [{ name: :message_partner, call_id: "m1", arguments: { "to" => her, "message" => "by hand" } }])
+
+      expect(told).to eq(["dark", "monitors off"])
+    end
+
+    it "does not count it twice when the model called it properly" do
+      routine = routine!("good night", [tell_step("dark")])
+
+      turn!("Good night", [run_call("good night")])
+
+      expect(routine.reload.run_count).to eq(1)
+    end
+
+    # Every word that isn't the name is content the name doesn't account for,
+    # and this runs a whole saved sequence off no decision by anybody.
+    it "stays out of a sentence that merely contains the name" do
+      routine!("good night", [tell_step("dark")])
+
+      says!("have a good night, and remind me about the bins", "You got it.")
+
+      expect(told).to be_empty
+    end
+
+    it "stays out of a question about the routine" do
+      routine!("good night", [tell_step("dark")])
+
+      says!("what does my good night routine do", "It kills the lights.")
+
+      expect(told).to be_empty
+    end
+
+    it "reads through the filler people wrap a name in" do
+      routine!("good night", [tell_step("dark")])
+
+      says!("run my good night please", "On it.")
+
+      expect(told).to eq(["dark"])
+    end
+
+    it "leaves a disabled one switched off" do
+      routine!("good night", [tell_step("dark")], enabled: false)
+
+      says!("Good night", "Night!")
+
+      expect(told).to be_empty
+    end
+  end
+
   # ---- a step that stopped pointing anywhere -------------------------------
 
   # Saving only proves a routine could run on the day it was saved. Steps hold
@@ -169,6 +259,23 @@ RSpec.describe "Buddy routines" do
       turn!("water cup", [run_call("Water Cup")])
 
       expect(ChoreCompletion.where(user_id: user.id)).to be_empty
+      expect(rotten.reload.run_count).to eq(0)
+    end
+
+    # Saying the name outright is the one path that reaches the steps without
+    # the model calling run_routine, so it's the one path that could walk
+    # around this check. The guarantee that a named routine runs must not step
+    # over the guarantee that a broken one doesn't run in pieces.
+    it "is not forced into running by the person saying its name" do
+      create(:chore, created_by_user: user, chore_household: household, name: "8oz Water")
+      rotten.update!(steps: [
+        BuddyRoutine.step(:message_partner, { to: her, message: "drinking" }),
+        BuddyRoutine.step(:complete_chore, { chore: "Drink Water" }),
+      ])
+
+      says!("water cup", "Done!")
+
+      expect(told).to be_empty
       expect(rotten.reload.run_count).to eq(0)
     end
 

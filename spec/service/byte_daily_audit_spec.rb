@@ -10,12 +10,9 @@ RSpec.describe ByteDailyAudit do
   end
 
   # The console entry point. Someone typing this is watching for a result, so
-  # the two cron-shaped behaviours (skip if already run, wait for the Mac) are
-  # both wrong here.
+  # the cron-shaped "skip if already run today" is wrong here.
   describe ".kick!" do
-    before { allow(ByteLocal).to receive(:awake?).and_return(true) }
-
-    it "runs even when tonight's scheduled one already went" do
+    it "runs even when this morning's scheduled one already went" do
       described_class.run!(user)
 
       expect(described_class.kick!(user)).to eq(:sent)
@@ -25,29 +22,40 @@ RSpec.describe ByteDailyAudit do
       expect { described_class.kick! }.to change { described_class.conversation(user).byte_messages.count }.by(1)
     end
 
-    it "can be pointed at an older two-day window" do
+    it "can be pointed at an older window" do
       described_class.kick!(user, now: Time.zone.parse("2026-08-05 22:00:00"))
       posted = described_class.conversation(user).byte_messages.order(:created_at).last
 
       expect(posted.body).to include("Tuesday August 4, 2026")
       expect(posted.body).to include("Wednesday August 5, 2026")
     end
-
-    # A failed bubble hours later is a worse answer than an error right now.
-    it "says so immediately when the Mac is asleep, rather than posting" do
-      allow(ByteLocal).to receive(:awake?).and_return(false)
-
-      expect { described_class.kick!(user) }.to raise_error(/Mac isn't answering/)
-      expect(described_class.conversation(user).byte_messages.count).to eq(0)
-    end
   end
 
   describe ".window" do
-    it "covers yesterday and today, so a fix can be seen next to the failure" do
-      days = described_class.window(user, now: Time.zone.parse("2026-08-12 22:00:00"))
+    let(:tz) { ActiveSupport::TimeZone["America/Denver"] }
 
-      expect(days.first).to eq(Date.new(2026, 8, 11))
-      expect(days.last).to eq(Date.new(2026, 8, 12))
+    it "covers the 24 hours ending right now" do
+      span = described_class.window(user, now: tz.parse("2026-08-12 14:32:00"))
+
+      expect(span.first).to eq(tz.parse("2026-08-11 14:32:00"))
+      expect(span.last).to eq(tz.parse("2026-08-12 14:32:00"))
+    end
+
+    # The reason it isn't pinned to a fixed hour: a run kicked by hand has to
+    # pick up what was said a minute ago, or there's no point being able to kick
+    # one.
+    it "moves with the clock rather than snapping to a scheduled hour" do
+      early = described_class.window(user, now: tz.parse("2026-08-12 06:00:00"))
+      later = described_class.window(user, now: tz.parse("2026-08-12 09:14:00"))
+
+      expect(later.last).to eq(tz.parse("2026-08-12 09:14:00"))
+      expect(later).not_to eq(early)
+    end
+
+    it "reaches all the way to now, leaving no tail unreviewed" do
+      now = tz.parse("2026-08-12 14:32:00")
+
+      expect(described_class.window(user, now: now)).to cover(now - 1.minute)
     end
   end
 
@@ -87,18 +95,35 @@ RSpec.describe ByteDailyAudit do
   end
 
   describe ".prompt" do
-    subject(:prompt) { described_class.prompt(user, now: Time.zone.parse("2026-08-12 22:00:00")) }
+    subject(:prompt) { described_class.prompt(user, now: tz.parse("2026-08-12 06:00:00")) }
 
-    it "spans two days, ending today" do
-      expect(prompt).to include("Tuesday August 11, 2026")
-      expect(prompt).to include("Wednesday August 12, 2026")
+    let(:tz) { ActiveSupport::TimeZone["America/Denver"] }
+
+    # A bare date can't say where a window that ends at 6am, or at 2:14pm,
+    # actually stops.
+    it "names both edges of the window with the hour, not just the date" do
+      expect(prompt).to include("Tuesday August 11, 2026 at 6:00 AM")
+      expect(prompt).to include("Wednesday August 12, 2026 at 6:00 AM")
     end
 
-    # A fresh session every night can't remember what it already reported, so
-    # the overlap is the only thing that lets it see this morning's fix.
-    it "makes it reconcile the older day against what shipped since" do
-      expect(prompt).to include("check whether a deploy since then addressed it")
+    # A kicked run is usually kicked BECAUSE of something that just happened,
+    # and the last few minutes are the part most likely to be skipped as too
+    # fresh to count.
+    it "says the last few minutes are in scope" do
+      expect(prompt).to include("right up to now, the last few minutes included")
+    end
+
+    it "makes it reconcile each problem against what shipped after it" do
+      expect(prompt).to include("check whether a deploy LATER IN THE WINDOW addressed it")
       expect(prompt).to include("no memory of previous reports")
+    end
+
+    # The window can end anywhere, so a fix can land just past it, and a run
+    # kicked twice in a day sees the same traffic twice. The thread itself is
+    # what stops the same problem being handed back.
+    it "sends it to the earlier reports in the thread before calling one new" do
+      expect(prompt).to include("previous report already in this thread")
+      expect(prompt).to include("a fix may have shipped after the window closed")
     end
 
     # The report is read by working down it and replying to each item in place.
@@ -131,8 +156,11 @@ RSpec.describe ByteDailyAudit do
       end
     end
 
-    it "splits the counts by day so the two are comparable" do
-      expect(prompt).to include("split by day")
+    # It used to ask for a per-day split, back when the window was two whole
+    # days. A rolling 24 hours can end anywhere, so midnight is just a point
+    # partway through it.
+    it "asks for one set of counts rather than a split at midnight" do
+      expect(prompt).to include("don't split it at midnight")
     end
 
     it "forbids the suggestion that must never be made" do
@@ -141,7 +169,7 @@ RSpec.describe ByteDailyAudit do
 
     it "asks for the counts, the misfires, the deploys and the backfills" do
       expect(prompt).to include("per conversation AND per direction")
-      expect(prompt).to include("Read both days in full")
+      expect(prompt).to include("Read the whole window in full")
       expect(prompt).to include("Cite the message id")
       expect(prompt).to include("Deploys")
       expect(prompt).to include("Backfills")
@@ -165,7 +193,7 @@ RSpec.describe ByteDailyAudit do
     # that OPENS with this sentence, because there is a window every night when
     # nothing else can tell it: run! clears the stored session id before
     # posting, and the Mac only writes the new one once the turn finishes —
-    # several minutes later for a report that reads two days of traffic. Ask
+    # several minutes later for a report that reads a day of traffic. Ask
     # during that window and you get "no Claude session yet" about an audit
     # that is running right then.
     #

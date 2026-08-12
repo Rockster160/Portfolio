@@ -13,6 +13,8 @@ class Jil::Methods::Custom < Jil::Methods::Base
       end
     when :refresh_travel_time
       return refresh_travel_time(evalargs(line.args).first)
+    when :ups_package
+      return ups_package(evalargs(line.args).first) if @jil.user.me?
     end
 
     task = @jil.user.tasks.active.enabled.functions.by_method_name(line.methodname).take
@@ -35,6 +37,21 @@ class Jil::Methods::Custom < Jil::Methods::Base
     ::AgendaTravelChain.refresh_for(item)
     item.reload
     item.metadata["travel"] || {}
+  end
+
+  # A forwarded UPS text, handed over by the phone's `ups` Jil trigger. Parses
+  # it and either back-fills the delivery it belongs to or opens a new one —
+  # a text that only carries a tracking number has nothing to connect on, and
+  # the resulting row (named for the tracking number) is exactly the placeholder
+  # the user renames from the dashboard.
+  #
+  # Returns the serialized delivery, or nil when the text isn't a UPS package
+  # notification at all (a digest, or something that just mentions UPS).
+  def ups_package(text)
+    item = ::UpsSmsParser.parse(text.to_s, user: @jil.user)
+    return nil unless item
+
+    item.serialize
   end
 
   private

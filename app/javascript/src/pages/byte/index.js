@@ -62,10 +62,10 @@ import {
   UnreadTracker,
   countsAsUnread,
   paintDrawerBadge,
-  paintAppBadge,
   initUnreadNotices,
   previewOf,
 } from "./unread";
+import { ownAppBadge, repaintAppBadge } from "../../support/app_badge";
 
 document.addEventListener("DOMContentLoaded", async () => {
   const app = document.querySelector(".byte-app");
@@ -258,9 +258,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     onChange: () => {
       const total = drawerUnread.total();
       paintDrawerBadge(drawerBadge, total);
-      paintAppBadge(total);
+      repaintAppBadge();
     },
   });
+  // Byte is the only page that knows a real number, so it takes the icon over.
+  // `ownAppBadge` also repaints on open and on every return to the foreground —
+  // which is the part that was missing: onChange fires on a CHANGE, and opening
+  // the app with nothing unread is not a change from nothing unread, so a badge
+  // a push left behind had nothing to clear it.
+  ownAppBadge(() => drawerUnread.total());
   // The kiosk is a pinned single-conversation display with no thread and no
   // header, and it can't be switched away from — a card about another
   // conversation there is something nobody can act on. `initUnreadNotices`
@@ -1342,7 +1348,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     unseenInCurrent = false;
     markConversationRead(currentConversationId);
-    paintAppBadge(drawerUnread.total());
+    repaintAppBadge();
   }
 
   function updateJumpBtn() {

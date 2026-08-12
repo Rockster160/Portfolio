@@ -32,8 +32,8 @@ daily_3am = "0 3 * * * MST"
 # hour, and the 4-hourly sync already owns that slot.
 every_3_hours_staggered = "37 */3 * * *"
 daily_4am = "0 4 * * * MST"
+daily_6am = "0 6 * * * MST"
 daily_9pm = "0 21 * * * MST"
-daily_10pm = "0 22 * * * MST"
 thursdays_at_noon = "0 12 * * 4 MST"
 mondays_at_noon = "0 12 * * 1 MST"
 monthly_5th_at_11am = "0 11 5 * * MST"
@@ -144,14 +144,12 @@ cron_jobs = [
     cron:  every_3_hours_staggered,
   },
   {
-    # Late enough to have the whole day in it, early enough that the Mac is
-    # still up. Reviews a TWO-day window, so a problem from yesterday is read
-    # alongside whatever shipped today — see ByteDailyAudit#window. The work
-    # happens on the Mac (`claude -p`), so this one reschedules itself while the
-    # machine is asleep — see DailyAuditWorker.
+    # First thing, so the report is there to read with the day rather than
+    # arriving after it. Reviews the 24 hours ending whenever it runs — see
+    # ByteDailyAudit#window.
     name:  "Daily Byte Audit",
     class: "DailyAuditWorker",
-    cron:  daily_10pm,
+    cron:  daily_6am,
   },
 ]
 

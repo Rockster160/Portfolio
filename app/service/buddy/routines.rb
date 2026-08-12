@@ -59,6 +59,35 @@ module Buddy
       str.to_s.downcase.scan(/[a-z0-9]+/)
     end
 
+    # Words a person wraps a routine's name in without meaning anything else by
+    # it. Deliberately tiny: every word added here is a word that stops counting
+    # as content, and the whole test below is that there IS no other content.
+    NAME_FILLER = %w[run please my the a do go now ok okay].freeze
+
+    # The routine the message IS, as opposed to the one it might be about.
+    #
+    # `find` above is fuzzy on purpose - by the time it runs, something has
+    # already decided a routine was meant and it only needs the row. Nothing has
+    # decided anything here, so this is much stricter: drop the filler and what
+    # remains must be exactly the routine's own words, in any order and nothing
+    # besides. **good night** matches "Good night" and "good night!"; it does
+    # not match "have a good night" or "what does my good night routine do",
+    # because both carry content the name doesn't account for.
+    #
+    # Prod 3392: "Good night" - as literal a match to a saved name as exists -
+    # got a warm goodnight and no routine, and the person had to ask for the
+    # monitors by hand afterwards, by which point the other half of the routine
+    # was never going to run at all. The name was in the prompt and matching it
+    # was left entirely to reading, which works right up until it doesn't.
+    def named_outright(user, text)
+      return nil unless user.respond_to?(:buddy_routines)
+
+      asked = words(text) - NAME_FILLER
+      return nil if asked.empty?
+
+      user.buddy_routines.enabled.ordered.to_a.find { |r| words(r.name).sort == asked.sort }
+    end
+
     # The markers a call expands into, or nil when the call isn't a routine run.
     # Turn asks this in two places - once to work out which gate the turn opens
     # on, and once to build the proposals - so the lookup lives here rather than

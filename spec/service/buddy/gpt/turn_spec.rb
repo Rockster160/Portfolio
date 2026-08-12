@@ -875,9 +875,14 @@ RSpec.describe Buddy::GPT::Turn do
   end
 
   # Aug 11: Suki opened "Mooooorning!" and Moss "Good morning!", and Byte, off
-  # the identical seed, opened "Pretty quiet day on your side." Three rounds of
-  # prompt wording have failed to make the greeting stick, the last of them
-  # saying "not optional" in capitals, so it gets checked instead of asked for.
+  # the identical seed, opened "Pretty quiet day on your side."
+  #
+  # Four rounds of prompt wording failed at this, then a corrective round did
+  # too — prod 3398 opened "Light day on your side so far." on a seed that
+  # said OPEN WITH A GREETING, because the corrective round is one shot shared
+  # with five other arms and something else had already spent it. So the hello
+  # is no longer requested: if the reply doesn't have one, one goes on the
+  # front, in the pet's own words.
   describe "a briefing that opens cold" do
     def briefing(rounds, seed: Buddy::TodayBriefing.seed(user))
       message = convo.byte_messages.create!(
@@ -889,14 +894,28 @@ RSpec.describe Buddy::GPT::Turn do
       client
     end
 
-    it "gets a corrective round and the greeting arrives" do
-      client = briefing([
-        { text: "Pretty quiet day on your side. The only thing I see is a noon supply run." },
-        { text: "Mooooorning! Pretty quiet day - just a noon supply run." },
-      ])
+    it "has one put on the front, without spending another round on it" do
+      cold   = "Pretty quiet day on your side. The only thing I see is a noon supply run."
+      client = briefing([{ text: cold }])
 
-      expect(client.calls.length).to eq(2)
-      expect(reply.body).to start_with("Mooooorning!")
+      expect(client.calls.length).to eq(1)
+      expect(reply.body).to end_with(cold)
+      expect(reply.body).not_to eq(cold)
+    end
+
+    # Whatever went on the front has to be a hello by the same test that found
+    # it missing, or the fallback is decoration.
+    it "puts on something that actually reads as a greeting" do
+      briefing([{ text: "Pretty quiet day on your side." }])
+
+      expect(reply.body).to match(described_class::GREETING_OPENER_RX)
+    end
+
+    it "takes the words from the pet whose thread it is" do
+      briefing([{ text: "Pretty quiet day on your side." }])
+
+      said = Buddy::VoiceLines.lines_for(convo.buddy_theme, Buddy::TodayBriefing.greeting_kind(user)).pluck(:say)
+      expect(said.any? { |hello| reply.body.start_with?(hello) }).to be(true)
     end
 
     it "leaves a briefing that already greeted alone" do
@@ -906,17 +925,23 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to start_with("Hey hey, Rocco!")
     end
 
-    # The other half of the same decision: when Rails works out that they were
-    # talking a moment ago, no hello is the CORRECT reply and must not be nudged.
-    it "does not chase a greeting that was never ordered" do
+    # Mid-conversation is still a Today, and a Today opens with a hello.
+    it "greets even when they were talking a moment ago" do
       convo.byte_messages.create!(
         user: user, direction: :outbound, state: :sent, body: "what's up", created_at: 2.minutes.ago,
       )
-      seed = Buddy::TodayBriefing.seed(user, conversation: convo)
-      client = briefing([{ text: "Quiet one today, just the noon run." }], seed: seed)
+      briefing([{ text: "Quiet one today, just the noon run." }])
 
-      expect(seed).to include("DON'T GREET")
+      expect(reply.body).to match(described_class::GREETING_OPENER_RX)
+    end
+
+    # The seed is what says a hello was wanted. If somebody edits that directive
+    # out, the fallback has to stop rather than argue with the prompt.
+    it "puts nothing on a briefing whose seed never asked" do
+      client = briefing([{ text: "Quiet one today." }], seed: "What's on for TODAY, forward-looking.")
+
       expect(client.calls.length).to eq(1)
+      expect(reply.body).to eq("Quiet one today.")
     end
 
     it "leaves ordinary turns alone" do

@@ -93,4 +93,91 @@ RSpec.describe BankTransaction, ".query" do
   it "does not support a time of day" do
     expect(found("timestamp>2026-07-01T18:00")).to be_empty
   end
+
+  # A bank reporting a DATE with no clock time sends epoch midnight UTC, which
+  # Mountain reads as 6pm the previous day. 149 of 458 real rows.
+  describe "a date-only row" do
+    let(:date_only) {
+      BankTransaction.create!(
+        simplefin_id: "DATEONLY", bank_account: account, amount_cents: -1_000,
+        posted_at: Time.utc(2026, 5, 13), transacted_at: Time.utc(2026, 5, 13)
+      )
+    }
+
+    it "lands on the calendar day the bank named" do
+      expect(date_only.occurred_local.to_date).to eq(Date.new(2026, 5, 13))
+    end
+
+    it "is found by the date the bank named, and not by the day before" do
+      date_only
+      expect(found("timestamp:2026-05-13")).to eq(["DATEONLY"])
+      expect(found("timestamp:2026-05-12")).to be_empty
+    end
+
+    it "reports no clock time, so nothing invents one" do
+      expect(date_only.occurred_time_known?).to be(false)
+    end
+
+    # The raw bank values are left alone. This column is the interpreted one,
+    # which is the only reason it is safe to interpret.
+    it "leaves posted_at and transacted_at untouched" do
+      expect(date_only.posted_at).to eq(Time.utc(2026, 5, 13))
+      expect(date_only.transacted_at).to eq(Time.utc(2026, 5, 13))
+    end
+
+    it "leaves a row that does carry a time exactly where it was" do
+      timed = BankTransaction.create!(
+        simplefin_id: "TIMED", bank_account: account, amount_cents: -1_000,
+        posted_at: Time.utc(2026, 5, 13, 22, 31), transacted_at: Time.utc(2026, 5, 13, 22, 31)
+      )
+
+      expect(timed.occurred_at).to eq(Time.utc(2026, 5, 13, 22, 31))
+      expect(timed.occurred_time_known?).to be(true)
+    end
+
+    # Denver is UTC-7 in winter and UTC-6 in summer; a fixed offset would move
+    # half the year onto the wrong day.
+    it "uses the offset in force on that date, not a fixed one" do
+      winter = BankTransaction.create!(
+        simplefin_id: "WINTER", bank_account: account, amount_cents: -1_000,
+        posted_at: Time.utc(2026, 1, 14), transacted_at: Time.utc(2026, 1, 14)
+      )
+
+      expect(winter.occurred_at).to eq(Time.utc(2026, 1, 14, 7))
+      expect(date_only.occurred_at).to eq(Time.utc(2026, 5, 13, 6))
+    end
+  end
+
+  # posted_at and occurred_at are a different day on 83% of real rows, so
+  # sorting on the wrong one puts the list visibly out of order against the
+  # dates printed beside it.
+  describe ".recent_first" do
+    it "orders by when the purchase happened, not when it cleared" do
+      BankTransaction.create!(
+        simplefin_id: "MADE-LATER", bank_account: account, amount_cents: -100,
+        transacted_at: Time.zone.local(2026, 7, 20, 12),
+        posted_at:     Time.zone.local(2026, 7, 21, 12)
+      )
+      BankTransaction.create!(
+        simplefin_id: "CLEARED-LATER", bank_account: account, amount_cents: -100,
+        transacted_at: Time.zone.local(2026, 7, 21, 12),
+        posted_at:     Time.zone.local(2026, 7, 25, 12)
+      )
+
+      ordered = BankTransaction.recent_first.pluck(:simplefin_id)
+      expect(ordered.index("CLEARED-LATER")).to be < ordered.index("MADE-LATER")
+    end
+
+    # A third of rows carry no clock time and land on the same instant.
+    # Without a tiebreaker, which of them appears on page 1 versus page 2 is
+    # undefined and can differ between requests.
+    it "breaks a tie deterministically" do
+      same = Time.zone.local(2026, 7, 20)
+      3.times { |i| row("TIE-#{i}", same) }
+
+      first = BankTransaction.recent_first.pluck(:simplefin_id)
+      second = BankTransaction.recent_first.pluck(:simplefin_id)
+      expect(first).to eq(second)
+    end
+  end
 end

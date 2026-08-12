@@ -68,7 +68,15 @@ class BankTransaction < ApplicationRecord
     transfer:  :search_transfer
 
   scope :posted_between, ->(from, to) { where(posted_at: from..to) }
-  scope :recent_first, -> { order(posted_at: :desc) }
+  # Ordered by when the purchase HAPPENED, which is what the table prints.
+  # Sorting on posted_at put rows visibly out of order: the two are a different
+  # day on most rows and up to four days apart, so a later purchase that
+  # cleared first sat above one made before it.
+  #
+  # `id` breaks the tie because a third of rows carry no clock time and land on
+  # the same instant — without it, which of them appears on page 1 versus
+  # page 2 is undefined and can change between requests.
+  scope :recent_first, -> { order(occurred_at: :desc, id: :desc) }
   scope :spending, -> { where(amount_cents: ...0) }
   scope :income, -> { where(amount_cents: 1..) }
   scope :linked, -> { where.not(action_event_id: nil) }
@@ -210,6 +218,18 @@ class BankTransaction < ApplicationRecord
     occurred_at&.in_time_zone(::User.timezone)
   end
 
+  # Whether the bank actually said what time it was.
+  #
+  # After `derive_occurred_at` a date-only row sits at LOCAL midnight, so that
+  # is the tell. Rendering one as a clock time would be a precise answer to a
+  # question the institution never answered. A real purchase at exactly
+  # midnight loses its time, which is far cheaper than inventing one for a
+  # third of the table.
+  def occurred_time_known?
+    local = occurred_local
+    local.present? && !local.seconds_since_midnight.zero?
+  end
+
   def display_payee
     payee.presence || description.presence || "—"
   end
@@ -257,6 +277,26 @@ class BankTransaction < ApplicationRecord
   # When the purchase happened, preferring the merchant's own timestamp over
   # when it cleared. `posted_at` can trail by days.
   def derive_occurred_at
-    self.occurred_at = transacted_at || posted_at
+    self.occurred_at = local_day_for(transacted_at || posted_at)
+  end
+
+  # A bank that reports a DATE with no clock time sends epoch midnight UTC.
+  # Read in Mountain that is 6pm the PREVIOUS day, so the row displayed, sorted
+  # and searched one day earlier than the statement said — 149 of 458 rows.
+  #
+  # Fixing it here rather than at each render is the whole point: the table,
+  # `timestamp:` search, `recent_first` and any future chart all read this
+  # column, and none of them should have to know this happened.
+  #
+  # `transacted_at` and `posted_at` keep the bank's raw values. This column is
+  # the interpreted one, which is why it can be interpreted.
+  #
+  # A genuine purchase at exactly midnight UTC shifts by the offset. Same trade
+  # `occurred_time_known?` already takes, and the cheap side of it.
+  def local_day_for(time)
+    return nil if time.nil?
+    return time unless time.utc.seconds_since_midnight.zero?
+
+    ::User.timezone { ::Time.zone.local(time.utc.year, time.utc.month, time.utc.day) }
   end
 end

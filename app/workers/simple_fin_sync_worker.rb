@@ -7,7 +7,6 @@ class SimpleFinSyncWorker
   # a day, and this is not the only caller: SimpleFinBalanceChaseWorker fires
   # up to six more when a charge is expected to move the dashboard figure. Six
   # scheduled runs a day leaves room for both that and a manual
-  # `prodExec lib/scripts/sync_simplefin.rb`.
   #
   # Four hours is also honest about the data — the Bridge itself can be a day
   # behind, so polling harder would not make anything fresher. The Chase alert

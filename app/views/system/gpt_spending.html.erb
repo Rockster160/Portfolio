@@ -42,6 +42,11 @@
           <span class="spend-legend-total"><%= Buddy::GPT::Pricing.format_micros(micros) %></span>
         </div>
       <% end %>
+      <div class="spend-legend-row">
+        <span class="spend-swatch spend-swatch-line"></span>
+        <span class="spend-legend-model">API calls</span>
+        <span class="spend-legend-total"><%= number_with_delimiter(@call_count) %></span>
+      </div>
     </div>
   <% else %>
     <p class="spend-empty">No GPT spending recorded in this window.</p>
@@ -53,6 +58,7 @@
   raw JSON.generate({
     labels:   @labels,
     datasets: @datasets.map { |ds| { label: ds[:label], color: ds[:color], data: ds[:data] } },
+    calls:    @calls_per_bucket,
   })
 %>
 </script>
@@ -155,6 +161,12 @@
       flex-shrink: 0;
     }
 
+    .spend-swatch-line {
+      height: 2px;
+      border-radius: 0;
+      background-color: #8B949E;
+    }
+
     .spend-legend-model {
       color: #C9D1D9;
       font-size: 14px;
@@ -185,13 +197,29 @@
 
       var datasets = payload.datasets.map(function(ds) {
         return {
+          type: "bar",
           label: ds.label,
           data: ds.data,
           backgroundColor: ds.color,
           borderColor: ds.color,
           borderWidth: 0,
           stack: "spend",
+          order: 1,
         };
+      });
+
+      datasets.push({
+        type: "line",
+        label: "API calls",
+        data: payload.calls,
+        borderColor: "#8B949E",
+        backgroundColor: "#8B949E",
+        borderWidth: 2,
+        pointRadius: 2,
+        pointHoverRadius: 4,
+        tension: 0.3,
+        yAxisID: "calls",
+        order: 0,
       });
 
       new Chart(canvas, {
@@ -217,6 +245,13 @@
               grid: { color: "rgba(255,255,255,0.05)" },
               title: { display: true, text: "USD", color: "#8B949E" },
             },
+            calls: {
+              position: "right",
+              beginAtZero: true,
+              ticks: { color: "#8B949E", precision: 0 },
+              grid: { drawOnChartArea: false },
+              title: { display: true, text: "Calls", color: "#8B949E" },
+            },
           },
           plugins: {
             legend: { display: false },
@@ -225,6 +260,9 @@
               intersect: false,
               callbacks: {
                 label: function(ctx) {
+                  if (ctx.dataset.yAxisID === "calls") {
+                    return ctx.dataset.label + ": " + Number(ctx.parsed.y);
+                  }
                   return ctx.dataset.label + ": $" + Number(ctx.parsed.y).toFixed(4);
                 },
               },

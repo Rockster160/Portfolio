@@ -21,7 +21,8 @@ class SystemController < ApplicationController
     @days = SPEND_DEFAULT_DAYS unless SPEND_WINDOWS.include?(@days)
     @hourly = @days == 1
 
-    scope, grouped, @buckets, @labels = @hourly ? hourly_spend : daily_spend
+    scope, grouped, @buckets, @labels, calls = @hourly ? hourly_spend : daily_spend
+    @calls_per_bucket = @buckets.map { |bucket| calls[bucket] || 0 }
 
     @user_totals = grouped.each_with_object(Hash.new(0)) { |((_bucket, user_id), micros), totals|
       totals[user_id] += micros
@@ -57,6 +58,7 @@ class SystemController < ApplicationController
     @dashboard_available = ::SimpleFin::DashboardCache.available_cents
     @stray_categories = ::TransactionCategory.unknown_in_use
     @unlinked_count = ::BankTransaction.unlinked.count
+    @backfill = ::SimpleFin::Backfill.progress
 
     @query = params[:q].to_s.strip
     # Collapsed before anything counts it, so the result count, the pagination
@@ -234,15 +236,16 @@ class SystemController < ApplicationController
     head :not_found unless current_user&.me?
   end
 
-  # Each returns [scope, grouped_by_[bucket, user_id], buckets, labels].
+  # Each returns [scope, grouped_by_[bucket, user_id], buckets, labels, calls_by_bucket].
 
   def daily_spend
     tz = ActiveSupport::TimeZone[SPEND_ZONE]
     start_date = tz.today - (@days - 1)
     scope = BuddyUsage.where(created_at: start_date.in_time_zone(tz).beginning_of_day..)
     grouped = scope.group(spend_day_sql, :user_id).sum(:cost_micros)
+    calls = scope.group(spend_day_sql).count
     buckets = (start_date..tz.today).to_a
-    [scope, grouped, buckets, buckets.map { |d| d.strftime("%b %-d") }]
+    [scope, grouped, buckets, buckets.map { |d| d.strftime("%b %-d") }, calls]
   end
 
   def hourly_spend
@@ -252,10 +255,11 @@ class SystemController < ApplicationController
     scope = BuddyUsage.where(created_at: start_hour..)
     grouped = scope.group(spend_hour_sql, :user_id).sum(:cost_micros)
     grouped = grouped.transform_keys { |(hour, user_id)| [hour.to_i, user_id] }
+    calls = scope.group(spend_hour_sql).count.transform_keys(&:to_i)
     # Chronological hour-of-day for each of the last 24 hourly slots; each hour
     # appears exactly once across a 24-hour window, so it doubles as the group key.
     buckets = (0..23).map { |i| (start_hour + i.hours).hour }
-    [scope, grouped, buckets, buckets.map { |h| Time.zone.local(2000, 1, 1, h).strftime("%-l %p") }]
+    [scope, grouped, buckets, buckets.map { |h| Time.zone.local(2000, 1, 1, h).strftime("%-l %p") }, calls]
   end
 
   # created_at is `timestamp without time zone` holding UTC, so re-anchor it to

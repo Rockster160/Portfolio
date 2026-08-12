@@ -49,6 +49,13 @@ RSpec.describe SystemController, type: :controller do
       old_i = payload["labels"].index(3.days.ago.in_time_zone(tz).to_date.strftime("%b %-d"))
       expect(rocco["data"][today_i]).to eq(0.0015)
       expect(rocco["data"][old_i]).to eq(0.0009)
+
+      # The call-count line runs across every bucket, counting all users' calls
+      # in each — two today, one three days back.
+      expect(payload["calls"].length).to eq(30)
+      expect(payload["calls"][today_i]).to eq(2)
+      expect(payload["calls"][old_i]).to eq(1)
+      expect(payload["calls"].sum).to eq(3)
     end
 
     it "honors an allowed window and ignores a bogus one" do
@@ -83,6 +90,10 @@ RSpec.describe SystemController, type: :controller do
       two_pm_i = payload["labels"].index("2 PM")
       expect(rocco["data"][two_pm_i]).to eq(0.002)
       expect(rocco["data"].sum).to eq(0.002) # nothing outside 2 PM
+
+      expect(payload["calls"].length).to eq(24)
+      expect(payload["calls"][two_pm_i]).to eq(1)
+      expect(payload["calls"].sum).to eq(1)
     end
 
     it "renders empty gracefully with no usage" do

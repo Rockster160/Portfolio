@@ -69,6 +69,11 @@ module SimpleFin
         last_synced_at:          ::Time.current,
       )
       account.save!
+      # Written here rather than on a cron: the balance is only knowable at the
+      # moment it arrives, and a separate schedule could miss a day outright.
+      # A day missed is a day lost — the Bridge will re-serve transactions but
+      # never a past balance.
+      ::BankBalanceSnapshot.capture!(account)
 
       ::Array.wrap(data["transactions"]).each { |row| upsert_transaction(account, row) }
     end

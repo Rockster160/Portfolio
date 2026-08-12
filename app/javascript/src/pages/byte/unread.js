@@ -154,23 +154,6 @@ export function paintDrawerBadge(el, total) {
   el.hidden = total <= 0;
 }
 
-// The number on the installed app's icon.
-//
-// Only means anything for a PWA added to the home screen, and throws outright
-// where it isn't supported — hence the guard and the swallow. While the app is
-// OPEN this is the only thing that keeps the icon honest; while it's closed the
-// push carries a count and `byte_worker.js` sets it from there.
-export function paintAppBadge(total) {
-  if (typeof navigator === "undefined") return;
-
-  try {
-    if (total > 0) navigator.setAppBadge?.(total);
-    else navigator.clearAppBadge?.();
-  } catch (e) {
-    /* unsupported, or denied — the in-page badge still tells the story */
-  }
-}
-
 // A message landed in a thread that isn't on screen.
 //
 // One notice per message, stacked, never merged. A run of them is a run of real

@@ -32,8 +32,13 @@ RSpec.describe Buddy::VoiceLines do
         expect(lines.select { |line| line[:mood] == Buddy::Faces.default }).to eq([])
       end
 
-      it "#{theme} says each of them only once" do
-        expect(lines.pluck(:say).tally.select { |_say, n| n > 1 }).to eq({})
+      # Per kind, not per theme: the same hello belongs in more than one set —
+      # "Hiii!" is as right at 2pm as it is at 2am — while a routine line
+      # appearing twice in one set is a line with double the odds.
+      kinds.each do |kind, of_kind|
+        it "#{theme} says each #{kind} line only once" do
+          expect(of_kind.pluck(:say).tally.select { |_say, n| n > 1 }).to eq({})
+        end
       end
     end
 
@@ -49,6 +54,29 @@ RSpec.describe Buddy::VoiceLines do
       Buddy::Themes::ALL.each_key { |theme|
         kinds.each { |kind| expect(described_class.lines_for(theme, kind)).to be_present }
       }
+    end
+
+    # The fallback only fires when Turn decides a hello is missing, so a
+    # greeting the same check can't recognise would get a SECOND hello put in
+    # front of it the next time a model happened to write it.
+    it "writes greetings that read as greetings" do
+      greetings = Buddy::VoiceLines::LINES.flat_map { |_theme, kinds|
+        kinds.select { |kind, _| kind.to_s.start_with?("greeting_") }.values.flatten
+      }
+
+      expect(greetings).to be_present
+      expect(greetings.reject { |line| line[:say].match?(Buddy::GPT::Turn::GREETING_OPENER_RX) }).to eq([])
+    end
+
+    # A hello that trails off on a period reads deadpan, and the line after it
+    # inherits the flatness - which is the whole reason the prompt spends a
+    # paragraph on it.
+    it "lands every greeting lifted rather than flat" do
+      greetings = Buddy::VoiceLines::LINES.flat_map { |_theme, kinds|
+        kinds.select { |kind, _| kind.to_s.start_with?("greeting_") }.values.flatten
+      }
+
+      expect(greetings.select { |line| line[:say].end_with?(".") }).to eq([])
     end
 
     # The variety IS the feature. A pet with four lines is recognised inside a
@@ -94,6 +122,23 @@ RSpec.describe Buddy::VoiceLines do
       line = described_class.pick(:glimmer, :routine_run, avoid: :happy, name: "Yoga Lamp")
 
       expect(line[:text]).to eq("Doing **Yoga Lamp**.")
+    end
+
+    # "Never the same hello twice running" was an instruction in the prompt.
+    # This is the version that's true.
+    it "never reuses the line that opened the last one" do
+      repeated = described_class.lines_for(:byte, :greeting_morning).first[:say]
+
+      20.times {
+        line = described_class.pick(:byte, :greeting_morning, unlike: "#{repeated} Quiet day today.")
+        expect(line[:text]).not_to eq(repeated)
+      }
+    end
+
+    it "ignores `unlike` when it isn't how the last one opened" do
+      expect {
+        described_class.pick(:byte, :greeting_morning, unlike: "Quiet day today.")
+      }.not_to raise_error
     end
 
     # The value arrives from a database column, same as Buddy::Themes.for.

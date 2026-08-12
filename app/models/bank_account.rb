@@ -19,6 +19,9 @@
 #
 class BankAccount < ApplicationRecord
   has_many :bank_transactions, dependent: :destroy
+  # Where this account stood at the end of each day. `balance_cents` is
+  # overwritten every sync, so this is the only record that a past existed.
+  has_many :balance_snapshots, class_name: "BankBalanceSnapshot", dependent: :destroy
 
   # SimpleFIN reports no account type at all, so this is set by hand once per
   # account and never inferred. Deriving it from `name` would work today and

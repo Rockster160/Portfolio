@@ -1,8 +1,10 @@
-# Inbound SMS forwarded from the phone (e.g. an iOS Shortcut POSTing to
-# /webhooks/sms). Mirrors ReceiveEmailWorker: fire the generic Jil :sms trigger
-# first (additive — lets future user automations claim it), then a hardcoded
-# carrier gate routes UPS package updates to the parser; anything else goes to
-# Slack so nothing is silently swallowed.
+# Inbound SMS forwarded from somewhere other than the phone (POSTing to
+# /webhooks/sms). Fires the generic Jil :sms trigger so user automations can
+# claim it, then falls through to Slack so nothing is silently swallowed.
+#
+# Carrier parsing deliberately does NOT live here: anything coming off the
+# phone arrives on its own Jil trigger (`ups`), and that task hands the text to
+# `Custom.UPSPackage` — see Jil::Methods::Custom.
 class ReceiveSmsWorker
   include Sidekiq::Worker
 
@@ -13,11 +15,7 @@ class ReceiveSmsWorker
     tasks = ::Jil.trigger(user, :sms, { text: text })
     return if tasks.any?(&:stop_propagation?)
 
-    if ::Shipments::SmsRouter.match?(text)
-      ::UpsSmsParser.parse(text, user: user)
-    else
-      notify_slack(text)
-    end
+    notify_slack(text)
   end
 
   def notify_slack(text)

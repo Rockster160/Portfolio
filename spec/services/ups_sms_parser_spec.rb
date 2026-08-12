@@ -51,6 +51,15 @@ RSpec.describe UpsSmsParser do
       date:      Date.new(2026, 7, 31),
       time_range: "9PM",
     },
+    {
+      desc:      "Tracking-only, delivering today in a window",
+      text:      "UPS: 1ZXH04590371184662 delivering today 5:45 PM - 7:45 PM. Leave with neighbor: ups.com/su/WGcxWDU0. Deliver another day: ups.com/su/dmZYeUE1.  Reply STOP to cancel msgs",
+      source:    nil,
+      tracking:  "1ZXH04590371184662",
+      delivered: false,
+      date:      Date.new(2026, 7, 30),
+      time_range: "5-7PM",
+    },
   ]
 
   ups_cases.each do |c|

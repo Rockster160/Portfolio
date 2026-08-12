@@ -48,7 +48,7 @@ module Buddy
     TONE_REMINDER = "Warm, short, human. No em dashes (use commas or short sentences). Don't list what I did in bullet form. Don't call out exact times like '8:19'. Don't recite chores by name unless one specific one is your recommendation.".freeze
 
     def trigger_today(conversation)
-      seed = ::Buddy::TodayBriefing.seed(current_user, conversation: conversation)
+      seed = ::Buddy::TodayBriefing.seed(current_user)
       dispatch_trigger(conversation, seed, buddy_action: "today")
     end
 

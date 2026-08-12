@@ -683,9 +683,37 @@ module Buddy
             last_fired: (r.last_fired_at && Buddy::TimeParser.friendly(r.last_fired_at, user: conversation.user)),
           }.compact
         }
-        live + switched_off(BuddyReminder, conversation)
+        live + already_rang(conversation, now) + switched_off(BuddyReminder, conversation)
       rescue StandardError => e
         Buddy::Errors.report(section: "context.upcoming_reminders", exception: e, user: conversation.user)
+        []
+      end
+
+      # One-offs that already RANG, for two days after they did.
+      #
+      # A recurring reminder rolls forward and stays in `pending`, so it's still
+      # in the list above and `last_fired` says when it went off. A one-off sets
+      # `fired_at`, drops out of `pending`, and vanishes completely - the row
+      # that was the entire subject of a conversation an hour ago is simply not
+      # there any more.
+      #
+      # Prod 3255 is what that costs. The swimming-lesson reminder rang at 7:00
+      # PM and the next morning Buddy announced it as "set for this evening",
+      # having read it off the thread and re-dated it a day forward. Nothing in
+      # context contradicted that, because there was nothing in context at all:
+      # an absence can't argue, and it leaves the transcript as the only source
+      # for a reminder - and a transcript has no idea what day it is.
+      def already_rang(conversation, now)
+        BuddyReminder.where(byte_conversation_id: conversation.id, cancelled_at: nil)
+          .where(fired_at: (now - 48.hours)..now).order(fired_at: :desc).limit(5).map { |r|
+            {
+              id:     r.id,
+              body:   r.body.to_s.first(120),
+              status: :already_rang,
+              rang:   Buddy::TimeParser.friendly(r.fired_at, user: conversation.user),
+            }
+          }
+      rescue StandardError
         []
       end
 

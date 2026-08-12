@@ -239,6 +239,70 @@ RSpec.describe SimpleFin::Backfill do
     end
   end
 
+  describe ".progress" do
+    it "reports nothing to show before anything has synced" do
+      expect(described_class.progress).to be_idle
+    end
+
+    it "reports the cursor and the oldest row held" do
+      transaction("TRN-A", anchor)
+      stub_fetch(created: 1)
+      described_class.call
+
+      progress = described_class.progress
+      expect(progress.cursor.to_date).to eq((anchor - 87.days).to_date)
+      expect(progress.oldest_row.to_date).to eq((anchor - 86.days).to_date)
+      expect(progress.done).to be(false)
+    end
+
+    # An UPPER bound, counted to the floor. The walk stops as soon as two
+    # windows come back empty, which is usually much sooner — so this must not
+    # be presented as an ETA.
+    it "counts windows to the floor as a ceiling, not a forecast" do
+      transaction("TRN-A", described_class::FLOOR + 200.days)
+
+      expect(described_class.progress.windows_remaining).to eq(3)
+    end
+
+    # The bar measures the span held against everything between the newest
+    # transaction and the floor.
+    it "reports a small fraction when only recent history is held" do
+      transaction("TRN-A", anchor)
+
+      expect(described_class.progress.percent).to be_between(0, 5)
+    end
+
+    it "grows as the walk goes back" do
+      transaction("TRN-A", anchor)
+      stub_fetch(created: 1)
+      before_walk = described_class.progress.percent
+
+      4.times { described_class.call }
+
+      expect(described_class.progress.percent).to be > before_walk
+    end
+
+    # Full wherever it finished. "Complete" means nothing older exists, not
+    # that the floor was reached — a walk that runs dry in 2019 still fills.
+    it "fills completely once finished, even short of the floor" do
+      transaction("TRN-A", anchor)
+      stub_fetch(created: 0)
+      3.times { described_class.call }
+
+      expect(described_class.progress.percent).to eq(100)
+    end
+
+    it "has none remaining once finished" do
+      transaction("TRN-A", anchor)
+      stub_fetch(created: 0)
+      3.times { described_class.call }
+
+      progress = described_class.progress
+      expect(progress.done).to be(true)
+      expect(progress.windows_remaining).to be_zero
+    end
+  end
+
   describe ".reset!" do
     # Forgets the cursor, so the walk re-derives its anchor from the oldest row
     # held — which after a run includes whatever that run brought back.

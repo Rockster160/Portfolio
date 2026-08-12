@@ -38,53 +38,55 @@ module Buddy
       An emoji, if you use one, has to be ABOUT something in the message: warmth you actually feel, or a reaction to one specific thing. If it could move to a different day's briefing unchanged, it isn't doing anything and it shouldn't be there.
     TONE
 
-    # How long since the person last said something for the briefing to still
-    # count as arriving out of the blue. A scheduled 8:30am broadcast almost
-    # always is; the chip tapped in the middle of a conversation is not.
-    GREET_GAP = 30.minutes
-
-    # Whether to greet is a FACT ABOUT THE THREAD, so Rails answers it.
+    # A Today ALWAYS opens with a hello. There is no branch here and there
+    # should never be one again.
     #
-    # This used to be four paragraphs of instruction opening with "OPEN with a
-    # warm greeting WHEN IT FITS", and over two days four of seven briefings
-    # either skipped the greeting entirely or landed it on the flat period the
-    # prompt spends a whole paragraph forbidding. That isn't a wording problem.
-    # It's the same failure the part-of-day line already ran into - "a paragraph
-    # of rules for reading a clock loses to one bad guess" - with an escape
-    # hatch on top: "skip it when we just talked a moment ago" is a licensed
-    # reason to skip, and a model reading a thread that still holds yesterday's
-    # messages will take it.
+    # It started as four paragraphs of "OPEN with a warm greeting WHEN IT FITS",
+    # and four of seven briefings over two days either skipped it or landed it
+    # flat. The judgement then moved here, where the timestamps are — greet
+    # unless they'd spoken in the last 30 minutes — which was still a branch,
+    # just a better-informed one, and it was answering the wrong question.
+    # Whether a hello fits isn't a fact about how recently anyone spoke: a Today
+    # is a THING WITH A SHAPE, and the shape opens with a hello, whether it was
+    # asked for at 8am, a second time at noon, or in the middle of a
+    # conversation. Two in a row is not a bug.
     #
-    # So the judgement is made here, where the timestamps are, and what reaches
-    # the model is an instruction with no branch left in it.
-    def greeting_block(conversation=nil)
-      return greet_lines if conversation.nil?
+    # What reaches the model is an instruction with nothing left to weigh.
 
-      last = conversation.byte_messages
-        .where(direction: :outbound)
-        .where("byte_messages.metadata ->> 'hidden' IS DISTINCT FROM 'true'")
-        .maximum(:created_at)
-
-      return greet_lines if last.nil? || last < GREET_GAP.ago
-
-      "DON'T GREET. We were talking a few minutes ago, so a hello here would be the second one in this thread. Go straight into the day."
-    rescue StandardError => e
-      Rails.logger.warn("[Buddy::TodayBriefing] greeting block failed: #{e.class}: #{e.message}")
-      greet_lines
-    end
-
-    # The exact directive, so the corrective round in Buddy::GPT::Turn can tell
-    # whether a greeting was actually ordered rather than assuming every
-    # briefing wants one.
+    # The exact directive, so Buddy::GPT::Turn can tell that the seed really did
+    # ask for one before putting a hello on a reply that lacks it.
     GREET_DIRECTIVE = "OPEN WITH A GREETING.".freeze
 
     def greeting_ordered?(seed_body)
       seed_body.to_s.include?(GREET_DIRECTIVE)
     end
 
+    # Which set of hellos fits the clock, for the fallback in Buddy::GPT::Turn
+    # when the model didn't write one of its own. Keyed off the same
+    # `part_of_day` the prompt is built from, so the two can't disagree about
+    # what half of the day it is.
+    #
+    # Late night gets its own set rather than borrowing evening's: the prompt
+    # tells the model to drop the time-of-day framing after hours, and wishing
+    # somebody a good evening at 2am is the exact tell it's trying to avoid.
+    GREETING_KINDS = {
+      "morning"    => :greeting_morning,
+      "afternoon"  => :greeting_afternoon,
+      "evening"    => :greeting_evening,
+      "late night" => :greeting_late_night,
+    }.freeze
+
+    def greeting_kind(user)
+      zone = ActiveSupport::TimeZone[user&.timezone.to_s] || Time.zone
+      part = Buddy::Personality.part_of_day(Time.current.in_time_zone(zone))
+      GREETING_KINDS.fetch(part, :greeting_morning)
+    end
+
     def greet_lines
       [
-        "#{GREET_DIRECTIVE} Not optional, and not a judgement call - this briefing is arriving out of the blue and a hello is how it stops reading like a notification. It is the FIRST thing in the message, before any news.",
+        "#{GREET_DIRECTIVE} Not optional, not a judgement call, and not conditional on anything. It is the FIRST thing in the message, before any news. Every Today opens with a hello - it's part of the shape of the thing, the way a letter opens with a name.",
+        "",
+        "**That holds even if we were talking a second ago, even if I just asked for one, even if this is the second in a row.** Two hellos back to back is fine and is not something to fix; skipping it because one feels redundant is the one way to get this wrong. Don't reason about whether it fits - it fits.",
         "",
         "Take the half of the day from `Part of day` at the top of your prompt, never from the shape of this request: a briefing is not a morning thing, I ask for these at all hours, and greeting me with the wrong half is one of the most obviously broken things you can do. The WORDS are yours: vary the opener, make it interesting, never the same hello twice running.",
         "",
@@ -176,11 +178,11 @@ module Buddy
       ""
     end
 
-    def seed(user=nil, conversation: nil)
+    def seed(user=nil)
       prompt = <<~PROMPT.strip
         What's on for TODAY, forward-looking. This is a briefing about the day ahead, NOT a recap of yesterday or a review of what's already done.
 
-        #{greeting_block(conversation)}
+        #{greet_lines}
 
         Never address me as "you" in place of a name. That lands too intimate. Use my name, a plain greeting, or just dive in.
         #{weather_block(user)}#{plunge_block(user)}
@@ -246,7 +248,7 @@ module Buddy
         user:      user,
         direction: :outbound,
         state:     :pending,
-        body:      seed(user, conversation: conversation),
+        body:      seed(user),
         metadata:  {
           "kind"         => "buddy_trigger",
           "hidden"       => true,

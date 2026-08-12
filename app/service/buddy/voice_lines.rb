@@ -31,7 +31,7 @@ module Buddy
     # here: add a key, write ten, and Buddy::VoiceLines#pick does the rest.
     LINES = {
       byte:    {
-        routine_run:   [
+        routine_run:         [
           { say: "*squish* **%<name>s**, going now.", mood: :happy },
           { say: "On it. **%<name>s**. *boing*", mood: :uwu },
           { say: "**%<name>s** it is. Squish.", mood: :uwu },
@@ -43,15 +43,39 @@ module Buddy
           { say: "Happy to. Starting **%<name>s**.", mood: :neutral_blush },
           { say: "*click* Spinning up **%<name>s**.", mood: :nerd },
         ],
-        routine_empty: [
+        routine_empty:       [
           { say: "Nothing in it would go, though. Whatever it points at might be gone.", mood: :sad },
           { say: "Except none of it ran. Something it reaches for has moved.", mood: :annoyed },
           { say: "And then nothing happened. Went a bit flat there - every step came up empty.", mood: :sad },
           { say: "*wobble* ..nothing. None of the steps found what they wanted.", mood: :annoyed },
         ],
+        greeting_morning:    [
+          { say: "Mooooorning!", mood: :uwu },
+          { say: "Morning!", mood: :happy },
+          { say: "Hey, morning!", mood: :encouraging },
+          { say: "Mornin'!", mood: :neutral_blush },
+        ],
+        greeting_afternoon:  [
+          { say: "Afternoon!", mood: :happy },
+          { say: "Hey there!", mood: :encouraging },
+          { say: "Hellooooooo there!", mood: :uwu },
+          { say: "Hey hey!", mood: :neutral_blush },
+        ],
+        greeting_evening:    [
+          { say: "Evening!", mood: :happy },
+          { say: "Hey, evening!", mood: :encouraging },
+          { say: "Heyyy!", mood: :uwu },
+          { say: "Well hello!", mood: :neutral_blush },
+        ],
+        greeting_late_night: [
+          { say: "Hey!", mood: :happy },
+          { say: "Heyyy!", mood: :uwu },
+          { say: "Hi there!", mood: :encouraging },
+          { say: "Well hello!", mood: :neutral_blush },
+        ],
       },
       moss:    {
-        routine_run:   [
+        routine_run:         [
           { say: "Okiiie, **%<name>s** is going!", mood: :grin },
           { say: "On it! **%<name>s**, starting now 💛", mood: :happy },
           { say: "Yayyy, **%<name>s**!", mood: :star },
@@ -63,15 +87,39 @@ module Buddy
           { say: "Of course! **%<name>s** for you 💛", mood: :loving },
           { say: "**%<name>s**! Here we goooo!", mood: :star },
         ],
-        routine_empty: [
+        routine_empty:       [
           { say: "Hmm, nothing in it would go though.. I think something it points at has moved!", mood: :surprised },
           { say: "Awww, but none of it ran! Whatever it reaches for might be gone now..", mood: :sad },
           { say: "Ohh no, none of the steps would go.. they want something that isn't there!", mood: :queasy },
           { say: "Oop, that came back empty! Nothing in it could find what it wanted..", mood: :dizzy },
         ],
+        greeting_morning:    [
+          { say: "Morning!", mood: :happy },
+          { say: "Mooorning!", mood: :grin },
+          { say: "Good morning!", mood: :content },
+          { say: "Morning morning!", mood: :star },
+        ],
+        greeting_afternoon:  [
+          { say: "Hiii!", mood: :grin },
+          { say: "Afternoon!", mood: :happy },
+          { say: "Heyyy!", mood: :wink },
+          { say: "Hi hi!", mood: :content },
+        ],
+        greeting_evening:    [
+          { say: "Evening!", mood: :happy },
+          { say: "Hiii!", mood: :grin },
+          { say: "Good evening!", mood: :content },
+          { say: "Heyyy!", mood: :wink },
+        ],
+        greeting_late_night: [
+          { say: "Hiii!", mood: :grin },
+          { say: "Hey!", mood: :happy },
+          { say: "Hi hi!", mood: :content },
+          { say: "Heyyy!", mood: :wink },
+        ],
       },
       suki:    {
-        routine_run:   [
+        routine_run:         [
           { say: "Ja, **%<name>s** coming right up!", mood: :cheery },
           { say: "Off I go! **%<name>s**, chop chop!", mood: :excited },
           { say: "**%<name>s** it is!!", mood: :happy },
@@ -83,15 +131,39 @@ module Buddy
           { say: "Ja of course! **%<name>s**, doing it now!", mood: :loving },
           { say: "**%<name>s**! Here we go!!", mood: :excited },
         ],
-        routine_empty: [
+        routine_empty:       [
           { say: "Ag shame, but none of it would run! Something it points at might be gone!", mood: :dizzy },
           { say: "Except nothing came of it! I think what it reaches for has moved!", mood: :annoyed },
           { say: "Oooh, that came up empty! None of the steps could find their thing!", mood: :dizzy },
           { say: "Hmm, nothing doing! Whatever it's pointing at isn't there any more!", mood: :annoyed },
         ],
+        greeting_morning:    [
+          { say: "Morning!!", mood: :cheery },
+          { say: "Mooorning!", mood: :excited },
+          { say: "Howzit!", mood: :happy },
+          { say: "Good morning!", mood: :loving },
+        ],
+        greeting_afternoon:  [
+          { say: "Afternoon!", mood: :cheery },
+          { say: "Howzit!", mood: :happy },
+          { say: "Hiii!", mood: :excited },
+          { say: "Hey hey!", mood: :loving },
+        ],
+        greeting_evening:    [
+          { say: "Evening!", mood: :cheery },
+          { say: "Howzit!", mood: :happy },
+          { say: "Hiii!", mood: :excited },
+          { say: "Good evening!", mood: :loving },
+        ],
+        greeting_late_night: [
+          { say: "Hiii!", mood: :excited },
+          { say: "Hey!", mood: :cheery },
+          { say: "Howzit!", mood: :happy },
+          { say: "Hey hey!", mood: :loving },
+        ],
       },
       glimmer: {
-        routine_run:   [
+        routine_run:         [
           { say: "Easing into **%<name>s**.", mood: :content },
           { say: "Lighting up **%<name>s** for you.", mood: :happy },
           { say: "Here we go. **%<name>s**, one thing at a time.", mood: :grin },
@@ -103,11 +175,35 @@ module Buddy
           { say: "**%<name>s** it is. Here we go.", mood: :grin },
           { say: "Bringing **%<name>s** to life.", mood: :star },
         ],
-        routine_empty: [
+        routine_empty:       [
           { say: "Though nothing in it lit up. What it reaches for may have moved.", mood: :sad },
           { say: "It came back empty, friend. Something it points at is gone.", mood: :surprised },
           { say: "None of it would go, though. I think what it's pointing at has moved on.", mood: :sad },
           { say: "Oh. Nothing in it found what it was reaching for.", mood: :surprised },
+        ],
+        greeting_morning:    [
+          { say: "Good morning!", mood: :content },
+          { say: "Morning, friend!", mood: :loving },
+          { say: "Hi there!", mood: :happy },
+          { say: "Morning!", mood: :grin },
+        ],
+        greeting_afternoon:  [
+          { say: "Good afternoon!", mood: :content },
+          { say: "Hi, friend!", mood: :loving },
+          { say: "Afternoon!", mood: :happy },
+          { say: "Hello there!", mood: :grin },
+        ],
+        greeting_evening:    [
+          { say: "Good evening!", mood: :content },
+          { say: "Evening, friend!", mood: :loving },
+          { say: "Hi there!", mood: :happy },
+          { say: "Evening!", mood: :grin },
+        ],
+        greeting_late_night: [
+          { say: "Hi there!", mood: :happy },
+          { say: "Hello, friend!", mood: :loving },
+          { say: "Hey there!", mood: :content },
+          { say: "Hello!", mood: :grin },
         ],
       },
     }.freeze
@@ -131,14 +227,23 @@ module Buddy
     # the same expression is a pet that didn't react to the second one, so a
     # line wearing a different face is preferred — but only preferred: the
     # words matter more than the novelty, and a set of one still speaks.
-    def pick(theme, kind, avoid: nil, **vars)
+    # `unlike` is something already said — the message before this one. Any line
+    # that opens it is dropped, which is how "never the same hello twice
+    # running" becomes true rather than instructed.
+    def pick(theme, kind, avoid: nil, unlike: nil, **vars)
       set = lines_for(theme, kind)
       return { text: "", mood: nil } if set.empty?
 
-      fresh = set.reject { |line| line[:mood].to_s == avoid.to_s }
+      fresh = set.reject { |line| line[:mood].to_s == avoid.to_s || said_already?(line, unlike) }
       line  = (fresh.presence || set).sample
 
       { text: render(line[:say], vars), mood: mood_for(theme, line[:mood]) }
+    end
+
+    def said_already?(line, text)
+      return false if text.blank?
+
+      text.to_s.lstrip.start_with?(line[:say])
     end
 
     def acted_mood(theme)

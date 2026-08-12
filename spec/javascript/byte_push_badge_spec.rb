@@ -11,16 +11,19 @@ require "open3"
 #     check that everything else in the handler respects. A message that
 #     correctly skipped its banner because the app was open still stamped the
 #     icon — with a server count that includes the conversation being read.
-#   * The page couldn't undo it. `paintAppBadge` is wired to the unread tracker,
-#     which by design only tracks conversations the person ISN'T in, so it never
-#     fires for the thread on screen.
+#   * The page couldn't undo it. The badge painter was wired to the unread
+#     tracker, which by design only tracks conversations the person ISN'T in, so
+#     it never fired for the thread on screen.
 #
 # And underneath both: `POST .../read` only ran when a conversation was OPENED,
 # so a message arriving in the thread already in front of you was read by the
 # person and never by the record. Prod conversation 21 was holding six of those.
 #
 # This file covers the worker half — the half with no UI, where being wrong is
-# invisible until an icon won't come clean.
+# invisible until an icon won't come clean. The page half is now unconditional
+# and lives in `app_badge_spec.rb`: opening the app clears the badge whatever
+# anything else believes, which is what finally made a stuck number impossible
+# rather than merely unlikely.
 RSpec.describe "Byte push badge" do
   let(:acted) {
     runner = Rails.root.join("spec/javascript/byte_push_badge_runner.js").to_s

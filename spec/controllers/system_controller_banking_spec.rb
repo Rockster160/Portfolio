@@ -377,6 +377,97 @@ RSpec.describe SystemController, type: :controller do
       end
     end
 
+    # About a third of rows arrive as a date with no clock time, which reaches
+    # us as midnight UTC and would print as "6:00 AM" — a precise answer to a
+    # question the bank never answered.
+    describe "the When column" do
+      it "shows the time when the bank gave one" do
+        BankTransaction.create!(
+          simplefin_id: "TIMED", bank_account: card, payee: "Arcade",
+          amount_cents: -500, posted_at: Time.utc(2026, 8, 10, 22, 31),
+          transacted_at: Time.utc(2026, 8, 10, 22, 31)
+        )
+
+        get :banking
+        expect(response.body).to include(%(<span class="time">4:31 PM</span>))
+      end
+
+      it "shows the date alone when it did not" do
+        BankTransaction.create!(
+          simplefin_id: "DATEONLY", bank_account: card, payee: "Arcade",
+          amount_cents: -500, posted_at: Time.utc(2026, 8, 10),
+          transacted_at: Time.utc(2026, 8, 10)
+        )
+
+        get :banking
+        # Asserted on the cell, not the page. A bare `include("Aug 10, 2026")`
+        # passed against the backfill note while the cell said something else
+        # entirely, which is how the off-by-one survived a green suite.
+        expect(response.body).to include(%(<span class="date">Aug 10, 2026</span>))
+        expect(response.body).not_to include(%(<span class="time">))
+      end
+
+      # The bug this whole normalization exists for: the bank said Aug 10 and
+      # the table said Aug 9, because a date-only row arrives at midnight UTC
+      # and Mountain reads that as 6pm the day before.
+      it "does not slip a date-only row back a day" do
+        BankTransaction.create!(
+          simplefin_id: "DATEONLY", bank_account: card, payee: "Arcade",
+          amount_cents: -500, posted_at: Time.utc(2026, 8, 10),
+          transacted_at: Time.utc(2026, 8, 10)
+        )
+
+        get :banking
+        expect(response.body).not_to include(%(<span class="date">Aug 9, 2026</span>))
+      end
+    end
+
+    describe "the backfill progress bar" do
+      # Asserted on the markup, not the class name — the stylesheet ships on
+      # every render and would match either way.
+      it "says nothing before anything has synced" do
+        get :banking
+        expect(response.body).not_to include(%(<div class="bank-progress">))
+      end
+
+      it "draws a partial bar and how far back it has reached" do
+        linked_transaction(cents: -500, category: "fun", payee: "Arcade")
+        DataStorage[SimpleFin::Backfill::STORAGE_KEY] = {
+          cursor: Time.utc(2024, 2, 16).iso8601, empty_runs: 0, done: false
+        }
+
+        get :banking
+        expect(response.body).to match(/bank-progress-fill" *\n? *style="width: \d+%;/)
+        expect(response.body).to include("Feb 16, 2024")
+        expect(response.body).to include("to go")
+      end
+
+      it "fills the bar and says so when there is nothing older left" do
+        linked_transaction(cents: -500, category: "fun", payee: "Arcade")
+        DataStorage[SimpleFin::Backfill::STORAGE_KEY] = {
+          cursor: Time.utc(2019, 5, 1).iso8601, empty_runs: 2, done: true
+        }
+
+        get :banking
+        expect(response.body).to include("bank-progress-fill done")
+        expect(response.body).to include("width: 100%")
+        expect(response.body).to include("Complete — nothing older to fetch")
+        expect(response.body).to include("100%")
+      end
+
+      # An implementation detail of when to stop, not something a bar needs to
+      # justify itself with.
+      it "does not explain its own stopping rule" do
+        linked_transaction(cents: -500, category: "fun", payee: "Arcade")
+        DataStorage[SimpleFin::Backfill::STORAGE_KEY] = {
+          cursor: Time.utc(2024, 2, 16).iso8601, empty_runs: 0, done: false
+        }
+
+        get :banking
+        expect(response.body).not_to include("come back empty")
+      end
+    end
+
     it "colors a negative amount" do
       linked_transaction(cents: -500, category: "fun", payee: "Arcade")
 

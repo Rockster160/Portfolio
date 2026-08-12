@@ -406,6 +406,7 @@ module Buddy
       # them across turns, and this loop is what stitches them back into one reply.
       def converse
         input     = History.build(@conversation, upto: @inbound)
+        input    += [{ role: :developer, content: routine_directive }] if routine_directive
         spoken    = nil
         proposals = []
         rounds    = 0
@@ -420,7 +421,9 @@ module Buddy
         # Whether this turn READ `recent_actions` rather than answering about
         # its own doings from memory. See disputed_action?.
         @read_actions = false
-        nudged        = false
+        # Whether any round reached for `run_routine`. See forced_routine.
+        @asked_routine = false
+        nudged         = false
 
         loop do
           rounds += 1
@@ -468,6 +471,12 @@ module Buddy
           # the SAME round are deliberate - that's how "two coffees" becomes one
           # row with count 2 - while the same call arriving a round later is the
           # model restating itself after reading the acknowledgement.
+          # Whether the model REACHED for a routine at all, which is a different
+          # question from whether one ended up in `proposals`: a call that
+          # failed to resolve is dropped from those, and that failure is the
+          # all-or-nothing guarantee doing its job rather than a gap to fill.
+          @asked_routine ||= calls.any? { |c| Buddy::Routines.runner?(Buddy::Tools[c[:name]]) }
+
           @prior = @seen.dup
           items  = calls.flat_map { |call| call_items(call) }
 
@@ -490,7 +499,68 @@ module Buddy
           input += items
         end
 
-        { ok: true, text: spoken.to_s, proposals: proposals }
+        { ok: true, text: spoken.to_s, proposals: forced_routine(proposals) }
+      end
+
+      # ---- a message that IS a routine's name ---------------------------------
+
+      # The saved sequence, when what they said was its name and nothing else.
+      # Memoized because both the directive and the guarantee want it, and
+      # `defined?` rather than `||=` so a nil answer is asked for once.
+      def outright_routine
+        return @outright_routine if defined?(@outright_routine)
+
+        @outright_routine = Buddy::Routines.named_outright(@user, @inbound.body)
+      end
+
+      ROUTINE_DIRECTIVE = <<~TXT.freeze
+        What they just said IS the name of their saved routine **%<name>s**, on its own. Call `run_routine` with that exact name and let the whole sequence run, then say your piece over it. Doing the steps by hand instead drops the ones you don't think of, and answering conversationally without running it drops all of them.
+      TXT
+
+      def routine_directive
+        return nil if outright_routine.nil?
+
+        format(ROUTINE_DIRECTIVE, name: outright_routine.name)
+      end
+
+      # A routine named outright RUNS, whatever the turn decided to do instead.
+      #
+      # The directive above asks, and asking is where this failed before: the
+      # name was sitting in the prompt under "Routines they've saved" and
+      # matching it was left to the model reading it, so one night "Good night"
+      # came back as a warm goodnight with nothing run (prod 3392). The follow-up
+      # request got the monitors dark by hand and the scene never ran at all,
+      # which is the shape of the whole problem - half a routine looks like a
+      # working one.
+      #
+      # So the improvised proposals are REPLACED rather than added to. The
+      # message was the name and nothing else, so there was nothing else in it
+      # to act on, and the saved sequence is what the person asked for by
+      # definition.
+      #
+      # Two things call it off. A turn that already REACHED for `run_routine` is
+      # left exactly as it is, whether the call worked or not: a routine that
+      # can't run any more fails there deliberately, and forcing it afterwards
+      # would step over that and run the half of it that still resolves. And a
+      # routine that can't run isn't forced in the first place - `check_runnable!`
+      # is the all-or-nothing guarantee, and skipping it here would give a
+      # rotten routine one path that runs it in pieces.
+      def forced_routine(proposals)
+        return proposals if outright_routine.nil? || @asked_routine
+        return proposals if proposals.any? { |c| Buddy::Routines.runner?(Buddy::Tools[c[:name]]) }
+
+        Buddy::Routines.check_runnable!(outright_routine, Buddy::ToolContext.new(@user, conversation: @conversation))
+        # `run_routine`'s confirm is what normally counts a run, and forcing the
+        # call skips straight past it to the expansion in build_proposals.
+        outright_routine.touch_run!
+        [{
+          name:      Buddy::Routines::RUNNER,
+          arguments: { name: outright_routine.name },
+          call_id:   "forced-routine-#{outright_routine.id}",
+        }]
+      rescue StandardError => e
+        Rails.logger.warn("[Buddy::GPT::Turn] #{outright_routine.name} named outright but can't run: #{e.message}")
+        proposals
       end
 
       # No incremental rendering: Buddy replies are 1-3 sentences and land in
@@ -677,18 +747,6 @@ module Buddy
         \z
       /xi
 
-      GREETING_NUDGE = <<~TXT.freeze
-        STOP. Your briefing was told to open with a greeting and it doesn't - it
-        starts on the news. Arriving unannounced with no hello is what makes this
-        read like a notification instead of you.
-
-        Write it again with a greeting on the front. Match the half of the day in
-        `Part of day`, make the words your own, and land it warm - a "!", a
-        stretched vowel, real warmth, never a flat period.
-
-        Everything after the greeting can stay as it was.
-      TXT
-
       # Does the reply actually open with a hello?
       #
       # Deliberately generous — a false "missing" costs one extra round, while
@@ -705,15 +763,65 @@ module Buddy
         # in front of the hello can't disqualify it.
         (?:(?:well|ah+|oh+|ok(?:ay)?)[\s,]+)?
         (?:
-            (?:good\s+)? m+o+r+n+i+n+g+
-          | (?:good\s+)? (?:afternoon|evening|night)
+          # The dropped `g` matters more than it looks: a hello this misses is
+          # one the fallback puts a SECOND hello in front of.
+            (?:good\s+)? m+o+r+n+i+n+ (?:g+|['’])
+          | (?:good\s+)? (?:afternoon|evening|evenin['’]|night)
           | h+e+y+
           | h+i+\b
           | h+e+l+l+o+
-          | howdy | greetings | welcome\s+back | ah+oy | yo\b
+          | howdy | howzit | greetings | welcome\s+back | ah+oy | yo\b
           | happy\s+\w+
         )
       /xi
+
+      # Put the hello on, when the model didn't.
+      #
+      # This is the fifth attempt and the first one that isn't a request. Four
+      # paragraphs of prompt, then a shorter directive, then the whether-to
+      # judgement moved into Rails, then a corrective round that said STOP in
+      # capitals — and prod 3398 still opened "Light day on your side so far."
+      # The corrective round can't be relied on either: it's one shot shared
+      # with five other arms (nudge_for), so a briefing that trips any of them
+      # first never gets asked, and a model that ignores it isn't asked twice.
+      #
+      # So the words come from the pet's own table (Buddy::VoiceLines) and are
+      # simply put in front. The model still writes its own whenever it does —
+      # this only fills a silence, and `unlike:` keeps it off the hello the last
+      # briefing used.
+      #
+      # The line's mood is deliberately NOT applied. The model already chose a
+      # face for this reply, and overwriting a deliberate expression to deliver
+      # a hello is the wrong trade.
+      def with_greeting(body)
+        return body unless greeting_missing?(body)
+
+        line = Buddy::VoiceLines.pick(
+          @conversation.buddy_theme,
+          Buddy::TodayBriefing.greeting_kind(@user),
+          unlike: previous_briefing_body
+        )
+        return body if line[:text].blank?
+
+        "#{line[:text]} #{body}"
+      rescue StandardError => e
+        # A missing hello is a worse briefing; a raised exception here is no
+        # briefing at all.
+        Rails.logger.warn("[Buddy::GPT::Turn] greeting fallback failed: #{e.class}: #{e.message}")
+        body
+      end
+
+      # What this thread was told last time, so the same opener doesn't land two
+      # mornings running.
+      def previous_briefing_body
+        @conversation.byte_messages
+          .where(direction: :inbound)
+          .where("byte_messages.metadata ->> 'self_initiated' = 'true'")
+          .where.not(id: @reply.id)
+          .order(id: :desc)
+          .limit(1)
+          .pick(:body)
+      end
 
       # Only on a briefing that was ORDERED to greet. Buddy::TodayBriefing
       # decides that from the thread, and when it decides not to, a reply with no
@@ -806,10 +914,6 @@ module Buddy
         # failure when neither looked.
         return CHECK_ACTIONS_NUDGE if disputed_action?
         return RETRY_NUDGE if unbacked_claim(spoken.to_s).present?
-        # Three rounds of prompt wording have failed to make the greeting stick,
-        # including one that said "not optional" in capitals. It is a cheap thing
-        # to check and a cheap thing to ask again for.
-        return GREETING_NUDGE if greeting_missing?(spoken.to_s)
         # They asked for a thing to happen and nothing was called. Worth the
         # corrective round on its own — this is the half that gets the TV
         # actually turned off, rather than only stopping the lie about it.
@@ -945,7 +1049,7 @@ module Buddy
       end
 
       def finalize_success(outcome)
-        body = display_body(apply_leading_mood(outcome[:text]))
+        body = with_greeting(display_body(apply_leading_mood(outcome[:text])))
         @reply.update!(state: :delivered, body: body, delivered_at: Time.current)
 
         proposals = outcome[:proposals]
