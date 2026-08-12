@@ -131,14 +131,33 @@
       Same syntax as events: <code>field:contains</code>, <code>field::exact</code>,
       <code>&gt;</code> <code>&lt;</code> on numbers and dates, <code>-</code> or
       <code>NOT</code> to negate, <code>AND</code> / <code>OR</code>. Fields:
-      payee, description, memo, mcc, <code>amount</code>, posted_at,
-      transacted_at, account, category, pending, linked,
-      <code>direction</code>, <code>transfer</code>.
+      payee, description, memo, mcc, <code>amount</code>,
+      <code>timestamp</code>, posted_at, transacted_at, account, category,
+      pending, linked, <code>direction</code>, <code>transfer</code>.
       <br>
       <code>amount</code> is in dollars and always positive — a $40 charge and a
       $40 deposit both match <code>amount::40</code>. Use
       <code>direction:withdrawal</code> or <code>direction:deposit</code> for the
       sign, since a leading <code>-</code> is the negation prefix.
+    </p>
+
+    <p class="bank-hint">
+      Dates use <code>timestamp</code> — the same field name as events, and the
+      date this table shows you. The part you give is the precision you get:
+      <br>
+      <code>timestamp:2026-07-01</code> that day ·
+      <code>timestamp:2026-07</code> that whole month ·
+      <code>timestamp:2026</code> that whole year ·
+      <code>timestamp:7-15</code> month-day, this year ·
+      <code>timestamp&gt;=2025-11-01 timestamp&lt;2026</code> a range ·
+      <code>-timestamp:2026-07</code> everything but that month
+      <br>
+      <code>&gt;</code> and <code>&lt;</code> step over the whole unit you
+      named: <code>timestamp&gt;2026-07-01</code> starts on the 2nd, and
+      <code>&gt;=2026-07-01</code> starts on the 1st. No times of day — the
+      <code>:</code> in <code>18:00</code> is the field separator.
+      <code>posted_at</code> (when it cleared) and <code>transacted_at</code>
+      still work if you need the distinction.
     </p>
 
     <% if @search_error.present? %>

@@ -1,3 +1,17 @@
+# == Schema Information
+#
+# Table name: device_login_tokens
+#
+#  id         :bigint           not null, primary key
+#  attempts   :integer          default(0), not null
+#  code       :string           not null
+#  expires_at :datetime         not null
+#  token      :string           not null
+#  used_at    :datetime
+#  created_at :datetime         not null
+#  updated_at :datetime         not null
+#  user_id    :bigint           not null
+#
 class DeviceLoginToken < ApplicationRecord
   TTL          = 5.minutes
   CODE_LENGTH  = 6

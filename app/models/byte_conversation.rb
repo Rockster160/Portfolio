@@ -9,6 +9,7 @@
 #  buddy_sleep_until :datetime
 #  buddy_theme       :string           default("byte"), not null
 #  last_message_at   :datetime
+#  last_read_at      :datetime
 #  metadata          :jsonb            not null
 #  mode              :integer          default("claude"), not null
 #  name              :string

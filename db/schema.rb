@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_12_012121) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_12_014924) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -279,11 +279,13 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_12_012121) do
     t.bigint "action_event_id"
     t.decimal "amount_abs", null: false
     t.bigint "transfer_counterpart_id"
+    t.datetime "occurred_at", null: false
     t.index ["action_event_id"], name: "index_bank_transactions_on_action_event_id"
     t.index ["action_event_id"], name: "index_bank_transactions_on_claimed_action_event", unique: true, where: "(action_event_id IS NOT NULL)"
     t.index ["amount_abs"], name: "index_bank_transactions_on_amount_abs"
     t.index ["bank_account_id", "posted_at"], name: "index_bank_transactions_on_bank_account_id_and_posted_at"
     t.index ["bank_account_id"], name: "index_bank_transactions_on_bank_account_id"
+    t.index ["occurred_at"], name: "index_bank_transactions_on_occurred_at"
     t.index ["simplefin_id"], name: "index_bank_transactions_on_simplefin_id", unique: true
     t.index ["transfer_counterpart_id"], name: "index_bank_transactions_on_claimed_transfer", unique: true, where: "(transfer_counterpart_id IS NOT NULL)"
   end

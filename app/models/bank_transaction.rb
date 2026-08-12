@@ -8,6 +8,7 @@
 #  description             :text
 #  mcc                     :string
 #  memo                    :text
+#  occurred_at             :datetime         not null
 #  payee                   :string
 #  pending                 :boolean          default(FALSE), not null
 #  posted_at               :datetime         not null
@@ -40,6 +41,9 @@ class BankTransaction < ApplicationRecord
   # solely so `amount>50` can use the numeric-comparison path — see the
   # search_terms note below.
   before_save :derive_amount_abs
+  # Same story as amount_abs, for the same reason — see the migration. It backs
+  # the `timestamp` search term, which needs a real column to get `>=` and `<`.
+  before_save :derive_occurred_at
 
   # Same query syntax as ActionEvent — `payee:amazon category:groceries
   # posted_at>2026-07-01 amount>50 direction:withdrawal`, with AND/OR/NOT.
@@ -48,8 +52,13 @@ class BankTransaction < ApplicationRecord
   # is a separate axis (`direction:`) rather than part of the number, because a
   # leading `-` is the tokenizer's negation prefix — `amount<-50` does not mean
   # what it looks like, and never could.
+  # `timestamp` is the one to reach for, and it is named that because every
+  # other searchable thing here is: it is what ActionEvent calls the same idea.
+  # It reads the column the table DISPLAYS — when the purchase happened —
+  # whereas posted_at is when it cleared, a different day on most rows.
   search_terms :id, :simplefin_id, :payee, :description, :memo, :mcc,
     :posted_at, :transacted_at,
+    timestamp: :occurred_at,
     amount:    :amount_abs,
     direction: :search_direction,
     account:   :search_account,
@@ -196,12 +205,6 @@ class BankTransaction < ApplicationRecord
   end
   # rubocop:enable Naming/PredicateMethod
 
-  # When the purchase happened, preferring the merchant's own timestamp over
-  # when it cleared. `posted_at` can trail by days.
-  def occurred_at
-    transacted_at || posted_at
-  end
-
   # Timestamps are stored UTC; everything user-facing is Mountain.
   def occurred_local
     occurred_at&.in_time_zone(::User.timezone)
@@ -249,5 +252,11 @@ class BankTransaction < ApplicationRecord
 
   def derive_amount_abs
     self.amount_abs = amount_cents.nil? ? nil : (BigDecimal(amount_cents.abs) / 100)
+  end
+
+  # When the purchase happened, preferring the merchant's own timestamp over
+  # when it cleared. `posted_at` can trail by days.
+  def derive_occurred_at
+    self.occurred_at = transacted_at || posted_at
   end
 end
