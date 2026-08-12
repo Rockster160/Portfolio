@@ -77,6 +77,54 @@ Buddy::Tools.register(
         to compose a fresh check-in each time, not repeat the exact
         same words.
 
+    **A reminder whose text contains an "if" needs a check, or the "if" is
+    decorative.** "Charge the car if the chore isn't done yet" with no check is
+    a sentence the person reads at 9pm whether or not they already did it, and
+    it will say the same thing again at 10. Whenever what they said carries a
+    condition, put the condition in the arguments. Two ways to ask:
+
+    SEARCH - does anything match?
+
+      check:        which set to look in (see the enum: chore_completions,
+                    action_events, agenda_items, chores, emails, contacts,
+                    boxes)
+      check_query:  a search in the ordinary query syntax - the same one the
+                    app searches everything with
+      check_expect: `missing` to fire only while the search finds NOTHING
+                    (the "if it isn't done yet" shape), `found` for the
+                    opposite ("once I've logged a workout, ...")
+
+    **QUOTE ANY VALUE CONTAINING A SPACE.** `name:"Charge Villager Car"` is one
+    term; `name:Charge Villager Car` is `name:Charge` plus two loose words, and
+    matches things nobody asked about. This is the single easiest way to write
+    a condition that looks right and answers the wrong question.
+
+    Use RELATIVE windows - `is:today`, `is:yesterday`, `is:week`. A written-out
+    date is fixed to the day you wrote it and means nothing on the day it runs.
+
+    ASK ONE OF THEIR OWN TASKS - anything they've wired, they can gate on:
+
+      check_task: the name of a Jil FUNCTION from `jil_functions`, run when the
+                  reminder comes due. Whatever it returns decides: empty,
+                  `false`, `0`, `no`, `off`, `none` and `unknown` are NO, and
+                  anything else is YES.
+      check_expect: `truthy` (default) or `falsy`.
+
+    Same rule as `call_jil_function`: only ever name a function that CHECKS or
+    REPORTS. One that opens, closes, sets or starts something will do that every
+    time the reminder comes due.
+
+    A skipped reminder says nothing at all - that's the point of it - but it
+    leaves a small receipt saying what it checked, and it still records that it
+    came due, so they can ask whether it went off.
+
+    **Repeating WITHIN a day** is `every_minutes` + `until_time` on top of a
+    `repeat`. "Nudge me hourly from 9 to 11 tonight" is one reminder -
+    `repeat: daily:21:00`, `every_minutes: 60`, `until_time: "23:00"`, `until`
+    today - not three reminders an hour apart. Three separate rows can't be
+    cancelled together, can't be edited together, and each one nags again after
+    the person has already dealt with it.
+
     A reminder can also RUN something instead of saying it. Write `text` as
     "run <name>" (or trigger / fire / start) naming one of their saved routines
     or a Jil task, and that's what happens when it comes due - no message, just
@@ -89,6 +137,12 @@ Buddy::Tools.register(
     at:     { type: :string, required: false, description: "First fire time (ISO datetime). Required for one-shot." },
     repeat: { type: :string, required: false, description: "Recurrence spec: daily:HH:MM / weekdays:HH:MM / weekly:<days>:HH:MM / monthly:<dom>:HH:MM / monthly:<nth>-<weekday>:HH:MM / every:<n>-<unit>:HH:MM / yearly:HH:MM" },
     until:  { type: :string, required: false, description: "Stop repeating after this date (YYYY-MM-DD)" },
+    every_minutes: { type: :integer, required: false, description: "Repeat WITHIN the day this often, starting at the repeat spec's time" },
+    until_time:    { type: :string,  required: false, description: "Stop repeating for the day at this time (HH:MM). Needs every_minutes." },
+    check:        { type: :enum,   required: false, values: ScheduleCondition.sets, description: "Records to search before firing" },
+    check_query:  { type: :string, required: false, description: "Search that decides it. QUOTE any value with a space: name:\"Some Thing\"" },
+    check_task:   { type: :string, required: false, description: "Jil function to ask instead of searching. Must only read/report." },
+    check_expect: { type: :enum,   required: false, values: %i[found missing truthy falsy], description: "found/missing for a search, truthy/falsy for a task" },
     kind:   { type: :enum,   required: false, default: :reminder, values: %i[reminder prompt] },
     notify: { type: :string, required: false, description: "Household member this reminder is FOR, if not the person asking" },
   },
@@ -103,6 +157,49 @@ Buddy::Tools.register(
       raise "couldn't read #{payload[:until].inspect} as a date" if ends.nil?
 
       recurrence_hash = recurrence_hash.merge("until_on" => ends.iso8601)
+    end
+
+    # The intraday window. Refused without a repeat spec to hang off, because
+    # `at` is where it starts and that's the repeat's to give - "every 30
+    # minutes" with no day pattern behind it is a rule with no beginning.
+    if payload[:every_minutes].to_i.positive? || payload[:until_time].to_s.strip.present?
+      raise "an every_minutes window needs a `repeat` to start from" if recurrence_hash.nil?
+      raise "every_minutes and until_time go together - one alone does nothing" unless
+        payload[:every_minutes].to_i.positive? && payload[:until_time].to_s.strip.present?
+
+      window_end = payload[:until_time].to_s.strip
+      raise "couldn't read #{window_end.inspect} as a time (want HH:MM)" unless window_end.match?(/\A\d{1,2}:\d{2}\z/)
+      raise "#{window_end} is not after #{recurrence_hash["at"]}" if window_end <= recurrence_hash["at"].to_s
+
+      recurrence_hash = recurrence_hash.merge(
+        "every_minutes" => payload[:every_minutes].to_i,
+        "until_at"      => window_end,
+      )
+    end
+
+    # Validated HERE rather than at fire time. A condition that can't be
+    # evaluated is an authoring mistake, and the moment to catch one is while
+    # the person is still in the conversation - not at 9pm three weeks later,
+    # when the only symptom is a reminder that quietly never came.
+    raise "a check is either a search or a task, not both" if payload[:check].present? && payload[:check_task].present?
+
+    condition = ScheduleCondition.normalize({
+      find:   payload[:check],
+      query:  payload[:check_query],
+      task:   payload[:check_task],
+      expect: payload[:check_expect],
+    })
+    # Run it once, here. A search that blows up in SQL, a task name that
+    # resolves to nothing, a value that needed quoting - all of it surfaces in
+    # the conversation rather than at 9pm three weeks later, where the only
+    # symptom is a reminder that quietly never came.
+    #
+    # Deliberately not run for a `jil` check: asking a function is not free, and
+    # a reminder set for next Tuesday would fire it today just to prove it can.
+    # `resolve_task` still runs, which is the half that can be wrong forever.
+    if condition
+      condition[:kind] == :jil ? ScheduleCondition.resolve_task(condition[:task], ctx.user) :
+                                 ScheduleCondition.met?(condition, user: ctx.user)
     end
 
     fire_at = ctx.resolve_time(payload[:at]) if payload[:at].to_s.strip.length > 0
@@ -143,11 +240,13 @@ Buddy::Tools.register(
     else
       "Remind you at #{when_str}?"
     end
+    summary = "#{summary.chomp("?")}, #{ScheduleCondition.describe(condition)}?" if condition
     {
       summary:  summary,
       resolved: {
         fire_at_iso:    fire_at.iso8601,
         recurrence:     recurrence_hash,
+        condition:      condition,
         notify_user_id: notify_user&.id,
         recipient_name: notify_user&.first_name,
       }.compact,
@@ -174,6 +273,7 @@ Buddy::Tools.register(
       body:              payload[:text].to_s.first(500),
       fire_at:           fire_at,
       recurrence:        payload[:recurrence],
+      condition:         payload[:condition],
     )
     {
       reminder_id:    reminder.id,

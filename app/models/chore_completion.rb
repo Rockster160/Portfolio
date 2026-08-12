@@ -54,13 +54,55 @@ class ChoreCompletion < ApplicationRecord
   #   name:Cat              → joined chore.name ILIKE %Cat%
   #   amount>1              → paid_pebbles > 1 (=, !=, <, >, <=, >=)
   #   bare keyword          → matches across notes + chore name
+  # `name:` reaches through to the chore, so every search term has to be
+  # resolvable with `chores` in scope. Without this the `name:` branch built SQL
+  # saying `chores.name ILIKE ...` against a bare `chore_completions` — and
+  # `raw_sql` RUNS the fragment to validate it, so it raised UndefinedTable
+  # every time. ChoresController#safe_query rescues and returns the unfiltered
+  # scope, which is why history search by name quietly returned everything
+  # instead of erroring. Left-outer to match LogTracker: `stripped_sql` knows
+  # how to strip a LEFT OUTER JOIN off the front of a fragment and does not
+  # know how to strip an INNER one.
+  def self.search_scope
+    left_outer_joins(:chore).references(:chore)
+  end
+
   search_terms :id, :note, :paid_pebbles,
     notes:  :note,
     amount: :paid_pebbles,
     time:   :completed_at,
+    is:     :is_search,
     name:   "chores.name"
 
   scope :for_day, ->(day) { where(day_key: day) }
+
+  # `is:today` — a RELATIVE window, which is the only kind a stored condition
+  # can use. `time>2026-08-12` is fine typed into a search box and useless
+  # written into a reminder that fires every night, since the date it was
+  # authored on is not the date it runs on.
+  #
+  # Days here are CHORE days, not calendar days: the boundary is the household's
+  # reset (see ChoreDay), so a chore ticked off at 1am still counts for the
+  # evening it belonged to. `day_key` is stamped at completion from exactly that
+  # notion, so this is a plain indexed column compare rather than a clock
+  # calculation done twice and hoped to agree.
+  #
+  # Mirrors AgendaItem#is_search, including returning `none` for a word it
+  # doesn't know — a filter that silently matched everything would read as
+  # "condition satisfied" and fire the thing it was meant to hold back.
+  scope :is_search, ->(val) {
+    today = ::ChoreDay.current
+    case val.to_s.downcase
+    when "today"                then for_day(today)
+    when "yesterday"            then for_day(today - 1)
+    when "week"                 then where(day_key: (today - 6)..today)
+    when "credited"             then credited
+    when "anonymous"            then where(anonymous: true)
+    when "paid"                 then paid
+    when "skipped"              then where(payout_skipped: true)
+    else none
+    end
+  }
   scope :paid, -> { where(payout_skipped: false) }
   # "Credited" = counts as someone's done-by-me action. Anonymous
   # completions still satisfy the schedule + cooldown (the work got

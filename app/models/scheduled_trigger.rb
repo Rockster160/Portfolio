@@ -59,6 +59,26 @@ class ScheduledTrigger < ApplicationRecord
     execute_at < 5.seconds.from_now # offset for minor async issues
   end
 
+  # A truthy check answered when this comes due — see ScheduleCondition. The
+  # rescue matches ReminderFirer's: an unanswerable condition FIRES, because a
+  # trigger that silently didn't run is indistinguishable from one that never
+  # existed, and something downstream is usually waiting on it.
+  def condition_met?
+    ScheduleCondition.met?(condition, user: user)
+  rescue StandardError => e
+    Rails.logger.warn("[ScheduledTrigger] condition failed on ##{id}: #{e.class}: #{e.message}")
+    true
+  end
+
+  # Where a skip gets announced. A trigger has no thread of its own, so it
+  # borrows the one the person actually reads — nil when they have none, which
+  # `announce_skip!` treats as "log it and move on".
+  def buddy_conversation
+    return nil if user.nil?
+
+    user.byte_conversations.where(mode: :buddy).order(last_message_at: :desc).first
+  end
+
   def running? = started? && !completed?
 
   def delayed_trigger?

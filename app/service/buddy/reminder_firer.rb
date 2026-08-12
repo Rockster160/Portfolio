@@ -21,6 +21,8 @@ module Buddy
       # nearest match.
       command = reminder.command
 
+      return skip!(reminder) unless condition_met?(reminder)
+
       if command
         run_command(reminder, command)
       elsif reminder.notify_user_id
@@ -31,19 +33,7 @@ module Buddy
         deliver_plain_reminder(user, conversation, reminder)
       end
 
-      # Recurring: roll fire_at forward to the next occurrence, keep
-      # the row pending. Non-recurring: terminal fired_at.
-      if reminder.recurring?
-        next_fire = reminder.next_fire_at(from: Time.current)
-        if next_fire
-          reminder.update!(last_fired_at: Time.current, fire_at: next_fire)
-        else
-          # Bad recurrence spec - treat as one-shot rather than loop forever.
-          reminder.update!(fired_at: Time.current, last_fired_at: Time.current)
-        end
-      else
-        reminder.update!(fired_at: Time.current)
-      end
+      roll_forward!(reminder)
     rescue StandardError => e
       # Firing a reminder failing is a data-integrity event: the user
       # asked to be reminded of something at a specific time and the
@@ -56,6 +46,62 @@ module Buddy
         user:      reminder.user,
         extra:     { reminder_id: reminder.id, kind: reminder.kind },
       )
+    end
+
+    # Is this still worth saying?
+    #
+    # An unanswerable condition FIRES. Both outcomes are wrong and they aren't
+    # equally wrong: a nudge that arrives when it needn't is noise the person
+    # can ignore, and one that silently vanishes is the thing they asked to be
+    # told about, gone, with nothing anywhere to say it was ever due. So a
+    # broken condition degrades to no condition, loudly.
+    def condition_met?(reminder)
+      ScheduleCondition.met?(reminder.condition, user: reminder.user)
+    rescue StandardError => e
+      Buddy::Errors.report(
+        section:   "reminder_firer.condition",
+        exception: e,
+        user:      reminder.user,
+        extra:     { reminder_id: reminder.id, condition: reminder.condition },
+      )
+      true
+    end
+
+    # The condition said no. Nothing is posted and nothing is pushed — that IS
+    # the feature — but the row still moves, so a skipped reminder leaves
+    # `fired_at` behind like a delivered one and stops being pending. Which
+    # means it stays visible in context as `status: already_rang` and Buddy can
+    # answer "did that go off?" honestly instead of the row simply vanishing.
+    #
+    # A recurring one rolls forward exactly as a fired one does: skipping
+    # tonight is not skipping every night.
+    def skip!(reminder)
+      Rails.logger.info(
+        "[Buddy::ReminderFirer] skipped ##{reminder.id} — #{ScheduleCondition.describe(reminder.condition)}",
+      )
+      ScheduleCondition.announce_skip!(
+        user:         reminder.user,
+        conversation: reminder.byte_conversation,
+        condition:    reminder.condition,
+        subject:      reminder.body.to_s.truncate(60),
+      )
+      reminder.update!(metadata: reminder.metadata.to_h.merge("last_skipped_at" => Time.current))
+      roll_forward!(reminder)
+    end
+
+    # Where a fired reminder and a skipped one end up the same: recurring rolls
+    # `fire_at` to the next occurrence and stays pending; a one-shot, or a
+    # pattern that has run out, goes terminal on `fired_at`.
+    def roll_forward!(reminder)
+      return reminder.update!(fired_at: Time.current) unless reminder.recurring?
+
+      next_fire = reminder.next_fire_at(from: Time.current)
+      if next_fire
+        reminder.update!(last_fired_at: Time.current, fire_at: next_fire)
+      else
+        # Bad recurrence spec - treat as one-shot rather than loop forever.
+        reminder.update!(fired_at: Time.current, last_fired_at: Time.current)
+      end
     end
 
     class << self

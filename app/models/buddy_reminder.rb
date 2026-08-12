@@ -162,29 +162,91 @@ class BuddyReminder < ApplicationRecord
       converted["by_day"] = [Recurrence::WEEKDAY_KEYS[index].to_s] if index
     end
     converted["by_month_day"] = [data["day"].to_i] if data["day"].present?
-    converted.merge(data.slice("starts_on", "until_on", "excluded_dates")).compact
+    converted.merge(data.slice("starts_on", "until_on", "excluded_dates", "until_at", "every_minutes")).compact
   end
 
   # The next moment this should go off, or nil when the pattern has run out
   # (an end date that's passed) so the firer can mark it terminal.
+  #
+  # Two layers, and keeping them apart is the whole design. `Recurrence` decides
+  # WHICH DAYS and knows nothing about clocks — it's shared with the calendar and
+  # has a JS port with a parity spec, so a sub-daily frequency there would mean
+  # reworking the calendar's engine to answer a question reminders alone were
+  # asking. The intraday window below decides WHICH TIMES within each of those
+  # days, and lives here where it's needed. "Hourly from 9 to 11pm on weekdays"
+  # is one of each, composed.
   def next_fire_at(from: Time.current)
     return nil unless recurring?
 
     tz    = ActiveSupport::TimeZone[user&.timezone.to_s] || Time.zone
     local = from.in_time_zone(tz)
-    hh, mm = time_of_day
     pattern = rule
 
     # Today counts only if its hour hasn't already gone by, so a daily 9am
     # asked at 9:01 rolls to tomorrow rather than firing immediately.
     date = pattern.next_on_or_after(local.to_date)
     while date
-      candidate = tz.local(date.year, date.month, date.day, hh, mm)
-      return candidate if candidate > local
+      slot = slots_on(date, tz).find { |candidate| candidate > local }
+      return slot if slot
 
       date = pattern.next_on_or_after(date + 1)
     end
     nil
+  end
+
+  # Every moment this fires on one of its days: just `at` normally, and `at`
+  # stepped by `every_minutes` up to `until_at` when a window is set.
+  #
+  # Bounded by MAX_INTRADAY_SLOTS rather than trusted to terminate: a zero or
+  # negative step is a rule that never advances, and this runs inside the
+  # minute-by-minute sweep.
+  MAX_INTRADAY_SLOTS = 96
+
+  def slots_on(date, tz)
+    hh, mm = time_of_day
+    first  = tz.local(date.year, date.month, date.day, hh, mm)
+    step   = every_minutes
+    ends   = window_end_on(date, tz)
+    return [first] if step.nil? || ends.nil? || ends <= first
+
+    slots = []
+    at    = first
+    while at <= ends && slots.length < MAX_INTRADAY_SLOTS
+      slots << at
+      at += step.minutes
+    end
+    slots
+  end
+
+  # Minutes between fires within a day, or nil for the ordinary once-a-day
+  # reminder. Floored at 1 so a rule can't ask to fire every zero minutes.
+  def every_minutes
+    raw = normalized_recurrence["every_minutes"]
+    return nil if raw.blank?
+
+    [raw.to_i, 1].max
+  end
+
+  def window_end_on(date, tz)
+    raw = normalized_recurrence["until_at"]
+    return nil if raw.blank?
+
+    hh, mm = raw.to_s.split(":").map(&:to_i)
+    tz.local(date.year, date.month, date.day, hh.to_i.clamp(0, 23), mm.to_i.clamp(0, 59))
+  end
+
+  # Does this repeat WITHIN a day as well as across days?
+  def intraday?
+    recurring? && every_minutes.present? && normalized_recurrence["until_at"].present?
+  end
+
+  # The check answered when this comes due, or nil. See ScheduleCondition.
+  def condition_data
+    ScheduleCondition.normalize(condition)
+  end
+
+  def conditional?
+    ScheduleCondition.present?(condition)
   end
 
   private

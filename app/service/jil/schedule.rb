@@ -1,13 +1,18 @@
 module Jil::Schedule
   module_function
 
-  def add_schedules(users, execute_at, trigger, data, auth: nil, auth_id: nil)
+  def add_schedules(users, execute_at, trigger, data, auth: nil, auth_id: nil, condition: nil)
     Array.wrap(users).filter_map { |user|
-      add_schedule(user, execute_at, trigger, data, auth: auth, auth_id: auth_id)
+      add_schedule(user, execute_at, trigger, data, auth: auth, auth_id: auth_id, condition: condition)
     }
   end
 
-  def add_schedule(user, execute_at, trigger, data, auth: nil, auth_id: nil)
+  # `condition` is a truthy check answered when this comes due rather than now —
+  # see ScheduleCondition. Everything goes through here rather than calling
+  # ScheduledTrigger.create! directly, because creating the row is only half of
+  # it: `add_job` is what puts a runner on the clock, and a row without one sits
+  # there until some unrelated task happens to wake the runner for that user.
+  def add_schedule(user, execute_at, trigger, data, auth: nil, auth_id: nil, condition: nil)
     return if trigger.blank?
 
     schedule = ::ScheduledTrigger.create!(
@@ -17,6 +22,7 @@ module Jil::Schedule
       data:         data,
       auth_type:    auth,
       auth_type_id: auth_id,
+      condition:    ::ScheduleCondition.normalize(condition),
     )
 
     add_job(schedule) unless far_future?(schedule)

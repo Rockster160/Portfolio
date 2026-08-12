@@ -55,6 +55,16 @@ Buddy::Tools.register(
     The list only contains tasks the person allowed you to run, and may
     include tasks shared with them by someone else (those run under the
     owner's account).
+
+    ## When it isn't on the list
+
+    This tool fires a task BY NAME, so it can only reach that list. If they
+    hand you a raw SCOPE instead - something shaped like `some:jil:listener` -
+    that is `schedule_trigger`, which publishes the scope itself and needs no
+    access to whatever is listening. Same if they want it to happen LATER, or
+    only if some condition holds. Don't tell them a scope isn't wired up
+    because it isn't in your index; the index is a list of tasks, not a list of
+    scopes.
   TXT
   feature:     :jil,
   args:        {
