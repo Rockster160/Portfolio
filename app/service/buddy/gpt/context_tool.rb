@@ -122,6 +122,18 @@ module Buddy
           the thing isn't listed, it didn't happen: say so and do it.
       TXT
 
+      # Did a get_context call actually fetch the named section? An empty or
+      # null list means "everything", which includes it.
+      #
+      # Buddy::GPT::Turn asks this to tell a turn that LOOKED from one that
+      # answered off its own memory. Reading the arguments is the only way to
+      # know: the output goes back to the model as a JSON string and nothing
+      # downstream records which sections were in it.
+      def self.serves?(args, section)
+        named = args.is_a?(Hash) ? Array(args["sections"] || args[:sections]) : []
+        named.empty? || named.map { |s| s.to_s.to_sym }.include?(section)
+      end
+
       # `user:` narrows the enum to sections this person actually has, so a
       # feature that's switched off isn't even nameable — the model can't ask
       # for chores and then have to explain the empty answer.

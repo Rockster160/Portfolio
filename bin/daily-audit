@@ -77,9 +77,18 @@ case "$CONVO_ID" in
     ;;
 esac
 
+PROJECT_DIR="$CLAUDE_CONFIG_DIR/projects/$(echo "$ROOT" | tr '/' '-')"
+
 # The session id lives in the Mac's own state file and NOT in the conversation
 # record: Rails only learns it on a `/switch` or `/adopt`, so the metadata
 # column is null for a thread that has simply been running normally.
+#
+# Authoritative when it's there, and there is a window every night when it
+# isn't. ByteDailyAudit.run! CLEARS this key before posting (a fresh session
+# each night is the point), and the Mac only writes the new one once the turn
+# finishes — which for an audit that reads two days of traffic is several
+# minutes. Run this script inside that window and the key is legitimately
+# absent while the audit is very much running.
 SESSION_ID="$(
   python3 -c "
 import json, sys
@@ -89,9 +98,44 @@ print(convo.get('claude_session_id') or '')
 " "$STATE" "$CONVO_ID"
 )"
 
+# So fall back to the transcripts, which know the session from its first
+# second. Every audit opens with the same sentence (ByteDailyAudit.prompt), so
+# the newest transcript starting that way IS today's audit — no handoff
+# between two processes to get wrong, and it works while the run is still
+# going.
+FROM_TRANSCRIPT=""
+if [ -z "$SESSION_ID" ] && [ -d "$PROJECT_DIR" ]; then
+  SESSION_ID="$(
+    python3 -c "
+import glob, json, os, sys
+
+newest = (0, '')
+for path in glob.glob(os.path.join(sys.argv[1], '*.jsonl')):
+    try:
+        with open(path) as f:
+            for line in f:
+                event = json.loads(line)
+                if event.get('type') != 'user':
+                    continue
+                content = event.get('message', {}).get('content')
+                text = content if isinstance(content, str) else ' '.join(
+                    part.get('text', '') for part in content if isinstance(part, dict)
+                )
+                if text.lstrip().startswith(sys.argv[2]):
+                    newest = max(newest, (os.path.getmtime(path), event.get('sessionId') or ''))
+                break
+    except (OSError, ValueError):
+        continue
+print(newest[1])
+" "$PROJECT_DIR" "You are the daily audit for this app."
+  )"
+  [ -n "$SESSION_ID" ] && FROM_TRANSCRIPT=" (found on disk — Byte hasn't recorded it yet)"
+fi
+
 if [ -z "$SESSION_ID" ]; then
-  echo "Conversation $CONVO_ID has no Claude session yet." >&2
-  echo "That's normal before the first audit has run." >&2
+  echo "No Daily Audit session found for conversation $CONVO_ID." >&2
+  echo "Normal before the very first audit; otherwise kick one off with:  ByteDailyAudit.kick!" >&2
+  echo "Transcripts were searched in: $PROJECT_DIR" >&2
   exit 1
 fi
 
@@ -100,7 +144,7 @@ if [ "${1:-}" = "--id" ]; then
   exit 0
 fi
 
-TRANSCRIPT="$CLAUDE_CONFIG_DIR/projects/$(echo "$ROOT" | tr '/' '-')/$SESSION_ID.jsonl"
+TRANSCRIPT="$PROJECT_DIR/$SESSION_ID.jsonl"
 if [ ! -f "$TRANSCRIPT" ]; then
   echo "Byte points at session $SESSION_ID but no transcript exists at:" >&2
   echo "  $TRANSCRIPT" >&2
@@ -108,6 +152,6 @@ if [ ! -f "$TRANSCRIPT" ]; then
   exit 1
 fi
 
-echo "Resuming Daily Audit (conversation $CONVO_ID, session ${SESSION_ID:0:8}…)"
+echo "Resuming Daily Audit (conversation $CONVO_ID, session ${SESSION_ID:0:8}…)$FROM_TRANSCRIPT"
 cd "$ROOT"
 exec claude --resume "$SESSION_ID"

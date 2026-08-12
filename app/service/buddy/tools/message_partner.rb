@@ -29,11 +29,25 @@ Buddy::Tools.register(
     This sends it NOW. A message they want delivered LATER is the same message
     on a delay, and both forms exist - don't decline one and don't send it early
     instead:
-    - At a time ("in five minutes", "at 4", "tonight") - `schedule_reminder`
-      with `notify` set to them, and `text` written as the note itself.
+    - At a time ("send it to her in five minutes", "tell him at 4") -
+      `schedule_reminder` with `notify` set to them, and `text` written as the
+      note itself.
     - When something HAPPENS ("when someone's at the door", "the next time a
       deploy finishes") - `remind_when` with `notify` set to them.
     Either way it arrives from this person, exactly as it would have here.
+
+    A DELAY IS IN THE INSTRUCTION, NEVER IN THE NOTE. The only thing that makes
+    it a later message is them telling you when to SEND it. A time sitting
+    inside what they want said is part of the message, and holding the message
+    until then is how it arrives too late to be any use:
+    - "Tell Rocco I'll make supper at 6:00 tonight" - send it NOW. The 6:00 is
+      when supper is. Delivering this at 6:00 tells him at supper time that
+      supper is at supper time. (This one really happened - prod 3303.)
+    - "Tell Chelsea I'm leaving at 4" - now, it's content.
+    - "Remind Chelsea at 4 that I'm leaving" - `schedule_reminder`, it's framing.
+    - "Let mom know the flight lands tomorrow" - now.
+    When the sentence carries one time and you can't place it, it's content.
+    Send it. They can always ask you to hold the next one.
 
     This is one-way. If the user wants an ANSWER back, use ask_partner (open
     question), ask_partner_choice (pick one), or ask_partner_multi (pick any).

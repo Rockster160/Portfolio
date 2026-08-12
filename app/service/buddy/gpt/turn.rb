@@ -417,7 +417,10 @@ module Buddy
         # resolves; everything asked for after that point is queued behind it
         # rather than going out with this reply.
         @gate_kind = nil
-        nudged     = false
+        # Whether this turn READ `recent_actions` rather than answering about
+        # its own doings from memory. See disputed_action?.
+        @read_actions = false
+        nudged        = false
 
         loop do
           rounds += 1
@@ -561,6 +564,7 @@ module Buddy
         # already finished and the slowest part of the turn would still look
         # like nothing was happening.
         note_progress(name, call[:arguments])
+        @read_actions ||= name == ContextTool::NAME && ContextTool.serves?(call[:arguments], :recent_actions)
         reader = read_tools[name]
         return reader.call(call[:arguments]) if reader
         # Silent tools already ran as their call arrived (see run_round).
@@ -722,6 +726,71 @@ module Buddy
         !body.sub(LEADING_MOOD_RX, "").match?(GREETING_OPENER_RX)
       end
 
+      # They are telling Buddy it didn't do the thing it said it did.
+      #
+      # Four times over two days, and the answer was written without looking
+      # every time. Prod 3129 "Oh you didn't do anything" got "Ahh, nope, I
+      # did." off nothing. Prod 3208 "That's not correct. That's the laundry
+      # button being pressed" got "I've got a watch on the dryer stop call
+      # already" when the watch really was on the button. Prod 3237 "You just
+      # copied what you said before without actually running the task" was
+      # right. Prod 3336 "I don't think you actually moved it to home. I think
+      # that's a lie" was WRONG - the refile had happened - and Buddy agreed
+      # anyway and invented a reason contradicting its own receipt.
+      #
+      # Note which way those cut: two arguments and two capitulations. The
+      # error isn't a leaning, it's answering the question at all without the
+      # one thing that settles it. Both `personality.rb` and the get_context
+      # description already say to read `recent_actions` the moment this
+      # happens; prod 3336 came a day after that instruction shipped. So the
+      # check stops being something the model elects to do.
+      #
+      # Reads the REQUEST, like COMMAND_REQUEST_RX and for the same reason: the
+      # reply can be worded any number of ways, but a person disputing an
+      # action says so in a small handful of shapes.
+      DISPUTED_ACTION_RX = /
+          \byou\s+(?:didn(?:'|’)?t|did\s+not|never)\s+(?:actually\s+|really\s+|even\s+)?\w+
+        | \bi\s+don(?:'|’)?t\s+think\s+you\s+(?:actually\s+|really\s+|ever\s+)?\w+
+        | \b(?:that(?:'|’)?s|this\s+is|you(?:'|’)?re)\s+(?:a\s+)?(?:lie|lying|made\s+up)\b
+        | \bnothing\s+(?:actually\s+)?(?:ran|happened|got\s+done)\b
+        | \bdid\s+you\s+(?:actually|really|even)\b
+        | \byou\s+just\s+(?:copied|repeated|re-?said)\b
+        | \bwithout\s+(?:actually\s+)?(?:running|doing|calling|sending)\b
+        # A correction arrives at the FRONT of the message or not at all, so
+        # anchoring keeps this off an ordinary sentence that happens to contain
+        # the words. Prod 3208 opens exactly this way.
+        | \A\s*(?:no,?\s+|um,?\s+)?that(?:'|’)?s\s+not\s+(?:correct|right|true|what)\b
+      /xi
+
+      # Never on a self-initiated turn: nobody spoke, so there is no dispute to
+      # answer. A turn that already read `recent_actions` has done the thing
+      # this would ask for.
+      def disputed_action?
+        return false if self_initiated?
+        return false if @read_actions
+
+        @inbound.body.to_s.match?(DISPUTED_ACTION_RX)
+      end
+
+      CHECK_ACTIONS_NUDGE = <<~TXT.freeze
+        STOP. They are disputing something you said you did, and you answered
+        without looking it up. What you remember about this turn is the thing
+        in question, so it cannot also be the evidence.
+
+        Call `get_context` for `recent_actions` now, plus whichever section
+        holds the thing itself - `active_watches`, `stashed_ideas`,
+        `upcoming_reminders`, `running_timers`.
+
+        Then answer from what you read, not from what you expect:
+        - It IS there: say so plainly and name it, with the time it ran.
+        - It ISN'T there: "You're right, that didn't go through" - then do it.
+          One sentence. Never invent a reason why it didn't happen.
+
+        Agreeing with them is not the safe default. They can be wrong about
+        this, and conceding something that really did happen leaves them with a
+        record they no longer trust and a correction you made up to explain it.
+      TXT
+
       # Worth a corrective round: nothing was proposed, we haven't already spent
       # the one retry we allow, and the reply either claims an action, points at
       # output that isn't there, waves off news nobody has heard yet, or opened a
@@ -730,6 +799,12 @@ module Buddy
         return nil if nudged || proposals.any?
         return nil if rounds >= MAX_ROUNDS || Time.current > @deadline
         return NOTIFY_NUDGE if self_initiated? && spoken.to_s.match?(DISMISSAL_RX)
+        # Before the arms that read the reply. Those ask whether the words are
+        # backed; this one asks whether the words were ever checked, and on a
+        # disputed action that question comes first no matter how the reply is
+        # phrased - a confident "I did" and a meek "you're right" are the same
+        # failure when neither looked.
+        return CHECK_ACTIONS_NUDGE if disputed_action?
         return RETRY_NUDGE if unbacked_claim(spoken.to_s).present?
         # Three rounds of prompt wording have failed to make the greeting stick,
         # including one that said "not optional" in capitals. It is a cheap thing
@@ -1166,6 +1241,15 @@ module Buddy
         kind    = unbacked_claim(body) || (:commanded if !pending && commanded_action_unanswered?(body))
         return if kind.nil?
         return if executed_anything?(result)
+        # Everything below assumes the claim is about THIS turn, which is why
+        # "nothing executed" reads as "nothing happened". A turn that fetched
+        # `recent_actions` is answering from the record instead, and the true
+        # answer to "did you do that?" is frequently a completion sentence about
+        # an EARLIER turn: "yep, logged it at 6:03." Same carve-out QUESTION_RX
+        # makes for "did you turn the lights off?", extended to the case where
+        # Buddy went and looked rather than being asked outright — which
+        # CHECK_ACTIONS_NUDGE now pushes it into on every disputed action.
+        return if @read_actions
 
         Rails.logger.warn(
           "[Buddy::GPT::Turn] retracted unbacked #{kind}#{" over a pending row" if pending} " \

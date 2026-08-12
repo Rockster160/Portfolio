@@ -160,6 +160,30 @@ RSpec.describe ByteDailyAudit do
       expect(prompt).to include("byte_messages")
       expect(prompt).to include("FORMAT csv")
     end
+
+    # `bin/daily-audit` finds tonight's session by looking for the transcript
+    # that OPENS with this sentence, because there is a window every night when
+    # nothing else can tell it: run! clears the stored session id before
+    # posting, and the Mac only writes the new one once the turn finishes —
+    # several minutes later for a report that reads two days of traffic. Ask
+    # during that window and you get "no Claude session yet" about an audit
+    # that is running right then.
+    #
+    # So the opening sentence is a contract between a prompt and a shell
+    # script, with nothing but this test connecting them. Reword the first line
+    # and the fallback silently stops matching, which looks exactly like the
+    # bug it exists to fix.
+    describe "the sentence bin/daily-audit matches on" do
+      let(:marker) { "You are the daily audit for this app." }
+
+      it "opens the prompt" do
+        expect(prompt).to start_with(marker)
+      end
+
+      it "is what the script actually searches for" do
+        expect(Rails.root.join("bin/daily-audit").read).to include(marker)
+      end
+    end
   end
 
   describe ".run!" do

@@ -22,6 +22,14 @@ Buddy::Tools.register(
     to whoever asked, so they can see and cancel it before it goes. Leave
     `notify` off for themselves.
 
+    With `notify`, `at` comes from WHEN THEY SAID TO SEND IT and from nowhere
+    else. A time inside the note is part of the note. "Tell Rocco I'll make
+    supper at 6:00" is a message to pass along right now that happens to
+    mention 6:00 - taking the 6:00 as the send time delivers the news at the
+    moment it stops being news, which is what happened in prod 3303. If the
+    only clock time in the request sits inside what they want said, this is the
+    wrong tool: use `message_partner`.
+
     This is the LATER form. To tell someone something right now, that's
     `message_partner`; to send it when something HAPPENS rather than at a time
     ("when someone's at the door", "next time a deploy finishes"), that's
