@@ -1,0 +1,29 @@
+<div class="skinny-container">
+  <div class="btn-container">
+    <a href="<%= account_path %>" class="btn">Account</a>
+    <a href="<%= device_login_path %>" class="btn pull-right">New code</a>
+  </div>
+
+  <div class="device-login" data-device-login data-seconds-remaining="<%= @device_login.seconds_remaining %>">
+    <div class="device-login-title">Log in on another device</div>
+
+    <div class="device-login-qr">
+      <%= @qr_svg.html_safe %>
+    </div>
+    <p class="device-login-hint">Scan this with the other device's camera to sign in there.</p>
+
+    <div class="device-login-divider"><span>or</span></div>
+
+    <p class="device-login-hint">
+      Go to the login page on the other device, enter
+      <strong><%= current_user.username %></strong> as the username, and use this
+      in place of your password:
+    </p>
+    <div class="device-login-code"><%= @device_login.formatted_code %></div>
+
+    <div class="device-login-countdown" data-device-login-countdown></div>
+    <div class="device-login-expired">
+      This code has expired. <a href="<%= device_login_path %>">Generate a new one.</a>
+    </div>
+  </div>
+</div>

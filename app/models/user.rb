@@ -26,6 +26,7 @@ class User < ApplicationRecord
   has_many :api_keys, dependent: :destroy
   has_many :bowling_leagues, dependent: :destroy
   has_many :climbs, dependent: :destroy
+  has_many :device_login_tokens, dependent: :delete_all
   has_many :folders, dependent: :destroy
   has_many :pages, dependent: :destroy
   has_many :shared_pages, dependent: :destroy
@@ -327,9 +328,12 @@ class User < ApplicationRecord
   def self.attempt_login(username, password)
     user = by_username(username).first
 
-    return unless user.present? && user.authenticate(password)
+    return if user.blank?
+    return user if user.authenticate(password)
 
-    user
+    # A live device-login code stands in for the password, once. Checked
+    # after the real password so the normal path costs no extra query.
+    DeviceLoginToken.claim_code(user, password)
   rescue PG::CharacterNotInRepertoire, ArgumentError
     nil # Bad username passed
   end

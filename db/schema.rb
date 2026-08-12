@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_11_213508) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_12_012121) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -896,6 +896,19 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_11_213508) do
     t.datetime "updated_at", null: false
   end
 
+  create_table "device_login_tokens", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "token", null: false
+    t.string "code", null: false
+    t.datetime "expires_at", null: false
+    t.datetime "used_at"
+    t.integer "attempts", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["token"], name: "index_device_login_tokens_on_token", unique: true
+    t.index ["user_id"], name: "index_device_login_tokens_on_user_id"
+  end
+
   create_table "emails", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.integer "direction", null: false
@@ -1732,6 +1745,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_11_213508) do
   add_foreign_key "chores", "users", column: "created_by_user_id"
   add_foreign_key "contact_tags", "contacts"
   add_foreign_key "contact_tags", "tags"
+  add_foreign_key "device_login_tokens", "users"
   add_foreign_key "emails", "users"
   add_foreign_key "google_accounts", "users"
   add_foreign_key "household_icons", "chore_households", on_delete: :cascade

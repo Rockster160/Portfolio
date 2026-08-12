@@ -219,31 +219,46 @@ self.addEventListener("push", (evt) => {
   data.icon = data.icon || "/byte_favicon/byte-detail.png";
   data.badge = data.badge || "/byte_favicon/byte-detail.png";
 
-  const badgeCount = parseInt(data.data?.count || 0);
-  if (navigator.setAppBadge) {
-    if (badgeCount > 0) navigator.setAppBadge(badgeCount);
-    else navigator.clearAppBadge();
-  }
+  evt.waitUntil((async () => {
+    // One foreground check, used for both decisions below.
+    //
+    // Broader match: no `type` filter (iOS standalone PWA sometimes
+    // isn't matched as "window"), no `includeUncontrolled` gating
+    // (installed PWA sessions can slip past the controller check on
+    // the first push after install). `focused` covers the case where
+    // iOS hasn't updated visibilityState yet during the push handoff.
+    const clients = await self.clients.matchAll({ includeUncontrolled: true });
+    const inForeground = clients.some((c) =>
+      c.visibilityState === "visible" || c.focused === true
+    );
 
-  if (data.title || data.body) {
-    evt.waitUntil((async () => {
-      // Suppress OS notification when the PWA is already open — the
-      // in-app UI already renders the message via WebSocket broadcast,
-      // so a system banner just double-alerts.
-      //
-      // Broader match: no `type` filter (iOS standalone PWA sometimes
-      // isn't matched as "window"), no `includeUncontrolled` gating
-      // (installed PWA sessions can slip past the controller check on
-      // the first push after install). `focused` covers the case where
-      // iOS hasn't updated visibilityState yet during the push handoff.
-      const clients = await self.clients.matchAll({ includeUncontrolled: true });
-      const inForeground = clients.some((c) =>
-        c.visibilityState === "visible" || c.focused === true
-      );
-      if (inForeground) return;
+    // The badge belongs to whichever side can actually see the thread.
+    //
+    // This used to run unconditionally, ahead of the foreground check, so a
+    // push that correctly skipped its banner because the app was open still
+    // stamped the icon — with a server count that includes the conversation
+    // being read right then. The page can't undo it either: it repaints the
+    // badge from the tracker for OTHER conversations, which by construction
+    // knows nothing about the one on screen. So the number stuck, describing
+    // messages the person was looking at.
+    //
+    // With the app open, the page owns the badge (paintAppBadge in unread.js);
+    // closed, this is the only thing that can set it, which is the whole
+    // reason the count rides on the push.
+    if (!inForeground && navigator.setAppBadge) {
+      const badgeCount = parseInt(data.data?.count || 0);
+      if (badgeCount > 0) navigator.setAppBadge(badgeCount);
+      else navigator.clearAppBadge();
+    }
+
+    // Suppress the OS notification when the PWA is already open — the in-app
+    // UI already renders the message via the WebSocket broadcast, so a system
+    // banner just double-alerts.
+    if (inForeground) return;
+    if (data.title || data.body) {
       await self.registration.showNotification(data.title || "Byte", data);
-    })());
-  }
+    }
+  })());
 });
 
 self.addEventListener("notificationclick", (evt) => {

@@ -67,6 +67,17 @@ class Rack::Attack
     end
   }
 
+  # Throttle GET requests to /scan/:token by IP address
+  #
+  # The token itself is 32 urlsafe-base64 characters, so guessing one is not
+  # the concern — hammering the endpoint to enumerate is. A real scan is one
+  # request, so anything past a handful in a window is not a person scanning.
+  #
+  # Key: "rack::attack:#{Time.now.to_i/:period}:device_login/ip:#{req.ip}"
+  throttle("device_login/ip", limit: 10, period: 1.minute) { |req|
+    req.ip if req.path.start_with?("/scan/") && req.get?
+  }
+
   ### Block Cookieless Scrapers ###
 
   # /recipes/print requires a logged-in session, so any legitimate visitor

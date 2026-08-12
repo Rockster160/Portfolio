@@ -1,4 +1,8 @@
 module AuthHelper
+  # Paths that render data rather than a page. Nothing here is somewhere a
+  # person can be dropped after logging in.
+  NON_PAGE_EXTENSIONS = /\.(json|js|csv|xml|pdf|png|jpe?g|gif|svg|ico|txt|webmanifest|map)\z/i
+
   def jwt
     return if !user_signed_in? || current_user.guest?
 
@@ -34,7 +38,36 @@ module AuthHelper
   end
 
   def previous_url(fallback=nil)
-    session[:forwarding_url] || fallback || lists_path
+    navigable_path(session[:forwarding_url]) || fallback || lists_path
+  end
+
+  # Sessions minted before the filter below existed are still carrying data
+  # URLs, and a redirect target should never be able to walk off the app.
+  def navigable_path(path)
+    return if path.blank?
+    return unless path.start_with?("/") && !path.start_with?("//")
+    return if path.split("?").first.match?(NON_PAGE_EXTENSIONS)
+
+    path
+  end
+
+  # Only a real page navigation is somewhere worth coming back to. Background
+  # fetches hit the same `authorize_user` filter that pages do, so without this
+  # a PWA polling /chores/icons/signature or /agenda/sync/bootstrap while its
+  # session lapsed leaves that URL as the post-login destination — and you log
+  # in and land on raw JSON.
+  def navigable_request?
+    return false unless request.get?
+    return false if request.xhr?
+
+    # Browsers send Sec-Fetch-Dest on everything; only a top-level document
+    # navigation says "document" (fetch and XHR say "empty", frames say
+    # "iframe"). Non-browser clients omit it, so absence can't disqualify —
+    # the format check below is what carries those.
+    dest = request.headers["Sec-Fetch-Dest"]
+    return false if dest.present? && dest != "document"
+
+    request.format.html?
   end
 
   def controller_action
@@ -42,9 +75,10 @@ module AuthHelper
   end
 
   def store_previous_url
-    return unless request.get? # Only store GET requests
+    return unless navigable_request? # Only store page navigations
     return if controller_action == "users#account" # Don't store Account page
-    return if controller_action.match?(/^users\/(sessions|registrations)/) # Don't store login pages
+    # Don't store login pages, or the single-use QR/code pages either side of them
+    return if controller_action.match?(%r{^users/(sessions|registrations|device_logins)})
     return if user_signed_in? && !guest_account? # Don't store if already logged in
 
     session[:forwarding_url] = request.fullpath || request.original_url

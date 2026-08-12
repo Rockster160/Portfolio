@@ -1,0 +1,86 @@
+// The QR / numeric code page at /account/device_login.
+//
+// The QR always sits on its own white plate. Scanners need dark modules on a
+// light field with a quiet zone around them, and the generated SVG is bare
+// black paths with no background of its own — on the dark-mode body it would
+// be black-on-black and unscannable.
+
+.device-login {
+  text-align: center;
+  padding: 10px 0 30px;
+
+  &.expired {
+    .device-login-qr,
+    .device-login-code {
+      opacity: 0.25;
+      filter: grayscale(1);
+    }
+
+    .device-login-expired {
+      display: block;
+    }
+  }
+}
+
+.device-login-title {
+  font-size: 24px;
+  margin-bottom: 18px;
+}
+
+.device-login-qr {
+  display: inline-block;
+  background: #fff;
+  padding: 14px;
+  border-radius: 8px;
+  line-height: 0;
+
+  svg {
+    display: block;
+    width: 240px;
+    height: 240px;
+  }
+}
+
+.device-login-hint {
+  max-width: 340px;
+  margin: 12px auto 0;
+  font-size: 14px;
+  opacity: 0.75;
+}
+
+.device-login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 340px;
+  margin: 26px auto 20px;
+  opacity: 0.4;
+
+  &::before,
+  &::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: currentColor;
+  }
+}
+
+.device-login-code {
+  font-family: monospace;
+  font-size: 40px;
+  letter-spacing: 4px;
+  margin: 14px 0 0;
+  user-select: all;
+}
+
+.device-login-countdown {
+  margin-top: 20px;
+  font-size: 14px;
+  opacity: 0.6;
+}
+
+.device-login-expired {
+  display: none;
+  margin-top: 20px;
+  font-size: 14px;
+}

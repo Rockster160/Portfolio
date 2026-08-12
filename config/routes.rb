@@ -336,6 +336,9 @@ Rails.application.routes.draw do
   end
 
   get :account, controller: :users
+  get "account/device_login" => "users/device_logins#show", as: :device_login
+  # /scan/:token — public, single-use sign-in link carried by the QR code.
+  get "/scan/:token" => "users/device_logins#claim", as: :device_login_claim
   resources :api_keys, except: :show
   resources :users, only: [:new, :create, :update]
   resources :lists do

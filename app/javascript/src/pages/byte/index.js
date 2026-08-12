@@ -60,6 +60,7 @@ import { initBuddyKiosk } from "./buddy/kiosk";
 import { toggleBuddyMuted, isBuddyMuted } from "./buddy/alarm";
 import {
   UnreadTracker,
+  countsAsUnread,
   paintDrawerBadge,
   paintAppBadge,
   initUnreadNotices,
@@ -208,6 +209,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   let messages = [];
   let atBottom = true;
   let unreadCount = 0;
+  // Something readable has landed in the thread on screen since the last time
+  // the server was told this conversation was read.
+  //
+  // The server's unread count only ever moves on `POST .../read`, and that only
+  // fired when a conversation was OPENED. A message arriving in the thread
+  // already in front of you was therefore read by the person and never by the
+  // record: `last_read_at` stayed put, the count kept climbing, and every later
+  // push stamped the home-screen icon with a number for messages that had been
+  // sitting on screen for hours. Conversation 21 was holding six of them.
+  let unseenInCurrent = false;
   let hasMore = true;
   let loadingOlder = false;
   // Declared up here (not next to scrollToBottom) because hydrateForConversation
@@ -1312,6 +1323,28 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateJumpBtn();
   }
 
+  // Tell the server the open thread has been caught up on, and re-stamp the
+  // app icon.
+  //
+  // "Caught up" needs all three: something new arrived, the window is actually
+  // being looked at, and the thread is scrolled to the bottom. A message that
+  // lands while the app is backgrounded, or while they're reading history
+  // further up, has NOT been read — marking it would delete the one signal
+  // telling them to come back.
+  //
+  // The badge repaint has to be here rather than only on the tracker's
+  // onChange. That fires for conversations the person is NOT in, so by
+  // construction it never fires for this one — which is why the icon kept a
+  // number that the app itself showed nowhere.
+  function markCurrentReadIfCaughtUp() {
+    if (!unseenInCurrent || !atBottom) return;
+    if (document.visibilityState !== "visible") return;
+
+    unseenInCurrent = false;
+    markConversationRead(currentConversationId);
+    paintAppBadge(drawerUnread.total());
+  }
+
   function updateJumpBtn() {
     if (!jumpBtn) return;
     const shouldShow = !atBottom;
@@ -1324,7 +1357,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   thread.addEventListener("scroll", () => {
     atBottom = measureAtBottom();
-    if (atBottom) clearUnread();
+    if (atBottom) {
+      clearUnread();
+      // Scrolling down to the newest message is reading it.
+      markCurrentReadIfCaughtUp();
+    }
     updateJumpBtn();
     if (thread.scrollTop < LOAD_TRIGGER_PX) maybeLoadOlder();
   });
@@ -2648,6 +2685,13 @@ document.addEventListener("DOMContentLoaded", async () => {
           // the pet or the question card over the buttons.
           buddyKiosk?.onLive(msg);
           armIdleFaceReset(); // a new message is activity
+          // Landed in the thread on screen. If they're looking at it and
+          // sitting at the bottom, that's read — say so, so the icon doesn't
+          // keep a count for something they've already seen.
+          if (countsAsUnread(msg)) {
+            unseenInCurrent = true;
+            markCurrentReadIfCaughtUp();
+          }
         } else if (drawerUnread.add(convId, msg)) {
           // Genuinely new and genuinely settled — `add` returns false for a
           // re-broadcast of something already counted, and for anything still
@@ -2767,6 +2811,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       startPresence();
       scheduleDrain();
       refetchHistory();
+      // Coming back to the app IS opening it, even though nothing navigated
+      // and nothing switched. Anything that arrived in this thread while it
+      // was backgrounded is on screen the moment they look, so this is the
+      // point the record has to catch up — and the point the icon's number
+      // stops being true.
+      markCurrentReadIfCaughtUp();
       requestShellRefresh();
       checkForServiceWorkerUpdate();
       // Re-validate push on every return-to-app (mirrors whisper.js): recovers
