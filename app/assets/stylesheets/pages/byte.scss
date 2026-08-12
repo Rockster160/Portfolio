@@ -728,7 +728,7 @@ html.html-ctr-byte body {
     align-items: center;
     gap: 5px;
     margin-bottom: 4px;
-    font-size: 11.5px;
+    font-size: 82%;
     font-weight: 600;
 
     &[hidden] { display: none; } // author `display` beats the hidden attr
@@ -745,7 +745,8 @@ html.html-ctr-byte body {
     .byte-msg-peer-arrow {
       color: var(--bs-text);
       opacity: 0.5;
-      font-size: 11px;
+      // Of .byte-msg-peer, which is already a percentage of the bubble.
+      font-size: 96%;
       line-height: 1;
 
       &[hidden] { display: none; }
@@ -1240,7 +1241,10 @@ html.html-ctr-byte body {
     display: flex;
     justify-content: flex-end;
     gap: 6px;
-    font-size: 10.5px;
+    // 75% of the bubble (10.5px at the default). Someone who turned the size
+    // up did it to read the thread, and a timestamp pinned at 10.5px is the
+    // part they still can't read.
+    font-size: 75%;
     color: rgba(255, 255, 255, 0.6);
     margin-top: 2px;
 
@@ -5034,7 +5038,11 @@ $suki_expr_aliases: (
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 14px;
+  // The checklist sits INSIDE the bubble, so 100% is the bubble's own scaled
+  // size — 14px at the design default, and the same as the prose above it at
+  // any other. Hard-coding 14px is what left the tool rows at one size while
+  // the reply that introduced them grew.
+  font-size: 100%;
   cursor: pointer;
   transition: background 100ms ease, border-color 100ms ease;
 
@@ -5097,7 +5105,8 @@ $suki_expr_aliases: (
   // little longer, so this sits a half-point under where it was.
   .byte-msg-action-kind {
     display: inline-block;
-    font-size: 8.5px;
+    // 61% of the row (8.5px at the default).
+    font-size: 61%;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -5118,7 +5127,7 @@ $suki_expr_aliases: (
   // that isn't the current user, a past completion time, extra function
   // args being passed). Muted so the title stays the anchor.
   .byte-msg-action-sublabel {
-    font-size: 11.5px;
+    font-size: 82%;
     line-height: 1.3;
     opacity: 0.65;
     word-break: break-word;
@@ -5129,14 +5138,14 @@ $suki_expr_aliases: (
   }
   .byte-msg-action-glyph {
     opacity: 0.7;
-    font-size: 15px;
+    font-size: 107%;
   }
   .byte-msg-action-error {
-    font-size: 11.5px;
+    font-size: 82%;
     color: #F26B6B;
   }
   .byte-msg-action-expired {
-    font-size: 11px;
+    font-size: 79%;
     opacity: 0.6;
     font-style: italic;
   }
@@ -5234,7 +5243,10 @@ $suki_expr_aliases: (
   border: 1px solid rgba(63, 160, 255, 0.4);
   background: rgba(63, 160, 255, 0.16);
   color: #CFE6FF;
-  font-size: 14px;
+  // Scales with the rows it submits. Safe to grow because its size comes from
+  // padding rather than a fixed box — unlike the ✕ buttons further down, which
+  // sit in a 26px square and stay put.
+  font-size: 100%;
   font-weight: 600;
   cursor: pointer;
   transition: background 100ms ease, opacity 100ms ease;
@@ -5264,11 +5276,12 @@ $suki_expr_aliases: (
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 14px;
+  // Same component as .byte-msg-action-row, same reason for the percentage.
+  font-size: 100%;
 
   .byte-msg-manage-glyph {
     flex-shrink: 0;
-    font-size: 16px;
+    font-size: 114%;
     opacity: 0.85;
   }
   .byte-msg-manage-body {
@@ -5284,7 +5297,7 @@ $suki_expr_aliases: (
     word-break: break-word;
   }
   .byte-msg-manage-sublabel {
-    font-size: 11.5px;
+    font-size: 82%;
     line-height: 1.3;
     opacity: 0.65;
     word-break: break-word;
@@ -5315,7 +5328,9 @@ $suki_expr_aliases: (
     &.is-undo {
       padding: 4px 12px;
       border-radius: 8px;
-      font-size: 12.5px;
+      // A padded text button, so it scales. Its ✕ sibling above does not: that
+      // one is a fixed 26px square and a bigger glyph would spill out of it.
+      font-size: 89%;
       font-weight: 600;
       color: #A8CFFF;
       background: rgba(63, 160, 255, 0.14);
@@ -5516,7 +5531,10 @@ $suki_expr_aliases: (
   [data-body] {
     display: inline-block;
     padding: 3px 12px;
-    font-size: 11.5px;
+    // 82% of the bubble's own size (11.5px at the design default), NOT 11.5px.
+    // A fixed px here overrides the scaled font-size on .byte-msg, so turning
+    // the reader's size up moved the messages and left every chip where it was.
+    font-size: 82%;
     font-weight: 500;
     letter-spacing: 0.03em;
     color: rgba(231, 238, 251, 0.65);
@@ -5558,7 +5576,9 @@ $suki_expr_aliases: (
   .byte-msg-actions { display: none; }
 
   [data-body] {
-    font-size: 11.5px;
+    // Percentage, so the receipt rides --byte-font-scale with the rest of the
+    // thread. 82% is 11.5px at the design default.
+    font-size: 82%;
     font-weight: 500;
     letter-spacing: 0.03em;
     line-height: 1.35;
@@ -5599,7 +5619,9 @@ $suki_expr_aliases: (
   // time: smaller, dimmer, and never bold, so the receipt stays the headline.
   .byte-msg-activity-detail {
     margin-top: 2px;
-    font-size: 10px;
+    // 71% of the bubble (10px at the default). A child of .byte-msg rather
+    // than of [data-body], so this is a percentage of the anchor too.
+    font-size: 71%;
     font-weight: 400;
     line-height: 1.3;
     letter-spacing: 0.02em;
