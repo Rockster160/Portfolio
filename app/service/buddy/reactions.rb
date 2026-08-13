@@ -1,14 +1,23 @@
 module Buddy
-  # Tapbacks on a relayed message — the small gesture that answers something
-  # without being a reply. A 👍 on "dinner's ready", a ❤️ on the answer that
-  # came back.
+  # Tapbacks — the small gesture that answers something without being a reply.
+  # A 👍 on "dinner's ready", a ❤️ on the answer that came back, a 😂 on
+  # something Byte said.
   #
-  # A relayed message exists TWICE (see CompanionRelay#bridge!): the recipient's
-  # copy in their thread and the sender's record in theirs. A reaction is one
-  # act by one person and has to be visible to both of them, so it is written to
-  # BOTH rows and each owner is broadcast their own. The two are linked by
-  # `metadata["relay_twin"]`, a plain message id — set at bridge time going
-  # forward, backfilled for the ones already sent.
+  # ANY message can take one: what the other person relayed, what you sent, what
+  # Buddy replied, a tool receipt, an action card. Reacting to Buddy is a note
+  # to yourself as much as anything — it needs no answer, and it deliberately
+  # gets none. This writes metadata and broadcasts; it never enters
+  # ByteMessageIntake or GPT::Turn, so nothing runs a turn off the back of it.
+  # The model can't see one either: Buddy::GPT::History reads named keys
+  # (`buddy_action`, `buddy_mood`, `kind`) and never the whole envelope.
+  #
+  # A RELAYED message is the one case that exists TWICE (see
+  # CompanionRelay#bridge!): the recipient's copy in their thread and the
+  # sender's record in theirs. A reaction is one act by one person and has to be
+  # visible to both of them, so it is written to BOTH rows and each owner is
+  # broadcast their own. The two are linked by `metadata["relay_twin"]`, a plain
+  # message id — set at bridge time going forward, backfilled for the ones
+  # already sent. Everything else has no twin and simply doesn't take that path.
   #
   # Reactions live in the message's jsonb envelope alongside everything else it
   # carries (buttons, action state, peer identity). Nothing ever queries FOR a
@@ -54,12 +63,6 @@ module Buddy
         "\"#{::IconPool.name_for(v) || v}\""
       end
 
-      # Only messages that passed between two people. Buddy's own replies, tool
-      # receipts and action cards are not conversation with anybody.
-      def reactable?(message)
-        message.is_a?(ByteMessage) && message.metadata.to_h["kind"].to_s == "buddy_relay"
-      end
-
       def of(message)
         list = message.metadata.to_h["reactions"]
         list.is_a?(Array) ? list : []
@@ -70,7 +73,6 @@ module Buddy
       # takes it off, tapping a different one replaces it.
       def react!(message:, user:, emoji:)
         raise ArgumentError, "#{emoji} isn't something you can react with" unless allowed?(emoji, user: user)
-        raise ArgumentError, "that message can't be reacted to" unless reactable?(message)
 
         added = false
         list  = nil
@@ -135,11 +137,16 @@ module Buddy
         message.update!(metadata: message.metadata.to_h.merge("reactions" => list))
       end
 
+      # `update: true` says this message ALREADY ARRIVED and only its metadata
+      # moved. The client repaints the bubble and stops there — no unread count,
+      # no "new message" notice, no re-triggering the pet's mood off an old
+      # reply, no popping that old bubble back up on the kiosk. Nothing was
+      # said; something was marked.
       def broadcast(message)
         MonitorChannel.broadcast_to(message.user, {
           id:      :byte,
           channel: :byte,
-          data:    { kind: :message, message: message.reload.as_wire },
+          data:    { kind: :message, message: message.reload.as_wire, update: true },
         })
       end
 
@@ -153,6 +160,12 @@ module Buddy
           title: "#{user.first_name} reacted #{label_for(emoji, user: user)} to \"#{twin.body.to_s.truncate(80)}\"",
           tag:   "byte-reaction-#{twin.id}-#{Time.current.to_i}",
           users: [twin.user],
+          # The CURRENT unread total, which a reaction doesn't change — so the
+          # home-screen badge is left exactly as it was. Sent rather than
+          # omitted because `byte_worker.js` reads a missing count as zero and
+          # CLEARS the badge, which would wipe real unread messages off the icon
+          # every time somebody left a 👍.
+          data:  { count: ByteConversation.unread_total_for(twin.user) },
         )
       rescue StandardError => e
         Buddy::Errors.report(section: "reactions.notify", exception: e, user: twin.user)

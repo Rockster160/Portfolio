@@ -1,5 +1,9 @@
 // Tapbacks on a message that passed between two people (Buddy::Reactions).
 //
+// Any message takes one — theirs, yours, Buddy's, a tool receipt. Reacting to
+// Buddy is deliberately inert: the server writes metadata and broadcasts, and
+// nothing dispatches a turn, so it never answers a tapback.
+//
 // Two surfaces, one server call: the long-press / right-click menu offers the
 // six you last used plus a "+" into the full icon picker, and any reaction
 // already on a bubble renders as a pill you can tap to join or take back. Both
@@ -89,11 +93,6 @@ export function pickReaction(messageId, { onNotice } = {}) {
   });
 }
 
-// A relayed message is the only thing with someone on the other side to see it.
-export function reactable(message) {
-  return message?.metadata?.kind === "buddy_relay";
-}
-
 // One pill per distinct reaction, in the order they were first used, carrying
 // who used it. Two people, so a count only ever means "both of us" — but it's
 // rendered from the real length rather than assumed.
@@ -122,7 +121,10 @@ export function renderReactions(container, message, { userId, onNotice } = {}) {
   const list = Array.isArray(message?.metadata?.reactions)
     ? message.metadata.reactions
     : [];
-  if (!reactable(message) || list.length === 0) {
+  // No row until someone leaves one. The gesture that leaves the first is the
+  // long-press menu, so an empty row would be a permanent affordance for
+  // something almost never done.
+  if (list.length === 0) {
     container.replaceChildren();
     container.hidden = true;
     return;

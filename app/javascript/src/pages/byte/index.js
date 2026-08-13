@@ -53,7 +53,6 @@ import { renderForm } from "./message_actions/form";
 import { initMessageContextMenu } from "./message_actions/context_menu";
 import {
   renderReactions,
-  reactable,
   seedReactionRecents,
 } from "./message_actions/reactions";
 import { renderMarkdown, escapeHtml, escapeAttr } from "./markdown";
@@ -117,12 +116,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   const composer = app.querySelector("[data-byte-composer]");
   const input = app.querySelector("[data-byte-input]");
   const originalPlaceholder = input?.getAttribute("placeholder") ?? "";
-  // True while the composer has focus (keyboard up / user typing). In that
-  // state we pin to the bottom UNCONDITIONALLY: the user is on the newest
-  // message and the keyboard must never cover it. This bypasses the atBottom
-  // heuristic, which flips false transiently mid-keyboard-animation and was
-  // stranding the thread scrolled up under the keyboard.
-  const composerFocused = () => document.activeElement === input;
+  // True while the user is COMPOSING. In that state we pin to the bottom
+  // UNCONDITIONALLY: they're on the newest message and the keyboard must never
+  // cover it. This bypasses the atBottom heuristic, which flips false
+  // transiently mid-keyboard-animation and was stranding the thread scrolled up
+  // under the keyboard.
+  //
+  // Holding focus is not the same as composing. Clicking anywhere in the thread
+  // also focuses the composer — a desktop convenience so you can just start
+  // typing — and reading that as "composing" is what dragged a scrolled-up
+  // reader to the bottom on EVERY click, including the click that starts a text
+  // selection. Every rule below means focus that was reached for.
+  let focusedIncidentally = false;
+  const composerFocused = () =>
+    document.activeElement === input && !focusedIncidentally;
   const status = app.querySelector("[data-byte-status]");
   const syncBadge = app.querySelector("[data-byte-sync]");
   const reloadBtn = app.querySelector("[data-byte-reload]");
@@ -599,22 +606,17 @@ document.addEventListener("DOMContentLoaded", async () => {
       renderForm(formEl, message);
     }
 
-    // Tapbacks. The pill row is rebuilt from the message every paint; the
-    // dataset flags are what the long-press menu reads to decide whether to
-    // offer the picker and which emoji to show as already yours.
+    // Tapbacks. Every message takes one — theirs, yours, Buddy's, a receipt —
+    // so the only thing stamped here is which one is already yours, for the
+    // long-press menu to show as picked. The pill row itself is rebuilt from
+    // the message on every paint.
     const reactions = Array.isArray(message?.metadata?.reactions)
       ? message.metadata.reactions
       : [];
-    if (reactable(message)) {
-      node.dataset.reactable = "true";
-      const own = reactions.find((r) => Number(r.user_id) === currentUserId);
-      if (own) {
-        node.dataset.myReaction = own.emoji;
-      } else {
-        delete node.dataset.myReaction;
-      }
+    const own = reactions.find((r) => Number(r.user_id) === currentUserId);
+    if (own) {
+      node.dataset.myReaction = own.emoji;
     } else {
-      delete node.dataset.reactable;
       delete node.dataset.myReaction;
     }
     renderReactions(node.querySelector("[data-reactions]"), message, {
@@ -2356,7 +2358,18 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     const sel = window.getSelection && window.getSelection();
     if (sel && sel.toString().length > 0) return; // don't steal focus mid-selection
+    // Focus as a convenience, not because they asked to type. Marked BEFORE the
+    // call, since the focus handler and the hero's resize both read it.
+    focusedIncidentally = true;
     input.focus();
+  });
+
+  // Reaching for the composer itself — or leaving it — settles the question.
+  input.addEventListener("pointerdown", () => {
+    focusedIncidentally = false;
+  });
+  input.addEventListener("blur", () => {
+    focusedIncidentally = false;
   });
 
   // The Buddy hero grows/shrinks over a 220ms CSS transition when the
@@ -2371,10 +2384,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (e.propertyName === "min-height" || e.propertyName === "max-height")
       repinIfAtBottom();
   });
-  // Focusing the composer (keyboard opening) always snaps to the bottom, no
-  // matter where the reader was — that's the whole point of tapping to type.
+  // Reaching for the composer (keyboard opening) snaps to the bottom, no matter
+  // where the reader was — that's the whole point of tapping to type. Focus
+  // picked up incidentally from a click in the thread does NOT: they clicked a
+  // message they were reading, and yanking them away from it is the bug.
   input.addEventListener("focus", () => {
-    scrollToBottom("auto");
+    if (composerFocused()) scrollToBottom("auto");
     armIdleFaceReset(); // interacting with the composer is activity
   });
   input.addEventListener("blur", repinIfAtBottom);
@@ -2723,6 +2738,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             convId === currentConversationId ? messages : loadMessages(convId);
           const updated = upsertPersisted(convId, targetList, msg);
           if (convId === currentConversationId) messages = updated;
+        }
+        // The message already arrived; only its metadata moved (a reaction
+        // landed on it). Repaint the bubble that's on screen and stop. It is
+        // not new, so it must not count toward unread, raise a notice, make the
+        // pet re-wear an old reply's mood, or pop that old bubble back up on
+        // the kiosk. And only if it IS on screen: appending a message from
+        // further back than the loaded window would drop it into the thread out
+        // of nowhere. The cache above already has it either way.
+        if (data.update) {
+          if (convId === currentConversationId && nodeForServerMessage(msg)) {
+            upsertMessage(msg);
+          }
+          return;
         }
         if (convId === currentConversationId) {
           receiveMessage(msg);

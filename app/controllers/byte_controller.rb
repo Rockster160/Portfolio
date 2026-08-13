@@ -229,17 +229,18 @@ class ByteController < ApplicationController
     render json: { ok: true, list: list.name }
   end
 
-  # A tapback on a message that passed between two people. Toggling — the same
-  # emoji again takes it back off. Both copies of the relay are written and both
-  # owners are broadcast, so the reaction lands on the other person's screen the
-  # same way the message did.
+  # A tapback on any message in your own thread — theirs, yours, Buddy's, a tool
+  # receipt. Toggling: the same one again takes it back off. Owning the message
+  # is the whole gate. Where the message is half of a relay, both copies are
+  # written and both owners broadcast, so it lands on the other person's screen
+  # the same way the message did; everything else is one row and stays local.
+  #
+  # Deliberately inert beyond that — no turn is dispatched and Buddy is told
+  # nothing, so reacting to something it said doesn't make it answer.
   def react_message
     message = current_user.byte_messages.find_by(id: params[:id])
     return render(json: { errors: ["that message isn't yours"] }, status: :not_found) if message.nil?
 
-    unless Buddy::Reactions.reactable?(message)
-      return render(json: { errors: ["there's no one on the other side of that one to see it"] }, status: :unprocessable_entity)
-    end
     unless Buddy::Reactions.allowed?(params[:emoji], user: current_user)
       return render(json: { errors: ["that isn't something you can react with"] }, status: :unprocessable_entity)
     end

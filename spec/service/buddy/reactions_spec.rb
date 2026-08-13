@@ -36,12 +36,71 @@ RSpec.describe Buddy::Reactions do
     ]
   end
 
+  # A pick-one question: a bridged message on both sides, with answer buttons
+  # attached to the recipient's copy from inside bridge!.
+  def asked_choice
+    relay = BuddyRelay.create!(
+      from_user: sender, to_user: recipient, from_conversation: sender_convo,
+      kind: :ask_choice, body: "watch something while we eat?",
+      options: %w[yes no], status: :pending
+    )
+    Buddy::CompanionRelay.deliver!(relay)
+    relay
+  end
+
   describe "linking the two copies" do
     it "points each copy at the other" do
       theirs, mine = relayed
 
       expect(theirs.reload.metadata["relay_twin"]).to eq(mine.id)
       expect(mine.metadata["relay_twin"]).to eq(theirs.id)
+    end
+
+    # The choice-question path is the one that runs a block inside bridge! to
+    # attach the answer buttons, and that block does its own metadata `update!`.
+    # If the twin stamp were written before it, or read off a stale object, the
+    # question card would be the one thing in the thread whose reaction went
+    # nowhere — and it's the message most likely to get one.
+    it "links a choice question, buttons and all" do
+      relay = asked_choice
+      question = recipient_convo.byte_messages.order(:id).last
+      copy     = sender_convo.byte_messages.order(:id).last
+
+      expect(question.metadata["relay_twin"]).to eq(copy.id)
+      expect(copy.metadata["relay_twin"]).to eq(question.id)
+      # The buttons survived the stamp — both writes merged rather than replaced.
+      expect(question.metadata["tool_name"]).to eq("buddy_relay_answer")
+      expect(question.metadata["buttons"].length).to eq(2)
+      expect(relay.reload.to_byte_action).to be_present
+    end
+
+    # End to end, on the shape the question actually has.
+    it "carries a reaction on a choice question across to the asker" do
+      asked_choice
+      question = recipient_convo.byte_messages.order(:id).last
+      copy     = sender_convo.byte_messages.order(:id).last
+      pushes.clear
+
+      described_class.react!(message: question, user: recipient, emoji: "👍")
+
+      expect(described_class.of(copy.reload).pluck("emoji")).to eq(["👍"])
+      expect(described_class.of(copy).first["user_id"]).to eq(recipient.id)
+      expect(pushes.first[:users]).to eq([sender])
+    end
+
+    # And the other direction: the asker reacting to the answer that came back.
+    it "carries a reaction on the answer across to the answerer" do
+      relay = asked_choice
+      Buddy::CompanionRelay.record_answer!(relay.reload, "yes")
+      answer = sender_convo.byte_messages.where(body: "yes").last
+      answer_copy = described_class.twin_of(answer)
+      pushes.clear
+
+      described_class.react!(message: answer, user: sender, emoji: "❤️")
+
+      expect(answer_copy).to be_present
+      expect(described_class.of(answer_copy.reload).pluck("emoji")).to eq(["❤️"])
+      expect(pushes.first[:users]).to eq([recipient])
     end
 
     it "links the answer that comes back too" do
@@ -130,6 +189,32 @@ RSpec.describe Buddy::Reactions do
       expect(pushes.length).to eq(1)
       expect(pushes.first[:users]).to eq([sender])
       expect(pushes.first[:title]).to include("👍", recipient.first_name, "dinner's ready")
+    end
+
+    # A reaction is not a message arriving. The broadcast has to say so, or the
+    # client counts the re-broadcast as new the moment the thread has been read
+    # and the live id set cleared — a badge for something nobody said.
+    it "marks the broadcast as an update, not an arrival" do
+      theirs, = relayed
+      broadcasts.clear
+
+      described_class.react!(message: theirs, user: recipient, emoji: "👍")
+
+      expect(broadcasts.map { |_, payload| payload[:data][:update] }).to all(be(true))
+    end
+
+    # `byte_worker.js` reads a missing count as zero and CLEARS the badge, so
+    # omitting it would wipe real unread messages off the app icon every time
+    # somebody left a 👍. Sending the live total leaves it exactly as it was.
+    it "carries the unread total so the badge is left alone" do
+      theirs, = relayed
+      pushes.clear
+      before = ByteConversation.unread_total_for(sender)
+
+      described_class.react!(message: theirs, user: recipient, emoji: "👍")
+
+      expect(pushes.first[:data][:count]).to eq(before)
+      expect(ByteConversation.unread_total_for(sender.reload)).to eq(before)
     end
 
     # Taking a reaction back is not news.
@@ -294,18 +379,62 @@ RSpec.describe Buddy::Reactions do
     end
   end
 
+  # Anything in the thread takes one, not just what passed between two people.
   describe "what can be reacted to" do
-    # Buddy's own replies, receipts and action cards are not conversation with
-    # anybody, so there is no one for a tapback to reach.
-    it "refuses a message that didn't pass between two people" do
-      own = recipient_convo.byte_messages.create!(
-        user: recipient, direction: :inbound, state: :delivered,
-        body: "all set", metadata: { "kind" => "buddy_reply" }, delivered_at: Time.current
+    def message_of(kind, body: "all set", direction: :inbound)
+      recipient_convo.byte_messages.create!(
+        user: recipient, direction: direction, state: :delivered, body: body,
+        metadata: { "kind" => kind }, delivered_at: Time.current
       )
+    end
 
-      expect(described_class.reactable?(own)).to be(false)
-      expect { described_class.react!(message: own, user: recipient, emoji: "👍") }
-        .to raise_error(ArgumentError, /can't be reacted to/)
+    %w[buddy_reply buddy buddy_receipt buddy_activity action_chip claude system watch].each do |kind|
+      it "takes one on a #{kind} message" do
+        message = message_of(kind)
+
+        described_class.react!(message: message, user: recipient, emoji: "👍")
+
+        expect(described_class.of(message.reload).pluck("emoji")).to eq(["👍"])
+      end
+    end
+
+    it "takes one on something they sent themselves" do
+      mine = message_of(nil, body: "on my way", direction: :outbound)
+
+      described_class.react!(message: mine, user: recipient, emoji: "👍")
+
+      expect(described_class.of(mine.reload).pluck("emoji")).to eq(["👍"])
+    end
+
+    # Reacting to Buddy is a note to yourself. It must not look like input.
+    it "doesn't say anything back, or run a turn" do
+      message = message_of("buddy_reply")
+      allow(ByteMessageIntake).to receive(:call)
+
+      expect { described_class.react!(message: message, user: recipient, emoji: "👍") }
+        .not_to change(ByteMessage, :count)
+      expect(ByteMessageIntake).not_to have_received(:call)
+    end
+
+    it "pushes nobody — there's no other side to a message in your own thread" do
+      message = message_of("buddy_reply")
+      pushes.clear
+
+      described_class.react!(message: message, user: recipient, emoji: "👍")
+
+      expect(pushes).to be_empty
+    end
+
+    # An old message reacted to must not jump its thread to the top of the
+    # drawer: nothing was said, and the ordering is by when things were.
+    it "doesn't bump the conversation's activity" do
+      message = message_of("buddy_reply")
+      recipient_convo.update!(last_message_at: 3.days.from_now)
+      was = recipient_convo.reload.last_message_at
+
+      described_class.react!(message: message, user: recipient, emoji: "👍")
+
+      expect(recipient_convo.reload.last_message_at).to eq(was)
     end
   end
 

@@ -74,7 +74,8 @@ RSpec.describe ByteController, type: :controller do
       expect(recents.length).to eq(Buddy::Reactions::RECENT_LIMIT)
     end
 
-    it "refuses a message that didn't pass between two people" do
+    # Anything in your own thread, not just what came from another person.
+    it "takes one on something Buddy said" do
       message = convo.byte_messages.create!(
         user: user, direction: :inbound, state: :delivered,
         body: "all set", metadata: { "kind" => "buddy_reply" }, delivered_at: Time.current
@@ -82,11 +83,12 @@ RSpec.describe ByteController, type: :controller do
 
       post :react_message, params: { id: message.id, emoji: "👍" }
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to be_successful
+      expect(Buddy::Reactions.of(message.reload).pluck("emoji")).to eq(["👍"])
     end
 
-    # The two copies are how a reaction crosses over. Reaching into someone
-    # else's thread directly is not.
+    # Owning the message is the whole gate. Reaching into someone else's thread
+    # is not how a reaction crosses over — the relay's two copies are.
     it "refuses someone else's message" do
       theirs = relay_message(
         owner: other, conversation: other.byte_conversations.create!(mode: :buddy),

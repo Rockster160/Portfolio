@@ -4,9 +4,9 @@
 // clipboard write is blocked in a non-secure context or on denied permission)
 // and its send time.
 //
-// On a message that passed between two people it also opens with a row of
-// tapbacks. Same gesture as everywhere else that has them, and it needs no
-// affordance on the bubble to find.
+// It also opens with a row of tapbacks — on every message, since anything in
+// the thread can take one. Same gesture as everywhere else that has them, and
+// it needs no affordance on the bubble to find.
 //
 // One reusable menu node is mounted lazily and repositioned per open; the
 // target's id + raw body are read off the bubble's dataset (paintMessageNode
@@ -162,12 +162,12 @@ export function initMessageContextMenu(thread, root, { onNotice } = {}) {
 
   // The six most recently used, rebuilt per open because reacting reorders
   // them, plus a "+" into the full pool — emoji, Tabler icons and the
-  // household's own uploads, all reactable.
+  // household's own uploads, all reactable. Offered on every message: theirs,
+  // yours, Buddy's, a tool receipt.
   function paintReactionRow(node) {
     const row = menu.querySelector("[data-menu-reactions]");
-    row.hidden = node.dataset.reactable !== "true";
+    row.hidden = false;
     row.replaceChildren();
-    if (row.hidden) return;
 
     const own = node.dataset.myReaction || "";
     const values = reactionRecents();
@@ -325,8 +325,7 @@ export function initMessageContextMenu(thread, root, { onNotice } = {}) {
     sentEl.textContent = sent ? `Sent ${sent}` : "";
     sentEl.hidden = !sent;
 
-    // Tapbacks, but only where there's someone on the other side to see one.
-    // `data-reactable` / `data-my-reaction` are stamped by paintMessageNode.
+    // `data-my-reaction` is stamped by paintMessageNode.
     paintReactionRow(node);
 
     // Reset button labels/state from any prior open.
