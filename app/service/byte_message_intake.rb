@@ -47,6 +47,22 @@ class ByteMessageIntake
       return message
     end
 
+    # Alarm fast path: the word "alarm" on its own and nothing else.
+    #
+    # Above the timer parser rather than below it, because this one is decided
+    # by the whole message being a single known word — there is nothing left to
+    # interpret, so it shouldn't be at the mercy of another parser's idea of
+    # what that word might be part of.
+    #
+    # Anything longer still goes to the model: "alarm in 20 minutes" and "alarm
+    # at 7" are alarms for LATER, and the one thing this must never do is make a
+    # noise in the room in answer to a request to make one at seven o'clock.
+    if buddy? && ::Buddy::Alarms.bare_request?(@body)
+      message = post!(state: :sent)
+      ::Buddy::Alarms.quick_ring!(@user, @conversation)
+      return message
+    end
+
     # Timer fast path: "5m", "5m pasta", "timer for 90s". Served straight from
     # Rails, because a model round trip costs several seconds — invisible on a
     # 20-minute timer, most of the countdown on a 10-second one — and is several

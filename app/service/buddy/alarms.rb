@@ -51,12 +51,63 @@ module Buddy
 
     # Ring now, because a watch just tripped.
     def ring!(watch)
-      create!(
+      now!(
         user:         watch.user,
-        seconds:      LEAD_SECONDS,
-        label:        watch.body.to_s.strip.presence,
         conversation: watch.byte_conversation,
+        label:        watch.body.to_s.strip.presence,
       )
+    end
+
+    # Ring now, full stop. LEAD_SECONDS rather than zero for the reason above:
+    # Buddy::Timers anchors a countdown to when the person ASKED, so a zero is a
+    # timer that was already over before it existed.
+    def now!(user:, conversation:, label: nil)
+      create!(user: user, seconds: LEAD_SECONDS, label: label, conversation: conversation)
+    end
+
+    # ---- the bare word -------------------------------------------------------
+
+    # "alarm", and nothing else.
+    #
+    # Deliberately the whole message. Anything with more in it has a WHEN or a
+    # WHAT in it — "alarm in 20 minutes", "alarm at 7", "set an alarm for the
+    # washer" — and each of those is a different alarm that must not go off in
+    # the room the moment it's typed. There is no ambiguity left to resolve in
+    # the single word, which is exactly why it needn't cost a model turn.
+    BARE_RX = /\A\s*alarm[\s.!]*\z/i
+
+    def bare_request?(body)
+      body.to_s.match?(BARE_RX)
+    end
+
+    # Straight from Rails, no model turn, same reasoning as the timer fast path
+    # next door: a round trip costs several seconds, and they are several
+    # seconds during which the model might not call the tool at all. On a
+    # countdown that's most of a short timer; on this it's the whole point.
+    def quick_ring!(user, conversation)
+      timer = now!(user: user, conversation: conversation, label: "Alarm")
+
+      chip = conversation.byte_messages.create!(
+        user:         user,
+        direction:    :inbound,
+        state:        :delivered,
+        body:         "#{conversation.buddy_name} sounded the alarm ⏰",
+        metadata:     {
+          "kind"      => "buddy_activity",
+          "tool_name" => "alarm",
+          "ok"        => true,
+          "source"    => "fast_path",
+          "timer_id"  => timer.id,
+        },
+        delivered_at: Time.current,
+      )
+      MonitorChannel.broadcast_to(
+        user, { id: :byte, channel: :byte, data: { kind: :message, message: chip.as_wire } }
+      )
+      chip
+    rescue StandardError => e
+      Buddy::Errors.report(section: "alarms.quick_ring", exception: e, user: user)
+      nil
     end
 
     def create!(user:, seconds:, label:, conversation: nil)
