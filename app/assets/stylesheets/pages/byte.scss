@@ -2135,6 +2135,21 @@ html.html-ctr-byte body {
     white-space: nowrap;
   }
 
+  // Which thread self-initiated messages land in. A 5px dot rather than a word:
+  // it's set once and then only ever confirmed at a glance, so it has to be
+  // legible without competing with the name it sits beside. Muted on purpose —
+  // this is ambient state, not something responding to what you just did.
+  .byte-convo-primary {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    margin-left: 6px;
+    border-radius: 50%;
+    background: var(--bs-muted);
+    vertical-align: middle;
+    flex: none;
+  }
+
   .byte-convo-time {
     font-size: 11px;
     color: var(--bs-muted);

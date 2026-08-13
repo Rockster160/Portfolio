@@ -492,6 +492,10 @@
       <h3 class="byte-modal-title" data-byte-menu-title>Conversation</h3>
       <div class="byte-menu-list">
         <button type="button" class="byte-menu-btn" data-byte-menu-rename>Rename…</button>
+        <%# Buddy threads only, and hidden on the one that already holds it —
+            there is no unset, so on the primary thread this row would be a
+            button that does nothing. %>
+        <button type="button" class="byte-menu-btn" data-byte-menu-primary>Make primary</button>
         <button type="button" class="byte-menu-btn" data-byte-menu-adopt>Adopt Claude session…</button>
         <button type="button" class="byte-menu-btn byte-menu-btn-danger" data-byte-menu-archive>Archive</button>
       </div>

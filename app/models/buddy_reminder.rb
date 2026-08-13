@@ -3,8 +3,10 @@
 # Table name: buddy_reminders
 #
 #  id                   :bigint           not null, primary key
+#  action               :jsonb
 #  body                 :text             not null
 #  cancelled_at         :datetime
+#  condition            :jsonb
 #  fire_at              :datetime         not null
 #  fired_at             :datetime
 #  kind                 :string           default("reminder"), not null
@@ -60,6 +62,27 @@ class BuddyReminder < ApplicationRecord
     (?:\s+(?:routine|task|automation|again))?
     \s*[.!]*\s*\z
   /xi
+
+  # A tool call to make when this comes due, as a ProposalBuilder marker, or nil
+  # for an ordinary reminder.
+  #
+  # Distinct from `command` below, which reads a NAME back out of the body text
+  # and re-resolves it at fire time. That covers "run my wind-down" and can't
+  # cover anything with arguments — there is nowhere in a sentence to put
+  # `sound: "nap"` — which is why "Play Whisper Nap sound at 11" had no way to be
+  # scheduled at all and got played immediately instead (prod 3562).
+  #
+  # The tool NAME is stored, never a resolved id, so this degrades the same way
+  # a routine step does: the function is looked up again every time it fires.
+  def action_call
+    row = action
+    return nil unless row.is_a?(Hash)
+
+    tool = row["tool"].presence
+    return nil if tool.blank? || Buddy::Tools[tool].nil?
+
+    { tool_name: tool.to_sym, payload: (row["payload"] || {}).transform_keys(&:to_sym) }
+  end
 
   # Is this reminder a note to them, or something to actually DO?
   #

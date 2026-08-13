@@ -269,7 +269,11 @@ Buddy::Tools.register(
   },
   execute: ->(payload, ctx) {
     fire_at = Time.zone.parse(payload[:fire_at_iso].to_s) || ctx.resolve_time(payload[:at])
-    conversation = ctx.user.byte_conversations.where(mode: :buddy).order(last_message_at: :desc).first ||
+    # The thread it will FIRE into, which is a question about weeks from now
+    # rather than about this moment — so it's the primary one, not whichever
+    # happened to be open when they asked. Falls back to any thread at all,
+    # since a reminder with nowhere to land is worse than one in the wrong place.
+    conversation = ByteConversation.for_self_initiated(ctx.user) ||
                    ctx.user.byte_conversations.order(last_message_at: :desc).first
     raise "no conversation to fire into" if conversation.nil?
 

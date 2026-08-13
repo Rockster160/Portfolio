@@ -15,7 +15,7 @@
 #  created_at              :datetime         not null
 #  updated_at              :datetime         not null
 #  conn_id                 :string
-#  simplefin_id            :string           not null
+#  simplefin_id            :string
 #
 class BankAccount < ApplicationRecord
   has_many :bank_transactions, dependent: :destroy

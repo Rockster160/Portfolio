@@ -505,6 +505,113 @@ RSpec.describe ByteController, type: :controller do
     end
   end
 
+  describe "POST #pin_primary_conversation" do
+    # Conversation ids, in the order they were pushed to the client.
+    let(:broadcasts) { [] }
+
+    before do
+      sign_in rocco
+      allow(MonitorChannel).to receive(:broadcast_to) { |_user, payload|
+        broadcasts << payload.dig(:data, :conversation)&.dig(:id)
+      }
+    end
+
+    def buddy!(name)
+      rocco.byte_conversations.create!(name: name, mode: :buddy)
+    end
+
+    it "points everything self-initiated at the chosen thread" do
+      first  = buddy!("Byte")
+      second = buddy!("Moss")
+
+      post :pin_primary_conversation, params: { conversation_id: second.id }
+
+      expect(response).to be_successful
+      expect(second.reload).to be_primary
+      expect(ByteConversation.for_self_initiated(rocco)).to eq(second)
+      expect(first.reload).not_to be_primary
+    end
+
+    it "takes it off whichever held it before" do
+      first  = buddy!("Byte")
+      second = buddy!("Moss")
+      ByteConversation.pin_primary!(first)
+
+      post :pin_primary_conversation, params: { conversation_id: second.id }
+
+      expect(rocco.byte_conversations.primary.pluck(:id)).to eq([second.id])
+    end
+
+    # Both rows have to repaint on a second device, or the one that lost it
+    # keeps showing the marker.
+    it "broadcasts the loser as well as the winner" do
+      first  = buddy!("Byte")
+      second = buddy!("Moss")
+      ByteConversation.pin_primary!(first)
+
+      post :pin_primary_conversation, params: { conversation_id: second.id }
+
+      expect(broadcasts).to include(first.id, second.id)
+    end
+
+    # A row predating the claim-on-create callback: nothing carries the flag, so
+    # there is no row to repaint and the resolved id rides along on the new
+    # one's own broadcast.
+    it "doesn't broadcast a default holder that was never marked" do
+      first  = buddy!("Byte")
+      second = buddy!("Moss")
+      rocco.byte_conversations.update_all(primary_at: nil)
+
+      post :pin_primary_conversation, params: { conversation_id: second.id }
+
+      expect(broadcasts).to eq([second.id])
+      expect(first.reload.primary_at).to be_nil
+    end
+
+    # Nothing self-initiated is ever sent to a claude or bash thread, so aiming
+    # at one would point briefings at somewhere they can't arrive.
+    it "refuses a claude thread" do
+      claude = rocco.byte_conversations.create!(name: "shell", mode: :claude)
+
+      post :pin_primary_conversation, params: { conversation_id: claude.id }
+
+      expect(response).to have_http_status(:not_found)
+      expect(claude.reload).not_to be_primary
+    end
+
+    # Their own first thread claims primary on creation, so the thing to assert
+    # is that OUR request changed nothing — not that the flag is absent.
+    it "refuses someone else's" do
+      theirs = create(:user).byte_conversations.create!(name: "theirs", mode: :buddy)
+      was    = theirs.reload.primary_at
+
+      post :pin_primary_conversation, params: { conversation_id: theirs.id }
+
+      expect(response).to have_http_status(:not_found)
+      expect(theirs.reload.primary_at).to eq(was)
+      expect(rocco.byte_conversations.primary).to be_empty
+    end
+
+    it "reports the resolved one on the conversations index" do
+      buddy!("Byte")
+      second = buddy!("Moss")
+      ByteConversation.pin_primary!(second)
+
+      get :list_conversations
+
+      expect(response.parsed_body["primary_id"]).to eq(second.id)
+    end
+
+    it "reports the default one when nothing has been chosen" do
+      first = buddy!("Byte")
+      buddy!("Moss")
+
+      get :list_conversations
+
+      expect(response.parsed_body["primary_id"]).to eq(first.id)
+    end
+  end
+
   describe "DELETE #delete_message" do
     before { sign_in rocco }
 

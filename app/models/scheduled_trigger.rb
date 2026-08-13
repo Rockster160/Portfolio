@@ -5,6 +5,7 @@
 #  id             :bigint           not null, primary key
 #  auth_type      :integer
 #  completed_at   :datetime
+#  condition      :jsonb
 #  data           :jsonb            not null
 #  execute_at     :datetime         not null
 #  jid            :text
@@ -76,7 +77,7 @@ class ScheduledTrigger < ApplicationRecord
   def buddy_conversation
     return nil if user.nil?
 
-    user.byte_conversations.where(mode: :buddy).order(last_message_at: :desc).first
+    ByteConversation.for_self_initiated(user)
   end
 
   def running? = started? && !completed?

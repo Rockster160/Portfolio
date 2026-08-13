@@ -5,19 +5,20 @@
 #  id                      :bigint           not null, primary key
 #  amount_abs              :decimal(, )      not null
 #  amount_cents            :bigint           not null
+#  category                :string
 #  description             :text
 #  mcc                     :string
 #  memo                    :text
 #  occurred_at             :datetime         not null
 #  payee                   :string
 #  pending                 :boolean          default(FALSE), not null
-#  posted_at               :datetime         not null
+#  posted_at               :datetime
 #  transacted_at           :datetime
 #  created_at              :datetime         not null
 #  updated_at              :datetime         not null
 #  action_event_id         :bigint
-#  bank_account_id         :bigint           not null
-#  simplefin_id            :string           not null
+#  bank_account_id         :bigint
+#  simplefin_id            :string
 #  transfer_counterpart_id :bigint
 #
 class BankTransaction < ApplicationRecord

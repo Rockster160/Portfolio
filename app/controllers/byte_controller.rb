@@ -44,6 +44,31 @@ class ByteController < ApplicationController
     render json: convo.as_wire
   end
 
+  # Point everything self-initiated at a thread. Its own action rather than a
+  # metadata write through #update_conversation for the same reason the kiosk
+  # pin is: setting one is also unsetting whichever was marked before, and that
+  # has to be one write of one fact.
+  def pin_primary_conversation
+    convo = current_user.byte_conversations.active.buddy.find_by(id: params[:conversation_id])
+    return head(:not_found) if convo.nil?
+
+    # Read BEFORE the write, because pin_primary! is what clears the old flag —
+    # asking afterwards always answers false.
+    previous   = ByteConversation.primary_for(current_user)
+    was_marked = previous&.primary?
+    ByteConversation.pin_primary!(convo)
+
+    # The one that LOST it needs a broadcast too, or a second device keeps
+    # showing the marker on a thread that no longer carries the flag. Skipped
+    # when the previous holder was only the DEFAULT: nothing was written to it,
+    # so its own wire payload is unchanged and the resolved id rides along on
+    # the new one's broadcast.
+    broadcast_convo_change(convo, :updated)
+    broadcast_convo_change(previous.reload, :updated) if was_marked && previous.id != convo.id
+
+    render json: convo.as_wire
+  end
+
   def create_message
     body = params[:body].to_s.strip
     # Signed ids for images the client already pushed to /byte/uploads. An
@@ -207,12 +232,21 @@ class ByteController < ApplicationController
   # ---------- conversation management ----------
 
   def list_conversations
-    convos = current_user.byte_conversations.active.ordered
+    convos = current_user.byte_conversations.active.ordered.to_a
     render json: {
       conversations: convos.map(&:as_wire),
       # An eval thread is listed but never landed on — a `rake buddy:eval` run
       # leaves it newest, and opening the app into it would be a surprise.
       default_id:    (convos.detect { |c| !c.eval? } || ByteConversation.default_for(current_user)).id,
+      # RESOLVED, not the raw flag: an unmarked account still has a primary (the
+      # first buddy thread), and which one that is takes the whole list to
+      # answer. Sending it means the rule lives in one place rather than being
+      # re-derived in JavaScript.
+      #
+      # Answered from the rows already loaded above. This endpoint runs on every
+      # open, refresh and reconnect, and `primary_for` would go back to the
+      # database for a list that is sitting right there.
+      primary_id:    ByteConversation.primary_among(convos)&.id,
     }
   end
 

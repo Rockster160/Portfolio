@@ -149,6 +149,11 @@ export class ConversationManager {
       null;
 
     this.menuTargetId = null;
+    // Resolved server-side (see ByteConversation.primary_for) and filled in by
+    // the first refresh. Null until then, which only means the marker is absent
+    // for a beat on a cold open — the rule needs the whole list to answer, and
+    // re-deriving it here would be a second copy of it to keep in step.
+    this.primaryId = null;
     this.bindDom();
     this.render();
     saveCurrentId(this.currentId);
@@ -195,6 +200,7 @@ export class ConversationManager {
     document.querySelector("[data-byte-menu-close]")?.addEventListener("click", () => this.menuModal?.close());
     this.pwdMode?.addEventListener("click", () => this.togglePermissionMode());
     document.querySelector("[data-byte-menu-rename]")?.addEventListener("click", () => this.handleRename());
+    document.querySelector("[data-byte-menu-primary]")?.addEventListener("click", () => this.handleMakePrimary());
     document.querySelector("[data-byte-menu-archive]")?.addEventListener("click", () => this.handleArchive());
     document.querySelector("[data-byte-menu-adopt]")?.addEventListener("click", () => this.handleAdoptOpen());
     document.querySelector("[data-byte-adopt-close]")?.addEventListener("click", () => this.adoptModal?.close());
@@ -223,6 +229,7 @@ export class ConversationManager {
       const data = await apiCall(this.conversationsUrl, "GET");
       if (data && Array.isArray(data.conversations)) {
         this.conversations = data.conversations;
+        if (data.primary_id != null) this.primaryId = data.primary_id;
         saveCachedList(this.conversations);
         // If our current id disappeared server-side (archived elsewhere),
         // fall back to the server-declared default.
@@ -314,8 +321,20 @@ export class ConversationManager {
     const convo = payload.conversation;
     if (!convo) return;
 
+    // Somebody set it on another device. Only the thread that GAINED the flag
+    // is acted on — the one that lost it broadcasts too, and reading that as
+    // "nobody is primary" would blank the marker in whichever order the two
+    // arrived.
+    if (convo.primary === true) this.primaryId = convo.id;
+
     if (payload.event === "archived") {
       this.conversations = this.conversations.filter((c) => c.id !== convo.id);
+      // The primary one got archived. Clearing rather than picking a successor:
+      // the server owns that rule, and the refresh below answers it properly.
+      if (this.primaryId === convo.id) {
+        this.primaryId = null;
+        this.refresh().catch(() => {});
+      }
     } else {
       const idx = this.conversations.findIndex((c) => c.id === convo.id);
       if (idx >= 0) this.conversations[idx] = convo;
@@ -476,12 +495,19 @@ export class ConversationManager {
       ? `<span class="byte-convo-unread">${unread > 99 ? "99+" : unread}</span>`
       : "";
 
+    // Ambient, and deliberately tiny: which thread briefings land in is a thing
+    // you set once and then want to be able to confirm at a glance. A label
+    // would put a permanent word next to one row in a list you read constantly.
+    const primaryHtml = convo.id === this.primaryId
+      ? `<span class="byte-convo-primary" title="Primary — self-initiated messages land here" aria-label="Primary"></span>`
+      : "";
+
     const pick = document.createElement("button");
     pick.type = "button";
     pick.className = "byte-convo-pick";
     pick.innerHTML = `
       ${convoBadge(convo)}
-      <span class="byte-convo-name">${escapeHtml(convoLabel(convo))}</span>
+      <span class="byte-convo-name">${escapeHtml(convoLabel(convo))}${primaryHtml}</span>
       <span class="byte-convo-time">${relativeTime(convo.last_message_at)}${unreadHtml}</span>
     `;
     pick.addEventListener("click", () => {
@@ -584,6 +610,15 @@ export class ConversationManager {
     // Adopt only makes sense for Claude-mode conversations.
     const adoptBtn = document.querySelector("[data-byte-menu-adopt]");
     if (adoptBtn) adoptBtn.style.display = convo.mode === "claude" ? "" : "none";
+    // Buddy threads only — nothing self-initiated is ever sent to a claude or
+    // bash thread. Hidden on the one that already holds it rather than shown
+    // disabled: there is no unset, so the row would be a button that does
+    // nothing, and a dead control reads as something being broken.
+    const primaryBtn = document.querySelector("[data-byte-menu-primary]");
+    if (primaryBtn) {
+      const offer = convo.mode === "buddy" && convo.id !== this.primaryId;
+      primaryBtn.style.display = offer ? "" : "none";
+    }
     if (typeof this.menuModal.showModal === "function") this.menuModal.showModal();
     else this.menuModal.setAttribute("open", "");
   }
@@ -602,6 +637,32 @@ export class ConversationManager {
     this.closeDrawer();
     this.switchTo(target.id);
     this.prefillComposer("/rename ", { focus: true });
+  }
+
+  // Move everything self-initiated here — the morning briefing, a reminder
+  // firing, a relay from the other person.
+  //
+  // Not a slash command like rename and archive. Those two are ABOUT the thread
+  // you're in and read naturally as a line in it; this is a preference that
+  // spans threads, and typing it into one of them would put a bubble in the
+  // wrong place. It also must not switch you: choosing where briefings land is
+  // not a request to go and look at that thread.
+  async handleMakePrimary() {
+    if (this.menuTargetId == null) return;
+    const id = this.menuTargetId;
+    this.menuModal?.close();
+
+    const previous = this.primaryId;
+    this.primaryId = id;
+    this.render();
+
+    try {
+      await apiCall("/byte/primary/conversation", "POST", { conversation_id: id });
+    } catch (err) {
+      this.primaryId = previous;
+      this.render();
+      alert(`Couldn't set primary: ${err.message || err}`);
+    }
   }
 
   handleArchive() {

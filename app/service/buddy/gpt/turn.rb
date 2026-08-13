@@ -1413,7 +1413,7 @@ module Buddy
       # The tools that mean LATER. One of these landing in the same turn says the
       # model understood the time, and nothing here should get in its way.
       SCHEDULING_TOOLS = %i[
-        schedule_reminder schedule_trigger alarm set_timer remind_when move_reminder
+        schedule_reminder schedule_trigger schedule_function alarm set_timer remind_when move_reminder
       ].freeze
 
       # Told the way every other refusal is told, because it IS one: the call did
@@ -1426,12 +1426,10 @@ module Buddy
           error:  "#{name} does it NOW, and they said when",
           note:   "This did NOT run, on purpose. A time in the request says when to act; " \
                   "it is never part of what to do. Put it on the clock instead: " \
-                  "`schedule_trigger` for a Jil listener scope, `schedule_reminder` with " \
-                  "`text: \"run <name>\"` for a saved routine or a plain Jil task, `alarm` " \
-                  "when it has to interrupt them, `set_timer` for a countdown. If none of " \
-                  "those can carry it - a Jil FUNCTION that takes arguments is the case that " \
-                  "can't be deferred yet - say so plainly and say when you could do it " \
-                  "instead. Do NOT do it now as a consolation, and never say it's scheduled " \
+                  "`schedule_function` is this exact call with a time on it, `schedule_trigger` " \
+                  "for a Jil listener scope, `schedule_reminder` with `text: \"run <name>\"` for " \
+                  "a saved routine, `alarm` when it has to interrupt them, `set_timer` for a " \
+                  "countdown. Never do it now as a consolation, and never say it's scheduled " \
                   "when it isn't.",
         }
       end

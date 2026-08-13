@@ -13,6 +13,7 @@
 #  metadata          :jsonb            not null
 #  mode              :integer          default("claude"), not null
 #  name              :string
+#  primary_at        :datetime
 #  created_at        :datetime         not null
 #  updated_at        :datetime         not null
 #  user_id           :bigint           not null
@@ -73,12 +74,33 @@ class ByteConversation < ApplicationRecord
   # routine on it.
   scope :not_kiosk, -> { where("metadata->>'kiosk' IS DISTINCT FROM 'true'") }
 
+  # THE thread. Everything nobody asked for lands here — the morning briefing, a
+  # reminder firing, a watch tripping, a relay from the other person — rather
+  # than in whichever one happens to have been touched most recently.
+  #
+  # "Most recently active" was never the right answer, only the easy one. It
+  # follows the person around: reading a shared thread, tapping a routine, or an
+  # automation posting a receipt all move it, so where tomorrow's briefing turns
+  # up depends on what you did last night. This is a choice they make once.
+  #
+  # A COLUMN rather than a metadata key, unlike the kiosk pin next door. That bag
+  # is merged from client-supplied params in ByteController#update_conversation,
+  # so an invariant kept in it isn't one — an ordinary PATCH could mark three
+  # threads at once and walk straight past pin_primary!. The partial unique index
+  # behind this column makes two primaries impossible in the DATABASE rather than
+  # impossible-if-everybody-uses-the-front-door.
+  scope :primary, -> { where.not(primary_at: nil) }
+
   def eval?
     metadata.is_a?(Hash) && metadata["eval"].to_s == "true"
   end
 
   def kiosk?
     metadata.is_a?(Hash) && metadata["kiosk"].to_s == "true"
+  end
+
+  def primary?
+    primary_at.present?
   end
 
   # Move the wall to this thread. Exclusive by construction: "which one is out
@@ -94,23 +116,72 @@ class ByteConversation < ApplicationRecord
     conversation
   end
 
+  # Make this the primary one. Exclusive by construction, like the kiosk pin and
+  # for the same reason: "which thread do I actually read" is a single fact, and
+  # leaving two marked would make where a briefing lands depend on row order.
+  #
+  # There is deliberately no unset. Nothing NOT being primary is not a state
+  # anyone wants — self-initiated messages have to go somewhere, so clearing the
+  # flag would only hand the choice back to whatever heuristic replaced it.
+  # Choosing a different one is how you change your mind.
+  # Clear THEN set, in that order and in one transaction: the partial unique
+  # index refuses a second primary, so setting first would fail on its own
+  # constraint rather than replacing anything.
+  def self.pin_primary!(conversation)
+    transaction {
+      conversation.user.byte_conversations.primary.where.not(id: conversation.id).update_all(primary_at: nil)
+      conversation.update!(primary_at: Time.current)
+    }
+    conversation
+  end
+
+  # Which Buddy thread is the primary one, chosen or not.
+  #
+  # The default is their FIRST buddy thread — oldest id, not newest activity —
+  # and that ordering is the whole point: it can't drift. Somebody who never
+  # opens this setting gets the same thread forever, which is what makes the
+  # marked one a decision rather than a race.
+  #
+  # The wall tablet and eval threads are out on the way in. Both are "active"
+  # without anyone personally reading them: the wall is a screen in a room, so a
+  # briefing delivered there is read by whoever is standing in the kitchen, and
+  # a `rake buddy:eval` run leaves 25 canned scenarios looking like the liveliest
+  # thread on the account.
+  def self.primary_for(user)
+    primary_among(user.byte_conversations.active.buddy.ordered.to_a)
+  end
+
+  # The rule itself, over rows that are already in hand.
+  #
+  # Split out because the answer is wanted in two places with very different
+  # costs: `for_self_initiated` has nothing loaded, and the conversations index
+  # has the whole list sitting in front of it — asking the database again there
+  # is a round trip for data already on the page.
+  #
+  # Takes the FULL list and filters here rather than expecting a pre-narrowed
+  # one, so a caller can't get the eligibility half wrong while getting the
+  # ordering half right.
+  def self.primary_among(conversations)
+    eligible = conversations.select { |c| c.buddy? && !c.archived? && !c.kiosk? && !c.eval? }
+
+    eligible.find(&:primary?) || eligible.min_by(&:id)
+  end
+
   # Where a message NOBODY ASKED FOR goes: the morning briefing, a reminder
   # firing, a watch tripping, a relay from the other person, a chore's prompt.
   #
-  # Their newest live Buddy thread, except the wall tablet and except an eval
-  # thread. Both fail the same way and for the same reason — `ordered` means
-  # "most recently active", and both of them are active without anyone
-  # personally reading them. The wall is a screen in a room: a briefing
-  # delivered there is read by whoever happens to be standing in the kitchen,
-  # which is not the same as being read by the person it was for.
-  #
-  # Falls back to the excluded thread when it's the only one, because a
-  # briefing on the wall still beats a briefing nowhere. That fallback is safe
-  # precisely because the push is suppressed independently — see ByteNotifier —
-  # so the worst case is that it shows up silently rather than not at all.
+  # Falls back to a thread `primary_for` excluded when it's the only one there
+  # is, because a briefing on the wall still beats a briefing nowhere. That
+  # fallback is safe precisely because the push is suppressed independently —
+  # see ByteNotifier — so the worst case is that it shows up silently rather
+  # than not at all.
   def self.for_self_initiated(user)
-    scope = user.byte_conversations.active.buddy
-    scope.not_kiosk.real.ordered.first || scope.ordered.first
+    # ONE query, and `ordered` is what makes the fallback free — the rows come
+    # back newest-first already, so `.first` is the old "newest live thread"
+    # answer with no second round trip.
+    all = user.byte_conversations.active.buddy.ordered.to_a
+
+    primary_among(all) || all.first
   end
 
   # Set by any caller that let a person CHOOSE the pet — today that's the
@@ -126,6 +197,15 @@ class ByteConversation < ApplicationRecord
   # A new Buddy thread inherits its owner's default pet; the theme then lives on
   # the row and can diverge per conversation. Only buddy convos carry a pet.
   before_create { self.buddy_theme = self.class.default_theme_for(user) if buddy? && !theme_chosen }
+
+  # Their FIRST buddy thread claims primary, once, here.
+  #
+  # `primary_among` would answer the same thing without this — an unmarked
+  # account resolves to its oldest thread anyway — but writing it down is what
+  # makes the answer a single indexed lookup instead of a scan-and-sort, and it
+  # makes `as_wire[:primary]` truthful about the thread that actually holds it.
+  # Set at the one moment it can change, rather than re-derived on every read.
+  after_create :claim_primary_if_first
 
   # Single source of truth for which pet a user's new Buddy threads spin up as.
   def self.default_theme_for(user)
@@ -202,6 +282,11 @@ class ByteConversation < ApplicationRecord
       last_message_at:  last_message_at&.iso8601(3),
       created_at:       created_at.iso8601(3),
       metadata:         metadata,
+      # The EXPLICIT flag only. Whether an unmarked thread is primary by default
+      # depends on its siblings, which one row can't answer — `primary_id` on the
+      # conversations index is the resolved one, so the rule lives in exactly one
+      # place (see primary_for).
+      primary:          primary?,
       buddy_theme:      buddy_theme,
       # The pet's name travels with the thread so the client never has to carry
       # its own copy of the theme table — switching threads repaints the title
@@ -222,6 +307,24 @@ class ByteConversation < ApplicationRecord
   end
 
   private
+
+  # Only when there is nothing to displace: this claims an EMPTY slot and never
+  # takes it off another thread. Choosing one is a deliberate act, and a new
+  # thread appearing must not quietly redirect somebody's morning briefing.
+  #
+  # The unique index is the real arbiter, so two threads created at the same
+  # instant for a fresh account can't both win — the loser just doesn't get the
+  # flag, and `primary_among` still answers correctly from the oldest id.
+  # Deliberately not fatal: failing to claim a default is never a reason to
+  # refuse someone a conversation.
+  def claim_primary_if_first
+    return unless buddy?
+    return if user.byte_conversations.primary.exists?
+
+    update_columns(primary_at: Time.current)
+  rescue ActiveRecord::RecordNotUnique, ActiveRecord::StatementInvalid => e
+    Rails.logger.info("[ByteConversation] primary already claimed for user=#{user_id}: #{e.class}")
+  end
 
   def default_display_name
     case mode.to_sym

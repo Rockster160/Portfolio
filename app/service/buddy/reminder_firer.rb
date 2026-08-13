@@ -20,10 +20,13 @@ module Buddy
       # routine and it goes back to being a nudge rather than running the
       # nearest match.
       command = reminder.command
+      action  = reminder.action_call
 
       return skip!(reminder) unless condition_met?(reminder)
 
-      if command
+      if action
+        run_action(reminder, action)
+      elsif command
         run_command(reminder, command)
       elsif reminder.notify_user_id
         deliver_cross_user_reminder(reminder)
@@ -161,6 +164,26 @@ module Buddy
           ::Jil.trigger(reminder.user, command[:scope].to_sym, {}, auth: :buddy, auth_id: reminder.user_id)
           command_chip(reminder, command[:name])
         end
+      end
+
+      # A stored tool call, replayed. Same `run_markers!` a routine goes through,
+      # for the same reason: the marker path already handles resolution, level,
+      # receipts and the empty-result line, so a scheduled call behaves exactly
+      # like the same call typed out by hand.
+      #
+      # The reminder's own body is the line over it. Whoever set it wrote that
+      # sentence to be read at this moment, and it says what the call is for far
+      # better than a generated heading would.
+      def run_action(reminder, action)
+        conversation = reminder.byte_conversation
+        return if conversation.nil?
+
+        Buddy::ProposalBuilder.run_markers!(
+          user:         reminder.user,
+          conversation: conversation,
+          markers:      [action],
+          body:         reminder.body.to_s.presence || "Running that now.",
+        )
       end
 
       # A Jil task leaves nothing behind on its own, so say what ran. A routine

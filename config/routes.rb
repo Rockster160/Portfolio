@@ -50,6 +50,7 @@ Rails.application.routes.draw do
   get "/byte", to: redirect(subdomain: "byte", path: "/")
   get  "/byte/kiosk", to: redirect(subdomain: "byte", path: "/kiosk")
   post "/byte/kiosk/conversation" => "byte#pin_kiosk_conversation", as: :byte_kiosk_conversation
+  post "/byte/primary/conversation" => "byte#pin_primary_conversation", as: :byte_primary_conversation
   get    "/byte/messages"     => "byte#messages",       as: :byte_message_history
   post   "/byte/messages"     => "byte#create_message", as: :byte_messages
   delete "/byte/messages/:id" => "byte#delete_message", as: :byte_message

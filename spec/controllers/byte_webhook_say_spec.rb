@@ -32,8 +32,25 @@ RSpec.describe WebhooksController, type: :controller do
       expect(BuddyDeliverWorker).to have_received(:perform_async).with(message.id)
     end
 
-    it "lands in the newest Buddy thread, not whatever default_for returns" do
+    # The PRIMARY thread, which is a different question from `default_for`
+    # (the newest live one) and used to be answered the same way. Nobody typed
+    # this — a cron job or the Mac `tell` CLI did — so it belongs where the
+    # person reads, not wherever they happened to be last.
+    it "lands in the primary Buddy thread, not whatever default_for returns" do
       newer = user.byte_conversations.create!(mode: :buddy, name: "Later", last_message_at: Time.current)
+      # Asserted before the post, because landing a message in a thread bumps
+      # its activity and would make it the newest by the time we looked.
+      expect(ByteConversation.default_for(user)).to eq(newer)
+
+      post :byte_say, params: { user_id: user.id, body: "hello" }
+
+      expect(buddy_convo.byte_messages.outbound.count).to eq(1)
+      expect(newer.byte_messages.outbound.count).to eq(0)
+    end
+
+    it "follows the primary somewhere else once one is chosen" do
+      newer = user.byte_conversations.create!(mode: :buddy, name: "Later", last_message_at: Time.current)
+      ByteConversation.pin_primary!(newer)
 
       post :byte_say, params: { user_id: user.id, body: "hello" }
 
