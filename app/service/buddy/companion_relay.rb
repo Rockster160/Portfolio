@@ -232,10 +232,17 @@ module Buddy
             "source"     => "relay_copy",
             "relay_peer" => recipient,
             "relay_from" => sender,
+            # Each copy points at the other, so a tapback on either one shows up
+            # on both (Buddy::Reactions). Only settable in this direction at
+            # create time — the recipient's copy is stamped below, once its twin
+            # exists. Invisible plumbing, so the earlier broadcast going out
+            # without it costs nothing.
+            "relay_twin" => to_msg.id,
           },
           delivered_at: Time.current,
         )
         broadcast(from_user, from_msg)
+        to_msg.update!(metadata: to_msg.metadata.merge("relay_twin" => from_msg.id))
 
         { to_message: to_msg, from_message: from_msg, to_conversation: to_convo, from_conversation: from_convo }
       end

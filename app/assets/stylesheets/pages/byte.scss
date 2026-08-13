@@ -758,6 +758,72 @@ html.html-ctr-byte body {
     }
   }
 
+  // Tapbacks on a relayed message. Only present once someone has left one — the
+  // gesture that adds the first is the long-press menu, so an empty row would be
+  // a permanent affordance for something almost never done.
+  .byte-msg-reactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+
+    &[hidden] { display: none; } // author `display` beats the hidden attr
+
+    // Tappable: this joins or takes back the same reaction. Neutralises the
+    // global `button` cascade (forms.scss), including the `:active` nudge that
+    // would shift the whole row.
+    .byte-msg-reaction {
+      appearance: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 1px 7px !important;
+      background: var(--bs-panel-soft) !important;
+      border: 1px solid var(--bs-border) !important;
+      border-radius: 11px !important;
+      font-size: 82%;
+      line-height: 1.5;
+      cursor: pointer;
+
+      &:active {
+        position: static !important;
+        top: auto !important;
+      }
+      // Yours, so the tap that takes it back is the obvious one.
+      &.is-mine {
+        border-color: var(--bs-accent-strong) !important;
+        background: var(--bs-panel) !important;
+      }
+      // Sent, not yet confirmed. The server broadcast repaints this row a beat
+      // later; until then the tap is visibly in flight rather than done.
+      &[data-pending] {
+        opacity: 0.5;
+      }
+      // A reaction is an icon reference, so the glyph slot holds an emoji, a
+      // Tabler <i>, or an <img> of one of the household's uploads. Sized to one
+      // line either way so the pill never changes height with its contents.
+      .byte-msg-reaction-icon {
+        display: inline-flex;
+        align-items: center;
+        line-height: 1;
+
+        .ti {
+          font-size: 15px;
+        }
+        .icon-img {
+          width: 15px;
+          height: 15px;
+          object-fit: contain;
+          display: block;
+        }
+      }
+      .byte-msg-reaction-count {
+        color: var(--bs-muted);
+        font-size: 88%;
+      }
+    }
+  }
+
   &.byte-msg-pending {
     opacity: 0.7;
   }
@@ -1286,6 +1352,64 @@ html.html-ctr-byte body {
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5);
   &[hidden] {
     display: none;
+  }
+
+  // Tapback picker, across the top of the menu. Only shown on a message that
+  // passed between two people; hidden on everything else.
+  .byte-msg-menu-reactions {
+    display: flex;
+    justify-content: space-between;
+    gap: 2px;
+    padding: 2px 2px 6px;
+    border-bottom: 1px solid var(--bs-border);
+
+    &[hidden] { display: none; }
+
+    .byte-msg-menu-reaction {
+      appearance: none;
+      flex: 1 1 0;
+      display: grid;
+      place-items: center;
+      padding: 5px 0 !important;
+      font-size: 19px;
+      line-height: 1.1;
+      text-align: center !important;
+      background: none !important;
+      border: 1px solid transparent !important;
+      border-radius: 8px !important;
+      color: var(--bs-text) !important;
+      cursor: pointer;
+
+      .ti {
+        font-size: 20px;
+      }
+      .icon-img {
+        width: 20px;
+        height: 20px;
+        object-fit: contain;
+        display: block;
+      }
+      // Into the full pool. Quieter than the six, since it's the way out of
+      // them rather than a seventh reaction.
+      &.is-more {
+        color: var(--bs-muted) !important;
+        font-size: 21px;
+      }
+
+      &:hover,
+      &:focus-visible {
+        background: var(--bs-panel-soft) !important;
+      }
+      &:active {
+        position: static !important;
+        top: auto !important;
+      }
+      // Already yours — tapping it again takes it back off.
+      &.is-mine {
+        background: var(--bs-panel-soft) !important;
+        border-color: var(--bs-accent-strong) !important;
+      }
+    }
   }
 
   .byte-msg-menu-id {

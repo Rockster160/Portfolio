@@ -1,0 +1,131 @@
+// Shared icon picker (app/javascript/src/icon_picker.js). Mounts itself on
+// document.body from any page, so it carries its OWN palette rather than
+// reading a page's variables — `--bs-*` is scoped to `.byte-app` and
+// `--chores-*` to the chores page, and a component that only works inside one
+// of them isn't shared. Overridable per page through the `--ipick-*` vars.
+.icon-pick-pop {
+  --ipick-sheet: #16233F;
+  --ipick-well: rgba(15, 27, 51, 0.5);
+  --ipick-border: rgba(255, 255, 255, 0.14);
+  --ipick-text: #E8EEF9;
+  --ipick-muted: #8FA3C4;
+  --ipick-accent: #3FA0FF;
+
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+
+  &[hidden] { display: none; } // author `display` beats the hidden attr
+
+  .icon-pick-sheet {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    background: var(--ipick-sheet);
+    border: 1px solid var(--ipick-border);
+    border-radius: 14px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+    color: var(--ipick-text);
+  }
+
+  .icon-pick-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  // `.basic` already opts out of the 18px/2px-border/full-width text-input
+  // cascade in forms.scss; these are the colours on top of it.
+  .icon-pick-search {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 7px 10px !important;
+    background: var(--ipick-well) !important;
+    border: 1px solid var(--ipick-border) !important;
+    border-radius: 8px !important;
+    color: var(--ipick-text) !important;
+    font-size: 15px !important;
+  }
+
+  .icon-pick-close {
+    appearance: none;
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    padding: 0 !important;
+    background: none !important;
+    border: 1px solid var(--ipick-border) !important;
+    border-radius: 8px !important;
+    color: var(--ipick-muted) !important;
+    font-size: 19px;
+    line-height: 1;
+    cursor: pointer;
+
+    &:active {
+      position: static !important;
+      top: auto !important;
+    }
+  }
+
+  .icon-pick-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px;
+    // Tall enough to browse, short enough that the sheet never outgrows a
+    // phone once the keyboard is up.
+    max-height: 46vh;
+    overflow-y: auto;
+    padding: 4px;
+    background: var(--ipick-well);
+    border-radius: 10px;
+  }
+
+  .icon-pick-tile {
+    appearance: none;
+    aspect-ratio: 1 / 1;
+    display: grid;
+    place-items: center;
+    padding: 0 !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    border-radius: 6px !important;
+    color: var(--ipick-text) !important;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(255, 255, 255, 0.07) !important;
+      border-color: var(--ipick-accent) !important;
+    }
+    &:active {
+      position: static !important;
+      top: auto !important;
+    }
+    .ti {
+      font-size: 23px;
+    }
+    .icon-img {
+      width: 24px;
+      height: 24px;
+      object-fit: contain;
+    }
+  }
+
+  .icon-pick-empty {
+    padding: 6px 2px;
+    color: var(--ipick-muted);
+    font-size: 13px;
+    text-align: center;
+
+    &[hidden] { display: none; }
+  }
+}

@@ -51,6 +51,11 @@ import { setupSlashAutocomplete } from "./slash_commands";
 import { renderMultiSelect } from "./message_actions/multi_select";
 import { renderForm } from "./message_actions/form";
 import { initMessageContextMenu } from "./message_actions/context_menu";
+import {
+  renderReactions,
+  reactable,
+  seedReactionRecents,
+} from "./message_actions/reactions";
 import { renderMarkdown, escapeHtml, escapeAttr } from "./markdown";
 import { initBuddyHero } from "./buddy/hero";
 import { initBuddyTimers } from "./buddy/timers";
@@ -197,6 +202,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   // it takes the server's, not this browser's last-viewed one, which on a
   // device that also opens the chat would be whatever was read there last.
   const isKiosk = app.dataset.kiosk === "true";
+
+  // Who's looking. Both people see the same reaction list, stamped with the
+  // reactor's id, so this is the only thing that says which one is theirs.
+  const currentUserId = Number(app.dataset.byteUserId) || null;
+
+  // The six on the tapback row, most-recently-used. Server-resolved so the
+  // padding rule lives in one place; every react response replaces it.
+  try {
+    seedReactionRecents(JSON.parse(app.dataset.reactionRecents || "[]"));
+  } catch (_e) {
+    // A malformed attribute just means the row falls back to the defaults.
+  }
 
   // ---------- conversation manager ----------
   //
@@ -581,6 +598,29 @@ document.addEventListener("DOMContentLoaded", async () => {
       node.classList.add("byte-msg-has-form");
       renderForm(formEl, message);
     }
+
+    // Tapbacks. The pill row is rebuilt from the message every paint; the
+    // dataset flags are what the long-press menu reads to decide whether to
+    // offer the picker and which emoji to show as already yours.
+    const reactions = Array.isArray(message?.metadata?.reactions)
+      ? message.metadata.reactions
+      : [];
+    if (reactable(message)) {
+      node.dataset.reactable = "true";
+      const own = reactions.find((r) => Number(r.user_id) === currentUserId);
+      if (own) {
+        node.dataset.myReaction = own.emoji;
+      } else {
+        delete node.dataset.myReaction;
+      }
+    } else {
+      delete node.dataset.reactable;
+      delete node.dataset.myReaction;
+    }
+    renderReactions(node.querySelector("[data-reactions]"), message, {
+      userId: currentUserId,
+      onNotice: (msg) => surfaceLocal(msg),
+    });
 
     // Time / attachments / state apply to every kind — used to live inside
     // renderThoughts by mistake, which meant non-claude messages had blank

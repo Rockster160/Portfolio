@@ -66,6 +66,26 @@ module IconPool
   # Drop the cache — useful in tests after rebuilding index files.
   def reset!
     @pool = nil
+    @by_char = nil
+  end
+
+  # Reverse index: the character / class a row is stored AS, back to the row.
+  # Custom household icons are deliberately absent — they're referenced by
+  # `hicon:<id>` and resolved against the household, not by their bytes.
+  def by_char
+    @by_char ||= pool.index_by { |row| row[:c] }
+  end
+
+  # Is this something the pool can actually produce? The picker only ever hands
+  # back a pool row, so anything else arriving at a writer is hand-crafted.
+  def known?(value)
+    by_char.key?(value.to_s)
+  end
+
+  # What to call an icon when you can't show it — a push notification, a log
+  # line, anything text-only. Nil when nothing knows it.
+  def name_for(value)
+    by_char[value.to_s]&.dig(:n)
   end
 
   def load_pool

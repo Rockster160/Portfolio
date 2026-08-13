@@ -55,6 +55,7 @@ Rails.application.routes.draw do
   post   "/byte/messages"     => "byte#create_message", as: :byte_messages
   delete "/byte/messages/:id" => "byte#delete_message", as: :byte_message
   post   "/byte/messages/:id/report" => "byte#report_message", as: :byte_message_report
+  post   "/byte/messages/:id/react"  => "byte#react_message",  as: :byte_message_react
   post   "/byte/uploads"      => "byte#uploads",        as: :byte_uploads
   get  "/byte/csrf"     => "byte#csrf",           as: :byte_csrf
   post "/byte/presence" => "byte#presence",       as: :byte_presence

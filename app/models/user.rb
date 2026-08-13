@@ -165,6 +165,21 @@ class User < ApplicationRecord
     self.byte_prefs = byte_prefs.to_h.merge("font_scale" => scale)
   end
 
+  # Icons this person has most recently reacted with, newest first. Raw — see
+  # Buddy::Reactions.recents_for for the list the picker row actually shows,
+  # which pads this out with sensible defaults.
+  def byte_reaction_recents
+    Array(byte_prefs.to_h["reaction_recents"]).map(&:to_s).compact_blank
+  end
+
+  # Most-recently-used, so the six on the row are the six they keep reaching
+  # for. Moves an already-present icon back to the front rather than repeating
+  # it, which is what makes the row settle instead of churning.
+  def remember_byte_reaction!(value)
+    list = ([value.to_s] + byte_reaction_recents).uniq.first(Buddy::Reactions::RECENT_LIMIT)
+    update!(byte_prefs: byte_prefs.to_h.merge("reaction_recents" => list))
+  end
+
   # Parts of Buddy this person holds (see Buddy::Features). Stored rather than
   # derived from the id, so changing what someone can do is a data change and
   # not another branch keyed on who they are.

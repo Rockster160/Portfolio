@@ -13,7 +13,7 @@
 // Cache name is versioned: bump CACHE on shipping a new shell so old
 // clients re-pull the HTML next time they're online.
 
-const CACHE = "byte-v18";
+const CACHE = "byte-v19";
 
 // Every page that is a Byte shell in its own right. `/kiosk` is the wall
 // tablet: the same controller and the same markup, so it carries the shell

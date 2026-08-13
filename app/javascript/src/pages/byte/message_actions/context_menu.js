@@ -4,6 +4,10 @@
 // clipboard write is blocked in a non-secure context or on denied permission)
 // and its send time.
 //
+// On a message that passed between two people it also opens with a row of
+// tapbacks. Same gesture as everywhere else that has them, and it needs no
+// affordance on the bubble to find.
+//
 // One reusable menu node is mounted lazily and repositioned per open; the
 // target's id + raw body are read off the bubble's dataset (paintMessageNode
 // stamps `data-message-id` and `data-full-body`).
@@ -12,6 +16,9 @@
 // a description; the body is re-read server-side rather than taken from
 // `data-full-body`, since that attribute is client-controlled and the whole
 // point of the report is an accurate record of what was said.
+
+import { reactionRecents, toggleReaction, pickReaction } from "./reactions";
+import { renderIconValue, needsIconPool, warmIconPool } from "../../../icon_picker";
 
 // Write to the clipboard with a graceful fallback for browsers / contexts
 // where the async Clipboard API is unavailable or rejected (e.g. http, or
@@ -114,6 +121,7 @@ export function initMessageContextMenu(thread, root, { onNotice } = {}) {
     el.className = "byte-msg-menu";
     el.hidden = true;
     el.innerHTML = `
+      <div class="byte-msg-menu-reactions" data-menu-reactions hidden></div>
       <div class="byte-msg-menu-id">
         <span class="byte-msg-menu-id-label">Message ID</span>
         <div class="byte-msg-menu-id-row">
@@ -150,6 +158,70 @@ export function initMessageContextMenu(thread, root, { onNotice } = {}) {
       runReport(e.currentTarget, menu.dataset.msgId || "");
     });
     return el;
+  }
+
+  // The six most recently used, rebuilt per open because reacting reorders
+  // them, plus a "+" into the full pool — emoji, Tabler icons and the
+  // household's own uploads, all reactable.
+  function paintReactionRow(node) {
+    const row = menu.querySelector("[data-menu-reactions]");
+    row.hidden = node.dataset.reactable !== "true";
+    row.replaceChildren();
+    if (row.hidden) return;
+
+    const own = node.dataset.myReaction || "";
+    const values = reactionRecents();
+    values.forEach((value) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `byte-msg-menu-reaction${value === own ? " is-mine" : ""}`;
+      btn.dataset.menuReaction = value;
+      btn.setAttribute("aria-label", `React ${value}`);
+      renderIconValue(btn, value);
+      btn.addEventListener("click", () => runReaction(menu.dataset.msgId || "", value));
+      row.appendChild(btn);
+    });
+
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "byte-msg-menu-reaction is-more";
+    more.setAttribute("aria-label", "More reactions");
+    more.textContent = "+";
+    more.addEventListener("click", () => runPicker(menu.dataset.msgId || ""));
+    row.appendChild(more);
+
+    // An upload can't be drawn until its pool is loaded; warm it and redraw.
+    if (values.some(needsIconPool)) {
+      warmIconPool().then(() => {
+        row.querySelectorAll("[data-menu-reaction]").forEach((b) => {
+          renderIconValue(b, b.dataset.menuReaction);
+        });
+      });
+    }
+  }
+
+  // Close first, then send. The server writes both copies of the relay and
+  // broadcasts them back, so the pill lands under the bubble on its own — and a
+  // menu that hung around waiting for that would feel like the tap didn't take.
+  function runReaction(id, emoji) {
+    if (!id || !emoji) return;
+
+    closeMenu();
+    toggleReaction(id, emoji).catch((err) => {
+      if (onNotice) {
+        onNotice(
+          (err.errors && err.errors[0]) ||
+            "Couldn't send that reaction — try again.",
+        );
+      }
+    });
+  }
+
+  function runPicker(id) {
+    if (!id) return;
+
+    closeMenu();
+    pickReaction(id, { onNotice });
   }
 
   // Ask for the optional description, then hand the id to the server. A native
@@ -252,6 +324,10 @@ export function initMessageContextMenu(thread, root, { onNotice } = {}) {
     const sentEl = menu.querySelector("[data-menu-sent]");
     sentEl.textContent = sent ? `Sent ${sent}` : "";
     sentEl.hidden = !sent;
+
+    // Tapbacks, but only where there's someone on the other side to see one.
+    // `data-reactable` / `data-my-reaction` are stamped by paintMessageNode.
+    paintReactionRow(node);
 
     // Reset button labels/state from any prior open.
     menu.querySelectorAll(".byte-msg-menu-item").forEach((b) => {
