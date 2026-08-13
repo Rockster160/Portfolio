@@ -276,6 +276,19 @@ module Buddy
         buttons = Array(relay.options).each_with_index.map { |opt, i|
           { "id" => i + 1, "label" => opt.to_s, "tool_name" => "buddy_relay_answer", "status" => "pending" }
         }
+        # NO EXPIRY. Every other action is a decision something is waiting on,
+        # and the ten-minute default exists so a forgotten one can't wedge a
+        # Claude turn forever. This is a question put to a PERSON, and the
+        # ask_partner tools say it outright: they may take hours, or never reply
+        # at all. Nothing is wedged in the meantime — the asker's side is its own
+        # conversation, and a queued `await_reply` sequence is deliberately
+        # parked until they answer.
+        #
+        # Prod 3586: Chelsea asked Rocco whether he wanted to watch something
+        # while they ate, he came back to it twenty minutes later, and every tap
+        # returned 409 with "tap to try again" — advice that could never work.
+        # Before that, every relayed question had happened to be answered inside
+        # nine minutes, so the fuse had never been reached.
         action = ByteAction.create!(
           user:              relay.to_user,
           byte_conversation: message.byte_conversation,
@@ -285,6 +298,7 @@ module Buddy
           multi_select:      true,
           buttons:           buttons,
           tool_input:        { "relay_id" => relay.id, "mode" => relay.kind },
+          never_expires:     true,
         )
 
         message.update!(metadata: message.metadata.merge(
@@ -293,6 +307,13 @@ module Buddy
           "action_request_id" => action.request_id,
           "action_kind"       => "custom",
           "action_state"      => "pending",
+          # The key the client actually greys stale rows off (see
+          # multi_select.js and form.js). ProposalBuilder and FormAction both
+          # send it; this path was the only one that didn't, which is why an
+          # expired relay card rendered as perfectly live right up until the tap
+          # came back refused. Nil now, and it stays honest if these are ever
+          # given a fuse.
+          "action_expires_at" => action.expires_at&.iso8601,
           "multi_select"      => true,
           "buttons"           => buttons,
           # "confirm" = pick-any with a Send button; "instant" = tap-to-answer.

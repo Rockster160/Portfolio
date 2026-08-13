@@ -34,9 +34,18 @@ class ByteAction < ApplicationRecord
   # forgotten action doesn't wedge a Claude turn forever.
   DEFAULT_TTL = 10.minutes
 
+  # Opt out of the default entirely, for actions where nothing is waiting on a
+  # decision and the question stays open until it's answered.
+  #
+  # A flag rather than passing `expires_at: nil`, because the default is applied
+  # with `||=` — a caller-supplied nil is indistinguishable from not having said
+  # anything, which is exactly how a relayed question ended up on a ten-minute
+  # fuse (prod action 505).
+  attr_accessor :never_expires
+
   before_validation on: :create do
     self.request_id ||= SecureRandom.uuid
-    self.expires_at ||= DEFAULT_TTL.from_now
+    self.expires_at ||= DEFAULT_TTL.from_now unless never_expires
   end
 
   # Payload consumed by the PWA to render an action-request message.

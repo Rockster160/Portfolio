@@ -241,6 +241,7 @@
   .start_at::Date
   .end_at::Date
   .completed_at::Date
+  .cancelled_at::Date
   .notes::String
   .location::String
   .travel_nav_address::String

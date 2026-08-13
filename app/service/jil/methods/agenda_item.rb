@@ -4,6 +4,11 @@ class Jil::Methods::AgendaItem < Jil::Methods::Base
     :id,
     :kind,
     :completed_at,
+    # A cancelled occurrence still comes back from Agenda#search: that filters
+    # on `status`, and most cancelled rows carry only `cancelled_at` (64 of the
+    # 95 Tech Stand-Ups, all superseded by a later schedule). Reading it is the
+    # only way a task can tell a holiday from a working day.
+    :cancelled_at,
     :trigger_expression,
     :agenda_schedule_id,
     :travel_nav_address,
