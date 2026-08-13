@@ -268,16 +268,20 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
     }
   }
 
-  // Non-Amazon rows get a colored carrier tag in front of the name ("USPS: …")
-  // so the source is obvious. Amazon/manual rows keep their bare name.
+  // Non-Amazon rows get a colored initial in front of the name ("S:…") so the
+  // source is obvious. Amazon/manual rows keep their bare name.
+  //
+  // One letter, not the carrier's name: this column is the narrowest thing on
+  // the dashboard and the NAME is what's worth reading. The color carries as
+  // much of the identity as the letter does.
   let carrierLabel = function (carrier) {
     switch (carrier) {
       case "ups":
-        return Text.orange("UPS:");
+        return Text.orange("U:");
       case "usps":
-        return Text.blue("USPS:");
+        return Text.blue("S:");
       case "fedex":
-        return Text.purple("FedEx:");
+        return Text.purple("F:");
       default:
         return null; // amazon, manual
     }
@@ -455,7 +459,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
       }
 
       let label = carrierLabel(order.carrier);
-      let display = label ? label + " " + name : name;
+      let display = label ? label + name : name;
       lines.push(Text.justify(idx + 1 + ". " + display, delivery));
     });
 

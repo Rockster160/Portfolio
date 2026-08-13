@@ -24,6 +24,16 @@ Buddy::Tools.register(
     state, and never tell them you can't check something that has a
     function for it.
 
+    **This happens the moment you call it, so it is the wrong tool the second
+    they say WHEN.** "Play the nap sound at 11" is one thing to do at 11, not a
+    thing to do now that mentions 11 — and it went off sixteen minutes early
+    next to a sleeping dog (prod 3562). A time in the request is an instruction
+    about when to act; it is never part of what to do. Reach for
+    `schedule_trigger`, `schedule_reminder` with `text: "run <name>"`, or
+    `alarm` instead. A call like that is refused here rather than run, so
+    saying it's set up when nothing was scheduled is a lie about a physical
+    thing.
+
     Two hard limits:
 
     - **Only ever call a function that CHECKS or REPORTS to answer

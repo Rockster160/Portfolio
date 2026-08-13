@@ -435,6 +435,8 @@ module Buddy
         @read_actions = false
         # Whether any round reached for `run_routine`. See forced_routine.
         @asked_routine = false
+        # Whether anything got put on the clock this turn. See tool_output.
+        @scheduled     = false
         nudged         = false
 
         loop do
@@ -655,6 +657,21 @@ module Buddy
         tool = Buddy::Tools[name]
         return JSON.generate({ ok: false, error: "no tool named #{name}" }) if tool.nil?
 
+        # THE gate, and it has to be HERE: an acting answering tool runs inside
+        # `resolve_call` (see its `answers?` branch), so anywhere downstream is
+        # after the sound has already played. Every call passes through this
+        # method — the proposal path too — so one check covers both, and a call
+        # marked failed is excluded from `proposals` by the same line that drops
+        # one which couldn't resolve.
+        if deferred_command? && IMMEDIATE_ACTION_TOOLS.include?(name) && !@scheduled
+          Rails.logger.warn(
+            "[Buddy::GPT::Turn] held back #{name} on message=#{@inbound.id} " \
+            "user=#{@user.id}: the request named a time",
+          )
+          @failed << call[:call_id]
+          return JSON.generate(self.class.held_for_later(name))
+        end
+
         result, signature, opens = self.class.resolve_call(
           tool, call, user: @user, conversation: @conversation, gate: @gate_kind
         )
@@ -666,6 +683,11 @@ module Buddy
 
         @seen << signature if signature
         @failed << call[:call_id] if result[:status].to_s == "failed"
+        # "Do this now and that at 11" is a real sentence. Once the model has
+        # actually put something on the clock this turn, it has understood the
+        # time, and an immediate call after that is a second request rather than
+        # the mistake this guards against.
+        @scheduled = true if result[:status].to_s != "failed" && SCHEDULING_TOOLS.include?(name)
         # An acting answering tool already did the thing, right here, and will
         # never be seen by ProposalBuilder. Recording it is what stops the
         # retraction from treating a true "Fan's on low now." as unbacked.
@@ -1344,6 +1366,85 @@ module Buddy
         # right after the verb is what separates an order from a turn of phrase.
         \b(?!\s+(?:with|by|from|about)\b)
       /xi
+
+      # ---- a command that said WHEN ------------------------------------------
+      #
+      # Prod 3562, 10:44 AM: "Play Whisper Nap sound at 11." Buddy answered
+      # "Playing the nap sound on Whisper." and called `call_jil_function` on
+      # the spot. The sound went off in the room, 16 minutes early, next to a
+      # sleeping dog.
+      #
+      # This is the same failure `message_partner` carries a whole section
+      # about ("A DELAY IS IN THE INSTRUCTION, NEVER IN THE NOTE") and prose
+      # didn't hold, for the reason prose never holds here: the tool that acts
+      # NOW is right there, its description says nothing about time, and every
+      # example in it is immediate. The difference is that a relay sent early is
+      # embarrassing and a sound played early is physical.
+      #
+      # So the request decides, not the reply. A person who says when is
+      # unambiguous, and unlike the reply there is only a small handful of ways
+      # to say it.
+      #
+      # Every alternative needs a real clock or a real deferral word. `at 72`
+      # (a thermostat) and `at 50` (a dimmer) must not read as times, so a bare
+      # hour is capped at 12 and anything longer needs a colon or a meridiem.
+      DEFERRED_COMMAND_RX = /
+          \bat\s+(?:1[0-2]|[1-9])\s*(?:am|pm|o'?clock)\b
+        | \bat\s+\d{1,2}:\d{2}\s*(?:am|pm)?\b
+        | \bat\s+(?:1[0-2]|[1-9])\b(?!\s*(?:%|percent|degrees?))
+        | \bat\s+(?:noon|midnight)\b
+        | \bin\s+(?:an?|\d+)\s+(?:sec|second|min|minute|hour|hr)s?\b
+        | \b(?:tonight|tomorrow|later\s+today|in\s+the\s+morning)\b
+        | \bthis\s+(?:morning|afternoon|evening)\b
+        | \bbefore\s+(?:bed|bedtime|dinner|lunch|work)\b
+        | \bwhen\s+i\s+(?:get\s+(?:home|back|up)|wake\s+up)\b
+      /xi
+
+      # Tools that change the world the instant they run and carry NO notion of
+      # when. That second half is what makes the list safe to gate on: a tool
+      # with its own time argument is one where "at 3" is an argument rather
+      # than a deferral, so `log_event`, `complete_chore` and the edit tools are
+      # deliberately absent — backdating a water to 3pm is a legitimate call on
+      # a sentence this regex matches.
+      IMMEDIATE_ACTION_TOOLS = %i[
+        call_jil_function trigger_jil_task run_routine mac_command print_again
+      ].freeze
+
+      # The tools that mean LATER. One of these landing in the same turn says the
+      # model understood the time, and nothing here should get in its way.
+      SCHEDULING_TOOLS = %i[
+        schedule_reminder schedule_trigger alarm set_timer remind_when move_reminder
+      ].freeze
+
+      # Told the way every other refusal is told, because it IS one: the call did
+      # not happen. `failed` is load-bearing rather than cosmetic — it drops the
+      # call from `proposals`, and it arms `retract_false_claim!` so a reply that
+      # says the sound is playing gets taken down instead of being believed.
+      def self.held_for_later(name)
+        {
+          status: "failed",
+          error:  "#{name} does it NOW, and they said when",
+          note:   "This did NOT run, on purpose. A time in the request says when to act; " \
+                  "it is never part of what to do. Put it on the clock instead: " \
+                  "`schedule_trigger` for a Jil listener scope, `schedule_reminder` with " \
+                  "`text: \"run <name>\"` for a saved routine or a plain Jil task, `alarm` " \
+                  "when it has to interrupt them, `set_timer` for a countdown. If none of " \
+                  "those can carry it - a Jil FUNCTION that takes arguments is the case that " \
+                  "can't be deferred yet - say so plainly and say when you could do it " \
+                  "instead. Do NOT do it now as a consolation, and never say it's scheduled " \
+                  "when it isn't.",
+        }
+      end
+
+      # Did they order something done AND say when? Both halves required: "at
+      # 11" on its own is conversation, and "play the nap sound" on its own is
+      # exactly what these tools are for.
+      def deferred_command?
+        return false if self_initiated?
+
+        body = @inbound.body.to_s
+        body.match?(COMMAND_REQUEST_RX) && body.match?(DEFERRED_COMMAND_RX)
+      end
 
       # A reply that DECLINES is honest and must survive. "I can't reach the TV
       # from here" is the right answer when nothing ran, and retracting it would
