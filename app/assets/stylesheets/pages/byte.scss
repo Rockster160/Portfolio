@@ -32,6 +32,17 @@ html.html-ctr-byte body {
   --bs-panel-soft: #1F3053;
   --bs-border: #24345B;
   --bs-text: #E8ECF6;
+  // Buddy's own voice: the ACCENT's hue, at 70% saturation and 84% lightness in
+  // every theme. General `--bs-text` stays near-neutral — this is only for the
+  // bubbles where the pet is the one speaking.
+  //
+  // 84% is the floor, and BLUE is what sets it. Luminance is 72% green and only
+  // 7% blue, so at a shared lightness Byte's tint runs out of contrast long
+  // before Moss's or Glimmer's: this value is 7.4:1 on `--bs-them-bg` where the
+  // others are 9-11:1. Going lighter than 84 was the first attempt and read as
+  // white; going darker drops Byte under AAA. Keep the recipe uniform and
+  // re-check the blue when changing it — it's the binding one.
+  --bs-text-buddy: #BAD6F3;
   --bs-muted: #8FA3C8;
   --bs-accent: #3FA0FF;
   --bs-accent-strong: #62B3FF;
@@ -52,6 +63,7 @@ html.html-ctr-byte body {
     --bs-panel-soft: #1E3325;
     --bs-border: #2E4A36;
     --bs-text: #E8F1E2;
+    --bs-text-buddy: #CDF3BA;  // 10.4:1 on --bs-them-bg
     --bs-muted: #94B48D;
     --bs-accent: #86C765;
     --bs-accent-strong: #A6E082;
@@ -73,6 +85,7 @@ html.html-ctr-byte body {
     --bs-panel-soft: #341C4E;
     --bs-border: #482860;
     --bs-text: #F2E9FA;
+    --bs-text-buddy: #D9BAF3;  // 8.9:1 on --bs-them-bg
     --bs-muted: #B69BD4;
     --bs-accent: #B266F2;
     --bs-accent-strong: #C98BFF;
@@ -94,6 +107,7 @@ html.html-ctr-byte body {
     --bs-panel-soft: #33260F;
     --bs-border: #4A3818;
     --bs-text: #F5ECD8;
+    --bs-text-buddy: #F3DFBA;  // 10.6:1 on --bs-them-bg
     --bs-muted: #C0A870;
     --bs-accent: #F2B84B;
     --bs-accent-strong: #FFD277;
@@ -705,20 +719,41 @@ html.html-ctr-byte body {
     border-bottom-left-radius: 4px;
   }
 
+  // Everything on THIS side of the thread wears the pet's colour — replies,
+  // receipts, watch reports, Claude output, and the app's own acknowledgements
+  // ("Renamed **x** → **y**"). Listing only the `buddy_*` kinds left a run of
+  // stark white chips between tinted bubbles, which read as a rendering fault
+  // rather than a distinction: the person's own messages are the only thing on
+  // the other side, and they're white on the accent gradient already.
+  //
+  // Relays are the exception, handled just below.
+  &.byte-msg-inbound:not(.byte-msg-kind-buddy_relay) {
+    color: var(--bs-text-buddy);
+  }
+
   // Cross-user relay bubble. Repainted (left bar + faint tint) in the accent of
   // whichever Buddy is speaking — the partner's on an incoming relay, your own
   // on the copy of one you sent out — so it never reads as a normal reply.
+  //
+  // The TEXT follows the same rule, in the other household's tint rather than
+  // this thread's: green words in a green bubble. Hardcoded like the accents
+  // above are, because the peer's theme is by definition not the one whose
+  // variables are in scope here. A peer theme with no entry (glimmer has none,
+  // and never had a background either) falls back to the neutral `--bs-text`.
   &[data-peer-theme="byte"] {
     background: rgba(63, 160, 255, 0.13);
     border-left: 3px solid #3fa0ff;
+    color: #BAD6F3;
   }
   &[data-peer-theme="moss"] {
     background: rgba(79, 207, 124, 0.13);
     border-left: 3px solid #4fcf7c;
+    color: #CDF3BA;
   }
   &[data-peer-theme="suki"] {
     background: rgba(178, 102, 242, 0.13);
     border-left: 3px solid #b266f2;
+    color: #D9BAF3;
   }
 
   // Attribution header atop the bubble. Incoming: the sending Buddy's icon +
@@ -4669,7 +4704,9 @@ $suki_expr_aliases: (
   border: 1px solid var(--bs-border);
   background: var(--bs-panel);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-  color: var(--bs-text);
+  // Buddy speaking, so the same tint their bubbles get in the thread — this is
+  // the wall tablet's ONLY rendering of a reply.
+  color: var(--bs-text-buddy);
   font-size: 16px;
   line-height: 1.4;
   text-align: center;
@@ -5705,7 +5742,17 @@ $suki_expr_aliases: (
     font-size: 82%;
     font-weight: 500;
     letter-spacing: 0.03em;
+    // Byte's own blue-white was baked in here, so this pill stayed cold on
+    // every other pet's surface. Faded from the pet's tint instead. The rgba
+    // stays as the line before it: a browser without color-mix drops the
+    // second declaration and keeps the old look rather than none.
+    //
+    // 78%, not the 65% the old rgba used — that alpha was fading a near-white,
+    // and this tint is already 9 points darker, so matching the number would
+    // have made the chip fainter than it has ever been (5.4:1 on Suki against
+    // the 6.9:1 it had). This lands at 6.6-8.5:1, a touch above where it was.
     color: rgba(231, 238, 251, 0.65);
+    color: color-mix(in srgb, var(--bs-text-buddy) 78%, transparent);
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.10);
     border-radius: 999px;
