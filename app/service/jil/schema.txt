@@ -509,8 +509,8 @@
   #blip(Numeric?)
   #data(Hash)
 [Whisper]
-  #notifySelf(String:"Title" String?:"Body" String?:"Tag")
-  #notifyAll(String:"Title" String?:"Body" String?:"Tag")
+  #notifySelf(String:"Title" String?:"Body" String?:"Tag" String?:"Icon")
+  #notifyAll(String:"Title" String?:"Body" String?:"Tag" String?:"Icon")
   #dismiss(String:"Tag")
 [Sms]
   #deliver(Text)::Boolean
