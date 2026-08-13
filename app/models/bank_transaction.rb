@@ -298,6 +298,20 @@ class BankTransaction < ApplicationRecord
     bank_account&.display_name || "—"
   end
 
+  # Where this row came from, for the tooltip on the When cell. Two rows that
+  # look identical on screen are the thing you most need to tell apart, and
+  # until this existed the only way was a console — which is how 26 duplicates
+  # went unnoticed. The id alone is not enough: which FEED a row came from is
+  # what says whether a near-identical pair is a duplicate or a genuine repeat
+  # charge.
+  def source_summary
+    parts = ["##{id}"]
+    parts << (simplefin_id.presence ? "SimpleFIN #{simplefin_id}" : "from an alert, not yet in the bank feed")
+    parts << "alert ##{action_event_id}" if action_event_id.present?
+    parts << "posted #{posted_at.in_time_zone(::User.timezone).strftime("%b %-d, %Y")}" if posted_at.present?
+    parts.join(" · ")
+  end
+
   private
 
   def mirror_category_to_event(canonical)

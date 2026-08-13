@@ -85,14 +85,37 @@ RSpec.describe SimpleFin::EventMatcher, ".link_event" do
     expect(BankTransaction.linked.count).to eq(1)
   end
 
-  it "refuses when two rows could equally be it" do
-    transaction(amount_cents: -2972, at: 1.day.ago, simplefin_id: "TRN-0001")
-    transaction(amount_cents: -2972, at: 2.days.ago, simplefin_id: "TRN-0002")
+  # This used to refuse, back when refusing just left the bank row unlinked.
+  # Now that every event gets a row, refusing MAKES a duplicate of a purchase
+  # already in the table — so the closest in time takes it instead. 26 pairs of
+  # exactly this shape had to be merged afterwards.
+  it "takes the closest row when two could equally be it" do
+    far = transaction(amount_cents: -2972, at: 5.hours.ago, simplefin_id: "TRN-0001")
+    near = transaction(amount_cents: -2972, at: 2.days.ago, simplefin_id: "TRN-0002")
     event = build_event(amount: 29.72, at: 2.days.ago)
     event.save!
 
-    expect(described_class.link_event(event)).to be_nil
-    expect(BankTransaction.linked).to be_empty
+    expect(described_class.link_event(event)).to eq(near)
+    expect(far.reload.action_event).to be_nil
+  end
+
+  # The real case: two same-sized charges on one card inside the window, each
+  # with its own alert. Both must pair off, and neither may spawn a third row.
+  it "pairs off two same-sized charges without inventing a row" do
+    early = transaction(amount_cents: -1611, at: 4.days.ago, simplefin_id: "TRN-EARLY")
+    late = transaction(amount_cents: -1611, at: 1.day.ago, simplefin_id: "TRN-LATE")
+
+    first = build_event(amount: 16.11, at: 4.days.ago)
+    first.save!
+    second = build_event(amount: 16.11, at: 1.day.ago)
+    second.save!
+
+    SimpleFin::EventTransaction.sync(first)
+    SimpleFin::EventTransaction.sync(second)
+
+    expect(early.reload.action_event).to eq(first)
+    expect(late.reload.action_event).to eq(second)
+    expect(BankTransaction.count).to eq(2)
   end
 
   it "does not match a different account" do
@@ -123,15 +146,15 @@ RSpec.describe SimpleFin::EventMatcher, ".link_event" do
       expect(described_class.link_event(event)).to eq(row)
     end
 
-    # With no account to narrow on, more of these land ambiguous — and
-    # ambiguous has to stay a second row rather than a guess.
-    it "refuses to choose between two rows of the same size" do
-      transaction(amount_cents: -2972, at: 1.day.ago, simplefin_id: "TRN-X")
-      transaction(amount_cents: -2972, at: 2.days.ago, simplefin_id: "TRN-Y")
+    # With no account to narrow on, more of these come back with several
+    # candidates — settled the same way, on time.
+    it "takes the closest of two rows of the same size" do
+      transaction(amount_cents: -2972, at: 5.hours.ago, simplefin_id: "TRN-X")
+      near = transaction(amount_cents: -2972, at: 2.days.ago, simplefin_id: "TRN-Y")
       event = build_event(amount: 29.72, at: 2.days.ago, label: "")
       event.save!
 
-      expect(described_class.link_event(event)).to be_nil
+      expect(described_class.link_event(event)).to eq(near)
     end
 
     # Signed, not magnitude: without an account to separate them, a refund

@@ -56,6 +56,9 @@ class SystemController < ApplicationController
     @unclassified = @accounts.select(&:unknown?)
     @dashboard_cents = ::SimpleFin::DashboardCache.balance_cents
     @dashboard_available = ::SimpleFin::DashboardCache.available_cents
+    # Which account is holding the figure back, so the page names it rather
+    # than reporting a cause that may not be the real one.
+    @dashboard_missing = ::SimpleFin::DashboardCache.missing_balance
     @stray_categories = ::TransactionCategory.unknown_in_use
     # Collapsed the same way the listing is, so the count matches the rows the
     # `category:none` link it points at will actually show.

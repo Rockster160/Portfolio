@@ -211,12 +211,13 @@ RSpec.describe SimpleFin::EventTransaction do
       expect(claim(amount_cents: 2499)).to be_nil
     end
 
-    # A wrong merge destroys a transaction and nothing downstream would show it.
-    it "refuses to choose between two equally good candidates" do
-      described_class.sync(alert(at: at))
-      described_class.sync(alert(at: at + 1.hour))
+    # Refusing here would let the bank's copy be inserted alongside the alert's,
+    # which is a phantom transaction in every total. Closest in time wins.
+    it "takes the closest of two candidates rather than neither" do
+      near = described_class.sync(alert(at: at))
+      described_class.sync(alert(at: at + 2.days))
 
-      expect(claim).to be_nil
+      expect(claim).to eq(near)
     end
 
     it "prefers the row that names the account over one that names none" do

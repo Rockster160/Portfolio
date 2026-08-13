@@ -33,9 +33,19 @@
         dashboard figure until a kind is set.
       </p>
     <% end %>
+    <%# Two very different reasons the figure can be blank, and saying the wrong
+        one sends you looking in the wrong place. It read "no classified account
+        outside a loan" while three were sitting right there — the actual cause
+        was an account that had not reported a balance. %>
     <% if @dashboard_cents.blank? %>
       <p class="bank-warn">
-        No classified account outside a loan, so the dashboard figure has nothing to read.
+        <% if @dashboard_missing.any? %>
+          <%= @dashboard_missing.map(&:display_name).to_sentence %>
+          <%= @dashboard_missing.one? ? "has" : "have" %> reported no balance, so the dashboard
+          figure has nothing to total. It fills in on the next successful sync.
+        <% else %>
+          No classified account outside a loan, so the dashboard figure has nothing to read.
+        <% end %>
       </p>
     <% end %>
 
@@ -277,7 +287,9 @@
                 <input type="checkbox" name="transaction_ids[]"
                        value="<%= transaction.id %>" form="bank-bulk-form">
               </td>
-              <td class="when">
+              <%# Which feed the row came from, on hover. Two rows that read the
+                  same on screen are exactly what you need to tell apart. %>
+              <td class="when" title="<%= transaction.source_summary %>">
                 <span class="date"><%= transaction.occurred_local&.strftime("%b %-d, %Y") %></span>
                 <%# Only when the bank actually gave a clock time — see
                     occurred_time_known?. A third of rows are date-only. %>
@@ -576,7 +588,9 @@
 
     /* Date on top, time tucked under it small and tight — two lines in less
        vertical space than the one line was taking. */
-    .bank-table td.when { white-space: nowrap; line-height: 1.15; }
+    /* `help` so the tooltip is discoverable — nothing else on the page hints
+       that the cell carries the row's id and which feed it came from. */
+    .bank-table td.when { white-space: nowrap; line-height: 1.15; cursor: help; }
     .bank-table td.when .date { display: block; }
     .bank-table td.when .time { display: block; font-size: 11px; color: #64748B; }
     .bank-table .right { text-align: right; font-variant-numeric: tabular-nums; }

@@ -63,6 +63,28 @@ RSpec.describe BankTransaction, ".query" do
     expect(found("payee:costco")).to contain_exactly(groceries)
   end
 
+  # Two rows that read identically on screen are the thing you most need to
+  # tell apart — which feed each came from is what says whether they are a
+  # duplicate or a genuine repeat charge.
+  describe "#source_summary" do
+    it "names the id and the SimpleFIN record for a bank row" do
+      expect(orphan.source_summary).to include("##{orphan.id}", "SimpleFIN T3")
+    end
+
+    it "says so when a row exists only because an alert arrived" do
+      row = BankTransaction.create!(
+        bank_account: card, amount_cents: -100, transacted_at: 1.day.ago,
+        action_event: ActionEvent.create!(
+          user: user, name: "Transaction", timestamp: 1.day.ago,
+          data: { amount: 1, account: "(...7283)", category: "fun" }
+        )
+      )
+
+      expect(row.source_summary).to include("not yet in the bank feed", "alert #")
+      expect(row.source_summary).not_to include("posted")
+    end
+  end
+
   it "matches a category" do
     expect(found("category:groceries")).to contain_exactly(groceries)
   end

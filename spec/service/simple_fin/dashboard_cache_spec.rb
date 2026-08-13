@@ -252,6 +252,66 @@ RSpec.describe SimpleFin::DashboardCache do
       expect(described_class.included?(loan)).to be(false)
       expect(described_class.included?(mystery)).to be(false)
     end
+
+    it "leaves out a hand-created account that has no balance" do
+      closed = BankAccount.create!(name: "Chase Credit (4842)", last4: "4842", kind: :credit)
+
+      expect(described_class.included?(closed)).to be(false)
+    end
+  end
+
+  # The two closed Chase cards are real credit accounts and are classified as
+  # such, but no institution reports them and none ever will. Treating that
+  # missing balance the same as a failed sync blanked the whole dashboard the
+  # moment they were given a kind.
+  describe "an account with no balance" do
+    let!(:closed) {
+      BankAccount.create!(name: "Chase Credit (4842)", last4: "4842", kind: :credit)
+    }
+
+    it "does not blank the figure when nothing will ever report it" do
+      full_sheet
+
+      expect(described_class.balance_cents).to eq(1_832_024 - 198_853 - 728_724)
+      expect(described_class.available_cents).to be_present
+    end
+
+    it "is left out of the accounts the figure is made of" do
+      full_sheet
+
+      expect(described_class.included_accounts).not_to include(closed)
+    end
+
+    # The half worth keeping: a real SimpleFIN account that fails to report is
+    # a sync problem, and a total that silently omits it is a wrong number.
+    it "still blanks the figure when a reporting account fails to send one" do
+      full_sheet
+      BankAccount.find_by(simplefin_id: "ACT-0002").update!(balance_cents: nil)
+
+      expect(described_class.balance_cents).to be_nil
+    end
+
+    it "counts it once someone gives it a balance by hand" do
+      full_sheet
+      closed.update!(balance_cents: -5_000)
+
+      expect(described_class.balance_cents).to eq(1_832_024 - 198_853 - 728_724 - 5_000)
+    end
+
+    describe ".missing_balance" do
+      it "names the reporting account that is holding the figure back" do
+        full_sheet
+        BankAccount.find_by(simplefin_id: "ACT-0002").update!(balance_cents: nil)
+
+        expect(described_class.missing_balance.map(&:simplefin_id)).to eq(["ACT-0002"])
+      end
+
+      it "says nothing about the account that was never going to report" do
+        full_sheet
+
+        expect(described_class.missing_balance).to be_empty
+      end
+    end
   end
 
   # Fires on the DISPLAYED figure, not the raw balance — nearly every sync

@@ -63,8 +63,28 @@ module SimpleFin
       # Everything the reported figure is made of. Unclassified accounts are
       # left out: a headline number should not rest on a guess about what an
       # account is, and the banking page already asks for the kind.
+      #
+      # So are hand-created accounts that carry no balance. The two closed Chase
+      # cards are real credit accounts and are correctly classified as such, but
+      # no institution reports them and none ever will — so their missing
+      # balance is a permanent fact, not a sync that has not happened yet, and
+      # letting it nil the total blanked the dashboard the moment they were
+      # classified.
+      #
+      # Deliberately `simplefin_id IS NOT NULL OR balance_cents IS NOT NULL`
+      # rather than just the former: a hand-created account that is given a
+      # balance should count, and a SimpleFIN account that fails to report one
+      # must still blank the figure. That second half is the behaviour worth
+      # keeping — see `balance_cents`.
       def included_accounts
-        ::BankAccount.classified.where.not(kind: EXCLUDED_KINDS).order(:id)
+        scope = ::BankAccount.classified.where.not(kind: EXCLUDED_KINDS)
+        scope.where("simplefin_id IS NOT NULL OR balance_cents IS NOT NULL").order(:id)
+      end
+
+      # The accounts that should have a balance and do not — i.e. exactly what
+      # is blanking the figure. Empty when nothing is wrong.
+      def missing_balance
+        included_accounts.where(balance_cents: nil).to_a
       end
 
       # Nil rather than a partial sum when an account has no balance yet. A
@@ -92,6 +112,7 @@ module SimpleFin
       # page marks its rows with.
       def included?(account)
         return false if account.nil? || account.unknown?
+        return false if account.simplefin_id.nil? && account.balance_cents.nil?
 
         EXCLUDED_KINDS.exclude?(account.kind&.to_sym)
       end

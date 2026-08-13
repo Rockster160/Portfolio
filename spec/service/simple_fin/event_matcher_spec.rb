@@ -65,15 +65,18 @@ RSpec.describe SimpleFin::EventMatcher do
     expect(row.reload.action_event).to eq(matching)
   end
 
-  it "leaves a charge alone when two alerts could explain it" do
+  # `ambiguous` counts the ones that needed settling now, not the ones given
+  # up on — nothing is given up on, because the alternative is a duplicate.
+  it "takes the closest alert when two could explain a charge" do
     event(amount: 29.72, at: 2.days.ago)
-    event(amount: 29.72, at: 1.day.ago)
+    closest = event(amount: 29.72, at: 1.day.ago)
     row = transaction(amount_cents: -2972, at: 1.day.ago)
 
     result = described_class.call
 
-    expect(row.reload.action_event).to be_nil
+    expect(row.reload.action_event).to eq(closest)
     expect(result.ambiguous).to eq(1)
+    expect(result.linked).to eq(1)
   end
 
   it "does not match a different amount" do

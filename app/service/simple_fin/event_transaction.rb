@@ -49,9 +49,10 @@ module SimpleFin
       # purchase and both disappear into one row.
       #
       # An exact account match wins outright; a row that names no account is
-      # only considered when nothing else fits, and then only if it is alone.
-      # Two candidates is left as two rows — a wrong merge silently destroys a
-      # transaction, and nothing downstream would ever show that it happened.
+      # only considered when nothing else fits. Where several fit, the closest
+      # in time takes it — refusing would leave the bank's copy to be inserted
+      # alongside the alert's, which is a phantom transaction in every total.
+      # See EventMatcher.nearest for why proximity is trustworthy here.
       def claim(bank_account:, amount_cents:, occurred_at:)
         return nil if amount_cents.nil? || occurred_at.blank?
 
@@ -61,12 +62,8 @@ module SimpleFin
           occurred_at:  (occurred_at - window)..(occurred_at + window),
         )
 
-        exact = scope.where(bank_account_id: bank_account&.id).to_a
-        return exact.first if exact.one?
-        return nil if exact.size > 1
-
-        unattributed = scope.where(bank_account_id: nil).to_a
-        unattributed.one? ? unattributed.first : nil
+        exact = closest(scope.where(bank_account_id: bank_account&.id), occurred_at)
+        exact || closest(scope.where(bank_account_id: nil), occurred_at)
       end
 
       # An event that goes away takes its row with it — but only if the row is
@@ -113,6 +110,11 @@ module SimpleFin
       end
 
       private
+
+      # `id` breaks an exact tie so the choice cannot vary between runs.
+      def closest(scope, occurred_at)
+        scope.to_a.min_by { |row| [(row.occurred_at - occurred_at).abs, row.id] }
+      end
 
       def create!(event)
         cents = amount_cents_for(event)

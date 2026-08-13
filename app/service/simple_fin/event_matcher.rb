@@ -70,9 +70,38 @@ module SimpleFin
           end
         )
         candidates = candidates.select { |row| within_window?(event, row) }
-        return nil unless candidates.one?
+        chosen = nearest(event, candidates)
+        return nil if chosen.nil?
 
-        candidates.first.tap { |row| attach!(row, event) }
+        chosen.tap { |row| attach!(row, event) }
+      end
+
+      # Which of several possible bank rows this event describes: the closest in
+      # time to it.
+      #
+      # This used to refuse outright when more than one fitted, on the grounds
+      # that a wrong link silently moves one purchase's category onto another.
+      # That was the right call when refusing was free — the bank row simply
+      # stayed unlinked. It stopped being free once every event started getting
+      # a row of its own: refusing now MAKES a second row for a purchase already
+      # in the table, and a duplicate double-counts the spend in every total and
+      # chart. 26 pairs of those exist, all of them two same-sized charges on one
+      # card inside five days.
+      #
+      # Proximity settles it because the two feeds disagree by hours, not days —
+      # the alert fires at the till and `occurred_at` is when the merchant says
+      # it happened. Against a five-day search window, the real partner is
+      # always the nearest by a wide margin.
+      #
+      # Worst case is now two same-priced charges on one card having their
+      # categories swapped, which are usually the same category anyway. That is
+      # a far cheaper mistake than a phantom transaction.
+      def nearest(event, candidates)
+        return nil if candidates.empty?
+        return candidates.first if candidates.one?
+
+        # `id` breaks an exact tie so the choice cannot vary between runs.
+        candidates.min_by { |row| [(event.timestamp - row.occurred_at).abs, row.id] }
       end
 
       # The link and the category land together, in both directions. Attaching
@@ -110,7 +139,7 @@ module SimpleFin
       def candidates_for(last4, cents)
         accounts = ::BankAccount.where(last4: last4).select(:id)
         scope = ::BankTransaction.unlinked.where(bank_account_id: accounts)
-        scope.where(amount_cents: [cents, -cents]).to_a
+        scope.where(amount_cents: [cents, -cents]).order(:occurred_at, :id).to_a
       end
 
       # 433 alerts come from a format that names no account, so account is not
@@ -119,16 +148,14 @@ module SimpleFin
       #
       #   * SIGNED amounts, not magnitude. Without an account to separate them,
       #     magnitude would let a refund match the charge it reverses.
-      #   * the same `one?` rule as everywhere else — with a weaker key, more
-      #     of these land ambiguous, and ambiguous means a second row rather
-      #     than a guess. A duplicate is visible on the page and mergeable; a
-      #     wrong attachment moves one purchase's category onto another and
-      #     nothing ever shows that it happened.
+      #   * a weaker key means more of these come back with several candidates,
+      #     and `nearest` settles them on time — see the note there for why
+      #     picking one beats refusing.
       def unattributed_candidates_for(event)
         cents = ::SimpleFin::EventTransaction.amount_cents_for(event)
         return [] if cents.nil?
 
-        ::BankTransaction.unlinked.where(amount_cents: cents).to_a
+        ::BankTransaction.unlinked.where(amount_cents: cents).order(:occurred_at, :id).to_a
       end
     end
 
@@ -166,14 +193,18 @@ module SimpleFin
         self.class.within_window?(event, transaction)
       }
 
-      case candidates.size
-      when 0 then @unmatched += 1
-      when 1
-        self.class.attach!(transaction, candidates.first)
-        claimed << candidates.first.id
-        @linked += 1
-      else @ambiguous += 1
-      end
+      return (@unmatched += 1) if candidates.empty?
+
+      # Nearest in time, same as the other direction — and `ambiguous` now
+      # counts the ones that needed settling rather than the ones abandoned,
+      # because none are abandoned any more.
+      @ambiguous += 1 if candidates.size > 1
+      chosen = candidates.min_by { |event|
+        [(event.timestamp - transaction.occurred_at).abs, event.id]
+      }
+      self.class.attach!(transaction, chosen)
+      claimed << chosen.id
+      @linked += 1
     end
 
     # One query for every candidate event in range, then matched in memory.
