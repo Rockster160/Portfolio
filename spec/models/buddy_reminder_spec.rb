@@ -141,4 +141,88 @@ RSpec.describe BuddyReminder do
       expect(converted).to include("freq" => "weekly", "by_day" => ["wed"], "at" => "20:00")
     end
   end
+
+  # Asking again about something you already asked about is the normal shape of
+  # a conversation, and Buddy has no memory of having set one that morning.
+  describe ".clashing" do
+    let(:noon) { zone.local(2026, 1, 1, 12, 0) }
+
+    def one_off!(body, at: noon)
+      described_class.create!(user: user, byte_conversation: convo, body: body, fire_at: at)
+    end
+
+    def daily!(body, at: noon)
+      described_class.create!(
+        user: user, byte_conversation: convo, body: body, fire_at: at,
+        recurrence: { "freq" => "daily", "at" => "12:00", "starts_on" => "2026-01-01" },
+      )
+    end
+
+    it "finds the same thing already set for the same minute" do
+      existing = one_off!("Take the trash out")
+
+      expect(described_class.clashing(user, "take the trash out", noon)).to eq(existing)
+    end
+
+    # Same minute alone would collapse two genuinely different reminders, and
+    # losing a real one is worse than the double ping this exists to stop.
+    it "leaves a different thing at the same minute alone" do
+      one_off!("Take the trash out")
+
+      expect(described_class.clashing(user, "call mom", noon)).to be_nil
+    end
+
+    it "leaves the same thing at a different minute alone" do
+      one_off!("Take the trash out")
+
+      expect(described_class.clashing(user, "take the trash out", noon + 1.hour)).to be_nil
+    end
+
+    # Prod 3448/3449. Reminder 37 was the daily noon plant check; reminder 40
+    # was set for the same noon off "please ping me when it's time to do that",
+    # and both went off. Excluding recurring reminders from the comparison was
+    # the only thing that hid it — the minute window already handles the case
+    # that exclusion was reasoning about, since a daily 9am only lands in the
+    # window on the day it's about to fire.
+    it "catches a RECURRING one whose next fire is that minute" do
+      existing = daily!("Check the bamboo tree and water all the plants.")
+
+      expect(described_class.clashing(user, "Ping me when it's time to do the plant check.", noon))
+        .to eq(existing)
+    end
+
+    it "still leaves a recurring one alone on a day it isn't about to fire" do
+      daily!("Check the bamboo tree and water all the plants.")
+
+      expect(described_class.clashing(user, "water the plants", noon + 1.day)).to be_nil
+    end
+
+    # Plural-vs-singular is how the same subject usually turns up twice, and
+    # "plants" against "plant" shared no word at all.
+    it "matches across a plural" do
+      existing = one_off!("Water the plants")
+
+      expect(described_class.clashing(user, "do the plant check", noon)).to eq(existing)
+    end
+
+    it "leaves short words unstemmed, so gas isn't ga" do
+      one_off!("Get gas")
+
+      expect(described_class.clashing(user, "check the ga meter", noon)).to be_nil
+    end
+
+    it "ignores one that already fired" do
+      one_off!("Take the trash out").update!(fired_at: Time.current)
+
+      expect(described_class.clashing(user, "take the trash out", noon)).to be_nil
+    end
+
+    it "ignores somebody else's" do
+      other = create(:user)
+      other_convo = other.byte_conversations.create!(mode: :buddy, name: "Buddy")
+      described_class.create!(user: other, byte_conversation: other_convo, body: "Take the trash out", fire_at: noon)
+
+      expect(described_class.clashing(user, "take the trash out", noon)).to be_nil
+    end
+  end
 end

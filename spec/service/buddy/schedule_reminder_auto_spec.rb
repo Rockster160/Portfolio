@@ -73,15 +73,30 @@ RSpec.describe "schedule_reminder auto-run" do
       expect { tool[:confirm].call({ text: "Write Doug's card", at: at.iso8601 }, ctx) }.not_to raise_error
     end
 
-    # A daily 9am and a one-off tomorrow at 9am are different requests, and the
-    # recurring one is never "already set" for a particular day.
-    it "doesn't compare against a recurring reminder" do
+    # A daily 9am and a one-off TOMORROW at 9am are different requests - and the
+    # minute window is what says so, since a recurring reminder's `fire_at` is
+    # its next fire. Recurring ones used to be excluded from the comparison
+    # outright on this reasoning, which threw away the one case where it
+    # matters: prod 3448/3449, where the daily noon plant check and a one-off
+    # set for the same noon both went off.
+    def daily!(body, fire_at)
       BuddyReminder.create!(
-        user: user, byte_conversation: convo, body: "Write Doug's card",
-        fire_at: at, recurrence: { "kind" => "daily", "at" => at.strftime("%H:%M") }
+        user: user, byte_conversation: convo, body: body,
+        fire_at: fire_at, recurrence: { "kind" => "daily", "at" => fire_at.strftime("%H:%M") }
       )
+    end
+
+    it "doesn't compare against a recurring reminder due on another day" do
+      daily!("Write Doug's card", at - 1.day)
 
       expect { tool[:confirm].call({ text: "Write Doug's card", at: at.iso8601 }, ctx) }.not_to raise_error
+    end
+
+    it "does compare against one about to fire at that very minute" do
+      daily!("Write Doug's card", at)
+
+      expect { tool[:confirm].call({ text: "Write Doug's card", at: at.iso8601 }, ctx) }
+        .to raise_error(/already set/)
     end
   end
 

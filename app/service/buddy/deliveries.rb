@@ -133,12 +133,12 @@ module Buddy
     # A row nothing emailed us about — something bought somewhere without a
     # parser, or a thing they were told is coming. `carrier: :manual` is what
     # the dashboard's own "add" uses, so these behave identically there.
-    def add!(user:, name:, on: nil, tracking: nil, url: nil)
+    def add!(user:, name:, on: nil, tracking: nil, url: nil, carrier: nil)
       raise "deliveries aren't part of this person's setup" unless available?(user)
       raise "a delivery needs a name" if name.to_s.strip.blank?
 
       AmazonOrder.reload
-      order = AmazonOrder.create(carrier: :manual)
+      order = AmazonOrder.create(carrier: carrier.presence || :manual)
       order.name = name.to_s.strip
       # THEIR today, not the server's. Time.zone is UTC app-wide, so a package
       # added after 6pm on a UTC-6 calendar would otherwise be filed under
@@ -158,7 +158,7 @@ module Buddy
     #
     # Only the fields actually passed are touched — nil means "leave it", so a
     # rename can't wipe a tracking number by omission.
-    def edit!(user:, match:, name: nil, on: nil, tracking: nil, url: nil)
+    def edit!(user:, match:, name: nil, on: nil, tracking: nil, url: nil, carrier: nil)
       raise "deliveries aren't part of this person's setup" unless available?(user)
 
       order = find(user, match)
@@ -168,6 +168,7 @@ module Buddy
       order.delivery_date   = on if on.present?
       order.tracking_number = tracking.to_s.strip if tracking.to_s.strip.present?
       order.custom_url      = url.to_s.strip if url.to_s.strip.present?
+      order.carrier         = carrier if carrier.present?
       commit!
       order
     end

@@ -54,6 +54,14 @@ Buddy::Tools.register(
     steps under the same name. Running the steps live instead performs actions
     they never asked for and leaves the routine every bit as wrong as it was.
 
+    When only one ARGUMENT is wrong - the scene, the chore, the count - that's
+    `edit_routine`, which patches that step and leaves the others alone. Reach
+    for it rather than this one, because `routines` shows you each step as a
+    short phrase and not its full arguments, so re-saving the sequence from
+    what you can see drops everything that phrase didn't mention. Either way it
+    takes a call: agreeing that a routine is wrong and writing nothing leaves
+    it armed exactly as it was.
+
     Every step is CHECKED before anything is stored - the tool has to exist, the
     arguments have to be complete, and each one has to actually resolve against
     their data. A chore name that matches nothing comes straight back to you

@@ -28,6 +28,14 @@ class AmazonOrder
     fedex: "https://www.fedex.com/fedextrack/?trknbr=%<tracking>s",
   }.freeze
 
+  # The carriers somebody can NAME. `manual` is the absence of one — what a
+  # hand-added row starts as — so it isn't in here; `amazon` has no template
+  # because those rows keep their product link instead.
+  #
+  # Derived from the URL map rather than listed again, so a carrier is
+  # sayable exactly when there's somewhere to send its tracking number.
+  NAMED_CARRIERS = (CARRIER_TRACKING_URLS.keys + [:amazon]).freeze
+
   def self.all
     @@all ||= reload
   end

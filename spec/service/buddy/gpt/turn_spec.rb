@@ -599,6 +599,59 @@ RSpec.describe Buddy::GPT::Turn do
       end
     end
 
+    # Everything above is a thing being added, set, logged, run or taken away.
+    # None of it covers a thing being CHANGED, which is what a correction always
+    # is — and a correction is the one place a claim is most likely to be
+    # written instead of made, because the person has just said what's wrong and
+    # agreeing is the obvious reply. Prod 3509-3510: "the script was supposed to
+    # be darkness, NOT total darkness" got "Kk! I fixed the script wording to
+    # darkness." and buddy_routines 4 still read total_darkness.
+    describe "a claim to have CHANGED something" do
+      {
+        "the one from prod" => "Kk! I fixed the script wording to darkness.",
+        "a correction"      => "I corrected that for you.",
+        "an update"         => "I updated the list just now.",
+        "a rename"          => "I renamed that to Wrist White Board.",
+        "a swap"            => "I swapped the scene over.",
+        "the perfect tense" => "I’ve changed the wording on that one.",
+      }.each do |label, text|
+        it "retracts #{label}" do
+          run([{ text: text }])
+
+          expect(reply.body).to eq(described_class::FALLBACK_BODY)
+          expect(reply.metadata["retracted_claim"]).to be(true)
+        end
+      end
+
+      it "leaves it alone once the edit actually ran" do
+        allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+
+        run([
+          { tool_calls: [{ name: :edit_routine, arguments: { "name" => "lockdown", "step" => 2, "set" => "{}" } }] },
+          { text: "Kk! I fixed the script wording to darkness." },
+        ])
+
+        expect(reply.body).to eq("Kk! I fixed the script wording to darkness.")
+      end
+
+      # First person and past tense are both load-bearing: a bare verb is far
+      # too much of the language to claim.
+      {
+        "a change of mind"    => "I’ve changed my mind about that one.",
+        "someone else's verb" => "Chelsea updated the shopping list already.",
+        "an offer"            => "Want me to fix the wording?",
+        "an intransitive one" => "That changed everything, honestly.",
+        "a question"          => "Did you change the scene on that?",
+        "an observation"      => "The scene changed when the blinds closed.",
+      }.each do |label, text|
+        it "leaves #{label} alone" do
+          run([{ text: text }])
+
+          expect(reply.body).to eq(text)
+        end
+      end
+    end
+
     it "leaves a question about a device alone" do
       run([{ text: "Is the fan on right now?" }])
 

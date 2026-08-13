@@ -9,6 +9,14 @@ Buddy::Tools.register(
     or asked for a TASK, they want a row they can see and check off - that's
     `add_agenda_item`, and a reminder is not a substitute for it.
 
+    **`text` is what they'll READ when it goes off, not what they said to get
+    it set.** Their words are a request aimed at you; the reminder is a nudge
+    aimed at them, and the two are almost never the same sentence. "Please ping
+    me when it's time to do that!" stored verbatim arrives at noon as "Reminder:
+    Ping me when it's time to do the plant check." - a message asking them to
+    ask you, at the moment they were supposed to be told what to do (prod 3449).
+    Write the thing itself: "Check the bamboo and water the plants."
+
     `notify` aims it at SOMEBODY ELSE in the house, and that makes it a MESSAGE
     from this person that leaves later. "Send Chelsea a cute note in 10
     minutes", "remind Eve at 4 that...", "ping mom tonight about..." - name them

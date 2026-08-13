@@ -161,6 +161,14 @@ RSpec.describe Buddy::Deliveries do
       expect(AmazonOrder.reload.first.carrier).to eq(:manual)
     end
 
+    it "takes a carrier when they named one, so the tracking number links" do
+      described_class.add!(user: owner, name: "Computer Desk", tracking: "532572111399", carrier: :fedex)
+
+      order = AmazonOrder.reload.first
+      expect(order.carrier).to eq(:fedex)
+      expect(order.url).to eq("https://www.fedex.com/fedextrack/?trknbr=532572111399")
+    end
+
     it "refuses a nameless one" do
       expect { described_class.add!(user: owner, name: "  ") }.to raise_error(/needs a name/)
     end
@@ -213,6 +221,31 @@ RSpec.describe Buddy::Deliveries do
     it "says so when nothing matches instead of editing the wrong package" do
       expect { described_class.edit!(user: owner, match: "kayak", name: "x") }
         .to raise_error(/nothing on the way matches/)
+    end
+
+    # Prod 3495: 'the "Computer Desk" tracking number is FedEx: #532572111399'.
+    # The number was stored, the word FedEx went into the confirmation sentence
+    # and nowhere else, and the row kept `carrier: manual` — which has no entry
+    # in CARRIER_TRACKING_URLS, so AmazonOrder#url returned nil and a package
+    # whose tracking number was sitting right there couldn't be tracked.
+    it "takes the carrier alongside the number, and the number becomes a link" do
+      described_class.edit!(user: owner, match: "office", tracking: "532572111399", carrier: :fedex)
+
+      order = AmazonOrder.reload.first
+      expect(order.carrier).to eq(:fedex)
+      expect(order.url).to eq("https://www.fedex.com/fedextrack/?trknbr=532572111399")
+    end
+
+    it "reads the carrier back when they ask what's coming" do
+      described_class.edit!(user: owner, match: "office", tracking: "532572111399", carrier: :fedex)
+
+      expect(described_class.call(user: owner)[:rows].first).to include("fedex 532572111399")
+    end
+
+    it "leaves the carrier alone when they didn't name one" do
+      described_class.edit!(user: owner, match: "office", tracking: "532572111399")
+
+      expect(AmazonOrder.reload.first.carrier).to eq(:amazon)
     end
 
     it "refuses anyone but the owner" do
@@ -305,6 +338,44 @@ RSpec.describe Buddy::Deliveries do
 
       chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
       expect(chip.body).to include("Office item").and include("Wrist White Board")
+    end
+
+    # The carrier arriving in the same breath as the number is the ordinary
+    # case, so the tool has to be able to carry it — without the argument the
+    # word had nowhere to go but the sentence.
+    it "carries the carrier through from what they said" do
+      stock!([{ name: "Computer Desk", on: today }])
+
+      Buddy::ProposalBuilder.create(
+        user: owner, byte_message: msg,
+        markers: [{ tool_name: :update_delivery,
+                    payload: { match: "desk", tracking: "532572111399", carrier: :fedex }, span: [0, 0] }]
+      )
+
+      expect(AmazonOrder.reload.first.carrier).to eq(:fedex)
+    end
+
+    it "counts a carrier on its own as a change worth making" do
+      stock!([{ name: "Computer Desk", on: today, carrier: "manual" }])
+
+      Buddy::ProposalBuilder.create(
+        user: owner, byte_message: msg,
+        markers: [{ tool_name: :update_delivery, payload: { match: "desk", carrier: :fedex }, span: [0, 0] }]
+      )
+
+      expect(AmazonOrder.reload.first.carrier).to eq(:fedex)
+    end
+
+    it "refuses a carrier it has nowhere to send" do
+      stock!([{ name: "Computer Desk", on: today }])
+
+      result = Buddy::GPT::Turn.resolve_tool(
+        Buddy::Tools[:update_delivery],
+        { call_id: "c1", name: :update_delivery, arguments: { match: "desk", carrier: "dhl" } },
+        user: owner, conversation: nil,
+      )
+
+      expect(result[:status]).to eq("failed")
     end
 
     it "refuses a day it can't read rather than quietly using today" do

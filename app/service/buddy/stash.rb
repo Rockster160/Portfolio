@@ -212,6 +212,7 @@ module Buddy
       def destination(user, idea)
         lines = ["WHAT IS IT? Decide this first, before you file anything."]
         lines << "- **Something to act on now.** A nudge at a time, a timer, something to send, anything with a clock on it: DO it with the tool that does it (`schedule_reminder`, `set_timer`, and so on), then take it off the pile with `sort_stash(id: #{idea.id}, drop: true)`. It only landed on the pile because they tapped Stash before typing. Never tell them it's handled unless you actually did the thing - a pile entry is not a reminder."
+        lines << "- **Or something that's already set.** \"Please ping me when it's time to do that!\" right after you told them a reminder exists is AGREEMENT, not a new request - read `upcoming_reminders` before you set anything and say it's already covered if it is. Prod: that exact sentence became a second reminder for the same noon, and both went off (msgs 3448/3449). Same when the request names the thing you just named: it's that thing's reminder, not another one."
         lines << task_line(user, idea) if to_do_lists(user).any?
         lines << "- **A thought worth holding.** Something to mull, decide, look into, or come back to - that one stays on the pile, and the rest of this is about it."
         lines.join("\n")

@@ -35,6 +35,16 @@ Buddy::Tools.register(
     Use it only when something really is downstream of the answer. A person is
     not a countdown: they may take hours, or never reply at all, and everything
     behind the wait sits there until they do.
+
+    ## What YOU say back
+
+    That you've asked, in one short line - "asked her, I'll pass on what she
+    says". This tool sends the question and leaves its own receipt, so that's
+    all that's left to say.
+
+    Never answer the question yourself and never read it back. A reply that
+    does either reads as the answer having already come in, when nobody has
+    even been asked yet.
   TXT
   feature:     :relay,
   args:        {

@@ -33,6 +33,18 @@ Buddy::Tools.register(
     chore = ctx.resolve_chore(payload[:chore])
     raise "no chore matching #{payload[:chore].inspect}" if chore.nil?
 
+    # An edit with nothing to edit is a mistake worth catching here, the same
+    # way update_delivery catches it. Left through, `execute` writes no
+    # attributes, returns `updated_fields: []` and `before: {}`, and the receipt
+    # still says "Updated Charge Villager Car ✓" over an undo row that undoes
+    # nothing (prod byte_action 493). A phantom confirmation is worse than an
+    # error, because the error is the thing that makes the model say what it
+    # actually wants changed.
+    given = payload.values_at(:name, :schedule, :due, :assignee, :priority, :disabled)
+    if given.all? { |v| v.to_s.strip.blank? }
+      raise "nothing to change on #{chore.name} - say what should be different"
+    end
+
     assignee_id = payload[:assignee].present? ? ctx.resolve_household_user(payload[:assignee])&.id : nil
     # Parse the schedule to the real recurrence hash here (the old code assigned
     # a nonexistent `schedule_text=`, silently dropping every schedule edit).

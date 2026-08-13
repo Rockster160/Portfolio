@@ -15,6 +15,12 @@ Buddy::Tools.register(
     is the day it's expected; leave it off if they didn't say and it goes on
     today. `tracking` and `url` are optional and only worth passing if they gave
     you one.
+
+    Pass `carrier` whenever they name one. A tracking number is only useful
+    next to the company that issued it - the carrier is what turns the number
+    into a tappable tracking link and what gets read back when they ask what's
+    on the way. Leave it off when they didn't say; a row with no carrier is
+    fine, a row with the wrong one is not.
   TXT
   feature:     :deliveries,
   args:        {
@@ -22,6 +28,7 @@ Buddy::Tools.register(
     when:     { type: :string, required: false, description: "Day it's expected: \"today\", \"tomorrow\", \"friday\", \"N days/weeks\", or YYYY-MM-DD. Defaults to today" },
     tracking: { type: :string, required: false, description: "Tracking number, only if they gave one" },
     url:      { type: :string, required: false, description: "Order or tracking link, only if they gave one" },
+    carrier:  { type: :enum, required: false, values: AmazonOrder::NAMED_CARRIERS, description: "Who's carrying it, only if they said - pass it alongside a tracking number" },
   },
   # Level 1: adding a row is low-stakes and the dashboard can edit or drop it,
   # so it goes on immediately with a receipt rather than asking first.
@@ -49,6 +56,7 @@ Buddy::Tools.register(
       on:       on,
       tracking: payload[:tracking],
       url:      payload[:url],
+      carrier:  payload[:carrier],
     )
     { name: order.name, on: order.delivery_date }
   },

@@ -157,8 +157,17 @@ RSpec.describe "Buddy conditional reminders" do
       { "freq" => "daily", "at" => "21:00", "until_at" => "23:00", "every_minutes" => 60 }
     end
 
+    # `created_at` is where a recurrence counts from when the rule names no
+    # start of its own, and a reminder can't fire before it was set. Every
+    # assertion below names particular dates, so it has to be pinned - left to
+    # default these passed on the day they were written and failed the next
+    # morning, when "2026-08-12" stopped being today.
+    def dated!(**attrs)
+      reminder!(created_at: tz.parse("2026-08-12 08:00"), **attrs)
+    end
+
     it "walks 9, 10, 11 and then stops for the night" do
-      rem = reminder!(recurrence: hourly_window)
+      rem = dated!(recurrence: hourly_window)
 
       fires = []
       at = tz.parse("2026-08-12 20:00")
@@ -171,14 +180,14 @@ RSpec.describe "Buddy conditional reminders" do
     end
 
     it "is one row, so cancelling it cancels all of tonight" do
-      rem = reminder!(recurrence: hourly_window)
+      rem = dated!(recurrence: hourly_window)
 
       expect(rem.intraday?).to be(true)
       expect(BuddyReminder.where(user_id: user.id).count).to eq(1)
     end
 
     it "leaves an ordinary daily reminder firing once" do
-      rem = reminder!(recurrence: { "freq" => "daily", "at" => "21:00" })
+      rem = dated!(recurrence: { "freq" => "daily", "at" => "21:00" })
 
       first  = rem.next_fire_at(from: tz.parse("2026-08-12 20:00"))
       second = rem.next_fire_at(from: first)
@@ -190,13 +199,13 @@ RSpec.describe "Buddy conditional reminders" do
     # A step of zero never advances, and this runs inside the every-minute
     # sweep. Floored rather than rejected so a bad rule still terminates.
     it "refuses to build a window that never advances" do
-      rem = reminder!(recurrence: hourly_window.merge("every_minutes" => 0))
+      rem = dated!(recurrence: hourly_window.merge("every_minutes" => 0))
 
       expect(rem.slots_on(tz.parse("2026-08-12").to_date, tz).length).to be <= BuddyReminder::MAX_INTRADAY_SLOTS
     end
 
     it "combines with the day pattern rather than replacing it" do
-      rem = reminder!(recurrence: hourly_window.merge("freq" => "weekly", "by_day" => ["sat"]))
+      rem = dated!(recurrence: hourly_window.merge("freq" => "weekly", "by_day" => ["sat"]))
 
       first = rem.next_fire_at(from: tz.parse("2026-08-12 20:00")) # a Wednesday
       expect(first.in_time_zone(tz).strftime("%A %-I:%M %p")).to eq("Saturday 9:00 PM")
@@ -208,7 +217,7 @@ RSpec.describe "Buddy conditional reminders" do
     # The other half of "three reminders should have been one": an end date, so
     # tonight's window doesn't come back tomorrow.
     it "stops for good at the until date" do
-      rem = reminder!(recurrence: hourly_window.merge("until_on" => "2026-08-12"))
+      rem = dated!(recurrence: hourly_window.merge("until_on" => "2026-08-12"))
 
       last = rem.next_fire_at(from: tz.parse("2026-08-12 22:30"))
       expect(last.in_time_zone(tz).hour).to eq(23)

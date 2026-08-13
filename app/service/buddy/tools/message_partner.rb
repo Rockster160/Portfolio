@@ -51,6 +51,19 @@ Buddy::Tools.register(
 
     This is one-way. If the user wants an ANSWER back, use ask_partner (open
     question), ask_partner_choice (pick one), or ask_partner_multi (pick any).
+
+    ## What YOU say back
+
+    A short confirmation in your own voice - "sent", "she'll see it in a sec".
+    That's the whole job. This tool sends the note and leaves its own receipt,
+    so there is nothing left for your reply to carry.
+
+    NEVER the note itself. "Tell Rocco I'm making salmon teriyaki bowls for
+    supper, it'll be started at 6:00" came back as exactly that sentence, word
+    for word, with the relay copy underneath it - so the same words appeared
+    three times on her screen and not one of them said it had gone (prod
+    3413-3417). Reading the note back tells them what they just typed and
+    nothing about whether it left.
   TXT
   feature:     :relay,
   args:        {

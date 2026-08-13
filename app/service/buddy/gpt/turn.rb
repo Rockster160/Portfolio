@@ -303,13 +303,25 @@ module Buddy
 
       # The model has to be able to tell this apart from success, and has to know
       # that saying it happened anyway is the one unacceptable move.
+      #
+      # The second half is about RECOVERY, and it exists because the recovery
+      # reached for was destructive. Prod 3434 and 3436: an hourly repeat that
+      # schedule_reminder couldn't parse came back "Oop, that repeat shape
+      # didn't line up!" over a cancel_reminder row for the very reminder it had
+      # been trying to change - and the second attempt offered to remove the
+      # standing daily one alongside it. She'd said "Perfect!" to what she
+      # thought was the repeat being set; tapping through would have deleted a
+      # reminder she relies on. A failed call changed nothing, so the record is
+      # still exactly right and there is nothing to clean up.
       def self.resolve_failure(reason)
         {
           status: "failed",
           error:  reason.to_s.truncate(200),
           note:   "This did NOT happen and there is no checkbox for it. Do not say you did it, " \
                   "logged it, or counted it. Tell them plainly what didn't line up, and ask for " \
-                  "what you need if a name was the problem.",
+                  "what you need if a name was the problem. Nothing changed, so do NOT offer to " \
+                  "delete, cancel or remove anything as a way out of it - the record you were " \
+                  "editing is untouched and still wanted. Fix the arguments and call again, or ask.",
         }
       end
 
@@ -899,6 +911,56 @@ module Buddy
         record they no longer trust and a correction you made up to explain it.
       TXT
 
+      # The mirror of a disputed action: they aren't saying something DIDN'T
+      # happen, they're saying something that DID happen shouldn't have.
+      #
+      # Prod 3484-3486. Suki learned two Afrikaans terms off Eve's example, an
+      # undo row came back "Undone - unlearn lekker", and seventeen seconds
+      # later Eve said "No, I didn't mean to undo that!". The answer was
+      # "Nothing got undone on my side, so you're still good!" - and `lekker`
+      # really was gone from the glossary. Nothing in DISPUTED_ACTION_RX covers
+      # this shape, because none of it reads as a dispute: she was correcting
+      # herself, not Buddy.
+      #
+      # The cost is the same either way. She was told a record exists that
+      # doesn't, by the thing whose whole job is keeping it.
+      UNDO_REGRET_RX = /
+          \bdidn(?:'|’)?t\s+mean\s+to\s+(?:undo|remove|delete|cancel|unlearn|drop|forget)\b
+        | \bdidn(?:'|’)?t\s+want\s+(?:you\s+)?to\s+(?:undo|remove|delete|cancel|unlearn|drop|forget)\b
+        | \bwhy\s+did\s+you\s+(?:undo|remove|delete|cancel|unlearn|drop|forget)\b
+        | \bundo\s+the\s+undo\b
+        | \bput\s+(?:it|that|them|those)\s+back\b
+        | \bi\s+still\s+want(?:ed)?\s+(?:it|that|them|those)\b
+      /xi
+
+      def undo_regret?
+        return false if self_initiated?
+        return false if @read_actions
+
+        @inbound.body.to_s.match?(UNDO_REGRET_RX)
+      end
+
+      UNDO_REGRET_NUDGE = <<~TXT.freeze
+        STOP. They are telling you that something you took away shouldn't have
+        gone. That is a statement about YOUR record, and you answered it from
+        memory - which is the one thing that can't settle it.
+
+        Call `get_context` for `recent_actions` now. An undo leaves a receipt
+        there like any other action, and it names what came off.
+
+        Then, in the same reply:
+        - It DID come off: say so plainly - "you're right, that one came off" -
+          and PUT IT BACK with the tool that created it in the first place. You
+          have the arguments; they're sitting in your own receipt. Don't ask
+          whether they want it back. They just told you.
+        - It didn't: say what the undo actually removed, so they can point at
+          the right one.
+
+        Never reassure them that nothing happened. "Nothing got undone on my
+        side, so you're still good" was said over a glossary term that was
+        already gone, and it left them believing they had something they don't.
+      TXT
+
       # Worth a corrective round: nothing was proposed, we haven't already spent
       # the one retry we allow, and the reply either claims an action, points at
       # output that isn't there, waves off news nobody has heard yet, or opened a
@@ -913,6 +975,10 @@ module Buddy
         # phrased - a confident "I did" and a meek "you're right" are the same
         # failure when neither looked.
         return CHECK_ACTIONS_NUDGE if disputed_action?
+        # Same footing and for the same reason: whether the record is right is
+        # not a thing to answer off memory. Below the dispute arm only because
+        # a message can be both, and "you didn't do that" is the older shape.
+        return UNDO_REGRET_NUDGE if undo_regret?
         return RETRY_NUDGE if unbacked_claim(spoken.to_s).present?
         # They asked for a thing to happen and nothing was called. Worth the
         # corrective round on its own — this is the half that gets the TV
@@ -1125,6 +1191,20 @@ module Buddy
         | (?:\bis|\bare|(?:'|’)s)\s+(?:on|off)\s+(?:now|high|low|mid|medium)\b
         | \A\s*(?:set|setting)\s+(?:it|that|the\s+\w+)\s+to\b
         | \b(?:saved\s+(?:it|that|as)|(?:it|that)(?:'|’)?s\s+saved|now\s+runs)\b
+        # The EDIT shape. Everything above is a thing being added, set, logged,
+        # run or taken away; none of it covers a thing being CHANGED, which is
+        # what a correction always is. Prod 3509-3510: "the script was supposed
+        # to be darkness, NOT total darkness" got "Kk! I fixed the script
+        # wording to darkness." and buddy_routines 4 still read total_darkness,
+        # with an updated_at identical to its created_at.
+        #
+        # First person and past tense, both load-bearing. "I've changed my mind"
+        # survives (`my` isn't an object here), and so does "that changed
+        # everything" - a bare verb is far too common to match on.
+        | \bi\s+(?:just\s+)?(?:fixed|corrected|changed|updated|swapped|edited|reworded|renamed)\s+
+            (?:it|that|the|your|both)\b
+        | \bi(?:'|’)ve\s+(?:just\s+)?(?:fixed|corrected|changed|updated|swapped|edited|reworded|renamed)\s+
+            (?:it|that|the|your|both)\b
         | \b(?:running|firing)\s+(?:\*\*|`)[^*`\n]{1,60}(?:\*\*|`)
         # Prod 2054: "Print again" got "Yep. Running the last print again." and
         # then, when told it hadn't, "Yep, it's running again now." — neither

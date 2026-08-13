@@ -22,6 +22,13 @@ Buddy::Tools.register(
 
     Use it only when something really is downstream of the answer - a person is
     not a countdown, and anything behind the wait sits there until they reply.
+
+    ## What YOU say back
+
+    That you've asked, in one short line. The card goes out on its own and
+    leaves its own receipt. Never answer the question yourself and never read
+    the question back - a reply that does either reads as the answer having
+    already arrived, when nobody has been asked yet.
   TXT
   feature:     :relay,
   args:        {

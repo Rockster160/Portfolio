@@ -5,8 +5,8 @@ Buddy::Tools.register(
     or that they don't use it anymore. `name` is fuzzy - match it against the
     `routines` section of get_context.
 
-    To CHANGE a routine, don't delete it first: save_routine over the same name
-    replaces its steps.
+    To CHANGE a routine, don't delete it first: `edit_routine` patches one
+    step's arguments, and save_routine over the same name replaces its steps.
   TXT
   args:        {
     name: { type: :string, required: true, description: "Routine name to delete" },

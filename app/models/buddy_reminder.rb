@@ -99,16 +99,24 @@ class BuddyReminder < ApplicationRecord
   # Same MINUTE and a shared word, both required. Same minute alone would
   # collapse "check the oven" and "call mom" at six o'clock into one, and
   # losing a real reminder is a worse failure than the double ping this exists
-  # to stop. Recurring ones are left out of the comparison entirely: a daily
-  # 9am and a one-off tomorrow at 9am are genuinely different requests.
+  # to stop.
+  #
+  # RECURRING ones count, and used to be excluded on the reasoning that "a
+  # daily 9am and a one-off tomorrow at 9am are genuinely different requests".
+  # They are - and the minute window already says so, because a recurring
+  # reminder's `fire_at` is its NEXT fire, so a daily 9am only lands in the
+  # window on the day it's about to go off. Excluding them threw away the one
+  # case where it matters. Prod: reminder 37 was the daily noon plant check
+  # and reminder 40 was set for the same noon, both fired, and 37's recurrence
+  # was the only thing that hid it (msgs 3448/3449).
   def self.clashing(user, text, fire_at)
     words = significant_words(text)
     return nil if words.empty? || fire_at.blank?
 
     minute = fire_at.change(sec: 0)
-    pending.where(user_id: user.id, recurrence: nil)
-      .where(fire_at: minute...(minute + 1.minute))
-      .find { |r| significant_words(r.body).intersect?(words) }
+    scope  = pending.where(user_id: user.id)
+    scope  = scope.where(fire_at: minute...(minute + 1.minute))
+    scope.find { |r| significant_words(r.body).intersect?(words) }
   end
 
   # Words worth matching on: everything that isn't scaffolding. Deliberately a
@@ -119,8 +127,20 @@ class BuddyReminder < ApplicationRecord
     my need needs please put remind reminder take that the then this you your
   WORDS
 
+  # The one bit of stemming there is, because plural-vs-singular is how the
+  # same subject usually turns up twice: "water all the PLANTS" and "do the
+  # PLANT check" shared no word at all, so the noon duplicate walked straight
+  # through. Four characters before anything comes off, so "gas" stays "gas"
+  # while "bins" and "cars" reach their singulars. Both sides fold the same
+  # way, so the only risk is two different words landing on one stem - and a
+  # clash is raised with the existing reminder quoted in it, so a wrong one is
+  # something the model can answer rather than something that vanishes.
   def self.significant_words(text)
-    text.to_s.downcase.scan(/[a-z]+/).reject { |w| w.length < 3 || FILLER.include?(w) }.to_set
+    text.to_s.downcase.scan(/[a-z]+/).filter_map { |w|
+      next nil if w.length < 3 || FILLER.include?(w)
+
+      w.length >= 4 ? w.delete_suffix("s") : w
+    }.to_set
   end
 
   # The repeat pattern, as the shared matcher the calendar uses.

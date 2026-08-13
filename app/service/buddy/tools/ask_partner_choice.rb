@@ -24,6 +24,18 @@ Buddy::Tools.register(
 
     Use it only when something really is downstream of the answer - a person is
     not a countdown, and anything behind the wait sits there until they reply.
+
+    ## What YOU say back
+
+    That you've asked, in one short line - "asked him, I'll let you know". The
+    card goes out on its own and leaves its own receipt, so that's all that's
+    left to say.
+
+    NEVER answer the question yourself. "Ask Rocco if he can change the logo on
+    the lights app to a simple house logo" came back as the single word "yes"
+    (prod 3459-3460) - which reads as his answer, arrived instantly, and it was
+    nothing of the kind. The whole point of relaying a question is that the
+    reply comes from the person it was put to.
   TXT
   feature:     :relay,
   args:        {

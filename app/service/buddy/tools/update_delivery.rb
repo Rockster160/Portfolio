@@ -16,6 +16,15 @@ Buddy::Tools.register(
     that are changing - anything you leave out keeps its current value, so a
     rename won't drop the tracking number. To say a package turned up, that's
     `delivery_arrived`; to put a brand new one on the list, `track_delivery`.
+
+    **When they name a carrier, pass it.** A tracking number is only useful
+    next to the company that issued it: `carrier` is what turns the number into
+    a link they can tap and what gets read back when they ask what's coming.
+    'the "Computer Desk" tracking number is FedEx: #532572111399' filed the
+    number and dropped the word FedEx into the confirmation sentence and
+    nowhere else (prod 3495), leaving a row that knows the number and can't
+    track it. The carrier is almost always sitting right next to the number in
+    what they said.
   TXT
   feature:     :deliveries,
   args:        {
@@ -24,6 +33,7 @@ Buddy::Tools.register(
     when:     { type: :string, required: false, description: "New expected day: \"today\", \"tomorrow\", \"friday\", \"N days/weeks\", or YYYY-MM-DD" },
     tracking: { type: :string, required: false, description: "Tracking number, if they gave one" },
     url:      { type: :string, required: false, description: "Order or tracking link, if they gave one" },
+    carrier:  { type: :enum, required: false, values: AmazonOrder::NAMED_CARRIERS, description: "Who's carrying it, whenever they say - pass it alongside a tracking number" },
   },
   auto:        true,
   confirm:     ->(payload, ctx) {
@@ -38,7 +48,7 @@ Buddy::Tools.register(
 
     # Nothing to change is a mistake worth catching here: it would otherwise
     # save an identical row, fire an update trigger, and report success.
-    if [payload[:name], said, payload[:tracking], payload[:url]].all? { |v| v.to_s.strip.blank? }
+    if [payload[:name], said, payload[:tracking], payload[:url], payload[:carrier]].all? { |v| v.to_s.strip.blank? }
       raise "nothing to change on #{order.name} - say what should be different"
     end
 
@@ -54,6 +64,7 @@ Buddy::Tools.register(
       on:       on,
       tracking: payload[:tracking],
       url:      payload[:url],
+      carrier:  payload[:carrier],
     )
     { was: payload[:was], name: order.name, on: order.delivery_date }
   },
