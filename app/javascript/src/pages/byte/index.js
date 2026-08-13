@@ -55,6 +55,11 @@ import {
   renderReactions,
   seedReactionRecents,
 } from "./message_actions/reactions";
+import {
+  renderIconValue,
+  needsIconPool,
+  warmIconPool,
+} from "../../icon_picker";
 import { renderMarkdown, escapeHtml, escapeAttr } from "./markdown";
 import { initBuddyHero } from "./buddy/hero";
 import { initBuddyTimers } from "./buddy/timers";
@@ -249,6 +254,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   // runs during init BEFORE the scroll section and calls scrollToBottom, which
   // reads stickRaf — a `let` down there would be in its TDZ and throw.
   let stickRaf = 0;
+  // Until when a deliberate jump to an older message is protected from every
+  // rule that pins the thread to the bottom. A timestamp rather than a flag
+  // because the thing being suppressed is a moment — the smooth scroll and the
+  // layout settling under it — and a flag would need something to clear it.
+  let revealUntil = 0;
+  const REVEAL_GUARD_MS = 1000;
   // Coalesces the growth-observer's re-pins into one write per frame (see the
   // MutationObserver in the scroll section). Declared here for the same TDZ
   // reason as stickRaf.
@@ -297,7 +308,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   // with no root returns a no-op notifier, which is exactly right.
   const unreadNotices = initUnreadNotices({
     root: isKiosk ? null : document.querySelector("[data-byte-notices]"),
-    onOpen: (convId) => convoManager?.switchTo(convId),
+    onOpen: (convId, messageId) => {
+      // switchTo is a no-op when it's already the open thread, and hydrate
+      // mounts cached messages synchronously — so by the time it returns, the
+      // bubble is either in the DOM or further back than the loaded window.
+      convoManager?.switchTo(convId);
+      revealMessage(messageId);
+    },
   });
 
   const convoManager = new ConversationManager({
@@ -678,6 +695,37 @@ document.addEventListener("DOMContentLoaded", async () => {
     // call unmarkLive — we just don't refresh the timer. If the node
     // WAS live from a prior WS update, it stays live until the timer
     // expires naturally.
+  }
+
+  // Somebody else reacted to a message. With the app open the OS banner is
+  // suppressed on purpose (byte_worker.js drops it whenever a Byte client is in
+  // the foreground), and a reaction has nothing else to announce it — it's a
+  // pill that appears somewhere in the scrollback, possibly in another thread,
+  // possibly hundreds of pixels up. So it gets the same strip a message in
+  // another conversation gets, and tapping it goes to the bubble.
+  //
+  // Unlike a message notice, this fires for the CURRENT conversation too: the
+  // pill can land well outside the viewport. It's skipped only when the bubble
+  // is genuinely in front of them, where they just watched it happen.
+  function noticeForReaction(reaction, message, convId) {
+    if (!reaction || reaction.added !== true) return; // taking one back isn't news
+    if (currentUserId != null && Number(reaction.by) === currentUserId) return;
+    if (convId === currentConversationId && messageOnScreen(message.id)) return;
+
+    const accessory = document.createElement("span");
+    renderIconValue(accessory, reaction.value);
+    unreadNotices.notify({
+      convId,
+      messageId: message.id,
+      title:     `${reaction.name || "Someone"} reacted`,
+      body:      previewOf(message),
+      icon:      convoManager?.chromeFor(convId)?.icon || null,
+      accessory,
+    });
+    // An upload has no picture until its pool is loaded; fill it in after.
+    if (needsIconPool(reaction.value)) {
+      warmIconPool().then(() => renderIconValue(accessory, reaction.value));
+    }
   }
 
   // What a Buddy turn is doing, while it's still doing it. The server pushes a
@@ -1371,6 +1419,56 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateJumpBtn();
   }
 
+  // Whether a message's bubble is actually in front of them right now. A notice
+  // about something they can already see is noise.
+  function messageOnScreen(id) {
+    const node = thread.querySelector(selectorForId(id));
+    if (!node) return false;
+
+    const bubble = node.getBoundingClientRect();
+    const view = thread.getBoundingClientRect();
+    return bubble.bottom > view.top && bubble.top < view.bottom;
+  }
+
+  // Take them to one specific message and mark it — what a notice naming a
+  // message has to do when tapped.
+  //
+  // Every rule that keeps the thread at the bottom has to be called off first,
+  // and there are three: the stick loop re-asserts scrollTop for up to 24
+  // frames after a conversation load, `stickThroughLoad` re-asserts `atBottom`
+  // on top of that, and the growth observer pins on any mutation. All three
+  // would drag the reader straight back down from the message they asked for.
+  //
+  // The highlight is a Web Animations call rather than a class, deliberately: a
+  // class is a DOM mutation, the growth observer watches the whole thread for
+  // mutations, and pinning to the bottom is precisely what it does about one.
+  function revealMessage(id) {
+    if (id == null) return false;
+    const node = thread.querySelector(selectorForId(id));
+    if (!node) return false;
+
+    releaseStickThroughLoad();
+    if (stickRaf) {
+      cancelAnimationFrame(stickRaf);
+      stickRaf = 0;
+    }
+    atBottom = false;
+    revealUntil = Date.now() + REVEAL_GUARD_MS;
+    updateJumpBtn();
+
+    node.scrollIntoView({ block: "center", behavior: "smooth" });
+    node.animate?.(
+      [
+        { boxShadow: "0 0 0 0 rgba(63, 160, 255, 0)" },
+        { boxShadow: "0 0 0 3px rgba(63, 160, 255, 0.65)" },
+        { boxShadow: "0 0 0 3px rgba(63, 160, 255, 0.65)" },
+        { boxShadow: "0 0 0 0 rgba(63, 160, 255, 0)" },
+      ],
+      { duration: 1600, easing: "ease-out" },
+    );
+    return true;
+  }
+
   // Tell the server the open thread has been caught up on, and re-stamp the
   // app icon.
   //
@@ -1437,6 +1535,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // so it never fights an intentional scroll-up. Coalesced via pinRaf so a
   // burst of streaming mutations is one scroll write per frame.
   function pinToBottomSoon() {
+    // They just asked to be taken to a specific message. Nothing gets to drag
+    // them off it — not even the composer being focused.
+    if (Date.now() < revealUntil) return;
     // While composing, pin even if the atBottom heuristic momentarily reads
     // false (a long message rendering while the keyboard animates) — otherwise
     // its tail strands below the fold.
@@ -2750,6 +2851,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           if (convId === currentConversationId && nodeForServerMessage(msg)) {
             upsertMessage(msg);
           }
+          noticeForReaction(data.reaction, msg, convId);
           return;
         }
         if (convId === currentConversationId) {

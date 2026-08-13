@@ -203,6 +203,44 @@ RSpec.describe Buddy::Reactions do
       expect(broadcasts.map { |_, payload| payload[:data][:update] }).to all(be(true))
     end
 
+    # With the app open the OS banner is suppressed on purpose, and a reaction
+    # has nothing else to announce it — so the client raises its own strip. It
+    # needs to know who and what without diffing the list against its cache.
+    it "says who reacted and with what" do
+      theirs, = relayed
+      broadcasts.clear
+
+      described_class.react!(message: theirs, user: recipient, emoji: "👍")
+
+      detail = broadcasts.map { |_, payload| payload[:data][:reaction] }
+      expect(detail).to all(
+        eq(by: recipient.id, name: recipient.first_name, value: "👍", added: true),
+      )
+    end
+
+    # The reactor gets the same payload and filters themselves out client-side.
+    # One shape on the wire beats two that have to be kept in step.
+    it "sends the same detail to both sides" do
+      theirs, = relayed
+      broadcasts.clear
+
+      described_class.react!(message: theirs, user: recipient, emoji: "👍")
+
+      expect(broadcasts.length).to eq(2)
+      expect(broadcasts.map { |_, p| p[:data][:reaction] }.uniq.length).to eq(1)
+    end
+
+    # A notice for a reaction being taken away would be a notice for nothing.
+    it "marks a removal as such so no notice is raised for it" do
+      theirs, = relayed
+      described_class.react!(message: theirs, user: recipient, emoji: "👍")
+      broadcasts.clear
+
+      described_class.react!(message: theirs.reload, user: recipient, emoji: "👍")
+
+      expect(broadcasts.map { |_, p| p[:data][:reaction][:added] }).to all(be(false))
+    end
+
     # `byte_worker.js` reads a missing count as zero and CLEARS the badge, so
     # omitting it would wipe real unread messages off the app icon every time
     # somebody left a 👍. Sending the live total leaves it exactly as it was.

@@ -154,7 +154,8 @@ export function paintDrawerBadge(el, total) {
   el.hidden = total <= 0;
 }
 
-// A message landed in a thread that isn't on screen.
+// A message landed in a thread that isn't on screen — or somebody reacted to
+// one of yours, which has no other announcement while the app is open.
 //
 // One notice per message, stacked, never merged. A run of them is a run of real
 // events and collapsing them into "3 new messages" would throw away the only
@@ -175,7 +176,13 @@ export function initUnreadNotices({ root, onOpen }) {
     setTimeout(() => node.remove(), 400);
   }
 
-  function notify({ convId, title, body, icon }) {
+  // `messageId` makes the notice point at one message rather than just its
+  // thread — a reaction notice names a bubble somewhere up the scrollback, and
+  // opening the conversation at the bottom would leave the person hunting for
+  // it. `accessory` is a caller-built node shown at the end (the reaction
+  // itself); a node rather than a value, so this stays ignorant of how an icon
+  // reference becomes pixels.
+  function notify({ convId, messageId, title, body, icon, accessory }) {
     const node = document.createElement("button");
     node.type = "button";
     node.className = "byte-notice";
@@ -190,13 +197,19 @@ export function initUnreadNotices({ root, onOpen }) {
         <span class="byte-notice-title"></span>
         <span class="byte-notice-body"></span>
       </span>
+      <span class="byte-notice-accessory" data-notice-accessory hidden></span>
     `;
     node.querySelector(".byte-notice-title").textContent = title || "New message";
     node.querySelector(".byte-notice-body").textContent = body || "";
+    if (accessory) {
+      const slot = node.querySelector("[data-notice-accessory]");
+      slot.hidden = false;
+      slot.appendChild(accessory);
+    }
 
     node.addEventListener("click", () => {
       dismiss(node);
-      onOpen?.(convId);
+      onOpen?.(convId, messageId ?? null);
     });
 
     root.appendChild(node);

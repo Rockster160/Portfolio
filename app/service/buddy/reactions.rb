@@ -92,13 +92,14 @@ module Buddy
         # different set of reactions from the other.
         twin&.with_lock { write!(twin, list) }
 
-        broadcast(message)
+        detail = { by: user.id, name: user.first_name, value: emoji.to_s, added: added }
+        broadcast(message, detail)
         if added
           # Only on ADD. Taking one back off isn't reaching for it.
           user.remember_byte_reaction!(emoji)
           notify(twin, user, emoji) if twin
         end
-        broadcast(twin) if twin
+        broadcast(twin, detail) if twin
         list
       end
 
@@ -142,11 +143,21 @@ module Buddy
       # no "new message" notice, no re-triggering the pet's mood off an old
       # reply, no popping that old bubble back up on the kiosk. Nothing was
       # said; something was marked.
-      def broadcast(message)
+      #
+      # `reaction` is who did it and what with, so the client can raise a notice
+      # naming them instead of diffing the list against its own cached copy. The
+      # reactor's own copy carries it too and they filter themselves out — one
+      # payload, one rule, rather than two shapes to keep in step.
+      def broadcast(message, detail)
         MonitorChannel.broadcast_to(message.user, {
           id:      :byte,
           channel: :byte,
-          data:    { kind: :message, message: message.reload.as_wire, update: true },
+          data:    {
+            kind:     :message,
+            message:  message.reload.as_wire,
+            update:   true,
+            reaction: detail,
+          },
         })
       end
 
