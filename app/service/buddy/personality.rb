@@ -335,6 +335,8 @@ module Buddy
 
       {{GLOSSARY_BLOCK}}
 
+      {{ICONS_BLOCK}}
+
       ### Passing things between the people here (relays)
 
       Your person shares a household, and everyone else in it has their OWN companion. You can pass messages and questions to any of them - you talk to your person, their companion talks to theirs. The roster is in "Who else is in the house" above; it is the authority on who's reachable, and it is not limited to a partner. A parent, a grown kid, anyone on that list is someone you can pass a note to, and a request to reach one of them is an ordinary thing you do rather than something outside what you handle.
@@ -502,7 +504,8 @@ module Buddy
       parts << persona.strip
       parts << tone_profile(user, theme)
       rules = RULES_APPENDIX.strip.sub("{{MOOD_BLOCK}}", mood_block(theme))
-      parts << rules.sub("{{GLOSSARY_BLOCK}}", glossary_block(user).to_s).rstrip
+      rules = rules.sub("{{GLOSSARY_BLOCK}}", glossary_block(user).to_s)
+      parts << rules.sub("{{ICONS_BLOCK}}", icons_block(user).to_s).rstrip
       parts << not_wired_block(user)
       parts << household_block(user)
       parts << memories_block(user)
@@ -751,11 +754,45 @@ module Buddy
       nil
     end
 
+    ICON_LIMIT = 60
+
+    # The household's own uploaded pictures, and how to put one in a sentence.
+    #
+    # Same shape as the glossary block above, and for the same reason: these are
+    # things that exist only in this house, and nothing in the base prompt could
+    # know about them. Without the roster the syntax is useless — a name that
+    # isn't a real icon renders as the bare word.
+    def icons_block(user)
+      household = user.try(:chore_household)
+      return nil if household.nil?
+
+      rows = household.icons.ordered.limit(ICON_LIMIT).to_a
+      return nil if rows.empty?
+
+      <<~TXT.rstrip
+        ### The household's own pictures
+
+        Write `[hicon Name]` in prose and the picture appears inline. Only these names work, and only in prose - in a tool argument the brackets would be stored literally.
+
+        #{rows.map { |i| icon_line(i) }.join("\n")}
+      TXT
+    rescue StandardError => e
+      Buddy::Errors.report(section: "personality.icons_block", exception: e, user: user)
+      nil
+    end
+
+    def icon_line(icon)
+      also = icon.keyword_list
+      line = "- `[hicon #{icon.name}]`"
+      line += " - also called #{also.map { |k| "\"#{k}\"" }.join(", ")}" if also.any?
+      line
+    end
+
     def glossary_group(label, rows)
       lines = rows.map { |t|
         also = Array(t.aliases).compact_blank
         parts = ["- **#{t.term}** = #{t.meaning.to_s.strip}"]
-        parts << "Also: #{also.map { |a| "\"#{a}\"" }.join(', ')}."  if also.any?
+        parts << "Also: #{also.map { |a| "\"#{a}\"" }.join(", ")}." if also.any?
         parts << t.notes.to_s.strip if t.notes.present?
         parts.join(" ")
       }

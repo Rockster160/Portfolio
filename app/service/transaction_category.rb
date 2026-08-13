@@ -375,6 +375,164 @@ module TransactionCategory
   MERCHANT_PATTERNS = MERCHANT_RULES.transform_values { |fragments|
     ::Regexp.new(fragments.join("|"), ::Regexp::IGNORECASE | ::Regexp::MULTILINE)
   }.freeze
+
+  # What was BOUGHT, for merchants that sell everything. The merchant rules put
+  # every Amazon charge under `shopping`, which is true of the shop and useless
+  # about the purchase.
+  #
+  # DELIBERATELY CONSERVATIVE, because the existing hand-labelled data says so.
+  # "Acrylic Markers", "Trash Baggies", "Shoulder bag", "Pillow", "AirTag
+  # Batteries" and even "Automotive item" were all filed under `shopping` by
+  # hand. General goods belong there; only a clear signal should pull one out.
+  # Anything unmatched keeps whatever the merchant rules decided.
+  #
+  # `home` is house fixtures and systems — the hand-labelled examples are
+  # "Light Sockets", "Thermostats", "Smart Thermometers", Home Depot, Vivint —
+  # NOT housewares. `fun` is gaming, from "Controller Shell" and "Red Keyb
+  # Keys". `hobby` is tabletop, craft and tinkering, from Game Haven, Hobby
+  # Lobby and Steam.
+  #
+  # Ordered like MERCHANT_RULES: first match wins, specific before general.
+  ITEM_RULES = {
+    pets:      [
+      "\\bdog\\b",
+      "\\bcat\\b",
+      "\\bcats\\b",
+      "\\bpet\\b",
+      "\\bpets\\b",
+      "\\bpuppy\\b",
+      "\\bkitten\\b",
+      "\\bfeline\\b",
+      "\\bcanine\\b",
+      "litter box",
+      "cat litter",
+      "pee pads",
+      "\\bleash\\b",
+      "pet carrier",
+    ],
+    medical:   [
+      "pedialyte",
+      "pepto",
+      "ibuprofen",
+      "acetaminophen",
+      "\\bgauze\\b",
+      "first aid",
+      "\\bbandage",
+      "antacid",
+      "cough drop",
+      "\\bantibiotic",
+      "blood pressure monitor",
+      "pill organizer",
+    ],
+    groceries: [
+      # Consumables. `coffee` on its own would claim a coffee MUG, so the
+      # grounds and the beans are named instead.
+      "celsius",
+      "hint water",
+      "\\bpropel\\b",
+      "gatorade",
+      "sprite",
+      "coca.cola",
+      "\\bpopcorn\\b",
+      "protein shake",
+      "protein powder",
+      "\\bsyrup\\b",
+      "grenadine",
+      "olive oil",
+      "\\bseasoning\\b",
+      "\\bsnack",
+      "granola",
+      "\\bcereal\\b",
+      "\\bcandy\\b",
+      "\\bchocolate\\b",
+      "beef jerky",
+      "coffee beans",
+      "ground coffee",
+      "k.cups?\\b",
+      "\\btea bags\\b",
+      "electrolyte",
+      "drink mix",
+      "sparkling water",
+      "energy drink",
+    ],
+    hobby:     [
+      "\\bdice\\b",
+      "\\bdnd\\b",
+      "dungeons . dragons",
+      "\\btcg\\b",
+      "card sleeves",
+      "board game",
+      "\\bjigsaw\\b",
+      "\\bpuzzle\\b",
+      "3d printer",
+      "printer filament",
+      "\\bpla\\b filament",
+      "\\bresin\\b",
+      "development board",
+      "\\barduino\\b",
+      "raspberry pi",
+      "soldering",
+      "\\bminiatures?\\b",
+      "lorcana",
+      "magic the gathering",
+      "\\bwarhammer\\b",
+    ],
+    fun:       [
+      "nintendo switch",
+      "\\bjoy.?con",
+      "\\bjoystick\\b",
+      "game controller",
+      "\\bxbox\\b",
+      "playstation",
+      "\\bps5\\b",
+      "gaming mouse",
+      "gaming keyboard",
+      "\\bamiibo\\b",
+    ],
+    car:       [
+      "\\btesla\\b",
+      "model [3y]\\b",
+      "\\bwindshield\\b",
+      "\\bwiper blade",
+      "\\btire\\b",
+      "\\btires\\b",
+      "motor oil",
+      "\\bautomotive\\b",
+      "license plate",
+      "car charger",
+      "\\bobd2?\\b",
+    ],
+    home:      [
+      "light bulb",
+      "\\bbulbs?\\b",
+      "light socket",
+      "\\bthermostat",
+      "\\bfaucet\\b",
+      "\\bcaulk\\b",
+      "weather ?strip",
+      "smoke detector",
+      "\\bdoorbell\\b",
+      "outlet cover",
+      "\\bdrywall\\b",
+      "\\bgrout\\b",
+      "\\bshowerhead\\b",
+      "air filter",
+      "furnace filter",
+      "\\bcircuit breaker",
+    ],
+    travel:    [
+      "\\bluggage\\b",
+      "\\bsuitcase\\b",
+      "packing cubes",
+      "travel pillow",
+      "passport holder",
+      "\\bcarry.on\\b",
+    ],
+  }.freeze
+
+  ITEM_PATTERNS = ITEM_RULES.transform_values { |fragments|
+    ::Regexp.new(fragments.join("|"), ::Regexp::IGNORECASE | ::Regexp::MULTILINE)
+  }.freeze
   # Strays render in a neutral gray rather than borrowing a real category's
   # color, so "this is not a real category" is visible on the chart.
   FALLBACK_COLOR = "#475569".freeze
@@ -421,6 +579,19 @@ module TransactionCategory
       # `detect` on an ordered hash — first match wins, which is the whole
       # contract MERCHANT_RULES' ordering encodes.
       MERCHANT_PATTERNS.detect { |_category, pattern| pattern.match?(text) }&.first
+    end
+
+    # What a purchase was, from the item description — for merchants that sell
+    # everything and whose own name says nothing useful.
+    #
+    # Nil when no rule is confident, and nil MEANS "leave it where the merchant
+    # put it". That is the whole safety property: an unrecognized item stays
+    # `shopping` rather than being pulled somewhere worse.
+    def for_item(text)
+      body = text.to_s
+      return nil if body.blank?
+
+      ITEM_PATTERNS.detect { |_category, pattern| pattern.match?(body) }&.first
     end
 
     # The color map in the exact shape CustomChart 4's config expects, so the

@@ -120,6 +120,10 @@ module SimpleFin
         cents = amount_cents_for(event)
         return nil if cents.nil? || event.timestamp.blank?
 
+        build!(event, cents).tap { |row| ::SimpleFin::AmazonEnrichment.apply(row) }
+      end
+
+      def build!(event, cents)
         ::BankTransaction.create!(
           action_event:  event,
           bank_account:  account_for(event),

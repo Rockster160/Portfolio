@@ -240,9 +240,29 @@ const IconPool = (function () {
     return row?.c || "";
   }
 
+  // Custom icons are written by NAME in prose (`[hicon Fae]`) — that's what a
+  // person, or Buddy, can actually type. Mirrors HouseholdIcon.normalize_name
+  // on the server, which is what makes "Kitty Litter", "kitty-litter" and
+  // "kitty_litter" the same icon on both sides. Deliberately NOT `normalize`
+  // above: that one strips separators entirely for search scoring, where
+  // "mtndew" should reach "Mtn Dew" — too loose for resolving one exact icon.
+  function normalizeName(name) {
+    return String(name ?? "").toLowerCase().replace(/[\s_-]+/g, " ").trim();
+  }
+
+  // `hicon:<id>` for a named icon, or null when this household has no such
+  // icon. Null rather than a guess: a wrong picture is worse than the name.
+  function customRefByName(name) {
+    const key = normalizeName(name);
+    if (!key) return null;
+    const row = CUSTOM_POOL.find((r) => normalizeName(r.n) === key);
+    return row ? `hicon:${row._id}` : null;
+  }
+
   return {
     load, normalize, variants, scoreRow, search, bestMatch,
     refreshCustom, syncCustomIfChanged, onCustomChanged, customSrcById,
+    customRefByName,
   };
 })();
 

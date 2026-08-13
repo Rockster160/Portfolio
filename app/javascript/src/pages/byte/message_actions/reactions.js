@@ -20,12 +20,7 @@
 // copies a moment to disagree. A tapped pill dims until that lands, so the tap
 // is visibly doing something without pretending it's done.
 
-import {
-  openIconPicker,
-  renderIconValue,
-  needsIconPool,
-  warmIconPool,
-} from "../../../icon_picker";
+import { openIconPicker, renderIconValue } from "../../../icon_picker";
 
 // The six on the picker row: most-recently-used, server-resolved (padded with
 // defaults until they've used six of their own). Seeded from the shell and
@@ -173,15 +168,13 @@ export function renderReactions(container, message, { userId, onNotice } = {}) {
     });
     container.appendChild(btn);
   });
+}
 
-  // A custom upload can't be drawn until its pool is loaded, and the pool is
-  // only fetched on demand. Warm it, then redraw just the pictures.
-  if (groups.some((g) => needsIconPool(g.value))) {
-    warmIconPool().then(() => {
-      container.querySelectorAll("[data-reaction]").forEach((btn) => {
-        const glyph = btn.querySelector(".byte-msg-reaction-icon");
-        if (glyph) renderIconValue(glyph, btn.dataset.reaction);
-      });
-    });
-  }
+// Redraw the pictures on every pill already on screen — for when the POOL
+// changed rather than the reactions did.
+export function repaintReactionIcons(root) {
+  root?.querySelectorAll?.("[data-reaction]").forEach((btn) => {
+    const glyph = btn.querySelector(".byte-msg-reaction-icon");
+    if (glyph) renderIconValue(glyph, btn.dataset.reaction);
+  });
 }

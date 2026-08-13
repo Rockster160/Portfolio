@@ -82,6 +82,22 @@ export function renderMarkdown(raw) {
     if (!SAFE_URL.test(url)) return null;
     return `@LINK@${stash.push({ kind: "link", url, text }) - 1}@LINK@`;
   };
+  // `[hicon Fae]` / `[hicon:12]` — one of the household's own uploaded icons,
+  // dropped inline in the prose. Same syntax the server-side Markdown service
+  // has always understood; Byte renders its own markdown, so it had to learn it
+  // separately. Stashed alongside links and BEFORE the link rule, or
+  // `[hicon Fae]` followed by a parenthetical would be read as a link.
+  //
+  // The span comes out EMPTY, carrying only the reference: resolving a name to
+  // a picture needs the custom icon pool, which is fetched on demand and can't
+  // be awaited from a synchronous render. `hydrateInlineIcons` fills it in.
+  const stashIcon = (ref) =>
+    `@HICON@${stash.push({ kind: "hicon", ref: ref.trim() }) - 1}@HICON@`;
+  t = t.replace(/\[hicon:(\d+)\]/gi, (_m, id) => stashIcon(`hicon:${id}`));
+  t = t.replace(/\[hicon[ \t]+([^\]\n]+)\]/gi, (_m, name) => stashIcon(name));
+  // `[ticon:ti-broom]` — a Tabler icon. Same three shapes the picker deals in,
+  // and what the `:name` autocomplete inserts for a non-emoji, non-custom hit.
+  t = t.replace(/\[ticon:(ti-[a-z0-9-]+)\]/gi, (_m, cls) => stashIcon(cls));
   t = t.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (m, text, url) => stashLink(url, text) ?? m);
   // Bare URLs. Runs second, so a URL already stashed as a markdown link is a
   // token by now and can't match twice.
@@ -163,6 +179,10 @@ export function renderMarkdown(raw) {
   t = t.replace(/@INLINE@(\d+)@INLINE@/g, (_m, i) => {
     const b = stash[Number(i)];
     return `<code class="byte-md-inline">${escapeHtml(b.code)}</code>`;
+  });
+  t = t.replace(/@HICON@(\d+)@HICON@/g, (_m, i) => {
+    const b = stash[Number(i)];
+    return `<span class="hicon" data-icon-ref="${escapeAttr(b.ref)}"></span>`;
   });
   // `_blank` because Byte is an installed PWA (display: standalone). Without
   // it a tap replaces the conversation with a page that has no back button and

@@ -103,6 +103,11 @@ module SimpleFin
         pending:       row["pending"].present?,
       )
       transaction.save!
+      # Only for a row the bank has just told us about. An Amazon charge that
+      # matches something on the delivery board picks up its order number, item
+      # id, item name and a category better than "shopping" — the same three
+      # things the order-history backfill wrote, by the same rules.
+      ::SimpleFin::AmazonEnrichment.apply(transaction) if created
       @transaction_count += 1
       @created_count += 1 if created
     end

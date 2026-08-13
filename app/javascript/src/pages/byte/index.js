@@ -54,11 +54,14 @@ import { initMessageContextMenu } from "./message_actions/context_menu";
 import {
   renderReactions,
   seedReactionRecents,
+  repaintReactionIcons,
 } from "./message_actions/reactions";
 import {
   renderIconValue,
-  needsIconPool,
-  warmIconPool,
+  loadIconPool,
+  onIconPoolChanged,
+  hydrateInlineIcons,
+  repaintInlineIcons,
 } from "../../icon_picker";
 import { renderMarkdown, escapeHtml, escapeAttr } from "./markdown";
 import { initBuddyHero } from "./buddy/hero";
@@ -218,6 +221,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Who's looking. Both people see the same reaction list, stamped with the
   // reactor's id, so this is the only thing that says which one is theirs.
   const currentUserId = Number(app.dataset.byteUserId) || null;
+
+  // Icons are page-load furniture here, not a lazy extra. `[hicon Fae]` in a
+  // reply, a tapback pill and the `:name` autocomplete all resolve a name
+  // SYNCHRONOUSLY, so a pool that shows up later leaves references rendered as
+  // bare words. Fetched once at boot, then repainted whenever it changes —
+  // IconPool keeps itself current off the chores broadcast, so an upload or a
+  // delete lands here without a reload, the same as on every other page.
+  function repaintIcons() {
+    repaintInlineIcons(thread);
+    repaintReactionIcons(thread);
+  }
+  loadIconPool().then(repaintIcons);
+  onIconPoolChanged(repaintIcons);
 
   // The six on the tapback row, most-recently-used. Server-resolved so the
   // padding rule lives in one place; every react response replaces it.
@@ -623,6 +639,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       renderForm(formEl, message);
     }
 
+    // `[hicon Fae]` anywhere in the body it just wrote. One call after the kind
+    // dispatch rather than inside each branch — every kind above goes through
+    // renderMarkdown or plain text, and the pass is a no-op when there's
+    // nothing to fill.
+    hydrateInlineIcons(bodyEl);
+
     // Tapbacks. Every message takes one — theirs, yours, Buddy's, a receipt —
     // so the only thing stamped here is which one is already yours, for the
     // long-press menu to show as picked. The pill row itself is rebuilt from
@@ -722,10 +744,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       icon:      convoManager?.chromeFor(convId)?.icon || null,
       accessory,
     });
-    // An upload has no picture until its pool is loaded; fill it in after.
-    if (needsIconPool(reaction.value)) {
-      warmIconPool().then(() => renderIconValue(accessory, reaction.value));
-    }
   }
 
   // What a Buddy turn is doing, while it's still doing it. The server pushes a

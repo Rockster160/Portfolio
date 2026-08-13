@@ -731,6 +731,24 @@ html.html-ctr-byte body {
     color: var(--bs-text-buddy);
   }
 
+  // One of the household's own pictures, or a Tabler icon, dropped inline in
+  // prose (`[hicon Fae]`, `[ticon:ti-broom]`). Sized in `em` rather than px so
+  // it rides --byte-font-scale with the words around it — a fixed size would
+  // stay put while the reader turned the text up.
+  .hicon {
+    display: inline-block;
+    vertical-align: -0.2em;
+
+    .ti {
+      font-size: 1.15em;
+    }
+    .icon-img {
+      width: 1.3em;
+      height: 1.3em;
+      object-fit: contain;
+    }
+  }
+
   // Cross-user relay bubble. Repainted (left bar + faint tint) in the accent of
   // whichever Buddy is speaking — the partner's on an incoming relay, your own
   // on the copy of one you sent out — so it never reads as a normal reply.

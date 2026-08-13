@@ -51,14 +51,56 @@ export function renderIconValue(container, value) {
   container.textContent = v;
 }
 
-// A reference whose picture needs the custom pool loaded before it can be
-// drawn. Callers warm the pool when one of these is on screen.
-export function needsIconPool(value) {
-  return String(value == null ? "" : value).startsWith("hicon:");
+
+// Pull the pool NOW. Called once at page load rather than on first use: names
+// resolve synchronously everywhere they're written, and a pool that arrives
+// late leaves them rendered as bare words.
+export function loadIconPool() {
+  return IconPool.load();
 }
 
-export function warmIconPool() {
-  return IconPool.load();
+// The household's uploads changed under us (someone added or deleted one).
+// Whoever is showing icons re-renders; what a NAME points at can change.
+export function onIconPoolChanged(fn) {
+  IconPool.onCustomChanged(fn);
+}
+
+// What a written reference points at, or null when nothing does. Names go
+// through the custom pool; ids and Tabler classes are already the answer.
+function resolveRef(ref) {
+  if (ref.startsWith("ti-")) return ref;
+  if (ref.startsWith("hicon:")) {
+    return IconPool.customSrcById(ref.slice("hicon:".length)) ? ref : null;
+  }
+  return IconPool.customRefByName(ref);
+}
+
+// Fill the `[hicon ...]` / `[ticon:...]` placeholders the markdown pass leaves
+// behind. Markdown rendering is synchronous, so the pass emits an empty span
+// carrying the reference and this puts the picture in. Matching on `:empty`
+// makes it idempotent — a repaint refills only what's still blank.
+//
+// A reference that resolves to nothing falls back to the reference as TEXT.
+// `[hicon Fae]` with no Fae should read as an odd word, not vanish.
+export function hydrateInlineIcons(root) {
+  const slots = root?.querySelectorAll?.("[data-icon-ref]:empty");
+  if (!slots || slots.length === 0) return;
+
+  slots.forEach((slot) => {
+    const ref = slot.dataset.iconRef || "";
+    const value = resolveRef(ref);
+    if (value) renderIconValue(slot, value);
+    else slot.textContent = ref;
+  });
+}
+
+// Repaint every inline icon, blank or not — for when the pool itself changed
+// (an upload, a delete) and what a name points at is no longer what it was.
+export function repaintInlineIcons(root) {
+  root?.querySelectorAll?.("[data-icon-ref]").forEach((slot) => {
+    slot.replaceChildren();
+  });
+  hydrateInlineIcons(root);
 }
 
 function buildModal() {

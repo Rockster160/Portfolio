@@ -55,6 +55,57 @@ RSpec.describe TransactionCategory do
     end
   end
 
+  # What was BOUGHT, for merchants that sell everything. Every Amazon charge is
+  # `shopping` by merchant, which is true of the shop and useless about the
+  # purchase.
+  describe ".for_item" do
+    it "recognizes a consumable" do
+      expect(described_class.for_item("CELSIUS Sparkling Kiwi Guava")).to eq(:groceries)
+      expect(described_class.for_item("Propel Powder Packets Berry")).to eq(:groceries)
+    end
+
+    it "recognizes pet things" do
+      expect(described_class.for_item("Dogcator Dog Pee Pads Extra Large")).to eq(:pets)
+      expect(described_class.for_item("SimpleThings Air-tag Cat Collar Holder")).to eq(:pets)
+    end
+
+    it "tells tabletop from video gaming" do
+      expect(described_class.for_item("ORIFANTOU 7PCS Metal DND Dice Set")).to eq(:hobby)
+      expect(described_class.for_item("ANYCUBIC PLA 3D Printer Filament")).to eq(:hobby)
+      expect(described_class.for_item("eXtremeRate Replacement 3D Joystick for Nintendo Switch"))
+        .to eq(:fun)
+    end
+
+    # Conservative on purpose. The hand-labelled data puts general goods under
+    # `shopping`, and nil means "leave it where the merchant put it".
+    it "says nothing about ordinary goods" do
+      ["Acrylic Markers", "Trash Baggies", "Shoulder bag", "Pillow", "AirTag Batteries"]
+        .each { |item| expect(described_class.for_item(item)).to be_nil }
+    end
+
+    # `coffee` on its own would claim a coffee MUG.
+    it "does not read a container as its contents" do
+      expect(described_class.for_item("Game Series Coffee Mug")).to be_nil
+      expect(described_class.for_item("KITESSENSU Cocktail Shaker Set")).to be_nil
+    end
+
+    # `home` is house fixtures, from the hand-labelled "Light Sockets" and
+    # "Thermostats" — not housewares.
+    it "reads a fixture as home but leaves housewares alone" do
+      expect(described_class.for_item("2 Pack BlueX LED A21 Blue Light Bulbs")).to eq(:home)
+      expect(described_class.for_item("AmorArc Ceramic Dinnerware Sets")).to be_nil
+    end
+
+    it "says nothing about nothing" do
+      expect(described_class.for_item(nil)).to be_nil
+      expect(described_class.for_item("")).to be_nil
+    end
+
+    it "only ever names a category that exists" do
+      expect(described_class::ITEM_RULES.keys).to all(satisfy { |c| described_class.valid?(c) })
+    end
+  end
+
   describe ".valid?" do
     it "accepts a known category as a string" do
       expect(described_class).to be_valid("eat out")

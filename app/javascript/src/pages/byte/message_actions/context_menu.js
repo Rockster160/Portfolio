@@ -18,7 +18,7 @@
 // point of the report is an accurate record of what was said.
 
 import { reactionRecents, toggleReaction, pickReaction } from "./reactions";
-import { renderIconValue, needsIconPool, warmIconPool } from "../../../icon_picker";
+import { renderIconValue } from "../../../icon_picker";
 
 // Write to the clipboard with a graceful fallback for browsers / contexts
 // where the async Clipboard API is unavailable or rejected (e.g. http, or
@@ -189,15 +189,6 @@ export function initMessageContextMenu(thread, root, { onNotice } = {}) {
     more.textContent = "+";
     more.addEventListener("click", () => runPicker(menu.dataset.msgId || ""));
     row.appendChild(more);
-
-    // An upload can't be drawn until its pool is loaded; warm it and redraw.
-    if (values.some(needsIconPool)) {
-      warmIconPool().then(() => {
-        row.querySelectorAll("[data-menu-reaction]").forEach((b) => {
-          renderIconValue(b, b.dataset.menuReaction);
-        });
-      });
-    }
   }
 
   // Close first, then send. The server writes both copies of the relay and

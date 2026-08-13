@@ -355,8 +355,11 @@
     <%# commands, flags, and paths, so they're off in that mode. JS keeps %>
     <%# these in sync on conversation switch (conversations.js). %>
     <% bash_mode = @conversation.mode.to_s == "bash" %>
+    <%# `emoji-autocomplete` is all it takes to get `:name` typing — the module %>
+    <%# self-initializes on every page and attaches by class, so the composer %>
+    <%# gets the same picker the /pages editor has, custom icons included. %>
     <textarea
-      class="byte-input"
+      class="byte-input emoji-autocomplete"
       data-byte-input
       rows="1"
       placeholder="Say something to <%= buddy_page_chrome[:name] %>…"
