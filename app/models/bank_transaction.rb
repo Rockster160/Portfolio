@@ -299,18 +299,24 @@ class BankTransaction < ApplicationRecord
     bank_account&.display_name || "—"
   end
 
-  # Where this row came from, for the tooltip on the When cell. Two rows that
-  # look identical on screen are the thing you most need to tell apart, and
-  # until this existed the only way was a console — which is how 26 duplicates
-  # went unnoticed. The id alone is not enough: which FEED a row came from is
-  # what says whether a near-identical pair is a duplicate or a genuine repeat
-  # charge.
+  # The identifiers for this row, for the tooltip on the When cell. Two rows
+  # that look identical on screen are the thing you most need to tell apart,
+  # and until this existed the only way was a console — which is how 26
+  # duplicates went unnoticed.
+  #
+  # The records behind this row, in the form you would type to go and find one.
+  # Nothing else: the SimpleFIN id is a 36-character UUID that identifies the
+  # row you are already looking at, and the posted date is in the table.
   def source_summary
-    parts = ["##{id}"]
-    parts << (simplefin_id.presence ? "SimpleFIN #{simplefin_id}" : "from an alert, not yet in the bank feed")
-    parts << "alert ##{action_event_id}" if action_event_id.present?
-    parts << "posted #{posted_at.in_time_zone(::User.timezone).strftime("%b %-d, %Y")}" if posted_at.present?
-    parts.join(" · ")
+    parts = ["BankTransaction##{id}"]
+    parts << "ActionEvent##{action_event_id}" if action_event_id.present?
+    parts << "Email##{source_email_id}" if source_email_id.present?
+    parts.join(" ")
+  end
+
+  # The Chase alert email this came from, which is what `prod-emails.sh` takes.
+  def source_email_id
+    action_event&.data&.dig("email_id")
   end
 
   private

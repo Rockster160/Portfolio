@@ -322,6 +322,12 @@
                     <em class="tag xfer"
                         title="Between your own accounts — not counted as spending or income">transfer</em>
                   <% end %>
+                  <%# Only where there is something to show. A button that opens
+                      an empty drawer is worse than no button. %>
+                  <% if transaction.metadata.present? %>
+                    <button type="button" class="tag meta" data-meta-toggle
+                            title="What is known about this purchase">metadata</button>
+                  <% end %>
                 </span>
               </td>
               <td class="memo">
@@ -344,6 +350,29 @@
                 <%= cents.call(transaction.amount_cents) %>
               </td>
             </tr>
+            <%# Rendered with the row and hidden, rather than fetched on click.
+                It is a few dozen bytes already loaded, and a drawer that cannot
+                fail to open is worth more than one that saves them.
+
+                Grouped by source key, and driven by whatever `metadata` holds —
+                so a second source appears here without this template changing. %>
+            <% if transaction.metadata.present? %>
+              <tr class="bank-meta-row hidden" data-meta-row>
+                <td colspan="6">
+                  <% transaction.metadata.each do |source, values| %>
+                    <div class="bank-meta">
+                      <div class="bank-meta-source"><%= source.to_s.titleize %></div>
+                      <dl>
+                        <% Hash(values).each do |key, value| %>
+                          <dt><%= key.to_s.tr("_", " ") %></dt>
+                          <dd><%= Array.wrap(value).join(", ").presence || "—" %></dd>
+                        <% end %>
+                      </dl>
+                    </div>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
           <% end %>
         </tbody>
       </table>
@@ -380,6 +409,20 @@
         row.classList.add(ok ? "saved" : "failed");
         window.setTimeout(function () { row.classList.remove("saved", "failed"); }, 1200);
       }
+
+      // The drawer sits in the row immediately after its own, already rendered.
+      // stopPropagation because the button lives inside an editable row and a
+      // click here means only "show me this".
+      document.querySelectorAll("[data-meta-toggle]").forEach(function (button) {
+        button.addEventListener("click", function (event) {
+          event.stopPropagation();
+          var drawer = button.closest("tr").nextElementSibling;
+          if (!drawer || !drawer.hasAttribute("data-meta-row")) { return; }
+
+          drawer.classList.toggle("hidden");
+          button.classList.toggle("open");
+        });
+      });
 
       function save(row, body) {
         return window.fetch(row.getAttribute("data-url"), {
@@ -624,6 +667,32 @@
     }
     .bank-table td.payee .tag.pending { color: #F5B041; background: rgba(245, 176, 65, 0.13); }
     .bank-table td.payee .tag.xfer { color: #94A3B8; background: rgba(148, 163, 184, 0.13); }
+    /* Quiet until wanted: it sits on most Amazon rows, so it must not read as
+       a status the way `pending` does. */
+    .bank-table td.payee .tag.meta {
+      border: 0; cursor: pointer; font-family: inherit; letter-spacing: 0.06em;
+      color: #64748B; background: rgba(100, 116, 139, 0.13);
+    }
+    .bank-table td.payee .tag.meta:hover { color: #CBD5E1; }
+    .bank-table td.payee .tag.meta.open { color: #5DADE2; background: rgba(93, 173, 226, 0.15); }
+
+    /* Scoped rather than relying on a global `.hidden`, which is defined in a
+       stylesheet this page does not necessarily load. */
+    .bank-meta-row.hidden { display: none; }
+    .bank-meta-row td { padding: 10px 12px 12px; background: rgba(148, 163, 184, 0.05); }
+    .bank-meta { margin-bottom: 8px; }
+    .bank-meta:last-child { margin-bottom: 0; }
+    .bank-meta-source {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+      color: #64748B; margin-bottom: 4px;
+    }
+    /* Two columns so the keys line up and the values can be scanned down. */
+    .bank-meta dl {
+      display: grid; grid-template-columns: max-content 1fr;
+      gap: 2px 14px; margin: 0; font-size: 12px;
+    }
+    .bank-meta dt { color: #64748B; }
+    .bank-meta dd { margin: 0; color: #CBD5E1; word-break: break-word; }
 
     .bank-cat-dot {
       width: 8px; height: 8px; border-radius: 2px;

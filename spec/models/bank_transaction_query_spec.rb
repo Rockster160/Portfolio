@@ -63,25 +63,31 @@ RSpec.describe BankTransaction, ".query" do
     expect(found("payee:costco")).to contain_exactly(groceries)
   end
 
-  # Two rows that read identically on screen are the thing you most need to
-  # tell apart — which feed each came from is what says whether they are a
-  # duplicate or a genuine repeat charge.
+  # Two rows that read the same on screen are what you most need to tell apart.
+  # Record ids only, in the form you would type to go and find one.
   describe "#source_summary" do
-    it "names the id and the SimpleFIN record for a bank row" do
-      expect(orphan.source_summary).to include("##{orphan.id}", "SimpleFIN T3")
+    it "names the bank transaction" do
+      expect(orphan.source_summary).to eq("BankTransaction##{orphan.id}")
     end
 
-    it "says so when a row exists only because an alert arrived" do
+    it "names the event and the email behind an alert-sourced row" do
+      event = ActionEvent.create!(
+        user: user, name: "Transaction", timestamp: 1.day.ago,
+        data: { amount: 1, account: "(...7283)", category: "fun", email_id: 51_450 }
+      )
       row = BankTransaction.create!(
-        bank_account: card, amount_cents: -100, transacted_at: 1.day.ago,
-        action_event: ActionEvent.create!(
-          user: user, name: "Transaction", timestamp: 1.day.ago,
-          data: { amount: 1, account: "(...7283)", category: "fun" }
-        )
+        bank_account: card, amount_cents: -100, transacted_at: 1.day.ago, action_event: event,
       )
 
-      expect(row.source_summary).to include("not yet in the bank feed", "alert #")
-      expect(row.source_summary).not_to include("posted")
+      expect(row.source_summary).to(
+        eq("BankTransaction##{row.id} ActionEvent##{event.id} Email#51450"),
+      )
+    end
+
+    # A 36-character UUID identifies the row already being looked at, and the
+    # posted date is in the table.
+    it "says nothing about the SimpleFIN id or the posted date" do
+      expect(orphan.source_summary).not_to include("SimpleFIN", "T3", "posted")
     end
   end
 

@@ -41,7 +41,7 @@ RSpec.describe SimpleFin::AmazonEnrichment do
     described_class.apply(row)
 
     expect(row.reload.metadata.dig("amazon", "order_id")).to eq("112-6608200-0828238")
-    expect(row.metadata.dig("amazon", "item_ids")).to eq(["B0C1XLC962"])
+    expect(row.metadata.dig("amazon", "asins")).to eq(["B0C1XLC962"])
   end
 
   it "names the item in the memo, tidied the same way the backfill did" do
@@ -62,21 +62,69 @@ RSpec.describe SimpleFin::AmazonEnrichment do
     expect(row.reload.category).to eq("pets")
   end
 
+  # The purchase should be traceable from either side.
+  it "stamps the order number and ASINs onto the alert as well" do
+    board(delivery)
+    event = ActionEvent.create!(
+      user: user, name: "Transaction", timestamp: at, notes: "AMAZON MKTPLACE PMTS",
+      data: { amount: 24.99, account: "(...7283)", category: "shopping" }
+    )
+    row = charge
+    row.update!(action_event: event)
+
+    described_class.apply(row)
+
+    expect(event.reload.data.dig("amazon", "order_id")).to eq("112-6608200-0828238")
+    expect(event.data.dig("amazon", "asins")).to eq(["B0C1XLC962"])
+  end
+
+  # The event owns its own category and notes; this only adds identifiers.
+  it "leaves everything else on the alert alone" do
+    board(delivery)
+    event = ActionEvent.create!(
+      user: user, name: "Transaction", timestamp: at, notes: "Puppy Bed Treats",
+      data: { amount: 24.99, account: "(...7283)", category: "shopping" }
+    )
+    row = charge
+    row.update!(action_event: event)
+
+    described_class.apply(row)
+
+    event.reload
+    expect(event.notes).to eq("Puppy Bed Treats")
+    expect(event.data["category"]).to eq("shopping")
+    expect(event.data["amount"]).to eq(24.99)
+  end
+
+  # Recorded alongside being set, exactly as the order-history backfill does.
+  # Without it a category this service chose would look like a hand-picked one,
+  # and the backfill would refuse to correct it later.
+  it "records the category it chose so a later writer can tell it apart" do
+    board(delivery)
+    row = charge
+
+    described_class.apply(row)
+
+    expect(row.reload.metadata.dig("amazon", "category")).to eq("pets")
+  end
+
   # A title is search spam and mentions everything the thing could be near.
   # This exact soup bowl was filed under groceries because its title says
   # "Stoneware Cereal Set of 4".
   it "categorizes on the tidied name, not the keyword spam in the title" do
     board(delivery(
-            "name"   => "27.0 Oz Large Soup Bowls, Stoneware Cereal Set of 4, " \
-                        "modern dark petrol-Blue Pasta Bowl for Kitchen",
-            "amount" => "24.99",
+      "name"   => "27.0 Oz Large Soup Bowls, Stoneware Cereal Set of 4, " \
+                  "modern dark petrol-Blue Pasta Bowl for Kitchen",
+      "amount" => "24.99",
           ))
     row = charge
 
     described_class.apply(row)
 
     expect(row.reload.memo).to eq("27.0 Oz Large Soup Bowls")
-    expect(row.category).to eq("shopping")
+    # Bowls are housewares. What matters is that the "Cereal" buried in the
+    # raw title does not make a soup bowl into groceries.
+    expect(row.category).to eq("home")
   end
 
   it "leaves a memo that was typed by hand" do

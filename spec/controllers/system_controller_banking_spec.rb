@@ -201,6 +201,68 @@ RSpec.describe SystemController, type: :controller do
       )
     end
 
+    # Two rows that read the same on screen are what you most need to tell
+    # apart, and the ids are the way to go and find either record.
+    describe "the identity tooltip" do
+      it "names the records behind the row, in the form you would type" do
+        row = linked_transaction(cents: -970, category: "fun", payee: "Arcade")
+        row.action_event.update!(data: row.action_event.data.merge("email_id" => 51_450))
+
+        get :banking
+
+        expect(response.body).to include(
+          %(title="BankTransaction##{row.id} ActionEvent##{row.action_event_id} Email#51450"),
+        )
+      end
+
+      # A 36-character UUID identifies the row already being looked at.
+      it "does not print the SimpleFIN id" do
+        linked_transaction(cents: -970, category: "fun", payee: "Arcade")
+
+        get :banking
+
+        expect(response.body).not_to include("SimpleFIN TRN-A")
+      end
+    end
+
+    describe "the metadata drawer" do
+      it "shows what is known about the purchase, grouped by source" do
+        row = linked_transaction(cents: -970, category: "fun", payee: "Arcade")
+        row.update!(metadata: {
+          "amazon" => { "order_id" => "112-6608200-0828238", "asins" => %w[B0C1XLC962 B07VWX9DMJ] },
+        })
+
+        get :banking
+
+        expect(response.body).to include("112-6608200-0828238")
+        # Arrays read as a list rather than as Ruby's inspect output.
+        expect(response.body).to include("B0C1XLC962, B07VWX9DMJ")
+        expect(response.body).to include("order id", "Amazon")
+      end
+
+      # Rendered with the row and hidden, so opening it cannot fail.
+      it "starts closed" do
+        row = linked_transaction(cents: -970, category: "fun", payee: "Arcade")
+        row.update!(metadata: { "amazon" => { "order_id" => "112-1" } })
+
+        get :banking
+
+        expect(response.body).to include(%(<tr class="bank-meta-row hidden" data-meta-row>))
+      end
+
+      # A button that opens an empty drawer is worse than no button.
+      it "offers no button on a row with no metadata" do
+        linked_transaction(cents: -970, category: "fun", payee: "Arcade")
+
+        get :banking
+
+        # Matched on the markup, not the bare attribute name: the page's own
+        # JS mentions `[data-meta-toggle]` and would satisfy a looser check.
+        expect(response.body).not_to include(%(<button type="button" class="tag meta"))
+        expect(response.body).not_to include(%(<tr class="bank-meta-row))
+      end
+    end
+
     it "renders cents to two places, never truncated" do
       linked_transaction(cents: -970, category: "fun", payee: "Arcade")
 

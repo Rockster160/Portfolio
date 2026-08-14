@@ -76,24 +76,65 @@ RSpec.describe TransactionCategory do
         .to eq(:fun)
     end
 
-    # Conservative on purpose. The hand-labelled data puts general goods under
-    # `shopping`, and nil means "leave it where the merchant put it".
-    it "says nothing about ordinary goods" do
-      ["Acrylic Markers", "Trash Baggies", "Shoulder bag", "Pillow", "AirTag Batteries"]
-        .each { |item| expect(described_class.for_item(item)).to be_nil }
+    # `shopping` is a failure, not a bucket — it says only "a shop sold it".
+    # These reach hard: 96% of the 445 that were left in it now land somewhere.
+    it "claims the ordinary goods that used to fall through" do
+      expect(described_class.for_item("Trash Baggies")).to eq(:home)
+      expect(described_class.for_item("MIULEE Couch Throw Pillow Covers")).to eq(:home)
+      expect(described_class.for_item("Acrylic Markers")).to eq(:hobby)
+      expect(described_class.for_item("Amazon Basics CR2032 Lithium Batteries")).to eq(:hobby)
     end
 
-    # `coffee` on its own would claim a coffee MUG.
-    it "does not read a container as its contents" do
-      expect(described_class.for_item("Game Series Coffee Mug")).to be_nil
-      expect(described_class.for_item("KITESSENSU Cocktail Shaker Set")).to be_nil
+    # A CORD powers the house; a CABLE is workbench kit. Read literally, as
+    # asked — so `hobby` is tested first and something naming both lands there.
+    it "tells a cord from a cable" do
+      expect(described_class.for_item("Power Strip with Extension Cord")).to eq(:home)
+      expect(described_class.for_item("Anker USB C to USB C Cable")).to eq(:hobby)
+      expect(described_class.for_item("Silicone Cord Organizer Magnetic Cable Clips")).to eq(:hobby)
     end
 
-    # `home` is house fixtures, from the hand-labelled "Light Sockets" and
-    # "Thermostats" — not housewares.
-    it "reads a fixture as home but leaves housewares alone" do
-      expect(described_class.for_item("2 Pack BlueX LED A21 Blue Light Bulbs")).to eq(:home)
-      expect(described_class.for_item("AmorArc Ceramic Dinnerware Sets")).to be_nil
+    # Games are fun, but tabletop stays hobby — which is why hobby is tested
+    # before fun.
+    it "keeps tabletop out of the generic games bucket" do
+      expect(described_class.for_item("Pillbox Games Side Effects")).to eq(:fun)
+      expect(described_class.for_item("Gamie Premium Glass Chess Set")).to eq(:hobby)
+      expect(described_class.for_item("Arkeiliy MTG Deck Box")).to eq(:hobby)
+    end
+
+    # `glasses` means four different things depending on what precedes it.
+    it "reads the right kind of glasses" do
+      expect(described_class.for_item("KastKing Polarized Sport Sunglasses")).to eq(:fun)
+      expect(described_class.for_item("WYND Blocker Motorcycle Riding Glasses")).to eq(:car)
+      expect(described_class.for_item("Blue Light Blocking Amber Glasses")).to eq(:medical)
+      expect(described_class.for_item("US Acrylic Reusable Drinking Glasses")).to eq(:home)
+    end
+
+    it "puts hygiene with the medicine" do
+      expect(described_class.for_item("Colgate Max Fresh Wisp")).to eq(:medical)
+      expect(described_class.for_item("Benadryl Extra Strength Itch Stopping Cream")).to eq(:medical)
+    end
+
+    # `home` is last of the specific rules because it is the widest: a camping
+    # lantern is fun before `lantern` can make it home.
+    it "lets a narrower rule beat home" do
+      expect(described_class.for_item("Coleman Camping Lantern")).to eq(:fun)
+      expect(described_class.for_item("SHYMERY Mini Lanterns")).to eq(:home)
+    end
+
+    # Three real bugs: the singular-only patterns missed the plural the data
+    # actually uses, and `dungeons . dragons` cannot match "Dungeons and
+    # Dragons" — one wildcard character against a three-letter word.
+    it "matches the plurals and phrasings the data actually uses" do
+      expect(described_class.for_item("DD Hammocks")).to eq(:fun)
+      expect(described_class.for_item("Maitys Large Folding Silk Hand Fans")).to eq(:home)
+      expect(described_class.for_item("Teeturtle Dungeons and Dragons Owlbear")).to eq(:hobby)
+    end
+
+    # `pads` is never used bare — mouse pads, brake pads and sticky-note pads
+    # would all be swept into medical.
+    it "does not read every pad as a sanitary one" do
+      expect(described_class.for_item("Ghost Book Mousepad")).to eq(:hobby)
+      expect(described_class.for_item("Dogcator Dog Pee Pads")).to eq(:pets)
     end
 
     it "says nothing about nothing" do

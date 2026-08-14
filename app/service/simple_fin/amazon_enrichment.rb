@@ -101,15 +101,7 @@ module SimpleFin
 
       def write!(transaction, order)
         name = order.full_name.presence || order.name.presence || order.listed_name
-        attrs = {
-          metadata: transaction.metadata.to_h.merge(
-            "amazon" => {
-              "order_id" => order.order_id,
-              "item_ids" => [order.item_id].compact,
-              "source"   => "delivery_board",
-            },
-          ),
-        }
+        attrs = {}
 
         memo = ::AmazonProductName.tidy(name)
         attrs[:memo] = memo if memo.present? && auto_filled?(transaction)
@@ -122,7 +114,41 @@ module SimpleFin
         category = ::TransactionCategory.for_item(memo)
         attrs[:category] = category.to_s if category.present?
 
+        # The category is recorded ALONGSIDE being set, exactly as the
+        # order-history backfill does. That is what lets either writer tell its
+        # own answer from one you picked by hand — without it, a category this
+        # service chose would look like your choice, and the backfill would
+        # refuse to correct it later.
+        #
+        # `asins` rather than `item_ids`: the backfill writes that name, and one
+        # field under two names is a field nothing can query.
+        amazon = {
+          "order_id" => order.order_id,
+          "asins"    => [order.item_id].compact,
+          "category" => attrs[:category],
+          "source"   => "delivery_board",
+        }.compact
+        attrs[:metadata] = transaction.metadata.to_h.merge("amazon" => amazon)
+
         transaction.update!(attrs)
+        stamp_event!(transaction, amazon)
+      end
+
+      # The same order number and ASINs onto the alert, so the purchase can be
+      # traced from either side. Only the identifiers — the event owns its own
+      # category and notes, and this must not touch them.
+      #
+      # Written straight to `data` rather than through ActionEventNotifier: the
+      # notifier fires a :event Jil trigger, and stamping an id is not an event
+      # worth waking every watch and automation for.
+      def stamp_event!(transaction, amazon)
+        event = transaction.action_event
+        return if event.blank?
+
+        facts = amazon.slice("order_id", "asins")
+        return if event.data.to_h["amazon"] == facts
+
+        event.update!(data: event.data.to_h.merge("amazon" => facts))
       end
 
       # The same rule the backfill used: blank, or still carrying the payee the
