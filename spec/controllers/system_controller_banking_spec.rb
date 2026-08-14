@@ -201,6 +201,66 @@ RSpec.describe SystemController, type: :controller do
       )
     end
 
+    # A reference, not an explanation. What matters is that the values it lists
+    # come FROM the code that accepts them, so it cannot describe a vocabulary
+    # the search no longer has.
+    describe "the search syntax reference" do
+      it "lists every category the search accepts, and `none`" do
+        get :banking
+
+        TransactionCategory::ALL.each { |category| expect(response.body).to include(category.to_s) }
+        expect(response.body).to include("none")
+      end
+
+      it "lists the words `direction` actually accepts" do
+        get :banking
+
+        (BankTransaction::WITHDRAWAL_WORDS + BankTransaction::DEPOSIT_WORDS).each { |word|
+          expect(response.body).to include(word)
+        }
+      end
+
+      it "names every searchable field with an example" do
+        get :banking
+
+        %w[
+          payee
+          memo
+          description
+          category
+          account
+          amount
+          timestamp
+          posted_at
+          transacted_at
+          direction
+          pending
+          linked
+          transfer
+          id
+          simplefin_id
+].each { |field|
+  expect(response.body).to include(field)
+}
+      end
+
+      # A real search term, but SimpleFIN never sends one — every row is nil, so
+      # documenting it would send you looking for something that cannot match.
+      it "says nothing about mcc" do
+        get :banking
+
+        expect(response.body).not_to include("mcc")
+      end
+
+      # A reminder you go and get, not something to read past every visit.
+      it "starts collapsed" do
+        get :banking
+
+        expect(response.body).to include(%(<details class="bank-syntax">))
+        expect(response.body).not_to include(%(<details class="bank-syntax" open))
+      end
+    end
+
     # Two rows that read the same on screen are what you most need to tell
     # apart, and the ids are the way to go and find either record.
     describe "the identity tooltip" do

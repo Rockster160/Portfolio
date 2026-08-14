@@ -266,6 +266,7 @@ Rails.application.routes.draw do
   post  "webhooks/byte"                  => "webhooks#byte_create"
   # Above the `:id` patch/post pair so "say" can't be read as a message id.
   post  "webhooks/byte/say"              => "webhooks#byte_say"
+  post  "webhooks/byte/photo"            => "webhooks#byte_photo"
   patch "webhooks/byte/:id"              => "webhooks#byte_update"
   patch "webhooks/byte/conversation/:id" => "webhooks#byte_update_conversation"
   post  "webhooks/byte/action"           => "webhooks#byte_create_action"

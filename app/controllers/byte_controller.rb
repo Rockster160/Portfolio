@@ -8,9 +8,6 @@ class ByteController < ApplicationController
   # exactly. `?limit=` can override up to MAX_LIMIT for larger bootstraps.
   HISTORY_LIMIT = 50
   MAX_LIMIT     = 200
-  # Images per /byte/uploads request. The composer posts one at a time; this is
-  # only here so a hand-rolled request can't ask us to store a hundred blobs.
-  MAX_UPLOADS   = 10
 
   def show
     load_thread
@@ -138,21 +135,10 @@ class ByteController < ApplicationController
   # message claims it — a picked-then-removed image, or a send that's abandoned
   # or fails, leaves one behind, and ActiveStorageSweepWorker reclaims those.
   def uploads
-    files = Array(params[:files]).compact_blank
-    return render(json: { error: "no file" }, status: :unprocessable_entity) if files.empty?
-    return render(json: { error: "too many images at once (max #{MAX_UPLOADS})" }, status: :unprocessable_entity) if files.size > MAX_UPLOADS
+    images = ByteImageIntake.call(params[:files])
+    return render(json: { error: images.error }, status: :unprocessable_entity) unless images.ok?
 
-    # Validate and normalize EVERY file before storing any of them, so a
-    # rejection halfway through a batch can't leave earlier blobs orphaned.
-    results = files.map { |upload| upload_rejection(upload) || ByteImageNormalizer.call(upload) }
-    failed  = results.find { |r| r.is_a?(String) || !r.ok? }
-    return render(json: { error: failed.is_a?(String) ? failed : failed.error }, status: :unprocessable_entity) if failed
-
-    blobs = results.map { |r|
-      ActiveStorage::Blob.create_and_upload!(io: r.io, filename: r.filename, content_type: r.content_type)
-    }
-
-    render json: { attachments: blobs.map { |b| blob_wire(b) } }, status: :created
+    render json: { attachments: images.blobs.map { |b| blob_wire(b) } }, status: :created
   end
 
   # Paginated history.
@@ -722,16 +708,6 @@ class ByteController < ApplicationController
     return {} unless Buddy::Themes.keys.include?(theme)
 
     { buddy_theme: theme, theme_chosen: true }
-  end
-
-  # Nil = accept. Anything else is a user-facing rejection string. Kept to
-  # images only and a sane size ceiling — this is a photo/screenshot channel,
-  # not a general upload surface.
-  def upload_rejection(upload)
-    return "unsupported file type" unless ByteMessage::UPLOADABLE_IMAGE_TYPES.include?(upload.content_type)
-    return "image too large (max 25MB)" if upload.size.to_i > ByteMessage::MAX_UPLOAD_BYTES
-
-    nil
   end
 
   def blob_wire(blob)

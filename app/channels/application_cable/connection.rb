@@ -54,7 +54,7 @@ module ApplicationCable
       if basic_auth_string.include?(":")
         User.auth_from_basic(basic_auth_string)
       else
-        ApiKey.find_by(key: auth_string.presence || type)&.tap(&:use!)&.user
+        ApiKey.authenticate(auth_string.presence || type)&.user
       end
     rescue StandardError => e
       # NoMethodError might get thrown if the raw_auth is not b64

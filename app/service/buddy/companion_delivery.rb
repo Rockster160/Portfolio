@@ -25,7 +25,12 @@ module Buddy
     SEED_FRAME = "[nothing was said to you - this fired on its own at %s, and your reply is the notification]".freeze
 
     class << self
-      def deliver_plain(user:, conversation:, text:, metadata:, push_title: nil)
+      # `files` are ActiveStorage blobs (see ByteImageIntake) for the callers
+      # that have a picture to show rather than only words — the doorbell
+      # snapshot above all. Attached BEFORE the broadcast, because `as_wire` is
+      # what the socket carries and a message that goes out without its
+      # attachment renders as an empty bubble that nothing broadcasts again.
+      def deliver_plain(user:, conversation:, text:, metadata:, push_title: nil, files: [])
         message = conversation.byte_messages.create!(
           user:         user,
           direction:    :inbound,
@@ -34,6 +39,7 @@ module Buddy
           metadata:     metadata,
           delivered_at: Time.current,
         )
+        message.files.attach(files) if files.present?
         broadcast(user, message)
         notify(user, message, push_title: push_title || text)
         message

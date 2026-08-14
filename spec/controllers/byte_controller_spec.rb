@@ -871,8 +871,8 @@ RSpec.describe ByteController, type: :controller do
       expect(response).to have_http_status(:unprocessable_entity)
     end
 
-    it "refuses a batch bigger than MAX_UPLOADS" do
-      files = Array.new(ByteController::MAX_UPLOADS + 1) { image }
+    it "refuses a batch bigger than MAX_FILES" do
+      files = Array.new(ByteImageIntake::MAX_FILES + 1) { image }
 
       expect { post :uploads, params: { files: files } }.not_to change(ActiveStorage::Blob, :count)
       expect(response).to have_http_status(:unprocessable_entity)

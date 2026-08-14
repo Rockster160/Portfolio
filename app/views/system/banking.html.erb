@@ -167,42 +167,117 @@
       <% end %>
     <% end %>
 
-    <p class="bank-hint">
-      Same syntax as events: <code>field:contains</code>, <code>field::exact</code>,
-      <code>&gt;</code> <code>&lt;</code> on numbers and dates, <code>-</code> or
-      <code>NOT</code> to negate, <code>AND</code> / <code>OR</code>. Fields:
-      payee, description, memo, mcc, <code>amount</code>,
-      <code>timestamp</code>, posted_at, transacted_at, account, category,
-      pending, linked, <code>direction</code>, <code>transfer</code>.
-      <br>
-      <code>amount</code> is in dollars and always positive — a $40 charge and a
-      $40 deposit both match <code>amount::40</code>. Use
-      <code>direction:withdrawal</code> or <code>direction:deposit</code> for the
-      sign, since a leading <code>-</code> is the negation prefix.
-      <br>
-      <code>category:none</code> lists everything not categorized yet.
-      <code>linked</code> is whether a Chase alert email backs the row, which is
-      no longer what decides whether it can hold a category.
-    </p>
+    <%# A reference table, not an explanation. Values that have a fixed set are
+        rendered FROM that set — the categories from TransactionCategory and the
+        direction words from BankTransaction — so the docs cannot drift from
+        what the search actually accepts. `mcc` is deliberately absent: it is a
+        real search term but SimpleFIN never sends one, so every row is nil. %>
+    <details class="bank-syntax">
+      <summary>Search syntax</summary>
 
-    <p class="bank-hint">
-      Dates use <code>timestamp</code> — the same field name as events, and the
-      date this table shows you. The part you give is the precision you get:
-      <br>
-      <code>timestamp:2026-07-01</code> that day ·
-      <code>timestamp:2026-07</code> that whole month ·
-      <code>timestamp:2026</code> that whole year ·
-      <code>timestamp:7-15</code> month-day, this year ·
-      <code>timestamp&gt;=2025-11-01 timestamp&lt;2026</code> a range ·
-      <code>-timestamp:2026-07</code> everything but that month
-      <br>
-      <code>&gt;</code> and <code>&lt;</code> step over the whole unit you
-      named: <code>timestamp&gt;2026-07-01</code> starts on the 2nd, and
-      <code>&gt;=2026-07-01</code> starts on the 1st. No times of day — the
-      <code>:</code> in <code>18:00</code> is the field separator.
-      <code>posted_at</code> (when it cleared) and <code>transacted_at</code>
-      still work if you need the distinction.
-    </p>
+      <table class="bank-syntax-table">
+        <tbody>
+          <tr>
+            <th>payee</th>
+            <td><code>payee:amazon</code></td>
+            <td></td>
+          </tr>
+          <tr>
+            <th>memo</th>
+            <td><code>memo:cable</code></td>
+            <td></td>
+          </tr>
+          <tr>
+            <th>description</th>
+            <td><code>description:mktplace</code></td>
+            <td></td>
+          </tr>
+          <tr>
+            <th>category</th>
+            <td><code>category:groceries</code></td>
+            <td><%= (TransactionCategory::ALL.map(&:to_s) + ["none"]).join(" · ") %></td>
+          </tr>
+          <tr>
+            <th>account</th>
+            <td><code>account:prime</code> <code>account:7283</code></td>
+            <td>chosen name, bank name, or last four</td>
+          </tr>
+          <tr>
+            <th>amount</th>
+            <td><code>amount&gt;50</code> <code>amount::40</code></td>
+            <td>dollars, always positive</td>
+          </tr>
+          <tr>
+            <th>timestamp</th>
+            <td><code>timestamp:2026-07</code></td>
+            <td>when it happened — see below</td>
+          </tr>
+          <tr>
+            <th>posted_at</th>
+            <td><code>posted_at&gt;2026-07-01</code></td>
+            <td>when it cleared</td>
+          </tr>
+          <tr>
+            <th>transacted_at</th>
+            <td><code>transacted_at:2026-07-01</code></td>
+            <td>the bank's raw value</td>
+          </tr>
+          <tr>
+            <th>direction</th>
+            <td><code>direction:withdrawal</code></td>
+            <td><%= (BankTransaction::WITHDRAWAL_WORDS + BankTransaction::DEPOSIT_WORDS).join(" · ") %></td>
+          </tr>
+          <tr>
+            <th>pending</th>
+            <td><code>pending:true</code></td>
+            <td>true · false</td>
+          </tr>
+          <tr>
+            <th>linked</th>
+            <td><code>linked:false</code></td>
+            <td>true · false — has a Chase alert behind it</td>
+          </tr>
+          <tr>
+            <th>transfer</th>
+            <td><code>transfer:true</code></td>
+            <td>true · false — between your own accounts</td>
+          </tr>
+          <tr>
+            <th>id</th>
+            <td><code>id:2652</code></td>
+            <td></td>
+          </tr>
+          <tr>
+            <th>simplefin_id</th>
+            <td><code>simplefin_id:TRN-0dcb</code></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="bank-syntax-notes">
+        <div>
+          <strong>Operators</strong>
+          <code>field:contains</code> <code>field::exact</code>
+          <code>amount&gt;50</code> <code>amount&lt;50</code> <code>amount&gt;=50</code>
+          <code>-payee:amazon</code> <code>NOT payee:amazon</code>
+          <code>AND</code> <code>OR</code>
+        </div>
+        <div>
+          <strong>Dates</strong>
+          <code>timestamp:2026-07-01</code> that day ·
+          <code>timestamp:2026-07</code> that month ·
+          <code>timestamp:2026</code> that year ·
+          <code>timestamp:7-15</code> this year ·
+          <code>timestamp&gt;=2025-11-01 timestamp&lt;2026</code> a range
+        </div>
+        <div>
+          <strong>Watch out</strong>
+          <code>&gt;</code> skips the whole unit named — <code>timestamp&gt;2026-07-01</code>
+          starts on the 2nd, <code>&gt;=</code> on the 1st. No times of day.
+        </div>
+      </div>
+    </details>
 
     <% if @search_error.present? %>
       <p class="bank-error">Could not parse that search: <%= @search_error %></p>
@@ -550,6 +625,35 @@
     .bank-section { margin-top: 36px; }
 
     .bank-empty, .bank-warn, .bank-hint, .bank-error { margin: 12px 0; color: #94A3B8; }
+
+    /* Collapsed by default: it is a reminder you go and get, not something to
+       read past on every visit. */
+    .bank-syntax { margin: 12px 0; font-size: 12px; color: #94A3B8; }
+    .bank-syntax > summary {
+      cursor: pointer; color: #64748B; font-size: 13px;
+      list-style: none; user-select: none; width: max-content;
+    }
+    .bank-syntax > summary::-webkit-details-marker { display: none; }
+    .bank-syntax > summary::before { content: "▸ "; }
+    .bank-syntax[open] > summary::before { content: "▾ "; }
+    .bank-syntax > summary:hover { color: #CBD5E1; }
+    .bank-syntax code {
+      background: rgba(148, 163, 184, 0.1); border-radius: 3px;
+      padding: 1px 4px; color: #CBD5E1; white-space: nowrap;
+    }
+    .bank-syntax-table { border-collapse: collapse; margin: 10px 0 0; }
+    .bank-syntax-table th {
+      text-align: left; font-weight: normal; color: #64748B;
+      padding: 3px 16px 3px 0; vertical-align: top; white-space: nowrap;
+    }
+    .bank-syntax-table td { padding: 3px 16px 3px 0; vertical-align: top; }
+    /* The values column wraps — 22 categories is a paragraph, not a cell. */
+    .bank-syntax-table td:last-child { color: #64748B; }
+    .bank-syntax-notes { margin-top: 12px; }
+    .bank-syntax-notes > div { margin-bottom: 5px; }
+    .bank-syntax-notes strong {
+      display: inline-block; min-width: 76px; color: #64748B; font-weight: normal;
+    }
     .bank-warn { color: #F5B041; }
     .bank-error { color: #EC7063; }
     .bank-hint { font-size: 12px; }

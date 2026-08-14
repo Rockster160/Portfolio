@@ -40,4 +40,22 @@ RSpec.describe ApplicationCable::Connection do
 
     conn.send(:find_verified_user)
   end
+
+  it "connects via a bearer API key" do
+    key = user.api_keys.create!(name: "Dashboard")
+    conn = build_conn(headers: { "HTTP_AUTHORIZATION" => "Bearer #{key.key}" })
+
+    expect(conn.send(:find_verified_user)).to eq(user)
+  end
+
+  # A socket outlives the request that opened it, so a key that's been turned
+  # off getting one is a key that keeps listening for as long as it stays open.
+  it "rejects a bearer API key that's been disabled" do
+    key = user.api_keys.create!(name: "Old laptop")
+    key.update!(enabled: false)
+    conn = build_conn(headers: { "HTTP_AUTHORIZATION" => "Bearer #{key.key}" })
+    expect(conn).to receive(:reject_unauthorized_connection)
+
+    conn.send(:find_verified_user)
+  end
 end

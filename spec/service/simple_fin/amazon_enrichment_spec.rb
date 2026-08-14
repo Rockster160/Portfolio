@@ -62,6 +62,29 @@ RSpec.describe SimpleFin::AmazonEnrichment do
     expect(row.reload.category).to eq("pets")
   end
 
+  # An AmazonOrder's `item_id` is the ORDER ID when the SKU is not known yet.
+  # Taking it on trust wrote `asins: ["111-0249626-0913845"]` beside
+  # `order_id: "111-0249626-0913845"` — the same number under two names.
+  it "records no ASIN when the delivery is still using the order id as its item id" do
+    board(delivery("item_id" => "111-0249626-0913845", "order_id" => "111-0249626-0913845"))
+    row = charge
+
+    described_class.apply(row)
+
+    amazon = row.reload.metadata["amazon"]
+    expect(amazon["asins"]).to eq([])
+    expect(amazon["order_id"]).to eq("111-0249626-0913845")
+  end
+
+  it "records no ASIN for a hand-added item id" do
+    board(delivery("item_id" => "CUSTOM-f4f9"))
+    row = charge
+
+    described_class.apply(row)
+
+    expect(row.reload.metadata.dig("amazon", "asins")).to eq([])
+  end
+
   # The purchase should be traceable from either side.
   it "stamps the order number and ASINs onto the alert as well" do
     board(delivery)

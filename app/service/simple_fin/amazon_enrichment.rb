@@ -124,7 +124,7 @@ module SimpleFin
         # field under two names is a field nothing can query.
         amazon = {
           "order_id" => order.order_id,
-          "asins"    => [order.item_id].compact,
+          "asins"    => asins_for(order),
           "category" => attrs[:category],
           "source"   => "delivery_board",
         }.compact
@@ -132,6 +132,19 @@ module SimpleFin
 
         transaction.update!(attrs)
         stamp_event!(transaction, amazon)
+      end
+
+      # An AmazonOrder's `item_id` is NOT always an ASIN. A row whose SKU is not
+      # known yet uses its ORDER ID as the item id — AmazonItemCatalog says so
+      # in as many words, and its `asin?` is the same guard used to keep those
+      # placeholders out of the per-SKU cache.
+      #
+      # Taking it on trust wrote `asins: ["111-0249626-0913845"]` next to
+      # `order_id: "111-0249626-0913845"`: the same number under two names, one
+      # of which claims to be something it is not. An empty list is the honest
+      # answer — the ASIN is simply not known yet.
+      def asins_for(order)
+        [order.item_id].compact.select { |id| ::AmazonItemCatalog.asin?(id) }
       end
 
       # The same order number and ASINs onto the alert, so the purchase can be

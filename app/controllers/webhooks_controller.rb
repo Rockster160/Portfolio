@@ -553,6 +553,72 @@ class WebhooksController < ApplicationController
     render json: message.as_wire, status: :created
   end
 
+  # POST /webhooks/byte/photo — a picture from the house, straight into the
+  # Buddy thread. The doorbell camera when the bell goes; a snapshot off any of
+  # the others.
+  #
+  # Home Assistant posts the JPEG ITSELF rather than handing over a URL for us
+  # to turn around and fetch. One request instead of three, nothing about the
+  # camera has to be reachable from outside the house, and the picture is the
+  # frame from the moment the bell rang rather than whatever the camera happens
+  # to be looking at by the time we get round to asking.
+  #
+  # Deliberately not a model turn. There is nothing to reason about — they want
+  # to see who is at the door, and a GPT call sitting between the bell and the
+  # picture would cost seconds to add nothing.
+  def byte_photo
+    user = byte_photo_user
+    return head :unauthorized if user.nil?
+
+    conversation = byte_say_conversation(user)
+    return render json: { error: :"no buddy conversation" }, status: :not_found if conversation.nil?
+    return render json: { error: :"not a buddy conversation" }, status: :unprocessable_entity unless conversation.buddy?
+
+    images = ByteImageIntake.call(params[:files])
+    return render json: { error: images.error }, status: :unprocessable_entity unless images.ok?
+
+    # A caption is optional — an image on its own is a real message here, same
+    # as it is from the composer. The push still needs words, so it falls back
+    # to something that says what arrived.
+    caption = params[:body].to_s.strip
+    message = ::Buddy::CompanionDelivery.deliver_plain(
+      user:         user,
+      conversation: conversation,
+      text:         caption,
+      files:        images.blobs,
+      metadata:     byte_metadata(params).symbolize_keys.reverse_merge(kind: :buddy, source: :photo),
+      push_title:   caption.presence || "📷 New photo",
+    )
+
+    render json: message.as_wire, status: :created
+  end
+
+  # Who the picture is for, and the only thing standing between the outside
+  # world and somebody's thread. Two doors, because two kinds of caller need
+  # this one.
+  #
+  # The Mac bridge holds the shared secret and speaks FOR whoever it names, so
+  # `user_id` is its to pass — that's the existing contract every other
+  # `webhooks/byte/*` action runs on. An API key is not a bearer of authority
+  # over the house, it IS a person: whoever holds it gets their own thread and
+  # `user_id` is ignored, because a key that could name somebody else is a key
+  # that can put a photo of a stranger's front door into their pocket.
+  #
+  # Header auth only, deliberately. This controller skips CSRF verification, so
+  # honoring a session cookie here would mean any page anybody happens to visit
+  # could post into their Byte thread. `current_user` only reads headers when
+  # `HTTP_AUTHORIZATION` is present (see AuthHelper), and the blank check is what
+  # keeps it that way rather than trusting that to stay true.
+  def byte_photo_user
+    return User.find_by(id: params[:user_id].presence || User.me.id) if byte_authorized?
+    return nil if request.headers["HTTP_AUTHORIZATION"].blank?
+
+    user = current_user
+    return nil if user.nil? || user.guest?
+
+    user
+  end
+
   # Explicit id wins; otherwise their most recent Buddy thread, falling back to
   # the default. `ByteConversation.default_for` can hand back a claude thread
   # for the owner, which is not what "send this to Byte" means.

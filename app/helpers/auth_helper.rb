@@ -169,10 +169,9 @@ module AuthHelper
 
     # Try API key first -  Base64-decoding hex keys can produce false
     # colons, causing them to be misidentified as basic auth
-    api_user = ApiKey.find_by(key: auth_string)&.tap { |key|
+    api_user = ApiKey.authenticate(auth_string)&.tap { |key|
       @auth_type = :api_key
       @auth_type_id = key.id
-      key.use!
     }&.user
     return api_user if api_user
 
@@ -184,10 +183,9 @@ module AuthHelper
       }
     end
   rescue ActiveRecord::StatementInvalid
-    ApiKey.find_by(key: auth_string)&.tap { |key|
+    ApiKey.authenticate(auth_string)&.tap { |key|
       @auth_type = :api_key
       @auth_type_id = key.id
-      key.use!
     }&.user
   end
 
