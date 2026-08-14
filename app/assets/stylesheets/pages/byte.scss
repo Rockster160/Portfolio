@@ -4142,9 +4142,20 @@ dialog.byte-modal {
 // Excluding the kiosk belt-and-braces: its composer is display:none so nothing
 // there can take focus, but this selector outranks the kiosk's own sizing, and
 // a stray match would silently turn the wall sideways.
-.byte-app:not([data-kiosk="true"]):has([data-byte-input]:focus)
-  .byte-buddy-hero {
-  @include buddy-hero-compact;
+//
+// Gated to coarse pointers because the thing being made room for is the
+// on-screen keyboard, and a mouse doesn't have one. On desktop this fired on
+// plain focus, and index.js focuses the composer on any click in empty thread
+// space — so clicking the page reshuffled Buddy and the chips into the phone
+// layout on a full-height window. Same test the JS uses for that click
+// handler (`pointer: fine`), so the two agree by construction: where clicking
+// focuses incidentally, focus no longer collapses the hero. Genuinely short
+// windows are already covered below, by height.
+@media (pointer: coarse) {
+  .byte-app:not([data-kiosk="true"]):has([data-byte-input]:focus)
+    .byte-buddy-hero {
+    @include buddy-hero-compact;
+  }
 }
 // Short viewport (shrunk desktop window, landscape phone) — collapse to the
 // same compact side-by-side layout so Buddy fits instead of being clipped.

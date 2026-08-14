@@ -23,6 +23,32 @@ RSpec.describe Jil::Executor do
     expect(Execution.where.not(payload_id: nil).count).to eq(11)
   end
 
+  # A camera frame reaches Jil as ~500KB of base64 sitting in a var, so what
+  # gets done with vars stopped being free. `store_progress` writes
+  # `ctx.except(:vars)` and `broadcast!` sends five named keys — neither carries
+  # a value. Including vars in either would write half a megabyte into
+  # execution_payloads and push it down the socket on EVERY snapshot request,
+  # 32 times over, since execute_line broadcasts per line.
+  it "keeps var values out of the stored payload and off the socket" do
+    big = "x" * 200_000
+    allow_any_instance_of(Jil::Methods::Global).to receive(:request).and_return(
+      code: 200, body: { "frame" => big },
+    )
+    broadcasts = []
+    allow(TasksChannel).to receive(:send_to) { |_u, _uuid, data| broadcasts << data }
+
+    described_class.call(user, <<~'JIL', {})
+      res = Global.request("GET", "http://example.test", {}, {})::Hash
+      huge = res.get("frame")::String
+      out = Global.return("done")::String
+    JIL
+
+    payload = Execution.last.payload
+    expect(payload.code.bytesize).to be < 1_000
+    expect(payload.ctx.to_json).not_to include(big)
+    expect(broadcasts.map(&:to_json).join).not_to include(big)
+  end
+
   it "exposes ctx-derived helpers through the payload" do
     described_class.call(user, code, {})
     execution = Execution.last
