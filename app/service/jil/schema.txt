@@ -518,6 +518,7 @@
 [Buddy]
   #say(Text)::Boolean
   #prompt(Text)::Boolean
+  #photo("Image" String BR "Caption" String)::Boolean
 [Tesla]
   #start(content(TeslaStartOptions))::Boolean
   #stop::Boolean

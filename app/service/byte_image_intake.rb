@@ -19,8 +19,48 @@ class ByteImageIntake
     end
   end
 
+  # Leading bytes of the formats we accept, checked against what actually
+  # decoded. Home Assistant hands back a 200 with an empty or truncated body
+  # when a camera is dead, so "the request worked" says nothing about whether
+  # there is a picture in it — and a broken image in the thread is worse than no
+  # image at all, because it looks like an answer.
+  MAGIC = {
+    "image/jpeg" => "\xFF\xD8".b,
+    "image/png"  => "\x89PNG".b,
+    "image/gif"  => "GIF8".b,
+    "image/webp" => "RIFF".b,
+  }.freeze
+
   def self.call(uploads)
     new(uploads).call
+  end
+
+  # A base64 image through the same door a multipart upload goes through.
+  #
+  # HASS's `camera_frame` script hands frames back as `image_b64` because Jil
+  # has no way to carry bytes — and it doesn't need one, since the string comes
+  # out of one HTTP response and goes straight into a blob. Building a REAL
+  # UploadedFile rather than a struct that quacks like one is what keeps the two
+  # paths from drifting: the type allowlist, the size ceiling and the HEIC
+  # transcode all apply here without being written twice.
+  def self.from_base64(data, filename: "image.jpg", content_type: "image/jpeg")
+    bytes = ::Base64.decode64(data.to_s.strip.sub(%r{\Adata:[^;]+;base64,}, ""))
+    return Result.new(blobs: [], error: "that image didn't decode") if bytes.empty?
+
+    magic = MAGIC[content_type]
+    if magic && !bytes.b.start_with?(magic)
+      return Result.new(blobs: [], error: "that wasn't #{content_type} — the camera sent nothing usable")
+    end
+
+    tempfile = ::Tempfile.new(["byte-image", ::File.extname(filename)])
+    tempfile.binmode
+    tempfile.write(bytes)
+    tempfile.rewind
+
+    upload = ::ActionDispatch::Http::UploadedFile.new(
+      tempfile: tempfile, filename: filename, type: content_type,
+    )
+    call([upload])
   end
 
   def initialize(uploads)
