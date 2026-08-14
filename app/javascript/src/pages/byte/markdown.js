@@ -25,6 +25,35 @@ export function escapeAttr(s) {
   return escapeHtml(String(s ?? "")).replace(/"/g, "&quot;");
 }
 
+// The three ways an icon gets written into text: `[hicon:12]`, `[hicon Fae]`,
+// `[ticon:ti-broom]`. `\s*` after the colon because the id form turns up
+// hand-typed with a space in it. Mirrors IconPool::ICON_REF_RX on the server,
+// which does the same job for surfaces that can only show words.
+const ICON_REF_RX =
+  /\[hicon:\s*(\d+)\]|\[ticon:\s*(ti-[a-z0-9-]+)\]|\[hicon[ \t]+([^\]\n]+)\]/gi;
+
+// Empty on purpose — `hydrateInlineIcons` fills it once the pool is loaded.
+function iconSpan(ref) {
+  return `<span class="hicon" data-icon-ref="${escapeAttr(ref)}"></span>`;
+}
+
+// Icon references in text that ISN'T markdown — a tool-argument preview, a
+// receipt line. Escapes everything and substitutes only the icons, so the one
+// piece of markup it can emit is the icon span. Written this way round (stash,
+// escape, expand) rather than escaping first, so a name containing `&` still
+// matches the pool.
+export function renderIconRefs(raw) {
+  const refs = [];
+  let t = String(raw ?? "").replace(ICON_REF_RX, (_m, id, tabler, name) => {
+    const ref = id ? `hicon:${id}` : (tabler || name).trim();
+    return `@ICONREF@${refs.push(ref) - 1}@ICONREF@`;
+  });
+  if (refs.length === 0) return escapeHtml(t);
+
+  t = escapeHtml(t);
+  return t.replace(/@ICONREF@(\d+)@ICONREF@/g, (_m, i) => iconSpan(refs[Number(i)]));
+}
+
 // Only these become anchors. `renderMarkdown` writes to innerHTML and the body
 // it renders is model output, so a `javascript:` or `data:` href would be a
 // script the model got to choose. Anything else falls through as plain text.
@@ -82,22 +111,17 @@ export function renderMarkdown(raw) {
     if (!SAFE_URL.test(url)) return null;
     return `@LINK@${stash.push({ kind: "link", url, text }) - 1}@LINK@`;
   };
-  // `[hicon Fae]` / `[hicon:12]` — one of the household's own uploaded icons,
-  // dropped inline in the prose. Same syntax the server-side Markdown service
-  // has always understood; Byte renders its own markdown, so it had to learn it
-  // separately. Stashed alongside links and BEFORE the link rule, or
-  // `[hicon Fae]` followed by a parenthetical would be read as a link.
+  // `[hicon Fae]` / `[hicon:12]` / `[ticon:ti-broom]` — the household's own
+  // uploads and Tabler icons, dropped inline in the prose. Same syntax the
+  // server-side Markdown service has always understood; Byte renders its own
+  // markdown, so it had to learn it separately.
   //
-  // The span comes out EMPTY, carrying only the reference: resolving a name to
-  // a picture needs the custom icon pool, which is fetched on demand and can't
-  // be awaited from a synchronous render. `hydrateInlineIcons` fills it in.
-  const stashIcon = (ref) =>
-    `@HICON@${stash.push({ kind: "hicon", ref: ref.trim() }) - 1}@HICON@`;
-  t = t.replace(/\[hicon:(\d+)\]/gi, (_m, id) => stashIcon(`hicon:${id}`));
-  t = t.replace(/\[hicon[ \t]+([^\]\n]+)\]/gi, (_m, name) => stashIcon(name));
-  // `[ticon:ti-broom]` — a Tabler icon. Same three shapes the picker deals in,
-  // and what the `:name` autocomplete inserts for a non-emoji, non-custom hit.
-  t = t.replace(/\[ticon:(ti-[a-z0-9-]+)\]/gi, (_m, cls) => stashIcon(cls));
+  // Stashed alongside links and BEFORE the link rule, or `[hicon Fae]` followed
+  // by a parenthetical would be read as a markdown link.
+  t = t.replace(ICON_REF_RX, (_m, id, tabler, name) => {
+    const ref = id ? `hicon:${id}` : (tabler || name).trim();
+    return `@HICON@${stash.push({ kind: "hicon", ref }) - 1}@HICON@`;
+  });
   t = t.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (m, text, url) => stashLink(url, text) ?? m);
   // Bare URLs. Runs second, so a URL already stashed as a markdown link is a
   // token by now and can't match twice.
@@ -180,10 +204,7 @@ export function renderMarkdown(raw) {
     const b = stash[Number(i)];
     return `<code class="byte-md-inline">${escapeHtml(b.code)}</code>`;
   });
-  t = t.replace(/@HICON@(\d+)@HICON@/g, (_m, i) => {
-    const b = stash[Number(i)];
-    return `<span class="hicon" data-icon-ref="${escapeAttr(b.ref)}"></span>`;
-  });
+  t = t.replace(/@HICON@(\d+)@HICON@/g, (_m, i) => iconSpan(stash[Number(i)].ref));
   // `_blank` because Byte is an installed PWA (display: standalone). Without
   // it a tap replaces the conversation with a page that has no back button and
   // no way home.

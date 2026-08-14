@@ -1,7 +1,7 @@
 // Feeds fixtures through the thread's markdown-lite renderer and prints the
 // results as JSON for byte_markdown_spec.rb. No DOM — renderMarkdown is a pure
 // string function.
-import { renderMarkdown } from "../../app/javascript/src/pages/byte/markdown.js";
+import { renderMarkdown, renderIconRefs } from "../../app/javascript/src/pages/byte/markdown.js";
 
 const cases = {
   underscore_em: "Mostly the household stuff I’d want more of is the _glue_.",
@@ -40,8 +40,31 @@ const cases = {
   table_then_text: "| a | b |\n|---|---|\n| 1 | 2 |\nafter the table",
   pipes_without_separator: "a | b\nc | d",
   table_after_heading: "## Counts\n| a | b |\n|---|---|\n| 1 | 2 |",
+
+  // Icon references. The id form turns up hand-typed with a space in it, and
+  // `[hicon X](...)` would parse as a markdown link without ordering care.
+  hicon_by_id: "sent [hicon:24] over",
+  hicon_id_spaced: "sent [hicon: 21] over",
+  hicon_by_name: "feeding [hicon Fae] now",
+  hicon_name_with_spaces: "grabbing a [hicon Mtn Dew Can]",
+  ticon: "sweeping [ticon:ti-broom] up",
+  hicon_three_in_a_row: "[hicon:21] [hicon:24] [hicon:22]",
+  hicon_then_parens: "[hicon Fae](not a link)",
+  hicon_in_code_untouched: "write `[hicon Fae]` for that",
+  hicon_unknown_shape_left_alone: "[hicon]",
+};
+
+// The narrow pass, for text that is not markdown - a tool-argument preview.
+const refCases = {
+  ref_id: "Custom.Notify [hicon:24]",
+  ref_id_spaced: "Custom.Notify [hicon: 21]",
+  ref_name: "chore: [hicon Fae] litter",
+  ref_escapes_html: "<b>x</b> [hicon:24]",
+  ref_leaves_markdown_alone: "a _b_ c **d** [hicon:24]",
+  ref_none: "just plain text",
 };
 
 const out = {};
 for (const [name, input] of Object.entries(cases)) out[name] = renderMarkdown(input);
+for (const [name, input] of Object.entries(refCases)) out[name] = renderIconRefs(input);
 process.stdout.write(JSON.stringify(out));

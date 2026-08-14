@@ -196,6 +196,83 @@ RSpec.describe "Byte thread markdown" do
     end
   end
 
+  # An icon is written three ways and rendered in two places — a message body
+  # (full markdown) and a tool-argument preview (icons only, everything else
+  # escaped). Both come out as an EMPTY span carrying the reference; the picture
+  # is put in afterwards, once the icon pool is loaded.
+  describe "icon references" do
+    def ref(html)
+      html[/data-icon-ref="([^"]*)"/, 1]
+    end
+
+    it "takes an id" do
+      expect(ref(rendered["hicon_by_id"])).to eq("hicon:24")
+    end
+
+    # Prod: this arrived typed with a space and rendered as literal brackets.
+    it "takes an id with a space after the colon" do
+      expect(ref(rendered["hicon_id_spaced"])).to eq("hicon:21")
+    end
+
+    it "takes a name" do
+      expect(ref(rendered["hicon_by_name"])).to eq("Fae")
+    end
+
+    it "takes a name with spaces in it" do
+      expect(ref(rendered["hicon_name_with_spaces"])).to eq("Mtn Dew Can")
+    end
+
+    it "takes a Tabler class" do
+      expect(ref(rendered["ticon"])).to eq("ti-broom")
+    end
+
+    it "renders each one in a run of them" do
+      expect(rendered["hicon_three_in_a_row"].scan(/data-icon-ref/).length).to eq(3)
+    end
+
+    # The link rule would swallow `[hicon Fae](...)` whole if it ran first.
+    it "isn't turned into a link by a following parenthetical" do
+      html = rendered["hicon_then_parens"]
+
+      expect(ref(html)).to eq("Fae")
+      expect(html).not_to include("<a ")
+    end
+
+    it "leaves one inside a code span alone" do
+      expect(rendered["hicon_in_code_untouched"]).to include(">[hicon Fae]</code>")
+    end
+
+    it "leaves a shape that isn't a reference as text" do
+      expect(rendered["hicon_unknown_shape_left_alone"]).to eq("[hicon]")
+    end
+
+    it "comes out empty, for the pool to fill" do
+      expect(rendered["hicon_by_id"]).to include('data-icon-ref="hicon:24"></span>')
+    end
+
+    describe "the narrow pass, for text that isn't markdown" do
+      it "still resolves every written form" do
+        expect(ref(rendered["ref_id"])).to eq("hicon:24")
+        expect(ref(rendered["ref_id_spaced"])).to eq("hicon:21")
+        expect(ref(rendered["ref_name"])).to eq("Fae")
+      end
+
+      it "escapes everything around them" do
+        expect(rendered["ref_escapes_html"]).to include("&lt;b&gt;x&lt;/b&gt;")
+      end
+
+      # A tool argument is not prose: an underscore in a chore name is an
+      # underscore, not the start of emphasis.
+      it "leaves markdown notation as written" do
+        expect(rendered["ref_leaves_markdown_alone"]).to include("a _b_ c **d**")
+      end
+
+      it "is a plain escape when there's nothing to find" do
+        expect(rendered["ref_none"]).to eq("just plain text")
+      end
+    end
+  end
+
   describe "what already worked" do
     it "still does asterisk italics" do
       expect(rendered["asterisk_em_still_works"]).to include("<em>very</em>")

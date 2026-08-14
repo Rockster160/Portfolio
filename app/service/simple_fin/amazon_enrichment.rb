@@ -114,7 +114,12 @@ module SimpleFin
         memo = ::AmazonProductName.tidy(name)
         attrs[:memo] = memo if memo.present? && auto_filled?(transaction)
 
-        category = ::TransactionCategory.for_item(name)
+        # Categorized on the TIDIED name, not the raw title. A title is search
+        # spam and mentions everything the thing could conceivably be near: a
+        # soup bowl reads "Stoneware Cereal Set of 4", which lands it in
+        # groceries. The tidied name is both more accurate and the text shown
+        # in the memo, so the category always agrees with what is on screen.
+        category = ::TransactionCategory.for_item(memo)
         attrs[:category] = category.to_s if category.present?
 
         transaction.update!(attrs)

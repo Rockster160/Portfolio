@@ -13,6 +13,12 @@ AllCops:
     - "monster_seed.rb"
     - ".pryrc"
     - "_scripts/**/*"
+    # One-off prodExec scripts. They are throwaway, they are gitignored, and
+    # some carry a large embedded data literal — the Amazon memo backfill is 828
+    # lines of hash — which the editor's RuboCop language server takes seconds
+    # to analyse on every save. Excluding them here makes it a no-op in the
+    # editor as well as on the command line.
+    - "lib/scripts/**/*"
     - "db/schema.rb"
     - "bin/**/*"
     - "vendor/**/*"

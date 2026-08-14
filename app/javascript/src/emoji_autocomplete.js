@@ -47,6 +47,17 @@ function ensurePopup() {
   return popup;
 }
 
+// Whether the popup is currently taking keystrokes for `el`.
+//
+// Exported because a host page's own Enter handler has to stand down while it
+// is: Byte's composer submits on Enter, so choosing an icon with Enter also
+// fired the message off half-written. `preventDefault` alone can't fix that —
+// it stops the browser's default, not another listener on the same element,
+// and which of the two is registered first is an accident of import order.
+export function autocompleteOpenFor(el) {
+  return Boolean(popup && !popup.classList.contains("hidden") && activeInput === el);
+}
+
 function hidePopup() {
   if (!popup) return;
   popup.classList.add("hidden");

@@ -112,8 +112,8 @@ module ByteNotifier
   # HTML tags (shell bubbles carry ANSI-styled <span>s), fenced/inline markdown
   # code, bold/italic delimiters, ANSI escapes (if any leaked), blockquote
   # markers, and any residual whitespace.
-  def clean_body(raw)
-    text = raw.to_s
+  def clean_body(raw, user=nil)
+    text = ::IconPool.refs_to_text(raw, user: user)                  # [hicon:24] -> its name
     text = text.gsub(/```[a-z]*\n?/i, "").gsub(/```/, "")            # fenced code delimiters
     text = text.gsub(/`([^`]+)`/, '\1')                              # inline code
     text = text.gsub(/\*\*([^*]+)\*\*/, '\1')                        # bold
@@ -128,7 +128,7 @@ module ByteNotifier
   # is the message itself — not the thread name. Any actionable framing (a
   # confirm cue, an approval prompt) rides in the body.
   def framing(message, meta, has_proposals)
-    preview = clean_body(message.body).truncate(PREVIEW_LIMIT).presence
+    preview = clean_body(message.body, message.user).truncate(PREVIEW_LIMIT).presence
 
     if has_proposals
       # Count pending buttons so we don't under-sell a "5 things to confirm".

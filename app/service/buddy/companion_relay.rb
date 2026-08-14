@@ -345,8 +345,11 @@ module Buddy
         # kiosk, because a caller can hand over an explicit `to_conversation`.
         return if conversation&.kiosk?
 
+        # Icon references become their names. A push has no pixels, and
+        # "Rocco: [hicon:24] [hicon:22]" is the message arriving as its own
+        # source code.
         WebPushNotifications.send_to_byte(
-          title: "💬 #{title.to_s.truncate(160)}",
+          title: "💬 #{::IconPool.refs_to_text(title, user: user).truncate(160)}",
           tag:   "byte-relay-#{user.id}-#{Time.current.to_i}",
           users: [user],
         )

@@ -48,6 +48,7 @@ import {
 import { ConversationManager } from "./conversations";
 import { initComposerAttachments } from "./attachments";
 import { setupSlashAutocomplete } from "./slash_commands";
+import { autocompleteOpenFor } from "../../emoji_autocomplete";
 import { renderMultiSelect } from "./message_actions/multi_select";
 import { renderForm } from "./message_actions/form";
 import { initMessageContextMenu } from "./message_actions/context_menu";
@@ -63,7 +64,7 @@ import {
   hydrateInlineIcons,
   repaintInlineIcons,
 } from "../../icon_picker";
-import { renderMarkdown, escapeHtml, escapeAttr } from "./markdown";
+import { renderMarkdown, renderIconRefs, escapeHtml, escapeAttr } from "./markdown";
 import { initBuddyHero } from "./buddy/hero";
 import { initBuddyTimers } from "./buddy/timers";
 import { initBuddyRoutines } from "./buddy/routines";
@@ -501,7 +502,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (detailEl) {
       const detail = message?.metadata?.detail;
       detailEl.hidden = !detail;
-      detailEl.textContent = detail || "";
+      // Icon references, and nothing else — the rest is escaped. This is the
+      // arguments a tool ran with, not prose, so it gets the narrow pass rather
+      // than full markdown: an underscore in a chore name is an underscore.
+      detailEl.innerHTML = detail ? renderIconRefs(detail) : "";
     }
 
     const peer = message?.metadata?.relay_peer;
@@ -639,11 +643,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       renderForm(formEl, message);
     }
 
-    // `[hicon Fae]` anywhere in the body it just wrote. One call after the kind
-    // dispatch rather than inside each branch — every kind above goes through
-    // renderMarkdown or plain text, and the pass is a no-op when there's
+    // `[hicon Fae]` anywhere in the bubble — the body it just wrote AND the
+    // tool-preview line above. One call on the whole node after the kind
+    // dispatch rather than inside each branch; the pass is a no-op when there's
     // nothing to fill.
-    hydrateInlineIcons(bodyEl);
+    hydrateInlineIcons(node);
 
     // Tapbacks. Every message takes one — theirs, yours, Buddy's, a receipt —
     // so the only thing stamped here is which one is already yours, for the
@@ -2430,6 +2434,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.matchMedia("(pointer: fine)").matches;
   input.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+    // The `:name` icon picker is open and Enter belongs to IT — that's how you
+    // choose the highlighted one. Without this the same keypress also sent the
+    // message, half-written, every single time.
+    if (autocompleteOpenFor(input) || e.defaultPrevented) return;
     if (composer.dataset.mode === "bash" || hasFinePointer()) {
       e.preventDefault();
       handleSend(input.value);

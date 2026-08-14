@@ -88,6 +88,43 @@ module IconPool
     by_char[value.to_s]&.dig(:n)
   end
 
+  # The three ways an icon gets written into prose. `\s*` after the colon
+  # because the id form turns up hand-typed with a space in it, and a reference
+  # that renders on screen but not in a notification is worse than either.
+  ICON_REF_RX = /
+      \[hicon:\s*(\d+)\]
+    | \[ticon:\s*(ti-[a-z0-9-]+)\]
+    | \[hicon[ \t]+([^\]\n]+)\]
+  /xi
+
+  # Swap icon references for their NAMES, for surfaces with no pixels to give
+  # them: a push notification, an SMS, a log line. Left as the written text when
+  # nothing resolves — a stray word beats a stray `[hicon:24]`.
+  def refs_to_text(raw, user: nil)
+    raw.to_s.gsub(ICON_REF_RX) {
+      id, tabler, name = Regexp.last_match(1), Regexp.last_match(2), Regexp.last_match(3)
+      label = (
+        if id.present?
+          household_icon_name(user, id)
+        elsif tabler.present?
+          name_for(tabler)
+        else
+          HouseholdIcon.lookup(user, name)&.name || name
+        end
+      )
+      label.presence || name.to_s.strip
+    }
+  end
+
+  # Scoped to the reader's own household on purpose: an id is just a number, and
+  # nobody's notification should name an icon from a house they aren't in.
+  def household_icon_name(user, id)
+    household = user&.chore_household
+    return nil if household.nil?
+
+    household.icons.find_by(id: id)&.name
+  end
+
   def load_pool
     emoji = load_index(EMOJI_PATH).map { |row| tag_row(row, :emoji) }
     icons = load_index(ICONS_PATH).map { |row| tag_row(row, :ti) }
@@ -157,7 +194,7 @@ module IconPool
       set << "#{q}ing"             # load → loading
       set << "#{q[0..-2]}ing" if q.end_with?("e")  # save → saving
       set << "#{q}ed"              # load → loaded
-      set << "#{q}d"   if q.end_with?("e")          # save → saved
+      set << "#{q}d" if q.end_with?("e")          # save → saved
     end
 
     set.to_a
