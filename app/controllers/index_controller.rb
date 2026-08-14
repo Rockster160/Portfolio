@@ -28,15 +28,6 @@ class IndexController < ApplicationController
     head :ok
   end
 
-  def nest_subscribe
-    if current_user.try(:admin?)
-      GoogleNestControl.subscribe(params[:code])
-      NestCommand.command("update")
-    end
-
-    render :home
-  end
-
   private
 
   def opening_garage?(user, body)

@@ -33,7 +33,6 @@ Rails.application.routes.draw do
 
   root "index#home"
   post "/talk" => "index#talk"
-  get "/nest_subscribe" => "index#nest_subscribe"
   post "/jarvis/command" => "jarvis#command"
   post "/jarvis" => "jarvis#command"
   post "proxy" => "proxy#proxy"

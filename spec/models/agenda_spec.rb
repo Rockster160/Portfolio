@@ -66,17 +66,23 @@ RSpec.describe Agenda do
       expect(phantom.agenda_schedule_id).to eq(sched.id)
     end
 
+    # The clock is pinned because the schedule is monthly on the 15th and
+    # MATERIALIZE_WINDOW is 30 hours: run this on the 14th and the very next
+    # occurrence is written as a real row, so the count assertion fails for
+    # reasons that have nothing to do with a century from now.
     it "renders schedules 100 years into the future without materialization" do
-      create(:agenda_schedule, agenda: agenda, name: "Birthday",
-        kind: "event", start_time: "10:00", duration_minutes: 60,
-        recurrence: { "freq" => "monthly", "by_month_day" => [15] },
-        starts_on: Date.current)
+      travel_to(Time.zone.parse("2026-03-02 09:00")) {
+        create(:agenda_schedule, agenda: agenda, name: "Birthday",
+          kind: "event", start_time: "10:00", duration_minutes: 60,
+          recurrence: { "freq" => "monthly", "by_month_day" => [15] },
+          starts_on: Date.current)
 
-      future = Date.current.change(day: 15) + 100.years
-      items = agenda.items_for(future)
-      expect(items.size).to eq(1)
-      expect(items.first).to be_phantom
-      expect(AgendaItem.count).to eq(0)
+        future = Date.current.change(day: 15) + 100.years
+        items = agenda.items_for(future)
+        expect(items.size).to eq(1)
+        expect(items.first).to be_phantom
+        expect(AgendaItem.count).to eq(0)
+      }
     end
 
     it "prefers the real row over a phantom when a recurring instance has been materialized" do

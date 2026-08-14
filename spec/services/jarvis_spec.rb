@@ -325,61 +325,6 @@ RSpec.describe Jarvis do
     end
   end
 
-  context "with home" do
-    let(:home_control) { double("GoogleNestControl") }
-    let(:upstairs) { { key: "", name: "Upstairs" } }
-    let(:entryway) { { key: "", name: "Entryway" } }
-    let(:devices) { { Upstairs: upstairs, Entryway: entryway } }
-
-    before do
-      allow(DataStorage).to receive(:[]).with(any_args).and_return("unimportant")
-      allow(DataStorage).to receive(:[]).with(:nest_devices).and_return(devices)
-      allow(GoogleNestControl).to receive(:new).and_return(home_control)
-      allow(home_control).to receive(:devices) do
-        devices.map { |_device_name, device_data|
-          GoogleNestDevice.new(home_control).set_all(device_data)
-        }
-      end
-    end
-
-    actions = {
-      "turn the upstairs heat to 69" => {
-        res:     "Set house upstairs heat to 69°.",
-        actions: [:set_mode, :set_temp],
-      },
-      "set upstairs 69"              => {
-        res:     "Set house upstairs to 69°.",
-        actions: [:set_temp],
-      },
-      "upstairs to heat"             => {
-        res:     "Set house upstairs to heat.",
-        actions: [:set_mode],
-      },
-      "cool upstairs"                => {
-        res:     "Set house upstairs to cool.",
-        actions: [:set_mode],
-      },
-      "cool house"                   => {
-        res:     "Set house entryway to cool.",
-        actions: [:set_mode],
-      },
-      "set ac to 69"                 => {
-        res:     "Set house entryway AC to 69°.",
-        actions: [:set_mode, :set_temp],
-      },
-    }
-
-    actions.each do |action, data|
-      it "can #{action}" do
-        data[:actions]&.each do |k|
-          expect(home_control).to receive(k)
-        end
-
-        expect(jarvis(action)).to eq(data[:res])
-      end
-    end
-  end
-
   # Garage is now a task, so would have to pull that in to get it working.
   # context "with garage" do
   #   before do

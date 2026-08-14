@@ -1059,6 +1059,31 @@ RSpec.describe Buddy::GPT::Turn do
 
       expect(reply.body).to eq("First thing.\n\nSecond thing.")
     end
+
+    # Prod 3575, in full: "Sure thing, what time later?" then "What time
+    # later?" — one question asked twice. Five words against three, both under
+    # the eight-word floor, so the similarity check never ran and they aren't
+    # identical. The floor is right; what it was missing is containment.
+    it "asks the question once when the second copy is the tail of the first" do
+      run([{ text: "Sure thing, what time later?\n\nWhat time later?" }], text: "remind me later")
+
+      expect(reply.body).to eq("Sure thing, what time later?")
+    end
+
+    # The other direction is a paragraph ADDING to the one above it, not
+    # repeating it, and both belong on screen.
+    it "keeps a second paragraph that says more than the first" do
+      run([{ text: "Water the plants.\n\nWater the plants at five, before you go." }], text: "what's up")
+
+      expect(reply.body).to include("before you go")
+    end
+
+    # The pair the word floor exists to protect.
+    it "leaves two short acknowledgements alone" do
+      run([{ text: "Okie!\n\nOk!" }], text: "thanks")
+
+      expect(reply.body).to eq("Okie!\n\nOk!")
+    end
   end
 
   describe "malformed and unknown tool calls" do

@@ -194,4 +194,49 @@ RSpec.describe Buddy::Context, ".build agenda" do
     expect(titles).not_to include("Dropped")
     expect(upcoming.find { |i| i[:title] == "No standup" }[:cancelled]).to be(true)
   end
+
+  # Prod: Moss opened its 8:30 briefing with "Rocco's Heads-down block is
+  # already past" — item 949, 8am to 5pm, thirty minutes old with eight and a
+  # half hours left. `passed` read start_at alone, so every timed item flipped
+  # the moment it began and today_briefing.rb was told not to mention it. The
+  # longer the block, the longer the briefing was wrong about the day.
+  describe "the passed flag" do
+    def event(attrs)
+      item({ kind: :event }.merge(attrs))
+    end
+
+    it "does not call an event past while it is still running" do
+      event(name: "Heads-down", start_at: Time.current - 30.minutes, end_at: Time.current + 8.hours)
+
+      today = described_class.build(user, conversation)[:today_agenda]
+
+      expect(today.find { |i| i[:title] == "Heads-down" }).not_to have_key(:passed)
+    end
+
+    it "calls it past once the end goes by" do
+      event(name: "Standup", start_at: Time.current - 2.hours, end_at: Time.current - 90.minutes)
+
+      today = described_class.build(user, conversation)[:today_agenda]
+
+      expect(today.find { |i| i[:title] == "Standup" }[:passed]).to be(true)
+    end
+
+    # A task has no span, so it has nothing to still be inside of.
+    it "still flips a task at its start" do
+      item(name: "Call the vet", start_at: Time.current - 10.minutes)
+
+      today = described_class.build(user, conversation)[:today_agenda]
+
+      expect(today.find { |i| i[:title] == "Call the vet" }[:passed]).to be(true)
+    end
+
+    it "leaves an all-day item alone either way" do
+      midnight = Time.current.in_time_zone(user.timezone).beginning_of_day
+      item(name: "Andrew's Bday", all_day: true, start_at: midnight, end_at: midnight + 1.day)
+
+      today = described_class.build(user, conversation)[:today_agenda]
+
+      expect(today.find { |i| i[:title] == "Andrew's Bday" }).not_to have_key(:passed)
+    end
+  end
 end

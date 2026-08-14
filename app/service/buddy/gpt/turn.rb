@@ -1680,14 +1680,33 @@ module Buddy
       SIMILAR_ENOUGH = 0.8
       MIN_COMPARABLE = 8
 
+      # Containment is the hole under the floor. Prod 3575: "Sure thing, what
+      # time later?" followed by "What time later?" — five words and three, so
+      # Dice never ran, and the two aren't identical. A LATER paragraph whose
+      # words appear as a contiguous run inside an EARLIER one adds nothing the
+      # earlier one didn't already say. Directional on purpose: the other way
+      # round ("Water the plants" then "Water the plants at 5") is the second
+      # paragraph adding to the first, and both belong.
+      MIN_CONTAINED = 3
+
       def restatement?(a, b)
         return true if a.casecmp?(b)
 
         left, right = words_of(a), words_of(b)
+        return true if contained?(left, right)
         return false if left.size < MIN_COMPARABLE || right.size < MIN_COMPARABLE
 
         overlap = left.tally.sum { |word, n| [n, right.count(word)].min }
         (2.0 * overlap / (left.size + right.size)) >= SIMILAR_ENOUGH
+      end
+
+      # Is `later` a contiguous run of words inside `earlier`? Floored so
+      # "Okie!" against "Ok!" — the pair the size guard exists to protect —
+      # stays two separate things.
+      def contained?(earlier, later)
+        return false if later.size < MIN_CONTAINED || later.size > earlier.size
+
+        earlier.each_cons(later.size).any? { |run| run == later }
       end
 
       def words_of(para)

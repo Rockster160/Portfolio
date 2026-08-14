@@ -262,6 +262,16 @@ class AgendaItem < ApplicationRecord
     crossed_out_at(now: now).present?
   end
 
+  # Row-level mirror of `scope :past` — kind-aware, because only events have a
+  # duration. An event is over when its END passes; a task or trigger has no
+  # span, so it flips at start. Distinct from `crossed_out?`, which is a UI
+  # rule that deliberately leaves tasks alone.
+  def past?(now: Time.current)
+    return (end_at || start_at) < now if event?
+
+    start_at < now
+  end
+
   # Distinct from `completed?` — `fired?` means the firing worker ran the
   # trigger, but the user-facing checkbox stays unchecked. The user can
   # still mark complete (post-fire personal tracking) or pre-mark complete

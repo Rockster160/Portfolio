@@ -2,7 +2,7 @@ import { Monitor } from "./monitor";
 import { Time } from "./_time";
 import { Text } from "../_text";
 import { ColorGenerator } from "./color_generator";
-import { dash_colors, beep, scaleVal, clamp } from "../vars";
+import { dash_colors, beep, scaleVal, clamp, shiftTempToColor } from "../vars";
 
 (function () {
   var cell = undefined;
@@ -268,6 +268,50 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
     }
   }
 
+  // Thermostats — one line for both zones, fed by the `thermostat` Jil cache
+  // that Home Assistant pushes into (`hass-sensor` for the temperature,
+  // `hass-hvac` for what the unit is doing).
+  //
+  // The temperature is read on the same scale as the weather cell and the car,
+  // so 68 indoors is the same color as 68 outdoors — one scale for every
+  // temperature on the dashboard.
+  //
+  // The bracket is the setpoint, colored by whether the compressor is ACTUALLY
+  // RUNNING (`hvac_action`), not by the mode it's set to. A unit set to cool
+  // and sitting idle reads grey, which is the thing worth knowing at a glance.
+  let thermostat_running_colors = {
+    cooling: dash_colors.lblue,
+    heating: dash_colors.red,
+  };
+
+  let thermostatChunk = function (label, data) {
+    // `at` is epoch SECONDS (the `hass` cache convention), written by both push
+    // streams — so it means "last heard from this unit", not "last temperature
+    // change". Past two hours the unit has stopped reporting: the numbers are
+    // still the last thing it said and stay on screen, but nothing about them
+    // is current, so the whole chunk greys out rather than coloring a stale
+    // `cooling` as though the AC were running right now.
+    let stale = Time.now() - (data?.at || 0) * 1000 > Time.hours(2);
+    let temp = data?.temp == null ? null : Math.round(data.temp);
+    let setpoint = data?.setpoint == null ? "--" : Math.round(data.setpoint);
+
+    if (temp == null) {
+      return Text.grey(`${label} --°[${setpoint}]`);
+    }
+    if (stale) {
+      return Text.grey(`${label} ${temp}°[${setpoint}]`);
+    }
+
+    return [
+      Text.grey(`${label} `),
+      shiftTempToColor(temp),
+      Text.color(
+        thermostat_running_colors[data.action] || dash_colors.grey,
+        `[${setpoint}]`,
+      ),
+    ].join("");
+  };
+
   // Non-Amazon rows get a colored initial in front of the name ("S:…") so the
   // source is obvious. Amazon/manual rows keep their bare name.
   //
@@ -290,7 +334,6 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
   let renderLines = function () {
     let lines = [];
     let first_row = [];
-    first_row.push(cell.data.loading ? "[ico ti ti-fa-spinner ti-spin]" : "");
     if (cell.data?.garage?.timestamp < Time.ago(Time.hour)) {
       cell.data.garage.state = "unknown";
     }
@@ -376,35 +419,14 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
 
     lines.push(Text.center(first_row.join("")));
 
-    cell.data.devices?.forEach(function (device) {
-      let mode_color = dash_colors.grey;
-      switch (device.current_mode) {
-        case "cool":
-          mode_color = dash_colors.lblue;
-          break;
-        case "heat":
-          mode_color = dash_colors.orange;
-          break;
-        case "off":
-          mode_color = dash_colors.grey;
-          break;
-      }
-      let name = device.name + ":";
-      let current = device.current_temp + "°";
-      let goal = Text.color(
-        mode_color,
-        "[" + (device.cool_set || device.heat_set || "off") + "°]",
-      );
-      let on = null;
-      if (device.status == "cooling") {
-        on = Emoji.snowflake + Emoji.dash;
-      }
-      if (device.status == "heating") {
-        on = Emoji.fire + Emoji.dash;
-      }
-
-      lines.push(Text.center([name, current, goal, on].join(" ")));
-    });
+    lines.push(
+      Text.center(
+        [
+          thermostatChunk("M", cell.data.thermostats.main),
+          thermostatChunk("U", cell.data.thermostats.upstairs),
+        ].join("  "),
+      ),
+    );
 
     let battery_icons = {
       phone: "[ico ti ti-fa-mobile_phone]",
@@ -585,9 +607,12 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
       },
     });
 
-    // Bank balance + bins location ride their own lightweight monitor so the
-    // bins HASS sensor (and a future bank updater) can refresh just this data
-    // without re-running the heavier garage cell.
+    // Bank balance, bins location and both thermostats ride their own
+    // lightweight monitor so the HASS sensors feeding them can refresh just
+    // this data without re-running the heavier garage cell.
+    //
+    // The thermostats push rather than poll: Home Assistant fires at every
+    // reading and every compressor/fan move, so nothing here asks on a timer.
     cell.home_extras_monitor = Monitor.subscribe("home_extras", {
       connected: function () {
         setTimeout(function () {
@@ -601,42 +626,17 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
         cell.flash();
         cell.data.bank = data.data?.bank || {};
         cell.data.bins = data.data?.bins || {};
+        cell.data.thermostats = data.data?.thermostats || {};
         renderLines();
       },
     });
 
-    cell.nest_socket = new CellWS(
+    // Anything typed into this cell that isn't an order or the garage is a
+    // Jarvis command — thermostat commands included.
+    cell.jarvis_socket = new CellWS(
       cell,
-      Server.socket("NestChannel", function (msg) {
-        this.flash();
-
-        if (msg.failed) {
-          this.data.loading = false;
-          this.data.failed = true;
-          clearInterval(this.data.nest_timer); // Don't try anymore until we manually update
-          renderLines();
-          return;
-        } else {
-          this.data.failed = false;
-        }
-        if (msg.loading) {
-          this.data.loading = true;
-          renderLines();
-          return;
-        }
-
-        this.data.loading = false;
-        this.data.devices = msg.devices;
-
-        renderLines();
-      }),
+      Server.socket("JarvisChannel", function () {}),
     );
-    setTimeout(() => {
-      cell.nest_socket.send({ action: "command", settings: "update" });
-      this.data.nest_timer = setInterval(function () {
-        cell.nest_socket.send({ action: "command", settings: "update" });
-      }, Time.minutes(10));
-    }, Time.seconds(30)); // Wait 30 seconds before attempting to connect
   };
 
   cell = Cell.register({
@@ -652,6 +652,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
       camera: { Backyard: {}, Driveway: {}, Doorbell: {} },
       bank: {},
       bins: {},
+      thermostats: {},
     },
     onload: subscribeWebsockets,
     reloader: function () {
@@ -662,12 +663,12 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
     started: function () {
       cell.amz_socket.reopen();
       cell.device_battery_socket.reopen();
-      cell.nest_socket.reopen();
+      cell.jarvis_socket.reopen();
     },
     stopped: function () {
       cell.amz_socket.close();
       cell.device_battery_socket.close();
-      cell.nest_socket.close();
+      cell.jarvis_socket.close();
     },
     commands: {
       quiet: function () {
@@ -718,9 +719,7 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
         return;
       }
 
-      if (msg.trim() == "o") {
-        window.open(cell.config.google_api_url, "_blank");
-      } else if (/^-?\d+/.test(msg) && parseInt(msg.match(/\d+/)[0]) < 30) {
+      if (/^-?\d+/.test(msg) && parseInt(msg.match(/\d+/)[0]) < 30) {
         var num = parseInt(msg.match(/\d+/)[0]);
         let order = this.data.orders[num - 1];
         if (!order) {
@@ -750,8 +749,11 @@ import { dash_colors, beep, scaleVal, clamp } from "../vars";
           request: msg.match(/\b(open|close|toggle)\b/)[0],
         });
       } else {
-        // Assume AC control
-        cell.nest_socket.send({ action: "command", settings: msg });
+        // Everything else is a Jarvis command. Thermostat phrasings land on
+        // the `Thermostat Command` Jil task, which runs ahead of the Jarvis
+        // action chain — so "cool upstairs" and "set the house to 72" work
+        // here exactly as they do over SMS or Alexa.
+        cell.jarvis_socket.send({ action: "command", words: msg });
       }
     },
   });

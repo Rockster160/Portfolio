@@ -16,7 +16,6 @@
 # [ ] Take me to Home Depot after PT - look for event called PT, schedule message to Jarvis at the ending time
 # [ ] "at noon/midnight" should work
 # [ ] Only send calendar start/directions to car if it’s off
-# [ ] "Refresh" in Home (cell) should open the link for Nest
 # [ ] Able to add other deliveries to Home(cell) with expected dates
 # [ ] Fix Notes and other livekey cells to use new scrolling techniques used with Js.Js
 # [ ] If a remind is within a few hours, say “I’ll remind you in 3 hours and 16 minutes to…”
@@ -156,7 +155,6 @@ class Jarvis
       Jarvis::Sms,            # Contains logic for remind and ping - need to extract those. Then not sure what to do about SMS in general...
       Jarvis::List,           # ? Maybe integration? Maybe default?
       Jarvis::Printer,        # -- Move to Jil whenever
-      Jarvis::Nest,           # -- Move to Jil after Oauth
       Jarvis::Tesla,          # -- Move to Jil after Oauth
       Jarvis::Venmo,          # -- Move to Jil after Oauth
       Jarvis::Trigger,        # √ Trigger a Jil task by name
