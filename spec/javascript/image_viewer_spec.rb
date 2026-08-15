@@ -21,7 +21,7 @@ RSpec.describe "Byte image viewer" do
 
   describe "panning" do
     # Fitted, the image is no bigger than its frame — there is nowhere to pan
-    # to, so a swipe must resolve to nothing rather than nudging it off-centre.
+    # to, so a swipe must resolve to nothing rather than nudging it off-center.
     it "does not let a fitted image drift" do
       expect(out["fitted_cannot_drift"]).to eq(0)
       expect(out["fitted_cannot_drift_negative"]).to eq(0)
@@ -56,6 +56,51 @@ RSpec.describe "Byte image viewer" do
     # reset rather than zooming further in.
     it "treats any zoom at all as zoomed" do
       expect(out["tap_from_pinch_remnant"]).to eq(1)
+    end
+  end
+
+  # A zoom anchored on the middle of the picture walks whatever you were
+  # pinching further away from your fingers, so magnifying a face in the corner
+  # meant magnifying it and then dragging it back into view by hand — most of
+  # the work the gesture was there to save.
+  describe "anchored zoom" do
+    # An 800-wide frame: the picture's middle sits at 400, and 600 is a pinch
+    # 200px right of it. That spot has to still be at 600 afterwards.
+    it "leaves the point being pinched exactly where it was" do
+      expect(out["focal_in_stays_put"]).to be_within(0.001).of(600)
+    end
+
+    it "does the same on the way back out" do
+      expect(out["focal_out_stays_put"]).to be_within(0.001).of(600)
+    end
+
+    # The picture is usually already offset by an earlier pan when a second
+    # pinch starts, and that offset is part of where the middle now sits.
+    it "holds when the picture has already been panned" do
+      expect(out["focal_already_panned_stays_put"]).to be_within(0.001).of(600)
+    end
+
+    it "holds on the far side of the middle too" do
+      expect(out["focal_top_left_corner_stays_put"]).to be_within(0.001).of(90)
+    end
+
+    it "has nothing to correct when the middle itself is pinched" do
+      expect(out["focal_on_center_is_a_no_op"]).to eq(75)
+    end
+
+    # Two fingers travelling together without spreading: the pan is the whole
+    # movement, and the anchor must not add to it.
+    it "contributes nothing when the scale doesn't change" do
+      expect(out["focal_no_zoom_is_a_no_op"]).to eq(75)
+    end
+
+    it "returns the offset untouched rather than NaN-ing the transform" do
+      expect(out["focal_zero_scale_guard"]).to eq(75)
+    end
+
+    # The bug itself, measured.
+    it "is what a center-anchored zoom got wrong" do
+      expect(out["unanchored_drift"]).to eq(200)
     end
   end
 

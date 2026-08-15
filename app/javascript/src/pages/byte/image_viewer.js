@@ -36,6 +36,26 @@ export function clampScale(scale) {
   return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
 }
 
+// Where the pan has to move, on one axis, so that the point being pinched stays
+// under the fingers as the scale goes from `from` to `to`.
+//
+// Without this a zoom is anchored on the middle of the picture, so pinching a
+// face in the corner walks it further into the corner and the whole magnified
+// area has to be dragged back by hand — which is most of the work the gesture
+// was supposed to save.
+//
+// `center` is where the picture's middle currently SITS on screen, which is the
+// only reading needed: scaling about the middle doesn't move the middle, so the
+// offset the picture already carries is baked into it and no layout arithmetic
+// is required. The point under the focus sits `focal - center` away from that
+// middle; magnifying by `to / from` would push it out to that distance times
+// the ratio, so the pan gives back exactly the difference.
+export function focalPan(offset, focal, center, from, to) {
+  if (!(from > 0)) return offset;
+
+  return offset + (focal - center) * (1 - to / from);
+}
+
 export function initImageViewer(root) {
   if (!root) return null;
 
@@ -49,6 +69,7 @@ export function initImageViewer(root) {
   const active = new Map();
   let pinchStart = 0;
   let pinchScale = 1;
+  let pinchMid = { x: 0, y: 0 };
   let lastTap = 0;
 
   function apply() {
@@ -60,8 +81,19 @@ export function initImageViewer(root) {
     overlay.classList.toggle("is-zoomed", scale > MIN_SCALE + 0.01);
   }
 
-  function setScale(next) {
-    scale = clampScale(next);
+  // Zoom anchored on a point on screen — the midpoint of a pinch, the cursor
+  // under a wheel, the spot that was double-tapped. That point stays where it
+  // is and the picture grows around it.
+  function zoomTo(next, focalX, focalY) {
+    if (!img) return;
+    const from = scale;
+    const to = clampScale(next);
+    // The transformed box: its center is where the picture's middle currently
+    // sits, offset and all. See focalPan.
+    const rect = img.getBoundingClientRect();
+    tx = focalPan(tx, focalX, rect.left + rect.width / 2, from, to);
+    ty = focalPan(ty, focalY, rect.top + rect.height / 2, from, to);
+    scale = to;
     if (scale === MIN_SCALE) {
       tx = 0;
       ty = 0;
@@ -128,6 +160,12 @@ export function initImageViewer(root) {
     return Math.hypot(a.x - b.x, a.y - b.y);
   }
 
+  // The point a pinch is aimed at: halfway between the two fingers.
+  function midpoint() {
+    const [a, b] = Array.from(active.values());
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+
   function wire() {
     // Tapping the backdrop closes; tapping the picture does not, so a
     // mis-aimed pan never dismisses what you were looking at.
@@ -140,6 +178,7 @@ export function initImageViewer(root) {
       if (active.size === 2) {
         pinchStart = distance();
         pinchScale = scale;
+        pinchMid = midpoint();
       }
       overlay.setPointerCapture?.(e.pointerId);
     });
@@ -150,7 +189,15 @@ export function initImageViewer(root) {
       active.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
       if (active.size === 2 && pinchStart > 0) {
-        setScale((distance() / pinchStart) * pinchScale);
+        const mid = midpoint();
+        // Two fingers travelling together carry the picture with them, so the
+        // spot being pinched stays under them even while they move. Nothing
+        // guards this at scale 1 because clampPan in apply() already resolves
+        // a fitted picture's pan to nothing.
+        tx += mid.x - pinchMid.x;
+        ty += mid.y - pinchMid.y;
+        pinchMid = mid;
+        zoomTo((distance() / pinchStart) * pinchScale, mid.x, mid.y);
         return;
       }
       // One finger only pans when there's somewhere to pan to. Fitted, the
@@ -173,7 +220,7 @@ export function initImageViewer(root) {
       "wheel",
       (e) => {
         e.preventDefault();
-        setScale(scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+        zoomTo(scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15), e.clientX, e.clientY);
       },
       { passive: false },
     );
@@ -181,7 +228,9 @@ export function initImageViewer(root) {
     img.addEventListener("click", (e) => {
       e.stopPropagation();
       const now = Date.now();
-      if (now - lastTap < 300) setScale(nextScale(scale));
+      // Anchored on the tap for the same reason a pinch is: double-tapping a
+      // face is a request to see THAT, not the middle of the picture.
+      if (now - lastTap < 300) zoomTo(nextScale(scale), e.clientX, e.clientY);
       lastTap = now;
     });
   }
