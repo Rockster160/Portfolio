@@ -5,28 +5,12 @@
 import Schema from "./schema.js"
 import Method from "./method.js"
 import { field, element, unwrap } from "./form_helpers.js"
+import { bindingFor, collectValues } from "./arg_binding.js"
 
 function ensureSchemaLoaded() {
   if (Schema.all.length <= 4 && window.load_schema) {
     Schema.load(window.load_schema)
   }
-}
-
-function readInputValue(input) {
-  if (!input) { return null }
-  switch (input.type) {
-    case "checkbox": return input.checked
-    case "number":
-      if (input.value === "") { return null }
-      return parseFloat(input.value)
-    default:
-      return input.dataset.raw || input.value
-  }
-}
-
-function findInput(wrapper) {
-  if (!wrapper) { return null }
-  return wrapper.querySelector(":scope > input, :scope > textarea, :scope > select, :scope > .switch > input")
 }
 
 function selectFrom(optionsStr, defaultval) {
@@ -116,6 +100,7 @@ function renderArgs(container, argsStr) {
 
     // `[opt1 opt2]:Name` → use Name as the arg label and bind it as a named arg.
     const enumNamed = arg.str?.match(/^\s*\[.*\]\s*:\s*([A-Za-z_]\w*)\s*$/)
+    const declaredLabel = pendingLabel
     let label = pendingLabel
     pendingLabel = null
     if (enumNamed) {
@@ -128,26 +113,25 @@ function renderArgs(container, argsStr) {
     if (!label) { label = arg.preferredtype || `arg ${positionalIdx}` }
 
     container.appendChild(rowFor(label, node))
-    fields.push({ kind: "positional", node })
+    // A QUOTED LABEL makes the arg addressable by name as well as by position.
+    //
+    // Buddy already posts these under lowercase_snake_case of the label (see
+    // call_jil_function), so `"When" TAB String` arrives as `when` from a Buddy
+    // call and as nothing at all from here — a task written with
+    // `Keyword.NamedArg("when")` read blank every time somebody hit Run in the
+    // editor, which is the only reason those tasks were written positionally.
+    //
+    // Positional reads are why that matters: `params` is built from the keys the
+    // caller actually SENT, so one omitted middle arg shifts every arg after it
+    // onto the wrong name. Being able to ask for an arg by its own label is what
+    // makes an optional arg safe to put anywhere but last.
+    //
+    // Purely additive — collectValues still pushes every field into `params` in
+    // declaration order, so tasks reading positionally are untouched.
+    fields.push({ ...bindingFor(declaredLabel), node })
   })
 
   return fields
-}
-
-// Build the input_data hash. Every value also goes into `params` (in declaration
-// order) so the task can read it via positional `Global.functionParams` /
-// `Global.params()` regardless of whether the listener spelled the arg with a
-// name. Named args additionally appear at the top level under their name.
-function collectValues(fields) {
-  const data = {}
-  const params = []
-  fields.forEach((f) => {
-    const value = readInputValue(findInput(f.node))
-    if (f.kind === "named") { data[f.name] = value }
-    params.push(value)
-  })
-  if (params.length > 0) { data.params = params }
-  return data
 }
 
 // Open a modal and resolve with the collected data when the user submits.

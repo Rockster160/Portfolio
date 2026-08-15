@@ -1246,6 +1246,26 @@ module Buddy
         | \b(?:it|that)(?:'|’)?s\s+(?:running|firing)\s+(?:again|now)\b
         | \bi(?:'|’)?m\s+(?:running|re-?running|firing)\s+(?:it|that|the|your)\b
         | \b(?:counted|counting)\s+(?:it|that|those|them|\*\*|\d)
+        # The PICTURE shape. Prod 3739-3742: "Show me the doorbell" got "Posted
+        # a live doorbell frame." with no call of any kind — the wording lifted
+        # from an earlier turn that HAD run, sitting in history. The person had
+        # to say "You did not do that" to find out.
+        #
+        # A picture is the one claim nobody can verify by looking, because the
+        # absence of an image reads as an image that hasn't loaded yet.
+        #
+        # Anchored on the NOUN rather than the verb: "sent" and "posted" are
+        # everywhere ("I sent that to Chelsea", "posted on the fridge"), but a
+        # delivery verb landing on a picture noun within a few words is only
+        # ever this claim. Up to three words between them covers "a live
+        # doorbell frame" and "the backyard camera picture".
+        # (No slashes in these comments - see the note above.)
+        | \b(?:posted|sent|shared|dropped|pulled\s+up|grabbed)\s+
+            (?:you\s+)?(?:a|an|the|your|it|that|another)\s+
+            (?:[\w-]+\s+){0,3}
+            (?:frames?|photos?|pictures?|images?|snapshots?|shots?)\b
+        | \b(?:frame|photo|picture|image|snapshot)\s+(?:is\s+)?
+            (?:in|on)\s+(?:the\s+)?(?:thread|chat)\b
         # The CANCELLATION shape, from prod 3171. "I don't need to water the
         # front flower bed" got "I pulled the front flower bed reminder down so
         # it won't keep bugging you!" over a cancel_reminder that was only ever

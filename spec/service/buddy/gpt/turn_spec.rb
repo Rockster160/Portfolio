@@ -257,6 +257,63 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 
+    # Prod 3739-3742. "Show me the doorbell" got this back with no call of any
+    # kind — the wording lifted from an earlier turn that HAD run. A picture is
+    # the one claim nobody can check by looking, because a missing image reads
+    # as an image still loading; the person had to say "You did not do that".
+    it "retracts a posted-picture claim with no call behind it" do
+      run([{ text: "Posted a live doorbell frame." }])
+
+      expect(reply.body).to eq(described_class::FALLBACK_BODY)
+      expect(reply.metadata["retracted_claim"]).to be(true)
+    end
+
+    it "retracts the same claim however it's worded" do
+      [
+        "Sent you the driveway snapshot.",
+        "Dropped a backyard photo in for you.",
+        "I've shared that frame with you.",
+        "The doorbell picture is in the thread.",
+      ].each do |faked|
+        run([{ text: faked }])
+
+        expect(reply.metadata["retracted_claim"]).to be(true), "not caught: #{faked}"
+      end
+    end
+
+    # `call_jil_function` acts, so a real Camera Snapshot sets @acted and the
+    # true sentence — which is the function's own return value — survives.
+    it "leaves the claim alone when the function actually ran" do
+      run(
+        [
+          { tool_calls: [{ name: :call_jil_function, arguments: { "name" => "Camera Snapshot" } }] },
+          { text: "Posted a live doorbell frame." },
+        ],
+        text: "show me the doorbell",
+      )
+
+      expect(reply.body).to eq("Posted a live doorbell frame.")
+      expect(reply.metadata["retracted_claim"]).to be_nil
+    end
+
+    # BOTH halves are load-bearing. The verbs are far too common on their own
+    # and so are the nouns; only the pair, close together, is the claim.
+    # (A relay claim like "I sent that over to Chelsea" IS caught — by the
+    # relay arm, which predates this one and is right to.)
+    it "leaves ordinary sentences using those verbs alone" do
+      [
+        "Posted on the fridge, like you asked.",
+        "I pulled up the agenda and there's nothing before noon.",
+        "That picture you mentioned - which one?",
+        "The photo you took yesterday is lovely.",
+        "Want a picture of the driveway?",
+      ].each do |innocent|
+        run([{ text: innocent }])
+
+        expect(reply.body).to eq(innocent), "false positive: #{innocent}"
+      end
+    end
+
     it "retracts a checking-that-off claim when the tool resolved to nothing" do
       allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: false)
 
