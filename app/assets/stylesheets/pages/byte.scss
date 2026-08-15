@@ -1329,6 +1329,49 @@ html.html-ctr-byte body {
         height: auto;
       }
 
+      // Images sit in a frame of a fixed HEIGHT, reserved before the picture
+      // exists. See buildAttachment for why: an <img> carrying no dimensions is
+      // 0px tall until its bytes land, so it's invisible and then shoves
+      // everything above it out of place on arrival.
+      //
+      // Height is the dimension that's pinned because height is the only one
+      // that moves other messages — the width is left free to be whatever the
+      // picture's own shape asks for, which is what lets one generic frame hold
+      // a portrait photo and a doorbell still without cropping or squashing
+      // either. Full size is a tap away in the image viewer.
+      &.byte-attachment-image {
+        // Shrink-wrap to the picture: the attachments column stretches its
+        // items by default, which would stretch the frame across the bubble.
+        align-self: flex-start;
+        height: 300px;
+        // The EMPTY frame is 4:3, so what's waiting looks picture-shaped rather
+        // than like a sliver. Inherits the tint above as its fill.
+        width: 400px;
+        max-width: 100%;
+        animation: byte-attachment-wait 1.4s ease-in-out infinite;
+
+        img {
+          width: 100%;
+          height: 100%;
+          max-height: none;
+          object-fit: contain;
+        }
+
+        // Arrived. The picture's own width takes over and the fill goes, so a
+        // narrow photo sits against the bubble instead of inside a letterboxed
+        // slab. The height is untouched, which is the whole point — nothing on
+        // screen moves at this moment.
+        &.byte-attachment-loaded {
+          width: auto;
+          background: none;
+          animation: none;
+
+          img {
+            width: auto;
+          }
+        }
+      }
+
       audio {
         display: block;
         width: 100%;
@@ -1945,6 +1988,19 @@ html.html-ctr-byte body {
 @keyframes byte-attach-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+// The reserved image frame, breathing while it waits. Only ever runs on an
+// EMPTY frame — .byte-attachment-loaded turns it off — so this never touches
+// the picture itself.
+@keyframes byte-attachment-wait {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
   }
 }
 
@@ -2788,6 +2844,11 @@ dialog.byte-modal {
 @media (prefers-reduced-motion: reduce) {
   .ctr-byte .byte-notices .byte-notice {
     transition: none;
+  }
+
+  // The frame still holds its space; it just stops breathing.
+  .ctr-byte .byte-attachment.byte-attachment-image {
+    animation: none;
   }
 }
 

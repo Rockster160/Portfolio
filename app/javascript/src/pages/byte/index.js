@@ -1323,14 +1323,36 @@ document.addEventListener("DOMContentLoaded", async () => {
       wrap.classList.add("byte-attachment-pending");
       wrap.textContent = "image";
     } else if (type === "image") {
+      // An <img> carries no size of its own until its bytes land, so the
+      // picture is invisible for as long as the network takes and then the
+      // bubble snaps to full height, shoving everything above it out of place —
+      // mid-read, mid-scroll. The wrap reserves a frame up front and the
+      // picture is fitted inside it, so the space it occupies is the same
+      // before and after and nothing on screen moves.
+      //
+      // A GENERIC frame, not the picture's own shape: nothing upstream records
+      // one (ActiveStorage's analysis leaves no width/height on these blobs).
+      // Fixing the HEIGHT and leaving the width free is what makes one generic
+      // frame honest for every aspect ratio — a portrait photo and a doorbell
+      // still both fit it uncropped, and a change in width moves nothing.
+      wrap.classList.add("byte-attachment-image");
       const img = document.createElement("img");
-      img.src = a.url;
       img.alt = a.filename || "";
       img.loading = "lazy";
-      // An image finishing load grows the bubble with no DOM mutation, so the
-      // growth observer can't see it — re-pin explicitly. Listener dies with
-      // the node; no leak.
-      img.addEventListener("load", pinToBottomSoon);
+      const settle = () => {
+        wrap.classList.add("byte-attachment-loaded");
+        // The frame no longer grows, so this is belt and braces — but an image
+        // finishing load mutates no DOM, so the growth observer can't see it,
+        // and pinning costs nothing. Listeners die with the node; no leak.
+        pinToBottomSoon();
+      };
+      img.addEventListener("load", settle);
+      // A picture that will never arrive must not hold an empty frame open
+      // forever.
+      img.addEventListener("error", settle);
+      img.src = a.url;
+      // Straight from cache, the load event can already have been and gone.
+      if (img.complete && img.naturalWidth) settle();
       wrap.appendChild(img);
     } else if (type === "audio") {
       const audio = document.createElement("audio");
