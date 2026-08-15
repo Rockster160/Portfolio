@@ -610,4 +610,91 @@ RSpec.describe GoogleCalendar::Sync do
       expect(google_account.reload.reauth_required_at).to be_nil
     end
   end
+
+  # `add_excluded_date!` states the invariant in as many words: a date in
+  # excluded_dates means no occurrence on that date, and it sweeps any row
+  # already materialized there. This writer doesn't go through it — it merges
+  # the master's inbound EXDATEs into `recurrence` and calls save! — so the
+  # sweep never ran on this path and a row we'd written ahead of time survived
+  # as an instance of a series that no longer had one.
+  describe "an EXDATE arriving on a recurring master" do
+    let(:excluded_on) { Date.new(2026, 6, 1) }
+
+    def master_event(exdates, etag: "etag-1")
+      recurrence = ["RRULE:FREQ=WEEKLY;BYDAY=MO"]
+      recurrence << "EXDATE:#{exdates.map { |d| d.strftime("%Y%m%d") }.join(",")}" if exdates.any?
+      {
+        id:         "evt-series-1",
+        status:     "confirmed",
+        summary:    "Tech Stand-Up",
+        start:      { dateTime: "2026-05-25T09:30:00-06:00" },
+        end:        { dateTime: "2026-05-25T10:00:00-06:00" },
+        recurrence: recurrence,
+        etag:       %("#{etag}"),
+        updated:    "2026-05-22T08:00:00Z",
+      }
+    end
+
+    def sync!(event)
+      allow(api).to receive(:list_events).and_return(page([event]))
+      described_class.new(agenda).run!
+    end
+
+    def materialized_on(date, schedule, detached: nil)
+      zone = ActiveSupport::TimeZone[agenda.user.timezone] || Time.zone
+      at   = zone.local(date.year, date.month, date.day, 9, 30)
+      agenda.agenda_items.create!(
+        name: "Tech Stand-Up", kind: :event, start_at: at, end_at: at + 30.minutes,
+        agenda_schedule: schedule, detached_at: detached
+      )
+    end
+
+    it "cancels a row already materialized on the newly excluded date" do
+      sync!(master_event([]))
+      schedule = agenda.agenda_schedules.find_by(external_uid: "evt-series-1")
+      item = materialized_on(excluded_on, schedule)
+
+      sync!(master_event([excluded_on], etag: "etag-2"))
+
+      expect(schedule.reload.excluded_dates).to include(excluded_on)
+      expect(item.reload.status).to eq("cancelled")
+    end
+
+    # The ordinary Google shape for a MOVED occurrence: an EXDATE on the master
+    # plus its own detached event. Cancelling that row would delete the meeting
+    # rather than the ghost — which is why the sweep skips detached overrides,
+    # and why this has to keep skipping them here.
+    it "leaves a detached override on that date alone" do
+      sync!(master_event([]))
+      schedule = agenda.agenda_schedules.find_by(external_uid: "evt-series-1")
+      override = materialized_on(excluded_on, schedule, detached: Time.current)
+
+      sync!(master_event([excluded_on], etag: "etag-2"))
+
+      expect(override.reload.status).to eq("confirmed")
+    end
+
+    it "leaves rows on dates the series still has" do
+      sync!(master_event([]))
+      schedule = agenda.agenda_schedules.find_by(external_uid: "evt-series-1")
+      kept = materialized_on(excluded_on + 7, schedule)
+
+      sync!(master_event([excluded_on], etag: "etag-2"))
+
+      expect(kept.reload.status).to eq("confirmed")
+    end
+
+    # A resync carrying the same EXDATE it already knew about must not re-sweep:
+    # a row legitimately re-created on that date later is not this method's to
+    # cancel, and re-running a sync is not a user action.
+    it "only sweeps dates it hasn't already seen" do
+      sync!(master_event([excluded_on]))
+      schedule = agenda.agenda_schedules.find_by(external_uid: "evt-series-1")
+      later = materialized_on(excluded_on, schedule)
+
+      sync!(master_event([excluded_on], etag: "etag-3"))
+
+      expect(later.reload.status).to eq("confirmed")
+    end
+  end
 end

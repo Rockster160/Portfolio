@@ -155,16 +155,19 @@ class ByteController < ApplicationController
     limit  = HISTORY_LIMIT if limit <= 0
     limit  = [limit, MAX_LIMIT].min
 
-    scope = conversation.byte_messages
+    scope = conversation.visible_messages
     scope = scope.where(id: ...before) if before&.positive?
 
     page = scope.chronological.last(limit)
     oldest_id = page.first&.id
-    has_more  = oldest_id ? conversation.byte_messages.exists?(["id < ?", oldest_id]) : false
+    has_more  = oldest_id ? conversation.visible_messages.exists?(["id < ?", oldest_id]) : false
 
     render json: {
       conversation_id: conversation.id,
-      messages:        page.map(&:as_wire),
+      # Addressed to the thread being READ, not the thread that owns the row —
+      # a shared message belongs to someone else's conversation and the client
+      # would drop a frame naming one it can't see.
+      messages:        page.map { |m| m.as_wire(conversation_id: conversation.id) },
       has_more:        has_more,
       oldest_id:       oldest_id,
     }
@@ -586,7 +589,7 @@ class ByteController < ApplicationController
     scope = scope.buddy if buddy
     @conversations = scope.to_a
     @conversation  = open_thread(prefer) || default_conversation(buddy)
-    @messages      = @conversation.byte_messages.chronological.last(HISTORY_LIMIT)
+    @messages      = @conversation.visible_messages.chronological.last(HISTORY_LIMIT)
   end
 
   # Which of the visible threads to open, most specific first: one the URL

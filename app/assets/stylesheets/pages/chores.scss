@@ -3253,6 +3253,11 @@ body:has(.env-banner) .chores-page .chores-toolbar {
   // touch momentum and start scrolling itself.
   overscroll-behavior: contain;
 }
+// Yes/no confirmations carry one line of copy and two buttons — at the
+// full 560px they read as an empty form rather than a question.
+.chores-modal.confirm-modal {
+  max-width: 360px;
+}
 .chores-modal .pill-group,
 .chores-modal .reward-quicks {
   // Pills can wrap freely but never bleed past the modal width.

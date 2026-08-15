@@ -54,6 +54,35 @@ module Buddy
         relay
       end
 
+      # How far back "the picture" reaches. A photo relay is always a follow-on
+      # from something just posted — the camera frame Buddy pulled up a moment
+      # ago — so the window is short on purpose. Reaching further would let
+      # "send her the driveway" grab yesterday's doorbell.
+      PHOTO_REACH = 15.minutes
+
+      # Pass along a picture ALREADY in the thread, instead of a sentence about
+      # one. "Send Chelsea a picture of the driveway" (prod 3731) came back as
+      # "I can't grab or forward a driveway photo from here" — and the frame was
+      # right there, one message up.
+      #
+      # Shared rather than copied (ByteMessageShare): what she opens is the same
+      # row, so it carries the same file at full size and the same reactions,
+      # and nothing has to keep two copies of a blob agreeing. Returns nil when
+      # there's no recent picture, which the caller reports honestly rather than
+      # claiming a send.
+      def share_photo!(from:, to:, from_conversation: nil)
+        photo = latest_photo(from_conversation || conversation_for(from))
+        return nil if photo.nil?
+
+        ByteMessageShare.share!(photo, conversation_for(to))
+      end
+
+      def latest_photo(conversation)
+        scope = conversation.byte_messages.where(created_at: PHOTO_REACH.ago..)
+        scope = scope.joins(:files_attachments).distinct
+        scope.order(created_at: :desc).first
+      end
+
       # Dispatch by kind. Returns the relay.
       def deliver!(relay)
         case relay.kind.to_sym

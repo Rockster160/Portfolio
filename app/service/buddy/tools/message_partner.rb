@@ -67,8 +67,9 @@ Buddy::Tools.register(
   TXT
   feature:     :relay,
   args:        {
-    to:      { type: :string, required: true, description: "First name of anyone on the household roster in \"Who else is in the house\" - not only a partner" },
-    message: { type: :string, required: true, description: "The note to send. Their exact words when they gave you words; your phrasing when they only gave you the gist." },
+    to:         { type: :string, required: true, description: "First name of anyone on the household roster in \"Who else is in the house\" - not only a partner" },
+    message:    { type: :string, required: true, description: "The note to send. Their exact words when they gave you words; your phrasing when they only gave you the gist." },
+    with_photo: { type: :boolean, required: false, default: false, description: "Send the picture that's already in this thread along with the note. Set it whenever they ask to send/show someone a PHOTO or camera frame - pull the frame up first (camera_snapshot) if it isn't here yet, then relay with this on." },
   },
   confirm:     ->(payload, ctx) {
     partner = ctx.resolve_household_user(payload[:to])
@@ -78,16 +79,33 @@ Buddy::Tools.register(
   },
   label:       ->(payload, _ctx) { { title: "Message #{payload[:to_name]}", sub: payload[:message].to_s } },
   execute:     ->(payload, ctx) {
+    partner = User.find(payload[:to_user_id])
     relay = Buddy::CompanionRelay.pass_along!(
       from:              ctx.user,
-      to:                User.find(payload[:to_user_id]),
+      to:                partner,
       text:              payload[:message].to_s,
       from_conversation: ctx.conversation,
     )
-    { relay_id: relay.id, to_name: payload[:to_name] }
+    # Nil when there was no recent picture to send. Reported, never glossed:
+    # the note still went, and saying a photo went when none did is the exact
+    # failure the camera turns kept producing.
+    shared = (
+      if payload[:with_photo]
+        Buddy::CompanionRelay.share_photo!(from: ctx.user, to: partner, from_conversation: ctx.conversation)
+      end
+    )
+    { relay_id: relay.id, to_name: payload[:to_name], photo_sent: shared.present?, photo_asked: !!payload[:with_photo] }
   },
   # Delivering to a partner is low-stakes and conversational, so it goes out
   # immediately and drops a receipt chip rather than a confirmation checkbox.
   auto:        true,
-  receipt:     ->(result, _ctx) { "Passed it along to #{result[:to_name]} 💬" },
+  receipt:     ->(result, _ctx) {
+    if result[:photo_sent]
+      "Sent #{result[:to_name]} the photo 📷"
+    elsif result[:photo_asked]
+      "Passed it along to #{result[:to_name]} 💬 (no recent picture here to send)"
+    else
+      "Passed it along to #{result[:to_name]} 💬"
+    end
+  },
 )

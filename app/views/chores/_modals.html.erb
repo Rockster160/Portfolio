@@ -4,12 +4,14 @@
       <button type="button" class="pin-toggle" data-edit-pin-toggle aria-label="Pin to Dailies" title="Pin to Dailies" hidden>
         <i class="fa fa-thumb-tack" aria-hidden="true"></i>
       </button>
-      <%# "This needs to get done" — stamps marked_due_at so the chore
-        promotes onto Today now, then surfaces as overdue across future
-        days until any ChoreCompletion clears the stamp. Household-wide. %>
+      <%# "Due today" — one-way shortcut for the Due Date field below:
+        stamps marked_due_at so the chore promotes onto Today now, then
+        surfaces as overdue across future days until any ChoreCompletion
+        clears the stamp. Household-wide. Never clears the stamp — that's
+        the Due Date field. Confirms via the mark-due modal. %>
       <button type="button" class="mark-due-toggle" data-edit-mark-due-toggle
-              aria-label="Mark needs to get done"
-              title="Mark needs to get done" hidden>
+              aria-label="Set due date to today"
+              title="Set due date to today" hidden>
         <i class="fa fa-exclamation-circle" aria-hidden="true"></i>
       </button>
       <h3 data-modal-title>Add Chore</h3>
@@ -514,6 +516,27 @@
       <div class="form-actions">
         <button type="button" class="ghost" data-action="cancel">Cancel</button>
         <button type="submit" class="primary" data-anonymous-submit>Mark done</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<%# Confirmation for the edit-modal head "!" button. That button touches
+  ONE field — the Due Date — so the confirm says exactly that and nothing
+  more. Confirming writes the date on its own (no Save trip) and closes
+  the editor; if the form has other pending edits it fills the Due Date
+  field instead and leaves the editor open so one Save carries both. %>
+<div id="chore-mark-due-modal" class="chores-modal-backdrop hidden" data-mark-due-modal>
+  <div class="chores-modal confirm-modal">
+    <div class="modal-head">
+      <h3>Due today?</h3>
+      <button type="button" class="modal-close" data-action="cancel" aria-label="Close">×</button>
+    </div>
+    <form class="chore-form basic" data-mark-due-form autocomplete="off" novalidate>
+      <p class="field-hint" data-mark-due-hint>Set the due date to today.</p>
+      <div class="form-actions">
+        <button type="button" class="ghost" data-action="cancel">Cancel</button>
+        <button type="submit" class="primary">Due today</button>
       </div>
     </form>
   </div>

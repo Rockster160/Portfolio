@@ -799,8 +799,17 @@ module Buddy
         (?:
           # The dropped `g` matters more than it looks: a hello this misses is
           # one the fallback puts a SECOND hello in front of.
-            (?:good\s+)? m+o+r+n+i+n+ (?:g+|['’])
-          | (?:good\s+)? (?:afternoon|evening|evenin['’]|night)
+          #
+          # The trailing lookahead is what stops the NOUN reading as the
+          # greeting. Prod 3650 opened "Morning's pretty light on your side"
+          # and satisfied this: `m+o+r+n+i+n+` took "Mornin", `g+` took the
+          # "g", and nothing required the word to end there — so a briefing
+          # with no hello in it kept the fallback from adding one. `\b` won't
+          # do, since an apostrophe is already a word boundary. Only the
+          # time-of-day arms need it: they're the ones that are ordinary
+          # nouns, and "Happy Friday's here" should still count as a hello.
+            (?:good\s+)? m+o+r+n+i+n+ (?:g+|['’]) (?!['’]?\w)
+          | (?:good\s+)? (?:afternoon|evening|evenin['’]|night) (?!['’]?\w)
           | h+e+y+
           | h+i+\b
           | h+e+l+l+o+

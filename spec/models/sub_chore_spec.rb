@@ -160,6 +160,39 @@ RSpec.describe "SubChore behavior" do
       expect(json[:cooldown_kind]).to eq(:fixed)
     end
 
+    # The flame has to promise what the tap will pay. ChoreCompleter falls
+    # back to the parent's pick for any sub-chore tap, so a sub under a hot
+    # parent earns the multiplier whether or not it shows it — and until it
+    # showed it, the only card wearing the badge was one the person doesn't
+    # tap.
+    it "wears the parent's hot multiplier without joining the Hot strip" do
+      create(:chore_hot_pick, chore: parent, multiplier: 2.0, day_key: ChoreDay.current(user))
+
+      ctx = ChoreSerializerContext.for_user(user)
+      sub_json = ChoreSerializer.new(sub, viewer: user, ctx: ctx).as_json
+      parent_json = ChoreSerializer.new(parent, viewer: user, ctx: ctx).as_json
+
+      expect(sub_json[:hot_multiplier]).to eq(2.0)
+      expect(sub_json[:hot_pick]).to be(false)
+      expect(parent_json[:hot_multiplier]).to eq(2.0)
+      expect(parent_json[:hot_pick]).to be(true)
+    end
+
+    it "keeps its own hot multiplier when it holds a pick of its own" do
+      create(:chore_hot_pick, chore: parent, multiplier: 2.0, day_key: ChoreDay.current(user))
+      create(:chore_hot_pick, chore: sub, multiplier: 3.0, day_key: ChoreDay.current(user))
+
+      json = ChoreSerializer.new(sub, viewer: user, ctx: ChoreSerializerContext.for_user(user)).as_json
+      expect(json[:hot_multiplier]).to eq(3.0)
+      expect(json[:hot_pick]).to be(true)
+    end
+
+    it "leaves a chore with no pick anywhere in the family cold" do
+      json = ChoreSerializer.new(sub, viewer: user, ctx: ChoreSerializerContext.for_user(user)).as_json
+      expect(json[:hot_multiplier]).to be_nil
+      expect(json[:hot_pick]).to be(false)
+    end
+
     it "falls through to the parent's day-reset sentinel when the sub has none" do
       parent.update!(threshold_seconds: Chore::THRESHOLD_DAY_RESET)
       sub.update!(threshold_seconds: nil)

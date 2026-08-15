@@ -103,9 +103,9 @@ Buddy::Tools.register(
     {
       summary:  ["Add #{payload[:title]} to #{agenda.name}?", warning].compact.join(" "),
       # `at` is resolved HERE, not at execute, so the checklist row renders the
-      # same time that lands on the calendar. See resolve_calendar_time: a
-      # same-day time that's already past is the 12-hour slip, and the row is
-      # where it has to be visible.
+      # same time that lands on the calendar. See resolve_calendar_time: an hour
+      # already gone today resolves to now, and the row is where that has to be
+      # visible before it's agreed to.
       resolved: {
         agenda_id:      agenda.id,
         agenda_name:    agenda.name,

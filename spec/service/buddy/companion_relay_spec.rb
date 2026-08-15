@@ -297,12 +297,76 @@ RSpec.describe "Buddy companion relay" do
       it "doesn't count Buddy's own hidden seeds as her passing it over" do
         her_convo.byte_messages.create!(
           user: chelsea, direction: :outbound, state: :sent, body: "[tapped Today]",
-          metadata: { "hidden" => true, "kind" => "buddy_trigger" },
+          metadata: { "hidden" => true, "kind" => "buddy_trigger" }
         )
         she_says("Tick")
 
         expect(open_now).to include(hash_including(id: question.id))
       end
+    end
+  end
+
+  # Prod 3731: "Send Chelsea a picture of the driveway" came back as "I can't
+  # grab or forward a driveway photo from here" — with the frame one message up
+  # in the same thread. The relay only ever carried text.
+  #
+  # Now it carries the frame by SHARING it (ByteMessageShare) rather than
+  # copying the blob, so she opens the same row at full size, and a reaction on
+  # it is one reaction rather than two that have to be kept level.
+  describe "relaying a photo" do
+    def frame!(at: Time.current, conversation: convo)
+      msg = conversation.byte_messages.create!(
+        user: rocco, direction: :inbound, state: :delivered,
+        body: "Driveway, just now", created_at: at
+      )
+      msg.files.attach(
+        io: StringIO.new("not-really-a-jpeg"), filename: "driveway.jpg", content_type: "image/jpeg",
+      )
+      msg
+    end
+
+    it "shows her the same row instead of a second copy of the picture" do
+      photo = frame!
+
+      expect { run(:message_partner, { to: her, message: "someone out front", with_photo: true }) }
+        .to change(ByteMessageShare, :count).by(1)
+
+      hers = BuddyRelay.last.to_conversation
+      expect(hers.visible_messages).to include(photo)
+      expect(hers.byte_messages).not_to include(photo)
+      expect(photo.reload.files.count).to eq(1)
+    end
+
+    it "says the photo went" do
+      frame!
+      result = run(:message_partner, { to: her, message: "someone out front", with_photo: true })
+
+      expect(result[:photo_sent]).to be(true)
+      expect(Buddy::Tools[:message_partner][:receipt].call(result, nil)).to include("the photo")
+    end
+
+    # The note still goes. What must not happen is a receipt claiming a picture
+    # went when there wasn't one — that's the camera failure all over again.
+    it "admits it when there's no picture to send" do
+      result = run(:message_partner, { to: her, message: "someone out front", with_photo: true })
+
+      expect(result[:photo_sent]).to be(false)
+      expect(BuddyRelay.last.body).to eq("someone out front")
+      expect(Buddy::Tools[:message_partner][:receipt].call(result, nil)).to include("no recent picture")
+    end
+
+    it "doesn't reach back for an older picture" do
+      frame!(at: 2.hours.ago)
+      result = run(:message_partner, { to: her, message: "someone out front", with_photo: true })
+
+      expect(result[:photo_sent]).to be(false)
+    end
+
+    it "sends nothing extra when the note isn't about a picture" do
+      frame!
+
+      expect { run(:message_partner, { to: her, message: "he fed the dog" }) }
+        .not_to change(ByteMessageShare, :count)
     end
   end
 end

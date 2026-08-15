@@ -245,18 +245,21 @@ class Chore < ApplicationRecord
   # completing it by name — the row landed on the container, which is usually
   # `show_on_today_view: never` and so not even on screen to look wrong.
   #
-  # Deliberately narrow: an ASSIGNED sub-chore and nothing else. A parent whose
-  # children are per-item rather than per-person (Supplements → Focus,
-  # Cymbalta) has nothing assigned to anybody, and guessing which child was
-  # meant is how you log the wrong medication. No assignment for this person,
-  # no redirect.
+  # Deliberately narrow: exactly ONE sub-chore assigned to this person, and
+  # nothing else. A parent whose children are per-item rather than per-person
+  # (Supplements → Focus, Cymbalta) either assigns them to nobody or assigns
+  # SEVERAL of them to the same person, and guessing which of those was meant
+  # is how you log the wrong medication. One unambiguous sub or no redirect.
   #
-  # Only for a write made on somebody's behalf from a NAME. An explicit tap
-  # carries the id the person chose and must be honoured exactly.
+  # Used for a write made on somebody's behalf from a NAME, and for a tap on a
+  # container — the card in the Hot strip or the grid is the only place a
+  # split-up chore appears, so tapping it means "I did my half of this", not
+  # "write a completion against the family that credits neither of us".
   def completion_leaf_for(user)
     return self if user.nil? || sub_chore?
 
-    sub_chores.detect { |sub| sub.assigned_to_user_id == user.id } || self
+    mine = sub_chores.select { |sub| sub.assigned_to_user_id == user.id }
+    mine.one? ? mine.first : self
   end
 
   # User-stamped "this needs to get done" flag. While set, the chore

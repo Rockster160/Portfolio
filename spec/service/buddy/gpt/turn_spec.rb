@@ -1076,6 +1076,14 @@ RSpec.describe Buddy::GPT::Turn do
         "☀️ Morning! ",
         "Happy Tuesday! ",
         "[[mood:happy]]Hey there! ",
+        # The dropped-g and comma forms still have to pass after the possessive
+        # lookahead went on — they're the shapes it sits closest to.
+        "Mornin', ",
+        "Morning, Rocco. ",
+        "Evenin'! ",
+        # `happy \w+` is deliberately left without the lookahead, so the day
+        # taking a possessive doesn't cost the hello.
+        "Happy Friday's here! ",
       ].each { |opener|
         body = opener.sub(described_class::LEADING_MOOD_RX, "")
         expect(body).to match(described_class::GREETING_OPENER_RX), "expected #{opener.inspect} to read as a greeting"
@@ -1090,6 +1098,23 @@ RSpec.describe Buddy::GPT::Turn do
         "Nothing pressing today.",
       ].each { |body|
         expect(body).not_to match(described_class::GREETING_OPENER_RX)
+      }
+    end
+
+    # Prod 3650 opened "Morning's pretty light on your side" with no hello on
+    # it, and the fallback didn't fire: `m+o+r+n+i+n+` took "Mornin", `g+` took
+    # the "g", and the regex was satisfied with the possessive left over. The
+    # noun as a sentence subject is not a greeting — and `\b` can't tell the
+    # difference, because an apostrophe is already a word boundary.
+    it "does not read the time of day as a hello when it's the subject" do
+      [
+        "Morning's pretty light on your side.",
+        "Morning’s pretty light on your side.",
+        "Evening's shaping up busy.",
+        "Afternoon's wide open.",
+        "Nights are the only time that works.",
+      ].each { |body|
+        expect(body).not_to match(described_class::GREETING_OPENER_RX), "#{body.inspect} read as a greeting"
       }
     end
   end

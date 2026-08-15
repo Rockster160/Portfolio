@@ -353,6 +353,10 @@ class GoogleCalendar::Sync
     inbound  = Array(merged_recurrence[:excluded_dates]).map(&:to_s)
     union    = (existing + inbound).uniq
     merged_recurrence[:excluded_dates] = union if union.any?
+    # Dates the master is telling us about for the first time. Swept AFTER the
+    # save below, because a row materialized on one of them is no longer an
+    # occurrence of this series and would otherwise sit in the agenda forever.
+    newly_excluded = (inbound - existing).filter_map { |d| ::GoogleCalendar::RRule.parse_date_str(d) }
 
     sched.assign_attributes(
       name:                event_summary(event),
@@ -372,6 +376,7 @@ class GoogleCalendar::Sync
       metadata:            sched.metadata.to_h.merge(attendee_metadata(event).stringify_keys),
     )
     sched.save!
+    sched.sweep_excluded!(newly_excluded) if newly_excluded.any?
   end
 
   def upsert_one_off(event)

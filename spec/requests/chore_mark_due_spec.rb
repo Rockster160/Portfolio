@@ -76,4 +76,17 @@ RSpec.describe "Chore mark_due", type: :request do
       expect(chore.reload.marked_due_at).to be_nil
     end
   end
+
+  # The head button is one-way — it asks first, then writes the Due Date and
+  # nothing else. Both halves of that live in markup the page script hooks
+  # onto by name, so the shell has to carry them.
+  describe "GET /chores (the head button's confirm step)" do
+    it "renders a confirm modal and a button that only ever sets today" do
+      get chores_path
+      expect(response.body).to include("data-mark-due-modal")
+      expect(response.body).to include("data-mark-due-form")
+      expect(response.body).to include('aria-label="Set due date to today"')
+      expect(response.body).not_to include("Mark needs to get done")
+    end
+  end
 end

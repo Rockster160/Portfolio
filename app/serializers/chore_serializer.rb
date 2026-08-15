@@ -114,6 +114,7 @@ class ChoreSerializer
       last_actor_username:  last_actor_username,
       last_actor_anonymous: last_actor_anonymous?,
       hot_multiplier:       hot_multiplier,
+      hot_pick:             own_hot_multiplier.present?,
       streak_multiplier:    streak_multiplier,
       today_visible:        today_visible?,
       due_today:            due_today?,
@@ -331,10 +332,34 @@ class ChoreSerializer
     @last_actor_anonymous_cached = last.present? && last.anonymous == true
   end
 
+  # The multiplier a completion of THIS chore would actually pay. Mirrors
+  # ChoreCompleter#apply_payout!'s own-pick-then-parent's-pick lookup, so a
+  # sub-chore under a hot parent wears the flame it will really earn —
+  # `hot_eligibility: never` included, since eligibility only governs which
+  # chores get PICKED, not which taps the pick pays out on.
   def hot_multiplier
-    return ctx.hot_picks[chore.id] if ctx
+    own_hot_multiplier || parent_hot_multiplier
+  end
 
-    @hot_multiplier ||= ChoreHotPick.lookup_for(day)[chore.id]
+  # This chore is itself one of today's picks (as opposed to inheriting its
+  # parent's). The Hot strip is built from this — the pick is one card, not
+  # one per sub-chore under it.
+  def own_hot_multiplier
+    return @own_hot_multiplier if defined?(@own_hot_multiplier)
+
+    @own_hot_multiplier = hot_picks[chore.id]
+  end
+
+  def parent_hot_multiplier
+    return nil unless chore.sub_chore?
+
+    hot_picks[chore.parent_chore_id]
+  end
+
+  def hot_picks
+    return ctx.hot_picks if ctx
+
+    @hot_picks ||= ChoreHotPick.lookup_for(day)
   end
 
   # Forecast of the streak-side multiplier this viewer would receive on

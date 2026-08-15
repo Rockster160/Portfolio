@@ -248,6 +248,18 @@ Buddy::Tools.register(
                       "Setting this leaves both, so both will fire. Say that plainly and offer to " \
                       "retire the old one (cancel_reminder) - don't add a second one silently."
 
+    # Not a twin, but armed on the same trigger. A correction rewrites the
+    # listener, so the twin check above structurally cannot see one, and the
+    # watch being corrected sits there and fires later anyway.
+    siblings = twin ? [] : ctx.sibling_watches(scope, condition.listener, owner: owner)
+    if siblings.any?
+      bodies  = siblings.map { |w| w.body.to_s.truncate(40).inspect }.join(", ")
+      warning = "JUST set on #{scope}, minutes ago: #{bodies}. A different listener is a SEPARATE watch, " \
+                "never a replacement. If this one CORRECTS one of those - they said no, not that, or asked " \
+                "again for a different event on the same thing - cancel it (cancel_reminder) in this same " \
+                "turn and tell them you did. If they're meant to run alongside each other, leave them."
+    end
+
     {
       summary:  ["#{framed}?", warning].compact.join(" "),
       resolved: {

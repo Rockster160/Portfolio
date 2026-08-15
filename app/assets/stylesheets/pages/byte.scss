@@ -5885,3 +5885,69 @@ $suki_expr_aliases: (
 .byte-msg.byte-msg-inbound:has([data-body]:empty) {
   [data-body] { display: none; }
 }
+
+// Full-screen image viewer (image_viewer.js). Fitted by default, zooms and
+// pans from there. Fixed rather than a <dialog>: modals.js closes any open
+// dialog on a document click, and this has to survive a drag across itself.
+.byte-image-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(3, 10, 22, 0.94);
+  // The pan gesture is ours once we're zoomed; without this the browser's own
+  // scroll/zoom takes the touch first and the image never moves.
+  touch-action: none;
+  overscroll-behavior: contain;
+  -webkit-user-select: none;
+  user-select: none;
+
+  &.is-zoomed {
+    cursor: grab;
+  }
+}
+
+.byte-image-viewer-img {
+  // Fit-to-screen is the resting state: the whole frame, as large as it goes,
+  // never cropped. Everything past that is the transform's business.
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transform-origin: center center;
+  will-change: transform;
+  -webkit-user-drag: none;
+}
+
+.byte-image-viewer-bar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  // Clear of the notch / status bar on a PWA, where the viewer runs full-bleed.
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 12px 10px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent);
+}
+
+// `.basic` isn't reachable here (this is built in JS, outside any form), so the
+// global forms.scss button cascade is what these would otherwise inherit.
+.byte-image-viewer-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 36px;
+  padding: 6px 14px !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  border-radius: 10px !important;
+  background: rgba(12, 26, 48, 0.72) !important;
+  color: #EAF2FF !important;
+  font-size: 14px !important;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}

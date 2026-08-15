@@ -33,6 +33,21 @@ class ByteMessageIntake
     # (no text AND no attachments) is a no-op.
     return nil if (@body.empty? && @attachment_signed_ids.empty?) || @conversation.nil?
 
+    # The client mints a `local_id` per composed message and its outbound queue
+    # retries on any uncertain outcome — a dropped response, a PWA backgrounded
+    # mid-send, a double-fired tap. That retry is BY DESIGN. What was missing is
+    # the other half of the contract, which queue.js has always stated we hold:
+    # "the server treats a repeat with the same local_id as idempotent".
+    #
+    # Prod 3781/3783 — one send, two rows, same local_id and the same
+    # client-stamped created_at to the millisecond. Two rows meant two turns,
+    # two replies, and "light covers" going onto the agenda twice. Handing back
+    # the row we already have is what the client is expecting either way: it
+    # upgrades its queued bubble to this id and stops.
+    if (already = existing_for_local_id)
+      return already
+    end
+
     # Brain-dump capture: if they armed a "Stash" bucket, THIS message is the
     # idea being dumped, so file it instead of running a normal turn. Their
     # bubble still posts; capture! adds the confirmation.
@@ -105,6 +120,16 @@ class ByteMessageIntake
     !@user.me? && !buddy?
   end
 
+  # The row this send already produced, if it produced one. Scoped to the
+  # conversation because a local_id is only ever unique within the client that
+  # minted it, and matched on the jsonb key the controller writes it under.
+  def existing_for_local_id
+    local_id = @metadata.to_h.symbolize_keys[:local_id].to_s
+    return nil if local_id.blank?
+
+    @conversation.byte_messages.where("metadata->>'local_id' = ?", local_id).order(:id).first
+  end
+
   def post!(state:)
     message = @conversation.byte_messages.create!(
       user:       @user,
@@ -117,6 +142,12 @@ class ByteMessageIntake
     attach_files!(message)
     broadcast(message)
     message
+  rescue ActiveRecord::RecordNotUnique
+    # Two requests carrying one local_id, in flight closely enough that both
+    # passed the check at the top of `call`. The unique index is what actually
+    # settles it; this hands back the row that won instead of 500ing a send the
+    # client is entitled to consider delivered.
+    existing_for_local_id or raise
   end
 
   # Attach the images the client pre-uploaded to /byte/uploads. They arrive as

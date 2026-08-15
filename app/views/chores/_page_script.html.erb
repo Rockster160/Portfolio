@@ -218,6 +218,18 @@
     return named == null ? NORMAL_PRIORITY_RANK : named;
   }
 
+  // "Is this chore itself one of today's Hot Picks?" — as opposed to a
+  // sub-chore wearing its parent's multiplier, which `hot_multiplier` now
+  // also carries (the payout falls back to the parent's pick, so the card
+  // has to show it). The strip and the rotate button follow the PICK, not
+  // the flame: one cell per pick, not one per sub-chore under it. Records
+  // cached by a build before `hot_pick` existed fall back to the old test.
+  function isOwnHotPick(c) {
+    if (!c) return false;
+    if (c.hot_pick != null) return !!c.hot_pick;
+    return c.hot_multiplier != null;
+  }
+
   // ============================================================
   // ChoreStore — the data model. Every read derives from here.
   //
@@ -483,7 +495,7 @@
       activeForGrid() { return this.all().filter(c => !c.archived); },
       hotPicks() {
         return this.all()
-          .filter(c => c.hot_multiplier != null && !c.archived)
+          .filter(c => isOwnHotPick(c) && !c.archived)
           .sort((a, b) => (b.hot_multiplier - a.hot_multiplier));
       },
       lookahead() { return lookahead; },
@@ -1304,7 +1316,7 @@
       // whole strip; otherwise just patch the existing cell.
       const hotEl = hot();
       const hotCell = hotEl?.querySelector(`[data-chore-id="${c.id}"]`)?.closest(".hot-strip-cell");
-      const shouldBeHot = c.hot_multiplier != null && !c.archived;
+      const shouldBeHot = isOwnHotPick(c) && !c.archived;
       if (hotCell && shouldBeHot) {
         patchHotCell(hotCell, c);
       } else if (hotCell || shouldBeHot) {
@@ -1624,7 +1636,8 @@
 
   // Mark-due button — sibling of pin. Stamps the chore as "needs to get
   // done" so it surfaces on Today (or Scheduled/overdue across days)
-  // until any ChoreCompletion clears it.
+  // until any ChoreCompletion clears it. One-way: it only ever moves the
+  // Due Date to today. Clearing the stamp is the Due Date field's job.
   function bindEditModalMarkDue() {
     const btn = document.querySelector("[data-edit-mark-due-toggle]");
     if (!btn) return;
@@ -1633,7 +1646,45 @@
       e.stopPropagation();
       const id = parseInt(currentChoreId, 10);
       if (!id || btn.dataset.busy === "1") return;
-      toggleMarkDue(id, btn);
+      openMarkDueModal(id);
+    });
+  }
+
+  const markDueModal = document.querySelector('[data-mark-due-modal]');
+  const markDueForm  = markDueModal?.querySelector('[data-mark-due-form]');
+  const markDueHint  = markDueModal?.querySelector('[data-mark-due-hint]');
+  let markDueTargetChoreId = null;
+
+  function openMarkDueModal(choreId) {
+    if (!markDueModal) return;
+    markDueTargetChoreId = choreId;
+    const c = ChoreStore.get(choreId);
+    const name = (c && (c.short_name || c.name)) || "this chore";
+    if (markDueHint) {
+      markDueHint.textContent = (
+        editFormHasOtherEdits()
+          ? `Set "${name}" to be due today. It goes up with your other edits when you Save.`
+          : `Set "${name}" to be due today. Nothing else changes.`
+      );
+    }
+    markDueModal.classList.remove("hidden");
+  }
+  function closeMarkDueModal() {
+    markDueModal?.classList.add("hidden");
+    markDueTargetChoreId = null;
+  }
+  wireModalDismiss(markDueModal, { onCancel: closeMarkDueModal, onBackdrop: closeMarkDueModal });
+
+  function bindMarkDueConfirmForm() {
+    if (!markDueForm) return;
+    markDueForm.addEventListener("submit", e => {
+      e.preventDefault();
+      const id = markDueTargetChoreId;
+      closeMarkDueModal();
+      if (!id) return;
+      const btn = document.querySelector("[data-edit-mark-due-toggle]");
+      if (!btn || btn.dataset.busy === "1") return;
+      markDueToday(id, btn);
     });
   }
 
@@ -1949,57 +2000,73 @@
     const c = ChoreStore.get(id);
     if (!c) { btn.hidden = true; return; }
     btn.hidden = false;
-    const marked = !!c.marked_due_at;
-    btn.classList.toggle("marked", marked);
-    const label = marked ? "Clear needs-to-get-done" : "Mark needs to get done";
-    btn.setAttribute("aria-label", label);
-    btn.setAttribute("title", label);
+    // `.marked` is ambient state — whether the chore currently carries a
+    // stamp. The action is the same either way, so the label doesn't move.
+    btn.classList.toggle("marked", !!c.marked_due_at);
   }
 
-  // Optimistic: stamp marked_due_at + force visibility flags so the card
-  // jumps into Today immediately. Unmark waits for server payload — the
-  // post-unmark visibility depends on the chore's normal schedule, which
-  // we don't recompute client-side.
+  // One-way: this button ONLY moves the Due Date to today. Clearing the
+  // stamp belongs to the Due Date field itself, so there's no unmark
+  // branch — and no toggle to land on by accident.
   //
-  // Form sync: the modal also exposes Due Date as a date input bound to
-  // marked_due_at. Without mirroring the change into that field, a
-  // subsequent form save would overwrite the stamp we just wrote with
-  // the form's stale value (or vice versa for unmark).
-  async function toggleMarkDue(id, btn) {
-    const c = ChoreStore.get(id);
-    const wasMarked = !!c?.marked_due_at;
-    btn.dataset.busy = "1";
+  // Two outcomes, decided by whether the form has other pending edits:
+  //   * clean form → write the stamp on its own (POST mark_due touches
+  //     nothing but marked_due_at) and close the editor. No Save trip.
+  //   * dirty form → fill the Due Date input and leave the editor open,
+  //     so this date and the user's other edits go up together. Stamping
+  //     now would just be overwritten by their Save a moment later.
+  //
+  // Optimistic: stamp marked_due_at + force the visibility flags so the
+  // card jumps into Today immediately.
+  //
+  // Form sync: the modal exposes Due Date as a date input bound to
+  // marked_due_at. Without mirroring the stamp into that field, a
+  // subsequent form save would overwrite it with the field's stale value.
+  async function markDueToday(id, btn) {
     const formField = editForm?.querySelector('[data-field="marked_due_at"]');
-    if (!wasMarked) {
-      ChoreStore.patch(id, {
-        marked_due_at:  new Date().toISOString(),
-        marked_due_on:  todayIso(),
-        today_visible:  true,
-        due_today:      true,
-      });
-      if (formField && String(currentChoreId) === String(id)) formField.value = todayIso();
-      refreshEditModalMarkDue();
-    } else if (formField && String(currentChoreId) === String(id)) {
-      formField.value = "";
+    const editingThis = String(currentChoreId) === String(id);
+    if (editingThis && editFormHasOtherEdits()) {
+      if (formField) formField.value = todayIso();
+      flash("Due date set to today — Save to apply");
+      return;
     }
-    const url = `/chores/items/${id}/mark_due`;
-    const method = wasMarked ? "DELETE" : "POST";
+    btn.dataset.busy = "1";
+    // Re-stamping an already-marked chore is legal (it refreshes the
+    // timestamp), so the rollback restores what was there rather than
+    // assuming the chore started out unmarked.
+    const prior = ChoreStore.get(id);
+    const priorState = {
+      marked_due_at: prior?.marked_due_at ?? null,
+      marked_due_on: prior?.marked_due_on ?? null,
+      today_visible: prior?.today_visible ?? false,
+      due_today:     prior?.due_today ?? false,
+    };
+    ChoreStore.patch(id, {
+      marked_due_at:  new Date().toISOString(),
+      marked_due_on:  todayIso(),
+      today_visible:  true,
+      due_today:      true,
+    });
+    if (formField && editingThis) formField.value = todayIso();
+    if (editingThis) dismissEditModalExplicit();
+    else refreshEditModalMarkDue();
     try {
-      const data = await api(url, method, { tab_id: TAB_ID });
+      const data = await api(`/chores/items/${id}/mark_due`, "POST", { tab_id: TAB_ID });
       if (data && data.chore) {
         const serverTs = data.server_ts ? new Date(data.server_ts).getTime() : null;
         ChoreStore.upsert(data.chore, { serverTs });
       }
       refreshEditModalMarkDue();
+      flash("Due today");
     } catch (err) {
       if (isTransientError(err)) {
         flash("Saved locally — will sync", "warn");
       } else {
-        if (!wasMarked) {
-          ChoreStore.patch(id, { marked_due_at: null, marked_due_on: null });
-          if (formField && String(currentChoreId) === String(id)) formField.value = "";
-          refreshEditModalMarkDue();
+        ChoreStore.patch(id, priorState);
+        if (formField && String(currentChoreId) === String(id)) {
+          formField.value = priorState.marked_due_on || "";
         }
+        refreshEditModalMarkDue();
         flash("Couldn't update: " + err.message, "error");
       }
     } finally {
@@ -2428,14 +2495,14 @@
     const c = ChoreStore.get(cid);
     if (!c) return;
     const prev = c.hot_multiplier;
-    ChoreStore.patch(cid, { hot_multiplier: null });
+    ChoreStore.patch(cid, { hot_multiplier: null, hot_pick: false });
     try {
       await api(`/chores/hot_picks/${cid}/rotate`, "POST", { tab_id: TAB_ID });
       flash("Swapped");
     } catch (err) {
       // On any failure path, restore the optimistic removal so the
       // user doesn't see the cell vanish in error.
-      ChoreStore.patch(cid, { hot_multiplier: prev });
+      ChoreStore.patch(cid, { hot_multiplier: prev, hot_pick: true });
       if (err.status === 403) flash("Only household managers can change Hot Picks.", "error");
       else if (err.status === 404) flash("Already swapped — nothing to do.", "warn");
       else if (isTransientError(err)) flash("Couldn't swap — try again", "warn");
@@ -4236,7 +4303,7 @@
   function refreshEditModalHeadActions(c) {
     const rotate = editModal?.querySelector('[data-edit-hot-rotate]');
     const anon = editModal?.querySelector('[data-edit-anonymous-complete]');
-    if (rotate) rotate.hidden = !c || c.hot_multiplier == null;
+    if (rotate) rotate.hidden = !isOwnHotPick(c);
     if (anon) anon.hidden = !c;
   }
 
@@ -4302,6 +4369,31 @@
     syncFreqRow();
     syncWeekdaysHelperHighlight();
   }
+
+  // Fingerprint of everything the edit form currently holds EXCEPT the
+  // Due Date. Due Date is deliberately excluded: it's the one field the
+  // head "!" button owns, so a value there — typed or stamped — must not
+  // count as "the user has other unsaved edits."
+  //
+  // Every control is keyed by its data-field (falling back to position
+  // for the handful of helper inputs that have none), and the active
+  // pills/chips are appended since those carry state no input holds.
+  function editFormSnapshot() {
+    if (!editForm) return "";
+    const parts = [];
+    editForm.querySelectorAll("input, select, textarea").forEach((el, i) => {
+      const key = el.dataset.field || el.name || `@${i}`;
+      if (key === "marked_due_at") return;
+      parts.push(`${key}=${el.type === "checkbox" ? (el.checked ? "1" : "0") : el.value}`);
+    });
+    editForm.querySelectorAll(".pill.active, .md-chip.active, [data-day].active").forEach((el, i) => {
+      parts.push(`a${i}=${el.dataset.value ?? el.dataset.day ?? el.dataset.monthMode ?? el.dataset.reward ?? ""}`);
+    });
+    return parts.join("|");
+  }
+  // Captured at the end of every fresh populate; compared on demand.
+  let editFormBaseline = "";
+  function editFormHasOtherEdits() { return editFormSnapshot() !== editFormBaseline; }
 
   function openCreateModal(opts = {}) {
     if (!editModal) return;
@@ -4427,6 +4519,11 @@
       if (rec.unit) editForm.querySelector('[data-unit]').value = rec.unit;
     }
     syncStartsOnDependents();
+    // Baseline for "has anything else been edited?" — taken after the
+    // form is fully populated, so only the user's own changes register.
+    // The lock-hit early return above skips it on purpose: reopening a
+    // modal keeps in-progress edits, and they're still edits.
+    editFormBaseline = editFormSnapshot();
     editForm.querySelector('[data-action="archive"]')?.classList.remove("hidden");
     editModal.classList.remove("hidden");
     scrollModalToTop(editModal);
@@ -6120,6 +6217,7 @@
   bindCardClicks();
   bindEditModalPin();
   bindEditModalMarkDue();
+  bindMarkDueConfirmForm();
   bindEditModalHotRotate();
   bindEditModalAnonymousComplete();
   bindAnonymousCompletionForm();

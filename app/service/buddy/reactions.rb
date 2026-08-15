@@ -149,12 +149,26 @@ module Buddy
       # reactor's own copy carries it too and they filter themselves out — one
       # payload, one rule, rather than two shapes to keep in step.
       def broadcast(message, detail)
-        MonitorChannel.broadcast_to(message.user, {
+        message.reload
+        push_reaction(message.user, message.as_wire, detail)
+        # A SHARED message is one row on two screens (ByteMessageShare), so the
+        # reaction is already on the other person's copy the moment it's
+        # written — there is nothing to mirror, only someone to tell. Addressed
+        # to THEIR thread, since the client routes by the conversation a frame
+        # names and this row names its home.
+        message.byte_message_shares.includes(:user).find_each { |share|
+          wire = message.as_wire(conversation_id: share.byte_conversation_id)
+          push_reaction(share.user, wire, detail)
+        }
+      end
+
+      def push_reaction(user, wire, detail)
+        MonitorChannel.broadcast_to(user, {
           id:      :byte,
           channel: :byte,
           data:    {
             kind:     :message,
-            message:  message.reload.as_wire,
+            message:  wire,
             update:   true,
             reaction: detail,
           },

@@ -212,6 +212,20 @@ class AgendaSchedule < ApplicationRecord
     update!(recurrence: recurrence_data.merge(excluded_dates: next_set.map(&:to_s)).to_h)
   end
 
+  # The same invariant as `add_excluded_date!`, for the writer that sets the
+  # whole list at once instead of one date at a time.
+  #
+  # Google sync merges the master's inbound EXDATEs into `recurrence` and calls
+  # `save!` directly (GoogleCalendar::Sync#upsert_schedule), so a date can enter
+  # excluded_dates with a row already materialized on it and nothing cancels
+  # that row — it survives as an occurrence of a series that no longer has one.
+  # Detached overrides are still skipped, which is what keeps the ordinary
+  # Google shape safe: a modified instance arrives as an EXDATE on the master
+  # PLUS its own detached event, and that pairing is correct rather than a ghost.
+  def sweep_excluded!(dates)
+    Array(dates).each { |date| sweep_materialized_on!(date) }
+  end
+
   def excluded?(date)
     excluded_dates.include?(date.to_date)
   end

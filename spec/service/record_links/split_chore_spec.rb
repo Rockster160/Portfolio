@@ -143,6 +143,18 @@ RSpec.describe "Logging an event for a chore that's been split per person" do
       expect(parent.completion_leaf_for(stranger)).to eq(parent)
     end
 
+    # Per-ITEM children can be assigned too — Supplements holds Focus and
+    # Cymbalta, both Rocco's. Two candidates is not a per-person split, and
+    # picking the first is how you log the wrong medication.
+    it "hands back the chore itself when the person has more than one sub under it" do
+      Chore.create!(
+        chore_household: household, created_by_user: user, name: "Teeth (electric)",
+        parent_chore: parent, assigned_to_user: user
+      )
+
+      expect(parent.reload.completion_leaf_for(user)).to eq(parent)
+    end
+
     # An explicit tap already carries the id somebody chose.
     it "never redirects a sub-chore to a sibling" do
       expect(mine.completion_leaf_for(partner)).to eq(mine)

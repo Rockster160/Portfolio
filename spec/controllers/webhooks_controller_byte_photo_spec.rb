@@ -201,4 +201,119 @@ RSpec.describe WebhooksController, type: :controller do
       expect(JSON.parse(response.body)["error"]).to match(/too large/i)
     end
   end
+
+  # A doorbell RING also reaches Chelsea — as one SHARED row rather than a
+  # second copy, so both people are looking at the same frame and a reaction on
+  # it is one reaction (ByteMessageShare).
+  #
+  # The payload shape is the real one, off log_tracker 4589106. She's a literal
+  # id in the controller (there's no partner relation on User to derive her
+  # from), so the spec stubs it rather than seeding user 58128 — an id that
+  # collides with whatever the factory sequence happens to reach.
+  describe "a doorbell ring" do
+    let(:chelsea) { create(:user, username: "chelsea") }
+    let(:bystander) { create(:user, username: "kiddo") }
+    # User.me may already be in one, and ChoreHousehold auto-adds its owner —
+    # creating a second would fail on the owner's own membership.
+    let!(:household) { user.chore_household || ChoreHousehold.create!(name: "Home", owner_user: user) }
+    let!(:hers) { chelsea.byte_conversations.create!(mode: :buddy, name: "Moss") }
+    let!(:theirs) { bystander.byte_conversations.create!(mode: :buddy, name: "Glimmer") }
+
+    before do
+      [chelsea, bystander].each { |u|
+        ChoreHouseholdMembership.create!(chore_household: household, user: u, role: :member)
+        u.update!(chore_household_id: household.id)
+      }
+      user.update!(chore_household_id: household.id)
+      stub_const("WebhooksController::DOORBELL_SHARE_USER_ID", chelsea.id)
+    end
+
+    def ring(extra={})
+      meta = {
+        camera:       "camera.doorbell_fluent",
+        frame_source: "live",
+        type:         "rang",
+        subject:      "visitor",
+        location:     "doorbell",
+        rang:         true,
+      }.merge(extra)
+      post :byte_photo, params: { files: [snapshot], body: "🔔 Someone is at the door", metadata: meta.to_json }
+    end
+
+    it "shows her the same frame instead of posting a second one" do
+      expect { ring }.to change(ByteMessage, :count).by(1)
+
+      message = ByteMessage.order(:id).last
+      expect(hers.visible_messages).to include(message)
+      expect(hers.byte_messages).to be_empty
+    end
+
+    # It goes to HER, not to everyone under the roof. A doorbell at everybody is
+    # a notification people learn to swipe away.
+    it "shares with her and nobody else in the house" do
+      expect { ring }.to change(ByteMessageShare, :count).by(1)
+
+      expect(theirs.visible_messages).to be_empty
+    end
+
+    it "pushes it to her, not only to the screen" do
+      expect(ByteNotifier).to receive(:notify).with(chelsea, anything)
+
+      ring
+    end
+
+    it "addresses her broadcast to her own thread" do
+      ring
+
+      expect(MonitorChannel).to have_received(:broadcast_to).with(
+        chelsea, hash_including(data: hash_including(message: hash_including(conversation_id: hers.id)))
+      )
+    end
+
+    # The same camera reports a person merely SEEN — no ring. Waking someone for
+    # a person walking past the door is the ping that got rejected in prod 3746,
+    # in capitals.
+    it "does not share a person the camera only saw" do
+      expect {
+        post :byte_photo, params: {
+          files:    [snapshot],
+          body:     "Someone out front",
+          metadata: { camera: "camera.doorbell_fluent", location: "doorbell", subject: "person", detected: true }.to_json,
+        }
+      }.not_to change(ByteMessageShare, :count)
+    end
+
+    it "does not share a frame from another camera" do
+      expect { ring(location: "driveway") }.not_to change(ByteMessageShare, :count)
+    end
+
+    it "does not share an ordinary photo with no metadata at all" do
+      expect { post :byte_photo, params: { files: [snapshot] } }.not_to change(ByteMessageShare, :count)
+    end
+
+    # A hardcoded id is a row that can stop existing. A webhook is the wrong
+    # place to raise about it — the picture still has to land for the person it
+    # was posted for.
+    it "still delivers the frame when the id points at nobody" do
+      stub_const("WebhooksController::DOORBELL_SHARE_USER_ID", 0)
+
+      expect { ring }.to change(ByteMessage, :count).by(1)
+      expect(ByteMessageShare.count).to eq(0)
+      expect(response).to have_http_status(:created)
+    end
+
+    # Posted for her in the first place: it's already in her thread, and a share
+    # would show it to her twice.
+    it "does not share it back to her when she's the one it was posted for" do
+      stub_const("WebhooksController::DOORBELL_SHARE_USER_ID", user.id)
+
+      expect { ring }.not_to change(ByteMessageShare, :count)
+    end
+
+    it "leaves the frame in the thread it was posted to" do
+      ring
+
+      expect(ByteMessage.order(:id).last.byte_conversation).to eq(buddy_convo)
+    end
+  end
 end

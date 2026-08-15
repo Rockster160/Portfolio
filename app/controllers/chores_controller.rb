@@ -234,7 +234,12 @@ class ChoresController < ApplicationController
       # chore.updated_at, so the basic diff above would miss
       # chores whose hot_multiplier/streak_multiplier just
       # changed. Pull their ids in explicitly.
-      touched_ids.merge(ChoreHotPick.where(day_key: @day).where(created_at: since_ts..).pluck(:chore_id))
+      # Sub-chores wear their parent's multiplier (ChoreSerializer#
+      # hot_multiplier), so a new pick on a container changes every card
+      # under it too — pull those in alongside the pick itself.
+      picked_ids = ChoreHotPick.where(day_key: @day).where(created_at: since_ts..).pluck(:chore_id)
+      touched_ids.merge(picked_ids)
+      touched_ids.merge(Chore.where(parent_chore_id: picked_ids).pluck(:id)) if picked_ids.any?
       touched_ids.merge(ChoreStreak.where(user_id: current_user.id).where(updated_at: since_ts..).pluck(:chore_id))
       # :after_chore followers don't get their own completions or an
       # updated_at bump when the anchor is completed — but the anchor's

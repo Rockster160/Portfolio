@@ -194,9 +194,11 @@ module Buddy
         LEAD WITH what still needs to happen today.
         #{chores_lead_lines(user)}
         - `today_notable` - today's events and meetings with times. This is NOT the whole calendar. Everything that repeats on an ordinary daily or weekday rhythm has already been taken out, because I know my own standing schedule and hearing it read back is what makes a briefing worthless. What's left is what makes today different from any other day.
-        - Agenda items tagged `mine: false` (with an `owner`) are on a partner's PERSONAL calendar shared with me - awareness only. They are NOT my tasks. Don't list them as mine; usually don't mention them at all. Only bring one up if it actually affects me, a conflict or a hand-off or something I'm part of, and say whose it is.#{chores_hot_line(user)}
+        - Agenda items tagged `mine: false` (with an `owner`) are on a partner's PERSONAL calendar shared with me - awareness only. They are NOT my tasks and they are NEVER the briefing. Default to leaving them out entirely. The ONLY reason to raise one is that it acts on my day - a conflict, a hand-off, something I'm part of - and then you say whose it is and what it means for me. A briefing that names a partner's item while leaving out one of MINE is wrong, no matter how quiet my day looks: everything tagged `mine: false` could vanish and the briefing still has to be right.#{chores_hot_line(user)}
 
         NAME THE THING, never just its category. Every item carries its real name, and the name is usually the entire reason it's worth mentioning: whose birthday, which meeting, who I'm collecting. Reducing one to its type strips out the only part I couldn't have guessed, and leaves me opening the agenda to find out what you meant - at which point the line did nothing but tell me I have plans. This goes just as hard for a one-line week mention as for today. Work in `where` whenever the place is the point, and a time whenever it changes what I'd do.
+
+        EVERY item you name has to be one that is actually in the lists above, on the day you put it on. Don't round a memory up into a plan. A briefing that adds one thing I don't have is worse than one that leaves out three that I do: the missing ones I'll find, and the invented one I'll act on. If it isn't in front of you, it isn't happening.
 
         Being brief means mentioning FEWER things. It never means saying less about the thing you did mention.
 

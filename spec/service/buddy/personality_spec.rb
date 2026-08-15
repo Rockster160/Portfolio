@@ -675,11 +675,17 @@ RSpec.describe Buddy::Personality do
       expect(prompt).to include("Read `upcoming_reminders` alongside it")
     end
 
-    # Prod Aug 3: "Shower's now at 4:45 PM" wrote 10:45Z, which is 4:45 AM. The
-    # model was doing the UTC conversion by hand and got the sign backwards.
+    # The instruction is stated POSITIVELY on purpose. It used to carry a worked
+    # example of the wrong answer — a real slip, quoted with the bad time in it
+    # — and a wrong hour written out in the prompt is an hour the model has seen
+    # written down. Say what to write; never show what not to.
     it "tells it to write local wall-clock time and never convert to UTC" do
       expect(prompt).to include("never convert to UTC")
-      expect(prompt).to include("belongs AHEAD of `now_local`")
+      expect(prompt).to include("ahead of `now_local`")
+    end
+
+    it "shows no wrong time for the model to copy" do
+      expect(prompt).not_to match(/4:45|04:45|slipped a half-day|twelve hours|12 hours/i)
     end
   end
 

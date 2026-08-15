@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_13_231514) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_15_172059) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -619,6 +619,19 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_13_231514) do
     t.index ["user_id"], name: "index_byte_conversations_on_user_id"
   end
 
+  create_table "byte_message_shares", force: :cascade do |t|
+    t.bigint "byte_message_id", null: false
+    t.bigint "byte_conversation_id", null: false
+    t.bigint "user_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["byte_conversation_id", "byte_message_id"], name: "idx_on_byte_conversation_id_byte_message_id_b957209113"
+    t.index ["byte_conversation_id"], name: "index_byte_message_shares_on_byte_conversation_id"
+    t.index ["byte_message_id", "byte_conversation_id"], name: "index_byte_message_shares_on_message_and_conversation", unique: true
+    t.index ["byte_message_id"], name: "index_byte_message_shares_on_byte_message_id"
+    t.index ["user_id"], name: "index_byte_message_shares_on_user_id"
+  end
+
   create_table "byte_messages", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.integer "direction", default: 0, null: false
@@ -630,6 +643,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_13_231514) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "byte_conversation_id", null: false
+    t.index "byte_conversation_id, ((metadata ->> 'local_id'::text))", name: "index_byte_messages_on_conversation_and_local_id", unique: true, where: "((metadata ->> 'local_id'::text) IS NOT NULL)"
     t.index ["byte_conversation_id"], name: "index_byte_messages_on_byte_conversation_id"
     t.index ["external_ref"], name: "index_byte_messages_on_external_ref"
     t.index ["user_id", "created_at"], name: "index_byte_messages_on_user_id_and_created_at"
@@ -1743,6 +1757,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_13_231514) do
   add_foreign_key "byte_actions", "byte_messages"
   add_foreign_key "byte_actions", "users"
   add_foreign_key "byte_conversations", "users"
+  add_foreign_key "byte_message_shares", "byte_conversations"
+  add_foreign_key "byte_message_shares", "byte_messages"
+  add_foreign_key "byte_message_shares", "users"
   add_foreign_key "byte_messages", "byte_conversations"
   add_foreign_key "byte_messages", "users"
   add_foreign_key "chore_completions", "chores"

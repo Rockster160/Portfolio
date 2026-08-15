@@ -15,6 +15,12 @@ class ChoreCompletionsController < ApplicationController
     credit_user = resolve_credit_user(params[:credit_user_id])
 
     if credit_user
+      # Crediting a member from a container's card means "they did their
+      # half" — same redirect as an ordinary tap, resolved for the person
+      # being credited rather than the one recording it. The anonymous
+      # branch below deliberately stays on the container: nobody is named,
+      # so there is no whose-sub to answer.
+      tapped = tapped.completion_leaf_for(credit_user)
       result = ChoreCompleter.new(
         tapped, credit_user,
         at:   completed_at,
@@ -56,7 +62,15 @@ class ChoreCompletionsController < ApplicationController
   end
 
   def create
-    chore = current_user.accessible_chores.find(params[:chore_id])
+    tapped = current_user.accessible_chores.find(params[:chore_id])
+    # A chore split into per-person sub-chores is tapped through its
+    # container — that's the card the Hot strip and the grid show. Record
+    # against this person's own sub so their card reads done too; a
+    # completion written on the container credits neither half (see
+    # Chore#completion_leaf_for). The payout is unchanged: ChoreCompleter
+    # still credits the parent's streak and falls back to the parent's hot
+    # multiplier.
+    chore = tapped.completion_leaf_for(current_user)
     completed_at = parse_client_time(params[:client_completed_at]) || Time.current
 
     # Queue-first replays POST the same body twice if the response of
@@ -187,7 +201,11 @@ class ChoreCompletionsController < ApplicationController
       ChoreStreak.rebuild_for!(current_user, leaf)
       related = (leaf.parent_chore if leaf.sub_chore?)
       ChoreBroadcaster.broadcast_changes!(current_user, leaf, related: related, actor_tab_id: params[:tab_id])
-      render json: response_payload(tapped, nil)
+      # The leaf, not the tapped chore: a container tap records against the
+      # sub-chore, and this broadcast skips the actor's own tab, so the
+      # response is the only thing that clears the sub-chore's done state
+      # on the device that undid it.
+      render json: response_payload(leaf, nil)
       return
     end
 
@@ -196,17 +214,21 @@ class ChoreCompletionsController < ApplicationController
     # completion (their record is theirs to undo). Anonymous
     # completions are administrative audits — the tap-undo gesture
     # never targets them; they're only edited via the History page.
+    # Mirror the create-side redirect: a tap on a container was recorded
+    # against this person's own sub-chore, so that's the row to undo.
+    # Without it, undoing a Hot-strip container tap finds nothing.
+    target = tapped.completion_leaf_for(current_user)
     completion = current_user.chore_completions
       .credited
-      .where(chore_id: tapped.id, day_key: day)
+      .where(chore_id: target.id, day_key: day)
       .order(completed_at: :desc).first
 
     if completion
       completion.destroy!
-      ChoreStreak.rebuild_for!(current_user, tapped)
-      related = (tapped.parent_chore if tapped.sub_chore?)
-      ChoreBroadcaster.broadcast_changes!(current_user, tapped, related: related, actor_tab_id: params[:tab_id])
-      render json: response_payload(tapped, nil)
+      ChoreStreak.rebuild_for!(current_user, target)
+      related = (target.parent_chore if target.sub_chore?)
+      ChoreBroadcaster.broadcast_changes!(current_user, target, related: related, actor_tab_id: params[:tab_id])
+      render json: response_payload(target, nil)
     else
       render json: { error: "no completion to undo" }, status: :not_found
     end

@@ -24,6 +24,11 @@ class ByteMessage < ApplicationRecord
   belongs_to :user
   belongs_to :byte_conversation
 
+  # The other threads this same row is shown in. One message, many audiences —
+  # see ByteMessageShare for why this isn't a second copy.
+  has_many :byte_message_shares, dependent: :destroy
+  has_many :shared_conversations, through: :byte_message_shares, source: :byte_conversation
+
   has_many_attached :files
 
   # Content types accepted for user uploads. Kept deliberately narrow: Byte's
@@ -79,10 +84,15 @@ class ByteMessage < ApplicationRecord
 
   after_commit :bump_conversation_activity, on: [:create, :update]
 
-  def as_wire
+  # `conversation_id` is overridable because a SHARED message is one row shown
+  # in two threads (ByteMessageShare), and the client routes every frame by the
+  # thread it names. Labelled with its home id, a share would arrive addressed
+  # to a conversation the recipient can't see, and be dropped. Default is the
+  # home thread, so every existing caller is unaffected.
+  def as_wire(conversation_id: byte_conversation_id)
     {
       id:              id,
-      conversation_id: byte_conversation_id,
+      conversation_id: conversation_id,
       direction:       direction,
       state:           state,
       body:            body,

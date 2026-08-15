@@ -47,6 +47,7 @@ import {
 } from "./push";
 import { ConversationManager } from "./conversations";
 import { initComposerAttachments } from "./attachments";
+import { initImageViewer } from "./image_viewer";
 import { setupSlashAutocomplete } from "./slash_commands";
 import { autocompleteOpenFor } from "../../emoji_autocomplete";
 import { renderMultiSelect } from "./message_actions/multi_select";
@@ -121,6 +122,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ---------- DOM refs ----------
   const thread = app.querySelector("[data-byte-thread]");
+  // Delegated off the thread, so it survives every repaint the way the other
+  // message-action handlers do.
+  initImageViewer(thread);
   const loader = app.querySelector("[data-byte-loader]");
   const composer = app.querySelector("[data-byte-composer]");
   const input = app.querySelector("[data-byte-input]");

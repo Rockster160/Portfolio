@@ -172,6 +172,72 @@ RSpec.describe "Buddy custom listeners" do
     end
   end
 
+  # Prod 3743/3746. "Let me know the next time somebody comes to the door" set a
+  # doorbell-RING watch. Thirty seconds later: "No, not doorbell ring. Again. I
+  # want to know the next time the doorbell SEES a person." That wrote a SECOND
+  # watch with a different listener - and a correction rewrites the listener, so
+  # the twin check, which compares them with string equality, structurally could
+  # never see it. Nothing cancelled the first, and 74 minutes on it fired the
+  # exact notification he had refused in capitals.
+  describe "a watch set moments after another on the same trigger" do
+    def summary_for(listener, text: "the other one")
+      args = {
+        text:        text,
+        trigger:     "custom",
+        listener:    listener,
+        when_phrase: "when something is removed from the Claude list",
+      }
+      tool[:confirm].call(args, ctx)[:summary]
+    end
+
+    it "says what was just set, so a correction can retire it" do
+      set!("item:action:added item:list:name:/^Claude$/", text: "milk landed")
+
+      summary = summary_for("item:action:removed item:list:name:/^Claude$/")
+
+      expect(summary).to include("JUST set on item")
+      expect(summary).to include("milk landed")
+      expect(summary).to include("cancel_reminder")
+    end
+
+    # The twin warning is the more specific of the two and says something this
+    # one doesn't ("both will fire"), so an exact repeat must still get it.
+    it "leaves an exact repeat to the twin warning" do
+      set!("item:action:added", text: "milk landed")
+
+      summary = summary_for("item:action:added")
+
+      expect(summary).to match(/ALREADY listening/)
+      expect(summary).not_to include("JUST set")
+    end
+
+    # The window is the whole point: a watch set last week is something they
+    # decided on, not something they're in the middle of correcting.
+    it "says nothing about a watch that isn't recent" do
+      set!("item:action:added item:list:name:/^Claude$/", text: "milk landed")
+      BuddyWatch.last.update!(created_at: 2.hours.ago)
+
+      expect(summary_for("item:action:removed item:list:name:/^Claude$/")).not_to include("JUST set")
+    end
+
+    it "says nothing about one that's already been used up" do
+      set!("item:action:added item:list:name:/^Claude$/", text: "milk landed")
+      BuddyWatch.last.update!(fired_at: Time.current)
+
+      expect(summary_for("item:action:removed item:list:name:/^Claude$/")).not_to include("JUST set")
+    end
+
+    # A named trigger carries no listener, so there is nothing here to compare
+    # and the twin check already covers it.
+    it "stays out of the way of the named triggers" do
+      set!("item:action:added item:list:name:/^Claude$/", text: "milk landed")
+
+      summary = tool[:confirm].call({ text: "floss", trigger: "deploy" }, ctx)[:summary]
+
+      expect(summary).not_to include("JUST set")
+    end
+  end
+
   # Named triggers are still resolved against real chores, places and calendars,
   # which a hand-written listener is not - so they must not regress into it.
   describe "the named triggers" do

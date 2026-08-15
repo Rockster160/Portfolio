@@ -28,7 +28,26 @@ class ByteConversation < ApplicationRecord
 
   belongs_to :user
 
+  # Messages this thread OWNS. Deliberately unchanged: it is the creation path,
+  # the cascade, and the answer to "whose row is this". Reading a thread goes
+  # through `visible_messages` instead, which adds what's been shared in.
   has_many :byte_messages, dependent: :destroy
+
+  # Messages shared INTO this thread — one row living in someone else's
+  # conversation, shown here too. Destroying the thread drops the shares, never
+  # the messages: they belong to whoever produced them.
+  has_many :byte_message_shares, dependent: :destroy
+  has_many :shared_messages, through: :byte_message_shares, source: :byte_message
+
+  # Everything this thread shows, owned and shared alike, as ONE relation so it
+  # still takes `.chronological`, `.where(id: ...before)` and `.exists?` the way
+  # the bare association did. Ordering is by the message's own created_at, so
+  # sharing something old drops it into the thread where it happened rather than
+  # at the bottom — it is the same event, not a new one.
+  def visible_messages
+    shared = ByteMessageShare.where(byte_conversation_id: id).select(:byte_message_id)
+    ByteMessage.where(byte_conversation_id: id).or(ByteMessage.where(id: shared))
+  end
 
   # `cursor` runs `cursor-agent` on the Mac the way `claude` runs `claude -p`:
   # same handoff, same streaming, its own session id in metadata. Purely

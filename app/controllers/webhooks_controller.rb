@@ -590,7 +590,48 @@ class WebhooksController < ApplicationController
       push_title:   caption.presence || "📷 New photo",
     )
 
+    # A doorbell ring goes to the housemate the automation names as well.
+    # Shared rather than re-posted, so both people are looking at the same row:
+    # one frame, one set of reactions, nothing to keep in step.
+    share_doorbell!(message, user, params)
+
     render json: message.as_wire, status: :created
+  end
+
+  # The HASS doorbell payload as it really arrives (log_tracker 4589106):
+  # `location: "doorbell"` with `rang: true`, alongside `type: "rang"`.
+  #
+  # Checked rather than assumed from the camera name, because the same camera
+  # also reports a person merely SEEN — `subject`/`detected`, no ring — and
+  # those are different events. That distinction is one somebody spent two
+  # messages drawing in prod (3743/3746), and waking the house for a person
+  # walking past the door is exactly the ping that got rejected there.
+  def doorbell_ring?(meta)
+    return false unless meta[:location].to_s.casecmp?("doorbell")
+
+    meta[:rang].to_s == "true" || meta[:type].to_s.casecmp?("rang")
+  end
+
+  # Who a doorbell ring reaches besides whoever posted it.
+  #
+  # A literal id, by decision: there is no partner/spouse relation on User to
+  # derive "Chelsea" from, and the alternative was making every automation that
+  # posts a frame carry a name. If this ever points at someone who has left the
+  # house, the ring quietly goes to the wrong pocket and nothing here will say
+  # so — that is the cost being accepted, and it's why the lookup below tolerates
+  # the row being gone rather than raising inside a webhook.
+  DOORBELL_SHARE_USER_ID = 58_128 # Alchemibluum (Chelsea)
+
+  def share_doorbell!(message, user, params)
+    meta = byte_metadata(params).with_indifferent_access
+    return unless doorbell_ring?(meta)
+
+    recipient = User.find_by(id: DOORBELL_SHARE_USER_ID)
+    # Nothing to do when she's the one it was posted for: the frame is already
+    # in her thread, and a share would show it to her twice.
+    return if recipient.nil? || recipient.id == user.id
+
+    ByteMessageShare.share_with!(message, to: recipient)
   end
 
   # Who the picture is for, and the only thing standing between the outside

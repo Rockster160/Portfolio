@@ -175,6 +175,42 @@ module Buddy
       nil
     end
 
+    # The OTHER custom watches already armed on this trigger.
+    #
+    # A twin is decided by string equality on the listener, so it can only ever
+    # catch an exact repeat — and a CORRECTION is never one. Prod 3743 set a
+    # doorbell-RING watch; thirty seconds later 3746 said "No, not doorbell
+    # ring. Again. I want to know the next time the doorbell SEES a person."
+    # That wrote a second watch with a different listener, nothing cancelled the
+    # first, and 74 minutes on it delivered the exact ping he'd refused, in the
+    # words he'd rejected.
+    #
+    # Deliberately NOT a similarity score over the listener strings. Whether two
+    # of them mean the same sensor isn't decidable from the text: a literal and
+    # a regex can name one thing (`location:doorbell`, `location:/^Doorbell$/`),
+    # and two listeners sharing a term can be on different ones. Guessing would
+    # trade a miss for a confident wrong answer.
+    #
+    # Bounded by RECENT instead, which is what actually separates a correction
+    # from a second opinion. Watching the Claude list and the Shopping list are
+    # both `item` and have nothing to do with each other; warning on every pair
+    # that shares a scope would put a cancel offer in front of watches nobody
+    # asked about. A correction, though, lands seconds later - these two were 31
+    # apart - so the window is the signal, not the string.
+    RECENT_SIBLING = 10.minutes
+
+    def sibling_watches(scope, listener, owner: user, limit: 3)
+      return [] if listener.blank?
+
+      scoped = BuddyWatch.active.where(user_id: owner.id, trigger_scope: scope.to_s)
+      scoped = scoped.where.not(listener: [nil, "", listener])
+      scoped = scoped.where(created_at: RECENT_SIBLING.ago..)
+      scoped.order(:id).last(limit)
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::ToolContext] sibling watch lookup failed: #{e.class}: #{e.message}")
+      []
+    end
+
     # ---- places ----
 
     # Resolve a spoken place ("costco", "the gym") to its canonical known
@@ -413,19 +449,27 @@ module Buddy
       date
     end
 
+    # A time already gone today lands at NOW. Nothing is nudged forward.
+    #
+    # This used to add 12 hours, on the theory that "4:45" written at 5 PM meant
+    # 16:45. It guessed wrong far more than it guessed right, and the wrong
+    # guesses were invisible: prod 966 and 967 were "today, finish the living
+    # room and bedroom" with no hour named anywhere, so the model wrote the wall
+    # clock it had been handed, that resolved a few seconds later, and both items
+    # landed at 11:11 PM. Half a day away from anything anyone said.
+    #
+    # An item at the current time is at worst where the conversation already is,
+    # and it's visibly wrong if it's wrong. One half a day out reads as
+    # deliberate and gets found at bedtime.
     def resolve_calendar_time(iso)
       time = resolve_time(iso)
       return nil if time.nil?
 
-      now    = Time.current
-      zone   = Buddy::Day.zone(user)
-      today  = now.in_time_zone(zone).to_date
-      return time unless time < now && time.in_time_zone(zone).to_date == today
+      now  = Time.current
+      zone = Buddy::Day.zone(user)
+      return time unless time < now && time.in_time_zone(zone).to_date == now.in_time_zone(zone).to_date
 
-      bumped = time + 12.hours
-      return time unless bumped > now && bumped.in_time_zone(zone).to_date == today
-
-      bumped
+      now
     end
 
     # An explicit offset is authoritative; without one the string is their wall

@@ -61,19 +61,22 @@ RSpec.describe "Buddy agenda times" do
     end
   end
 
+  # Nothing gets nudged forward any more. A time already gone today lands at
+  # NOW — see ToolContext#resolve_calendar_time for why the 12-hour bump went.
   describe "a same-day time that's already gone" do
-    it "reads 4:45 AM on today's calendar as the 4:45 PM it meant" do
+    it "puts an hour that's already passed at the current time" do
       payload, = Timecop.freeze(now) { settled("2026-08-03T04:45:00") }
 
-      expect(local(payload)).to eq("Mon 4:45 PM")
+      expect(local(payload)).to eq("Mon 8:47 AM")
     end
 
-    # The exact payload from prod: 10:45Z is the offset applied backwards, which
-    # at UTC-6 is the same twelve-hour error as an AM/PM slip.
-    it "undoes an offset applied the wrong way round" do
-      payload, = Timecop.freeze(now) { settled("2026-08-03T10:45:00Z") }
+    # Prod 966/967: no hour was named at all, so the model wrote the wall clock
+    # and it resolved a few seconds late. That used to become 11:11 PM.
+    it "leaves a timestamp that IS now where it is" do
+      moment = zone.local(2026, 8, 3, 8, 47, 20)
+      payload, = Timecop.freeze(moment) { settled("2026-08-03T08:47:00") }
 
-      expect(local(payload)).to eq("Mon 4:45 PM")
+      expect(local(payload)).to eq("Mon 8:47 AM")
     end
 
     it "leaves an ordinary future time alone" do
@@ -90,23 +93,36 @@ RSpec.describe "Buddy agenda times" do
       expect(local(payload)).to eq("Sun 4:45 AM")
     end
 
-    it "leaves it alone when the bump wouldn't reach the future either" do
+    # Late at night is where the old bump was at its worst: it either wrapped
+    # past midnight or gave up. Now it just says now.
+    it "says now rather than wrapping a late-night item" do
       late = zone.local(2026, 8, 3, 23, 30)
       payload, = Timecop.freeze(late) { settled("2026-08-03T01:00:00") }
 
-      expect(local(payload)).to eq("Mon 1:00 AM")
+      expect(local(payload)).to eq("Mon 11:30 PM")
+    end
+
+    # The one thing that must never happen again: an item landing half a day
+    # from anything that was said.
+    it "never puts an item twelve hours out" do
+      %w[2026-08-03T04:45:00 2026-08-03T08:30:00 2026-08-03T10:45:00Z].each { |iso|
+        payload, = Timecop.freeze(now) { settled(iso) }
+        drift = (payload[:at] - now).abs
+
+        expect(drift).to be < 1.hour, "#{iso} landed #{(drift / 3600.0).round(1)}h from now"
+      }
     end
   end
 
   # The row IS the receipt for a level-2 tool, so a correction that the row
   # doesn't show is a correction nobody can check.
   describe "what the person sees" do
-    it "shows the corrected time on the checklist row" do
+    it "shows the time it actually settled on, not the one that was asked for" do
       payload, tool = Timecop.freeze(now) { settled("2026-08-03T04:45:00") }
       label = tool[:label].call(payload, ctx)
 
-      expect(label[:sub]).to include("4:45 PM")
-      expect(label[:sub]).not_to include("4:45 AM")
+      expect(label[:sub]).to include("8:47 AM")
+      expect(label[:sub]).not_to include("4:45")
     end
 
     it "names the time in the add receipt" do
@@ -124,14 +140,16 @@ RSpec.describe "Buddy agenda times" do
       )
     }
 
-    it "corrects the slip on an edit too" do
+    # An edit takes the same rule as an add: a moved-to time that's already gone
+    # today lands at now, never half a day out.
+    it "moves it to now rather than twelve hours on" do
       tool = Buddy::Tools[:edit_agenda_item]
       payload = { item: "Shower", at: cast("2026-08-03T04:45:00")[:at] }
       merged  = Timecop.freeze(now) { payload.merge(tool[:confirm].call(payload, ctx)[:resolved]) }
 
       Timecop.freeze(now) { tool[:execute].call(merged, ctx) }
 
-      expect(item.reload.start_at.in_time_zone(zone).strftime("%-I:%M %p")).to eq("4:45 PM")
+      expect(item.reload.start_at.in_time_zone(zone).strftime("%-I:%M %p")).to eq("8:47 AM")
     end
 
     it "says the new time in the receipt rather than a bare Updated" do
