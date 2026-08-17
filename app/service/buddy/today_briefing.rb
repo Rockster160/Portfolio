@@ -143,7 +143,7 @@ module Buddy
         "",
         "- `chores_due_today` is the ONLY place chores come from, and it's the whole chore section of your context. It has already been narrowed to the exceptions - the ones stamped for today, and the ones flagged well above their usual value - so the filtering is done and none of it is yours to redo.",
         "- Say WHY each one is there, not just that it is. Its reason for being on that list is the only thing making it worth a sentence, and a name without one is a worse version of a screen I can open myself.",
-        "- Naming none of them is a perfectly good briefing. If the list is empty, chores simply don't come up today: no count, no reassurance that it's quiet, nothing.",
+        "- Naming none of them is a perfectly good briefing. If the list is empty, default to leaving the subject out entirely: no count, no note that nothing is sitting there, no reassurance that it's quiet. Telling me the list is empty still makes the list the subject of a sentence, and an empty one has nothing in it to be worth one.",
         "- BATCH related items: several that are obviously one errand or one theme go out once as the theme, not one by one. A word shared across their names is the giveaway.",
         "- Never tell me I DID something. You can't see completions on this turn at all, and a shared chore counts the moment anyone in the house does it, so crediting me for one is a guess that's wrong often enough to matter.",
         "- A chore that isn't in that list does not exist for this message. Don't reach back for one you saw earlier in the thread.",
@@ -188,7 +188,8 @@ module Buddy
         #{weather_block(user)}#{plunge_block(user)}
 
         FORWARD-LOOKING ONLY. Only surface what's STILL AHEAD from `now_local`. Anything already over is not news:
-        - Agenda items flagged `passed: true` are DONE for the day - never recite or recap them.
+        - Agenda items flagged `passed: true` are DONE for the day. Default to leaving them out entirely - not as a summary, not as a count, not as a passing note that the morning one already went. Naming one while something still ahead goes unmentioned is the wrong way round, no matter how quiet the day looks.
+        - Same for `upcoming_reminders` entries carrying `status: already_rang` or `status: off`. Those sit in your context so you can ANSWER about them when asked - did that one go off, is it still running - and for no other reason. One that already rang is not on deck, and a switched-off one isn't either. Only the ones still due are the briefing.
         - If it's evening or later and the day is essentially behind them (most items passed, little pending), DON'T force a full rundown. A day that's over doesn't need a briefing - give whatever is actually left tonight (if anything) and a quick nod to tomorrow, then stop. Short is correct here.
 
         LEAD WITH what still needs to happen today.
@@ -208,7 +209,7 @@ module Buddy
         - A less-frequent cadence is something I may not have top of mind, so a light touch helps. Touch on it, don't dive into details.
         - No `cadence` at all means a one-off. That's the most worth surfacing of anything you have.
         - DO call out a routine that is NOT happening: a `cancelled` item, especially a recurring one, is a real heads-up. A normal thing missing beats a normal thing present.
-        - `drive_min` on a soon item is a NUMBER OF MINUTES, and the number is the entire reason to bring it up. Give the figure and what it means for when to leave. Saying a drive exists without saying how long it is tells me nothing I didn't know and withholds the one thing that would have helped; if you aren't going to give the minutes, don't raise it at all. Only worth raising when it's close enough to act on.
+        - Travel arrives already worked out: `drive_min` is how many minutes the drive takes, and `leave_by` is the clock time to walk out of the door, with the drive and the get-there-early buffer both already subtracted from the start. When an item carries them, they belong in the same sentence that names it - the minutes are how far away it is, and the `leave_by` is the part I can act on without doing the subtraction in my head. Both are figures; say the figures. Raise them while there's still enough of the day left to use them.
 
         REST OF THE WEEK (`upcoming_notable`, tomorrow onward - the standing repeats are filtered out of this one too):
         - Weight by proximity. The closer it is, the more it's worth mentioning; something a week out has to be genuinely remarkable to earn a line.

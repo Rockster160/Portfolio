@@ -170,6 +170,7 @@ module Buddy
                 kind:      i.kind,
                 cadence:   schedule_cadence(i),  # nil = one-off; "every weekday" / "monthly" / ...
                 drive_min: drive_minutes(i),     # known travel time, for a soon "leave by" nudge
+                leave_by:  leave_by(i, user),    # the clock time to walk out, already worked out
                 # Already happened — a forward-looking briefing skips these
                 # instead of recapping a day that's mostly over. `past?` is
                 # kind-aware: an event with hours left on it is NOT news that
@@ -289,6 +290,27 @@ module Buddy
         travel = item.metadata.is_a?(Hash) ? item.metadata["travel"] : nil
         mins   = travel.is_a?(Hash) ? travel["travel_minutes"].to_i : 0
         mins.positive? ? mins : nil
+      end
+
+      # The clock time to actually walk out the door.
+      #
+      # The travel chain has already subtracted the drive AND the arrive-early
+      # buffer from the start and stored the result, so this is a ready-made
+      # wall clock rather than arithmetic anyone has to do downstream. (Item
+      # 858: 10:00 AM start, 32-minute drive, 5 minutes early, `leave_at` 9:22.)
+      #
+      # It exists because `drive_min` on its own was not enough to get the
+      # number said. Prod 3823 raised the travel on two items and gave a figure
+      # for neither - "it's a longer drive", "much closer" - which is worse than
+      # silence, since it names a cost and withholds the one part that could be
+      # acted on. A minute count still asks the reader to do the subtraction;
+      # this is the answer to the question they'd be doing it for.
+      def leave_by(item, user)
+        travel = item.metadata.is_a?(Hash) ? item.metadata["travel"] : nil
+        epoch  = travel.is_a?(Hash) ? travel["leave_at"].to_i : 0
+        return nil unless epoch.positive?
+
+        Time.zone.at(epoch).in_time_zone(user.timezone).strftime("%-I:%M %p")
       end
 
       # Five buckets with sharply distinct meanings. The primary "what's

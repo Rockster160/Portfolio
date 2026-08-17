@@ -388,12 +388,24 @@ class AgendaSchedule < ApplicationRecord
   # `:agenda_schedule` can react to lifecycle changes. The metadata-only
   # short-circuit keeps Jil-side metadata writes (travel-time caching)
   # from refiring the schedule task.
+  #
+  # Reaches everyone the calendar is visible to, and carries `mine` / `owner`
+  # in the same spelling an item does — see Agenda#jil_trigger_viewers. A
+  # recurring thing on a partner's calendar is on the day exactly as much as a
+  # one-off is, so there was never a reason for the series to be the half that
+  # stayed invisible.
   def fire_jil_trigger
     return if Thread.current[::GoogleCalendar::Sync::SUPPRESS_KEY]
     return if metadata_only_change?
 
     action = saved_change_to_id? ? :created : :updated
-    ::Jil.trigger(user, :agenda_schedule, with_jil_attrs(action: action))
+
+    agenda.jil_trigger_viewers.each { |viewer|
+      # Same single-mutable-payload caveat as AgendaItem: `with_jil_attrs`
+      # returns `self`, and it holds only because matched tasks execute inline.
+      attrs = { action: action }.merge(agenda.jil_viewer_attrs(viewer))
+      ::Jil.trigger(viewer, :agenda_schedule, with_jil_attrs(attrs))
+    }
   end
 
   # See AgendaItem#metadata_only_change? — same rationale: skip refire on

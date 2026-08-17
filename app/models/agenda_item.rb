@@ -57,9 +57,9 @@ class AgendaItem < ApplicationRecord
   # `dependent: :destroy` is here as a safety net for code paths that
   # bypass the cascade (e.g. dependent destroys from above).
   has_many :derived_triggers, class_name: "ScheduledTrigger",
-                              foreign_key: :source_item_id,
-                              dependent: :destroy,
-                              inverse_of: :source_item
+    foreign_key: :source_item_id,
+    dependent: :destroy,
+    inverse_of: :source_item
 
   validates :name, presence: true
   validates :start_at, presence: true
@@ -490,19 +490,19 @@ class AgendaItem < ApplicationRecord
   def presentation_attrs
     travel = metadata.is_a?(Hash) ? (metadata["travel"] || {}) : {}
     {
-      "item-id"               => display_id,
-      "item-url"              => "/agenda_items/#{display_id}",
-      "phantom"               => phantom?,
-      "recurring"             => recurring?,
-      "agenda-schedule-id"    => agenda_schedule_id,
-      "detached"              => detached?,
-      "kind"                  => kind,
-      "color"                 => display_color,
-      "agenda-id"             => agenda_id,
-      "agenda-name"           => agenda&.name,
-      "agenda-color"          => agenda&.color,
-      "agenda-source"         => agenda&.source,
-      "all-day"               => all_day?,
+      "item-id"              => display_id,
+      "item-url"             => "/agenda_items/#{display_id}",
+      "phantom"              => phantom?,
+      "recurring"            => recurring?,
+      "agenda-schedule-id"   => agenda_schedule_id,
+      "detached"             => detached?,
+      "kind"                 => kind,
+      "color"                => display_color,
+      "agenda-id"            => agenda_id,
+      "agenda-name"          => agenda&.name,
+      "agenda-color"         => agenda&.color,
+      "agenda-source"        => agenda&.source,
+      "all-day"              => all_day?,
       # Inclusive last-day midnight, anchored in the user's timezone — NOT
       # `to_time` (which lands in Rails' Time.zone, defaulting to UTC) and
       # NOT `end_at.to_i` (which is the exclusive next-day-midnight per
@@ -510,44 +510,44 @@ class AgendaItem < ApplicationRecord
       # with the day the browser will format it into for any user whose
       # browser shares their tz. Mirrors `optimistic_item.js` (`endAt -
       # 86400` for all-day) and `recurrence.js` for phantom parity.
-      "end-date"              => end_date&.in_time_zone(user.timezone)&.beginning_of_day&.to_i,
-      "start-at"              => start_at&.to_i,
-      "end-at"                => end_at&.to_i,
+      "end-date"             => end_date&.in_time_zone(user.timezone)&.beginning_of_day&.to_i,
+      "start-at"             => start_at&.to_i,
+      "end-at"               => end_at&.to_i,
       # The row's slot in the parent recurrence pattern BEFORE detach —
       # used by the recurring-scope-modal preview to shift the
       # describeRecurrence output against the right anchor weekday/day.
       # Without this, dragging a Sat-landing detached row to Thursday
       # would shift "Sat → Thu" against a `by_day: [fri]` rule and the
       # pattern preview would silently stay on Fridays.
-      "original-start-at"     => original_start_at&.to_i,
-      "name"                  => name,
-      "notes"                 => notes,
-      "location"              => location,
-      "nav-address"           => travel_nav_address,
-      "resolved-address"      => travel["location_address"],
-      "arrive-early-minutes"  => arrive_early_minutes.to_i,
-      "travel-minutes"        => travel["travel_minutes"].to_i,
-      "travel-from-kind"      => travel["travel_from_kind"],
-      "travel-from"           => travel["travel_from"],
-      "chain-predecessor-id"  => travel["chain_predecessor_id"],
-      "chain-successor-id"    => travel["chain_successor_id"],
-      "chain-prev-end-epoch"  => travel["chain_prev_end_at"],
-      "leave-at-epoch"        => travel["leave_at"],
-      "post-travel-to"        => travel["post_travel_to"],
-      "post-travel-minutes"   => travel["post_travel_minutes"].to_i,
-      "post-arrive-at-epoch"  => travel["post_arrive_at"],
+      "original-start-at"    => original_start_at&.to_i,
+      "name"                 => name,
+      "notes"                => notes,
+      "location"             => location,
+      "nav-address"          => travel_nav_address,
+      "resolved-address"     => travel["location_address"],
+      "arrive-early-minutes" => arrive_early_minutes.to_i,
+      "travel-minutes"       => travel["travel_minutes"].to_i,
+      "travel-from-kind"     => travel["travel_from_kind"],
+      "travel-from"          => travel["travel_from"],
+      "chain-predecessor-id" => travel["chain_predecessor_id"],
+      "chain-successor-id"   => travel["chain_successor_id"],
+      "chain-prev-end-epoch" => travel["chain_prev_end_at"],
+      "leave-at-epoch"       => travel["leave_at"],
+      "post-travel-to"       => travel["post_travel_to"],
+      "post-travel-minutes"  => travel["post_travel_minutes"].to_i,
+      "post-arrive-at-epoch" => travel["post_arrive_at"],
       # JSON-encoded leg breakdown for multi-stop travel rendering. Each
       # entry: `{to, drive_seconds, dwell_seconds}`. Absent when there are
       # no waypoints — a single-drive band is rendered from travel-minutes
       # alone. `from` is omitted from the payload since chain rendering
       # only needs each stop's destination + leg/dwell sizes.
-      "before-legs"           => leg_payload(travel["before_legs"]),
-      "after-legs"            => leg_payload(travel["after_legs"]),
-      "trigger-expression"    => trigger_expression,
-      "schedule"              => agenda_schedule&.serialize_for_edit&.to_json,
-      "attendees"             => attendees.to_json,
-      "organizer"             => organizer.to_json,
-      "self-response"         => self_response,
+      "before-legs"          => leg_payload(travel["before_legs"]),
+      "after-legs"           => leg_payload(travel["after_legs"]),
+      "trigger-expression"   => trigger_expression,
+      "schedule"             => agenda_schedule&.serialize_for_edit&.to_json,
+      "attendees"            => attendees.to_json,
+      "organizer"            => organizer.to_json,
+      "self-response"        => self_response,
     }
   end
 
@@ -585,7 +585,43 @@ class AgendaItem < ApplicationRecord
     return if metadata_only_change?
 
     action = saved_change_to_id? ? :created : :updated
-    ::Jil.trigger(user, :agenda_item, with_jil_attrs(action: action))
+    fire_jil_trigger_for_viewers(action)
+  end
+
+  # One trigger per viewer (see Agenda#jil_trigger_viewers), each carrying whose
+  # calendar it came off.
+  #
+  # Those attrs ride in the EXECUTION attrs rather than in `jil_serialize`,
+  # because the payload a listener is matched against is `serialize` (see
+  # ApplicationRecord#serialize, which merges the execution attrs in) and
+  # `jil_serialize` never reaches it. `serialize` is also the FE's payload, and
+  # a `username` lookup in there would be an N+1 across every agenda view.
+  #
+  # Flat keys, to match the `agenda_slug` / `agenda_name` already on the item,
+  # so all of these filter the way a listener already does:
+  #
+  #   agenda_item:mine:true                  - only my own calendars
+  #   agenda_item:owner:Alchemibluum         - or only hers
+  #   agenda_item:mine:false                 - only what's shared in to me
+  #
+  # Everything about WHOSE the item is travels with the event, so a task decides
+  # for itself rather than having the decision made upstream by whichever
+  # account happened to own the calendar.
+  def fire_jil_trigger_for_viewers(action)
+    agenda.jil_trigger_viewers.each { |viewer|
+      # `with_jil_attrs` stashes the attrs ON this record and returns `self`, so
+      # every pass of this loop hands out the same object and only the last
+      # `mine` survives it. That's safe here and only here: Task#match_run runs
+      # `Jil::Executor.call` INLINE, so a viewer's matched tasks have all
+      # finished before the next viewer's attrs are written over the top.
+      #
+      # Anything that ever holds this payload past the call - a deferred
+      # dispatcher, an enqueued worker taking the record rather than a
+      # serialization of it - would read the wrong viewer's `mine`, and would
+      # need its own copy rather than this one.
+      attrs = { action: action }.merge(agenda.jil_viewer_attrs(viewer))
+      ::Jil.trigger(viewer, :agenda_item, with_jil_attrs(attrs))
+    }
   end
 
   # True when this commit reflects either (a) no real attribute change at
@@ -605,7 +641,10 @@ class AgendaItem < ApplicationRecord
     return if trigger?
     return if Thread.current[::GoogleCalendar::Sync::SUPPRESS_KEY]
 
-    ::Jil.trigger(user, :agenda_item, with_jil_attrs(action: :destroyed))
+    # Same reach as create/update: a task that schedules something off a
+    # partner's event needs the removal as much as the addition, or it tears
+    # nothing down.
+    fire_jil_trigger_for_viewers(:destroyed)
   end
 
   # Enqueue the travel-chain sync only when something the chain actually
@@ -644,7 +683,7 @@ class AgendaItem < ApplicationRecord
     return false unless event_after_save?
     return false if all_day? && !saved_change_to_all_day?
 
-    return true if (saved_changes.keys & CHAIN_RELEVANT_COLUMNS).any?
+    return true if saved_changes.keys.intersect?(CHAIN_RELEVANT_COLUMNS)
     return true if overrides_changed?
 
     false

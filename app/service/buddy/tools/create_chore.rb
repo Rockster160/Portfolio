@@ -42,7 +42,7 @@ Buddy::Tools.register(
     # A named `after` chore is a dependency (after_chore recurrence); it takes
     # precedence over a clock schedule. Otherwise parse the free-form schedule.
     anchor = payload[:after].present? ? ctx.resolve_chore(payload[:after]) : nil
-    raise "no chore matching #{payload[:after].inspect} to follow" if payload[:after].present? && anchor.nil?
+    raise ctx.no_chore_error(payload[:after], suffix: "to follow") if payload[:after].present? && anchor.nil?
 
     recurrence = if anchor
       { "freq" => "after_chore", "anchor_chore_id" => anchor.id, "interval" => 0, "unit" => "day" }

@@ -56,6 +56,34 @@ class Agenda < ApplicationRecord
   validates :name, presence: true
   validates :parameterized_name, presence: true, uniqueness: { scope: :user_id }
 
+  # Everyone a change on this calendar should reach: whoever owns it, plus
+  # everyone it's shared with.
+  #
+  # `AgendaItem#user` and `AgendaSchedule#user` both delegate here, and what
+  # they get is who OWNS the calendar — a different question from whose day the
+  # thing is on. Firing only for the owner meant a task could see nothing on a
+  # calendar shared IN to it, however plainly the item belonged to that person's
+  # day. Prod, Sat 8/15: "Games @ lucky ones" at 10:00 AM sat on a partner's
+  # calendar shared to Rocco. It was on his dashboard, in his morning briefing,
+  # with a leave-by time worked out from his own address — and his
+  # `Pre-Morning Event Fade` never ran, because the trigger fired as her.
+  #
+  # It lives on the Agenda because it's a fact about the CALENDAR rather than
+  # about either record hanging off it, and because those two fire paths are
+  # near-identical and already documented as mirroring one another. One copy is
+  # what stops them drifting the next time.
+  def jil_trigger_viewers
+    ([user] + shared_users.to_a).compact.uniq(&:id)
+  end
+
+  # The whose-is-it half of a trigger payload, for one viewer. Kept here with
+  # the list above so `mine` means the same thing on an item and on a schedule —
+  # someone writing a listener shouldn't have to check which scope changes the
+  # spelling.
+  def jil_viewer_attrs(viewer)
+    { mine: viewer.id == user_id, owner: user&.username, owner_id: user_id }
+  end
+
   before_validation :set_parameterized_name
   before_validation :set_color, on: :create
   # Prune our id out of every user's hidden_agenda_ids preference so the

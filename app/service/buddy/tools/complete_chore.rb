@@ -24,7 +24,7 @@ Buddy::Tools.register(
   },
   confirm:     ->(payload, ctx) {
     chore = ctx.resolve_chore(payload[:chore])
-    raise "no chore matching #{payload[:chore].inspect}" if chore.nil?
+    raise ctx.no_chore_error(payload[:chore]) if chore.nil?
 
     # A fuzzy name lands on the container when a chore has been split per
     # person ("Teeth" holding one Teeth each), and a completion on the

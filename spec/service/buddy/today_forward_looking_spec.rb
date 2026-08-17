@@ -205,6 +205,124 @@ RSpec.describe "Buddy Today forward-looking" do
     end
   end
 
+  # Three briefings across two days read something already finished back to the
+  # person whose day it was, each from a different context key:
+  #
+  #   3796 (Suki, 8/15) named "leave for work at 9:20 AM" at 12:03 PM and said
+  #         in the same breath that it had already passed.
+  #   3824 (Suki, 8/16) recapped two of Saturday's reminders, both rung.
+  #   3825 (Moss, 8/16) opened the chore subject purely to report there was
+  #         nothing in it.
+  #
+  # The flags were all correct in context every time; what was missing was any
+  # instruction about what they're FOR. The reminder statuses in particular were
+  # never named anywhere in the briefing prompt, so the model got two rows
+  # labelled already-rung, no rule, and did the obvious thing with them.
+  describe "things that are already done" do
+    let(:seed) { Buddy::TodayBriefing.seed(user) }
+
+    # Half of this is a fact about context rather than the prompt: the rule can
+    # only be written against a key that actually arrives.
+    it "gets rung reminders in context to have a rule about" do
+      conversation = user.byte_conversations.create!(mode: :buddy)
+      BuddyReminder.create!(
+        user: user, byte_conversation: conversation,
+        body: "Finish cleaning the car.", fire_at: 20.hours.ago, fired_at: 20.hours.ago
+      )
+
+      reminders = Buddy::Context.build(user, conversation)[:upcoming_reminders]
+
+      expect(reminders.pluck(:status)).to include(:already_rang)
+    end
+
+    it "says what a rung reminder is there for" do
+      expect(seed).to include("already_rang")
+      expect(seed).to match(/status: off/)
+    end
+
+    # The lever both audits pointed at: a bare prohibition in a list of bullets
+    # lost, and the `mine: false` bullet that got this shape held.
+    it "tells it to leave a passed item out rather than only not to recap it" do
+      expect(seed).to include("Default to leaving them out entirely")
+    end
+
+    it "closes the passing-mention loophole a bare prohibition leaves open" do
+      expect(seed).to match(/not as a count/)
+    end
+
+    # Byte's briefing the same morning got this right by simply not raising the
+    # subject, so the fix is the clause, not the pipe.
+    it "tells it an empty chore list is not something to report" do
+      allow(Buddy::Features).to receive(:enabled?).and_call_original
+      allow(Buddy::Features).to receive(:enabled?).with(user, :chores).and_return(true)
+
+      expect(seed).to include("default to leaving the subject out entirely")
+    end
+  end
+
+  # Prod 3823 raised the travel on two items and gave a figure for neither:
+  # "it's a longer drive" and "much closer". Both numbers were in context the
+  # whole time (32 and 5 minutes). That's worse than saying nothing — it names
+  # a cost and withholds the only part that can be acted on.
+  #
+  # `drive_min` alone had been there for a while and still asks whoever reads it
+  # to subtract. `leave_by` is the answer to the question they'd be subtracting
+  # for, and the travel chain has already computed it.
+  describe "when to leave" do
+    let(:conversation) { user.byte_conversations.create!(mode: :buddy) }
+
+    def item_with_travel!(leave_at)
+      agenda = Agenda.create!(user: user, name: "Mine")
+      item   = AgendaItem.create!(
+        agenda:               agenda,
+        name:                 "Rose Establishment",
+        kind:                 :event,
+        location:             "The Rose Establishment",
+        arrive_early_minutes: 5,
+        start_at:             tz.parse("2026-07-28 10:00"),
+        end_at:               tz.parse("2026-07-28 11:00"),
+      )
+      # Written past the callbacks: saving a located item kicks off the travel
+      # recompute, which owns this key and would drop a hand-set one.
+      item.update_columns(metadata: { "travel" => { "travel_minutes" => 32, "leave_at" => leave_at.to_i } }) # rubocop:disable Rails/SkipsModelValidations
+      item
+    end
+
+    it "hands over the clock time to walk out, not just the minutes" do
+      travel_to(tz.parse("2026-07-28 08:00")) do
+        item_with_travel!(tz.parse("2026-07-28 09:23"))
+
+        item = Buddy::Context.build(user, conversation)[:today_agenda].first
+
+        expect(item[:drive_min]).to eq(32)
+        expect(item[:leave_by]).to eq("9:23 AM")
+      end
+    end
+
+    # An item with no travel worked out must not carry an empty key for the
+    # model to explain.
+    it "leaves the key off an item with no travel at all" do
+      travel_to(tz.parse("2026-07-28 08:00")) do
+        agenda = Agenda.create!(user: user, name: "Mine")
+        AgendaItem.create!(
+          agenda: agenda, name: "Focus", kind: :event,
+          start_at: tz.parse("2026-07-28 14:00"), end_at: tz.parse("2026-07-28 15:00")
+        )
+
+        item = Buddy::Context.build(user, conversation)[:today_agenda].first
+
+        expect(item).not_to have_key(:leave_by)
+      end
+    end
+
+    it "asks for both figures rather than for a sense of distance" do
+      seed = Buddy::TodayBriefing.seed(user)
+
+      expect(seed).to include("`leave_by`")
+      expect(seed).to include("Both are figures; say the figures")
+    end
+  end
+
   describe "weather_block time gating" do
     before do
       allow(WeatherService).to receive_messages(summary: "currently 72°F, clear. today high 88°F.", week_outlook: "rain Thu")

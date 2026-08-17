@@ -33,15 +33,118 @@ module Buddy
     # which makes Buddy ask instead of act.
     FUZZY_TOLERANCE = 0.34
 
+    # Words that say HOW MANY, not WHICH.
+    #
+    # "another water" is water, again - the chore is `water` and the rest is the
+    # request wrapped around it. Matching runs one way only (does a chore NAME
+    # contain what they said), so every one of these wrappers used to miss:
+    # "water" resolved and "another water", "one more water" and "water again"
+    # did not, which is the shape a person's own words arrive in.
+    REPEAT_WORDS = /
+      \b(?: another | again | one \s+ more | 1 \s+ more | more | extra
+          | additional | an \s+ extra | a \s+ second | second )\b
+    /xi
+
     def resolve_chore(name)
       return nil if name.blank?
 
-      needle     = name.to_s.downcase.strip
       candidates = user.accessible_chores.to_a
-      exact      = candidates.find { |c| c.name.to_s.downcase == needle }
+      needle     = name.to_s.downcase.strip
+      direct     = match_chore(candidates, needle)
+      return direct if direct
+
+      # Only once the name as given has failed, so a chore genuinely CALLED
+      # "Second Coat" or "Extra Laundry" is still found by its own name first.
+      variants(needle).each { |variant|
+        found = match_chore(candidates, variant)
+        return found if found
+      }
+
+      nil
+    end
+
+    # What else the same request could be called. Repeat words come off first,
+    # then a plural is folded back to the singular - "waters" is the same ask as
+    # "water", and it's the one the FUZZY_TOLERANCE comment records answering to
+    # "Shower" back when the fallback was wide enough to reach it.
+    def variants(needle)
+      trimmed = needle.gsub(REPEAT_WORDS, " ").squish
+      [trimmed, trimmed.singularize].uniq.reject { |v| v.blank? || v == needle }
+    end
+
+    def match_chore(candidates, needle)
+      exact = candidates.find { |c| c.name.to_s.downcase == needle }
       return exact if exact
 
       best_contained(candidates, needle) || nearest_name(candidates, needle)
+    end
+
+    # Words that carry no chore in them, so a needle made only of these has
+    # nothing to suggest from.
+    CHORE_STOPWORDS = (
+      %w[a an the one more another other some any my our it that this] +
+      %w[again done did do next last of for to and or]
+    ).freeze
+
+    # What they might have meant, for when nothing resolved.
+    #
+    # Returning nil rather than guessing is correct and stays that way - see
+    # FUZZY_TOLERANCE, where "waters" answering to "Shower" is the thing being
+    # prevented, and a completion written against the wrong chore is a false
+    # record nobody can see is false. What was missing is the other half: the
+    # model got back the bare fact that its string missed, and nothing else.
+    #
+    # Prod 3802-3808. "Water cup yesterday" resolved (the model passed the exact
+    # name, `8oz Water`, and two waters went on). Forty seconds later "Add it as
+    # one more" and "No, mark another water done yesterday" both failed, because
+    # the model passed the person's own phrasing that time and `resolve_chore`
+    # only ever asks whether a chore NAME contains the needle - never the other
+    # way round, so every superset of a real name misses. "one more water",
+    # "another water" and "water cup" all resolve to nothing while bare "water"
+    # resolves cleanly.
+    #
+    # Twice Buddy could do no better than ask which chore was meant, and the
+    # third attempt gave up on chores entirely and wrote an ActionEvent instead
+    # (msg 3805), reporting it as though the chore had been marked. The water
+    # asked for twice was never recorded anywhere.
+    #
+    # So: name the near misses in the failure. A retry then picks from a list
+    # instead of guessing again, and it happens inside the same turn.
+    def chore_suggestions(name, limit: 4)
+      words = significant_words(name)
+      return [] if words.empty?
+
+      scored = user.accessible_chores.to_a.filter_map { |c|
+        parts  = significant_words(c.name)
+        shared = words.count { |w| parts.any? { |p| p.start_with?(w) || w.start_with?(p) } }
+        [shared, c.name.to_s] if shared.positive?
+      }
+      # Most words in common first; the shortest name breaks a tie, on the same
+      # reasoning as best_contained - the least padding around the match.
+      scored.sort_by { |shared, chore_name| [-shared, chore_name.length] }.first(limit).map(&:last)
+    end
+
+    # The failure `complete_chore` and `edit_chore` raise, with those near
+    # misses folded in. One place, because a resolve that misses reads the same
+    # whichever tool asked.
+    def no_chore_error(name, suffix: nil)
+      near = chore_suggestions(name)
+      base = "no chore matching #{name.inspect}"
+      base = "#{base} #{suffix}" if suffix.present?
+      return base if near.empty?
+
+      "#{base} - the closest names are #{near.join(", ")}. " \
+        "Call again with one of those EXACTLY if one is what they meant, " \
+        "or ask them which. Never substitute another tool for the chore."
+    end
+
+    # Whole words worth matching on. Short ones are dropped rather than
+    # stopworded: two-letter fragments match INSIDE longer words ("as" sits in
+    # "wash"), which is how "add it as one more" came back suggesting a
+    # bowl-washing. Prefix comparison rather than equality so a plural or a
+    # participle still counts - "waters" and "watering" are both "water".
+    def significant_words(text)
+      text.to_s.downcase.scan(/[a-z0-9]+/).select { |w| w.length >= 3 } - CHORE_STOPWORDS
     end
 
     def resolve_chore_completion(chore_or_name, hint: :last)

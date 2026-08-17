@@ -992,6 +992,112 @@ module Buddy
         already gone, and it left them believing they had something they don't.
       TXT
 
+      # Asking to SEE what a camera has, as opposed to asking what happened.
+      #
+      # The line between the two is the whole of this arm, and it is not the
+      # tense. "When was the last time somebody was at the door?" is a question
+      # about a time, and answering it with the time of the last alert is
+      # correct and wanted - no camera needs consulting to say when the doorbell
+      # rang. What needs a camera is a request for the PICTURE: "show me the
+      # last person that rang the doorbell" (prod 3789), "can you show me the
+      # last person that came to the door" (3728), "show me the last person who
+      # was at the door" (3751). All three got "I can't pull that up from here"
+      # with `Camera Last Seen` sitting unused in the index, where it has never
+      # run once since it was created.
+      #
+      # `who` counts as asking to see. Identifying a person is a question about
+      # a face, and a face only comes off a frame - "who was at the door
+      # yesterday morning" wants the picture even though it never says so.
+      #
+      # It reads the REQUEST rather than the reply because the reply gives
+      # nothing away: a refusal is exempted from the false-claim guard on
+      # purpose (DENIAL_RX - declining honestly is right when nothing ran), so
+      # there is no arm below that can see this.
+      #
+      # Two rewrites of the task description were aimed here first, plus
+      # `call_jil_function`'s own "never tell them you can't check something
+      # that has a function for it". All landed, and 3790 broke the newest one
+      # 26 minutes after it shipped. The description is not the lever.
+      CAMERA_LOOK_RX = /
+        (?=.*\b(?:camera|doorbell|door|driveway|backyard|porch)\b)
+        (?:
+            \bshow\s+(?:me|us)\b
+          | \b(?:let\s+me|let\s+us|can\s+i|could\s+i|wanna|want\s+to|lemme)\s+see\b
+          | \b(?:pull|bring)\s+up\b
+          | \b(?:picture|photo|image|snapshot|screenshot|frame|footage|clip)\b
+          | \bwho\s+(?:was|were|is|came|rang|showed|that)\b
+        )
+      /xi
+
+      # The same nouns in a FORWARD-looking request are a watch, not a lookup -
+      # "let me know the next time somebody comes to the door" (prod 3743) is
+      # `remind_when` and gets the doorbell listener, which is a different tool
+      # and a correct answer. Ordinarily the proposal it produces keeps this arm
+      # from ever being reached; this is for the turn where the watch itself
+      # failed to resolve, so the nudge doesn't send it after a camera instead.
+      CAMERA_WATCH_RX = /
+        \b(?:next\s+time|let\s+me\s+know|tell\s+me\s+when|ping\s+me|notify\s+me
+           |remind\s+me|whenever|from\s+now\s+on|going\s+forward)\b
+      /xi
+
+      def camera_look_unanswered?
+        return false if self_initiated?
+
+        body = @inbound.body.to_s
+        return false unless body.match?(CAMERA_LOOK_RX)
+        return false if body.match?(CAMERA_WATCH_RX)
+
+        camera_functions.any?
+      end
+
+      # The camera functions this person can actually call, by name.
+      #
+      # Looked up rather than assumed, because the nudge names them: pointing
+      # someone at a tool that isn't in their index is telling them to invent a
+      # name, which is the one thing `call_jil_function` warns hardest against.
+      # An empty list means no camera is wired here and the refusal was honest.
+      def camera_functions
+        return @camera_functions if defined?(@camera_functions)
+
+        @camera_functions = begin
+          if defined?(Task)
+            scope = @user.accessible_tasks.buddy_visible.functions
+            # `uniq` because accessible_tasks LEFT JOINs shared_tasks and pluck
+            # drops its DISTINCT, so a task both owned and shared comes back twice.
+            scope.where("tasks.name ILIKE ?", "%camera%").limit(5).pluck(:name).uniq
+          else
+            []
+          end
+        rescue StandardError => e
+          Rails.logger.warn("[Buddy::GPT::Turn] camera function lookup failed: #{e.class}: #{e.message}")
+          []
+        end
+      end
+
+      # Interpolated rather than frozen, because naming the functions is most of
+      # the point - the failure is never that it lacked the instruction, it's
+      # that it didn't connect the question to the entry in the index.
+      def camera_nudge
+        <<~TXT
+          STOP. They asked to SEE something, and a camera is what shows it.
+
+          #{camera_functions.map { |n| "`#{n}`" }.to_sentence} #{"is".pluralize(camera_functions.length)} in your `jil_functions` index right now. Call `call_jil_function` with `expect_result: true` and answer from what comes back.
+
+          A camera holds what it already saw as well as what it can see now, and
+          both are yours to pull. "Show me the last person that rang", "who was
+          at the door yesterday morning" - these are asking for the FRAME, and
+          the function that reads a past sighting takes the time they named.
+
+          "Who" is a request to see. Recognising a person is a question about a
+          face, and a face is only ever in a picture.
+
+          Once you have the frame, describe what's actually in it. If the
+          function comes back empty, say so plainly - "nothing since yesterday
+          evening" is a real answer, and it's one you can only give after
+          looking.
+        TXT
+      end
+
       # Worth a corrective round: nothing was proposed, we haven't already spent
       # the one retry we allow, and the reply either claims an action, points at
       # output that isn't there, waves off news nobody has heard yet, or opened a
@@ -1010,6 +1116,11 @@ module Buddy
         # not a thing to answer off memory. Below the dispute arm only because
         # a message can be both, and "you didn't do that" is the older shape.
         return UNDO_REGRET_NUDGE if undo_regret?
+        # Above the reply-reading arms, and for the same reason the two above it
+        # are: whether it LOOKED comes before anything about how the answer is
+        # worded. This one is invisible down there - the reply that goes out is
+        # a refusal, and DENIAL_RX exempts those by design.
+        return camera_nudge if camera_look_unanswered?
         return RETRY_NUDGE if unbacked_claim(spoken.to_s).present?
         # They asked for a thing to happen and nothing was called. Worth the
         # corrective round on its own — this is the half that gets the TV

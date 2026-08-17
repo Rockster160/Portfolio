@@ -31,7 +31,7 @@ Buddy::Tools.register(
   },
   confirm:     ->(payload, ctx) {
     chore = ctx.resolve_chore(payload[:chore])
-    raise "no chore matching #{payload[:chore].inspect}" if chore.nil?
+    raise ctx.no_chore_error(payload[:chore]) if chore.nil?
 
     # An edit with nothing to edit is a mistake worth catching here, the same
     # way update_delivery catches it. Left through, `execute` writes no
