@@ -341,6 +341,11 @@ class ApplicationRecord < ActiveRecord::Base
       begin
         now = Time.current
         year, mth, day, hr, mn, sec = vals = value.split(/\D/).map(&:to_i)
+        # A value with no digits at all ("notadate") splits to nothing, and
+        # every line below reads `year` — so this used to leave the method with
+        # a NoMethodError on nil rather than with the "could not read it"
+        # answer the two rescues below already know how to give.
+        raise ArgumentError, "no date in #{value.inspect}" if vals.empty?
 
         if year <= 12
           mth, day, hr, mn, sec = year, mth, day, hr, mn
@@ -365,11 +370,23 @@ class ApplicationRecord < ActiveRecord::Base
         return (range ? date.all_day : date) if vals.length > units.length
 
         unit = units[vals.length - 1]
+        # A date names a UNIT, not an instant — `2026-08` is a whole month — so
+        # each operator has to resolve to whichever end of that unit makes the
+        # comparison mean what it says. The two inclusive operators reach for the
+        # far edge, the two exclusive ones for the near edge:
+        #
+        #   >= 2026-08-18  from 00:00:00, so the 18th is IN
+        #   >  2026-08-18  from 23:59:59, so the 18th is skipped
+        #   <= 2026-08-18  to 23:59:59, so the 18th is IN
+        #   <  2026-08-18  to 00:00:00, so the 18th is skipped
+        #
+        # `<=` used to fall through to the same beginning-of-unit as `<`, which
+        # made the two identical and `<=` useless on a date:
+        # `timestamp>=2026-08-17 timestamp<=2026-08-18` returned only the 17th,
+        # so no inclusive range could be expressed at all.
         if range
           date.send("beginning_of_#{unit}")..date.send("end_of_#{unit}")
-        elsif operator && operator == :>=
-          date.send("beginning_of_#{unit}")
-        elsif operator && !operator.in?(%i[< <=])
+        elsif operator.in?(%i[> <=])
           date.send("end_of_#{unit}")
         else
           date.send("beginning_of_#{unit}")

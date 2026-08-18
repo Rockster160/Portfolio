@@ -31,7 +31,11 @@ module SimpleFin
         return false if last4.blank?
         return false unless ::SimpleFin::DashboardCache.included_accounts.exists?(last4: last4)
 
-        total = ::SimpleFin::DashboardCache.balance_cents
+        # The published figure, which is the available total — the same number
+        # `thousands` floors and the chase worker watches. Measuring the
+        # crossing against the posted balance would test a boundary the
+        # dashboard never shows.
+        total = ::SimpleFin::DashboardCache.available_cents
         return false if total.nil?
 
         cents = amount_cents(event)

@@ -104,8 +104,20 @@ RSpec.describe SystemController, type: :controller do
 
         get :banking
         # 18,320.24 - 1,988.53
-        expect(response.body).to include("Dashboard figure")
+        expect(response.body).to include("Totals")
         expect(response.body).to include("$16,331.71")
+      end
+
+      # The published figure is the AVAILABLE total, not the posted one — a
+      # debit the bank has authorized and not yet posted is money already gone.
+      it "publishes the available total, not the posted balance" do
+        checking.update!(kind: :checking, available_balance_cents: 1_692_699)
+
+        get :banking
+        # 16,926.99 - 1,988.53, and the posted total still reads down its column
+        expect(SimpleFin::DashboardCache.balance_cents).to eq(1_633_171)
+        expect(response.body).to include("$14,938.46 available")
+        expect(response.body).to include(%(title="What the dashboard cell shows"))
       end
 
       # The available column reads down to its own total rather than stopping
@@ -126,7 +138,8 @@ RSpec.describe SystemController, type: :controller do
         )
 
         get :banking
-        expect(response.body.scan(%r{<em class="tag primary"}).size).to eq(2)
+        marks = %r{<em class="tag primary" title="Counted in the dashboard figure"}
+        expect(response.body.scan(marks).size).to eq(2)
         expect(SimpleFin::DashboardCache.included?(loan)).to be(false)
       end
 
@@ -201,6 +214,191 @@ RSpec.describe SystemController, type: :controller do
       )
     end
 
+    # The dates belong to the query, so the pickers are a view onto it: what is
+    # typed fills them in, and what is picked is written back.
+    describe "the date pickers" do
+      it "fills from an explicit range in the query" do
+        get :banking, params: { q: "timestamp>=2026-07-01 timestamp<=2026-07-31" }
+
+        expect(response.body).to include(%(data-date-from value="2026-07-01"))
+        expect(response.body).to include(%(data-date-to value="2026-07-31"))
+      end
+
+      # A bare term names a whole unit, so it sets both ends.
+      it "fills both ends from a single month term" do
+        get :banking, params: { q: "timestamp:2026-07" }
+
+        expect(response.body).to include(%(data-date-from value="2026-07-01"))
+        expect(response.body).to include(%(data-date-to value="2026-07-31"))
+      end
+
+      # `>` skips the whole unit named, so the first day actually matched is the
+      # 2nd — which is the date a picker has to show.
+      it "reports the exclusive operators inclusively" do
+        get :banking, params: { q: "timestamp>2026-07-01 timestamp<2026-08-01" }
+
+        expect(response.body).to include(%(data-date-from value="2026-07-02"))
+        expect(response.body).to include(%(data-date-to value="2026-07-31"))
+      end
+
+      # A negated term names dates to EXCLUDE. That is not a range and has no
+      # place in a from/to picker.
+      it "ignores a negated timestamp term" do
+        get :banking, params: { q: "-timestamp:2026-07" }
+
+        expect(response.body).to include(%(data-date-from value=""))
+        expect(response.body).to include(%(data-date-to value=""))
+      end
+
+      it "does not fall over on a date it cannot read" do
+        get :banking, params: { q: "timestamp>=notadate" }
+
+        expect(response).to have_http_status(:ok)
+      end
+
+      it "offers a way to clear only once there is something to clear" do
+        get :banking
+        expect(response.body).not_to include("data-date-clear")
+
+        get :banking, params: { q: "timestamp:2026-07" }
+        expect(response.body).to include("data-date-clear")
+      end
+    end
+
+    # The bucket is a way of looking at the results rather than a filter, so it
+    # rides as its own param.
+    describe "the over-time chart" do
+      before { linked_transaction(cents: -2148, category: "subscriptions", payee: "Netflix") }
+
+      it "buckets by month unless told otherwise" do
+        get :banking
+
+        expect(response.body).to include(%(<option selected="selected" value="month">Month</option>))
+      end
+
+      # The select lives inside the chart and belongs to the search form by id.
+      # Without the id on the form it submits nothing and the picker is inert.
+      it "hangs the bucket picker off the search form" do
+        get :banking
+
+        expect(response.body).to include(%(id="bank-search-form"))
+        expect(response.body).to include(%(form="bank-search-form"))
+      end
+
+      it "takes the bucket from the params" do
+        get :banking, params: { bucket: "week" }
+
+        expect(response.body).to include(%(<option selected="selected" value="week">Week</option>))
+      end
+
+      it "ignores a bucket it does not have" do
+        get :banking, params: { bucket: "fortnight" }
+
+        expect(response.body).to include(%(<option selected="selected" value="month">Month</option>))
+      end
+
+      # The chart is a view of what the SEARCH matched, which is the whole
+      # reason it is on this page rather than being a saved chart.
+      it "charts only the rows the search matched" do
+        linked_transaction(cents: -9900, category: "groceries", payee: "Sprouts", id: "TRN-B")
+
+        get :banking, params: { q: "payee:sprouts" }
+        payload = JSON.parse(response.body[%r{data-bank-chart-payload>(.*?)</script>}m, 1])
+
+        expect(payload["datasets"].pluck("label")).to eq(["Groceries"])
+      end
+
+      # A non-default bucket has to survive every link that rebuilds the page,
+      # or clicking an account silently resets the view.
+      it "carries a non-default bucket through the account filter links" do
+        get :banking, params: { bucket: "week" }
+
+        expect(response.body).to include("bucket=week")
+      end
+    end
+
+    # Clicking an account narrows the listing without discarding what was
+    # already typed — and clicking the same one again gives it back.
+    describe "filtering by clicking an account" do
+      it "offers each account a filter that keeps the rest of the search" do
+        get :banking, params: { q: "payee:amazon" }
+
+        expect(response.body).to include(
+          %(data-filter-url="/system/banking?q=payee%3Aamazon+account%3A2363"),
+        )
+      end
+
+      # Two account terms AND together and match nothing, so a second click
+      # means "that one instead" rather than "both".
+      it "swaps one account for another rather than ANDing them" do
+        get :banking, params: { q: "account:7283" }
+
+        expect(response.body).to include(%(data-filter-url="/system/banking?q=account%3A2363"))
+      end
+
+      it "clears the filter when the account already filtered is clicked" do
+        get :banking, params: { q: "account:2363 payee:amazon" }
+
+        expect(response.body).to include(%(data-filter-url="/system/banking?q=payee%3Aamazon"))
+        expect(response.body).to include(%(class="filtered"))
+      end
+
+      it "takes the negation with it rather than orphaning the operator" do
+        get :banking, params: { q: "-account:7283 payee:amazon" }
+
+        expect(response.body).to include(
+          %(data-filter-url="/system/banking?q=payee%3Aamazon+account%3A2363"),
+        )
+      end
+
+      # Last four is the only key that cannot also match a second account, so
+      # an account without one gets no filter rather than one that quietly
+      # widens to two.
+      it "gives an account with no last four no filter at all" do
+        BankAccount.create!(
+          simplefin_id: "ACT-X", name: "Mystery", kind: :savings, balance_cents: 100,
+        )
+
+        get :banking
+        expect(response.body).to include(%(data-filter-url=""))
+      end
+    end
+
+    # Most visits are not about the bars, and open they pushed the transactions
+    # themselves off the first screen.
+    it "keeps the spending chart in a drawer that starts closed" do
+      linked_transaction(cents: -2148, category: "subscriptions", payee: "Netflix")
+
+      get :banking
+      expect(response.body).to include(%(<details class="bank-drawer bank-chart">))
+      expect(response.body).not_to include(%(<details class="bank-drawer bank-chart" open))
+    end
+
+    # A rare, deliberate action. As a permanent row of controls above the table
+    # it read as a second search bar and cost the page a band of space on every
+    # visit.
+    describe "the bulk category form" do
+      before { linked_transaction(cents: -2148, category: "subscriptions", payee: "Netflix") }
+
+      it "lives in a modal rather than a bar above the table" do
+        get :banking
+
+        expect(response.body).to include(%(data-modal="#bank-bulk"))
+        expect(response.body).to include(%(id="bank-bulk"))
+        expect(response.body).to include("modal-wrapper hidden")
+        expect(response.body).not_to include("Set category on selected")
+      end
+
+      # The checkboxes stay in the table and reach the form by id, so the form
+      # sitting inside a closed modal changes nothing about what submits.
+      it "still reaches the row checkboxes through form association" do
+        get :banking
+
+        expect(response.body).to include(%(form="bank-bulk-form"))
+        expect(response.body).to include(%(class="basic bank-bulk"))
+      end
+    end
+
     # A reference, not an explanation. What matters is that the values it lists
     # come FROM the code that accepts them, so it cannot describe a vocabulary
     # the search no longer has.
@@ -256,8 +454,8 @@ RSpec.describe SystemController, type: :controller do
       it "starts collapsed" do
         get :banking
 
-        expect(response.body).to include(%(<details class="bank-syntax">))
-        expect(response.body).not_to include(%(<details class="bank-syntax" open))
+        expect(response.body).to include(%(<details class="bank-drawer bank-syntax">))
+        expect(response.body).not_to include(%(<details class="bank-drawer bank-syntax" open))
       end
     end
 

@@ -135,11 +135,9 @@ RSpec.describe SimpleFin::AmazonEnrichment do
   # This exact soup bowl was filed under groceries because its title says
   # "Stoneware Cereal Set of 4".
   it "categorizes on the tidied name, not the keyword spam in the title" do
-    board(delivery(
-      "name"   => "27.0 Oz Large Soup Bowls, Stoneware Cereal Set of 4, " \
-                  "modern dark petrol-Blue Pasta Bowl for Kitchen",
-      "amount" => "24.99",
-          ))
+    spam = "27.0 Oz Large Soup Bowls, Stoneware Cereal Set of 4, " \
+           "modern dark petrol-Blue Pasta Bowl for Kitchen"
+    board(delivery("name" => spam, "amount" => "24.99"))
     row = charge
 
     described_class.apply(row)

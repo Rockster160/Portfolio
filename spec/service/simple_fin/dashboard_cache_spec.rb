@@ -36,6 +36,20 @@ RSpec.describe SimpleFin::DashboardCache do
       expect(user.caches.dig(:bank, :amount)).to eq("9044.47")
     end
 
+    # The gap between the two figures is real money already spent — a $1,393.25
+    # mortgage debit sat in `available` for hours while `balance` still counted
+    # it as mine, and the dashboard showed money that was gone.
+    it "publishes the available figure, not the posted balance" do
+      BankAccount.create!(
+        simplefin_id: "ACT-0001", name: "PREMIER PLUS CKG (2363)", kind: :checking,
+        balance_cents: 1_815_820, available_balance_cents: 1_676_495
+      )
+
+      described_class.refresh!(user: user)
+
+      expect(user.caches.dig(:bank, :amount)).to eq("16764.95")
+    end
+
     # A mortgage is two orders of magnitude larger than everything else, and
     # folding it in would leave the dashboard reading -328k forever.
     it "leaves a loan out of the total" do
@@ -229,6 +243,17 @@ RSpec.describe SimpleFin::DashboardCache do
       full_sheet
 
       expect(described_class.thousands).to eq(9)
+    end
+
+    # It floors the figure that is actually published, so the chase worker is
+    # watching the same boundary the dashboard crosses.
+    it "floors the available total, not the posted one" do
+      BankAccount.create!(
+        simplefin_id: "ACT-0001", name: "PREMIER PLUS CKG (2363)", kind: :checking,
+        balance_cents: 900_100, available_balance_cents: 899_900
+      )
+
+      expect(described_class.thousands).to eq(8)
     end
 
     # Integer division floors toward negative infinity, so an overdrawn total

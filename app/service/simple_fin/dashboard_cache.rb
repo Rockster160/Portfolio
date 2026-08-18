@@ -11,6 +11,17 @@ module SimpleFin
   # what is owed on the cards. That is the number that answers "what do I
   # actually have", where the checking balance on its own reads high by
   # whatever is sitting unpaid on a card.
+  #
+  # It is built from AVAILABLE, not from the posted balance. The two differ by
+  # whatever the bank has authorized and not yet posted, and that gap is real
+  # money already spent: a $1,393.25 mortgage debit sat in `available` for
+  # hours while `balance` still counted it as mine. Publishing the posted
+  # balance meant the dashboard confidently showed money that was gone.
+  #
+  # The trade is the other direction: a deposit the bank is still holding
+  # counts in `balance` before it counts in `available`, so the figure reads
+  # low until the hold clears. Understating what you have is the safer error of
+  # the two, and it corrects itself on the next sync.
   module DashboardCache
     CACHE_KEY = :bank
     AMOUNT = :amount
@@ -24,7 +35,7 @@ module SimpleFin
 
     class << self
       def refresh!(user: ::User.me)
-        cents = balance_cents
+        cents = available_cents
         return nil if cents.nil?
 
         amount = BigDecimal(cents) / 100
@@ -126,7 +137,7 @@ module SimpleFin
       # behavior wanted here: an overdrawn total reads one lower, not one
       # closer to zero.
       def thousands
-        cents = balance_cents
+        cents = available_cents
         return nil if cents.nil?
 
         cents / 100_000

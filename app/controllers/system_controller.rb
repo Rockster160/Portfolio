@@ -8,6 +8,14 @@ class SystemController < ApplicationController
   SPEND_WINDOWS = [1, 7, 30, 90].freeze
   SPEND_DEFAULT_DAYS = 30
   TRANSACTION_PAGE = 100
+  # A `timestamp` term in the search, with its comparison operator. Longest
+  # operators first, or `>=` would match as `>` and leave a stray `=` behind.
+  # A negated term (`-timestamp:`) deliberately does not match: it names dates
+  # to exclude, which is not a range and has no place in a from/to picker.
+  TIMESTAMP_TERM = /(?:\A|\s)timestamp(>=|<=|>|<|::|:)(\S+)/i
+  # An `account:` term as the search tokenizer sees it, including a negated one,
+  # so removing it takes the `-`/`NOT` with it rather than orphaning the operator.
+  ACCOUNT_TERM = /(?:\A|\s)(?:NOT\s+|-)?account:\S+/i
   # Dark-theme palette, assigned to users by spend rank.
   SPEND_PALETTE = %w[
     #5DADE2 #58D68D #F5B041 #AF7AC5 #EC7063 #48C9B0 #F7DC6F #5499C7
@@ -66,6 +74,9 @@ class SystemController < ApplicationController
     @backfill = ::SimpleFin::Backfill.progress
 
     @query = params[:q].to_s.strip
+    # Built after @query, because each one is that query with this account
+    # swapped in.
+    @account_filters = account_filters
     # Collapsed before anything counts it, so the result count, the pagination
     # and the bulk button all agree with the rows actually on screen.
     scope = filtered_transactions.without_transfer_mirror
@@ -79,6 +90,14 @@ class SystemController < ApplicationController
     @result_count = scope.count
     @transfer_count = scope.count - real.count
     @category_totals = category_totals(real)
+
+    # The bucket is a way of LOOKING at the results, so it rides as its own
+    # param. The dates are a filter, so they live in the query itself — read
+    # out of it here to fill the pickers, written back into it by them.
+    @bucket = ::BankChart::BUCKETS.detect { |unit| unit.to_s == params[:bucket].to_s }
+    @bucket ||= ::BankChart::DEFAULT_BUCKET
+    @date_from, @date_to = query_dates
+    @chart_data = ::BankChart.new(real, bucket: @bucket, from: @date_from, to: @date_to).call
 
     listing = scope.includes(:bank_account, :action_event, transfer_counterpart: :bank_account)
     listing = listing.recent_first
@@ -188,6 +207,69 @@ class SystemController < ApplicationController
   end
 
   private
+
+  # Clicking an account scopes the listing to it without throwing away whatever
+  # else was typed. It REPLACES any account term rather than appending one: two
+  # account terms AND together and match nothing, and clicking a second account
+  # plainly means that one INSTEAD. Clicking the account already filtered
+  # clears it, so the click undoes itself from the same place it was made.
+  #
+  # Keyed by last four rather than by name: it is the only thing an account can
+  # be matched on that cannot also match another account, and a name the search
+  # would find two of would silently widen the filter. An account without one
+  # gets no filter at all rather than a guess — see the missing-over-wrong rule.
+  def account_filters
+    rest = @query.gsub(ACCOUNT_TERM, " ").squish
+
+    @accounts.to_h { |account|
+      next [account.id, nil] if account.last4.blank?
+
+      term = "account:#{account.last4}"
+      active = @query.match?(/(?:\A|\s)account:#{account.last4}\b/i)
+      query = (active ? rest : [rest, term].compact_blank.join(" "))
+      [account.id, { query: query, active: active }]
+    }
+  end
+
+  # The from/to the search is already asking for, as whole days, so the pickers
+  # show the range that is actually in force rather than an empty pair beside a
+  # query that plainly has dates in it.
+  #
+  # Reported INCLUSIVELY, which is what a date picker means: `timestamp>2026-07-01`
+  # begins on the 2nd, so that is the date shown. The parser answers with the
+  # edge of the unit the operator lands on, and the second of slack is what
+  # turns that edge back into the first day actually matched.
+  def query_dates
+    from = nil
+    to = nil
+
+    @query.scan(TIMESTAMP_TERM) { |operator, value|
+      if operator.start_with?(">")
+        at = boundary(value, operator == ">" ? :> : :>=)
+        from = (operator == ">" ? at + 1.second : at) if at
+      elsif operator.start_with?("<")
+        at = boundary(value, operator == "<" ? :< : :<=)
+        to = (operator == "<" ? at - 1.second : at) if at
+      else
+        # A bare `timestamp:2026-07` names a whole unit, so it sets both ends.
+        span = ::BankTransaction.parse_date(value, range: true)
+        next unless span.is_a?(::Range)
+
+        from = span.first
+        to = span.last
+      end
+    }
+
+    [from&.to_date, to&.to_date]
+  end
+
+  # Nil rather than whatever was typed. `parse_date` hands back the raw string
+  # when it cannot read one, and doing date arithmetic on that raises — a typo
+  # in the search box must not take the page down.
+  def boundary(value, operator)
+    parsed = ::BankTransaction.parse_date(value, operator: operator)
+    parsed.acts_like?(:time) ? parsed : nil
+  end
 
   # Every row can hold a category now, so the only way this fails is a value
   # outside the vocabulary.

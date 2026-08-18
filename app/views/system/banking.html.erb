@@ -1,5 +1,9 @@
 <%= meta_title "System Banking", include_name: false %>
 <%= meta_description "SimpleFIN accounts and transactions." %>
+<%# Chart.js plus the `cc-` chart chrome the custom charts page already
+    defines. The over-time chart here is the same reading as CustomChart 4, so
+    it should be the same controls and the same surface, not a second set. %>
+<%= render "custom_charts/chart_assets" %>
 
 <%
   # number_to_currency handles both asks at once: thousands delimiters and a
@@ -10,6 +14,8 @@
   }
   cents = ->(amount) { money.call(BigDecimal(amount.to_i) / 100) }
   sign_class = ->(value) { value.to_i.negative? ? "neg" : "pos" }
+  # Only when it is not the default, so an ordinary link stays clean.
+  chart_bucket = (@bucket unless @bucket == BankChart::DEFAULT_BUCKET)
 %>
 
 <div class="system-page">
@@ -37,7 +43,7 @@
         one sends you looking in the wrong place. It read "no classified account
         outside a loan" while three were sitting right there — the actual cause
         was an account that had not reported a balance. %>
-    <% if @dashboard_cents.blank? %>
+    <% if @dashboard_available.blank? %>
       <p class="bank-warn">
         <% if @dashboard_missing.any? %>
           <%= @dashboard_missing.map(&:display_name).to_sentence %>
@@ -60,7 +66,25 @@
       </thead>
       <tbody>
         <% @accounts.each do |account| %>
-          <tr data-row data-url="<%= system_bank_account_path(account) %>">
+          <%
+            # Clicking the row scopes the listing below to this account, keeping
+            # whatever else has been typed into the search. Clicking the one
+            # already filtered clears it, so the click undoes itself.
+            filter = @account_filters[account.id]
+            filter_title = (
+              if filter.blank?
+                nil
+              elsif filter[:active]
+                "Filtering the transactions below to this account — click to clear"
+              else
+                "Click to filter the transactions below to this account"
+              end
+            )
+          %>
+          <tr data-row data-url="<%= system_bank_account_path(account) %>"
+              data-filter-url="<%= system_banking_path(q: filter[:query].presence, bucket: chart_bucket) if filter %>"
+              class="<%= "filtered" if filter&.dig(:active) %>"
+              title="<%= filter_title %>">
             <td class="acct-name">
               <%# The chosen name is the editable line; the institution's own
                   name sits under it as the thing that never changes. %>
@@ -97,17 +121,21 @@
       <tfoot>
         <tr>
           <td colspan="2" class="total-label">
-            Dashboard figure
+            Totals
             <span class="sub">Cumulative, excluding loans and unclassified</span>
           </td>
           <td class="right <%= sign_class.call(@dashboard_cents) if @dashboard_cents.present? %>">
             <%= @dashboard_cents.present? ? cents.call(@dashboard_cents) : "—" %>
           </td>
-          <%# Same cell the per-account available sits in, so the column reads
-              down to its own total rather than stopping at the rows. %>
+          <%# Each column totals its own figure. The chip marks WHICH of the two
+              the dashboard publishes, and sits in the cell holding the
+              per-account available — the thing it is the total of. %>
           <td class="meta">
             <span class="sub">
-              <%= @dashboard_available.present? ? "#{cents.call(@dashboard_available)} available" : "" %>
+              <% if @dashboard_available.present? %>
+                <%= cents.call(@dashboard_available) %> available
+                <em class="tag primary" title="What the dashboard cell shows">dashboard</em>
+              <% end %>
             </span>
           </td>
         </tr>
@@ -158,7 +186,10 @@
       </p>
     <% end %>
 
-    <%= form_with(url: system_banking_path, method: :get, class: "basic bank-search") do %>
+    <%# The id is what lets the bucket select down in the chart submit this
+        form: a control anywhere in the document can belong to it by `form=`. %>
+    <%= form_with(url: system_banking_path, method: :get, class: "basic bank-search",
+          id: "bank-search-form") do %>
       <input type="search" name="q" value="<%= @query %>"
              placeholder="payee:amazon category:groceries amount&gt;50 direction:withdrawal">
       <button type="submit" class="btn">Search</button>
@@ -172,7 +203,7 @@
         direction words from BankTransaction — so the docs cannot drift from
         what the search actually accepts. `mcc` is deliberately absent: it is a
         real search term but SimpleFIN never sends one, so every row is nil. %>
-    <details class="bank-syntax">
+    <details class="bank-drawer bank-syntax">
       <summary>Search syntax</summary>
 
       <table class="bank-syntax-table">
@@ -269,15 +300,32 @@
           <code>timestamp:2026-07</code> that month ·
           <code>timestamp:2026</code> that year ·
           <code>timestamp:7-15</code> this year ·
-          <code>timestamp&gt;=2025-11-01 timestamp&lt;2026</code> a range
+          <code>timestamp&gt;=2026-07-01 timestamp&lt;=2026-07-31</code> a range
         </div>
         <div>
           <strong>Watch out</strong>
-          <code>&gt;</code> skips the whole unit named — <code>timestamp&gt;2026-07-01</code>
-          starts on the 2nd, <code>&gt;=</code> on the 1st. No times of day.
+          <code>&gt;</code> and <code>&lt;</code> skip the whole unit named —
+          <code>timestamp&gt;2026-07-01</code> starts on the 2nd,
+          <code>timestamp&lt;2026-07-31</code> ends on the 30th. Use
+          <code>&gt;=</code> and <code>&lt;=</code> to keep both ends. No times of day.
         </div>
       </div>
     </details>
+
+    <%# The dates are a filter, so they belong to the query rather than beside
+        it: picking one writes a `timestamp` term into the search box, which
+        means it is visible, editable by hand, and carried by every link and
+        page of results the same way any other term is. Typing one fills these
+        back in. %>
+    <div class="cc-daterange bank-dates">
+      <span class="bank-dates-label">Dates</span>
+      <input type="date" data-date-from value="<%= @date_from %>" aria-label="From date">
+      <span class="cc-daterange-sep">–</span>
+      <input type="date" data-date-to value="<%= @date_to %>" aria-label="To date">
+      <% if @date_from.present? || @date_to.present? %>
+        <button type="button" class="bank-dates-clear" data-date-clear>Clear</button>
+      <% end %>
+    </div>
 
     <% if @search_error.present? %>
       <p class="bank-error">Could not parse that search: <%= @search_error %></p>
@@ -300,12 +348,46 @@
       <% end %>
     </div>
 
+    <%# The same reading as CustomChart 4 — a series per category, money out and
+        money in in their own stacks side by side per bucket — over whatever the
+        search matched rather than over a saved query. %>
+    <details class="bank-drawer bank-over-time" open>
+      <summary>
+        Over time
+        <span class="bank-drawer-note">by <%= @bucket %></span>
+      </summary>
+
+      <div class="cc-controls bank-chart-controls">
+        <label class="cc-bucket">
+          Bucket
+          <%= select_tag(:bucket,
+                options_for_select(BankChart::BUCKETS.map { |unit| [unit.to_s.titleize, unit] }, @bucket),
+                id: nil, form: "bank-search-form", data: { bucket_select: true }) %>
+        </label>
+      </div>
+
+      <div class="chart-wrapper bank-chart-wrapper">
+        <canvas data-bank-canvas></canvas>
+        <div class="cc-empty-overlay" data-bank-chart-empty></div>
+      </div>
+
+      <div class="cc-legend" data-bank-chart-legend></div>
+    </details>
+
+    <script type="application/json" data-bank-chart-payload><%= raw JSON.generate(@chart_data) %></script>
+
     <% if @category_totals.any? %>
       <%
         chart_max = @category_totals.first.last.to_f
       %>
-      <div class="bank-chart">
-        <div class="bank-chart-title">Spending by category<%= " · matching search" if @query.present? %></div>
+      <%# Closed on arrival. It answers a question worth asking occasionally,
+          not one worth re-reading every visit, and open it pushed the
+          transactions themselves off the first screen. %>
+      <details class="bank-drawer bank-chart">
+        <summary>
+          Spending by category<%= " · matching search" if @query.present? %>
+          <span class="bank-drawer-note"><%= pluralize(@category_totals.size, "category") %></span>
+        </summary>
         <% @category_totals.each do |category, total| %>
           <%
             width = chart_max.positive? ? ((total / chart_max) * 100).round(1) : 0
@@ -322,7 +404,7 @@
             <div class="bank-bar-value"><%= cents.call(total) %></div>
           </div>
         <% end %>
-      </div>
+      </details>
     <% end %>
 
     <% if @transactions.none? %>
@@ -330,19 +412,39 @@
         <%= @query.present? ? "Nothing matched that search." : "No transactions synced yet." %>
       </p>
     <% else %>
-      <%= form_with(url: system_bank_transactions_bulk_path, method: :patch, class: "basic bank-bulk") do %>
-        <input type="hidden" name="q" value="<%= @query %>">
-        <span class="bank-bulk-label">Set category on selected</span>
-        <%= select_tag(:category, options_for_select(TransactionCategory.options),
-              include_blank: "Choose…") %>
-        <button type="submit" class="btn">Apply</button>
-        <button type="submit" class="btn" name="apply_to_search" value="1"
-                data-confirm-count="<%= @result_count %>">
-          Apply to all <%= number_with_delimiter(@result_count) %> matching
-        </button>
-      <% end %>
+      <%# Recategorising in bulk is rare and deliberate. As a permanent row of
+          controls above the table it read as a second search bar and cost the
+          page a band of vertical space on every visit; it is now one quiet
+          button that produces the form when it is actually wanted.
 
-      <div class="bank-page-info"><%= page_entries_info @transactions %></div>
+          The checkboxes stay in the table and reach the form through `form=`,
+          which associates by id from anywhere in the document — so the form
+          being inside a closed modal changes nothing about what submits. %>
+      <div class="bank-list-tools">
+        <div class="bank-page-info"><%= page_entries_info @transactions %></div>
+        <button type="button" class="bank-bulk-open" data-modal="#bank-bulk">
+          Set category<span data-bulk-count></span>
+        </button>
+      </div>
+
+      <%= render_modal("bank-bulk", "Set category") do %>
+        <%= form_with(url: system_bank_transactions_bulk_path, method: :patch,
+              class: "basic bank-bulk") do %>
+          <input type="hidden" name="q" value="<%= @query %>">
+          <p class="bank-bulk-count">
+            <strong data-bulk-selected>0</strong> selected on this page
+          </p>
+          <%= select_tag(:category, options_for_select(TransactionCategory.options),
+                include_blank: "Choose…") %>
+          <div class="bank-bulk-actions">
+            <button type="submit" class="btn" data-bulk-apply>Apply to selected</button>
+            <button type="submit" class="btn" name="apply_to_search" value="1"
+                    data-confirm-count="<%= @result_count %>">
+              Apply to all <%= number_with_delimiter(@result_count) %> matching
+            </button>
+          </div>
+        <% end %>
+      <% end %>
 
       <table class="bank-table">
         <thead>
@@ -465,14 +567,48 @@
       var bulk = document.querySelector(".bank-bulk");
       if (bulk) { bulk.id = "bank-bulk-form"; }
 
+      // The form is behind a modal now, so ticking a box has to say so out
+      // here — otherwise a selection is invisible until you go looking for it.
+      var boxes = document.querySelectorAll('input[name="transaction_ids[]"]');
+      var badge = document.querySelector("[data-bulk-count]");
+      var selectedLabel = document.querySelector("[data-bulk-selected]");
+      var applySelected = document.querySelector("[data-bulk-apply]");
+
+      function countSelected() {
+        var picked = 0;
+        boxes.forEach(function (box) { if (box.checked) { picked += 1; } });
+
+        if (badge) { badge.textContent = picked ? " \u00B7 " + picked + " selected" : ""; }
+        if (selectedLabel) { selectedLabel.textContent = picked; }
+        // With nothing ticked this reports "Categorised 0", which reads as a
+        // failure rather than as nothing having been chosen.
+        if (applySelected) { applySelected.disabled = picked === 0; }
+      }
+
+      boxes.forEach(function (box) { box.addEventListener("change", countSelected); });
+
       var all = document.querySelector("[data-check-all]");
       if (all) {
         all.addEventListener("change", function () {
-          document.querySelectorAll('input[name="transaction_ids[]"]').forEach(function (box) {
-            box.checked = all.checked;
-          });
+          boxes.forEach(function (box) { box.checked = all.checked; });
+          countSelected();
         });
       }
+
+      countSelected();
+
+      // Clicking an account scopes the listing to it. Interactive cells are
+      // skipped: the chosen name is editable and the kind is a dropdown, so a
+      // click landing on either of those means edit, not filter.
+      document.querySelectorAll(".bank-accounts tr[data-filter-url]").forEach(function (row) {
+        var url = row.getAttribute("data-filter-url");
+        if (!url) { return; }
+
+        row.addEventListener("click", function (event) {
+          if (event.target.closest("[contenteditable], select, input, button, a")) { return; }
+          window.location.href = url;
+        });
+      });
 
       // Inline edits save one field on one row and patch the row in place.
       // Reloading after every category pick would lose scroll position on a
@@ -624,19 +760,23 @@
     .system-page .lists-title { font-size: 24px; margin-bottom: 16px; color: #E2E8F0; }
     .bank-section { margin-top: 36px; }
 
-    .bank-empty, .bank-warn, .bank-hint, .bank-error { margin: 12px 0; color: #94A3B8; }
+    .bank-empty, .bank-warn, .bank-error { margin: 12px 0; color: #94A3B8; }
 
-    /* Collapsed by default: it is a reminder you go and get, not something to
-       read past on every visit. */
-    .bank-syntax { margin: 12px 0; font-size: 12px; color: #94A3B8; }
-    .bank-syntax > summary {
+    /* Both drawers on this page disclose the same way, and both arrive closed:
+       each is something you go and get, not something to read past on every
+       visit. One marker style, so opening either feels like the same control. */
+    .bank-drawer > summary {
       cursor: pointer; color: #64748B; font-size: 13px;
       list-style: none; user-select: none; width: max-content;
     }
-    .bank-syntax > summary::-webkit-details-marker { display: none; }
-    .bank-syntax > summary::before { content: "▸ "; }
-    .bank-syntax[open] > summary::before { content: "▾ "; }
-    .bank-syntax > summary:hover { color: #CBD5E1; }
+    .bank-drawer > summary::-webkit-details-marker { display: none; }
+    .bank-drawer > summary::before { content: "▸ "; }
+    .bank-drawer[open] > summary::before { content: "▾ "; }
+    .bank-drawer > summary:hover { color: #CBD5E1; }
+    /* How much is behind the summary, so it is worth deciding about unopened. */
+    .bank-drawer-note { color: #475569; margin-left: 6px; }
+
+    .bank-syntax { margin: 12px 0; font-size: 12px; color: #94A3B8; }
     .bank-syntax code {
       background: rgba(148, 163, 184, 0.1); border-radius: 3px;
       padding: 1px 4px; color: #CBD5E1; white-space: nowrap;
@@ -656,8 +796,6 @@
     }
     .bank-warn { color: #F5B041; }
     .bank-error { color: #EC7063; }
-    .bank-hint { font-size: 12px; }
-    .bank-hint code { color: #CBD5E1; }
     .bank-warn-inline { font-size: 14px; color: #F5B041; margin-left: 8px; }
     .bank-muted { color: #64748B; }
 
@@ -666,6 +804,16 @@
        stack of panels above a table. */
     .bank-accounts { margin-bottom: 8px; }
     .bank-accounts td.acct-name { min-width: 180px; }
+    /* The row is the filter control. Only the cells that are not already an
+       editable field say so, which is also where the click actually works. */
+    .bank-accounts tr[data-filter-url] td.kind,
+    .bank-accounts tr[data-filter-url] td.right,
+    .bank-accounts tr[data-filter-url] td.meta { cursor: pointer; }
+    .bank-accounts tr[data-filter-url]:hover { background: rgba(148, 163, 184, 0.05); }
+    /* Which account the listing below is currently scoped to. A left edge
+       rather than a fill, so it marks the row without recoloring its numbers. */
+    .bank-accounts tr.filtered { background: rgba(93, 173, 226, 0.08); }
+    .bank-accounts tr.filtered td:first-child { box-shadow: inset 2px 0 0 #5DADE2; }
     .bank-accounts td.meta .age { display: block; white-space: nowrap; }
     .bank-accounts .tag.primary { color: #58D68D; background: rgba(88, 214, 141, 0.13); }
     .bank-accounts tfoot td { border-bottom: none; border-top: 1px solid #334155; color: #E2E8F0; }
@@ -681,6 +829,24 @@
 
     .bank-search { display: flex; gap: 8px; margin-bottom: 6px; }
     .bank-search input[type="search"] { flex: 1 1 auto; min-width: 0; }
+
+    /* Sits with the search because it edits the search. `.cc-daterange` from
+       the charts page styles the inputs; this only places the row. */
+    .bank-dates { margin: 10px 0 4px; flex-wrap: wrap; }
+    .bank-dates-label {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #64748B;
+    }
+    .bank-dates-clear {
+      border: 0; background: none; padding: 0 0 0 4px; cursor: pointer;
+      font-family: inherit; font-size: 12px; color: #64748B;
+    }
+    .bank-dates-clear:hover { color: #CBD5E1; }
+
+    /* Shorter than the charts page's 360px: this one shares the screen with a
+       table, and the table is what the page is for. */
+    .bank-over-time { margin: 18px 0 24px; }
+    .bank-chart-controls { margin: 10px 0 8px; }
+    .bank-chart-wrapper { height: 260px; padding: 12px; }
 
     .bank-totals { display: flex; flex-wrap: wrap; gap: 24px; margin: 16px 0; }
     .bank-totals > div { font-size: 16px; font-variant-numeric: tabular-nums; color: #E2E8F0; }
@@ -712,7 +878,7 @@
     .bank-progress-note { font-size: 11px; color: #64748B; margin: 4px 0 0 70px; }
 
     .bank-chart { margin: 20px 0 28px; }
-    .bank-chart-title { font-size: 13px; color: #94A3B8; margin-bottom: 10px; }
+    .bank-chart > summary { margin-bottom: 10px; }
     .bank-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
     .bank-bar-label { flex: 0 0 130px; font-size: 13px; color: #CBD5E1; text-align: right; }
     .bank-bar-track { flex: 1 1 auto; min-width: 0; }
@@ -721,9 +887,28 @@
     .bank-bar-value { flex: 0 0 110px; font-size: 13px; color: #94A3B8;
       font-variant-numeric: tabular-nums; }
 
-    .bank-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
-    .bank-bulk-label { font-size: 13px; color: #94A3B8; }
-    .bank-page-info { font-size: 12px; color: #64748B; margin: 8px 0; }
+    /* The count and the way in, on one line above the table — the whole
+       footprint bulk editing now has when it is not being used. */
+    .bank-list-tools {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 12px; margin: 8px 0;
+    }
+    /* Deliberately not a .btn: a rare action should not carry the same weight
+       as Search, which sits a few rows above it. */
+    .bank-bulk-open {
+      border: 0; background: none; padding: 0; cursor: pointer;
+      font-family: inherit; font-size: 12px; color: #64748B;
+    }
+    .bank-bulk-open:hover { color: #CBD5E1; }
+
+    .bank-bulk-count { margin: 0 0 10px; font-size: 13px; color: #94A3B8; }
+    .bank-bulk-count strong { color: #E2E8F0; }
+    .bank-bulk-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    /* Nothing ticked is a normal state to open this in, so the disabled button
+       has to read as "not yet", not as broken. */
+    .bank-bulk-actions .btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+    .bank-page-info { font-size: 12px; color: #64748B; margin: 0; }
     .bank-pagination { margin-top: 12px; }
 
     .bank-table { width: 100%; border-collapse: collapse; font-size: 14px; }
