@@ -22,13 +22,20 @@ Buddy::Tools.register(
     things - a tap beats typing, and it keeps the value predictable for whatever
     consumes it. Leave it off for anything open-ended.
 
+    The steps behind this run on ANY answer unless you say otherwise, so when
+    they only make sense for one of them, add `continue_if`. "Ask me whether to
+    order it, and if yes put it on the list" is `continue_if: "yes"`: on a no
+    the rest is dropped and they're told what didn't happen. Name the answer
+    itself when it isn't a yes/no - `continue_if: "pizza"`.
+
     Their answer goes nowhere except into the steps behind it. If you want it
     logged or recorded, that is a separate step.
   TXT
   args:        {
-    question: { type: :string, required: true,  description: "What to ask them, in their words" },
-    var:      { type: :string, required: true,  description: "Name their answer is filed under, for a later {{step}} to use" },
-    choices:  { type: :string, required: false, description: "Comma-separated options, when the answer is one of a few known things" },
+    question:    { type: :string, required: true,  description: "What to ask them, in their words" },
+    var:         { type: :string, required: true,  description: "Name their answer is filed under, for a later {{step}} to use" },
+    choices:     { type: :string, required: false, description: "Comma-separated options, when the answer is one of a few known things" },
+    continue_if: { type: :string, required: false, description: "Run the steps behind this one ONLY if their answer matches - \"yes\", \"no\", or the answer by name. Leave it off when they should run either way." },
   },
   # A form rather than a checklist row: a checkbox can only say yes to something
   # already decided, and the entire point here is a value that isn't.

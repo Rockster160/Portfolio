@@ -223,13 +223,31 @@ RSpec.describe "Buddy commands that named a time" do
     # call on a sentence the regex matches.
     it "leaves tools that have their own time argument off the list" do
       %i[log_event complete_chore edit_chore schedule_reminder alarm].each do |name|
-        expect(Buddy::GPT::Turn::IMMEDIATE_ACTION_TOOLS).not_to include(name)
+        expect(Buddy::Tools::IMMEDIATE_ACTION_TOOLS).not_to include(name)
       end
     end
 
     it "gates every tool that acts on the world with no notion of when" do
-      expect(Buddy::GPT::Turn::IMMEDIATE_ACTION_TOOLS)
-        .to contain_exactly(:call_jil_function, :trigger_jil_task, :run_routine, :mac_command, :print_again)
+      expect(Buddy::Tools::IMMEDIATE_ACTION_TOOLS).to contain_exactly(
+        :call_jil_function, :trigger_jil_task, :run_routine, :mac_command, :print_again,
+        :add_list_item, :remove_list_item
+      )
+    end
+
+    # The list is read twice, and the second reader is the schema: being on it
+    # is how a tool gets told about time at all, since none of their own
+    # descriptions mention it.
+    it "tells each gated tool that it acts the moment it's called" do
+      Buddy::Tools::IMMEDIATE_ACTION_TOOLS.each do |name|
+        schema = Buddy::Tools.function_schema(Buddy::Tools[name])
+        expect(schema[:description]).to include("never part of what to do")
+      end
+    end
+
+    it "does not put that on a tool that means later" do
+      schema = Buddy::Tools.function_schema(Buddy::Tools[:schedule_reminder])
+
+      expect(schema[:description]).not_to include("never part of what to do")
     end
   end
 

@@ -37,6 +37,37 @@ module Buddy
     # without a gate in the middle the third step fires alongside the first.
     WAIT_ARG = :then_continue
 
+    # Tools that change the world the instant they run and carry NO notion of
+    # when. That second half is what makes the list safe to key anything off: a
+    # tool with its own time argument is one where "at 3" is an ARGUMENT rather
+    # than a deferral, so `log_event`, `complete_chore`, `add_agenda_item` and
+    # the edit tools are deliberately absent — backdating a water to 3pm is a
+    # legitimate call on a sentence that names a time.
+    #
+    # Read in two places, which is the point of it being one list:
+    # `function_schema` appends IMMEDIATE_NOTE to each of these descriptions,
+    # and Buddy::GPT::Turn holds one back when the request named a time.
+    IMMEDIATE_ACTION_TOOLS = %i[
+      call_jil_function
+      trigger_jil_task
+      run_routine
+      mac_command
+      print_again
+      add_list_item
+      remove_list_item
+    ].freeze
+
+    # The one lesson none of their own descriptions can carry on its own,
+    # because every example in one is immediate and most never mention time at
+    # all. It lived only on `call_jil_function`; prod 3897 was `add_list_item`,
+    # which had never been told, and "Add "something" to my todo list in 2
+    # minutes" put the item on the list on the spot.
+    IMMEDIATE_NOTE = "This happens the MOMENT you call it. A time in the request says WHEN to " \
+                     "act and is never part of what to do. For anything later, put it on the " \
+                     "clock FIRST and call this one after it: set_timer with then_continue: true " \
+                     "for a delay, or a schedule_* tool when they named a clock time. Never do it " \
+                     "now as a consolation, and never say it's scheduled when it isn't.".freeze
+
     # Buddy USED to carry its spoken words on the tool call, to save the second
     # round trip. That's gone: the model now stays quiet on the call, we resolve
     # the tool, and it speaks on the follow-up with the outcome in hand. Writing
@@ -312,7 +343,7 @@ module Buddy
       {
         type:        :function,
         name:        tool[:name],
-        description: tool[:description].strip.gsub(/\s+/, " "),
+        description: described(tool),
         strict:      strict?(tool),
         parameters:  {
           type:                 :object,
@@ -321,6 +352,17 @@ module Buddy
           additionalProperties: false,
         },
       }
+    end
+
+    # Appended rather than written into each tool's own prose, so a tool added
+    # to IMMEDIATE_ACTION_TOOLS is told about time by the act of being listed
+    # there. `call_jil_function` says it in its own words too — it can name
+    # `schedule_function` specifically, which the shared line can't.
+    def described(tool)
+      text = tool[:description].strip.gsub(/\s+/, " ")
+      return text unless IMMEDIATE_ACTION_TOOLS.include?(tool[:name])
+
+      "#{text} #{IMMEDIATE_NOTE}"
     end
 
     # Inverse of the passthrough schema: fold the nested `args` object back

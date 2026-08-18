@@ -121,7 +121,7 @@ module Buddy
       # that gate and lands when it resolves (see advance_queue!). split_at_gate
       # leaves the gate as the last step of `head`, so it's the only step handed
       # anything to carry, and a level-2-only checklist never takes the queue.
-      steps        = build_steps(merged)
+      steps        = hoist_dangling_wait(build_steps(merged), merged)
       head, queue  = split_at_gate(steps)
       head         = runnable_now(user, byte_message.byte_conversation, head)
       queued       = serialize_steps(queue)
@@ -392,7 +392,32 @@ module Buddy
         return false
       end
 
+      # "If she says yes." The asking step carried a condition on the ANSWER,
+      # and the answer only exists now. Checked here rather than at either
+      # caller because both of them arrive through this method: a relay released
+      # by a reply, and a form released by a submit.
+      #
+      # An answer that doesn't clearly go either way stops the queue too, and
+      # says so — see Buddy::AnswerCondition on why that's three cases.
+      condition = gate_condition(action)
+      outcome   = Buddy::AnswerCondition.check(condition, vars)
+      if outcome != :met
+        post_message(
+          user, conversation,
+          "#{Buddy::AnswerCondition.describe(condition, vars, outcome)}, " \
+          "so I didn't go on to #{queue_summary(user, steps, vars)}."
+        )
+        return false
+      end
+
       run_steps!(user, conversation, message, steps, vars)
+    end
+
+    # What this gate has to hear before it lets the rest through, or nil for the
+    # overwhelming majority that will let anything through.
+    def gate_condition(action)
+      input = action.tool_input.is_a?(Hash) ? action.tool_input : {}
+      input["continue_if"].presence
     end
 
     # The gate is never going to resolve, so say what won't be happening and
@@ -437,9 +462,7 @@ module Buddy
       # agenda items asked for together stay two rows on one checklist, and three
       # prompts stay three forms posted side by side.
       def build_steps(merged)
-        level2, rest = merged.partition { |p|
-          p[:tool][:level] == 2 && Buddy::StepVars.references(p[:payload]).empty?
-        }
+        level2, rest = split_hoistable(merged)
         steps = rest.each_with_object([]) { |p, out|
           kind = step_kind(p)
           if SOLO_KINDS.exclude?(kind) && out.last && out.last[:kind] == kind
@@ -450,17 +473,11 @@ module Buddy
         }
         return steps if level2.empty?
 
-        # Level 2 executes the instant it arrives, so it can never sit in a
-        # queue. It joins the first checklist when that checklist is also the
-        # first gate; otherwise it gets one of its own out front, which isn't a
-        # gate and so holds nothing up behind it.
-        #
-        # Unless it's waiting on a value. Hoisting is a reordering, and it's
-        # harmless right up until a step's arguments depend on something an
-        # earlier gate collects: `ask_me` then `log_event("{{mine}}")` logged an
-        # event literally named "{{mine}}" before the question was even asked.
-        # Those stay where they were put and ride the queue like anything else —
-        # they run a moment later than usual, which is the whole point.
+        # Whatever cleared split_hoistable executes the instant it arrives, so
+        # it belongs in front rather than in a queue. It joins the first
+        # checklist when that checklist is also the first gate; otherwise it
+        # gets one of its own out front, which isn't a gate and so holds nothing
+        # up behind it.
         gate_idx = steps.index { |s| gate?(s) }
         rows_idx = steps.index { |s| s[:kind] == :rows }
         if rows_idx && rows_idx == gate_idx
@@ -469,6 +486,54 @@ module Buddy
           steps.unshift({ kind: :rows, calls: level2 })
         end
         steps
+      end
+
+      # Which level-2 calls may be pulled to the front, and which have to stay
+      # where the model put them.
+      #
+      # A WAIT earlier in the same reply is the line they can't cross (see
+      # blocks_hoist?). "Ask Chelsea if she wants syrup for dinner in 5 minutes;
+      # if she says yes, wait 2 minutes and then add it to the agenda" hoisted
+      # the agenda add ahead of both waits and put it on the calendar before
+      # Chelsea had been asked anything — the one step that was supposed to
+      # happen last happened first, and it happened whether she wanted syrup or
+      # not.
+      #
+      # Also blocked when the call is waiting on a VALUE. Hoisting is a
+      # reordering and it's harmless right up until a step's arguments depend on
+      # something an earlier gate collects: `ask_me` then `log_event("{{mine}}")`
+      # logged an event literally named "{{mine}}" before the question was even
+      # asked.
+      def split_hoistable(merged)
+        waited = false
+        merged.partition { |p|
+          hoistable = !waited && p[:tool][:level] == 2 && Buddy::StepVars.references(p[:payload]).empty?
+          waited ||= blocks_hoist?(p)
+          hoistable
+        }
+      end
+
+      # Does this step mean NOT YET for everything the model put after it?
+      #
+      # A countdown and a question put to someone else always do: `then_continue`
+      # and `await_reply` are the model saying the rest of the sequence rides on
+      # this one, and that's what those args are FOR.
+      #
+      # A form only does when something actually depends on the answer. "Do the
+      # prompt and put milk on groceries" is two independent requests and the
+      # milk must not wait on a survey; "ask me whether to order it, and if yes
+      # add it" is one request in two halves. `continue_if` is what tells them
+      # apart — it is the model saying the follow-up hangs on what comes back.
+      # A `{{var}}` reference says the same thing and is handled above.
+      #
+      # A level-3 checklist never blocks. Hoisting a level-2 row onto that same
+      # checklist is the whole point of a level-2 row: it arrives already
+      # executed, alongside the ones still to be tapped.
+      def blocks_hoist?(proposal)
+        kind = step_kind(proposal)
+        return true if SOLO_KINDS.include?(kind)
+
+        kind == :forms && proposal[:payload][:continue_if].present?
       end
 
       def step_kind(proposal)
@@ -488,6 +553,47 @@ module Buddy
         return true if [:forms, :timer, :relay].include?(step[:kind])
 
         step[:kind] == :rows && step[:calls].any? { |p| p[:tool][:level] == 3 }
+      end
+
+      # A wait the model put LAST, with nothing behind it — and the steps it
+      # meant to hold sitting in front of it instead.
+      #
+      # Prod 3897, "Add "something" to my todo list in 2 minutes": add_list_item
+      # then set_timer(then_continue: true). The item was created on the spot and
+      # the countdown rang two minutes later over a job already done. Reported as
+      # a VERY common shape, and the diagnosis is the person's: the trailing time
+      # phrase gets read as a second thing to DO rather than as when to do the
+      # first, so it's appended in the order it was spoken. Not a reordering
+      # mistake — an adverb mistaken for a deliverable.
+      #
+      # `then_continue` is the model's own word for "the rest of this rides on
+      # the wait" (see Buddy::Tools.waits? — a bare countdown never reaches
+      # here, it's an ordinary :autos). A wait carrying that flag with an empty
+      # tail contradicts itself, and the only steps it can have meant are the
+      # ones already emitted. So move the wait in front of them.
+      #
+      # Only when it's the sole gate. A sequence that already has one splits at
+      # THAT one and never shows this shape, so a trailing wait after it is a
+      # real trailing wait ("start it, wait a minute, preheat, wait five") and
+      # rotating a genuine chain would run it backwards.
+      def hoist_dangling_wait(steps, merged)
+        return steps unless steps.size > 1
+        return steps unless steps.last[:kind] == :timer
+        return steps unless sole_trailing_wait?(merged)
+
+        [steps.last, *steps[..-2]]
+      end
+
+      # Asked of the model's OWN call order, never of `steps`. build_steps
+      # hoists every level-2 call to the front whatever position it was in, so
+      # by then "add milk, wait, add eggs" and "add milk, add eggs, wait" look
+      # identical — and only the second one is the mistake. Reading `merged`
+      # keeps the two apart.
+      def sole_trailing_wait?(merged)
+        calls = merged.map { |p| { kind: step_kind(p), calls: [p] } }
+        return false unless calls.last[:kind] == :timer
+
+        calls.one? { |s| gate?(s) }
       end
 
       def split_at_gate(steps)
@@ -678,14 +784,16 @@ module Buddy
       # waits on someone else deciding to reply, which is why the gate carries
       # its own expiry (see AWAIT_TTL) rather than trusting it to arrive.
       def run_ask!(user, byte_message, calls, deferred: [], vars: {})
-        relay_id = nil
-        var      = nil
+        relay_id  = nil
+        var       = nil
+        condition = nil
         asked = run_auto(user, byte_message, calls) { |result|
           data = result[:data]
           next unless result[:ok] && data.is_a?(Hash) && relay_id.nil?
 
-          relay_id = data[:relay_id]
-          var      = data[:var]
+          relay_id  = data[:relay_id]
+          var       = data[:var]
+          condition = data[:continue_if]
         }
 
         # A gate goes up whenever the answer was AWAITED, not only when steps
@@ -697,11 +805,11 @@ module Buddy
         # nothing existed to keep it: the answer came back as a bubble and Buddy
         # never took a turn on it. resume_after_reply! handles the empty queue.
         holding = relay_id.present? && (deferred.any? || var.present?)
-        hold_for_reply!(user, byte_message, relay_id, var, deferred, vars) if holding
+        hold_for_reply!(user, byte_message, relay_id, var, condition, deferred, vars) if holding
         [asked, holding]
       end
 
-      def hold_for_reply!(user, byte_message, relay_id, var, deferred, vars)
+      def hold_for_reply!(user, byte_message, relay_id, var, condition, deferred, vars)
         ByteAction.create!(
           user:              user,
           byte_conversation: byte_message.byte_conversation,
@@ -709,7 +817,9 @@ module Buddy
           kind:              :custom,
           tool_name:         RELAY_GATE,
           buttons:           [],
-          tool_input:        gate_input(deferred, vars).merge("relay_id" => relay_id, "var" => var),
+          tool_input:        gate_input(deferred, vars).merge(
+            { "relay_id" => relay_id, "var" => var, "continue_if" => condition }.compact,
+          ),
           # Long, but finite. Someone who hasn't answered in three days isn't
           # going to, and a sequence that fires its last step a week later is
           # worse than one that admits it gave up.

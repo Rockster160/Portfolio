@@ -36,6 +36,17 @@ Buddy::Tools.register(
     not a countdown: they may take hours, or never reply at all, and everything
     behind the wait sits there until they do.
 
+    What comes after the wait runs on ANY answer unless you say otherwise, so
+    when the follow-up depends on WHAT they say, add `continue_if`. "Ask Chelsea
+    if she wants syrup for dinner, and if she says yes put it on the agenda" is
+    `continue_if: "yes"`: the steps behind it run on a yes, and on a no they are
+    dropped and your person is told what didn't happen. Name the answer itself
+    when it isn't a yes/no - `continue_if: "pizza"`. An answer that's neither
+    one thing nor the other stops it too, and says so.
+
+    Without `continue_if` the dinner goes on the agenda whether she wanted it or
+    not, so put one on every "if they say" sequence.
+
     ## What YOU say back
 
     That you've asked, in one short line - "asked her, I'll pass on what she
@@ -52,6 +63,7 @@ Buddy::Tools.register(
     question:    { type: :string,  required: true,  description: "What to ask, addressed TO them - \"you\" is the person being asked, and your own person is named. Their exact words when they gave you words." },
     await_reply: { type: :boolean, required: false, description: "Hold the rest of the sequence until they answer. Only when a later step needs what they say." },
     var:         { type: :string,  required: false, description: "Name their answer is filed under, for a later {{step}} to use. With await_reply." },
+    continue_if: { type: :string,  required: false, description: "Run the steps behind this one ONLY if their answer matches - \"yes\", \"no\", or the answer by name. With await_reply. Leave it off when the follow-up should happen either way." },
   },
   confirm:     ->(payload, ctx) {
     partner = ctx.resolve_household_user(payload[:to])
@@ -82,8 +94,17 @@ Buddy::Tools.register(
     )
     Buddy::CompanionRelay.deliver!(relay)
     # `var` rides back out so ProposalBuilder can key the gate to it — the
-    # answer has to land somewhere named for the step behind it to reach.
-    { relay_id: relay.id, to_name: payload[:to_name], var: payload[:await_var] }.compact
+    # answer has to land somewhere named for the step behind it to reach. The
+    # condition rides with it for the same reason: the gate is where it has to
+    # be sitting when the reply finally lands.
+    {
+      relay_id:    relay.id,
+      to_name:     payload[:to_name],
+      var:         payload[:await_var],
+      continue_if: Buddy::AnswerCondition.build(
+        var: payload[:await_var], is: payload[:continue_if], who: payload[:to_name],
+      ),
+    }.compact
   },
   auto:        true,
   receipt:     ->(result, _ctx) {

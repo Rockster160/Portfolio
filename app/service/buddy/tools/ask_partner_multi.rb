@@ -23,6 +23,13 @@ Buddy::Tools.register(
     Use it only when something really is downstream of the answer - a person is
     not a countdown, and anything behind the wait sits there until they reply.
 
+    What comes after the wait runs on ANY selection, because it was decided
+    before they made one. So when the follow-up depends on WHAT they pick, add
+    `continue_if`: the steps behind this one then run only when their
+    selection matches it. Name the option - `continue_if: "mop"` - and anything
+    they send without it drops the rest, with your person told what didn't
+    happen.
+
     ## What YOU say back
 
     That you've asked, in one short line. The card goes out on its own and
@@ -37,6 +44,7 @@ Buddy::Tools.register(
     options:     { type: :string,  required: true,  description: "Comma-separated choices to pick any of" },
     await_reply: { type: :boolean, required: false, description: "Hold the rest of the sequence until they send. Only when a later step needs it." },
     var:         { type: :string,  required: false, description: "Name their picks are filed under, for a later {{step}} to use. With await_reply." },
+    continue_if: { type: :string,  required: false, description: "Run the steps behind this one ONLY if their selection includes this - name the option. With await_reply. Leave it off when the follow-up should happen either way." },
   },
   confirm:     ->(payload, ctx) {
     partner = ctx.resolve_household_user(payload[:to])
@@ -68,7 +76,14 @@ Buddy::Tools.register(
       status:            :pending,
     )
     Buddy::CompanionRelay.deliver!(relay)
-    { relay_id: relay.id, to_name: payload[:to_name], var: payload[:await_var] }.compact
+    {
+      relay_id:    relay.id,
+      to_name:     payload[:to_name],
+      var:         payload[:await_var],
+      continue_if: Buddy::AnswerCondition.build(
+        var: payload[:await_var], is: payload[:continue_if], who: payload[:to_name],
+      ),
+    }.compact
   },
   auto:        true,
   receipt:     ->(result, _ctx) {

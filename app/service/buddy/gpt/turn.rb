@@ -491,6 +491,14 @@ module Buddy
           # all-or-nothing guarantee doing its job rather than a gap to fill.
           @asked_routine ||= calls.any? { |c| Buddy::Routines.runner?(Buddy::Tools[c[:name]]) }
 
+          # Whether anything in this round PUT SOMETHING ON THE CLOCK, asked
+          # before any of it runs. "Remind me at 5 to call mom, and add milk to
+          # the list" names a time and then asks for something now, and which of
+          # the two calls the model emits first is arbitrary — read one at a
+          # time, the reminder only covered the milk when it happened to come
+          # first. Reading the whole round covers it either way.
+          @scheduled ||= calls.any? { |c| self.class.defers?(c[:name], c[:arguments]) }
+
           @prior = @seen.dup
           items  = calls.flat_map { |call| call_items(call) }
 
@@ -663,7 +671,7 @@ module Buddy
         # method — the proposal path too — so one check covers both, and a call
         # marked failed is excluded from `proposals` by the same line that drops
         # one which couldn't resolve.
-        if deferred_command? && IMMEDIATE_ACTION_TOOLS.include?(name) && !@scheduled
+        if deferred_command? && Buddy::Tools::IMMEDIATE_ACTION_TOOLS.include?(name) && !@scheduled
           Rails.logger.warn(
             "[Buddy::GPT::Turn] held back #{name} on message=#{@inbound.id} " \
             "user=#{@user.id}: the request named a time",
@@ -686,8 +694,10 @@ module Buddy
         # "Do this now and that at 11" is a real sentence. Once the model has
         # actually put something on the clock this turn, it has understood the
         # time, and an immediate call after that is a second request rather than
-        # the mistake this guards against.
-        @scheduled = true if result[:status].to_s != "failed" && SCHEDULING_TOOLS.include?(name)
+        # the mistake this guards against. The round-level read above catches
+        # the same thing a call earlier; this one adds the half that can only be
+        # known afterwards, that the scheduling call really resolved.
+        @scheduled = true if result[:status].to_s != "failed" && self.class.defers?(name, call[:arguments])
         # An acting answering tool already did the thing, right here, and will
         # never be seen by ProposalBuilder. Recording it is what stops the
         # retraction from treating a true "Fan's on low now." as unbacked.
@@ -1565,21 +1575,45 @@ module Buddy
         | \bwhen\s+i\s+(?:get\s+(?:home|back|up)|wake\s+up)\b
       /xi
 
-      # Tools that change the world the instant they run and carry NO notion of
-      # when. That second half is what makes the list safe to gate on: a tool
-      # with its own time argument is one where "at 3" is an argument rather
-      # than a deferral, so `log_event`, `complete_chore` and the edit tools are
-      # deliberately absent — backdating a water to 3pm is a legitimate call on
-      # a sentence this regex matches.
-      IMMEDIATE_ACTION_TOOLS = %i[
-        call_jil_function trigger_jil_task run_routine mac_command print_again
-      ].freeze
+      # The other half of an imperative, for the writes the verb list above
+      # doesn't reach. COMMAND_REQUEST_RX is device vocabulary and it also arms
+      # `retract_false_claim!`, where a false positive REWRITES a good reply —
+      # so verbs that only matter to this gate get their own list rather than
+      # being pushed into that one, where being wrong costs more.
+      #
+      # Prod 3897 is why it exists: "Add "something" to my todo list in 2
+      # minutes" never reached the gate at all, because "add" is not a device
+      # verb and never will be.
+      WRITE_REQUEST_RX = /
+        \A\s*(?:hey[\s,]+\w+[\s,]+)?
+        (?:(?:please|can\s+you|could\s+you|would\s+you|go\s+ahead\s+and|go|just)\s+)*
+        (?:add|put|remove|delete)
+        # Same guard as above: the word after the verb is what separates an
+        # order from a turn of phrase.
+        \b(?!\s+(?:with|by|from|about)\b)
+      /xi
 
       # The tools that mean LATER. One of these landing in the same turn says the
       # model understood the time, and nothing here should get in its way.
       SCHEDULING_TOOLS = %i[
         schedule_reminder schedule_trigger schedule_function alarm set_timer remind_when move_reminder
       ].freeze
+
+      # Does this call actually put something on the clock? `set_timer` is the
+      # one that has to be read rather than just named, because a BARE countdown
+      # defers nothing. Prod 3897's second shape is the add plus a plain timer:
+      # the timer IS the artifact of the mistake, and letting it stand in for
+      # "the model understood the time" is what lets the write through. Only a
+      # wait carrying the rest of the sequence counts.
+      def self.defers?(name, arguments)
+        name = name.to_sym
+        return false unless SCHEDULING_TOOLS.include?(name)
+        return true unless name == :set_timer
+
+        args = arguments || {}
+        wait = args[Buddy::Tools::WAIT_ARG.to_s].presence || args[Buddy::Tools::WAIT_ARG]
+        ActiveModel::Type::Boolean.new.cast(wait)
+      end
 
       # Told the way every other refusal is told, because it IS one: the call did
       # not happen. `failed` is load-bearing rather than cosmetic — it drops the
@@ -1606,7 +1640,9 @@ module Buddy
         return false if self_initiated?
 
         body = @inbound.body.to_s
-        body.match?(COMMAND_REQUEST_RX) && body.match?(DEFERRED_COMMAND_RX)
+        return false unless body.match?(COMMAND_REQUEST_RX) || body.match?(WRITE_REQUEST_RX)
+
+        body.match?(DEFERRED_COMMAND_RX)
       end
 
       # A reply that DECLINES is honest and must survive. "I can't reach the TV

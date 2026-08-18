@@ -65,6 +65,12 @@ module Buddy
           # Values collected before this form, so a step after it can still use
           # them. Rides with the queue, not with the form.
           "vars"      => stringify(vars),
+          # What this form has to hear before the queue behind it runs. Stored
+          # on the gate like the relay path does it, so advance_queue! finds it
+          # in one place whichever kind of question was asked.
+          **Buddy::AnswerCondition.build(
+            var: payload[:var], is: payload[:continue_if],
+          ).then { |c| c ? { "continue_if" => c } : {} },
         },
         expires_at:        TTL.from_now,
       )
