@@ -5,11 +5,16 @@ class Jil::Methods::Tesla < Jil::Methods::Base
   # Schema entries live in `app/service/jil/schema.txt` under [Tesla] and
   # [TeslaStartOptions].
   #
-  # Every method that sends a command to the car pairs the broadcast with a
-  # user-facing PushNotification (via `notify_user`). The car can act on
-  # commands silently — without the notification the user has no audit
-  # trail of what Jil/Jarvis/automation just did. Notifications are tagged
-  # `:tesla_action` so they consolidate (each new toast replaces the prior).
+  # Every method that sends a command to the car says so (via `announce`).
+  # The car can act on commands silently — without the line the user has no
+  # audit trail of what Jil/Jarvis/automation just did.
+  #
+  # That line is a Jarvis say rather than a push. A push is an interruption,
+  # and a car command is rarely one: it's either something the person just
+  # asked for out loud, or automation doing its job. The messages that DO
+  # warrant reaching them — leave-by, heavy traffic, time to go — now come
+  # from Buddy instead (see Jil::Methods::Buddy#sayEvent), addressed to
+  # whoever the event actually belongs to.
 
   def cast(value)
     @jil.cast(value, :Boolean)
@@ -25,12 +30,22 @@ class Jil::Methods::Tesla < Jil::Methods::Base
       dest = opts[:navigate].presence&.to_s
 
       if dest && ::TripState.car_at?(dest, user: @jil.user)
-        notify_user("Already at destination", dest) unless opts[:silent]
+        announce("Already at destination", dest) unless opts[:silent]
         next
       end
 
       if dest && ::TripState.car_navigating_to?(dest, user: @jil.user)
-        notify_user("Already navigating there", dest) unless opts[:silent]
+        announce("Already navigating there", dest) unless opts[:silent]
+        next
+      end
+
+      # A scheduled navigation yields to a live route. The car takes ONE
+      # destination, so a calendar trigger firing mid-drive doesn't add a
+      # stop — it replaces where the person is going, silently, while they're
+      # following it. `keepRoute` is what separates that from a nav the person
+      # just asked for by name, which should absolutely retarget the car.
+      if dest && opts[:keepRoute] && ::TripState.car_routing?(user: @jil.user)
+        announce("Already on a route", "left it alone rather than rerouting to #{dest}") unless opts[:silent]
         next
       end
 
@@ -46,7 +61,7 @@ class Jil::Methods::Tesla < Jil::Methods::Base
       next if opts[:silent]
 
       if opts[:title].present?
-        notify_user(opts[:title].to_s, opts[:body].to_s.presence)
+        announce(opts[:title].to_s, opts[:body].to_s.presence)
       else
         bits = []
         bits << "#{opts[:temp].to_i}°F" if opts[:temp].present?
@@ -55,7 +70,7 @@ class Jil::Methods::Tesla < Jil::Methods::Base
         bits << "passenger seat"            if opts[:heatPassenger]
         bits << "vent"                      if opts[:vent]
         bits << "defrost"                   if opts[:defrost]
-        notify_user("Climate on", bits.join(" · ").presence)
+        announce("Climate on", bits.join(" · ").presence)
       end
     }
   end
@@ -63,28 +78,28 @@ class Jil::Methods::Tesla < Jil::Methods::Base
   def stop
     wrap {
       ::TeslaControl.me.off_car
-      notify_user("Climate off")
+      announce("Climate off")
     }
   end
 
   def honk
     wrap {
       ::TeslaControl.me.honk
-      notify_user("Honking")
+      announce("Honking")
     }
   end
 
   def flashLights
     wrap {
       ::TeslaControl.me.send(:proxy_command, :flash_lights)
-      notify_user("Flashing lights")
+      announce("Flashing lights")
     }
   end
 
   def setTemp(f)
     wrap {
       ::TeslaControl.me.set_temp(f.to_f)
-      notify_user("Temperature set to: #{f.to_i}°F")
+      announce("Temperature set to: #{f.to_i}°F")
     }
   end
 
@@ -100,11 +115,11 @@ class Jil::Methods::Tesla < Jil::Methods::Base
     wrap {
       dest = input.to_s
       if ::TripState.car_at?(dest, user: @jil.user)
-        notify_user("Already at destination", dest)
+        announce("Already at destination", dest)
         next
       end
       if ::TripState.car_navigating_to?(dest, user: @jil.user)
-        notify_user("Already navigating there", dest)
+        announce("Already navigating there", dest)
         next
       end
       ::TeslaControl.me.navigate(dest)
@@ -112,7 +127,7 @@ class Jil::Methods::Tesla < Jil::Methods::Base
       # leg of an upcoming event. No-op when no candidate is found or a
       # trip is already in flight — see TripState.start_for_destination!.
       ::TripState.start_for_destination!(dest, @jil.user)
-      notify_user("Navigating to #{dest}", travel_time_body(dest))
+      announce("Navigating to #{dest}", travel_time_body(dest))
     }
   end
 
@@ -125,7 +140,7 @@ class Jil::Methods::Tesla < Jil::Methods::Base
 
     dest = input.to_s
     result = ::TeslaControl.me.add_stop(dest)
-    notify_user(result ? "Stop added" : "Couldn't add stop", dest)
+    announce(result ? "Stop added" : "Couldn't add stop", dest)
     result
   rescue ::TeslaNotAuthorized
     false
@@ -137,63 +152,63 @@ class Jil::Methods::Tesla < Jil::Methods::Base
   def lockDoors
     wrap {
       ::TeslaControl.me.doors(:close)
-      notify_user("Doors locked")
+      announce("Doors locked")
     }
   end
 
   def unlockDoors
     wrap {
       ::TeslaControl.me.doors(:open)
-      notify_user("Doors unlocked")
+      announce("Doors unlocked")
     }
   end
 
   def closeWindows
     wrap {
       ::TeslaControl.me.windows(:close)
-      notify_user("Windows closed")
+      announce("Windows closed")
     }
   end
 
   def ventWindows
     wrap {
       ::TeslaControl.me.windows(:open)
-      notify_user("Windows vented")
+      announce("Windows vented")
     }
   end
 
   def popFrunk
     wrap {
       ::TeslaControl.me.pop_frunk
-      notify_user("Frunk open")
+      announce("Frunk open")
     }
   end
 
   def popTrunk
     wrap {
       ::TeslaControl.me.pop_boot
-      notify_user("Trunk open")
+      announce("Trunk open")
     }
   end
 
   def defrost
     wrap {
       ::TeslaControl.me.defrost(true)
-      notify_user("Defrost on")
+      announce("Defrost on")
     }
   end
 
   def heatDriver
     wrap {
       ::TeslaControl.me.heat_driver
-      notify_user("Driver seat heat on")
+      announce("Driver seat heat on")
     }
   end
 
   def heatPassenger
     wrap {
       ::TeslaControl.me.heat_passenger
-      notify_user("Passenger seat heat on")
+      announce("Passenger seat heat on")
     }
   end
 
@@ -213,8 +228,8 @@ class Jil::Methods::Tesla < Jil::Methods::Base
 
   private
 
-  # Notification body for a nav command — the drive time, or nil when we
-  # can't get one (notify_user drops a blank body). Best-effort: the car
+  # Second half of the line for a nav command — the drive time, or nil when
+  # we can't get one (announce drops a blank half). Best-effort: the car
   # already has the command by the time this runs, so a Google miss or an
   # unresolvable destination costs the travel time rather than failing the
   # whole call through #wrap.
@@ -228,17 +243,15 @@ class Jil::Methods::Tesla < Jil::Methods::Base
     nil
   end
 
-  def notify_user(title, body=nil)
+  # `Jarvis.say` — out over the websocket to the Jarvis cell on the dashboard,
+  # with no push. #wrap has already refused anyone but me by the time this is
+  # reached, which is why it can address `User.me` without asking.
+  def announce(title, body=nil)
     return unless @jil.user
 
-    payload = { title: title, tag: :tesla_action }
-    payload[:body] = body if body.present?
-    # Explicit `channel:` so the call is unambiguous as
-    # `send_to(user, payload, channel: …)` — Ruby 3 + rspec-mocks partial
-    # doubles otherwise misread the 2-arg form as kwargs.
-    ::WebPushNotifications.send_to(@jil.user, payload, channel: :jarvis)
+    ::Jarvis.say([title, body.presence].compact.join(" — "))
   rescue StandardError => e
-    ::PrettyLogger.error("[JIL TESLA] notify_user: #{e.class}: #{e.message}")
+    ::PrettyLogger.error("[JIL TESLA] announce: #{e.class}: #{e.message}")
   end
 
   def wrap(&block)

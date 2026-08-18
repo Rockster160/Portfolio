@@ -347,13 +347,35 @@ class ChoreCompletionsController < ApplicationController
   def response_payload(chore, completion)
     day = ChoreDay.current(current_user)
     today_earnings = current_user.chore_completions.where(day_key: day).sum(:paid_pebbles)
+    followers = after_chore_followers(chore).map { |f|
+      ChoreSerializer.new(f, viewer: current_user, day: day).as_json
+    }
 
     {
       chore:          ChoreSerializer.new(chore, viewer: current_user, day: day).as_json,
+      chores:         followers,
       balance:        current_user.chore_balance,
       today_earnings: today_earnings,
       paid:           completion&.paid_pebbles,
       server_ts:      Time.current.iso8601(3),
     }
+  end
+
+  # `:after_chore` followers of the chore just completed (or un-completed).
+  # Their today_visible / due_today flip the moment the anchor is tapped,
+  # but they get no completion row and no `updated_at` bump — and this
+  # response is the ONLY channel the acting device has, since
+  # ChoreBroadcaster skips the actor's own tab. Without them, a same-day
+  # "Go get mail → Go through mail" doesn't surface until the next full
+  # /chores/sync (foreground, reload, reconnect, or the 4am rollover).
+  # ChoresController#after_chore_follower_ids does the same thing for the
+  # sync delta.
+  #
+  # A container tap is recorded against the leaf, and a parent-anchored
+  # follower fires on ANY sub-chore of the parent, so both ids count as
+  # anchors here — mirroring the `chore_id OR parent_chore_id` in
+  # Chore#lookup_anchor_last_day.
+  def after_chore_followers(chore)
+    current_user.accessible_chores.following([chore.id, chore.parent_chore_id]).to_a
   end
 end

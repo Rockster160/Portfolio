@@ -217,6 +217,15 @@ class Chore < ApplicationRecord
   scope :persistent, -> { where(one_off: false) }
   scope :sub_chores, -> { where.not(parent_chore_id: nil) }
   scope :top_level, -> { where(parent_chore_id: nil) }
+  # `:after_chore` followers anchored to any of `anchor_ids`. The anchor
+  # lives in the recurrence jsonb rather than a column, so this is a `->>`
+  # text compare — a numeric and a stringified id both normalize to text.
+  scope :following, ->(anchor_ids) {
+    ids = Array(anchor_ids).compact.map { |i| i.to_i.to_s }
+    next none if ids.empty?
+
+    where("recurrence->>'freq' = 'after_chore' AND recurrence->>'anchor_chore_id' IN (?)", ids)
+  }
   # Assignment narrows visibility only when the chore's cooldown is
   # personal. household-cooldown chores stay grid-visible to every
   # household member; the Today gate runs in the serializer.

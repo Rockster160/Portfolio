@@ -119,6 +119,22 @@ class TripState
       leg_destination(user, current(user)[:leg_index].to_i + 1)
     end
 
+    # Does the car have a route loaded right now, wherever it's pointed?
+    #
+    # A weaker question than `car_navigating_to?`, and a different one: that
+    # asks whether the car is going somewhere SPECIFIC, this asks only whether
+    # it's going anywhere. Scheduled navigation uses it to leave a live route
+    # alone — a calendar event coming due is no reason to retarget a drive the
+    # person is already on.
+    #
+    # `car_data[:trip]` exists only while Tesla reports miles/minutes to
+    # arrival: TeslaCacheStore#compose_trip drops the whole section when nav
+    # ends, precisely because the lat/lng left behind is stale. So the
+    # section's presence IS the route, and nothing here has to re-derive it.
+    def car_routing?(user: ::User.me)
+      user.caches.dig(:car_data, :trip).present?
+    end
+
     # Is Tesla's active navigation destination effectively the same place
     # as `destination`? Uses the geofence threshold so a curbside-vs-parking-
     # lot geocode mismatch doesn't defeat the check. Used by Tesla.navigate /

@@ -96,6 +96,23 @@ class Agenda < ApplicationRecord
     User.where(id: ([user_id] + shared_users.pluck(:id)).uniq)
   end
 
+  # Whose days these events are — a narrower question than who can SEE them.
+  #
+  # A calendar with a co-owner is a joint one ("Ours"), and everything on it
+  # is both people's business. Any other share is access to somebody else's
+  # calendar: an editor can add to "Rocco Work" and a viewer can read
+  # Chelsea's, but neither is having the day. So a leave-by alert on a
+  # personal calendar goes to its owner and nobody else, however widely it's
+  # shared, while the same alert on a joint one goes to everyone on it.
+  #
+  # `owner` is the only share level that means "this is mine too" — the enum
+  # already grants rename/destroy/manage-sharing, which nobody hands to a
+  # calendar they don't consider theirs.
+  def subject_users
+    co_owners = agenda_shares.owner.pluck(:user_id)
+    User.where(id: [user_id, *co_owners].uniq)
+  end
+
   # True when anyone other than `other_user` can see this agenda — i.e. it's
   # genuinely shared. Drives the "Notify others" affordance: no point offering
   # to brief anyone on a solo calendar.

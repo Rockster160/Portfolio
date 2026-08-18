@@ -267,4 +267,31 @@ RSpec.describe TripState do
       expect(described_class.car_navigating_to?("Nowhere", user: user)).to be(false)
     end
   end
+
+  # Whether the car is going ANYWHERE — what a scheduled navigation checks
+  # before it retargets a drive the person is already following.
+  describe ".car_routing?" do
+    it "is true whenever there's an active trip section" do
+      user.caches.set(:car_data, { trip: { destination: { lat: 40.5, lng: -111.9 }, minutes_to_arrival: 12.0 } })
+      expect(described_class.car_routing?(user: user)).to be(true)
+    end
+
+    it "is true regardless of WHERE the car is headed, without geocoding anything" do
+      expect(user).not_to receive(:address_book)
+      user.caches.set(:car_data, { trip: { destination: { lat: 12.3, lng: 45.6 } } })
+      expect(described_class.car_routing?(user: user)).to be(true)
+    end
+
+    # TeslaCacheStore#compose_trip drops the section outright when nav ends,
+    # so absence is the signal — nothing here re-derives it from stale lat/lng.
+    it "is false once nav has ended and the section is gone" do
+      user.caches.set(:car_data, { location: { lat: 40.5, lng: -111.9 } })
+      expect(described_class.car_routing?(user: user)).to be(false)
+    end
+
+    it "is false with no car data at all" do
+      user.caches.set(:car_data, {})
+      expect(described_class.car_routing?(user: user)).to be(false)
+    end
+  end
 end

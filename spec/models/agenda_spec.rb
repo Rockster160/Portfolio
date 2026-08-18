@@ -43,6 +43,49 @@ RSpec.describe Agenda do
     expect(other).to be_valid
   end
 
+  # Whose days these events are, which is narrower than who can see them.
+  # Drives who a leave-by / heavy-traffic / time-to-go alert reaches.
+  describe "#subject_users" do
+    let(:partner) { create(:user, phone: "5550000101") }
+    let(:agenda) { described_class.create!(user: user, name: "Work") }
+
+    it "is the owner alone on a calendar nobody else touches" do
+      expect(agenda.subject_users).to contain_exactly(user)
+    end
+
+    # The distinction the whole thing turns on: an editor can ADD to someone's
+    # work calendar without it being their day.
+    it "is still the owner alone when shared as an editor" do
+      agenda.agenda_shares.create!(user: partner, permission: :editor)
+      expect(agenda.subject_users).to contain_exactly(user)
+    end
+
+    it "is still the owner alone when shared as a viewer" do
+      agenda.agenda_shares.create!(user: partner, permission: :viewer)
+      expect(agenda.subject_users).to contain_exactly(user)
+    end
+
+    it "is everyone once someone else is a co-owner — that's a joint calendar" do
+      agenda.agenda_shares.create!(user: partner, permission: :owner)
+      expect(agenda.subject_users).to contain_exactly(user, partner)
+    end
+
+    it "counts a co-owner once even alongside other shares" do
+      third = create(:user, phone: "5550000102")
+      agenda.agenda_shares.create!(user: partner, permission: :owner)
+      agenda.agenda_shares.create!(user: third, permission: :viewer)
+      expect(agenda.subject_users).to contain_exactly(user, partner)
+    end
+
+    # access_users answers "who can see this" — a wider set on purpose, and
+    # the two must not be confused for one another.
+    it "is narrower than access_users" do
+      agenda.agenda_shares.create!(user: partner, permission: :editor)
+      expect(agenda.access_users).to contain_exactly(user, partner)
+      expect(agenda.subject_users).to contain_exactly(user)
+    end
+  end
+
   describe "#items_for" do
     let(:agenda) { create(:agenda, user: user) }
 

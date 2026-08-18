@@ -13,6 +13,7 @@ class ChoreBroadcaster
     return if recipient_ids.empty?
 
     chore_ids = [chore&.id, related&.id].compact.uniq
+    chore_ids |= follower_ids_for(chore_ids)
 
     payload = {
       id:        :chores,
@@ -30,6 +31,19 @@ class ChoreBroadcaster
     User.where(id: recipient_ids).find_each do |r|
       MonitorChannel.broadcast_to(r, payload)
     end
+  end
+
+  # `:after_chore` followers own no completion row and get no `updated_at`
+  # bump when their anchor is tapped, yet the tap is exactly what makes
+  # them due. Receiving tabs re-fetch one /state per id in `chore_ids`, so
+  # a follower has to be named here or it stays off Today until that
+  # device's next full sync. Both the tapped chore and its parent count as
+  # anchors — a parent-anchored follower fires on any sub-chore tap.
+  def self.follower_ids_for(anchor_ids)
+    return [] if anchor_ids.empty?
+
+    parent_ids = Chore.where(id: anchor_ids).pluck(:parent_chore_id).compact
+    Chore.active.following(anchor_ids | parent_ids).pluck(:id)
   end
 
   # Hot Picks are a household-wide concept (today's pick set is shared

@@ -517,6 +517,7 @@
   #deliver(Text)::Boolean
 [Buddy]
   #say(Text)::Boolean
+  #sayEvent("Event" Numeric|Hash|AgendaItem BR "Message" String)::Numeric
   #prompt(Text)::Boolean
   #photo("Image" String BR "Caption" String)::Boolean
 [Tesla]
@@ -544,6 +545,7 @@
   #heatPassenger(Boolean)
   #vent(Boolean)
   #defrost(Boolean)
+  #keepRoute(Boolean)
   #title(String)
   #body(String)
   #silent(Boolean)
