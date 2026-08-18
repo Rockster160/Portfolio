@@ -24,6 +24,12 @@ RSpec.describe SystemController, type: :controller do
     allow_any_instance_of(User).to receive(:me?) { |u| u.id == me_id }
   end
 
+  # Scoped on purpose: the page prints "$0.00" in the results totals whenever a
+  # search matched nothing, so a bare `include` says nothing about the accounts.
+  def accounts_table
+    response.body[%r{<table class="bank-table bank-accounts">.*?</table>}m].to_s
+  end
+
   describe "GET #banking" do
     render_views
 
@@ -49,12 +55,36 @@ RSpec.describe SystemController, type: :controller do
         expect(response.body).to include("still unclassified")
       end
 
-      it "hides the available balance on a card, where it is a placeholder" do
+      # A card sends "0.00" available, which is a placeholder rather than
+      # headroom. Taking it at face value would headline the card as holding
+      # nothing instead of owing $1,988.53.
+      it "headlines a card with its balance, not its placeholder zero" do
         checking.update!(kind: :checking)
 
         get :banking
-        expect(response.body).to include("$18,320.24 available")
-        expect(response.body).not_to include("$0.0 available")
+        expect(accounts_table).to include("-$1,988.53")
+        expect(accounts_table).not_to include("$0.00")
+      end
+
+      # The two figures are the same number on a card and on an account with
+      # nothing authorized, and printing it twice says nothing.
+      it "shows the balance beside it only where the two differ" do
+        checking.update!(kind: :checking, available_balance_cents: 1_692_699)
+
+        get :banking
+        expect(response.body).to include("$16,926.99")
+        expect(response.body).to include("$18,320.24 balance")
+        expect(response.body).not_to include("-$1,988.53 balance")
+      end
+
+      # Two closed cards will never be reported by anyone. "$0.00" reads as a
+      # real balance; nothing reported is not zero.
+      it "leaves an account that has never reported blank rather than zero" do
+        BankAccount.create!(name: "Chase Credit (4842)", last4: "4842", kind: :credit)
+
+        get :banking
+        expect(accounts_table).to include("Chase Credit (4842)")
+        expect(accounts_table).not_to include("$0.00")
       end
 
       it "marks which account feeds the dashboard" do
@@ -104,7 +134,7 @@ RSpec.describe SystemController, type: :controller do
 
         get :banking
         # 18,320.24 - 1,988.53
-        expect(response.body).to include("Totals")
+        expect(response.body).to include("Dashboard figure")
         expect(response.body).to include("$16,331.71")
       end
 
@@ -114,20 +144,20 @@ RSpec.describe SystemController, type: :controller do
         checking.update!(kind: :checking, available_balance_cents: 1_692_699)
 
         get :banking
-        # 16,926.99 - 1,988.53, and the posted total still reads down its column
+        # 16,926.99 - 1,988.53 is the headline; the posted total sits beside it
         expect(SimpleFin::DashboardCache.balance_cents).to eq(1_633_171)
-        expect(response.body).to include("$14,938.46 available")
-        expect(response.body).to include(%(title="What the dashboard cell shows"))
+        expect(response.body).to include("$14,938.46")
+        expect(response.body).to include("$16,331.71 balance")
       end
 
-      # The available column reads down to its own total rather than stopping
-      # at the rows, and it is netted against the cards the same way.
-      it "totals the available column too" do
+      # The headline column reads down to its own total rather than stopping at
+      # the rows, and it is netted against the cards the same way.
+      it "totals the headline column" do
         checking.update!(kind: :checking, available_balance_cents: 1_800_000)
 
         get :banking
         # 18,000.00 - 1,988.53
-        expect(response.body).to include("$16,011.47 available")
+        expect(response.body).to include("$16,011.47")
       end
 
       it "marks every account that counts toward the figure" do
@@ -256,12 +286,16 @@ RSpec.describe SystemController, type: :controller do
         expect(response).to have_http_status(:ok)
       end
 
-      it "offers a way to clear only once there is something to clear" do
+      # In the search row, not above it — the dates are part of the search. And
+      # `basic`, which is what opts them out of the global input rule that
+      # forces width:100% and gave each picker a line of its own.
+      it "sits inside the search row rather than taking one of its own" do
         get :banking
-        expect(response.body).not_to include("data-date-clear")
 
-        get :banking, params: { q: "timestamp:2026-07" }
-        expect(response.body).to include("data-date-clear")
+        row = response.body[%r{<form[^>]*class="basic bank-search".*?</form>}m].to_s
+        expect(row).to include("data-date-from")
+        expect(row).to include("data-date-to")
+        expect(row).to include(%(<input type="date" class="basic"))
       end
     end
 

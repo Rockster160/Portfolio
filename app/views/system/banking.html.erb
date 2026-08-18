@@ -60,7 +60,12 @@
         <tr>
           <th>Account</th>
           <th>Kind</th>
-          <th class="right">Balance</th>
+          <%# The available figure is the headline. A card reports "0.00"
+              available — a placeholder, not headroom — so it shows its balance
+              instead; see BankAccount#spendable_cents. %>
+          <th class="right" title="What the bank has already authorized is taken out of this">
+            Available
+          </th>
           <th>Reported</th>
         </tr>
       </thead>
@@ -97,16 +102,20 @@
               <%= select_tag(:kind, options_for_select(BankAccount.kind_options, account.kind),
                     id: nil, class: "inline-select", data: { select: true, field: :kind }) %>
             </td>
-            <td class="right <%= sign_class.call(account.balance_cents) %>">
-              <%= cents.call(account.balance_cents) %>
+            <%# Nothing reported is not zero. Two closed cards will never be
+                reported by anyone, and "$0.00" reads as a real balance. %>
+            <td class="right <%= sign_class.call(account.spendable_cents) if account.spendable_cents %>">
+              <%= account.spendable_cents.nil? ? "—" : cents.call(account.spendable_cents) %>
             </td>
             <td class="meta">
               <span class="age">
                 <%= account.balance_date.present? ? "#{time_ago_in_words(account.balance_date)} ago" : "—" %>
               </span>
               <span class="sub">
-                <% if account.available_balance.present? %>
-                  <%= money.call(account.available_balance) %> available
+                <%# Only where the two differ. On a card they are the same
+                    number, and printing it twice says nothing. %>
+                <% if account.balance_cents.present? && account.balance_cents != account.spendable_cents %>
+                  <%= cents.call(account.balance_cents) %> balance
                 <% end %>
                 <% if SimpleFin::DashboardCache.included?(account) %>
                   <em class="tag primary" title="Counted in the dashboard figure">dashboard</em>
@@ -120,21 +129,19 @@
           here rather than leaving it derivable only by adding them up. %>
       <tfoot>
         <tr>
+          <%# The headline column IS what the dashboard publishes now, so the
+              label names it rather than a chip pointing at another cell. %>
           <td colspan="2" class="total-label">
-            Totals
-            <span class="sub">Cumulative, excluding loans and unclassified</span>
+            Dashboard figure
+            <span class="sub">Available, cumulative, excluding loans and unclassified</span>
           </td>
-          <td class="right <%= sign_class.call(@dashboard_cents) if @dashboard_cents.present? %>">
-            <%= @dashboard_cents.present? ? cents.call(@dashboard_cents) : "—" %>
+          <td class="right <%= sign_class.call(@dashboard_available) if @dashboard_available.present? %>">
+            <%= @dashboard_available.present? ? cents.call(@dashboard_available) : "—" %>
           </td>
-          <%# Each column totals its own figure. The chip marks WHICH of the two
-              the dashboard publishes, and sits in the cell holding the
-              per-account available — the thing it is the total of. %>
           <td class="meta">
             <span class="sub">
-              <% if @dashboard_available.present? %>
-                <%= cents.call(@dashboard_available) %> available
-                <em class="tag primary" title="What the dashboard cell shows">dashboard</em>
+              <% if @dashboard_cents.present? && @dashboard_cents != @dashboard_available %>
+                <%= cents.call(@dashboard_cents) %> balance
               <% end %>
             </span>
           </td>
@@ -192,6 +199,22 @@
           id: "bank-search-form") do %>
       <input type="search" name="q" value="<%= @query %>"
              placeholder="payee:amazon category:groceries amount&gt;50 direction:withdrawal">
+      <%# In the search row rather than above it: the dates ARE part of the
+          search. Picking one writes a `timestamp` term into the box beside it,
+          so it is visible, editable by hand, and carried by every link and page
+          of results like any other term. Typing one fills these back in.
+
+          `basic` is not decoration — it opts out of the `input[type=date]` rule
+          in forms.scss, which forces width:100% and an 18px font and put each
+          picker on a line of its own. `cc-daterange` then supplies the compact
+          look the charts page already uses. %>
+      <span class="cc-daterange bank-dates">
+        <input type="date" class="basic" data-date-from value="<%= @date_from %>"
+               aria-label="From date">
+        <span class="cc-daterange-sep">–</span>
+        <input type="date" class="basic" data-date-to value="<%= @date_to %>"
+               aria-label="To date">
+      </span>
       <button type="submit" class="btn">Search</button>
       <% if @query.present? %>
         <a class="btn" href="<%= system_banking_path %>">Clear</a>
@@ -311,21 +334,6 @@
         </div>
       </div>
     </details>
-
-    <%# The dates are a filter, so they belong to the query rather than beside
-        it: picking one writes a `timestamp` term into the search box, which
-        means it is visible, editable by hand, and carried by every link and
-        page of results the same way any other term is. Typing one fills these
-        back in. %>
-    <div class="cc-daterange bank-dates">
-      <span class="bank-dates-label">Dates</span>
-      <input type="date" data-date-from value="<%= @date_from %>" aria-label="From date">
-      <span class="cc-daterange-sep">–</span>
-      <input type="date" data-date-to value="<%= @date_to %>" aria-label="To date">
-      <% if @date_from.present? || @date_to.present? %>
-        <button type="button" class="bank-dates-clear" data-date-clear>Clear</button>
-      <% end %>
-    </div>
 
     <% if @search_error.present? %>
       <p class="bank-error">Could not parse that search: <%= @search_error %></p>
@@ -827,20 +835,20 @@
       display: block; font-size: 11px; color: #64748B; line-height: 1.3; margin-top: 2px;
     }
 
-    .bank-search { display: flex; gap: 8px; margin-bottom: 6px; }
-    .bank-search input[type="search"] { flex: 1 1 auto; min-width: 0; }
-
-    /* Sits with the search because it edits the search. `.cc-daterange` from
-       the charts page styles the inputs; this only places the row. */
-    .bank-dates { margin: 10px 0 4px; flex-wrap: wrap; }
-    .bank-dates-label {
-      font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #64748B;
+    /* Wraps rather than compressing: on a narrow screen the pickers drop to a
+       second line instead of squeezing the query box to nothing. */
+    .bank-search {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px;
     }
-    .bank-dates-clear {
-      border: 0; background: none; padding: 0 0 0 4px; cursor: pointer;
-      font-family: inherit; font-size: 12px; color: #64748B;
-    }
-    .bank-dates-clear:hover { color: #CBD5E1; }
+    /* The query box is the only thing that grows. 260px keeps it from being
+       shorter than the pickers beside it once the row wraps. The margin goes
+       because `margin: 4px auto` from forms.scss sets the row's height AND
+       absorbs the free space the flex-grow is there to hand out. */
+    .bank-search input[type="search"] { flex: 1 1 260px; min-width: 0; margin: 0; }
+    /* Stretched rather than sized: the pickers take their height from the
+       query box beside them, so nothing has to be kept matching by hand. */
+    .bank-dates { flex: 0 0 auto; align-self: stretch; }
+    .bank-dates input[type="date"] { align-self: stretch; }
 
     /* Shorter than the charts page's 360px: this one shares the screen with a
        table, and the table is what the page is for. */

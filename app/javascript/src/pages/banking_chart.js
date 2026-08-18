@@ -42,18 +42,23 @@ $(document).ready(function() {
     return [fromInput ? fromInput.value : "", toInput ? toInput.value : ""]
   }
 
+  function submitDates() {
+    const dates = currentDates()
+    applyDates(dates[0], dates[1])
+  }
+
   ;[fromInput, toInput].forEach(function(el) {
     if (!el) { return }
-    el.addEventListener("change", function() {
-      const dates = currentDates()
-      applyDates(dates[0], dates[1])
+    el.addEventListener("change", submitDates)
+    // The pickers sit INSIDE the search form, so Enter would submit it with
+    // the old query still in the box and the date silently dropped. Take the
+    // key and run the same path a change does.
+    el.addEventListener("keydown", function(event) {
+      if (event.key !== "Enter") { return }
+      event.preventDefault()
+      submitDates()
     })
   })
-
-  const clearBtn = document.querySelector("[data-date-clear]")
-  if (clearBtn) {
-    clearBtn.addEventListener("click", function() { applyDates("", "") })
-  }
 
   // The bucket belongs to the search form by `form=`, so changing it only needs
   // to submit — the value rides along as a param of its own.
