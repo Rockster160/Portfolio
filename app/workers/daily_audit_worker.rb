@@ -1,10 +1,14 @@
-# Kicks off the daily self-review (ByteDailyAudit) at 6am local, covering the
-# 24 hours that just finished (see ByteDailyAudit#window).
+# Kicks off the daily self-review (ByteDailyAudit), covering the 24 hours that
+# just finished (see ByteDailyAudit#window).
 #
-# The time is set by the cron entry, not here — `daily_6am` in sidekiq_cron.rb.
-# Don't restate it anywhere else: this comment said 6am while the job ran at
-# 10pm and the wrong one was believed, which is how a report that had already
-# landed got read as a job that never ran.
+# Enqueued the moment the morning Today briefing finishes writing
+# (Buddy::GPT::Turn#queue_daily_audit), so the report lands directly under it:
+# one is what's coming, the other is what broke. The briefing moves with the
+# person's schedule, so no fixed hour could follow it.
+#
+# The cron entry of the same name is only the BACKSTOP, for the day Today never
+# came at all. It runs once, and on an ordinary day it does nothing, because
+# `already_ran?` inside run! has already seen this morning's report.
 #
 # Sidekiq's own retry is off. The work is a Claude turn that streams back into
 # the thread over several minutes, so a retry would post a second prompt on top

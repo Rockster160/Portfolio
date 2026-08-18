@@ -68,7 +68,7 @@ module Buddy
       @loading_tools = false
     end
 
-    def register(name:, description:, args:, confirm:, label:, execute:, receipt: nil, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, answers: false, acts: false, feature: Buddy::Features::CORE, gated_values: {})
+    def register(name:, description:, args:, confirm:, label:, execute:, receipt: nil, merge_key: nil, merge_label: nil, passthrough_args: false, auto: false, level: nil, form: nil, supersedes: false, routinable: true, answers: false, acts: false, speaks: false, feature: Buddy::Features::CORE, gated_values: {})
       # Confidence level governs how a proposal is presented (see
       # Buddy::ProposalBuilder):
       #   1 — highest confidence (reminders, car/house/light commands): fires
@@ -110,6 +110,14 @@ module Buddy
         # this so validate_payload keeps every OTHER k=v the marker carried
         # instead of dropping the undeclared ones on the floor.
         passthrough_args: passthrough_args,
+        # This tool posts a WHOLE MESSAGE of its own. Buddy::Routines.run!
+        # normally opens with a line in the pet's voice saying which routine is
+        # going ("*squish* **Today**, going now."), which is right over a set of
+        # checklist rows and wrong over a message that opens with its own
+        # greeting - the briefing's first line is the one thing its prompt works
+        # hardest to get right, and an announcement above it lands on top of
+        # exactly that.
+        speaks:           speaks,
         # Renders as an editable FORM in the thread instead of a checkbox row
         # (see Buddy::FormAction). `{ arg:, fields:, title:, submit:, actions: }`
         # — the collected values land on the payload under `arg`, and `fields`
@@ -203,6 +211,10 @@ module Buddy
     # Safe to save into a BuddyRoutine and replay later.
     def routinable?(tool)
       tool.is_a?(Hash) && tool[:routinable] != false
+    end
+
+    def speaks?(tool)
+      tool.is_a?(Hash) && tool[:speaks] == true
     end
 
     # A tool where asking again means correcting, not repeating.

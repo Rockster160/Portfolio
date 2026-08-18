@@ -32,7 +32,9 @@ daily_3am = "0 3 * * * MST"
 # hour, and the 4-hourly sync already owns that slot.
 every_3_hours_staggered = "37 */3 * * *"
 daily_4am = "0 4 * * * MST"
-daily_6am = "0 6 * * * MST"
+# Keep in step with ByteDailyAudit::BACKSTOP_HOUR — that's the constant the
+# audit's own "have I waited long enough" check reads.
+daily_10am = "0 10 * * * MST"
 daily_9pm = "0 21 * * * MST"
 thursdays_at_noon = "0 12 * * 4 MST"
 mondays_at_noon = "0 12 * * 1 MST"
@@ -63,11 +65,6 @@ cron_jobs = [
   {
     name:  "Fire Due Buddy Reminders",
     class: "BuddyReminderWorker",
-    cron:  every_minute,
-  },
-  {
-    name:  "Fire Scheduled Buddy Today Briefing",
-    class: "BuddyTodayWorker",
     cron:  every_minute,
   },
   {
@@ -144,12 +141,16 @@ cron_jobs = [
     cron:  every_3_hours_staggered,
   },
   {
-    # First thing, so the report is there to read with the day rather than
-    # arriving after it. Reviews the 24 hours ending whenever it runs — see
+    # The BACKSTOP, not the usual path. Ordinarily the audit is enqueued the
+    # moment the morning Today finishes writing (Buddy::GPT::Turn
+    # #queue_daily_audit), so the report lands directly under the briefing.
+    # This covers the day Today never came — asleep, no conversation, Sidekiq
+    # backed up — and is a no-op on every other day, because run! is guarded by
+    # `already_ran?`. Reviews the 24 hours ending whenever it runs; see
     # ByteDailyAudit#window.
-    name:  "Daily Byte Audit",
+    name:  "Daily Byte Audit Backstop",
     class: "DailyAuditWorker",
-    cron:  daily_6am,
+    cron:  daily_10am,
   },
 ]
 

@@ -174,15 +174,22 @@ module Buddy
       # The reminder's own body is the line over it. Whoever set it wrote that
       # sentence to be read at this moment, and it says what the call is for far
       # better than a generated heading would.
+      #
+      # Unless the tool posts a whole message of ITS own (`speaks: true`), in
+      # which case there is no line at all. The morning briefing is the one:
+      # "Today briefing" sitting above a message that opens with its own
+      # greeting lands directly on the line that briefing's prompt works hardest
+      # to get right.
       def run_action(reminder, action)
         conversation = reminder.byte_conversation
         return if conversation.nil?
 
+        speaks = Buddy::Tools.speaks?(Buddy::Tools[action[:tool_name]])
         Buddy::ProposalBuilder.run_markers!(
           user:         reminder.user,
           conversation: conversation,
           markers:      [action],
-          body:         reminder.body.to_s.presence || "Running that now.",
+          body:         (reminder.body.to_s.presence || "Running that now." unless speaks),
         )
       end
 

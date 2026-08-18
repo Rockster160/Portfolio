@@ -1294,6 +1294,31 @@ module Buddy
         settle_expression(acted: executed_anything?(result))
         broadcast(@reply.reload)
         ByteNotifier.notify(@user, @reply)
+        queue_daily_audit
+      end
+
+      # The morning briefing is what the daily audit waits for: the report reads
+      # best directly under it, one being what's coming and the other what broke.
+      #
+      # Hung off the turn FINISHING rather than polled for. A sweep asking every
+      # few minutes whether the briefing had landed would spend all day answering
+      # no, and the one moment it needs to know about is this one - the reply is
+      # written, it's on screen, and nothing else is going to happen to it.
+      def queue_daily_audit
+        return unless @user.me?
+        return unless scheduled_today?
+
+        DailyAuditWorker.perform_async
+      rescue StandardError => e
+        Rails.logger.warn("[Buddy::GPT::Turn] daily audit enqueue failed: #{e.class}: #{e.message}")
+      end
+
+      # Was the seed behind this reply the SCHEDULED broadcast, as opposed to a
+      # tap on the hero chip? Someone asking for a Today at four in the afternoon
+      # is not the morning, and shouldn't drag a report along with it.
+      def scheduled_today?
+        meta = @inbound.metadata
+        meta.is_a?(Hash) && meta["source"].to_s == "today_scheduled"
       end
 
       def finalize_failure(error)

@@ -1,7 +1,7 @@
 module Buddy
   # The "Today" briefing seed + delivery. Fired two ways: by tapping the hero
-  # "Today" chip, and by the scheduled broadcast (Buddy::TodayScheduler). Rails
-  # owns the prompt text; the Mac just runs it.
+  # "Today" chip, and by the daily reminder that carries the `today_briefing`
+  # tool (Buddy::TodaySchedule). Rails owns the prompt text; the Mac just runs it.
   #
   # The SCHEDULE is a morning thing. The briefing is not — the chip is there all
   # day and gets tapped at all hours, so nothing in the seed may assume which
@@ -246,7 +246,18 @@ module Buddy
     # Deliver a Today briefing as a hidden Buddy turn into `conversation`. Used
     # by the scheduled broadcast (the tap path goes through
     # QuickActionsController#dispatch_trigger for its action chip).
+    #
+    # Returns nil while Buddy is asleep, and only then. The guard used to sit in
+    # Buddy::TodayScheduler, which was fine while that was the only way here — it
+    # isn't any more, the schedule is a reminder now, and Buddy::ReminderFirer
+    # has never checked it. Whether Buddy is awake enough to speak unprompted is
+    # a property of the BRIEFING, not of whichever thing decided it was time.
+    #
+    # A hand-run is exempt: someone asking for one at 2am has already answered
+    # the question the guard exists to ask.
     def deliver!(user, conversation, scheduled: true)
+      return nil if scheduled && defined?(Buddy::SleepGuard) && Buddy::SleepGuard.sleeping?(user)
+
       msg = conversation.byte_messages.create!(
         user:      user,
         direction: :outbound,

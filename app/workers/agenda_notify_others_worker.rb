@@ -38,7 +38,7 @@ class AgendaNotifyOthersWorker
 
   # Everyone with access to the agenda except the actor, gated to users who
   # actually use Buddy (have a buddy conversation) so we never spin one up
-  # for someone who's never opened it — mirrors TodayScheduler's candidate set.
+  # for someone who's never opened it — mirrors Buddy::TodaySchedule's candidate set.
   def recipients(agenda, actor)
     agenda.access_users
       .where.not(id: actor.id)

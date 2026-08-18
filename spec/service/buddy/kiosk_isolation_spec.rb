@@ -70,13 +70,10 @@ RSpec.describe "Buddy kiosk isolation" do
   # read, and on the wall it would be read by whoever walked into the kitchen
   # while the person it was written for got nothing at all.
   describe "the morning briefing" do
+    # The schedule is a reminder now, and a reminder carries the conversation it
+    # fires into. This is where that gets decided, once, at creation.
     it "goes to their own thread, not the wall" do
-      allow(Buddy::TodayBriefing).to receive(:deliver!)
-      allow(Buddy::TodayScheduler).to receive(:target_time).and_return(Time.current)
-
-      Buddy::TodayScheduler.maybe_deliver(user, Time.current)
-
-      expect(Buddy::TodayBriefing).to have_received(:deliver!).with(user, phone, scheduled: true)
+      expect(Buddy::TodaySchedule.ensure!(user).byte_conversation).to eq(phone)
     end
   end
 

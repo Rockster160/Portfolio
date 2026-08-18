@@ -19,11 +19,14 @@ RSpec.describe DailyAuditWorker do
     expect { described_class.new.perform }.to change { ByteDailyAudit.conversation(user).byte_messages.count }.by(1)
   end
 
-  it "is registered on the cron schedule" do
-    schedule = Rails.root.join("config/initializers/sidekiq_cron.rb").read
+  # Ordinarily enqueued by the briefing turn; the cron entry is the backstop for
+  # a day that never had one. Either way `already_ran?` is what stops a second
+  # report, so the same worker running twice has to be harmless.
+  it "posts nothing on a second run the same day" do
+    described_class.new.perform
 
-    expect(schedule).to include("DailyAuditWorker")
-    expect(schedule).to include("daily_6am")
-    expect(schedule).to include(%(daily_6am = "0 6 * * * MST"))
+    counted = -> { ByteDailyAudit.conversation(user).byte_messages.count }
+
+    expect { described_class.new.perform }.not_to change(counted, :call)
   end
 end

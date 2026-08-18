@@ -197,13 +197,23 @@ module Buddy
     #
     # `body` is the line the steps hang under, since a checklist needs a message
     # to attach to and silence would read as nothing having happened.
+    # `body` is the line that goes over whatever the markers produce, or nil for
+    # a set of steps that each post a whole message of their own (see
+    # Buddy::Routines.speaks_for_itself?).
+    #
+    # The row is still created either way, because it's the anchor a checklist
+    # hangs off and `create` reads the conversation from it. With no body it's
+    # marked hidden instead, which the PWA already drops on receipt — the same
+    # mechanism the Today seed uses. So nothing renders above the message the
+    # step is about to post.
     def run_markers!(user:, conversation:, markers:, body:)
-      msg = conversation.byte_messages.create!(
+      silent = body.blank?
+      msg    = conversation.byte_messages.create!(
         user:         user,
         direction:    :inbound,
         state:        :delivered,
-        body:         body,
-        metadata:     { "kind" => "buddy_reply", "source" => "quick_action" },
+        body:         body.presence || "…",
+        metadata:     { "kind" => "buddy_reply", "source" => "quick_action", "hidden" => silent }.compact_blank,
         delivered_at: Time.current,
       )
 
@@ -213,12 +223,19 @@ module Buddy
       # bare heading over nothing, in the same voice the heading was written in
       # (Buddy::VoiceLines), and drop the face out of the pleased-to-help
       # expression the announcement just put it in.
+      #
+      # A SILENT run has to be un-hidden here. Its steps were going to do the
+      # talking and none of them ran, so leaving the row hidden is a tap that
+      # produces nothing at all and no way to tell why.
       if result[:action].nil? && !result[:auto_ran] && result[:forms].blank?
         line = Buddy::VoiceLines.pick(
-          conversation.buddy_theme, :routine_empty, avoid: conversation.buddy_expression,
+          conversation.buddy_theme, :routine_empty, avoid: conversation.buddy_expression
         )
         Buddy::SideEffects.apply_mood(conversation, line[:mood]) if line[:mood]
-        msg.update!(body: "#{body}\n\n#{line[:text]}")
+        msg.update!(
+          body:     [body.presence, line[:text]].compact.join("\n\n"),
+          metadata: msg.metadata.to_h.except("hidden"),
+        )
       end
 
       broadcast_message(user, msg.reload)
