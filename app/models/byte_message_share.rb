@@ -1,3 +1,14 @@
+# == Schema Information
+#
+# Table name: byte_message_shares
+#
+#  id                   :bigint           not null, primary key
+#  created_at           :datetime         not null
+#  updated_at           :datetime         not null
+#  byte_conversation_id :bigint           not null
+#  byte_message_id      :bigint           not null
+#  user_id              :bigint           not null
+#
 class ByteMessageShare < ApplicationRecord
   # One message, shown in a second person's thread, WITHOUT a second copy of it.
   #

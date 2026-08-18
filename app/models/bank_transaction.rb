@@ -9,6 +9,7 @@
 #  description             :text
 #  mcc                     :string
 #  memo                    :text
+#  metadata                :jsonb            not null
 #  occurred_at             :datetime         not null
 #  payee                   :string
 #  pending                 :boolean          default(FALSE), not null
