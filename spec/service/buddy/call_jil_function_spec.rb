@@ -189,6 +189,79 @@ RSpec.describe "call_jil_function tool" do
       expect(captured["params"]).to eq(["laundry_gate"])
     end
 
+    # A task reading `Keyword.Item()` gets its args BY POSITION, so `params`
+    # deciding the order decides what the task does. It used to be built from
+    # the keys the caller happened to hand over, which is not the same thing.
+    describe "the positional params array" do
+      let!(:blinds) {
+        Task.create!(
+          user:          user,
+          name:          "HASS Blinds",
+          listener:      'function("Action" TAB ["open" "close" "stop" "position"]("open") BR ' \
+                         '"Which" TAB ["all" "great_room" "stairs"]("great_room") BR "Position" TAB Numeric)::String',
+          code:          "// noop",
+          enabled:       true,
+          buddy_enabled: true,
+          description:   "Opens, closes, stops, or sets the position of the blinds",
+        )
+      }
+
+      def captured_for(payload)
+        captured = nil
+        allow_any_instance_of(Task).to receive(:execute) { |_t, input, **_kw|
+          captured = input
+          instance_double(::Jil::Executor, result: "ok")
+        }
+        run(payload)
+        captured
+      end
+
+      it "orders by the signature, not by the order the keys arrived in" do
+        input = captured_for({ name: "HASS Blinds", which: "all", action: "close", position: 0 })
+
+        expect(input["params"]).to eq(["close", "all", 0])
+      end
+
+      it "still names every arg at the top level for a task reading them that way" do
+        input = captured_for({ name: "HASS Blinds", which: "all", action: "close", position: 0 })
+
+        expect(input).to include("action" => "close", "which" => "all", "position" => 0)
+      end
+
+      # Prod byte_message 3845. `lockdown` was saved {action, which, position};
+      # its steps live in a jsonb column, Postgres sorts object keys by length
+      # then bytes, and it came back {name, which, action, position}. HASS Blinds
+      # ran with action="all", which="close", matched no case, sent no HASSPOST,
+      # and the reply said "Lockdown's in" over a house with the blinds up.
+      it "survives the routine round trip that scrambled it" do
+        routine = BuddyRoutine.create!(
+          user:  user,
+          name:  "lockdown",
+          steps: [
+            BuddyRoutine.step(
+              :call_jil_function,
+              { name: "HASS Blinds", action: "close", which: "all", position: 0 },
+            ),
+          ],
+        )
+        saved = routine.reload.markers.first[:payload]
+
+        # The scramble is real, not hypothetical - assert it before relying on
+        # the fix, so this test fails honestly if Postgres ever stops doing it.
+        expect(saved.keys).to eq(%i[name which action position])
+
+        expect(captured_for(saved)["params"]).to eq(["close", "all", 0])
+      end
+
+      # The other half: an arg left out used to slide every later arg onto the
+      # wrong slot. "Close the blinds" with no position is a real request.
+      it "fills an unsent arg with the signature's default rather than shifting" do
+        input = captured_for({ name: "HASS Blinds", which: "stairs" })
+
+        expect(input["params"]).to eq(["open", "stairs", nil])
+      end
+    end
+
     it "keeps expect_result out of the row's sublabel args" do
       stub_execution("closed")
       tool = Buddy::Tools[:call_jil_function]

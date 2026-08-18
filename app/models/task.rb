@@ -256,6 +256,13 @@ class Task < ApplicationRecord
     match[:args].to_s.strip.presence
   end
 
+  # The `params` array to send alongside named args, built from THIS task's
+  # declared arg order rather than the order the caller wrote its keys in. See
+  # Jil::FunctionSignature for why the caller's order can't be trusted.
+  def function_params(named_args)
+    ::Jil::FunctionSignature.params(function_args_str, named_args)
+  end
+
   def monitor
     return unless listener.to_s.starts_with?("monitor:")
 

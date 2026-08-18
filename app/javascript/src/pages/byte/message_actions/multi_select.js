@@ -139,6 +139,14 @@ const ACTION_KIND_LABELS = {
   delete_event:          "Delete Logged Event",
   schedule_reminder:     "New Reminder",
   cancel_reminder:       "Cancel Reminder",
+  // The rest of the rows that take something away. Without a chip they render
+  // as a bare title over a checkbox, which is the least legible a destructive
+  // row can be - "Forget kettle" says nothing about whether ticking the box
+  // teaches the word or drops it.
+  cancel_timer:          "Stop Timer",
+  forget_routine:        "Delete Routine",
+  forget_term:           "Delete Glossary Term",
+  unlink_records:        "Unlink Records",
 };
 
 // The chip above a checklist row, or null for a tool that doesn't get one.
@@ -146,6 +154,45 @@ const ACTION_KIND_LABELS = {
 export function actionKindLabel(toolName, payload) {
   const entry = ACTION_KIND_LABELS[toolName];
   return typeof entry === "function" ? entry(payload || {}) : entry || null;
+}
+
+// Rows where the checkbox TAKES SOMETHING AWAY, and what a tap means on one.
+//
+// A tickbox means "yes, this one" everywhere else on earth, so a ticked box
+// beside "Remove oat milk" is genuinely ambiguous: it could as easily read as
+// "the removal is queued" or "oat milk is here, untick to drop it". It gets
+// worse once the row has already run, because then UNticking is what puts the
+// thing back — tick-to-delete and untick-to-restore in the same control, which
+// is a double negative to hold in your head mid-conversation.
+//
+// So these rows say it in words. `tap` is what checking an untouched row will
+// do; `done` is what a ticked one already did, plus the way back. Only removals
+// get them: on an additive row ("New Chore · Water plants") a tick already
+// means the obvious thing, and a line under every row would be noise.
+const REMOVAL_TOOLS = {
+  cancel_reminder:       { tap: "Tap to cancel it",   done: "Cancelled — untick to put it back" },
+  cancel_timer:          { tap: "Tap to cancel it",   done: "Cancelled — untick to put it back" },
+  delete_event:          { tap: "Tap to delete it",   done: "Deleted — untick to put it back" },
+  remove_list_item:      { tap: "Tap to remove it",   done: "Removed — untick to put it back" },
+  forget_routine:        { tap: "Tap to forget it",   done: "Forgotten — untick to put it back" },
+  forget_term:           { tap: "Tap to forget it",   done: "Forgotten — untick to put it back" },
+  unlink_records:        { tap: "Tap to unlink them", done: "Unlinked — untick to link them again" },
+  undo_chore_completion: { tap: "Tap to unmark it",   done: "Unmarked — untick to mark it again" },
+  undo:                  { tap: "Tap to undo it",     done: "Undone — untick to redo it" },
+};
+
+// The line under a removal row saying what its checkbox does right now, or null
+// when the row isn't one / isn't live. An executed row only earns one if it can
+// actually be unticked — otherwise it would promise a way back that the ✓ and
+// the locked box have already ruled out.
+//
+// Exported so it can be tested without a DOM.
+export function removalHint(toolName, { status, undoable } = {}) {
+  const words = REMOVAL_TOOLS[toolName];
+  if (!words) return null;
+  if (status === "executed") return undoable ? words.done : null;
+
+  return status === "pending" ? words.tap : null;
 }
 
 // Render (or re-render) into a container element. Container is expected
@@ -269,6 +316,16 @@ export function renderMultiSelect(container, message) {
       sub.className = "byte-msg-action-sublabel";
       sub.textContent = btn.sublabel;
       body.appendChild(sub);
+    }
+    // Spelled out only where a tick doesn't mean what a tick usually means.
+    // Inside the row's <label>, so reading it and tapping it are the same
+    // gesture and screen readers pick it up as part of the box's name.
+    const hint = removalHint(btn.tool_name, { status: effectiveStatus, undoable: undoable });
+    if (hint) {
+      const note = document.createElement("span");
+      note.className = "byte-msg-action-hint";
+      note.textContent = hint;
+      body.appendChild(note);
     }
     row.appendChild(body);
 

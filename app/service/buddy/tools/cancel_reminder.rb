@@ -27,6 +27,17 @@ Buddy::Tools.register(
   # Cancelling matches whatever is pending right now, which is never the same
   # set twice - a saved copy would retire a reminder they still want.
   routinable:  false,
+  # Level 2: the row goes now and comes back if they untick it.
+  #
+  # Untyped, this defaulted to 3 - a plain pending checkbox - while the tools
+  # that CREATE these are level 1 on the reasoning that setting one is safe
+  # because cancel_reminder undoes it. Removing one is exactly as reversible and
+  # already carries the proof: `execute` returns PendingLookup's `recreated`
+  # descriptor, holding every column, and Reverter lists both BuddyReminder and
+  # BuddyWatch. What it cost was a reminder firing 47 minutes after the person
+  # said to stop it (prod 3849 -> 3855), because the card sat untapped and
+  # nothing about "you can clear it off" reads as "this is still on".
+  level:       2,
   confirm:     ->(payload, ctx) {
     needle = payload[:match].to_s.strip
     raise "which one?" if needle.empty?

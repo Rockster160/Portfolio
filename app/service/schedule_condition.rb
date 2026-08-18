@@ -146,7 +146,9 @@ module ScheduleCondition
   def ran(data, user)
     task = resolve_task(data[:task], user)
     args = (data[:args] || {}).transform_keys(&:to_s)
-    input = args.empty? ? {} : args.merge("params" => args.values)
+    # Signature order, not key order - `condition` is a jsonb column and comes
+    # back sorted by key length. Same reasoning as call_jil_function.
+    input = args.empty? ? {} : args.merge("params" => task.function_params(args))
 
     execution = task.execute(input, auth: :buddy, auth_id: user.id, trigger_scope: "buddy")
     execution.respond_to?(:result) ? execution.result.to_s : ""

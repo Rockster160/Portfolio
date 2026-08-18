@@ -61,6 +61,19 @@ RSpec.describe "Checklist action labels" do
     expect(label_for(:add_list_item)).to eq("New List Item")
   end
 
+  # A destructive row with no chip is a bare title over a checkbox, which is the
+  # least legible one of these can be: "Forget kettle" doesn't say whether
+  # ticking the box teaches the household that word or drops it.
+  it "names every row that takes something away" do
+    expect(label_for(:cancel_reminder)).to eq("Cancel Reminder")
+    expect(label_for(:cancel_timer)).to eq("Stop Timer")
+    expect(label_for(:forget_routine)).to eq("Delete Routine")
+    expect(label_for(:forget_term)).to eq("Delete Glossary Term")
+    expect(label_for(:unlink_records)).to eq("Unlink Records")
+    expect(label_for(:remove_list_item)).to eq("Remove List Item")
+    expect(label_for(:undo_chore_completion)).to eq("Undo Chore")
+  end
+
   it "gives no chip to a tool that has none" do
     expect(label_for(:some_future_tool)).to be_nil
   end

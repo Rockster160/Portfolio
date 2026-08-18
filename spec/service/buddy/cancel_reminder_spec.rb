@@ -110,6 +110,57 @@ RSpec.describe "cancel_reminder tool" do
     end
   end
 
+  # Prod 3849 -> 3855, 47 minutes apart. "You can stop the reminder about the
+  # Bamboo and houseplants, thank you!" put up a pending checkbox (byte_action
+  # 548), nobody tapped it, and the reminder fired at noon anyway: "Lol I just
+  # told you that you can delete that reminder forever!"
+  #
+  # Nothing in the wording was wrong - "you can clear it off with one tap" was
+  # true. The row was level 3 only because no level was declared, while the
+  # tools that CREATE these are level 1 on the reasoning that setting one is
+  # safe because THIS undoes it. Removing one is exactly as reversible.
+  describe "how confidently it removes" do
+    let!(:message) {
+      convo.byte_messages.create!(
+        user: user, direction: :inbound, state: :delivered, body: "stop that one",
+        metadata: { "kind" => "buddy" }
+      )
+    }
+    let!(:noon) {
+      BuddyReminder.create!(
+        user: user, byte_conversation: convo, body: "Check the bamboo tree and water all the plants.",
+        fire_at: 40.minutes.from_now
+      )
+    }
+
+    def proposed
+      Buddy::ProposalBuilder.create(
+        user: user, byte_message: message.reload,
+        markers: [{ tool_name: :cancel_reminder, payload: { match: noon.id.to_s } }]
+      )
+    end
+
+    it "takes the reminder away when they say so, rather than offering to" do
+      button = proposed[:action].buttons.first
+
+      expect(button["status"]).to eq("executed")
+      expect(BuddyReminder.find_by(id: noon.id)).to be_nil
+    end
+
+    it "leaves the row ticked and untickable, so undo is one tap the other way" do
+      action = proposed[:action]
+
+      expect(action.buttons.first["undoable"]).to be(true)
+      expect { Buddy::ProposalExecutor.undo!(action.id, action.buttons.first["id"]) }
+        .to change(BuddyReminder, :count).by(1)
+      expect(BuddyReminder.last.body).to eq("Check the bamboo tree and water all the plants.")
+    end
+
+    it "is declared at the level that makes both of those true" do
+      expect(tool[:level]).to eq(2)
+    end
+  end
+
   describe "reminders and watches as one list" do
     let!(:reminder) {
       BuddyReminder.create!(

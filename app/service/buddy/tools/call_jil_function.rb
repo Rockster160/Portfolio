@@ -157,12 +157,18 @@ Buddy::Tools.register(
     fn_args = (payload[:fn_args] || {}).transform_keys(&:to_s)
 
     # Named args PLUS an ordered `params` array, mirroring what the Run-args
-    # modal posts (run_args_modal.js `collectValues`). A function task reads
-    # its args either way - `Keyword.NamedArg("x")` off the top-level key,
-    # bare `Keyword.Item()` off `params` by position - and the listener alone
-    # doesn't say which. Sending both means Buddy can call either style
-    # without us parsing the Jil signature grammar server-side.
-    input = fn_args.empty? ? {} : fn_args.merge("params" => fn_args.values)
+    # modal posts (arg_binding.js `collectValues`). A function task reads its
+    # args either way - `Keyword.NamedArg("x")` off the top-level key, bare
+    # `Keyword.Item()` off `params` by position - and the listener alone doesn't
+    # say which, so both go out.
+    #
+    # The order comes from the TASK's signature, not from the keys we were
+    # handed. A routine's steps and a scheduled call's payload both round-trip
+    # through jsonb, which sorts object keys by length then bytes, so `lockdown`
+    # saved {action, which, position} arrived {which, action, position} and
+    # HASS Blinds ran with action="all" — matched no case, moved no blind, and
+    # reported the house shut (prod 3845). Jil::FunctionSignature has the rest.
+    input = fn_args.empty? ? {} : fn_args.merge("params" => task.function_params(fn_args))
 
     # auth_id is the ACTING user, which differs from the execution's user
     # whenever the task was shared: it runs as its owner, but Chelsea may be
