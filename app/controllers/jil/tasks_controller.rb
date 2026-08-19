@@ -67,20 +67,23 @@ class Jil::TasksController < ApplicationController
 
   def create
     @task = current_user.tasks.create(task_params)
+    return render_task_errors unless @task.persisted?
 
     render json: {
-      data: @task.serialize,
-      url:  jil_task_path(@task),
+      data:     @task.serialize,
+      url:      jil_task_path(@task),
+      warnings: @task.cron_warnings,
     }
   end
 
   def update
     @task = current_user.tasks.find(params[:id])
-    @task.update(task_params)
+    return render_task_errors unless @task.update(task_params)
 
     render json: {
-      data: @task.serialize,
-      url:  jil_task_path(@task),
+      data:     @task.serialize,
+      url:      jil_task_path(@task),
+      warnings: @task.cron_warnings,
     }
   end
 
@@ -141,6 +144,13 @@ class Jil::TasksController < ApplicationController
   end
 
   private
+
+  # The editor's save button reads `errors` off a non-2xx body. Without this a
+  # rejected save rendered 200 with the pre-save record, so a bad cron looked
+  # like it had been accepted.
+  def render_task_errors
+    render json: { errors: @task.errors.full_messages }, status: :unprocessable_entity
+  end
 
   def task_params
     params.require(:task).permit(

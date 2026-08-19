@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_19_184813) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_19_205410) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -210,6 +210,27 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_19_184813) do
     t.index ["user_id"], name: "index_agendas_on_user_id"
     t.index ["watch_channel_id"], name: "index_agendas_on_watch_channel_id", unique: true, where: "(watch_channel_id IS NOT NULL)"
     t.index ["watch_expires_at"], name: "index_agendas_on_watch_expires_at", where: "(watch_expires_at IS NOT NULL)"
+  end
+
+  create_table "anchor_occurrences", force: :cascade do |t|
+    t.bigint "anchor_id", null: false
+    t.datetime "occurs_at", null: false
+    t.text "identifier"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["anchor_id", "identifier"], name: "index_anchor_occurrences_on_anchor_id_and_identifier", unique: true
+    t.index ["anchor_id", "occurs_at"], name: "index_anchor_occurrences_on_anchor_id_and_occurs_at"
+    t.index ["anchor_id"], name: "index_anchor_occurrences_on_anchor_id"
+  end
+
+  create_table "anchors", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.text "key", null: false
+    t.text "description"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "key"], name: "index_anchors_on_user_id_and_key", unique: true
+    t.index ["user_id"], name: "index_anchors_on_user_id"
   end
 
   create_table "api_keys", force: :cascade do |t|
@@ -873,43 +894,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_19_184813) do
     t.index ["user_id"], name: "index_climbs_on_user_id"
   end
 
-  create_table "command_proposal_comments", id: :serial, force: :cascade do |t|
-    t.integer "iteration_id"
-    t.integer "line_number"
-    t.integer "author_id"
-    t.text "body"
-    t.datetime "created_at", precision: nil, null: false
-    t.datetime "updated_at", precision: nil, null: false
-    t.index ["iteration_id"], name: "index_command_proposal_comments_on_iteration_id"
-  end
-
-  create_table "command_proposal_iterations", id: :serial, force: :cascade do |t|
-    t.integer "task_id"
-    t.text "args"
-    t.text "code"
-    t.text "result"
-    t.integer "status", default: 0
-    t.integer "requester_id"
-    t.integer "approver_id"
-    t.datetime "approved_at", precision: nil
-    t.datetime "started_at", precision: nil
-    t.datetime "completed_at", precision: nil
-    t.datetime "stopped_at", precision: nil
-    t.datetime "created_at", precision: nil, null: false
-    t.datetime "updated_at", precision: nil, null: false
-    t.index ["task_id"], name: "index_command_proposal_iterations_on_task_id"
-  end
-
-  create_table "command_proposal_tasks", id: :serial, force: :cascade do |t|
-    t.text "name"
-    t.text "friendly_id"
-    t.text "description"
-    t.integer "session_type", default: 0
-    t.datetime "last_executed_at", precision: nil
-    t.datetime "created_at", precision: nil, null: false
-    t.datetime "updated_at", precision: nil, null: false
-  end
-
   create_table "contact_tags", force: :cascade do |t|
     t.bigint "contact_id", null: false
     t.bigint "tag_id", null: false
@@ -1004,8 +988,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_19_184813) do
     t.datetime "started_at"
     t.datetime "finished_at"
     t.datetime "created_at", null: false
-    t.index ["task_id", "started_at"], name: "index_execution_archives_on_task_id_and_started_at", order: { started_at: :desc }
-    t.index ["user_id", "started_at"], name: "index_execution_archives_on_user_id_and_started_at", order: { started_at: :desc }
   end
 
   create_table "execution_payloads", force: :cascade do |t|
@@ -1439,8 +1421,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_19_184813) do
     t.bigint "source_item_id"
     t.integer "offset_seconds"
     t.jsonb "condition"
-    t.text "anchor"
-    t.index ["anchor"], name: "index_scheduled_triggers_on_anchor", where: "(anchor IS NOT NULL)"
+    t.bigint "anchor_occurrence_id"
+    t.index ["anchor_occurrence_id"], name: "index_scheduled_triggers_on_anchor_occurrence_id"
     t.index ["execute_at"], name: "index_scheduled_triggers_on_pending_execute_at", where: "(jid IS NULL)"
     t.index ["source_item_id"], name: "index_scheduled_triggers_on_source_item_id"
     t.index ["user_id"], name: "index_scheduled_triggers_on_user_id"
@@ -1776,6 +1758,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_19_184813) do
   add_foreign_key "agenda_shares", "users"
   add_foreign_key "agendas", "google_accounts"
   add_foreign_key "agendas", "users"
+  add_foreign_key "anchor_occurrences", "anchors"
+  add_foreign_key "anchors", "users"
   add_foreign_key "bank_balance_snapshots", "bank_accounts"
   add_foreign_key "bank_transactions", "action_events", on_delete: :nullify
   add_foreign_key "bank_transactions", "bank_accounts"
@@ -1850,6 +1834,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_19_184813) do
   add_foreign_key "page_tags", "tags"
   add_foreign_key "pages", "users"
   add_foreign_key "scheduled_triggers", "agenda_items", column: "source_item_id", on_delete: :cascade
+  add_foreign_key "scheduled_triggers", "anchor_occurrences", on_delete: :cascade
   add_foreign_key "sections", "lists"
   add_foreign_key "shared_pages", "pages"
   add_foreign_key "shared_pages", "users"

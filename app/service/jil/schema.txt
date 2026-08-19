@@ -345,6 +345,19 @@
 *[ChoreCompletionData]
   #timestamp(Date)
   #note(String)
+[Anchor]
+  #set(String:Key Date:At String?:Id)::Anchor
+  #remove(String:Key String:Id)::Boolean
+  #clear(String:Key)::Boolean
+  #destroy(String:Key)::Boolean
+  #next(String:Key)::Date
+  #prune(String:Key)::Numeric
+  #list::Array
+  #trigger("Anchor" String BR "Name" String BR "Scope" String BR "Data" Hash)::Schedule
+  #untrigger("Anchor" String BR "Name" String)::Boolean
+  .id::Numeric
+  .key::String
+  .description::String
 [Timer]
   #find(String|Numeric)::Timer
   #list::Array

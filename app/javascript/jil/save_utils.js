@@ -133,34 +133,43 @@ saveBtn
         jilTaskForm.getAttribute("method"),
       body: formData,
       headers: { Accept: "application/json" },
-    }).then(function (res) {
+    }).then(async function (res) {
       formSubmitting = false;
-      formDirty = false;
-      History.savedIdx = History.currentIdx;
       document
         .querySelectorAll(".jil-temp-code")
         .forEach((item) => item.remove());
+
       if (!res.ok) {
-        throw new Error(
-          `HTTP error! status: ${res.status} response: ${JSON.stringify(res)}`,
-        );
+        // Leave formDirty set — the changes really are still unsaved, so the
+        // unload warning and the dirty save button should both stay honest.
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.errors?.join(" ") || `[SAVE] HTTP ${res.status}`);
       }
-      res.json().then(function (json) {
-        const toastMessage = document.createElement("span");
-        toastMessage.classList.add("fa", "fa-check", "text-center");
-        Toast.success(toastMessage, 2000);
-        if (isNewTask && json.url) {
-          window.location.href = json.url;
-        }
-      });
+
+      formDirty = false;
+      History.savedIdx = History.currentIdx;
+
+      const json = await res.json();
+      const toastMessage = document.createElement("span");
+      toastMessage.classList.add("fa", "fa-check", "text-center");
+      Toast.success(toastMessage, 2000);
+
+      // It saved — these are things to know about, not reasons it didn't. A
+      // cron naming an anchor that doesn't exist yet is a legitimate
+      // half-finished state, so it says so and gets out of the way.
+      (json.warnings || []).forEach((warning) => Toast.info(warning, 6000));
+
+      if (isNewTask && json.url) {
+        window.location.href = json.url;
+      }
     });
   })
   .onError(async (evt) => {
-    Toast.error(
-      (evt.detail && JSON.stringify(evt.detail)) || "[SAVE] Unknown Error",
-    );
-    document.querySelector(".results .error").innerText =
-      evt.detail || "[SAVE] Unknown Error";
+    // detail is the thrown Error. JSON.stringify on one yields "{}" because its
+    // properties aren't enumerable, which is why failures used to read as empty.
+    const message = evt.detail?.message || "[SAVE] Unknown Error";
+    Toast.error(message);
+    document.querySelector(".results .error").innerText = message;
   });
 
 export const runBtn = new SaveBtn(document.querySelector(".btn-run"));
@@ -173,7 +182,9 @@ runBtn
     if (argsStr) {
       const taskName = runBtn.btn?.dataset?.taskName;
       const collected = await promptForArgs({ argsStr, taskName });
-      if (collected === null) { return; } // User dismissed
+      if (collected === null) {
+        return;
+      } // User dismissed
       data = collected;
     }
 
@@ -193,11 +204,9 @@ runBtn
     });
   })
   .onError(async (evt) => {
-    Toast.error(
-      (evt.detail && JSON.stringify(evt.detail)) || "[Run] Unknown Error",
-    );
-    document.querySelector(".results .error").innerText =
-      evt.detail || "[RUN] Unknown Error";
+    const message = evt.detail?.message || "[RUN] Unknown Error";
+    Toast.error(message);
+    document.querySelector(".results .error").innerText = message;
   });
 
 const enabledCheckbox = document.querySelector(

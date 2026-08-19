@@ -28,6 +28,11 @@ class Task < ApplicationRecord
   belongs_to :user, optional: false
   belongs_to :task_folder, optional: true
 
+  # Only on change: a legacy row with an unreadable cron must still be able to
+  # save its `last_trigger_at` after a run, or JilRunnerWorker would keep
+  # finding it pending and re-run it in a loop.
+  validate :cron_must_be_readable, if: -> { cron.present? && cron_changed? }
+
   before_save :set_next_cron
   after_create { reload } # Needed to retrieve the generated uuid on the current instance in memory
   orderable sort_order: :desc, scope: ->(task) { task.user.tasks }
@@ -397,12 +402,24 @@ class Task < ApplicationRecord
     Task.recompute_tree_order(user)
   end
 
+  # Readable, but naming an anchor that doesn't exist yet. Not an error: the
+  # task may deliberately be a placeholder written before its feeder. Surfaced
+  # on save so it isn't a surprise, and it clears itself once the anchor exists.
+  def cron_warnings
+    ::CronParse.warnings(cron, user)
+  end
+
   def broadcast_users
     shared_ids = SharedTask.where(task_id: id).pluck(:user_id)
     User.where(id: [user_id] + shared_ids)
   end
 
   private
+
+  def cron_must_be_readable
+    complaint = ::CronParse.complaint(cron)
+    errors.add(:cron, complaint) if complaint
+  end
 
   def set_next_cron
     prior_trigger = next_trigger_at

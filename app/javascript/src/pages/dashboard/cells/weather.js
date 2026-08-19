@@ -3,6 +3,9 @@ import { Time } from "./_time";
 import { shiftTempToColor } from "../vars";
 
 (function () {
+  var NIGHT_COLOR = "#C5C4DE";
+  var DAY_COLOR = "#DEDBBB";
+
   var getWeatherEmoji = function (code, isNight) {
     let ico =
       "[ico wi wi-owm-" +
@@ -12,11 +15,17 @@ import { shiftTempToColor } from "../vars";
       "-" +
       code +
       "]";
-    return Text.color(isNight ? "#C5C4DE" : "#DEDBBB", ico);
+    return Text.color(isNight ? NIGHT_COLOR : DAY_COLOR, ico);
   };
 
+  // Sunset leads into night and sunrise into day, so each marker takes the
+  // color of the hours it introduces — the strip stays one gradient instead of
+  // the markers standing apart from it.
   var getSunEmoji = function (kind) {
-    return Text.orange("[ico wi wi-" + kind + "]");
+    return Text.color(
+      kind == "sunset" ? NIGHT_COLOR : DAY_COLOR,
+      "[ico wi wi-" + kind + "]",
+    );
   };
 
   // Every sunrise/sunset the forecast covers, ascending. `current` only carries
@@ -117,7 +126,7 @@ import { shiftTempToColor } from "../vars";
             // Only the minutes fit, and the icon says which event it is.
             var minutes = ":" + String(time.getMinutes()).padStart(2, "0");
 
-            hourly_hours.push(Text.orange(minutes.padStart(pad, " ")));
+            hourly_hours.push(minutes.padStart(pad, " "));
             hourly_icons.push("".padStart(pad - 2, " ") + getSunEmoji(col.sun));
             hourly_temps.push(" ".repeat(pad));
             return;

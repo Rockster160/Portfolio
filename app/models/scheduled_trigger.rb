@@ -3,6 +3,7 @@
 # Table name: scheduled_triggers
 #
 #  id             :bigint           not null, primary key
+#  anchor         :text
 #  auth_type      :integer
 #  completed_at   :datetime
 #  condition      :jsonb
@@ -27,6 +28,11 @@ class ScheduledTrigger < ApplicationRecord
   # rewrites execute_at = source.start_at + offset_seconds. FK cascade
   # destroys these when the source is deleted.
   belongs_to :source_item, class_name: "AgendaItem", optional: true
+  # Derived from an Anchor occurrence instead, with the same offset_seconds
+  # meaning. Bound to the exact occurrence rather than to the anchor: an anchor
+  # may be hourly, daily or weekly, so "the one nearest where this sits" has no
+  # window that is right for all of them. FK cascade removes these with it.
+  belongs_to :anchor_occurrence, optional: true
 
   enum :auth_type, ::Execution.auth_types
 
@@ -37,9 +43,11 @@ class ScheduledTrigger < ApplicationRecord
   scope :running, -> { started.not_completed }
   scope :ready, -> { not_started.where(execute_at: ..5.seconds.from_now) }
   scope :derived, -> { where.not(source_item_id: nil) }
+  scope :anchored, -> { where.not(anchor_occurrence_id: nil) }
 
   validates :trigger, presence: true
   validates :offset_seconds, presence: true, if: :source_item_id?
+  validates :offset_seconds, presence: true, if: :anchor_occurrence_id?
   validates :name, presence: true, if: :source_item_id?
   validates :name, uniqueness: { scope: [:user_id, :source_item_id] }, if: :source_item_id?
 

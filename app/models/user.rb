@@ -47,6 +47,7 @@ class User < ApplicationRecord
   has_many :agenda_notification_settings, dependent: :destroy
   has_many :emails, dependent: :destroy
   has_many :scheduled_triggers, dependent: :destroy
+  has_many :anchors, dependent: :destroy
   has_many :prompts, dependent: :destroy
   has_many :action_events
   has_many :custom_charts
