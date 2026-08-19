@@ -495,26 +495,44 @@ module Buddy
     # prose list of tool names would only be a second, driftable source of
     # truth. What stays here is the behavioral guidance no schema can express -
     # tool PRIORITY, tense discipline, tone.
+    # **Ordered steadiest-first, and that ordering is load-bearing.** Prompt
+    # caching matches on a PREFIX, so the first thing that differs from last
+    # turn ends the cache hit and everything after it is billed in full. The
+    # clock used to be line one, rendered to the minute, which put the single
+    # most volatile string in the prompt ahead of the persona, the tone profile
+    # and the whole rules appendix - roughly 25k tokens that never change,
+    # re-billed all day because the minute had ticked over.
+    #
+    # So the blocks run: fixed text (persona, tone, rules, the get_context
+    # guide), then things that change over days (roster, routines, memories),
+    # then per-conversation state, then the two that genuinely differ every turn
+    # - the at-a-glance counts and the clock. Anything added here goes in the
+    # band matching how often it changes, NOT where it reads best.
+    #
+    # The clock landing last is not a demotion. It sits closest to the person's
+    # own message now, which is the most attended position in the prompt, and it
+    # was moved for the cache rather than against the "impossible to miss" note
+    # it used to carry.
     def for(user, conversation:, at_glance: nil, recap: nil)
       theme = conversation.buddy_theme.presence || Buddy::Themes::DEFAULT
       persona = load_persona(theme)
 
       parts = []
-      parts << time_preamble(user)  # first & impossible to miss
       parts << persona.strip
       parts << tone_profile(user, theme)
       rules = RULES_APPENDIX.strip.sub("{{MOOD_BLOCK}}", mood_block(theme))
       rules = rules.sub("{{GLOSSARY_BLOCK}}", glossary_block(user).to_s)
       parts << rules.sub("{{ICONS_BLOCK}}", icons_block(user).to_s).rstrip
+      parts << context_guide_block
       parts << not_wired_block(user)
       parts << household_block(user)
+      parts << routines_block(user)
       parts << memories_block(user)
       parts << open_loops_block(user)
-      parts << routines_block(user)
       parts << conversation_notes_block(conversation)
       parts << recap_block(recap) if recap.to_s.strip.length.positive?
-      parts << context_guide_block
       parts << at_glance_block(at_glance) if at_glance.present?
+      parts << time_preamble(user)
       parts.compact.reject { |s| s.to_s.strip.empty? }.join("\n\n---\n\n")
     end
 
