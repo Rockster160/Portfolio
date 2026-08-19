@@ -565,10 +565,6 @@ Rails.application.routes.draw do
     get "/system/memories" => "system#memories", as: :system_memories
     patch "/system/memories/:id" => "system#update_memory", as: :system_memory
     delete "/system/memories/:id" => "system#destroy_memory", as: :system_memory_destroy
-    get "/system/announcements" => "system#announcements", as: :system_announcements
-    post "/system/announcements" => "system#create_announcement", as: :system_announcement_create
-    patch "/system/announcements/:id" => "system#requeue_announcement", as: :system_announcement_requeue
-    delete "/system/announcements/:id" => "system#destroy_announcement", as: :system_announcement_destroy
   end
   mount ::ActionCable.server => "/cable"
 end

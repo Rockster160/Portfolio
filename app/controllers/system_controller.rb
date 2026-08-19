@@ -9,7 +9,6 @@ class SystemController < ApplicationController
   SPEND_DEFAULT_DAYS = 30
   TRANSACTION_PAGE = 100
   MEMORY_PAGE = 200
-  ANNOUNCEMENT_PAGE = 50
   # A `timestamp` term in the search, with its comparison operator. Longest
   # operators first, or `>=` would match as `>` and leave a stray `=` behind.
   # A negated term (`-timestamp:`) deliberately does not match: it names dates
@@ -266,58 +265,6 @@ class SystemController < ApplicationController
   def destroy_memory
     BuddyMemory.find(params[:id]).destroy!
     redirect_to(system_memories_path(kind: params[:kind], q: params[:q], tag: params[:tag]), notice: "Deleted.")
-  end
-
-  # Notes to be worked into somebody's next Today briefing. Its own page rather
-  # than a panel on the memories list: this one has a form, and a form on a page
-  # whose job is reading a long list would end up being the loudest thing there.
-  def announcements
-    @announcements = BuddyAnnouncement.includes(:user).order(created_at: :desc).limit(ANNOUNCEMENT_PAGE)
-    @users = companion_users
-  end
-
-  # Who can actually receive one. Having a Buddy conversation IS having a
-  # companion — the same gate Buddy::CompanionRelay uses to decide whether
-  # someone can be reached at all. There is no per-user flag for this; `tasks`
-  # has a `buddy_enabled` column and it is about Jil task access, not people.
-  def companion_users
-    User.where(id: ByteConversation.where(mode: :buddy).select(:user_id)).order(:username).to_a
-  end
-
-  # `user_id` of "all" queues one row per person, because delivery is tracked
-  # per person — see BuddyAnnouncement.
-  def create_announcement
-    body = params[:body].to_s.strip
-    return redirect_to(system_announcements_path, alert: "Nothing to say.") if body.empty?
-
-    targets = (
-      if params[:user_id].to_s == "all"
-        companion_users
-      else
-        User.where(id: params[:user_id]).to_a
-      end
-    )
-    return redirect_to(system_announcements_path, alert: "No one to tell.") if targets.empty?
-
-    hours = params[:expires_in_hours].to_i
-    expires_in = hours.positive? ? hours.hours : nil
-    targets.each { |user| Buddy::Announcements.queue!(user: user, body: body, expires_in: expires_in) }
-
-    who = targets.one? ? targets.first.first_name : "#{targets.size} people"
-    redirect_to(system_announcements_path, notice: "Queued for #{who}. It'll land on their next Today.")
-  end
-
-  def destroy_announcement
-    BuddyAnnouncement.find(params[:id]).destroy!
-    redirect_to(system_announcements_path, notice: "Removed.")
-  end
-
-  # Put a delivered one back in the queue. The reason `delivered_at` is a stamp
-  # rather than a delete: a briefing that failed after the claim leaves an
-  # announcement nobody heard, and this is the one click that fixes it.
-  def requeue_announcement
-    BuddyAnnouncement.find(params[:id]).update!(delivered_at: nil)
-    redirect_to(system_announcements_path, notice: "Back in the queue.")
   end
 
   def connections

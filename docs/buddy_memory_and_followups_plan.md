@@ -564,41 +564,36 @@ dedupe and `forget`'s substring match now share a table with the stash, so both
 are scoped to `[:preference, :concept]`. Otherwise a remembered fact could
 reinforce — and overwrite the text of — a held idea that happened to share six
 words with it.
+## 9. Announcements on the next Today — REMOVED
 
-## 9. Announcements on the next Today
+Queue a note for somebody, ride it along on their next Today briefing, said in
+the companion's own words. Built, shipped, and taken back out on 19 Aug.
 
-Queue a note for somebody, and it rides along on their next Today briefing —
-said in their companion's own words, not read out.
+It never worked once. Three briefings running had the block sitting in the seed
+intact — verified in the message rows, not inferred — and said nothing from it.
+The block competed with ~13k characters of *forward-looking only*, *mention
+fewer things*, *cut padding*, *three to five lines*, and an announcement is none
+of those: not on the agenda, not still-ahead, and indistinguishable from padding
+under the subtraction test. Two rounds of stronger wording changed nothing, and
+moving the block last — below the rules arguing against it — cost the briefing
+entirely: the reply came back as a bare offer of help with no briefing in it.
 
-`BuddyAnnouncement` (user, body, `delivered_at`, `expires_at`) +
-`Buddy::Announcements` + `/system/announcements`.
+What's worth keeping from it, if this is ever tried again:
 
-- **One row per person, even for a household-wide note.** They read their
-  briefings at different times and one of them may not read the next one at all,
-  so a shared row would be marked delivered by whoever got up first.
-- **Reworded, not pasted.** A line dropped verbatim into an otherwise-written
-  briefing is audible — it arrives in a different voice than everything around
-  it. The prompt hands over the substance and says to keep every name, time and
-  number and change everything else.
-- **Placed above the weather**, not after the agenda: an announcement is the one
-  thing in a briefing the person has no other way of finding out, so it can't
-  sit behind the parts they could have read off their own calendar.
-- **Claimed when the seed is built.** `TodayBriefing.seed` is called exactly
-  once per briefing from both paths that produce one (the scheduled reminder via
-  `deliver!`, and the hero chip via `QuickActionsController`), which makes it
-  the only place a claim can happen without double-delivering. The tradeoff is
-  deliberate: if the turn then fails, the note is stamped delivered without
-  being heard — so `delivered_at` is a stamp rather than a delete and
-  `/system/announcements` re-queues it in one click.
-- **`expires_at`**, because nothing else in the system would ever clear "the
-  plumber comes this afternoon", and a queue without one says it on Thursday.
-- Capped at `MAX_PER_BRIEFING` so a briefing can't turn into a noticeboard.
-- Empty string when nothing is queued, so the prompt is byte-identical for
-  anyone with none.
+- **The delivery path was never the problem.** Both losses were on turns that
+  succeeded. A deferred claim, a retry, a re-queue on failure — none of them
+  would have fired, because nothing failed.
+- **Verifying the reply is the only mechanism with teeth**, and it is a
+  heuristic (word-stem overlap) that has to be capped or it re-says a delivered
+  note every morning. That it was needed at all is the tell.
+- **A briefing prompt this long has a budget.** Anything added to it is arguing
+  against everything already in it, and position in the prompt decides how much
+  argument comes after — not how prominent the thing is in the answer.
+- If somebody needs to be told something, a message of its own says it. Folding
+  it into a message whose whole design is *say less* was the wrong host.
 
-Recipients are "users with a Buddy conversation" — the same gate
-`CompanionRelay` uses. There is no per-user flag; `tasks.buddy_enabled` exists
-but is about Jil task access, not people.
+`20260819042151` had already reached production, so removal is
+`20260819065044_drop_buddy_announcements`, not a deleted file.
 
 ## 10. Pile entries that were never thoughts
 

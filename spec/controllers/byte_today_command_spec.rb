@@ -78,15 +78,6 @@ RSpec.describe ByteController, type: :controller do
     expect(buddy.byte_messages.where(body: "/today")).to be_empty
   end
 
-  it "carries a queued announcement into the briefing it builds" do
-    Buddy::Announcements.queue!(user: user, body: "The plumber is coming Thursday.")
-
-    send_command("/today")
-
-    expect(seeds.last.body).to include("The plumber is coming Thursday.")
-    expect(BuddyAnnouncement.pending.count).to eq(0)
-  end
-
   context "in a thread that isn't Buddy's" do
     let!(:claude) {
       user.byte_conversations.create!(mode: :claude, name: "Claude", last_message_at: Time.current)
