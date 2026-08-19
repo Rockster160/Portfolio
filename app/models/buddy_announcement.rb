@@ -9,6 +9,7 @@
 #  created_at   :datetime         not null
 #  updated_at   :datetime         not null
 #  user_id      :bigint           not null
+
 #
 # Something to tell somebody, folded into their next Today briefing and said in
 # their companion's own words rather than read out verbatim.

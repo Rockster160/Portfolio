@@ -2,21 +2,25 @@
 #
 # Table name: byte_conversations
 #
-#  id                :bigint           not null, primary key
-#  archived          :boolean          default(FALSE), not null
-#  buddy_expression  :string           default("neutral"), not null
-#  buddy_memories    :text
-#  buddy_sleep_until :datetime
-#  buddy_theme       :string           default("byte"), not null
-#  last_message_at   :datetime
-#  last_read_at      :datetime
-#  metadata          :jsonb            not null
-#  mode              :integer          default("claude"), not null
-#  name              :string
-#  primary_at        :datetime
-#  created_at        :datetime         not null
-#  updated_at        :datetime         not null
-#  user_id           :bigint           not null
+#  id                  :bigint           not null, primary key
+#  archived            :boolean          default(FALSE), not null
+#  buddy_compile_after :datetime
+#  buddy_compiled_at   :datetime
+#  buddy_expression    :string           default("neutral"), not null
+#  buddy_memories      :text
+#  buddy_sleep_until   :datetime
+#  buddy_theme         :string           default("byte"), not null
+#  buddy_topic         :text
+#  buddy_topic_at      :datetime
+#  last_message_at     :datetime
+#  last_read_at        :datetime
+#  metadata            :jsonb            not null
+#  mode                :integer          default("claude"), not null
+#  name                :string
+#  primary_at          :datetime
+#  created_at          :datetime         not null
+#  updated_at          :datetime         not null
+#  user_id             :bigint           not null
 #
 class ByteConversation < ApplicationRecord
   # Users whose new Buddy threads spin up as a non-default pet. The pet theme is

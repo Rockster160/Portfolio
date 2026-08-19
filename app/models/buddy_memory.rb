@@ -23,6 +23,7 @@
 #  updated_at        :datetime         not null
 #  source_message_id :bigint
 #  user_id           :bigint           not null
+
 #
 # Everything Buddy holds about a person, in one table.
 #

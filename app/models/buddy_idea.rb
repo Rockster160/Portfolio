@@ -13,6 +13,7 @@
 #  created_at      :datetime         not null
 #  updated_at      :datetime         not null
 #  last_touched_at :datetime
+
 #
 # LEGACY — merged into BuddyMemory (`kind: :stash`).
 #
@@ -82,18 +83,18 @@ class BuddyIdea < ApplicationRecord
   # "3 notes, last week" — how much is in here and how warm it still is. Nil for
   # an idea nobody has added to, so an untouched pile reads exactly as it did
   # before any of this existed.
-  def thread_label(now = Time.current)
+  def thread_label(now=Time.current)
     count = notes.loaded? ? notes.size : notes.count
     return nil if count.zero?
 
-    ["#{count} #{'note'.pluralize(count)}", "last #{touched_ago(now)}"].join(", ")
+    ["#{count} #{"note".pluralize(count)}", "last #{touched_ago(now)}"].join(", ")
   end
 
   # The seed plus everything added to it, oldest first, as one readable block.
   # This is what "remind me what this was" hands back.
-  def transcript(now = Time.current)
+  def transcript(now=Time.current)
     lines = ["[seed, #{waiting_label(now.to_date)}] #{body.to_s.strip}"]
-    notes.each { |n| lines << "[#{n.from_companion? ? 'you, ' : ''}#{n.age_label(now)}] #{n.body.to_s.strip}" }
+    notes.each { |n| lines << "[#{"you, " if n.from_companion?}#{n.age_label(now)}] #{n.body.to_s.strip}" }
     lines.join("\n")
   end
 
