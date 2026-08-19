@@ -40,6 +40,24 @@ RSpec.describe Buddy::Announcements do
       expect(described_class.claim_block!(user)).to eq("")
     end
 
+    # The block sits inside ~12k characters of "forward-looking only", "lead
+    # with what's still ahead", "mention FEWER things", "cut padding" and "aim
+    # for 3-5 short lines". An announcement is none of those, so without an
+    # explicit exemption it reads as something to filter out — which is exactly
+    # what happened the first time one was queued for real: it reached the model
+    # in the seed and simply wasn't said.
+    it "exempts itself from the day rules that would otherwise filter it out" do
+      described_class.queue!(user: user, body: "The plumber is coming Thursday.")
+
+      block = described_class.claim_block!(user)
+
+      expect(block).to include("NOT OPTIONAL")
+      expect(block).to match(/none of it applies to these/i)
+      expect(block).to match(/don't count against the three-to-five lines/i)
+      expect(block).to match(/quiet day .* still carries these/i)
+      expect(block).to match(/has failed/i)
+    end
+
     it "carries the substance and tells the model to reword it" do
       described_class.queue!(user: user, body: "The plumber is coming Thursday.")
 

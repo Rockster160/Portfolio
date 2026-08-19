@@ -876,6 +876,68 @@ module Buddy
           .pick(:body)
       end
 
+      # A briefing that announces itself instead of being itself.
+      #
+      # "Hiii! Your Today is ready ✨" is not a briefing, it's a claim that one
+      # happened — and nothing else is coming, so the person is left with a
+      # receipt for a message that was never written. It shows up two ways: the
+      # `today_briefing` tool used to be callable from the briefing turn (see
+      # Buddy::Tools::BRIEFING_WITHHELD), and once one reply lands like this it
+      # sits in history teaching every briefing after it.
+      #
+      # That second half is why the seed's HARD NO isn't enough on its own. A
+      # thread that has said it once has a worked example in front of it, and
+      # prose has lost to a worked example every time it's been tried here.
+      #
+      # A REPAIR, in the same spirit as with_greeting: the claim is cut and
+      # whatever real briefing followed it stands. Only when nothing is left does
+      # this report — that's a briefing that never got written, and it should be
+      # loud rather than silently empty.
+      # Matches the CLAIM, not the sentence around it. An earlier cut anchored
+      # to the start of a line and "Hiii! Your Today is ready" walked straight
+      # past it; taking the whole sentence instead would have eaten the real
+      # briefing in "…went out 💛 Dentist at 2".
+      #
+      # The state word has to follow the noun almost immediately — only a
+      # linking verb between them — so "Today the bins go out" is left alone
+      # while "Your Today briefing went out" is not.
+      BRIEFING_CLAIM_RX = /
+        (?:\b(?:your|the)\s+)?
+        (?:today(?:'s|’s)?(?:\s+briefing)?|briefing|rundown)\s*
+        (?:is|was|has|just)?\s*(?:already\s+)?
+        (?:ready|up(?:\s+now)?|out(?:\s+now)?|sent|posted|delivered|
+           coming(?:\s+up)?|on\s+its\s+way|went\s+out|popped\s+in)
+        \b[!.?]*\s*[✨💛💙🌟🎉]*\s*
+      /xi
+
+      # Below this, what survived the strip is a greeting and nothing else — so
+      # the "briefing" was only ever the claim.
+      MIN_BRIEFING_CHARS = 25
+
+      def without_briefing_claim(body)
+        return body unless today_briefing?
+
+        stripped = body.to_s.gsub(BRIEFING_CLAIM_RX, "").squeeze(" ").strip
+        return body if stripped == body.to_s.strip
+
+        if stripped.length < MIN_BRIEFING_CHARS
+          # Nothing was written. Report loudly rather than shipping either the
+          # lie or an empty message — what's left is a bare hello, which is
+          # useless but at least true.
+          Buddy::Errors.report(
+            section:   "turn.briefing_claim",
+            exception: RuntimeError.new("Today briefing was only a claim that it had been sent"),
+            user:      @user,
+            extra:     { conversation_id: @conversation.id, body: body.to_s.truncate(200) },
+          )
+        end
+
+        stripped
+      rescue StandardError => e
+        Rails.logger.warn("[Buddy::GPT::Turn] briefing claim strip failed: #{e.class}: #{e.message}")
+        body
+      end
+
       # Only on a briefing that was ORDERED to greet. Buddy::TodayBriefing
       # decides that from the thread, and when it decides not to, a reply with no
       # hello is exactly right — so this must never fire on that half.
@@ -1203,7 +1265,7 @@ module Buddy
           ImageTool.schema,
           ListenerTool.schema,
           *Buddy::SideEffects.function_schemas(theme: @conversation.buddy_theme),
-          *Buddy::Tools.function_schemas(user: @user),
+          *Buddy::Tools.function_schemas(user: @user, briefing: today_briefing?),
         ]
       end
 
@@ -1267,7 +1329,7 @@ module Buddy
       end
 
       def finalize_success(outcome)
-        body = with_greeting(display_body(apply_leading_mood(outcome[:text])))
+        body = with_greeting(without_briefing_claim(display_body(apply_leading_mood(outcome[:text]))))
         @reply.update!(state: :delivered, body: body, delivered_at: Time.current)
 
         proposals = outcome[:proposals]

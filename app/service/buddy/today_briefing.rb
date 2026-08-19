@@ -1,7 +1,13 @@
 module Buddy
-  # The "Today" briefing seed + delivery. Fired two ways: by tapping the hero
-  # "Today" chip, and by the daily reminder that carries the `today_briefing`
-  # tool (Buddy::TodaySchedule). Rails owns the prompt text; the Mac just runs it.
+  # The "Today" briefing seed + delivery. Fired by the daily reminder carrying
+  # the `today_briefing` tool (Buddy::TodaySchedule), and by hand with the
+  # `/today` slash command (ByteController#send_today_briefing). The hero chip
+  # that used to run one is long gone; comments here said otherwise for a while
+  # and sent people looking for a button that isn't there.
+  #
+  # A turn answering the seed is NOT offered the `today_briefing` tool — see
+  # Buddy::Tools::BRIEFING_WITHHELD. It could otherwise send itself another one,
+  # forever.
   #
   # The SCHEDULE is a morning thing. The briefing is not — the chip is there all
   # day and gets tapped at all hours, so nothing in the seed may assume which
@@ -198,6 +204,10 @@ module Buddy
 
     def seed(user=nil)
       prompt = <<~PROMPT.strip
+        WHAT YOU WRITE HERE IS THE BRIEFING. It goes to them exactly as you write it, as the message they've been waiting for. Nothing else is coming, and there is no step after this one.
+
+        So there is nothing to announce, confirm, send, deliver or hand over. Any sentence reporting that the briefing itself is finished, on its way, or has gone out is a message ABOUT a briefing standing where the briefing should be, and it leaves them holding a claim that something happened instead of the thing. If a reply further up this thread did that, it was wrong, and it is not a pattern to follow.
+
         What's on for TODAY, forward-looking. This is a briefing about the day ahead, NOT a recap of yesterday or a review of what's already done.
 
         #{greet_lines}
@@ -247,6 +257,7 @@ module Buddy
         - If the day genuinely holds nothing unusual, say so briefly and warmly and stop. That is a correct briefing, not a failed one, and padding it back out to length is the thing being avoided here.
 
         HARD NO:
+        - Never say the briefing is ready, sent, up, out, done or on its way. You are writing it; saying so instead of doing it is the one failure that leaves them with nothing.
         - Never recap yesterday.
         - Never invent chores/events not in context.
         - No filler adjectives about the day's general shape in place of a fact.

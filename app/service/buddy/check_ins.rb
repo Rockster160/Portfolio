@@ -139,10 +139,23 @@ module Buddy
 
     # When did this person last say something? Used to hold a check-in back
     # rather than interrupt a live conversation with it.
+    #
+    # `outbound` alone is not "the person": every seeded turn is written as an
+    # outbound message too — a briefing, a watch firing, a reminder, and check-in
+    # delivery itself all go through CompanionDelivery#deliver_prompt. Counting
+    # those meant Buddy talking to ITSELF read as the person being mid-
+    # conversation, so the 8:30 briefing would push any check-in due in the hour
+    # after it, every single day, and a check-in would defer the next one behind
+    # it. Hence the same silent kinds every other reader here skips.
     def last_spoke_at(user)
       ByteMessage.joins(:byte_conversation)
         .where(byte_conversations: { user_id: user.id, mode: ByteConversation.modes[:buddy] })
         .where(direction: ByteMessage.directions[:outbound])
+        .where("COALESCE(byte_messages.metadata ->> 'hidden', '') <> 'true'")
+        .where(
+          "COALESCE(byte_messages.metadata ->> 'kind', '') NOT IN (?)",
+          ByteMessage::SILENT_KINDS,
+        )
         .maximum(:created_at)
     end
 

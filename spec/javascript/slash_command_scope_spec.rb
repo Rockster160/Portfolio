@@ -31,7 +31,7 @@ RSpec.describe "Slash command scoping" do
 
     it "keeps the Buddy commands and the ones that work in any thread" do
       expect(offered(mode: :buddy, owner: true)).to include(
-        "buddy", "reset", "rename", "archive", "fork", "clear"
+        "buddy", "today", "reset", "rename", "archive", "fork", "clear"
       )
     end
   end

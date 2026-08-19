@@ -64,10 +64,12 @@ module Buddy
       lines = rows.map { |row| "- #{row.body.strip}" }.join("\n")
       <<~TXT
 
-        ANNOUNCEMENTS — say these, in your own words:
+        ANNOUNCEMENTS — say these, in your own words. NOT OPTIONAL:
         #{lines}
 
-        These are things I've asked you to pass on, and they belong in this briefing rather than a message of their own. Work each one in where it fits the day you're describing; if one relates to something already on the agenda, say them together rather than twice.
+        **Every rule below about what belongs in a briefing is about the DAY. None of it applies to these.** They are not agenda items, so "only what's still ahead" doesn't reach them; they are not padding, so the subtraction test doesn't either; and they don't count against the three-to-five lines. A quiet day with nothing on it still carries these. A briefing that leaves one out has failed, however right the rest of it is - they are the one thing in here the person has no other way of finding out, and nothing else is coming to tell them.
+
+        These are things I've asked you to pass on, and they belong in this briefing rather than a message of their own. Work each one in where it fits; if one relates to something already on the agenda, say them together rather than twice.
 
         Say the substance, not the sentence. The wording above is mine and it is a note TO you, not a line to read out - a phrase lifted straight from it lands in a different voice from the rest of the briefing, which is the one way to make this obvious. Keep every fact, especially names, times and numbers, and change everything else.
 

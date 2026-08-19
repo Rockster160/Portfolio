@@ -813,6 +813,8 @@ class ByteController < ApplicationController
       conversation.update!(mode: new_mode)
       broadcast_convo_change(conversation, :updated)
       ack(conversation, "Mode set to **#{new_mode}** for this conversation.")
+    when "today"
+      send_today_briefing(conversation)
     when "buddy"
       switch_buddy_theme(conversation, arg)
     when "compact", "forget", "reset"
@@ -824,6 +826,38 @@ class ByteController < ApplicationController
       # in the same directory.
       fork_conversation(conversation, arg.presence)
     end
+  end
+
+  # `/today` — the briefing, on demand.
+  #
+  # The scheduled one is a recurring reminder (Buddy::TodaySchedule) and the
+  # hero chip that used to run one by hand is long gone, which left asking for
+  # a briefing dependent on the model choosing to reach for the `today_briefing`
+  # tool — and that tool's own description tells it that almost nothing said to
+  # it is a reason to. A typed command is the deterministic way back in.
+  #
+  # `scheduled: false` skips the sleep guard on purpose, matching the comment on
+  # Buddy::TodayBriefing.deliver!: somebody typing this at 2am has already
+  # answered the question the guard exists to ask.
+  #
+  # Returns the SEED, not an acknowledgement, and that is the whole trick.
+  #
+  # Every other slash command acks because it has something to report. This one
+  # doesn't: the briefing is the answer, and it opens with a greeting its prompt
+  # works harder on than anything else. A line above saying it's on its way is
+  # the receipt the `today_briefing` tool already refuses for the same reason —
+  # "a 'Called Today ✓' pill over a message that opens with a greeting is the
+  # chip saying what the next line is about to say".
+  #
+  # The seed is a real persisted message, so the caller has something to render,
+  # and it carries `hidden: true`, which the client drops on sight (see
+  # byte/index.js). So nothing appears until the briefing itself does.
+  def send_today_briefing(conversation)
+    unless conversation.buddy?
+      return ack(conversation, "`/today` is a Buddy thing - this conversation is in #{conversation.mode} mode.")
+    end
+
+    Buddy::TodayBriefing.deliver!(conversation.user, conversation, scheduled: false)
   end
 
   # Swap which pet this Buddy thread wears, mid-conversation. The theme lives on

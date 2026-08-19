@@ -146,6 +146,30 @@ RSpec.describe Buddy::CheckIns do
       expect(memory.reload.check_in_at).to be > Time.current
     end
 
+    # Every seeded turn is written as an OUTBOUND message — a briefing, a watch
+    # firing, a reminder, and check-in delivery itself. Counting those as "the
+    # person just spoke" meant Buddy talking to itself looked like a live
+    # conversation, so the 8:30 briefing would push any check-in due in the hour
+    # after it, every day, and one check-in would defer the next behind it.
+    it "does not mistake Buddy's own seeded turns for the person speaking" do
+      memory = followup("the cat is in hospital", check_in_at: 1.hour.ago)
+      convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: "What's on for TODAY...",
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "source" => "today_scheduled" },
+      )
+      allow(Buddy::CompanionDelivery).to receive(:deliver_prompt)
+
+      expect(described_class.fire!(memory)).to eq(:fired)
+    end
+
+    it "still gets out of the way of something the person actually typed" do
+      memory = followup("the cat is in hospital", check_in_at: 1.hour.ago)
+      convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "hey")
+      allow(Buddy::CompanionDelivery).to receive(:deliver_prompt)
+
+      expect(described_class.fire!(memory)).to eq(:deferred)
+    end
+
     it "closes one that stopped being worth asking about instead of firing it" do
       memory = followup("sorted", check_in_at: 1.hour.ago)
       memory.update!(status: :done)

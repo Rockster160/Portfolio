@@ -1,9 +1,9 @@
 Buddy::Tools.register(
   name:        :today_briefing,
   description: <<~TXT,
-    Deliver the "Today" briefing - the same thing the Today chip on the hero
-    does. It composes and posts a whole message of its own, so calling it is
-    handing the turn over rather than getting an answer back.
+    Deliver the "Today" briefing. It composes and posts a whole message of its
+    own, so calling it is handing the turn over rather than getting an answer
+    back.
 
     Almost nothing said to you is a reason to call this. "What's on today" is an
     ordinary question you answer from your own context, and this would answer it

@@ -322,8 +322,23 @@ module Buddy
     # offering the schema at all is the real enforcement: the model can't reach
     # for what it was never shown, so there's no refusal to write and no tokens
     # spent describing a capability that isn't there.
-    def function_schemas(user: nil)
+    # Tools a Today briefing turn must not be offered.
+    #
+    # `today_briefing` posts a whole message of its own, so on the turn that IS
+    # the briefing, calling it delivers a second briefing — whose turn is handed
+    # the same seed, sees the same tool, and calls it again. In dev that ran at
+    # a turn every four seconds until it was killed, each reply announcing that
+    # the briefing had gone out rather than being the briefing.
+    #
+    # The tool's own description already says "almost nothing said to you is a
+    # reason to call this", and the seed could not be more explicit about what
+    # it wants. Both are prose, and prose is advice. A turn that is the briefing
+    # can never have a reason to send one, so it stops being reachable.
+    BRIEFING_WITHHELD = %i[today_briefing].freeze
+
+    def function_schemas(user: nil, briefing: false)
       offered = user ? all.select { |tool| Buddy::Features.allows_tool?(user, tool) } : all
+      offered = offered.reject { |tool| BRIEFING_WITHHELD.include?(tool[:name]) } if briefing
       offered.map { |tool| function_schema(tool, user: user) }
     end
 
