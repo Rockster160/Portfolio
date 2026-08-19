@@ -11,6 +11,11 @@ set :db_user, "rails"
 
 # set :bundle_binstubs_command, :binstubs
 
+# NOTE: these two are inert. capistrano3-puma renders them into
+# shared/puma.rb, but the systemd unit runs
+# `puma -C .../current/config/puma.rb` — the file in this repo — so
+# shared/puma.rb is regenerated every deploy and never read. Thread and worker
+# counts are set in config/puma.rb; change them there.
 set :puma_threads,    [4, 16]
 set :puma_workers,    0
 set :pty,             true

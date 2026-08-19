@@ -43,8 +43,11 @@ monthly_1st_at_midnight = "0 0 1 * * MST"
 
 cron_jobs = [
   {
-    name:  "Clean up Guests",
-    class: "CleanGuestsWorker",
+    # Guest accounts and one-off IPs, swept together. 9pm rather than the 4am
+    # slot on purpose — that hour already runs four jobs against a Sidekiq
+    # concurrency of 5.
+    name:  "Forget One-Off Visitors",
+    class: "CleanVisitorsWorker",
     cron:  daily_9pm,
   },
   {

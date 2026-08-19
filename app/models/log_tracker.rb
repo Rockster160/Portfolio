@@ -21,7 +21,6 @@ class LogTracker < ApplicationRecord
   belongs_to :user, optional: true
   belongs_to :location, optional: true
 
-  after_initialize :set_additional_tracking
   after_create_commit :broadcast_creation
 
   def self.search_scope
@@ -74,21 +73,6 @@ class LogTracker < ApplicationRecord
   end
 
   private
-
-  def set_additional_tracking
-    set_ip_count if ip_count.nil?
-    geolocate if location_id.nil?
-  end
-
-  def geolocate
-    # new_location_id = LogTracker.where(ip_address: self.ip_address).where.not(location_id: nil).pluck(:location_id).uniq.first
-    # self.location_id = new_location_id || Location.create(ip: self.ip_address).id
-  end
-
-  def set_ip_count
-    now = created_at || DateTime.current
-    self.ip_count = LogTracker.where.not(id: id).where(created_at: ...now).where(ip_address: ip_address).count
-  end
 
   def broadcast_creation
     rendered_message = LogTrackersController.render partial: "log_trackers/logger_row", locals: { logger: self }

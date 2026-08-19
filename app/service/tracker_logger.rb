@@ -5,10 +5,14 @@ module TrackerLogger
     return unless trackable?(request)
 
     filtered_params = filter_hash(request.env["action_dispatch.request.parameters"])
+    ip_address = request.try(:remote_ip)
 
     LogTracker.create(
       user_agent:  request.user_agent,
-      ip_address:  request.try(:remote_ip),
+      ip_address:  ip_address,
+      # Stamped from the IpVisit upsert rather than derived here, so the row
+      # keeps the count as it stood at request time without reading the log.
+      ip_count:    ::IpVisit.record!(ip_address),
       http_method: request.env["REQUEST_METHOD"],
       url:         request.env["REQUEST_PATH"],
       params:      filtered_params,

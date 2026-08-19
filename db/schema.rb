@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_19_065044) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_19_184813) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -25,6 +25,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_19_065044) do
     t.text "notes"
     t.integer "streak_length"
     t.jsonb "data"
+    t.index ["user_id", "timestamp"], name: "index_action_events_on_user_id_and_timestamp", order: { timestamp: :desc }
     t.index ["user_id"], name: "index_action_events_on_user_id"
   end
 
@@ -1118,6 +1119,17 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_19_065044) do
     t.index ["uploaded_by_user_id"], name: "index_household_icons_on_uploaded_by_user_id"
   end
 
+  create_table "ip_visits", force: :cascade do |t|
+    t.string "ip_address", null: false
+    t.integer "visit_count", default: 0, null: false
+    t.datetime "first_seen_at"
+    t.datetime "last_seen_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["ip_address"], name: "index_ip_visits_on_ip_address", unique: true
+    t.index ["visit_count", "last_seen_at"], name: "index_ip_visits_on_visit_count_and_last_seen_at"
+  end
+
   create_table "jil_trigger_shapes", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.text "scope", null: false
@@ -1427,6 +1439,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_19_065044) do
     t.bigint "source_item_id"
     t.integer "offset_seconds"
     t.jsonb "condition"
+    t.text "anchor"
+    t.index ["anchor"], name: "index_scheduled_triggers_on_anchor", where: "(anchor IS NOT NULL)"
+    t.index ["execute_at"], name: "index_scheduled_triggers_on_pending_execute_at", where: "(jid IS NULL)"
     t.index ["source_item_id"], name: "index_scheduled_triggers_on_source_item_id"
     t.index ["user_id"], name: "index_scheduled_triggers_on_user_id"
   end

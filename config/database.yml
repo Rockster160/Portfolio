@@ -3,10 +3,32 @@ default: &default
   encoding: unicode
   # For details on connection pooling, see rails configuration guide
   # http://guides.rubyonrails.org/configuring.html#database-pooling
-  # Kept safely above Puma's web thread count (RAILS_MAX_THREADS, default
-  # 10) so background threads that briefly need a connection can't starve
-  # web requests. Also covers Sidekiq (concurrency 5) in its own process.
-  pool: 22
+  # HEADS UP: in production this file is NOT read. `config/database.yml` is a
+  # linked file (config/deploy.rb), so the deploy symlinks it to
+  # shared/config/database.yml on the server and that copy is the live one.
+  # Changing `pool` here only affects development and test — the production
+  # value has to be edited on the server. There is no sync task despite the
+  # note at deploy.rb:62; sync_linked.rake was never written.
+  #
+  # Sized against what the web process can actually demand at once.
+  #
+  # The thread count comes from config/puma.rb — `RAILS_MAX_THREADS`, default
+  # 10 — because that is the file the production systemd unit loads
+  # (`puma -C .../current/config/puma.rb`). NOT :puma_threads in
+  # config/deploy.rb, which renders into a shared/puma.rb that nothing reads.
+  # Workers are 0 there, so this is a single process.
+  #
+  # Because /cable is mounted in-app (routes.rb) rather than run separately,
+  # ActionCable's worker pool (4 by default) checks out of this same pool, so
+  # the real ceiling is RAILS_MAX_THREADS + 4.
+  #
+  # Sidekiq (concurrency 5) gets its own process and its own pool from this
+  # same number, so it is covered many times over.
+  #
+  # 26 leaves headroom above either ceiling. It is a lazy limit — connections
+  # are opened on demand, so a high value costs nothing until it is reached,
+  # and the server allows 100.
+  pool: 26
   host: localhost
   password: <%= ENV['PORTFOLIO_DB_PASS'] %>
 
