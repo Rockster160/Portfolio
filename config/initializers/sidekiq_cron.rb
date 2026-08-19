@@ -159,15 +159,14 @@ cron_jobs = [
 
 if Rails.env.production?
   cron_jobs += [
-    # Blocked on pg_stat_statements: the extension is installed but the
-    # library has never been in shared_preload_libraries, so PgHero has
-    # nothing to capture. Uncomment once the postgresql.conf block at the
-    # repo root has been applied and Postgres restarted.
-    # {
-    #   name: "CaptureQueryStats",
-    #   class: "CaptureQueryStatsWorker",
-    #   cron: every_5_minutes,
-    # },
+    # Live as of 19 Aug 2026: the postgresql.conf block at the repo root was
+    # applied and Postgres restarted, so pg_stat_statements is finally in
+    # shared_preload_libraries and PgHero has something to capture.
+    {
+      name:  "CaptureQueryStats",
+      class: "CaptureQueryStatsWorker",
+      cron:  every_5_minutes,
+    },
     {
       name:  "DropLogTrackers",
       class: "DropLogTrackersWorker",

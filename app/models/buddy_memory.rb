@@ -40,6 +40,24 @@ class BuddyMemory < ApplicationRecord
   belongs_to :user
   belongs_to :source_message, class_name: "ByteMessage", optional: true
 
+  # Same query syntax as emails and bank transactions — `kind:followup
+  # who:eve severity>50 tag:health -status:dropped`, with AND/OR/NOT. A bare
+  # word searches the prose.
+  #
+  # `kind`, `status` and `category` are integer enum columns, so each needs a
+  # scope rather than the default ILIKE — matching "followup" against a `3`
+  # finds nothing and says so silently.
+  search_terms :id, :content, :summary,
+    kind:      :search_kind,
+    status:    :search_status,
+    category:  :search_category,
+    who:       :search_who,
+    tag:       :search_tag,
+    note:      :search_note,
+    severity:  :severity,
+    priority:  :priority,
+    timestamp: :created_at
+
   # The thread. Optional by design — a `concept` never grows one, a `followup`
   # collects one every time the person gives an update.
   has_many :notes, -> { ordered },
@@ -109,6 +127,64 @@ class BuddyMemory < ApplicationRecord
   # then recency.
   scope :for_recall, -> { unexpired.order(Arel.sql("severity DESC, priority DESC, created_at DESC")) }
 
+  # --- search terms -------------------------------------------------------
+  # Each takes however many values the query gave it and ORs them, so
+  # `(kind:stash OR kind:concept)` reads as one clause.
+  def self.search_words(values)
+    Array.wrap(values).flatten.compact_blank.map { |value| value.to_s.downcase.strip }
+  end
+
+  scope :search_kind, ->(*qs) {
+    found = search_words(qs).filter_map { |word| kinds[word] }
+    found.any? ? where(kind: found) : none
+  }
+
+  scope :search_status, ->(*qs) {
+    found = search_words(qs).filter_map { |word| statuses[word] }
+    found.any? ? where(status: found) : none
+  }
+
+  scope :search_category, ->(*qs) {
+    words = search_words(qs)
+    found = words.filter_map { |word| categories[word] }
+    # `category:none` is the one worth asking for by name — a stash row with no
+    # pile is exactly what you go looking for, and an IN on NULL matches nothing.
+    next where(category: nil) if words.intersect?(%w[none nil null unsorted])
+
+    found.any? ? where(category: found) : none
+  }
+
+  # `first_name` is a method with a hardcoded map behind it, not a column, so
+  # the match runs in Ruby across the handful of people who have memories at
+  # all rather than as SQL against a column that doesn't exist.
+  scope :search_who, ->(*qs) {
+    terms = search_words(qs)
+    next none if terms.empty?
+
+    people = ::User.where(id: BuddyMemory.distinct.select(:user_id))
+    ids = people.select { |user|
+      haystack = "#{user.first_name} #{user.username}".downcase
+      terms.any? { |term| haystack.include?(term) }
+    }.map(&:id)
+
+    ids.any? ? where(user_id: ids) : none
+  }
+
+  scope :search_tag, ->(*qs) {
+    terms = search_words(qs)
+    next none if terms.empty?
+
+    where(terms.map { "buddy_memories.tags @> ?" }.join(" OR "), *terms.map { |term| [term].to_json })
+  }
+
+  scope :search_note, ->(*qs) {
+    terms = search_words(qs).map { |word| "%#{word}%" }
+    next none if terms.empty?
+
+    notes = BuddyMemoryNote.where(terms.map { "body ILIKE ?" }.join(" OR "), *terms)
+    where(id: notes.select(:buddy_memory_id))
+  }
+
   # Records with a check-in armed and due. `relevant_at` gates whether it is
   # live yet at all — a parent's surgery next week is severe now and worth
   # nothing until the week turns.
@@ -142,6 +218,18 @@ class BuddyMemory < ApplicationRecord
   def category_label
     CATEGORY_LABELS[category] || "Unsorted"
   end
+
+  # `followup` is the only one `humanize` gets wrong.
+  KIND_LABELS = {
+    "concept"    => "Concept",
+    "preference" => "Preference",
+    "stash"      => "Stash",
+    "followup"   => "Follow-up",
+  }.freeze
+
+  def self.kind_label(kind) = KIND_LABELS[kind.to_s] || kind.to_s.humanize
+
+  def kind_label = self.class.kind_label(kind)
 
   # Tags as a plain array of strings, however the column got written. jsonb will
   # happily hold a hash or a string, and a nil-safe reader here is cheaper than

@@ -3,12 +3,11 @@ default: &default
   encoding: unicode
   # For details on connection pooling, see rails configuration guide
   # http://guides.rubyonrails.org/configuring.html#database-pooling
-  # HEADS UP: in production this file is NOT read. `config/database.yml` is a
-  # linked file (config/deploy.rb), so the deploy symlinks it to
-  # shared/config/database.yml on the server and that copy is the live one.
-  # Changing `pool` here only affects development and test — the production
-  # value has to be edited on the server. There is no sync task despite the
-  # note at deploy.rb:62; sync_linked.rake was never written.
+  # This file IS what production reads, as of 19 Aug 2026. It used to be a
+  # linked file — symlinked from shared/ on the server, invisible to git — and
+  # production quietly ran on `pool: 5` for years while this comment claimed
+  # otherwise. It was de-linked in config/deploy.rb precisely so that changing
+  # the pool here is a change a person can review.
   #
   # Sized against what the web process can actually demand at once.
   #

@@ -403,14 +403,15 @@ class ByteController < ApplicationController
 
     # Fire-and-forget notification to the Mac so a blocked hook can
     # unblock. Silent on failure — the hook will time out and deny.
-    # Executor.wrap ensures the checked-out AR connection is released
-    # even if the HTTP call to Mac hangs.
+    #
+    # The payload is read HERE, on the request's own connection. The previous
+    # `executor.wrap` only released the connection when the block finished, so
+    # a thread that read the record and then hung on an unreachable Mac pinned
+    # a pooled connection for the whole timeout. Handing the thread plain data
+    # means it never checks one out at all.
+    decision_payload = ByteLocal.action_decision_payload(action)
     Thread.new {
-      Rails.application.executor.wrap do
-        ByteLocal.notify_action_decision(action)
-      rescue StandardError => e
-        Rails.logger.warn("[Byte] action decision notify failed: #{e.class}: #{e.message}")
-      end
+      ByteLocal.notify_action_decision(decision_payload)
     }
 
     # For Jarvis-mode clarifications, the tap ALSO fires the chosen

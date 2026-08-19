@@ -249,16 +249,27 @@ module ByteLocal
 
   # Rails → Mac: user has decided on an action-request. Mac wakes any
   # PreToolUse hook blocking on that request_id so Claude Code proceeds.
-  def notify_action_decision(action)
-    uri = URI.join(base_url, "/byte/action_decision")
-    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
-    req.body = JSON.generate({
+  # The five attributes the Mac needs, read on whatever connection the caller
+  # already holds. Split out from the notify below so a caller running this in
+  # a detached thread can gather them BEFORE the thread starts.
+  def action_decision_payload(action)
+    {
       request_id: action.request_id,
       decision:   action.decision,
       state:      action.state,
       kind:       action.kind,
       tool_name:  action.tool_name,
-    })
+    }
+  end
+
+  # Takes the plain hash from `action_decision_payload`, never the record.
+  # Touching ActiveRecord here would check out a pooled connection and hold it
+  # for the full length of the HTTP call — and this call exists precisely for
+  # the case where the Mac is unreachable and it hangs to the timeout.
+  def notify_action_decision(payload)
+    uri = URI.join(base_url, "/byte/action_decision")
+    req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json", "X-Byte-Secret" => secret)
+    req.body = JSON.generate(payload)
 
     Net::HTTP.start(uri.hostname, uri.port,
       use_ssl: uri.scheme == "https", open_timeout: TIMEOUT_SECONDS, read_timeout: TIMEOUT_SECONDS,

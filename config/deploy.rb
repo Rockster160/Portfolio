@@ -59,8 +59,20 @@ set :rbenv_custom_path, "/home/deploy/.rbenv"
 # set :pty, true
 
 # Default value for :linked_files is []
-# NOTE: When adding any files here,make sure to update `lib/capistrano/tasks/sync_linked.rake`
-append :linked_files, "config/database.yml", ".env", ".env.production"
+# Linked files are symlinked from shared/ and never travel with a deploy, so
+# the copies in this repo are NOT what production reads. `cap production
+# sync_linked:check` reports where the two have drifted; it reads this list, so
+# there is nothing to keep in step when adding a file here.
+#
+# config/database.yml was in this list for years, and that is how production
+# came to run on `pool: 5` while the copy in this repo claimed 22 with a
+# comment explaining reasoning that had never applied — nothing in git, CI or
+# code review could see the file actually being read. Both copies resolve the
+# password through `<%= ENV['PORTFOLIO_DB_PASS'] %>`, so there was never
+# anything server-specific in it to justify that cost. Removed 19 Aug 2026;
+# shared/config/database.yml is left in place on the server, unused, as a
+# rollback path.
+append :linked_files, ".env", ".env.production"
 
 # Default value for linked_dirs is []
 append :linked_dirs, "log", "tmp/pids", "tmp/cache", "tmp/sockets", "public/system", "vendor",

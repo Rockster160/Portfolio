@@ -207,22 +207,29 @@ class SystemController < ApplicationController
   # what it has kept — deleting a memory that landed wrong, dropping a severity
   # that reads too high, disarming a check-in — is administration, and putting
   # it in the chat would mean a companion that keeps offering to manage itself.
+  # Dropped and done rows are kept deliberately — a companion's own judgement has
+  # to be reversible — but they are not what this page is for. Written as a real
+  # clause rather than a hidden default so it shows in the bar, and clearing it
+  # is the same gesture as clearing anything else.
+  DEFAULT_MEMORY_QUERY = "(status:active OR status:deferred)".freeze
+
   def memories
-    @kinds = BuddyMemory.kinds.keys
-    @kind  = params[:kind].presence_in(@kinds)
-    @tag   = params[:tag].to_s.strip.downcase.presence
-    @query = params[:q].to_s.strip
+    @kinds    = BuddyMemory.kinds.keys
+    @statuses = BuddyMemory.statuses.keys
+    @query    = params.key?(:q) ? params[:q].to_s.strip : DEFAULT_MEMORY_QUERY
 
     scope = BuddyMemory.includes(:user, :notes)
-    scope = scope.where(kind: @kind) if @kind
-    scope = scope.where(user_id: params[:user_id]) if params[:user_id].present?
-    scope = Buddy::MemorySearch.matching(scope, @query) if @query.present?
-    scope = Buddy::MemorySearch.tagged(scope, [@tag]) if @tag
+    scope = scope.query(@query) if @query.present?
 
     @total = scope.count
     @memories = scope.order(Arel.sql("severity DESC, COALESCE(last_touched_at, created_at) DESC")).limit(MEMORY_PAGE)
     @users = User.where(id: BuddyMemory.distinct.pluck(:user_id)).index_by(&:id)
     @all_tags = BuddyMemory.pluck(:tags).flatten.compact.map(&:to_s).tally.sort_by { |t, n| [-n, t] }.first(30)
+
+    @kind_filters     = memory_filters(:kind, @kinds)
+    @status_filters   = memory_filters(:status, @statuses)
+    @who_filters      = memory_filters(:who, @users.each_value.map(&:first_name))
+    @tag_filters      = memory_filters(:tag, @all_tags.map(&:first))
   end
 
   # One field at a time, answered as JSON so a row edits in place.
@@ -233,6 +240,11 @@ class SystemController < ApplicationController
     if params.key?(:severity)
       memory.severity = params[:severity].to_i.clamp(BuddyMemory::SEVERITY_RANGE.min, BuddyMemory::SEVERITY_RANGE.max)
       changed[:severity] = memory.severity
+    end
+
+    if params.key?(:priority)
+      memory.priority = params[:priority].to_i
+      changed[:priority] = memory.priority
     end
 
     if params.key?(:content)
@@ -250,6 +262,13 @@ class SystemController < ApplicationController
       changed[:kind] = memory.kind
     end
 
+    # Dropping is what makes a companion's own judgement reversible, so putting
+    # a row back has to be as cheap as taking it off.
+    if params.key?(:status) && BuddyMemory.statuses.key?(params[:status].to_s)
+      memory.status = params[:status].to_s
+      changed[:status] = memory.status
+    end
+
     # Disarming a check-in is the single most likely reason to open this page at
     # all, so it gets to be a plain field rather than a separate action.
     if params.key?(:check_in_at)
@@ -264,7 +283,7 @@ class SystemController < ApplicationController
 
   def destroy_memory
     BuddyMemory.find(params[:id]).destroy!
-    redirect_to(system_memories_path(kind: params[:kind], q: params[:q], tag: params[:tag]), notice: "Deleted.")
+    redirect_to(memories_filter_path, notice: "Deleted.")
   end
 
   def connections
@@ -276,6 +295,26 @@ class SystemController < ApplicationController
   end
 
   private
+
+  # Filters as they were, so an edit doesn't dump you back at the top of an
+  # unfiltered list.
+  def memories_filter_path
+    system_memories_path(q: params[:q])
+  end
+
+  # One chip per option: the query with that term added, or taken back out if
+  # it's already in there. Same shape the banking page uses for its accounts.
+  def memory_filters(field, options)
+    picked = selected_values(field)
+
+    options.map { |option|
+      {
+        value:  option,
+        query:  toggled_query(field, option, options),
+        active: picked.include?(option.to_s.downcase),
+      }
+    }
+  end
 
   # One `field:value` term, negated or not.
   def field_term(field)
@@ -342,6 +381,7 @@ class SystemController < ApplicationController
       next [account.id, nil] if account.last4.blank?
 
       [account.id, {
+        value:  account.last4,
         query:  toggled_query(:account, account.last4, options),
         active: picked.include?(account.last4.downcase),
       }]
@@ -370,6 +410,7 @@ class SystemController < ApplicationController
         label:  category.present? ? ::TransactionCategory.label(category) : "(none)",
         color:  ::TransactionCategory.color(category),
         cents:  cents,
+        value:  value,
         active: picked.include?(value.downcase),
         query:  toggled_query(:category, value, options),
       }
