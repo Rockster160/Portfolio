@@ -2,23 +2,24 @@
 #
 # Table name: scheduled_triggers
 #
-#  id             :bigint           not null, primary key
-#  anchor         :text
-#  auth_type      :integer
-#  completed_at   :datetime
-#  condition      :jsonb
-#  data           :jsonb            not null
-#  execute_at     :datetime         not null
-#  jid            :text
-#  name           :text
-#  offset_seconds :integer
-#  started_at     :datetime
-#  trigger        :text             not null
-#  created_at     :datetime         not null
-#  updated_at     :datetime         not null
-#  auth_type_id   :integer
-#  source_item_id :bigint
-#  user_id        :bigint           not null
+#  id                   :bigint           not null, primary key
+#  anchor               :text
+#  auth_type            :integer
+#  completed_at         :datetime
+#  condition            :jsonb
+#  data                 :jsonb            not null
+#  execute_at           :datetime         not null
+#  jid                  :text
+#  name                 :text
+#  offset_seconds       :integer
+#  started_at           :datetime
+#  trigger              :text             not null
+#  created_at           :datetime         not null
+#  updated_at           :datetime         not null
+#  anchor_occurrence_id :bigint
+#  auth_type_id         :integer
+#  source_item_id       :bigint
+#  user_id              :bigint           not null
 #
 class ScheduledTrigger < ApplicationRecord
   REDIS_OFFSET = 10.minutes

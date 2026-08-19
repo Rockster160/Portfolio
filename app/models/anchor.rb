@@ -1,3 +1,15 @@
+# == Schema Information
+#
+# Table name: anchors
+#
+#  id          :bigint           not null, primary key
+#  description :text
+#  key         :text             not null
+#  created_at  :datetime         not null
+#  updated_at  :datetime         not null
+#  user_id     :bigint           not null
+#
+
 # A named point in time that something else can be scheduled against.
 #
 # An anchor holds no logic and computes nothing. It is a key the user owns

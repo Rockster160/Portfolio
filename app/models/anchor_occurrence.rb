@@ -9,6 +9,7 @@
 #  updated_at :datetime         not null
 #  anchor_id  :bigint           not null
 #
+
 # One upcoming time on an Anchor.
 #
 # Saving one is what announces that the anchor moved, so anything scheduled
