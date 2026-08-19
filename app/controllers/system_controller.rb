@@ -13,9 +13,10 @@ class SystemController < ApplicationController
   # A negated term (`-timestamp:`) deliberately does not match: it names dates
   # to exclude, which is not a range and has no place in a from/to picker.
   TIMESTAMP_TERM = /(?:\A|\s)timestamp(>=|<=|>|<|::|:)(\S+)/i
-  # An `account:` term as the search tokenizer sees it, including a negated one,
-  # so removing it takes the `-`/`NOT` with it rather than orphaning the operator.
-  ACCOUNT_TERM = /(?:\A|\s)(?:NOT\s+|-)?account:\S+/i
+  # A search value: quoted where it has to be, because half the category names
+  # are two words and `category:eat out` parses as `category:eat` plus a stray
+  # bare word.
+  SEARCH_VALUE = /(?:"[^"]*"|'[^']*'|[^\s)]+)/
   # Dark-theme palette, assigned to users by spend rank.
   SPEND_PALETTE = %w[
     #5DADE2 #58D68D #F5B041 #AF7AC5 #EC7063 #48C9B0 #F7DC6F #5499C7
@@ -98,6 +99,7 @@ class SystemController < ApplicationController
     @bucket ||= ::BankChart::DEFAULT_BUCKET
     @date_from, @date_to = query_dates
     @chart_data = ::BankChart.new(real, bucket: @bucket, from: @date_from, to: @date_to).call
+    @legend = legend_entries(real)
 
     listing = scope.includes(:bank_account, :action_event, transfer_counterpart: :bank_account)
     listing = listing.recent_first
@@ -208,27 +210,118 @@ class SystemController < ApplicationController
 
   private
 
-  # Clicking an account scopes the listing to it without throwing away whatever
-  # else was typed. It REPLACES any account term rather than appending one: two
-  # account terms AND together and match nothing, and clicking a second account
-  # plainly means that one INSTEAD. Clicking the account already filtered
-  # clears it, so the click undoes itself from the same place it was made.
+  # One `field:value` term, negated or not.
+  def field_term(field)
+    /(?:NOT\s+|-)?#{field}:#{SEARCH_VALUE}/i
+  end
+
+  # The query with this field's clause taken out, in either shape this page
+  # writes: a lone `field:value`, or `(field:a OR field:b)` once several are
+  # picked. Taken out WHOLE — removing the terms and leaving the parentheses and
+  # the ORs behind would not parse.
+  def without_clause(field)
+    term = field_term(field)
+
+    stripped = @query.gsub(/\(\s*#{term}(?:\s+OR\s+#{term})*\s*\)/i, " ")
+    stripped.gsub(/(?:\A|\s)#{term}/i, " ").squish
+  end
+
+  # What is currently picked for this field. Reads through an opening paren so
+  # the OR form is seen, and not through a `-`, because a negated term names
+  # something to EXCLUDE and is not a selection.
+  def selected_values(field)
+    pattern = /(?:\A|[\s(])#{field}:(?:"([^"]*)"|'([^']*)'|([^\s)]+))/i
+
+    @query.scan(pattern).map { |quoted, single, bare| (quoted || single || bare).to_s.downcase }
+  end
+
+  # The query with `value` added to this field's selection, or taken out of it
+  # if it is already in — everything picked ORed together, and whatever else was
+  # typed left where it is. Clicking the same thing twice undoes itself.
+  #
+  # `options` is what the page is currently offering, in the order it offers it,
+  # and the result is intersected with it: a value no longer on screen cannot be
+  # clicked off, so carrying it forward would strand the filter.
+  def toggled_query(field, value, options)
+    picked = selected_values(field)
+    wanted = (
+      picked.include?(value.to_s.downcase) ? picked - [value.to_s.downcase] : picked + [value.to_s.downcase]
+    )
+    ordered = options.select { |option| wanted.include?(option.to_s.downcase) }
+
+    [without_clause(field), clause_for(field, ordered)].compact_blank.join(" ")
+  end
+
+  def clause_for(field, values)
+    terms = values.map { |value| "#{field}:#{value.to_s.match?(/\s/) ? value.to_s.inspect : value}" }
+    return nil if terms.empty?
+    return terms.first if terms.one?
+
+    "(#{terms.join(" OR ")})"
+  end
+
+  # Clicking accounts builds an OR of them, so the listing can be scoped to two
+  # cards at once, and clicking one already picked drops it.
   #
   # Keyed by last four rather than by name: it is the only thing an account can
   # be matched on that cannot also match another account, and a name the search
   # would find two of would silently widen the filter. An account without one
   # gets no filter at all rather than a guess — see the missing-over-wrong rule.
   def account_filters
-    rest = @query.gsub(ACCOUNT_TERM, " ").squish
+    options = @accounts.filter_map(&:last4)
+    picked = selected_values(:account)
 
     @accounts.to_h { |account|
       next [account.id, nil] if account.last4.blank?
 
-      term = "account:#{account.last4}"
-      active = @query.match?(/(?:\A|\s)account:#{account.last4}\b/i)
-      query = (active ? rest : [rest, term].compact_blank.join(" "))
-      [account.id, { query: query, active: active }]
+      [account.id, {
+        query:  toggled_query(:account, account.last4, options),
+        active: picked.include?(account.last4.downcase),
+      }]
     }
+  end
+
+  # The chart's legend, which is also its category picker. It lists everything
+  # the REST of the search allows rather than only what is on the chart —
+  # otherwise picking one category removes every other one from the legend and
+  # there is nothing left to click.
+  #
+  # Totals come from that same wider set, so they hold still as you pick: each
+  # one says what that category is worth in this date range and payee filter,
+  # which is the number you are choosing between.
+  def legend_entries(real)
+    totals = legend_scope(real).group(:category).sum(:amount_cents)
+    ordered = totals.sort_by { |_category, cents| -cents.abs }
+    # `none` is what the search calls an uncategorized row, so it is selectable
+    # like any other value.
+    options = ordered.map { |category, _cents| category.presence || "none" }
+    picked = selected_values(:category)
+
+    ordered.map { |category, cents|
+      value = category.presence || "none"
+      {
+        label:  category.present? ? ::TransactionCategory.label(category) : "(none)",
+        color:  ::TransactionCategory.color(category),
+        cents:  cents,
+        active: picked.include?(value.downcase),
+        query:  toggled_query(:category, value, options),
+      }
+    }
+  end
+
+  # Only re-runs the search when the query actually names a category. With no
+  # category term the results ARE the wider set, and asking twice for the same
+  # rows is the most expensive thing on the page.
+  def legend_scope(real)
+    return real unless @query.match?(/(?:\A|[\s(])(?:NOT\s+|-)?category:/i)
+
+    rest = without_clause(:category)
+    scope = (rest.blank? ? ::BankTransaction.all : ::BankTransaction.query(rest))
+    scope.without_transfer_mirror.real_money
+  rescue ::StandardError
+    # The search box already reports a query it cannot parse; the legend does
+    # not need to report it a second time.
+    real
   end
 
   # The from/to the search is already asking for, as whole days, so the pickers

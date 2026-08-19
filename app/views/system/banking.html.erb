@@ -72,23 +72,23 @@
       <tbody>
         <% @accounts.each do |account| %>
           <%
-            # Clicking the row scopes the listing below to this account, keeping
-            # whatever else has been typed into the search. Clicking the one
-            # already filtered clears it, so the click undoes itself.
+            # Clicking the row adds this account to the listing below, keeping
+            # whatever else has been typed into the search. Pick several and
+            # they OR together; click one already picked to drop it.
             filter = @account_filters[account.id]
             filter_title = (
               if filter.blank?
                 nil
               elsif filter[:active]
-                "Filtering the transactions below to this account — click to clear"
+                "Showing this account — click to drop it"
               else
-                "Click to filter the transactions below to this account"
+                "Click to add this account to the search"
               end
             )
           %>
           <tr data-row data-url="<%= system_bank_account_path(account) %>"
               data-filter-url="<%= system_banking_path(q: filter[:query].presence, bucket: chart_bucket) if filter %>"
-              class="<%= "filtered" if filter&.dig(:active) %>"
+              class="<%= "picked" if filter&.dig(:active) %>"
               title="<%= filter_title %>">
             <td class="acct-name">
               <%# The chosen name is the editable line; the institution's own
@@ -379,7 +379,22 @@
         <div class="cc-empty-overlay" data-bank-chart-empty></div>
       </div>
 
-      <div class="cc-legend" data-bank-chart-legend></div>
+      <%# The legend IS the category picker. Clicking one ORs it into the search;
+          clicking it again drops it. It lists everything the rest of the search
+          allows rather than only what is on the chart — pick one category and a
+          chart-derived legend would have nothing left to click. %>
+      <div class="cc-legend bank-legend"
+           data-any-picked="<%= @legend.any? { |entry| entry[:active] } %>">
+        <% @legend.each do |entry| %>
+          <a class="cc-legend-row bank-legend-row<%= " picked" if entry[:active] %>"
+             href="<%= system_banking_path(q: entry[:query].presence, bucket: chart_bucket) %>"
+             title="<%= entry[:active] ? "Showing this — click to drop it" : "Click to add this to the search" %>">
+            <span class="cc-swatch" style="background-color: <%= entry[:color] %>;"></span>
+            <span class="cc-legend-label"><%= entry[:label] %></span>
+            <span class="cc-legend-total"><%= cents.call(entry[:cents].abs) %></span>
+          </a>
+        <% end %>
+      </div>
     </details>
 
     <script type="application/json" data-bank-chart-payload><%= raw JSON.generate(@chart_data) %></script>
@@ -818,10 +833,11 @@
     .bank-accounts tr[data-filter-url] td.right,
     .bank-accounts tr[data-filter-url] td.meta { cursor: pointer; }
     .bank-accounts tr[data-filter-url]:hover { background: rgba(148, 163, 184, 0.05); }
-    /* Which account the listing below is currently scoped to. A left edge
-       rather than a fill, so it marks the row without recoloring its numbers. */
-    .bank-accounts tr.filtered { background: rgba(93, 173, 226, 0.08); }
-    .bank-accounts tr.filtered td:first-child { box-shadow: inset 2px 0 0 #5DADE2; }
+    /* Which accounts the listing below is currently scoped to — several at a
+       time. A left edge rather than a fill, so it marks the row without
+       recoloring its numbers. */
+    .bank-accounts tr.picked { background: rgba(93, 173, 226, 0.08); }
+    .bank-accounts tr.picked td:first-child { box-shadow: inset 2px 0 0 #5DADE2; }
     .bank-accounts td.meta .age { display: block; white-space: nowrap; }
     .bank-accounts .tag.primary { color: #58D68D; background: rgba(88, 214, 141, 0.13); }
     .bank-accounts tfoot td { border-bottom: none; border-top: 1px solid #334155; color: #E2E8F0; }
@@ -902,12 +918,41 @@
       gap: 12px; margin: 8px 0;
     }
     /* Deliberately not a .btn: a rare action should not carry the same weight
-       as Search, which sits a few rows above it. */
-    .bank-bulk-open {
-      border: 0; background: none; padding: 0; cursor: pointer;
-      font-family: inherit; font-size: 12px; color: #64748B;
+       as Search, which sits a few rows above it.
+
+       forms.scss paints EVERY <button> as a blue pill with `color: white
+       !important`, and `.dark-mode button` is (0,1,1) — which outranks a lone
+       component class, so the reset has to be scoped under the page AND carry
+       !important wherever the global rule does. Without that this rendered as
+       a bold white-on-blue capsule. */
+    .system-page .bank-bulk-open {
+      margin: 0; border: 0; border-radius: 0; padding: 0;
+      background: transparent; background-image: none;
+      box-shadow: none !important; text-shadow: none !important;
+      font-family: inherit; font-size: 12px; font-weight: normal;
+      color: #64748B !important; cursor: pointer;
     }
-    .bank-bulk-open:hover { color: #CBD5E1; }
+    .system-page .bank-bulk-open:hover {
+      background: transparent; color: #CBD5E1 !important;
+    }
+
+    /* Every category the rest of the search allows, picked or not, so the
+       legend is somewhere to choose FROM rather than a readout of what is
+       already chosen. Unpicked ones recede; nothing is hidden. */
+    .bank-legend { gap: 6px 16px; }
+    .bank-legend-row {
+      text-decoration: none; padding: 2px 6px; border-radius: 4px;
+      border: 1px solid transparent; opacity: 0.55; transition: opacity 0.15s;
+    }
+    .bank-legend-row:hover { opacity: 1; background: rgba(148, 163, 184, 0.08); }
+    .bank-legend-row.picked {
+      opacity: 1; border-color: rgba(93, 173, 226, 0.4); background: rgba(93, 173, 226, 0.1);
+    }
+    /* Nothing picked is not "nothing selected" — it is everything. Dimming the
+       whole legend then would say the opposite of what is on the chart. Driven
+       by an attribute rather than `:not(:has(...))`, which is newer than it
+       needs to be for a fact the server already knows. */
+    .bank-legend[data-any-picked="false"] .bank-legend-row { opacity: 1; }
 
     .bank-bulk-count { margin: 0 0 10px; font-size: 13px; color: #94A3B8; }
     .bank-bulk-count strong { color: #E2E8F0; }
@@ -966,12 +1011,20 @@
     .bank-table td.payee .tag.xfer { color: #94A3B8; background: rgba(148, 163, 184, 0.13); }
     /* Quiet until wanted: it sits on most Amazon rows, so it must not read as
        a status the way `pending` does. */
+    /* Also a <button>, so it needs the same escape from the global pill —
+       otherwise it sits bold and shadowed beside the plain <em> chips it is
+       supposed to match. */
     .bank-table td.payee .tag.meta {
-      border: 0; cursor: pointer; font-family: inherit; letter-spacing: 0.06em;
-      color: #64748B; background: rgba(100, 116, 139, 0.13);
+      margin: 0; border: 0; cursor: pointer; font-family: inherit;
+      font-weight: normal; letter-spacing: 0.06em;
+      background: rgba(100, 116, 139, 0.13);
+      box-shadow: none !important; text-shadow: none !important;
+      color: #64748B !important;
     }
-    .bank-table td.payee .tag.meta:hover { color: #CBD5E1; }
-    .bank-table td.payee .tag.meta.open { color: #5DADE2; background: rgba(93, 173, 226, 0.15); }
+    .bank-table td.payee .tag.meta:hover { color: #CBD5E1 !important; }
+    .bank-table td.payee .tag.meta.open {
+      color: #5DADE2 !important; background: rgba(93, 173, 226, 0.15);
+    }
 
     /* Scoped rather than relying on a global `.hidden`, which is defined in a
        stylesheet this page does not necessarily load. */

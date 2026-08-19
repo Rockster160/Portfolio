@@ -87,35 +87,6 @@ $(document).ready(function() {
     })
   }
 
-  function escapeHtml(str) {
-    return String(str == null ? "" : str).replace(/[&<>"']/g, function(c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
-    })
-  }
-
-  function datasetTotal(ds) {
-    return (ds.data || []).reduce(function(sum, v) {
-      return sum + (typeof v === "number" ? v : 0)
-    }, 0)
-  }
-
-  function renderLegend() {
-    const el = document.querySelector("[data-bank-chart-legend]")
-    if (!el) { return }
-
-    // Presentational order only — biggest first. The dataset order, and so the
-    // stacking, is untouched.
-    const rows = (payload.datasets || []).slice().sort(function(a, b) {
-      return datasetTotal(b) - datasetTotal(a)
-    })
-    el.innerHTML = rows.map(function(ds) {
-      return '<div class="cc-legend-row"><span class="cc-swatch" style="background-color:' +
-        escapeHtml(ds.color) + '"></span><span class="cc-legend-label">' +
-        escapeHtml(ds.label) + '</span><span class="cc-legend-total">' +
-        escapeHtml(fmtMoney(datasetTotal(ds))) + "</span></div>"
-    }).join("")
-  }
-
   function setEmpty(message) {
     const el = document.querySelector("[data-bank-chart-empty]")
     if (!el) { return }
@@ -181,7 +152,9 @@ $(document).ready(function() {
     }
   }
 
-  renderLegend()
+  // The legend is rendered by the server, not from this payload: it is a
+  // category PICKER and has to list every category the rest of the search
+  // allows, including the ones this chart is not showing.
   setEmpty(payload.message || null)
   if ((payload.datasets || []).length) { new Chart(canvas, build()) }
 })

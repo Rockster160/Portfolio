@@ -299,6 +299,81 @@ RSpec.describe SystemController, type: :controller do
       end
     end
 
+    # The legend is the category picker, so it has to list what is NOT on the
+    # chart as well as what is.
+    describe "the legend" do
+      before do
+        linked_transaction(cents: -2148, category: "subscriptions", payee: "Netflix")
+        linked_transaction(cents: -9900, category: "groceries", payee: "Sprouts", id: "TRN-B")
+        linked_transaction(cents: -500, category: "eat out", payee: "Cafe", id: "TRN-C")
+      end
+
+      def legend
+        response.body[%r{<div class="cc-legend bank-legend".*?</div>\s*</details>}m].to_s
+      end
+
+      it "lists every category the rest of the search allows" do
+        get :banking
+
+        expect(legend).to include("Subscriptions")
+        expect(legend).to include("Groceries")
+        expect(legend).to include("Eat Out")
+      end
+
+      # Pick one category and a chart-derived legend would have nothing left to
+      # click. This one keeps offering the others.
+      it "keeps offering the categories it is not currently showing" do
+        get :banking, params: { q: "category:groceries" }
+
+        expect(legend).to include("Subscriptions")
+        expect(legend).to include("Eat Out")
+        expect(legend).to include("picked")
+      end
+
+      it "ORs a second category in" do
+        get :banking, params: { q: "category:groceries" }
+
+        expect(legend).to include(CGI.escapeHTML(
+                                    system_banking_path(q: "(category:groceries OR category:subscriptions)"),
+                                  ))
+      end
+
+      # Half the category names are two words, and `category:eat out` parses as
+      # `category:eat` plus a stray bare word that matches nothing.
+      it "quotes a category whose name has a space in it" do
+        get :banking
+
+        expect(legend).to include(CGI.escapeHTML(system_banking_path(q: %(category:"eat out"))))
+      end
+
+      it "drops one category out of the group and leaves the other" do
+        get :banking, params: { q: "(category:groceries OR category:subscriptions)" }
+
+        expect(legend).to include(CGI.escapeHTML(system_banking_path(q: "category:subscriptions")))
+      end
+
+      # Totals hold still as you pick, because each one says what that category
+      # is worth in the rest of the search — the number you are choosing between.
+      # Nothing picked is not "nothing selected" — it is everything, so the
+      # legend must not render itself as if it were all switched off.
+      it "does not dim itself when nothing is picked" do
+        get :banking
+        expect(legend).to include(%(data-any-picked="false"))
+
+        get :banking, params: { q: "category:groceries" }
+        expect(legend).to include(%(data-any-picked="true"))
+      end
+
+      it "totals each category over the wider set, not over the picked one" do
+        get :banking, params: { q: "category:groceries" }
+
+        expect(legend).to include("$21.48")
+        expect(legend).to include("$99.00")
+      end
+    end
+
+    # The bucket is a way of looking at the results rather than a filter, so it
+    # rides as its own param.
     # The bucket is a way of looking at the results rather than a filter, so it
     # rides as its own param.
     describe "the over-time chart" do
@@ -351,9 +426,9 @@ RSpec.describe SystemController, type: :controller do
       end
     end
 
-    # Clicking an account narrows the listing without discarding what was
-    # already typed — and clicking the same one again gives it back.
-    describe "filtering by clicking an account" do
+    # Clicking an account adds it to the listing without discarding what was
+    # already typed — and clicking the same one again takes it back out.
+    describe "picking accounts" do
       it "offers each account a filter that keeps the rest of the search" do
         get :banking, params: { q: "payee:amazon" }
 
@@ -362,19 +437,33 @@ RSpec.describe SystemController, type: :controller do
         )
       end
 
-      # Two account terms AND together and match nothing, so a second click
-      # means "that one instead" rather than "both".
-      it "swaps one account for another rather than ANDing them" do
+      # Two bare account terms AND together and match nothing, so several
+      # picked accounts have to become one ORed group. Built in table order,
+      # not click order, so the same pair always reads the same way.
+      it "ORs a second account in rather than ANDing or replacing it" do
         get :banking, params: { q: "account:7283" }
 
-        expect(response.body).to include(%(data-filter-url="/system/banking?q=account%3A2363"))
+        expect(response.body).to include(
+          %(data-filter-url="/system/banking?q=%28account%3A2363+OR+account%3A7283%29"),
+        )
       end
 
-      it "clears the filter when the account already filtered is clicked" do
+      # And the OR group has to come back OUT whole — leaving the parentheses
+      # and the OR behind would not parse.
+      it "drops one account out of the group and leaves the other" do
+        get :banking, params: { q: "(account:2363 OR account:7283) payee:amazon" }
+
+        expect(response.body).to include(
+          %(data-filter-url="/system/banking?q=payee%3Aamazon+account%3A7283"),
+        )
+        expect(response.body.scan(%(class="picked")).size).to eq(2)
+      end
+
+      it "clears the filter when the only account picked is clicked" do
         get :banking, params: { q: "account:2363 payee:amazon" }
 
         expect(response.body).to include(%(data-filter-url="/system/banking?q=payee%3Aamazon"))
-        expect(response.body).to include(%(class="filtered"))
+        expect(response.body).to include(%(class="picked"))
       end
 
       it "takes the negation with it rather than orphaning the operator" do
