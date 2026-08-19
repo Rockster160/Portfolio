@@ -565,6 +565,85 @@ are scoped to `[:preference, :concept]`. Otherwise a remembered fact could
 reinforce — and overwrite the text of — a held idea that happened to share six
 words with it.
 
+## 9. Announcements on the next Today
+
+Queue a note for somebody, and it rides along on their next Today briefing —
+said in their companion's own words, not read out.
+
+`BuddyAnnouncement` (user, body, `delivered_at`, `expires_at`) +
+`Buddy::Announcements` + `/system/announcements`.
+
+- **One row per person, even for a household-wide note.** They read their
+  briefings at different times and one of them may not read the next one at all,
+  so a shared row would be marked delivered by whoever got up first.
+- **Reworded, not pasted.** A line dropped verbatim into an otherwise-written
+  briefing is audible — it arrives in a different voice than everything around
+  it. The prompt hands over the substance and says to keep every name, time and
+  number and change everything else.
+- **Placed above the weather**, not after the agenda: an announcement is the one
+  thing in a briefing the person has no other way of finding out, so it can't
+  sit behind the parts they could have read off their own calendar.
+- **Claimed when the seed is built.** `TodayBriefing.seed` is called exactly
+  once per briefing from both paths that produce one (the scheduled reminder via
+  `deliver!`, and the hero chip via `QuickActionsController`), which makes it
+  the only place a claim can happen without double-delivering. The tradeoff is
+  deliberate: if the turn then fails, the note is stamped delivered without
+  being heard — so `delivered_at` is a stamp rather than a delete and
+  `/system/announcements` re-queues it in one click.
+- **`expires_at`**, because nothing else in the system would ever clear "the
+  plumber comes this afternoon", and a queue without one says it on Thursday.
+- Capped at `MAX_PER_BRIEFING` so a briefing can't turn into a noticeboard.
+- Empty string when nothing is queued, so the prompt is byte-identical for
+  anyone with none.
+
+Recipients are "users with a Buddy conversation" — the same gate
+`CompanionRelay` uses. There is no per-user flag; `tasks.buddy_enabled` exists
+but is about Jil task access, not people.
+
+## 10. Pile entries that were never thoughts
+
+About a third of the migrated stash turned out not to be ideas: repeating jobs,
+one-offs naming a clock time, and bare nouns from a dictated list. The merge
+didn't cause this — it was mis-filed at capture and copied across verbatim — but
+`/system/memories` was the first time it was all visible at once.
+
+**Retroactive:** `lib/scripts/tidy_misfiled_stash_memories.rb`. Four became real
+recurring `BuddyReminder`s and came off the pile; ten were dropped with the
+reason written onto the thread; twenty-three genuine one-off tasks were left
+alone, because a task with no clock on it is exactly what a pile is for. Nothing
+deleted — `status: :dropped` keeps the row visible and un-dropping is a click.
+
+**Prospective, two halves:**
+
+- `Buddy::Stash::TIME_BOUND_RX` + `time_bound_closing` — the counterpart to
+  `RECURRING_RX`. A recurring item merely gets an OFFER, because it can wait; a
+  one-off naming a moment gets SET, because "want me to set that?" answered
+  twenty minutes later is a reminder that already missed.
+- `Buddy::Stash.misfiled_kind` marks flagged entries `REPEATS` / `NAMES A TIME`
+  inside `open_loops_block`. This is the half that matters: `destination`
+  ("WHAT IS IT?") shipped 6 Aug and works, but a capture-time fix can only ever
+  help things captured after it. 13 of the 15 mis-filed entries predate it, and
+  nothing ever went back for them. Marking them where the pile is *already
+  being read* costs nothing, needs no sweep and no clock, and gives Buddy
+  somewhere to notice. Buddy is told to wait until the subject comes up rather
+  than audit the pile at anybody, and to offer `drop_idea` when the moment has
+  already gone. The line renders only when something is actually flagged.
+
+Worth knowing: `destination`'s comment cites memory 58's exact sentence
+("Please ping me when it's time to do that!") as the prod case that drove it —
+and 58 was still sitting on the pile when this was written. The fix was real;
+nothing applied it backwards.
+
+## Announcements are mostly about the companion
+
+The intended use is telling people what's changing about their companion, so the
+prompt says those are to be spoken in the first person as a thing about itself
+("I can look back through our old conversations now") and never as a release
+note, an update, a feature or a version. It also asks for rough edges to be
+named plainly — being told what to watch for is the reason it's worth
+mentioning, and a change described as seamless is how somebody ends up believing
+they broke it.
+
 ## Decided since
 
 - **Journal** — covered by memories plus conversation search; no separate

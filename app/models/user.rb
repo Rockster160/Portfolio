@@ -58,6 +58,7 @@ class User < ApplicationRecord
   has_many :byte_conversations, dependent: :destroy
   has_many :byte_actions, dependent: :destroy
   has_many :buddy_memories, dependent: :destroy
+  has_many :buddy_announcements, dependent: :destroy
   # Legacy. Everything reads BuddyMemory now; this stays only until
   # lib/scripts/merge_buddy_ideas_into_memories.rb has run in production and the
   # table is dropped.

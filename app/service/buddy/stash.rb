@@ -22,6 +22,46 @@ module Buddy
     # long way round, by someone who didn't know she could have one.
     RECURRING_RX = /\b(?:daily|nightly|weekly|monthly|every\s+(?:day|night|morning|evening|week|month|other\b|\d+\s*\w+)|each\s+(?:day|night|morning|week|month))\b/i
 
+    # A one-off with a clock or a date on it. The counterpart to RECURRING_RX,
+    # and the same failure in a different shape: "Pick out my outfit before
+    # 3:45" and "Please remind me at 8pm to put the banana juice on the
+    # tomatoes" both went onto the pile as thoughts, and both times went past
+    # with nothing set.
+    #
+    # `destination` already tells the model to DO these rather than file them,
+    # and that prose landed on 6 Aug and works most of the time. This is the
+    # deterministic half: a pile entry that names a moment can be recognised
+    # without a model in the loop, which is what lets an item already ON the
+    # pile be spotted later (see .misfiled?) rather than only as it arrives.
+    #
+    # Deliberately narrow. A bare weekday or the word "later" would match half
+    # of everything anybody ever says; what's here is a clock time, an explicit
+    # remind/ping request, or a named day close enough to act on.
+    TIME_BOUND_RX = /
+      \b(?:
+        (?:at|by|before|around)\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b |
+        \d{1,2}(?::\d{2})\s*(?:am|pm)\b |
+        \d{1,2}\s*(?:am|pm)\b |
+        remind\s+me | ping\s+me | set\s+(?:a\s+)?reminder |
+        tomorrow | tonight | this\s+(?:morning|afternoon|evening)
+      )\b
+    /xi
+
+    # Does this pile entry look like it was never a thought at all?
+    #
+    # Used at capture (which closing to give) AND over what's already held (see
+    # Buddy::Personality#open_loops_block), because the capture-time fix can
+    # only ever help things captured after it shipped. Everything already on the
+    # pile when it landed stayed exactly as mis-filed as the day it arrived, and
+    # a pile nobody revisits is where those go to be stepped over forever.
+    def misfiled_kind(memory)
+      text = "#{memory.summary} #{memory.content}"
+      return :recurring if text.match?(RECURRING_RX)
+      return :timed if text.match?(TIME_BOUND_RX)
+
+      nil
+    end
+
     # Someone who has thrown three things at you in ten minutes is emptying
     # their head, and asking what to do with each one is the opposite of the
     # point. The "want to talk it through?" offer is worth making once at the
@@ -247,6 +287,7 @@ module Buddy
       # fixed and shouldn't be.
       def closing(user, idea)
         return recurring_closing if recurring?(idea)
+        return time_bound_closing(idea) if time_bound?(idea)
         return mid_dump_closing if mid_dump?(user, idea)
 
         talk_closing(idea)
@@ -260,6 +301,27 @@ module Buddy
 
       def recurring?(idea)
         idea.content.to_s.match?(RECURRING_RX)
+      end
+
+      # A moment named in a thing that only happens once. Unlike the recurring
+      # case this is NOT an offer: the moment is coming whether or not anybody
+      # gets round to discussing it, and "want me to set that?" answered twenty
+      # minutes later is a reminder that already missed. So it's set first and
+      # mentioned after, which is what `destination` above already says and what
+      # this makes unambiguous for the one shape where hesitating costs the
+      # whole thing.
+      def time_bound_closing(idea)
+        <<~TXT.strip
+          This one names a MOMENT, so it is not a thought and it does not belong on the pile. Set it now with `schedule_reminder` (or `set_timer` if it's minutes away), then `sort_stash(id: #{idea.id}, drop: true)` to take it off.
+
+          Do NOT offer and wait. An offer costs the thing being asked for if they don't answer in time, and they only tapped Stash because that's the button that was in front of them. Check `upcoming_reminders` first - if one already covers this, say so warmly and still drop it off the pile rather than setting a second.
+
+          Then say what you set, in one short line, with the time in it so they can catch a wrong reading straight away.
+        TXT
+      end
+
+      def time_bound?(idea)
+        idea.content.to_s.match?(TIME_BOUND_RX)
       end
 
       def mid_dump?(user, idea)

@@ -154,7 +154,11 @@ RSpec.describe "Buddy brain-dump (stash)" do
         seed = seed_for("Please remind me at 3:35 to uncover the tomatoes")
 
         expect(seed).to include("WHAT IS IT?")
-        expect(seed.index("WHAT IS IT?")).to be < seed.index("bucket")
+        # Anchored on the filing instruction itself rather than the word
+        # "bucket": this fixture names a time, so it now takes the time-bound
+        # closing (which is the whole point of the case), and "bucket" only ever
+        # appeared here by way of the ordinary talk-it-through closing.
+        expect(seed.index("WHAT IS IT?")).to be < seed.index("If it IS a thought:")
       end
 
       it "tells it to do the real thing and take it off the pile" do

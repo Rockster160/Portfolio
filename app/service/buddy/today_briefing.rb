@@ -94,6 +94,24 @@ module Buddy
       ].join("\n")
     end
 
+    # Anything queued to be passed on in this briefing, CLAIMED as it's read —
+    # see Buddy::Announcements for why the claim happens here rather than after
+    # the turn. Empty string for the overwhelming majority of briefings, which
+    # keeps the prompt exactly as it was for anyone with nothing queued.
+    #
+    # Placed above the weather rather than below the agenda on purpose: an
+    # announcement is the one thing in a briefing that the person has no other
+    # way of finding out, so it can't sit behind the parts they could have read
+    # off their own calendar.
+    def announcements_block(user)
+      return "" if user.nil?
+
+      Buddy::Announcements.claim_block!(user)
+    rescue StandardError => e
+      Buddy::Errors.report(section: "today_briefing.announcements", exception: e, user: user)
+      ""
+    end
+
     # Comfort bands mirror the dashboard weather cell's colour scale. Woven into
     # the seed so the briefing frames weather the way we read it at a glance.
     # Time-aware: past ~4pm the day's high/comfort read is no longer actionable,
@@ -185,7 +203,7 @@ module Buddy
         #{greet_lines}
 
         Never address me as "you" in place of a name. That lands too intimate. Use my name, a plain greeting, or just dive in.
-        #{weather_block(user)}#{plunge_block(user)}
+        #{announcements_block(user)}#{weather_block(user)}#{plunge_block(user)}
 
         FORWARD-LOOKING ONLY. Only surface what's STILL AHEAD from `now_local`. Anything already over is not news:
         - Agenda items flagged `passed: true` are DONE for the day. Default to leaving them out entirely - not as a summary, not as a count, not as a passing note that the morning one already went. Naming one while something still ahead goes unmentioned is the wrong way round, no matter how quiet the day looks.

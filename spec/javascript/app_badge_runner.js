@@ -9,10 +9,20 @@
 const calls = [];
 const listeners = {};
 
-globalThis.navigator = {
-  setAppBadge: (n) => calls.push(["set", n]),
-  clearAppBadge: () => calls.push(["clear"]),
-};
+// `defineProperty` rather than plain assignment: Node ships its own `navigator`
+// global from 21 onward, and it's an accessor with no setter, so `globalThis.navigator = {}`
+// throws "Cannot set property navigator of #<Object> which has only a getter"
+// and takes every example in this file down with it. Defining the property
+// replaces the accessor outright, and works the same on older Node where the
+// global didn't exist at all.
+Object.defineProperty(globalThis, "navigator", {
+  value:        {
+    setAppBadge:   (n) => calls.push(["set", n]),
+    clearAppBadge: () => calls.push(["clear"]),
+  },
+  configurable: true,
+  writable:     true,
+});
 globalThis.document = {
   visibilityState: "visible",
   addEventListener: (name, fn) => {

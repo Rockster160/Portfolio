@@ -880,9 +880,18 @@ module Buddy
         # last week" says something is being built, where "3 weeks" on the same
         # row would say it's been abandoned. Those are opposite facts and the
         # created_at one was the only one on offer.
-        tags = [i.category_label.downcase, i.thread_label(now) || i.waiting_label].join(", ")
-        "- `##{i.id}` (#{tags}) #{i.summary.presence || i.content.to_s.first(140)}"
+        tags = [i.category_label.downcase, i.thread_label(now) || i.waiting_label]
+        # Marked, not filtered. A pile entry that names a moment or a rhythm was
+        # never a thought, and the capture-time routing can only ever help
+        # things captured after it shipped — everything already held when it
+        # landed stayed exactly as mis-filed as the day it arrived. Flagging it
+        # where the pile is already being read costs nothing and gives Buddy
+        # somewhere to notice, without a sweep or a clock.
+        misfiled = Buddy::Stash.misfiled_kind(i)
+        tags << (misfiled == :recurring ? "REPEATS" : "NAMES A TIME") if misfiled
+        "- `##{i.id}` (#{tags.join(", ")}) #{i.summary.presence || i.content.to_s.first(140)}"
       }
+      flagged = rows.any? { |i| Buddy::Stash.misfiled_kind(i) }
       <<~TXT
         ## Things you're holding for #{user.first_name}
 
@@ -897,10 +906,20 @@ module Buddy
         When they add to one, that's `elaborate_idea` and NOT a second `stash_idea`: a thought they've circled four times should be one thread with four notes, not four piles saying nearly the same thing. Reaching for something older than this list is `search_ideas`, which covers finished and dropped ones too.
 
         `finish_idea` when they say one's done, `drop_idea` when they want it gone unfinished, `defer_idea` to push one out, `move_idea` to refile it. The live version of this list, with anything stashed mid-turn, is `stashed_ideas` in `get_context`.
+        #{misfiled_line if flagged}
       TXT
     rescue StandardError => e
       Buddy::Errors.report(section: "personality.open_loops_block", exception: e, user: user)
       nil
+    end
+
+    # Only rendered when something on the pile is actually flagged, so the
+    # common prompt is unchanged for a pile that's all genuine thoughts.
+    def misfiled_line
+      <<~TXT.strip
+
+        **Anything tagged `REPEATS` or `NAMES A TIME` was never a thought.** It's a reminder that got written down instead of set - most of them from before that was handled at capture, so they've been sitting there ever since with nobody to notice. Don't raise them out of nowhere or list them back; a pile isn't a thing to audit at somebody. But the moment one comes up, or they're going through the pile with you, say what it looks like and offer to make it real: `schedule_reminder` (with a recurrence for a `REPEATS` one), then `finish_idea` so it stops being a loose end. One at a time, easy to wave off. If the moment it named has already gone, say that instead and offer `drop_idea` - a stale one is worth less than the space it takes up.
+      TXT
     end
 
     ROUTINE_LIST_LIMIT = 20

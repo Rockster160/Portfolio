@@ -1,0 +1,100 @@
+<%= meta_title "Announcements", include_name: false %>
+<%= meta_description "Queue a note for someone's next Today briefing." %>
+
+<div class="ann-page">
+  <div class="lists-title">
+    <small>Announcements</small>
+  </div>
+
+  <%= form_with url: system_announcement_create_path, method: :post, class: "ann-form basic" do %>
+    <textarea name="body" rows="2" required
+      placeholder="What should they be told? Written as a note to their companion, not as the line it reads out."></textarea>
+    <div class="ann-form-row">
+      <select name="user_id">
+        <option value="all">everyone</option>
+        <% @users.each do |user| %>
+          <option value="<%= user.id %>"><%= user.first_name.presence || user.username %></option>
+        <% end %>
+      </select>
+      <select name="expires_in_hours">
+        <option value="">no expiry</option>
+        <option value="12">expires in 12h</option>
+        <option value="24" selected>expires in 24h</option>
+        <option value="72">expires in 3 days</option>
+        <option value="168">expires in a week</option>
+      </select>
+      <button type="submit">Queue it</button>
+    </div>
+    <p class="ann-hint">
+      It rides along on their next Today briefing, said in their companion's own words. Nothing is sent
+      on its own, so a note queued now waits for whenever they next ask for a Today or their scheduled
+      one fires.
+    </p>
+  <% end %>
+
+  <% if @announcements.empty? %>
+    <p class="ann-empty">Nothing queued.</p>
+  <% end %>
+
+  <div class="ann-list">
+    <% @announcements.each do |ann| %>
+      <% state = ann.state %>
+      <div class="ann-row is-<%= state %>">
+        <div class="ann-head">
+          <span class="ann-who"><%= ann.user.first_name.presence || ann.user.username %></span>
+          <span class="ann-state ann-state-<%= state %>"><%= state %></span>
+          <% if ann.delivered_at %>
+            <span class="ann-when">on their Today <%= time_ago_in_words(ann.delivered_at) %> ago</span>
+          <% elsif ann.expires_at %>
+            <span class="ann-when">
+              <%= state == :expired ? "expired" : "expires" %>
+              <%= ann.expires_at.in_time_zone(SystemController::SPEND_ZONE).strftime("%b %-d, %-I%P") %>
+            </span>
+          <% end %>
+          <span class="ann-when"><%= ann.created_at.to_date.to_fs(:short) %></span>
+        </div>
+
+        <div class="ann-body"><%= ann.body %></div>
+
+        <div class="ann-actions">
+          <% if ann.delivered? %>
+            <%= button_to "Send again", system_announcement_requeue_path(ann), method: :patch, class: "ann-requeue" %>
+          <% end %>
+          <%= button_to "Delete", system_announcement_destroy_path(ann), method: :delete,
+                class: "ann-delete", form: { data: { turbo_confirm: "Delete this announcement?" } } %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</div>
+
+<%= content_for :head do %>
+  <style>
+    .ann-page { max-width: 800px; margin: 0 auto; padding: 12px; }
+
+    .ann-form { margin-bottom: 16px; }
+    .ann-form textarea { width: 100%; resize: vertical; font: inherit; }
+    .ann-form-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+    .ann-hint { font-size: 0.8em; opacity: 0.6; margin: 6px 0 0; }
+
+    .ann-empty { opacity: 0.6; padding: 24px 0; }
+
+    .ann-list { display: flex; flex-direction: column; gap: 8px; }
+    .ann-row { border: 1px solid rgba(127, 127, 127, 0.22); border-radius: 8px; padding: 8px 10px; }
+    .ann-row.is-delivered, .ann-row.is-expired { opacity: 0.6; }
+
+    .ann-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 0.82em; }
+    .ann-who { font-weight: 600; }
+    .ann-when { opacity: 0.55; }
+
+    .ann-state { padding: 1px 7px; border-radius: 4px; text-transform: uppercase; font-size: 0.85em; letter-spacing: 0.03em; }
+    .ann-state-pending   { background: rgba(245, 176, 65, 0.28); }
+    .ann-state-delivered { background: rgba(88, 214, 141, 0.24); }
+    .ann-state-expired   { background: rgba(127, 127, 127, 0.22); }
+
+    .ann-body { margin: 6px 0; }
+
+    .ann-actions { display: flex; gap: 8px; align-items: center; }
+    .ann-actions button { font-size: 0.85em; opacity: 0.75; }
+  </style>
+<% end %>

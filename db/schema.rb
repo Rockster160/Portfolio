@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_19_004803) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_19_042151) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -430,6 +430,17 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_19_004803) do
     t.index ["param_key"], name: "index_boxes_on_param_key", unique: true
     t.index ["parent_key"], name: "index_boxes_on_parent_key"
     t.index ["user_id"], name: "index_boxes_on_user_id"
+  end
+
+  create_table "buddy_announcements", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.text "body", null: false
+    t.datetime "delivered_at"
+    t.datetime "expires_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "delivered_at"], name: "index_buddy_announcements_on_user_id_and_delivered_at"
+    t.index ["user_id"], name: "index_buddy_announcements_on_user_id"
   end
 
   create_table "buddy_idea_notes", force: :cascade do |t|
@@ -1766,6 +1777,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_19_004803) do
   add_foreign_key "bank_transactions", "bank_accounts"
   add_foreign_key "bank_transactions", "bank_transactions", column: "transfer_counterpart_id", on_delete: :nullify
   add_foreign_key "boxes", "users"
+  add_foreign_key "buddy_announcements", "users"
   add_foreign_key "buddy_ideas", "users"
   add_foreign_key "buddy_memories", "byte_messages", column: "source_message_id"
   add_foreign_key "buddy_memories", "users"
