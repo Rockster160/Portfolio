@@ -183,6 +183,40 @@ RSpec.describe Buddy::Context, ".build agenda" do
     expect(mine_row).not_to have_key(:mine)   # owned → no ownership tag
   end
 
+  # Prod, twice: Moss told Chelsea "there's supper on the shared calendar at
+  # 6:00 PM for Rocco" (17 Aug) and "Rocco's dinner is at 6:00" (19 Aug). Both
+  # are item 985 on "Ours 💕 ", which Chelsea co-OWNS. A share at :owner means
+  # the calendar is hers too - Agenda#owned_by? and #subject_users have always
+  # said so - but this map only looked at `user_id`, so a joint calendar reached
+  # the second owner tagged as the first one's personal business, which the
+  # briefing seed reads as "leave it out entirely".
+  it "treats a calendar the person CO-OWNS as theirs, not as the other owner's" do
+    partner = create(:user)
+    ours = create(:agenda, user: partner, name: "Ours 💕 ")
+    AgendaShare.create!(agenda: ours, user: user, permission: :owner)
+    create(:agenda_item, agenda: ours, name: "Dinner", start_at: Time.current + 2.hours)
+
+    today = described_class.build(user, conversation)[:today_agenda]
+    dinner = today.find { |i| i[:title] == "Dinner" }
+
+    expect(dinner).to be_present
+    expect(dinner).not_to have_key(:mine)
+    expect(dinner).not_to have_key(:owner)
+  end
+
+  # An editor can add to somebody's calendar without it being theirs. Only
+  # :owner carries co-ownership, so this is the line the fix must not cross.
+  it "still holds a calendar shared at :editor at arm's length" do
+    partner = create(:user)
+    theirs = create(:agenda, user: partner)
+    AgendaShare.create!(agenda: theirs, user: user, permission: :editor)
+    create(:agenda_item, agenda: theirs, name: "Their Thing", start_at: Time.current + 2.hours)
+
+    today = described_class.build(user, conversation)[:today_agenda]
+
+    expect(today.find { |i| i[:title] == "Their Thing" }[:mine]).to be(false)
+  end
+
   it "keeps a cancelled ROUTINE (heads-up) but drops a cancelled one-off (noise)" do
     item(name: "No standup", start_at: Time.current + 1.day, agenda_schedule: schedule, status: :cancelled)
     item(name: "Dropped",    start_at: Time.current + 2.days, status: :cancelled)

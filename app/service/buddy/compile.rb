@@ -61,7 +61,18 @@ module Buddy
     # Kinds that aren't somebody talking. Same list Buddy::IdeaDwell skips, for
     # the same reason: a doorbell notification should not get a vote on what the
     # conversation was about.
-    SKIP_KINDS = %w[action_chip buddy_activity buddy_trigger].freeze
+    SKIP_KINDS = %w[action_chip buddy_activity buddy_trigger buddy_receipt].freeze
+
+    # Sources that are the APP asking or announcing, not the conversation.
+    #
+    # `watch` was already here. `form` is the attribution prompt ("Who did:
+    # Puppy Up?"), which is a widget with buttons and reads as a question the
+    # companion asked. Prod memory 64 is what that costs: the form went up at
+    # 15:04, Rocco typed an unrelated printer command at 15:13, and the compile
+    # read them as one exchange and wrote down that "Puppy Up" MEANS "print game
+    # tray vase". Two unrelated things fused into a false definition, which is
+    # worse than either being lost - it is now a fact about his vocabulary.
+    SKIP_SOURCES = %w[watch form relay_copy].freeze
 
     INSTRUCTIONS = <<~TXT.freeze
       You read a stretch of conversation between a person and their companion,
@@ -111,6 +122,14 @@ module Buddy
       by an action that was taken, or anything already in the EXISTING list you
       are shown. Nothing at all is a perfectly good answer, and it is the right
       one most of the time.
+
+      A CLOCK TIME OR A DATE MEANS IT IS NOT A CONCEPT. Something happening once
+      at a stated time is an event, and a `concept` never expires and carries no
+      date - so filing one as a concept leaves a permanent record saying they do
+      that at that hour, forever. If the moment is worth keeping at all it is a
+      `followup` with `relevant_in_days`. If it has already been and gone, or
+      something was already set up for it in the conversation, it is nothing:
+      drop it.
 
       ONE MESSAGE CAN CARRY SEVERAL THINGS. A person mentioning a health flare
       and a job loss in one breath has told you two separate things with two
@@ -304,19 +323,34 @@ module Buddy
       []
     end
 
-    # Everything since the last compile, capped. Falls back to the window when
-    # nothing has compiled yet.
-    def window(conversation)
-      scope = conversation.byte_messages.order(created_at: :desc)
-      since = conversation.buddy_compiled_at
-      scope = scope.where("created_at > ?", since) if since
+    # How far back the FIRST compile on a thread may reach.
+    #
+    # `buddy_compiled_at` is null until a thread has compiled once, and the
+    # count cap alone let that first run read whatever forty messages happened
+    # to be there — which on a thread older than the feature is months of
+    # backlog, not a sitting. Suki's first run on 19 Aug read back to 16 Aug and
+    # wrote two memories off things that had been asked for, actioned and
+    # finished three days earlier: a 3pm visit became an undated permanent
+    # concept, so the record now says she visits Doug at 3pm forever.
+    #
+    # Six hours because a compile fires QUIET_PERIOD after the last message, so
+    # this covers the sitting that just ended with hours to spare and reaches no
+    # further. Chelsea's thread has never compiled either and was primed to do
+    # exactly the same thing.
+    FIRST_READ = 6.hours
+
+    # Everything since the last compile, capped. A thread that has never
+    # compiled reads the sitting that just happened, not its history.
+    def window(conversation, now: Time.current)
+      since = conversation.buddy_compiled_at || (now - FIRST_READ)
+      scope = conversation.byte_messages.order(created_at: :desc).where("created_at > ?", since)
       scope.limit(WINDOW * 3).to_a.reject { |m| skip?(m) }.first(WINDOW).reverse
     end
 
     def skip?(message)
       meta = message.metadata.is_a?(Hash) ? message.metadata : {}
       return true if meta["hidden"]
-      return true if meta["source"] == "watch"
+      return true if SKIP_SOURCES.include?(meta["source"].to_s)
       return true if SKIP_KINDS.include?(meta["kind"].to_s)
 
       message.body.to_s.strip.empty?
@@ -396,6 +430,32 @@ module Buddy
       }.join("\n")
     end
 
+    # Which message in the window this memory actually came out of.
+    #
+    # It used to be the LAST thing the person said, which is where they stopped
+    # talking and has nothing to do with where the content came from: both
+    # memories written off Suki's thread on 19 Aug point at a goodnight message
+    # containing neither subject. Nothing reads `source_message` yet, which is
+    # precisely why it has to be right or absent - a provenance link is only
+    # worth having if following it lands somewhere, and a wrong one is worse
+    # than none the first time somebody trusts it.
+    #
+    # Overlap on the distinctive words, and nil when nothing carries them.
+    ORIGIN_MIN_OVERLAP = 2
+
+    def origin_message(messages, content)
+      words = content.to_s.downcase.scan(/[a-z]{5,}/).uniq
+      return nil if words.empty?
+
+      scored = messages.select { |m| m.direction == "outbound" }.map { |m|
+        body = m.body.to_s.downcase
+        [m, words.count { |word| body.include?(word) }]
+      }
+      best, score = scored.max_by { |(_, count)| count }
+
+      score.to_i >= ORIGIN_MIN_OVERLAP ? best : nil
+    end
+
     def write_memory!(user, _conversation, messages, row, now)
       content = row["content"].to_s.strip
       return nil if content.empty?
@@ -408,7 +468,7 @@ module Buddy
         content:        content.first(BuddyMemory::MAX_CONTENT),
         summary:        row["summary"].to_s.strip.presence&.first(BuddyMemory::MAX_SUMMARY),
         severity:       clamp_severity(row["severity"]),
-        source_message: messages.reverse.find { |m| m.direction == "outbound" },
+        source_message: origin_message(messages, content),
         last_used_at:   now,
       )
       memory.tag_list = row["tags"]

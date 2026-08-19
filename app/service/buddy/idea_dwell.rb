@@ -101,7 +101,14 @@ module Buddy
     # quick action, the chip that renders one, a tool's own receipt, a watch
     # firing on its own. Counting those would let a doorbell notification vote
     # on what the conversation is about.
-    SKIP_KINDS = %w[action_chip buddy_activity buddy_trigger].freeze
+    SKIP_KINDS = %w[action_chip buddy_activity buddy_trigger buddy_receipt].freeze
+
+    # Sources that are the APP asking or announcing rather than the
+    # conversation. `form` is the attribution prompt ("Who did: Puppy Up?") -
+    # a widget with buttons that reads like a question the companion asked, so
+    # whatever the person typed next gets fused to it. See the note on
+    # Buddy::Compile::SKIP_SOURCES for what that produced in prod.
+    SKIP_SOURCES = %w[watch form relay_copy].freeze
 
     # Cheapest thing that can read a transcript and write three sentences off
     # it, same as compaction. Distilling is not the work Buddy is good at, it's
@@ -301,7 +308,7 @@ module Buddy
     def skip?(message)
       meta = message.metadata.is_a?(Hash) ? message.metadata : {}
       return true if meta["hidden"]
-      return true if meta["source"] == "watch"
+      return true if SKIP_SOURCES.include?(meta["source"].to_s)
       return true if SKIP_KINDS.include?(meta["kind"].to_s)
 
       message.body.to_s.strip.empty?

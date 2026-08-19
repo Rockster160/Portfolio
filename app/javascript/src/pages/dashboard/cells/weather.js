@@ -15,6 +15,66 @@ import { shiftTempToColor } from "../vars";
     return Text.color(isNight ? "#C5C4DE" : "#DEDBBB", ico);
   };
 
+  var getSunEmoji = function (kind) {
+    return Text.orange("[ico wi wi-" + kind + "]");
+  };
+
+  // Every sunrise/sunset the forecast covers, ascending. `current` only carries
+  // today's pair, so the markers have to come from `daily` - and the hourly
+  // icons read the same list, so a marker can't contradict the icon beside it.
+  var getSunEvents = function (json) {
+    var events = [];
+    (json.daily || []).forEach(function (day_data) {
+      if (day_data.sunrise) {
+        events.push({ dt: day_data.sunrise, kind: "sunrise" });
+      }
+      if (day_data.sunset) {
+        events.push({ dt: day_data.sunset, kind: "sunset" });
+      }
+    });
+
+    return events.sort(function (a, b) {
+      return a.dt - b.dt;
+    });
+  };
+
+  // The most recent sun event at or before the given time decides; earlier than
+  // all of them means we're in the night leading up to the first one.
+  var isNightAt = function (time_sec, sun_events) {
+    var last = null;
+    sun_events.forEach(function (evt) {
+      if (evt.dt <= time_sec) {
+        last = evt;
+      }
+    });
+    if (last) {
+      return last.kind == "sunset";
+    }
+
+    return sun_events.length > 0 && sun_events[0].kind == "sunrise";
+  };
+
+  // The eight hourly columns with any upcoming sun event slotted in between the
+  // hours it falls between. The row is 32 characters wide either way, so a
+  // marker costs the last hour of forecast rather than overflowing. Past events
+  // are skipped - you can already see out the window.
+  var getHourlyColumns = function (json, now_sec, sun_events) {
+    var columns = json.hourly.slice(0, 8).map(function (hr_data) {
+      return { dt: hr_data.dt, hour: hr_data };
+    });
+    sun_events.forEach(function (evt) {
+      if (evt.dt > now_sec) {
+        columns.push({ dt: evt.dt, sun: evt.kind });
+      }
+    });
+
+    return columns
+      .sort(function (a, b) {
+        return a.dt - b.dt;
+      })
+      .slice(0, 8);
+  };
+
   let getNextPingTime = function () {
     let next_hour = Time.msUntilNextHour() + Time.seconds(5);
     let ten_minutes = Time.minutes(10);
@@ -36,8 +96,8 @@ import { shiftTempToColor } from "../vars";
       $.getJSON(url).done(function (json) {
         var current = json.current;
         var currentTime = new Date().getTime() / 1000;
-        var isNight =
-          currentTime <= current.sunrise || currentTime >= current.sunset;
+        var sun_events = getSunEvents(json);
+        var isNight = isNightAt(currentTime, sun_events);
         var now = {
           icon: getWeatherEmoji(current.weather[0].id, isNight),
           temp: Math.round(current.temp),
@@ -48,10 +108,21 @@ import { shiftTempToColor } from "../vars";
         var hourly_hours = [],
           hourly_icons = [],
           hourly_temps = [];
-        json.hourly.slice(0, 8).forEach(function (hr_data, idx) {
+        var columns = getHourlyColumns(json, currentTime, sun_events);
+        columns.forEach(function (col, idx) {
           var pad = idx == 0 ? 3 : 4;
-          var time = Time.at(hr_data.dt);
-          // This day/night check might be weird overnight
+          var time = Time.at(col.dt);
+
+          if (col.sun) {
+            // Only the minutes fit, and the icon says which event it is.
+            var minutes = ":" + String(time.getMinutes()).padStart(2, "0");
+
+            hourly_hours.push(Text.orange(minutes.padStart(pad, " ")));
+            hourly_icons.push("".padStart(pad - 2, " ") + getSunEmoji(col.sun));
+            hourly_temps.push(" ".repeat(pad));
+            return;
+          }
+
           var hour = time.getHours();
           if (hour > 12) {
             hour -= 12;
@@ -59,14 +130,12 @@ import { shiftTempToColor } from "../vars";
           if (hour == 0) {
             hour = 12;
           }
-          let time_sec = time.getTime() / 1000;
-          var is_night_hour =
-            time_sec <= current.sunrise || time_sec >= current.sunset;
-          var icon = getWeatherEmoji(hr_data.weather[0].id, is_night_hour);
+          var is_night_hour = isNightAt(col.dt, sun_events);
+          var icon = getWeatherEmoji(col.hour.weather[0].id, is_night_hour);
 
           hourly_hours.push(String(hour).padStart(pad, " "));
           hourly_icons.push("".padStart(pad - 2, " ") + icon);
-          hourly_temps.push(shiftTempToColor(hr_data.temp, pad));
+          hourly_temps.push(shiftTempToColor(col.hour.temp, pad));
         });
 
         var daily_days = [],

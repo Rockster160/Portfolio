@@ -48,6 +48,34 @@ RSpec.describe ApplicationCable::Connection do
     expect(conn.send(:find_verified_user)).to eq(user)
   end
 
+  # This spec used to fail about one run in seven, and it was never the spec.
+  #
+  # An API key is 32 hex characters, `user_from_headers` base64-decoded it, and
+  # a decoded result containing a colon was taken to mean basic auth. Hex
+  # decodes to arbitrary bytes, so ~15% of keys decode with a colon somewhere in
+  # them and went down the wrong branch. The randomness was in the FIXTURE, not
+  # the run: whether a given key can open a socket is settled when the key is
+  # generated, and a person holding an unlucky one is locked out permanently
+  # while the same key works fine over HTTP.
+  #
+  # So the key here is a real generated one, pinned because of what it decodes
+  # to rather than in spite of it.
+  it "connects with a key whose bytes happen to contain a colon" do
+    key = user.api_keys.create!(name: "Unlucky", key: "07431DF91B793A558680A6FA9A8AB5A6")
+    expect(Base64.decode64(key.key)).to include(":")
+    conn = build_conn(headers: { "HTTP_AUTHORIZATION" => "Bearer #{key.key}" })
+
+    expect(conn.send(:find_verified_user)).to eq(user)
+  end
+
+  it "still accepts genuine basic auth" do
+    user.update!(password: "correct-horse", password_confirmation: "correct-horse")
+    token = Base64.encode64("#{user.username}:correct-horse")
+    conn = build_conn(headers: { "HTTP_AUTHORIZATION" => "Basic #{token}" })
+
+    expect(conn.send(:find_verified_user)).to eq(user)
+  end
+
   # A socket outlives the request that opened it, so a key that's been turned
   # off getting one is a key that keeps listening for as long as it stays open.
   it "rejects a bearer API key that's been disabled" do

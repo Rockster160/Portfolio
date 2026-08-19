@@ -84,6 +84,49 @@ RSpec.describe Buddy::GPT::ContextTool do
       expect(briefing_sections(["lists"])).to eq(["lists"])
     end
 
+    # Prod 3951 signed off with "there's one reminder in play already: Today
+    # briefing." That's the row that FIRED this turn — it rolls forward to
+    # tomorrow the moment it goes off, landing back inside the 48h window while
+    # the briefing it caused is still being written.
+    describe "the reminder that caused the briefing" do
+      def reminder_bodies(tool)
+        rows = JSON.parse(tool.call({ "sections" => ["upcoming_reminders"] }))["upcoming_reminders"]
+        rows.to_a.pluck("body")
+      end
+
+      let!(:own) {
+        BuddyReminder.create!(
+          user: user, byte_conversation: convo, kind: :reminder,
+          body: Buddy::TodaySchedule::BODY, fire_at: 23.hours.from_now,
+          recurrence: { "freq" => "daily", "at" => "08:30" },
+          action: { "tool" => "today_briefing", "payload" => {} },
+          metadata: { "today_briefing" => true },
+        )
+      }
+      let!(:other) {
+        BuddyReminder.create!(
+          user: user, byte_conversation: convo, kind: :reminder,
+          body: "Cover the tomatoes.", fire_at: 3.hours.from_now,
+        )
+      }
+
+      it "is not in front of the briefing that it started" do
+        expect(reminder_bodies(briefing)).not_to include(Buddy::TodaySchedule::BODY)
+      end
+
+      # Half of somebody's day can live in reminders, so this takes one row
+      # rather than the section.
+      it "leaves every other reminder where it is" do
+        expect(reminder_bodies(briefing)).to include("Cover the tomatoes.")
+      end
+
+      # "When's my next briefing?" is a real question, and an ordinary turn is
+      # where it gets asked.
+      it "is still there on an ordinary turn" do
+        expect(reminder_bodies(tool)).to include(Buddy::TodaySchedule::BODY)
+      end
+    end
+
     # Asking about chores directly is a different thing entirely, and still
     # gets the whole list — the narrowing is the briefing's, not the person's.
     it "does not narrow an ordinary turn" do

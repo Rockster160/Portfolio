@@ -250,6 +250,14 @@ RSpec.describe "Buddy Today forward-looking" do
       expect(seed).to match(/not as a count/)
     end
 
+    # Prod 3951 led Rocco's briefing with Chelsea's 11:30 block AND its 10:50
+    # leave-by, then tagged her 4:00 correctly one sentence later. The awareness
+    # rule was already there and long; what it lacked was the concrete tell.
+    it "forbids a departure time for an item that isn't the person's" do
+      expect(seed).to match(/Never give me a `leave_by` or a `drive_min` off an item tagged `mine: false`/)
+      expect(seed).to match(/instruction about somebody else's calendar/)
+    end
+
     # Byte's briefing the same morning got this right by simply not raising the
     # subject, so the fix is the clause, not the pipe.
     it "tells it an empty chore list is not something to report" do

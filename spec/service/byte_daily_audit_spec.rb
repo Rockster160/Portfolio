@@ -86,6 +86,23 @@ RSpec.describe ByteDailyAudit do
       expect(described_class.conversation(user).id).to eq(first.id)
     end
 
+    # Found by NAME, so the report is somewhere you can scroll back through
+    # rather than wherever the day happened to end.
+    it "adopts an existing thread of that name instead of making a second" do
+      existing = user.byte_conversations.create!(name: described_class::NAME, mode: :claude)
+
+      expect(described_class.conversation(user).id).to eq(existing.id)
+    end
+
+    # Prod 19 Aug: the report was published into a Buddy companion thread. A
+    # companion thread cannot be the audit however it comes to be named one.
+    it "puts a thread that has been flipped to companion mode back" do
+      convo = described_class.conversation(user)
+      convo.update!(mode: :buddy)
+
+      expect(described_class.conversation(user).mode).to eq("claude")
+    end
+
     it "keeps anything else already on the thread" do
       convo = described_class.conversation(user)
       convo.update!(metadata: convo.metadata.merge("kiosk" => "false", "note" => "keep me"))

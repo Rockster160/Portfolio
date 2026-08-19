@@ -16,6 +16,65 @@ RSpec.describe Buddy::TodaySchedule do
     allow(BuddyDeliverWorker).to receive(:perform_async)
   end
 
+  # `at` is the LATEST it may land, not a fixed hour. Moving the schedule onto a
+  # reminder took it literally, and on 19 Aug all three briefings went out at
+  # 08:30:40 — Rocco's landing in the same SECOND as an 08:30:00 Focus block.
+  describe "an early start pulling the time forward" do
+    def early_item(start_at, travel: nil)
+      agenda = create(:agenda, user: user)
+      create(
+        :agenda_item, agenda: agenda, name: "Standup", start_at: start_at,
+        metadata: travel ? { "travel" => { "travel_minutes" => travel } } : {},
+      )
+    end
+
+    let(:tomorrow_at) { Buddy::Day.at(user, hour: 9, min: 0, now: 1.day.from_now) }
+
+    it "briefs half an hour before departure, not at the flat hour" do
+      early_item(tomorrow_at, travel: 25)
+
+      fire = described_class.fire_time(user, tomorrow_at.change(hour: 8, min: 30))
+
+      expect(fire).to eq(tomorrow_at - 55.minutes)
+    end
+
+    it "falls back to start minus the lead when no drive is known" do
+      early_item(tomorrow_at)
+
+      fire = described_class.fire_time(user, tomorrow_at.change(hour: 8, min: 30))
+
+      expect(fire).to eq(tomorrow_at - 30.minutes)
+    end
+
+    # It only ever pulls FORWARD. A 9:30 start would compute to 9:00, which is
+    # later than the hour they picked, and their hour wins.
+    it "never pushes the briefing later than the hour they chose" do
+      early_item(tomorrow_at.change(hour: 9, min: 30))
+      at = tomorrow_at.change(hour: 8, min: 30)
+
+      expect(described_class.fire_time(user, at)).to eq(at)
+    end
+
+    it "leaves a day with nothing early exactly where it was" do
+      at = tomorrow_at.change(hour: 8, min: 30)
+
+      expect(described_class.fire_time(user, at)).to eq(at)
+    end
+
+    it "ignores an event past the cutoff, however big the drive" do
+      early_item(tomorrow_at.change(hour: 11, min: 0), travel: 90)
+      at = tomorrow_at.change(hour: 8, min: 30)
+
+      expect(described_class.fire_time(user, at)).to eq(at)
+    end
+
+    it "applies to the first occurrence a new schedule gets" do
+      early_item(tomorrow_at, travel: 25)
+
+      expect(described_class.ensure!(user).fire_at).to be < tomorrow_at.change(hour: 8, min: 30)
+    end
+  end
+
   describe ".ensure!" do
     it "makes a daily reminder that fires the briefing" do
       reminder = described_class.ensure!(user)
@@ -93,6 +152,23 @@ RSpec.describe Buddy::TodaySchedule do
       expect(reminder.last_fired_at).to be_present
       expect(reminder.fire_at).to be > Time.current
       expect(described_class).to be_scheduled(user)
+    end
+
+    # The roll-forward is where tomorrow's time is decided, so the rule has to
+    # be applied there and not only when the schedule is first made.
+    it "puts tomorrow's early start on the slot it rolls to" do
+      allow(Buddy::TodayBriefing).to receive(:deliver!).and_return(nil)
+      reminder = described_class.ensure!(user)
+      agenda = create(:agenda, user: user)
+      early = Buddy::Day.at(user, hour: 9, min: 0, now: 1.day.from_now)
+      create(
+        :agenda_item, agenda: agenda, name: "Standup", start_at: early,
+        metadata: { "travel" => { "travel_minutes" => 25 } },
+      )
+
+      Buddy::ReminderFirer.fire!(reminder)
+
+      expect(reminder.reload.fire_at).to eq(early - 55.minutes)
     end
 
     # An ordinary action reminder still says what it's running — only a tool

@@ -174,7 +174,8 @@ module Buddy
         # there is, which is the opposite of withholding one.
         payload = named_sections(args).empty? ? context : context.slice(*requested_sections(args))
         # Applied to the everything path too, which is the one a briefing takes.
-        JSON.generate(payload.except(*self.class.withheld(@user, briefing: @briefing)))
+        payload = payload.except(*self.class.withheld(@user, briefing: @briefing))
+        JSON.generate(without_own_reminder(payload))
       rescue StandardError => e
         Buddy::Errors.report(
           section:   "gpt.context_tool",
@@ -186,6 +187,31 @@ module Buddy
       end
 
       private
+
+      # A briefing must not list the reminder that CAUSED it.
+      #
+      # Buddy::TodaySchedule's row is an ordinary recurring reminder on purpose,
+      # so it sits in `upcoming_reminders` where Buddy can answer "when's the
+      # next one due" — and it rolls forward to tomorrow the instant it fires,
+      # which drops it right back inside the 48-hour window while the briefing
+      # it just triggered is being written. Prod 3951 closed with "there's one
+      # reminder in play already: Today briefing." All three companions carry
+      # the row; the other two only happened not to mention it.
+      #
+      # A whole-section withhold would be wrong — half of somebody's day lives
+      # in reminders — so this takes the one row, and only on a briefing turn.
+      def without_own_reminder(payload)
+        return payload unless @briefing
+        return payload unless payload.key?(:upcoming_reminders)
+
+        own = Buddy::TodaySchedule.all_for(@user).pluck(:id).to_set
+        return payload if own.empty?
+
+        payload.merge(upcoming_reminders: payload[:upcoming_reminders].reject { |r| own.include?(r[:id]) })
+      rescue StandardError => e
+        Buddy::Errors.report(section: "gpt.context_tool.own_reminder", exception: e, user: @user)
+        payload
+      end
 
       # Memoized per turn: Buddy::Context.build runs a lot of queries, and a
       # model that calls get_context twice in one turn must not pay for it

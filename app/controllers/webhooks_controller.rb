@@ -834,20 +834,48 @@ class WebhooksController < ApplicationController
   # Prefer an explicit conversation_id (Mac echoes back what we passed
   # forward). If absent, look up an in_reply_to → find that message's
   # conversation. Absolute fallback: the user's default conversation.
+  # Which thread a reply from the Mac belongs to.
+  #
+  # Both hints are the Mac's, and on 19 Aug both were wrong at once: the daily
+  # audit came back naming conversation 26 (Moss) with an `in_reply_to` of 1133,
+  # a fan command from 30 July in conversation 21. Neither had anything to do
+  # with the audit, which had been posted into 37 twelve minutes earlier. The
+  # explicit id won, so a full engineering report was published inside a
+  # companion thread as a `claude` message with no prompt above it.
+  #
+  # So a hint is now checked rather than obeyed. Nothing reaching this
+  # controller is ever a Buddy turn — the in-Rails turn does not route through
+  # these webhooks at all (see the ByteNotifier note below) — which makes a
+  # companion thread not a bad guess but an impossible answer, and the one thing
+  # we can rule out without knowing anything else about the message.
   def byte_resolve_conversation(user)
-    convo_id = params[:conversation_id].presence
-    if convo_id
-      convo = user.byte_conversations.find_by(id: convo_id)
-      return convo if convo
-    end
+    byte_routable(user.byte_conversations.find_by(id: params[:conversation_id].presence)) ||
+      byte_routable(byte_reply_parent(user)&.byte_conversation) ||
+      byte_fallback_conversation(user)
+  end
 
+  def byte_reply_parent(user)
     reply_id = params[:in_reply_to].presence
-    if reply_id
-      parent = user.byte_messages.find_by(id: reply_id)
-      return parent.byte_conversation if parent&.byte_conversation
-    end
+    reply_id && user.byte_messages.find_by(id: reply_id)
+  end
 
-    ByteConversation.default_for(user)
+  # A thread this controller is allowed to write into. Companion threads belong
+  # to Buddy and reach it by another path entirely.
+  def byte_routable(conversation)
+    return nil if conversation.nil? || conversation.buddy?
+
+    conversation
+  end
+
+  # Where a reply goes when neither hint survived: the main Byte thread, BY
+  # NAME, so it is the same place every time. ByteConversation.default_for is
+  # "whichever thread was active most recently", which is a moving target and
+  # the reason a stray reply can land anywhere at all.
+  FALLBACK_NAME = "Byte".freeze
+
+  def byte_fallback_conversation(user)
+    scope = user.byte_conversations.active.real.ordered.where.not(mode: :buddy)
+    scope.find_by(name: FALLBACK_NAME) || scope.first || ByteConversation.default_for(user)
   end
 
   def byte_metadata(params)

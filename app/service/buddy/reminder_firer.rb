@@ -99,6 +99,10 @@ module Buddy
       return reminder.update!(fired_at: Time.current) unless reminder.recurring?
 
       next_fire = reminder.next_fire_at(from: Time.current)
+      # The Today briefing's `at` is a latest-by, not a fixed hour: it moves
+      # earlier for a day that starts early. Buddy::TodaySchedule owns that rule
+      # and nothing else here needs to know about it.
+      next_fire = Buddy::TodaySchedule.fire_time(reminder.user, next_fire) if Buddy::TodaySchedule.briefing?(reminder)
       if next_fire
         reminder.update!(last_fired_at: Time.current, fire_at: next_fire)
       else

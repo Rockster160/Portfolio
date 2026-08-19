@@ -26,6 +26,53 @@ RSpec.describe WebhooksController, type: :controller do
       expect(msg).to be_delivered
     end
 
+    # Prod 3946, the daily audit. It came back naming conversation 26 (Moss)
+    # with an in_reply_to of 1133 — a fan command from three weeks earlier in
+    # conversation 21 — while the prompt it was answering sat in 37. Both hints
+    # the Mac sent were wrong, and the explicit one won, so a full engineering
+    # report was published inside a companion thread with no prompt above it.
+    describe "routing a reply the Mac has mis-addressed" do
+      let!(:moss) {
+        user.byte_conversations.create!(mode: :buddy, name: "Moss", last_message_at: Time.current)
+      }
+      let!(:home) {
+        user.byte_conversations.create!(mode: :claude, name: "Byte", last_message_at: 2.hours.ago)
+      }
+
+      before do
+        allow(MonitorChannel).to receive(:broadcast_to)
+        allow(WebPushNotifications).to receive(:send_to_byte)
+      end
+
+      def landed_in(params)
+        post(:byte_create, params: { user_id: user.id, body: "Read the whole window." }.merge(params))
+        user.byte_messages.inbound.last.byte_conversation
+      end
+
+      it "refuses a companion thread even when named outright" do
+        expect(landed_in(conversation_id: moss.id)).to eq(home)
+      end
+
+      it "refuses one reached through a stale in_reply_to" do
+        stale = moss.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "hi")
+
+        expect(landed_in(in_reply_to: stale.id)).to eq(home)
+      end
+
+      # The rule is about companion threads, not about distrusting the Mac.
+      it "still honors a thread it is allowed to write into" do
+        other = user.byte_conversations.create!(mode: :claude, name: "OCS", last_message_at: 1.day.ago)
+
+        expect(landed_in(conversation_id: other.id)).to eq(other)
+      end
+
+      # Named, so an unrouted reply is in the same place every time — not
+      # wherever happened to be open, which is how this found Moss.
+      it "falls back by name rather than to whatever was most recent" do
+        expect(landed_in({})).to eq(home)
+      end
+    end
+
     it "starts in :streaming state without firing a push notification" do
       expect(MonitorChannel).to receive(:broadcast_to)
       expect(WebPushNotifications).not_to receive(:send_to_byte)

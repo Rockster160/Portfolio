@@ -31,6 +31,14 @@ module ByteDailyAudit
   # One thread, a fresh Claude session each day. The thread is what makes the
   # reports scrollable side by side; the session reset is what stops a month of
   # them accumulating into one context.
+  # Found or made by NAME, never by "whichever thread is current". The audit is
+  # a fixed place you scroll back through, so the thread has to be the same one
+  # every day — and a report that lands anywhere else is a report nobody will
+  # look for again.
+  #
+  # `mode:` is asserted on the way out for the same reason. On 19 Aug the report
+  # was published into a Buddy companion thread because the Mac replied naming
+  # one, and a companion thread cannot be the audit however it gets nominated.
   def conversation(user)
     convo = user.byte_conversations.find_by(name: NAME)
     return sync!(convo) if convo
@@ -48,6 +56,7 @@ module ByteDailyAudit
   # `auto` overnight is one that can rewrite the app while nobody's looking.
   def sync!(convo)
     wanted = convo.metadata.to_h.merge(base_metadata)
+    convo.update!(mode: :claude) unless convo.claude?
     convo.update!(metadata: wanted) if convo.metadata.to_h != wanted
     convo
   end

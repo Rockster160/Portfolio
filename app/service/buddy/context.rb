@@ -114,6 +114,16 @@ module Buddy
     def agenda_source_map(user)
       map = {}
       Agenda.where(user_id: user.id).pluck(:id).each { |id| map[id] = { mine: true } }
+      # A share at :owner IS ownership — the same rule Agenda#owned_by? and
+      # #subject_users already apply, and the reason the comment above says
+      # "agendas they own, like a jointly-run 'Ours' calendar". Without this,
+      # every co-owned calendar reached the non-primary owner's briefing tagged
+      # as the OTHER person's, which the seed reads as "leave it out entirely":
+      # Moss called the joint 6pm dinner "Rocco's dinner" to Chelsea on both 17
+      # and 19 Aug. Their own joint calendar is not somebody else's news.
+      AgendaShare.where(user_id: user.id, permission: :owner).pluck(:agenda_id).each { |id|
+        map[id] ||= { mine: true }
+      }
       user.shared_agendas.includes(:user).find_each { |ag|
         next if map.key?(ag.id)  # if they own it too, owned wins
 

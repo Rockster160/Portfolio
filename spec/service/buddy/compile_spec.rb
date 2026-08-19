@@ -70,6 +70,89 @@ RSpec.describe Buddy::Compile do
     end
   end
 
+  # `buddy_compiled_at` is null until a thread compiles once, and the count cap
+  # alone let that first run read whatever forty messages were there. Suki's
+  # first run on 19 Aug reached back to 16 Aug and wrote two memories off things
+  # that had been asked for, actioned and finished three days earlier — one of
+  # them a 3pm errand filed as a concept, which never expires.
+  describe "the first compile on a thread that has never compiled" do
+    it "reads the sitting that just happened, not the thread's history" do
+      old = say("I need to leave around 3 to visit Doug.", at: 3.days.ago)
+      say("On the calendar for 3:00 PM.", direction: :inbound, at: 3.days.ago, meta: { "kind" => "buddy" })
+      recent = say("The fence gate is sticking again.")
+      say("Oh, that one.", direction: :inbound, meta: { "kind" => "buddy" })
+      convo.update_columns(buddy_compiled_at: nil)
+      client = stub_client({ memories: [] })
+
+      described_class.run!(convo)
+
+      brief = client.calls.first.input.first[:content]
+      expect(brief).to include(recent.body)
+      expect(brief).not_to include(old.body)
+    end
+
+    it "still reads everything since the last compile once there has been one" do
+      say("Older but already compiled past.", at: 3.hours.ago)
+      say("Noted.", direction: :inbound, at: 3.hours.ago, meta: { "kind" => "buddy" })
+      convo.update_columns(buddy_compiled_at: 4.hours.ago)
+      client = stub_client({ memories: [] })
+
+      described_class.run!(convo)
+
+      expect(client.calls.first.input.first[:content]).to include("Older but already compiled past.")
+    end
+  end
+
+  # Both memories written off Suki's thread point at her goodnight message,
+  # which contains neither subject: the stamp was "last thing they said", not
+  # "where this came from". Nothing reads the column yet, which is exactly why
+  # it has to be right or absent.
+  describe "where a memory says it came from" do
+    it "points at the message the content is actually in" do
+      origin = say("The fence gate is sticking again and the latch is bent.")
+      say("I'll remember that.", direction: :inbound, meta: { "kind" => "buddy" })
+      say("I'm off to bed for the night.")
+      stub_client({
+        memories: [
+          { content: "Their fence gate is sticking and the latch is bent.", kind: "concept",
+            severity: 20, tags: %w[home], check_in_days: nil },
+        ],
+      })
+
+      expect(described_class.run!(convo).first.source_message_id).to eq(origin.id)
+    end
+
+    it "leaves it empty rather than pointing somewhere wrong" do
+      say("I'm off to bed for the night.")
+      say("Night!", direction: :inbound, meta: { "kind" => "buddy" })
+      stub_client({
+        memories: [
+          { content: "Their dentist appointment moved to November.", kind: "concept",
+            severity: 20, tags: %w[health], check_in_days: nil },
+        ],
+      })
+
+      expect(described_class.run!(convo).first.source_message).to be_nil
+    end
+  end
+
+  # Prod memory 64: the attribution form went up at 15:04 ("Who did: Puppy
+  # Up?"), Rocco typed an unrelated printer command at 15:13, and the compile
+  # read them as one exchange — writing down that "Puppy Up" MEANS "print game
+  # tray vase". A widget with buttons is not the companion asking a question.
+  describe "app widgets that look like conversation" do
+    it "keeps a form prompt out of the stretch it reads" do
+      say("Who did: Puppy Up?", direction: :inbound, meta: { "kind" => "buddy_reply", "source" => "form" })
+      say("print game tray vase")
+      say("It's printing.", direction: :inbound, meta: { "kind" => "buddy" })
+      client = stub_client({ memories: [] })
+
+      described_class.run!(convo)
+
+      expect(client.calls.first.input.first[:content]).not_to include("Puppy Up")
+    end
+  end
+
   describe "writing what mattered" do
     # The point of the whole thing: one message, several records, each with its
     # own weight and its own timing.

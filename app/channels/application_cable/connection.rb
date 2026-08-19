@@ -42,23 +42,35 @@ module ApplicationCable
 
     # ws://url/cable?Authorization="Bearer <raw_api_key>"
     # ws://url/cable headers: { Authorization: "Bearer <b64(username:password)>" }
+    # Had issues where some clients were mixing up bearer vs basic, so the
+    # prefix is ignored and both are tried.
+    #
+    # API KEY FIRST, and that order is the whole point. This used to decide by
+    # base64-decoding the token and asking whether the result contained a colon
+    # — but an API key is hex, and hex decodes to arbitrary bytes, so roughly
+    # one key in eight decodes to something with a colon in it and was handed to
+    # basic auth instead. Not a flake in the usual sense: whether a given key
+    # can ever open a socket is fixed at the moment it's generated, and one that
+    # can't never will. AuthHelper#user_from_auth_string was fixed for exactly
+    # this and carries the same note; this copy was missed.
     def user_from_headers
       raw_auth = request.headers["HTTP_AUTHORIZATION"] || request.parameters["Authorization"]
       return if raw_auth.blank?
 
-      # Had issues where some clients were mixing up bearer vs basic
-      # Just made this work for whatever prefix
       type, auth_string = raw_auth.split(" ", 2)
-      basic_auth_string = Base64.decode64(auth_string)
+      token = auth_string.presence || type
 
-      if basic_auth_string.include?(":")
-        User.auth_from_basic(basic_auth_string)
-      else
-        ApiKey.authenticate(auth_string.presence || type)&.user
-      end
-    rescue StandardError => e
+      ApiKey.authenticate(token)&.user || user_from_basic(token)
+    rescue StandardError
       # NoMethodError might get thrown if the raw_auth is not b64
       nil
+    end
+
+    def user_from_basic(token)
+      decoded = Base64.decode64(token.to_s)
+      return nil unless decoded.include?(":")
+
+      User.auth_from_basic(decoded)
     end
 
     def find_avatar

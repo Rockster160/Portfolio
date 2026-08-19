@@ -570,3 +570,13 @@
 .wi-owm-night-957:before {
   content: "\f050";
 }
+
+// This build was trimmed to the OpenWeather condition-code mapping, but the
+// webfont still carries the whole Weather Icons set. Sunrise/sunset aren't
+// condition codes - the dashboard marks them as their own moments.
+.wi-sunrise:before {
+  content: "\f051";
+}
+.wi-sunset:before {
+  content: "\f052";
+}
