@@ -845,18 +845,32 @@ class WebhooksController < ApplicationController
   #
   # So a hint is now checked rather than obeyed. Nothing reaching this
   # controller is ever a Buddy turn — the in-Rails turn does not route through
-  # these webhooks at all (see the ByteNotifier note below) — which makes a
-  # companion thread not a bad guess but an impossible answer, and the one thing
-  # we can rule out without knowing anything else about the message.
+  # these webhooks at all (see the ByteNotifier note below) — so a hint naming a
+  # companion thread is not a bad guess but an impossible answer, and the one
+  # thing we can rule out without knowing anything else about the message. Only
+  # the hints are held to that; where an unrouted message goes is the fallback's
+  # question, and the answer there is the person's primary thread whether or not
+  # it happens to be a companion.
   def byte_resolve_conversation(user)
     byte_routable(user.byte_conversations.find_by(id: params[:conversation_id].presence)) ||
       byte_routable(byte_reply_parent(user)&.byte_conversation) ||
       byte_fallback_conversation(user)
   end
 
+  # How old the message being answered may be. A reply is an answer to something
+  # just said; past this it is the Mac replaying state, not a conversation.
+  #
+  # Both mis-routed reports named one: 3946 pointed at message 1133 and 4002 at
+  # 1194, a "turn the fan to high" and a thank-you from 30 July, three weeks
+  # dead and in a thread neither report had anything to do with.
+  REPLY_MAX_AGE = 6.hours
+
   def byte_reply_parent(user)
     reply_id = params[:in_reply_to].presence
-    reply_id && user.byte_messages.find_by(id: reply_id)
+    parent   = reply_id && user.byte_messages.find_by(id: reply_id)
+    return nil if parent.nil? || parent.created_at < REPLY_MAX_AGE.ago
+
+    parent
   end
 
   # A thread this controller is allowed to write into. Companion threads belong
@@ -867,13 +881,31 @@ class WebhooksController < ApplicationController
     conversation
   end
 
-  # Where a reply goes when neither hint survived: the main Byte thread, BY
-  # NAME, so it is the same place every time. ByteConversation.default_for is
-  # "whichever thread was active most recently", which is a moving target and
-  # the reason a stray reply can land anywhere at all.
+  # Where a message goes when neither hint survived: the PRIMARY thread, the one
+  # the account has actually settled on (ByteConversation.primary_for). It is a
+  # decision rather than a race, which is the whole property wanted here —
+  # ByteConversation.default_for is "whichever thread was active most recently",
+  # a moving target and the reason a stray message can land anywhere at all.
+  #
+  # Matching by name was the first attempt and it silently stopped matching: the
+  # main thread is `Byte`, and Byte is a companion, so a scope excluding buddy
+  # mode ruled out the very thread it was looking for and every `byte "..."` from
+  # the CLI fell through to `.first` — the newest thread of any kind. That is how
+  # a "alert" test message ended up in a Claude thread named Memory.
+  #
+  # The primary thread being a companion is not the same thing as a hint naming
+  # one: `byte_routable` still refuses to be STEERED into a companion by the Mac,
+  # so a mis-addressed reply lands here, in the person's own main thread, rather
+  # than in whichever pet the Mac happened to name.
   FALLBACK_NAME = "Byte".freeze
 
   def byte_fallback_conversation(user)
+    ByteConversation.primary_for(user) || byte_named_conversation(user)
+  end
+
+  # No companion thread at all on the account — an unusual shape, but the one the
+  # webhook can still be reached in, so it keeps the old answer.
+  def byte_named_conversation(user)
     scope = user.byte_conversations.active.real.ordered.where.not(mode: :buddy)
     scope.find_by(name: FALLBACK_NAME) || scope.first || ByteConversation.default_for(user)
   end

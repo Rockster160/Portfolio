@@ -1,38 +1,69 @@
 <%= meta_title "Buddy Memories", include_name: false %>
 <%= meta_description "Everything the companions are holding." %>
 
-<div class="memories-page">
+<%
+  # The query IS the filter state, so acting on one row carries all of it back
+  # in a single param rather than throwing away the search that found it.
+  filters = { q: @query.presence }
+%>
+
+<div class="memories-page" data-query-scope>
   <div class="lists-title">
     <small>Buddy Memories</small>
   </div>
 
   <form class="memories-filters basic" method="get" action="<%= system_memories_path %>">
-    <input type="search" name="q" value="<%= @query %>" placeholder="Search content, summaries and notes">
-    <select name="kind">
-      <option value="">every kind</option>
-      <% @kinds.each do |kind| %>
-        <option value="<%= kind %>" <%= "selected" if @kind == kind %>><%= kind %></option>
-      <% end %>
-    </select>
-    <select name="user_id">
-      <option value="">everyone</option>
-      <% @users.each_value do |user| %>
-        <option value="<%= user.id %>" <%= "selected" if params[:user_id].to_i == user.id %>><%= user.first_name %></option>
-      <% end %>
-    </select>
-    <input type="hidden" name="tag" value="<%= @tag %>">
-    <button type="submit">Filter</button>
-    <span class="memories-count"><%= @total %> total<%= ", showing #{@memories.size}" if @total > @memories.size %></span>
+    <div class="memories-search">
+      <input type="search" name="q" value="<%= @query %>" data-query-input
+             data-query-initial="<%= @query %>"
+             placeholder="kind:followup who:eve severity&gt;50 -status:dropped">
+      <button type="submit" data-query-submit>Search</button>
+      <span class="memories-count"><%= @total %> total<%= ", showing #{@memories.size}" if @total > @memories.size %></span>
+    </div>
   </form>
 
-  <% if @all_tags.any? %>
-    <div class="memories-tags">
-      <% if @tag %>
-        <a class="memory-tag is-on" href="<%= system_memories_path(q: @query.presence, kind: @kind) %>"><%= @tag %> ✕</a>
+  <% # Every chip is the same query with one term written in or taken back out,
+     # so the bar always says exactly what the list is showing. %>
+  <div class="memories-checks">
+    <div class="memories-group">
+      <span class="memories-group-label">Kind</span>
+      <% @kind_filters.each do |filter| %>
+        <a class="memory-check <%= "is-on" if filter[:active] %>"
+           data-query-chip data-query-field="kind" data-query-value="<%= filter[:value] %>"
+           href="<%= system_memories_path(q: filter[:query]) %>"><%= BuddyMemory.kind_label(filter[:value]) %></a>
       <% end %>
-      <% @all_tags.each do |tag, count| %>
-        <% next if tag == @tag %>
-        <a class="memory-tag" href="<%= system_memories_path(q: @query.presence, kind: @kind, tag: tag) %>"><%= tag %> <span><%= count %></span></a>
+    </div>
+
+    <div class="memories-group">
+      <span class="memories-group-label">Status</span>
+      <% @status_filters.each do |filter| %>
+        <a class="memory-check <%= "is-on" if filter[:active] %>"
+           data-query-chip data-query-field="status" data-query-value="<%= filter[:value] %>"
+           href="<%= system_memories_path(q: filter[:query]) %>"><%= filter[:value].humanize %></a>
+      <% end %>
+    </div>
+
+    <% if @who_filters.many? %>
+      <div class="memories-group">
+        <span class="memories-group-label">Who</span>
+        <% @who_filters.each do |filter| %>
+          <a class="memory-check <%= "is-on" if filter[:active] %>"
+             data-query-chip data-query-field="who" data-query-value="<%= filter[:value] %>"
+             href="<%= system_memories_path(q: filter[:query]) %>"><%= filter[:value] %></a>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+
+  <% if @tag_filters.any? %>
+    <div class="memories-tags">
+      <% counts = @all_tags.to_h %>
+      <% @tag_filters.each do |filter| %>
+        <a class="memory-tag <%= "is-on" if filter[:active] %>"
+           data-query-chip data-query-field="tag" data-query-value="<%= filter[:value] %>"
+           href="<%= system_memories_path(q: filter[:query]) %>">
+          <%= filter[:value] %> <span><%= counts[filter[:value]] %></span>
+        </a>
       <% end %>
     </div>
   <% end %>
@@ -43,31 +74,77 @@
 
   <div class="memories-list">
     <% @memories.each do |memory| %>
-      <div class="memory-row" data-memory-id="<%= memory.id %>">
+      <div class="memory-row is-<%= memory.status %>" data-memory-id="<%= memory.id %>">
         <div class="memory-head">
-          <span class="memory-kind memory-kind-<%= memory.kind %>"><%= memory.kind %></span>
+          <span class="memory-kind memory-kind-<%= memory.kind %>"><%= memory.kind_label %></span>
+          <span class="memory-id" title="Memory id">#<%= memory.id %></span>
           <span class="memory-who"><%= @users[memory.user_id]&.first_name || "user ##{memory.user_id}" %></span>
-          <span class="memory-sev" title="Severity, 0-100">
-            <input type="number" min="0" max="100" value="<%= memory.severity %>" data-field="severity">
+
+          <label class="memory-field" title="Severity, 0-100: how much this matters. 0 is trivia, 100 is the most serious thing they've said. Orders recall.">
+            <span>sev</span>
+            <input class="basic" type="number" min="0" max="100" value="<%= memory.severity %>" data-field="severity">
+          </label>
+          <label class="memory-field" title="Priority: the tie-breaker between two memories of equal severity, and the running order of the preferences loaded into every prompt.">
+            <span>pri</span>
+            <input class="basic" type="number" value="<%= memory.priority %>" data-field="priority">
+          </label>
+
+          <% unless memory.status_active? %>
+            <span class="memory-status memory-status-<%= memory.status %>"><%= memory.status.humanize %></span>
+          <% end %>
+
+          <span class="memory-dates">
+            <% # Labelled, because a bare date can't say whether it's when this
+               # was written, last read, or about to go away — and all three are
+               # here for different reasons. %>
+            <span title="Written on <%= memory.created_at %>">added <%= memory.created_at.to_date.to_fs(:short) %></span>
+            <% if memory.last_used_at %>
+              <span title="Last pulled into a prompt">· used <%= time_ago_in_words(memory.last_used_at) %> ago</span>
+            <% end %>
+            <% if memory.last_touched_at %>
+              <span title="Last edited or noted on">· touched <%= time_ago_in_words(memory.last_touched_at) %> ago</span>
+            <% end %>
+            <% if memory.relevant_at %>
+              <span class="is-future" title="Held back until this date">· wakes <%= memory.relevant_at.to_date.to_fs(:short) %></span>
+            <% end %>
+            <% if memory.expires_at %>
+              <span class="is-expiry" title="Stops being loaded after this">· expires <%= memory.expires_at.to_date.to_fs(:short) %></span>
+            <% end %>
           </span>
+
           <% if memory.check_in_at %>
             <span class="memory-checkin" title="Scheduled check-in">
               ⏰ <%= memory.check_in_at.in_time_zone(SystemController::SPEND_ZONE).strftime("%b %-d, %-I%P") %>
-              <button type="button" class="memory-disarm" data-field="check_in_at">disarm</button>
+              <button type="button" class="memory-mini" data-field="check_in_at">disarm</button>
             </span>
           <% end %>
           <% if memory.checked_in_at %>
             <span class="memory-asked" title="Last asked about">asked <%= time_ago_in_words(memory.checked_in_at) %> ago</span>
           <% end %>
-          <span class="memory-status memory-status-<%= memory.status %>"><%= memory.status %></span>
-          <span class="memory-when"><%= memory.created_at.to_date.to_fs(:short) %></span>
         </div>
 
-        <textarea class="memory-content" data-field="content" rows="2"><%= memory.content %></textarea>
+        <textarea class="basic memory-content" data-field="content" rows="2"><%= memory.content %></textarea>
 
         <div class="memory-foot">
-          <input class="memory-tags-input" type="text" value="<%= memory.tag_list.join(', ') %>" data-field="tags" placeholder="tags, comma separated">
-          <% if memory.category.present? %><span class="memory-cat"><%= memory.category_label %></span><% end %>
+          <% if memory.category.present? %>
+            <span class="memory-cat" title="Which pile this was filed into"><%= memory.category_label %></span>
+          <% end %>
+          <input class="basic memory-tags-input" type="text" value="<%= memory.tag_list.join(', ') %>"
+                 data-field="tags" placeholder="tags, comma separated">
+
+          <span class="memory-saved" data-role="saved"></span>
+
+          <div class="memory-acts">
+            <% if memory.status_active? %>
+              <button type="button" class="memory-mini" data-field="status" data-value="dropped">drop</button>
+            <% else %>
+              <button type="button" class="memory-mini is-restore" data-field="status" data-value="active">restore</button>
+            <% end %>
+            <%= button_to "delete", system_memory_destroy_path(memory, **filters),
+                  method: :delete, class: "memory-delete", form_class: "memory-delete-form",
+                  form: { data: { confirm: "Delete ##{memory.id} for good?\n\n#{memory.content.truncate(140)}\n\nDrop keeps it and can be undone." } } %>
+          </div>
+
           <% if memory.notes.any? %>
             <details class="memory-notes">
               <summary><%= pluralize(memory.notes.size, "note") %></summary>
@@ -76,9 +153,6 @@
               <% end %>
             </details>
           <% end %>
-          <span class="memory-saved" data-role="saved"></span>
-          <%= button_to "Delete", system_memory_destroy_path(memory, kind: @kind, q: @query.presence, tag: @tag),
-                method: :delete, class: "memory-delete", form: { data: { turbo_confirm: "Delete this memory?" } } %>
         </div>
       </div>
     <% end %>
@@ -104,8 +178,17 @@
           flag.className = "memory-saved " + (res.ok ? "is-ok" : "is-bad");
           setTimeout(() => { flag.textContent = ""; }, 1500);
         }
-        if (field === "check_in_at" && res.ok) {
-          row.querySelector(".memory-checkin")?.remove();
+        if (!res.ok) return;
+        if (field === "check_in_at") row.querySelector(".memory-checkin")?.remove();
+        // Dropping and restoring change how the row reads, so the row says so
+        // straight away rather than waiting for a reload that isn't coming.
+        if (field === "status") {
+          row.className = "memory-row is-" + value;
+          const btn = row.querySelector('[data-field="status"]');
+          const dropping = value === "dropped";
+          btn.textContent = dropping ? "restore" : "drop";
+          btn.dataset.value = dropping ? "active" : "dropped";
+          btn.classList.toggle("is-restore", dropping);
         }
       });
     }
@@ -113,7 +196,7 @@
     document.querySelectorAll(".memory-row").forEach((row) => {
       row.querySelectorAll("[data-field]").forEach((el) => {
         if (el.tagName === "BUTTON") {
-          el.addEventListener("click", () => save(row, el.dataset.field, ""));
+          el.addEventListener("click", () => save(row, el.dataset.field, el.dataset.value ?? ""));
           return;
         }
         let last = el.value;
@@ -129,10 +212,50 @@
 
 <%= content_for :head do %>
   <style>
+    /* Inputs are `.basic` on purpose: forms.scss gives every unmarked input and
+       textarea `width: 100%`, `font-size: 18px` and a 2px border. Buttons can't
+       opt out the same way — `.dark-mode button` is a full blue capsule at
+       (0,1,1), so a reset has to be scoped under the page class AND carry
+       !important wherever the global rule does. Same shape as the note on
+       `.system-page .bank-bulk-open` in banking. */
     .memories-page { max-width: 1100px; margin: 0 auto; padding: 12px; }
-    .memories-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
-    .memories-filters input[type="search"] { flex: 1 1 240px; }
-    .memories-count { opacity: 0.6; font-size: 0.85em; margin-left: auto; }
+
+    .memories-filters { margin-bottom: 12px; }
+    .memories-search { display: flex; gap: 8px; align-items: center; }
+    .memories-search input[type="search"] { flex: 1 1 auto; min-width: 0; margin: 0; }
+    .memories-page .memories-search button {
+      flex: 0 0 auto; margin: 0; padding: 8px 18px; font-size: 0.9em; font-weight: normal; border-radius: 5px;
+    }
+    .memories-count { opacity: 0.6; font-size: 0.85em; flex: 0 0 auto; white-space: nowrap; }
+    /* The list is still answering the previous question until Search is
+       pressed. Said quietly, on the button that resolves it. */
+    .memories-page.query-dirty .memories-count { opacity: 0.35; }
+    .memories-page.query-dirty .memories-search button {
+      box-shadow: 0 0 0 2px rgba(93, 173, 226, 0.55) !important;
+    }
+    .memories-page .memories-search button:disabled {
+      background-color: rgba(127, 127, 127, 0.22) !important;
+      color: #94A3B8 !important; opacity: 0.7;
+    }
+
+    .memories-checks { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; margin-top: 8px; }
+    .memories-group { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+    .memories-group-label {
+      opacity: 0.45; font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 2px;
+    }
+    /* Chips rather than boxes: the same shape as the tag row underneath, which
+       is the other thing on this page that narrows the list. The native control
+       is hidden and the label carries the state. */
+    .memory-check {
+      display: inline-flex; align-items: center; cursor: pointer; user-select: none;
+      padding: 3px 10px; border-radius: 999px; font-size: 0.82em;
+      background: rgba(127, 127, 127, 0.14); opacity: 0.7;
+      border: 1px solid transparent; text-decoration: none; color: inherit;
+    }
+    .memory-check:hover { opacity: 0.95; }
+    .memory-check.is-on {
+      background: rgba(93, 173, 226, 0.28); border-color: rgba(93, 173, 226, 0.55); opacity: 1;
+    }
 
     .memories-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
     .memory-tag {
@@ -148,9 +271,12 @@
     .memory-row {
       border: 1px solid rgba(127, 127, 127, 0.22); border-radius: 8px; padding: 8px 10px;
     }
-    .memory-head, .memory-foot {
-      display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 0.82em;
-    }
+    /* A row that isn't live dims as a whole rather than having one word struck
+       through, so it reads as "put aside" at a glance. */
+    .memory-row.is-dropped, .memory-row.is-done { opacity: 0.55; }
+    .memory-row.is-dropped { border-style: dashed; }
+
+    .memory-head, .memory-foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 0.82em; }
     .memory-head { margin-bottom: 6px; }
     .memory-foot { margin-top: 6px; }
 
@@ -160,15 +286,76 @@
     .memory-kind-stash      { background: rgba(88, 214, 141, 0.24); }
     .memory-kind-concept    { background: rgba(93, 173, 226, 0.24); }
 
+    /* Selectable, because the reason to want it is to paste it into a script. */
+    .memory-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; opacity: 0.5; user-select: all; }
     .memory-who { font-weight: 600; }
-    .memory-sev input { width: 62px; }
-    .memory-checkin { opacity: 0.9; }
-    .memory-disarm { font-size: 0.85em; padding: 0 6px; }
-    .memory-asked, .memory-when, .memory-cat { opacity: 0.55; }
-    .memory-status-done, .memory-status-dropped { opacity: 0.5; text-decoration: line-through; }
 
-    .memory-content { width: 100%; resize: vertical; font: inherit; }
-    .memory-tags-input { flex: 1 1 220px; }
+    .memory-field { display: inline-flex; align-items: center; gap: 4px; }
+    .memory-field > span { opacity: 0.55; text-transform: uppercase; font-size: 0.85em; letter-spacing: 0.04em; }
+    .memory-field input {
+      width: 3.4em; padding: 2px 4px; font: inherit; text-align: center;
+      border: 1px solid rgba(127, 127, 127, 0.35); border-radius: 4px;
+      background: rgba(127, 127, 127, 0.08); color: inherit;
+    }
+
+    .memory-status { padding: 1px 7px; border-radius: 999px; background: rgba(127, 127, 127, 0.18); opacity: 0.8; }
+
+    /* Every date says which date it is. One bare "01 Aug" can't tell you
+       whether it was written, read or about to expire. */
+    .memory-dates { opacity: 0.5; margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .memory-dates .is-expiry { color: #F5B041; opacity: 0.9; }
+    .memory-dates .is-future { color: #5DADE2; opacity: 0.9; }
+    .memory-asked { opacity: 0.55; }
+    .memory-checkin { opacity: 0.9; }
+
+    .memory-content {
+      width: 100%; box-sizing: border-box; resize: vertical; font: inherit; line-height: 1.4;
+      padding: 6px 8px; border: 1px solid rgba(127, 127, 127, 0.3); border-radius: 6px;
+      background: rgba(127, 127, 127, 0.06); color: inherit;
+    }
+
+    /* The pile a stashed thought was filed into, in front of the tags because
+       it is the same sort of thing: how the memory gets found again. */
+    .memory-cat {
+      flex: 0 0 auto; padding: 3px 9px; border-radius: 999px; font-size: 0.95em;
+      background: rgba(174, 122, 197, 0.22); opacity: 0.9;
+    }
+    .memory-tags-input {
+      flex: 1 1 200px; min-width: 0; box-sizing: border-box; font: inherit; font-size: 0.95em;
+      padding: 4px 8px; border: 1px solid rgba(127, 127, 127, 0.25); border-radius: 6px;
+      background: transparent; color: inherit;
+    }
+    .memory-tags-input::placeholder { opacity: 0.4; }
+
+    /* Housekeeping controls, not the point of the page: plain text, same
+       baseline, and destructive-looking only where it destroys something.
+
+       `button_to` puts `class:` on the button and `form_class:` on the wrapper,
+       and the wrapper is a flex item with its own margins — `display: contents`
+       drops it out of the box tree so both buttons sit on one baseline.
+       `.dark-mode button` is (0,1,1) with `color: … !important`, so the reset
+       has to out-specify it rather than merely tie. */
+    .memory-acts { display: flex; gap: 10px; align-items: center; margin-left: auto; }
+    .memories-page .memory-delete-form { display: contents; margin: 0; }
+    .memories-page button.memory-mini,
+    .memories-page button.memory-delete {
+      margin: 0; border: 0; border-radius: 4px; padding: 2px 6px;
+      background: transparent !important; background-image: none !important;
+      box-shadow: none !important; text-shadow: none !important;
+      font: inherit; font-size: 0.95em; font-weight: normal; line-height: 1.4;
+      color: #94A3B8 !important; cursor: pointer; opacity: 0.85;
+    }
+    .memories-page button.memory-mini:hover {
+      color: #CBD5E1 !important; background: rgba(127, 127, 127, 0.16) !important;
+    }
+    .memories-page button.memory-mini.is-restore { color: #58D68D !important; }
+    .memories-page button.memory-delete:hover {
+      color: #EC7063 !important; background: rgba(236, 112, 99, 0.16) !important;
+    }
+    /* forms.scss nudges every button down 1px while held, which on a form using
+       `display: contents` shifts it out of line with its neighbour. */
+    .memories-page button.memory-mini:active,
+    .memories-page button.memory-delete:active { top: 0; }
 
     .memory-notes { flex: 1 1 100%; }
     .memory-note { padding: 4px 8px; margin-top: 4px; border-left: 2px solid rgba(127, 127, 127, 0.4); opacity: 0.85; }
@@ -177,11 +364,11 @@
     .memory-saved { font-size: 0.8em; }
     .memory-saved.is-ok { color: #58D68D; }
     .memory-saved.is-bad { color: #EC7063; }
-    .memory-delete { margin-left: auto; }
-    .memory-delete button, button.memory-delete { font-size: 0.85em; opacity: 0.7; }
 
-    @media (max-width: 640px) {
+    @media (max-width: 720px) {
       .memories-count { margin-left: 0; width: 100%; }
+      .memory-dates { margin-left: 0; flex: 1 1 100%; white-space: normal; }
+      .memory-acts { margin-left: auto; }
     }
   </style>
 <% end %>

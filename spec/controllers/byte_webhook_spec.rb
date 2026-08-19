@@ -32,11 +32,14 @@ RSpec.describe WebhooksController, type: :controller do
     # the Mac sent were wrong, and the explicit one won, so a full engineering
     # report was published inside a companion thread with no prompt above it.
     describe "routing a reply the Mac has mis-addressed" do
+      # The account shape in prod: the main thread IS a companion — Byte is a
+      # pet, thread 21, the primary one — and Moss is a second companion beside
+      # it. `home` first, so it is the older id and therefore the primary.
+      let!(:home) {
+        user.byte_conversations.create!(mode: :buddy, name: "Byte", last_message_at: 2.hours.ago)
+      }
       let!(:moss) {
         user.byte_conversations.create!(mode: :buddy, name: "Moss", last_message_at: Time.current)
-      }
-      let!(:home) {
-        user.byte_conversations.create!(mode: :claude, name: "Byte", last_message_at: 2.hours.ago)
       }
 
       before do
@@ -53,10 +56,29 @@ RSpec.describe WebhooksController, type: :controller do
         expect(landed_in(conversation_id: moss.id)).to eq(home)
       end
 
-      it "refuses one reached through a stale in_reply_to" do
+      it "refuses one reached through an in_reply_to into a companion thread" do
         stale = moss.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "hi")
 
         expect(landed_in(in_reply_to: stale.id)).to eq(home)
+      end
+
+      # 4002 named message 1194, a thank-you from three weeks earlier. A reply
+      # answers something just said; anything older is the Mac replaying state.
+      it "ignores an in_reply_to pointing weeks into the past" do
+        old = user.byte_conversations.create!(mode: :claude, name: "OCS", last_message_at: 3.weeks.ago)
+        ancient = old.byte_messages.create!(
+          user: user, direction: :outbound, state: :sent, body: "Turn the fan to high, please",
+          created_at: 3.weeks.ago,
+        )
+
+        expect(landed_in(in_reply_to: ancient.id)).to eq(home)
+      end
+
+      it "still follows a fresh one" do
+        other = user.byte_conversations.create!(mode: :claude, name: "OCS", last_message_at: Time.current)
+        asked = other.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "audit this")
+
+        expect(landed_in(in_reply_to: asked.id)).to eq(other)
       end
 
       # The rule is about companion threads, not about distrusting the Mac.
@@ -66,10 +88,23 @@ RSpec.describe WebhooksController, type: :controller do
         expect(landed_in(conversation_id: other.id)).to eq(other)
       end
 
-      # Named, so an unrouted reply is in the same place every time — not
-      # wherever happened to be open, which is how this found Moss.
-      it "falls back by name rather than to whatever was most recent" do
+      # Prod 4005: `byte "alert"` from the CLI landed in Memory, a Claude thread
+      # that happened to be the newest on the account, because the fallback
+      # looked for a NON-companion thread named Byte and the real one is a
+      # companion. Every `byte "..."` before it had gone to thread 21.
+      it "falls back to the primary thread rather than to whatever was most recent" do
+        newest = user.byte_conversations.create!(
+          mode: :claude, name: "Memory", last_message_at: 1.minute.from_now,
+        )
+
         expect(landed_in({})).to eq(home)
+        expect(newest.byte_messages.count).to eq(0)
+      end
+
+      it "follows the primary flag when it moves off the oldest thread" do
+        ByteConversation.pin_primary!(moss)
+
+        expect(landed_in({})).to eq(moss)
       end
     end
 

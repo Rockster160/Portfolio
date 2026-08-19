@@ -18,7 +18,7 @@
   chart_bucket = (@bucket unless @bucket == BankChart::DEFAULT_BUCKET)
 %>
 
-<div class="system-page">
+<div class="system-page" data-query-scope>
   <div class="btn-container">
     <a href="<%= system_path %>" class="btn">System Index</a>
     <a href="<%= request.path %>" class="btn btn-refresh">Refresh</a>
@@ -88,6 +88,10 @@
           %>
           <tr data-row data-url="<%= system_bank_account_path(account) %>"
               data-filter-url="<%= system_banking_path(q: filter[:query].presence, bucket: chart_bucket) if filter %>"
+              <% if filter %>
+                data-query-chip data-query-manual data-query-on="picked"
+                data-query-field="account" data-query-value="<%= filter[:value] %>"
+              <% end %>
               class="<%= "picked" if filter&.dig(:active) %>"
               title="<%= filter_title %>">
             <td class="acct-name">
@@ -197,7 +201,8 @@
         form: a control anywhere in the document can belong to it by `form=`. %>
     <%= form_with(url: system_banking_path, method: :get, class: "basic bank-search",
           id: "bank-search-form") do %>
-      <input type="search" name="q" value="<%= @query %>"
+      <input type="search" name="q" value="<%= @query %>" data-query-input
+             data-query-initial="<%= @query %>"
              placeholder="payee:amazon category:groceries amount&gt;50 direction:withdrawal">
       <%# In the search row rather than above it: the dates ARE part of the
           search. Picking one writes a `timestamp` term into the box beside it,
@@ -215,7 +220,7 @@
         <input type="date" class="basic" data-date-to value="<%= @date_to %>"
                aria-label="To date">
       </span>
-      <button type="submit" class="btn">Search</button>
+      <button type="submit" class="btn" data-query-submit>Search</button>
       <% if @query.present? %>
         <a class="btn" href="<%= system_banking_path %>">Clear</a>
       <% end %>
@@ -387,6 +392,8 @@
            data-any-picked="<%= @legend.any? { |entry| entry[:active] } %>">
         <% @legend.each do |entry| %>
           <a class="cc-legend-row bank-legend-row<%= " picked" if entry[:active] %>"
+             data-query-chip data-query-field="category" data-query-value="<%= entry[:value] %>"
+             data-query-on="picked"
              href="<%= system_banking_path(q: entry[:query].presence, bucket: chart_bucket) %>"
              title="<%= entry[:active] ? "Showing this — click to drop it" : "Click to add this to the search" %>">
             <span class="cc-swatch" style="background-color: <%= entry[:color] %>;"></span>
@@ -629,6 +636,8 @@
 
         row.addEventListener("click", function (event) {
           if (event.target.closest("[contenteditable], select, input, button, a")) { return; }
+          // Writes the term into the search box; Search is what re-runs it.
+          if (window.queryChips && window.queryChips.apply(row)) { return; }
           window.location.href = url;
         });
       });
@@ -925,6 +934,16 @@
        component class, so the reset has to be scoped under the page AND carry
        !important wherever the global rule does. Without that this rendered as
        a bold white-on-blue capsule. */
+    /* The table and the chart are still answering the previous question until
+       Search is pressed. Said on the button that resolves it. */
+    .system-page.query-dirty .bank-search button[type="submit"] {
+      box-shadow: 0 0 0 2px rgba(93, 173, 226, 0.65) !important;
+    }
+    .system-page .bank-search button[type="submit"]:disabled {
+      background-color: rgba(127, 127, 127, 0.22) !important;
+      color: #94A3B8 !important; opacity: 0.7; box-shadow: none !important;
+    }
+
     .system-page .bank-bulk-open {
       margin: 0; border: 0; border-radius: 0; padding: 0;
       background: transparent; background-image: none;
