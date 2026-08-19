@@ -27,8 +27,9 @@ RSpec.describe "Buddy stash refile receipts" do
 
   describe "moving one that was already filed" do
     let!(:idea) {
-      user.buddy_ideas.create!(
-        body: "recipe cards need total/prep/cook times", summary: "Recipe card time clarity",
+      user.buddy_memories.create!(
+      kind:     :stash,
+        content: "recipe cards need total/prep/cook times", summary: "Recipe card time clarity",
         category: :work, status: :active
       )
     }
@@ -73,7 +74,7 @@ RSpec.describe "Buddy stash refile receipts" do
   # Silence is correct here: Stash#capture! already posted "📥 Stashed to Home"
   # above this, and a second receipt saying the same thing is noise.
   describe "filing a fresh dump for the first time" do
-    let!(:idea) { user.buddy_ideas.create!(body: "garage shelves", category: nil, status: :active) }
+    let!(:idea) { user.buddy_memories.create!(kind: :stash, content: "garage shelves", category: nil, status: :active) }
 
     it "files it silently" do
       Buddy::Stash.apply_sort(user, { id: idea.id, category: "home" }, conversation: convo)
@@ -97,7 +98,7 @@ RSpec.describe "Buddy stash refile receipts" do
   end
 
   describe "taking one off the pile" do
-    let!(:idea) { user.buddy_ideas.create!(body: "uncover the tomatoes", category: :home, status: :active) }
+    let!(:idea) { user.buddy_memories.create!(kind: :stash, content: "uncover the tomatoes", category: :home, status: :active) }
 
     # It went somewhere it can be acted on. Buddy is told never to say a pile
     # entry is handled, so the chip says what actually happened to the ENTRY.
@@ -110,7 +111,7 @@ RSpec.describe "Buddy stash refile receipts" do
   end
 
   describe "when nothing is asked for" do
-    let!(:idea) { user.buddy_ideas.create!(body: "something", category: :home, status: :active) }
+    let!(:idea) { user.buddy_memories.create!(kind: :stash, content: "something", category: :home, status: :active) }
 
     it "reports no change, so it can't back a claim" do
       expect(Buddy::SideEffects.call(convo, :sort_stash, { id: idea.id })).to be(false)

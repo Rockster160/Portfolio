@@ -39,19 +39,23 @@ Buddy::Tools.register(
   confirm:     ->(_payload, _ctx) { { summary: "Search held ideas", resolved: {} } },
   label:       ->(_payload, _ctx) { "Search held ideas" },
   execute:     ->(payload, ctx) {
-    found = Buddy::IdeaSearch.call(
+    # Pinned to `stash` so "what am I holding" can never start answering with
+    # preferences or follow-ups. Everything Buddy keeps lives in one table now;
+    # this tool is still only about the pile.
+    found = Buddy::MemorySearch.call(
       user:         ctx.user,
       query:        payload[:query],
+      kinds:        [:stash],
       status:       ActiveModel::Type::Boolean.new.cast(payload[:open_only]) ? :live : :all,
       threads_only: ActiveModel::Type::Boolean.new.cast(payload[:threads_only]),
     )
-    ideas = found[:ideas]
+    ideas = found[:memories]
 
     {
       query:   payload[:query].presence,
       total:   found[:total],
       showing: ideas.length,
-      ideas:   Buddy::IdeaSearch.rows(ideas),
+      ideas:   Buddy::MemorySearch.rows(ideas),
       how:     (
         if ideas.any?
           "Newest-touched first. Each line is `#id`, the label, then its tags — how many notes it has and " \

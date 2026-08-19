@@ -8,6 +8,7 @@ class SystemController < ApplicationController
   SPEND_WINDOWS = [1, 7, 30, 90].freeze
   SPEND_DEFAULT_DAYS = 30
   TRANSACTION_PAGE = 100
+  MEMORY_PAGE = 200
   # A `timestamp` term in the search, with its comparison operator. Longest
   # operators first, or `>=` would match as `>` and leave a stray `=` behind.
   # A negated term (`-timestamp:`) deliberately does not match: it names dates
@@ -198,6 +199,72 @@ class SystemController < ApplicationController
 
     notice = "Categorised #{updated} as #{::TransactionCategory.label(category)}."
     redirect_to(system_banking_path(q: params[:q].presence), notice: notice)
+  end
+
+  # Everything a companion is holding about somebody, in one table.
+  #
+  # Deliberately NOT in Byte. Buddy's own surface is for talking to; curating
+  # what it has kept — deleting a memory that landed wrong, dropping a severity
+  # that reads too high, disarming a check-in — is administration, and putting
+  # it in the chat would mean a companion that keeps offering to manage itself.
+  def memories
+    @kinds = BuddyMemory.kinds.keys
+    @kind  = params[:kind].presence_in(@kinds)
+    @tag   = params[:tag].to_s.strip.downcase.presence
+    @query = params[:q].to_s.strip
+
+    scope = BuddyMemory.includes(:user, :notes)
+    scope = scope.where(kind: @kind) if @kind
+    scope = scope.where(user_id: params[:user_id]) if params[:user_id].present?
+    scope = Buddy::MemorySearch.matching(scope, @query) if @query.present?
+    scope = Buddy::MemorySearch.tagged(scope, [@tag]) if @tag
+
+    @total = scope.count
+    @memories = scope.order(Arel.sql("severity DESC, COALESCE(last_touched_at, created_at) DESC")).limit(MEMORY_PAGE)
+    @users = User.where(id: BuddyMemory.distinct.pluck(:user_id)).index_by(&:id)
+    @all_tags = BuddyMemory.pluck(:tags).flatten.compact.map(&:to_s).tally.sort_by { |t, n| [-n, t] }.first(30)
+  end
+
+  # One field at a time, answered as JSON so a row edits in place.
+  def update_memory
+    memory  = BuddyMemory.find(params[:id])
+    changed = {}
+
+    if params.key?(:severity)
+      memory.severity = params[:severity].to_i.clamp(BuddyMemory::SEVERITY_RANGE.min, BuddyMemory::SEVERITY_RANGE.max)
+      changed[:severity] = memory.severity
+    end
+
+    if params.key?(:content)
+      memory.content = params[:content].to_s.strip.first(BuddyMemory::MAX_CONTENT)
+      changed[:content] = memory.content
+    end
+
+    if params.key?(:tags)
+      memory.tag_list = params[:tags].to_s.split(",")
+      changed[:tags] = memory.tag_list
+    end
+
+    if params.key?(:kind) && BuddyMemory.kinds.key?(params[:kind].to_s)
+      memory.kind = params[:kind].to_s
+      changed[:kind] = memory.kind
+    end
+
+    # Disarming a check-in is the single most likely reason to open this page at
+    # all, so it gets to be a plain field rather than a separate action.
+    if params.key?(:check_in_at)
+      memory.check_in_at = params[:check_in_at].presence && Time.zone.parse(params[:check_in_at])
+      changed[:check_in_at] = memory.check_in_at&.iso8601
+    end
+
+    return render(json: { error: memory.errors.full_messages.to_sentence }, status: :unprocessable_entity) unless memory.save
+
+    render(json: changed)
+  end
+
+  def destroy_memory
+    BuddyMemory.find(params[:id]).destroy!
+    redirect_to(system_memories_path(kind: params[:kind], q: params[:q], tag: params[:tag]), notice: "Deleted.")
   end
 
   def connections

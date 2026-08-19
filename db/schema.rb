@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_15_172059) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_19_004803) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -467,9 +467,34 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_15_172059) do
     t.datetime "updated_at", null: false
     t.datetime "expires_at"
     t.datetime "last_used_at"
+    t.integer "kind", default: 0, null: false
+    t.integer "severity", default: 0, null: false
+    t.text "summary"
+    t.integer "status", default: 0, null: false
+    t.integer "category"
+    t.datetime "relevant_at"
+    t.datetime "check_in_at"
+    t.datetime "checked_in_at"
+    t.datetime "surfaced_at"
+    t.datetime "last_touched_at"
+    t.bigint "source_message_id"
+    t.index ["check_in_at"], name: "index_buddy_memories_on_check_in_at", where: "(check_in_at IS NOT NULL)"
+    t.index ["source_message_id"], name: "index_buddy_memories_on_source_message_id"
+    t.index ["tags"], name: "index_buddy_memories_on_tags", using: :gin
     t.index ["user_id", "created_at"], name: "index_buddy_memories_on_user_id_and_created_at"
     t.index ["user_id", "expires_at"], name: "index_buddy_memories_on_user_id_and_expires_at"
+    t.index ["user_id", "kind"], name: "index_buddy_memories_on_user_id_and_kind"
+    t.index ["user_id", "status"], name: "index_buddy_memories_on_user_id_and_status"
     t.index ["user_id"], name: "index_buddy_memories_on_user_id"
+  end
+
+  create_table "buddy_memory_notes", force: :cascade do |t|
+    t.bigint "buddy_memory_id", null: false
+    t.text "body", null: false
+    t.integer "source", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["buddy_memory_id"], name: "index_buddy_memory_notes_on_buddy_memory_id"
   end
 
   create_table "buddy_relays", force: :cascade do |t|
@@ -614,6 +639,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_15_172059) do
     t.text "buddy_memories"
     t.datetime "last_read_at"
     t.datetime "primary_at"
+    t.datetime "buddy_compile_after"
+    t.datetime "buddy_compiled_at"
+    t.text "buddy_topic"
+    t.datetime "buddy_topic_at"
+    t.index ["buddy_compile_after"], name: "index_byte_conversations_on_buddy_compile_after", where: "(buddy_compile_after IS NOT NULL)"
     t.index ["user_id", "archived", "last_message_at"], name: "index_byte_conversations_on_user_bucket_activity"
     t.index ["user_id"], name: "index_byte_conversations_on_one_primary_per_user", unique: true, where: "(primary_at IS NOT NULL)"
     t.index ["user_id"], name: "index_byte_conversations_on_user_id"
@@ -1737,7 +1767,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_15_172059) do
   add_foreign_key "bank_transactions", "bank_transactions", column: "transfer_counterpart_id", on_delete: :nullify
   add_foreign_key "boxes", "users"
   add_foreign_key "buddy_ideas", "users"
+  add_foreign_key "buddy_memories", "byte_messages", column: "source_message_id"
   add_foreign_key "buddy_memories", "users"
+  add_foreign_key "buddy_memory_notes", "buddy_memories"
   add_foreign_key "buddy_relays", "byte_actions", column: "to_byte_action_id"
   add_foreign_key "buddy_relays", "byte_conversations", column: "from_conversation_id"
   add_foreign_key "buddy_relays", "byte_conversations", column: "to_conversation_id"

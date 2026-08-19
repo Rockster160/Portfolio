@@ -39,7 +39,7 @@ Buddy::Tools.register(
     { summary: "Hold onto #{idea}?", resolved: { idea: idea } }
   },
   label:       ->(payload, _ctx) {
-    bucket = BuddyIdea::CATEGORY_LABELS[payload[:category].to_s]
+    bucket = BuddyMemory::CATEGORY_LABELS[payload[:category].to_s]
     { title: "📥 #{payload[:summary].presence || payload[:idea]}", sub: bucket }
   },
   # Two dumps of the same thought in one turn is one thing to hold, not two.
@@ -56,28 +56,29 @@ Buddy::Tools.register(
   routinable:  false,
   execute:     ->(payload, ctx) {
     body     = payload[:idea].to_s.strip
-    category = (payload[:category].to_s if BuddyIdea.categories.key?(payload[:category].to_s))
+    category = (payload[:category].to_s if BuddyMemory.categories.key?(payload[:category].to_s))
 
     # Saying the same thing twice is one thing to hold, whether the two came in
     # the same breath or three days apart - and someone who talks to empty their
     # head circles the same loose end constantly. A second telling fills in
     # whatever the first one didn't carry rather than starting a second pile.
-    held = ctx.user.buddy_ideas.live.where("LOWER(body) = ?", body.downcase).first
+    held = ctx.user.buddy_memories.kind_stash.live.where("LOWER(content) = ?", body.downcase).first
     if held
       held.update!(category: held.category || category, summary: held.summary.presence || payload[:summary].presence)
-      return { idea_id: held.id, label: held.summary.presence || held.body }
+      return { idea_id: held.id, label: held.summary.presence || held.content }
     end
 
-    idea = ctx.user.buddy_ideas.create!(
-      body:     body,
+    idea = ctx.user.buddy_memories.create!(
+      kind:     :stash,
+      content:  body,
       summary:  payload[:summary].presence,
       category: category,
       status:   :active,
     )
     {
       idea_id: idea.id,
-      label:   idea.summary.presence || idea.body,
-      revert:  { op: "created", model: "BuddyIdea", id: idea.id, summary: "let go of that one" },
+      label:   idea.summary.presence || idea.content,
+      revert:  { op: "created", model: "BuddyMemory", id: idea.id, summary: "let go of that one" },
     }
   },
   receipt:     ->(result, _ctx) { "Holding onto #{result[:label]} ✓" },

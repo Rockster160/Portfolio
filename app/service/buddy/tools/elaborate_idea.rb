@@ -30,12 +30,12 @@ Buddy::Tools.register(
     note = payload[:note].to_s.strip
     raise "nothing to add" if note.empty?
 
-    idea = ctx.user.buddy_ideas.find_by(id: payload[:id])
+    idea = ctx.user.buddy_memories.kind_stash.find_by(id: payload[:id])
     raise "no held idea ##{payload[:id]}" if idea.nil?
 
     {
-      summary:  "Add to **#{idea.summary.presence || idea.body.to_s.truncate(60)}**?",
-      resolved: { idea_id: idea.id, note: note, label: idea.summary.presence || idea.body.to_s.truncate(60) },
+      summary:  "Add to **#{idea.summary.presence || idea.content.to_s.truncate(60)}**?",
+      resolved: { idea_id: idea.id, note: note, label: idea.summary.presence || idea.content.to_s.truncate(60) },
     }
   },
   label:       ->(payload, _ctx) {
@@ -50,7 +50,7 @@ Buddy::Tools.register(
   # thought; replaying it weeks later inside a routine is meaningless.
   routinable:  false,
   execute:     ->(payload, ctx) {
-    idea = ctx.user.buddy_ideas.find_by(id: payload[:idea_id])
+    idea = ctx.user.buddy_memories.kind_stash.find_by(id: payload[:idea_id])
     raise "that idea is gone" if idea.nil?
 
     # Coming back to something they'd given up on is them picking it back up.
@@ -63,9 +63,9 @@ Buddy::Tools.register(
     )
     {
       idea_id: idea.id,
-      label:   idea.summary.presence || idea.body.to_s.truncate(60),
+      label:   idea.summary.presence || idea.content.to_s.truncate(60),
       count:   idea.notes.count,
-      revert:  { op: "created", model: "BuddyIdeaNote", id: note.id, summary: "took that addition back off" },
+      revert:  { op: "created", model: "BuddyMemoryNote", id: note.id, summary: "took that addition back off" },
     }
   },
   receipt:     ->(result, _ctx) {

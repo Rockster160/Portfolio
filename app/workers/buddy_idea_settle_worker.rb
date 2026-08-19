@@ -21,5 +21,11 @@ class BuddyIdeaSettleWorker
     return if conversation.nil?
 
     Buddy::IdeaDwell.settle!(conversation, over: over)
+    # The same moment answers both questions. A stretch ending is when a held
+    # idea's note gets written AND when the thread's current topic stops being
+    # current, so they settle together rather than each paying for its own
+    # trigger. Independent failures: a topic that doesn't refresh must not cost
+    # the idea its note.
+    Buddy::TopicState.settle!(conversation, over: over)
   end
 end

@@ -35,7 +35,11 @@ class BuddyUsage < ApplicationRecord
   # `idea_note` is Buddy::IdeaDwell settling a stretch of conversation onto the
   # idea it was about. It bills like a compaction and is just as invisible, but
   # it's the one kind nobody asked for per-turn, so it stays separable.
-  enum :kind, { turn: 0, compaction: 1, eval: 2, idea_note: 3 }
+  # `compile` is Buddy::Compile — the background pass that reads a finished
+  # stretch and writes memories and follow-ups off it. Its own kind rather than
+  # folded into `idea_note`, so the first time either number looks wrong it's
+  # possible to tell which one moved.
+  enum :kind, { turn: 0, compaction: 1, eval: 2, idea_note: 3, compile: 4 }
 
   scope :chronological, -> { order(created_at: :asc) }
   scope :since,         ->(time) { where(created_at: time...) }

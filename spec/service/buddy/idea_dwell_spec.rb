@@ -9,12 +9,13 @@ RSpec.describe Buddy::IdeaDwell do
     ByteConversation.create!(user: user, mode: :buddy, name: "test", last_message_at: Time.current)
   }
   let!(:idea) {
-    BuddyIdea.create!(
+    BuddyMemory.create!(
+      kind:     :stash,
       user:     user,
       category: :home,
       status:   :active,
       summary:  "Kennel auto-open idea",
-      body:     "automatic kennel open/close and treat dispenser with an inside sensor to tell if Whisper is in there",
+      content:     "automatic kennel open/close and treat dispenser with an inside sensor to tell if Whisper is in there",
     )
   }
 
@@ -137,7 +138,7 @@ RSpec.describe Buddy::IdeaDwell do
       described_class.settle!(conversation)
 
       sent = fake.calls.first.input.first[:content]
-      expect(sent).to include(idea.body)
+      expect(sent).to include(idea.content)
       expect(sent).to include("the door is NOT done yet")
       expect(sent).to include("Them:", "Byte:")
     end
@@ -225,12 +226,13 @@ RSpec.describe Buddy::IdeaDwell do
   # of the greenhouse, they weave between the two, and both get further along.
   describe "two ideas at once" do
     let!(:greenhouse) {
-      BuddyIdea.create!(
+      BuddyMemory.create!(
+      kind:     :stash,
         user:     user,
         category: :home,
         status:   :active,
         summary:  "Greenhouse propagation shelf",
-        body:     "propagation shelf in the greenhouse with a heat mat and grow lights on a timer",
+        content:     "propagation shelf in the greenhouse with a heat mat and grow lights on a timer",
       )
     }
 
@@ -262,7 +264,7 @@ RSpec.describe Buddy::IdeaDwell do
 
       notes = described_class.settle!(conversation)
 
-      expect(notes.map(&:buddy_idea_id)).to contain_exactly(idea.id, greenhouse.id)
+      expect(notes.map(&:buddy_memory_id)).to contain_exactly(idea.id, greenhouse.id)
       expect(idea.reload.notes.map(&:body)).to eq(["Presence sensor inside; door still only planned."])
       expect(greenhouse.reload.notes.map(&:body)).to eq(["Heat mat on a thermostat, grow lights on a clock."])
     end
@@ -286,8 +288,8 @@ RSpec.describe Buddy::IdeaDwell do
       described_class.settle!(conversation)
 
       briefs = fake.calls.map { |call| call.input.first[:content] }
-      expect(briefs.first).to include(idea.body).and include("NOT YOURS", greenhouse.summary)
-      expect(briefs.last).to include(greenhouse.body).and include("NOT YOURS", idea.summary)
+      expect(briefs.first).to include(idea.content).and include("NOT YOURS", greenhouse.summary)
+      expect(briefs.last).to include(greenhouse.content).and include("NOT YOURS", idea.summary)
     end
 
     it "still writes the other one when a note fails to come back for the first" do
@@ -296,7 +298,7 @@ RSpec.describe Buddy::IdeaDwell do
 
       notes = described_class.settle!(conversation)
 
-      expect(notes.map(&:buddy_idea_id)).to eq([greenhouse.id])
+      expect(notes.map(&:buddy_memory_id)).to eq([greenhouse.id])
     end
   end
 
@@ -304,12 +306,13 @@ RSpec.describe Buddy::IdeaDwell do
   # never discussed gets read back months later as a thing that was decided.
   describe "an idea that only looks like the subject" do
     let!(:garage) {
-      BuddyIdea.create!(
+      BuddyMemory.create!(
+      kind:     :stash,
         user:     user,
         category: :home,
         status:   :active,
         summary:  "Garage door sensor upgrade",
-        body:     "upgrade the garage door sensor to report open and closed properly, plus presence inside",
+        content:     "upgrade the garage door sensor to report open and closed properly, plus presence inside",
       )
     }
 
@@ -319,7 +322,7 @@ RSpec.describe Buddy::IdeaDwell do
 
       notes = described_class.settle!(conversation)
 
-      expect(notes.map(&:buddy_idea_id)).to eq([idea.id])
+      expect(notes.map(&:buddy_memory_id)).to eq([idea.id])
       expect(garage.reload.notes).to be_empty
       expect(fake.calls.size).to eq(1)
     end

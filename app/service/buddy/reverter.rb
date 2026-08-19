@@ -23,11 +23,11 @@ module Buddy
       # `dependent: :destroy`, so removing it takes the whole series with it and
       # the undo is as clean as it is for a single item.
       "AgendaSchedule"        => "AgendaSchedule",
-      "BuddyIdea"             => "BuddyIdea",
+      "BuddyMemory"           => "BuddyMemory",
       # One addition to a thread. Notes are append-only by design, so undoing
       # one really does delete it — there's no earlier version to fall back to,
       # and leaving a mis-heard note in a thread poisons every later read of it.
-      "BuddyIdeaNote"         => "BuddyIdeaNote",
+      "BuddyMemoryNote"       => "BuddyMemoryNote",
       # `cancel_reminder` deletes rather than switching off (the panel's toggle
       # is a separate thing), so undo has to be able to put the whole row back.
       "BuddyReminder"         => "BuddyReminder",
@@ -52,7 +52,7 @@ module Buddy
     # `recreated` one - re-creating would leave the hidden original sitting
     # next to a fresh duplicate.
     SOFT_CREATE_UNDO = {
-      "BuddyIdea" => %w[status],
+      "BuddyMemory" => %w[status],
       "Chore"     => %w[archived_at],
     }.freeze
 
@@ -158,8 +158,8 @@ module Buddy
       # Dropped, not destroyed. "I didn't mean that" is the same gesture as
       # telling Buddy to forget one, and it lands the same way - out of the
       # pool, off the prompt, still there if the undo gets undone.
-      when "BuddyIdea"       then rec.update!(status: :dropped)
-      when "BuddyIdeaNote"   then rec.destroy!
+      when "BuddyMemory"     then rec.update!(status: :dropped)
+      when "BuddyMemoryNote" then rec.destroy!
       # Archived, not destroyed. A chore owns its completions and its streak
       # history, and undoing "you just made this" must not take a month of
       # someone's record with it. Archiving is also what the Chores app itself

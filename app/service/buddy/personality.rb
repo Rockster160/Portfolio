@@ -531,6 +531,7 @@ module Buddy
       parts << open_loops_block(user)
       parts << conversation_notes_block(conversation)
       parts << recap_block(recap) if recap.to_s.strip.length.positive?
+      parts << Buddy::TopicState.block_for(conversation)
       parts << at_glance_block(at_glance) if at_glance.present?
       parts << time_preamble(user)
       parts.compact.reject { |s| s.to_s.strip.empty? }.join("\n\n---\n\n")
@@ -817,24 +818,35 @@ module Buddy
       "**#{label}**\n#{lines.join("\n")}"
     end
 
-    MEMORY_RECALL_LIMIT = 30
-
-    # Recent BuddyMemory records - durable facts the pet has been asked
-    # to hold across sessions. Injected every turn so recall is
-    # automatic. Cap at MEMORY_RECALL_LIMIT to keep prompt size bounded.
+    # Preferences only — how this person wants things done.
+    #
+    # This used to be every memory, ordered by reinforcement count and cut at
+    # MEMORY_RECALL_LIMIT = 30. That cap is gone rather than raised. It bounded
+    # the prompt by silently dropping the tail, and it dropped by how OFTEN a
+    # fact had come up, so the first thing over the side was always something
+    # said once and never repeated — which is the exact shape of the memories
+    # most worth having ("we forgot the sleeping bags that time"). Nothing
+    # anywhere reported that a memory had been withheld.
+    #
+    # What replaces it is `search_memories`, by tag. Preferences are the one
+    # kind that can't work that way: the moment a preference applies is the
+    # moment nobody thinks to look it up, so they stay inline. They're also
+    # small and slow-moving, which is what makes carrying them free.
     def memories_block(user)
       return nil unless defined?(BuddyMemory)
 
-      rows = BuddyMemory.where(user: user).for_recall.limit(MEMORY_RECALL_LIMIT).to_a
+      rows = BuddyMemory.where(user: user).always_loaded.to_a
       return nil if rows.empty?
 
       lines = rows.map { |m| "- #{m.content.to_s.strip}" }
       <<~TXT
-        ## Things you remember about #{user.first_name}
+        ## How #{user.first_name} likes things done
 
-        These are durable facts the person has asked you to hold onto. Use them naturally in conversation when relevant - don't recite them, just let them inform how you respond.
+        Standing preferences. Use them naturally - don't recite them, just let them shape how you respond.
 
         #{lines.join("\n")}
+
+        These are only their PREFERENCES. Everything else you've kept about them - what happened, what they told you once, what they're worried about - is in `search_memories`, by tag or by words they remember. When they reference something from the past and it isn't here, that's a search, not a blank.
       TXT
     rescue StandardError => e
       Buddy::Errors.report(section: "personality.memories_block", exception: e, user: user)
@@ -856,9 +868,10 @@ module Buddy
     #
     # Nil for anyone holding nothing, so an unused stash costs no prompt at all.
     def open_loops_block(user)
-      return nil unless user.respond_to?(:buddy_ideas)
+      return nil unless user.respond_to?(:buddy_memories)
 
-      rows = user.buddy_ideas.live.includes(:notes).order(created_at: :asc).limit(OPEN_LOOP_LIMIT).to_a
+      scope = user.buddy_memories.kind_stash.live.includes(:notes)
+      rows  = scope.order(created_at: :asc).limit(OPEN_LOOP_LIMIT).to_a
       return nil if rows.empty?
 
       now   = Time.current
@@ -868,7 +881,7 @@ module Buddy
         # row would say it's been abandoned. Those are opposite facts and the
         # created_at one was the only one on offer.
         tags = [i.category_label.downcase, i.thread_label(now) || i.waiting_label].join(", ")
-        "- `##{i.id}` (#{tags}) #{i.summary.presence || i.body.to_s.first(140)}"
+        "- `##{i.id}` (#{tags}) #{i.summary.presence || i.content.to_s.first(140)}"
       }
       <<~TXT
         ## Things you're holding for #{user.first_name}

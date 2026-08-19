@@ -12,14 +12,14 @@ Buddy::Tools.register(
   # See move_idea: an idea id doesn't survive being replayed.
   routinable:  false,
   confirm:     ->(payload, ctx) {
-    idea = ctx.user.buddy_ideas.live.find_by(id: payload[:id])
+    idea = ctx.user.buddy_memories.kind_stash.live.find_by(id: payload[:id])
     raise "no stashed idea ##{payload[:id]}" if idea.nil?
 
     { summary: "Drop this idea?", resolved: {} }
   },
   label:       ->(_payload, _ctx) { { title: "Forget this idea", sub: nil } },
   execute:     ->(payload, ctx) {
-    idea = ctx.user.buddy_ideas.find(payload[:id])
+    idea = ctx.user.buddy_memories.kind_stash.find(payload[:id])
     idea.update!(status: :dropped)
     { idea_id: idea.id }
   },

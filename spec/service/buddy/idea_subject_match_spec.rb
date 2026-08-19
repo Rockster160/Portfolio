@@ -28,8 +28,9 @@ RSpec.describe "Buddy held-idea subject matching" do
   end
 
   before do
-    user.buddy_ideas.create!(
-      body:     "Glimmer iPad idea: control lights, playlist, projector, big button for mode",
+    user.buddy_memories.create!(
+      kind:     :stash,
+      content:     "Glimmer iPad idea: control lights, playlist, projector, big button for mode",
       summary:  "Glimmer iPad controls",
       category: :home,
       status:   :active,

@@ -14,6 +14,12 @@
 #  updated_at      :datetime         not null
 #  last_touched_at :datetime
 #
+# LEGACY — merged into BuddyMemory (`kind: :stash`).
+#
+# Nothing in the app reads this any more. It stays reachable solely so
+# lib/scripts/merge_buddy_ideas_into_memories.rb can copy the rows across in
+# production; once that has run and been verified, this model, BuddyIdeaNote,
+# and both tables go.
 class BuddyIdea < ApplicationRecord
   belongs_to :user
 

@@ -1,0 +1,187 @@
+<%= meta_title "Buddy Memories", include_name: false %>
+<%= meta_description "Everything the companions are holding." %>
+
+<div class="memories-page">
+  <div class="lists-title">
+    <small>Buddy Memories</small>
+  </div>
+
+  <form class="memories-filters basic" method="get" action="<%= system_memories_path %>">
+    <input type="search" name="q" value="<%= @query %>" placeholder="Search content, summaries and notes">
+    <select name="kind">
+      <option value="">every kind</option>
+      <% @kinds.each do |kind| %>
+        <option value="<%= kind %>" <%= "selected" if @kind == kind %>><%= kind %></option>
+      <% end %>
+    </select>
+    <select name="user_id">
+      <option value="">everyone</option>
+      <% @users.each_value do |user| %>
+        <option value="<%= user.id %>" <%= "selected" if params[:user_id].to_i == user.id %>><%= user.first_name %></option>
+      <% end %>
+    </select>
+    <input type="hidden" name="tag" value="<%= @tag %>">
+    <button type="submit">Filter</button>
+    <span class="memories-count"><%= @total %> total<%= ", showing #{@memories.size}" if @total > @memories.size %></span>
+  </form>
+
+  <% if @all_tags.any? %>
+    <div class="memories-tags">
+      <% if @tag %>
+        <a class="memory-tag is-on" href="<%= system_memories_path(q: @query.presence, kind: @kind) %>"><%= @tag %> ✕</a>
+      <% end %>
+      <% @all_tags.each do |tag, count| %>
+        <% next if tag == @tag %>
+        <a class="memory-tag" href="<%= system_memories_path(q: @query.presence, kind: @kind, tag: tag) %>"><%= tag %> <span><%= count %></span></a>
+      <% end %>
+    </div>
+  <% end %>
+
+  <% if @memories.empty? %>
+    <p class="memories-empty">Nothing held yet.</p>
+  <% end %>
+
+  <div class="memories-list">
+    <% @memories.each do |memory| %>
+      <div class="memory-row" data-memory-id="<%= memory.id %>">
+        <div class="memory-head">
+          <span class="memory-kind memory-kind-<%= memory.kind %>"><%= memory.kind %></span>
+          <span class="memory-who"><%= @users[memory.user_id]&.first_name || "user ##{memory.user_id}" %></span>
+          <span class="memory-sev" title="Severity, 0-100">
+            <input type="number" min="0" max="100" value="<%= memory.severity %>" data-field="severity">
+          </span>
+          <% if memory.check_in_at %>
+            <span class="memory-checkin" title="Scheduled check-in">
+              ⏰ <%= memory.check_in_at.in_time_zone(SystemController::SPEND_ZONE).strftime("%b %-d, %-I%P") %>
+              <button type="button" class="memory-disarm" data-field="check_in_at">disarm</button>
+            </span>
+          <% end %>
+          <% if memory.checked_in_at %>
+            <span class="memory-asked" title="Last asked about">asked <%= time_ago_in_words(memory.checked_in_at) %> ago</span>
+          <% end %>
+          <span class="memory-status memory-status-<%= memory.status %>"><%= memory.status %></span>
+          <span class="memory-when"><%= memory.created_at.to_date.to_fs(:short) %></span>
+        </div>
+
+        <textarea class="memory-content" data-field="content" rows="2"><%= memory.content %></textarea>
+
+        <div class="memory-foot">
+          <input class="memory-tags-input" type="text" value="<%= memory.tag_list.join(', ') %>" data-field="tags" placeholder="tags, comma separated">
+          <% if memory.category.present? %><span class="memory-cat"><%= memory.category_label %></span><% end %>
+          <% if memory.notes.any? %>
+            <details class="memory-notes">
+              <summary><%= pluralize(memory.notes.size, "note") %></summary>
+              <% memory.notes.each do |note| %>
+                <div class="memory-note <%= "is-mine" if note.from_companion? %>"><%= note.body %></div>
+              <% end %>
+            </details>
+          <% end %>
+          <span class="memory-saved" data-role="saved"></span>
+          <%= button_to "Delete", system_memory_destroy_path(memory, kind: @kind, q: @query.presence, tag: @tag),
+                method: :delete, class: "memory-delete", form: { data: { turbo_confirm: "Delete this memory?" } } %>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</div>
+
+<script>
+  // Field-at-a-time saves. A full reload after every severity nudge would throw
+  // away scroll position on a long list, which is the whole reason to be here.
+  (function () {
+    const url = (id) => "<%= system_memories_path %>/" + id;
+    const token = document.querySelector('meta[name="csrf-token"]')?.content;
+
+    function save(row, field, value) {
+      const flag = row.querySelector('[data-role="saved"]');
+      fetch(url(row.dataset.memoryId), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": token, "Accept": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      }).then((res) => {
+        if (flag) {
+          flag.textContent = res.ok ? "saved" : "failed";
+          flag.className = "memory-saved " + (res.ok ? "is-ok" : "is-bad");
+          setTimeout(() => { flag.textContent = ""; }, 1500);
+        }
+        if (field === "check_in_at" && res.ok) {
+          row.querySelector(".memory-checkin")?.remove();
+        }
+      });
+    }
+
+    document.querySelectorAll(".memory-row").forEach((row) => {
+      row.querySelectorAll("[data-field]").forEach((el) => {
+        if (el.tagName === "BUTTON") {
+          el.addEventListener("click", () => save(row, el.dataset.field, ""));
+          return;
+        }
+        let last = el.value;
+        el.addEventListener("change", () => {
+          if (el.value === last) return;
+          last = el.value;
+          save(row, el.dataset.field, el.value);
+        });
+      });
+    });
+  })();
+</script>
+
+<%= content_for :head do %>
+  <style>
+    .memories-page { max-width: 1100px; margin: 0 auto; padding: 12px; }
+    .memories-filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+    .memories-filters input[type="search"] { flex: 1 1 240px; }
+    .memories-count { opacity: 0.6; font-size: 0.85em; margin-left: auto; }
+
+    .memories-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .memory-tag {
+      font-size: 0.78em; padding: 2px 8px; border-radius: 999px;
+      background: rgba(127, 127, 127, 0.16); text-decoration: none; opacity: 0.85;
+    }
+    .memory-tag span { opacity: 0.5; }
+    .memory-tag.is-on { background: rgba(93, 173, 226, 0.35); opacity: 1; }
+
+    .memories-empty { opacity: 0.6; padding: 24px 0; }
+
+    .memories-list { display: flex; flex-direction: column; gap: 8px; }
+    .memory-row {
+      border: 1px solid rgba(127, 127, 127, 0.22); border-radius: 8px; padding: 8px 10px;
+    }
+    .memory-head, .memory-foot {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 0.82em;
+    }
+    .memory-head { margin-bottom: 6px; }
+    .memory-foot { margin-top: 6px; }
+
+    .memory-kind { padding: 1px 7px; border-radius: 4px; text-transform: uppercase; font-size: 0.85em; letter-spacing: 0.03em; }
+    .memory-kind-preference { background: rgba(245, 176, 65, 0.28); }
+    .memory-kind-followup   { background: rgba(236, 112, 99, 0.28); }
+    .memory-kind-stash      { background: rgba(88, 214, 141, 0.24); }
+    .memory-kind-concept    { background: rgba(93, 173, 226, 0.24); }
+
+    .memory-who { font-weight: 600; }
+    .memory-sev input { width: 62px; }
+    .memory-checkin { opacity: 0.9; }
+    .memory-disarm { font-size: 0.85em; padding: 0 6px; }
+    .memory-asked, .memory-when, .memory-cat { opacity: 0.55; }
+    .memory-status-done, .memory-status-dropped { opacity: 0.5; text-decoration: line-through; }
+
+    .memory-content { width: 100%; resize: vertical; font: inherit; }
+    .memory-tags-input { flex: 1 1 220px; }
+
+    .memory-notes { flex: 1 1 100%; }
+    .memory-note { padding: 4px 8px; margin-top: 4px; border-left: 2px solid rgba(127, 127, 127, 0.4); opacity: 0.85; }
+    .memory-note.is-mine { border-left-color: rgba(93, 173, 226, 0.7); font-style: italic; }
+
+    .memory-saved { font-size: 0.8em; }
+    .memory-saved.is-ok { color: #58D68D; }
+    .memory-saved.is-bad { color: #EC7063; }
+    .memory-delete { margin-left: auto; }
+    .memory-delete button, button.memory-delete { font-size: 0.85em; opacity: 0.7; }
+
+    @media (max-width: 640px) {
+      .memories-count { margin-left: 0; width: 100%; }
+    }
+  </style>
+<% end %>

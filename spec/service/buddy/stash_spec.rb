@@ -28,7 +28,7 @@ RSpec.describe "Buddy brain-dump (stash)" do
       described_class.arm!(convo, "work")
       idea = described_class.capture!(user, convo, message("ship the invoice tool"), "work")
 
-      expect(idea).to have_attributes(category: "work", body: "ship the invoice tool", status: "active")
+      expect(idea).to have_attributes(category: "work", content: "ship the invoice tool", status: "active")
       expect(described_class.armed_category(convo.reload)).to be_nil
       # Buddy responds (acknowledge + offer to talk it through) even for a
       # concrete bucket.
@@ -52,7 +52,7 @@ RSpec.describe "Buddy brain-dump (stash)" do
           described_class.arm!(convo, "me")
 
           expect { described_class.capture!(user, convo, message(word), "me") }
-            .not_to change(BuddyIdea, :count)
+            .not_to change(BuddyMemory, :count)
         end
       }
 
@@ -68,12 +68,12 @@ RSpec.describe "Buddy brain-dump (stash)" do
         described_class.arm!(convo, "me")
 
         expect { described_class.capture!(user, convo, message("thanks for the shelf idea"), "me") }
-          .to change(BuddyIdea, :count).by(1)
+          .to change(BuddyMemory, :count).by(1)
       end
     end
 
     it "applies Buddy's sort from a sort_stash call" do
-      idea = BuddyIdea.create!(user: user, body: "garage shelves", status: :active)
+      idea = BuddyMemory.create!(kind: :stash, user: user, content: "garage shelves", status: :active)
       Buddy::SideEffects.call(convo, :sort_stash, {
         "id" => idea.id, "category" => "home", "summary" => "build garage shelves"
       })
@@ -112,7 +112,7 @@ RSpec.describe "Buddy brain-dump (stash)" do
       end
 
       it "offers again once the run is over" do
-        BuddyIdea.create!(user: user, body: "yesterday's thing", status: :active, created_at: 5.hours.ago)
+        BuddyMemory.create!(kind: :stash, user: user, content: "yesterday's thing", status: :active, created_at: 5.hours.ago)
 
         expect(seed_for("check the battery on the smoke alarm")).to include(offer)
       end
@@ -196,7 +196,7 @@ RSpec.describe "Buddy brain-dump (stash)" do
     end
 
     it "takes it off the pile once it's been filed somewhere real" do
-      idea = BuddyIdea.create!(user: user, body: "remind me at 3:35 to uncover the tomatoes", status: :active)
+      idea = BuddyMemory.create!(kind: :stash, user: user, content: "remind me at 3:35 to uncover the tomatoes", status: :active)
 
       Buddy::SideEffects.call(convo, :sort_stash, { "id" => idea.id, "drop" => true })
 
@@ -204,7 +204,7 @@ RSpec.describe "Buddy brain-dump (stash)" do
     end
 
     it "leaves a sort alone when drop isn't set" do
-      idea = BuddyIdea.create!(user: user, body: "garage shelves", status: :active)
+      idea = BuddyMemory.create!(kind: :stash, user: user, content: "garage shelves", status: :active)
 
       Buddy::SideEffects.call(convo, :sort_stash, { "id" => idea.id, "category" => "home", "drop" => false })
 
@@ -218,7 +218,7 @@ RSpec.describe "Buddy brain-dump (stash)" do
     end
 
     it "refines just the summary from a talk-through (summary-only call)" do
-      idea = BuddyIdea.create!(user: user, category: :home, summary: "shelves", body: "garage shelves", status: :active)
+      idea = BuddyMemory.create!(kind: :stash, user: user, category: :home, summary: "shelves", content: "garage shelves", status: :active)
       Buddy::SideEffects.call(convo, :sort_stash, {
         "id" => idea.id, "summary" => "floating oak shelves over the bench"
       })
@@ -228,7 +228,7 @@ RSpec.describe "Buddy brain-dump (stash)" do
   end
 
   describe "management tools" do
-    let!(:idea) { BuddyIdea.create!(user: user, category: :me, body: "learn rust", status: :active) }
+    let!(:idea) { BuddyMemory.create!(kind: :stash, user: user, category: :me, content: "learn rust", status: :active) }
 
     def run(tool_name, payload)
       tool = Buddy::Tools[tool_name]
@@ -242,10 +242,10 @@ RSpec.describe "Buddy brain-dump (stash)" do
       expect(idea.reload.category).to eq("work")
     end
 
-    it "defer_idea sets a remind_after and defers it" do
+    it "defer_idea sets a relevant_at and defers it" do
       run(:defer_idea, { id: idea.id })
       expect(idea.reload).to have_attributes(status: "deferred")
-      expect(idea.remind_after).to be_present
+      expect(idea.relevant_at).to be_present
     end
 
     it "drop_idea forgets it" do
@@ -286,16 +286,16 @@ RSpec.describe "Buddy brain-dump (stash)" do
     it "holds it the moment it's said, without waiting for a tap" do
       catch!({ idea: "call Mel back about the fish tank", category: :home, summary: "call Mel re: fish tank" })
 
-      held = user.buddy_ideas.last
+      held = user.buddy_memories.last
       expect(held).to have_attributes(
-        body: "call Mel back about the fish tank", category: "home", summary: "call Mel re: fish tank", status: "active",
+        content: "call Mel back about the fish tank", category: "home", summary: "call Mel re: fish tank", status: "active",
       )
     end
 
     it "unchecking the row lets it go rather than deleting the record" do
       result = catch!({ idea: "sort out the greenhouse" })
       action = result[:action]
-      held   = user.buddy_ideas.last
+      held   = user.buddy_memories.last
 
       Buddy::ProposalExecutor.undo!(action.id, action.buttons.first["id"])
 
@@ -305,7 +305,7 @@ RSpec.describe "Buddy brain-dump (stash)" do
     # The latch refuses these; this is the other door into the same pile, and
     # it was standing open.
     it "refuses a bare pleasantry here too" do
-      expect { catch!({ idea: "Thanks!", category: :me }) }.not_to change(BuddyIdea, :count)
+      expect { catch!({ idea: "Thanks!", category: :me }) }.not_to change(BuddyMemory, :count)
     end
 
     it "catches each loose end in a rant separately" do
@@ -322,7 +322,7 @@ RSpec.describe "Buddy brain-dump (stash)" do
         ],
       )
 
-      expect(user.buddy_ideas.live.pluck(:category)).to match_array(%w[me home work])
+      expect(user.buddy_memories.live.pluck(:category)).to match_array(%w[me home work])
     end
 
     it "collapses the same thought said twice in one turn" do
@@ -338,7 +338,7 @@ RSpec.describe "Buddy brain-dump (stash)" do
         ],
       )
 
-      expect(user.buddy_ideas.live.count).to eq(1)
+      expect(user.buddy_memories.live.count).to eq(1)
     end
   end
 
@@ -346,7 +346,7 @@ RSpec.describe "Buddy brain-dump (stash)" do
   # already thought to look, which is never the turn one goes missing.
   describe "what's being held rides in the prompt every turn" do
     it "lists live items with their id and how long they've waited" do
-      BuddyIdea.create!(user: user, category: :home, body: "fix the gate", status: :active, created_at: 3.days.ago)
+      BuddyMemory.create!(kind: :stash, user: user, category: :home, content: "fix the gate", status: :active, created_at: 3.days.ago)
 
       block = Buddy::Personality.open_loops_block(user)
 
@@ -356,15 +356,15 @@ RSpec.describe "Buddy brain-dump (stash)" do
     end
 
     it "costs nothing for someone holding nothing" do
-      BuddyIdea.create!(user: user, body: "done with this", status: :done)
-      BuddyIdea.create!(user: user, body: "never mind", status: :dropped)
+      BuddyMemory.create!(kind: :stash, user: user, content: "done with this", status: :done)
+      BuddyMemory.create!(kind: :stash, user: user, content: "never mind", status: :dropped)
 
       expect(Buddy::Personality.open_loops_block(user)).to be_nil
     end
 
     it "puts the oldest first, since that's the one at risk" do
-      BuddyIdea.create!(user: user, body: "newer thing", status: :active, created_at: 1.hour.ago)
-      BuddyIdea.create!(user: user, body: "older thing", status: :active, created_at: 9.days.ago)
+      BuddyMemory.create!(kind: :stash, user: user, content: "newer thing", status: :active, created_at: 1.hour.ago)
+      BuddyMemory.create!(kind: :stash, user: user, content: "older thing", status: :active, created_at: 9.days.ago)
 
       block = Buddy::Personality.open_loops_block(user)
 
@@ -372,16 +372,16 @@ RSpec.describe "Buddy brain-dump (stash)" do
     end
 
     it "reaches the real system prompt, not just the helper" do
-      BuddyIdea.create!(user: user, category: :work, body: "chase the invoice", status: :active)
+      BuddyMemory.create!(kind: :stash, user: user, category: :work, content: "chase the invoice", status: :active)
 
       expect(Buddy::Personality.for(user, conversation: convo)).to include("chase the invoice")
     end
   end
 
   it "surfaces surfaceable ideas in context, hiding dropped + not-yet-due defers" do
-    live = BuddyIdea.create!(user: user, category: :home, body: "fix the gate", summary: "fix the gate", status: :active)
-    BuddyIdea.create!(user: user, category: :me, body: "gone", status: :dropped)
-    BuddyIdea.create!(user: user, category: :work, body: "later", status: :deferred, remind_after: 3.days.from_now)
+    live = BuddyMemory.create!(kind: :stash, user: user, category: :home, content: "fix the gate", summary: "fix the gate", status: :active)
+    BuddyMemory.create!(kind: :stash, user: user, category: :me, content: "gone", status: :dropped)
+    BuddyMemory.create!(kind: :stash, user: user, category: :work, content: "later", status: :deferred, relevant_at: 3.days.from_now)
 
     listed = Buddy::Context.send(:stashed_ideas, user)
     expect(listed.pluck(:id)).to eq([live.id])

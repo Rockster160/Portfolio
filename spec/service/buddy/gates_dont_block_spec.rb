@@ -26,6 +26,10 @@ RSpec.describe "Buddy while a sequence is waiting" do
     allow(::Jil).to receive(:trigger).and_return(true)
     allow(Buddy::Compactor).to receive(:should_compact?).and_return(false)
     allow(Buddy::GPT::Turn).to receive(:run!).and_return(true)
+    # Stubbing the turn leaves the background settle running, and these fixtures
+    # are long enough to clear its threshold. This spec is about sequence
+    # parking; the topic distiller reaching for a model here is incidental.
+    allow(Buddy::TopicState).to receive(:settle!)
     ChoreHouseholdMembership.create!(chore_household: household, user: partner, role: :member)
     user.update!(chore_household_id: household.id)
     partner.update!(chore_household_id: household.id)

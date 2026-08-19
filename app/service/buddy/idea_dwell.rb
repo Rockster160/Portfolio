@@ -235,9 +235,9 @@ module Buddy
     # The same pool the prompt's "Things you're holding" list draws from, so a
     # note can only ever land on an idea the conversation could have been about.
     def held(user)
-      return [] unless user.respond_to?(:buddy_ideas)
+      return [] unless user.respond_to?(:buddy_memories)
 
-      scope = user.buddy_ideas.live.includes(:notes).order(created_at: :asc)
+      scope = user.buddy_memories.kind_stash.live.includes(:notes).order(created_at: :asc)
       scope.limit(Buddy::Personality::OPEN_LOOP_LIMIT).to_a
     end
 
@@ -286,7 +286,7 @@ module Buddy
     # substrings so "sensor" catches "sensors" and "open" catches "opening"
     # without any of the machinery a stemmer would cost.
     def terms_for(idea)
-      words = "#{idea.summary} #{idea.body}".downcase.scan(/[a-z]+/)
+      words = "#{idea.summary} #{idea.content}".downcase.scan(/[a-z]+/)
       words.uniq.reject { |word| word.length < MIN_WORD || STOPWORDS.include?(word) }
     end
 
@@ -311,7 +311,7 @@ module Buddy
       text = distill(conversation, idea, ideas, messages)
       return nil if text.blank? || text.delete("^A-Za-z").casecmp?(NOTHING)
 
-      idea.notes.create!(body: text.first(BuddyIdeaNote::MAX_BODY), source: :companion)
+      idea.notes.create!(body: text.first(BuddyMemoryNote::MAX_BODY), source: :companion)
     end
 
     # One call per idea, over the SAME transcript. Splitting the messages up by
@@ -351,7 +351,7 @@ module Buddy
       others = ideas - [idea]
       return "" if others.empty?
 
-      labels = others.map { |other| "- #{other.summary.presence || other.body.to_s.truncate(80)}" }
+      labels = others.map { |other| "- #{other.summary.presence || other.content.to_s.truncate(80)}" }
       <<~TXT
 
         THEY ALSO TANGENTED ONTO THESE, WHICH ARE NOT YOURS TO WRITE:

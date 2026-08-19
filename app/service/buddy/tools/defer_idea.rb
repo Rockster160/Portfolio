@@ -14,7 +14,7 @@ Buddy::Tools.register(
   # See move_idea: an idea id doesn't survive being replayed.
   routinable:  false,
   confirm:     ->(payload, ctx) {
-    idea = ctx.user.buddy_ideas.live.find_by(id: payload[:id])
+    idea = ctx.user.buddy_memories.kind_stash.live.find_by(id: payload[:id])
     raise "no stashed idea ##{payload[:id]}" if idea.nil?
 
     at = (Time.zone.parse(payload[:at].to_s) rescue nil) if payload[:at].present?
@@ -22,8 +22,11 @@ Buddy::Tools.register(
   },
   label:       ->(_payload, _ctx) { { title: "Remind me about this idea later", sub: nil } },
   execute:     ->(payload, ctx) {
-    idea = ctx.user.buddy_ideas.find(payload[:id])
-    idea.update!(status: :deferred, remind_after: Time.zone.parse(payload[:remind_after_iso].to_s))
+    idea = ctx.user.buddy_memories.kind_stash.find(payload[:id])
+    # `relevant_at` is the merged table's successor to `remind_after`: the point
+    # at which a record becomes worth raising again. One field answers it for a
+    # deferred thought and for a follow-up waiting on a date in the future.
+    idea.update!(status: :deferred, relevant_at: Time.zone.parse(payload[:remind_after_iso].to_s))
     { idea_id: idea.id }
   },
   receipt:     ->(_result, _ctx) { "I'll bring that back up later ✓" },

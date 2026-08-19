@@ -26,7 +26,7 @@ Buddy::Tools.register(
   confirm:     ->(_payload, _ctx) { { summary: "Read a held idea", resolved: {} } },
   label:       ->(_payload, _ctx) { "Read a held idea" },
   execute:     ->(payload, ctx) {
-    idea = ctx.user.buddy_ideas.includes(:notes).find_by(id: payload[:id])
+    idea = ctx.user.buddy_memories.kind_stash.includes(:notes).find_by(id: payload[:id])
     return { found: false, how: "There's no held idea ##{payload[:id]}. Say so plainly; don't invent one." } if idea.nil?
 
     count = idea.notes.size

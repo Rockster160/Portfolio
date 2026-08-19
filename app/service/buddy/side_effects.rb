@@ -206,9 +206,22 @@ module Buddy
         return
       end
 
+      # `preference`, which is the kind that still ships inline in every prompt.
+      #
+      # An explicit `remember` is the model being TOLD to hold something — "10p
+      # means ten pebbles", "drinks oat milk lattes" — and those have to be
+      # present without being looked up, because the moment one applies is the
+      # moment nobody thinks to search for it. Keeping this path inline is also
+      # what makes the merge a no-op for existing behavior: everything that
+      # reached the prompt before still reaches it.
+      #
+      # The widened capture (episodes, worries, things worth revisiting) does
+      # NOT come through here. Buddy::Compile writes those in the background as
+      # `concept` and `followup`, tagged, and they're reached by search.
       BuddyMemory.create!(
         user:         user,
-        content:      fact.first(500),
+        kind:         :preference,
+        content:      fact.first(BuddyMemory::MAX_CONTENT),
         expires_at:   ttl,
         last_used_at: Time.current,
       )
@@ -277,7 +290,11 @@ module Buddy
       return nil if norm.length < 8
 
       words = significant_words(norm)
-      BuddyMemory.where(user: user).active.find { |m|
+      # Facts only. Since the merge these share a table with the stash, and a
+      # remembered fact must never dedupe against a thought the person handed
+      # over to hold — reinforcing a stashed idea because it shares six words
+      # with a preference would quietly rewrite the idea's text.
+      BuddyMemory.where(user: user).where(kind: [:preference, :concept]).active.find { |m|
         other = normalize_fact(m.content)
         next true if other == norm || other.include?(norm) || norm.include?(other)
 
@@ -352,7 +369,10 @@ module Buddy
       needle = body.to_s.strip
       return if needle.empty?
 
-      scope = user.buddy_memories rescue BuddyMemory.where(user: user)
+      # Facts only, for the same reason find_similar_memory is: `drop_idea` is
+      # how a held thought gets let go, and a substring "forget" that reached
+      # the pile would delete something the person is still counting on.
+      scope = BuddyMemory.where(user: user).where(kind: [:preference, :concept])
       matches = if needle.match?(/\A\d+\z/)
         scope.where(id: needle.to_i)
       else

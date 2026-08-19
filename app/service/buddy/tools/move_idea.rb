@@ -15,16 +15,16 @@ Buddy::Tools.register(
   # happens to be months later.
   routinable:  false,
   confirm:     ->(payload, ctx) {
-    idea = ctx.user.buddy_ideas.live.find_by(id: payload[:id])
+    idea = ctx.user.buddy_memories.kind_stash.live.find_by(id: payload[:id])
     raise "no stashed idea ##{payload[:id]}" if idea.nil?
 
     { summary: "Move idea to #{payload[:category]}?", resolved: {} }
   },
   label:       ->(payload, _ctx) { { title: "Move idea → #{payload[:category]}", sub: nil } },
   execute:     ->(payload, ctx) {
-    idea = ctx.user.buddy_ideas.find(payload[:id])
+    idea = ctx.user.buddy_memories.kind_stash.find(payload[:id])
     idea.update!(category: payload[:category].to_s, status: :active)
     { idea_id: idea.id, category: payload[:category].to_s }
   },
-  receipt:     ->(result, _ctx) { "Moved it to #{BuddyIdea::CATEGORY_LABELS[result[:category]]} ✓" },
+  receipt:     ->(result, _ctx) { "Moved it to #{BuddyMemory::CATEGORY_LABELS[result[:category]]} ✓" },
 )

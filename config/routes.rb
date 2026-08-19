@@ -562,6 +562,9 @@ Rails.application.routes.draw do
     patch "/system/banking/transactions/:id" => "system#update_transaction",
       as: :system_bank_transaction
     patch "/system/banking/:id" => "system#update_bank_account", as: :system_bank_account
+    get "/system/memories" => "system#memories", as: :system_memories
+    patch "/system/memories/:id" => "system#update_memory", as: :system_memory
+    delete "/system/memories/:id" => "system#destroy_memory", as: :system_memory_destroy
   end
   mount ::ActionCable.server => "/cable"
 end

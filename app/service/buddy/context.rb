@@ -900,7 +900,7 @@ module Buddy
       end
 
       # Brain-dump ideas the person stashed, eligible to resurface now (active,
-      # or a defer whose remind_after has passed). Grouped so Today / What now
+      # or a defer whose relevant_at has passed). Grouped so Today / What now
       # can pull one from the relevant bucket. Each: { id, category, idea,
       # waiting } where `idea` is the summary if Buddy sorted it, else the raw
       # body, and `waiting` is how long it's been sitting.
@@ -908,15 +908,15 @@ module Buddy
       # Oldest first: this list is what keeps a loose end from going quietly
       # missing, so the one at most risk of that goes at the top.
       def stashed_ideas(user)
-        return [] unless user.respond_to?(:buddy_ideas)
+        return [] unless user.respond_to?(:buddy_memories)
 
         now = Time.current
-        user.buddy_ideas.surfaceable.includes(:notes).order(created_at: :asc).limit(12).map { |i|
+        user.buddy_memories.kind_stash.surfaceable.includes(:notes).order(created_at: :asc).limit(12).map { |i|
           count = i.notes.size
           {
             id:           i.id,
             category:     i.category,
-            idea:         i.summary.presence || i.body.to_s.first(140),
+            idea:         i.summary.presence || i.content.to_s.first(140),
             waiting:      i.waiting_label,
             # Only present on a thread. Their absence is the signal that the
             # `idea` line above is the whole of it and nothing needs opening.

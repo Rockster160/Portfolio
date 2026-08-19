@@ -2,7 +2,7 @@ require "rails_helper"
 
 # A held idea you can come back to.
 #
-# A BuddyIdea used to be one immutable `body`, so the second and third visits to
+# A BuddyMemory used to be one immutable `body`, so the second and third visits to
 # a thought had nowhere to land — stash_idea dedupes on lowercased body, so
 # re-saying it merged onto the original row and the new detail was dropped on
 # the floor. Notes are the place it lands now.
@@ -13,8 +13,9 @@ RSpec.describe "Buddy idea threads" do
   def ctx = Buddy::ToolContext.new(user)
 
   def idea!(body, summary: nil, status: :active, created: 3.days.ago, category: :home)
-    BuddyIdea.create!(
-      user: user, body: body, summary: summary, status: status,
+    BuddyMemory.create!(
+      kind:     :stash,
+      user: user, content: body, summary: summary, status: status,
       category: category, created_at: created, last_touched_at: created
     )
   end
@@ -36,7 +37,7 @@ RSpec.describe "Buddy idea threads" do
   before do
     allow(MonitorChannel).to receive(:broadcast_to)
     allow(ActionCable.server).to receive(:broadcast)
-    BuddyIdea.where(user: user).destroy_all
+    BuddyMemory.where(user: user).destroy_all
   end
 
   describe "elaborate_idea" do
@@ -47,7 +48,7 @@ RSpec.describe "Buddy idea threads" do
 
       expect(confirm[:summary]).to include("greenhouse needs sorting out")
       expect(result[:count]).to eq(1)
-      expect(idea.reload.body).to eq("greenhouse needs sorting out")
+      expect(idea.reload.content).to eq("greenhouse needs sorting out")
       expect(idea.notes.map(&:body)).to eq(["should probably be solar"])
     end
 
@@ -106,7 +107,7 @@ RSpec.describe "Buddy idea threads" do
     end
 
     it "refuses an id that isn't theirs" do
-      theirs = BuddyIdea.create!(user: create(:user), body: "not mine", status: :active)
+      theirs = BuddyMemory.create!(kind: :stash, user: create(:user), content: "not mine", status: :active)
       tool = Buddy::Tools[:elaborate_idea]
 
       expect { tool[:confirm].call({ id: theirs.id, note: "x" }, ctx) }.to raise_error(/no held idea/)
@@ -245,7 +246,7 @@ RSpec.describe "Buddy idea threads" do
 
     it "does not reach another person's pile" do
       other = create(:user)
-      BuddyIdea.create!(user: other, body: "their private greenhouse thought", status: :active)
+      BuddyMemory.create!(kind: :stash, user: other, content: "their private greenhouse thought", status: :active)
 
       expect(answer(:search_ideas, { query: "greenhouse" })[:total]).to eq(0)
     end

@@ -74,7 +74,27 @@ module Buddy
         broadcast_message(user, message.reload)
       end
 
-      Buddy::GPT::Turn.run!(message).tap { settle_ideas(conversation) }
+      Buddy::GPT::Turn.run!(message).tap {
+        settle_ideas(conversation)
+        flag_compile(conversation, message)
+      }
+    end
+
+    # Note that there was real conversation here, so Buddy::Compile can read it
+    # back once it's over. Only for a message the PERSON actually wrote: a
+    # reminder firing or a briefing seeding itself is not somebody telling their
+    # companion something, and compiling those would spend a model call on
+    # Buddy's own output.
+    #
+    # Every qualifying turn re-flags, which pushes the compile back — so one
+    # compile covers a whole conversation rather than one per message.
+    def flag_compile(conversation, message)
+      return unless message.outbound?
+      return if message.metadata.is_a?(Hash) && message.metadata["hidden"]
+
+      Buddy::Compile.flag!(conversation)
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy] compile flag failed: #{e.class}: #{e.message}")
     end
 
     # A stretch about a held idea ends when the conversation moves off it, and

@@ -83,7 +83,7 @@ module Buddy
       return nil if pleasantry?(body)
 
       cat  = %w[me home work].include?(category.to_s) ? category.to_s : nil
-      idea = BuddyIdea.create!(user: user, category: cat, body: body, status: :active)
+      idea = BuddyMemory.create!(user: user, category: cat, content: body, kind: :stash, status: :active)
 
       # Instant visual receipt, then a warm turn that acknowledges + offers to
       # talk it through (and sorts it when the bucket was "anything").
@@ -97,7 +97,7 @@ module Buddy
     # which is what lets the turn tell a true "moved it to home" from an
     # invented one.
     def apply_sort(user, args, conversation: nil)
-      idea = user.buddy_ideas.find_by(id: args[:id])
+      idea = user.buddy_memories.kind_stash.find_by(id: args[:id])
       return false if idea.nil?
 
       # It went somewhere it can actually be acted on, so it comes off the pile
@@ -153,7 +153,7 @@ module Buddy
     end
 
     def label_for(idea)
-      idea.summary.presence || idea.body.to_s.truncate(60)
+      idea.summary.presence || idea.content.to_s.truncate(60)
     end
 
     class << self
@@ -188,7 +188,7 @@ module Buddy
 
       def response_seed(user, idea, cat)
         <<~SEED.strip
-          The person just brain-dumped this: "#{idea.body}"
+          The person just brain-dumped this: "#{idea.content}"
 
           #{destination(user, idea)}
 
@@ -239,7 +239,7 @@ module Buddy
         if cat.nil?
           "If it IS a thought: sort it into ONE bucket - me (personal), home (household/family), or work - give it a short 3-6 word summary, and record both with `sort_stash(id: #{idea.id}, category: <me|home|work>, summary: \"<short summary>\")` (silent)."
         else
-          "If it IS a thought: it's already filed under their #{BuddyIdea::CATEGORY_LABELS[cat]} list. If a crisper one-line summary comes to mind, set it silently with `sort_stash(id: #{idea.id}, summary: \"<short summary>\")`."
+          "If it IS a thought: it's already filed under their #{BuddyMemory::CATEGORY_LABELS[cat]} list. If a crisper one-line summary comes to mind, set it silently with `sort_stash(id: #{idea.id}, summary: \"<short summary>\")`."
         end
       end
 
@@ -259,11 +259,11 @@ module Buddy
       end
 
       def recurring?(idea)
-        idea.body.to_s.match?(RECURRING_RX)
+        idea.content.to_s.match?(RECURRING_RX)
       end
 
       def mid_dump?(user, idea)
-        scope = BuddyIdea.where(user_id: user.id).where.not(id: idea.id)
+        scope = BuddyMemory.where(user_id: user.id).kind_stash.where.not(id: idea.id)
         scope.exists?(created_at: DUMP_WINDOW.ago..)
       rescue StandardError
         false
