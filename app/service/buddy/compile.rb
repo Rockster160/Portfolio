@@ -21,7 +21,7 @@ module Buddy
   # Someone who has just said their cat is dying should not sit watching a
   # spinner while a model sorts through their history. The reply goes out first
   # and this runs behind it — and not immediately, because the stretch usually
-  # isn't finished. `Buddy::Compile.flag!` sets a target roughly an hour out and
+  # isn't finished. `Buddy::Compile.flag!` sets a target a quarter of an hour out and
   # every further message pushes it back, so one compile covers a whole
   # conversation instead of one per message.
   #
@@ -47,7 +47,7 @@ module Buddy
 
     # How long after the last message the stretch is presumed over. Long enough
     # that a pause to make coffee doesn't count as the end of a conversation.
-    QUIET_PERIOD = 1.hour
+    QUIET_PERIOD = 15.minutes
 
     # How far back a compile reads. Bounded so a marathon thread doesn't hand a
     # cheap model a novel; the debounce means this is normally one sitting.
@@ -75,32 +75,70 @@ module Buddy
     SKIP_SOURCES = %w[watch form relay_copy].freeze
 
     INSTRUCTIONS = <<~TXT.freeze
-      You read a stretch of conversation between a person and their companion,
-      and write down what is worth keeping. You are not talking to anyone. Your
-      entire output is one JSON object.
+      You keep the long-term record of one person, and you are the ONLY thing
+      that writes it. Their companion talks to them and acts for them in the
+      moment; once a conversation has gone quiet you read the whole
+      stretch at once and decide what it changed about what is held. Nobody
+      reads what you say and nothing you write is shown to anyone - your tools
+      are the entire result of this run.
 
-      {
-        "memories": [
-          {
-            "content": "one sentence, under 400 characters, third person",
-            "summary": "3-6 words",
-            "kind": "concept" | "preference",
-            "severity": 0-100,
-            "tags": ["lowercase", "subjects"],
-            "check_in_days": null | number,
-            "relevant_in_days": null | number
-          }
-        ],
-        "updates": [
-          {
-            "id": <id of an open follow-up you were shown>,
-            "action": "resolved" | "answered" | "dropped",
-            "check_in_days": null | number,
-            "note": "what they said about it, one sentence"
-          }
-        ],
-        "face": null | "<expression name>"
-      }
+      You have as many rounds as you need, and the stretch below is a starting
+      point rather than a limit. GO AND LOOK before you write. If something
+      refers to an exchange you cannot see - a "that", a "the thing we talked
+      about", a plan whose beginning is missing - call `read_conversation` and
+      keep calling it, paging back with `before`, until you have the part that
+      explains it or you reach the start of the thread. Deciding from half a
+      conversation is how a finished errand becomes a permanent fact.
+
+      Same with what is held: `search_memories` before writing anything you
+      suspect is already there. A run that changes nothing is a good run and is
+      the usual one.
+
+      YOUR TOOLS
+
+      - `search_memories` - everything held, well past the rows listed below.
+      - `read_conversation` - further back than the stretch you were given.
+      - `write_memory` - hold something new.
+      - `revise_memory` - rewrite a row that is already there.
+      - `close_memory` - retire one: `done` if it happened, `dropped` if it
+        stopped being worth holding.
+      - `set_check_in` - when a follow-up is worth asking about, or no longer is.
+
+      Stop calling tools when you are finished. A short sentence saying what you
+      did is fine and goes nowhere.
+
+      A PAUSE IS NOT A NEW SUBJECT. Every line carries its time, and you will
+      see gaps - minutes, hours, sometimes days. None of that decides anything
+      on its own: people come back after four days and carry straight on as
+      though they never left, and they also change the subject completely
+      between two messages a minute apart. Read what was said. If a line only
+      makes sense as a continuation of something earlier, it IS one, whatever
+      the clock says in between.
+
+      Anything above the "read before" line you have already weighed once. That
+      is not a reason to skip it - it is context for what came after, and a
+      second look is your chance to improve what you wrote the first time.
+
+      CHECK WHAT THE COMPANION SAID IT DID
+
+      You are reading its side of the conversation as well as theirs, and it
+      answers in the moment with no way to look back. So it sometimes says a
+      thing is handled when nothing was written. On 14 Aug it was taught an
+      Afrikaans saying and replied "that's in the house words too" - and it was
+      not, anywhere, until somebody noticed five days later.
+
+      A claim looks like: "I'll remember that", "tucked away", "got it", "that's
+      on your list now", "I've set that". For anything it claimed to REMEMBER,
+      you can settle it yourself: `search_memories` for the thing, and if it
+      isn't there, `write_memory` it. That is the promise being kept rather than
+      a note about a promise.
+
+      For a claim about something you can't write - a reminder, a list, the
+      calendar - check the ALREADY DONE list first, because a receipt there
+      means it really happened and there is nothing to fix. If a claim has no
+      receipt and no other sign of it, hold a `followup` saying what they were
+      told was done, so it comes up rather than being quietly wrong forever.
+      Don't do this for small talk; do it for anything they would act on.
 
       WHAT TO KEEP
 
@@ -123,17 +161,68 @@ module Buddy
       are shown. Nothing at all is a perfectly good answer, and it is the right
       one most of the time.
 
+      A REQUEST THAT WAS CARRIED OUT IS NOT A PREFERENCE. If they asked for
+      something and the ALREADY DONE list shows it was set up, the record of it
+      is the thing that was set up - a reminder, a list item, an agenda entry.
+      Writing "they want X" alongside the X that now exists stores the same
+      request twice, and the copy in here has no way to be cancelled when they
+      change their mind about the real one.
+
       A CLOCK TIME OR A DATE MEANS IT IS NOT A CONCEPT. Something happening once
       at a stated time is an event, and a `concept` never expires and carries no
       date - so filing one as a concept leaves a permanent record saying they do
       that at that hour, forever. If the moment is worth keeping at all it is a
-      `followup` with `relevant_in_days`. If it has already been and gone, or
+      `followup` with a check-in. If it has already been and gone, or
       something was already set up for it in the conversation, it is nothing:
       drop it.
 
       ONE MESSAGE CAN CARRY SEVERAL THINGS. A person mentioning a health flare
       and a job loss in one breath has told you two separate things with two
       different weights and two different timings. Split them.
+
+      EVERY ROW HAS TO STAND ALONE. These are never read in order, never read
+      beside each other, and one surfaces months later with no conversation
+      around it. So splitting a sentence in two is not finished until both
+      halves make sense by themselves: "after that, clear out the pantry" leans
+      on a row that will not be there, and comes back out as a sentence about
+      nothing. Say which thing it comes after, or say it without the ordering.
+
+      WRITE THE FACT, NOT A NOTE ABOUT THE FACT. Content is handed over as
+      something TRUE ABOUT THEM. An instruction filed there - "do not remind her
+      about this", "check on this next week", "the earlier version was wrong" -
+      does nothing at all, because nothing reads content and acts on it; it just
+      comes back out as a claim about the person.
+
+      Each of those has a tool: something to come back to is `set_check_in`, a
+      row that is finished or no longer worth holding is `close_memory`, and a
+      row that is wrong is `revise_memory`. A sentence describing what should
+      happen is the one option that does nothing.
+
+      A CORRECTION IS NOT A MEMORY. When they fix something mid-conversation -
+      a spelling, a name, a misunderstanding - what to keep is the corrected
+      fact, written once, correctly. That there was a mistake, and what the
+      mistake was, is not a fact about them and does not belong in the row. If
+      the wrong version is already held, `revise_memory` it; otherwise just
+      write the right one.
+
+      TIDY WHAT IS ALREADY THERE. Every row in ALREADY KEPT carries its id, and
+      `revise_memory` rewrites one in place - content, summary, tags. Reach for it
+      when this stretch changed something you already hold rather than adding to
+      it:
+
+      - The same fact said better, or with the part that was missing. A row that
+        only makes sense next to another one is the clearest case: rewrite it so
+        it stands alone.
+      - Two rows that turned out to be one thing. Revise the fuller one to say
+        all of it, and `dropped` the other. Never leave both.
+      - A row that has drifted - a project that moved on, a detail that changed.
+        Rewrite it as it is now.
+
+      Rewriting is not free: the old wording is kept as a note, so a bad rewrite
+      can be seen and undone, but the row itself is what everything reads. Only
+      revise when THIS conversation gave you a reason to. Tidying for its own
+      sake, across rows nobody mentioned, is how a memory quietly turns into
+      something they never said.
 
       SEVERITY, 0-100
 
@@ -149,24 +238,25 @@ module Buddy
 
       CHECKING IN
 
-      `check_in_days` is how long until this is worth ASKING about, unprompted.
+      A check-in is how long until this is worth ASKING about, unprompted.
       Leave it null unless a person who cared would actually follow up.
 
       - A sick pet, a hard day, a hospital visit: 0 (later today) or 1.
       - A project, an interview, something they were excited about: 3 to 14.
       - Something dated in the future - "surgery next week" - set
-        `relevant_in_days` to when it happens and `check_in_days` to just after.
+        the check-in to just after it happens.
         Do NOT ask about next week's surgery tomorrow.
 
       Most memories have no check-in. An unprompted question about something
       they mentioned in passing is worse than silence.
 
-      `relevant_in_days` says when this becomes live at all. Null means now.
+      A check-in in the future is also how something becomes live later rather
+      than now.
 
       UPDATING WHAT IS ALREADY WAITING
 
       You are shown the follow-ups already scheduled for this person. If this
-      conversation touched any of them, say so in `updates` - otherwise leave
+      conversation touched any of them, say so with the tools - otherwise leave
       the list empty.
 
       A check-in exists to ASK a question. Someone who volunteers the answer
@@ -179,8 +269,8 @@ module Buddy
         you how they are - a good day reported unprompted answers "how are they
         doing" completely.
       - "answered" - they gave an update and it is still going ("she's still in
-        hospital, doing okay for now"). Set `check_in_days` to when it would be
-        worth asking again. Leave `check_in_days` null if their update reads
+        hospital, doing okay for now"). `set_check_in` to when it would be
+        worth asking again. Clear it if their update reads
         like the end of it.
       - "dropped" - it stopped being worth asking about at all.
 
@@ -249,22 +339,70 @@ module Buddy
       user     = conversation.user
       messages = window(conversation)
       return clear!(conversation, now) if user.nil? || messages.size < 2
+      return clear!(conversation, now) unless fresh?(conversation, messages)
 
-      parsed = distill(conversation, user, messages)
-      return clear!(conversation, now) if parsed.nil?
-
-      written = Array(parsed["memories"]).filter_map { |row|
-        write_memory!(user, conversation, messages, row, now)
-      }
-      touched = Array(parsed["updates"]).filter_map { |row| apply_update!(user, row, now) }
-      apply_face(conversation, parsed["face"])
+      box = Buddy::Compile::Toolbox.new(
+        user: user, conversation: conversation, messages: messages, now: now,
+      )
+      converse!(conversation, user, messages, box)
 
       # Placing happens once, over everything pending, so a batch of three
       # follow-ups out of one message can't all land on the same evening.
-      Buddy::CheckIns.replan!(user, now: now) if written.any?(&:check_in_at) || touched.any?
+      if box.written.any?(&:check_in_at) || box.touched.any?
+        Buddy::CheckIns.replan!(user, now: now)
+      end
 
       clear!(conversation, now)
-      written
+      box.written
+    end
+
+    # The pass, as a conversation with itself rather than one shot at a JSON
+    # blob.
+    #
+    # It used to answer once, in a fixed shape, and Rails applied whatever came
+    # back. That could only ever ADD: forty truncated labels was not enough to
+    # judge overlap, there was no way to look further, and nothing could fix a
+    # row that was already wrong. Every tangle found in prod on 19 Aug — the
+    # same request held twice, a sentence leaning on a row beside it, a
+    # correction stored instead of applied — was something this pass had written
+    # and then had no means to repair.
+    #
+    # Rounds are bounded and the tools are its own. There is nobody waiting on
+    # this, so the cost of a loop that will not settle is a quiet bill rather
+    # than a hang, which is why the ceiling is well under the turn's.
+    def converse!(conversation, user, messages, box)
+      client = Buddy::GPT::Client.new(model: MODEL, reasoning_effort: nil)
+      input  = [{ role: :user, content: brief(conversation, user, messages) }]
+
+      Buddy::Compile::Toolbox::MAX_ROUNDS.times do
+        result = client.stream(
+          instructions: INSTRUCTIONS, input: input, tools: Buddy::Compile::Toolbox.schemas,
+        )
+        record_usage(result, conversation)
+        return nil unless result[:ok]
+
+        calls = Array(result[:tool_calls])
+        return result[:text] if calls.empty?
+
+        input += calls.flat_map { |call|
+          answer = box.call(call[:name], call[:arguments])
+          [
+            {
+              type:      :function_call,
+              call_id:   call[:call_id],
+              name:      call[:name].to_s,
+              arguments: JSON.generate(call[:arguments] || {}),
+            },
+            { type: :function_call_output, call_id: call[:call_id], output: answer.to_s },
+          ]
+        }
+      end
+
+      Rails.logger.info("[Buddy::Compile] hit the round ceiling for conversation #{conversation.id}")
+      nil
+    rescue StandardError => e
+      Buddy::Errors.report(section: "compile.converse", exception: e, user: user)
+      nil
     end
 
     # Act on a follow-up that was already waiting, because the person has since
@@ -287,35 +425,6 @@ module Buddy
     #               re-arm path: `checked_in_at` is a last-checked mark, not a
     #               seal.
     #   dropped   — no longer worth asking about at all.
-    def apply_update!(user, row, now)
-      memory = BuddyMemory.where(user: user).find_by(id: row["id"])
-      return nil if memory.nil?
-
-      note = row["note"].to_s.strip
-      memory.notes.create!(body: note.first(BuddyMemoryNote::MAX_BODY), source: :companion) if note.present?
-
-      case row["action"].to_s
-      when "resolved"
-        memory.update!(status: :done, check_in_at: nil)
-      when "dropped"
-        memory.update!(status: :dropped, check_in_at: nil)
-      when "answered"
-        days = row["check_in_days"]
-        # No new interval offered means the update was the end of it — they
-        # spoke, so stop asking rather than inventing a fresh reason to.
-        return memory.tap { memory.update!(check_in_at: nil) } if days.nil?
-
-        memory.update!(check_in_at: Buddy::CheckIns.place(days_from(days, now), user: user, now: now))
-      else
-        return nil
-      end
-
-      memory
-    rescue StandardError => e
-      Rails.logger.warn("[Buddy::Compile] update failed: #{e.class}: #{e.message}")
-      nil
-    end
-
     def clear!(conversation, now)
       conversation.update_columns(
         buddy_compile_after: nil, buddy_compiled_at: now, updated_at: now,
@@ -323,28 +432,41 @@ module Buddy
       []
     end
 
-    # How far back the FIRST compile on a thread may reach.
+    # The last stretch of real conversation, however long ago any of it was.
     #
-    # `buddy_compiled_at` is null until a thread has compiled once, and the
-    # count cap alone let that first run read whatever forty messages happened
-    # to be there — which on a thread older than the feature is months of
-    # backlog, not a sitting. Suki's first run on 19 Aug read back to 16 Aug and
-    # wrote two memories off things that had been asked for, actioned and
-    # finished three days earlier: a 3pm visit became an undated permanent
-    # concept, so the record now says she visits Doug at 3pm forever.
+    # It used to read from `buddy_compiled_at` forward, which left every run
+    # after a mid-conversation compile blind to everything before it: somebody
+    # talks for twenty minutes, pauses long enough to trip the debounce, carries
+    # on — and the next run sees only the second half, judging "so I'll do that
+    # on Thursday then" with no idea what THAT is.
     #
-    # Six hours because a compile fires QUIET_PERIOD after the last message, so
-    # this covers the sitting that just ended with hours to spare and reaches no
-    # further. Chelsea's thread has never compiled either and was primed to do
-    # exactly the same thing.
-    FIRST_READ = 6.hours
+    # There is deliberately NO time boundary here. A gap is not a subject
+    # change: people come back four days later and carry straight on as though
+    # they never left, and cutting the read at some number of hours would throw
+    # away the half of that conversation that explains the other half. Whether
+    # the thread moved on is a question about what was SAID, so the timestamps
+    # go in the brief and the model judges it — and `read_conversation` is there
+    # when it needs more than this.
+    #
+    # Re-reading what it already saw is the point rather than the cost: it can
+    # revise and consolidate now, so a second look at the same exchange is a
+    # chance to improve what it wrote the first time. `duplicate?`, the ALREADY
+    # KEPT list and the instruction against repeating are what stop that
+    # becoming a second copy.
+    def window(conversation, _now: Time.current)
+      recent = conversation.byte_messages.order(created_at: :desc).limit(WINDOW * 3).to_a
+      recent.reject { |m| skip?(m) }.first(WINDOW).reverse
+    end
 
-    # Everything since the last compile, capped. A thread that has never
-    # compiled reads the sitting that just happened, not its history.
-    def window(conversation, now: Time.current)
-      since = conversation.buddy_compiled_at || (now - FIRST_READ)
-      scope = conversation.byte_messages.order(created_at: :desc).where("created_at > ?", since)
-      scope.limit(WINDOW * 3).to_a.reject { |m| skip?(m) }.first(WINDOW).reverse
+    # Whether anything has actually been said since the last run. Without this
+    # the whole-stretch read would recompile the same exchange on every debounce
+    # for as long as the conversation lasts, paying a model call each time to
+    # reach the same conclusion.
+    def fresh?(conversation, messages)
+      compiled = conversation.buddy_compiled_at
+      return true if compiled.nil?
+
+      messages.any? { |m| m.created_at > compiled }
     end
 
     def skip?(message)
@@ -354,33 +476,6 @@ module Buddy
       return true if SKIP_KINDS.include?(meta["kind"].to_s)
 
       message.body.to_s.strip.empty?
-    end
-
-    def distill(conversation, user, messages)
-      result = Buddy::GPT::Client.new(model: MODEL, reasoning_effort: nil).stream(
-        instructions: INSTRUCTIONS,
-        input:        [{ role: :user, content: brief(conversation, user, messages) }],
-      )
-      record_usage(result, conversation)
-      return nil unless result[:ok]
-
-      parse(result[:text])
-    end
-
-    # Tolerant of the fences a model wraps JSON in even when told not to. A
-    # compile that can't be parsed writes nothing, which is the same outcome as
-    # a compile that found nothing — so it degrades to silence rather than to an
-    # error the person would see.
-    def parse(text)
-      raw = text.to_s.strip.sub(/\A```(?:json)?/, "").sub(/```\z/, "").strip
-      body = raw[/\{.*\}/m]
-      return nil if body.blank?
-
-      parsed = JSON.parse(body)
-      parsed.is_a?(Hash) ? parsed : nil
-    rescue JSON::ParserError => e
-      Rails.logger.warn("[Buddy::Compile] unparseable output: #{e.message}")
-      nil
     end
 
     def brief(conversation, user, messages)
@@ -396,9 +491,44 @@ module Buddy
         FOLLOW-UPS ALREADY SCHEDULED (update these by id if the conversation touched them):
         #{pending(user)}
 
+        ALREADY DONE IN THIS STRETCH - these were asked for and HANDLED, so keep nothing about them:
+        #{receipts(conversation, messages)}
+
         THE CONVERSATION:
         #{stretch(conversation, messages)}
       TXT
+    end
+
+    # What the companion actually DID while this was being said.
+    #
+    # A receipt is `buddy_activity`, which SKIP_KINDS drops so a doorbell
+    # notification can't vote on what the conversation was about — and dropping
+    # it took the evidence with it. Asked for a daily nudge on 19 Aug, Suki set
+    # the reminder and posted "Suki will remind you every day at 9am"; the
+    # compile saw only the asking and wrote down "she wants a daily reminder to
+    # let things go" as a standing preference, so the same request now exists
+    # twice, once as a live reminder and once as a fact about her.
+    #
+    # Listed apart from the transcript rather than folded back into it: these
+    # are not somebody talking, and the whole reason they were filtered stands.
+    # What changes is that the rule against keeping something "already handled
+    # by an action that was taken" now has the actions in front of it.
+    RECEIPT_KINDS = %w[buddy_activity buddy_receipt action_chip].freeze
+
+    def receipts(conversation, messages)
+      window = messages.first&.created_at
+      return "(none)" if window.blank?
+
+      rows = conversation.byte_messages.where(created_at: window..).order(:created_at).select { |m|
+        meta = m.metadata.is_a?(Hash) ? m.metadata : {}
+        RECEIPT_KINDS.include?(meta["kind"].to_s) && m.body.to_s.strip.present?
+      }
+      return "(none)" if rows.empty?
+
+      rows.last(15).map { |m| "- #{m.body.to_s.squish.truncate(120)}" }.join("\n")
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::Compile] receipts failed: #{e.class}: #{e.message}")
+      "(none)"
     end
 
     # The open follow-ups, by id, so a conversation that answered one can say
@@ -415,18 +545,35 @@ module Buddy
     # What's already held, so the compile doesn't write a fourth copy of a fact
     # it has written three times. Deliberately the labels only — the full text
     # of every memory would be most of the reason this runs on a cheap model.
+    # Ids and full wording, because `revised` needs both: a row can't be tidied
+    # without being nameable, and overlap can't be judged off a label truncated
+    # at 80 characters. It used to be labels only — enough to avoid writing a
+    # fourth copy of the same fact, and not enough to fix the three already
+    # there.
     def existing(user)
       rows = BuddyMemory.where(user: user).unexpired.for_recall.limit(40).to_a
       return "(nothing yet)" if rows.empty?
 
-      rows.map { |m| "- #{m.summary.presence || m.content.to_s.truncate(80)}" }.join("\n")
+      rows.map { |m| "- ##{m.id} [#{m.kind}] #{m.content.to_s.squish.truncate(200)}" }.join("\n")
     end
 
+    # Timestamped, and marked where the last run stopped reading. Both are
+    # judgement the model has to make rather than judgement made for it: how
+    # long a pause was, and which of this it has weighed before.
     def stretch(conversation, messages)
-      name = conversation.buddy_name
+      name     = conversation.buddy_name
+      compiled = conversation.buddy_compiled_at
+      zone     = Buddy::Day.zone(conversation.user)
+      marked   = false
+
       messages.map { |message|
+        line = +""
+        if compiled && !marked && message.created_at > compiled
+          marked = true
+          line << "--- you have read everything above this line before ---\n"
+        end
         who = message.direction == "outbound" ? "Them" : name
-        "#{who}: #{message.body.to_s.strip}"
+        line << "[#{message.created_at.in_time_zone(zone).strftime("%a %-d %b, %-l:%M%P")}] #{who}: #{message.body.to_s.strip}"
       }.join("\n")
     end
 
@@ -456,45 +603,6 @@ module Buddy
       score.to_i >= ORIGIN_MIN_OVERLAP ? best : nil
     end
 
-    def write_memory!(user, _conversation, messages, row, now)
-      content = row["content"].to_s.strip
-      return nil if content.empty?
-      return nil if duplicate?(user, content)
-
-      kind = %w[concept preference].include?(row["kind"].to_s) ? row["kind"].to_s : "concept"
-      memory = BuddyMemory.new(
-        user:           user,
-        kind:           kind,
-        content:        content.first(BuddyMemory::MAX_CONTENT),
-        summary:        row["summary"].to_s.strip.presence&.first(BuddyMemory::MAX_SUMMARY),
-        severity:       clamp_severity(row["severity"]),
-        source_message: origin_message(messages, content),
-        last_used_at:   now,
-      )
-      memory.tag_list = row["tags"]
-      memory.relevant_at = days_from(row["relevant_in_days"], now)
-      arm_check_in(memory, row, now)
-      memory.save!
-      memory
-    rescue StandardError => e
-      Rails.logger.warn("[Buddy::Compile] memory write failed: #{e.class}: #{e.message}")
-      nil
-    end
-
-    # A follow-up is a memory that also carries a time to come back to it. The
-    # severity floor is what stops "they mentioned a mug preference" turning
-    # into an unprompted question three days later.
-    def arm_check_in(memory, row, now)
-      days = row["check_in_days"]
-      return if days.nil?
-
-      memory.kind = :followup
-      return if memory.severity < BuddyMemory::CHECK_IN_FLOOR
-
-      base = [days_from(days, now), memory.relevant_at].compact.max || now
-      memory.check_in_at = Buddy::CheckIns.place(base, user: memory.user)
-    end
-
     def days_from(days, now)
       return nil if days.nil?
 
@@ -515,26 +623,6 @@ module Buddy
       BuddyMemory.where(user: user).unexpired.where(kind: [:concept, :preference, :followup]).any? { |m|
         m.content.to_s.downcase.gsub(/[^a-z0-9 ]/, "").squeeze(" ").strip == norm
       }
-    end
-
-    # The stale-face fix (prod message 3908: an unmistakably warm and correct
-    # reply about a health flare and a job loss, delivered wearing `happy`).
-    #
-    # The mood persists by design — Buddy::ExpressionState keeps it until
-    # something DELIBERATELY changes it — so a turn that emits no `[[mood:]]`
-    # marker inherits whatever the last cheerful exchange left behind. That is
-    # the default, and it fails hardest exactly where it shows most.
-    #
-    # Correcting it here is a beat late, which the persona rightly complains
-    # about. A beat late is still better than an hour wrong.
-    def apply_face(conversation, face)
-      wanted = face.to_s.strip
-      return if wanted.empty?
-      return if conversation.buddy_expression.to_s == wanted
-
-      Buddy::SideEffects.apply_mood(conversation, wanted)
-    rescue StandardError => e
-      Rails.logger.warn("[Buddy::Compile] face correction failed: #{e.class}: #{e.message}")
     end
 
     # Its own usage kind so a compile's spend stays legible next to a turn's.

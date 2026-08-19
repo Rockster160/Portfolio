@@ -601,6 +601,7 @@ module Buddy
           # a truthful "moved it to home" was one regex away from being wiped
           # as an unbacked claim.
           @acted = true if Buddy::SideEffects.call(@conversation, event[:name], event[:arguments])
+          @kept = true if Buddy::SideEffects::MEMORY_MARKERS.include?(event[:name].to_sym)
         }
       end
 
@@ -1361,6 +1362,12 @@ module Buddy
         else
           retract_false_claim!(result)
         end
+
+        # A brain in the corner of the bubble. Writing to somebody's memory is
+        # otherwise completely silent — that is the point of these being silent
+        # tools, and silent is not the same as invisible. Stamped here rather
+        # than at create_reply, which runs before any round has fired.
+        @reply.update!(metadata: @reply.metadata.to_h.merge("kept" => true)) if @kept
 
         stamp_usage_rollup
         settle_expression(acted: executed_anything?(result))

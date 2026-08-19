@@ -132,6 +132,29 @@ class BuddyReminder < ApplicationRecord
   # case where it matters. Prod: reminder 37 was the daily noon plant check
   # and reminder 40 was set for the same noon, both fired, and 37's recurrence
   # was the only thing that hid it (msgs 3448/3449).
+  # A reminder about this same thing that they SWITCHED OFF.
+  #
+  # `clashing` only ever sees `pending` rows at the same minute, so a reminder
+  # somebody cancelled is invisible to everything — which is how the noon plant
+  # check came back on 18 Aug, eleven days after Eve asked twice for it to be
+  # gone.
+  #
+  # Deliberately not a veto. People change their minds, and refusing to set
+  # something they have just asked for is a worse failure than setting it. This
+  # exists so the companion can SAY so — "putting that back on, you'd switched
+  # it off on Sunday" — which is what a friend would do with the same
+  # information, and which gives them the opening to say they didn't mean it.
+  CANCELLED_MEMORY = 60.days
+
+  def self.cancelled_like(user, text, now: Time.current)
+    words = significant_words(text)
+    return nil if words.empty?
+
+    scope = where(user_id: user.id).where.not(cancelled_at: nil)
+    scope = scope.where(cancelled_at: (now - CANCELLED_MEMORY)..).order(cancelled_at: :desc)
+    scope.find { |r| significant_words(r.body).intersect?(words) }
+  end
+
   def self.clashing(user, text, fire_at)
     words = significant_words(text)
     return nil if words.empty? || fire_at.blank?

@@ -148,7 +148,38 @@ RSpec.describe "Buddy Today forward-looking" do
     # category strips the only part that couldn't have been guessed.
     it "refuses a bare category where the item has a name" do
       expect(seed).to include("NAME THE THING")
-      expect(seed).to include("Being brief means mentioning FEWER things")
+    end
+
+    # The old rule said brevity meant "mentioning FEWER things", with a 3-5 line
+    # cap in two other places. That is an instruction to drop real items on a
+    # busy day, and it costs exactly the ones worth having — everything reaching
+    # the model is already narrowed to the exceptions, so there is nothing left
+    # in it that is safe to leave out. Length follows the day now.
+    it "puts no cap on how many lines a day is allowed to be" do
+      expect(seed).to include("SAY EVERYTHING UNUSUAL")
+      expect(seed).to match(/never about how many things get named/)
+      expect(seed).not_to match(/three to five|3-5|3 to 5/i)
+      expect(seed).not_to match(/mentioning FEWER things/i)
+    end
+
+    # Brevity still means something: it comes out of the words, not the item
+    # count, and the padding rules are untouched.
+    it "still asks for tight lines and no padding" do
+      expect(seed).to include("Cut PADDING")
+      expect(seed).to include("Tight, not truncated")
+    end
+
+    # Prod: "The only thing to do today is Espresso" — Espresso was 5x that day,
+    # so it was the only chore that cleared the exception bar. The dailies are
+    # deliberately withheld, which makes a one-item list a statement about what
+    # is UNUSUAL, and reading it as the whole day is how the rest of it gets
+    # forgotten.
+    it "forbids calling the chore list everything they have to do" do
+      allow(Buddy::Features).to receive(:enabled?).and_call_original
+      allow(Buddy::Features).to receive(:enabled?).with(user, :chores).and_return(true)
+
+      expect(seed).to match(/NOT everything they have to do today, and you must never say it is/)
+      expect(seed).to match(/never count it, total it, or call it all there is/)
     end
 
     it "treats a hot multiplier as already-rare rather than something to weigh" do

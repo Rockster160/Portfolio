@@ -43,6 +43,14 @@ Buddy::Tools.register(
     ("when someone's at the door", "next time a deploy finishes"), that's
     `remind_when` with its own `notify`.
 
+    If the result comes back with `reinstated_from`, they had this same reminder
+    once and TURNED IT OFF on that date. It is set either way - asking for
+    something and not getting it is the worse failure - but say so, lightly, the
+    way you would if you remembered: putting it back on and mentioning when they
+    switched it off gives them the chance to say they didn't mean to ask for it
+    again. Don't make it a question, don't apologise for it, and don't raise it
+    at all if they clearly know.
+
     A reminder is a message they have to be LOOKING at. If they said ALARM, or
     the whole point is being interrupted - waking up, leaving on time - use
     `alarm`, which rings out loud until it's acknowledged. It reaches 24 hours
@@ -141,7 +149,15 @@ Buddy::Tools.register(
     being an ordinary nudge rather than running the nearest thing to it.
   TXT
   args: {
-    text:   { type: :string, required: true,  description: "What to remind them of / prompt about" },
+    text:   {
+      type:        :string,
+      required:    true,
+      description: "What to remind them of. ALWAYS name the thing itself - this fires hours or " \
+                   "days later, out of any context, and it is the whole message they get. " \
+                   "\"Leave for the dentist\" over \"time to go\"; \"Get ready for the 1:40 " \
+                   "doctor appointment\" over \"get ready\". A nudge that doesn't say what it " \
+                   "is for makes them come and ask you.",
+    },
     at:     { type: :string, required: false, description: "First fire time (ISO datetime). Required for one-shot." },
     repeat: { type: :string, required: false, description: "Recurrence spec: daily:HH:MM / weekdays:HH:MM / weekly:<days>:HH:MM / monthly:<dom>:HH:MM / monthly:<nth>-<weekday>:HH:MM / every:<n>-<unit>:HH:MM / yearly:HH:MM" },
     until:  { type: :string, required: false, description: "Stop repeating after this date (YYYY-MM-DD)" },
@@ -287,11 +303,15 @@ Buddy::Tools.register(
       recurrence:        payload[:recurrence],
       condition:         payload[:condition],
     )
+    # Told, not blocked. See BuddyReminder.cancelled_like.
+    previously = BuddyReminder.cancelled_like(ctx.user, payload[:text])
+
     {
-      reminder_id:    reminder.id,
-      fire_at:        fire_at.iso8601,
-      recurrence:     payload[:recurrence],
-      recipient_name: payload[:recipient_name],
+      reminder_id:     reminder.id,
+      fire_at:         fire_at.iso8601,
+      recurrence:      payload[:recurrence],
+      recipient_name:  payload[:recipient_name],
+      reinstated_from: previously&.cancelled_at&.iso8601,
     }
   },
   # Scheduling a reminder is safe + reversible, so it runs WITHOUT a
@@ -307,17 +327,23 @@ Buddy::Tools.register(
     fire_at = (Time.zone.parse(result[:fire_at].to_s) rescue nil)
     rec     = result[:recurrence]
     who     = result[:recipient_name].presence
+    # Says it plainly on the chip as well as leaving it in the result, so the
+    # one thing they might want to correct is visible without reading prose. A
+    # dated phrase rather than a friendly one: "Sunday" is ambiguous two months
+    # out, and this can reach back that far.
+    back    = (Time.zone.parse(result[:reinstated_from].to_s) rescue nil)
+    again   = back ? " (back on, you'd switched this off #{back.in_time_zone(ctx.user.timezone).strftime("%b %-d")})" : ""
 
     if rec.is_a?(Hash)
       hhmm  = (Time.zone.parse(rec["at"].to_s) rescue nil)
       tstr  = hhmm ? hhmm.strftime("%-I:%M%P").sub(":00", "") : rec["at"].to_s
       ends  = rec["until_on"].present? ? " until #{rec["until_on"]}" : ""
       verb  = who ? "send this to #{who}" : "remind you"
-      "#{name} will #{verb} #{Buddy::ReminderPresenter.repeat_phrase(rec)} at #{tstr}#{ends}"
+      "#{name} will #{verb} #{Buddy::ReminderPresenter.repeat_phrase(rec)} at #{tstr}#{ends}#{again}"
     elsif who
-      "#{name} will send this to #{who} #{ctx.friendly_future(fire_at)}"
+      "#{name} will send this to #{who} #{ctx.friendly_future(fire_at)}#{again}"
     else
-      "#{name} will send you a reminder #{ctx.friendly_future(fire_at)}"
+      "#{name} will send you a reminder #{ctx.friendly_future(fire_at)}#{again}"
     end
   },
 )

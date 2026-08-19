@@ -27,6 +27,13 @@ module Buddy
     # `SideEffects.handles?(name)` to route a tool call without a registry hit.
     NAMES = %i[set_mood add_note remember forget sort_stash].freeze
 
+    # The ones that change what is HELD about the person, as opposed to how one
+    # thread behaves. A turn that fires any of these gets a small mark on the
+    # reply — writing to somebody's memory is otherwise completely silent, and
+    # the whole point of these being silent tools is that they don't interrupt
+    # the sentence. Silent is not the same as invisible.
+    MEMORY_MARKERS = %i[remember forget sort_stash].freeze
+
     def handles?(name)
       NAMES.include?(name.to_sym)
     end

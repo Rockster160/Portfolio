@@ -613,6 +613,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       node.classList.remove("byte-msg-watching");
     }
 
+    // A turn that wrote to long-term memory gets a small brain in the corner.
+    // remember/forget are silent by design — nothing about them appears in the
+    // prose — and silent shouldn't mean the person has no way of knowing their
+    // record just changed.
+    node.classList.toggle("byte-msg-kept", !!message?.metadata?.kept);
+
     // If this message carries a Buddy proposal checklist, mount (or
     // re-mount) the multi-select renderer below the body. Idempotent —
     // each paint clears the container and re-renders from message.metadata.

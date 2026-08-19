@@ -26,6 +26,65 @@ RSpec.describe "schedule_reminder auto-run" do
     expect(chip.body).to match(/\A(Byte|Moss) will send you a reminder /)
   end
 
+  # Eve asked twice on 17 Aug for the noon plant reminder to be gone, and it was
+  # rebuilt on the 18th. Nothing could see that it had ever been switched off:
+  # `clashing` only looks at pending rows at the same minute.
+  #
+  # Setting it anyway is deliberate. Refusing something they have just asked for
+  # is the worse failure, and people do change their minds — so this SAYS so and
+  # leaves the correction to them, which is what a friend would do with the same
+  # information.
+  describe "one they had switched off before" do
+    def set!(text, at:)
+      markers = [{ tool_name: :schedule_reminder, payload: { text: text, at: at }, span: [0, 0] }]
+      Buddy::ProposalBuilder.create(user: user, byte_message: msg, markers: markers)
+    end
+
+    let!(:cancelled) {
+      BuddyReminder.create!(
+        user: user, byte_conversation: convo, kind: :reminder,
+        body: "Check the bamboo and water the plants.",
+        fire_at: 1.day.ago, cancelled_at: Time.zone.parse("2026-08-17 18:02"),
+      )
+    }
+
+    it "sets it rather than refusing" do
+      at = 2.hours.from_now.in_time_zone(user.timezone).iso8601
+
+      expect { set!("Water the plants and check the bamboo", at: at) }
+        .to change { BuddyReminder.where(user: user, cancelled_at: nil).count }.by(1)
+    end
+
+    it "says on the chip that it is going back on, and when it came off" do
+      at = 2.hours.from_now.in_time_zone(user.timezone).iso8601
+
+      set!("Water the plants and check the bamboo", at: at)
+
+      chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
+      expect(chip.body).to match(/back on, you'd switched this off Aug 17/)
+    end
+
+    it "stays quiet about an unrelated reminder" do
+      at = 2.hours.from_now.in_time_zone(user.timezone).iso8601
+
+      set!("Take the bins out", at: at)
+
+      chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
+      expect(chip.body).not_to match(/back on/)
+    end
+
+    # Long enough that a reminder from last spring doesn't get dragged up.
+    it "forgets a cancellation older than the window" do
+      cancelled.update!(cancelled_at: (BuddyReminder::CANCELLED_MEMORY + 1.day).ago)
+      at = 2.hours.from_now.in_time_zone(user.timezone).iso8601
+
+      set!("Water the plants and check the bamboo", at: at)
+
+      chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
+      expect(chip.body).not_to match(/back on/)
+    end
+  end
+
   # Prod: "please alert me of both of those items" produced second copies of two
   # reminders set three hours earlier, and both fired twice - 3:15 and 3:35, a
   # minute apart each. Buddy had `upcoming_reminders` and never read it, which

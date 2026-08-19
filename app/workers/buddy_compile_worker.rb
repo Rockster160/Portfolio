@@ -1,7 +1,7 @@
 # Runs Buddy::Compile once a conversation has gone quiet.
 #
 # Queued by Buddy::Compile.flag! on every turn carrying a person's message, for
-# roughly an hour out. Because each turn re-flags, several of these can be in
+# a quarter of an hour out. Because each turn re-flags, several of these can be in
 # flight for one conversation at once — which is fine and is the design. The job
 # re-reads `buddy_compile_after` and only does the work if that moment has
 # arrived; otherwise it schedules itself for wherever the target moved to and

@@ -15,6 +15,18 @@ RSpec.describe "Buddy brain-dump (stash)" do
     convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: body)
   end
 
+  # Prod memory 60 was "After that, clear out the entire pantry." — one half of
+  # a sentence she said in one breath, split into a row that means nothing on
+  # its own. The pile is unordered and its rows are never read side by side.
+  describe "the stash_idea tool's own instructions" do
+    it "requires each split-out piece to still say something" do
+      tool = Buddy::Tools.all.find { |t| t[:name] == :stash_idea }
+
+      expect(tool[:description]).to match(/EACH ONE HAS TO\s+STAND ALONE/)
+      expect(tool[:description]).to match(/Splitting their sentence is only half the job/)
+    end
+  end
+
   describe Buddy::Stash do
     it "arms + reads + expires the latch" do
       described_class.arm!(convo, "home")

@@ -18,9 +18,13 @@ Buddy::Tools.register(
 
     When someone is thinking out loud and several loose ends land in one
     message, that is several calls - one per thing, and they don't all have to
-    be this tool. Keep `idea` close to their own words; `summary` is your own
-    short label for it, and `category` files it under me (personal), home
-    (household/family), or work. This CREATES a new held item - to file or
+    be this tool. Keep `idea` close to their own words, but EACH ONE HAS TO
+    STAND ALONE: the pile is not ordered and these are never read side by side,
+    so "and after that, clear out the pantry" surfaces on its own, weeks later,
+    pointing at nothing. Splitting their sentence is only half the job - carry
+    enough of it into each piece that each piece still says something. `summary`
+    is your own short label for it, and `category` files it under me (personal),
+    home (household/family), or work. This CREATES a new held item - to file or
     relabel one that's already stashed, use sort_stash instead.
   TXT
   args:        {

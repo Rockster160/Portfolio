@@ -9,6 +9,47 @@ RSpec.describe Buddy::Personality do
     convo
   end
 
+  # Prod, 19 Aug: three memories carried handling instructions instead of facts.
+  # Content is handed over as something TRUE ABOUT THE PERSON, so an instruction
+  # filed there comes back out as a claim about them — and the thing it was
+  # asking for never happens, because nothing reads content and acts on it.
+  describe ".for what `remember` may write" do
+    let(:prompt) { described_class.for(User.me, conversation: buddy_convo(User.me, "byte")) }
+
+    it "requires a memory to make sense with nothing around it" do
+      expect(prompt).to include("IT HAS TO STAND ALONE")
+      expect(prompt).to match(/after that, do the pantry/)
+    end
+
+    it "says a memory is a fact and never an instruction about the memory" do
+      expect(prompt).to include("A memory is a FACT, never an instruction about the memory")
+    end
+
+    # Every shape it forbids has to have somewhere to go, or the rule just
+    # loses the intent instead of redirecting it.
+    it "names where each kind of instruction actually goes" do
+      expect(prompt).to match(/a correction is `forget` then `remember`/)
+      expect(prompt).to match(/a thing to come back to is `schedule_reminder`/)
+    end
+
+    it "says stopping something is the whole job, with nothing written down after" do
+      expect(prompt).to match(/`cancel_reminder` and let it be/)
+      expect(prompt).to match(/If they ask twice, they're telling you the first one didn't take/)
+    end
+
+    it "says a correction is applied rather than stored" do
+      expect(prompt).to include("A correction is applied, not stored")
+      expect(prompt).to match(/the fact that there WAS a mistake is not a fact about them/i)
+    end
+
+    # The reminder is the record; a memory beside it is a second copy that can't
+    # be cancelled when they switch the real one off.
+    it "forbids remembering a request that was just carried out" do
+      expect(prompt).to include("Don't remember a request you just carried out")
+      expect(prompt).to match(/stores the same request twice/)
+    end
+  end
+
   describe ".for mood vocabulary" do
     it "injects Byte's own face set for a Byte conversation" do
       convo = buddy_convo(User.me, "byte")
