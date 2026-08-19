@@ -97,6 +97,75 @@ RSpec.describe CleanVisitorsWorker, type: :worker do
     end
   end
 
+  describe "draining a backlog" do
+    it "comes back for the rest when it hits the delete cap" do
+      stub_const("#{described_class}::MAX_GUEST_DELETES", 2)
+      3.times { make_guest }
+
+      expect(described_class).to receive(:perform_in).with(described_class::RESUME_DELAY, nil)
+
+      described_class.new.perform
+    end
+
+    it "carries a shortened retention into the follow-up run" do
+      stub_const("#{described_class}::MAX_GUEST_DELETES", 2)
+      3.times { make_guest(created_at: 3.days.ago) }
+
+      expect(described_class).to receive(:perform_in).with(described_class::RESUME_DELAY, 1)
+
+      described_class.new.perform(1)
+    end
+
+    it "does not reschedule once it has drained everything" do
+      make_guest
+
+      expect(described_class).not_to receive(:perform_in)
+
+      described_class.new.perform
+    end
+  end
+
+  describe "vacuum" do
+    let(:connection) { ActiveRecord::Base.connection }
+
+    it "vacuums the tables it deleted from once the sweep is finished" do
+      make_guest
+      allow(connection).to receive(:transaction_open?).and_return(false)
+      allow(connection).to receive(:execute)
+
+      described_class.new.perform
+
+      expect(connection).to have_received(:execute).with(/VACUUM ANALYZE "users"/)
+      expect(connection).to have_received(:execute).with(/VACUUM ANALYZE "ip_visits"/)
+    end
+
+    it "skips the vacuum when there was nothing to delete" do
+      allow(connection).to receive(:transaction_open?).and_return(false)
+
+      expect(connection).not_to receive(:execute).with(/VACUUM/)
+
+      described_class.new.perform
+    end
+
+    it "skips the vacuum mid-drain, so resumed chunks don't each pay for it" do
+      stub_const("#{described_class}::MAX_GUEST_DELETES", 2)
+      3.times { make_guest }
+      allow(described_class).to receive(:perform_in)
+      allow(connection).to receive(:transaction_open?).and_return(false)
+
+      expect(connection).not_to receive(:execute).with(/VACUUM/)
+
+      described_class.new.perform
+    end
+
+    # VACUUM raises inside a transaction, and specs always run in one.
+    it "stays silent when it cannot vacuum" do
+      make_guest
+
+      expect { described_class.new.perform }.not_to raise_error
+    end
+  end
+
   describe "ownership coverage" do
     subject(:columns) { described_class.new.send(:child_columns) }
 

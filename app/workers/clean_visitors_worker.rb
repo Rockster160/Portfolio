@@ -14,9 +14,16 @@ class CleanVisitorsWorker
 
   GUEST_RETENTION = 1.week
   GUEST_BATCH_SIZE = 1_000
-  # Guard against a single nightly run doing unbounded work; leftovers are
-  # picked up tomorrow.
+  # Guard against a single run doing unbounded work. Hitting this is not the
+  # end of the sweep — see the resume in #perform.
   MAX_GUEST_DELETES = 100_000
+  # Long enough that a capped run isn't hammering the database back to back,
+  # short enough that a real backlog drains tonight rather than over weeks.
+  RESUME_DELAY = 1.minute
+
+  # Vacuumed after a sweep that actually deleted something. These are the only
+  # two tables this worker removes rows from.
+  VACUUM_TABLES = %i[users ip_visits].freeze
 
   # An IP is kept far longer than a guest account, because the count IS the
   # record — it's what tells a regular from a newcomer from a stranger, and
@@ -31,10 +38,43 @@ class CleanVisitorsWorker
   # shorter window than the nightly run uses. It applies to guests only; the IP
   # sweep is cheap enough that it has never needed draining.
   def perform(guest_retention_days=nil)
-    { guests: clean_guests(guest_retention_days), ip_visits: clean_ip_visits }
+    guests = clean_guests(guest_retention_days)
+    ip_visits = clean_ip_visits
+
+    if guests >= MAX_GUEST_DELETES
+      # The cap was reached, so there is more waiting. Come back for it now
+      # rather than leaving the remainder until tomorrow — a backlog that only
+      # drains 100k a night never catches up if it grows faster than that.
+      # Carries the retention window so a shortened drain stays shortened.
+      self.class.perform_in(RESUME_DELAY, guest_retention_days)
+    elsif (guests + ip_visits).positive?
+      vacuum!
+    end
+
+    { guests: guests, ip_visits: ip_visits }
   end
 
   private
+
+  # Deleting rows in bulk leaves the planner describing a table that no longer
+  # exists, and leaves the space unreclaimed until autovacuum gets to it. Doing
+  # it here puts that cost next to the deletes that caused it. Only on the
+  # final pass — vacuuming between resumed chunks would be wasted work.
+  #
+  # Plain VACUUM, deliberately NOT VACUUM FULL. Only FULL returns space to the
+  # OS, but it takes an ACCESS EXCLUSIVE lock and every request touches
+  # `users`, so it would block the whole site. FULL stays a manual operation
+  # run at a chosen moment.
+  def vacuum!
+    connection = ::ActiveRecord::Base.connection
+    # VACUUM cannot run inside a transaction block, and callers (specs among
+    # them) may well be in one.
+    return if connection.transaction_open?
+
+    VACUUM_TABLES.each { |table|
+      connection.execute("VACUUM ANALYZE #{connection.quote_table_name(table)}")
+    }
+  end
 
   # An IP that made one request three months ago is a stranger, and should read
   # as one if it ever comes back. Forgetting it is the point, not just
