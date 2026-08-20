@@ -166,5 +166,48 @@ RSpec.describe ByteController, type: :controller do
         expect(prompt.reload.response).to be_nil
       end
     end
+
+    # The single button on a work/break card. It rides the ordinary decision
+    # path, which is what makes a second tap a 409 rather than a second block.
+    describe "a work/break block" do
+      let(:buddy) { user.byte_conversations.create!(name: "Byte", mode: :buddy, last_message_at: Time.current) }
+
+      around { |example| Sidekiq::Testing.fake! { example.run } }
+
+      before do
+        allow(MonitorChannel).to receive(:broadcast_to)
+        allow(WebPushNotifications).to receive(:send_to_byte)
+        allow(WebPushNotifications).to receive(:update_count)
+      end
+
+      def card!
+        timer = Buddy::TimerCycle.start!(
+          user: user, conversation: buddy, seconds: 1800, label: "Cupboards", break_seconds: 600
+        )
+        Buddy::TimerCycle.on_fired(timer, buddy)
+        ByteAction.where(tool_name: Buddy::TimerCycle::TOOL_NAME).order(:id).last
+      end
+
+      it "starts the next block on the tap" do
+        action = card!
+
+        expect {
+          post :respond_action, params: { request_id: action.request_id, value: "resume" }
+        }.to change { user.timers.where(name: "Cupboards").count }.by(1)
+
+        expect(response).to be_successful
+      end
+
+      it "refuses the second tap rather than starting a second block" do
+        action = card!
+        post :respond_action, params: { request_id: action.request_id, value: "resume" }
+
+        expect {
+          post :respond_action, params: { request_id: action.request_id, value: "resume" }
+        }.not_to(change { user.timers.count })
+
+        expect(response).to have_http_status(:conflict)
+      end
+    end
   end
 end

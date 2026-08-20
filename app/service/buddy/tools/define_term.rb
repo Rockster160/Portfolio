@@ -16,6 +16,21 @@ Buddy::Tools.register(
     most usefully when the term is a record name that shouldn't be spoken back
     in prose. Defining a term that already exists updates it rather than making
     a second one.
+
+    **CALLING THIS IS THE THANK-YOU.** Somebody teaching you a word wants it
+    kept, and warm words about keeping it are not keeping it. "That one's going
+    in the little bird pile" over no call at all is the worst answer available:
+    it reads exactly like the real thing, so nobody finds out until they use the
+    word again and you don't know it. If you say a word has been tucked away,
+    this call is what made that true. Prod: Eve taught four Afrikaans phrases in
+    ninety seconds, was told twice they were being kept, and one of them was
+    never written anywhere.
+
+    CHECK THE GLOSSARY FIRST. It's already in your context. A word that's in
+    there is one they taught you before, and the honest answer is that you have
+    it - not a fresh thank-you for a fresh gift, which tells them their last
+    lesson went nowhere. Re-teaching with a changed meaning is a real update and
+    should still be called.
   TXT
   args:        {
     term:    { type: :string, required: true,  description: "The word or phrase, as they say it" },

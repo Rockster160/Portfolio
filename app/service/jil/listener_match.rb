@@ -52,6 +52,7 @@ class Jil
       tesla_trip_ended
       tesla_trip_started
       tesla_trip_updated
+      trytravel
       websocket
     ].freeze
 

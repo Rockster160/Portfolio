@@ -5,7 +5,7 @@
   links = [
     { title: "GPT Spending", path: system_gpt_spending_path, desc: "Buddy GPT API cost per day or hour", icon: :dollar },
     { title: "Banking", path: system_banking_path, desc: "SimpleFIN accounts, balances, transactions", icon: :bank },
-    { title: "Buddy Memories", path: system_memories_path, desc: "Everything the companions are holding, and their check-ins", icon: :brain },
+    { title: "Buddy Memories", path: system_memories_path, desc: "Everything the companions are holding, and their check-ins", svg: "buddy/byte/silhouette" },
     { title: "Custom Charts", path: custom_charts_path, desc: "Saved charts over logged events", icon: :"bar-chart" },
     { title: "Tasks", path: jil_tasks_path, desc: "Jil automation task list", icon: :code },
     { title: "Cache", path: jil_user_cache_index_path, desc: "User cache key/value store", icon: :archive },
@@ -25,7 +25,13 @@
   <div class="system-grid">
     <% links.each do |link| %>
       <a class="system-card" href="<%= link[:path] %>">
-        <div class="system-card-icon"><i class="fa fa-<%= link[:icon] %>"></i></div>
+        <div class="system-card-icon">
+          <% if link[:svg] %>
+            <%= svg(link[:svg], title: link[:title]) %>
+          <% else %>
+            <i class="fa fa-<%= link[:icon] %>"></i>
+          <% end %>
+        </div>
         <div class="system-card-body">
           <div class="system-card-title"><%= link[:title] %></div>
           <div class="system-card-desc"><%= link[:desc] %></div>
@@ -80,6 +86,13 @@
       width: 40px;
       text-align: center;
       flex-shrink: 0;
+    }
+
+    .system-card-icon svg {
+      width: 1.1em;
+      height: 1.1em;
+      vertical-align: -0.12em;
+      fill: currentColor;
     }
 
     .system-card-title {

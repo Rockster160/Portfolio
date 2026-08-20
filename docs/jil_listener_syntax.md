@@ -127,6 +127,7 @@ These fire per user, carrying that user's own data.
 | `agenda_sync` | a Google calendar sync completes | `action`, counts |
 | `tesla` | car state changes | varies |
 | `tesla_parked`, `tesla_charge`, `tesla_drive_start`, `tesla_drive_stop`, `tesla_shift`, `tesla_trip_started`, `tesla_trip_updated`, `tesla_trip_ended` | specific car events | varies |
+| `trytravel` | the phone starts or finishes a drive, off the car's Bluetooth | `action` (`departed`/`arrived`), `location`, `lat`, `lng`, `coord`, `from`, `source`, `timestamp`, plus `departed`/`arrived` set to the place name for `travel:arrive:home`-style matching |
 | `monitor` | a dashboard channel updates | `channel` |
 | `websocket` | a websocket message arrives | varies |
 | `jarvis_subscribed` | the Jarvis channel connects | - |

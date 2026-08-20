@@ -52,6 +52,7 @@ import { setupSlashAutocomplete } from "./slash_commands";
 import { autocompleteOpenFor } from "../../emoji_autocomplete";
 import { renderMultiSelect } from "./message_actions/multi_select";
 import { renderForm } from "./message_actions/form";
+import { renderCycleButton } from "./message_actions/cycle_button";
 import { initMessageContextMenu } from "./message_actions/context_menu";
 import {
   renderReactions,
@@ -651,6 +652,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       // after the className rebuild above, which would wipe it.
       node.classList.add("byte-msg-has-form");
       renderForm(formEl, message);
+    }
+
+    // One button, for the next block of a work/break cycle. Same mount pattern
+    // as the two above: a message carries exactly one action, so these never
+    // coexist.
+    if (message?.metadata?.tool_name === "buddy_timer_cycle") {
+      let cycleEl = node.querySelector("[data-buddy-cycle]");
+      if (!cycleEl) {
+        cycleEl = document.createElement("div");
+        cycleEl.setAttribute("data-buddy-cycle", "");
+        bodyEl.parentNode.insertBefore(cycleEl, bodyEl.nextSibling);
+      }
+      renderCycleButton(cycleEl, message);
     }
 
     // `[hicon Fae]` anywhere in the bubble — the body it just wrote AND the

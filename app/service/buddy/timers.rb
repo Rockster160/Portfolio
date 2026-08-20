@@ -264,6 +264,14 @@ module Buddy
       # "⏰ Alarm" under one reading "Byte sounded the alarm ⏰".
       return if alarm && Buddy::Alarms.quick?(timer)
 
+      # A block in a work/break cycle ends with a button rather than a full
+      # stop, because the next block starts when they come back rather than on
+      # a schedule of its own. See Buddy::TimerCycle.
+      if !alarm && Buddy::TimerCycle.cycle?(timer)
+        Buddy::TimerCycle.on_fired(timer, conversation)
+        return
+      end
+
       # A WAIT is Buddy holding the middle of a sequence the person asked for
       # ("start the printer, wait a minute, then preheat it"), not a countdown
       # they're watching. Say what's happening rather than that time is up — the

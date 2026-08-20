@@ -141,10 +141,26 @@ module Buddy
       # Tag an item hash with ownership. Owned items carry no marker (the
       # default is "mine"); a shared-in item is stamped mine:false + owner so
       # the briefing can hold it at arm's length.
+      #
+      # And a shared-in item loses its DEPARTURE TIME here, which is the half
+      # that has never held. `leave_by` is an instruction to walk out of the
+      # door, and on somebody else's calendar it is an instruction to go to
+      # their appointment — the clearest possible sign the item was read as
+      # theirs. Three rules have been written into the briefing prompt against
+      # exactly this, and the morning after the last of them it went out again
+      # (prod 3951, then 4040: "Chelsea's Inclusion Cheer board meeting at 4:00
+      # PM. It's a drive one too, so you'd want to leave around 3:28 PM").
+      #
+      # A fourth rule was not going to be the one that worked. A number the
+      # model is never shown is a number it cannot hand over.
+      #
+      # Only viewer shares. A JOINT calendar comes back mine: true from
+      # agenda_source_map's co-owner pass and keeps its leave_by, because a
+      # dinner they are both going to is one they both leave for.
       def tag_ownership(hash, source)
         return hash if source.nil? || source[:mine] != false
 
-        hash.merge(mine: false, owner: source[:owner])
+        hash.except(:leave_by, :drive_min).merge(mine: false, owner: source[:owner])
       end
 
       def today_agenda(user, now)

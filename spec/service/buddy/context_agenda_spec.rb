@@ -204,6 +204,70 @@ RSpec.describe Buddy::Context, ".build agenda" do
     expect(dinner).not_to have_key(:owner)
   end
 
+  # Prod 3951 and again 4040, the morning after the third prompt rule against
+  # it: "Chelsea's Inclusion Cheer board meeting at 4:00 PM. It's a drive one
+  # too, so you'd want to leave around 3:28 PM." A departure time is an
+  # instruction to walk out of the door, and on a viewer's copy of somebody
+  # else's calendar it is an instruction to go to their appointment.
+  #
+  # A fourth rule was not going to be the one that worked, so the number stops
+  # reaching the model at all.
+  describe "a departure time on somebody else's item" do
+    # What the travel chain leaves behind: the drive and the get-there-early
+    # buffer already subtracted, stored as an epoch.
+    def travelled!(agenda, name)
+      create(
+        :agenda_item,
+        agenda:   agenda,
+        name:     name,
+        start_at: Time.current + 3.hours,
+        metadata: { "travel" => { "travel_minutes" => 27, "leave_at" => (Time.current + 2.hours).to_i } },
+      )
+    end
+
+    def row(title)
+      described_class.build(user, conversation)[:today_agenda].find { |i| i[:title] == title }
+    end
+
+    it "keeps it on the person's own item" do
+      item(name: "Mine", start_at: Time.current + 3.hours)
+      travelled!(user.agendas.first || create(:agenda, user: user), "My Drive")
+
+      expect(row("My Drive")).to include(:leave_by, :drive_min)
+    end
+
+    it "strips it off a calendar shared in as a viewer" do
+      partner = create(:user)
+      hers = create(:agenda, user: partner)
+      AgendaShare.create!(agenda: hers, user: user, permission: :viewer)
+      travelled!(hers, "Her Board Meeting")
+
+      expect(row("Her Board Meeting")).not_to include(:leave_by)
+      expect(row("Her Board Meeting")).not_to include(:drive_min)
+    end
+
+    it "still tags who it belongs to" do
+      partner = create(:user)
+      hers = create(:agenda, user: partner)
+      AgendaShare.create!(agenda: hers, user: user, permission: :viewer)
+      travelled!(hers, "Her Board Meeting")
+
+      expect(row("Her Board Meeting")[:mine]).to be(false)
+      expect(row("Her Board Meeting")[:owner]).to eq(partner.first_name)
+    end
+
+    # A dinner they are both going to is one they both leave for, so a joint
+    # calendar keeps its departure time.
+    it "keeps it on a calendar they co-own" do
+      partner = create(:user)
+      ours = create(:agenda, user: partner, name: "Ours 💕 ")
+      AgendaShare.create!(agenda: ours, user: user, permission: :owner)
+      travelled!(ours, "Dinner Out")
+
+      expect(row("Dinner Out")).to include(:leave_by, :drive_min)
+    end
+  end
+
   # An editor can add to somebody's calendar without it being theirs. Only
   # :owner carries co-ownership, so this is the line the fix must not cross.
   it "still holds a calendar shared at :editor at arm's length" do

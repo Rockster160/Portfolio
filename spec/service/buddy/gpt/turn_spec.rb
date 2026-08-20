@@ -1605,13 +1605,19 @@ RSpec.describe Buddy::GPT::Turn do
       captured.filter_map { |p| p.dig(:data, :message, :metadata, "steps") }
     end
 
+    # `fake!` because the suite runs Sidekiq inline and a real five-minute
+    # countdown has TimerFireWorker reschedule itself forever. `minutes` used to
+    # be an undeclared arg that fell through to a one-second timer, which is why
+    # this passed before set_timer learned to read it.
     it "pushes a line for each tool call, in the order they happen" do
-      steps = broadcasts {
-        run([
-          { tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
-          { tool_calls: [{ name: :set_timer, arguments: { "minutes" => 5 } }] },
-          { text: "Timer's going." },
-        ])
+      steps = Sidekiq::Testing.fake! {
+        broadcasts {
+          run([
+            { tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_all"] } }] },
+            { tool_calls: [{ name: :set_timer, arguments: { "minutes" => 5 } }] },
+            { text: "Timer's going." },
+          ])
+        }
       }
 
       expect(steps.last).to eq(["Going through your chores", "Starting the timer"])

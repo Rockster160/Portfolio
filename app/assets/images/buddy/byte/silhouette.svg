@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="1em" height="1em" fill="currentColor">
+  <title>Byte</title>
+  <mask id="byte-silhouette-face">
+    <rect x="0" y="0" width="512" height="512" fill="#FFFFFF"/>
+    <g fill="none" stroke="#000000" stroke-width="15" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M256 150 L256 287"/>
+      <circle cx="256" cy="133" r="17"/>
+      <path d="M206 189 L206 205 L237 235 L237 258 L246 268"/>
+      <circle cx="206" cy="175" r="14"/>
+      <path d="M306 189 L306 205 L275 235 L275 258 L266 268"/>
+      <circle cx="306" cy="175" r="14"/>
+    </g>
+    <circle cx="185" cy="306" r="41" fill="#000000"/>
+    <circle cx="327" cy="306" r="41" fill="#000000"/>
+    <circle cx="175" cy="287" r="10" fill="#FFFFFF"/>
+    <circle cx="317" cy="287" r="10" fill="#FFFFFF"/>
+    <path d="M231 341 Q256 366 281 341" fill="none" stroke="#000000" stroke-width="16" stroke-linecap="round"/>
+  </mask>
+  <g mask="url(#byte-silhouette-face)">
+    <path d="M256 82 C200 82 160 98 137 130 C114 162 90 190 90 226 C89 250 85 274 83 298 C79 330 48 352 21 382 C14 392 16 408 26 418 C72 438 160 445 256 445 C352 445 440 438 486 418 C496 408 498 392 491 382 C464 352 433 330 429 298 C427 274 423 250 422 226 C422 190 398 162 375 130 C352 98 312 82 256 82 Z"/>
+  </g>
+  <circle cx="44" cy="292" r="16"/>
+  <circle cx="21" cy="328" r="9"/>
+  <circle cx="467" cy="252" r="21"/>
+  <circle cx="443" cy="286" r="8"/>
+  <circle cx="472" cy="322" r="25"/>
+</svg>

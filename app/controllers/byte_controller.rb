@@ -401,6 +401,12 @@ class ByteController < ApplicationController
       Buddy::ProposalExecutorJob.perform_later(action.id)
     end
 
+    # The one button on a work/break card. Started HERE rather than on a
+    # schedule, so the next block begins when they actually came back to it —
+    # and `apply_decision!` above is what makes a second tap impossible, since
+    # the action stops being pending.
+    Buddy::TimerCycle.resume!(action) if action.tool_name == Buddy::TimerCycle::TOOL_NAME
+
     # Fire-and-forget notification to the Mac so a blocked hook can
     # unblock. Silent on failure — the hook will time out and deny.
     #

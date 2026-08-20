@@ -132,29 +132,21 @@ class BuddyReminder < ApplicationRecord
   # case where it matters. Prod: reminder 37 was the daily noon plant check
   # and reminder 40 was set for the same noon, both fired, and 37's recurrence
   # was the only thing that hid it (msgs 3448/3449).
-  # A reminder about this same thing that they SWITCHED OFF.
+  # There used to be a `cancelled_like` here, and a receipt that said "(back on,
+  # you'd switched this off Aug 19)" whenever it matched. It's gone.
   #
-  # `clashing` only ever sees `pending` rows at the same minute, so a reminder
-  # somebody cancelled is invisible to everything — which is how the noon plant
-  # check came back on 18 Aug, eleven days after Eve asked twice for it to be
-  # gone.
+  # It matched on ONE shared significant word across sixty days, which is not a
+  # narrowing — `clashing` below uses the same one-word test but only after
+  # pinning to a single minute, which is what makes that one safe. So Eve asking
+  # for a 9pm nudge about a YouTube video on propagating snake plants was told
+  # she'd switched it off, on the strength of "plant" appearing in a noon plant
+  # check she cancelled the day before (prod 4115).
   #
-  # Deliberately not a veto. People change their minds, and refusing to set
-  # something they have just asked for is a worse failure than setting it. This
-  # exists so the companion can SAY so — "putting that back on, you'd switched
-  # it off on Sunday" — which is what a friend would do with the same
-  # information, and which gives them the opening to say they didn't mean it.
-  CANCELLED_MEMORY = 60.days
-
-  def self.cancelled_like(user, text, now: Time.current)
-    words = significant_words(text)
-    return nil if words.empty?
-
-    scope = where(user_id: user.id).where.not(cancelled_at: nil)
-    scope = scope.where(cancelled_at: (now - CANCELLED_MEMORY)..).order(cancelled_at: :desc)
-    scope.find { |r| significant_words(r.body).intersect?(words) }
-  end
-
+  # It isn't worth fixing the threshold, because there's nothing on the other
+  # side of it. A cancelled row is kept so an undo has something to restore, and
+  # that's the whole job. Telling somebody what they turned off a fortnight ago,
+  # while they are in the middle of asking for something else, is a fact about
+  # our bookkeeping wearing the clothes of a thing a friend would remember.
   def self.clashing(user, text, fire_at)
     words = significant_words(text)
     return nil if words.empty? || fire_at.blank?

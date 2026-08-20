@@ -41,12 +41,41 @@ Buddy::Tools.register(
     nothing named to follow it - is the ordinary countdown, and that one leaves
     the flag off.
 
+    ROUND AND ROUND: `repeat: true` is for a rhythm rather than one countdown -
+    "half an hour at a time", "30 on, 10 off until 6:30", "keep nudging me back
+    to it". Add `break_minutes` when they named a break, and `until_time` when
+    they named an hour to stop. When a block ends they get a button, the break
+    starts counting on its own, and the NEXT block starts when they tap - never
+    before. That is deliberate: a cycle that restarts on a schedule drifts away
+    from the person inside two rounds. One call sets the whole thing up, so
+    don't call this once per block, and don't promise a rhythm without
+    `repeat`.
+
     Never offer to do the delayed part later; it's the part they already asked
     for, and the wait already holds it for you.
   TXT
   args:        {
-    seconds:       { type: :integer, required: true,  description: "Countdown length in whole seconds" },
+    seconds:       { type: :integer, required: false, description: "Countdown length in whole seconds. Give this OR minutes, not both" },
+    minutes:       { type: :integer, required: false, description: "Countdown length in whole minutes, when that's how they said it (\"30 minutes\"). Give this OR seconds, not both" },
     label:         { type: :string,  required: false, description: "Short name for what the timer is for" },
+    repeat:        {
+      type:        :boolean,
+      required:    false,
+      description: "True when they want to go round again and again rather than once - \"every 30 " \
+                   "minutes\", \"another one after that\", a work/break rhythm. When it's up they " \
+                   "get a button to start the next block, and nothing restarts until they tap it",
+    },
+    break_minutes: {
+      type:        :integer,
+      required:    false,
+      description: "Minutes of BREAK between blocks, when they named one (\"30 on, 10 off\"). Needs " \
+                   "repeat. The break starts counting the moment the block ends",
+    },
+    until_time:    {
+      type:        :string,
+      required:    false,
+      description: "ISO8601 local time to stop offering another block (\"until 6:30\"). Needs repeat",
+    },
     then_continue: {
       type:        :boolean,
       required:    false,
@@ -60,20 +89,49 @@ Buddy::Tools.register(
   # Level 1 (auto): setting a timer is safe + reversible (swipe it away), so it
   # fires immediately with an activity receipt rather than a confirm checkbox.
   auto:        true,
-  confirm:     ->(_payload, _ctx) { { summary: "Set a timer", resolved: {} } },
-  label:       ->(payload, _ctx) { "Timer · #{Buddy::Timers.humanize_seconds(payload[:seconds])}" },
+  # Seconds OR minutes, and a length is the one thing this can't be called
+  # without. Raising here drops the proposal, which is better than a one-second
+  # countdown standing in for a thirty-minute one.
+  confirm:     ->(payload, _ctx) {
+    raise "a timer needs a length - give seconds or minutes" if Buddy::Tools::SetTimer.seconds(payload).zero?
+
+    { summary: "Set a timer", resolved: {} }
+  },
+  label:       ->(payload, _ctx) { "Timer · #{Buddy::Timers.humanize_seconds(Buddy::Tools::SetTimer.seconds(payload))}" },
   execute:     ->(payload, ctx) {
-    timer = Buddy::Timers.create!(
-      user:         ctx.user,
-      seconds:      payload[:seconds],
-      label:        payload[:label],
-      conversation: ctx.conversation,
+    seconds = Buddy::Tools::SetTimer.seconds(payload)
+    cycle   = ActiveModel::Type::Boolean.new.cast(payload[:repeat]).present?
+    rest    = payload[:break_minutes].to_i * 60
+    ends    = Buddy::Tools::SetTimer.until_at(payload, ctx)
+
+    timer = (
+      if cycle
+        Buddy::TimerCycle.start!(
+          user:          ctx.user,
+          conversation:  ctx.conversation,
+          seconds:       seconds,
+          label:         payload[:label],
+          break_seconds: rest.positive? ? rest : nil,
+          until_at:      ends,
+        )
+      else
+        Buddy::Timers.create!(
+          user:         ctx.user,
+          seconds:      seconds,
+          label:        payload[:label],
+          conversation: ctx.conversation,
+        )
+      end
     )
+
     {
       timer_id: timer.id,
-      seconds:  payload[:seconds].to_i,
+      seconds:  seconds,
       label:    payload[:label].to_s,
       waiting:  payload[Buddy::Tools::WAIT_ARG].present?,
+      cycle:    cycle,
+      breaking: rest.positive? && cycle ? rest : nil,
+      until_at: (ends&.strftime("%-l:%M %p")&.strip if cycle),
     }
   },
   receipt:     ->(result, ctx) {
@@ -83,6 +141,42 @@ Buddy::Tools.register(
     # the sequence, so the chip says that rather than announcing a timer.
     next "#{ctx.buddy_name} is waiting #{dur} before the next step ⏲" if result[:waiting]
 
+    if result[:cycle]
+      on   = label.present? ? " on #{label}" : ""
+      rest = (" then #{Buddy::Timers.humanize_seconds(result[:breaking])} off" if result[:breaking])
+      till = (" until #{result[:until_at]}" if result[:until_at].present?)
+      next "#{ctx.buddy_name} started #{dur}#{on}#{rest}#{till} ⏲"
+    end
+
     "#{ctx.buddy_name} set a #{dur} timer#{" for #{label}" if label.present?} ⏲"
   },
 )
+
+module Buddy
+  module Tools
+    # Shared by three of the procs above, which each see only the raw payload.
+    module SetTimer
+      module_function
+
+      # One length, whichever way they said it. Seconds wins if both arrive,
+      # because it's the more specific of the two.
+      def seconds(payload)
+        return payload[:seconds].to_i if payload[:seconds].present?
+
+        payload[:minutes].to_i * 60
+      end
+
+      # "until 6:30" as a real moment in their zone. Nil - rather than a
+      # guessed hour - when it can't be read, so a cycle with an unparseable
+      # end just runs until they stop tapping.
+      def until_at(payload, ctx)
+        raw = payload[:until_time].presence
+        return nil if raw.nil?
+
+        ctx.resolve_time(raw.to_s)
+      rescue StandardError
+        nil
+      end
+    end
+  end
+end

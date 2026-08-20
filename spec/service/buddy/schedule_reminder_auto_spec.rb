@@ -55,33 +55,17 @@ RSpec.describe "schedule_reminder auto-run" do
         .to change { BuddyReminder.where(user: user, cancelled_at: nil).count }.by(1)
     end
 
-    it "says on the chip that it is going back on, and when it came off" do
+    # A cancelled row is kept so an undo has something to restore. Raising it
+    # while somebody is asking for something else turns our bookkeeping into a
+    # claim about their memory — and it matched on one shared word across sixty
+    # days, so it was usually about a different reminder entirely (prod 4115).
+    it "says nothing about what they cancelled before" do
       at = 2.hours.from_now.in_time_zone(user.timezone).iso8601
 
       set!("Water the plants and check the bamboo", at: at)
 
       chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
-      expect(chip.body).to match(/back on, you'd switched this off Aug 17/)
-    end
-
-    it "stays quiet about an unrelated reminder" do
-      at = 2.hours.from_now.in_time_zone(user.timezone).iso8601
-
-      set!("Take the bins out", at: at)
-
-      chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
-      expect(chip.body).not_to match(/back on/)
-    end
-
-    # Long enough that a reminder from last spring doesn't get dragged up.
-    it "forgets a cancellation older than the window" do
-      cancelled.update!(cancelled_at: (BuddyReminder::CANCELLED_MEMORY + 1.day).ago)
-      at = 2.hours.from_now.in_time_zone(user.timezone).iso8601
-
-      set!("Water the plants and check the bamboo", at: at)
-
-      chip = convo.byte_messages.where("metadata->>'kind' = 'buddy_activity'").last
-      expect(chip.body).not_to match(/back on/)
+      expect(chip.body).not_to match(/back on|switched this off/)
     end
   end
 
