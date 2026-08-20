@@ -178,7 +178,7 @@ The **Next run** column on the task row shows the resolved time and how far off 
 ## The weather cache
 
 The **Weather Refresh** task is the one fetch everything else reads. Hourly, or
-on demand via the `weather_refresh` trigger, it stores the whole OpenWeather
+on demand via the `weather-refresh` trigger, it stores the whole OpenWeather
 payload in the `weather` cache and writes the `sun:sunrise` / `sun:sunset`
 occurrences from that same response:
 
