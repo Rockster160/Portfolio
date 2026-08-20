@@ -23,11 +23,18 @@ Buddy::Tools.register(
 
     - A chain - "start the printer, wait a minute, then preheat it". The first
       step, then the timer, then the rest.
-    - A single thing put off - **"play the nap sound in 2 minutes", "turn the
-      fan on in a bit", "remind the room to go dark in 10"**. There's no step
-      before the wait, and that does NOT make it an ordinary countdown: the
-      timer comes first, then the one action. Calling the action on its own
-      does it immediately, which is the opposite of what they asked for.
+    - A single thing put off - **"add the milk to my list in 2 minutes", "take
+      that off the board in a bit"**. There's no step before the wait, and that
+      does NOT make it an ordinary countdown: the timer comes first, then the
+      one action. Calling the action on its own does it immediately, which is
+      the opposite of what they asked for.
+
+    A wait holds a step that hasn't happened yet. Some tools say in their own
+    description that a wait CANNOT hold them - they act the instant they are
+    called, before the wait is even set - and a delay on one of those goes on a
+    real schedule instead: schedule_function, schedule_trigger,
+    schedule_reminder or alarm. Sounds, devices and Jil functions are the ones
+    to look twice at.
 
     The test is whether they named something to happen AFTER a delay. If they
     did, the timer carries `then_continue: true`. A bare "set a timer for 10" -

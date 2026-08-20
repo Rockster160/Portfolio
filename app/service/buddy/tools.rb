@@ -68,6 +68,23 @@ module Buddy
                      "for a delay, or a schedule_* tool when they named a clock time. Never do it " \
                      "now as a consolation, and never say it's scheduled when it isn't.".freeze
 
+    # The variant for a tool that settles INSIDE the turn (`answers`). The note
+    # above offers a wait, and for these there is no such thing: they run in
+    # `resolve_call`, which is before any proposal queue exists for a wait to
+    # hold them in. So a `set_timer` in the same reply is set AFTER the sound
+    # has already played, and it holds an empty queue.
+    #
+    # Prod 4081, "Play the whisper wake sound in 2 minutes": Whisper Sound at
+    # 21:04:35, the two-minute wait at 21:04:36, timer 78 with `{}` for a queue.
+    # The model was doing what both descriptions told it to.
+    UNWAITABLE_NOTE = "This happens the MOMENT you call it, and a wait CANNOT hold it - it will " \
+                      "already have run by the time the wait is set. A time in the request says " \
+                      "WHEN to act and is never part of what to do. For anything later it goes on " \
+                      "a real schedule instead: schedule_function is this exact call with a time " \
+                      "on it, schedule_trigger for a Jil listener scope, schedule_reminder or " \
+                      "alarm when it has to reach them. Never do it now as a consolation, and " \
+                      "never say it's scheduled when it isn't.".freeze
+
     # Buddy USED to carry its spoken words on the tool call, to save the second
     # round trip. That's gone: the model now stays quiet on the call, we resolve
     # the tool, and it speaks on the follow-up with the outcome in hand. Writing
@@ -377,7 +394,7 @@ module Buddy
       text = tool[:description].strip.gsub(/\s+/, " ")
       return text unless IMMEDIATE_ACTION_TOOLS.include?(tool[:name])
 
-      "#{text} #{IMMEDIATE_NOTE}"
+      "#{text} #{answers?(tool) ? UNWAITABLE_NOTE : IMMEDIATE_NOTE}"
     end
 
     # Inverse of the passthrough schema: fold the nested `args` object back

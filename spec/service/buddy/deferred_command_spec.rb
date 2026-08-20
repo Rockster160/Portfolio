@@ -65,6 +65,16 @@ RSpec.describe "Buddy commands that named a time" do
     }
   end
 
+  # The wait the model reaches for when it has read "in 2 minutes" and decided
+  # the delay is something it can hold the rest of the reply in.
+  def wait_call(id: "t1")
+    {
+      name:      :set_timer,
+      call_id:   id,
+      arguments: { "seconds" => 120, "label" => "Whisper wake sound", "then_continue" => true },
+    }
+  end
+
   def ran?(client)
     outputs(client).none? { |o| o["error"].to_s.include?("they said when") }
   end
@@ -216,6 +226,154 @@ RSpec.describe "Buddy commands that named a time" do
       )
 
       expect(ran?(client)).to be(true)
+    end
+
+    # Prod 4081, "Play the whisper wake sound in 2 minutes".
+    #
+    # The model emitted the function AND a two-minute `then_continue` wait in
+    # one round. The round-level read saw the wait, took the time as understood
+    # and stood the gate down — so Whisper Sound fired at 21:04:35 and the wait
+    # it was supposedly riding was created a second later, holding an empty
+    # queue (timer 78, metadata `{}`). The sound played in the room two minutes
+    # early, which is the entire thing this gate exists to stop.
+    #
+    # A wait can hold a step that goes through ProposalBuilder. It cannot hold
+    # one that has already run by the time a proposal queue exists, and
+    # `call_jil_function` is `answers: true` — it settles inside resolve_call.
+    describe "a wait is not a schedule" do
+      it "holds the function back when the wait rides along with it" do
+        client = run(
+          [
+            { tool_calls: [play_call, wait_call] },
+            { text: "That'll play in two minutes." },
+          ],
+          text: "Play the whisper wake sound in 2 minutes",
+        )
+
+        expect(ran?(client)).to be(false)
+      end
+
+      # Which one the model emits first is arbitrary, and running early is just
+      # as wrong when the wait was named first.
+      it "holds it back with the wait in front" do
+        client = run(
+          [
+            { tool_calls: [wait_call, play_call] },
+            { text: "Two minutes." },
+          ],
+          text: "Play the whisper wake sound in 2 minutes",
+        )
+
+        expect(ran?(client)).to be(false)
+      end
+
+      it "holds it back when the wait came a round earlier" do
+        client = run(
+          [
+            { tool_calls: [wait_call] },
+            { tool_calls: [play_call] },
+            { text: "Two minutes." },
+          ],
+          text: "Play the whisper wake sound in 2 minutes",
+        )
+
+        expect(ran?(client)).to be(false)
+      end
+
+      # A bare countdown never counted, and it still doesn't.
+      it "holds it back behind a plain countdown too" do
+        client = run(
+          [
+            { tool_calls: [play_call, wait_call(id: "t2").merge(arguments: { "seconds" => 120 })] },
+            { text: "Two minutes." },
+          ],
+          text: "Play the whisper wake sound in 2 minutes",
+        )
+
+        expect(ran?(client)).to be(false)
+      end
+
+      # The other half. A wait DOES defer a write: that reaches
+      # ProposalBuilder, `hoist_dangling_wait` rotates the wait to the front and
+      # the write queues behind it. Holding those back would undo the fix for
+      # prod 3897.
+      it "still lets a wait cover something that can actually be queued" do
+        client = run(
+          [
+            { tool_calls: [
+              { name: :add_list_item, call_id: "a1", arguments: { "list" => "Groceries", "item" => "milk" } },
+              wait_call,
+            ] },
+            { text: "Two minutes." },
+          ],
+          text: "Add milk to my list in 2 minutes",
+        )
+
+        expect(ran?(client)).to be(true)
+      end
+
+      # A real scheduler takes the payload and the time together, so there's
+      # nothing left for this turn to do early. That one covers everything.
+      it "still lets a real schedule cover the function" do
+        client = run(
+          [
+            { tool_calls: [
+              { name: :schedule_trigger, call_id: "s1", arguments: { "scope" => "whisper-wake", "at" => 2.minutes.from_now.iso8601 } },
+              play_call,
+            ] },
+            { text: "Set." },
+          ],
+          text: "Play the whisper wake sound in 2 minutes",
+        )
+
+        expect(ran?(client)).to be(true)
+      end
+    end
+
+    describe "what counts as putting it on the clock" do
+      it "does not count a wait" do
+        expect(Buddy::GPT::Turn.puts_on_clock?(:set_timer, { "then_continue" => true })).to be(false)
+        expect(Buddy::GPT::Turn.puts_on_clock?(:set_timer, { "seconds" => 120 })).to be(false)
+      end
+
+      it "counts a scheduler that carries the thing itself" do
+        %i[schedule_reminder schedule_trigger schedule_function alarm remind_when].each do |name|
+          expect(Buddy::GPT::Turn.puts_on_clock?(name, {})).to be(true), "expected #{name} to count"
+        end
+      end
+
+      it "reads a wait as a wait, and only when it carries the rest" do
+        expect(Buddy::GPT::Turn.queues_rest?(:set_timer, { "then_continue" => true })).to be(true)
+        expect(Buddy::GPT::Turn.queues_rest?(:set_timer, { "seconds" => 120 })).to be(false)
+        expect(Buddy::GPT::Turn.queues_rest?(:schedule_reminder, {})).to be(false)
+      end
+    end
+
+    # Both descriptions were telling the model to do the thing that broke. The
+    # tool that acts on the spot said "set_timer with then_continue: true for a
+    # delay"; set_timer said the same in reverse, with "play the nap sound in 2
+    # minutes" as its worked example.
+    describe "what the schema tells it" do
+      it "stops offering a wait to a tool a wait can't hold" do
+        %i[call_jil_function print_again].each do |name|
+          schema = Buddy::Tools.function_schema(Buddy::Tools[name])
+          expect(schema[:description]).to include("a wait CANNOT hold it")
+          expect(schema[:description]).not_to include("set_timer with then_continue")
+        end
+      end
+
+      it "still offers one to a tool that can be queued behind it" do
+        schema = Buddy::Tools.function_schema(Buddy::Tools[:add_list_item])
+
+        expect(schema[:description]).to include("set_timer with then_continue")
+      end
+
+      it "no longer teaches the wait with the sound that started this" do
+        schema = Buddy::Tools.function_schema(Buddy::Tools[:set_timer])
+
+        expect(schema[:description]).not_to include("play the nap sound in 2 minutes")
+        expect(schema[:description]).to include("a wait CANNOT hold them")
+      end
     end
 
     # Tools that carry their own sense of when are exactly the ones where "at 3"

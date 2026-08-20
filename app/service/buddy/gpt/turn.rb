@@ -437,6 +437,9 @@ module Buddy
         @asked_routine = false
         # Whether anything got put on the clock this turn. See tool_output.
         @scheduled     = false
+        # ...and separately, whether a wait was opened for the rest to queue
+        # behind. Not the same thing, and see scheduled_for? for why.
+        @queued        = false
         nudged         = false
 
         loop do
@@ -497,7 +500,8 @@ module Buddy
           # the two calls the model emits first is arbitrary — read one at a
           # time, the reminder only covered the milk when it happened to come
           # first. Reading the whole round covers it either way.
-          @scheduled ||= calls.any? { |c| self.class.defers?(c[:name], c[:arguments]) }
+          @scheduled ||= calls.any? { |c| self.class.puts_on_clock?(c[:name], c[:arguments]) }
+          @queued    ||= calls.any? { |c| self.class.queues_rest?(c[:name], c[:arguments]) }
 
           @prior = @seen.dup
           items  = calls.flat_map { |call| call_items(call) }
@@ -672,7 +676,7 @@ module Buddy
         # method — the proposal path too — so one check covers both, and a call
         # marked failed is excluded from `proposals` by the same line that drops
         # one which couldn't resolve.
-        if deferred_command? && Buddy::Tools::IMMEDIATE_ACTION_TOOLS.include?(name) && !@scheduled
+        if deferred_command? && Buddy::Tools::IMMEDIATE_ACTION_TOOLS.include?(name) && !scheduled_for?(tool)
           Rails.logger.warn(
             "[Buddy::GPT::Turn] held back #{name} on message=#{@inbound.id} " \
             "user=#{@user.id}: the request named a time",
@@ -698,7 +702,10 @@ module Buddy
         # the mistake this guards against. The round-level read above catches
         # the same thing a call earlier; this one adds the half that can only be
         # known afterwards, that the scheduling call really resolved.
-        @scheduled = true if result[:status].to_s != "failed" && self.class.defers?(name, call[:arguments])
+        if result[:status].to_s != "failed"
+          @scheduled ||= self.class.puts_on_clock?(name, call[:arguments])
+          @queued    ||= self.class.queues_rest?(name, call[:arguments])
+        end
         # An acting answering tool already did the thing, right here, and will
         # never be seen by ProposalBuilder. Recording it is what stops the
         # retraction from treating a true "Fan's on low now." as unbacked.
@@ -1697,7 +1704,50 @@ module Buddy
 
         args = arguments || {}
         wait = args[Buddy::Tools::WAIT_ARG.to_s].presence || args[Buddy::Tools::WAIT_ARG]
-        ActiveModel::Type::Boolean.new.cast(wait)
+        # `cast` answers nil for a missing flag, and a predicate that answers
+        # nil reads fine in an `if` and wrongly in everything else.
+        ActiveModel::Type::Boolean.new.cast(wait).present?
+      end
+
+      # Did this call put the THING ITSELF on the clock?
+      #
+      # Every scheduler but one takes the payload and the time together, so
+      # after it there is nothing left for this turn to do early. `set_timer` is
+      # the exception and always has been: it carries no payload of its own, and
+      # `then_continue` only says the rest of the sequence rides on the wait —
+      # what the rest IS lives in the calls around it.
+      def self.puts_on_clock?(name, arguments)
+        name.to_sym != :set_timer && defers?(name, arguments)
+      end
+
+      # ...and did it open a wait for the rest to queue behind?
+      def self.queues_rest?(name, arguments)
+        name.to_sym == :set_timer && defers?(name, arguments)
+      end
+
+      # Is this tool covered by what's already been scheduled this turn?
+      #
+      # A real scheduler covers everything. A WAIT covers only what can actually
+      # be queued behind it, and that is the distinction prod 4081 turns on.
+      #
+      # "Play the whisper wake sound in 2 minutes" came back as
+      # `call_jil_function` plus `set_timer(then_continue: true)` in one round.
+      # The round-level read saw the wait, took the time as understood, and
+      # stood the gate down — so Whisper Sound fired at 21:04:35 and the wait it
+      # was supposedly riding was created at 21:04:36, with an empty queue
+      # behind it. The sound played in the room two minutes early, which is the
+      # whole failure this gate exists for.
+      #
+      # A wait genuinely does defer an `add_list_item`: that reaches
+      # ProposalBuilder, `hoist_dangling_wait` rotates the wait to the front and
+      # the write queues behind it. A tool marked `answers` never gets there —
+      # it runs inside `resolve_call`, before any proposal exists — so for those
+      # a wait defers nothing at all and must not vouch for one.
+      def scheduled_for?(tool)
+        return true if @scheduled
+        return false if Buddy::Tools.answers?(tool)
+
+        @queued
       end
 
       # Told the way every other refusal is told, because it IS one: the call did
