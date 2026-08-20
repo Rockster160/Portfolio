@@ -68,6 +68,32 @@ RSpec.describe "Buddy alarm fast path" do
       expect(Buddy::Alarms.alarm?(alarms.first)).to be(true)
     end
 
+    # It's flagged `quick` so the countdown underneath knows it has nothing left
+    # to announce when it reaches zero.
+    it "is marked as a ring that has already announced itself" do
+      say!("alarm")
+
+      expect(Buddy::Alarms.quick?(alarms.first)).to be(true)
+    end
+
+    # The chip is the only line this produces, so it's the one that has to reach
+    # somebody who isn't looking at the app.
+    it "pushes" do
+      say!("alarm")
+
+      expect(WebPushNotifications).to have_received(:send_to_byte).with(hash_including(title: "⏰ Alarm"))
+    end
+
+    # Prod 4062 ("Byte sounded the alarm ⏰") and 4063 ("⏰ Alarm") were the same
+    # event twice, 5.6 seconds apart.
+    it "says it once, not once now and once when the countdown lands" do
+      say!("alarm")
+      Buddy::Timers.on_fired(alarms.first.tap { |t| t.update!(fired_at: Time.current) })
+
+      expect(chips.length).to eq(1)
+      expect(convo.byte_messages.where(direction: :inbound).map(&:body)).to eq([chips.first.body])
+    end
+
     it "takes the punctuation people actually type" do
       ["alarm", "ALARM", "Alarm!", "alarm.", " alarm ", "alarm!!"].each do |text|
         expect(Buddy::Alarms.bare_request?(text)).to be(true), "expected #{text.inspect} to ring"
@@ -97,6 +123,45 @@ RSpec.describe "Buddy alarm fast path" do
 
       expect(alarms).to be_empty
       expect(BuddyDeliverWorker).to have_received(:perform_async)
+    end
+  end
+
+  # Setting one off from somewhere else — the Mac CLI, a cron, a Jil bash step —
+  # without the word that did it turning up in the thread as though they'd said
+  # it. `hidden` is the same flag the quick-action chips and the daily audit
+  # already ride on: the row still exists (the ring hangs off it), it just isn't
+  # anything anyone reads.
+  describe "triggering one without a visible message" do
+    def say_hidden!(body)
+      ByteMessageIntake.call(user: user, conversation: convo, body: body, metadata: { hidden: true })
+    end
+
+    it "still rings" do
+      say_hidden!("alarm")
+
+      expect(alarms.length).to eq(1)
+    end
+
+    it "keeps the flag on their message, which the client drops on sight" do
+      expect(say_hidden!("alarm").metadata["hidden"]).to be(true)
+    end
+
+    # Not the alarm word specifically — anything the thread accepts can come in
+    # this way. `fake!` because the suite runs Sidekiq inline and a five-minute
+    # countdown would have TimerFireWorker reschedule itself forever.
+    it "works the same for a timer" do
+      Sidekiq::Testing.fake! { say_hidden!("5m pasta") }
+
+      expect(Timer.where(user_id: user.id).count).to eq(1)
+      expect(convo.byte_messages.where(direction: :outbound).last.metadata["hidden"]).to be(true)
+    end
+
+    # What Buddy SAYS is not hidden — only the words that asked for it. The
+    # chip is the whole point of the thing still being visible.
+    it "leaves the chip it produced alone" do
+      say_hidden!("alarm")
+
+      expect(chips.last.metadata["hidden"]).to be_nil
     end
   end
 

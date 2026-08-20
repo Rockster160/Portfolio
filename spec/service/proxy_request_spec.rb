@@ -12,7 +12,7 @@ RSpec.describe ProxyRequest do
       http_test: %({"success":true}),
     )
     allow(LocalIpManager).to receive(:last_seen_at).and_return(2.minutes.ago)
-    allow(ProxyRequest).to receive(:relay_last_seen_at).and_return(2.minutes.ago)
+    allow(ProxyRequest).to receive_messages(relay_last_seen_at: 2.minutes.ago, relay_lan: nil)
   end
 
   describe "#probe" do
@@ -94,6 +94,17 @@ RSpec.describe ProxyRequest do
       expect(result[:layers].find { |l| l[:key] == :house }[:detail]).to match(/3h ago — stale/)
     end
 
+    # The two signals arrive at different rates (local_ping every 5 min, the
+    # relay every 2), so one shared tolerance can only be wrong for one of them.
+    it "calls the relay stale well before the house, matching their cadences" do
+      allow(ProxyRequest).to receive(:relay_last_seen_at).and_return(10.minutes.ago)
+      allow(LocalIpManager).to receive(:last_seen_at).and_return(10.minutes.ago)
+
+      layers = diag.probe[:layers]
+      expect(layers.find { |l| l[:key] == :relay }[:ok]).to be(false)
+      expect(layers.find { |l| l[:key] == :house }[:ok]).to be(true)
+    end
+
     it "says so when no check-in was ever recorded" do
       allow(ProxyRequest).to receive(:relay_last_seen_at).and_return(nil)
       detail = diag.probe[:layers].find { |l| l[:key] == :relay }[:detail]
@@ -123,8 +134,48 @@ RSpec.describe ProxyRequest do
         expect(remediation).to match(/proxy Mac is up, so this is not your outage/)
       end
 
-      it "stays on the router while both check-ins are current" do
+      it "stays on the router while both check-ins are current and no address is known" do
         expect(diag.probe[:remediation].join("\n")).not_to match(/checked in|checking in/)
+      end
+
+      # The case this whole layer exists for: the relay never faltered, but the
+      # interface holding the forwarded address dropped. Both check-ins look
+      # perfect, so the pairwise logic stays silent and would leave you reading
+      # it as a router fault.
+      context "when the relay is still checking in from a known address" do
+        before { allow(ProxyRequest).to receive(:relay_lan).and_return({ ip: "192.168.0.160", interface: "en7" }.with_indifferent_access) }
+
+        it "names the address the forward has to target" do
+          remediation = diag.probe[:remediation].join("\n")
+          expect(remediation).to match(/still checking in from 192\.168\.0\.160 \(en7\)/)
+          expect(remediation).to match(/FORWARDED ADDRESS is the fault line/)
+          expect(remediation).to match(/must forward to 192\.168\.0\.160/)
+        end
+
+        it "surfaces the address on the relay layer line too" do
+          detail = diag.probe[:layers].find { |l| l[:key] == :relay }[:detail]
+          expect(detail).to match(/from 192\.168\.0\.160 \(en7\)/)
+        end
+
+        it "stays quiet about it when the relay itself has gone stale" do
+          allow(ProxyRequest).to receive(:relay_last_seen_at).and_return(3.hours.ago)
+          expect(diag.probe[:remediation].join("\n")).not_to match(/FORWARDED ADDRESS/)
+        end
+      end
+
+      # A hung USB NIC holds its link LED and keeps the switch port happy, so
+      # every cable-level check passes while the host sees nothing. Nothing but
+      # removing power clears it, and that is not guessable from the symptom.
+      it "tells you to power-cycle the USB adapter, not re-seat the cable" do
+        remediation = diag.probe[:remediation].join("\n")
+        expect(remediation).to match(/POWER-CYCLE IT/)
+        expect(remediation).to match(/Unplug the adapter\/dock from the Mac for ~30s/)
+        expect(remediation).to match(/Re-seating the ETHERNET cable does nothing/)
+      end
+
+      it "gives the same USB advice on a silent timeout" do
+        allow(diag).to receive(:tcp_error).and_return(Errno::ETIMEDOUT.new("timed out"))
+        expect(diag.probe[:remediation].join("\n")).to match(/POWER-CYCLE IT/)
       end
     end
 
@@ -164,7 +215,8 @@ RSpec.describe ProxyRequest do
       # The outer stubs exist for the probe examples; these read the real store.
       allow(DataStorage).to receive(:[]).and_call_original
       allow(ProxyRequest).to receive(:relay_last_seen_at).and_call_original
-      DataStorage.where(name: ProxyRequest::RELAY_SEEN_AT_KEY).delete_all
+      allow(ProxyRequest).to receive(:relay_lan).and_call_original
+      DataStorage.where(name: [ProxyRequest::RELAY_SEEN_AT_KEY, ProxyRequest::RELAY_LAN_KEY]).delete_all
     end
 
     it "is nil until the relay has ever checked in" do
@@ -174,6 +226,20 @@ RSpec.describe ProxyRequest do
     it "round-trips the stamp through DataStorage as a real time" do
       ProxyRequest.record_relay_heartbeat!
       expect(ProxyRequest.relay_last_seen_at).to be_within(5.seconds).of(Time.current)
+    end
+
+    it "stores the reported LAN address alongside the stamp" do
+      ProxyRequest.record_relay_heartbeat!(lan_ip: "192.168.0.160", interface: "en7")
+      expect(ProxyRequest.relay_lan[:ip]).to eq("192.168.0.160")
+      expect(ProxyRequest.relay_lan[:interface]).to eq("en7")
+    end
+
+    # An older relay posts no address at all. Blanking the last known one would
+    # trade a slightly stale fact for no fact, and the stamp still has to land.
+    it "keeps the last known address when a check-in omits it" do
+      ProxyRequest.record_relay_heartbeat!(lan_ip: "192.168.0.160", interface: "en7")
+      ProxyRequest.record_relay_heartbeat!
+      expect(ProxyRequest.relay_lan[:ip]).to eq("192.168.0.160")
     end
   end
 end

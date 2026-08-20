@@ -433,7 +433,16 @@ RSpec.describe Buddy::WatchMatcher do
     it "still reads cleanly when the trigger carries nothing to name" do
       described_class.dispatch(user, :item, { "action" => "added" })
 
-      expect(lines.last).to eq("🔔 Claude list got a new item in Ocs-Backend")
+      expect(lines.last).to eq("🔔 Claude list got a new item in Ocs-Backend.")
+    end
+
+    # The append is there to name what changed. A trigger whose name never
+    # varies - every Whisper event is named "Whisper" - has already been named
+    # by any sentence worth sending, and repeating it reads as a stray quote.
+    it "doesn't repeat a detail the sentence already said" do
+      described_class.dispatch(user, :item, { "action" => "added", "name" => "Ocs-Backend" })
+
+      expect(lines.last).to eq("🔔 Claude list got a new item in Ocs-Backend.")
     end
 
     # Appending the detail is only what happens to a plain sentence. A body

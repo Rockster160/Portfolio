@@ -26,12 +26,23 @@ module Buddy
 
     FLAG = "alarm".freeze
 
+    # A ring asked for RIGHT NOW, which has already announced itself in the
+    # thread before the countdown underneath it reaches zero. Buddy::Timers
+    # reads this to know there is nothing left to say when it fires.
+    QUICK = "quick".freeze
+
     # Is this fired timer an alarm? Read straight off the row, so a clock alarm
     # and a condition alarm answer the same way with nothing to look up.
     def alarm?(timer)
       return false if timer.nil?
 
       timer.metadata.to_h[FLAG].present?
+    end
+
+    def quick?(timer)
+      return false if timer.nil?
+
+      timer.metadata.to_h[QUICK].present?
     end
 
     # ---- setting one ---------------------------------------------------------
@@ -61,8 +72,8 @@ module Buddy
     # Ring now, full stop. LEAD_SECONDS rather than zero for the reason above:
     # Buddy::Timers anchors a countdown to when the person ASKED, so a zero is a
     # timer that was already over before it existed.
-    def now!(user:, conversation:, label: nil)
-      create!(user: user, seconds: LEAD_SECONDS, label: label, conversation: conversation)
+    def now!(user:, conversation:, label: nil, metadata: {})
+      create!(user: user, seconds: LEAD_SECONDS, label: label, conversation: conversation, metadata: metadata)
     end
 
     # ---- the bare word -------------------------------------------------------
@@ -84,14 +95,20 @@ module Buddy
     # next door: a round trip costs several seconds, and they are several
     # seconds during which the model might not call the tool at all. On a
     # countdown that's most of a short timer; on this it's the whole point.
+    # The chip is the WHOLE record of a bare ring, which is why it goes out
+    # through CompanionDelivery rather than being written here: that is what
+    # carries the push, and the push is how this reaches somebody who isn't
+    # looking at the app. `quick_ring!` used to post the chip itself and leave
+    # the notifying to the message Buddy::Timers.on_fired writes a second later
+    # — so a single "alarm" produced two lines saying the same nothing, and
+    # dropping the second one would have taken the only push with it.
     def quick_ring!(user, conversation)
-      timer = now!(user: user, conversation: conversation, label: "Alarm")
+      timer = now!(user: user, conversation: conversation, label: "Alarm", metadata: { QUICK => true })
 
-      chip = conversation.byte_messages.create!(
+      Buddy::CompanionDelivery.deliver_plain(
         user:         user,
-        direction:    :inbound,
-        state:        :delivered,
-        body:         "#{conversation.buddy_name} sounded the alarm ⏰",
+        conversation: conversation,
+        text:         "#{conversation.buddy_name} sounded the alarm ⏰",
         metadata:     {
           "kind"      => "buddy_activity",
           "tool_name" => "alarm",
@@ -99,24 +116,20 @@ module Buddy
           "source"    => "fast_path",
           "timer_id"  => timer.id,
         },
-        delivered_at: Time.current,
+        push_title:   "⏰ Alarm",
       )
-      MonitorChannel.broadcast_to(
-        user, { id: :byte, channel: :byte, data: { kind: :message, message: chip.as_wire } }
-      )
-      chip
     rescue StandardError => e
       Buddy::Errors.report(section: "alarms.quick_ring", exception: e, user: user)
       nil
     end
 
-    def create!(user:, seconds:, label:, conversation: nil)
+    def create!(user:, seconds:, label:, conversation: nil, metadata: {})
       Buddy::Timers.create!(
         user:         user,
         seconds:      seconds,
         label:        label,
         conversation: conversation,
-        metadata:     { FLAG => true },
+        metadata:     { FLAG => true }.merge(metadata.to_h.stringify_keys),
       )
     end
 

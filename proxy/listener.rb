@@ -171,6 +171,23 @@ rescue StandardError
   nil
 end
 
+# The address the router has to be forwarding to, read fresh on every check-in
+# rather than assumed. When a USB NIC drops off the bus the Mac silently falls
+# back to another interface on a different address; the relay never notices,
+# and from prod the result is indistinguishable from a dead port-forward.
+# Reporting where the relay actually lives is what tells those two apart.
+def heartbeat_lan
+  iface = `route -n get default 2>/dev/null | awk '/interface:/ {print $2}'`.strip
+  return {} if iface.empty?
+
+  ip = `ipconfig getifaddr #{iface} 2>/dev/null`.strip
+  return { interface: iface } if ip.empty?
+
+  { lan_ip: ip, interface: iface }
+rescue StandardError
+  {}
+end
+
 def start_heartbeat
   auth = heartbeat_auth
   if auth.nil?
@@ -180,8 +197,9 @@ def start_heartbeat
 
   Thread.new do
     loop do
+      payload = heartbeat_lan
       HEARTBEAT_URLS.each do |url|
-        RestClient.post(url, {}, { Authorization: "Basic #{auth}" })
+        RestClient.post(url, payload, { Authorization: "Basic #{auth}" })
       rescue StandardError => e
         puts "\e[90m[HEARTBEAT]\e[31m #{url} → #{e.class}\e[0m" unless url.include?("localhost")
       end

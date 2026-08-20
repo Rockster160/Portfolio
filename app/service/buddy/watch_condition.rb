@@ -23,13 +23,13 @@ module Buddy
       keyword_init: true
     )
 
-    TRIGGERS = %i[arrive depart chore event agenda deploy custom].freeze
+    TRIGGERS = %i[arrive depart chore event agenda whisper deploy custom].freeze
 
     # Which triggers reach into a feature. Watching for an arrival or a deploy
     # is everyone's; a chore watch would tell someone without chores when the
     # rest of the household finished theirs, which is the visibility the feature
     # block exists to prevent.
-    GATED = { chore: :chores, event: :events, agenda: :agenda }.freeze
+    GATED = { chore: :chores, event: :events, agenda: :agenda, whisper: :events }.freeze
 
     module_function
 
@@ -46,6 +46,7 @@ module Buddy
       when "chore"   then chore(ctx, target)
       when "event"   then event(ctx, target)
       when "agenda"  then agenda(ctx, target)
+      when "whisper" then whisper(ctx, target)
       when "deploy"  then deploy(ctx)
       when "custom"  then custom(ctx, payload)
       else raise "unknown trigger #{trigger.inspect}"
@@ -104,6 +105,99 @@ module Buddy
         owner:      found.user,
         place_name: found.name,
       )
+    end
+
+    # Whisper's day, as the five ActionEvent notes `Whisper Timers` (task 224)
+    # branches on. Anyone in the house can ask about the dog, but her events are
+    # the OWNER's rows, so a watch filed under whoever asked can never fire -
+    # see `agenda` above for the same shape and the same fix.
+    #
+    # She gets a named trigger rather than a hand-written listener for two
+    # reasons. `custom` files under `ctx.user` with no way to say otherwise, so
+    # the honest version of this can't be expressed there at all. And the named
+    # `event` trigger matches on the event NAME, which for her is "Whisper" for
+    # every one of them - a watch on that fires on pees, poops, walks, baths and
+    # dinners alike. The state lives in the notes.
+    WHISPER_STATES = {
+      "up"      => { notes: "Up",    human: "when Whisper wakes up" },
+      "nap"     => { notes: "Nap",   human: "when Whisper goes down for a nap" },
+      "bedtime" => { notes: "Sleep", human: "when Whisper goes down for the night" },
+      "home"    => { notes: "Home",  human: "when Whisper gets home" },
+      "out"     => { notes: "Gone",  human: "when Whisper leaves the house" },
+    }.freeze
+
+    # The words that mean BOTH, which have to be asked about rather than
+    # resolved. Every one of these is said about two in the afternoon at least
+    # as often as it's said at nine at night - "let me know when she goes to
+    # bed" is usually the nap - so mapping them onto either one produces a watch
+    # that fires at the wrong end of the day, or eight hours late, and from
+    # outside that is indistinguishable from a dog who simply didn't go to
+    # sleep.
+    #
+    # Only words that can ONLY be the night get an alias below. Everything about
+    # sleeping in general lands here.
+    WHISPER_AMBIGUOUS = [
+      "down",
+      "goes down",
+      "go down",
+      "puts her down",
+      "put down",
+      "sleep",
+      "sleeps",
+      "sleeping",
+      "asleep",
+      "goes to sleep",
+      "go to sleep",
+      "bed",
+      "goes to bed",
+      "go to bed",
+      "settle",
+      "settles",
+      "settled",
+    ].freeze
+
+    # What people actually say, mapped onto those - only where it can mean one
+    # thing. See WHISPER_AMBIGUOUS for the ones that can't.
+    WHISPER_ALIASES = {
+      "up"      => ["wake", "wakes", "wakes up", "wake up", "gets up", "awake", "waking"],
+      "nap"     => ["naps", "napping", "nap time", "naptime"],
+      "bedtime" => ["night", "the night", "for the night", "down for the night", "tonight", "overnight"],
+      "home"    => ["gets home", "comes home", "back", "arrives"],
+      "out"     => ["gone", "leaves", "goes out", "away"],
+    }.freeze
+
+    def whisper(ctx, target)
+      owner = ::User.me
+      raise "Whisper isn't set up here" if owner.nil?
+      raise "Whisper isn't in your house" unless owner_household?(ctx.user, owner)
+
+      # A state named outright wins: `nap` and `bedtime` are the answers the
+      # ambiguity check below asks for, so they must always resolve.
+      key   = target.to_s.downcase.strip
+      state = WHISPER_STATES[key] || begin
+        if WHISPER_AMBIGUOUS.include?(key)
+          raise "#{target.inspect} is her nap as often as it's her bedtime - people usually " \
+                "mean the NAP, but not always. Ask which they meant, then pass `nap` or " \
+                "`bedtime`. Never pick one silently."
+        end
+
+        WHISPER_STATES[WHISPER_ALIASES.find { |_state, words| words.include?(key) }&.first]
+      end
+      raise "#{target.inspect} isn't one of Whisper's: #{WHISPER_STATES.keys.join(", ")}" if state.nil?
+
+      Resolved.new(
+        scope:      "event",
+        match:      { "action" => "added", "name" => "Whisper", "notes" => state[:notes] },
+        human:      state[:human],
+        owner:      owner,
+        place_name: "Whisper",
+      )
+    end
+
+    def owner_household?(user, owner)
+      return true if user.id == owner.id
+
+      owner.chore_household_id.present? && user.chore_household_id == owner.chore_household_id
     end
 
     def deploy(ctx)

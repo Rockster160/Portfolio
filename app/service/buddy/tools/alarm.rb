@@ -40,6 +40,8 @@ Buddy::Tools.register(
       "chore"  - a chore being marked done. `target` = the chore name.
       "event"  - an activity being logged. `target` = the event name.
       "agenda" - something added to a calendar. `target` = the calendar name.
+      "whisper" - the dog's day changing. `target` is `up`, `nap`, `bedtime`,
+                 `home` or `out`. "Wake me when the puppy gets up" is this.
       "deploy" - a Portfolio deploy finishing. No `target`.
       "custom" - anything else, and that's most of what an alarm is for. Every
                  physical thing in the house - the washer, the dryer, the

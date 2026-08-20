@@ -102,6 +102,50 @@ RSpec.describe WebhooksController, type: :controller do
       expect(buddy_convo.byte_messages.outbound.last).to be_sent
     end
 
+    # `tell --hidden alarm`. The metadata arrives as a JSON STRING in a form
+    # field, so this is the seam where a boolean can turn into the word "true"
+    # — and both readers of the flag are strict: the `readable` scope compares
+    # against 'true' and the PWA drops on `=== true`.
+    describe "--hidden" do
+      def say_hidden!(body)
+        post :byte_say, params: {
+          user_id:  user.id,
+          body:     body,
+          metadata: { hidden: true }.to_json,
+        }
+      end
+
+      it "keeps it a boolean through the JSON round trip" do
+        say_hidden!("alarm")
+
+        expect(buddy_convo.byte_messages.outbound.last.metadata["hidden"]).to be(true)
+      end
+
+      # The server sends hidden rows down like any other and the CLIENT drops
+      # them (byte/index.js upsertMessage), so the wire payload is where the
+      # flag has to survive — a broadcast or a history page that lost it would
+      # render the message as an ordinary bubble.
+      it "carries the flag on the wire, which is where it's acted on" do
+        say_hidden!("alarm")
+
+        expect(buddy_convo.byte_messages.outbound.last.as_wire[:metadata]["hidden"]).to be(true)
+      end
+
+      it "still does the thing that was asked for" do
+        allow(::Buddy::Alarms).to receive(:quick_ring!)
+
+        say_hidden!("alarm")
+
+        expect(::Buddy::Alarms).to have_received(:quick_ring!)
+      end
+
+      it "keeps the source it always had rather than replacing it" do
+        say_hidden!("alarm")
+
+        expect(buddy_convo.byte_messages.outbound.last.metadata["source"]).to eq("cli")
+      end
+    end
+
     it "queues instead of dispatching while Buddy is asleep" do
       allow(::Buddy::SleepGuard).to receive(:sleeping?).and_return(true)
 

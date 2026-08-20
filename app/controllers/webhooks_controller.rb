@@ -232,7 +232,13 @@ class WebhooksController < ApplicationController
   def proxy_heartbeat
     return head :unauthorized unless current_user == User.me
 
-    ProxyRequest.record_relay_heartbeat!
+    ProxyRequest.record_relay_heartbeat!(
+      lan_ip:    params[:lan_ip],
+      interface: params[:interface],
+    )
+    # Costs nothing while healthy, and it is the only moment we KNOW the Mac is
+    # alive after an outage — so it is where the recovery attempt belongs.
+    TeslaProxyRecoveryWorker.perform_async if DataStorage[:tesla_proxy_unreachable]
 
     head :ok
   end
@@ -710,12 +716,26 @@ class WebhooksController < ApplicationController
 
     Rails.logger.info("Signed in!")
     keys = params.permit(keys: [:auth, :p256dh])[:keys].slice(:auth, :p256dh)
-    channel = params[:channel].presence || :jarvis
+    channel  = params[:channel].presence || :jarvis
+    endpoint = params[:endpoint].to_s
 
-    # One subscription per user per channel - find by channel only, update endpoint if changed
-    push_sub = current_user.push_subs.find_or_initialize_by(channel: channel)
+    # Nothing can be sent to a subscription with no endpoint, and a blank one
+    # would match the next blank one and be overwritten by it.
+    return render json: { errors: ["endpoint required"] }, status: :bad_request if endpoint.blank?
+
+    # One row per DEVICE, keyed on the endpoint, because the endpoint IS the
+    # device as far as a push service is concerned.
+    #
+    # This used to look the row up by channel alone. WebPushNotifications.send_to
+    # fans a push out to every registered subscription on the channel - and that
+    # fan-out could never reach more than one device, because there was never
+    # more than one row for it to find. Two devices took turns owning the single
+    # row: opening Byte on the desktop rewrote the endpoint to the desktop's,
+    # and the phone silently stopped receiving anything until it was opened
+    # again, which then evicted the desktop. Re-subscribing on open cannot fix
+    # that, and never could - each device was undoing the other one.
+    push_sub = current_user.push_subs.find_or_initialize_by(channel: channel, endpoint: endpoint)
     push_sub.assign_attributes({
-      endpoint:      params[:endpoint],
       registered_at: Time.current,
       **keys,
     })
@@ -733,8 +753,14 @@ class WebhooksController < ApplicationController
   def push_notification_unsubscribe
     return head :ok unless user_signed_in?
 
-    channel = params[:channel].presence || :jarvis
-    push_sub = current_user.push_subs.find_by(channel: channel)
+    channel  = params[:channel].presence || :jarvis
+    endpoint = params[:endpoint].to_s
+
+    # Turning notifications off is a decision about THIS device. Scoped by
+    # channel alone it retired whichever row happened to come back first, so
+    # tapping the bell off on the phone could silence the desktop instead.
+    scope    = current_user.push_subs.for_channel(channel)
+    push_sub = (endpoint.present? ? scope.find_by(endpoint: endpoint) : nil)
 
     if push_sub
       push_sub.update(registered_at: nil)

@@ -107,7 +107,7 @@ RSpec.describe Buddy::Tools do
 
     it "maps registry types onto JSON Schema types" do
       remind = schema_for(:remind_when)[:parameters][:properties]
-      expect(remind[:trigger]).to include(type: :string, enum: %i[arrive depart chore event agenda deploy custom])
+      expect(remind[:trigger]).to include(type: :string, enum: %i[arrive depart chore event agenda whisper deploy custom])
       expect(remind[:repeat][:type]).to eq([:boolean, :null])
 
       agenda = schema_for(:add_agenda_item)[:parameters][:properties]

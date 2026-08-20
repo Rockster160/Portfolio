@@ -290,11 +290,10 @@ class TeslaControl
       tries += 1
       if tries <= max_attempts
         result = block.call
-        # Reached the proxies successfully — clear any prior disconnect flag so
-        # the dashboard Tesla cell drops its disconnect indicator on the next
-        # broadcast (format_data reads this flag). Only write when it was set,
-        # to avoid churning the row on every successful command.
-        ::DataStorage[:tesla_proxy_unreachable] = false if ::DataStorage[:tesla_proxy_unreachable]
+        # Reached the proxies successfully — clear any prior disconnect flag and
+        # push it to the dashboard in the same breath. No-ops when it was
+        # already clear, so this doesn't churn on every successful command.
+        ::TeslaCommand.proxy_unreachable!(false)
         result
       end
     rescue *::TeslaErrorClassifier::PROXY_UNREACHABLE_CLASSES => e
@@ -303,9 +302,10 @@ class TeslaControl
       # mute covers that case, so being unreachable WITHOUT a deliberate
       # mute is genuinely worth a Slack notification with kickstart steps.
       # Flag it so the dashboard Tesla cell can surface a disconnect indicator.
-      ::DataStorage[:tesla_proxy_unreachable] = true
+      # Ahead of err(), which runs a live reachability probe and can take ~10s.
+      # The dashboard should show the disconnect immediately, not after it.
+      ::TeslaCommand.proxy_unreachable!(true, loading: false)
       err("Home proxy unreachable", e)
-      TeslaCommand.broadcast(loading: false)
       false
     rescue RestClient::ExceptionWithResponse => e
       case tesla_exc_code(e)

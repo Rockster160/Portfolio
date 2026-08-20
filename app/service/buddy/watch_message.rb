@@ -40,7 +40,20 @@ module Buddy
       # all sixty-four of them - pings saying an item landed, never which one.
       return rendered if Buddy::Template.templated?(body)
 
-      [rendered.sub(/[.!]+\z/, ""), payload_detail(payload)].compact.join(" — ")
+      # A detail the line already says is noise, not information. Every one of
+      # Whisper's events is NAMED "Whisper" and only the notes say which, so a
+      # watch on her waking up went out as `🐶 Whisper's up — “Whisper”`. The
+      # append exists to name what CHANGED; when the sentence already named it,
+      # there is nothing left for it to add.
+      detail = payload_detail(payload)
+      detail = nil if detail && rendered.downcase.include?(detail_name(payload).downcase)
+      # Terminal punctuation is dropped to make room for the detail, so with no
+      # detail to make room for it stays. A sentence nothing is being added to
+      # goes out as it was written - and "🐶 Whisper's up" is a colder line than
+      # "🐶 Whisper's up!" to anyone whose companion runs on exclamation marks.
+      return rendered if detail.nil?
+
+      "#{rendered.sub(/[.!]+\z/, "")} — #{detail}"
     end
 
     # A deploy watch whose body doesn't mention the outcome can't report the

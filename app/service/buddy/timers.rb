@@ -257,6 +257,13 @@ module Buddy
       # timer's done" was.
       alarm = Buddy::Alarms.alarm?(timer)
 
+      # A bare "alarm" already said so, and pushed, at the moment it was asked
+      # for (Buddy::Alarms.quick_ring!). The countdown under it exists only to
+      # put a timer into the fired state so the client rings; it has nothing of
+      # its own to announce, and announcing it anyway is a second line reading
+      # "⏰ Alarm" under one reading "Byte sounded the alarm ⏰".
+      return if alarm && Buddy::Alarms.quick?(timer)
+
       # A WAIT is Buddy holding the middle of a sequence the person asked for
       # ("start the printer, wait a minute, then preheat it"), not a countdown
       # they're watching. Say what's happening rather than that time is up — the

@@ -16,13 +16,17 @@ class ProxyRequest
   end
 
   RELAY_SEEN_AT_KEY = :tesla_relay_seen_at
+  RELAY_LAN_KEY     = :tesla_relay_lan
 
   # Stamped by the relay process itself (proxy/listener.rb), which is running
   # exactly when the relay is. That makes it the one signal separating "Mac
   # asleep or relay dead" from "Mac fine, router mis-forwarding" — from outside
   # the house those are indistinguishable, both just a dead port.
-  def self.record_relay_heartbeat!
+  def self.record_relay_heartbeat!(lan_ip: nil, interface: nil)
     DataStorage[RELAY_SEEN_AT_KEY] = Time.current.to_i
+    return if lan_ip.blank?
+
+    DataStorage[RELAY_LAN_KEY] = { ip: lan_ip, interface: interface }
   end
 
   def self.relay_last_seen_at
@@ -30,6 +34,13 @@ class ProxyRequest
     return nil if raw.blank?
 
     Time.zone.at(raw.to_i)
+  end
+
+  # Where the relay says it currently lives. The router has to be forwarding to
+  # THIS address; when a NIC drops off, the Mac quietly moves to another one and
+  # the old target goes dead while the relay itself never falters.
+  def self.relay_lan
+    DataStorage[RELAY_LAN_KEY].presence&.with_indifferent_access
   end
 
   # Walks the prod → public IP → router port-forward → Ruby relay path one layer
@@ -48,10 +59,16 @@ class ProxyRequest
   # fatal aborted the walk at layer 2 and blamed the pre-router path whenever
   # ICMP was merely filtered — while the real break sat one layer down at TCP.
   # It stays in the walk as corroboration for the TCP remediation instead.
-  # How long a check-in stays meaningful. The pinger runs every few minutes, so
-  # a gap this wide means the home network stopped reporting rather than that we
-  # caught it mid-cycle.
-  HEARTBEAT_STALE_AFTER = 15.minutes
+  # Each signal gets a tolerance derived from its own measured cadence rather
+  # than one shared guess: local_ping arrives every 5 min from the Desktop's
+  # cron, the relay every 2 min from proxy/listener.rb. Three missed check-ins
+  # is the bar for calling a signal dead — loose enough to ride out a hiccup,
+  # tight enough that a Mac which went to sleep four minutes ago shows up in the
+  # very alert that reports it, instead of still looking healthy for a quarter
+  # of an hour. A single shared 15 min gave the relay 7 misses and made it
+  # useless for exactly the case it was added to catch.
+  HOUSE_STALE_AFTER = 15.minutes
+  RELAY_STALE_AFTER = 6.minutes
 
   STEPS = [
     { key: :house, label: "home network checked in (informational)", run: :check_house, fatal: false },
@@ -133,14 +150,21 @@ class ProxyRequest
   # Answers "is anything home?" without touching the network, which is the one
   # question the walk itself can't settle: every network layer failing looks the
   # same whether the house is offline or merely mis-forwarded.
-  def check_house = checkin(LocalIpManager.last_seen_at, "/webhooks/local_ping")
-  def check_relay = checkin(self.class.relay_last_seen_at, "relay heartbeat")
+  def check_house = checkin(LocalIpManager.last_seen_at, "/webhooks/local_ping", HOUSE_STALE_AFTER)
 
-  def checkin(at, label)
+  def check_relay
+    result = checkin(self.class.relay_last_seen_at, "relay heartbeat", RELAY_STALE_AFTER)
+    lan = self.class.relay_lan
+    return result if lan.blank? || lan[:ip].blank?
+
+    result.merge(detail: "#{result[:detail]} from #{lan[:ip]} (#{lan[:interface]})")
+  end
+
+  def checkin(at, label, stale_after)
     return { ok: false, detail: "no #{label} ever recorded" } if at.nil?
 
     age = Time.current - at
-    return { ok: true, detail: "#{time_ago(age)} ago" } if age <= HEARTBEAT_STALE_AFTER
+    return { ok: true, detail: "#{time_ago(age)} ago" } if age <= stale_after
 
     { ok: false, detail: "#{time_ago(age)} ago — stale" }
   end
@@ -224,7 +248,39 @@ class ProxyRequest
       end
     )
 
-    heartbeat_lines + lines + stale_ip_lines
+    heartbeat_lines + relay_alive_lines + lines + stale_ip_lines
+  end
+
+  # The failure this names: the relay never went down, but the interface holding
+  # the forwarded address did. From prod that is indistinguishable from a dead
+  # port-forward, so it reads as a router problem while the router is fine — and
+  # a USB NIC that hangs on the bus produces exactly this shape.
+  def relay_alive_lines
+    relay = @results[:relay]
+    return [] if relay.nil? || !relay[:ok]
+
+    lan = self.class.relay_lan
+    return [] if lan.blank? || lan[:ip].blank?
+
+    [
+      "The relay is still checking in from #{lan[:ip]} (#{lan[:interface]}) — it never went",
+      "down. So the relay is healthy and the FORWARDED ADDRESS is the fault line.",
+      "• #{PROXY_PORT} must forward to #{lan[:ip]}, which is where the relay is right now.",
+      "• If it already does, the interface behind it dropped off. See the USB note below.",
+    ]
+  end
+
+  # Worth its own block because it is not intuitive and it is not optional: a
+  # hung USB NIC keeps its link LED lit and keeps the switch port happy, so
+  # every cable-level check passes while the host sees nothing at all.
+  def usb_cycle_lines
+    [
+      "If the Mac reaches the LAN on a USB ethernet adapter or dock, POWER-CYCLE IT:",
+      "• Unplug the adapter/dock from the Mac for ~30s, then reconnect.",
+      "• Re-seating the ETHERNET cable does nothing — the adapter has to lose power.",
+      "• Confirm it came back: ioreg -p IOUSB -w 0 | grep -i lan   (and `ifconfig -l`).",
+      "• Then re-check that the forward still targets the address it came back on.",
+    ]
   end
 
   # A missing check-in outranks every port-forward theory, so it leads. The PAIR
@@ -277,7 +333,7 @@ class ProxyRequest
       "    (or whichever interface `route -n get default` names).",
       "• DHCP-reserve it against the MAC of the interface actually holding it — Wi-Fi",
       "    counts. A dead cable/dock makes the Mac fall back to Wi-Fi silently.",
-    ]
+    ] + usb_cycle_lines
   end
 
   def tcp_refused_fix
@@ -294,7 +350,7 @@ class ProxyRequest
       "Connection timed out (packets silently dropped) → something is filtering #{PROXY_PORT}.",
       "• Router port-forward rule missing/disabled, or a firewall is dropping it.",
       "• macOS firewall on the Mac blocking inbound on #{PROXY_PORT}.",
-    ]
+    ] + usb_cycle_lines
   end
 
   def tcp_generic_fix(result)

@@ -24,6 +24,21 @@ Buddy::Tools.register(
       "agenda" - when something is added to one of their calendars. `target` =
                  the calendar name ("Ours", "our agenda", "Work").
                  e.g. "whenever something's added to our agenda, let me know".
+      "whisper" - the dog's day changing. `target` is one of `up` (she wakes
+                 up), `nap` (she goes down for a nap), `bedtime` (she goes down
+                 for the night), `home` (she gets back), `out` (she leaves).
+                 e.g. "tell me when the puppy wakes up", "let me know when
+                 Whisper's home". Anyone in the house can set one, whoever
+                 actually logs her events - so never answer one of these with
+                 "she's not mine to watch". **Everything about her sleeping is
+                 ambiguous** - "goes down", "goes to bed", "goes to sleep" mean
+                 her afternoon nap as often as they mean her night, and usually
+                 the nap. Ask which they meant unless they said "for the night"
+                 or named a nap outright; picking one quietly sets a watch that
+                 fires at the wrong end of the day.
+                 Use this rather than `event` or a hand-written listener: every
+                 one of her events is named "Whisper", so an `event` watch on
+                 her fires on pees, walks and dinners too.
       "deploy" - when a Portfolio deploy finishes, whether it succeeded or
                  failed. No `target`. Pair with `repeat: true` for a standing
                  "ping me on every deploy"; you'll be told which outcome it
@@ -147,7 +162,7 @@ Buddy::Tools.register(
   args: {
     text:        { type: :string,  required: true,  description: "What to remind them of" },
     trigger:     { type: :enum,    required: true,  values: Buddy::WatchCondition::TRIGGERS, description: "Condition type" },
-    target:      { type: :string,  required: false, description: "Place / chore / event / calendar name the condition is about (omit for deploy and custom)" },
+    target:      { type: :string,  required: false, description: "Place / chore / event / calendar name the condition is about, or which of Whisper's states for trigger=whisper (omit for deploy and custom)" },
     listener:    { type: :string,  required: false, description: "Jil listener string. Required for trigger=custom, ignored otherwise. Read read_listener_guide first." },
     when_phrase: { type: :string,  required: false, description: "Plain-language meaning of the listener (\"when something is added to the Claude list\"). Required for trigger=custom." },
     repeat:      { type: :boolean, required: false, default: false, description: "Fire every time (true) instead of just the next time (false)" },

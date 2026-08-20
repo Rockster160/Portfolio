@@ -16,6 +16,19 @@ module TeslaCommand
     ActionCable.server.broadcast(:tesla_channel, format_data(extra_data))
   end
 
+  # Writing the flag and telling the dashboard are one act, so they live in one
+  # method. The Tesla cell renders straight off the broadcast, which means a
+  # flag written without one leaves it displaying state that stopped being true.
+  # Clearing it used to lean on "the next broadcast" arriving from somewhere
+  # else — fine inside a command, but recovery happens outside one, and then no
+  # broadcast ever comes and the disconnect icon just stays put.
+  def proxy_unreachable!(value, extra={})
+    value = !!value
+    changed = !!DataStorage[:tesla_proxy_unreachable] != value
+    DataStorage[:tesla_proxy_unreachable] = value if changed
+    broadcast(extra) if changed || extra.present?
+  end
+
   def address_book
     @address_book ||= User.me.address_book
   end
