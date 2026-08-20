@@ -31,9 +31,9 @@ module Buddy
     # they already been set up", so calling ensure! again can't hand back the
     # thing they switched off.
     def all_for(user)
-      BuddyReminder.where(user_id: user.id)
-        .where("buddy_reminders.metadata ->> 'today_briefing' = 'true'")
-        .order(:id)
+      scope = BuddyReminder.where(user_id: user.id)
+      scope = scope.where("buddy_reminders.metadata ->> 'today_briefing' = 'true'")
+      scope.order(:id)
     end
 
     def for(user)

@@ -200,6 +200,58 @@ RSpec.describe "Buddy Today forward-looking" do
       expect(seed).to include("Round odd clock times")
     end
 
+    # Prod 3954, 19 Aug: "a very open day ahead, with nothing pressing" at 8:30,
+    # with two reminders due at 9:00 and one at 10:00, all of which rang. The
+    # seed said which reminders to leave OUT and never once said they belong in.
+    it "says a still-due reminder is part of the day, not just which ones to drop" do
+      expect(seed).to include("`upcoming_reminders` is the OTHER HALF of the day")
+      expect(seed).to include("a day with three of them on it is not an open day")
+    end
+
+    # Prod 3951 opened by weighing his calendar against his partner's, and named
+    # her 4pm meeting on the strength of it maybe mattering later. The rules
+    # already forbade naming her items; they said nothing about framing his day
+    # by hers, and nothing about what counts as a reason.
+    describe "a partner's calendar" do
+      it "is never the frame for their own day" do
+        expect(seed).to include("My day is never described by comparison to theirs")
+        expect(seed).to include("How full their day is isn't a fact about mine")
+      end
+
+      it "needs a concrete effect to be raised at all, not a hedge" do
+        expect(seed).to include("A hedge is not an effect")
+        expect(seed).to include("which is how you can tell it isn't a reason")
+      end
+
+      it "still keeps the departure-time rule that was already there" do
+        expect(seed).to include("Never give me a `leave_by` or a `drive_min` off an item tagged `mine: false`")
+      end
+    end
+
+    # The seed said four different things about length in four places, and one
+    # of them ("the few things you do name") was left over from a line cap that
+    # had already been removed for costing real items on a busy day.
+    describe "rules that were stated more than once" do
+      it "no longer contradicts itself about how much to name" do
+        expect(seed).not_to match(/few things you do name/i)
+        expect(seed).to include("SAY EVERYTHING UNUSUAL")
+      end
+
+      it "keeps every consolidated rule somewhere" do
+        expect(seed).to include("A vague gesture at a busy morning")
+        expect(seed).to include("That is a correct briefing, not a failed one")
+        expect(seed).to match(/Lead with|LEAD WITH/)
+        expect(seed).to include("most unlike an ordinary day")
+      end
+
+      # Not consolidated, deliberately. Announcing the briefing instead of
+      # writing it is the one failure that leaves them holding nothing, and it
+      # is worth saying at both ends.
+      it "still says twice that the briefing is never announced" do
+        expect(seed.scan(/on its way|is finished, on its way/).length).to be >= 2
+      end
+    end
+
     # The chore rules come out entirely for someone who doesn't have chores,
     # rather than pointing them at sections that aren't in their context.
     it "drops the chore guidance for someone without chores" do

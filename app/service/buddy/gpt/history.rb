@@ -49,6 +49,28 @@ module Buddy
       # happened, which is why this is the only one.
       FAST_PATH_SOURCE = "fast_path".freeze
 
+      # A form card is not something Buddy SAID.
+      #
+      # Buddy::FormAction posts one as `kind: "buddy_reply"`, so it replays as
+      # an assistant turn — and a day of chore prompts is ten of them, all
+      # identical. On 19 Aug that thread held ten form cards against eight real
+      # replies, and Byte answered a correction with "Kk! I marked `Make Meal`
+      # off instead of logging it." followed, on its own line, by "Who did:
+      # Puppy Up?" — prose, no form, no metadata, copied off the ten above it.
+      # The person's next message was "Huh?".
+      #
+      # That is the failure `drop_stale_quick_actions` already exists for:
+      # whatever shape a repeated turn happens to be in becomes the house style.
+      # Buddy::Compile and Buddy::IdeaDwell both skip `source: form` for related
+      # reasons; this is the third place that needed to.
+      #
+      # It can't drop the row outright the way the receipt chips are dropped. A
+      # form Buddy raised mid-conversation is a question the person answered, and
+      # "yeah, that one" needs something to point at. So it survives as a
+      # bracketed standin — the same device the quick-action seeds and the relay
+      # bridges use — which keeps the reference and retires the template.
+      FORM_SOURCE = "form".freeze
+
       # An image is sent as pixels EXACTLY ONCE: on the turn it arrives, which is
       # the message this build is answering. History is rebuilt from scratch
       # every turn, so replaying it would mean one photo is re-fetched by OpenAI
@@ -135,6 +157,7 @@ module Buddy
         return nil if body.empty?
 
         return { role: :assistant, content: relay_content(message, body) } if relay?(message)
+        return { role: :assistant, content: form_standin(message, body) } if form_card?(message)
 
         { role: :assistant, content: body } if prose_reply?(message) || fast_path?(message)
       end
@@ -225,6 +248,27 @@ module Buddy
       def fast_path?(message)
         meta = message.metadata
         meta.is_a?(Hash) && meta["source"].to_s == FAST_PATH_SOURCE
+      end
+
+      def form_card?(message)
+        meta = message.metadata
+        meta.is_a?(Hash) && meta["source"].to_s == FORM_SOURCE
+      end
+
+      # What became of it matters as much as what it asked: an unanswered form
+      # is still open and a skipped one was declined, and both read as "answered"
+      # if only the question survives.
+      def form_standin(message, body)
+        "[form you put up: #{body.squish.truncate(80)} - #{form_state(message)}]"
+      end
+
+      def form_state(message)
+        form = message.metadata["form"]
+        return "unanswered" unless form.is_a?(Hash)
+        return "skipped" if form["decided"].to_s == "skip"
+        return "superseded" if form["status"].to_s == Buddy::Supersede::STATUS
+
+        form["status"].to_s == "submitted" ? "answered" : "unanswered"
       end
 
       # `source` distinguishes the two halves bridge! writes: "relay" is the copy

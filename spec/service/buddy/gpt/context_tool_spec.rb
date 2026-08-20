@@ -58,7 +58,13 @@ RSpec.describe Buddy::GPT::ContextTool do
 
     it "refuses the full roster even when it's asked for by name" do
       expect(briefing_sections(["chores_pending_today"])).not_to include("chores_pending_today")
-      expect(briefing_sections(["chores_all"])).to be_empty
+      expect(briefing_sections(["chores_all"])).not_to include("chores_all")
+    end
+
+    # Asking only for things this turn can't have used to come back with the
+    # ENTIRE context, which is the opposite of withholding one.
+    it "does not answer a refused request with everything there is" do
+      expect(briefing_sections(["chores_all"]).length).to be < described_class::SECTIONS.length
     end
 
     it "cannot even name them: they're off the schema enum" do
@@ -80,8 +86,9 @@ RSpec.describe Buddy::GPT::ContextTool do
     end
 
     it "leaves everything that isn't routine alone" do
-      expect(briefing_sections(["today_notable"])).to eq(["today_notable"])
-      expect(briefing_sections(["lists"])).to eq(["lists"])
+      expect(briefing_sections(["today_notable"])).to include("today_notable")
+      expect(briefing_sections(["lists"])).to include("lists")
+      expect(briefing_sections(["lists"])).not_to include("chores_all", "today_agenda")
     end
 
     # Prod 3951 signed off with "there's one reminder in play already: Today
@@ -100,13 +107,13 @@ RSpec.describe Buddy::GPT::ContextTool do
           body: Buddy::TodaySchedule::BODY, fire_at: 23.hours.from_now,
           recurrence: { "freq" => "daily", "at" => "08:30" },
           action: { "tool" => "today_briefing", "payload" => {} },
-          metadata: { "today_briefing" => true },
+          metadata: { "today_briefing" => true }
         )
       }
       let!(:other) {
         BuddyReminder.create!(
           user: user, byte_conversation: convo, kind: :reminder,
-          body: "Cover the tomatoes.", fire_at: 3.hours.from_now,
+          body: "Cover the tomatoes.", fire_at: 3.hours.from_now
         )
       }
 
@@ -124,6 +131,31 @@ RSpec.describe Buddy::GPT::ContextTool do
       # where it gets asked.
       it "is still there on an ordinary turn" do
         expect(reminder_bodies(tool)).to include(Buddy::TodaySchedule::BODY)
+      end
+
+      # Prod 4020, hours after the briefing-turn guard shipped: "what's
+      # happening tomorrow?" came back "that Today briefing reminder is still
+      # sitting there from this morning." Present is right; unlabelled is not.
+      it "is labelled on an ordinary turn, so it doesn't read as a job of theirs" do
+        rows = JSON.parse(tool.call({ "sections" => ["upcoming_reminders"] }))["upcoming_reminders"]
+        mine = rows.find { |r| r["body"] == Buddy::TodaySchedule::BODY }
+
+        expect(mine["own_briefing"]).to be(true)
+        expect(rows.find { |r| r["body"] == "Cover the tomatoes." }).not_to have_key("own_briefing")
+      end
+    end
+
+    # Prod 3954: "a very open day ahead, with nothing pressing" at 8:30, with
+    # two reminders due at 9:00 and one at 10:00. The seed said which reminders
+    # to leave OUT and never said to go and get them, so a briefing that didn't
+    # think to ask wrote the day without them.
+    describe "reminders" do
+      it "arrive whether or not the briefing thought to ask" do
+        expect(briefing_sections(["today_notable"])).to include("upcoming_reminders")
+      end
+
+      it "are not forced into an ordinary turn that asked for something else" do
+        expect(sections_returned(["today_notable"])).to eq(["today_notable"])
       end
     end
 

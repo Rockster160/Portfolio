@@ -322,6 +322,38 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).not_to match(/checking that off/i)
     end
 
+    # Prod 4025, 19 Aug. Every wording above takes a PRONOUN - "checking that
+    # off", "marked it done" - and Buddy is told everywhere else to name the
+    # record instead, so the reply that follows the house style was the one
+    # shape this couldn't see. Nothing ran; the chore was completed two
+    # messages later, after the person answered "Huh?".
+    it "retracts a completion claim with the record NAMED rather than pronouned" do
+      [
+        "Kk! I marked `Make Meal` off instead of logging it. *squish*",
+        "Checked **Rotate Laundry** off for you!",
+        "Crossed `Water the tomatoes` off, nice one.",
+      ].each do |faked|
+        run([{ text: faked }])
+
+        expect(reply.metadata["retracted_claim"]).to be(true), "not caught: #{faked}"
+      end
+    end
+
+    # Anchored on the backticks and bold that a record name is written in here,
+    # not on a word budget: a bare gap of a few words between the verb and the
+    # particle also swallows an honest report of a state.
+    it "leaves an ordinary sentence with those verbs alone" do
+      [
+        "I checked and the great room fan is off.",
+        "I checked `Make Meal` and it's still open - want me to tick it?",
+        "I haven't checked the mail off yet - want me to?",
+      ].each do |innocent|
+        run([{ text: innocent }])
+
+        expect(reply.body).to eq(innocent), "false positive: #{innocent}"
+      end
+    end
+
     it "leaves the claim alone when a level-1 tool actually fired" do
       allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
 

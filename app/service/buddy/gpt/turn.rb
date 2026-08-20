@@ -1427,6 +1427,22 @@ module Buddy
       COMPLETION_CLAIM_RX = /
         \b(?:check(?:ing|ed)?\s+(?:that|it|those|them|this)\s+off)\b
         | \b(?:checked\s+off|marked\s+(?:it|that|those)?\s*(?:off|done)|crossed\s+off)\b
+        # The same claim with the thing NAMED instead of pronouned. Everything
+        # above takes "it", "that" or nothing, and Buddy is told everywhere else
+        # to name the record rather than gesture at it — so the reply that
+        # follows the house style is the one shape this rule couldn't see. Prod
+        # 4025, 19 Aug: "Kk! I marked `Make Meal` off instead of logging it."
+        # with no call of any kind. The chore was only completed two messages
+        # later, after the person answered "Huh?".
+        #
+        # Matched on the DELIMITERS rather than a word budget, the way the
+        # emphasised receipt shape below is. A bare gap of a few words also
+        # swallows "I checked and the fan is off", which is an honest sentence;
+        # backticks and bold are how a record name is written here, and they
+        # can't appear by accident.
+        # (No slashes in these comments - see the note further down.)
+        | \b(?:check(?:ing|ed)?|mark(?:ing|ed)|cross(?:ing|ed)|tick(?:ing|ed))\s+
+            (?:\*\*|`)[^*`\n]{1,60}(?:\*\*|`)\s*(?:off|done)\b
         | \b(?:logged|recorded|credited|crediting)\b
         | \b(?:timer(?:'|’)?s\s+set|reminder(?:'|’)?s\s+set|set\s+(?:a|the)\s+timer)\b
         | \b(?:added\s+(?:it|that|them)\s+to)\b

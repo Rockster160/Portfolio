@@ -706,15 +706,28 @@ module Buddy
         tz   = conversation.user.timezone
         live = BuddyReminder.upcoming(now, 48).where(byte_conversation_id: conversation.id).limit(15).map { |r|
           {
-            id:         r.id,
-            fire_at:    r.fire_at.in_time_zone(tz).strftime("%a %-I:%M %p"),
-            kind:       r.kind,
-            body:       r.body.to_s.first(120),
+            id:           r.id,
+            fire_at:      r.fire_at.in_time_zone(tz).strftime("%a %-I:%M %p"),
+            kind:         r.kind,
+            body:         r.body.to_s.first(120),
             # A recurring reminder rolls `fire_at` forward the moment it fires,
             # so the next occurrence is all that's visible and the one that just
             # went off looks like it never did. Prod 2761 announced the flower
             # bed "tomorrow at 8:00 AM" half an hour after it rang that morning.
-            last_fired: (r.last_fired_at && Buddy::TimeParser.friendly(r.last_fired_at, user: conversation.user)),
+            last_fired:   (r.last_fired_at && Buddy::TimeParser.friendly(r.last_fired_at, user: conversation.user)),
+            # The row that FIRES the briefing, which is an ordinary recurring
+            # reminder on purpose (Buddy::TodaySchedule) so it can be moved and
+            # cancelled like any other. Unmarked it reads as something on their
+            # plate, and it has gone out as one twice: prod 3951 closed a
+            # briefing with "there's one reminder in play already: Today
+            # briefing", and prod 4020 answered "what's happening tomorrow?"
+            # with "that Today briefing reminder is still sitting there from
+            # this morning" — hours after it had already run that day.
+            #
+            # Buddy::GPT::ContextTool drops it outright on a briefing turn. This
+            # is for every other turn, where it has to stay reachable: "move my
+            # morning briefing to nine" is a real request and it needs the id.
+            own_briefing: (true if Buddy::TodaySchedule.briefing?(r)),
           }.compact
         }
         live + already_rang(conversation, now) + switched_off(BuddyReminder, conversation)

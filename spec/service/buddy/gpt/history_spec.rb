@@ -173,6 +173,55 @@ RSpec.describe Buddy::GPT::History do
     end
   end
 
+  # Buddy::FormAction posts a form card as `kind: "buddy_reply"`, so it used to
+  # replay as an assistant turn. Prod 19 Aug: ten chore forms against eight real
+  # replies, and Byte answered a correction with "Kk! I marked `Make Meal` off
+  # instead of logging it." followed, on its own line, by "Who did: Puppy Up?" -
+  # prose, no form, no metadata, copied off the ten above it. The person said
+  # "Huh?".
+  describe "form cards" do
+    def form(body, form_meta)
+      convo.byte_messages.create!(
+        user: user, direction: :inbound, state: :delivered, body: body,
+        metadata: { "kind" => "buddy_reply", "source" => "form", "form" => form_meta }
+      )
+    end
+
+    it "does not replay as something Buddy said" do
+      form("Who did: Puppy Up?", { "status" => "submitted", "decided" => "submit" })
+
+      expect(build.first[:content]).not_to eq("Who did: Puppy Up?")
+    end
+
+    # It can't just vanish: a form Buddy raised mid-conversation is a question
+    # the person answered, and "yeah, that one" needs something to point at.
+    it "survives as a bracketed standin, so a reference back still lands" do
+      form("Who did: Puppy Up?", { "status" => "submitted", "decided" => "submit" })
+
+      expect(build).to eq([
+        { role: :assistant, content: "[form you put up: Who did: Puppy Up? - answered]" },
+      ])
+    end
+
+    it "says which ones are still open" do
+      form("Who did: Puppy Fed?", { "status" => "pending" })
+
+      expect(build.first[:content]).to end_with("- unanswered]")
+    end
+
+    it "says which ones were declined" do
+      form("Who did: Puppy Down?", { "status" => "submitted", "decided" => "skip" })
+
+      expect(build.first[:content]).to end_with("- skipped]")
+    end
+
+    it "does not touch an ordinary reply" do
+      said("Kk! On the agenda for tonight.", direction: :inbound, kind: "buddy_reply")
+
+      expect(build).to eq([{ role: :assistant, content: "Kk! On the agenda for tonight." }])
+    end
+  end
+
   describe "bridged relay messages" do
     it "includes a message received from the partner, attributed" do
       said("I fed the dog", direction: :inbound, kind: "buddy_relay", source: "relay", peer: "Byte")

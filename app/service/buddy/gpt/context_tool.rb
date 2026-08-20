@@ -74,6 +74,21 @@ module Buddy
         chores_all
       ].freeze
 
+      # Sections a briefing gets whether or not it thought to ask.
+      #
+      # `upcoming_reminders` is on-demand like everything else, and the briefing
+      # prompt only ever told the model how to FILTER it — which ones are stale,
+      # which are switched off — never to go and fetch it. So a briefing that
+      # didn't ask wrote the day without the half of it that lives in reminders.
+      # Prod 3954, 19 Aug: "a very open day ahead, with nothing pressing" at
+      # 8:30, against two reminders due at 9:00 and one at 10:00. All three rang
+      # on time.
+      #
+      # Handed over rather than instructed, for the same reason the greeting is:
+      # a rule the model has to remember to follow is one it can skip on the
+      # morning it matters.
+      BRIEFING_ALWAYS = %i[upcoming_reminders].freeze
+
       # Sections this turn may not have, for any reason: a feature the person
       # doesn't use, or a briefing that has no business with the full roster.
       def self.withheld(user, briefing: false)
@@ -200,14 +215,15 @@ module Buddy
       #
       # A whole-section withhold would be wrong — half of somebody's day lives
       # in reminders — so this takes the one row, and only on a briefing turn.
+      # Everywhere else it stays, marked `own_briefing`, because "move my morning
+      # briefing to nine" needs the id: prod 4020 is what an UNMARKED row costs
+      # on an ordinary turn, and removing it there would only trade one wrong
+      # answer for another.
       def without_own_reminder(payload)
         return payload unless @briefing
-        return payload unless payload.key?(:upcoming_reminders)
+        return payload unless payload[:upcoming_reminders].is_a?(Array)
 
-        own = Buddy::TodaySchedule.all_for(@user).pluck(:id).to_set
-        return payload if own.empty?
-
-        payload.merge(upcoming_reminders: payload[:upcoming_reminders].reject { |r| own.include?(r[:id]) })
+        payload.merge(upcoming_reminders: payload[:upcoming_reminders].reject { |r| r[:own_briefing] })
       rescue StandardError => e
         Buddy::Errors.report(section: "gpt.context_tool.own_reminder", exception: e, user: @user)
         payload
@@ -229,7 +245,9 @@ module Buddy
       end
 
       def requested_sections(args)
-        sections = named_sections(args) & (SECTIONS - self.class.withheld(@user, briefing: @briefing))
+        sections = named_sections(args)
+        sections |= BRIEFING_ALWAYS if @briefing
+        sections &= (SECTIONS - self.class.withheld(@user, briefing: @briefing))
         # Whether an automation is a trigger or a function is OUR filing system,
         # not something the person's request tells you. Asked to "turn the fan to
         # low", the model looked in jil_triggers, found only "Fan High", and said
