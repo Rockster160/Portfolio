@@ -100,28 +100,46 @@ module Buddy
       ].join("\n")
     end
 
-    # Comfort bands mirror the dashboard weather cell's colour scale. Woven into
-    # the seed so the briefing frames weather the way we read it at a glance.
-    # Time-aware: past ~4pm the day's high/comfort read is no longer actionable,
-    # so we drop TODAY's weather and keep only the week outlook (upcoming days
-    # still matter). Empty when there's nothing worth saying.
+    # The figures, plus whatever is actually notable, and nothing drawn from
+    # either. Time-aware: past ~4pm the day's high is no longer actionable, so we
+    # drop TODAY's weather and keep only the week outlook (upcoming days still
+    # matter). Empty when there's nothing worth saying.
+    #
+    # Two things this block has been wrong about, in order.
+    #
+    # It used to carry comfort bands off the dashboard's colour scale, each one
+    # attaching a suggestion — light layers, a coat, an umbrella. That advice
+    # isn't wanted: a high is a number, and being told how to dress for it is the
+    # part of a forecast that reads as being managed.
+    #
+    # The correction then overshot and told the model to say the rain chance
+    # every day. A sunny day with no rain in it is the BASELINE and has no line
+    # to give; only what's genuinely notable adds anything on top. Which is also
+    # why `today_notable` is in here: the summary has never carried wind, so a
+    # day of hard gusts arrived reading "currently 71°F, clear".
+    #
+    # Nothing here names a phrase to avoid, and nothing here may. A phrase quoted
+    # in order to forbid it is still a phrase handed over, and this prompt has
+    # been bitten by that repeatedly — see the note above TONE. Rules go in
+    # positively or they don't go in.
     def weather_block(user=nil)
       late = late_in_day?(user)
       week = WeatherService.week_outlook(user: user)
-      summary = WeatherService.summary(user: user) unless late
+      unless late
+        summary = WeatherService.summary(user: user)
+        notable = WeatherService.today_notable(user: user)
+      end
 
       return "" if summary.blank? && week.blank?
 
-      lines = ["", "WEATHER (weave it in naturally, don't recite a forecast):"]
+      lines = ["", "WEATHER:"]
       if summary.present?
         lines << "Today: #{summary}"
+        lines << "Notable today: #{notable}." if notable.present?
         lines += [
-          "Comfort read on today's high:",
-          "- ~62-75°F is the comfortable sweet spot - no need to fuss.",
-          "- upper 70s is warm; mid-80s and up is hot - flag it, suggest light layers / water.",
-          "- 50s is cool, 40s and below is cold; freezing or under, say to grab a coat.",
-          "- real rain chance today? mention an umbrella.",
-          "Skip the today-comfort line if it's unremarkable.",
+          "Give me the high and the low, in one short line.",
+          "Anything above that is worth its own mention with its odds: rain, wind, storms, snow. Only ever what's in the lines just above - an ordinary sunny day is the baseline, and the baseline is already covered by the figures.",
+          "Weather gets reported here, not acted on.",
         ]
       end
       lines << "This week to flag: #{week}. Give a short heads-up for any day with rain / wind / snow." if week.present?
@@ -185,6 +203,19 @@ module Buddy
       ""
     end
 
+    # The week's rain in Alpine, and his alone. Alpine is a canyon he drives to;
+    # for everyone else in the house it's a town half an hour away that they
+    # have no reason to hear a forecast for, and their own weather is already in
+    # the block above.
+    def alpine_week_block(user)
+      return "" if user.nil? || !user.me?
+
+      Buddy::PlungeAdvisor.week_rain_block(user)
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::TodayBriefing] alpine week block failed: #{e.class}: #{e.message}")
+      ""
+    end
+
     def seed(user=nil)
       prompt = <<~PROMPT.strip
         WHAT YOU WRITE HERE IS THE BRIEFING. It goes to them exactly as you write it, as the message they've been waiting for. Nothing else is coming, and there is no step after this one.
@@ -196,7 +227,7 @@ module Buddy
         #{greet_lines}
 
         Never address me as "you" in place of a name. That lands too intimate. Use my name, a plain greeting, or just dive in.
-        #{weather_block(user)}#{plunge_block(user)}
+        #{weather_block(user)}#{plunge_block(user)}#{alpine_week_block(user)}
 
         FORWARD-LOOKING ONLY. Only surface what's STILL AHEAD from `now_local`. Anything already over is not news:
         - Agenda items flagged `passed: true` are DONE for the day. Default to leaving them out entirely - not as a summary, not as a count, not as a passing note that the morning one already went. Naming one while something still ahead goes unmentioned is the wrong way round, no matter how quiet the day looks.

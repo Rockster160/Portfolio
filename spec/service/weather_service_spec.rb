@@ -28,6 +28,41 @@ RSpec.describe WeatherService do
     end
   end
 
+  # `summary` reports the temperature, the sky and the rain odds. Wind isn't in
+  # any of those, so a day of hard gusts read "currently 71°F, clear" and the
+  # gusts reached no chat surface at all.
+  describe ".today_notable" do
+    def notable(day)
+      allow(described_class).to receive(:data).and_return({ "daily" => [day] })
+      described_class.today_notable
+    end
+
+    it "picks up wind the summary has no room for" do
+      expect(notable({ "weather" => [{ "main" => "Clear" }], "pop" => 0.0, "wind_gust" => 38 })).to eq("windy")
+    end
+
+    it "is nil on an ordinary day" do
+      expect(notable({ "weather" => [{ "main" => "Clear" }], "pop" => 0.05, "wind_speed" => 6 })).to be_nil
+    end
+
+    it "reads today, not tomorrow" do
+      allow(described_class).to receive(:data).and_return({
+        "daily" => [
+          { "weather" => [{ "main" => "Clear" }], "pop" => 0.0 },
+          { "weather" => [{ "main" => "Snow" }],  "pop" => 0.9 },
+        ],
+      })
+
+      expect(described_class.today_notable).to be_nil
+    end
+
+    it "is nil when there's no forecast to read" do
+      allow(described_class).to receive(:data).and_return(nil)
+
+      expect(described_class.today_notable).to be_nil
+    end
+  end
+
   describe ".format_week_outlook" do
     it "flags notable days, grouped and ordered by severity, skipping calm days" do
       base = 1_700_000_000  # fixed so day names are deterministic-ish; \w{3} matches any

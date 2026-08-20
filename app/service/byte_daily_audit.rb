@@ -74,10 +74,26 @@ module ByteDailyAudit
   # It used to run two whole days and deliberately overlap, so that a fresh
   # session with no memory of last night's report could see this morning's fix
   # sitting next to yesterday's failure and not hand the problem back.
-  def window(user, now: Time.current)
+  #
+  # `since:` moves the start, which is the only way to read a GAP. A run that
+  # doesn't happen leaves a stretch of hours nothing has ever looked at, and the
+  # next one opens 24 hours before ITSELF rather than where the last report
+  # stopped — so the hours in between are skipped by both and would stay skipped
+  # forever. On 20 Aug that was 08:30 to 13:32 the previous day.
+  def window(user, now: Time.current, since: nil)
     local = now.in_time_zone(user.timezone)
+    from  = (since ? since.in_time_zone(user.timezone) : local - 24.hours)
 
-    (local - 24.hours)..local
+    from..local
+  end
+
+  # However long the window actually is, so a five-hour gap isn't handed a
+  # prompt telling it to review a day.
+  def span_length(span)
+    minutes = ((span.last - span.first) / 60).round
+    return "#{minutes} minutes" if minutes < 90
+
+    "#{(minutes / 60.0).round} hours"
   end
 
   # sidekiq-cron can fire the same minute twice across a restart, so the guard
@@ -103,10 +119,17 @@ module ByteDailyAudit
   # out because otherwise every run spends its first several turns rediscovering
   # it, and rediscovery is where a run quietly decides to sample instead of read
   # the lot. The judgement half is left open on purpose.
-  def prompt(user, now: Time.current)
-    span = window(user, now: now)
+  def prompt(user, now: Time.current, since: nil)
+    span  = window(user, now: now, since: since)
+    reach = (
+      if since
+        "That window has already closed, and it is a GAP: the run that should have covered it never happened, and the reports either side of it stop at one edge and start at the other. Nothing outside those two timestamps is yours to review, however much went on there."
+      else
+        "That window runs right up to now, the last few minutes included."
+      end
+    )
     <<~TXT
-      You are the daily audit for this app. Review the 24 hours from **#{stamp(span.first)}** to **#{stamp(span.last)}** (America/Denver) - right up to now, the last few minutes included - and write up what didn't work quite as desired.
+      You are the daily audit for this app. Review the #{span_length(span)} from **#{stamp(span.first)}** to **#{stamp(span.last)}** (America/Denver) and write up what didn't work quite as desired. #{reach}
 
       REPORT ONLY. Do not change any code, and do not offer to until asked. If a fix is obvious, describe it precisely enough that it could be applied in one step, and stop there. Reads, greps and prod queries are yours to run freely; a Write or an Edit will stop and wait for a tap, so don't reach for one.
 
@@ -117,7 +140,7 @@ module ByteDailyAudit
       - Deploys are in the thread already: messages with `metadata->>'source' = 'watch'` whose body starts with a deploy marker carry the commit sha, the title and the time, and a failed deploy says so. `git log` and `git show --stat` in this repo fill in what each one actually contained - read those rather than guessing from the commit title, which is usually too terse to tell you whether a specific bug was addressed.
 
       WHAT TO PRODUCE
-      1. **Counts.** Messages per conversation AND per direction, so each companion's inbound/outbound is visible separately. Name the companion, not the id. It's one rolling 24 hours, not two calendar days - don't split it at midnight, the halves aren't comparable and the boundary means nothing.
+      1. **Counts.** Messages per conversation AND per direction, so each companion's inbound/outbound is visible separately. Name the companion, not the id. It's one rolling window, not calendar days - don't split it at midnight, the halves aren't comparable and the boundary means nothing.
       2. **What misfired.** Anything that didn't do what the person plainly asked, answered a question wrongly, claimed something it hadn't done, fired twice, or fired never. Cite the message id for every single one - a claim without an id is not usable. Say what should have happened instead. **One section per problem, and each one opens with its status marker** - see the next point for which.
       3. **Deploys, and what they already fixed.** List which went out and when across the window. Then reconcile: **for every problem you find, check whether a deploy LATER IN THE WINDOW addressed it, and check the traffic after that deploy to see whether it actually took.**
 
@@ -141,6 +164,10 @@ module ByteDailyAudit
       - Do not suggest anything you have not seen evidence for in the data. No speculative hardening, no "might be worth considering".
       - If it was quiet and little went wrong, say so and stop. A short report is a correct report; padding it out to look thorough is worse than nothing.
       - Read the whole window in full. Do not sample.
+
+      NOT FINDINGS
+      These have been looked at and answered. A fresh session has no memory of that, so they are listed here; raising one again in any framing costs a section and tells me something I already know.
+      - `syncevents` writing an ActionEvent whose name is the digit `1`. The lines arrive over the trigger that way and the app is logging exactly what it was handed. The sender is correct. Leave it alone.
     TXT
   end
 
@@ -154,6 +181,7 @@ module ByteDailyAudit
   #
   #   ByteDailyAudit.kick!                      # the last 24 hours, right now
   #   ByteDailyAudit.kick!(now: 3.days.ago)     # the 24 hours before then
+  #   ByteDailyAudit.kick!(now: a, since: b)    # one exact stretch, for a gap
   #
   # The window ends at `now`, so a kick picks up what was said a minute ago.
   # That is the point of being able to kick one.
@@ -164,12 +192,12 @@ module ByteDailyAudit
   #
   # Returns as soon as the message is posted — the Mac does the actual work and
   # streams the report into the thread, same as any other Claude turn.
-  def kick!(user=User.me, now: Time.current)
-    run!(user, now: now, force: true)
+  def kick!(user=User.me, now: Time.current, since: nil)
+    run!(user, now: now, since: since, force: true)
   end
 
   # Post the day's prompt.
-  def run!(user, now: Time.current, force: false)
+  def run!(user, now: Time.current, since: nil, force: false)
     convo = conversation(user)
     return :already_ran if !force && already_ran?(user, convo, now: now)
 
@@ -180,7 +208,7 @@ module ByteDailyAudit
     ByteMessageIntake.call(
       user:         user,
       conversation: convo,
-      body:         prompt(user, now: now),
+      body:         prompt(user, now: now, since: since),
       metadata:     { "daily_audit" => true, "hidden" => true },
     )
     :sent

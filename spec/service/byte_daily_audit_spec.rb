@@ -59,6 +59,90 @@ RSpec.describe ByteDailyAudit do
     end
   end
 
+  # A run that fails costs more than its own report. The next window opens 24
+  # hours before ITSELF rather than where the last finished report stopped, so
+  # the hours in between belong to no run at all and nothing later reaches back
+  # for them. On 20 Aug that was 8:30 AM to 1:32 PM the day before.
+  describe "a gap left by a run that never happened" do
+    let(:tz)    { ActiveSupport::TimeZone["America/Denver"] }
+    let(:since) { tz.parse("2026-08-19 08:30:51") }
+    let(:upto)  { tz.parse("2026-08-19 13:32:20") }
+
+    it "starts where it's told rather than 24 hours back" do
+      span = described_class.window(user, now: upto, since: since)
+
+      expect(span.first).to eq(since)
+      expect(span.last).to eq(upto)
+    end
+
+    it "leaves the default alone when nothing is passed" do
+      expect(described_class.window(user, now: upto).first).to eq(upto - 24.hours)
+    end
+
+    # The prompt used to say "the 24 hours" in so many words, which for a
+    # five-hour window is an instruction to go and find nineteen hours that
+    # aren't in it.
+    it "tells the run how long its window actually is" do
+      body = described_class.prompt(user, now: upto, since: since)
+
+      expect(body).to include("Review the 5 hours from")
+      expect(body).not_to include("Review the 24 hours")
+    end
+
+    it "still says 24 hours for an ordinary run" do
+      expect(described_class.prompt(user, now: upto)).to include("Review the 24 hours from")
+    end
+
+    it "names both edges of the gap" do
+      body = described_class.prompt(user, now: upto, since: since)
+
+      expect(body).to include("Wednesday August 19, 2026 at 8:30 AM")
+      expect(body).to include("Wednesday August 19, 2026 at 1:32 PM")
+    end
+
+    # Without this it reads a closed window as though it ran up to the present,
+    # and reports today's traffic as though it were in scope.
+    it "says the window has closed instead of promising it reaches now" do
+      body = described_class.prompt(user, now: upto, since: since)
+
+      expect(body).to include("already closed")
+      expect(body).not_to include("right up to now")
+    end
+
+    it "keeps the up-to-now promise on an ordinary run" do
+      expect(described_class.prompt(user, now: upto)).to include("right up to now")
+    end
+
+    it "posts one when kicked" do
+      described_class.kick!(user, now: upto, since: since)
+      posted = described_class.conversation(user).byte_messages.order(:id).last
+
+      expect(posted.body).to include("Review the 5 hours from")
+    end
+  end
+
+  describe ".span_length" do
+    let(:tz) { ActiveSupport::TimeZone["America/Denver"] }
+
+    def length(minutes)
+      start = tz.parse("2026-08-19 08:00:00")
+      described_class.span_length(start..(start + minutes.minutes))
+    end
+
+    it "reads a day as hours" do
+      expect(length(24 * 60)).to eq("24 hours")
+    end
+
+    it "rounds a ragged window to the nearest hour" do
+      expect(length(302)).to eq("5 hours")
+    end
+
+    # An hour and a bit rounded to "1 hours" reads as a bug in the prompt.
+    it "stays in minutes while hours would be a rounding lie" do
+      expect(length(35)).to eq("35 minutes")
+    end
+  end
+
   describe ".conversation" do
     it "runs in claude mode against the repo, not as a Buddy thread" do
       convo = described_class.conversation(user)
@@ -128,6 +212,13 @@ RSpec.describe ByteDailyAudit do
     # fresh to count.
     it "says the last few minutes are in scope" do
       expect(prompt).to include("right up to now, the last few minutes included")
+    end
+
+    # A fresh session each day means a dismissed finding comes back every day
+    # until the prompt itself says otherwise.
+    it "carries the findings that have already been answered" do
+      expect(prompt).to include("NOT FINDINGS")
+      expect(prompt).to include("syncevents")
     end
 
     it "makes it reconcile each problem against what shipped after it" do

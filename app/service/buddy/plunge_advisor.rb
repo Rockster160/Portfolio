@@ -1,8 +1,13 @@
 module Buddy
   # Reads Alpine's hourly forecast and produces a short block for the Today
-  # briefing — but ONLY when there's something worth saying: rain/snow, or heavy
-  # dark clouds. When it IS raining, it lists the rain windows and judges
-  # whether it's a good day to go plunge:
+  # briefing — but ONLY about rain. Alpine's temperature, its sky and its
+  # general shape of a day are somebody else's business; the one thing that
+  # decides whether the canyon is worth the drive is whether it's wet. It used
+  # to speak up for heavy dark cloud as well, which is a forecast for a place
+  # nobody is standing in.
+  #
+  # When it IS raining, it lists the rain windows and judges whether it's a good
+  # day to go plunge:
   #
   #   * the rain falls during a DOWN-TIME window (late morning / early afternoon
   #     or 6-8pm on weekdays; any time on weekends),
@@ -19,9 +24,20 @@ module Buddy
     ALPINE = { lat: 40.4527, lng: -111.7688 }.freeze
 
     RAINY_MAINS   = %w[Rain Drizzle Thunderstorm Snow].freeze
-    HEAVY_CLOUDS  = 80          # % cover that reads as "dark/heavy"
     DRIVE_MINUTES = 30          # rough Alpine round-trip leg
     RUSH_HOURS    = [7, 8, 16, 17].freeze # leave/return we'd rather dodge
+
+    # Daytime only, for the week ahead. Rain at 3am is not weather anybody is
+    # out in, and a window running through the small hours puts a time in the
+    # briefing that nothing can be done with.
+    DAY_HOURS = (7..19)
+
+    # How far "this week" reaches, counting from tomorrow.
+    WEEK_DAYS = 6
+
+    # The day-level labels worth a line. `windy` is not: a gusty Thursday says
+    # nothing about whether the canyon is worth the drive.
+    WET_KINDS = %w[rain snow storms].freeze
 
     # Returns the seed block string, or "" when there's nothing to report.
     def briefing_block(user, now: Time.current)
@@ -32,17 +48,82 @@ module Buddy
       a  = analyze(data, user, tz, now)
       return "" unless a[:notable]
 
-      lines = ["", "ALPINE WEATHER (only surfaced because there's something to note - otherwise stay quiet on weather):"]
+      lines = ["", "RAIN IN ALPINE TODAY:"]
       lines << "- #{a[:headline]}"
       lines << "- Rain windows today (give these times): #{a[:rain_windows].join(", ")}" if a[:rain_windows].any?
-      # ONLY speak up about the plunge when it's genuinely a good window. If it's
-      # not, say NOTHING about plunging - don't editorialize about why not (a
-      # "you're too busy" claim reads as presumptuous when the day's actually
-      # clear). Just report the rain and move on.
+      # The plunge is only ever mentioned when the window is genuinely good.
+      # There's no line for a bad one, because the reasons it read as bad are
+      # guesses at somebody's day and came out sounding presumptuous on days
+      # that were in fact wide open.
+      #
+      # The wording is positive for the reason the weather block is: this seed
+      # used to spell out what not to claim, and spelling it out is how the
+      # claim got made.
       if a[:plunge]
-        lines << "- Good plunge window: #{a[:plunge_reason]}. Float the plunge lightly (don't oversell it), and DON'T claim they're busy or the day's packed."
+        lines << "- Good plunge window: #{a[:plunge_reason]}. Float it once, lightly, as something the day has room for."
       end
       lines.join("\n")
+    end
+
+    # Every daytime rain window in Alpine between tomorrow and the end of the
+    # week. TODAY is deliberately absent: `briefing_block` above already lists
+    # today's windows whenever there are any, and both blocks land in the same
+    # prompt.
+    #
+    # Two resolutions, because the forecast has two. The hourly array runs 48
+    # hours and gives real times; past its end there is one `pop` per day and
+    # nothing at all about WHEN. Those days get their odds and no window rather
+    # than a plausible-sounding hour.
+    def week_rain_block(user, now: Time.current)
+      data = WeatherService.data(lat: ALPINE[:lat], lng: ALPINE[:lng])
+      return "" if data.blank?
+
+      tz     = Buddy::Day.zone(user).name
+      first  = now.in_time_zone(tz).to_date + 1
+      hourly = Array(data["hourly"]).map { |h| [Time.at(h["dt"].to_i).in_time_zone(tz), h] }
+      days   = timed_days(first, hourly.last&.first)
+
+      entries = timed_rain(hourly, tz, days, first) + loose_rain(data, tz, days, first)
+      return "" if entries.empty?
+
+      lines = ["", "RAIN IN ALPINE THIS WEEK:"]
+      lines += entries.map { |entry| "- #{entry}" }
+      lines << "Give the hours wherever there are hours, and the day on its own where there aren't. Rain is the whole of what Alpine is here for."
+      lines.join("\n")
+    end
+
+    # The days the hourly forecast reaches all the way through. One it only half
+    # covers falls to the day-level line instead: a real window from the morning
+    # sitting next to silence about the afternoon reads as a complete answer.
+    def timed_days(first, covered_through)
+      return [] if covered_through.nil?
+
+      (first..(first + WEEK_DAYS)).select { |date|
+        (covered_through.to_date > date) || (covered_through.to_date == date && covered_through.hour >= DAY_HOURS.last)
+      }
+    end
+
+    def timed_rain(hourly, tz, days, first)
+      wet = hourly.select { |at, hour| days.include?(at.to_date) && DAY_HOURS.cover?(at.hour) && rainy?(hour) }
+      contiguous_windows(wet.map(&:last), tz).map { |win| "#{day_label(win[0], first)} #{format_window(win)}" }
+    end
+
+    def loose_rain(data, tz, days, first)
+      Array(data["daily"]).filter_map { |day|
+        at   = Time.at(day["dt"].to_i).in_time_zone(tz)
+        date = at.to_date
+        next if date < first || date > (first + WEEK_DAYS) || days.include?(date)
+
+        kind = WeatherService.day_notable(day)
+        next unless WET_KINDS.include?(kind)
+
+        "#{day_label(at, first)}, #{kind} at #{(day["pop"].to_f * 100).round}% - the forecast has no hours that far out, so the day on its own is the whole of it"
+      }
+    end
+
+    # `first` is tomorrow, which is the only day here with a name of its own.
+    def day_label(time, first)
+      time.to_date == first ? "tomorrow" : time.strftime("%A")
     end
 
     # ---- analysis ----
@@ -57,11 +138,8 @@ module Buddy
       hours = today_hours(data["hourly"], tz, today).select { |h|
         (Time.at(h["dt"].to_i).in_time_zone(tz) + 3600) > local_now
       }
-      rain  = hours.select { |h| rainy?(h) }
-      heavy = hours.select { |h| h["clouds"].to_i >= HEAVY_CLOUDS }
-
-      notable = rain.any? || heavy.size >= 3
-      return { notable: false } unless notable
+      rain = hours.select { |h| rainy?(h) }
+      return { notable: false } if rain.empty?
 
       windows = contiguous_windows(rain, tz)
       sun     = sun_times(data, tz, today)
@@ -70,7 +148,7 @@ module Buddy
 
       {
         notable:       true,
-        headline:      headline(rain, heavy),
+        headline:      headline(rain),
         rain_windows:  windows.map { |w| format_window(w) },
         plunge:        plunge,
         plunge_reason: reason,
@@ -88,13 +166,9 @@ module Buddy
       RAINY_MAINS.include?(main) || hour.key?("rain") || hour.key?("snow")
     end
 
-    def headline(rain, _heavy)
-      if rain.any?
-        snow = rain.any? { |h| h.dig("weather", 0, "main").to_s == "Snow" || h.key?("snow") }
-        snow ? "Snow moving through Alpine today." : "Rain in the forecast for Alpine today."
-      else
-        "Heavy, dark cloud cover over Alpine today."
-      end
+    def headline(rain)
+      snow = rain.any? { |h| h.dig("weather", 0, "main").to_s == "Snow" || h.key?("snow") }
+      snow ? "Snow moving through Alpine today." : "Rain in the forecast for Alpine today."
     end
 
     # Group consecutive rain hours into [start_local, end_local] windows.

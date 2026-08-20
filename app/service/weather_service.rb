@@ -78,6 +78,18 @@ module WeatherService
     payload && format_week_outlook(payload)
   end
 
+  # Today's one notable label ("windy", "storms", "snow", "rain"), or nil for an
+  # ordinary day. Same vocabulary the week outlook uses.
+  #
+  # `summary` carries the temperature, the sky and the rain odds, and has never
+  # carried wind at all - so a day of 40mph gusts reaches a chat surface reading
+  # "currently 71°F, clear". This is the one thing the summary can miss whole.
+  def today_notable(lat: HOME_LAT, lng: HOME_LNG, user: nil)
+    payload = data(lat: lat, lng: lng, user: user)
+    today   = payload && Array(payload["daily"]).first
+    today && day_notable(today)
+  end
+
   def fetch(lat, lng, key)
     uri = URI("https://api.openweathermap.org/data/3.0/onecall")
     uri.query = URI.encode_www_form(

@@ -421,16 +421,54 @@ RSpec.describe "Buddy Today forward-looking" do
 
     it "includes today's weather in the morning" do
       travel_to(tz.parse("2026-07-28 08:00")) do
-        expect(Buddy::TodayBriefing.weather_block(user)).to include("Today:").and include("Comfort read")
+        expect(Buddy::TodayBriefing.weather_block(user)).to include("Today:").and include("currently 72°F, clear")
       end
     end
 
-    it "carries the comfort bands so the briefing frames the number rather than reciting it" do
+    # Six briefings running across two mornings carried the forecast in the seed
+    # and said nothing about the weather at all. The block was worded as an
+    # option ("weave it in naturally", "skip the today line if it's
+    # unremarkable") and that is how it was taken.
+    it "asks for the figures rather than leaving it to taste" do
       travel_to(tz.parse("2026-07-28 08:00")) do
         block = Buddy::TodayBriefing.weather_block(user)
-        expect(block).to include("currently 72°F, clear")
-        expect(block).to include("comfortable sweet spot")
-        expect(block).to match(/hot/)
+        expect(block).to include("Give me the high and the low")
+        expect(block).not_to include("weave it in naturally")
+      end
+    end
+
+    # A plain sunny day is the baseline and has nothing to say for itself. Only
+    # what's genuinely notable adds a line on top of the figures.
+    it "makes an ordinary day the baseline rather than a line to fill" do
+      travel_to(tz.parse("2026-07-28 08:00")) do
+        expect(Buddy::TodayBriefing.weather_block(user)).to include("an ordinary sunny day is the baseline")
+      end
+    end
+
+    # `summary` has never carried wind, so a day of hard gusts reached the seed
+    # reading "currently 72°F, clear" and nothing more.
+    it "carries the notable thing the summary has no room for" do
+      allow(WeatherService).to receive(:today_notable).and_return("windy")
+
+      travel_to(tz.parse("2026-07-28 08:00")) do
+        expect(Buddy::TodayBriefing.weather_block(user)).to include("Notable today: windy.")
+      end
+    end
+
+    it "adds nothing on a day with nothing notable in it" do
+      allow(WeatherService).to receive(:today_notable).and_return(nil)
+
+      travel_to(tz.parse("2026-07-28 08:00")) do
+        expect(Buddy::TodayBriefing.weather_block(user)).not_to include("Notable today")
+      end
+    end
+
+    # A phrase quoted in order to forbid it is still a phrase handed over, and
+    # it has come back out of the model as a suggestion more than once. The rule
+    # is carried positively or it isn't carried.
+    it "hands over no phrase to avoid" do
+      travel_to(tz.parse("2026-07-28 08:00")) do
+        expect(Buddy::TodayBriefing.weather_block(user)).not_to match(/layers|coat|umbrella|what to wear|don't|do not|never/i)
       end
     end
 
@@ -438,7 +476,7 @@ RSpec.describe "Buddy Today forward-looking" do
       travel_to(tz.parse("2026-07-28 21:00")) do
         block = Buddy::TodayBriefing.weather_block(user)
         expect(block).not_to include("Today:")
-        expect(block).not_to include("Comfort read")
+        expect(block).not_to include("Give me the high")
         expect(block).to include("This week to flag")
       end
     end
