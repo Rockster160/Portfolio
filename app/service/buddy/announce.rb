@@ -2,7 +2,7 @@ module Buddy
   # Tell somebody in the house something, in their own companion's voice, from
   # the console.
   #
-  #     Buddy::Announce.(:chels, "The reminders panel can edit recurrence now")
+  #     Buddy::Announce.call(:chels, "The reminders panel can edit recurrence now")
   #
   # Prints a draft, then asks. `s` sends it, `r` regenerates, `n` regenerates
   # with an extra note ("shorter", "mention it's opt-in"), `q` walks away.
@@ -14,6 +14,12 @@ module Buddy
   # companion would say it.
   #
   # Nothing is sent until you say so, and a regenerate costs one model call.
+  #
+  # `say` is the other door, for when you already have the words:
+  #
+  #     Buddy::Announce.say(:chels, "Heads up, the server's down for an hour")
+  #
+  # No model, no draft, no confirming - it goes straight into the thread.
   module Announce
     module_function
 
@@ -32,11 +38,8 @@ module Buddy
     MAX_WORDS = 90
 
     def call(who, briefing, io: $stdout, input: $stdin)
-      user = resolve(who)
-      return io.puts("Don't know who #{who.inspect} is. Try: #{WHO.keys.join(", ")}") if user.nil?
-
-      convo = conversation_for(user)
-      return io.puts("#{user.first_name} has no Buddy conversation to write into.") if convo.nil?
+      user, convo = target(who, io: io)
+      return if user.nil?
 
       pet = ByteConversation.display_name_for(convo.buddy_theme.presence || Buddy::Themes::DEFAULT)
       io.puts("\n#{pet} → #{user.first_name}")
@@ -64,6 +67,42 @@ module Buddy
         # "r" and anything unrecognised fall through and regenerate, which is
         # the harmless option to land on when you fat-finger the prompt.
       end
+    end
+
+    # Straight into their thread, word for word, no model in the middle.
+    #
+    # It still arrives under their companion's name, because that name is the
+    # only voice that thread has - so a line written flat lands as something
+    # Suki said flatly. Worth a beat on the wording, or use `call` and let her
+    # say it herself.
+    def say(who, text, io: $stdout)
+      body = text.to_s.strip
+      return io.puts("Nothing to send.") if body.blank?
+
+      user, convo = target(who, io: io)
+      return if user.nil?
+
+      message = deliver!(user, convo, body)
+      io.puts("Sent to #{user.first_name}. (message ##{message.id})")
+      message
+    end
+
+    # Both doors need the same two things, and have the same nothing to offer
+    # when either one is missing.
+    def target(who, io: $stdout)
+      user = resolve(who)
+      if user.nil?
+        io.puts("Don't know who #{who.inspect} is. Try: #{WHO.keys.join(", ")}")
+        return nil
+      end
+
+      convo = conversation_for(user)
+      if convo.nil?
+        io.puts("#{user.first_name} has no Buddy conversation to write into.")
+        return nil
+      end
+
+      [user, convo]
     end
 
     def resolve(who)

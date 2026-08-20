@@ -135,6 +135,51 @@ RSpec.describe Buddy::Announce do
     end
   end
 
+  # The other door: you already have the words, so nothing is drafted, shown,
+  # or confirmed.
+  describe "saying it yourself" do
+    it "sends the text as written, with no model in the middle" do
+      expect_any_instance_of(Buddy::GPT::Client).not_to receive(:stream)
+
+      described_class.say(:eve, "Server's down for an hour.", io: out)
+
+      message = convo.reload.byte_messages.last
+      expect(message.body).to eq("Server's down for an hour.")
+      expect(message).to be_inbound
+      expect(message.metadata["source"]).to eq("announce")
+      expect(out.string).to include("Sent to Eve")
+    end
+
+    it "hands back the message so a script can carry on with it" do
+      message = described_class.say(:eve, "anything", io: out)
+
+      expect(message).to eq(convo.reload.byte_messages.last)
+    end
+
+    it "writes into their newest live thread, not an archived one" do
+      convo.update!(archived: true)
+      current = eve.byte_conversations.create!(mode: :buddy, last_message_at: Time.current)
+
+      described_class.say(:eve, "anything", io: out)
+
+      expect(current.reload.byte_messages.last.body).to eq("anything")
+    end
+
+    it "sends nothing when there's nothing to send" do
+      described_class.say(:eve, "   ", io: out)
+
+      expect(out.string).to include("Nothing to send.")
+      expect(convo.reload.byte_messages).to be_empty
+    end
+
+    it "says who it knows rather than guessing" do
+      described_class.say(:nobody, "hi", io: out)
+
+      expect(out.string).to include("Don't know who")
+      expect(convo.reload.byte_messages).to be_empty
+    end
+  end
+
   describe "iterating" do
     it "regenerates on r and sends the second draft" do
       stub_model(draft, "Second go, shorter.")
