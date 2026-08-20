@@ -12,9 +12,41 @@ module WeatherService
   HOME_LNG  = -111.9982
   CACHE_TTL = 15.minutes
 
+  # How old the shared forecast may be before we stop trusting it and fetch our
+  # own. Generous next to the Weather Refresh task's hourly cadence, so one
+  # missed run doesn't cost a billed fetch - but a feeder that has actually
+  # stopped doesn't leave Buddy quoting yesterday's weather either.
+  SHARED_TTL = 3.hours
+
   # Cached, parsed onecall payload (or nil). Match the AddressBook/traveltime
   # convention: never bill an external API from dev/test.
-  def data(lat: HOME_LAT, lng: HOME_LNG)
+  def data(lat: HOME_LAT, lng: HOME_LNG, user: nil)
+    shared(lat, lng, user) || own(lat, lng)
+  end
+
+  # The forecast the hourly Weather Refresh task already fetched. Reading it
+  # costs nothing and bills nobody, so it comes first and works in every
+  # environment - and it means Buddy, Jil and the dashboard are all quoting the
+  # same numbers instead of three independently-timed fetches.
+  #
+  # Home only: the cache holds one location, and a named place still has to be
+  # looked up.
+  def shared(lat, lng, user)
+    return nil unless home?(lat, lng)
+
+    cache = (user || ::User.me)&.caches&.dig(:weather)
+    return nil if cache.blank?
+
+    fetched_at = cache[:fetched_at].presence&.then { |at| ::Time.zone.parse(at.to_s) }
+    return nil if fetched_at.nil? || fetched_at < SHARED_TTL.ago
+
+    cache[:forecast].presence&.deep_stringify_keys
+  rescue StandardError => e
+    Rails.logger.warn("[WeatherService] shared read: #{e.class}: #{e.message}")
+    nil
+  end
+
+  def own(lat, lng)
     return nil unless Rails.env.production?
 
     key = ENV["WEATHER_APIKEY"].to_s
@@ -28,17 +60,21 @@ module WeatherService
     nil
   end
 
+  def home?(lat, lng)
+    lat.to_f.round(2) == HOME_LAT.round(2) && lng.to_f.round(2) == HOME_LNG.round(2)
+  end
+
   # One-line current + today read ("currently 72°F, clear. today high 88 / low 61.").
-  def summary(lat: HOME_LAT, lng: HOME_LNG)
-    payload = data(lat: lat, lng: lng)
+  def summary(lat: HOME_LAT, lng: HOME_LNG, user: nil)
+    payload = data(lat: lat, lng: lng, user: user)
     payload && format_summary(payload)
   end
 
   # Short list of the notable-weather days coming this week ("rain Tue & Thu,
   # windy Fri"), or nil if the week's unremarkable. Not a full forecast - just
   # the days worth a heads-up.
-  def week_outlook(lat: HOME_LAT, lng: HOME_LNG)
-    payload = data(lat: lat, lng: lng)
+  def week_outlook(lat: HOME_LAT, lng: HOME_LNG, user: nil)
+    payload = data(lat: lat, lng: lng, user: user)
     payload && format_week_outlook(payload)
   end
 

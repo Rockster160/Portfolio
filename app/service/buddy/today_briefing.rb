@@ -107,8 +107,8 @@ module Buddy
     # still matter). Empty when there's nothing worth saying.
     def weather_block(user=nil)
       late = late_in_day?(user)
-      week = WeatherService.week_outlook
-      summary = WeatherService.summary unless late
+      week = WeatherService.week_outlook(user: user)
+      summary = WeatherService.summary(user: user) unless late
 
       return "" if summary.blank? && week.blank?
 

@@ -84,107 +84,117 @@ import { shiftTempToColor } from "../vars";
       .slice(0, 8);
   };
 
-  let getNextPingTime = function () {
-    let next_hour = Time.msUntilNextHour() + Time.seconds(5);
-    let ten_minutes = Time.minutes(10);
+  // Everything above turns one OpenWeather payload into the nine lines below.
+  // Split out from the subscription so the same code renders a fresh broadcast
+  // and a resync on reconnect.
+  var render = function (json) {
+    var current = json.current;
+    var currentTime = new Date().getTime() / 1000;
+    var sun_events = getSunEvents(json);
+    var isNight = isNightAt(currentTime, sun_events);
+    var now = {
+      icon: getWeatherEmoji(current.weather[0].id, isNight),
+      temp: Math.round(current.temp),
+      description: current.weather[0].description,
+      feelsLike: Math.round(current.feels_like),
+    };
 
-    return next_hour < ten_minutes ? next_hour : ten_minutes;
+    var hourly_hours = [],
+      hourly_icons = [],
+      hourly_temps = [];
+    var columns = getHourlyColumns(json, currentTime, sun_events);
+    columns.forEach(function (col, idx) {
+      var pad = idx == 0 ? 3 : 4;
+      var time = Time.at(col.dt);
+
+      if (col.sun) {
+        // Only the minutes fit, and the icon says which event it is.
+        var minutes = ":" + String(time.getMinutes()).padStart(2, "0");
+
+        hourly_hours.push(minutes.padStart(pad, " "));
+        hourly_icons.push("".padStart(pad - 2, " ") + getSunEmoji(col.sun));
+        hourly_temps.push(" ".repeat(pad));
+        return;
+      }
+
+      var hour = time.getHours();
+      if (hour > 12) {
+        hour -= 12;
+      }
+      if (hour == 0) {
+        hour = 12;
+      }
+      var is_night_hour = isNightAt(col.dt, sun_events);
+      var icon = getWeatherEmoji(col.hour.weather[0].id, is_night_hour);
+
+      hourly_hours.push(String(hour).padStart(pad, " "));
+      hourly_icons.push("".padStart(pad - 2, " ") + icon);
+      hourly_temps.push(shiftTempToColor(col.hour.temp, pad));
+    });
+
+    var daily_days = [],
+      daily_icons = [],
+      daily_highs = [],
+      daily_lows = [];
+    json.daily.slice(0, 7).forEach(function (day_data) {
+      var pad = 4;
+      var time = Time.at(day_data.dt);
+      var icon = getWeatherEmoji(day_data.weather[0].id, false);
+      var day_names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+      daily_days.push(day_names[time.getDay()].padStart(pad, " "));
+      daily_icons.push("".padStart(pad - 2, " ") + icon);
+      daily_highs.push(shiftTempToColor(day_data.temp.max, pad));
+      daily_lows.push(shiftTempToColor(day_data.temp.min, pad));
+    });
+
+    return [
+      Text.center(
+        now.description +
+          " " +
+          now.icon +
+          " " +
+          shiftTempToColor(now.temp) +
+          " (" +
+          shiftTempToColor(now.feelsLike) +
+          ")",
+      ),
+      "\u25f4" + hourly_hours.join("").slice(1),
+      hourly_icons.join(""),
+      " " + hourly_temps.join(""),
+      "",
+      "  " + daily_days.join(""),
+      "  " + daily_icons.join(""),
+      "\u25b2  " + daily_highs.join(""),
+      "\u25bc  " + daily_lows.join(""),
+    ].join("\n");
   };
 
-  Cell.register({
+  let cell = undefined;
+
+  // Fed by the `weather` Monitor channel rather than calling OpenWeather from
+  // the browser. The Weather Refresh task holds the one fetch and pushes here
+  // when it lands, so the dashboard, Buddy and Jil are all reading the same
+  // forecast — and the api key stays on the server instead of in page source.
+  cell = Cell.register({
     title: "Weather",
     text: "Loading...",
-    refreshInterval: getNextPingTime(),
-    reloader: function () {
-      var cell = this;
-      cell.refreshInterval = getNextPingTime();
-
-      var url =
-        "https://api.openweathermap.org/data/3.0/onecall?lat=40.480476443141924&lon=-111.99818607287183&units=imperial&exclude=minutely,alerts&lang=en&appid=" +
-        cell.config.apikey;
-      $.getJSON(url).done(function (json) {
-        var current = json.current;
-        var currentTime = new Date().getTime() / 1000;
-        var sun_events = getSunEvents(json);
-        var isNight = isNightAt(currentTime, sun_events);
-        var now = {
-          icon: getWeatherEmoji(current.weather[0].id, isNight),
-          temp: Math.round(current.temp),
-          description: current.weather[0].description,
-          feelsLike: Math.round(current.feels_like),
-        };
-
-        var hourly_hours = [],
-          hourly_icons = [],
-          hourly_temps = [];
-        var columns = getHourlyColumns(json, currentTime, sun_events);
-        columns.forEach(function (col, idx) {
-          var pad = idx == 0 ? 3 : 4;
-          var time = Time.at(col.dt);
-
-          if (col.sun) {
-            // Only the minutes fit, and the icon says which event it is.
-            var minutes = ":" + String(time.getMinutes()).padStart(2, "0");
-
-            hourly_hours.push(minutes.padStart(pad, " "));
-            hourly_icons.push("".padStart(pad - 2, " ") + getSunEmoji(col.sun));
-            hourly_temps.push(" ".repeat(pad));
+    onload: function () {
+      cell.monitor = Monitor.subscribe("weather", {
+        // The socket carries no history, so a dashboard that just opened has
+        // nothing until the next hourly push. resync replays the current value.
+        connected: function () {
+          cell.monitor?.resync();
+        },
+        disconnected: function () {},
+        received: function (json) {
+          if (!json.data || !json.data.current || !json.data.hourly) {
+            console.log("Unknown data for Monitor.weather:", json);
             return;
           }
 
-          var hour = time.getHours();
-          if (hour > 12) {
-            hour -= 12;
-          }
-          if (hour == 0) {
-            hour = 12;
-          }
-          var is_night_hour = isNightAt(col.dt, sun_events);
-          var icon = getWeatherEmoji(col.hour.weather[0].id, is_night_hour);
-
-          hourly_hours.push(String(hour).padStart(pad, " "));
-          hourly_icons.push("".padStart(pad - 2, " ") + icon);
-          hourly_temps.push(shiftTempToColor(col.hour.temp, pad));
-        });
-
-        var daily_days = [],
-          daily_icons = [],
-          daily_highs = [],
-          daily_lows = [];
-        json.daily.slice(0, 7).forEach(function (day_data, idx) {
-          var pad = 4;
-          var time = Time.at(day_data.dt);
-          var icon = getWeatherEmoji(day_data.weather[0].id, false);
-          var day_names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-          daily_days.push(day_names[time.getDay()].padStart(pad, " "));
-          daily_icons.push("".padStart(pad - 2, " ") + icon);
-          daily_highs.push(shiftTempToColor(day_data.temp.max, pad));
-          daily_lows.push(shiftTempToColor(day_data.temp.min, pad));
-        });
-
-        var lines = [
-          Text.center(
-            now.description +
-              " " +
-              now.icon +
-              " " +
-              shiftTempToColor(now.temp) +
-              " (" +
-              shiftTempToColor(now.feelsLike) +
-              ")",
-          ),
-          "◴" + hourly_hours.join("").slice(1),
-          hourly_icons.join(""),
-          " " + hourly_temps.join(""),
-          "",
-          "  " + daily_days.join(""),
-          "  " + daily_icons.join(""),
-          "▲  " + daily_highs.join(""),
-          "▼  " + daily_lows.join(""),
-        ];
-
-        cell.text(lines.join("\n"));
+          cell.text(render(json.data));
+        },
       });
     },
   });

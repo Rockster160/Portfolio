@@ -26,11 +26,11 @@ Buddy::Tools.register(
   label:       ->(payload, _ctx) { "Weather · #{payload[:label] || payload["label"] || "home"}" },
   auto:        true,
   answers:     true,
-  execute:     ->(payload, _ctx) {
+  execute:     ->(payload, ctx) {
     lat     = payload[:lat] || payload["lat"]
     lng     = payload[:lng] || payload["lng"]
     label   = payload[:label] || payload["label"] || "there"
-    summary = lat && lng ? WeatherService.summary(lat: lat.to_f, lng: lng.to_f) : nil
+    summary = lat && lng ? WeatherService.summary(lat: lat.to_f, lng: lng.to_f, user: ctx.user) : nil
 
     raise "the weather service didn't answer for #{label}" if summary.to_s.strip.empty?
 

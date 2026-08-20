@@ -22,7 +22,7 @@ RSpec.describe "check_weather tool" do
 
   it "hands home weather back in the same turn" do
     allow(WeatherService).to receive(:summary)
-      .with(lat: WeatherService::HOME_LAT, lng: WeatherService::HOME_LNG)
+      .with(lat: WeatherService::HOME_LAT, lng: WeatherService::HOME_LNG, user: user)
       .and_return("currently 75°F, clear sky. today high 88°F / low 61°F.")
 
     result = read({})
@@ -34,7 +34,7 @@ RSpec.describe "check_weather tool" do
   it "resolves a named saved place and reads it there" do
     contact = user.contacts.create!(name: "The Gym")
     contact.addresses.create!(user: user, street: "1 Fit Way", lat: 40.6, lng: -111.8, primary: true)
-    allow(WeatherService).to receive(:summary).with(lat: 40.6, lng: -111.8).and_return("currently 70°F.")
+    allow(WeatherService).to receive(:summary).with(lat: 40.6, lng: -111.8, user: user).and_return("currently 70°F.")
 
     result = read(location: "the gym")
     expect(result[:place]).to eq("The Gym")

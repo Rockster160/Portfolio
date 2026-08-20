@@ -175,6 +175,55 @@ The moment the anchor is created and fed, the task picks it up with no edit: fee
 
 The **Next run** column on the task row shows the resolved time and how far off it is. A dash means nothing resolved — either every anchor it names is still empty, or it's a placeholder waiting on one.
 
+## The weather cache
+
+The **Weather Refresh** task is the one fetch everything else reads. Hourly, or
+on demand via the `weather_refresh` trigger, it stores the whole OpenWeather
+payload in the `weather` cache and writes the `sun:sunrise` / `sun:sunset`
+occurrences from that same response:
+
+```
+user_caches["weather"] = { forecast: <full onecall body>, fetched_at: <iso8601> }
+```
+
+`WeatherService` reads it before considering a fetch of its own, so Buddy's
+`check_weather`, the Today briefing and anything else are quoting the same
+numbers rather than three independently-timed fetches. Reading it costs nothing
+and bills nobody, so unlike a live fetch it works outside production too. It's
+home-only — a named place still has to be looked up — and a cache older than
+three hours is ignored rather than trusted, so a feeder that has actually
+stopped doesn't leave Buddy quoting yesterday.
+
+`hourly` is deliberately NOT excluded from the request. The dashboard cell needs
+per-hour icons and temps, and the point of one shared cache is that a single
+fetch serves everybody.
+
+### Reaching the dashboard
+
+The cell doesn't fetch — it subscribes to the `weather` Monitor channel, the
+same way the calendar and printer cells do:
+
+```
+Weather Refresh ──> weather cache ──> Monitor.refresh("weather")
+                                             │
+                                   Weather Monitor  (listener monitor:weather)
+                                             │
+                                   Monitor.broadcast("weather", …)
+                                             │
+                                      the dashboard cell
+```
+
+**Weather Monitor** is the only thing that broadcasts, and it reads the cache
+rather than fetching. That matters twice: the hourly refresh nudges it after
+writing, and the cell's `resync()` on connect lands there too — so a dashboard
+opening at 3pm gets the 3pm forecast immediately instead of waiting for the top
+of the hour, and a reconnect costs nothing.
+
+No `refreshInterval`, and no polling: the push IS the update, and it arrives at
+the top of each hour, which is exactly when hourly data changes. The api key
+stayed on the server as a side effect — the browser has no reason to hold it, so
+`show.html.erb` no longer ships it to the page.
+
 ## Buddy and Byte
 
 `check_anchor` gives the assistant read access:
