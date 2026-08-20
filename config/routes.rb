@@ -55,7 +55,7 @@ Rails.application.routes.draw do
   delete "/byte/messages/:id" => "byte#delete_message", as: :byte_message
   post   "/byte/messages/:id/report" => "byte#report_message", as: :byte_message_report
   post   "/byte/messages/:id/react"  => "byte#react_message",  as: :byte_message_react
-  post   "/byte/uploads"      => "byte#uploads",        as: :byte_uploads
+  post   "/byte/uploads" => "byte#uploads", as: :byte_uploads
   get  "/byte/csrf"     => "byte#csrf",           as: :byte_csrf
   post "/byte/presence" => "byte#presence",       as: :byte_presence
   post "/byte/font_scale" => "byte#font_scale",   as: :byte_font_scale
@@ -72,8 +72,8 @@ Rails.application.routes.draw do
   post   "/buddy/timers/:id/pause"  => "buddy/timers#pause",   as: :buddy_timer_pause
   post   "/buddy/timers/:id/resume" => "buddy/timers#resume",  as: :buddy_timer_resume
   post   "/buddy/timers/:id/confirm" => "buddy/timers#confirm", as: :buddy_timer_confirm
-  delete "/buddy/timers/:id"        => "buddy/timers#destroy", as: :buddy_timer
-  get    "/buddy/routines"         => "buddy/routines#index",   as: :buddy_routines
+  delete "/buddy/timers/:id" => "buddy/timers#destroy", as: :buddy_timer
+  get    "/buddy/routines"         => "buddy/routines#index", as: :buddy_routines
   post   "/buddy/routines"         => "buddy/routines#create"
   # Before the :id routes so "jil_actions" is never read as one.
   get    "/buddy/routines/jil_actions" => "buddy/routines#jil_actions", as: :buddy_routine_jil_actions
@@ -165,19 +165,19 @@ Rails.application.routes.draw do
   get  "/chores/archived"       => "chores#archived",       as: :chores_archived
   get  "/chores/recent_history" => "chores#recent_history", as: :chores_recent_history
   get  "/chores/csrf"           => "chores#csrf",           as: :chores_csrf
-  get  "/chores/sync"    => "chores#sync",    as: :chores_sync
+  get  "/chores/sync" => "chores#sync", as: :chores_sync
   get  "/chores/icons.json"      => "household_icons#index",     as: :chores_icons_index
   get  "/chores/icons/signature" => "household_icons#signature", as: :chores_icons_signature
   get  "/chores/icons"           => "household_icons#manage",    as: :chores_icons_manage
   # Record links: which record following which has been automated. Managed
   # here AND by talking to Byte (`link_records` / `unlink_records`).
-  get    "/chores/links"     => "record_links#index",   as: :chores_links
+  get    "/chores/links"     => "record_links#index", as: :chores_links
   post   "/chores/links"     => "record_links#create"
-  patch  "/chores/links/:id" => "record_links#update",  as: :chores_link
+  patch  "/chores/links/:id" => "record_links#update", as: :chores_link
   delete "/chores/links/:id" => "record_links#destroy"
   scope path: "chores", as: :chore_routes do
     resources :icons, only: [:create, :update, :destroy], controller: :household_icons
-    get  "/new"          => "chores#new",            as: :new
+    get  "/new" => "chores#new", as: :new
     get  "/items/:id/edit" => "chores#edit",         as: :edit
     post "/items"        => "chores#create",         as: :items
     patch  "/items/:id"  => "chores#update",         as: :item
@@ -199,7 +199,7 @@ Rails.application.routes.draw do
     get    "/notification_preferences"   => "chores#notification_preferences",        as: :notification_preferences
     patch  "/notification_preferences"   => "chores#update_notification_preferences", as: :update_notification_preferences
     resources :completions, controller: :chore_completions, only: [:update, :destroy]
-    resources :goals,         controller: :chore_goals,          only: [:create, :update, :destroy], as: :goals do
+    resources :goals, controller: :chore_goals, only: [:create, :update, :destroy], as: :goals do
       post :reopen, on: :member
     end
     resources :streak_bonuses, controller: :chore_streak_bonuses, only: [:create, :update, :destroy], as: :streak_bonuses
@@ -235,7 +235,7 @@ Rails.application.routes.draw do
     patch  "/items/:id/layout"   => "timers#layout",    as: :layout_item
     patch  "/order"              => "timers#reorder",   as: :reorder
 
-    resources :pages,         controller: :timer_pages,         only: [:create, :update, :destroy] do
+    resources :pages, controller: :timer_pages, only: [:create, :update, :destroy] do
       resources :buttons, controller: :timer_page_buttons, only: [:create, :update, :destroy]
     end
     patch "/quick_buttons/order" => "timer_quick_buttons#reorder", as: :reorder_quick_buttons
@@ -258,6 +258,7 @@ Rails.application.routes.draw do
   post "webhooks/report" => "webhooks#report"
   get "webhooks/local_ping" => "webhooks#local_ping"
   post "webhooks/local_ping" => "webhooks#local_ping"
+  post "webhooks/proxy_heartbeat" => "webhooks#proxy_heartbeat"
   post "webhooks/jenkins" => "webhooks#jenkins"
   post "webhooks/post" => "webhooks#post"
   post "webhooks/email" => "webhooks#email"

@@ -146,5 +146,52 @@ class ProxyServer < Sinatra::Base
   end
 end
 
-ProxyServer.run! if __FILE__ == $PROGRAM_NAME
+# ── Relay heartbeat ─────────────────────────────────────────────────────────
+# This process is running exactly when the relay is reachable, so its own
+# check-in is the one signal that separates "Mac asleep / relay dead" from
+# "Mac fine, router mis-forwarding". From prod those two are indistinguishable
+# — both are just a dead port — which is why every proxy alert had to list a
+# sleeping Mac as a maybe and could never rule it out.
+
+HEARTBEAT_INTERVAL = 120
+HEARTBEAT_URLS = [
+  "https://ardesian.com/webhooks/proxy_heartbeat",
+  "http://localhost:3141/webhooks/proxy_heartbeat",
+].freeze
+
+# launchd hands this process almost no environment — the plist sets RBENV_ROOT
+# and PATH and nothing else — so PORTFOLIO_AUTH has to come from the login
+# shell that defines it. The sibling dashboard job solves the same problem the
+# same way.
+def heartbeat_auth
+  auth = ENV["PORTFOLIO_AUTH"].to_s.strip
+  auth = `zsh -lc 'printf %s "$PORTFOLIO_AUTH"'`.strip if auth.empty?
+  auth.empty? ? nil : auth
+rescue StandardError
+  nil
+end
+
+def start_heartbeat
+  auth = heartbeat_auth
+  if auth.nil?
+    puts "\e[31m[HEARTBEAT] PORTFOLIO_AUTH unavailable — relay check-ins disabled\e[0m"
+    return
+  end
+
+  Thread.new do
+    loop do
+      HEARTBEAT_URLS.each do |url|
+        RestClient.post(url, {}, { Authorization: "Basic #{auth}" })
+      rescue StandardError => e
+        puts "\e[90m[HEARTBEAT]\e[31m #{url} → #{e.class}\e[0m" unless url.include?("localhost")
+      end
+      sleep HEARTBEAT_INTERVAL
+    end
+  end
+end
+
+if __FILE__ == $PROGRAM_NAME
+  start_heartbeat
+  ProxyServer.run!
+end
 exit

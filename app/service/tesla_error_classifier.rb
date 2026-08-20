@@ -51,10 +51,10 @@ module TeslaErrorClassifier
   # the user can one-tap silence Tesla while traveling.
   def slack_message(exception, where:, toggle_link:)
     category = classify(exception)
-    body = MESSAGES.fetch(category).call(exception, where)
     [
       header(category, where),
-      body,
+      MESSAGES.fetch(category).call(exception, where),
+      (proxy_diagnosis_block if category == :proxy_unreachable),
       footer(toggle_link),
     ].compact.join("\n")
   end
@@ -77,20 +77,99 @@ module TeslaErrorClassifier
     unknown:             ":bangbang: Tesla error",
   }.freeze
 
+  # What the exception class alone proves. This is the strongest signal in the
+  # whole alert and the old message threw it away: it printed the class, then a
+  # fixed four-item checklist led by the two causes that class had already ruled
+  # out. Working that list top-down missed every time, because "no route to
+  # host" is a reply from something on the path — a sleeping Mac and a crashed
+  # relay are the two things that cannot produce it.
+  PROXY_VERDICTS = {
+    "Errno::ECONNREFUSED"                 => [
+      "The path works end-to-end and the Mac *actively refused* the connection.",
+      "→ Nothing is listening on 3142: the Ruby relay is down. The Mac itself is fine.",
+    ],
+    "Errno::EHOSTUNREACH"                 => [
+      "Something on the path replied *\"no route to host\"*.",
+      "→ The router could not deliver to the LAN IP it forwards 3142 to: either nothing",
+      "   holds that address (dead port-forward / DMZ target), or the machine there is",
+      "   asleep or off and never answered ARP.",
+      "→ Rules OUT a crashed relay on a *live* Mac — that would refuse, not go unreachable.",
+      "→ The relay check-in below separates the two.",
+    ],
+    "Errno::ENETUNREACH"                  => [
+      "No route to the network at all — prod couldn't even get a packet out toward it.",
+      "→ Look at prod's own egress, or at whether `local_ip` is a routable address.",
+    ],
+    "Errno::ETIMEDOUT"                    => [
+      "Nothing answered at all — the packets were silently dropped.",
+      "→ Mac powered off, the port-forward rule is missing/disabled, or a firewall ate it.",
+    ],
+    "RestClient::Exceptions::OpenTimeout" => [
+      "The TCP handshake never completed — silently dropped, nothing answered.",
+      "→ Mac powered off, the port-forward rule is missing/disabled, or a firewall ate it.",
+    ],
+    "RestClient::Exceptions::ReadTimeout" => [
+      "The socket opened but the relay never sent a response body.",
+      "→ The relay is listening but wedged — the break is the app, not the network.",
+    ],
+    "RestClient::ServerBrokeConnection"   => [
+      "The relay accepted the connection and then dropped it mid-response.",
+      "→ The relay is listening but crashing on the request — check its log, not the router.",
+    ],
+    "SocketError"                         => [
+      "The address never resolved.",
+      "→ A DNS/name problem, not a home-network one.",
+    ],
+  }.freeze
+
+  # Matched through the ancestry so a subclass of a mapped error still reads
+  # straight instead of falling through to the unmapped branch.
+  def proxy_verdict(exception)
+    exception.class.ancestors.each { |klass|
+      lines = PROXY_VERDICTS[klass.name]
+      return lines if lines
+    }
+
+    nil
+  end
+
+  # Runs the real reachability walk at alert time, so the post names the layer
+  # that is actually broken rather than every layer that could be. Wrapped
+  # because a probe that blows up must never cost us the alert it rode in on.
+  def proxy_diagnosis_block
+    result = ::ProxyRequest.probe
+    [
+      "",
+      "*Live probe — #{result[:ip] || "local_ip UNSET"}:#{::ProxyRequest::PROXY_PORT}*",
+      "```",
+      *result[:layers].map { |layer| "#{layer_mark(layer)} #{layer[:label]} — #{layer[:detail]}" },
+      "```",
+      (result[:ok] ? "*All layers healthy* — the break is past the relay:" : "*Fix (broken at `#{result[:failed_at]}`):*"),
+      *result[:remediation],
+    ].join("\n")
+  rescue StandardError => e
+    "\n_Live probe failed to run: `#{e.class}: #{e.message.to_s[0..120]}`_"
+  end
+
+  def layer_mark(layer)
+    return "✓" if layer[:ok]
+    return "!" unless layer[:fatal]
+
+    "✗"
+  end
+
   MESSAGES = {
     proxy_unreachable:   ->(exc, _where) {
-      <<~MSG.strip
-        Couldn't reach the home Mac proxies at `#{DataStorage[:local_ip]}:3142`.
-        `#{exc.class}: #{exc.message.to_s[0..160]}`
-
-        *Likely causes (in order):*
-        1. Home Mac is asleep / off network → wake it
-        2. launchd jobs crashed → on the Mac:
-           `launchctl kickstart -k gui/$UID/com.ardesian.tesla-go-proxy`
-           `launchctl kickstart -k gui/$UID/com.ardesian.tesla-ruby-relay`
-        3. Public IP changed and duckdns lagged → check `DataStorage[:local_ip]` vs `curl ifconfig.me` on the Mac
-        4. Router port-forward on 3142 broke
-      MSG
+      verdict = proxy_verdict(exc) || [
+        "Unmapped error class — add it to `PROXY_VERDICTS` so the next alert reads straight.",
+      ]
+      [
+        "Couldn't reach the home Mac proxies at `#{DataStorage[:local_ip]}:#{::ProxyRequest::PROXY_PORT}`.",
+        "`#{exc.class}: #{exc.message.to_s[0..160]}`",
+        "",
+        "*What the error class proves:*",
+        *verdict,
+      ].join("\n")
     },
     auth_refresh_failed: ->(exc, _where) {
       <<~MSG.strip

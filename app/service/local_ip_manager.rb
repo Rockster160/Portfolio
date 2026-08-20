@@ -1,8 +1,27 @@
 module LocalIpManager
   module_function
 
+  SEEN_AT_KEY = :local_ip_seen_at
+
   def local_ip
     DataStorage[:local_ip]
+  end
+
+  # Every check-in stamps the clock, whether or not the address moved. The
+  # IP-change path below deliberately writes nothing when the address is
+  # unchanged, so a healthy home network and a dead one both used to leave the
+  # same trace: none. That made "is anything home?" unanswerable from prod, and
+  # kept a sleeping-Mac theory permanently un-eliminable on every proxy alert.
+  def record_ping!(ip)
+    DataStorage[SEEN_AT_KEY] = Time.current.to_i
+    self.local_ip = ip
+  end
+
+  def last_seen_at
+    raw = DataStorage[SEEN_AT_KEY]
+    return nil if raw.blank?
+
+    Time.zone.at(raw.to_i)
   end
 
   def local_ip=(new_ip)

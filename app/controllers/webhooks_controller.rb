@@ -219,7 +219,20 @@ class WebhooksController < ApplicationController
   def local_ping
     return head :ok unless current_user == User.me
 
-    LocalIpManager.local_ip = request.remote_ip
+    LocalIpManager.record_ping!(request.remote_ip)
+
+    head :ok
+  end
+
+  # Posted by the relay process on the home Mac (proxy/listener.rb). Unlike
+  # local_ping this answers for THAT machine specifically, which is what lets a
+  # proxy alert tell a sleeping Mac apart from a mis-forwarded router. It 401s
+  # rather than quietly heading :ok, because a relay that thinks it is checking
+  # in while prod records nothing is the exact blind spot this closes.
+  def proxy_heartbeat
+    return head :unauthorized unless current_user == User.me
+
+    ProxyRequest.record_relay_heartbeat!
 
     head :ok
   end

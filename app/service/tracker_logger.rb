@@ -28,6 +28,7 @@ module TrackerLogger
     # TODO: Should check Dashboard UserAgent -- OR! Include some kind of param/token/header
     #   that disables the log tracker
     return false if request.env["REQUEST_PATH"] == "/webhooks/local_ping"
+    return false if request.env["REQUEST_PATH"] == "/webhooks/proxy_heartbeat"
     return false if request.env["REQUEST_PATH"] == "/webhooks/report"
     return false if request.env["REQUEST_PATH"] == "/printer_control"
 
