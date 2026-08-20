@@ -82,12 +82,19 @@ module ByteDailyAudit
 
   # sidekiq-cron can fire the same minute twice across a restart, so the guard
   # is a real requirement rather than belt-and-braces.
+  #
+  # A prompt that never reached the Mac does NOT count as having run. On 20 Aug
+  # the 8:30 handoff failed (message 4046, state `failed`, nothing delivered),
+  # the 10am backstop found that row and stood down, and the day had no report
+  # at all until someone noticed the absence seven hours later. The backstop
+  # exists for exactly the morning the audit didn't happen, and asking whether a
+  # prompt was POSTED answers a different question from whether one landed.
   def already_ran?(user, convo, now: Time.current)
     midnight = now.in_time_zone(user.timezone).beginning_of_day
-    convo.byte_messages
-      .where(direction: :outbound)
-      .where("byte_messages.metadata ->> 'daily_audit' = 'true'")
-      .exists?(byte_messages: { created_at: midnight.. })
+    scope    = convo.byte_messages.where(direction: :outbound)
+    scope    = scope.where("byte_messages.metadata ->> 'daily_audit' = 'true'")
+    scope    = scope.where(byte_messages: { created_at: midnight.. })
+    scope.where.not(byte_messages: { state: :failed }).exists?
   end
 
   # Everything the audit is asked to do.

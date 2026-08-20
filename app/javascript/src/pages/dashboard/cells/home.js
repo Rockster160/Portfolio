@@ -326,6 +326,8 @@ import { dash_colors, beep, scaleVal, clamp, shiftTempToColor } from "../vars";
         return Text.blue("S:");
       case "fedex":
         return Text.purple("F:");
+      case "wayfair":
+        return Text.chelsea("W:");
       default:
         return null; // amazon, manual
     }

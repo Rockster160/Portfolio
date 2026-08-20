@@ -171,4 +171,70 @@ RSpec.describe Jil::Methods::Custom do
       expect(exe.ctx[:error]).to be_present
     end
   end
+
+  # ── WayfairPackage: the phone's `wayfair` trigger → the shipment parser ─
+
+  describe "Custom.WayfairPackage" do
+    include ActiveSupport::Testing::TimeHelpers
+
+    around { |ex| travel_to(DateTime.new(2026, 8, 20, 18, 0, 0)) { ex.run } }
+
+    before do
+      allow(user).to receive(:me?).and_return(true)
+      AmazonOrder.clear
+      allow(MeCache).to receive(:get).and_call_original
+      allow(MeCache).to receive(:get).with(:amazon_deliveries).and_return([])
+      allow(AmazonOrder).to receive(:save)
+      allow(AmazonOrder).to receive(:broadcast)
+    end
+
+    let(:text) {
+      "Wayfair: Exciting news! Your order is out for delivery. " \
+      "Track your desk here: https://www.wayfair.com/pXJxCqyzBM"
+    }
+
+    # What the deployed `wayfair` listener task runs, shape for shape.
+    def wayfair_code
+      <<~'JIL'
+        input = Global.input_data()::Hash
+        raw = input.get("wayfair")::String
+        result = Custom.WayfairPackage(raw)::Hash
+      JIL
+    end
+
+    it "opens a delivery named for the product and returns it" do
+      exe = jil(wayfair_code, { "wayfair" => text })
+
+      expect(exe.ctx[:error]).to be_blank
+      expect(AmazonOrder.all.length).to eq(1)
+
+      item = AmazonOrder.all.first
+      expect(item.carrier).to eq(:wayfair)
+      expect(item.name).to eq("desk")
+      expect(item.source).to eq("Wayfair")
+      expect(item.delivery_date).to eq("2026-08-20")
+
+      returned = exe.ctx.dig(:vars, :result, :value)
+      expect(returned[:custom_url]).to eq("https://www.wayfair.com/pXJxCqyzBM")
+      # Nothing to send to a carrier tracking page — the short link is the link.
+      expect(returned[:url]).to be_nil
+    end
+
+    it "creates nothing for a marketing text and returns nil" do
+      promo = "Wayfair: Way Day starts now! Up to 70% off: https://www.wayfair.com/zzQ1Ab2Cd"
+      exe = jil(wayfair_code, { "wayfair" => promo })
+
+      expect(exe.ctx[:error]).to be_blank
+      expect(AmazonOrder.all).to be_empty
+    end
+
+    it "does not touch User.me's deliveries for another user's task" do
+      allow(user).to receive(:me?).and_return(false)
+
+      exe = jil(wayfair_code, { "wayfair" => text })
+
+      expect(AmazonOrder.all).to be_empty
+      expect(exe.ctx[:error]).to be_present
+    end
+  end
 end

@@ -272,5 +272,26 @@ RSpec.describe ByteDailyAudit do
 
       expect(described_class.run!(user)).to eq(:sent)
     end
+
+    # 20 Aug: the 8:30 handoff failed (message 4046), the 10am backstop found
+    # that row and stood down, and the day had no report at all. The backstop is
+    # there for the morning the audit didn't happen, and a prompt that never
+    # reached the Mac is that morning.
+    describe "when the morning's prompt never got out" do
+      it "lets the backstop have another go" do
+        described_class.run!(user)
+        described_class.conversation(user).byte_messages.last.update!(state: :failed)
+
+        expect(described_class.run!(user)).to eq(:sent)
+      end
+
+      it "still stands down once one of them lands" do
+        described_class.run!(user)
+        described_class.conversation(user).byte_messages.last.update!(state: :failed)
+        described_class.run!(user)
+
+        expect(described_class.run!(user)).to eq(:already_ran)
+      end
+    end
   end
 end

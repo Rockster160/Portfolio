@@ -21,6 +21,8 @@ class Jil::Methods::Custom < Jil::Methods::Base
       return refresh_travel_time(evalargs(line.args).first)
     when :ups_package
       return ups_package(evalargs(line.args).first) if @jil.user.me?
+    when :wayfair_package
+      return wayfair_package(evalargs(line.args).first) if @jil.user.me?
     end
 
     task = @jil.user.tasks.active.enabled.functions.by_method_name(line.methodname).take
@@ -55,6 +57,19 @@ class Jil::Methods::Custom < Jil::Methods::Base
   # notification at all (a digest, or something that just mentions UPS).
   def ups_package(text)
     item = ::UpsSmsParser.parse(text.to_s, user: @jil.user)
+    return nil unless item
+
+    item.serialize
+  end
+
+  # A forwarded Wayfair text, handed over by the phone's `wayfair` trigger.
+  # Same deal as `ups_package`, except Wayfair sends no tracking number — the
+  # delivery is tracked by its product name and the order's short link.
+  #
+  # Returns nil for anything that isn't a shipment update (Wayfair's marketing
+  # texts carry a wayfair.com link too).
+  def wayfair_package(text)
+    item = ::WayfairSmsParser.parse(text.to_s, user: @jil.user)
     return nil unless item
 
     item.serialize

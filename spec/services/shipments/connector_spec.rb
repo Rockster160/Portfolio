@@ -55,6 +55,29 @@ RSpec.describe Shipments::Connector do
       expect(AmazonOrder.all.size).to eq(2)
     end
 
+    it "WEAK-matches on the NAME when the caller connects on :name" do
+      desk = seed(carrier: :wayfair, source: "Wayfair", name: "desk", item_id: "WAYFAIR-a")
+      seed(carrier: :wayfair, source: "Wayfair", name: "nightstand", item_id: "WAYFAIR-b")
+
+      hit = described_class.connect_or_create(
+        carrier: :wayfair, source: "Wayfair", name: "desk", connect_on: :name,
+      )
+
+      expect(hit).to be(desk)
+      expect(AmazonOrder.all.size).to eq(2)
+    end
+
+    it "creates a NEW item when connecting on :name and no item carries that name" do
+      seed(carrier: :wayfair, source: "Wayfair", name: "nightstand", item_id: "WAYFAIR-b")
+
+      hit = described_class.connect_or_create(
+        carrier: :wayfair, source: "Wayfair", name: "desk", connect_on: :name,
+      )
+
+      expect(hit.item_id).not_to eq("WAYFAIR-b")
+      expect(AmazonOrder.all.size).to eq(2)
+    end
+
     it "creates with tracking number as item_id when present, else a synthetic id" do
       with_tracking = described_class.connect_or_create(carrier: :usps, tracking_number: "9200190267338000065163052")
       no_tracking   = described_class.connect_or_create(carrier: :ups, source: "AMPLETHINK")

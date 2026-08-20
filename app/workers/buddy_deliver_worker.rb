@@ -35,15 +35,45 @@ class BuddyDeliverWorker
   # claude / bash: plain Mac handoff, reflect success in state + broadcast.
   # Untouched by Buddy's move into Rails — these modes need the Mac's real shell
   # and real repos.
+  #
+  # A non-success answer raises rather than being handled separately, so the one
+  # rescue below covers both ways this fails: the Mac refusing it and the Mac
+  # not being there at all.
   def deliver_plain(message, conversation)
     response = ByteLocal.deliver(message, conversation: conversation)
-    ok       = response.is_a?(Net::HTTPSuccess)
-    message.update!(state: ok ? :sent : :failed)
+    raise("the Mac didn't take it (#{response&.code || "no answer"})") unless response.is_a?(Net::HTTPSuccess)
+
+    message.update!(state: :sent)
     broadcast(message.reload)
   rescue => e
     Rails.logger.warn("[Byte] deliver worker crashed: #{e.class}: #{e.message}")
     message.update!(state: :failed) rescue nil
     broadcast(message.reload) rescue nil
+    report_failed_handoff(message, e)
+  end
+
+  # The `:failed` state was supposed to be the whole signal — see the note on
+  # `sidekiq_options` above. It isn't one for a message nobody can see: the
+  # daily audit's prompt carries `hidden`, so when its handoff failed on 20 Aug
+  # the state was set on a row that renders nowhere, and the first sign of it
+  # was somebody noticing that no report had arrived. The person's OWN message
+  # went the same way on 19 Aug (4001, the one asking about connection
+  # timeouts), where a visible bubble at least showed the state.
+  #
+  # Same reason Buddy::ReminderFirer reports: something the person is waiting
+  # for silently didn't happen, and silent-log-only means hours before anyone
+  # knows.
+  def report_failed_handoff(message, exception)
+    Buddy::Errors.report(
+      section:   "byte.local_handoff",
+      exception: exception,
+      user:      message.user,
+      extra:     {
+        message_id:      message.id,
+        conversation_id: message.byte_conversation_id,
+        hidden:          message.metadata.is_a?(Hash) && message.metadata["hidden"].present?,
+      },
+    )
   end
 
   def broadcast(message)

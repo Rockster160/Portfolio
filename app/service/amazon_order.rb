@@ -30,7 +30,9 @@ class AmazonOrder
 
   # The carriers somebody can NAME. `manual` is the absence of one — what a
   # hand-added row starts as — so it isn't in here; `amazon` has no template
-  # because those rows keep their product link instead.
+  # because those rows keep their product link instead, and `wayfair` (like
+  # amazon, a merchant reporting its own shipments) links through the per-order
+  # short link its texts carry, in `custom_url`.
   #
   # Derived from the URL map rather than listed again, so a carrier is
   # sayable exactly when there's somewhere to send its tracking number.

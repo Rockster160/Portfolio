@@ -8,6 +8,16 @@ RSpec.describe "Jil: Anchor", type: :service do
   let(:tz) { ActiveSupport::TimeZone[user.timezone] }
   let(:tonight) { tz.local(2026, 8, 19, 20, 24) }
 
+  # Every date in here is written out in full, so the wall clock has to be
+  # pinned or the file only means what it says on one particular afternoon.
+  # `next_trigger_at` answers with the next occurrence STILL AHEAD: the pickup
+  # example below passed until the real clock reached the morning it names, and
+  # from that moment it was going to fail on every run forever. Three examples
+  # already pinned their own clock for this reason; now the file does it once.
+  noon = ActiveSupport::TimeZone["America/Denver"].local(2026, 8, 19, 12, 0)
+
+  around { |example| travel_to(noon) { example.run } }
+
   def run(code)
     Jil::Executor.call(user, code).tap { |result|
       expect(result.ctx[:error]).to be_nil, "Jil error: #{result.ctx[:error].inspect}"
@@ -99,32 +109,26 @@ RSpec.describe "Jil: Anchor", type: :service do
   it "answers what a cron of the same string would" do
     user.anchors.create!(key: "sun:sunset").set_occurrence(tonight, identifier: "a")
 
-    result = travel_to(tz.local(2026, 8, 19, 12, 0)) do
-      run(<<~'JIL')
-        at = Anchor.next("sun:sunset-5m")::Date
-        out = Global.return(at)::Date
-      JIL
-    end
+    result = run(<<~'JIL')
+      at = Anchor.next("sun:sunset-5m")::Date
+      out = Global.return(at)::Date
+    JIL
 
     expect(Time.parse(result.ctx[:return_val].to_s)).to be_within(1.second).of(tonight - 5.minutes)
   end
 
   it "re-resolves a dependent task as a side effect of the write" do
     user.anchors.create!(key: "sun:sunset").set_occurrence(tonight, identifier: "2026-08-19")
-    task = travel_to(tz.local(2026, 8, 19, 12, 0)) do
-      user.tasks.create!(
-        name: "Porch", listener: "tell:porch", code: "// noop", enabled: true,
-        cron: "sun:sunset-5m",
-      )
-    end
+    task = user.tasks.create!(
+      name: "Porch", listener: "tell:porch", code: "// noop", enabled: true,
+      cron: "sun:sunset-5m",
+    )
 
-    travel_to(tz.local(2026, 8, 19, 12, 0)) do
-      run(<<~'JIL')
-        at = Date.new(2026, 8, 19, 20, 42)::Date
-        a = Anchor.set("sun:sunset", at, "2026-08-19")::Anchor
-        out = Global.return(a)::Hash
-      JIL
-    end
+    run(<<~'JIL')
+      at = Date.new(2026, 8, 19, 20, 42)::Date
+      a = Anchor.set("sun:sunset", at, "2026-08-19")::Anchor
+      out = Global.return(a)::Hash
+    JIL
 
     expect(task.reload.next_trigger_at).to be_within(1.second).of(tonight + 13.minutes)
   end

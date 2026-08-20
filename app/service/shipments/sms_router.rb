@@ -14,8 +14,13 @@ module Shipments
     # number, or a same-day/next-day delivery. Excludes the digest above.
     UPS_PACKAGE_REGEX = /your .+? package|delivering (?:today|tomorrow)|\b1Z[0-9A-Z]{16}\b|Delivered your/i
 
+    # Wayfair texts a shipment status; it also texts a great deal of marketing,
+    # and both carry a wayfair.com short link. The status VOCABULARY is what
+    # separates them — "Track your desk here" alone is a sale email's shape too.
+    WAYFAIR_PACKAGE_REGEX = /out for delivery|(?:has|have) shipped|on (?:its|the) way|\bdelivered\b|arriv(?:ing|es|ed)|estimated delivery|delivery (?:date|window)/i
+
     def match?(text)
-      ups?(text)
+      ups?(text) || wayfair?(text)
     end
 
     def ups?(text)
@@ -24,6 +29,13 @@ module Shipments
       return false unless t.match?(/\bUPS\b/i)
 
       t.match?(UPS_PACKAGE_REGEX)
+    end
+
+    def wayfair?(text)
+      t = text.to_s
+      return false unless t.match?(/\bWayfair\b/i)
+
+      t.match?(WAYFAIR_PACKAGE_REGEX)
     end
   end
 end
