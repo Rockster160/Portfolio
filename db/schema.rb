@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_19_205410) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_20_224043) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1017,6 +1017,22 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_19_205410) do
     t.index ["user_id", "task_id", "status", "started_at"], name: "index_executions_on_compaction_candidates", order: { started_at: :desc }, where: "(payload_id IS NOT NULL)"
   end
 
+  create_table "feature_requests", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "byte_conversation_id"
+    t.bigint "byte_message_id"
+    t.string "title", null: false
+    t.text "body", null: false
+    t.integer "status", default: 0, null: false
+    t.datetime "seen_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["byte_conversation_id"], name: "index_feature_requests_on_byte_conversation_id"
+    t.index ["byte_message_id"], name: "index_feature_requests_on_byte_message_id"
+    t.index ["status", "created_at"], name: "index_feature_requests_on_status_and_created_at"
+    t.index ["user_id"], name: "index_feature_requests_on_user_id"
+  end
+
   create_table "flash_cards", id: :serial, force: :cascade do |t|
     t.integer "batch_id"
     t.string "title", limit: 255
@@ -1421,9 +1437,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_19_205410) do
     t.bigint "source_item_id"
     t.integer "offset_seconds"
     t.jsonb "condition"
-    t.text "anchor"
     t.bigint "anchor_occurrence_id"
-    t.index ["anchor"], name: "index_scheduled_triggers_on_anchor", where: "(anchor IS NOT NULL)"
     t.index ["anchor_occurrence_id"], name: "index_scheduled_triggers_on_anchor_occurrence_id"
     t.index ["execute_at"], name: "index_scheduled_triggers_on_pending_execute_at", where: "(jid IS NULL)"
     t.index ["source_item_id"], name: "index_scheduled_triggers_on_source_item_id"
@@ -1821,6 +1835,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_19_205410) do
   add_foreign_key "contact_tags", "tags"
   add_foreign_key "device_login_tokens", "users"
   add_foreign_key "emails", "users"
+  add_foreign_key "feature_requests", "byte_conversations"
+  add_foreign_key "feature_requests", "byte_messages"
+  add_foreign_key "feature_requests", "users"
   add_foreign_key "google_accounts", "users"
   add_foreign_key "household_icons", "chore_households", on_delete: :cascade
   add_foreign_key "household_icons", "users", column: "uploaded_by_user_id"

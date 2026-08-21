@@ -9,6 +9,16 @@ Buddy::Tools.register(
     or asked for a TASK, they want a row they can see and check off - that's
     `add_agenda_item`, and a reminder is not a substitute for it.
 
+    **A REPEAT THEY HAVE TO ACT ON EACH TIME IS `set_timer(repeat: true)`, NOT
+    THIS.** "Check the printer every 30 minutes", "get me back to the cupboards
+    every half hour", "make me drink water every hour" - each round asks them
+    to go and DO something, and the next round should start when they've done
+    it. That's a countdown with a button on the end, which is what set_timer's
+    `repeat` builds. Set it here instead and it fires on the clock whether or
+    not they acted, so fourteen nudges stack up while they're away from the
+    thing. This tool is for a nudge that's true whether or not they're there:
+    "remind me at 9", "every Wednesday night", "in an hour".
+
     **`text` is what they'll READ when it goes off, not what they said to get
     it set.** Their words are a request aimed at you; the reminder is a nudge
     aimed at them, and the two are almost never the same sentence. "Please ping
@@ -63,9 +73,12 @@ Buddy::Tools.register(
       "monthly:<nth>-<weekday>:HH:MM" - the Nth weekday of the month, where
                                        nth is 1-4 or "last": "monthly:2-tuesday:10:00"
                                        is the SECOND TUESDAY of every month
-      "every:<n>-<unit>:HH:MM"       - every N days / weeks / months, counting
-                                       from today: "every:2-weeks:10:00" is
-                                       every OTHER week on today's weekday
+      "every:<n>-<unit>:HH:MM"       - every N minutes / hours / days / weeks /
+                                       months, counting from today:
+                                       "every:2-weeks:10:00" is every OTHER
+                                       week on today's weekday, and
+                                       "every:30-minutes:14:00" nudges every
+                                       half hour from 2pm to the end of the day
       "yearly:HH:MM"                 - once a year, on today's date
 
     "Every second Tuesday" is two different requests and they aren't the
@@ -126,12 +139,28 @@ Buddy::Tools.register(
     leaves a small receipt saying what it checked, and it still records that it
     came due, so they can ask whether it went off.
 
-    **Repeating WITHIN a day** is `every_minutes` + `until_time` on top of a
-    `repeat`. "Nudge me hourly from 9 to 11 tonight" is one reminder -
-    `repeat: daily:21:00`, `every_minutes: 60`, `until_time: "23:00"`, `until`
-    today - not three reminders an hour apart. Three separate rows can't be
-    cancelled together, can't be edited together, and each one nags again after
-    the person has already dealt with it.
+    **Repeating WITHIN a day** has two ways in and they build the same rule.
+    `repeat: "every:30-minutes:14:00"` is the short one and runs to the end of
+    the day; add `until` (a date) to stop it after today. When they named an
+    hour to STOP, use `every_minutes` + `until_time` on top of a `repeat`
+    instead: "nudge me hourly from 9 to 11 tonight" is `repeat: daily:21:00`,
+    `every_minutes: 60`, `until_time: "23:00"`, `until` today.
+
+    Either way it is ONE reminder, never three an hour apart. Three rows can't
+    be cancelled together, can't be edited together, and each one nags again
+    after the person has already dealt with it.
+
+    **A repeat that should stop when something HAPPENS** - "check the printer
+    every 30 minutes until the print finishes", "nudge me hourly until I get
+    home" - is `stop_when`, on the same call. It takes the same conditions
+    `remind_when` does, and when that condition trips the reminder is switched
+    off for good and they're told it stopped. **This is not a thing you lack** -
+    never answer one of these with "I can't make it stop by itself".
+
+    `stop_when` is the whole rule ending. `check` / `check_task` are a
+    different question: they decide whether ONE firing speaks, so a reminder
+    with a check stays alive and asks again tomorrow. Use a check to skip, and
+    `stop_when` to finish.
 
     A reminder can also RUN something instead of saying it. Write `text` as
     "run <name>" (or trigger / fire / start) naming one of their saved routines
@@ -155,6 +184,16 @@ Buddy::Tools.register(
     until:  { type: :string, required: false, description: "Stop repeating after this date (YYYY-MM-DD)" },
     every_minutes: { type: :integer, required: false, description: "Repeat WITHIN the day this often, starting at the repeat spec's time" },
     until_time:    { type: :string,  required: false, description: "Stop repeating for the day at this time (HH:MM). Needs every_minutes." },
+    stop_when:     {
+      type:        :enum,
+      required:    false,
+      values:      Buddy::WatchCondition::TRIGGERS,
+      description: "Switch the whole reminder off when this HAPPENS - \"until the print finishes\", " \
+                   "\"until I get home\". Needs a repeat; the same conditions remind_when takes",
+    },
+    stop_target:   { type: :string, required: false, description: "Place / chore / event / calendar name the stop condition is about. With stop_when." },
+    stop_listener: { type: :string, required: false, description: "Jil listener string, for stop_when=custom. Read read_listener_guide first." },
+    stop_phrase:   { type: :string, required: false, description: "Plain-language meaning of the stop listener. Required for stop_when=custom." },
     check:        { type: :enum,   required: false, values: ScheduleCondition.sets, description: "Records to search before firing" },
     check_query:  { type: :string, required: false, description: "Search that decides it. QUOTE any value with a space: name:\"Some Thing\"" },
     check_task:   { type: :string, required: false, description: "Jil function to ask instead of searching. Must only read/report." },
@@ -163,7 +202,11 @@ Buddy::Tools.register(
     notify: { type: :string, required: false, description: "Household member this reminder is FOR, if not the person asking" },
   },
   confirm: ->(payload, ctx) {
-    recurrence_hash = Buddy::RepeatSpec.parse(payload[:repeat], on: ctx.user.perceived_today)
+    recurrence_hash = Buddy::RepeatSpec.parse(
+      payload[:repeat],
+      on:  ctx.user.perceived_today,
+      now: Time.current.in_time_zone(ctx.user.timezone),
+    )
     if payload[:repeat].to_s.strip.present? && recurrence_hash.nil?
       raise "unknown repeat spec #{payload[:repeat].inspect}"
     end
@@ -191,6 +234,54 @@ Buddy::Tools.register(
         "every_minutes" => payload[:every_minutes].to_i,
         "until_at"      => window_end,
       )
+    end
+
+    # The condition that ENDS it. Resolved here, in front of the person, for the
+    # same reason an action watch resolves its task here: a stop rule that can't
+    # be built has to fail while somebody is still in the conversation, not
+    # silently leave a repeat running forever.
+    # And it DEGRADES rather than raising, which is the whole difference
+    # between this working and not. A stopping rule that can't be built is a
+    # reason to set the repeat without one and say so — not a reason to abandon
+    # the repeat, which was fine. Raising here took the half that worked down
+    # with the half that didn't, and the person got nothing (dev 4085-4087).
+    #
+    # The failure travels in the result instead, so the model reads "the
+    # reminder is set, the ending is NOT" before it says a word.
+    stop_condition = nil
+    stop_error     = nil
+    if payload[:stop_when].to_s.strip.present?
+      begin
+        raise "a repeating reminder is what a stopping condition ends, and there isn't one here" if recurrence_hash.nil?
+
+        arg, feature = Buddy::Features.gated_arg(ctx.user, { gated_values: { stop_when: Buddy::WatchCondition::GATED } }, payload)
+        raise "watching for that needs #{Buddy::Features.label_for(feature)}" if arg
+
+        stop_condition = Buddy::WatchCondition.resolve(
+          {
+            trigger:     payload[:stop_when],
+            target:      payload[:stop_target],
+            listener:    payload[:stop_listener],
+            when_phrase: payload[:stop_phrase],
+          },
+          ctx,
+        )
+      rescue StandardError => e
+        stop_error = e.message
+      end
+    end
+
+    # An event ending means there is NO daily window. A sub-day repeat needs
+    # `until_at` for the fire path to step at all (BuddyReminder#slots_on), and
+    # the placeholder end-of-day it gets became a promise: "every 30 min from
+    # 5:39pm to 11:59pm" over a rule that was supposed to run until a print
+    # finished. Worse than cosmetic - it also stopped at midnight and picked up
+    # again at 5:39pm, so an overnight print went unchecked for seventeen hours.
+    #
+    # Round the clock instead, and let the watch be the ending. `all_day?` in
+    # Buddy::ReminderPresenter is what keeps that out of the prose.
+    if stop_condition && recurrence_hash && recurrence_hash["every_minutes"].to_i.positive?
+      recurrence_hash = recurrence_hash.merge("at" => "00:00", "until_at" => "23:59")
     end
 
     # Validated HERE rather than at fire time. A condition that can't be
@@ -257,6 +348,7 @@ Buddy::Tools.register(
       "Remind you at #{when_str}?"
     end
     summary = "#{summary.chomp("?")}, #{ScheduleCondition.describe(condition)}?" if condition
+    summary = "#{summary.chomp("?")}, #{stop_condition.human}?" if stop_condition
     {
       summary:  summary,
       resolved: {
@@ -265,6 +357,11 @@ Buddy::Tools.register(
         condition:      condition,
         notify_user_id: notify_user&.id,
         recipient_name: notify_user&.first_name,
+        stop_scope:     stop_condition&.scope,
+        stop_match:     stop_condition&.match,
+        stop_listener:  stop_condition&.listener,
+        stop_human:     stop_condition&.human,
+        stop_error:     stop_error,
       }.compact,
     }
   },
@@ -295,12 +392,41 @@ Buddy::Tools.register(
       recurrence:        payload[:recurrence],
       condition:         payload[:condition],
     )
+    # The rule that ends it. A one-shot watch, armed on the same condition
+    # machinery `remind_when` uses — it fires once, switches the reminder off
+    # and says so.
+    stopper = nil
+    if payload[:stop_scope].present?
+      stopper = BuddyWatch.create!(
+        user:              ctx.user,
+        byte_conversation: conversation,
+        kind:              :cancel,
+        trigger_scope:     payload[:stop_scope],
+        listener:          payload[:stop_listener],
+        match:             payload[:stop_match] || {},
+        body:              payload[:stop_human].to_s.presence || "That's done",
+        one_shot:          true,
+        metadata:          { "cancels_reminder_id" => reminder.id, "human_when" => payload[:stop_human].to_s },
+      )
+    end
+
     {
       reminder_id:    reminder.id,
       fire_at:        fire_at.iso8601,
       recurrence:     payload[:recurrence],
       recipient_name: payload[:recipient_name],
-    }
+      stop_watch_id:  stopper&.id,
+      stop_human:     payload[:stop_human],
+      # Said in as many words, because the one thing that must not happen next
+      # is the reply describing an ending that isn't there.
+      stop_failed:    (
+        if payload[:stop_error].present?
+          "THE REMINDER IS SET. The stopping rule is NOT: #{payload[:stop_error]}. " \
+            "Say both - what you set, and that it won't stop on its own yet - and offer " \
+            "`request_feature` for the ending. Never describe a stopping rule you haven't set."
+        end
+      ),
+    }.compact
   },
   # Scheduling a reminder is safe + reversible, so it runs WITHOUT a
   # confirmation checkbox and drops an activity receipt instead.
@@ -316,12 +442,27 @@ Buddy::Tools.register(
     rec     = result[:recurrence]
     who     = result[:recipient_name].presence
 
+    # The chip has to carry the ending, or the one thing they'd want to correct
+    # is the one thing not written down.
+    stops = (", #{Buddy::WatchCondition.until_phrase(result[:stop_human])}" if result[:stop_watch_id].present? && result[:stop_human].present?)
+    stops ||= " (won't stop on its own)" if result[:stop_failed].present?
+
     if rec.is_a?(Hash)
       hhmm  = (Time.zone.parse(rec["at"].to_s) rescue nil)
       tstr  = hhmm ? hhmm.strftime("%-I:%M%P").sub(":00", "") : rec["at"].to_s
       ends  = rec["until_on"].present? ? " until #{rec["until_on"]}" : ""
       verb  = who ? "send this to #{who}" : "remind you"
-      "#{name} will #{verb} #{Buddy::ReminderPresenter.repeat_phrase(rec)} at #{tstr}#{ends}"
+      # An intraday rule has a start AND an end to its day, and "at 5:19pm"
+      # names only the first of fourteen fires. Unless it runs round the clock,
+      # in which case it has no window to name and saying one is the lie.
+      shut  = (Time.zone.parse(rec["until_at"].to_s)&.strftime("%-I:%M%P")&.sub(":00", "") rescue nil)
+      band  = (
+        if Buddy::ReminderPresenter.all_day?(rec) then ""
+        elsif rec["every_minutes"].to_i.positive? && shut then " from #{tstr} to #{shut}"
+        end
+      )
+
+      "#{name} will #{verb} #{Buddy::ReminderPresenter.repeat_phrase(rec)}#{band || " at #{tstr}"}#{ends}#{stops}"
     elsif who
       "#{name} will send this to #{who} #{ctx.friendly_future(fire_at)}"
     else

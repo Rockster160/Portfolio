@@ -3,7 +3,6 @@
 # Table name: scheduled_triggers
 #
 #  id                   :bigint           not null, primary key
-#  anchor               :text
 #  auth_type            :integer
 #  completed_at         :datetime
 #  condition            :jsonb

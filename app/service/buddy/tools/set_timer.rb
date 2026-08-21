@@ -42,14 +42,31 @@ Buddy::Tools.register(
     the flag off.
 
     ROUND AND ROUND: `repeat: true` is for a rhythm rather than one countdown -
-    "half an hour at a time", "30 on, 10 off until 6:30", "keep nudging me back
-    to it". Add `break_minutes` when they named a break, and `until_time` when
-    they named an hour to stop. When a block ends they get a button, the break
-    starts counting on its own, and the NEXT block starts when they tap - never
-    before. That is deliberate: a cycle that restarts on a schedule drifts away
-    from the person inside two rounds. One call sets the whole thing up, so
-    don't call this once per block, and don't promise a rhythm without
-    `repeat`.
+    "half an hour at a time", "30 on, 10 off until 6:30", "check the printer
+    every 30 minutes until the print finishes", "keep nudging me back to it".
+    Add `break_minutes` when they named a break. When a block ends they get a
+    button, the break starts counting on its own, and the NEXT block starts when
+    they tap - never before. That is deliberate: a cycle that restarts on a
+    schedule drifts away from the person inside two rounds. One call sets the
+    whole thing up, so don't call this once per block, and don't promise a
+    rhythm without `repeat`.
+
+    **A REPEAT THEY HAVE TO ACT ON EACH TIME IS THIS TOOL, not
+    `schedule_reminder`.** The test is whether each round asks them to DO
+    something before the next one makes sense - go and look at the printer,
+    get back to the cupboards, drink a glass of water. Then the next round
+    starts when they've done it, which is what the button is for. A reminder
+    fires on a clock whether or not they acted, which for that shape means
+    fourteen nudges stacking up while they're away from it. Save
+    `schedule_reminder` for a nudge that's true whether or not they're there.
+
+    HOW IT ENDS, and it's one of three:
+      - they stop tapping - the default, and fine
+      - `until_time`, when they named an HOUR ("until 6:30")
+      - `stop_when`, when they named a THING HAPPENING ("until the print
+        finishes"). Same conditions `remind_when` takes. **Never turn one of
+        those into a clock time** - it runs for fifteen minutes or fifteen
+        years, whichever the thing takes.
 
     Never offer to do the delayed part later; it's the part they already asked
     for, and the wait already holds it for you.
@@ -76,6 +93,17 @@ Buddy::Tools.register(
       required:    false,
       description: "ISO8601 local time to stop offering another block (\"until 6:30\"). Needs repeat",
     },
+    stop_when:     {
+      type:        :enum,
+      required:    false,
+      values:      Buddy::WatchCondition::TRIGGERS,
+      description: "Stop the whole rhythm when this HAPPENS - \"until the print finishes\", \"until " \
+                   "I get home\". Needs repeat. Not a time: it runs for fifteen minutes or fifteen " \
+                   "years, whichever the thing takes",
+    },
+    stop_target:   { type: :string, required: false, description: "Place / chore / event / calendar name the stop condition is about. With stop_when." },
+    stop_listener: { type: :string, required: false, description: "Jil listener string, for stop_when=custom. Read read_listener_guide first." },
+    stop_phrase:   { type: :string, required: false, description: "Plain-language meaning of the stop listener. Required for stop_when=custom." },
     then_continue: {
       type:        :boolean,
       required:    false,
@@ -104,35 +132,51 @@ Buddy::Tools.register(
     rest    = payload[:break_minutes].to_i * 60
     ends    = Buddy::Tools::SetTimer.until_at(payload, ctx)
 
-    timer = (
-      if cycle
-        Buddy::TimerCycle.start!(
-          user:          ctx.user,
-          conversation:  ctx.conversation,
-          seconds:       seconds,
-          label:         payload[:label],
-          break_seconds: rest.positive? ? rest : nil,
-          until_at:      ends,
-        )
-      else
-        Buddy::Timers.create!(
-          user:         ctx.user,
-          seconds:      seconds,
-          label:        payload[:label],
-          conversation: ctx.conversation,
-        )
-      end
+    # The condition that ends it, resolved before anything is built but never
+    # allowed to take the timer down with it — the countdown they asked for is
+    # good whether or not its ending could be wired.
+    stop, stop_error = Buddy::Tools::SetTimer.stop_condition(payload, ctx) if cycle
+
+    unless cycle
+      plain = Buddy::Timers.create!(
+        user:         ctx.user,
+        seconds:      seconds,
+        label:        payload[:label],
+        conversation: ctx.conversation,
+      )
+      next { timer_id: plain.id, seconds: seconds, label: payload[:label].to_s, waiting: payload[Buddy::Tools::WAIT_ARG].present? }
+    end
+
+    timer = Buddy::TimerCycle.start!(
+      user:          ctx.user,
+      conversation:  ctx.conversation,
+      seconds:       seconds,
+      label:         payload[:label],
+      break_seconds: rest.positive? ? rest : nil,
+      # An EVENT ending is not a clock ending, and the two must never be mixed:
+      # a cycle that stops when the print finishes has no hour attached to it
+      # at all, or the hour arrives first and stops it early.
+      until_at:      (ends unless stop),
     )
+    watch = (Buddy::TimerCycle.stop_on!(timer, ctx.conversation, stop) if stop)
 
     {
-      timer_id: timer.id,
-      seconds:  seconds,
-      label:    payload[:label].to_s,
-      waiting:  payload[Buddy::Tools::WAIT_ARG].present?,
-      cycle:    cycle,
-      breaking: rest.positive? && cycle ? rest : nil,
-      until_at: (ends&.strftime("%-l:%M %p")&.strip if cycle),
-    }
+      timer_id:   timer.id,
+      seconds:    seconds,
+      label:      payload[:label].to_s,
+      waiting:    payload[Buddy::Tools::WAIT_ARG].present?,
+      cycle:      true,
+      breaking:   rest.positive? ? rest : nil,
+      until_at:   (ends&.strftime("%-l:%M %p")&.strip unless stop),
+      stop_human: (stop&.human if watch),
+      stop_failed: (
+        if stop_error.present?
+          "THE TIMER IS RUNNING. The stopping rule is NOT: #{stop_error}. Say both - what you " \
+            "started, and that it won't stop on its own yet - and offer `request_feature` for the " \
+            "ending. Never describe a stopping rule you haven't set."
+        end
+      ),
+    }.compact
   },
   receipt:     ->(result, ctx) {
     dur   = Buddy::Timers.humanize_seconds(result[:seconds])
@@ -144,7 +188,15 @@ Buddy::Tools.register(
     if result[:cycle]
       on   = label.present? ? " on #{label}" : ""
       rest = (" then #{Buddy::Timers.humanize_seconds(result[:breaking])} off" if result[:breaking])
-      till = (" until #{result[:until_at]}" if result[:until_at].present?)
+      # The ending, in whichever of the three shapes it has. An event ending is
+      # said as the event — turning it into a clock time is the thing this is
+      # here to stop.
+      till = (
+        if result[:stop_human].present? then ", #{Buddy::WatchCondition.until_phrase(result[:stop_human])}"
+        elsif result[:until_at].present? then " until #{result[:until_at]}"
+        elsif result[:stop_failed].present? then " (won't stop on its own)"
+        end
+      )
       next "#{ctx.buddy_name} started #{dur}#{on}#{rest}#{till} ⏲"
     end
 
@@ -176,6 +228,32 @@ module Buddy
         ctx.resolve_time(raw.to_s)
       rescue StandardError
         nil
+      end
+
+      # [condition, error]. Degrades rather than raising, for the same reason
+      # the reminder's does: an ending that can't be wired is a reason to run
+      # the rhythm without one and say so, not a reason to abandon the rhythm.
+      def stop_condition(payload, ctx)
+        return [nil, nil] if payload[:stop_when].to_s.strip.blank?
+
+        gate = { gated_values: { stop_when: Buddy::WatchCondition::GATED } }
+        arg, feature = Buddy::Features.gated_arg(ctx.user, gate, payload)
+        raise "watching for that needs #{Buddy::Features.label_for(feature)}" if arg
+
+        [
+          Buddy::WatchCondition.resolve(
+            {
+              trigger:     payload[:stop_when],
+              target:      payload[:stop_target],
+              listener:    payload[:stop_listener],
+              when_phrase: payload[:stop_phrase],
+            },
+            ctx,
+          ),
+          nil,
+        ]
+      rescue StandardError => e
+        [nil, e.message]
       end
     end
   end

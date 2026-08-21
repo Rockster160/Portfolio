@@ -9,6 +9,11 @@
 #   # Canned scenarios that exercise the rules most likely to regress:
 #   rake buddy:eval
 #
+#   # One sentence per tool, checking the right tool is the one reached:
+#   rake buddy:eval_tools
+#   rake "buddy:eval_tools[idea]"    # just the tools whose name matches
+#   rake buddy:tool_coverage         # free: does every tool have a sentence?
+#
 #   # One ad-hoc message:
 #   rake "buddy:eval_one[I just took the recycling out]"
 #
@@ -82,6 +87,125 @@ BUDDY_EVAL_SCENARIOS = [
   "what time is it?",                                 # 12-hour local, never UTC
 ].freeze
 
+# One sentence per registered tool, and the tool it has to reach.
+#
+# The scenarios above ask "does this still sound like Buddy". This asks the
+# other question, which nothing was asking: given a plain sentence, does the
+# model pick the RIGHT tool? A description that reads beautifully and never
+# gets chosen is worth nothing, and the failure is invisible from the inside -
+# the reply is fluent, something happens, and it's the wrong something. Every
+# real mis-selection this year (a reminder where a cycle was asked for, an
+# immediate list-add where a delay was asked for) looked fine in prose.
+#
+# The table is keyed by tool name so `buddy:tool_coverage` can hold it against
+# the registry: a tool nobody wrote a sentence for is a tool nobody knows the
+# model can find. Adding a tool without adding a line here fails that check
+# before a penny is spent.
+#
+# Entry is the sentence, or a hash:
+#   say:   what the person says
+#   with:  other tools that must ALSO be called for this to be right
+#   avoid: tools that must NOT be called (the near-miss it gets confused with)
+#   needs: a precondition in the acting user's real data. A miss on one of
+#          these is reported apart from the rest, because "no idea to defer"
+#          and "reached for the wrong tool" are different problems and only one
+#          of them is about the description.
+BUDDY_TOOL_PROBES = {
+  # --- logging, chores, lists ---
+  log_event:             { say: "ate a sandwich", avoid: %i[complete_chore] },
+  complete_chore:        { say: "took the recycling out twice", avoid: %i[log_event], needs: "a recycling chore" },
+  create_chore:          "add a new chore for filling the kitty litter every Sunday",
+  edit_chore:            { say: "rename the recycling chore to bins", needs: "a recycling chore" },
+  edit_chore_completion: { say: "put 'hint raspberry' on that water I just logged", needs: "a water completion today" },
+  undo_chore_completion: { say: "I marked the recycling done by mistake, take it back off", needs: "a recycling completion" },
+  chore_progress:        "did I get all my dailies done yesterday?",
+  withdraw_pebbles:      "took 20 pebbles for the arcade",
+  delete_event:          { say: "I logged a Strawberry Celsius by accident this morning, get rid of it", needs: "a Celsius logged today" },
+  edit_event:            { say: "that sandwich I logged was actually at 1", needs: "a sandwich logged today" },
+  search_events:         "how many celsius did I drink last month?",
+  add_list_item:         "add oat milk to the groceries",
+  remove_list_item:      { say: "take the oat milk off the groceries", needs: "oat milk on a list" },
+  edit_list_item:        { say: "flag the oat milk on the groceries as important", needs: "oat milk on a list" },
+
+  # --- time: the four that get confused with each other ---
+  set_timer:             { say: "5m", avoid: %i[schedule_reminder alarm] },
+  alarm:                 { say: "wake me at 6:30 tomorrow", avoid: %i[schedule_reminder set_timer] },
+  schedule_reminder:     { say: "remind me to call mom at 6", avoid: %i[alarm add_agenda_item] },
+  remind_when:           { say: "remind me to grab my rx next time I'm at Costco", avoid: %i[schedule_reminder] },
+  move_reminder:         { say: "move the tomato reminder to 3", needs: "a pending reminder" },
+  cancel_reminder:       { say: "never mind the vet reminder, drop it", needs: "a pending reminder" },
+  list_reminders:        "what reminders do I have?",
+  cancel_timer:          "cancel all my timers",
+  check_anchor:          "when's sunset?",
+
+  # --- calendar ---
+  add_agenda_item:       { say: "put dinner with Sam on the calendar Thursday at 7", avoid: %i[schedule_reminder] },
+  edit_agenda_item:      { say: "move my dentist appointment to 3", needs: "a dentist item on the calendar" },
+  search_agenda:         "when's my next dentist appointment?",
+  today_briefing:        "give me my Today briefing",
+
+  # --- the house, the printer, the Mac ---
+  call_jil_function:     { say: "turn the office light purple", needs: "a matching jil_function" },
+  schedule_function:     { say: "play the Whisper nap sound at 11 tonight", avoid: %i[call_jil_function], needs: "a matching jil_function" },
+  trigger_jil_task:      { say: "chill mode", needs: "a matching jil_trigger" },
+  schedule_trigger:      { say: "at 8 tonight fire the villager car charged trigger", needs: "a matching jil scope" },
+  mac_command:           "turn the monitors off at the desk",
+  print_again:           { say: "print the vase again", needs: "the printer reachable" },
+  print_history:         { say: "what did I print yesterday?", avoid: %i[print_again] },
+
+  # --- other people ---
+  message_partner:       "let Chelsea know I fed the dog",
+  ask_partner:           { say: "ask Chelsea what she wants for dinner", avoid: %i[message_partner] },
+  ask_partner_choice:    { say: "ask Chelsea whether she'd rather do dishes or mop", avoid: %i[ask_partner] },
+  ask_partner_multi:     { say: "ask Chelsea which of these she's up for tonight - dishes, laundry, vacuuming - she can pick as many as she likes", avoid: %i[ask_partner ask_partner_choice] },
+  relay_answer:          { say: "tell her tacos", needs: "an open question from someone else" },
+  ask_me:                "add whatever I say next to my grocery list - ask me what it is first",
+
+  # --- deliveries ---
+  track_delivery:        "I ordered a desk, should be here Friday",
+  check_deliveries:      "what packages are on their way?",
+  update_delivery:       { say: "the desk is coming Friday now", needs: "a desk on the delivery list" },
+  delivery_arrived:      { say: "the desk got here", needs: "a desk on the delivery list" },
+
+  # --- things held for them ---
+  stash_idea:            { say: "I keep meaning to sort out the greenhouse", avoid: %i[add_list_item schedule_reminder] },
+  elaborate_idea:        { say: "about that greenhouse - it should probably be solar", needs: "a stashed greenhouse idea" },
+  read_idea:             { say: "remind me what that greenhouse thing was about", needs: "a stashed greenhouse idea" },
+  finish_idea:           { say: "the greenhouse is sorted, I did it", needs: "a stashed greenhouse idea" },
+  drop_idea:             { say: "forget the greenhouse thing", needs: "a stashed greenhouse idea" },
+  defer_idea:            { say: "bring the greenhouse one back up next week", needs: "a stashed greenhouse idea" },
+  move_idea:             { say: "move the greenhouse one over to home", needs: "a stashed greenhouse idea" },
+  search_ideas:          "did I ever hand you anything about a greenhouse?",
+
+  # --- what it knows ---
+  search_memories:       { say: "what do you know about my sister?", avoid: %i[search_conversations] },
+  search_conversations:  { say: "what did we actually say about the greenhouse a few weeks back?", avoid: %i[search_memories] },
+  define_term:           "when I say the plunge I mean the trailhead in Alpine",
+  forget_term:           { say: "bakkie doesn't mean that any more, drop it", needs: "bakkie in the glossary" },
+
+  # --- routines and wiring ---
+  save_routine:          "when I say prep my printer, turn it on, wait a minute, then preheat it",
+  run_routine:           { say: "run my wind-down", needs: "a wind-down routine" },
+  edit_routine:          { say: "in my wind-down, make it darkness instead of total darkness", avoid: %i[save_routine], needs: "a wind-down routine" },
+  forget_routine:        { say: "delete my wind-down routine, I don't use it", needs: "a wind-down routine" },
+  link_records:          "logging coffee should tick off the coffee chore",
+  unlink_records:        { say: "logging coffee shouldn't tick off the chore any more", needs: "that pairing" },
+
+  # --- prompts, the app itself, the edges ---
+  answer_prompt:         { say: "answer my check-in for me - say I slept fine", needs: "a pending prompt" },
+  skip_prompt:           { say: "skip that check-in for now", needs: "a pending prompt" },
+  set_font_size:         "this text is too small, bump it up",
+  check_weather:         "how's the weather right now? I may take the bike",
+  undo:                  { say: "undo that", needs: "something undoable in this thread" },
+  request_feature:       { say: "can you order me a pizza?", avoid: %i[call_jil_function trigger_jil_task] },
+}.freeze
+
+# Calling one of these alongside the right tool is ordinary - the model looks
+# things up before it acts - so they never count as "called something else".
+BUDDY_EVAL_READERS = %i[
+  get_context read_prompt view_image read_listener_guide set_mood add_note remember
+].freeze
+
 namespace :buddy do
   desc "Run Buddy against canned scenarios and print replies + tool calls (REAL API CALLS)"
   task eval: :environment do
@@ -105,6 +229,44 @@ namespace :buddy do
     puts banner("Moss eval — #{BUDDY_EVAL_SCENARIOS.length} scenarios")
     BUDDY_EVAL_SCENARIOS.each { |text| evaluate(text, theme: "moss") }
     puts summary
+  end
+
+  desc "Say one sentence per tool and check the right tool was reached (REAL API CALLS)"
+  task :eval_tools, [:filter] => %i[environment tool_coverage] do |_t, args|
+    probes = BUDDY_TOOL_PROBES.select { |name, _| args[:filter].blank? || name.to_s.include?(args[:filter].to_s) }
+    abort "no tool matches #{args[:filter].inspect}" if probes.empty?
+
+    user = User.me
+    puts banner("Buddy tool selection — #{probes.length} tools")
+    probes.each { |name, entry|
+      tool = Buddy::Tools[name]
+      # Not offered to this person, so the model was never shown it and a miss
+      # would say nothing about the description.
+      unless Buddy::Features.allows_tool?(user, tool)
+        stats[:probe_skipped] << "#{name} (#{Buddy::Features.label_for(tool[:feature])} is off)"
+        next
+      end
+
+      probe = entry.is_a?(Hash) ? entry.merge(tool: name) : { say: entry, tool: name }
+      evaluate(probe[:say], user: user, probe: probe)
+    }
+    puts summary
+    puts probe_summary
+  end
+
+  desc "Check every registered tool has an eval probe (no API calls)"
+  task tool_coverage: :environment do
+    known   = Buddy::Tools.registry.keys
+    missing = known - BUDDY_TOOL_PROBES.keys
+    unknown = BUDDY_TOOL_PROBES.keys - known
+
+    # A tool with no sentence is a tool nobody has ever checked the model can
+    # find, and it fails here rather than after 68 billed calls.
+    puts "\e[31mno eval probe for: #{missing.sort.join(", ")}\e[0m" if missing.any?
+    puts "\e[31mprobe for a tool that no longer exists: #{unknown.sort.join(", ")}\e[0m" if unknown.any?
+    abort "add a line to BUDDY_TOOL_PROBES in lib/tasks/buddy_eval.rake" if missing.any? || unknown.any?
+
+    puts "\e[32mall #{known.length} tools have an eval probe\e[0m"
   end
 
   desc "Replay the last N real user messages from a conversation (REAL API CALLS, read-only)"
@@ -217,10 +379,21 @@ namespace :buddy do
   # ---- internals -----------------------------------------------------------
 
   def stats
-    @stats ||= { turns: 0, tool_calls: 0, no_tool: 0, elapsed: 0.0, cost_micros: 0, flags: [] }
+    @stats ||= {
+      turns:         0,
+      tool_calls:    0,
+      no_tool:       0,
+      elapsed:       0.0,
+      cost_micros:   0,
+      flags:         [],
+      probe_pass:    0,
+      probe_fail:    [],
+      probe_unmet:   [],
+      probe_skipped: [],
+    }
   end
 
-  def evaluate(text, user: User.me, theme: "byte")
+  def evaluate(text, user: User.me, theme: "byte", probe: nil)
     convo  = eval_conversation(user, theme)
     client = Buddy::GPT::Client.new
     tools  = [
@@ -312,7 +485,7 @@ namespace :buddy do
 
     elapsed = Time.current - started
     record(calls, elapsed)
-    report(text, reply.strip, calls, elapsed, bubble)
+    report(text, reply.strip, calls, elapsed, bubble, probe)
   rescue StandardError => e
     puts "  \e[31mCRASHED\e[0m #{e.class}: #{e.message}"
   end
@@ -330,6 +503,16 @@ namespace :buddy do
 
     tool = Buddy::Tools[name]
     return JSON.generate({ ok: false, error: "no tool named #{name}" }) if tool.nil?
+
+    # An ANSWERING tool runs inside resolve_call - that's what makes it an
+    # answer - and the handful that also `act` really do the thing: print_again
+    # puts a file on the printer, call_jil_function starts the car. An eval is
+    # scoring which tool got picked, and this file has always said nothing is
+    # executed, so those are answered as though they had run. BUDDY_EVAL_LIVE=1
+    # to let them through when the point is the round trip itself.
+    if Buddy::Tools.acts?(tool) && ENV["BUDDY_EVAL_LIVE"] != "1"
+      return JSON.generate({ ok: true, status: "ok", note: "(eval) resolved but not run" })
+    end
 
     result, signature = Buddy::GPT::Turn.resolve_call(tool, call, user: user, conversation: conversation)
     # Same cross-round repeat detection Turn does, so an eval doesn't report a
@@ -436,9 +619,9 @@ namespace :buddy do
     stats[:elapsed]    += elapsed
   end
 
-  def report(prompt, reply, calls, elapsed, bubble=nil)
+  def report(prompt, reply, calls, elapsed, bubble=nil, probe=nil)
     puts
-    puts "\e[36m▸ #{prompt}\e[0m"
+    puts "\e[36m▸ #{"#{probe[:tool]}: " if probe}#{prompt}\e[0m"
     puts "  #{reply.presence || "(no prose)"}"
 
     if calls.any?
@@ -456,6 +639,7 @@ namespace :buddy do
       puts "  \e[33m! #{w}\e[0m"
       stats[:flags] << w
     }
+    verdict(probe, calls) if probe
 
     # Per-scenario cost, so an expensive one is obvious as it scrolls past
     # rather than only in the total at the end.
@@ -463,6 +647,56 @@ namespace :buddy do
     stats[:cost_micros] += cost.to_i if cost
     money = cost ? "  #{Buddy::GPT::Pricing.format_micros(cost)}" : ""
     puts "  \e[90m#{elapsed.round(2)}s#{money}\e[0m"
+  end
+
+  # Did that sentence reach the tool it was written for? A near miss is the
+  # interesting result and gets named: reaching for `schedule_reminder` when the
+  # person asked for a rhythm is a wrong answer that reads perfectly.
+  def verdict(probe, calls)
+    named  = calls.map { |c| c[:name].to_sym }
+    missed = [probe[:tool], *Array(probe[:with])] - named
+    wrong  = Array(probe[:avoid]) & named
+    line   = "#{probe[:tool]} — #{probe[:say]}"
+
+    if missed.empty? && wrong.empty?
+      stats[:probe_pass] += 1
+      puts "  \e[32m✓ reached #{probe[:tool]}\e[0m"
+      return
+    end
+
+    instead = (named - BUDDY_EVAL_READERS).presence
+    detail  = [
+      ("missed #{missed.join(", ")}" if missed.any?),
+      ("called #{wrong.join(", ")} instead" if wrong.any?),
+      ("called #{instead.join(", ")}" if wrong.empty? && instead),
+      ("no tool at all" if named.empty?),
+    ].compact.join("; ")
+
+    # A miss on a probe whose precondition isn't in this person's data says
+    # nothing about the description — there was no idea to defer. Kept apart so
+    # the number that matters stays honest in both directions.
+    if probe[:needs] && missed.any?
+      stats[:probe_unmet] << "#{line} (needs #{probe[:needs]})"
+      puts "  \e[33m? #{detail} — needs #{probe[:needs]}\e[0m"
+      return
+    end
+
+    stats[:probe_fail] << "#{line} → #{detail}"
+    puts "  \e[31m✗ #{detail}\e[0m"
+  end
+
+  def probe_summary
+    fails = stats[:probe_fail]
+    unmet = stats[:probe_unmet]
+    tried = stats[:probe_pass] + fails.length + unmet.length
+    return "" if tried.zero? && stats[:probe_skipped].empty?
+
+    [
+      "\ntool selection: #{stats[:probe_pass]}/#{tried} reached the right tool",
+      fails.any? ? "\e[31m#{fails.map { |f| "  ✗ #{f}" }.join("\n")}\e[0m" : nil,
+      unmet.any? ? "\e[33mnot answerable from this person's data:\n#{unmet.map { |u| "  ? #{u}" }.join("\n")}\e[0m" : nil,
+      stats[:probe_skipped].any? ? "\e[90mnot offered: #{stats[:probe_skipped].join(", ")}\e[0m" : nil,
+    ].compact.join("\n")
   end
 
   # Cheap mechanical checks for the tone rules that are actually checkable. The

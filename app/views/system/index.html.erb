@@ -2,7 +2,22 @@
 <%= meta_description "System tools and dashboards." %>
 
 <%
+  # The blip counts what still needs deciding; the unread treatment is about
+  # whether this page has been looked at since the last one landed. They're
+  # different questions and they answer at different times — a request marked
+  # `planned` stops needing a decision without becoming unseen again.
+  open_requests   = FeatureRequest.status_open.count
+  unseen_requests = FeatureRequest.where(seen_at: nil).count
+
   links = [
+    {
+      title: "Feature Requests",
+      path:  system_feature_requests_path,
+      desc:  "What the companions were asked for and couldn't do",
+      icon:  :"paper-plane",
+      blip:  open_requests,
+      unread: unseen_requests.positive?,
+    },
     { title: "GPT Spending", path: system_gpt_spending_path, desc: "Buddy GPT API cost per day or hour", icon: :dollar },
     { title: "Banking", path: system_banking_path, desc: "SimpleFIN accounts, balances, transactions", icon: :bank },
     { title: "Buddy Memories", path: system_memories_path, desc: "Everything the companions are holding, and their check-ins", svg: "buddy/byte/silhouette" },
@@ -24,7 +39,7 @@
 
   <div class="system-grid">
     <% links.each do |link| %>
-      <a class="system-card" href="<%= link[:path] %>">
+      <a class="system-card<%= " unread" if link[:unread] %>" href="<%= link[:path] %>">
         <div class="system-card-icon">
           <% if link[:svg] %>
             <%= svg(link[:svg], title: link[:title]) %>
@@ -33,7 +48,12 @@
           <% end %>
         </div>
         <div class="system-card-body">
-          <div class="system-card-title"><%= link[:title] %></div>
+          <div class="system-card-title">
+            <%= link[:title] %>
+            <% if link[:blip].to_i.positive? %>
+              <span class="system-card-blip"><%= link[:blip] %></span>
+            <% end %>
+          </div>
           <div class="system-card-desc"><%= link[:desc] %></div>
         </div>
       </a>
@@ -105,6 +125,29 @@
       font-size: 13px;
       color: #8B949E;
       margin-top: 2px;
+    }
+
+    .system-card.unread {
+      border-color: #5DADE2;
+      background-color: #18222C;
+    }
+
+    .system-card.unread .system-card-title {
+      color: #FFF;
+    }
+
+    .system-card-blip {
+      display: inline-block;
+      min-width: 20px;
+      padding: 1px 6px;
+      margin-left: 8px;
+      border-radius: 10px;
+      background-color: #5DADE2;
+      color: #0D1117;
+      font-size: 12px;
+      font-weight: bold;
+      text-align: center;
+      vertical-align: 1px;
     }
   </style>
 <% end %>

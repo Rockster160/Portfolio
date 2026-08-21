@@ -49,7 +49,9 @@ module Buddy
     end
 
     # Past the end of what they asked for. Blank `until_at` means "keep going
-    # until they stop tapping", which is a perfectly ordinary way to want this.
+    # until they stop tapping", which is a perfectly ordinary way to want this
+    # — and it's what an EVENT-ended cycle looks like from here, because the
+    # event doesn't end it on a clock, a watch does (see `stop_on!`).
     def over?(cycle, now: Time.current)
       ends = cycle["until_at"].presence
       return false if ends.nil?
@@ -59,10 +61,101 @@ module Buddy
       false
     end
 
+    # The handle a stopping watch holds. It has to survive every block, because
+    # the watch is armed once and the timer it eventually kills is the fifth one
+    # in the chain, not the one that was running when it was set.
+    def id_for(cycle) = cycle["cycle_id"].presence
+
+    # Every live piece of one cycle: the block that's counting, the break, and
+    # any card still waiting on a tap.
+    def timers_for(user, cycle_id)
+      Buddy::Timers.live_for(user).select { |t| id_for(cycle_for(t).to_h) == cycle_id }
+    end
+
+    def cards_for(user, cycle_id)
+      scope = ByteAction.where(user_id: user.id, tool_name: TOOL_NAME).pending
+      scope.select { |a| a.tool_input.to_h.dig(KEY, "cycle_id") == cycle_id }
+    end
+
+    # Every rhythm currently going, one entry each — a cycle spans many timer
+    # rows and the person thinks of it as one thing, so the reminders list has
+    # to as well.
+    def live_cycles(user)
+      seen = {}
+      Buddy::Timers.live_for(user).each { |timer|
+        cycle = cycle_for(timer)
+        id    = id_for(cycle.to_h)
+        next if id.nil? || seen.key?(id)
+
+        seen[id] = { id: id, cycle: cycle, timer: timer }
+      }
+      seen.values
+    end
+
+    # The rhythm as a sentence, for a list row: "every 30 min, 10 min off,
+    # until the print finishes".
+    def describe(user, cycle)
+      bits = ["every #{Buddy::Timers.humanize_seconds(cycle["seconds"])}"]
+      bits << "#{Buddy::Timers.humanize_seconds(cycle["break_seconds"])} off" if cycle["break_seconds"].to_i.positive?
+      bits << ending_phrase(user, cycle)
+      bits.compact.join(", ")
+    end
+
+    def ending_phrase(user, cycle)
+      stopper = stopper_for(user, id_for(cycle))
+      return Buddy::WatchCondition.until_phrase(stopper.metadata.to_h["human_when"].presence || stopper.body) if stopper
+
+      ends = cycle["until_at"].presence
+      return nil if ends.nil?
+
+      "until #{Time.zone.parse(ends.to_s).in_time_zone(user.timezone).strftime("%-l:%M %p").strip}"
+    rescue StandardError
+      nil
+    end
+
+    # `include_off` for the undo path only: switching the rhythm off cancels its
+    # stopper too, so putting the rhythm back has to be able to find a stopper
+    # that is currently switched off. Everywhere else wants the live one.
+    def stopper_for(user, cycle_id, include_off: false)
+      return nil if cycle_id.blank?
+
+      scope = BuddyWatch.where(user_id: user.id, kind: :cancel, fired_at: nil)
+      scope = scope.where(cancelled_at: nil) unless include_off
+      scope.find { |w| w.cancels_cycle_id == cycle_id }
+    end
+
+    # Switched off from the reminders list. Same teardown the event does, minus
+    # the announcement — they're looking at the list, so they can see it go.
+    def cancel!(user, cycle_id)
+      timers_for(user, cycle_id).each { |timer| Buddy::Timers.stop!(timer) }
+      cards_for(user, cycle_id).each { |card| card.apply_decision!(value: "stopped", source: :user) }
+      stopper_for(user, cycle_id)&.update!(cancelled_at: Time.current)
+    end
+
+    # Undo. The rhythm is a rule rather than a row, so putting it back means
+    # starting the next block — read off whichever timer last carried it,
+    # archived or not.
+    def restart!(user, cycle_id, conversation)
+      last  = user.timers.where.not(metadata: nil).order(id: :desc).find { |t| id_for(cycle_for(t).to_h) == cycle_id }
+      cycle = cycle_for(last)
+      return nil if cycle.nil?
+
+      stopper_for(user, cycle_id, include_off: true)&.update!(cancelled_at: nil)
+      start!(
+        user:          user,
+        conversation:  conversation,
+        seconds:       cycle["seconds"],
+        label:         cycle["label"].presence,
+        break_seconds: cycle["break_seconds"],
+        until_at:      cycle["until_at"],
+        cycle_id:      cycle_id,
+      )
+    end
+
     # ---- starting one -------------------------------------------------------
 
     # The first block. Everything after it comes through `resume!`.
-    def start!(user:, conversation:, seconds:, label: nil, break_seconds: nil, until_at: nil)
+    def start!(user:, conversation:, seconds:, label: nil, break_seconds: nil, until_at: nil, cycle_id: nil)
       Buddy::Timers.create!(
         user:         user,
         seconds:      seconds,
@@ -70,12 +163,55 @@ module Buddy
         conversation: conversation,
         metadata:     {
           KEY => {
+            "cycle_id"      => cycle_id.presence || SecureRandom.uuid,
             "seconds"       => seconds.to_i,
             "break_seconds" => break_seconds.presence&.to_i,
             "until_at"      => until_at.presence&.then { |at| at.to_time.iso8601 },
             "label"         => label.to_s,
           }.compact,
         },
+      )
+    end
+
+    # Arm the thing that ends it: a one-shot watch on the same conditions
+    # `remind_when` runs on.
+    #
+    # "Until the print finishes" is not a time and must never be rounded into
+    # one. A cycle ended this way has NO `until_at` at all — it goes round for
+    # fifteen minutes or fifteen years, and stops when the thing happens.
+    def stop_on!(timer, conversation, condition)
+      cycle = cycle_for(timer)
+      return nil if cycle.nil? || condition.nil?
+
+      BuddyWatch.create!(
+        user:              timer.user,
+        byte_conversation: conversation,
+        kind:              :cancel,
+        trigger_scope:     condition.scope,
+        listener:          condition.listener,
+        match:             condition.match || {},
+        body:              condition.human.to_s.presence || "That's done",
+        one_shot:          true,
+        metadata:          { "cancels_cycle" => id_for(cycle), "human_when" => condition.human.to_s },
+      )
+    end
+
+    # The event happened. Take down the whole cycle — whichever block is
+    # counting, its break, and any card still offering the next one.
+    def stop_cycle!(user, cycle_id, conversation, said)
+      live  = timers_for(user, cycle_id)
+      cards = cards_for(user, cycle_id)
+      return if live.empty? && cards.empty?
+
+      live.each { |timer| Buddy::Timers.stop!(timer) }
+      cards.each { |card| card.apply_decision!(value: "stopped", source: :system) }
+
+      Buddy::CompanionDelivery.deliver_plain(
+        user:         user,
+        conversation: conversation,
+        text:         "#{said.to_s.strip.presence || "That's done"} - I've stopped the check-ins.",
+        metadata:     { "kind" => "buddy", "source" => "timer_cycle", "cycle_id" => cycle_id },
+        push_title:   "Stopped",
       )
     end
 
@@ -213,6 +349,9 @@ module Buddy
         label:         cycle["label"].presence,
         break_seconds: cycle["break_seconds"],
         until_at:      cycle["until_at"],
+        # Carried, not regenerated. A watch armed on the first block has to be
+        # able to find the fifth one.
+        cycle_id:      id_for(cycle),
       )
       chip!(user, conversation, cycle, timer)
       timer

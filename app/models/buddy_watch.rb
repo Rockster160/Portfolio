@@ -49,7 +49,7 @@ class BuddyWatch < ApplicationRecord
   # announced itself as a timer finishing. What the person asked for was an
   # alarm for when the washer is done, and every surface named the mechanism
   # instead of the thing.
-  KINDS = %w[reminder prompt action timer alarm].freeze
+  KINDS = %w[reminder prompt action timer alarm cancel].freeze
 
   # How long a delayed action may hold. Long enough for "a couple of minutes
   # after", short enough that a queue backed up behind one is a bug rather than
@@ -67,6 +67,29 @@ class BuddyWatch < ApplicationRecord
   def alarm?
     kind.to_s == "alarm"
   end
+
+  # A watch whose whole job is to switch a REMINDER off when something happens.
+  #
+  # "Check the printer every 30 minutes until the print finishes" is two rules,
+  # and only the first of them was expressible: a repeat has a clock-time end
+  # (`until_at`) and a date end (`until_on`) and no way to say "until that
+  # thing". The `check` conditions are a different question — they decide
+  # whether ONE firing speaks, so a print that finished leaves a reminder alive
+  # and re-asking every half hour tomorrow.
+  #
+  # The condition machinery for "when X happens" already existed and is the
+  # same one `remind_when` uses; the only thing missing was something for it to
+  # switch off.
+  def cancels?
+    kind.to_s == "cancel"
+  end
+
+  def cancels_reminder_id = metadata.to_h["cancels_reminder_id"].presence&.to_i
+
+  # A work/break CYCLE, by the id it carries through every block. Not the timer
+  # row: the block running when this fires is the fifth one in the chain, and
+  # the one that was running when the watch was armed is long archived.
+  def cancels_cycle_id = metadata.to_h["cancels_cycle"].presence
 
   # The Jil scope this watch fires, the task name it was resolved from (for the
   # receipt and the reminders list), and how long to wait first.

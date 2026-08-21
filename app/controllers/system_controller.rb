@@ -286,6 +286,28 @@ class SystemController < ApplicationController
     redirect_to(memories_filter_path, notice: "Deleted.")
   end
 
+  # What the companions were asked for and couldn't do. Open ones first, since
+  # they're the only ones with anything to decide.
+  def feature_requests
+    @requests = FeatureRequest.includes(:user, :byte_conversation).order(
+      Arel.sql("CASE status WHEN 0 THEN 0 WHEN 1 THEN 1 ELSE 2 END, created_at DESC"),
+    )
+    @counts = FeatureRequest.group(:status).count
+
+    # Read is read. Landing on the page is what clears the blip, so it can't
+    # sit there counting things already looked at.
+    FeatureRequest.where(seen_at: nil).update_all(seen_at: Time.current)
+  end
+
+  def update_feature_request
+    request = FeatureRequest.find(params[:id])
+    status  = params[:status].to_s
+    return head(:unprocessable_entity) unless FeatureRequest.statuses.key?(status)
+
+    request.update!(status: status)
+    render json: { id: request.id, status: request.status, open: FeatureRequest.status_open.count }
+  end
+
   def connections
     @pool_stat = load_pool_stat
     @db_connections = load_db_connections

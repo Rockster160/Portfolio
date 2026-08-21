@@ -83,8 +83,16 @@ module Buddy
           buttons = (action.buttons || []).map(&:deep_dup)
           btn = buttons.find { |b| b["id"].to_i == button_id.to_i }
           if btn
-            record = record_for(user, btn)
-            record&.update!(cancelled_at: cancel ? Time.current : nil)
+            # A cycle is a RULE rather than a row, so there's no `cancelled_at`
+            # to flip: switching it off tears down the block that's counting,
+            # its break and any card still waiting, and Undo starts the next
+            # block rather than un-deleting anything.
+            if btn["record_type"].to_s == "cycle"
+              set_cycle(user, action, btn, cancel)
+            else
+              record = record_for(user, btn)
+              record&.update!(cancelled_at: cancel ? Time.current : nil)
+            end
             btn["status"] = cancel ? "cancelled" : "active"
             action.buttons = buttons
             action.save!
@@ -105,6 +113,13 @@ module Buddy
         when "reminder" then BuddyReminder.where(user_id: user.id).find_by(id: btn["record_id"])
         when "watch"    then BuddyWatch.where(user_id: user.id).find_by(id: btn["record_id"])
         end
+      end
+
+      def set_cycle(user, action, btn, cancel)
+        cycle_id = btn["record_id"].to_s
+        return Buddy::TimerCycle.cancel!(user, cycle_id) if cancel
+
+        Buddy::TimerCycle.restart!(user, cycle_id, action.byte_conversation)
       end
 
       # What a row SAYS comes from Buddy::ReminderPresenter, shared with the

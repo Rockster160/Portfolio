@@ -43,6 +43,12 @@ class BuddyReminder < ApplicationRecord
   validates :fire_at, presence: true
   validates :kind,    inclusion: { in: KINDS }
 
+  # A `stop_when` arms a one-shot watch pointing back at this row. Switching the
+  # reminder off by hand leaves that watch armed with nothing left to end, so it
+  # goes at the same moment — here rather than in whichever surface did the
+  # cancelling, because there are several and they'd each have to remember.
+  after_update :retire_stoppers, if: :saved_change_to_cancelled_at?
+
   def recurring?
     normalized_recurrence["freq"].present?
   end
@@ -308,6 +314,17 @@ class BuddyReminder < ApplicationRecord
   end
 
   private
+
+  # Only on the way OFF. Reinstating a reminder doesn't rearm its stopper,
+  # because a condition that may already have passed would switch the thing
+  # straight back off — and there's no way to know from here whether it did.
+  def retire_stoppers
+    return if cancelled_at.blank?
+
+    BuddyWatch.where(user_id: user_id, kind: :cancel, cancelled_at: nil)
+      .where("metadata ->> 'cancels_reminder_id' = ?", id.to_s)
+      .update_all(cancelled_at: Time.current)
+  end
 
   def parse_date(value)
     return nil if value.blank?

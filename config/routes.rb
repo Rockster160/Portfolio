@@ -566,6 +566,8 @@ Rails.application.routes.draw do
     get "/system/memories" => "system#memories", as: :system_memories
     patch "/system/memories/:id" => "system#update_memory", as: :system_memory
     delete "/system/memories/:id" => "system#destroy_memory", as: :system_memory_destroy
+    get "/system/feature_requests" => "system#feature_requests", as: :system_feature_requests
+    patch "/system/feature_requests/:id" => "system#update_feature_request", as: :system_feature_request
   end
   mount ::ActionCable.server => "/cable"
 end

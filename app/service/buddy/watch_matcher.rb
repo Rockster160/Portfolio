@@ -187,6 +187,8 @@ module Buddy
       case watch.kind
       when "action"
         run_action!(watch)
+      when "cancel"
+        cancel_reminder!(watch)
       when "timer"
         start_timer!(watch)
       when "alarm"
@@ -293,6 +295,57 @@ module Buddy
     # Rings rather than counting down. Nothing is posted here: the alarm speaks
     # for itself when it goes off a second later (Buddy::Timers.on_fired), and
     # saying it twice would put the notification in the thread before the noise.
+    # The thing they said to stop has happened, so stop it.
+    #
+    # It says so out loud rather than going quiet. Somebody who asked to be
+    # nudged every half hour notices the nudges stopping either way, and the
+    # difference between "it worked" and "it broke" is one sentence.
+    def cancel_reminder!(watch)
+      return cancel_cycle!(watch) if watch.cancels_cycle_id.present?
+
+      reminder = BuddyReminder.find_by(id: watch.cancels_reminder_id)
+      return if reminder.nil? || reminder.cancelled_at.present?
+
+      reminder.update!(cancelled_at: Time.current)
+      Buddy::CompanionDelivery.deliver_plain(
+        user:         watch.user,
+        conversation: watch.byte_conversation,
+        text:         "#{watch.body.to_s.strip.presence || "That's done"} - I've stopped the check-ins.",
+        metadata:     {
+          "kind"        => "buddy",
+          "source"      => "watch_cancel",
+          "watch_id"    => watch.id,
+          "reminder_id" => reminder.id,
+        },
+        push_title:   "Stopped: #{reminder.body.to_s.first(40)}",
+      )
+    rescue StandardError => e
+      Buddy::Errors.report(
+        section:   "watch_matcher.cancel_reminder",
+        exception: e,
+        user:      watch.user,
+        extra:     { watch_id: watch.id },
+      )
+    end
+
+    # Same event, a cycle instead of a reminder: the block that's counting, its
+    # break, and any card still offering the next one all come down together.
+    def cancel_cycle!(watch)
+      Buddy::TimerCycle.stop_cycle!(
+        watch.user,
+        watch.cancels_cycle_id,
+        watch.byte_conversation,
+        watch.body,
+      )
+    rescue StandardError => e
+      Buddy::Errors.report(
+        section:   "watch_matcher.cancel_cycle",
+        exception: e,
+        user:      watch.user,
+        extra:     { watch_id: watch.id },
+      )
+    end
+
     def sound_alarm!(watch)
       Buddy::Alarms.ring!(watch)
     rescue StandardError => e

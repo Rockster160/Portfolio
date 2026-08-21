@@ -23,7 +23,37 @@ module Buddy
     # thread a cancelled reminder is gone and listing it would be noise; in the
     # manager it has to stay visible, or turning one off is a one-way door.
     def rows(user, include_off: false)
-      reminder_rows(user, include_off) + watch_rows(user, include_off)
+      reminder_rows(user, include_off) + watch_rows(user, include_off) + cycle_rows(user)
+    end
+
+    # A work/break rhythm. It isn't a reminder and it isn't a watch, but it's a
+    # standing thing that will keep asking for their attention, which is what
+    # this list is FOR — and until it was on here the only way to stop one was
+    # to swipe a countdown away and hope.
+    #
+    # One row per rhythm, not per block: a cycle is a dozen timer rows over an
+    # afternoon and the person thinks of it as one thing.
+    def cycle_rows(user)
+      Buddy::TimerCycle.live_cycles(user).map { |live|
+        {
+          type:       :cycle,
+          record_id:  live[:id],
+          glyph:      "⏲",
+          label:      live[:cycle]["label"].to_s.presence || "Work rhythm",
+          sublabel:   Buddy::TimerCycle.describe(user, live[:cycle]),
+          enabled:    true,
+          body:       live[:cycle]["label"].to_s,
+          at:         nil,
+          recurring:  true,
+          listener:   nil,
+          custom:     false,
+          templated:  false,
+          expires_on: nil,
+        }
+      }
+    rescue StandardError => e
+      Buddy::Errors.report(section: "reminder_presenter.cycle_rows", exception: e, user: user)
+      []
     end
 
     def reminder_rows(user, include_off)
@@ -112,6 +142,11 @@ module Buddy
     def watch_rows(user, include_off)
       scope = BuddyWatch.where(user_id: user.id, fired_at: nil)
         .where("expires_at IS NULL OR expires_at > ?", Time.current)
+      # A `cancel` watch is the ENDING of a reminder, not a rule of its own. It
+      # already shows on that reminder's row, and listed separately it's a
+      # second thing to switch off — where switching off the stopper leaves the
+      # repeat running with nothing left to end it.
+      scope = scope.where.not(kind: :cancel)
       scope = scope.where(cancelled_at: nil) unless include_off
       scope.order(:created_at).limit(LIMIT).map { |w|
         {
@@ -156,9 +191,22 @@ module Buddy
     # has no answer short of opening it.
     def when_text(reminder, user)
       base = reminder.recurring? ? recurrence_text(reminder) : reminder.fire_at.in_time_zone(user.timezone).strftime("%a %-I:%M %p")
+      base = "#{base}, #{stops_at(reminder)}" if stops_at(reminder)
       return base if reminder.notify_user_id.blank?
 
       "to #{reminder.notify_user&.first_name || "someone else"} · #{base}"
+    end
+
+    # The rule that ENDS it, which lives on a separate watch and so was
+    # invisible here — the list showed a repeat with no ending next to a
+    # companion that had just promised one, which reads as the promise being
+    # false. It's the same row as far as anyone using this is concerned.
+    def stops_at(reminder)
+      watch = BuddyWatch.where(user_id: reminder.user_id, kind: :cancel, cancelled_at: nil, fired_at: nil)
+        .find { |w| w.cancels_reminder_id == reminder.id }
+      return nil if watch.nil?
+
+      Buddy::WatchCondition.until_phrase(watch.metadata.to_h["human_when"].presence || watch.body)
     end
 
     def recurrence_text(reminder)
@@ -166,7 +214,17 @@ module Buddy
       hhmm = (Time.zone.parse(rec["at"].to_s) rescue nil)
       tstr = hhmm ? hhmm.strftime("%-I:%M %p") : rec["at"].to_s
       ends = rec["until_on"].present? ? " until #{rec["until_on"]}" : ""
+      # A window covering the whole day is not a window, and naming its edges
+      # is how "until 11:59pm" turned up on a rule that ends when a print does.
+      return "#{repeat_phrase(rec)}#{ends}" if all_day?(rec)
+
       "#{repeat_phrase(rec)} at #{tstr}#{ends}"
+    end
+
+    # Round the clock: `every_minutes` stepping from midnight to the last
+    # minute of the day.
+    def all_day?(rec)
+      rec["every_minutes"].to_i.positive? && rec["at"].to_s == "00:00" && rec["until_at"].to_s >= "23:59"
     end
 
     DAY_NAMES = {
@@ -184,6 +242,14 @@ module Buddy
     # receipt so the two can never describe the same rule differently.
     def repeat_phrase(rec)
       rec = rec.with_indifferent_access
+      # An intraday window is a rule about MINUTES that happens to recur across
+      # days, so the day pattern is the small half of it and reading only that
+      # half describes a different reminder. Asked to check a printer every 30
+      # minutes, the chip came back "Byte will remind you every day at 5:19pm"
+      # over a row that was going to nudge fourteen times before midnight
+      # (dev 4091). The row was right; the read-back was a different reminder.
+      return intraday_phrase(rec) if rec[:every_minutes].to_i.positive?
+
       case rec[:freq].to_s
       when "daily"    then "every day"
       when "weekdays" then "every weekday"
@@ -193,6 +259,16 @@ module Buddy
       when "custom"   then custom_phrase(rec)
       else                 "on a schedule"
       end
+    end
+
+    # "every 30 min", and the day pattern only when it's something other than
+    # the plain every-day it nearly always is.
+    def intraday_phrase(rec)
+      step  = Buddy::Timers.humanize_seconds(rec[:every_minutes].to_i * 60)
+      shape = rec[:freq].to_s
+      band  = (" on #{repeat_phrase(rec.except(:every_minutes))}" unless shape == "daily")
+
+      "every #{step}#{band}"
     end
 
     def monthly_phrase(rec)

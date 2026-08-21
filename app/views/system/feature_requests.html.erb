@@ -1,0 +1,138 @@
+<%= meta_title "Feature Requests", include_name: false %>
+<%= meta_description "What the companions were asked for and couldn't do." %>
+
+<div class="system-page">
+  <div class="lists-title">
+    <small><%= link_to "System", system_path %> / Feature Requests</small>
+  </div>
+
+  <div class="fr-counts">
+    <% FeatureRequest.statuses.each_key do |status| %>
+      <span class="fr-count fr-<%= status %>"><%= @counts[status].to_i %> <%= status %></span>
+    <% end %>
+  </div>
+
+  <% if @requests.none? %>
+    <p class="fr-empty">Nothing on the list. The companions haven't hit a wall they couldn't describe.</p>
+  <% end %>
+
+  <% @requests.each do |request| %>
+    <div class="fr-row fr-status-<%= request.status %>" data-fr-row data-fr-id="<%= request.id %>">
+      <div class="fr-head">
+        <div class="fr-title"><%= request.title %></div>
+        <div class="fr-meta">
+          <%= request.user&.first_name %>
+          ·
+          <%= request.created_at.in_time_zone(current_user.timezone).strftime("%b %-d, %-I:%M %p") %>
+          <span class="fr-badge" data-fr-badge><%= request.status %></span>
+        </div>
+      </div>
+
+      <div class="fr-body"><%= simple_format(request.body) %></div>
+
+      <%# Every status is a button, including the one it's already on, so the %>
+      <%# row can be moved back as readily as forward - a decision made from %>
+      <%# this page is as reversible as one made anywhere else. %>
+      <div class="fr-actions">
+        <% FeatureRequest.statuses.each_key do |status| %>
+          <button
+            type="button"
+            class="fr-btn fr-btn-<%= status %><%= " current" if request.status == status %>"
+            data-fr-set="<%= status %>"
+          ><%= status %></button>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+</div>
+
+<%= content_for :head do %>
+  <style>
+    .system-page { max-width: 1000px; width: 95%; margin: 0 auto; padding: 20px; }
+    .system-page .lists-title { font-size: 24px; margin-bottom: 16px; color: #E2E8F0; }
+    .system-page .lists-title a { color: #8B949E; text-decoration: none; }
+
+    .fr-counts { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .fr-count {
+      font-size: 12px; color: #8B949E; background-color: #161B22;
+      border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 3px 10px;
+    }
+
+    .fr-empty { color: #8B949E; }
+
+    .fr-row {
+      background-color: #161B22; border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px; padding: 16px 18px; margin-bottom: 12px;
+      transition: opacity 0.15s ease, border-color 0.15s ease;
+    }
+    .fr-row.fr-status-shipped, .fr-row.fr-status-declined { opacity: 0.55; }
+    .fr-row.fr-status-open { border-color: rgba(93, 173, 226, 0.4); }
+
+    .fr-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .fr-title { font-size: 16px; font-weight: bold; color: #C9D1D9; }
+    .fr-meta { font-size: 12px; color: #8B949E; }
+
+    .fr-badge {
+      margin-left: 6px; padding: 1px 8px; border-radius: 10px;
+      background-color: rgba(255, 255, 255, 0.08); color: #C9D1D9; font-size: 11px;
+    }
+
+    .fr-body { font-size: 14px; color: #8B949E; margin: 10px 0 14px; white-space: pre-wrap; }
+    .fr-body p { margin: 0 0 8px; }
+
+    .fr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .fr-btn {
+      padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;
+      background-color: #21262D; border: 1px solid rgba(255, 255, 255, 0.12); color: #C9D1D9;
+    }
+    .fr-btn:hover { border-color: #5DADE2; }
+    .fr-btn.current { background-color: #5DADE2; border-color: #5DADE2; color: #0D1117; font-weight: bold; }
+    .fr-btn:disabled { opacity: 0.5; cursor: wait; }
+  </style>
+<% end %>
+
+<%= content_for :after_body do %>
+  <script>
+    (function () {
+      const token = document.querySelector('meta[name="csrf-token"]');
+
+      document.querySelectorAll("[data-fr-row]").forEach(function (row) {
+        row.querySelectorAll("[data-fr-set]").forEach(function (btn) {
+          btn.addEventListener("click", async function () {
+            const status = btn.dataset.frSet;
+            const buttons = row.querySelectorAll("[data-fr-set]");
+            buttons.forEach(function (b) { b.disabled = true; });
+
+            try {
+              const res = await fetch("/system/feature_requests/" + row.dataset.frId, {
+                method: "PATCH",
+                credentials: "same-origin",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Accept": "application/json",
+                  "X-CSRF-Token": token ? token.getAttribute("content") : "",
+                },
+                body: JSON.stringify({ status: status }),
+              });
+              if (!res.ok) throw new Error("HTTP " + res.status);
+              const data = await res.json();
+
+              // Repaint the row in place rather than reloading — the page is a
+              // working list and a reload throws away where you were in it.
+              row.className = "fr-row fr-status-" + data.status;
+              row.querySelector("[data-fr-badge]").textContent = data.status;
+              buttons.forEach(function (b) {
+                b.classList.toggle("current", b.dataset.frSet === data.status);
+              });
+            } catch (e) {
+              console.warn("[system] feature request update failed", e);
+            } finally {
+              buttons.forEach(function (b) { b.disabled = false; });
+            }
+          });
+        });
+      });
+    })();
+  </script>
+<% end %>

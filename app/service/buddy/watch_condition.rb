@@ -33,6 +33,20 @@ module Buddy
 
     module_function
 
+    # The same condition read as an ENDING rather than a trigger.
+    #
+    # `human` is minted for the trigger sense — "when the print finishes", which
+    # is right for "tell me when the print finishes" and wrong the moment it's
+    # what stops something: "every 30 min, when the print finishes" reads as a
+    # second thing that happens rather than the point it stops. One word, and
+    # it's the difference between a rule and a list of two events.
+    def until_phrase(human)
+      text = human.to_s.strip
+      return nil if text.blank?
+
+      "until #{text.sub(/\A(?:when(?:ever)?|once|after)\s+/i, "")}"
+    end
+
     # Raises with a sentence the model can act on when the condition can't be
     # resolved - every raise here reaches the person as Buddy explaining what it
     # needs, so they read as questions rather than error text.

@@ -54,6 +54,14 @@ module Buddy
     }.freeze
 
     UNITS = {
+      "minute"  => "minute",
+      "minutes" => "minute",
+      "min"     => "minute",
+      "mins"    => "minute",
+      "hour"    => "hour",
+      "hours"   => "hour",
+      "hr"      => "hour",
+      "hrs"     => "hour",
       "day"     => "day",
       "days"    => "day",
       "daily"   => "day",
@@ -65,7 +73,28 @@ module Buddy
       "monthly" => "month",
     }.freeze
 
-    def parse(spec, on: Date.current)
+    # A sub-day interval is NOT a new kind of recurrence. It's the intraday
+    # window that already existed — `every_minutes` stepping from `at` up to
+    # `until_at`, which BuddyReminder#slots_on walks — so `every:30-minutes`
+    # translates into that rather than storing a `unit` nothing knows how to
+    # advance. Same rule, reachable by the name people actually use.
+    #
+    # It could not be reached before, and the cost was visible: asked to check
+    # a print every 30 minutes, Byte tried `every:30-minutes`, was refused,
+    # explained to the person that it "needed the recurrence as a plain
+    # every:30-minutes shape", tried again, and ended with nothing set.
+    SUB_DAY_MINUTES = { "minute" => 1, "hour" => 60 }.freeze
+
+    # No end time given means the rest of the day. `until_on` is what bounds
+    # the DAYS, and it's a separate argument.
+    DAY_END = "23:59".freeze
+
+    # Longest a sub-day step can be before it's just a daily wearing a costume.
+    MAX_SUB_DAY_MINUTES = 12 * 60
+
+    # `now` is only ever consulted by a SUB-DAY interval, which is the one shape
+    # with no natural hour to name — see `every`.
+    def parse(spec, on: Date.current, now: nil)
       parts = spec.to_s.strip.downcase.split(":")
       return nil if parts.empty?
 
@@ -78,7 +107,7 @@ module Buddy
       when "yearly"   then base("yearly", parts, on)
       when "weekly"   then weekly(parts, on)
       when "monthly"  then monthly(parts, on)
-      when "every"    then every(parts, on)
+      when "every"    then every(parts, on, now)
       end
     end
 
@@ -122,17 +151,49 @@ module Buddy
 
     # "every:2-weeks:10:00". The interval counts from `on`, so every-2-weeks
     # set on a Tuesday lands on Tuesdays.
-    def every(parts, on)
+    def every(parts, on, now = nil)
       spec = parts.shift.to_s
       at   = clock(parts)
-      return nil if at.nil? || spec.exclude?("-")
+      return nil if spec.exclude?("-")
 
       count, unit = spec.split("-", 2)
       n = count.to_i
       u = UNITS[unit.to_s]
-      return nil if u.nil? || !n.between?(1, 52)
+      return nil if u.nil?
+
+      step = SUB_DAY_MINUTES[u]
+      # A sub-day interval is the ONE shape with no hour in the sentence.
+      # "Every 30 minutes" starts now, and there is nothing else it could mean —
+      # so requiring the clock here made the natural spelling unparseable, which
+      # is exactly what happened: `every:30-minutes` came back "unknown repeat
+      # spec" and the whole reminder was abandoned (dev 4085-4087).
+      #
+      # Every other shape still demands one, because "weekly" without an hour
+      # really is missing something the person has to have meant.
+      return sub_day(n * step, at || now_clock(now), on) if step
+
+      return nil if at.nil?
+      return nil unless n.between?(1, 52)
 
       { "freq" => "custom", "interval" => n, "unit" => u, "at" => at, "starts_on" => on.iso8601 }
+    end
+
+    # Rounded to the minute so a countdown asked for at 14:02:47 doesn't store
+    # a start nobody typed.
+    def now_clock(now)
+      (now || Time.current).strftime("%H:%M")
+    end
+
+    def sub_day(minutes, at, on)
+      return nil unless minutes.between?(1, MAX_SUB_DAY_MINUTES)
+
+      {
+        "freq"          => "daily",
+        "at"            => at,
+        "starts_on"     => on.iso8601,
+        "every_minutes" => minutes,
+        "until_at"      => DAY_END,
+      }
     end
 
     # The clock is mandatory in a spec, because a reminder at an hour nobody

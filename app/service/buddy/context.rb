@@ -77,6 +77,7 @@ module Buddy
         pending_relays:         pending_relays(user, conversation),                # open questions from a partner, awaiting THIS user's answer
         pending_prompts:        pending_prompts(user),               # app surveys/questions Buddy can answer or skip on demand
         stashed_ideas:          stashed_ideas(user),                 # brain-dump ideas to occasionally resurface
+        feature_requests:       Buddy::FeatureRequests.context_for(user), # things a companion couldn't do, written down
         jil_triggers:           jil_triggers(user),
         jil_functions:          jil_functions(user),
         device_states:          device_states(user),          # last known state of every sensor in the house
