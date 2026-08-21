@@ -249,12 +249,12 @@ RSpec.describe Buddy::Timers do
         expect(timer.name).to eq("")
       end
 
-      it "anchors the countdown to the person's last sent message, not now" do
+      it "anchors an :message countdown to the person's last sent message, not now" do
         convo = user.byte_conversations.create!(mode: :buddy)
         sent_at = 40.seconds.ago
         convo.byte_messages.create!(user: user, direction: :outbound, state: :sent, body: "timer 3m", created_at: sent_at)
 
-        timer = described_class.create!(user: user, seconds: 180, conversation: convo)
+        timer = described_class.create!(user: user, seconds: 180, conversation: convo, anchor: :message)
 
         # end_at = sent_at + 180s, so remaining is ~140s, not the full 180.
         expect(timer.end_at).to be_within(2.seconds).of(sent_at + 180.seconds)
@@ -272,7 +272,7 @@ RSpec.describe Buddy::Timers do
           user: user, direction: :outbound, state: :sent, body: "timer for 5s", created_at: 8.seconds.ago,
         )
 
-        timer = described_class.create!(user: user, seconds: 5, conversation: convo)
+        timer = described_class.create!(user: user, seconds: 5, conversation: convo, anchor: :message)
 
         expect(timer.end_at).to be < Time.current
       end
@@ -284,9 +284,24 @@ RSpec.describe Buddy::Timers do
           user: user, direction: :outbound, state: :sent, body: "timer 10m", created_at: sent_at,
         )
 
-        timer = described_class.create!(user: user, seconds: 600, conversation: convo)
+        timer = described_class.create!(user: user, seconds: 600, conversation: convo, anchor: :message)
 
         expect(timer.end_at).to be_within(2.seconds).of(sent_at + 600.seconds)
+      end
+
+      # Prod timer 93. A spent countdown paused stores zero remaining, and
+      # resuming that gives a timer that starts and ends in the same microsecond
+      # — which reschedules a fire for a moment already past and can be re-armed
+      # at zero forever. It sat in the corner ringing at every tap meant to
+      # dismiss it.
+      it "will not pause a countdown that has nothing left" do
+        timer = described_class.create!(user: user, seconds: 60)
+        timer.update_columns(started_at: 2.minutes.ago, end_at: 1.minute.ago)
+
+        timer.pause!
+
+        expect(timer.reload).not_to be_paused
+        expect(timer.paused_remaining_ms).to be_nil
       end
 
       it "leaves no timer and raises when the fire can't be scheduled" do

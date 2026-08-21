@@ -2369,13 +2369,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     sleepChip.hidden = !show;
     if (!show) return;
     const who = buddyName();
-    // Three states, and they must not read alike. "reconnecting" is the
-    // benign one — the socket dropped, it'll come back on its own, nothing is
-    // wrong. An OUTAGE is not that: it will not fix itself, what you send is
-    // failing, and saying "reconnecting" there is the app telling you to wait
-    // for something that isn't coming.
+    // Three states, and they must not read alike. "reconnecting" is the benign
+    // one — the socket dropped, it'll come back on its own, nothing is wrong.
+    // An OUTAGE is not that: it will not fix itself, and saying "reconnecting"
+    // there is the app telling you to wait for something that isn't coming.
+    //
+    // Said in character, though. This is the pet on the person's home screen,
+    // not a status page — "messages aren't going through" is true and reads
+    // like a 500. They're worn out, and they'll be back.
     if (sleepReason === "gpt_outage") {
-      sleepText.textContent = `${who} can't think right now — messages aren't going through`;
+      sleepText.textContent = `${who}'s crashed out. Check back in a bit?`;
     } else if (usageCapped()) {
       sleepText.textContent = sleepWake
         ? `${who}'s asleep until ${sleepWake}`

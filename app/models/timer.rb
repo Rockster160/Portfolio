@@ -98,6 +98,12 @@ class Timer < ApplicationRecord
 
   def pause!
     return unless countdown? && running?
+    # Nothing left to hold. A spent countdown is one waiting on its fire, and
+    # pausing it stores zero remaining — which `resume!` then turns into a timer
+    # that starts and ends in the same microsecond, reschedules a fire for a
+    # moment already past, and can be re-armed at zero forever. Prod timer 93
+    # sat in the corner doing exactly that, ringing at a tap meant to dismiss it.
+    return if remaining_ms.to_i.zero?
 
     transaction do
       remaining = [((end_at - Time.current) * 1000).to_i, 0].max

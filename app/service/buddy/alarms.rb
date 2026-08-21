@@ -60,20 +60,26 @@ module Buddy
       create!(user: user, seconds: seconds, label: label, conversation: conversation)
     end
 
-    # Ring now, because a watch just tripped.
+    # Ring now, because a watch just tripped. Anchored to now, not to the
+    # conversation: nothing was typed to cause this, and reaching for the last
+    # message would start the lead-in wherever that happened to be.
     def ring!(watch)
       now!(
         user:         watch.user,
         conversation: watch.byte_conversation,
         label:        watch.body.to_s.strip.presence,
+        anchor:       :now,
       )
     end
 
     # Ring now, full stop. LEAD_SECONDS rather than zero for the reason above:
     # Buddy::Timers anchors a countdown to when the person ASKED, so a zero is a
     # timer that was already over before it existed.
-    def now!(user:, conversation:, label: nil, metadata: {})
-      create!(user: user, seconds: LEAD_SECONDS, label: label, conversation: conversation, metadata: metadata)
+    def now!(user:, conversation:, label: nil, metadata: {}, anchor: :message)
+      create!(
+        user: user, seconds: LEAD_SECONDS, label: label,
+        conversation: conversation, metadata: metadata, anchor: anchor,
+      )
     end
 
     # ---- the bare word -------------------------------------------------------
@@ -123,13 +129,17 @@ module Buddy
       nil
     end
 
-    def create!(user:, seconds:, label:, conversation: nil, metadata: {})
+    def create!(user:, seconds:, label:, conversation: nil, metadata: {}, anchor: :message)
+      # `seconds_until` already counted down from the message that asked, so the
+      # countdown has to start there too or the two disagree by however long the
+      # turn took and the alarm rings late.
       Buddy::Timers.create!(
         user:         user,
         seconds:      seconds,
         label:        label,
         conversation: conversation,
         metadata:     { FLAG => true }.merge(metadata.to_h.stringify_keys),
+        anchor:       anchor,
       )
     end
 
@@ -138,7 +148,7 @@ module Buddy
     # reaches" apart — Buddy::Timers would clamp both into something that rings
     # at the wrong time, silently.
     def seconds_until(fire_at, conversation=nil)
-      (fire_at - Buddy::Timers.anchor_time(conversation)).round
+      (fire_at - Buddy::Timers.anchor_time(conversation, :message)).round
     end
 
     # Whether a moment is one an alarm can actually be set for. Nil when it's

@@ -277,6 +277,8 @@ module Buddy
       seconds = watch.timer_seconds
       return if seconds < 1
 
+      # Anchored to now, not to whatever they last typed: a watch fires because
+      # something HAPPENED, which has nothing to do with the conversation.
       Buddy::Timers.create!(
         user:         watch.user,
         seconds:      seconds,

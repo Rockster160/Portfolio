@@ -173,7 +173,27 @@ module Buddy
 
     # Create + start a countdown. Broadcasts :created so the hero picks it up
     # live (the model only broadcasts on fire/confirm/chain on its own).
-    def create!(user:, seconds:, label: nil, conversation: nil, metadata: {})
+    # `anchor:` is WHERE THE CLOCK STARTS, and the default is now.
+    #
+    # `:message` measures from the message that asked, so a turn taking four
+    # seconds doesn't quietly shave four seconds off a "3 minute" timer. That is
+    # only true when the timer is being created BECAUSE of that message. Anything
+    # started later by the app — a break when a work block ends, the next block
+    # when they tap, a watch firing — has no such relationship, and reaching for
+    # the last thing they typed puts the start time wherever that happened to be.
+    #
+    # Prod timer 93: a 15-minute break created at 18:53:47 with `started_at`
+    # 18:38:46, the moment they'd typed "Let's do 15/15" a quarter of an hour
+    # earlier. It was over before it existed. That one bug showed up as three —
+    # no break counting down, a chip stuck flashing in the corner, and Byte
+    # saying it had started something that wasn't there.
+    #
+    # Note the fix is WHICH moment, not a floor on how far back it can reach.
+    # A `:message` timer landing already spent is deliberate and documented: a
+    # "5 minute timer" ends five minutes after it was asked for, and trimming
+    # that would make every timer end at a slightly different offset than the
+    # one requested.
+    def create!(user:, seconds:, label: nil, conversation: nil, metadata: {}, anchor: :now)
       secs  = seconds.to_i.clamp(1, MAX_SECONDS)
       clean = label.to_s.strip.first(60)
       page  = page_for(user)
@@ -193,9 +213,7 @@ module Buddy
           timer_page:  page,
           metadata:    metadata.to_h,
         )
-        # Anchor to WHEN THE PERSON ASKED, not when the turn finished, so a slow
-        # turn doesn't quietly shave time off a "3 minute" timer.
-        timer.start!(at: anchor_time(conversation))
+        timer.start!(at: anchor_time(conversation, anchor))
         raise ActiveRecord::Rollback unless timer.running?
       end
 
@@ -315,7 +333,8 @@ module Buddy
     # different offset than the one requested. A short timer arriving with a
     # second left is correct; the fix for it feeling instant is not spending
     # seconds in a model round trip (see ByteController's timer fast path).
-    def anchor_time(conversation)
+    def anchor_time(conversation, anchor)
+      return Time.current unless anchor == :message
       return Time.current if conversation.nil?
 
       sent = conversation.byte_messages.where(direction: :outbound).order(:created_at).last&.created_at

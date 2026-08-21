@@ -28,6 +28,10 @@ module Buddy
     TOOL_NAME = "buddy_timer_cycle".freeze
     KEY       = "cycle".freeze
     RESUME    = "resume".freeze
+    # Ending the block you're in, early. The rhythm is a promise about SHAPE,
+    # not a sentence — finishing the washing up in four of your fifteen minutes
+    # and then sitting out the other eleven is the opposite of the point.
+    SKIP      = "skip".freeze
 
     # A card nobody taps shouldn't be tappable next Tuesday. Long enough to
     # cover a break that ran over, short enough that yesterday's block can't be
@@ -155,12 +159,17 @@ module Buddy
     # ---- starting one -------------------------------------------------------
 
     # The first block. Everything after it comes through `resume!`.
-    def start!(user:, conversation:, seconds:, label: nil, break_seconds: nil, until_at: nil, cycle_id: nil)
+    # `anchor:` defaults to now, which is right for every block after the first —
+    # they start on a TAP, and the last thing typed was however long ago the
+    # previous block ran. Only the opening one, created inside the turn that
+    # asked for the rhythm, backdates.
+    def start!(user:, conversation:, seconds:, label: nil, break_seconds: nil, until_at: nil, cycle_id: nil, anchor: :now)
       Buddy::Timers.create!(
         user:         user,
         seconds:      seconds,
         label:        label,
         conversation: conversation,
+        anchor:       anchor,
         metadata:     {
           KEY => {
             "cycle_id"      => cycle_id.presence || SecureRandom.uuid,
@@ -276,8 +285,14 @@ module Buddy
     # the ordinary action renderer with no client changes - one tap, and the
     # card settles into its decided state, which is also what stops a second
     # tap starting a second block.
-    def attach_button!(user, conversation, message, cycle, rest, worked)
-      button = { "id" => 1, "label" => "Start the next #{worked}", "value" => RESUME, "variant" => "primary" }
+    def attach_button!(user, conversation, message, cycle, rest, worked, button: nil)
+      button ||= { "id" => 1, "label" => "Start the next #{worked}", "value" => RESUME, "variant" => "primary" }
+
+      # Only ever one live button per cycle. Every card carries one so there is
+      # always one to hand, which means the ones behind it have to stop being
+      # tappable — two live cards is two ways to start a block, and the second
+      # tap would start a second one on top of the first.
+      retire_cards!(user, id_for(cycle))
 
       action = ByteAction.create!(
         user:              user,
@@ -360,6 +375,83 @@ module Buddy
       nil
     end
 
+    # Grey out every other card still offering something for this cycle.
+    # `apply_decision!` is what the client reads to draw a card as settled, so
+    # this is the same thing a tap does — just done for them.
+    def retire_cards!(user, cycle_id)
+      return if cycle_id.blank?
+
+      cards_for(user, cycle_id).each { |card| card.apply_decision!(value: "superseded", source: :system) }
+    end
+
+    # The block that's counting right now. `timers_for` only matches rows
+    # carrying this cycle's metadata, so the break — a plain timer — is never
+    # what comes back.
+    def block_timer(user, cycle_id)
+      timers_for(user, cycle_id).first
+    end
+
+    # Offer a way out of the block that's running. Posted when a block STARTS,
+    # so from the first second of it there is a button to hand.
+    def offer_skip!(timer, conversation)
+      cycle = cycle_for(timer)
+      return nil if cycle.nil?
+
+      user  = timer.user
+      label = cycle["label"].to_s.strip
+      dur   = Buddy::Timers.humanize_seconds(cycle["seconds"])
+
+      message = Buddy::CompanionDelivery.deliver_plain(
+        user:         user,
+        conversation: conversation,
+        text:         "#{dur}#{" on #{label}" if label.present?} is running.",
+        metadata:     { "kind" => "buddy", "source" => "timer_cycle", "timer_id" => timer.id },
+        push_title:   nil,
+      )
+      attach_button!(user, conversation, message, cycle, nil, dur, button: skip_button(cycle))
+      message
+    end
+
+    def skip_button(cycle)
+      rest = cycle["break_seconds"].to_i
+      label = (
+        if rest.positive?
+          "Done early - start the #{Buddy::Timers.humanize_seconds(rest)}"
+        else
+          "Done early - next one"
+        end
+      )
+      { "id" => 1, "label" => label, "value" => SKIP, "variant" => "secondary" }
+    end
+
+    # A tap on any cycle card. Which button it was decides what happens, so the
+    # controller doesn't have to know there are two.
+    def tapped!(action)
+      value = action.decision.to_h["value"] || action.decision.to_h[:value]
+      return skip!(action) if value.to_s == SKIP
+
+      resume!(action)
+    end
+
+    # End the block where it stands and run the ordinary block-ending path — a
+    # skipped block does exactly what a finished one does, which is how the
+    # break still starts and the next card still appears.
+    def skip!(action)
+      cycle = action.tool_input.to_h[KEY]
+      return nil unless cycle.is_a?(Hash)
+
+      conversation = action.byte_conversation
+      timer        = block_timer(action.user, id_for(cycle))
+      return nil if timer.nil?
+
+      Buddy::Timers.stop!(timer)
+      on_fired(timer, conversation)
+      timer
+    rescue StandardError => e
+      Buddy::Errors.report(section: "timer_cycle.skip", exception: e, user: action&.user)
+      nil
+    end
+
     def stop_break(user, timer_id)
       return if timer_id.blank?
 
@@ -386,7 +478,8 @@ module Buddy
         },
         delivered_at: Time.current,
       )
-      Buddy::Timers.broadcast_chip(user, chip)
+      attach_button!(user, conversation, chip, cycle, nil, dur, button: skip_button(cycle))
+      Buddy::Timers.broadcast_chip(user, chip.reload)
       chip
     end
 
@@ -398,6 +491,10 @@ module Buddy
       label = cycle["label"].to_s.strip
       who   = user || timer&.user
       ends  = Time.zone.parse(cycle["until_at"].to_s)&.strftime("%-l:%M %p")&.strip
+
+      # Nothing is offered past the hour they named, so nothing should still be
+      # tappable either.
+      retire_cards!(who, id_for(cycle))
 
       Buddy::CompanionDelivery.deliver_plain(
         user:         who,

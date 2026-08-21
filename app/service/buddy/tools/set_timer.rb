@@ -151,6 +151,7 @@ Buddy::Tools.register(
         seconds:      seconds,
         label:        payload[:label],
         conversation: ctx.conversation,
+        anchor:       :message,
       )
       next { timer_id: plain.id, seconds: seconds, label: payload[:label].to_s, waiting: payload[Buddy::Tools::WAIT_ARG].present? }
     end
@@ -160,6 +161,7 @@ Buddy::Tools.register(
       conversation:  ctx.conversation,
       seconds:       seconds,
       label:         payload[:label],
+      anchor:        :message,
       break_seconds: rest.positive? ? rest : nil,
       # An EVENT ending is not a clock ending, and the two must never be mixed:
       # a cycle that stops when the print finishes has no hour attached to it
@@ -167,6 +169,10 @@ Buddy::Tools.register(
       until_at:      (ends unless stop),
     )
     watch = (Buddy::TimerCycle.stop_on!(timer, ctx.conversation, stop) if stop)
+    # A way out of the FIRST block. Every one after it gets the same button on
+    # its own chip; without this the opening block is the only one you can't
+    # cut short, which is the one people most often want to.
+    Buddy::TimerCycle.offer_skip!(timer, ctx.conversation)
 
     {
       timer_id:   timer.id,

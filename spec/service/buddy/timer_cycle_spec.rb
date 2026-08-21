@@ -85,6 +85,27 @@ RSpec.describe Buddy::TimerCycle do
       end
 
       # THE rule. Nothing about a fired block starts the next one.
+      # Prod timer 93: the break was created at 18:53:47 carrying `started_at`
+      # 18:38:46 — the moment "Let's do 15/15" was typed, a quarter of an hour
+      # before the block it was breaking from had even ended. Fifteen minutes of
+      # break, already spent. It read as three separate bugs: no countdown
+      # anywhere, a chip stuck flashing in the corner, and Byte announcing a
+      # timer that wasn't there.
+      it "starts the break NOW, not back when the rhythm was asked for" do
+        convo.byte_messages.create!(
+          user: user, direction: :outbound, state: :sent,
+          body: "Let's do 15/15", created_at: 15.minutes.ago,
+        )
+        timer = start!(seconds: 900, break_seconds: 900)
+
+        described_class.on_fired(timer, convo)
+
+        rest = timers.where(name: "Break").last
+        expect(rest.started_at).to be_within(5.seconds).of(Time.current)
+        expect(rest.end_at).to be > Time.current
+        expect(rest.remaining_ms).to be_within(5_000).of(900_000)
+      end
+
       it "does not start the next block" do
         timer = start!
         described_class.on_fired(timer, convo)
@@ -142,6 +163,63 @@ RSpec.describe Buddy::TimerCycle do
       end
     end
 
+    describe "cutting a block short" do
+      def skip_card
+        ByteAction.where(tool_name: described_class::TOOL_NAME).pending.order(:id).last
+      end
+
+      it "offers a way out from the first second of a block" do
+        timer = start!(seconds: 900, break_seconds: 600)
+
+        described_class.offer_skip!(timer, convo)
+
+        expect(skip_card.buttons.first["value"]).to eq(described_class::SKIP)
+        expect(skip_card.buttons.first["label"]).to include("10 min")
+      end
+
+      it "ends the block and does what its ending would have done" do
+        timer = start!(seconds: 900, break_seconds: 600)
+        described_class.offer_skip!(timer, convo)
+        card = skip_card
+
+        expect { described_class.skip!(card) }.to change { timers.where(name: "Break").count }.by(1)
+        expect(timer.reload.archived_at).to be_present
+        expect(said.last.body).to include("Tap below")
+      end
+
+      # Two live cards is two ways to start a block, and the second tap would
+      # start one on top of the other.
+      it "leaves only the newest card tappable" do
+        timer = start!(seconds: 900, break_seconds: nil)
+        described_class.offer_skip!(timer, convo)
+        first = skip_card
+
+        described_class.on_fired(timer, convo)
+
+        expect(first.reload).not_to be_pending
+        expect(ByteAction.where(tool_name: described_class::TOOL_NAME).pending.count).to eq(1)
+      end
+
+      it "sends a skip tap to skip and a resume tap to resume" do
+        timer = start!(seconds: 900, break_seconds: nil)
+        described_class.offer_skip!(timer, convo)
+        card = skip_card
+        card.apply_decision!(value: described_class::SKIP, source: :user)
+
+        expect { described_class.tapped!(card) }.to change { timer.reload.archived_at }.from(nil)
+      end
+
+      # Mid-break there is no block counting; the resume card is the live one.
+      it "does nothing when no block is running" do
+        timer = start!(seconds: 900, break_seconds: 600)
+        described_class.offer_skip!(timer, convo)
+        card = skip_card
+        Buddy::Timers.stop!(timer)
+
+        expect(described_class.skip!(card)).to be_nil
+      end
+    end
+
     describe "the tap" do
       def fire_and_tap!
         described_class.on_fired(start!, convo)
@@ -153,6 +231,21 @@ RSpec.describe Buddy::TimerCycle do
         action = card
 
         expect { described_class.resume!(action) }.to change { timers.where(name: "Kitchen cupboards").count }.by(1)
+      end
+
+      # Same trap on the other side of the tap: a block that starts when they
+      # come back must start THEN, not whenever the last thing was typed.
+      it "starts the next block from the tap, not from the last thing they said" do
+        convo.byte_messages.create!(
+          user: user, direction: :outbound, state: :sent,
+          body: "Let's do 15/15", created_at: 20.minutes.ago,
+        )
+        described_class.on_fired(start!(seconds: 900, break_seconds: nil), convo)
+
+        nxt = described_class.resume!(card)
+
+        expect(nxt.started_at).to be_within(5.seconds).of(Time.current)
+        expect(nxt.remaining_ms).to be_within(5_000).of(900_000)
       end
 
       it "carries the whole rhythm forward so it can go round again" do
