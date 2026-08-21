@@ -19,6 +19,29 @@ require "rails_helper"
 RSpec.describe ByteMessage, type: :model do
   let(:user) { User.me }
 
+  # A usage row is what a turn COST. Deleting the message it was earned on used
+  # to raise a foreign key violation - it stopped a backfill halfway through the
+  # twelve looping briefings of 21 Aug - and deleting the spend with it would
+  # have been worse: the money is a true fact about the day either way, and
+  # `buddy:cost` still has to add it up.
+  describe "deleting a message that cost something" do
+    let(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Byte", buddy_theme: "byte") }
+
+    it "keeps the spend and lets the message go" do
+      msg = convo.byte_messages.create!(user: user, direction: :inbound, state: :delivered, body: "hi")
+      usage = BuddyUsage.create!(
+        user: user, byte_conversation: convo, byte_message: msg, kind: :turn,
+        model: "gpt-5.4-mini", input_tokens: 100, output_tokens: 10, cost_micros: 5_000,
+      )
+
+      expect { msg.destroy! }.not_to raise_error
+
+      expect(BuddyUsage.exists?(usage.id)).to be(true)
+      expect(usage.reload.byte_message_id).to be_nil
+      expect(usage.cost_micros).to eq(5_000)
+    end
+  end
+
   it "creates with default direction and state" do
     msg = user.byte_messages.create!(body: "hi")
     expect(msg.direction).to eq("outbound")

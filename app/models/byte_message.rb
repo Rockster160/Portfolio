@@ -27,6 +27,13 @@ class ByteMessage < ApplicationRecord
   # The other threads this same row is shown in. One message, many audiences —
   # see ByteMessageShare for why this isn't a second copy.
   has_many :byte_message_shares, dependent: :destroy
+  # NULLIFY, not destroy. A usage row is what a turn COST, and the money is a
+  # true fact about the day whichever bubble it was earned on - `buddy:cost`
+  # still has to add it up after the message is gone. Without this, deleting any
+  # message with spend on it raises a foreign key violation instead: it stopped
+  # a backfill halfway through the twelve looping briefings of 21 Aug, and it is
+  # why tearing down an eval conversation used to fail.
+  has_many :buddy_usages, dependent: :nullify
   has_many :shared_conversations, through: :byte_message_shares, source: :byte_conversation
 
   has_many_attached :files
