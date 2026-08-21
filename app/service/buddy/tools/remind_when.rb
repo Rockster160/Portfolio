@@ -12,9 +12,18 @@ Buddy::Tools.register(
     alongside an agenda item when they want both.
 
     `trigger` picks the condition:
-      "arrive" - when they get to a place. `target` = the place name
+      "arrive" - when THIS PERSON gets to a place. `target` = the place name
                  ("Costco", "the gym", "home").
                  e.g. "remind me to grab my prescription next time I'm at Costco".
+                 It watches THEIR phone and THEIR car, so it can only ever
+                 mean them. Never put another person's name in `target` here:
+                 it doesn't watch for her, it watches for them, and the reminder
+                 fires when the wrong person gets home.
+                 Somebody else arriving is `custom`, and only if something in
+                 the house actually reports it - her car, a door, a sensor.
+                 `read_listener_guide` is what says whether anything does. When
+                 nothing does, that is a real `request_feature`, and saying so
+                 is the honest answer rather than a failure.
       "depart" - when they leave a place. `target` = the place name.
       "chore"  - when a chore is marked done. `target` = the chore name
                  ("Brush Teeth"). e.g. "next time I brush my teeth, remind
@@ -60,6 +69,15 @@ Buddy::Tools.register(
     syntax plus the listeners already running on their own automations, and
     copying a real key path from those is the difference between a watch that
     fires and one that silently never does. Do not guess at payload keys.
+
+    **Not knowing the format is never a reason to decline.** The guide is a
+    tool call, in this same turn, and it costs the person nothing. Asked to
+    watch the front door and to watch for someone getting home, a companion
+    answered "I can't wire that watch from here yet" and "I need the house
+    listener format and I don't have it in front of me right now" - both
+    without calling the one tool that hands it over. It read as a missing
+    feature and it was a lookup that hadn't happened yet. Read the guide, then
+    set the watch.
 
     That tool is also how you find out whether something is watchable in the
     first place, by passing what they called it (`about: "doorbell"`). The house

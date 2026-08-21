@@ -13,6 +13,12 @@ Buddy::Tools.register(
     interrupts them: waking up, the oven, the laundry, a meeting they cannot be
     late for.
 
+    **One or the other, never both.** An alarm alongside a reminder for the
+    same moment is two things going off, and the reply then describes the
+    quiet one: "wake me at 6:30 tomorrow" came back as an alarm AND a reminder,
+    announced as "you've got a wake-up reminder" - so the thing that would
+    actually wake them went unmentioned and the thread carried a duplicate.
+
     Say when in exactly ONE of three ways:
       `at`      - a clock time, as an ISO datetime. "6:30 tomorrow", "at 7pm".
       `seconds` - a stretch of time from now. "in 20 minutes" is 1200.

@@ -24,6 +24,77 @@ RSpec.describe Buddy::ReminderFirer do
     convo.byte_messages.where(direction: :inbound).order(:id).pluck(:body)
   end
 
+  # 21 Aug: Byte briefed once a minute for ten minutes until the reminder was
+  # cancelled by hand. Agenda item 1006 ("Focus") started at 8:30, the briefing
+  # is pulled 30 minutes ahead of the first thing, and 8:30 minus 30 is 8:00 -
+  # exactly the time it had just fired at. Every roll-forward recomputed the
+  # same past time, and a `fire_at` in the past is due on every tick.
+  describe "the Today briefing rolling forward" do
+    let(:zone)   { ActiveSupport::TimeZone[user.timezone.to_s] }
+    let!(:agenda) { Agenda.create!(user: user, name: "Mine") }
+
+    def briefing!(fire_at:)
+      BuddyReminder.create!(
+        user: user, byte_conversation: convo, body: "Today briefing", fire_at: fire_at,
+        recurrence: { "freq" => "daily", "at" => "08:30" }, metadata: { "today_briefing" => true },
+      )
+    end
+
+    def event!(at)
+      AgendaItem.create!(agenda: agenda, kind: :event, name: "Focus", all_day: false,
+                         start_at: at, end_at: at + 1.hour)
+    end
+
+    it "lands tomorrow, not on a time that has already gone" do
+      travel_to(zone.local(2026, 8, 21, 8, 0)) do
+        event!(zone.local(2026, 8, 21, 8, 30))
+        reminder = briefing!(fire_at: zone.local(2026, 8, 21, 8, 0))
+
+        described_class.fire!(reminder)
+
+        expect(reminder.reload.fire_at).to be > Time.current
+        expect(reminder.fire_at.in_time_zone(zone).to_date).to eq(Date.new(2026, 8, 22))
+      end
+    end
+
+    # The other half: rolling from `now` lands on today's own 8:30 slot, which
+    # the briefing fired BEFORE. That's a second briefing the same morning.
+    it "doesn't brief twice on the morning it fired early" do
+      travel_to(zone.local(2026, 8, 21, 8, 0)) do
+        event!(zone.local(2026, 8, 21, 8, 30))
+        reminder = briefing!(fire_at: zone.local(2026, 8, 21, 8, 0))
+
+        described_class.fire!(reminder)
+
+        expect(reminder.reload.fire_at.in_time_zone(zone).to_date).not_to eq(Date.new(2026, 8, 21))
+      end
+    end
+
+    it "still moves tomorrow's earlier when tomorrow starts early" do
+      travel_to(zone.local(2026, 8, 21, 8, 0)) do
+        event!(zone.local(2026, 8, 22, 7, 30))
+        reminder = briefing!(fire_at: zone.local(2026, 8, 21, 8, 0))
+
+        described_class.fire!(reminder)
+
+        expect(reminder.reload.fire_at.in_time_zone(zone).strftime("%m-%d %H:%M")).to eq("08-22 07:00")
+      end
+    end
+
+    it "leaves an ordinary recurring reminder alone" do
+      travel_to(zone.local(2026, 8, 21, 8, 0)) do
+        reminder = BuddyReminder.create!(
+          user: user, byte_conversation: convo, body: "water the tomatoes",
+          fire_at: zone.local(2026, 8, 21, 8, 0), recurrence: { "freq" => "daily", "at" => "08:30" },
+        )
+
+        described_class.fire!(reminder)
+
+        expect(reminder.reload.fire_at.in_time_zone(zone).strftime("%m-%d %H:%M")).to eq("08-21 08:30")
+      end
+    end
+  end
+
   describe "an ordinary reminder" do
     it "says it, with nothing stuck on the front" do
       described_class.fire!(remind!("take the trash out"))

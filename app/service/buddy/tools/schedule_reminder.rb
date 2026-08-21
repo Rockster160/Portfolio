@@ -58,6 +58,12 @@ Buddy::Tools.register(
     `alarm`, which rings out loud until it's acknowledged. It reaches 24 hours
     ahead; further out, or on a recurrence, this is still the tool.
 
+    **Never alongside an alarm for the same moment.** "Wake me at 6:30
+    tomorrow" came back as an alarm AND one of these, and the reply then
+    described the reminder - "wake-up reminder's set" - so the thing that would
+    actually wake them went unmentioned and the thread carried a duplicate that
+    fires beside it. Pick the one that does the job and say what it is.
+
     ONE-SHOT: pass `at` (ISO-8601 datetime with timezone offset).
     Convert natural-language times ("in 30 min", "3pm", "tomorrow
     morning") into ISO using the local time in RIGHT NOW block.

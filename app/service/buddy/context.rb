@@ -1087,14 +1087,24 @@ module Buddy
       # opened (see Buddy::PromptForm), so anything richer here would be a
       # skeleton Buddy could mistake for the finished form. `read_prompt` opens
       # one for real.
+      # A prompt whose `options` isn't an array of question hashes — 320 rows in
+      # dev carry a bare hash or nil — used to take this whole section with it:
+      # `Array(a_hash)` yields PAIRS, and a pair has no `deep_symbolize_keys`.
+      # Buddy::PromptForm has always guarded for it and this didn't, so one bad
+      # row among somebody's ten most recent silently emptied their prompts
+      # section in production and raised the turn outright in development, where
+      # Buddy::Errors.report re-raises on purpose.
+      def question_texts(prompt)
+        rows = prompt.options.is_a?(Array) ? prompt.options.grep(Hash) : []
+        rows = rows.map(&:deep_symbolize_keys).reject { |o| o[:type].to_s == "hidden" }
+        rows.filter_map { |o| o[:question].presence }
+      end
+
       def pending_prompts(user)
         return [] unless user.respond_to?(:prompts)
 
         user.prompts.unanswered.order(created_at: :desc).limit(10).map { |p|
-          questions = Array(p.options).map(&:deep_symbolize_keys)
-            .reject { |o| o[:type].to_s == "hidden" }
-            .filter_map { |o| o[:question].presence }
-          { id: p.id, title: p.question, questions: questions }
+          { id: p.id, title: p.question, questions: question_texts(p) }
         }
       rescue StandardError => e
         Buddy::Errors.report(section: "context.pending_prompts", exception: e, user: user)

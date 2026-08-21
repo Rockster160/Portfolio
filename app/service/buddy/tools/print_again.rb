@@ -20,6 +20,14 @@ Buddy::Tools.register(
 
     Never invent a filename to send. A wrong one either does nothing or ties the
     machine up for hours on the wrong model.
+
+    **REPRINTS ONLY, and omitting `file` is not a way to handle a verb you
+    don't recognise.** Warming the printer, cooling it, homing the head - those
+    are `printer_control` and none of them touches a file. "Preheat printer"
+    reached this tool with no `file`, which means "the last thing printed", and
+    started a 40-minute vase that had to be cancelled at the machine. If what
+    they asked for isn't a print, this is the wrong tool even when it's the
+    closest one.
   TXT
   feature:     :jil,
   args:        {

@@ -12,6 +12,13 @@ Buddy::Tools.register(
     No time named? Pick the natural one (now, for "once I get home"; tonight,
     for "later") and say what you assumed - don't stall the add to ask.
 
+    **A weekday whose time has already gone today means NEXT week.** "Dinner
+    with Sam Thursday at 7", said at nine on a Thursday evening, is next
+    Thursday - nobody schedules a thing for two hours ago. Add it there and
+    say which Thursday you took it for. Asked instead ("has already gone by
+    tonight, so I need to know if you mean next Thursday") it costs them a
+    whole extra exchange to confirm the only reading that made sense.
+
     Pull the PLACE into `location`, not the title: "coffee at Lucky Ones"
     → title "Coffee", location "Lucky Ones". "dentist" with no place →
     no location.

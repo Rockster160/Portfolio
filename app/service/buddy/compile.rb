@@ -616,13 +616,24 @@ module Buddy
     # Cheap guard against writing the same thing twice when a stretch gets
     # compiled and then the person immediately says it again. The model is also
     # shown what's already held; this catches what it writes anyway.
+    #
+    # EVERY kind, not three of them. `stash` was missing, which is how memory 88
+    # came to be a byte-identical copy of 84 - same content, same
+    # source_message_id, written half an hour later by the compile pass over a
+    # row this check couldn't see.
+    #
+    # And spaces come out with the punctuation. Keeping them meant `naptime` and
+    # `nap time` normalized differently and both got written (78 and 82), which
+    # is the same fact twice with a space between.
     def duplicate?(user, content)
-      norm = content.downcase.gsub(/[^a-z0-9 ]/, "").squeeze(" ").strip
+      norm = normalize_memory(content)
       return false if norm.length < 12
 
-      BuddyMemory.where(user: user).unexpired.where(kind: [:concept, :preference, :followup]).any? { |m|
-        m.content.to_s.downcase.gsub(/[^a-z0-9 ]/, "").squeeze(" ").strip == norm
-      }
+      BuddyMemory.where(user: user).unexpired.any? { |m| normalize_memory(m.content) == norm }
+    end
+
+    def normalize_memory(content)
+      content.to_s.downcase.gsub(/[^a-z0-9]/, "")
     end
 
     # Its own usage kind so a compile's spend stays legible next to a turn's.

@@ -49,6 +49,46 @@ RSpec.describe Buddy::EventSearch do
         expect(found[:events]).not_to include(old)
       end
 
+      # `timestamp:today` is what the model reaches for and the parser has no
+      # word for: the term produced no SQL and vanished, leaving a broader
+      # question answered in silence. Resolved in the PERSON's zone — Time.zone
+      # is UTC and their day starts six hours later, so the two calendars
+      # disagree all evening.
+      it "resolves today and yesterday against the person's own calendar" do
+        zone     = ActiveSupport::TimeZone[user.timezone.to_s]
+        this_one = event!("Celsius", at: Time.current.in_time_zone(zone).change(hour: 10))
+        event!("Celsius", at: Time.current.in_time_zone(zone).change(hour: 10) - 1.day)
+
+        expect(described_class.call(user: user, query: "celsius timestamp:today")[:events]).to contain_exactly(this_one)
+        expect(described_class.call(user: user, query: "celsius timestamp:yesterday")[:total]).to eq(1)
+        expect(described_class.call(user: user, query: "celsius")[:total]).to eq(2)
+      end
+
+      # Prod: "How much Celsius did I drink last month vs this one?" answered
+      # "I couldn't find any Celsius entries to total up" over fifty-eight of
+      # them. The model wrote the month bound the description told it to write
+      # and left `days` alone, and the two were ANDed — so a fourteen-day floor
+      # excluded every row in the month being asked about.
+      it "lets a month bound in the query outrank the days window" do
+        july = event!("Strawberry Celsius", at: 45.days.ago)
+        recent = event!("Strawberry Celsius", at: 2.days.ago)
+        from = 60.days.ago.to_date.iso8601
+        to   = 20.days.ago.to_date.iso8601
+
+        found = described_class.call(user: user, query: "celsius timestamp>#{from} timestamp<#{to}")
+
+        expect(found[:events]).to contain_exactly(july)
+        expect(found[:events]).not_to include(recent)
+      end
+
+      it "lets an upper bound alone outrank it too" do
+        old = event!("Coffee", at: 40.days.ago)
+
+        found = described_class.call(user: user, query: "Coffee timestamp<#{20.days.ago.to_date.iso8601}")
+
+        expect(found[:events]).to contain_exactly(old)
+      end
+
       # `timestamp:>x` reads as one unknown `:>` operator and gets dropped, so the
       # bound silently stops applying. Accept the spelling instead of answering a
       # bounded question with unbounded results.

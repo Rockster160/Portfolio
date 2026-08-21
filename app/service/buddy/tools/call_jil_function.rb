@@ -15,6 +15,14 @@ Buddy::Tools.register(
     nothing", and saying otherwise describes something that never
     happened.
 
+    **When their words fit more than one function, say which one you ran.**
+    There are two fans covering three rooms, so "turn the fan to low" is a
+    choice you made on their behalf - and "Kk! Fan's on low" tells them nothing
+    about which room just changed, which is indistinguishable from the reply
+    that goes out when nothing ran at all (prod 1146). Name it: "great room
+    fan's on low". One word, and it's the difference between a receipt they can
+    check and one they can't.
+
     These also ANSWER QUESTIONS, not just perform commands. A
     function that reads a sensor or device ("is the doggy door
     shut?", "did we leave the laundry gate open?", "what's the

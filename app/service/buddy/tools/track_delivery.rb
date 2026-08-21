@@ -11,6 +11,16 @@ Buddy::Tools.register(
     for an Amazon order they just placed - that one will arrive on its own, and
     two rows for one package is worse than waiting.
 
+    **A NEW row, only.** If the thing they're talking about is already on the
+    list, whatever they're telling you about it is `update_delivery` - a moved
+    date, a better name, and especially a tracking number, which usually
+    arrives in a separate message hours after the package did. "Here's the
+    tracking for the mattress" came back as a SECOND mattress: the number
+    landed on a row nothing else knew about, and the one they were watching
+    still had none. Check what's on the list before you add to it - and if it
+    ISN'T there, add it in the same turn. Looking and then stopping ("that
+    one's already on the way") is only an answer when it really is.
+
     `name` is what THEY call it ("computer desk"), not a catalogue title. `when`
     is the day it's expected; leave it off if they didn't say and it goes on
     today. `tracking` and `url` are optional and only worth passing if they gave

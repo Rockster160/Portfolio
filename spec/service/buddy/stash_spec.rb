@@ -694,6 +694,45 @@ RSpec.describe "Buddy brain-dump (stash)" do
         ).send(:display_body, body)
       }
 
+      # The em dash rule is written down in the persona and in every tone
+      # profile, and em dashes still come out - two in one 100-turn eval. Four
+      # statements of a rule is where a fifth stops being the fix.
+      # Prod 4202: "Log 4 more Build Furniture for the Wayfair Desk" came back
+      # with History#form_standin's marker as the ENTIRE reply, and the
+      # instruction was dropped. Same family as the mood marker and the relay
+      # framing, both already scrubbed here.
+      context "when the model echoes the form marker it was given to read" do
+        let(:body) { "[form you put up: Who did: Puppy Down? - answered]" }
+
+        it "takes it out" do
+          expect(deduped).to eq("")
+        end
+      end
+
+      context "when the marker is buried in a real sentence" do
+        let(:body) { "Kk, four of them. [form you put up: Who did: Puppy Down? - answered] Done." }
+
+        it "leaves the sentence" do
+          expect(deduped).to eq("Kk, four of them.  Done.")
+        end
+      end
+
+      context "when the model uses an em dash anyway" do
+        let(:body) { "Done — your Today briefing is up." }
+
+        it "hands over the hyphen every profile actually asks for" do
+          expect(deduped).to eq("Done - your Today briefing is up.")
+        end
+      end
+
+      context "when the em dash is already sitting in spaces" do
+        let(:body) { "Kk! Fan's on low  —  living room one." }
+
+        it "doesn't leave a puddle of spaces behind" do
+          expect(deduped).to eq("Kk! Fan's on low - living room one.")
+        end
+      end
+
       context "when the second copy is reworded in the middle" do
         let(:body) {
           "Ahh, yep. You're right - it's still sitting in home already, so there wasn't anything " \

@@ -255,6 +255,35 @@ RSpec.describe Buddy::Compile do
   # Content is handed over as something TRUE ABOUT THE PERSON, so anything else
   # comes back out as a claim about them and the thing it asked for never
   # happens.
+  # Suki told Eve three things once and remembered each of them twice: the
+  # inline `remember` path writes immediately, then compile re-reads the same
+  # turns half an hour later. `duplicate?` is what should have caught the second
+  # write, and it had two holes.
+  describe ".duplicate?" do
+    it "sees a stash row, which is how 88 got written over an identical 84" do
+      BuddyMemory.create!(user: user, kind: :stash, status: :active,
+                          content: "She is working on kitchen cupboards and wants to keep at it")
+
+      expect(described_class.send(:duplicate?, user, "She is working on kitchen cupboards and wants to keep at it"))
+        .to be(true)
+    end
+
+    it "reads naptime and nap time as the same fact" do
+      BuddyMemory.create!(user: user, kind: :preference,
+                          content: "She avoids the hose when Whisper's naptime is close")
+
+      expect(described_class.send(:duplicate?, user, "She avoids the hose when Whisper's nap time is close"))
+        .to be(true)
+    end
+
+    it "still lets a genuinely different fact through" do
+      BuddyMemory.create!(user: user, kind: :preference, content: "She checks the schedule when working outside")
+
+      expect(described_class.send(:duplicate?, user, "She avoids the hose during the last nap of the day"))
+        .to be(false)
+    end
+  end
+
   describe "what a row is allowed to be" do
     let(:instructions) {
       say("Anything at all.")

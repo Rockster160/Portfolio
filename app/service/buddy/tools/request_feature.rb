@@ -2,8 +2,15 @@ Buddy::Tools.register(
   name:        :request_feature,
   description: <<~TXT,
     Write down something you were asked for and CAN'T DO. Use it the moment you
-    hit the edge of your tools, and offer it out loud: "I can't do that one yet
-    - want me to put it on the list?"
+    hit the edge of your tools.
+
+    **CALLING IT IS THE OFFER.** It writes the row and leaves a receipt in one
+    move, so you say "I can't do that one yet, so I've put it on the list" -
+    past tense, because by then you have. Asked "can you order me a pizza?", a
+    companion answered "I can't place the order from here, but I can put the
+    idea on your list if you want" and called nothing: the offer was made, the
+    row was not, and the person now has to ask a second time for the thing
+    they'd already asked for. There is nothing here to get permission for.
 
     This is the honest answer, and it is a better one than either of the two
     you'd otherwise pick from. Saying no and stopping leaves them with nothing.
@@ -24,6 +31,21 @@ Buddy::Tools.register(
     section is not a missing feature, it's the thing they're asking you to
     fix), a job for a list, a thought for the stash, or anything you could do
     and would rather not.
+
+    TWO THAT LOOK LIKE WALLS AND AREN'T. Both have been filed as a feature
+    request with the tool for it sitting in the list:
+
+      - "check X every 30 minutes until it's done" - `set_timer` with
+        `repeat: true`, and its `stop_when` family for the ending.
+      - "tell me when someone's at the door" / any sensor, button, camera or
+        door in the house - `remind_when` with `trigger: "custom"`. Call
+        `read_listener_guide` and it will show you what's already reporting in.
+
+    And one that looks like a wall and IS one: "let me know when <somebody
+    else> gets home". `arrive` watches the person asking, never a third party,
+    so this only works if something in the house reports her specifically.
+    Read the listener guide first - if nothing does, this is exactly what this
+    tool is for, and filing it is the right answer rather than a shortfall.
 
     **DO THE HALF YOU CAN.** Most walls are hit part of the way through
     something you can otherwise handle, and stopping at the wall leaves them

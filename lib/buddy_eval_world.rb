@@ -18,7 +18,7 @@
 # Three things keep that honest:
 #
 #   1. It refuses to run anywhere but development and test.
-#   2. Every record is written to a MANIFEST on disk as it's created, by class
+#   2. Every record is written to a manifest on disk as it's created, by class
 #      and id, before the next one is built. Teardown reads the manifest, so a
 #      run that dies halfway — or gets killed — leaves an exact list of what to
 #      remove rather than a pattern to guess with.
@@ -29,7 +29,11 @@
 # proposal in the thread for `undo` to reverse. Both are live state rather than
 # rows, and a stand-in for either would be testing the stand-in.
 class BuddyEvalWorld
-  MANIFEST = "tmp/buddy_eval/world.json".freeze
+  DIR = "tmp/buddy_eval".freeze
+
+  # Must match the thread lib/tasks/buddy_eval.rake speaks in, or anything
+  # seeded per-conversation is invisible to the turn that asks about it.
+  EVAL_THREAD = "Eval · Byte".freeze
 
   class << self
     def build!(user)
@@ -41,9 +45,15 @@ class BuddyEvalWorld
       new(user).tap(&:build!)
     end
 
+    # Shares BUDDY_EVAL_DIR with the report, so a spec driving the harness
+    # can't sweep the manifest a real run is holding.
+    def manifest_path
+      Rails.root.join(ENV["BUDDY_EVAL_DIR"].presence || DIR, "world.json")
+    end
+
     # Whatever a previous run left behind. Safe to call when there's nothing.
     def sweep!
-      path = Rails.root.join(MANIFEST)
+      path = manifest_path
       return 0 unless path.exist?
 
       rows = JSON.parse(path.read) rescue []
@@ -64,7 +74,10 @@ class BuddyEvalWorld
       return false if klass.blank?
 
       if klass == "AmazonOrder"
-        order = AmazonOrder.all.find { |o| o.id.to_s == id.to_s }
+        # Not a record: a row in a cached list, identified by the (order_id,
+        # item_id) pair its own `destroy` matches on. `id` is not a method it
+        # has, which is why nothing this ever added was being taken away again.
+        order = AmazonOrder.all.find { |o| o.item_id.to_s == id.to_s }
         return false if order.nil?
 
         order.destroy
@@ -82,11 +95,12 @@ class BuddyEvalWorld
     end
   end
 
-  attr_reader :user, :made
+  attr_reader :user, :made, :reused
 
   def initialize(user)
-    @user = user
-    @made = []
+    @user   = user
+    @made   = []
+    @reused = []
   end
 
   def build!
@@ -101,6 +115,7 @@ class BuddyEvalWorld
     links!
     deliveries!
     jil_tasks!
+    prompts!
     self
   end
 
@@ -112,10 +127,35 @@ class BuddyEvalWorld
   # met" because the world silently failed to build is worse than one that says
   # which half is missing.
   def summary
-    made.group_by { |row| row[:class] }.transform_values(&:length).sort.map { |k, n| "#{k} x#{n}" }
+    counts = made.group_by { |row| row[:class] }.transform_values(&:length).sort.map { |k, n| "#{k} x#{n}" }
+    counts << "reused #{reused.length} of theirs" if reused.any?
+    counts
   end
 
   private
+
+  # Anything the person ALREADY has is used as it stands, and never tracked:
+  # teardown must not remove a chore that was theirs before the run started.
+  #
+  # This is not only about the unique index that "bakkie" hit. A second "Take
+  # out the recycling" standing beside their real one doesn't make "rename the
+  # recycling chore" more answerable — it makes it AMBIGUOUS, and then a miss
+  # gets read as a description problem when the description was fine and the
+  # question had two right answers. The eval runs against their real database
+  # precisely so the records are the ones they'd actually be talking about;
+  # duplicating them throws that away.
+  #
+  # Callers look up what's there with a FRESH query rather than through
+  # `user.buddy_routines`, because a has_many proxy caches the moment it's read
+  # and `User.me` is memoized process-wide. Off a cached association the second
+  # build of a run can't see the first build's rows, and that surfaces as a
+  # unique-index violation partway through rather than as a duplicate.
+  def reuse(found)
+    return track(yield) if found.nil?
+
+    @reused << found
+    found
+  end
 
   # Recorded BEFORE the next record is built, so a crash between two writes
   # still leaves the first one on the list.
@@ -127,7 +167,7 @@ class BuddyEvalWorld
   end
 
   def manifest_path
-    @manifest_path ||= Rails.root.join(MANIFEST)
+    @manifest_path ||= self.class.manifest_path
   end
 
   def household
@@ -137,53 +177,104 @@ class BuddyEvalWorld
   def chores!
     return if household.nil?
 
-    @recycling = track(
+    live = household.chores.active.to_a
+    @recycling = reuse(live.detect { |chore| chore.name.match?(/recycl/i) }) {
       Chore.create!(
         created_by_user: user, chore_household: household, name: "Take out the recycling",
         reward_pebbles: 2, recurrence: { freq: :weekly, by_day: %w[tue] }
-      ),
-    )
-    @water = track(
+      )
+    }
+    @water = reuse(live.detect { |chore| chore.name.match?(/water/i) }) {
       Chore.create!(
         created_by_user: user, chore_household: household, name: "Drink Water",
         reward_pebbles: 1, recurrence: { freq: :daily }
-      ),
-    )
-    # One of each, today: `edit_chore_completion` and `undo_chore_completion`
-    # both need a landed completion to talk about, and they are the two most
-    # often confused with logging a fresh one.
-    track(ChoreCompletion.create!(chore: @water, user: user, completed_at: 2.hours.ago, day_key: user.perceived_today))
-    track(ChoreCompletion.create!(chore: @recycling, user: user, completed_at: 3.hours.ago, day_key: user.perceived_today))
+      )
+    }
+    completion!(@water)
+    completion!(@recycling)
   end
 
-  # A list belongs to people through UserList, so a new one needs both rows —
-  # and an existing Groceries list is reused rather than duplicated, because
-  # two lists by that name would make "add it to the groceries" ambiguous in a
-  # way nothing about the tool caused.
+  # `edit_chore_completion` and `undo_chore_completion` both need a landed
+  # completion to talk about, and they are the two most often confused with
+  # logging a fresh one. Theirs counts: a second one today would be a second
+  # thing "that water you just marked" could mean.
+  def completion!(chore)
+    day = user.perceived_today
+    reuse(ChoreCompletion.find_by(chore: chore, user: user, day_key: day)) {
+      ChoreCompletion.create!(chore: chore, user: user, completed_at: 2.hours.ago, day_key: day)
+    }
+  end
+
+  # A list belongs to people through UserList, so a NEW one needs both rows.
+  # Matched on "grocer" rather than an exact name because theirs is as likely
+  # to be called Grocery as Groceries, and a second list either way is the
+  # ambiguity this whole file is trying not to introduce.
   def lists!
-    list = user.lists.find_by("LOWER(name) = ?", "groceries")
+    list = user.lists.reload.detect { |l| l.name.match?(/grocer/i) }
     if list.nil?
       list = track(List.create!(name: "Groceries"))
       track(UserList.create!(user: user, list: list, is_owner: true))
+    else
+      @reused << list
     end
-    track(ListItem.create!(list: list, name: "Oat milk"))
+
+    reuse(list.list_items.detect { |item| item.name.match?(/oat milk/i) }) {
+      ListItem.create!(list: list, name: "Oat milk")
+    }
   end
 
+  # Anchored to THEIR morning rather than "four hours ago". A run at 9pm put
+  # these in the late afternoon, and the probe that says "I logged a Strawberry
+  # Celsius by accident this morning" then correctly found nothing that
+  # matched — a probe failing on the wording of its own seed.
   def events!
-    track(ActionEvent.create!(user: user, name: "Strawberry Celsius", timestamp: 4.hours.ago))
-    track(ActionEvent.create!(user: user, name: "Sandwich", timestamp: 5.hours.ago))
+    { "Strawberry Celsius" => 0, "Sandwich" => 30 }.each { |name, offset|
+      # A wide reuse window on purpose: a SECOND Strawberry Celsius makes "get
+      # rid of the one I logged by accident" a question rather than an action,
+      # and "I found two of them, which one?" is the right answer to a mess the
+      # seed made.
+      since  = [morning, 12.hours.ago].min
+      recent = user.action_events.where(name: name).where(timestamp: since..).first
+      reuse(recent) { ActionEvent.create!(user: user, name: name, timestamp: morning + offset.minutes) }
+    }
+  end
+
+  # 9am their time, or an hour ago if 9am hasn't happened yet.
+  def morning
+    @morning ||= (
+      zone  = ActiveSupport::TimeZone[user.timezone.to_s] || Time.zone
+      local = Time.current.in_time_zone(zone)
+      [local.change(hour: 9), local - 1.hour].min
+    )
   end
 
   def reminders!
     convo = conversation
     return if convo.nil?
 
-    ["water the tomatoes", "the vet appointment", "water the front flower bed"].each { |body|
-      track(
-        BuddyReminder.create!(
-          user: user, byte_conversation: convo, body: body, fire_at: 6.hours.from_now,
-        ),
-      )
+    # Reused only when it's already in THIS thread. `upcoming_reminders` is
+    # conversation-scoped, so one of theirs sitting in another thread is
+    # invisible here — and reusing it means the probe asks Buddy about
+    # something it has no way to see, which reads as a description failure and
+    # isn't one. Three probes failed exactly that way, twice.
+    #
+    # And when the wording exists in ANOTHER thread, nothing is built at all.
+    # Adding a second "the vet appointment" gives the context one reminder and
+    # the tool's fuzzy match two, so a perfectly correct "two vet reminders
+    # match, which one do you want gone?" gets scored as a miss. Better to
+    # leave it, and let the precondition say the thread has none.
+    mine = BuddyReminder.pending.where(user: user).to_a
+    {
+      /tomato/i     => "water the tomatoes",
+      /vet/i        => "the vet appointment",
+      /flower bed/i => "water the front flower bed",
+    }.each { |rx, body|
+      matching = mine.select { |r| r.body.to_s.match?(rx) }
+      here     = matching.detect { |r| r.byte_conversation_id == convo.id }
+      next @reused << here if here
+      next if matching.any?
+
+      track(BuddyReminder.create!(user: user, byte_conversation: convo, body: body, fire_at: 6.hours.from_now))
     }
   end
 
@@ -191,64 +282,77 @@ class BuddyEvalWorld
     agenda = user.agendas.first
     return if agenda.nil?
 
-    track(
+    upcoming = agenda.agenda_items.where(start_at: Time.current..2.weeks.from_now).to_a
+    reuse(upcoming.detect { |item| item.name.to_s.match?(/dentist/i) }) {
       AgendaItem.create!(
         agenda: agenda, kind: :event, name: "Dentist",
         start_at: 1.day.from_now.change(hour: 15), end_at: 1.day.from_now.change(hour: 16)
-      ),
-    )
+      )
+    }
   end
 
   def ideas!
-    track(
+    held = user.buddy_memories.kind_stash.status_active.to_a
+    reuse(held.detect { |m| m.content.to_s.match?(/greenhouse/i) }) {
+      # Filed under `me`, because `move_idea`'s probe asks to move it to `home`
+      # and a move to where it already is is a no-op the model is right to
+      # decline: "It's already in Home."
       BuddyMemory.create!(
-        user: user, kind: :stash, status: :active, category: :home,
+        user: user, kind: :stash, status: :active, category: :me,
         content: "Sort out the greenhouse - the glass on the north side needs replacing"
-      ),
-    )
+      )
+    }
   end
 
   def glossary!
     return if household.nil?
 
-    track(
+    terms = HouseholdGlossaryTerm.where(chore_household: household).to_a
+    reuse(terms.detect { |t| t.term.to_s.casecmp?("bakkie") }) {
       HouseholdGlossaryTerm.create!(
         chore_household: household, term: "bakkie", meaning: "a plastic tub, not a truck",
-      ),
-    )
+      )
+    }
   end
 
   # Steps have to be RUNNABLE — BuddyRoutine validates them against the
   # registry — so this is a real two-step routine rather than a placeholder.
   def routines!
-    track(
+    reuse(BuddyRoutine.where(user: user).detect { |r| r.name.match?(/wind.?down/i) }) {
       BuddyRoutine.create!(
         user: user, name: "Wind-down", description: "The evening one",
         steps: [
           { "tool_name" => "set_font_size", "payload" => { "size" => "normal" } },
           { "tool_name" => "set_timer", "payload" => { "minutes" => 10, "label" => "wind down" } },
         ]
-      ),
-    )
+      )
+    }
   end
 
   def links!
-    track(
+    existing = RecordLink.where(user: user).detect { |link|
+      link.source_name.match?(/coffee/i) && link.target_chore?
+    }
+    reuse(existing) {
       RecordLink.create!(
         user: user, source_kind: :event, source_name: "Coffee",
-        target_kind: :chore, target_name: "Drink Water"
-      ),
-    )
+        target_kind: :chore, target_name: @water&.name || "Drink Water"
+      )
+    }
   rescue StandardError => e
     warn "[eval world] no record link: #{e.message}"
   end
 
+  # AmazonOrder isn't an ActiveRecord model, so it can't go through `reuse` —
+  # same rule by hand: theirs is left alone and only ours goes on the manifest.
   def deliveries!
     return unless Buddy::Deliveries.available?(user)
 
     ["desk", "mattress"].each { |name|
+      next if Buddy::Deliveries.find(user, name)
+
       order = Buddy::Deliveries.add!(user: user, name: name, on: 3.days.from_now.to_date)
-      @made << { class: "AmazonOrder", id: order.id }
+      @made << { class: "AmazonOrder", id: order.item_id }
     }
     manifest_path.write(JSON.pretty_generate(@made.map(&:stringify_keys)))
   rescue StandardError => e
@@ -260,31 +364,80 @@ class BuddyEvalWorld
   def jil_tasks!
     return unless defined?(Task)
 
-    {
-      "Whisper Sound"    => "function(sound::String)",
-      "Camera Last Seen" => "function(camera::String)",
-      "Office Light"     => "function(color::String, brightness::Integer)",
-      "Fan"              => "function(speed::String)",
-    }.each { |name, signature|
-      track(
-        Task.create!(
-          user: user, name: name, listener: signature, buddy_enabled: true, enabled: true,
-          description: "#{name}, for the eval world"
-        ),
-      )
-    }
+    mine = Task.where(user: user, buddy_enabled: true, enabled: true).to_a
+    # Matched by PATTERN, not by exact name, and this is the difference between
+    # a working probe and a broken one. Their house already has a Great Fan and
+    # a HASS Fan; adding a third called "Fan" doesn't give "turn the fan to low"
+    # something to find, it gives it three things to choose between, and the
+    # honest answer becomes a question. Theirs is also the one that would really
+    # move air.
+    [
+      [/whisper sound/i,    "Whisper Sound",    "function(sound::String)"],
+      [/camera last seen/i, "Camera Last Seen", "function(camera::String)"],
+      [/fan/i,              "Great Fan",        "function(mode::String)"],
+      [/chill|zen/i,        "Chill Mode",       "chill-mode"],
+    ].each { |rx, name, listener|
+      wanted_function = listener.start_with?("function")
+      found = mine.detect { |task|
+        next false unless task.name.to_s.match?(rx)
 
-    track(
-      Task.create!(
-        user: user, name: "Chill Mode", listener: "chill-mode", buddy_enabled: true, enabled: true,
-        description: "The evening scene"
-      ),
-    )
+        task.listener.to_s.start_with?("function") == wanted_function
+      }
+      reuse(found) {
+        Task.create!(
+          user: user, name: name, listener: listener, buddy_enabled: true, enabled: true,
+          description: "#{name}, for the eval world"
+        )
+      }
+    }
   rescue StandardError => e
     warn "[eval world] no jil tasks: #{e.message}"
   end
 
+  # `answer_prompt` and `skip_prompt` both need something unanswered sitting
+  # there, and neither probe says anything at all without one.
+  def prompts!
+    reuse(user.prompts.unanswered.first) {
+      # The REAL shape: `options` is an array of question hashes and
+      # `answer_type` is null. A bare hash here isn't just unanswerable — it
+      # took down 34 turns of a run, because `Array(a_hash)` yields pairs and
+      # Buddy::Errors re-raises in development.
+      Prompt.create!(
+        user:     user,
+        question: "Evening check-in",
+        options:  [
+          { "type" => "select", "question" => "How did you sleep?", "choices" => ["Badly", "Fine", "Great"], "default" => "" },
+          { "type" => "text", "question" => "Anything worth noting?", "default" => "" },
+        ],
+      )
+    }
+  rescue StandardError => e
+    warn "[eval world] no prompt: #{e.message}"
+  end
+
+  # Deliberately NOT here: an open question from the other companion. A relay
+  # is answerable on the NEXT thing the person says and passed over after that,
+  # so one built at world time is stale by the second probe — and visible to
+  # the first, which is worse. `relay_answer`'s probe seeds its own, one turn
+  # before it needs it. See `seed:` in lib/tasks/buddy_eval.rake.
+  # Reminders and relays both hang off a thread, and a person who has never
+  # opened Byte has none — which quietly skipped every reminder probe rather
+  # than failing, and reported them as preconditions nobody could meet.
+  # THE EVAL THREAD, not their oldest one.
+  #
+  # `upcoming_reminders` is scoped to the conversation on purpose (see
+  # Buddy::Context) — Buddy notices the reminders in the thread it's speaking
+  # in. Seeded into some other thread they're invisible, and four probes in the
+  # 21 Aug run were told "I don't see a tomato reminder to move" about a
+  # reminder the precondition check had just confirmed was there.
+  #
+  # Deliberately NOT tracked: a companion thread is furniture rather than test
+  # data, the next run reuses it, and tearing one down means deleting messages
+  # that BuddyUsage rows point at.
   def conversation
-    @conversation ||= user.byte_conversations.order(:id).first
+    @conversation ||= user.byte_conversations.evals.find_by(name: EVAL_THREAD) ||
+      user.byte_conversations.create!(
+        name: EVAL_THREAD, mode: :buddy, buddy_theme: "byte", metadata: { "eval" => true },
+      )
   end
 end

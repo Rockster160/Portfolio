@@ -11,6 +11,13 @@ Buddy::Tools.register(
     saying you can't see their orders - you can, and answering "not from here"
     to "can you see my Amazon orders?" is the thing this exists to stop.
 
+    **A QUESTION, never a change.** "The desk is coming Friday now" is them
+    telling you something, not asking - it's `update_delivery`, and looking it
+    up and reading the old date back ("the computer desk is due tomorrow")
+    answers a question nobody asked while the date they gave you goes nowhere.
+    Same for a tracking number or a better name. If you look first to find the
+    row, finish the job in the same turn.
+
     `query` matches on words in the item's name, in any order, and also matches
     a carrier or a tracking number. Omit it for everything in the window. `days`
     is how far ahead to look (default 14). Anything overdue and anything that

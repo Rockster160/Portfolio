@@ -974,6 +974,35 @@ RSpec.describe Buddy::GPT::Turn do
   # request side, and no noun the claim regex knew — but the sound effect is
   # Byte's own, and in every one of its 18 prod appearances it sat on a claim
   # about a device.
+  # The mirror of the unbacked claim, and the quieter of the two: that one says
+  # a thing happened when it didn't, this one says a thing COULD happen and then
+  # drops it. Three eval runs came back with the same shape and no call under it.
+  describe ".unfiled_offer?" do
+    [
+      "Psh, I can't place the order from here. If you want, I can help you pick one or jot down what kind you're craving for later.",
+      "Hmm, I can't place the order itself yet. If you want, I can write down the pizza idea so it doesn't drift off.",
+      "Hmm, I can't watch for Chelsea to get home yet. If you want, I can put that on the list.",
+      "I can still put the request on the list so it doesn't get lost.",
+    ].each do |said|
+      it "catches #{said.truncate(40).inspect}" do
+        expect(described_class.unfiled_offer?(said)).to be(true)
+      end
+    end
+
+    # A refusal that promises nothing, and a receipt for something already
+    # filed, both need no corrective round.
+    [
+      "I couldn't find a car wash logged yesterday.",
+      "I can't run scripts, but I can fix the chores themselves if you tell me what's off.",
+      "Nothing matched over the last 14 days.",
+      "Kk! I've put that on the list as Doorbell Watch.",
+    ].each do |said|
+      it "leaves #{said.truncate(40).inspect} alone" do
+        expect(described_class.unfiled_offer?(said)).to be(false)
+      end
+    end
+  end
+
   describe "the *click*" do
     before { allow(described_class).to receive(:resolve_call).and_return([{ status: "proposed" }, nil]) }
 
@@ -988,7 +1017,7 @@ RSpec.describe Buddy::GPT::Turn do
     # The same sentence, correctly, with nothing run: they asked what the state
     # was rather than telling Buddy to change it.
     it "stands when they only asked whether it was done" do
-      said = "Yep — lights are off. *click*"
+      said = "Yep - lights are off. *click*"
       run([{ text: said }], text: "did you turn the lights off?")
 
       expect(reply.body).to eq(said)

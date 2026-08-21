@@ -57,11 +57,18 @@ RSpec.describe Buddy::AgendaSeries do
       expect(AgendaSchedule.last.start_time.strftime("%H:%M")).to eq("06:15")
     end
 
+    # Pinned to a clock, because AgendaSchedule::MATERIALIZE_WINDOW is 30 hours
+    # and `tomorrow` here is 08:30 the following morning in THEIR zone. Whether
+    # that falls inside 30 hours depends on the hour the suite happens to run:
+    # from about 08:30 UTC it does, and before that it's 32-odd hours out and
+    # nothing materializes. It ran green all day and failed at midnight.
     it "materializes real occurrences off the back of it" do
-      expect { add(title: "Flower bed", at: tomorrow.iso8601, kind: :task, repeat: "daily") }
-        .to change(AgendaItem, :count)
+      travel_to(Time.utc(2026, 8, 19, 15, 0)) do
+        expect { add(title: "Flower bed", at: tomorrow.iso8601, kind: :task, repeat: "daily") }
+          .to change(AgendaItem, :count)
 
-      expect(AgendaItem.where(agenda_schedule_id: AgendaSchedule.last.id)).to exist
+        expect(AgendaItem.where(agenda_schedule_id: AgendaSchedule.last.id)).to exist
+      end
     end
 
     it "honours an end date" do

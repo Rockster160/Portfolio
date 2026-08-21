@@ -98,17 +98,44 @@ module Buddy
     def roll_forward!(reminder)
       return reminder.update!(fired_at: Time.current) unless reminder.recurring?
 
-      next_fire = reminder.next_fire_at(from: Time.current)
-      # The Today briefing's `at` is a latest-by, not a fixed hour: it moves
-      # earlier for a day that starts early. Buddy::TodaySchedule owns that rule
-      # and nothing else here needs to know about it.
-      next_fire = Buddy::TodaySchedule.fire_time(reminder.user, next_fire) if Buddy::TodaySchedule.briefing?(reminder)
+      next_fire = next_fire_for(reminder)
       if next_fire
         reminder.update!(last_fired_at: Time.current, fire_at: next_fire)
       else
         # Bad recurrence spec - treat as one-shot rather than loop forever.
         reminder.update!(fired_at: Time.current, last_fired_at: Time.current)
       end
+    end
+
+    # Where the briefing rolls to, and it is NOT simply "the next slot after
+    # now".
+    #
+    # The Today briefing's `at` is a latest-by rather than a fixed hour:
+    # Buddy::TodaySchedule pulls it EARLIER for a day that starts early. That
+    # makes two things true at once, and both of them bite here.
+    #
+    #   1. Rolling from `now` lands on TODAY's own nominal slot, because the
+    #      briefing fired before it. 8:30 pulled back to 8:00 for a 8:30 Focus
+    #      block fires at 8:00, and "the next daily 8:30 after 8:00" is 8:30
+    #      the same morning - a second briefing an hour later. So a briefing
+    #      rolls from the END of the perceived day, which is tomorrow's slot.
+    #   2. The pull-back can land in the PAST, and a `fire_at` in the past is
+    #      due on every scheduler tick. On 21 Aug that produced a fixed point:
+    #      agenda item 1006 at 8:30, minus the 30-minute lead, is 8:00 exactly,
+    #      so every roll recomputed the same past time and Byte briefed once a
+    #      minute for ten minutes until the reminder was cancelled by hand.
+    #
+    # So: roll from the end of the day, and never accept an adjustment that
+    # isn't actually ahead of us.
+    def next_fire_for(reminder)
+      return reminder.next_fire_at(from: Time.current) unless Buddy::TodaySchedule.briefing?(reminder)
+
+      _, day_end = Buddy::Day.range(reminder.user)
+      nominal    = reminder.next_fire_at(from: [day_end, Time.current].max)
+      return nil if nominal.nil?
+
+      earlier = Buddy::TodaySchedule.fire_time(reminder.user, nominal)
+      earlier && earlier > Time.current ? earlier : nominal
     end
 
     class << self

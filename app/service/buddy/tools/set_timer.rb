@@ -68,6 +68,14 @@ Buddy::Tools.register(
         those into a clock time** - it runs for fifteen minutes or fifteen
         years, whichever the thing takes.
 
+    **The ending is never a reason not to start the rhythm.** If you can't work
+    out how to wire the stop, `read_listener_guide` is one call away and will
+    show you what the thing actually reports - and if it still won't go, set
+    the repeat and say the stop isn't wired. Asked to "check my printer every
+    30 minutes until the print finishes", a companion wrote the stop condition
+    down as a feature request and set no timer at all, which leaves someone who
+    asked for a rhythm with nothing running.
+
     Never offer to do the delayed part later; it's the part they already asked
     for, and the wait already holds it for you.
   TXT

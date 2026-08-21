@@ -241,26 +241,69 @@ Three obligations, and none of them is optional:
    manifest afterwards. Without the records the probe reports "unanswerable",
    which is not a pass.
 
+   Build it with `reuse`, never a bare `create!`. It runs against the real dev
+   database, so anything the person already has is theirs: use it as it stands
+   and don't track it. A second "Take out the recycling" doesn't make "rename
+   the recycling chore" more answerable — it makes it AMBIGUOUS, and then a
+   miss gets read as a description problem when the question had two right
+   answers. Look records up with a fresh query (`BuddyRoutine.where(user:)`),
+   not `user.buddy_routines`: the association caches on first read and `User.me`
+   is memoized process-wide.
+
 3. **Every misinterpretation found in real use becomes an entry in
    `BUDDY_EDGE_PROBES`** — the sentence as they actually said it, the tool it
    should have reached, `avoid:` for the one it did, and `note:` for what
-   happened. Use `order:` when the bug was doing the thing before the wait,
-   `args:` / `never_args:` when the tool was right and its arguments weren't.
-   Fix the description in the same change; the probe is what stops the third
-   occurrence. Several of these have already come back twice wearing different
+   happened. Fix the description in the same change; the probe is what stops
+   the third occurrence. Several have already come back twice wearing different
    words.
+
+   The fields, and when each one is the right one:
+
+   | field | for |
+   |---|---|
+   | `order:` | the thing was done before the wait that was supposed to hold it |
+   | `args:` / `never_args:` | right tool, wrong arguments |
+   | `once:` | it made two of something they asked for one of |
+   | `run:` + `effect:` | **did it actually happen?** dispatches the call for real and asks the database |
+   | `steps:` | several turns, each a cold start — continuity, a thing then its undo |
+   | `seed:` | a precondition that's only true for one turn (an open relay question) |
+   | `expect_reply:` | the words are the point — a term taught last turn coming back understood |
+   | `tool: :none` | the honest answer is a question, and any call is the failure |
+
+   **`run:`/`steps:`/`seed:`/`effect:` run inside a transaction that is always
+   rolled back**, so nothing they write survives. Only tools on
+   `BUDDY_EVAL_EXECUTABLE` are ever dispatched — an allowlist, so a run of the
+   suite can't text anyone or start a print.
+
+4. **A `needs:` is a KEY into `lib/buddy_eval_needs.rb`, never a sentence.** It
+   goes and looks. Taking a probe's word for it filed ten real failures under
+   "not answerable" in the 21 Aug run, with the records sitting in the database
+   the whole time. `rake buddy:tool_coverage` rejects a key that isn't there.
 
 ```bash
 rake buddy:tool_coverage   # free: does every tool have a sentence?
 rake buddy:eval_tools      # the sweep + the edge cases (REAL API CALLS)
 rake buddy:eval_edges      # only the ones that have gone wrong before
+rake buddy:eval           # the canned scenarios: voice, not tool choice
 rake buddy:eval_world      # build the world and leave it up, to poke by hand
 rake buddy:eval_world_clear
 ```
 
-A run writes `tmp/buddy_eval/report.md` — every failure with the sentence, what
-it reached for, what it said, the known incident, and the file that owns the
-wording. That file is meant to be handed straight to an agent to fix.
+Two failures the harness itself used to cause, worth knowing because both read
+as Buddy being broken: an acting tool was answered with `note: "resolved but
+not run"`, and the model dutifully said the thing hadn't landed; and a leading
+`[[mood:]]` marker was judged as stray output when production consumes it.
+Both are fixed — an acting tool now resolves for real and stops short of the
+side effect, so a name matching nothing still fails and a name matching
+something reads as success.
+
+EVERY run writes `tmp/buddy_eval/report.md`, and that file is meant to be handed
+straight to an agent. It holds three things: each probe that missed, with the
+sentence, what it reached for, what it said, the known incident and the file
+that owns the wording; each turn that tripped a mechanical check; and — for a
+scenario run, which has no automatic verdict at all — every turn beside the
+`want:` saying what a pass looks like, so the judging happens in a file instead
+of in a scrollback that gets read once and lost.
 
 ## Environment
 

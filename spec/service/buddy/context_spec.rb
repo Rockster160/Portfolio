@@ -138,6 +138,36 @@ RSpec.describe Buddy::Context do
   # Buddy previously fell back to log_event because it only ever saw the
   # today/overdue/hot chore buckets. `chores_all` gives it the complete active
   # roster to match completions against.
+  # A prompt whose `options` is a bare hash — 320 rows in dev carry one. It used
+  # to raise inside the section, which production swallowed into an empty list
+  # (their real prompts vanish silently) and development re-raised outright,
+  # taking the whole turn with it.
+  describe "pending_prompts with a malformed row" do
+    let(:user) {
+      User.create!(username: "prompt-#{SecureRandom.hex(4)}", password: "abcd1234!", password_confirmation: "abcd1234!")
+    }
+    let(:convo) { user.byte_conversations.create!(name: "T", mode: :buddy, buddy_theme: "byte") }
+
+    it "skips the bad row and still lists the good ones" do
+      Prompt.create!(user: user, question: "Broken one", options: { "choices" => %w[a b] })
+      Prompt.create!(user: user, question: "Fine one", options: [{ "type" => "text", "question" => "How was it?" }])
+
+      listed = described_class.send(:pending_prompts, user)
+
+      expect(listed.pluck(:title)).to include("Broken one", "Fine one")
+      expect(listed.detect { |p| p[:title] == "Fine one" }[:questions]).to eq(["How was it?"])
+      expect(listed.detect { |p| p[:title] == "Broken one" }[:questions]).to eq([])
+    end
+
+    it "doesn't take the context build down with it" do
+      Prompt.create!(user: user, question: "Broken one", options: { "choices" => %w[a b] })
+
+      built = described_class.build(user, convo)
+
+      expect(built[:pending_prompts].pluck(:title)).to include("Broken one")
+    end
+  end
+
   describe "chores_all" do
     it "lists every active chore (even ones not due today) and excludes archived" do
       user = create(:user)

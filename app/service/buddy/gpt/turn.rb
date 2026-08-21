@@ -168,6 +168,51 @@ module Buddy
       # can disagree about what counts as a claim. Defined here rather than
       # inline because the regexes live below `private` and the predicate is a
       # pure function of the text.
+      # The em dash rule is written down four times - in the persona, twice in
+      # byte.md, and once per other tone profile - and em dashes still come
+      # out. Four statements of a rule is the point at which a fifth stops
+      # being the fix: this is a shape, not a judgement, so it's normalized on
+      # the way out instead of asked for.
+      #
+      # An em dash between words becomes " - " (what every profile asks for);
+      # one already sitting in spaces just loses the character, so " — " can't
+      # turn into "  -  ".
+      #
+      # Public because the eval harness applies it too — it doesn't go through
+      # display_body, and a harness that flags what production quietly fixes
+      # reports a problem nobody has.
+      def self.normalize_dashes(body)
+        body.to_s.gsub(/\s*[—–]\s*/, " - ")
+      end
+
+      # An offer to write something down, with nothing written down.
+      #
+      # `request_feature` exists so that "I can't do that one" is never the
+      # whole answer, and its own description says calling it IS the offer. It
+      # still came back as prose across three eval runs - "I can't place the
+      # order from here, but I can jot down what kind you're craving" - with no
+      # call under it, which leaves the person to ask a second time for a thing
+      # they already asked for.
+      #
+      # Only the OFFER shape, never a plain refusal: "I can't find a car wash
+      # logged yesterday" promises nothing and needs no round.
+      OFFER_TO_NOTE_RX = /
+        \b(?: i\s+can | i\s+could | want\s+me\s+to | shall\s+i | happy\s+to |
+              if\s+you\s+(?:want|like),?\s+i\s+(?:can|could) )\b
+        [^.!?\n]{0,70}
+        (?:
+          \b(?:put|pop|add|stick|get)\b [^.!?\n]{0,40} \b(?:list|wish\s*list|queue)\b
+          |
+          \b(?:jot|write|note|scribble)\b [^.!?\n]{0,20} \bdown\b
+          |
+          \b(?:note|write)\s+(?:it|that|this)\b
+        )
+      /xi
+
+      def self.unfiled_offer?(body)
+        body.to_s.match?(OFFER_TO_NOTE_RX)
+      end
+
       def self.unbacked_claim(body)
         return nil if body.blank?
         return :claim if body.match?(COMPLETION_CLAIM_RX)
@@ -369,6 +414,15 @@ module Buddy
       # my formatting!" with no tool call, no relay row, and no receipt chip.
       # Nothing reached Chelsea and nothing said so.
       RELAY_FRAMING_RX = /\[(?:you\s+passed\s+this\s+along\s+to|relayed\s+to\s+you\s+from)\s[^\]\n]{0,40}\]/i
+
+      # The third of the same family, and the one that cost a typed instruction.
+      #
+      # Buddy::GPT::History#form_standin represents a past form card to the model
+      # as `[form you put up: ... - answered]`. Prod 4202: "Log 4 more Build
+      # Furniture for the Wayfair Desk" came back with that marker as the ENTIRE
+      # reply body - two model calls, no tool call, and the instruction dropped.
+      # It took two more messages to get the four completions written.
+      FORM_FRAMING_RX = /\[form you put up:[^\]\n]*\]/i
 
       def self.run!(message, client: nil)
         new(message, client: client).run!
@@ -751,6 +805,26 @@ module Buddy
         - If you meant to say the thing yourself, say it. In full, in this reply.
 
         A lead-in is never the whole message.
+      TXT
+
+      # What goes out when everything the model wrote was framing it had been
+      # given to READ. Rare, and better than a blank bubble.
+      NOTHING_TO_SAY = "Hm - that came out empty on my side. Say it again and I'll get it?".freeze
+
+      UNFILED_OFFER_NUDGE = <<~TXT.freeze
+        STOP. You offered to write something down and then wrote nothing down,
+        so the person has to ask a second time for the thing they already
+        asked for.
+
+        Do ONE of these now:
+        - If it genuinely isn't something you can do, call `request_feature`.
+          Calling it IS the offer: it files the row and leaves the receipt in
+          one move, and there is nothing to get permission for.
+        - If it IS doable after all, do that instead. Check `jil_functions`,
+          `jil_triggers`, and `read_listener_guide` before deciding you can't -
+          most "I can't" is an argument you'd forgotten.
+
+        Either way, the next reply says what you did, not what you could do.
       TXT
 
       NOTIFY_NUDGE = <<~TXT.freeze
@@ -1207,6 +1281,11 @@ module Buddy
         # actually turned off, rather than only stopping the lie about it.
         return RETRY_NUDGE if commanded_action_unanswered?(spoken.to_s)
         return POINTER_NUDGE if spoken.to_s.strip.match?(DANGLING_POINTER_RX)
+        # The mirror of the unbacked claim, and the quieter failure of the two:
+        # that one says a thing happened when it didn't, this one says a thing
+        # COULD happen and then drops it. Nobody notices, because the sentence
+        # is helpful and the person just asks again.
+        return UNFILED_OFFER_NUDGE if self.class.unfiled_offer?(spoken.to_s)
 
         nil
       end
@@ -1338,6 +1417,11 @@ module Buddy
 
       def finalize_success(outcome)
         body = with_greeting(without_briefing_claim(display_body(apply_leading_mood(outcome[:text]))))
+        # Scrubbing can empty a reply outright: on prod 4202 the form marker WAS
+        # the whole body. A blank bubble is worse than the marker was - it reads
+        # as Buddy having nothing to say to something they typed - so the turn
+        # goes down the same road as a reply whose proposals all died.
+        body = NOTHING_TO_SAY if body.blank? && outcome[:text].present?
         @reply.update!(state: :delivered, body: body, delivered_at: Time.current)
 
         proposals = outcome[:proposals]
@@ -1964,11 +2048,15 @@ module Buddy
       # bracket means Buddy imitated a bridged message instead of sending one.
       def display_body(text)
         raw   = text.to_s
-        stray = { marker: STRAY_MARKER_RX, relay: RELAY_FRAMING_RX }.select { |_kind, rx| raw.match?(rx) }
+        stray = { marker: STRAY_MARKER_RX, relay: RELAY_FRAMING_RX, form: FORM_FRAMING_RX }.select { |_kind, rx| raw.match?(rx) }
         stray.each { |kind, rx| Rails.logger.warn("[Buddy::GPT::Turn] stray #{kind} in output: #{raw[rx]}") }
 
         cleaned = stray.each_value.reduce(raw) { |body, rx| body.gsub(rx, "") }
-        dedupe_paragraphs(cleaned.gsub(/\n{3,}/, "\n\n").strip)
+        dedupe_paragraphs(dashes(cleaned).gsub(/\n{3,}/, "\n\n").strip)
+      end
+
+      def dashes(body)
+        self.class.normalize_dashes(body)
       end
 
       # Drop a paragraph that repeats one already said.
