@@ -7,21 +7,26 @@
 # right tool".
 #
 #   # Canned scenarios that exercise the rules most likely to regress:
-#   rake buddy:eval
+#   bx rails buddy:eval
 #
-#   # One sentence per tool, checking the right tool is the one reached:
-#   rake buddy:eval_tools
-#   rake "buddy:eval_tools[idea]"    # just the tools whose name matches
-#   rake buddy:tool_coverage         # free: does every tool have a sentence?
+#   # One sentence per tool, checking the right tool is the one reached,
+#   # then the turns that have already gone wrong once:
+#   bx rails buddy:eval_tools
+#   bx rails "buddy:eval_tools[idea]"    # just the tools whose name matches
+#   bx rails buddy:tool_coverage         # free: does every tool have a sentence?
+#
+#   # Only the ones that have gone wrong before:
+#   bx rails buddy:eval_edges
+#   bx rails "buddy:eval_edges[timer]"   # matches tool, prod id, or the sentence
 #
 #   # One ad-hoc message:
-#   rake "buddy:eval_one[I just took the recycling out]"
+#   bx rails "buddy:eval_one[I just took the recycling out]"
 #
 #   # Replay real messages from a conversation (source is read-only):
-#   rake "buddy:replay[123,20]"
+#   bx rails "buddy:replay[123,20]"
 #
 #   # Wipe the eval threads and their usage rows when they get noisy:
-#   rake buddy:eval_clear
+#   bx rails buddy:eval_clear
 #
 # Every run writes into a dedicated per-theme "Eval" conversation so the
 # back-and-forth is readable in the app afterwards, and so the spend is
@@ -37,6 +42,9 @@
 #
 # Set BUDDY_EVAL_PERSIST=0 to go back to leaving no trace at all.
 
+require Rails.root.join("lib/buddy_eval_world")
+require Rails.root.join("lib/buddy_eval_report")
+
 # The behaviors most worth eyeballing after a prompt or model change. The
 # trailing comment on each is what a PASS looks like.
 #
@@ -44,7 +52,7 @@
 # the invented set missed whole categories: bare-duration timers, undo and
 # correction, retroactive completion, pebble rewards, and history questions that
 # need chore_progress instead of get_context (which only knows about today).
-# For the genuine article, use `rake "buddy:replay[<conversation_id>,30]"`.
+# For the genuine article, use `bx rails "buddy:replay[<conversation_id>,30]"`.
 BUDDY_EVAL_SCENARIOS = [
   # --- core logging and action ---
   "hey",                                              # get_context + short briefing, WITH prose
@@ -206,6 +214,236 @@ BUDDY_EVAL_READERS = %i[
   get_context read_prompt view_image read_listener_guide set_mood add_note remember
 ].freeze
 
+# The ones that have already gone wrong, in the words they went wrong in.
+#
+# The table above asks whether each tool is REACHABLE. This asks the harder
+# question: between two tools that both look right, does it pick the one that
+# isn't a bug? Every entry is a real turn - the prod ids are the messages, and
+# `note` is what actually happened. None of them was a fluent-sounding failure;
+# every one of them read perfectly and did the wrong thing.
+#
+# Same fields as the table above, plus:
+#   order:      tools that must be called in this relative order. This is the
+#               whole of the deferred-action family: the wait has to be SET
+#               before the thing it's holding, and a turn that does them the
+#               other way round has already done the thing.
+#   args:       { tool => { arg => value | /regex/ } } the call must carry.
+#   never_args: the same, for what it must NOT carry.
+#   tool: :none where the right answer is a QUESTION and any tool call is the
+#               failure.
+BUDDY_EDGE_PROBES = [
+  # --- a thing put off, which is the one that keeps coming back -------------
+  {
+    case:  "prod 3897",
+    say:   "add oat milk to my grocery list in 2 minutes",
+    tool:  :set_timer,
+    with:  %i[add_list_item],
+    order: %i[set_timer add_list_item],
+    args:  { set_timer: { then_continue: true } },
+    note:  "the item went on the list on the spot; the time was read as noise",
+  },
+  {
+    case:  "the same shape, taking something away",
+    say:   "take the oat milk off my list in five minutes",
+    tool:  :set_timer,
+    with:  %i[remove_list_item],
+    order: %i[set_timer remove_list_item],
+    args:  { set_timer: { then_continue: true } },
+    needs: "oat milk on a list",
+    note:  "doing it now is the opposite of what was asked",
+  },
+  {
+    case:  "prod 4081",
+    say:   "play the Whisper nap sound in 2 minutes",
+    tool:  :schedule_function,
+    avoid: %i[call_jil_function],
+    needs: "the Whisper Sound function",
+    note:  "the sound played in the room two minutes early - a wait can't hold " \
+           "a tool that runs inside the turn, and the queue behind it was empty",
+  },
+  {
+    case:  "prod 3562",
+    say:   "play the nap sound at 11",
+    tool:  :schedule_function,
+    avoid: %i[call_jil_function],
+    needs: "the Whisper Sound function",
+    note:  "it went off sixteen minutes early next to a sleeping dog",
+  },
+
+  # --- a rhythm they act on, versus a nudge on a clock ----------------------
+  {
+    case:  "Eve asked Suki for a work/break cycle",
+    say:   "let's do 30 minutes on, 10 off",
+    tool:  :set_timer,
+    avoid: %i[schedule_reminder alarm],
+    args:  { set_timer: { repeat: true, break_minutes: 10 } },
+    note:  "she was promised the cycle and given a reminder every 30 minutes, " \
+           "which fires whether or not she's back at the desk",
+  },
+  {
+    case:  "the printer cycle",
+    say:   "I need to check my printer every 30 minutes until the print finishes",
+    tool:  :set_timer,
+    avoid: %i[schedule_reminder],
+    args:  { set_timer: { repeat: true } },
+    note:  "went out as a reminder every 30 minutes ending at 11:59pm - an hour " \
+           "the person never named, and a seventeen-hour overnight gap",
+  },
+
+  # --- who a message is for, and when it leaves -----------------------------
+  {
+    case:  "prod 3303",
+    say:   "tell Rocco I'll make supper at 6:00 tonight",
+    tool:  :message_partner,
+    avoid: %i[schedule_reminder],
+    note:  "held until 6:00, which told him at supper time that supper was at " \
+           "supper time. The clock time was part of the note, not the send time",
+  },
+  {
+    case:  "the same words, framed as the delay",
+    say:   "remind Chelsea at 4 that I'm leaving",
+    tool:  :schedule_reminder,
+    avoid: %i[message_partner],
+    args:  { schedule_reminder: { notify: /chelsea/i } },
+    note:  "here the time IS the instruction, and it's hers rather than theirs",
+  },
+  {
+    case: "prod 2547",
+    say:  "send a reminder to Chelsea that we need to book the vet",
+    tool: :schedule_reminder,
+    args: { schedule_reminder: { notify: /chelsea/i } },
+    note: "set for the asker instead, so the person who had to act never heard",
+  },
+  {
+    case:       "prod 3449",
+    say:        "at noon please ping me when it's time to do the plant check",
+    tool:       :schedule_reminder,
+    never_args: { schedule_reminder: { text: /ping me|remind me/i } },
+    note:       "stored verbatim, so at noon it arrived as a message asking them " \
+                "to ask you, at the moment they were meant to be told what to do",
+  },
+
+  # --- the camera: seeing something, versus being told when ----------------
+  {
+    case:  "prod 3789, 3728, 3751",
+    say:   "show me the last person that rang the doorbell",
+    tool:  :call_jil_function,
+    needs: "the Camera Last Seen function",
+    note:  "three separate turns answered \"I can't pull that up from here\" " \
+           "with the function sitting unused in the index",
+  },
+  {
+    case:  "prod 3743",
+    say:   "let me know the next time somebody comes to the door",
+    tool:  :remind_when,
+    avoid: %i[call_jil_function],
+    note:  "the same nouns pointed forward are a watch, not a look",
+  },
+
+  # --- a receipt for something that never ran ------------------------------
+  {
+    case: "prod 3236, 2054",
+    say:  "print that again",
+    tool: :print_again,
+    with: %i[print_history],
+    note: "\"Yessss, the printer's running the last file again\" off a single " \
+          "call with nothing run. Third time for that same request",
+  },
+  {
+    case:  "prod 1146",
+    say:   "turn the fan to low",
+    tool:  :call_jil_function,
+    needs: "a fan function",
+    note:  "\"Done. Fan's on low now.\" with no tool use anywhere",
+  },
+  {
+    case:  "prod 3171",
+    say:   "I don't need to water the front flower bed any more",
+    tool:  :cancel_reminder,
+    needs: "a flower bed reminder",
+    note:  "reported as pulled down over a cancel that was only ever proposed; " \
+           "it went off again the next morning and every morning after",
+  },
+
+  # --- looking something up rather than answering from the air -------------
+  {
+    case:  "prod 2710, 2712",
+    say:   "did that game_tray-vase print ever finish?",
+    tool:  :print_history,
+    avoid: %i[print_again],
+    note:  "\"No print record for game_tray-vase either\", then four seconds " \
+           "later \"Found it.\" Neither had looked",
+  },
+  {
+    case:  "prod 4020",
+    say:   "what's happening tomorrow?",
+    avoid: %i[today_briefing],
+    tool:  :get_context,
+    note:  "answered with \"that Today briefing reminder is still sitting there " \
+           "from this morning\", hours after it had run",
+  },
+  {
+    case:  "the briefing tool's own rule",
+    say:   "what's on today?",
+    tool:  :get_context,
+    avoid: %i[today_briefing],
+    note:  "calling the briefing here posts a second whole briefing, and the " \
+           "turn that receives it has the same reason to post a third",
+  },
+  {
+    case:  "prod 2612",
+    say:   "how do I see my agenda?",
+    tool:  :search_agenda,
+    avoid: %i[request_feature],
+    note:  "sent them hunting for an \"Agenda tab in Byte\" that has never " \
+           "existed. The answer is to read the agenda out, not to describe a screen",
+  },
+
+  # --- correcting a record, rather than writing a second one ---------------
+  {
+    case:  "prod 2440",
+    say:   "put 'hint raspberry' on that water you just marked",
+    tool:  :edit_chore_completion,
+    avoid: %i[log_event complete_chore],
+    needs: "a water completion today",
+    note:  "a note on an existing completion became a second completion",
+  },
+  {
+    case:  "prod 3495",
+    say:   "here's the tracking for the mattress, 1Z999AA10123456784",
+    tool:  :update_delivery,
+    avoid: %i[track_delivery],
+    needs: "a mattress on the delivery list",
+    note:  "the number landed nowhere, leaving a row that knew it and couldn't use it",
+  },
+  {
+    case:  "prod 2364",
+    say:   "push the tomato one an hour later",
+    tool:  :move_reminder,
+    avoid: %i[cancel_reminder schedule_reminder],
+    needs: "a tomato reminder",
+    note:  "answered with \"couldn't find that reminder to move it\"",
+  },
+  {
+    case:  "the chore/event fork",
+    say:   "just finished a 14oz cup of water",
+    tool:  :complete_chore,
+    avoid: %i[log_event],
+    needs: "a water chore",
+    note:  "logged as a loose event beside the chore it was meant to tick off",
+  },
+
+  # --- where the right answer is a question --------------------------------
+  {
+    case: "Whisper sleeps twice a day",
+    say:  "let me know when Whisper goes to bed",
+    tool: :none,
+    note: "her nap as often as her bedtime. Picking one silently sets a watch " \
+          "that fires at the wrong end of the day, or eight hours late, and " \
+          "from outside that looks exactly like a dog who didn't sleep",
+  },
+].freeze
+
 namespace :buddy do
   desc "Run Buddy against canned scenarios and print replies + tool calls (REAL API CALLS)"
   task eval: :environment do
@@ -237,21 +475,45 @@ namespace :buddy do
     abort "no tool matches #{args[:filter].inspect}" if probes.empty?
 
     user = User.me
-    puts banner("Buddy tool selection — #{probes.length} tools")
-    probes.each { |name, entry|
-      tool = Buddy::Tools[name]
-      # Not offered to this person, so the model was never shown it and a miss
-      # would say nothing about the description.
-      unless Buddy::Features.allows_tool?(user, tool)
-        stats[:probe_skipped] << "#{name} (#{Buddy::Features.label_for(tool[:feature])} is off)"
-        next
-      end
+    with_world(user) {
+      puts banner("Buddy tool selection — #{probes.length} tools")
+      probes.each { |name, entry|
+        tool = Buddy::Tools[name]
+        # Not offered to this person, so the model was never shown it and a miss
+        # would say nothing about the description.
+        unless Buddy::Features.allows_tool?(user, tool)
+          stats[:probe_skipped] << "#{name} (#{Buddy::Features.label_for(tool[:feature])} is off)"
+          next
+        end
 
-      probe = entry.is_a?(Hash) ? entry.merge(tool: name) : { say: entry, tool: name }
-      evaluate(probe[:say], user: user, probe: probe)
+        probe = entry.is_a?(Hash) ? entry.merge(tool: name) : { say: entry, tool: name }
+        evaluate(probe[:say], user: user, probe: probe)
+      }
+      run_edge_probes(user, args[:filter]) if args[:filter].blank?
     }
-    puts summary
-    puts probe_summary
+    finish_report
+  end
+
+  desc "Replay the turns that have already gone wrong, and check they go right (REAL API CALLS)"
+  task :eval_edges, [:filter] => :environment do |_t, args|
+    user = User.me
+    with_world(user) {
+      puts banner("Buddy edge cases — turns that have gone wrong before")
+      run_edge_probes(user, args[:filter])
+    }
+    finish_report
+  end
+
+  desc "Build the eval world and leave it standing, to poke at Buddy by hand"
+  task eval_world: :environment do
+    world = BuddyEvalWorld.build!(User.me)
+    puts "Built: #{world.summary.join(", ")}"
+    puts "It stays until `rake buddy:eval_world_clear`."
+  end
+
+  desc "Remove whatever the eval world left behind (safe to run any time)"
+  task eval_world_clear: :environment do
+    puts "Removed #{BuddyEvalWorld.sweep!} eval-world records."
   end
 
   desc "Check every registered tool has an eval probe (no API calls)"
@@ -378,6 +640,69 @@ namespace :buddy do
 
   # ---- internals -----------------------------------------------------------
 
+  # One world, built before anything is said and taken back down afterwards -
+  # the same shape a spec's setup has, and for the same reason. Without it a
+  # third of the sweep asks about records that aren't there, and reports the
+  # answer as an unanswerable rather than as a pass or a fail.
+  #
+  # BUDDY_EVAL_WORLD=0 runs against whatever is really in the database, which
+  # is what you want when the question is "does it work with MY data".
+  def with_world(user)
+    if ENV["BUDDY_EVAL_WORLD"] == "0"
+      puts "\e[90mrunning against the real database — `needs:` probes will mostly be unanswerable\e[0m"
+      return yield
+    end
+
+    world = BuddyEvalWorld.build!(user)
+    puts "\e[90mworld: #{world.summary.join(", ")}\e[0m"
+    stats[:world] = world.summary
+    yield
+  ensure
+    # In an ensure so an interrupt still cleans up. Anything a hard kill leaves
+    # behind is on the manifest, and the next run sweeps it before building.
+    puts "\e[90mworld: removed #{world.teardown!} records\e[0m" if world
+  end
+
+  def finish_report
+    puts summary
+    puts probe_summary
+
+    md, json = BuddyEvalReport.new(
+      failures: stats[:report],
+      unmet:    stats[:probe_unmet],
+      skipped:  stats[:probe_skipped],
+      passed:   stats[:probe_pass],
+      world:    stats[:world],
+    ).write!(at: Time.current)
+
+    return puts "\n\e[32mNothing to fix.\e[0m" if stats[:report].empty?
+
+    puts "\n\e[1m#{stats[:report].length} to fix. Written to:\e[0m"
+    puts "  #{md}   \e[90m← paste this into an agent\e[0m"
+    puts "  #{json}"
+  end
+
+  def run_edge_probes(user, filter)
+    probes = BUDDY_EDGE_PROBES.select { |p|
+      filter.blank? || "#{p[:tool]} #{p[:case]} #{p[:say]}".include?(filter.to_s)
+    }
+    return puts "no edge case matches #{filter.inspect}" if probes.empty?
+
+    puts banner("#{probes.length} of them") if filter.present?
+    probes.each { |probe|
+      tool = (Buddy::Tools[probe[:tool]] unless probe[:tool] == :none)
+      if tool && !Buddy::Features.allows_tool?(user, tool)
+        stats[:probe_skipped] << "#{probe[:tool]} (#{Buddy::Features.label_for(tool[:feature])} is off)"
+        next
+      end
+
+      # The incident is printed with the probe rather than only on a failure:
+      # reading what it did last time is most of what makes the reply legible.
+      puts "\n\e[90m#{probe[:case]}: #{probe[:note]}\e[0m"
+      evaluate(probe[:say], user: user, probe: probe)
+    }
+  end
+
   def stats
     @stats ||= {
       turns:         0,
@@ -390,6 +715,8 @@ namespace :buddy do
       probe_fail:    [],
       probe_unmet:   [],
       probe_skipped: [],
+      report:        [],
+      last_reply:    nil,
     }
   end
 
@@ -639,6 +966,7 @@ namespace :buddy do
       puts "  \e[33m! #{w}\e[0m"
       stats[:flags] << w
     }
+    stats[:last_reply] = reply
     verdict(probe, calls) if probe
 
     # Per-scenario cost, so an expensive one is obvious as it scrolls past
@@ -653,23 +981,28 @@ namespace :buddy do
   # interesting result and gets named: reaching for `schedule_reminder` when the
   # person asked for a rhythm is a wrong answer that reads perfectly.
   def verdict(probe, calls)
-    named  = calls.map { |c| c[:name].to_sym }
-    missed = [probe[:tool], *Array(probe[:with])] - named
-    wrong  = Array(probe[:avoid]) & named
-    line   = "#{probe[:tool]} — #{probe[:say]}"
+    named   = calls.map { |c| c[:name].to_sym }
+    acting  = named - BUDDY_EVAL_READERS
+    quiet   = probe[:tool] == :none
+    missed  = (quiet ? [] : [probe[:tool], *Array(probe[:with])] - named)
+    wrong   = Array(probe[:avoid]) & named
+    wrong  += acting if quiet
+    line    = "#{quiet ? "no tool" : probe[:tool]} — #{probe[:say]}"
+    shape   = out_of_order(probe, named) + bad_args(probe, calls)
 
-    if missed.empty? && wrong.empty?
+    if missed.empty? && wrong.empty? && shape.empty?
       stats[:probe_pass] += 1
-      puts "  \e[32m✓ reached #{probe[:tool]}\e[0m"
+      puts "  \e[32m✓ #{quiet ? "asked instead of guessing" : "reached #{probe[:tool]}"}\e[0m"
       return
     end
 
-    instead = (named - BUDDY_EVAL_READERS).presence
+    instead = acting.presence
     detail  = [
       ("missed #{missed.join(", ")}" if missed.any?),
       ("called #{wrong.join(", ")} instead" if wrong.any?),
-      ("called #{instead.join(", ")}" if wrong.empty? && instead),
-      ("no tool at all" if named.empty?),
+      ("called #{instead.join(", ")}" if wrong.empty? && missed.any? && instead),
+      ("no tool at all" if named.empty? && !quiet),
+      *shape,
     ].compact.join("; ")
 
     # A miss on a probe whose precondition isn't in this person's data says
@@ -682,7 +1015,83 @@ namespace :buddy do
     end
 
     stats[:probe_fail] << "#{line} → #{detail}"
+    # The same failure again, with everything a person (or an agent) would
+    # otherwise have to go and look up: what it said while doing the wrong
+    # thing, the arguments it passed, and the file that owns the wording that
+    # decided. See BuddyEvalReport.
+    stats[:report] << {
+      "expected" => (quiet ? "no tool" : probe[:tool].to_s),
+      "said"     => probe[:say],
+      "wanted"   => wanted_phrase(probe),
+      "detail"   => detail,
+      "calls"    => calls.map { |c| "#{c[:name]}(#{(c[:arguments] || {}).except(Buddy::Tools::REPLY_ARG.to_s).to_json})" }.join("  "),
+      "case"     => probe[:case],
+      "note"     => probe[:note],
+      "files"    => tool_files(probe),
+      "reply"    => stats[:last_reply],
+    }
     puts "  \e[31m✗ #{detail}\e[0m"
+  end
+
+  def wanted_phrase(probe)
+    return "no tool at all — the request is ambiguous and the answer is a question" if probe[:tool] == :none
+
+    [
+      [probe[:tool], *Array(probe[:with])].compact.join(" + "),
+      ("in that order" if probe[:order].present?),
+      ("carrying #{probe[:args].values.map(&:to_json).join(", ")}" if probe[:args].present?),
+      ("never carrying #{probe[:never_args].values.map(&:to_json).join(", ")}" if probe[:never_args].present?),
+      ("and never #{Array(probe[:avoid]).join(", ")}" if probe[:avoid].present?),
+    ].compact.join(", ")
+  end
+
+  # Where the wording that decided this actually lives. Every tool named in the
+  # probe, not only the expected one: a sentence that reaches the wrong tool is
+  # a boundary between two descriptions, and it is as often the other one that
+  # claims too much.
+  def tool_files(probe)
+    named = [probe[:tool], *Array(probe[:with]), *Array(probe[:avoid])].compact.uniq
+    named.filter_map { |name|
+      path = "app/service/buddy/tools/#{name}.rb"
+      path if Rails.root.join(path).exist?
+    }
+  end
+
+  # The right tools in the wrong order, which for a deferred action is the whole
+  # bug: the wait has to exist before the thing it's holding, and a turn that
+  # calls them the other way round has already done the thing.
+  def out_of_order(probe, named)
+    wanted = Array(probe[:order]).select { |tool| named.include?(tool) }
+    return [] if wanted.length < 2
+
+    seen = named.select { |tool| wanted.include?(tool) }.uniq
+    return [] if seen == wanted
+
+    ["called #{seen.join(" then ")} — that order does it before the wait"]
+  end
+
+  # The right tool carrying the wrong arguments. `repeat` missing off a cycle,
+  # `notify` missing off somebody else's reminder, and the reminder text that
+  # was the person's request rather than the nudge, all read as a pass without
+  # this.
+  def bad_args(probe, calls)
+    checks = [[probe[:args], false], [probe[:never_args], true]]
+    checks.flat_map { |table, forbidden|
+      (table || {}).flat_map { |tool, wanted|
+        call = calls.find { |c| c[:name].to_sym == tool.to_sym }
+        next [] if call.nil?
+
+        args = (call[:arguments] || {}).transform_keys(&:to_s)
+        wanted.filter_map { |arg, want|
+          got = args[arg.to_s]
+          hit = want.is_a?(Regexp) ? want.match?(got.to_s) : got.to_s == want.to_s
+          next if hit != forbidden
+
+          "#{tool}(#{arg}: #{got.inspect})#{" — should not #{want.inspect}" if forbidden}" \
+            "#{" — wanted #{want.inspect}" unless forbidden}"
+        }
+      }
+    }
   end
 
   def probe_summary

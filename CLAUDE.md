@@ -219,6 +219,49 @@ What to do instead, all of which are real:
 - **Verify by reading first.** `.claude/prod-query.sh` answers "what is it now"
   without writing anything, and that's what a preview was reaching for.
 
+## Buddy tools: the eval harness is part of the change
+
+`lib/tasks/buddy_eval.rake` says plain sentences to the real model and checks
+which tool comes back. Specs prove the plumbing; this is the only thing that
+proves a description can still be FOUND. A tool whose prose reads beautifully
+and never gets chosen is invisible from the inside — the reply is fluent,
+something happens, and it's the wrong something.
+
+Three obligations, and none of them is optional:
+
+1. **A new tool needs a line in `BUDDY_TOOL_PROBES`** — one sentence a person
+   would actually say, plus `avoid:` naming the tool it will get confused with.
+   `rake buddy:tool_coverage` fails until it's there, free and before any spend.
+   Adding the tool without the probe means nobody has ever checked the model
+   can reach it.
+
+2. **A new tool that needs RECORDS to be reachable needs them in
+   `lib/buddy_eval_world.rb`** — a chore, a list item, a stashed idea. The
+   world is built once, everything runs against it, and it's torn down from a
+   manifest afterwards. Without the records the probe reports "unanswerable",
+   which is not a pass.
+
+3. **Every misinterpretation found in real use becomes an entry in
+   `BUDDY_EDGE_PROBES`** — the sentence as they actually said it, the tool it
+   should have reached, `avoid:` for the one it did, and `note:` for what
+   happened. Use `order:` when the bug was doing the thing before the wait,
+   `args:` / `never_args:` when the tool was right and its arguments weren't.
+   Fix the description in the same change; the probe is what stops the third
+   occurrence. Several of these have already come back twice wearing different
+   words.
+
+```bash
+rake buddy:tool_coverage   # free: does every tool have a sentence?
+rake buddy:eval_tools      # the sweep + the edge cases (REAL API CALLS)
+rake buddy:eval_edges      # only the ones that have gone wrong before
+rake buddy:eval_world      # build the world and leave it up, to poke by hand
+rake buddy:eval_world_clear
+```
+
+A run writes `tmp/buddy_eval/report.md` — every failure with the sentence, what
+it reached for, what it said, the known incident, and the file that owns the
+wording. That file is meant to be handed straight to an agent to fix.
+
 ## Environment
 
 Key env vars in `.env`: `PORTFOLIO_OPENAI_KEY`, `PORTFOLIO_TESLA_CLIENT_ID`, `PORTFOLIO_TWILIO_*`, `PORTFOLIO_S3_*`, `PORTFOLIO_SLACK_HOOK`
