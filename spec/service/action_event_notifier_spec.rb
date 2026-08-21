@@ -31,6 +31,55 @@ RSpec.describe ActionEventNotifier do
     expect(UpdateActionStreak).to have_received(:perform_async).with(newer.id)
   end
 
+  # An alert is the only real-time signal there is, and the published balance
+  # counts everything since the bank's last snapshot — so the figure has to be
+  # rebuilt as the alert lands rather than whenever SimpleFIN is next polled.
+  describe "republishing the balance" do
+    it "rebuilds the figure when a transaction lands" do
+      expect(::SimpleFin::DashboardCache).to receive(:refresh!)
+
+      ev = ActionEvent.create!(
+        user: user, name: "Transaction", timestamp: Time.current,
+        data: { amount: 21.49, account: "(...2363)", category: "subscriptions" }
+      )
+      described_class.notify(user, ev, :added)
+    end
+
+    it "rebuilds it again when the transaction is taken back" do
+      ev = ActionEvent.create!(
+        user: user, name: "Transaction", timestamp: Time.current,
+        data: { amount: 21.49, account: "(...2363)", category: "subscriptions" }
+      )
+      described_class.notify(user, ev, :added)
+
+      expect(::SimpleFin::DashboardCache).to receive(:refresh!)
+      described_class.notify(user, ev, :removed)
+    end
+
+    # It runs on every single-event mutation in the app, so it must cost
+    # nothing for the overwhelming majority that are not transactions.
+    it "leaves an ordinary event alone" do
+      expect(::SimpleFin::DashboardCache).not_to receive(:refresh!)
+
+      ev = ActionEvent.create!(user: user, name: "Coffee", timestamp: Time.current)
+      described_class.notify(user, ev, :added)
+    end
+
+    # Everything it needs is already stored by the time this runs. A cache
+    # write that fails must not take the alert down with it.
+    it "does not take the notification down with it when it fails" do
+      allow(::SimpleFin::DashboardCache).to receive(:refresh!).and_raise("nope")
+
+      ev = ActionEvent.create!(
+        user: user, name: "Transaction", timestamp: Time.current,
+        data: { amount: 21.49, account: "(...2363)", category: "subscriptions" }
+      )
+
+      expect { described_class.notify(user, ev, :added) }.not_to raise_error
+      expect(ActionEventBroadcastWorker).to have_received(:perform_async).with(ev.id, true)
+    end
+  end
+
   describe "Buddy event tools" do
     let!(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy", last_message_at: Time.current) }
     let(:msg) { convo.byte_messages.create!(user: user, direction: :inbound, state: :delivered, body: "ok") }

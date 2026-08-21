@@ -70,7 +70,16 @@ class ApplicationRecord < ActiveRecord::Base
 
   def self.raw_sql(q, *data)
     sql = search_scope.where(q, *data)
-    sql.any? # validate
+    # Executed to prove the SQL runs, because what gets used is the WHERE
+    # clause as a STRING and by then there is no one left to complain to.
+    #
+    # In a savepoint, because a failed statement aborts the whole surrounding
+    # transaction: every query after it — including ones with nothing to do
+    # with the search — then fails with "current transaction is aborted"
+    # instead, and the page falls over somewhere unrelated to the typo that
+    # caused it. Rolling back to a savepoint leaves the caller's transaction
+    # intact so the rescue below is worth something.
+    transaction(requires_new: true) { sql.any? }
     sql.stripped_sql
   rescue ActiveRecord::StatementInvalid
     # puts sql.to_sql unless Rails.env.production?

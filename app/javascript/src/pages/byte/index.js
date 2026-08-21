@@ -302,6 +302,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   let channelConnected = false;
   let sleepUntil = bootstrap.buddy_sleep?.sleep_until || null; // ISO string or null
   let sleepWake = bootstrap.buddy_sleep?.wake_string || null; // "8:00 AM" or null
+  let sleepReason = bootstrap.buddy_sleep?.reason || null; // "gpt_outage" or null
   let oldestLoadedId = null;
 
   // Per-conversation unread-in-drawer counters. Only tracks conversations
@@ -708,6 +709,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       message.attachments,
     );
     node.querySelector("[data-state]").textContent = renderState(message);
+    // Read by the long-press menu to decide whether to offer Retry. Only your
+    // own message, and only one that actually failed — everything else has
+    // either been answered or is still on its way.
+    if (message.direction === "outbound" && message.state === "failed") {
+      node.dataset.retryable = String(message.id);
+    } else {
+      delete node.dataset.retryable;
+    }
 
     // Tag the node with its "active" role so the tail-reorder pass can
     // float in-flight items to the bottom. A message is active while it's
@@ -1401,8 +1410,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (message.state === "streaming") return "";
     if (message.direction !== "outbound") return "";
     if (message.state === "pending") return "…";
-    if (message.state === "failed") return "failed";
-    return "";
+    if (message.state !== "failed") return "";
+    // A failed send while the house is asleep is not the same thing as a send
+    // that broke, and the person can do something about exactly one of them.
+    // "undelivered" says what's true about their message rather than naming a
+    // fault they can't see.
+    return message.metadata?.failure === "gpt_outage" ? "undelivered" : "failed";
   }
 
   // ---------- scroll / jump-button / atBottom bookkeeping ----------
@@ -2356,7 +2369,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     sleepChip.hidden = !show;
     if (!show) return;
     const who = buddyName();
-    if (usageCapped()) {
+    // Three states, and they must not read alike. "reconnecting" is the
+    // benign one — the socket dropped, it'll come back on its own, nothing is
+    // wrong. An OUTAGE is not that: it will not fix itself, what you send is
+    // failing, and saying "reconnecting" there is the app telling you to wait
+    // for something that isn't coming.
+    if (sleepReason === "gpt_outage") {
+      sleepText.textContent = `${who} can't think right now — messages aren't going through`;
+    } else if (usageCapped()) {
       sleepText.textContent = sleepWake
         ? `${who}'s asleep until ${sleepWake}`
         : `${who}'s asleep`;
@@ -2862,6 +2882,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // instead of leaving Byte stuck mid-thought.
         sleepUntil = data.sleep_until || null;
         sleepWake = data.wake_string || null;
+        sleepReason = data.reason || null;
         updateSleepChip();
         buddySleep();
         return;
@@ -2872,6 +2893,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // bubbles resolve on their own.
         sleepUntil = null;
         sleepWake = null;
+        sleepReason = null;
         updateSleepChip();
         buddyWake();
         return;

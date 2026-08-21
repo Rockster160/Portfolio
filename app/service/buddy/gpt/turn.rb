@@ -452,7 +452,7 @@ module Buddy
       def run!
         @reply = create_reply
         outcome = converse
-        outcome[:ok] ? finalize_success(outcome) : finalize_failure(outcome[:error])
+        outcome[:ok] ? finalize_success(outcome) : finalize_failure(outcome[:error], kind: outcome[:error_kind])
         outcome[:ok]
       rescue StandardError => e
         Buddy::Errors.report(
@@ -516,7 +516,7 @@ module Buddy
           # Record usage BEFORE the ok check: a failed or truncated response still
           # consumed tokens and still bills.
           record_usage(result)
-          return { ok: false, error: result[:error] } unless result[:ok]
+          return { ok: false, error: result[:error], error_kind: result[:error_kind] } unless result[:ok]
 
           calls      = result[:tool_calls]
           round_text = result[:text].to_s.strip
@@ -1505,8 +1505,12 @@ module Buddy
         meta.is_a?(Hash) && meta["source"].to_s == "today_scheduled"
       end
 
-      def finalize_failure(error)
+      # `kind` is `:outage` only when the ACCOUNT is unusable — see
+      # Buddy::GPT::Client#kind_of, which draws that line narrowly. Anything
+      # else is one turn going wrong and must not put the house to sleep.
+      def finalize_failure(error, kind: nil)
         Rails.logger.warn("[Buddy::GPT::Turn] turn failed: #{error}")
+        Buddy::Outage.down!(detail: error.to_s) if kind == :outage
         @reply.update!(
           state:    :failed,
           body:     FAILURE_BODY,

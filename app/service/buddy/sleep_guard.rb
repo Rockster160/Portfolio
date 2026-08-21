@@ -64,6 +64,34 @@ module Buddy
       BuddyWakeWorker.perform_at(until_time, user.id)
     end
 
+    # No end time, because there isn't one to know. Used by Buddy::Outage when
+    # the provider is down: `sleep_until!` would schedule a BuddyWakeWorker for
+    # a moment nobody can predict, and the queue it drains is exactly the queue
+    # an outage must not build. Nothing here schedules a wake — it comes back
+    # when a real call succeeds.
+    def sleep_indefinitely!(user, reason:)
+      buddy_conversations(user).find_each { |convo|
+        patch = { "sleep_reason" => reason.to_s }
+        patch["pre_sleep_expression"] = convo.buddy_expression unless convo.buddy_expression == "sleeping"
+        convo.update_column(:metadata, convo.metadata.merge(patch))
+        convo.update_column(:buddy_sleep_until, Buddy::Outage::FOREVER.from_now)
+        Buddy::ExpressionState.set(convo, :sleeping)
+      }
+      # The far-future stamp goes over as-is. The client decides "asleep" by
+      # comparing that time to now, so sending nil would leave the chip down
+      # and the only sign of an outage would be messages quietly failing.
+      broadcast_sleep(user, Buddy::Outage::FOREVER.from_now, reason: reason)
+    end
+
+    # WHY this user is asleep, or nil if they aren't. The two reasons want
+    # opposite handling on an incoming message — a usage cap holds it, an outage
+    # fails it — so the caller has to be able to tell them apart.
+    def reason(user)
+      buddy_conversations(user).where("buddy_sleep_until > ?", Time.current)
+        .pick(:metadata)
+        &.dig("sleep_reason")
+    end
+
     def sleeping?(user)
       buddy_conversations(user).where("buddy_sleep_until > ?", Time.current).exists?
     end
@@ -76,7 +104,7 @@ module Buddy
       buddy_conversations(user).where.not(buddy_sleep_until: nil).find_each do |convo|
         prior = convo.metadata["pre_sleep_expression"].presence || "neutral"
         convo.update_column(:buddy_sleep_until, nil)
-        convo.update_column(:metadata, convo.metadata.except("pre_sleep_expression"))
+        convo.update_column(:metadata, convo.metadata.except("pre_sleep_expression", "sleep_reason"))
         Buddy::ExpressionState.set(convo, prior)
       end
       broadcast_wake(user)
@@ -103,7 +131,7 @@ module Buddy
         .chronological
     end
 
-    def broadcast_sleep(user, until_time)
+    def broadcast_sleep(user, until_time, reason: nil)
       MonitorChannel.broadcast_to(user, {
         id:      :byte,
         channel: :byte,
@@ -111,6 +139,7 @@ module Buddy
           kind:        :buddy_sleep,
           sleep_until: until_time&.iso8601,
           wake_string: wake_string(user),
+          reason:      reason,
         },
       })
     rescue => e
@@ -132,6 +161,10 @@ module Buddy
     def wake_string(user)
       until_time = buddy_conversations(user).maximum(:buddy_sleep_until)
       return "later" if until_time.nil?
+      # An indefinite sleep is stamped a century out. Reading that back as a
+      # date is worse than saying nothing — no usage window is ever more than
+      # a day away, so anything past that has no time to give.
+      return "later" if until_time > 1.day.from_now
 
       until_time
         .in_time_zone(user.timezone)

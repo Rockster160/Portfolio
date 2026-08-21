@@ -218,6 +218,29 @@ class ByteController < ApplicationController
     render json: { ok: true, list: list.name }
   end
 
+  # Send it again, after it failed.
+  #
+  # Only YOUR OWN message, and only one that actually failed — a delivered
+  # message re-sent would be a second copy of something already answered, and a
+  # queued one is going out on its own.
+  #
+  # It runs the ordinary intake dispatch, which means it fails again straight
+  # away while the outage is still up. That's deliberate: the alternative is a
+  # retry that looks like it worked, and the reply never coming is a worse way
+  # to learn nothing has changed. `Buddy::Outage.retry!` is the thing that
+  # actually re-tests the provider, and it's one tap away in Slack.
+  def retry_message
+    message = current_user.byte_messages.find_by(id: params[:id])
+    return render(json: { errors: ["that message isn't yours"] }, status: :not_found) if message.nil?
+    return render(json: { errors: ["that one didn't fail"] }, status: :unprocessable_entity) unless message.failed?
+    return render(json: { errors: ["that's not yours to send"] }, status: :unprocessable_entity) unless message.outbound?
+
+    message.update!(state: :pending, metadata: message.metadata.to_h.except("failure"))
+    ByteMessageIntake.redispatch!(message)
+
+    render json: { ok: true, message: message.reload.as_wire }
+  end
+
   # A tapback on any message in your own thread — theirs, yours, Buddy's, a tool
   # receipt. Toggling: the same one again takes it back off. Owning the message
   # is the whole gate. Where the message is half of a relay, both copies are

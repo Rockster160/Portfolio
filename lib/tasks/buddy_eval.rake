@@ -1890,6 +1890,31 @@ namespace :buddy do
       "silent turns: #{stats[:no_tool]}  avg: #{avg.round(2)}s",
       persist? ? "spend: #{money.call(spend)} this run (#{money.call(per)}/turn) — `bx rails buddy:cost` for the running total" : "\e[90mnot persisted (BUDDY_EVAL_PERSIST=0)\e[0m",
       stats[:flags].any? ? "\e[33mflags: #{stats[:flags].tally.map { |f, n| "#{f} x#{n}" }.join(", ")}\e[0m" : "\e[32mno mechanical flags\e[0m",
-    ].join("\n")
+      hand_over_spend,
+    ].compact.join("\n")
+  end
+
+  # The eval is where nearly all local spend comes from, and it is billed to the
+  # same account as everything else — so production's total was short by however
+  # much of it happened. Sending it here rather than leaving a command to
+  # remember: the run has just finished, the money has just been spent, and the
+  # spool line for every call was written as the call happened.
+  #
+  # Never fatal. A sync that can't reach production leaves the file exactly where
+  # it was and says so; the spend is not lost and the next run picks it up.
+  def hand_over_spend
+    return nil unless persist?
+
+    waiting = Buddy::UsageSpool.pending
+    return nil if waiting.empty?
+
+    money = Buddy::GPT::Pricing.method(:format_micros)
+    total = waiting.sum { |row| row[:cost_micros].to_i }
+    result = Buddy::UsageSync.call
+    "handed #{result[:created]} calls (#{money.call(total)}) to production" \
+      "#{" — #{result[:duplicate]} were already there" if result[:duplicate].to_i.positive?}"
+  rescue StandardError => e
+    "\e[33mspend not handed over (#{e.class}: #{e.message}) — " \
+      "#{Buddy::UsageSpool.pending.length} calls still in the spool, `bx rails buddy:usage_sync` to retry\e[0m"
   end
 end

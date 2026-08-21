@@ -149,6 +149,7 @@ RSpec.describe BankTransaction, ".query" do
         # The point is that a -437070 row answers a positive threshold at all.
         expect(found("amount>4000")).to contain_exactly(payday, big_spend)
       end
+
       it "compares with > and <, and takes a decimal threshold" do
         expect_matches(
           "amount>100" => %i[payday],
@@ -235,23 +236,23 @@ RSpec.describe BankTransaction, ".query" do
 
     it "reads every date form the hint advertises" do
       expect_dates(
-        "timestamp:2026-07-01" => %w[JUL01],
-        "timestamp:2026-07"    => %w[JUL01 JUL15],
-        "timestamp:2026"       => %w[AUG02 JUL01 JUL15],
+        "timestamp:2026-07-01"                       => %w[JUL01],
+        "timestamp:2026-07"                          => %w[JUL01 JUL15],
+        "timestamp:2026"                             => %w[AUG02 JUL01 JUL15],
         "timestamp>=2026-07-01 timestamp<2026-08-01" => %w[JUL01 JUL15],
-        "-timestamp:2026-07"   => %w[AUG02 Y2025],
+        "-timestamp:2026-07"                         => %w[AUG02 Y2025],
         # The gotcha the hint calls out: a bare `>` steps over the entire unit
         # named, so `>2026-07-01` starts on the 2nd rather than at midnight on
         # the 1st.
-        "timestamp>2026-07-01"  => %w[AUG02 JUL15],
-        "timestamp>=2026-07-01" => %w[AUG02 JUL01 JUL15],
+        "timestamp>2026-07-01"                       => %w[AUG02 JUL15],
+        "timestamp>=2026-07-01"                      => %w[AUG02 JUL01 JUL15],
         # Both underlying columns stay reachable, for the rows where they differ.
-        "transacted_at:2026-07" => %w[JUL01 JUL15],
-        "posted_at:2026-07"     => %w[JUL01 JUL15],
+        "transacted_at:2026-07"                      => %w[JUL01 JUL15],
+        "posted_at:2026-07"                          => %w[JUL01 JUL15],
         # Documented as unsupported rather than left to be discovered: the
         # tokenizer splits fields on `:`, so a clock time is not a value it can
         # ever receive.
-        "timestamp>2026-07-01T18:00" => [],
+        "timestamp>2026-07-01T18:00"                 => [],
       )
     end
 
@@ -363,6 +364,101 @@ RSpec.describe BankTransaction, ".query" do
         second = BankTransaction.recent_first.pluck(:simplefin_id)
         expect(first).to eq(second)
       end
+    end
+  end
+
+  # A charge that was authorized and then cancelled never posts. A refund is a
+  # row of its own that nets the charge off; this is not, so without a way to
+  # say so it counts as spending for good.
+  describe "a cancelled charge" do
+    let!(:account) {
+      BankAccount.create!(
+        simplefin_id: "A1", name: "AMZ Prime (7283)", last4: "7283", kind: :credit,
+      )
+    }
+    let!(:cancelled) {
+      BankTransaction.create!(
+        bank_account: account, posted_at: 1.day.ago, amount_cents: -1_955,
+        payee: "Amazon.com", category: "pets", voided_at: Time.current
+      )
+    }
+    let!(:reissued) {
+      BankTransaction.create!(
+        bank_account: account, posted_at: 1.day.ago, amount_cents: -2_078,
+        payee: "AMAZON MKTPLACE PMTS", category: "pets"
+      )
+    }
+
+    it "keeps the row out of what counts" do
+      expect(BankTransaction.countable).to contain_exactly(reissued)
+    end
+
+    # `real_money` answers a question about transfers and nothing else. A search
+    # for `transfer:false` is asking to SEE the rows that are not transfers, and
+    # a cancelled charge is exactly the sort of thing you go looking for.
+    it "stays in the listing, which is not the same question" do
+      expect(BankTransaction.real_money).to contain_exactly(cancelled, reissued)
+      expect(described_class.query("transfer:false")).to include(cancelled)
+    end
+
+    it "is findable, and excludable, by name" do
+      expect(described_class.query("voided:true")).to contain_exactly(cancelled)
+      expect(described_class.query("voided:false")).to contain_exactly(reissued)
+    end
+
+    # Boolean in, timestamp out, so no caller has to know the column holds a
+    # time.
+    it "takes a boolean and stores when it was marked" do
+      reissued.voided = "1"
+      reissued.save!
+
+      expect(reissued.reload.voided_at).to be_present
+      expect(reissued).to be_voided
+    end
+
+    it "clears back to counting" do
+      cancelled.voided = false
+      cancelled.save!
+
+      expect(cancelled.reload.voided_at).to be_nil
+      expect(BankTransaction.countable).to include(cancelled)
+    end
+
+    # When it was cancelled is the fact. A second click on the same chip must
+    # not rewrite it.
+    it "leaves the original stamp alone when marked again" do
+      was = cancelled.voided_at
+
+      cancelled.voided = true
+      cancelled.save!
+
+      expect(cancelled.reload.voided_at).to be_within(1.second).of(was)
+    end
+  end
+
+  # The projection can only carry forward what it can attribute, so the rows it
+  # cannot are worth listing — and there is no name to match them by.
+  describe "account:none" do
+    let!(:account) {
+      BankAccount.create!(
+        simplefin_id: "A1", name: "PREMIER PLUS CKG (2363)", last4: "2363", kind: :checking,
+      )
+    }
+    let!(:attributed) {
+      BankTransaction.create!(
+        bank_account: account, posted_at: 1.day.ago, amount_cents: -100, payee: "Known",
+      )
+    }
+    let!(:unattributed) {
+      BankTransaction.create!(posted_at: 1.day.ago, amount_cents: 437_070, payee: "direct deposit")
+    }
+
+    it "lists the rows whose alert named no account" do
+      expect(described_class.query("account:none")).to contain_exactly(unattributed)
+    end
+
+    it "still matches a real account by name" do
+      expect(described_class.query("account:2363")).to contain_exactly(attributed)
     end
   end
 end

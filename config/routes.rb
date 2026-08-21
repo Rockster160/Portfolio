@@ -30,6 +30,8 @@ Rails.application.routes.draw do
   post "tesla/api/1/vehicles/:vin/command/:command" => "vehicles#command"
   post "tesla/oauth2/v3/token" => "vehicles#token"
   get "tesla/switch" => "tesla_switch#show", as: :tesla_switch
+  # One-tap controls linked from Slack posts. See Slack::Actions.
+  get "slack/action/:name" => "slack_actions#show", as: :slack_action
 
   root "index#home"
   post "/talk" => "index#talk"
@@ -54,6 +56,7 @@ Rails.application.routes.draw do
   post   "/byte/messages"     => "byte#create_message", as: :byte_messages
   delete "/byte/messages/:id" => "byte#delete_message", as: :byte_message
   post   "/byte/messages/:id/report" => "byte#report_message", as: :byte_message_report
+  post   "/byte/messages/:id/retry"  => "byte#retry_message",  as: :byte_message_retry
   post   "/byte/messages/:id/react"  => "byte#react_message",  as: :byte_message_react
   post   "/byte/uploads" => "byte#uploads", as: :byte_uploads
   get  "/byte/csrf"     => "byte#csrf",           as: :byte_csrf

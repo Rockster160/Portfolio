@@ -19,6 +19,19 @@ class ByteMessageIntake
     new(**).call
   end
 
+  # Put a message that already exists back through dispatch — the retry on a
+  # failed bubble. Nothing is re-parsed and nothing is re-created: the stash
+  # capture and the timer fast path already had their turn when it was typed,
+  # and running them again would log the same thing twice.
+  def self.redispatch!(message)
+    new(
+      user:         message.user,
+      conversation: message.byte_conversation,
+      body:         message.body,
+    ).send(:dispatch!, message)
+    message
+  end
+
   def initialize(user:, conversation:, body:, metadata: {}, created_at: nil, attachment_signed_ids: [])
     @user                  = user
     @conversation          = conversation
@@ -170,11 +183,25 @@ class ByteMessageIntake
       return
     end
 
-    # Buddy asleep (Anthropic usage cap): HOLD the message rather than
-    # dispatching or bouncing a canned reply. The persistent sleeping chip
-    # communicates the state and BuddyWakeWorker drains these in order.
     if buddy? && ::Buddy::SleepGuard.sleeping?(@user)
-      message.update!(state: :queued)
+      # WHY it's asleep decides what happens to this message, and the two
+      # answers are opposites.
+      #
+      # A usage cap has a reset time, so HOLD it: the sleeping chip says what's
+      # going on, BuddyWakeWorker drains the queue in order, and what they typed
+      # arrives late rather than never.
+      #
+      # An outage has no known end, so holding is a promise nobody can keep —
+      # the queue might never drain, and meanwhile it looks sent. It FAILS,
+      # visibly, with a retry on it (see Buddy::Outage).
+      if ::Buddy::Outage.down?
+        message.update!(
+          state:    :failed,
+          metadata: message.metadata.to_h.merge("failure" => ::Buddy::Outage::REASON),
+        )
+      else
+        message.update!(state: :queued)
+      end
       broadcast(message.reload)
       return
     end

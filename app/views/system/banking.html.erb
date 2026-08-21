@@ -404,6 +404,12 @@
           <span class="bank-muted"><%= @transfer_count %> excluded</span>
         </div>
       <% end %>
+      <% if @voided_count.positive? %>
+        <div title="Authorized and then cancelled, so it never posted — excluded from the figures above">
+          <span class="bank-totals-label">Cancelled</span>
+          <span class="bank-muted"><%= @voided_count %> excluded</span>
+        </div>
+      <% end %>
     </div>
 
     <%# The same reading as CustomChart 4 — a series per category, money out and

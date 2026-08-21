@@ -408,4 +408,124 @@ RSpec.describe SimpleFin::DashboardCache do
       expect(described_class.balance_cents).to eq(300)
     end
   end
+
+  # SimpleFIN is polled six times a day and the institution behind it refreshes
+  # about once, so the reported figure is routinely most of a day stale. The
+  # published number carries it forward over everything that has happened
+  # since — which is what makes the dashboard move when a purchase does.
+  describe ".projected_cents" do
+    let!(:checking) {
+      BankAccount.create!(
+        simplefin_id: "ACT-0001", name: "PREMIER PLUS CKG (2363)", last4: "2363",
+        kind: :checking, balance_cents: 1_676_495, available_balance_cents: 1_676_495,
+        balance_date: 1.day.ago
+      )
+    }
+
+    def charge(cents, at:, account: checking, **attrs)
+      BankTransaction.create!(
+        bank_account: account, amount_cents: cents, transacted_at: at,
+        payee: "Test", **attrs
+      )
+    end
+
+    it "is the reported figure when nothing has happened since" do
+      expect(described_class.projected_cents).to eq(1_676_495)
+    end
+
+    # The case it was built for: a $4,370.70 deposit landed at 3:43am against a
+    # balance the bank computed at 10:43am the previous morning, and the
+    # dashboard went on showing the older number all day.
+    it "adds a deposit the bank's figure is too old to include" do
+      charge(437_070, at: 2.hours.ago)
+
+      expect(described_class.projected_cents).to eq(2_113_565)
+    end
+
+    it "subtracts a charge the bank's figure is too old to include" do
+      charge(-2_149, at: 2.hours.ago)
+
+      expect(described_class.projected_cents).to eq(1_674_346)
+    end
+
+    # The bound is the bank's own snapshot, not whether a row is confirmed. A
+    # row older than the snapshot is already IN it, so adding it again would
+    # count the same money twice.
+    it "leaves alone anything the bank's figure already covers" do
+      charge(-2_149, at: 2.days.ago)
+
+      expect(described_class.projected_cents).to eq(1_676_495)
+    end
+
+    it "leaves out a charge that was voided" do
+      charge(-2_149, at: 2.hours.ago, voided_at: Time.current)
+
+      expect(described_class.projected_cents).to eq(1_676_495)
+    end
+
+    # Both halves of a self-transfer describe the same money, so they net to
+    # zero across a cumulative figure — and the hand-flagged ones only ever
+    # have the leaving half, which would read as money vanishing.
+    it "leaves out a transfer between your own accounts" do
+      event = ActionEvent.create!(
+        user: user, name: "Transaction", timestamp: 2.hours.ago,
+        data: { amount: 21.49, transfer: true }
+      )
+      charge(-2_149, at: 2.hours.ago, action_event: event)
+
+      expect(described_class.projected_cents).to eq(1_676_495)
+    end
+
+    # A loan is excluded from the figure, so nothing on one can move it.
+    it "leaves out an account the figure does not count" do
+      loan = BankAccount.create!(
+        simplefin_id: "ACT-0004", name: "MORTGAGE LOAN (7153)", kind: :loan,
+        balance_cents: -33_558_582, balance_date: 1.day.ago
+      )
+      charge(-139_325, at: 2.hours.ago, account: loan)
+
+      expect(described_class.projected_cents).to eq(1_676_495)
+    end
+
+    # An account that has never reported has nothing to project from, and a
+    # partial sum is a wrong number rather than a slightly stale one.
+    it "is nil when an account has never reported a balance" do
+      BankAccount.create!(
+        simplefin_id: "ACT-0002", name: "AMZ Prime (7283)", kind: :credit,
+      )
+
+      expect(described_class.projected_cents).to be_nil
+    end
+
+    it "publishes the projected figure rather than the reported one" do
+      charge(437_070, at: 2.hours.ago)
+
+      described_class.refresh!(user: user)
+
+      expect(user.caches.dig(:bank, :amount)).to eq("21135.65")
+    end
+
+    describe ".unattributed_unsettled" do
+      # For eighteen months every paycheque landed here: the deposit alert
+      # writes its account on a line of its own and the extractor was looking
+      # for one after a space.
+      it "finds a recent row that names no account" do
+        row = charge(437_070, at: 2.hours.ago, account: nil)
+
+        expect(described_class.unattributed_unsettled).to contain_exactly(row)
+      end
+
+      it "ignores one old enough for the bank's figure to cover" do
+        charge(437_070, at: 2.days.ago, account: nil)
+
+        expect(described_class.unattributed_unsettled).to be_empty
+      end
+
+      it "ignores one that found its account" do
+        charge(437_070, at: 2.hours.ago)
+
+        expect(described_class.unattributed_unsettled).to be_empty
+      end
+    end
+  end
 end

@@ -93,6 +93,9 @@ class FakeBuddyClient
       tool_calls:  [],
       response_id: nil,
       error:       round[:error],
+      # `:outage` is what puts the whole house to sleep, so a spec has to be
+      # able to say which KIND of failure it is staging.
+      error_kind:  round[:error_kind],
       model:       @model,
       usage:       round.fetch(:usage, DEFAULT_USAGE),
     }

@@ -69,6 +69,26 @@ module Buddy
         @reasoning_effort = reasoning_effort.presence
       end
 
+      # Is the account usable? One real, deliberately tiny call — the thing an
+      # outage is waiting on is the provider accepting a request, and nothing
+      # short of making one can answer that. Asking whether enough time has
+      # passed is how a companion comes back saying it's fine when it isn't.
+      #
+      # Cheapest shape available: no tools, no reasoning, one token of output.
+      # An empty reply still counts, because the failure being tested for is the
+      # request being REJECTED, not what came back.
+      PING_INSTRUCTIONS = "Reply with the single word: ok".freeze
+
+      ACCOUNT_STATUSES = [401, 402, 403].freeze
+      QUOTA_RX = /insufficient[_ ]quota|no credits|billing|payment|exceeded your current quota/i
+
+      def ping
+        result = stream(instructions: PING_INSTRUCTIONS, input: [], tools: [])
+        # `ok: false` also covers "the model said nothing", which is a perfectly
+        # healthy account having a quiet moment. Only an ERROR means still down.
+        { ok: result[:error].nil?, error: result[:error], kind: result[:error_kind] }
+      end
+
       # `deadline` is an absolute Time. Checked on every SSE event, which is
       # exactly the case Faraday's read timeout can't see: a stream that keeps
       # dribbling tokens resets the read clock forever. One prod turn ran 3m45s
@@ -159,6 +179,7 @@ module Buddy
           tool_calls:  tool_calls,
           response_id: response_id,
           error:       describe(e),
+          error_kind:  kind_of(e),
           model:       model,
           usage:       usage,
         }
@@ -272,6 +293,35 @@ module Buddy
         body = exception.respond_to?(:response) ? exception.response : nil
         detail = body.is_a?(Hash) ? body.dig(:body, "error", "message") : nil
         detail.presence || "#{exception.class}: #{exception.message}"
+      end
+
+      # Is this the ACCOUNT being unusable, as opposed to one request going
+      # wrong? The difference decides whether the house goes to sleep, so it is
+      # drawn narrowly: only the failures where the next call is certain to fail
+      # the same way.
+      #
+      #   401/403  the key is rejected
+      #   402      payment required
+      #   429      ONLY when it is quota rather than rate — a rate limit is the
+      #            account working and being asked too fast, and sleeping every
+      #            companion over one burst would be worse than the burst
+      #
+      # `insufficient_quota` is what OpenAI returns behind "You have no credits
+      # remaining. Add credits to continue using the API at ..." (prod 4185),
+      # which is the message that went into the thread as Buddy's reply and
+      # started all of this.
+      def kind_of(exception)
+        response = exception.respond_to?(:response) ? exception.response : nil
+        return nil unless response.is_a?(Hash)
+
+        status = response[:status].to_i
+        return :outage if ACCOUNT_STATUSES.include?(status)
+        return nil unless status == 429
+
+        error = response.dig(:body, "error")
+        error = {} unless error.is_a?(Hash)
+        haystack = [error["type"], error["code"], error["message"]].compact.join(" ")
+        (:outage if haystack.match?(QUOTA_RX))
       end
 
       def client

@@ -1,0 +1,6 @@
+<%= meta_title "Slack action", include_name: false %>
+
+<div class="system-page" style="padding: 24px; max-width: 540px; margin: 0 auto">
+  <h1><%= { ok: "Done", unknown: "Nothing to do", error: "That didn't work" }[@status] %></h1>
+  <p><%= @said %></p>
+</div>

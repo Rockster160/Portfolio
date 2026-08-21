@@ -94,11 +94,16 @@ class SystemController < ApplicationController
     # the same money seen twice — counting it inflates BOTH spend and income by
     # the same amount, so a card payoff reads as if the purchase happened
     # twice — and a voided charge never happened at all.
-    real = scope.countable
+    untransferred = scope.real_money
+    real = untransferred.not_voided
     @spend_cents = real.spending.sum(:amount_cents)
     @income_cents = real.income.sum(:amount_cents)
     @result_count = scope.count
-    @transfer_count = scope.count - real.count
+    # Counted separately so each says what it is. Rolling them together would
+    # report a cancelled charge as a transfer, which is a different fact about
+    # a different row.
+    @transfer_count = @result_count - untransferred.count
+    @voided_count = untransferred.count - real.count
     @category_totals = category_totals(real)
 
     # The bucket is a way of LOOKING at the results, so it rides as its own
@@ -521,22 +526,10 @@ class SystemController < ApplicationController
   # A malformed query is a typo, not a 500. Surfaces the parser's own message
   # and shows nothing, rather than silently falling back to every row — which
   # would read as "your filter matched everything".
-  #
-  # The probe is not paranoia. A typo can build SQL that Postgres rejects only
-  # on execution — `timestamp>=notadate` reaches it as a timestamp cast — and a
-  # relation is lazy, so nothing raises until something further down the action
-  # reads it, long past this rescue. Worse, a failed statement ABORTS the
-  # surrounding transaction: every query after it fails too, with an error
-  # about the transaction rather than about the typo. Running one cheap
-  # statement inside a savepoint moves the failure to where it can be caught
-  # and gives the rescue something to roll back to; the relation itself stays
-  # lazy, because by then its SQL is known to be executable.
   def filtered_transactions
     return ::BankTransaction.all if @query.blank?
 
-    scope = ::BankTransaction.query(@query)
-    ::BankTransaction.transaction(requires_new: true) { scope.limit(1).pluck(:id) }
-    scope
+    ::BankTransaction.query(@query)
   rescue ::StandardError => e
     @search_error = e.message
     ::BankTransaction.none

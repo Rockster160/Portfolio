@@ -500,6 +500,147 @@ RSpec.describe SystemController, type: :controller do
     # A rare, deliberate action. As a permanent row of controls above the table
     # it read as a second search bar and cost the page a band of space on every
     # visit.
+    # SimpleFIN is polled six times a day and the institution behind it
+    # refreshes about once, so the reported figure is routinely most of a day
+    # stale — and the alert for a purchase arrives in seconds. The page carries
+    # the figure forward rather than showing two numbers with nothing to say
+    # which to believe.
+    describe "the projected balance" do
+      before { checking.update!(kind: :checking) }
+
+      def since(cents, at: 10.minutes.ago, account: checking, **attrs)
+        BankTransaction.create!(
+          bank_account: account, amount_cents: cents, transacted_at: at,
+          payee: "direct deposit", **attrs
+        )
+      end
+
+      it "shows the reported figure when nothing has happened since" do
+        get :banking
+
+        expect(accounts_table).to include("$18,320.24")
+        # Not a bare "reported" — the column header is one, and matching it
+        # would pass whether or not the sub line was there.
+        expect(accounts_table).not_to include("$18,320.24 reported")
+      end
+
+      it "carries a deposit the bank's figure is too old to include" do
+        since(437_070)
+
+        get :banking
+
+        # 18,320.24 + 4,370.70
+        expect(accounts_table).to include("$22,690.94")
+      end
+
+      # The estimate says what it was built on, so the two numbers are not two
+      # claims about the same thing.
+      it "names the figure it was carried forward from" do
+        since(437_070)
+
+        get :banking
+
+        expect(accounts_table).to include("$18,320.24 reported")
+      end
+
+      # Italic, not a different color — recoloring would read as good or bad
+      # news rather than as provisional.
+      it "marks the carried-forward number as an estimate" do
+        since(437_070)
+
+        get :banking
+
+        expect(accounts_table).to match(/<td class="right [a-z]+ projected"/)
+      end
+
+      it "leaves alone anything the bank's figure already covers" do
+        since(437_070, at: 3.hours.ago)
+
+        get :banking
+
+        expect(accounts_table).to include("$18,320.24")
+        expect(accounts_table).not_to include("$22,690.94")
+      end
+
+      it "leaves out a charge that was voided" do
+        since(-437_070, voided_at: Time.current)
+
+        get :banking
+
+        # The second assertion is the one that matters: without it this passes
+        # either way, because a drifted figure prints the reported one too.
+        expect(accounts_table).to include("$18,320.24")
+        expect(accounts_table).not_to include("$13,949.54")
+      end
+
+      # It can only carry forward what it can attribute to an account. For
+      # eighteen months every paycheque named none, because the deposit alert
+      # writes its account on a line of its own.
+      it "names the rows it could not attribute rather than dropping them" do
+        since(437_070, account: nil)
+
+        get :banking
+
+        expect(response.body).to include("names no account")
+        expect(response.body).to include("$4,370.70")
+        expect(accounts_table).not_to include("$22,690.94")
+      end
+
+      it "says nothing about attribution when everything found an account" do
+        since(437_070)
+
+        get :banking
+
+        expect(response.body).not_to include("names no account")
+      end
+    end
+
+    # An authorization that was cancelled before it posted never arrives to be
+    # netted off the way a refund is, so without this it counts forever.
+    describe "cancelling a charge" do
+      it "offers the control on every row" do
+        linked_transaction(cents: -1_955, category: "pets", payee: "Amazon.com")
+
+        get :banking
+
+        expect(response.body).to include("data-void")
+      end
+
+      it "strikes the row through and keeps it listed" do
+        cancelled = linked_transaction(cents: -1_955, category: "pets", payee: "Amazon.com")
+        cancelled.update!(voided_at: Time.current)
+
+        get :banking
+
+        expect(response.body).to include("Amazon.com")
+        expect(response.body).to match(/<tr data-row[^>]*class="voided"/)
+      end
+
+      it "leaves it out of the totals and says how many it left out" do
+        cancelled = linked_transaction(cents: -1_955, category: "pets", payee: "Amazon.com")
+        cancelled.update!(voided_at: Time.current)
+        linked_transaction(cents: -2_078, category: "pets", payee: "AMAZON MKTPLACE", id: "TRN-B")
+
+        get :banking
+
+        totals = response.body[%r{<div class="bank-totals">.*?</div>\s*</div>}m].to_s
+        expect(totals).to include("$20.78")
+        expect(totals).not_to include("$19.55")
+        expect(response.body).to include("Cancelled")
+      end
+
+      # A cancelled charge is exactly the sort of row you go looking for, so it
+      # must not vanish from a search that is asking a different question.
+      it "still answers to transfer:false" do
+        cancelled = linked_transaction(cents: -1_955, category: "pets", payee: "Amazon.com")
+        cancelled.update!(voided_at: Time.current)
+
+        get :banking, params: { q: "transfer:false" }
+
+        expect(response.body).to include("Amazon.com")
+      end
+    end
+
     describe "the bulk category form" do
       before { linked_transaction(cents: -2148, category: "subscriptions", payee: "Netflix") }
 
@@ -963,6 +1104,39 @@ RSpec.describe SystemController, type: :controller do
         posted_at: 1.day.ago, amount_cents: -300, payee: "Mystery"
       )
     }
+
+    # A cancelled charge never posts, so nothing arrives to net it off. Marking
+    # it has to move the published balance too, or the row greys out here while
+    # the dashboard goes on counting it.
+    describe "cancelling" do
+      it "marks it and answers with what was stored" do
+        patch :update_transaction, params: { id: linked.id, voided: true }
+
+        expect(linked.reload).to be_voided
+        expect(response.parsed_body["voided"]).to be(true)
+      end
+
+      it "clears it back to counting" do
+        linked.update!(voided_at: Time.current)
+
+        patch :update_transaction, params: { id: linked.id, voided: false }
+
+        expect(linked.reload.voided_at).to be_nil
+        expect(response.parsed_body["voided"]).to be(false)
+      end
+
+      it "republishes the balance" do
+        expect(SimpleFin::DashboardCache).to receive(:refresh!)
+
+        patch :update_transaction, params: { id: linked.id, voided: true }
+      end
+
+      it "leaves the category alone" do
+        patch :update_transaction, params: { id: linked.id, voided: true }
+
+        expect(linked.reload.category).to eq("other")
+      end
+    end
 
     it "sets one row's category and answers with its color" do
       patch :update_transaction, params: { id: linked.id, category: "subscriptions" }

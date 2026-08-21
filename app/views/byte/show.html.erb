@@ -731,6 +731,7 @@
     buddy_sleep: {
       sleep_until: (@conversation.buddy_sleep_until&.iso8601 if ::Buddy::SleepGuard.sleeping?(current_user)),
       wake_string: (::Buddy::SleepGuard.wake_string(current_user) if ::Buddy::SleepGuard.sleeping?(current_user)),
+      reason:      ::Buddy::SleepGuard.reason(current_user),
     },
   ) %>
 </script>

@@ -1,39 +1,74 @@
 require "rails_helper"
 
-# The dashboard floors to the thousand, so only a charge that tips the balance
-# across a boundary is worth spending a request on.
+# The dashboard floors to the thousand, so a chase is worth a request only when
+# what we are SHOWING and what the bank last REPORTED are different numbers at
+# that resolution.
 RSpec.describe SimpleFin::BalanceWatch do
   let(:user) { User.me }
   # $2,034.00 — the worked example: a $35 charge turns the 2 into a 1.
   let!(:checking) {
     BankAccount.create!(
       simplefin_id: "A1", name: "PREMIER PLUS CKG (2363)",
-      last4: "2363", kind: :checking, balance_cents: 203_400
+      last4: "2363", kind: :checking, balance_cents: 203_400,
+      available_balance_cents: 203_400, balance_date: 2.hours.ago
     )
   }
 
-  def alert(amount, label: "(...2363)", name: "Transaction")
-    ActionEvent.create!(
-      user: user, name: name, timestamp: Time.current,
-      data: { amount: amount, account: label, category: "groceries" }
+  def card(balance_cents)
+    BankAccount.create!(
+      simplefin_id: "A2", name: "AMZ Prime (7283)", last4: "7283", kind: :credit,
+      balance_cents: balance_cents, balance_date: 2.hours.ago
     )
   end
 
-  describe ".crosses_thousand?" do
-    it "is true when the charge tips it into the next thousand down" do
-      expect(described_class.crosses_thousand?(203_400, 3_500)).to be(true)
+  # The row exists before `consider` runs — ActionEventNotifier syncs it first —
+  # so it has to exist here too. Without it the projection has nothing to carry
+  # forward and no alert could ever diverge from the reported figure.
+  #
+  # Amounts are stored the way the alerts store them: unsigned and INVERTED, so
+  # 35.0 is $35 leaving and -1000.0 is $1,000 arriving.
+  def alert(amount, label: "(...2363)", name: "Transaction")
+    event = ActionEvent.create!(
+      user: user, name: name, timestamp: Time.current,
+      data: { amount: amount, account: label, category: "groceries" }
+    )
+    SimpleFin::EventTransaction.sync(event)
+    event
+  end
+
+  describe ".diverged?" do
+    it "is false while nothing has happened since the bank's figure" do
+      expect(described_class.diverged?).to be(false)
     end
 
-    it "is false when it stays inside the same thousand" do
-      expect(described_class.crosses_thousand?(203_400, 3_300)).to be(false)
+    it "is false for a charge that leaves the floored figure alone" do
+      alert(33.0)
+
+      expect(described_class.diverged?).to be(false)
     end
 
-    it "is true for a charge larger than the whole remainder" do
-      expect(described_class.crosses_thousand?(203_400, 150_000)).to be(true)
+    it "is true once the charges since add up to a different thousand" do
+      alert(20.0)
+      alert(20.0)
+
+      expect(described_class.diverged?).to be(true)
     end
 
-    it "reads an overdraft as one lower rather than one closer to zero" do
-      expect(described_class.crosses_thousand?(5_000, 10_000)).to be(true)
+    # It reads the transactions, not the alert, so a row that is not counted
+    # anywhere else is not counted here either.
+    it "ignores a charge that has been voided" do
+      alert(35.0)
+      BankTransaction.last.update!(voided_at: Time.current)
+
+      expect(described_class.diverged?).to be(false)
+    end
+
+    # Nothing to project from and nothing to compare against.
+    it "is false when an account has never reported a balance" do
+      card(nil)
+      alert(35.0)
+
+      expect(described_class.diverged?).to be(false)
     end
   end
 
@@ -50,6 +85,16 @@ RSpec.describe SimpleFin::BalanceWatch do
       expect(described_class.consider(alert(33.0))).to be(false)
     end
 
+    # The old test subtracted the alert's own amount from the reported figure,
+    # which could only ever read a deposit as money leaving. The projection is
+    # signed, so an arriving $1,000 now moves the figure the way it actually
+    # moves it.
+    it "starts a chase for a deposit that crosses the boundary upward" do
+      expect(SimpleFinBalanceChaseWorker).to receive(:start!).and_return(true)
+
+      expect(described_class.consider(alert(-1_000.0))).to be(true)
+    end
+
     it "ignores an alert for an account we do not hold" do
       expect(SimpleFinBalanceChaseWorker).not_to receive(:start!)
 
@@ -59,10 +104,7 @@ RSpec.describe SimpleFin::BalanceWatch do
     # The figure is cumulative, so a card charge pulls it down exactly as a
     # checking charge does — watching only checking would miss half of them.
     it "starts a chase for a card charge that crosses the boundary" do
-      BankAccount.create!(
-        simplefin_id: "A2", name: "AMZ Prime (7283)",
-        last4: "7283", kind: :credit, balance_cents: -50_000
-      )
+      card(-50_000)
       expect(SimpleFinBalanceChaseWorker).to receive(:start!).and_return(true)
 
       # Total is $1,534.00; a $600 charge turns the 1 into a 0.
@@ -72,10 +114,7 @@ RSpec.describe SimpleFin::BalanceWatch do
     # The card deepens the debt, so the total sits a thousand lower than
     # checking alone and a charge that would have crossed no longer does.
     it "measures the crossing against the total, not the one account" do
-      BankAccount.create!(
-        simplefin_id: "A2", name: "AMZ Prime (7283)",
-        last4: "7283", kind: :credit, balance_cents: -50_000
-      )
+      card(-50_000)
       expect(SimpleFinBalanceChaseWorker).not_to receive(:start!)
 
       # $35 crosses 203,400 but not the 153,400 total.
@@ -86,14 +125,11 @@ RSpec.describe SimpleFin::BalanceWatch do
       expect(described_class.consider(alert(35.0, name: "Whisper"))).to be(false)
     end
 
-    # If a bank row already exists the charge is synced, so the balance
-    # SimpleFIN reported already accounts for it.
+    # If the bank has already reported this charge, the balance it sent
+    # alongside already accounts for it and there is nothing to chase.
     it "ignores an alert whose charge has already been synced" do
       event = alert(35.0)
-      BankTransaction.create!(
-        simplefin_id: "T1", bank_account: checking, action_event: event,
-        posted_at: Time.current, amount_cents: -3_500
-      )
+      BankTransaction.find_by!(action_event_id: event.id).update!(simplefin_id: "T1")
 
       expect(described_class.consider(event)).to be(false)
     end
@@ -123,7 +159,10 @@ RSpec.describe SimpleFin::BalanceWatch do
     it "fires through ActionEventNotifier" do
       expect(SimpleFinBalanceChaseWorker).to receive(:start!).and_return(true)
 
-      event = alert(35.0)
+      event = ActionEvent.create!(
+        user: user, name: "Transaction", timestamp: Time.current,
+        data: { amount: 35.0, account: "(...2363)", category: "groceries" }
+      )
       ActionEventNotifier.notify(user, event, :added)
     end
   end

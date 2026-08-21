@@ -138,6 +138,7 @@ export function initMessageContextMenu(thread, root, { onNotice } = {}) {
         </div>
         <span class="byte-msg-menu-sent" data-menu-sent hidden></span>
       </div>
+      <button type="button" class="byte-msg-menu-item" data-menu-retry hidden>Send it again</button>
       <button type="button" class="byte-msg-menu-item" data-menu-copy-full>Copy full message</button>
       <button type="button" class="byte-msg-menu-item is-report" data-menu-report>Report a problem</button>
     `;
@@ -156,6 +157,9 @@ export function initMessageContextMenu(thread, root, { onNotice } = {}) {
     });
     el.querySelector("[data-menu-report]").addEventListener("click", (e) => {
       runReport(e.currentTarget, menu.dataset.msgId || "");
+    });
+    el.querySelector("[data-menu-retry]").addEventListener("click", (e) => {
+      runRetry(e.currentTarget, menu.dataset.msgRetry || "");
     });
     return el;
   }
@@ -220,6 +224,26 @@ export function initMessageContextMenu(thread, root, { onNotice } = {}) {
   // this (buddy/routines.js), and it distinguishes cancel from "no description"
   // for free — `null` is Cancel, `""` is OK with an empty box, and only the
   // first should abort.
+  // Sends it back through the ordinary dispatch. While the provider is still
+  // down it fails again immediately, and saying so plainly is the point — the
+  // alternative is a retry that looks like it worked and a reply that never
+  // comes.
+  async function runRetry(btn, id) {
+    if (!id) return;
+    btn.disabled = true;
+    btn.textContent = "Sending…";
+    try {
+      await apiCall(`/byte/messages/${id}/retry`, "POST");
+      btn.classList.add("is-ok");
+      btn.textContent = "Sent again";
+      closeMenu();
+    } catch (e) {
+      btn.classList.add("is-err");
+      btn.textContent = "Still not going through";
+      onNotice?.("That one still isn't going through.");
+    }
+  }
+
   async function runReport(btn, id) {
     if (!id) return;
 
@@ -328,6 +352,16 @@ export function initMessageContextMenu(thread, root, { onNotice } = {}) {
     const reportBtn = menu.querySelector("[data-menu-report]");
     reportBtn.textContent = "Report a problem";
     reportBtn.disabled = false;
+
+    // Only on a bubble that failed. `data-retryable` is stamped by
+    // paintMessageNode and carries the id, so the menu never has to work out
+    // for itself whose message it is or what state it was in.
+    const retryId = node.dataset.retryable || "";
+    menu.dataset.msgRetry = retryId;
+    const retryBtn = menu.querySelector("[data-menu-retry]");
+    retryBtn.hidden = !retryId;
+    retryBtn.textContent = "Send it again";
+    retryBtn.disabled = false;
 
     menu.hidden = false;
     positionMenu(x, y);

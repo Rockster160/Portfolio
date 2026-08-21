@@ -15,6 +15,7 @@
 #  pending                 :boolean          default(FALSE), not null
 #  posted_at               :datetime
 #  transacted_at           :datetime
+#  voided_at               :datetime
 #  created_at              :datetime         not null
 #  updated_at              :datetime         not null
 #  action_event_id         :bigint
