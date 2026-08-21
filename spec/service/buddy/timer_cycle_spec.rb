@@ -117,6 +117,23 @@ RSpec.describe Buddy::TimerCycle do
         expect(card).to be_present
       end
 
+      # One level further out than the case above: TimerFireWorker is what
+      # actually runs in production, and it has its own guards (drift, an
+      # already-set fired_at) in front of the hand-off.
+      #
+      # Prod timer 91 on 21 Aug was the first cycle block ever to reach its own
+      # end there. It fired, the row was reset six seconds later, and no message
+      # and no card were written anywhere.
+      it "posts the card when the fire arrives through the worker" do
+        timer = start!(break_seconds: nil)
+        travel_to(timer.end_at + 1.second)
+
+        TimerFireWorker.new.perform(timer.id)
+
+        expect(card).to be_present
+        expect(said.last.body).to include("Tap below")
+      end
+
       it "still says time's up for a countdown with no cycle on it" do
         plain = Buddy::Timers.create!(user: user, seconds: 60, label: "Pasta", conversation: convo)
         Buddy::Timers.on_fired(plain.tap { |t| t.update!(fired_at: Time.current) })

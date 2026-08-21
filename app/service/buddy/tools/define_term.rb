@@ -4,8 +4,15 @@ Buddy::Tools.register(
     Teach the household glossary a word. Use it when they explain what something
     means ("muti is medicine", "when I say the plunge I mean the trailhead in
     Alpine", "bakkie is a tub, not a truck"), or when you had to ask what a word
-    meant and they told you. Once it's in, every companion in the house
-    understands it and nobody has to explain it again.
+    meant and they told you. The glossary is shared by the house, so the other
+    companions get the word too.
+
+    That last part is a fact about the plumbing, not a line to say back. Somebody
+    teaching you their word wants YOU to have it; "tucked in for everyone, so
+    nobody has to puzzle over it again" answers a question nobody asked, and it
+    turns a bit of family shorthand into a comprehension problem that needed
+    solving. Say it the way you'd say it to a friend who just let you in on
+    something - the receipt already shows it was kept.
 
     This is for VOCABULARY - a word and what it points at. A fact about the
     person ("she hates cilantro") is `remember` instead. Something to do is a
@@ -31,6 +38,14 @@ Buddy::Tools.register(
     it - not a fresh thank-you for a fresh gift, which tells them their last
     lesson went nowhere. Re-teaching with a changed meaning is a real update and
     should still be called.
+
+    **AGREEING IS NOT TEACHING.** "You got it!", "yep, that's it", a thumbs up -
+    those close the subject, they don't reopen it. Prod: `dealeo` was learned,
+    refined fifty seconds later when she described the sing-song, and then
+    written a THIRD time on a bare "You got it!" - same meaning, same aliases,
+    nothing changed - which put a third card up and a third thank-you under it.
+    Once a word is in and right, the next warm thing said about it is words, not
+    a call.
   TXT
   args:        {
     term:    { type: :string, required: true,  description: "The word or phrase, as they say it" },
@@ -85,10 +100,21 @@ Buddy::Tools.register(
        (row = HouseholdGlossaryTerm.find_by(id: payload[:existing_id]))
       before = row.slice(:meaning, :aliases, :kind, :notes)
       # An update that only adds aliases shouldn't drop the ones already there —
-      # "oh, and I call it X too" is additive, not a replacement.
-      attrs[:aliases] = (Array(row.aliases) + aliases).uniq if aliases.any?
+      # "oh, and I call it X too" is additive, not a replacement. Unconditional
+      # on purpose: guarded by `if aliases.any?` this left `attrs[:aliases]` as
+      # the empty array it starts as, so any re-teaching that didn't happen to
+      # mention them wiped the ones already held.
+      attrs[:aliases] = (Array(row.aliases) + aliases).uniq
       attrs[:kind] ||= row.kind
       attrs[:notes] ||= row.notes
+
+      # Re-teaching a word that already says exactly this is not an update, and
+      # writing it as one is what turns "you got it!" into a third card and a
+      # third thank-you for the same gift. Nothing changed, so there is nothing
+      # to revert either.
+      held = { meaning: row.meaning, aliases: Array(row.aliases), kind: row.kind, notes: row.notes }
+      return { term: row.term, verb: "Already knew", held: true } if held == attrs
+
       row.update!(attrs)
       return {
         term:   row.term,

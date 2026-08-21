@@ -80,7 +80,8 @@ class BankTransaction < ApplicationRecord
     category:  :search_category,
     pending:   :search_pending,
     linked:    :search_linked,
-    transfer:  :search_transfer
+    transfer:  :search_transfer,
+    voided:    :search_voided
 
   scope :posted_between, ->(from, to) { where(posted_at: from..to) }
   # Ordered by when the purchase HAPPENED, which is what the table prints.
@@ -106,6 +107,14 @@ class BankTransaction < ApplicationRecord
   scope :paired, -> { where.not(transfer_counterpart_id: nil) }
   scope :unpaired, -> { where(transfer_counterpart_id: nil) }
 
+  # An authorization that was cancelled before it ever posted. A refund is a
+  # row of its own that nets the charge off; a cancelled auth is not — the bank
+  # simply never reports it, so nothing ever arrives to cancel it out and it
+  # counts as spending for good. Marked by hand, because only the person who
+  # cancelled the order knows.
+  scope :voided, -> { where.not(voided_at: nil) }
+  scope :not_voided, -> { where(voided_at: nil) }
+
   # One movement, listed once. Both halves of a pair describe the same money,
   # so showing both reads as a spend AND a deposit that never happened. The
   # leaving side is the one kept: it is the side that names a destination, so
@@ -124,6 +133,16 @@ class BankTransaction < ApplicationRecord
   # not income, it is the same money seen twice.
   scope :real_money, -> { where.not(id: transfers.select(:id)) }
 
+  # Money that actually moved: `real_money` minus the charges that were
+  # cancelled before they posted.
+  #
+  # Kept separate from `real_money` rather than folded into it because the two
+  # answer different questions, and one caller wants the other answer:
+  # `transfer:false` in a search is asking to SEE the rows that are not
+  # transfers, and a voided row is exactly the sort of thing you go looking for.
+  # Totals and charts read this; the listing reads `real_money`.
+  scope :countable, -> { real_money.not_voided }
+
   # Two constraints shape these, both learned the hard way:
   #
   # 1. SUBQUERIES, not joins. A search term's scope has its WHERE clause
@@ -138,7 +157,14 @@ class BankTransaction < ApplicationRecord
   # without the second clause a mortgage payment would be unfindable by
   # `account:mortgage` — the only row left showing it is the one on checking.
   scope :search_account, ->(*qs) {
-    terms = like_terms(qs)
+    words = ::Array.wrap(qs).flatten.compact_blank.map { |q| q.to_s.downcase.strip }
+    # Spelled out for the same reason `category:none` is: a row whose alert
+    # named no account is exactly the thing worth listing, and there is no name
+    # to match it by. NONE_WORDS is evaluated when the scope runs, not when it
+    # is defined, so its position further down the file is fine.
+    next where(bank_account_id: nil) if words.any? { |w| NONE_WORDS.include?(w) }
+
+    terms = like_terms(words)
     next none if terms.empty?
 
     clause = terms.map {
@@ -194,6 +220,10 @@ class BankTransaction < ApplicationRecord
     boolean_terms(qs).include?(true) ? linked : unlinked
   }
 
+  scope :search_voided, ->(*qs) {
+    boolean_terms(qs).include?(true) ? voided : not_voided
+  }
+
   scope :search_transfer, ->(*qs) {
     boolean_terms(qs).include?(true) ? transfers : real_money
   }
@@ -210,6 +240,19 @@ class BankTransaction < ApplicationRecord
 
   def amount
     BigDecimal(amount_cents) / 100
+  end
+
+  def voided? = voided_at?
+
+  # Boolean in, timestamp out, so a caller never has to know the column holds a
+  # time. Re-marking an already-voided row leaves the original stamp alone —
+  # when it was cancelled is the fact, and a second click on the same button
+  # should not rewrite it.
+  def voided=(value)
+    wanted = ::ActiveModel::Type::Boolean.new.cast(value)
+    return if wanted && voided_at.present?
+
+    self.voided_at = (wanted ? ::Time.current : nil)
   end
 
   # Writes the category, and mirrors it onto the linked event when there is

@@ -169,9 +169,24 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
     let startX = null;
     let dragging = false;
 
+    const release = (e) => {
+      try {
+        if (chip.hasPointerCapture(e.pointerId)) chip.releasePointerCapture(e.pointerId);
+      } catch (_) { /* already gone */ }
+    };
+
+    // Capture the pointer, or the swipe strands the chip.
+    //
+    // Dragging works by translating the chip out from under the finger. Without
+    // capture the browser retargets every following pointer event to whatever
+    // is under the finger NOW, which is no longer the chip - so pointermove
+    // stops arriving, pointerup never fires, `finish` never runs, and the chip
+    // is left sitting at its last transform with the timer still very much
+    // alive. Swiped either way, it stayed where it was put and never went away.
     chip.addEventListener("pointerdown", (e) => {
       startX = e.clientX;
       dragging = false;
+      try { chip.setPointerCapture(e.pointerId); } catch (_) { /* no capture, no drag */ }
     });
     chip.addEventListener("pointermove", (e) => {
       if (startX == null) return;
@@ -181,6 +196,7 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
       chip.style.opacity = String(Math.max(0.2, 1 - Math.abs(dx) / 160));
     });
     const finish = (e) => {
+      release(e);
       if (startX == null) return;
       const dx = e.clientX - startX;
       startX = null;
@@ -195,8 +211,10 @@ export function initBuddyTimers({ container, hero, isBuddyActiveFn }) {
       if (!dragging) toggleTimer(t);
     };
     chip.addEventListener("pointerup", finish);
-    chip.addEventListener("pointercancel", () => {
+    chip.addEventListener("pointercancel", (e) => {
+      release(e);
       startX = null;
+      dragging = false;
       chip.style.transform = "";
       chip.style.opacity = "";
     });

@@ -625,11 +625,21 @@ module Buddy
     # And spaces come out with the punctuation. Keeping them meant `naptime` and
     # `nap time` normalized differently and both got written (78 and 82), which
     # is the same fact twice with a space between.
+    #
+    # Two tests, because string equality only ever catches a verbatim repeat and
+    # the gap between the two writes is where the wording moves. The inline
+    # `remember` path writes first and stamps no source_message_id, then compile
+    # re-reads the same turns half an hour later and says it again in its own
+    # words: "a good time for Eve to water outside" became "for her" (79/83),
+    # and a followup grew its own second half (76/80). Buddy::SideEffects
+    # already knew how to tell those apart for the inline path; this asks it.
     def duplicate?(user, content)
       norm = normalize_memory(content)
       return false if norm.length < 12
 
-      BuddyMemory.where(user: user).unexpired.any? { |m| normalize_memory(m.content) == norm }
+      BuddyMemory.where(user: user).unexpired.any? { |m|
+        normalize_memory(m.content) == norm || Buddy::SideEffects.same_fact?(content, m.content)
+      }
     end
 
     def normalize_memory(content)

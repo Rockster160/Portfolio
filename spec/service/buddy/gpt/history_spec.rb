@@ -161,7 +161,7 @@ RSpec.describe Buddy::GPT::History do
     end
 
     it "leaves out a failed reply" do
-      said("buddy error: boom", direction: :inbound, kind: "buddy", state: :failed)
+      said(Buddy::GPT::Turn::FAILURE_BODY, direction: :inbound, kind: "buddy", state: :failed)
 
       expect(build).to be_empty
     end

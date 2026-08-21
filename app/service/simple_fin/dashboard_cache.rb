@@ -22,6 +22,13 @@ module SimpleFin
   # counts in `balance` before it counts in `available`, so the figure reads
   # low until the hold clears. Understating what you have is the safer error of
   # the two, and it corrects itself on the next sync.
+  #
+  # And it is PROJECTED forward from there — see `projected_cents`. The
+  # institution's figure is routinely most of a day old, so the number now adds
+  # everything that has happened since it was computed. That is what makes the
+  # cell move when a purchase happens rather than whenever the bank next gets
+  # round to mentioning it, and it is why `refresh!` is called from
+  # ActionEventNotifier as well as from a sync.
   module DashboardCache
     CACHE_KEY = :bank
     AMOUNT = :amount
@@ -35,7 +42,7 @@ module SimpleFin
 
     class << self
       def refresh!(user: ::User.me)
-        cents = available_cents
+        cents = projected_cents
         return nil if cents.nil?
 
         amount = BigDecimal(cents) / 100
@@ -119,6 +126,48 @@ module SimpleFin
         accounts.sum(&:spendable_cents)
       end
 
+      # THE PUBLISHED FIGURE: available, plus everything that has happened since
+      # the institution worked that number out.
+      #
+      # SimpleFIN is polled six times a day and the institution behind it
+      # refreshes about once, so the reported figure is routinely most of a day
+      # stale — a $4,370.70 deposit landed at 3:43am against a balance computed
+      # at 10:43am the PREVIOUS morning, and the dashboard went on showing the
+      # older number all day. Meanwhile the alert for it arrived in seconds.
+      # Publishing the reported figure alone meant the two most reliable things
+      # we know disagreed on screen with nothing to say which to believe.
+      #
+      # This is an ESTIMATE and reads as one wherever both are shown. It is
+      # nonetheless the better number: it is never further from the truth than
+      # the reported figure, since every term it adds is a transaction the bank
+      # itself told us about.
+      def projected_cents
+        accounts = included_accounts.to_a
+        return nil if accounts.empty? || accounts.any? { |account| account.projected_cents.nil? }
+
+        accounts.sum(&:projected_cents)
+      end
+
+      # The gap between the two, which is what makes the estimate an estimate.
+      def unsettled_cents
+        cents = projected_cents
+        return nil if cents.nil?
+
+        cents - available_cents.to_i
+      end
+
+      # Rows recent enough to belong in the projection that name no account, so
+      # nothing can add them to one. Not a rounding error to be swallowed: the
+      # deposit alert format named an account in a shape the extractor could not
+      # read for eighteen months, and every paycheque landed here. The page says
+      # so rather than quietly totalling without them.
+      def unattributed_unsettled
+        oldest = included_accounts.filter_map(&:balance_date).min
+        return ::BankTransaction.none if oldest.nil?
+
+        ::BankTransaction.countable.where(bank_account_id: nil, occurred_at: oldest...)
+      end
+
       # Whether this account is part of the reported figure — what the banking
       # page marks its rows with.
       def included?(account)
@@ -137,7 +186,7 @@ module SimpleFin
       # behavior wanted here: an overdrawn total reads one lower, not one
       # closer to zero.
       def thousands
-        cents = available_cents
+        cents = projected_cents
         return nil if cents.nil?
 
         cents / 100_000

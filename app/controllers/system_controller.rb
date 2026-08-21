@@ -66,6 +66,13 @@ class SystemController < ApplicationController
     @unclassified = @accounts.select(&:unknown?)
     @dashboard_cents = ::SimpleFin::DashboardCache.balance_cents
     @dashboard_available = ::SimpleFin::DashboardCache.available_cents
+    # What the dashboard actually publishes: available, carried forward over
+    # everything that has happened since the bank worked that figure out.
+    @dashboard_projected = ::SimpleFin::DashboardCache.projected_cents
+    # Rows recent enough to belong in that projection that name no account, so
+    # nothing could add them to one. Named on the page rather than silently
+    # left out of the total.
+    @unattributed = ::SimpleFin::DashboardCache.unattributed_unsettled.to_a
     # Which account is holding the figure back, so the page names it rather
     # than reporting a cause that may not be the real one.
     @dashboard_missing = ::SimpleFin::DashboardCache.missing_balance
@@ -83,10 +90,11 @@ class SystemController < ApplicationController
     # and the bulk button all agree with the rows actually on screen.
     scope = filtered_transactions.without_transfer_mirror
 
-    # Totals and the chart run on real money only. A self-transfer is the same
-    # money seen twice — counting it inflates BOTH spend and income by the same
-    # amount, so a card payoff reads as if the purchase happened twice.
-    real = scope.real_money
+    # Totals and the chart run on money that actually moved. A self-transfer is
+    # the same money seen twice — counting it inflates BOTH spend and income by
+    # the same amount, so a card payoff reads as if the purchase happened
+    # twice — and a voided charge never happened at all.
+    real = scope.countable
     @spend_cents = real.spending.sum(:amount_cents)
     @income_cents = real.income.sum(:amount_cents)
     @result_count = scope.count
@@ -163,6 +171,16 @@ class SystemController < ApplicationController
       transaction.update!(memo: params[:memo].to_s.strip.presence)
       changed[:memo] = transaction.display_memo
       changed[:from_event] = transaction.memo_from_event?
+    end
+
+    # Marking a charge cancelled changes what the balance is projected to be,
+    # so the published figure has to be rebuilt — otherwise the row greys out
+    # on this page while the dashboard goes on counting it.
+    if params.key?(:voided)
+      transaction.voided = params[:voided]
+      transaction.save!
+      ::SimpleFin::DashboardCache.refresh!
+      changed[:voided] = transaction.voided?
     end
 
     render(json: changed)
@@ -447,7 +465,7 @@ class SystemController < ApplicationController
 
     rest = without_clause(:category)
     scope = (rest.blank? ? ::BankTransaction.all : ::BankTransaction.query(rest))
-    scope.without_transfer_mirror.real_money
+    scope.without_transfer_mirror.countable
   rescue ::StandardError
     # The search box already reports a query it cannot parse; the legend does
     # not need to report it a second time.
@@ -503,10 +521,22 @@ class SystemController < ApplicationController
   # A malformed query is a typo, not a 500. Surfaces the parser's own message
   # and shows nothing, rather than silently falling back to every row — which
   # would read as "your filter matched everything".
+  #
+  # The probe is not paranoia. A typo can build SQL that Postgres rejects only
+  # on execution — `timestamp>=notadate` reaches it as a timestamp cast — and a
+  # relation is lazy, so nothing raises until something further down the action
+  # reads it, long past this rescue. Worse, a failed statement ABORTS the
+  # surrounding transaction: every query after it fails too, with an error
+  # about the transaction rather than about the typo. Running one cheap
+  # statement inside a savepoint moves the failure to where it can be caught
+  # and gives the rescue something to roll back to; the relation itself stays
+  # lazy, because by then its SQL is known to be executable.
   def filtered_transactions
     return ::BankTransaction.all if @query.blank?
 
-    ::BankTransaction.query(@query)
+    scope = ::BankTransaction.query(@query)
+    ::BankTransaction.transaction(requires_new: true) { scope.limit(1).pluck(:id) }
+    scope
   rescue ::StandardError => e
     @search_error = e.message
     ::BankTransaction.none

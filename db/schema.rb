@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_21_155142) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_21_180117) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -316,6 +316,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_21_155142) do
     t.datetime "occurred_at", null: false
     t.string "category"
     t.jsonb "metadata", default: {}, null: false
+    t.datetime "voided_at"
     t.index ["action_event_id"], name: "index_bank_transactions_on_action_event_id"
     t.index ["action_event_id"], name: "index_bank_transactions_on_claimed_action_event", unique: true, where: "(action_event_id IS NOT NULL)"
     t.index ["amount_abs"], name: "index_bank_transactions_on_amount_abs"
@@ -326,6 +327,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_21_155142) do
     t.index ["occurred_at"], name: "index_bank_transactions_on_occurred_at"
     t.index ["simplefin_id"], name: "index_bank_transactions_on_simplefin_id", unique: true
     t.index ["transfer_counterpart_id"], name: "index_bank_transactions_on_claimed_transfer", unique: true, where: "(transfer_counterpart_id IS NOT NULL)"
+    t.index ["voided_at"], name: "index_bank_transactions_on_voided_at", where: "(voided_at IS NOT NULL)"
   end
 
   create_table "banned_ips", force: :cascade do |t|

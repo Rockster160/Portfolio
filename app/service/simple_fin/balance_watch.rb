@@ -1,12 +1,23 @@
 module SimpleFin
-  # Decides whether a just-arrived Chase alert is likely to move the figure the
-  # dashboard shows, and if so starts a chase to go and fetch the new balance.
+  # Decides whether a just-arrived Chase alert leaves our estimate of the
+  # balance far enough from the bank's own last figure to be worth a request,
+  # and if so starts a chase to go and fetch a fresh one.
   #
   # The dashboard floors to the thousand ("9k"), so most charges change nothing
   # on screen and are not worth a request. The ones that matter are the ones
   # that tip the total across a thousand boundary — at $2,034 a $35 charge
-  # turns a 2 into a 1, and until the next scheduled sync the dashboard is
-  # confidently wrong by a whole unit.
+  # turns a 2 into a 1.
+  #
+  # The test is DIVERGENCE, not the size of this one charge. It used to
+  # subtract the charge from the reported figure and ask whether that crossed a
+  # boundary. That stopped being the right question when the published number
+  # became a projection: the row for this alert already exists by the time this
+  # runs and is already counted, so the old sum subtracted it a second time,
+  # and it ignored every other charge sitting unsettled alongside it. Comparing
+  # the two published figures asks what actually matters — is what we are
+  # showing a different number, at the resolution shown, from the last thing
+  # the bank told us — and gets deposits right for free, where the old
+  # direction-blind subtraction could only ever treat them as spending.
   module BalanceWatch
     EVENT_NAME = "Transaction".freeze
 
@@ -31,16 +42,7 @@ module SimpleFin
         return false if last4.blank?
         return false unless ::SimpleFin::DashboardCache.included_accounts.exists?(last4: last4)
 
-        # The published figure, which is the available total — the same number
-        # `thousands` floors and the chase worker watches. Measuring the
-        # crossing against the posted balance would test a boundary the
-        # dashboard never shows.
-        total = ::SimpleFin::DashboardCache.available_cents
-        return false if total.nil?
-
-        cents = amount_cents(event)
-        return false if cents.nil? || cents.zero?
-        return false unless crosses_thousand?(total, cents)
+        return false unless diverged?
 
         # Asks for a chase unconditionally. Whether one is already in flight is
         # Sidekiq's problem — the worker holds a uniqueness lock, so a second
@@ -50,28 +52,21 @@ module SimpleFin
       end
       # rubocop:enable Naming/PredicateMethod
 
-      # Treated as money LEAVING the total. The alerts store an unsigned amount
-      # with no direction, and the overwhelming majority are charges — which
-      # pull the cumulative figure down whether they land on checking or on a
-      # card, since a card charge deepens what is owed. A deposit large enough
-      # to cross a boundary is picked up by the scheduled sync within four
-      # hours instead — the cost of being wrong here is lateness, not a wrong
-      # number.
-      def crosses_thousand?(balance_cents, spend_cents)
-        before = balance_cents / 100_000
-        after = (balance_cents - spend_cents) / 100_000
-        before != after
-      end
+      # Whether what the dashboard is showing and what the bank last reported
+      # are different numbers AT THE RESOLUTION SHOWN. Both are floored the
+      # same way `thousands` floors — integer division toward negative
+      # infinity, so an overdraft reads one lower rather than one closer to
+      # zero.
+      #
+      # False whenever either figure is unavailable: an account that has never
+      # reported has nothing to project from, and there is no divergence to
+      # measure against a number that does not exist.
+      def diverged?
+        reported = ::SimpleFin::DashboardCache.available_cents
+        projected = ::SimpleFin::DashboardCache.projected_cents
+        return false if reported.nil? || projected.nil?
 
-      private
-
-      def amount_cents(event)
-        raw = event.data&.dig("amount")
-        return nil if raw.blank?
-
-        (BigDecimal(raw.to_s) * 100).round.abs
-      rescue ArgumentError
-        nil
+        reported / 100_000 != projected / 100_000
       end
     end
   end

@@ -293,20 +293,34 @@ module Buddy
     # containment alone they became two rows, each at priority zero, competing
     # for the same recall slots. The fact got said MORE and remembered LESS.
     def find_similar_memory(user, fact)
-      norm = normalize_fact(fact)
-      return nil if norm.length < 8
+      return nil if normalize_fact(fact).length < 8
 
-      words = significant_words(norm)
       # Facts only. Since the merge these share a table with the stash, and a
       # remembered fact must never dedupe against a thought the person handed
       # over to hold — reinforcing a stashed idea because it shares six words
       # with a preference would quietly rewrite the idea's text.
       BuddyMemory.where(user: user).where(kind: [:preference, :concept]).active.find { |m|
-        other = normalize_fact(m.content)
-        next true if other == norm || other.include?(norm) || norm.include?(other)
-
-        overlaps?(words, significant_words(other))
+        same_fact?(fact, m.content)
       }
+    end
+
+    # Two texts saying the same thing: identical once normalized, one containing
+    # the other, or the same significant words.
+    #
+    # Public because Buddy::Compile needs to ask the same question. It had its
+    # own test that compared normalized strings for equality, so one fact
+    # reworded between the inline write and the compile pass half an hour later
+    # became two rows — "a good time for Eve to water outside" and "a good time
+    # for her to water outside" (memories 79 and 83), and "told to check the
+    # print at 3:16" against the same sentence with the follow-up appended
+    # (76 and 80). Which scope to search is the caller's to decide; this only
+    # answers whether two pieces of text are the same fact.
+    def same_fact?(left, right)
+      a = normalize_fact(left)
+      b = normalize_fact(right)
+      return true if a == b || a.include?(b) || b.include?(a)
+
+      overlaps?(significant_words(a), significant_words(b))
     end
 
     def normalize_fact(text)

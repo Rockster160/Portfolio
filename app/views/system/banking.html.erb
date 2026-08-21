@@ -55,15 +55,33 @@
       </p>
     <% end %>
 
+    <%# The figure carries forward everything since the bank's own snapshot, and
+        it can only carry forward what it can attribute to an account. Named
+        rather than quietly omitted — for eighteen months every paycheque landed
+        here, because the deposit alert writes its account on a line of its own
+        and the extractor was looking for one after a space. %>
+    <% if @unattributed.any? %>
+      <p class="bank-warn">
+        <%= link_to(pluralize(@unattributed.size, "recent transaction"),
+              system_banking_path(q: "account:none")) %>
+        <%= @unattributed.one? ? "names" : "name" %> no account, so
+        <%= @unattributed.one? ? "it is" : "they are" %> left out of the projected figure
+        (<%= cents.call(@unattributed.sum(&:amount_cents)) %>).
+      </p>
+    <% end %>
+
     <table class="bank-table bank-accounts">
       <thead>
         <tr>
           <th>Account</th>
           <th>Kind</th>
-          <%# The available figure is the headline. A card reports "0.00"
-              available — a placeholder, not headroom — so it shows its balance
-              instead; see BankAccount#spendable_cents. %>
-          <th class="right" title="What the bank has already authorized is taken out of this">
+          <%# The available figure carried forward over everything that has
+              happened since the bank worked it out, which is what the dashboard
+              publishes. A card reports "0.00" available — a placeholder, not
+              headroom — so it starts from its balance instead; see
+              BankAccount#spendable_cents. %>
+          <th class="right"
+              title="Available, plus anything the bank's figure is too old to include">
             Available
           </th>
           <th>Reported</th>
@@ -72,6 +90,14 @@
       <tbody>
         <% @accounts.each do |account| %>
           <%
+            # Loaded once and totalled here rather than calling
+            # `projected_cents`, which would ask the same question a second
+            # time — the rows themselves are wanted for the count.
+            unsettled = account.unsettled.to_a
+            since_cents = unsettled.sum(&:amount_cents)
+            projected = (account.spendable_cents + since_cents unless account.spendable_cents.nil?)
+            drifted = projected.present? && since_cents != 0
+
             # Clicking the row adds this account to the listing below, keeping
             # whatever else has been typed into the search. Pick several and
             # they OR together; click one already picked to drop it.
@@ -108,17 +134,22 @@
             </td>
             <%# Nothing reported is not zero. Two closed cards will never be
                 reported by anyone, and "$0.00" reads as a real balance. %>
-            <td class="right <%= sign_class.call(account.spendable_cents) if account.spendable_cents %>">
-              <%= account.spendable_cents.nil? ? "—" : cents.call(account.spendable_cents) %>
+            <td class="right <%= sign_class.call(projected) if projected %><%= " projected" if drifted %>"
+                title="<%= "#{cents.call(account.spendable_cents)} reported, #{pluralize(unsettled.size, "transaction")} since" if drifted %>">
+              <%= projected.nil? ? "—" : cents.call(projected) %>
             </td>
             <td class="meta">
               <span class="age">
                 <%= account.balance_date.present? ? "#{time_ago_in_words(account.balance_date)} ago" : "—" %>
               </span>
               <span class="sub">
-                <%# Only where the two differ. On a card they are the same
-                    number, and printing it twice says nothing. %>
-                <% if account.balance_cents.present? && account.balance_cents != account.spendable_cents %>
+                <%# What the estimate was built on, and only while it IS an
+                    estimate — once the bank catches up the two are the same
+                    number and printing it twice says nothing. The balance is
+                    the fallback comparison for the same reason. %>
+                <% if drifted %>
+                  <%= cents.call(account.spendable_cents) %> reported
+                <% elsif account.balance_cents.present? && account.balance_cents != account.spendable_cents %>
                   <%= cents.call(account.balance_cents) %> balance
                 <% end %>
                 <% if SimpleFin::DashboardCache.included?(account) %>
@@ -135,16 +166,25 @@
         <tr>
           <%# The headline column IS what the dashboard publishes now, so the
               label names it rather than a chip pointing at another cell. %>
+          <%
+            projected_total = @dashboard_projected
+            total_drifted = (
+              projected_total.present? && @dashboard_available.present? &&
+                projected_total != @dashboard_available
+            )
+          %>
           <td colspan="2" class="total-label">
             Dashboard figure
             <span class="sub">Available, cumulative, excluding loans and unclassified</span>
           </td>
-          <td class="right <%= sign_class.call(@dashboard_available) if @dashboard_available.present? %>">
-            <%= @dashboard_available.present? ? cents.call(@dashboard_available) : "—" %>
+          <td class="right <%= sign_class.call(projected_total) if projected_total.present? %><%= " projected" if total_drifted %>">
+            <%= projected_total.present? ? cents.call(projected_total) : "—" %>
           </td>
           <td class="meta">
             <span class="sub">
-              <% if @dashboard_cents.present? && @dashboard_cents != @dashboard_available %>
+              <% if total_drifted %>
+                <%= cents.call(@dashboard_available) %> reported
+              <% elsif @dashboard_cents.present? && @dashboard_cents != @dashboard_available %>
                 <%= cents.call(@dashboard_cents) %> balance
               <% end %>
             </span>
@@ -258,7 +298,7 @@
           </tr>
           <tr>
             <th>account</th>
-            <td><code>account:prime</code> <code>account:7283</code></td>
+            <td><code>account:prime</code> <code>account:7283</code> <code>account:none</code></td>
             <td>chosen name, bank name, or last four</td>
           </tr>
           <tr>
@@ -300,6 +340,11 @@
             <th>transfer</th>
             <td><code>transfer:true</code></td>
             <td>true · false — between your own accounts</td>
+          </tr>
+          <tr>
+            <th>voided</th>
+            <td><code>voided:true</code></td>
+            <td>true · false — cancelled before it posted, and not counted</td>
           </tr>
           <tr>
             <th>id</th>
@@ -489,7 +534,8 @@
         </thead>
         <tbody>
           <% @transactions.each do |transaction| %>
-            <tr data-row data-url="<%= system_bank_transaction_path(transaction) %>">
+            <tr data-row data-url="<%= system_bank_transaction_path(transaction) %>"
+                class="<%= "voided" if transaction.voided? %>">
               <td class="tick">
                 <input type="checkbox" name="transaction_ids[]"
                        value="<%= transaction.id %>" form="bank-bulk-form">
@@ -535,6 +581,18 @@
                     <button type="button" class="tag meta" data-meta-toggle
                             title="What is known about this purchase">metadata</button>
                   <% end %>
+                  <%# An authorization that was cancelled before it posted. The
+                      chip is always present rather than appearing on hover: it
+                      is the only thing that says a row is or is not counted,
+                      and a control you have to discover is one nobody uses.
+                      Unstyled until set, so it recedes on the ninety-nine rows
+                      it does not apply to. %>
+                  <button type="button"
+                          class="tag void<%= " on" if transaction.voided? %>"
+                          data-void data-voided="<%= transaction.voided? %>"
+                          title="<%= transaction.voided? ? "Cancelled — not counted. Click to count it again." : "Mark cancelled: keeps the row, stops counting it" %>">
+                    <%= transaction.voided? ? "cancelled" : "void" %>
+                  </button>
                 </span>
               </td>
               <td class="memo">
@@ -684,6 +742,31 @@
           });
         });
       }
+
+      // A cancelled charge keeps its row and stops counting. stopPropagation
+      // for the same reason the metadata button needs it: the click lands
+      // inside an editable row and means only "this one never happened".
+      document.querySelectorAll("[data-void]").forEach(function (button) {
+        var row = button.closest("[data-row]");
+        if (!row) { return; }
+
+        button.addEventListener("click", function (event) {
+          event.stopPropagation();
+          var wanted = button.getAttribute("data-voided") !== "true";
+
+          save(row, { voided: wanted }).then(function (data) {
+            // Driven by what came back, not by what was asked for.
+            button.setAttribute("data-voided", data.voided ? "true" : "false");
+            button.classList.toggle("on", !!data.voided);
+            button.textContent = data.voided ? "cancelled" : "void";
+            row.classList.toggle("voided", !!data.voided);
+            flash(row, true);
+          }).catch(function (err) {
+            flash(row, false);
+            window.alert(err.message);
+          });
+        });
+      });
 
       // Both tables edit the same way, so the handlers are driven by
       // `data-field` rather than written once per field. An account rename and
@@ -1044,6 +1127,36 @@
     .bank-table td.payee .tag.meta.open {
       color: #5DADE2 !important; background: rgba(93, 173, 226, 0.15);
     }
+
+    /* Same escape from the global button pill as `.meta`, and quieter still
+       while off: it is on every row, and ninety-nine of a hundred are not
+       cancelled. Nearly invisible until the row is hovered or it is set. */
+    .bank-table td.payee .tag.void {
+      margin: 0; border: 0; cursor: pointer; font-family: inherit;
+      font-weight: normal; letter-spacing: 0.06em;
+      background: transparent; background-image: none;
+      box-shadow: none !important; text-shadow: none !important;
+      color: #334155 !important; opacity: 0; transition: opacity 0.12s;
+    }
+    .bank-table tr:hover td.payee .tag.void { opacity: 1; }
+    .bank-table td.payee .tag.void:hover { color: #E74C3C !important; }
+    /* Once set it is a state, not a control, so it reads like the other chips
+       and stays visible whether or not the row is hovered. */
+    .bank-table td.payee .tag.void.on {
+      opacity: 1; color: #E74C3C !important; background: rgba(231, 76, 60, 0.13);
+    }
+
+    /* Struck through and dimmed: still there, plainly not counted. The amount
+       is what the strike is FOR, so it is the part that must carry it. */
+    .bank-table tr.voided td { opacity: 0.55; }
+    .bank-table tr.voided td.payee .name,
+    .bank-table tr.voided td.right { text-decoration: line-through; }
+    .bank-table tr.voided td.payee .tag.void { opacity: 1; }
+
+    /* An estimate, marked as one. Not a different color — it is the same
+       number in the same column, and recoloring it would read as good or bad
+       news rather than as provisional. */
+    .bank-table td.right.projected { font-style: italic; }
 
     /* Scoped rather than relying on a global `.hidden`, which is defined in a
        stylesheet this page does not necessarily load. */

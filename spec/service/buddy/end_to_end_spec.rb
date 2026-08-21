@@ -134,6 +134,8 @@ RSpec.describe "Buddy end-to-end" do
 
     reply = convo.byte_messages.where(direction: :inbound).order(:created_at).last
     expect(reply.state).to eq("failed")
-    expect(reply.body).to include("rate limited")
+    # What the provider said goes on the row, not into the thread.
+    expect(reply.body).to eq(Buddy::GPT::Turn::FAILURE_BODY)
+    expect(reply.metadata["error"]).to include("rate limited")
   end
 end

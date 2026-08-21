@@ -92,11 +92,14 @@ RSpec.describe Buddy::UsageSpool do
   end
 
   describe ".uid_for" do
-    # A row id is only unique while the row exists, and the eval harness rolls
-    # its rows back — so the same id can come around again on a real call.
-    it "separates two rows that share an id" do
+    # The id alone is not enough, and the reason is two DATABASES rather than
+    # two rows. Dev is a restore of a production backup, so the laptop's eval
+    # rows sit at ids production had already given to different calls of its
+    # own — 1925 up, in the 20 Aug restore. Sending one under a bare id would
+    # have it deduped against a real row and its spend dropped on the floor.
+    it "separates two rows that share an id but were written by different databases" do
       first  = usage
-      second = usage
+      second = usage(created_at: first.created_at - 3.hours)
       second.id = first.id
 
       expect(described_class.uid_for(second)).not_to eq(described_class.uid_for(first))

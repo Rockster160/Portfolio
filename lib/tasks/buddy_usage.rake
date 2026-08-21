@@ -14,8 +14,25 @@ namespace :buddy do
     rows  = Buddy::UsageSpool.pending
     money = ->(micros) { Buddy::GPT::Pricing.format_micros(micros) }
 
-    if rows.empty?
+    # Answers "do I need to run the backfill?" rather than leaving it to be
+    # remembered. `record!` spools as it writes, so the honest answer is almost
+    # always no — a row shows up here only if it was written before the spool
+    # existed, or while BUDDY_USAGE_SPOOL was off or pointed at another folder.
+    owed = Buddy::UsageSync.unspooled
+
+    if rows.empty? && owed.empty?
       puts "Nothing waiting. (#{Buddy::UsageSpool.path})"
+      next
+    end
+
+    if owed.any?
+      spend = owed.sum(&:cost_micros)
+      puts "\e[33m#{owed.length} local calls (#{money.call(spend)}) are in this database and NOT in the spool."
+      puts "  Run `bx rails buddy:usage_backfill` to add them.\e[0m"
+    end
+
+    if rows.empty?
+      puts "Nothing spooled yet. (#{Buddy::UsageSpool.path})"
       next
     end
 

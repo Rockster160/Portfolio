@@ -23,11 +23,14 @@ module ProdApi
     Api.delete(url(path), params, headers.reverse_merge(authorization), opts)
   end
 
+  # A path segment is an identifier, so callers write it as one — `:buddy_usages`
+  # rather than a string. The Array branch has always taken symbols (`join`
+  # stringifies), and this one raised on them.
   def url(path)
     if path.is_a?(Array)
       "#{PROD_URL}/#{path.join("/")}"
     else
-      "#{PROD_URL}/#{path.sub(/^\/+/, "")}"
+      "#{PROD_URL}/#{path.to_s.sub(/^\/+/, "")}"
     end
   end
 

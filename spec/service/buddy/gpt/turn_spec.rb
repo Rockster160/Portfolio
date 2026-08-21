@@ -86,7 +86,8 @@ RSpec.describe Buddy::GPT::Turn do
       run([{ error: "upstream exploded" }])
 
       expect(reply.state).to eq("failed")
-      expect(reply.body).to include("upstream exploded")
+      expect(reply.body).to eq(described_class::FAILURE_BODY)
+      expect(reply.metadata["error"]).to include("upstream exploded")
     end
 
     it "never leaves a bubble in streaming state after an unexpected crash" do

@@ -106,6 +106,44 @@ class BankAccount < ApplicationRecord
     ::Time.current - balance_date
   end
 
+  # Everything that has happened since the bank last worked out its figure —
+  # i.e. everything that figure CANNOT already contain, whichever feed it
+  # arrived from.
+  #
+  # Bounded on `balance_date` rather than on whether a row is bank-confirmed,
+  # which is the other obvious rule and is wrong: a handful of alert rows never
+  # get confirmed at all — a cancelled authorization never posts, and some
+  # alerts name an account nothing matches — so "unconfirmed" accumulates
+  # permanent residue and the projection drifts further out every week. A date
+  # bound clears itself: the moment the institution's snapshot moves past a
+  # row, that row stops being added because it is now IN the snapshot.
+  #
+  # `countable` on purpose. Transfers are excluded because both halves of one
+  # move net to zero across the cumulative figure, and the hand-flagged ones
+  # only ever have the leaving half — counting those would show money vanishing
+  # when it went to a card. Voided rows are excluded because they never post.
+  def unsettled
+    return ::BankTransaction.none if balance_date.blank?
+
+    bank_transactions.countable.where(occurred_at: balance_date...)
+  end
+
+  def unsettled_cents
+    unsettled.sum(:amount_cents)
+  end
+
+  # What the account is actually worth right now, as best we can tell: the
+  # bank's own figure plus everything it predates.
+  #
+  # Nil where `spendable_cents` is nil, and for the same reason — the two
+  # closed cards report nothing and never will, and a projection built on an
+  # unknown starting point is a guess wearing a number's clothes.
+  def projected_cents
+    return nil if spendable_cents.nil?
+
+    spendable_cents + unsettled_cents
+  end
+
   private
 
   def cents_to_decimal(cents)

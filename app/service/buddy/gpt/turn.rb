@@ -424,6 +424,20 @@ module Buddy
       # It took two more messages to get the four completions written.
       FORM_FRAMING_RX = /\[form you put up:[^\]\n]*\]/i
 
+      # What the provider said is not something to say back.
+      #
+      # A failed turn posted the exception verbatim, which is how "You have no
+      # credits remaining. Add credits to continue using the API at
+      # https://platform.openai.com/settings/organization/billing/" arrived in
+      # the thread as Buddy's reply, billing link and all (prod 4185, and 2240
+      # before it). The person can't act on any of it, half of it isn't theirs
+      # to read, and it doesn't sound like anyone. That one fixed itself when
+      # the auto-recharge landed three minutes later.
+      #
+      # The raw text still goes to the log and onto the row's metadata, so it's
+      # there for whoever looks into it - it just stops being the reply.
+      FAILURE_BODY = "Something went wrong on my end and that one didn't make it out. Give me another go?".freeze
+
       def self.run!(message, client: nil)
         new(message, client: client).run!
       end
@@ -1495,8 +1509,11 @@ module Buddy
         Rails.logger.warn("[Buddy::GPT::Turn] turn failed: #{error}")
         @reply.update!(
           state:    :failed,
-          body:     "buddy error: #{error.to_s.truncate(600)}",
-          metadata: (@reply.metadata || {}).merge("kind" => "buddy"),
+          body:     FAILURE_BODY,
+          metadata: (@reply.metadata || {}).merge(
+            "kind"  => "buddy",
+            "error" => error.to_s.truncate(600),
+          ),
         )
         # A failed turn still cost something; stamp what it was.
         stamp_usage_rollup

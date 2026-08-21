@@ -693,6 +693,35 @@ BUDDY_EDGE_PROBES = [
     ],
   },
 
+  # --- agreeing is not teaching --------------------------------------------
+  {
+    case:  "prod 4317-4322",
+    note:  "`dealeo` was learned, refined fifty seconds later when she described " \
+           "the sing-song, then written a THIRD time on a bare \"You got it!\" - " \
+           "same meaning, same aliases, nothing changed. That put a third card up " \
+           "and a third thank-you under it, the last one reciting the tool's own " \
+           "line back at her: \"tucked in for everyone, so nobody has to puzzle " \
+           "over it again\"",
+    steps: [
+      {
+        say:          "dealeo just means deal, with a sing-song eooo on the end",
+        tool:         :define_term,
+        run:          true,
+        effect_label: "dealeo never made it into the glossary",
+        effect:       ->(u) {
+          u.chore_household && HouseholdGlossaryTerm.where(chore_household: u.chore_household).any? { |t|
+            t.term.to_s.match?(/dealeo/i)
+          }
+        },
+      },
+      {
+        say:   "You got it!",
+        tool:  :none,
+        avoid: %i[define_term],
+      },
+    ],
+  },
+
   # --- where the right answer is a question --------------------------------
   {
     case:         "prod 1146",

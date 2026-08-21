@@ -50,13 +50,22 @@ module Buddy
     # the same problem — a row that went to production and came back in a later
     # backup arrives carrying the uid it was filed under.
     def backfill!(days: nil)
+      rows = unspooled(days: days)
+      rows.each { |row| UsageSpool.write(UsageSpool.line(row)) }
+      rows
+    end
+
+    # The same question without the write, so `buddy:usage_spool` can say
+    # whether a backfill is owed instead of leaving it to be remembered. Normal
+    # is none: `record!` spools as it writes, so a row only lands here if it was
+    # written before the spool existed, or while it was switched off or pointed
+    # somewhere else.
+    def unspooled(days: nil)
       scope = BuddyUsage.from_development.unsynced
       scope = scope.since(days.to_i.days.ago) if days.present?
 
       already = UsageSpool.spooled_uids
-      rows    = scope.chronological.reject { |row| already.include?(UsageSpool.uid_for(row)) }
-      rows.each { |row| UsageSpool.write(UsageSpool.line(row)) }
-      rows
+      scope.chronological.reject { |row| already.include?(UsageSpool.uid_for(row)) }
     end
 
     def stamp

@@ -168,6 +168,7 @@ module ByteDailyAudit
       NOT FINDINGS
       These have been looked at and answered. A fresh session has no memory of that, so they are listed here; raising one again in any framing costs a section and tells me something I already know.
       - `syncevents` writing an ActionEvent whose name is the digit `1`. The lines arrive over the trigger that way and the app is logging exactly what it was handed. The sender is correct. Leave it alone.
+      - `buddy_watches` id 10, the deploy announcement, sitting cancelled while deploys go out unannounced. I switched it off myself and I meant to. Deploys not being announced is the intended state until I turn it back on, so it is not a finding and neither is the quiet.
     TXT
   end
 

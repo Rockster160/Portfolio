@@ -21,11 +21,20 @@ class ActionEventNotifier
     # and categorized the moment the alert arrives, rather than whenever the
     # bank next clears and reports it. Exits immediately for anything that is
     # not a Transaction event.
-    if action == :removed
-      ::SimpleFin::EventTransaction.forget(event)
-    else
-      ::SimpleFin::EventTransaction.sync(event)
-    end
+    touched = (
+      if action == :removed
+        ::SimpleFin::EventTransaction.forget(event)
+      else
+        ::SimpleFin::EventTransaction.sync(event)
+      end
+    )
+
+    # The published balance counts everything since the bank's last snapshot,
+    # so a transaction alert changes it the moment it lands — which is the
+    # point, and is hours before SimpleFIN would have said anything. Skipped
+    # for every event that is not a Transaction: both calls above answer blank
+    # for those.
+    republish_balance if touched.present?
 
     # An alert is the only real-time signal there is — SimpleFIN is polled and
     # can be a day behind. If this charge would tip the dashboard's floored
@@ -36,6 +45,15 @@ class ActionEventNotifier
 
     ActionEventBroadcastWorker.perform_async(event.id, update_streak)
     event
+  end
+
+  # Never at the cost of the event itself. Everything here is already stored by
+  # the time this runs; a cache write or a Jil re-render that fails must not
+  # take the notification — or the alert that produced it — down with it.
+  def self.republish_balance
+    ::SimpleFin::DashboardCache.refresh!
+  rescue ::StandardError => e
+    ::Rails.logger.warn("[ActionEventNotifier] balance refresh failed: #{e.message}")
   end
 
   # Removing an event breaks the action-streak chain for events of the same
