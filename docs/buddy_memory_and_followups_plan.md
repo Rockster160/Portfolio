@@ -70,8 +70,8 @@ don't count toward it).
 
 **Not verified yet:** the actual cache improvement. Watch `avg_cached` against
 `avg_in` in `buddy_usages` over a day of normal use — the gap should close
-toward the fixed block. Behavioral check is `rake buddy:eval` or
-`rake "buddy:replay[<convo>,30]"`; both make real billed calls, so they're the
+toward the fixed block. Behavioral check is `bx rails buddy:eval` or
+`bx rails "buddy:replay[<convo>,30]"`; both make real billed calls, so they're the
 owner's to run.
 
 ---
@@ -440,8 +440,8 @@ failure, because people stop asking. Lazy-loading manufactures exactly that.
 So this is last, and it is empirically gated rather than argued:
 
 ```
-rake buddy:eval                    # canned scenarios, each with a documented PASS
-rake "buddy:replay[<convo>,30]"    # replays 30 REAL messages, read-only
+bx rails buddy:eval                    # canned scenarios, each with a documented PASS
+bx rails "buddy:replay[<convo>,30]"    # replays 30 REAL messages, read-only
 ```
 
 Tools are resolved but not executed, so tool *choice* is visible without side

@@ -51,7 +51,7 @@ namespace :emoji do
 end
 
 # Hand-curated search aliases. Lives at db/icon_search_aliases.json
-# with two top-level keys (`emoji`, `ti`) so both rake tasks pull
+# with two top-level keys (`emoji`, `ti`) so both tasks pull
 # from the same file. Returns {} on missing/parse error so a typo
 # never blocks an index rebuild.
 def load_search_aliases

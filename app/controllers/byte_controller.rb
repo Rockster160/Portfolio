@@ -245,7 +245,7 @@ class ByteController < ApplicationController
     convos = current_user.byte_conversations.active.ordered.to_a
     render json: {
       conversations: convos.map(&:as_wire),
-      # An eval thread is listed but never landed on — a `rake buddy:eval` run
+      # An eval thread is listed but never landed on — a `bx rails buddy:eval` run
       # leaves it newest, and opening the app into it would be a surprise.
       default_id:    (convos.detect { |c| !c.eval? } || ByteConversation.default_for(current_user)).id,
       # RESOLVED, not the raw flag: an unmarked account still has a primary (the

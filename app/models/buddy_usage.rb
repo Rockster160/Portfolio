@@ -5,9 +5,11 @@
 #  id                   :bigint           not null, primary key
 #  cached_input_tokens  :integer          default(0), not null
 #  cost_micros          :bigint           default(0), not null
+#  env                  :integer          default("production"), not null
 #  input_tokens         :integer          default(0), not null
 #  kind                 :integer          default("turn"), not null
 #  model                :string           not null
+#  origin_uid           :string
 #  output_tokens        :integer          default(0), not null
 #  reasoning_tokens     :integer          default(0), not null
 #  created_at           :datetime         not null
@@ -28,7 +30,7 @@ class BuddyUsage < ApplicationRecord
 
   # NOTE: never reassign existing integers — enum order is persisted.
   #
-  # `eval` is the buddy:eval rake harness. It bills exactly like a turn, so it
+  # `eval` is the buddy:eval harness. It bills exactly like a turn, so it
   # has to be recorded, but it must stay separable: a few eval runs can dwarf a
   # day of real use, and folding them into the same total would make the
   # projected bill meaningless.
@@ -40,6 +42,23 @@ class BuddyUsage < ApplicationRecord
   # folded into `idea_note`, so the first time either number looks wrong it's
   # possible to tell which one moved.
   enum :kind, { turn: 0, compaction: 1, eval: 2, idea_note: 3, compile: 4 }
+
+  # Where the call was made. Prod only ever saw its own rows until local spend
+  # started syncing in, and without this the bill reads as if the laptop were
+  # free. Crossed with `kind` it says which of the three local things it was:
+  # an eval sweep (development + eval), poking Byte on localhost (development +
+  # anything else), or the spec suite (test).
+  #
+  # `test` rows are fabricated — the fake client invents its token counts — so
+  # they are recorded for completeness and excluded from spend.
+  enum :env, { production: 0, development: 1, test: 2 }, prefix: :from
+
+  # `origin_uid` is set only on rows that arrived from somewhere else. It names
+  # the machine and the row that spent the money, and it is what the prod copy
+  # dedupes on, so re-sending a spool file is harmless.
+  scope :billed,   -> { where.not(env: :test) }
+  scope :synced,   -> { where.not(origin_uid: nil) }
+  scope :unsynced, -> { where(origin_uid: nil) }
 
   scope :chronological, -> { order(created_at: :asc) }
   scope :since,         ->(time) { where(created_at: time...) }
@@ -66,7 +85,8 @@ class BuddyUsage < ApplicationRecord
       output_tokens:       usage[:output_tokens].to_i,
       reasoning_tokens:    usage[:reasoning_tokens].to_i,
       cost_micros:         Buddy::GPT::Pricing.cost_micros(usage, model: model),
-    )
+      env:                 Rails.env,
+    ).tap { |row| Buddy::UsageSpool.append!(row) }
   end
 
   # Total spend for a scope, in micro-dollars.

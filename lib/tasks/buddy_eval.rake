@@ -732,7 +732,7 @@ namespace :buddy do
 
   desc "Run Buddy against one message (REAL API CALL). Pass a theme to run as Moss."
   task :eval_one, [:message, :theme] => :environment do |_t, args|
-    abort "usage: rake \"buddy:eval_one[your message]\" or \"buddy:eval_one[msg,moss]\"" if args[:message].blank?
+    abort "usage: bx rails \"buddy:eval_one[your message]\" or \"buddy:eval_one[msg,moss]\"" if args[:message].blank?
 
     reset_run!
     theme = args[:theme].presence || "byte"
@@ -797,7 +797,7 @@ namespace :buddy do
   task eval_world: :environment do
     world = BuddyEvalWorld.build!(User.me)
     puts "Built: #{world.summary.join(", ")}"
-    puts "It stays until `rake buddy:eval_world_clear`."
+    puts "It stays until `bx rails buddy:eval_world_clear`."
   end
 
   desc "Remove whatever the eval world left behind (safe to run any time)"
@@ -829,7 +829,7 @@ namespace :buddy do
 
   desc "Replay the last N real user messages from a conversation (REAL API CALLS, read-only)"
   task :replay, [:conversation_id, :limit] => :environment do |_t, args|
-    abort "usage: rake \"buddy:replay[<conversation_id>,<limit>]\"" if args[:conversation_id].blank?
+    abort "usage: bx rails \"buddy:replay[<conversation_id>,<limit>]\"" if args[:conversation_id].blank?
 
     reset_run!
     convo = ByteConversation.find(args[:conversation_id])
@@ -871,14 +871,23 @@ namespace :buddy do
 
     # Eval spend counts toward the total like everything else — it's the same
     # money out the same door. The `kind` breakdown above is where it shows up
-    # on its own; the separation that actually matters is prod vs local, and
-    # evals only ever run locally.
-    total  = rows.spend_micros
-    input  = rows.sum(:input_tokens)
-    cached = rows.sum(:cached_input_tokens)
-    turns  = rows.turn.count
+    # on its own; `env` is where the machine shows up, now that spend from the
+    # laptop is synced in rather than stranded in whatever database it ran
+    # against. Suite rows are the one thing left out: the fake client invents
+    # its token counts, so they are not money.
+    billed = rows.billed
+    by_env = billed.group(:env).sum(:cost_micros)
+    if by_env.length > 1
+      puts "-" * 66
+      puts "by env: #{by_env.map { |e, c| "#{e} #{money.call(c)}" }.join("  ")}"
+    end
+
+    total  = billed.spend_micros
+    input  = billed.sum(:input_tokens)
+    cached = billed.sum(:cached_input_tokens)
+    turns  = billed.turn.count
     puts "-" * 66
-    puts "total: #{money.call(total)} over #{rows.count} calls (#{turns} turns)"
+    puts "total: #{money.call(total)} over #{billed.count} calls (#{turns} turns)"
     # All-in: total spend over turn count, so each turn carries its share of the
     # compaction that keeps it cheap. That is the number that predicts the bill.
     puts "per turn all-in: #{money.call(turns.zero? ? 0 : total / turns)}"
@@ -891,7 +900,7 @@ namespace :buddy do
     flag = rate < 60 ? " \e[33m<- low, prefix is being invalidated\e[0m" : ""
     puts "prompt cache hit rate: #{rate.round(1)}%#{flag}"
 
-    by_model = rows.group(:model).sum(:cost_micros)
+    by_model = billed.group(:model).sum(:cost_micros)
     puts "by model: #{by_model.map { |m, c| "#{m} #{money.call(c)}" }.join("  ")}" if by_model.length > 1
   end
 
@@ -921,6 +930,8 @@ namespace :buddy do
     }
   end
 
+  # The spend survives this: every call was written to the usage spool as it
+  # happened, so clearing the local rows drops the conversation, not the money.
   desc "Delete the eval conversations and their usage rows"
   task eval_clear: :environment do
     convos = ByteConversation.evals
@@ -1848,7 +1859,7 @@ namespace :buddy do
       "\n#{"=" * 60}",
       "turns: #{stats[:turns]}  tool calls: #{stats[:tool_calls]}  " \
       "silent turns: #{stats[:no_tool]}  avg: #{avg.round(2)}s",
-      persist? ? "spend: #{money.call(spend)} this run (#{money.call(per)}/turn) — `rake buddy:cost` for the running total" : "\e[90mnot persisted (BUDDY_EVAL_PERSIST=0)\e[0m",
+      persist? ? "spend: #{money.call(spend)} this run (#{money.call(per)}/turn) — `bx rails buddy:cost` for the running total" : "\e[90mnot persisted (BUDDY_EVAL_PERSIST=0)\e[0m",
       stats[:flags].any? ? "\e[33mflags: #{stats[:flags].tally.map { |f, n| "#{f} x#{n}" }.join(", ")}\e[0m" : "\e[32mno mechanical flags\e[0m",
     ].join("\n")
   end

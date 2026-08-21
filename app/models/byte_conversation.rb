@@ -75,7 +75,7 @@ class ByteConversation < ApplicationRecord
   scope :active,  -> { where(archived: false) }
   scope :ordered, -> { order(Arel.sql("last_message_at DESC NULLS LAST, id DESC")) }
 
-  # Threads the buddy:eval rake task writes into. Visible in the list on purpose
+  # Threads the buddy:eval task writes into. Visible in the list on purpose
   # — reading the back-and-forth is half the point of running an eval — but
   # never the DEFAULT, since an eval run leaves the eval thread with the newest
   # last_message_at and opening the app into 25 canned scenarios isn't what
@@ -168,7 +168,7 @@ class ByteConversation < ApplicationRecord
   # The wall tablet and eval threads are out on the way in. Both are "active"
   # without anyone personally reading them: the wall is a screen in a room, so a
   # briefing delivered there is read by whoever is standing in the kitchen, and
-  # a `rake buddy:eval` run leaves 25 canned scenarios looking like the liveliest
+  # a `bx rails buddy:eval` run leaves 25 canned scenarios looking like the liveliest
   # thread on the account.
   def self.primary_for(user)
     primary_among(user.byte_conversations.active.buddy.ordered.to_a)

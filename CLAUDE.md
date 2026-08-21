@@ -13,7 +13,7 @@ Personal automation platform built on Rails 7.1.2 (Ruby 3.2.2). The core systems
 
 ```bash
 # Server (runs on port 3141)
-rails server
+bx rails server
 
 # Background jobs (required for automations)
 bundle exec sidekiq
@@ -32,8 +32,8 @@ bundle exec rubocop
 bundle exec rubocop -A                 # Auto-correct
 
 # Database (ALWAYS use RAILS_ENV=test — never run in dev)
-RAILS_ENV=test bundle exec rails g migration AddFooToBar   # ALWAYS generate; never hand-name
-RAILS_ENV=test bundle exec rake db:migrate
+RAILS_ENV=test bx rails g migration AddFooToBar   # ALWAYS generate; never hand-name
+RAILS_ENV=test bx rails db:migrate
 bundle exec annotate                   # Update model annotations
 
 # Deployment (auto-deploys on master push via GitHub Actions)
@@ -231,7 +231,7 @@ Three obligations, and none of them is optional:
 
 1. **A new tool needs a line in `BUDDY_TOOL_PROBES`** — one sentence a person
    would actually say, plus `avoid:` naming the tool it will get confused with.
-   `rake buddy:tool_coverage` fails until it's there, free and before any spend.
+   `bx rails buddy:tool_coverage` fails until it's there, free and before any spend.
    Adding the tool without the probe means nobody has ever checked the model
    can reach it.
 
@@ -278,15 +278,15 @@ Three obligations, and none of them is optional:
 4. **A `needs:` is a KEY into `lib/buddy_eval_needs.rb`, never a sentence.** It
    goes and looks. Taking a probe's word for it filed ten real failures under
    "not answerable" in the 21 Aug run, with the records sitting in the database
-   the whole time. `rake buddy:tool_coverage` rejects a key that isn't there.
+   the whole time. `bx rails buddy:tool_coverage` rejects a key that isn't there.
 
 ```bash
-rake buddy:tool_coverage   # free: does every tool have a sentence?
-rake buddy:eval_tools      # the sweep + the edge cases (REAL API CALLS)
-rake buddy:eval_edges      # only the ones that have gone wrong before
-rake buddy:eval           # the canned scenarios: voice, not tool choice
-rake buddy:eval_world      # build the world and leave it up, to poke by hand
-rake buddy:eval_world_clear
+bx rails buddy:tool_coverage   # free: does every tool have a sentence?
+bx rails buddy:eval_tools      # the sweep + the edge cases (REAL API CALLS)
+bx rails buddy:eval_edges      # only the ones that have gone wrong before
+bx rails buddy:eval            # the canned scenarios: voice, not tool choice
+bx rails buddy:eval_world      # build the world and leave it up, to poke by hand
+bx rails buddy:eval_world_clear
 ```
 
 Two failures the harness itself used to cause, worth knowing because both read

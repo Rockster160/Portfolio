@@ -78,6 +78,34 @@ RSpec.describe BuddyUsage do
     end
   end
 
+  describe "where it was spent" do
+    it "stamps the environment that made the call" do
+      row = described_class.record!(result, user: user, message: message)
+
+      expect(row.env).to eq("test")
+      expect(described_class.billed).not_to include(row)
+    end
+
+    # The fake client invents its token counts, so the suite must not be able to
+    # push a number at production that nobody was charged for.
+    it "does not spool a suite run" do
+      expect(Buddy::UsageSpool).not_to receive(:write)
+
+      described_class.record!(result, user: user, message: message)
+    end
+
+    it "hands a real call to the spool" do
+      allow(Buddy::UsageSpool).to receive_messages(spool?: true, origin_id: "spec-origin")
+      allow(Buddy::UsageSpool).to receive(:write)
+
+      row = described_class.record!(result, user: user, message: message)
+
+      expect(Buddy::UsageSpool).to have_received(:write).with(
+        hash_including(origin_uid: Buddy::UsageSpool.uid_for(row), cost_micros: row.cost_micros),
+      )
+    end
+  end
+
   describe "reporting" do
     it "sums spend over a window, counting turns and compactions together" do
       described_class.record!(result, user: user, conversation: convo, message: message)

@@ -6,7 +6,7 @@ return if ENV["LOCAL_QUEUE"] == "true"
 # gem genuinely is absent.
 return unless defined?(Puma)
 
-# The one that actually catches `rake db:migrate`. Registering the whole cron
+# The one that actually catches `bx rails db:migrate`. Registering the whole cron
 # schedule as a side effect of a migration is surprising locally, and on a
 # deploy it means the release being swapped in re-registers every job from a
 # task rather than from the server that will run them.

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_20_224043) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_21_155142) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -594,8 +594,12 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_20_224043) do
     t.bigint "cost_micros", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "env", default: 0, null: false
+    t.string "origin_uid"
     t.index ["byte_conversation_id"], name: "index_buddy_usages_on_byte_conversation_id"
     t.index ["byte_message_id"], name: "index_buddy_usages_on_byte_message_id"
+    t.index ["env", "created_at"], name: "index_buddy_usages_on_env_and_created_at"
+    t.index ["origin_uid"], name: "index_buddy_usages_on_origin_uid", unique: true
     t.index ["user_id", "created_at"], name: "index_buddy_usages_on_user_id_and_created_at"
     t.index ["user_id"], name: "index_buddy_usages_on_user_id"
   end

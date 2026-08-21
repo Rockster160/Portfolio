@@ -23,7 +23,7 @@
 #      run that dies halfway — or gets killed — leaves an exact list of what to
 #      remove rather than a pattern to guess with.
 #   3. `BuddyEvalWorld.sweep!` removes whatever a previous run left behind, and
-#      `rake buddy:eval_world_clear` is that from the outside.
+#      `bx rails buddy:eval_world_clear` is that from the outside.
 #
 # What it deliberately does NOT fake: the printer being reachable, and a
 # proposal in the thread for `undo` to reverse. Both are live state rather than

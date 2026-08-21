@@ -36,7 +36,7 @@ class BuddyEvalReport
 
   PREAMBLE = <<~MD.freeze
     Each section below is one thing Buddy was told, and the tool it reached for
-    instead of the right one. They came from `rake buddy:eval_tools`, which says
+    instead of the right one. They came from `bx rails buddy:eval_tools`, which says
     a plain sentence to the real model with the real tool schemas and watches
     which tool comes back.
 

@@ -62,7 +62,7 @@ class GoogleCalendarSyncWorker
   def migration_hint(error)
     return nil unless error.is_a?(::NoMethodError) || error.is_a?(::ActiveModel::UnknownAttributeError) || error.message.match?(/unknown attribute|undefined method.*for #<Agenda/i)
 
-    "looks like a missing migration — run `bundle exec rake db:migrate` in this environment."
+    "looks like a missing migration — run `bx rails db:migrate` in this environment."
   end
 
   # Lazily start a watch channel after the first successful sync. Renewal is

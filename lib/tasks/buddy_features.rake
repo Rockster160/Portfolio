@@ -2,8 +2,8 @@ namespace :buddy do
   # Features are an allow-list, which means "why can't she do that?" is a real
   # question with a real answer. This prints it.
   #
-  #   rake buddy:features            — everyone with a Buddy thread
-  #   rake buddy:features[eve]       — one person
+  #   bx rails buddy:features            — everyone with a Buddy thread
+  #   bx rails buddy:features[eve]       — one person
   desc "Show which Buddy features each person holds"
   task :features, [:username] => :environment do |_t, args|
     scope = User.where(id: ByteConversation.where(mode: :buddy).select(:user_id))

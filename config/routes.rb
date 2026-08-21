@@ -100,6 +100,8 @@ Rails.application.routes.draw do
     namespace :v1 do
       post :alexa, controller: :alexa
 
+      resources :buddy_usages, only: [:create]
+
       resources :lists, only: [:index, :show, :update, :create, :destroy] do
         post :reorder, on: :collection
         put :order_items, on: :member
