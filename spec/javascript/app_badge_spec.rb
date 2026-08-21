@@ -1,6 +1,4 @@
 require "rails_helper"
-require "json"
-require "open3"
 
 # The home-screen badge showed a 1 that no message anywhere accounted for: every
 # conversation the icon counts was read, the server's total was 0, and the
@@ -18,13 +16,7 @@ require "open3"
 # answer to it available to them. One that survives being opened can't be got
 # rid of, and stops meaning anything the first time it lies.
 RSpec.describe "PWA home-screen badge" do
-  let(:result) {
-    runner = Rails.root.join("spec/javascript/app_badge_runner.js").to_s
-    stdout, stderr, status = Open3.capture3("node", runner)
-    raise "runner failed: #{stderr}" unless status.success?
-
-    JSON.parse(stdout)
-  }
+  let(:result) { JsRunner.output("spec/javascript/app_badge_runner.js") }
 
   describe "any page at all" do
     # Importing the module is the app being opened. No count, no fetch, no

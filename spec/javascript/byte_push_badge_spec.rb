@@ -1,6 +1,4 @@
 require "rails_helper"
-require "json"
-require "open3"
 
 # The home-screen badge kept a number while the app was open and showing
 # nothing unread.
@@ -25,13 +23,7 @@ require "open3"
 # anything else believes, which is what finally made a stuck number impossible
 # rather than merely unlikely.
 RSpec.describe "Byte push badge" do
-  let(:acted) {
-    runner = Rails.root.join("spec/javascript/byte_push_badge_runner.js").to_s
-    stdout, stderr, status = Open3.capture3("node", runner)
-    raise "runner failed: #{stderr}" unless status.success?
-
-    JSON.parse(stdout)
-  }
+  let(:acted) { JsRunner.output("spec/javascript/byte_push_badge_runner.js") }
 
   # The reported bug.
   describe "while the app is open and being looked at" do

@@ -1,10 +1,16 @@
-# Compiles pages/byte.scss and reports every rule that touches a thread image
-# attachment, each with the @media condition it was emitted under and its
-# declaration body — as JSON for byte_image_frame_spec.rb.
+# Compiles pages/byte.scss and reports every rule in it — the @media
+# conditions it sits under, its selector, its declaration body, and the
+# font-size it sets if it sets one — as JSON.
 #
-# A separate process for the same reason as byte_hero_compact_runner.rb: SassC
-# segfaults compiling this stylesheet inside the loaded RSpec process, while the
-# identical call is fine standalone.
+# A separate process on purpose: SassC segfaults compiling this stylesheet
+# inside the loaded RSpec process, while the identical call is fine standalone.
+# Shelling out matches how the JS specs run their node runners, and keeps the
+# assertions on the REAL compiled cascade rather than on a regex over the
+# source, which is what let the font-scale drift happen in the first place.
+#
+# One runner for every asset spec that reads this sheet. There were three, each
+# compiling the same stylesheet for its own slice of the answer, and each `let`
+# re-ran its own on every example — fifteen compiles of one file per suite run.
 require "sassc"
 require "json"
 
@@ -48,13 +54,16 @@ css.each_line { |raw|
       body     = +""
     end
   elsif line == "}"
-    rules << { "conditions" => conditions.dup, "selector" => selector, "body" => body }
+    rules << {
+      "conditions" => conditions.dup,
+      "selector"   => selector,
+      "body"       => body.strip,
+      "font_size"  => body[/font-size:\s*([^;]+)/, 1]&.strip,
+    }
     selector = nil
   else
     body << " #{line}"
   end
 }
 
-frames = rules.select { |r| r["selector"].include?(".byte-attachment-image") }
-
-puts JSON.generate(frames.map { |r| r.merge("body" => r["body"].strip) })
+puts JSON.generate(rules)

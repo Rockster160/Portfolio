@@ -12,14 +12,7 @@ RSpec.describe "AgendaRecurrence phantoms (JS-side)" do
   # `AgendaItem#presentation_attrs` (`end_date.in_time_zone(user.tz)
   # .beginning_of_day.to_i`).
   describe "all-day phantom end-date" do
-    let(:runner_path) {
-      Rails.root.join("spec", "javascript", "all_day_phantom_runner.js").to_s
-    }
-    let(:cases) {
-      stdout, stderr, status = Open3.capture3("node", runner_path)
-      raise "runner failed: #{stderr}" unless status.success?
-      JSON.parse(stdout, symbolize_names: true)[:cases]
-    }
+    let(:cases) { JsRunner.output("spec/javascript/all_day_phantom_runner.js", symbolize: true)[:cases] }
     let(:by_name) { cases.to_h { |c| [c[:name].to_sym, c] } }
 
     it "emits end-date == start-at for a single-day all-day phantom" do
@@ -49,13 +42,9 @@ RSpec.describe "AgendaRecurrence phantoms (JS-side)" do
   # silently break it again. (The legacy top-level `metadata.travel_minutes`
   # shape is no longer supported — the resolver migrated it into `travel`.)
   describe "travel inheritance" do
-    let(:runner_path) {
-      Rails.root.join("spec", "javascript", "phantom_travel_inheritance_runner.js").to_s
-    }
     let(:by_name) {
-      stdout, stderr, status = Open3.capture3("node", runner_path)
-      raise "runner failed: #{stderr}" unless status.success?
-      JSON.parse(stdout, symbolize_names: true)[:cases].to_h { |c| [c[:name].to_sym, c[:attrs]] }
+      JsRunner.output("spec/javascript/phantom_travel_inheritance_runner.js", symbolize: true)[:cases]
+        .to_h { |c| [c[:name].to_sym, c[:attrs]] }
     }
 
     it "inherits every nested metadata.travel.* field" do

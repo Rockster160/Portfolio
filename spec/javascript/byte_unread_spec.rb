@@ -1,19 +1,11 @@
 require "rails_helper"
-require "json"
-require "open3"
 
 # The drawer's unread counter was a tally incremented once per BROADCAST, and a
 # broadcast is not a message: a Claude turn re-sends the same row every time its
 # text grows, so one reply working through a long task pushed the badge up by
 # dozens while nothing had been said yet.
 RSpec.describe "Byte unread counting" do
-  let(:result) {
-    runner = Rails.root.join("spec/javascript/byte_unread_runner.js").to_s
-    stdout, stderr, status = Open3.capture3("node", runner)
-    raise "runner failed: #{stderr}" unless status.success?
-
-    JSON.parse(stdout)
-  }
+  let(:result) { JsRunner.output("spec/javascript/byte_unread_runner.js") }
 
   describe "what counts as unread" do
     it "counts a settled inbound message" do

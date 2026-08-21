@@ -1,6 +1,4 @@
 require "rails_helper"
-require "json"
-require "open3"
 
 # The viewer's arithmetic, driven directly. A doorbell frame in a bubble is a
 # thumbnail of the one thing the notification was about, so tapping it opens it
@@ -11,13 +9,7 @@ require "open3"
 # you where you are. So the clamp is the part worth testing, and it's the part
 # kept free of the DOM in order to be testable.
 RSpec.describe "Byte image viewer" do
-  let(:out) {
-    runner = Rails.root.join("spec/javascript/image_viewer_runner.js").to_s
-    stdout, stderr, status = Open3.capture3("node", runner)
-    raise "runner failed: #{stderr}" unless status.success?
-
-    JSON.parse(stdout)
-  }
+  let(:out) { JsRunner.output("spec/javascript/image_viewer_runner.js") }
 
   describe "panning" do
     # Fitted, the image is no bigger than its frame — there is nowhere to pan

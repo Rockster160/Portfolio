@@ -1,6 +1,4 @@
 require "rails_helper"
-require "json"
-require "open3"
 
 # What the Quick popover and the wall tablet list, and in what order.
 #
@@ -13,53 +11,55 @@ require "open3"
 # BuddyRoutine.for_quick is the other half of this, and its spec is the mirror
 # of this one. Runs the real module rather than re-deriving the rule.
 RSpec.describe "Quick routine ordering" do
-  def run_order(fn, routines)
+  # Every fixture at once. Each example below asks a different question, but
+  # they all needed the same module loaded to answer it, and a node process per
+  # example to load it was the whole cost of this file.
+  fixtures = {
+    starred_first:    ["quickOrder", [{ name: "Zebra", position: 1 }, { name: "Apple", position: 0 }]],
+    unstarred_after:  ["quickOrder", [{ name: "Zebra" }, { name: "Starred", position: 0 }, { name: "Apple" }]],
+    switched_off:     ["quickOrder", [{ name: "Off", enabled: false }, { name: "On" }]],
+    first_slot:       ["quickOrder", [{ name: "Unstarred" }, { name: "First", position: 0 }]],
+    empty:            ["quickOrder", []],
+    wall_starred:     ["kioskOrder", [{ name: "Zebra", position: 1 }, { name: "Unstarred" }, { name: "Apple", position: 0 }]],
+    wall_switched_off: ["kioskOrder", [{ name: "Off", position: 0, enabled: false }, { name: "On", position: 1 }]],
+    wall_none_starred: ["kioskOrder", [{ name: "Saved" }, { name: "Also saved" }]],
+  }
+
+  let(:ordered) {
+    module_path = Rails.root.join("app/javascript/src/pages/byte/buddy/routine_order.js")
     script = <<~JS
-      import { #{fn} } from "#{Rails.root.join("app/javascript/src/pages/byte/buddy/routine_order.js")}";
-      console.log(JSON.stringify(#{fn}(#{routines.to_json}).map((r) => r.name)));
+      import { quickOrder, kioskOrder } from "#{module_path}";
+      const fns = { quickOrder, kioskOrder };
+      const cases = #{fixtures.transform_keys(&:to_s).to_json};
+      const out = {};
+      for (const [name, [fn, rows]] of Object.entries(cases)) {
+        out[name] = fns[fn](rows.map((r) => ({ position: null, enabled: true, ...r }))).map((r) => r.name);
+      }
+      console.log(JSON.stringify(out));
     JS
-    out, err, status = Open3.capture3("node", "--input-type=module", stdin_data: script)
-    raise "node failed: #{err}" unless status.success?
-
-    JSON.parse(out)
-  end
-
-  def ordered(routines)
-    run_order("quickOrder", routines)
-  end
-
-  def on_wall(routines)
-    run_order("kioskOrder", routines)
-  end
-
-  def routine(name, position: nil, enabled: true)
-    { name: name, position: position, enabled: enabled }
-  end
+    JsRunner.eval_module(script, symbolize: true)
+  }
 
   it "puts the starred ones first, in the order they were dragged into" do
-    expect(ordered([routine("Zebra", position: 1), routine("Apple", position: 0)]))
-      .to eq(["Apple", "Zebra"])
+    expect(ordered[:starred_first]).to eq(%w[Apple Zebra])
   end
 
   it "keeps the unstarred ones, after them and by name" do
-    rows = [routine("Zebra"), routine("Starred", position: 0), routine("Apple")]
-
-    expect(ordered(rows)).to eq(["Starred", "Apple", "Zebra"])
+    expect(ordered[:unstarred_after]).to eq(%w[Starred Apple Zebra])
   end
 
   it "leaves out the ones switched off" do
-    expect(ordered([routine("Off", enabled: false), routine("On")])).to eq(["On"])
+    expect(ordered[:switched_off]).to eq(["On"])
   end
 
   # position 0 is a real slot, and the falsy check this replaced dropped it to
   # the bottom — so the routine most deliberately put first sorted last.
   it "treats the first slot as first, not as absent" do
-    expect(ordered([routine("Unstarred"), routine("First", position: 0)]))
-      .to eq(["First", "Unstarred"])
+    expect(ordered[:first_slot]).to eq(%w[First Unstarred])
   end
 
-  it "survives an empty list and a missing one" do
-    expect(ordered([])).to eq([])
+  it "survives an empty list" do
+    expect(ordered[:empty]).to eq([])
   end
 
   # The wall is the one place the star is a GATE rather than a promotion, and
@@ -68,17 +68,15 @@ RSpec.describe "Quick routine ordering" do
   # BuddyRoutine.for_kiosk is the server half of this and has to agree.
   describe "the wall tablet" do
     it "takes only the starred ones, in their dragged order" do
-      rows = [routine("Zebra", position: 1), routine("Unstarred"), routine("Apple", position: 0)]
-
-      expect(on_wall(rows)).to eq(["Apple", "Zebra"])
+      expect(ordered[:wall_starred]).to eq(%w[Apple Zebra])
     end
 
     it "still drops a starred one that's switched off" do
-      expect(on_wall([routine("Off", position: 0, enabled: false), routine("On", position: 1)])).to eq(["On"])
+      expect(ordered[:wall_switched_off]).to eq(["On"])
     end
 
     it "comes back empty when they have routines but none starred" do
-      expect(on_wall([routine("Saved"), routine("Also saved")])).to eq([])
+      expect(ordered[:wall_none_starred]).to eq([])
     end
   end
 end

@@ -301,17 +301,6 @@ RSpec.describe Jil::Validator do
       JIL
     end
 
-    it "does not warn about Keyword.Item in functionParams" do
-      # Inside functionParams, Item is correct
-      result = validate(<<~'JIL'.strip)
-        a0 = Global.functionParams({
-          name = Keyword.Item()::String
-        })::Array
-      JIL
-      # The warning still fires because we can't statically determine context,
-      # but functionParams is the one place Item is valid.
-      # Future enhancement: suppress warning inside functionParams blocks.
-    end
   end
 
   describe "method existence" do

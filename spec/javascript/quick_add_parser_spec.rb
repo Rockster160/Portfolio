@@ -1,6 +1,4 @@
 require "rails_helper"
-require "json"
-require "open3"
 
 # Locks the natural-language parser for the Agenda Quick Add modal at
 # the same capability tier as `Jarvis::Times` + `Jarvis::Durations`.
@@ -11,13 +9,9 @@ require "open3"
 # offsets, weak day words, weekday hints, date forms), (4) "on the Nth"
 # regression, (5) error cases, (6) duration-only probes.
 RSpec.describe "AgendaQuickAddParser (JS-side)" do
-  let(:runner_path) {
-    Rails.root.join("spec", "javascript", "quick_add_parser_runner.js").to_s
-  }
   let(:by_name) {
-    stdout, stderr, status = Open3.capture3("node", runner_path)
-    raise "runner failed: #{stderr}" unless status.success?
-    JSON.parse(stdout, symbolize_names: true)[:cases].to_h { |c| [c[:name].to_sym, c[:result]] }
+    JsRunner.output("spec/javascript/quick_add_parser_runner.js", symbolize: true)[:cases]
+      .to_h { |c| [c[:name].to_sym, c[:result]] }
   }
 
   describe "quick add example chips" do

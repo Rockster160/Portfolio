@@ -34,18 +34,22 @@ RSpec.describe "Glimmer face assets" do
     (rows.first + rows.last) / 2.0 / image.height
   end
 
-  it "ships the nine poses the stylesheet wires up" do
+  # The roster and the framing together, because they're one question asked of
+  # one set of files: are the nine poses the stylesheet wires up all here, and
+  # do they all sit in the middle of their canvas. Nine examples decoded nine
+  # PNGs one example at a time; the report is the same either way, because a
+  # failure lists every pose that drifted and where it landed.
+  it "ships the nine poses the stylesheet wires up, each centered in its canvas" do
     expect(faces.map { |p| p.basename(".png").to_s.delete_prefix("face_") })
       .to match_array(%w[content grin happy loving neutral sad sleeping star surprised])
-  end
 
-  faces.each do |path|
-    it "centers #{path.basename} in its canvas" do
+    drifted = faces.filter_map { |path|
       center = content_center(path, alpha_floor)
+      next if center_band.cover?(center)
 
-      expect(center).to be_between(center_band.first, center_band.last),
-        "#{path.basename} draws its content centered at #{(center * 100).round(1)}% of the " \
-        "canvas; it renders that far off the middle of the hero"
-    end
+      "#{path.basename} draws its content centered at #{(center * 100).round(1)}% of the canvas"
+    }
+
+    expect(drifted).to eq([]), "these render that far off the middle of the hero:\n#{drifted.join("\n")}"
   end
 end

@@ -1,6 +1,4 @@
 require "rails_helper"
-require "json"
-require "open3"
 
 # A function task's args used to be readable only BY POSITION when the task was
 # run from the editor, because a quoted label produced a display string and
@@ -13,13 +11,7 @@ require "open3"
 # {camera, event} and the event landed in the timestamp. A label that binds a
 # name is what makes an optional arg safe anywhere but last.
 RSpec.describe "Run-args modal named binding" do
-  let(:result) {
-    runner = Rails.root.join("spec/javascript/run_args_named_runner.js").to_s
-    stdout, stderr, status = Open3.capture3("node", runner)
-    raise "runner failed: #{stderr}" unless status.success?
-
-    JSON.parse(stdout)
-  }
+  let(:result) { JsRunner.output("spec/javascript/run_args_named_runner.js") }
 
   describe "the key a label posts under" do
     it "lowercases a single word" do

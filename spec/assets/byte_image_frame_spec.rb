@@ -1,6 +1,4 @@
 require "rails_helper"
-require "json"
-require "open3"
 
 # A picture in the thread was invisible for as long as the network took, and
 # then arrived all at once and shoved everything above it — mid-read, mid-scroll
@@ -12,13 +10,7 @@ require "open3"
 # That's a fact about the compiled cascade rather than about any single
 # declaration, which is why it's asserted here and not in a diff.
 RSpec.describe "Byte thread image frame" do
-  let(:rules) {
-    runner = Rails.root.join("spec/assets/byte_image_frame_runner.rb").to_s
-    stdout, stderr, status = Open3.capture3("bundle", "exec", "ruby", runner, chdir: Rails.root.to_s)
-    raise "runner failed: #{stderr}" unless status.success?
-
-    JSON.parse(stdout)
-  }
+  let(:rules) { CompiledCss.rules.select { |r| r["selector"].include?(".byte-attachment-image") } }
 
   # The frame itself: not the loaded state, not the <img> inside it.
   let(:frame) {
@@ -27,20 +19,20 @@ RSpec.describe "Byte thread image frame" do
     }
   }
 
-  it "reserves a real box before the picture exists" do
+  # The load-bearing property, from both sides in one example: a real box
+  # reserved up front, and nothing in the loaded state that could change its
+  # height afterwards. Either half alone puts the jump back, so a failure in
+  # either is the same failure.
+  it "reserves a real box, and the picture arriving never changes its height" do
     expect(frame).not_to be_nil, "the image frame rule is gone entirely"
     # Both dimensions, or what's waiting is a sliver rather than something
     # picture-shaped.
     expect(frame["body"]).to match(/height: \d+px/)
     expect(frame["body"]).to match(/width: \d+px/)
-  end
 
-  # The load-bearing one. Anything that changes height when the picture arrives
-  # puts the jump straight back.
-  it "never changes height when the picture arrives" do
     loaded = rules.select { |r| r["selector"].include?("byte-attachment-loaded") }
-
     expect(loaded).not_to be_empty, "nothing marks the frame as loaded"
+
     offenders = loaded.select { |r| r["body"].match?(/(^|[; ])(height|max-height|aspect-ratio|padding):/) }
     expect(offenders.pluck("selector")).to eq([])
   end
@@ -56,16 +48,15 @@ RSpec.describe "Byte thread image frame" do
   end
 
   # The waiting animation runs on an EMPTY frame; once there's a picture in it,
-  # pulsing the opacity would be pulsing the picture.
-  it "stops the waiting animation once loaded" do
+  # pulsing the opacity would be pulsing the picture. Turning motion down stops
+  # it the same way, and — the part that matters — without touching the height,
+  # or the reserved box goes away for the people least able to absorb a jump.
+  it "stops the waiting animation once loaded, and for anyone who asked for less motion" do
     loaded = rules.find { |r| r["selector"].end_with?(".byte-attachment-loaded") }
+    still  = rules.find { |r| r["conditions"].include?("@media (prefers-reduced-motion: reduce)") }
 
     expect(frame["body"]).to match(/animation: byte-attachment-wait/)
     expect(loaded["body"]).to include("animation: none")
-  end
-
-  it "holds the space for someone who asked for less motion" do
-    still = rules.find { |r| r["conditions"].include?("@media (prefers-reduced-motion: reduce)") }
 
     expect(still).not_to be_nil, "the frame breathes even when motion is turned down"
     expect(still["body"]).to include("animation: none")

@@ -1,6 +1,4 @@
 require "rails_helper"
-require "json"
-require "open3"
 
 # Eve turned Suki's text up and the messages grew, but the receipts, the
 # tool-use rows and the timestamps stayed exactly as small as they were.
@@ -32,17 +30,16 @@ RSpec.describe "Byte thread font scaling" do
   # A ✕ centered in a fixed 26px square doesn't get to grow.
   fixed_box = /is-remove/
 
-  let(:rules) {
-    runner = Rails.root.join("spec/assets/byte_font_scale_runner.rb").to_s
-    stdout, stderr, status = Open3.capture3("bundle", "exec", "ruby", runner, chdir: Rails.root.to_s)
-    raise "runner failed: #{stderr}" unless status.success?
-
-    JSON.parse(stdout)
+  # The surfaces most likely to be re-added with a hard size, each named so a
+  # failure says WHICH one went back rather than only that something did.
+  named = {
+    ".byte-msg.byte-msg-kind-buddy_activity [data-body]" => "the ✓ receipt for a tool that ran",
+    ".byte-msg.byte-msg-kind-action_chip [data-body]"    => "the chip for a quick-action tap",
+    ".byte-msg-action-row"                               => "a tool-use row waiting to be checked",
+    ".byte-msg .byte-msg-meta"                           => "the timestamp under a message",
   }
 
-  def rule_for(selector)
-    rules.find { |r| r["selector"] == selector }
-  end
+  let(:rules) { CompiledCss.sized }
 
   it "sizes everything in a bubble relative to the one scaled anchor" do
     offenders = rules.select { |r|
@@ -55,28 +52,23 @@ RSpec.describe "Byte thread font scaling" do
     expect(offenders.map { |r| "#{r["selector"]} { font-size: #{r["font_size"]} }" }).to eq([])
   end
 
-  # The anchor itself. If this stops multiplying, every percentage underneath
-  # becomes a percentage of a constant and the whole preference goes dead
-  # without a single rule looking wrong.
-  it "still multiplies the anchor by the reader's scale" do
-    expect(rule_for(".byte-msg")&.fetch("font_size")).to match(
+  # The anchor and the four surfaces hanging off it, in one example: they are
+  # one fact — the multiplication happens once and everything under it is a
+  # percentage — and splitting them into five cost five compiles of the sheet
+  # to assert five halves of the same sentence. The failure still names the
+  # surface, which is the only thing the split was buying.
+  it "multiplies the anchor by the reader's scale, and sizes each surface off it" do
+    expect(rules.find { |r| r["selector"] == ".byte-msg" }&.fetch("font_size")).to match(
       /\Acalc\(14px \* var\(--byte-font-scale/,
     )
-  end
 
-  # Named individually so a regression says WHICH surface went back to a fixed
-  # size rather than only that something did.
-  {
-    ".byte-msg.byte-msg-kind-buddy_activity [data-body]" => "the ✓ receipt for a tool that ran",
-    ".byte-msg.byte-msg-kind-action_chip [data-body]"    => "the chip for a quick-action tap",
-    ".byte-msg-action-row"                               => "a tool-use row waiting to be checked",
-    ".byte-msg .byte-msg-meta"                           => "the timestamp under a message",
-  }.each do |selector, what|
-    it "scales #{what}" do
-      rule = rule_for(selector)
+    broken = named.filter_map { |selector, what|
+      size = rules.find { |r| r["selector"] == selector }&.fetch("font_size")
+      next if size&.match?(/\A[\d.]+%\z/)
 
-      expect(rule).not_to be_nil, "#{selector} no longer sets a font-size"
-      expect(rule["font_size"]).to match(/\A[\d.]+%\z/)
-    end
+      "#{what} (#{selector}): #{size || "no longer sets a font-size"}"
+    }
+
+    expect(broken).to eq([])
   end
 end

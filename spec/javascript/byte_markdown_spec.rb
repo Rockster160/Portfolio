@@ -1,6 +1,4 @@
 require "rails_helper"
-require "json"
-require "open3"
 
 # Prod 2620 and the few after it came out with raw `_glue_` and raw `- ` bullets
 # on screen: the thread's markdown-lite did `**bold**` and `*italic*` and
@@ -11,13 +9,7 @@ require "open3"
 # `_glue_` is emphasis and `game_tray-vase` is a filename, and this app is full
 # of the second kind.
 RSpec.describe "Byte thread markdown" do
-  let(:rendered) {
-    runner = Rails.root.join("spec/javascript/byte_markdown_runner.js").to_s
-    stdout, stderr, status = Open3.capture3("node", runner)
-    raise "runner failed: #{stderr}" unless status.success?
-
-    JSON.parse(stdout)
-  }
+  let(:rendered) { JsRunner.output("spec/javascript/byte_markdown_runner.js") }
 
   describe "underscore emphasis" do
     it "italicises a word wrapped in underscores" do

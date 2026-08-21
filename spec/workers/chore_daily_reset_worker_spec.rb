@@ -3,13 +3,19 @@ require "rails_helper"
 RSpec.describe ChoreDailyResetWorker do
   let(:user) { create(:user) }
 
-  before do
+  # A household with enough chores in each reward band to sample from. Only the
+  # two examples about the SHAPE of a day's picks need it, and it used to run in
+  # a `before` for all thirty-one — thirty-one chores built and torn down per
+  # example, with eleven of them opening on `Chore.delete_all` to get the pool
+  # back out of their way.
+  def seed_reward_pool
     20.times { |i| create(:chore, created_by_user: user, reward_pebbles: (i % 4) + 1) } # 1..4
     8.times { |i| create(:chore, created_by_user: user, reward_pebbles: 5 + (i % 5)) }  # 5..9
     3.times { |i| create(:chore, created_by_user: user, reward_pebbles: 15 + i) }       # >10
   end
 
   it "creates 5 low + 2 medium hot picks for the day" do
+    seed_reward_pool
     described_class.new.perform
     day = ChoreDay.current
     picks = ChoreHotPick.where(day_key: day).to_a
@@ -24,6 +30,7 @@ RSpec.describe ChoreDailyResetWorker do
   end
 
   it "is idempotent for the same day" do
+    seed_reward_pool
     described_class.new.perform
     described_class.new.perform
     expect(ChoreHotPick.where(day_key: ChoreDay.current).count).to be_between(7, 8) # 5 low + 2 med (+ maybe 1 premium)
@@ -101,7 +108,6 @@ RSpec.describe ChoreDailyResetWorker do
 
   describe "hot eligibility — (overdue OR unscheduled) AND not on cooldown" do
     it "excludes a scheduled chore that is not yet due (future-only)" do
-      Chore.delete_all
       today = ChoreDay.current
       # Scheduled to recur on a single far-future weekday only.
       far_future_wday = ((today + 5).wday)
@@ -119,7 +125,6 @@ RSpec.describe ChoreDailyResetWorker do
     end
 
     it "includes a scheduled chore that is overdue (last scheduled day passed, no completion since)" do
-      Chore.delete_all
       today = ChoreDay.current
       weekday_keys = %i[sun mon tue wed thu fri sat]
       # Weekly on yesterday's weekday → last scheduled day was yesterday,
@@ -137,7 +142,6 @@ RSpec.describe ChoreDailyResetWorker do
     end
 
     it "excludes a scheduled chore whose last scheduled day was already completed" do
-      Chore.delete_all
       today = ChoreDay.current
       weekday_keys = %i[sun mon tue wed thu fri sat]
       satisfied = create(
@@ -154,7 +158,6 @@ RSpec.describe ChoreDailyResetWorker do
     end
 
     it "includes an unscheduled chore" do
-      Chore.delete_all
       unscheduled = create(:chore, created_by_user: user, reward_pebbles: 2)
 
       described_class.new.perform
@@ -176,7 +179,6 @@ RSpec.describe ChoreDailyResetWorker do
     end
 
     it "includes a fixed-cooldown chore whose threshold has elapsed" do
-      Chore.delete_all # remove the seeded pool so this is the only low-reward candidate
       ready = create(:chore, created_by_user: user, reward_pebbles: 2, threshold_seconds: 1.hour)
       create(:chore_completion, user: user, chore: ready, completed_at: 2.hours.ago, payout_skipped: false)
 
@@ -203,7 +205,6 @@ RSpec.describe ChoreDailyResetWorker do
     end
 
     it "ignores skipped-payout completions when checking cooldown" do
-      Chore.delete_all
       ready = create(:chore, created_by_user: user, reward_pebbles: 2, threshold_seconds: 4.hours)
       create(:chore_completion, user: user, chore: ready, completed_at: 30.minutes.ago, payout_skipped: true)
 
@@ -309,7 +310,6 @@ RSpec.describe ChoreDailyResetWorker do
 
   describe "hot_eligibility" do
     it ":never chores are excluded from hot-pick selection" do
-      Chore.delete_all # reset baseline so this spec doesn't fight the outer 31-chore fixture
       11.times { create(:chore, created_by_user: user, reward_pebbles: 2, hot_eligibility: :when_available) }
       excluded = create(:chore, created_by_user: user, reward_pebbles: 2, hot_eligibility: :never)
       described_class.new.perform
@@ -318,7 +318,6 @@ RSpec.describe ChoreDailyResetWorker do
     end
 
     it ":when_scheduled unscheduled chores are excluded from hot-pick selection" do
-      Chore.delete_all
       # 5 always-eligible scheduled chores so low-band picks have plenty of room
       5.times {
         create(
@@ -361,7 +360,6 @@ RSpec.describe ChoreDailyResetWorker do
     end
 
     it "never picks a :none chore even when it's the only candidate in its band" do
-      Chore.delete_all
       skipped = create(:chore, created_by_user: user, reward_pebbles: 2, priority: :none)
       premium = create(:chore, created_by_user: user, reward_pebbles: 20, priority: :none)
 
@@ -373,7 +371,6 @@ RSpec.describe ChoreDailyResetWorker do
     end
 
     it "still fills the low band from the non-:none candidates" do
-      Chore.delete_all
       eligible = 5.times.map { create(:chore, created_by_user: user, reward_pebbles: 2, priority: :low) }
       skipped  = create(:chore, created_by_user: user, reward_pebbles: 2, priority: :none)
 

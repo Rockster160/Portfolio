@@ -1,6 +1,4 @@
 require "rails_helper"
-require "json"
-require "open3"
 
 # On a full-height desktop window, clicking anywhere in the message thread
 # reshuffled Buddy and his chips into the phone layout — character and buttons
@@ -17,12 +15,11 @@ require "open3"
 # wrong isn't in any declaration, it's in the conditions a rule does or doesn't
 # sit under, which is the part a diff of the rule body cannot show.
 RSpec.describe "Byte Buddy hero compact layout" do
+  # Every rule that can flip the hero sideways.
   let(:triggers) {
-    runner = Rails.root.join("spec/assets/byte_hero_compact_runner.rb").to_s
-    stdout, stderr, status = Open3.capture3("bundle", "exec", "ruby", runner, chdir: Rails.root.to_s)
-    raise "runner failed: #{stderr}" unless status.success?
-
-    JSON.parse(stdout)
+    CompiledCss.rules.select { |r|
+      r["selector"].include?(".byte-buddy-hero") && r["body"].include?("flex-direction: row")
+    }
   }
 
   def trigger_matching(pattern)
@@ -30,32 +27,25 @@ RSpec.describe "Byte Buddy hero compact layout" do
   end
 
   # The bug in one line. Anything that can flip the hero sideways has to say
-  # WHEN, or it flips it on every screen there is.
-  it "never collapses the hero unconditionally" do
-    unconditional = triggers.select { |t| t["conditions"].empty? }
-
-    expect(unconditional.pluck("selector")).to eq([])
+  # WHEN, or it flips it on every screen there is — and both spellings
+  # deliberately skip the kiosk, whose premise is a fixed half/half split that
+  # the compact row would swap the character out of.
+  it "never collapses the hero unconditionally, and never on the kiosk wall" do
+    expect(triggers.select { |t| t["conditions"].empty? }.pluck("selector")).to eq([])
+    expect(triggers.pluck("selector")).to all(include('not([data-kiosk="true"])'))
   end
 
-  it "only makes room for a keyboard on a device that has one" do
+  # The two triggers, which are the same fact from both ends: room for a
+  # keyboard belongs to devices that have one, and a genuinely short window
+  # collapses whatever is pointing at it.
+  it "makes room for a keyboard only where there is one, and still collapses a short window" do
     focus_rule = trigger_matching(/data-byte-input\]:focus/)
+    short_rule = trigger_matching(/data-active-mode="buddy"/)
 
     expect(focus_rule).not_to be_nil, "the keyboard-up trigger is gone entirely"
     expect(focus_rule["conditions"]).to include("@media (pointer: coarse)")
-  end
 
-  # The other trigger, which is the one that should be doing the work on a
-  # desktop: a window genuinely too short to stack them.
-  it "still collapses a short window regardless of pointer" do
-    short_rule = trigger_matching(/data-active-mode="buddy"/)
-
-    expect(short_rule).not_to be_nil
+    expect(short_rule).not_to be_nil, "the short-window trigger is gone entirely"
     expect(short_rule["conditions"]).to eq(["@media (max-height: 560px)"])
-  end
-
-  # Both spellings deliberately skip the kiosk: its premise is a fixed half/half
-  # split, and the compact row swaps the character out for chips it never shows.
-  it "leaves the kiosk wall alone" do
-    expect(triggers.pluck("selector")).to all(include('not([data-kiosk="true"])'))
   end
 end

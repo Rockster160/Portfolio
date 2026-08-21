@@ -1,6 +1,4 @@
 require "rails_helper"
-require "json"
-require "open3"
 
 # Locks the boundary contract of the AgendaStore: malformed or missing
 # server envelopes MUST NOT mutate local state. The user-visible
@@ -12,14 +10,7 @@ require "open3"
 # Runs the actual store.js inside Node so the spec catches drift between
 # this checker and the validator the real PWA will use at runtime.
 RSpec.describe "AgendaStore validation guard (JS-side)" do
-  let(:runner_path) {
-    Rails.root.join("spec", "javascript", "agenda_store_validation_runner.js").to_s
-  }
-  let(:results) {
-    stdout, stderr, status = Open3.capture3("node", runner_path)
-    raise "runner failed: #{stderr}" unless status.success?
-    JSON.parse(stdout, symbolize_names: true)[:results]
-  }
+  let(:results) { JsRunner.output("spec/javascript/agenda_store_validation_runner.js", symbolize: true)[:results] }
   let(:by_name) { results.to_h { |r| [r[:name].to_sym, r[:result]] } }
 
   it "rejects every malformed bootstrap and keeps the existing seed item alive" do

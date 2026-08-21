@@ -1,6 +1,4 @@
 require "rails_helper"
-require "json"
-require "open3"
 
 # The slash popover used to offer all 21 commands in every thread, so a Buddy
 # conversation advertised eight ways to manage a Claude session and a shell it
@@ -13,15 +11,22 @@ require "open3"
 RSpec.describe "Slash command scoping" do
   let(:mac_only) { %w[sessions switch adopt join new watch unwatch watches wait waits abort pwd help] }
 
-  def offered(mode:, owner:)
+  # Four threads is the whole matrix, so they're all asked for at once rather
+  # than a node process per example — the examples below differ in what they
+  # claim about the answer, not in what they need computed.
+  threads = [[:buddy, true], [:claude, true], [:buddy, false], [:jarvis, true]]
+
+  let(:menus) {
     script = <<~JS
       import { available } from "#{Rails.root.join("app/javascript/src/pages/byte/slash_commands.js")}";
-      console.log(JSON.stringify(available({ mode: #{mode.to_s.inspect}, owner: #{owner} })));
+      const threads = #{threads.map { |mode, owner| [mode.to_s, owner] }.to_json};
+      console.log(JSON.stringify(threads.map(([mode, owner]) => available({ mode, owner }).map((c) => c.name))));
     JS
-    out, err, status = Open3.capture3("node", "--input-type=module", stdin_data: script)
-    raise "node failed: #{err}" unless status.success?
+    threads.zip(JsRunner.eval_module(script)).to_h
+  }
 
-    JSON.parse(out).map { |c| c["name"] }
+  def offered(mode:, owner:)
+    menus.fetch([mode, owner])
   end
 
   describe "a Buddy thread" do

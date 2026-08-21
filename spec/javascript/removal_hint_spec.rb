@@ -1,6 +1,4 @@
 require "rails_helper"
-require "json"
-require "open3"
 
 # The line under a checklist row that removes something.
 #
@@ -9,13 +7,7 @@ require "open3"
 # is what puts the thing back, which is tick-to-delete and untick-to-restore in
 # the same control. These rows say which it is in words.
 RSpec.describe "Checklist removal hints" do
-  let(:result) {
-    runner = Rails.root.join("spec/javascript/removal_hint_runner.js")
-    out, err, status = Open3.capture3("node", runner.to_s)
-    raise "node failed: #{err}" unless status.success?
-
-    JSON.parse(out)
-  }
+  let(:result) { JsRunner.output("spec/javascript/removal_hint_runner.js") }
 
   describe "before it's been tapped" do
     it "says the tick is what does the removing" do
