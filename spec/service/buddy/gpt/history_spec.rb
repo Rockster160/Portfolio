@@ -254,6 +254,59 @@ RSpec.describe Buddy::GPT::History do
     end
   end
 
+  describe "replies aimed at one message" do
+    def replied(body, quote, **opts)
+      message = said(body, **opts)
+      message.update!(metadata: message.metadata.merge("reply_to" => quote))
+      message
+    end
+
+    it "names what they were answering, so it isn't read as the nearest thing" do
+      said("Which calendar - Ours or Work?", direction: :inbound, kind: "buddy")
+      said("actually hang on")
+      replied("the second one", { "role" => "buddy", "author" => "Byte", "excerpt" => "Which calendar - Ours or Work?" })
+
+      expect(build.last[:content]).to eq(%([replying to your "Which calendar - Ours or Work?"] the second one))
+    end
+
+    it "says when they were answering something they said themselves" do
+      replied("AA not AAA", { "role" => "self", "author" => "You", "excerpt" => "grab batteries" })
+
+      expect(build.first[:content]).to eq(%([replying to their own earlier "grab batteries"] AA not AAA))
+    end
+
+    it "names the other household's companion on a relayed quote" do
+      replied("sounds good", { "role" => "relay_in", "author" => "Moss", "excerpt" => "dinner at 6?" })
+
+      expect(build.first[:content]).to eq(%([replying to what Moss said "dinner at 6?"] sounds good))
+    end
+
+    it "marks a reply that went to the PERSON as already gone, not as a request" do
+      replied(
+        "make it 6:30",
+        { "role" => "relay_in", "author" => "Moss", "excerpt" => "dinner at 6?" },
+        kind: "buddy_relay", source: "relay_copy", peer: "Moss",
+      )
+
+      expect(build.first).to eq({
+        role:    :user,
+        content: %([they sent this to Moss themselves, answering "dinner at 6?"] make it 6:30),
+      })
+    end
+
+    it "still says where an unquoted relay reply went" do
+      said("on my way", kind: "buddy_relay", source: "relay_copy", peer: "Moss")
+
+      expect(build.first[:content]).to eq("[they sent this to Moss themselves] on my way")
+    end
+
+    it "leaves an ordinary message alone" do
+      said("morning")
+
+      expect(build.first[:content]).to eq("morning")
+    end
+  end
+
   describe "compaction boundary" do
     it "starts after buddy_recap_at so a compacted stretch is not replayed" do
       said("ancient history")

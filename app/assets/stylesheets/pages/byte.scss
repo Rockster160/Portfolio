@@ -811,6 +811,50 @@ html.html-ctr-byte body {
     }
   }
 
+  // What this message is answering, above its own words. A left bar and a
+  // single clipped line: enough to recognise, never enough to compete with the
+  // reply itself. Tapping it jumps to the original, so it neutralises the
+  // global `button` cascade (forms.scss) the same way the tapbacks below do.
+  .byte-msg-quote {
+    appearance: none;
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    width: 100%;
+    margin: 0 0 5px;
+    padding: 3px 0 3px 8px;
+    border: 0;
+    border-left: 2px solid currentColor;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 84%;
+    text-align: left;
+    opacity: 0.65;
+    cursor: pointer;
+
+    &[hidden] { display: none; } // author `display` beats the hidden attr
+    &:active { top: auto; }      // the global :active nudge would shift the bubble
+
+    .byte-msg-quote-author {
+      flex: 0 0 auto;
+      font-weight: 600;
+
+      &::after { content: ":"; }
+    }
+    // One line, whatever the excerpt is. A quote that wraps to four lines is
+    // the thing being quoted rather than a reference to it, and it buries the
+    // reply underneath.
+    .byte-msg-quote-text {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+  }
+
   // Tapbacks on a relayed message. Only present once someone has left one — the
   // gesture that adds the first is the long-press menu, so an empty row would be
   // a permanent affordance for something almost never done.
@@ -1782,6 +1826,66 @@ html.html-ctr-byte body {
 @keyframes byte-sleep-pulse {
   0%, 100% { opacity: 0.55; }
   50%      { opacity: 1; }
+}
+
+// The message being replied to, pinned above the composer from the moment one
+// is picked until the send goes. Same footprint as the sleep chip, deliberately
+// — it's the same kind of thing, a line of state about what the next message is
+// going to do.
+.byte-reply-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px 6px;
+  padding: 5px 6px 5px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--bs-subtle, #9fb2c8);
+  background: var(--bs-surface-2, rgba(255, 255, 255, 0.05));
+  border-left: 2px solid var(--bs-accent, #3fa0ff);
+
+  &[hidden] { display: none; }
+
+  .byte-reply-bar-mark {
+    opacity: 0.7;
+    line-height: 1;
+  }
+  // The label takes whatever's left and clips. The ✕ must never be pushed off
+  // the edge by a long quote — it's the only way out of a reply.
+  .byte-reply-bar-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .byte-reply-bar-clear {
+    appearance: none;
+    flex: 0 0 auto;
+    padding: 2px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    font-size: 12px;
+    line-height: 1;
+    opacity: 0.75;
+    cursor: pointer;
+
+    &:active { top: auto; }
+  }
+}
+
+// Where a tapped quote lands. Brief and colour-only — it says "here", and then
+// it stops, so it never becomes a second thing on screen asking to be dealt
+// with.
+.byte-msg-flash {
+  animation: byte-msg-flash 1.4s ease-out;
+}
+@keyframes byte-msg-flash {
+  0%   { box-shadow: 0 0 0 2px var(--bs-accent, #3fa0ff); }
+  100% { box-shadow: 0 0 0 2px rgba(63, 160, 255, 0); }
 }
 
 .byte-app .byte-composer {
@@ -4660,6 +4764,7 @@ $suki_expr_aliases: (
   .byte-composer,
   .byte-jump-btn,
   .byte-sleep-chip,
+  .byte-reply-bar,
   .byte-slash-popover,
   // The chip row and its popovers. Their contents either need a keyboard
   // (Stash arms the next thing you type) or open a second layer over the pet,

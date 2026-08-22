@@ -102,7 +102,18 @@ class ByteController < ApplicationController
     metadata[:local_id] = local_id if local_id
 
     incoming_meta = (params[:metadata] || {}).to_unsafe_h rescue {}
-    metadata.merge!(incoming_meta.symbolize_keys.except(:source, :local_id))
+    metadata.merge!(incoming_meta.symbolize_keys.except(:source, :local_id, :reply_to))
+
+    # Which message this is a reply to, if they long-pressed one. It rides in
+    # `metadata` so the offline queue carries it through a reload for free, but
+    # it is lifted OUT of the merge above: what ends up stored is the resolved
+    # quote block ByteMessageIntake stamps, not a bare client-supplied id.
+    # The client sends the whole descriptor - id, author, excerpt - because its
+    # optimistic bubble has to draw the quote before any echo comes back. Only
+    # the id is taken: the rest is client-controlled, and what gets stored is
+    # the block ByteMessageIntake builds by reading the row itself.
+    reply_to = params[:reply_to].presence || incoming_meta.symbolize_keys[:reply_to]
+    reply_to = reply_to["id"] if reply_to.is_a?(Hash)
 
     # Prefer the client-typed timestamp for `created_at` so a burst of
     # rapid sends stays in the user's typing order even when the network
@@ -120,6 +131,7 @@ class ByteController < ApplicationController
       metadata:              metadata,
       created_at:            created,
       attachment_signed_ids: attachment_signed_ids,
+      reply_to:              reply_to,
     )
     return head(:bad_request) if message.nil?
 

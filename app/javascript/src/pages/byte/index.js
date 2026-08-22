@@ -130,6 +130,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   const composer = app.querySelector("[data-byte-composer]");
   const input = app.querySelector("[data-byte-input]");
   const originalPlaceholder = input?.getAttribute("placeholder") ?? "";
+  // The message being replied to, and the bar that says so. Declared up here
+  // with the rest of the composer's handles rather than beside setReplyTarget
+  // below: switching threads clears the target, and the drawer can fire that
+  // switch while init is still running.
+  const replyBar = app.querySelector("[data-byte-reply-bar]");
+  const replyLabel = app.querySelector("[data-byte-reply-label]");
+  let replyTarget = null;
   // True while the user is COMPOSING. In that state we pin to the bottom
   // UNCONDITIONALLY: they're on the newest message and the keyboard must never
   // cover it. This bypasses the atBottom heuristic, which flips false
@@ -463,6 +470,32 @@ document.addEventListener("DOMContentLoaded", async () => {
     return tpl.content.firstElementChild.cloneNode(true);
   }
 
+  // Whose words a bubble carries, phrased the way the reply chip says it.
+  // Mirrors Buddy::ThreadReply#author: the server stamps the durable copy when
+  // the reply is sent, and this is the same answer a moment earlier, for the
+  // chip that has to appear before any send exists.
+  function replyAuthorFor(message) {
+    const meta = message?.metadata || {};
+    if (meta.kind === "buddy_relay")
+      return meta.source === "relay_copy"
+        ? "You"
+        : meta.relay_peer?.name || "them";
+    return message.direction === "outbound" ? "You" : buddyName();
+  }
+
+  // The quoted stub above a reply's body. Same painter for a server message and
+  // for the optimistic bubble, so a reply doesn't lose the thing it's answering
+  // for the second between send and echo.
+  function paintQuote(node, quote) {
+    const el = node.querySelector("[data-quote]");
+    if (!el) return;
+    el.hidden = !quote;
+    if (!quote) return;
+    el.dataset.quoteId = String(quote.id || "");
+    el.querySelector("[data-quote-author]").textContent = quote.author || "";
+    el.querySelector("[data-quote-text]").textContent = quote.excerpt || "";
+  }
+
   function paintMessageNode(node, message, opts = {}) {
     const live = opts.live === true;
     node.dataset.messageId = String(message.id);
@@ -541,6 +574,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         node.removeAttribute("data-peer-theme");
       }
     }
+
+    // Who a long-press would be answering, and whether that answer leaves the
+    // house. Stamped on the node so the menu and the reply bar read one answer
+    // instead of each deriving its own from metadata.
+    node.dataset.replyAuthor = replyAuthorFor(message);
+    const replyPeer = kind === "buddy_relay" ? peer?.name || "" : "";
+    if (replyPeer) node.dataset.replyPeer = replyPeer;
+    else delete node.dataset.replyPeer;
+
+    paintQuote(node, message?.metadata?.reply_to);
 
     // Kind-dispatch for body content rendering.
     //   claude          → thoughts collapsible + markdown-lite final body
@@ -1296,6 +1339,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const held = entry.held === true;
     node.className = `byte-msg byte-msg-outbound ${held ? "byte-msg-queued" : "byte-msg-pending"}`;
     node.querySelector("[data-body]").textContent = entry.body || "";
+    paintQuote(node, entry.metadata?.reply_to);
     node.querySelector("[data-time]").textContent = formatTime(
       new Date(entry.client_ts || entry.queued_at || Date.now()).toISOString(),
     );
@@ -1701,6 +1745,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   function handleSwitch(nextId) {
     if (nextId === currentConversationId) return;
     currentConversationId = nextId;
+    // A quote only means anything beside the thread it came out of.
+    setReplyTarget(null);
     hydrateForConversation(nextId, []);
     syncConversationChrome();
   }
@@ -1996,7 +2042,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }).catch(() => {});
   }
 
-  function sendMessageTo(convId, body, pending = null) {
+  function sendMessageTo(convId, body, pending = null, replyTo = null) {
     const signedIds = pending?.signed_ids || [];
     const previews = pending?.previews || [];
     if ((!body && signedIds.length === 0) || !convId) return;
@@ -2032,7 +2078,18 @@ document.addEventListener("DOMContentLoaded", async () => {
       // server echoes the real attachment on delivery).
       attachment_signed_ids: signedIds,
       attachments_preview: previews,
-      metadata: { source: "web", local_id, client_ts, conversation_id: convId },
+      // The whole reply descriptor, not just the id: the optimistic bubble
+      // needs the excerpt to draw the quote, and metadata is the one part of an
+      // entry the offline queue persists verbatim — so a reply picked, typed
+      // and left overnight still knows what it was answering. The server reads
+      // the id off it and stamps its own block; nothing else here is trusted.
+      metadata: {
+        source: "web",
+        local_id,
+        client_ts,
+        conversation_id: convId,
+        ...(replyTo ? { reply_to: replyTo } : {}),
+      },
     };
 
     sendMessage(
@@ -2144,7 +2201,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     // written about, and the chip is stranded in the tray with no explanation.
     if (composerAttachments.isUploading()) await composerAttachments.settled();
     const pending = composerAttachments.commit();
-    sendMessageTo(currentConversationId, body, pending);
+    const replyTo = replyTarget;
+    // Cleared BEFORE the send, not after: the await above can hold for as long
+    // as an upload takes, and a bar still up in the meantime invites a second
+    // message to be typed at a target that's already spoken for.
+    setReplyTarget(null);
+    sendMessageTo(currentConversationId, body, pending, replyTo);
   }
 
   // Mount the Buddy hero once the composer + input handles exist. The
@@ -2435,9 +2497,48 @@ document.addEventListener("DOMContentLoaded", async () => {
     onNotice: (msg) => surfaceLocal(msg),
   });
 
-  // Long-press / right-click a message bubble → Copy ID / Copy full message /
-  // Report a problem.
-  initMessageContextMenu(thread, app, { onNotice: (msg) => surfaceLocal(msg) });
+  // ---- replying to one message rather than to the thread ----
+  //
+  // One target at a time. Picking another replaces it, sending clears it, the ✕
+  // cancels, and switching threads drops it — a quote is only meaningful next
+  // to the conversation it came out of.
+  function setReplyTarget(target) {
+    replyTarget = target || null;
+    if (!replyBar) return;
+    replyBar.hidden = !replyTarget;
+    if (!replyTarget) return;
+    // `peer` over `author` when both are there: a reply to something relayed
+    // goes to the PERSON, and the bar is the last chance to notice that before
+    // the words leave the house.
+    const who = replyTarget.peer || replyTarget.author || "";
+    replyLabel.textContent = [who, replyTarget.excerpt]
+      .filter(Boolean)
+      .join(": ");
+    input?.focus();
+  }
+
+  app
+    .querySelector("[data-byte-reply-clear]")
+    ?.addEventListener("click", () => setReplyTarget(null));
+
+  // Tapping the quoted stub jumps to what it quotes, and flashes it — a reply
+  // three screens down from its subject is the whole reason the quote is there.
+  thread.addEventListener("click", (e) => {
+    const stub = e.target.closest("[data-quote]");
+    if (!stub) return;
+    const target = thread.querySelector(selectorForId(stub.dataset.quoteId));
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    target.classList.add("byte-msg-flash");
+    setTimeout(() => target.classList.remove("byte-msg-flash"), 1400);
+  });
+
+  // Long-press / right-click a message bubble → Reply / Copy ID / Copy full
+  // message / Report a problem.
+  initMessageContextMenu(thread, app, {
+    onNotice: (msg) => surfaceLocal(msg),
+    onReply: (target) => setReplyTarget(target),
+  });
 
   composer.addEventListener("submit", (e) => {
     e.preventDefault();

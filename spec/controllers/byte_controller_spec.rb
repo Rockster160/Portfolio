@@ -1167,6 +1167,60 @@ RSpec.describe ByteController, type: :controller do
   # Reporting a bad reply from the message's own long-press menu. The line lands
   # on the Todo list as `#{id} [{body}] {description}`, which is the format asked
   # for and also, not coincidentally, one that survives ListItem.add.
+  describe "replying to a message" do
+    let(:user)  { User.me }
+    let(:convo) { user.byte_conversations.create!(name: "t", mode: :buddy) }
+
+    # The suite runs Sidekiq inline, so a dispatched turn would make a real call.
+    around { |example| Sidekiq::Testing.fake! { example.run } }
+
+    before do
+      allow(MonitorChannel).to receive(:broadcast_to)
+      sign_in user
+    end
+
+    def said
+      convo.byte_messages.create!(
+        user:      user,
+        direction: :inbound,
+        state:     :delivered,
+        body:      "Which calendar - Ours or Work?",
+        metadata:  { "kind" => "buddy" },
+      )
+    end
+
+    # The client sends the whole descriptor so its optimistic bubble can draw
+    # the quote before any echo exists. Only the id is read off it; what gets
+    # stored is the block the server builds for itself.
+    it "reads the target off the metadata the offline queue carries" do
+      target = said
+
+      post :create_message, params: {
+        conversation_id: convo.id,
+        body:            "the second one",
+        metadata:        { reply_to: { id: target.id, author: "whatever they like", excerpt: "..." } },
+      }
+
+      quote = convo.byte_messages.order(:id).last.metadata["reply_to"]
+      expect(quote).to include("id" => target.id, "excerpt" => "Which calendar - Ours or Work?")
+      expect(quote["author"]).not_to eq("whatever they like")
+    end
+
+    it "takes a bare id too" do
+      target = said
+
+      post :create_message, params: { conversation_id: convo.id, body: "the second one", reply_to: target.id }
+
+      expect(convo.byte_messages.order(:id).last.metadata.dig("reply_to", "id")).to eq(target.id)
+    end
+
+    it "stores nothing when they replied to nothing" do
+      post :create_message, params: { conversation_id: convo.id, body: "morning" }
+
+      expect(convo.byte_messages.order(:id).last.metadata).not_to have_key("reply_to")
+    end
+  end
+
   describe "reporting a message" do
     let(:rocco) { User.me }
     let(:convo) { rocco.byte_conversations.create!(mode: :buddy, name: "Byte", last_message_at: Time.current) }

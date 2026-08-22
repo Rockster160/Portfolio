@@ -1,6 +1,6 @@
 // Long-press (touch) / right-click (desktop) context menu on a message
-// bubble. Three actions — Copy ID, Copy full message, Report a problem — plus
-// a header showing the message's id (verbatim + hand-selectable if the
+// bubble. Four actions — Reply, Copy ID, Copy full message, Report a problem —
+// plus a header showing the message's id (verbatim + hand-selectable if the
 // clipboard write is blocked in a non-secure context or on denied permission)
 // and its send time.
 //
@@ -90,7 +90,23 @@ async function apiCall(url, method, body) {
   return json;
 }
 
-export function initMessageContextMenu(thread, root, { onNotice } = {}) {
+// What a bubble offers as a reply target. `data-reply-author` and
+// `data-reply-peer` are stamped by paintMessageNode, so the menu never has to
+// re-derive from metadata what the bubble already worked out — and a reply that
+// leaves the house says whose house it's going to right there on the button.
+function replyTargetFor(node) {
+  const id = node.dataset.messageId;
+  if (!id) return null; // still in the outbound queue; nothing to point at yet
+
+  return {
+    id,
+    author: node.dataset.replyAuthor || "",
+    peer: node.dataset.replyPeer || "",
+    excerpt: (node.dataset.fullBody || "").trim().slice(0, 140),
+  };
+}
+
+export function initMessageContextMenu(thread, root, { onNotice, onReply } = {}) {
   if (!thread || !root) return;
 
   let menu = null;
@@ -138,6 +154,7 @@ export function initMessageContextMenu(thread, root, { onNotice } = {}) {
         </div>
         <span class="byte-msg-menu-sent" data-menu-sent hidden></span>
       </div>
+      <button type="button" class="byte-msg-menu-item" data-menu-reply hidden>Reply</button>
       <button type="button" class="byte-msg-menu-item" data-menu-retry hidden>Send it again</button>
       <button type="button" class="byte-msg-menu-item" data-menu-copy-full>Copy full message</button>
       <button type="button" class="byte-msg-menu-item is-report" data-menu-report>Report a problem</button>
@@ -160,6 +177,13 @@ export function initMessageContextMenu(thread, root, { onNotice } = {}) {
     });
     el.querySelector("[data-menu-retry]").addEventListener("click", (e) => {
       runRetry(e.currentTarget, menu.dataset.msgRetry || "");
+    });
+    el.querySelector("[data-menu-reply]").addEventListener("click", () => {
+      const raw = menu.dataset.msgReply || "";
+      // Close first: picking a target is instant and the composer is where
+      // they're headed next, so a menu still sitting over it is just in the way.
+      closeMenu();
+      if (raw && onReply) onReply(JSON.parse(raw));
     });
     return el;
   }
@@ -352,6 +376,15 @@ export function initMessageContextMenu(thread, root, { onNotice } = {}) {
     const reportBtn = menu.querySelector("[data-menu-report]");
     reportBtn.textContent = "Report a problem";
     reportBtn.disabled = false;
+
+    // "Reply to Moss" when the answer leaves the house, plain "Reply" when it
+    // stays here — the difference is the whole point of the distinction, and
+    // finding out afterwards is too late.
+    const target = onReply ? replyTargetFor(node) : null;
+    menu.dataset.msgReply = target ? JSON.stringify(target) : "";
+    const replyBtn = menu.querySelector("[data-menu-reply]");
+    replyBtn.hidden = !target;
+    replyBtn.textContent = target?.peer ? `Reply to ${target.peer}` : "Reply";
 
     // Only on a bubble that failed. `data-retryable` is stamped by
     // paintMessageNode and carries the id, so the menu never has to work out

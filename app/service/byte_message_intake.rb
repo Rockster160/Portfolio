@@ -32,13 +32,21 @@ class ByteMessageIntake
     message
   end
 
-  def initialize(user:, conversation:, body:, metadata: {}, created_at: nil, attachment_signed_ids: [])
+  def initialize(
+    user:,
+    conversation:,
+    body:,
+    metadata: {},
+    created_at: nil,
+    attachment_signed_ids: [],
+    reply_to: nil)
     @user                  = user
     @conversation          = conversation
     @body                  = body.to_s.strip
     @metadata              = metadata || {}
     @created_at            = created_at || Time.current
     @attachment_signed_ids = Array(attachment_signed_ids).compact_blank
+    @reply_to              = reply_to
   end
 
   def call
@@ -59,6 +67,25 @@ class ByteMessageIntake
     # upgrades its queued bubble to this id and stops.
     if (already = existing_for_local_id)
       return already
+    end
+
+    # They long-pressed one message and answered THAT. Above everything below
+    # it because an explicit target outranks whatever the parsers would make of
+    # the same words: "10 more minutes" said at a note from Chelsea is an answer
+    # to Chelsea, not a timer.
+    #
+    # A reply to a relayed message never reaches Buddy at all - it goes to the
+    # person who sent it, which is also why it still works while the provider is
+    # down. Everything else is an ordinary turn that happens to name what it's
+    # about (Buddy::GPT::History).
+    if buddy? && (target = reply_target)
+      @metadata = @metadata.to_h.merge(reply_to: ::Buddy::ThreadReply.quote(target))
+
+      if (relay = ::Buddy::ThreadReply.relay_for(@user, target))
+        message = post!(state: :sent)
+        ::Buddy::ThreadReply.send_back!(user: @user, message: message, relay: relay)
+        return message
+      end
     end
 
     # Brain-dump capture: if they armed a "Stash" bucket, THIS message is the
@@ -124,6 +151,12 @@ class ByteMessageIntake
 
   def buddy?
     @conversation.buddy?
+  end
+
+  def reply_target
+    return @reply_target if defined?(@reply_target)
+
+    @reply_target = ::Buddy::ThreadReply.target(@conversation, @reply_to)
   end
 
   # A buddy-only member must never reach the owner's Mac through a

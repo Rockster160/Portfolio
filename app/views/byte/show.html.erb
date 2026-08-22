@@ -302,6 +302,13 @@
         <img class="byte-msg-peer-icon" data-peer-icon alt="" aria-hidden="true">
         <span class="byte-msg-peer-name" data-peer-name></span>
       </div>
+      <%# What this message is answering — who said it and an excerpt, stamped %>
+      <%# at send time by Buddy::ThreadReply. Tapping it jumps to the original. %>
+      <%# Hidden unless the message carries a reply_to block. %>
+      <button type="button" class="byte-msg-quote" data-quote hidden>
+        <span class="byte-msg-quote-author" data-quote-author></span>
+        <span class="byte-msg-quote-text" data-quote-text></span>
+      </button>
       <div class="byte-msg-body" data-body></div>
       <%# Activity-chip footnote: which tool ran and with what. Its own element %>
       <%# so it can sit quietly under the receipt instead of competing with it. %>
@@ -322,6 +329,14 @@
   <div class="byte-sleep-chip" data-byte-sleep-chip hidden>
     <span class="byte-sleep-chip-dot" aria-hidden="true">💤</span>
     <span class="byte-sleep-chip-text" data-byte-sleep-text></span>
+  </div>
+
+  <%# The message being replied to, pinned above the composer from the moment %>
+  <%# one is picked out of the thread until the send goes (or the ✕ clears it). %>
+  <div class="byte-reply-bar" data-byte-reply-bar hidden>
+    <span class="byte-reply-bar-mark" aria-hidden="true">↳</span>
+    <span class="byte-reply-bar-label" data-byte-reply-label></span>
+    <button type="button" class="byte-reply-bar-clear" data-byte-reply-clear aria-label="Cancel reply">✕</button>
   </div>
 
   <%# Slash-command autocomplete popover. Positioned above the composer, %>

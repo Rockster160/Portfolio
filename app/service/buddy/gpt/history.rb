@@ -152,7 +152,7 @@ module Buddy
       def item_for(message, replay_images: false)
         body = seed_standin(message.metadata) || message.body.to_s.strip
 
-        return user_item(message, body, replay_images) if message.direction == "outbound"
+        return user_item(message, outbound_body(message, body), replay_images) if message.direction == "outbound"
 
         return nil if body.empty?
 
@@ -200,6 +200,48 @@ module Buddy
         stand_in = ACTION_STANDINS[action] || "[tapped #{action}]"
         mood     = metadata["buddy_mood"].to_s.presence
         mood ? "#{stand_in.delete_suffix("]")}, feeling #{mood}]" : stand_in
+      end
+
+      # What the person's turn is ANSWERING, when it isn't just the last thing
+      # said. Same bracketed system voice as the relay bridges and the image
+      # standins, for the same reason: it's the transcript saying who a line
+      # belongs to, not words anybody typed.
+      #
+      # Two things need it. A reply aimed at one message means the thread is no
+      # longer in order — "yes, that one" three messages down answers something
+      # further up, and without the quote the only reading available is the
+      # nearest one. And a reply typed at a RELAYED message never came to Buddy
+      # at all: it went to the person who sent it (Buddy::ThreadReply), so a
+      # turn that reads it as being addressed here answers a note meant for
+      # somebody else.
+      def outbound_body(message, body)
+        prefix = reply_prefix(message)
+        prefix ? "#{prefix} #{body}".strip : body
+      end
+
+      REPLY_FRAMES = {
+        "relay_in"  => ->(quote) { "replying to what #{quote["author"]} said" },
+        "relay_out" => ->(_q)    { "replying to the note they passed along" },
+        "buddy"     => ->(_q)    { "replying to your" },
+        "self"      => ->(_q)    { "replying to their own earlier" },
+      }.freeze
+
+      def reply_prefix(message)
+        meta  = message.metadata.is_a?(Hash) ? message.metadata : {}
+        quote = meta["reply_to"]
+        quote = nil unless quote.is_a?(Hash)
+        peer  = relay_copy?(meta) ? meta.dig("relay_peer", "name").presence : nil
+        return nil if quote.nil? && peer.nil?
+
+        answering = quote ? %(, answering "#{quote["excerpt"]}") : ""
+        return "[they sent this to #{peer} themselves#{answering}]" if peer
+
+        frame = REPLY_FRAMES[quote["role"].to_s] || REPLY_FRAMES["buddy"]
+        %([#{frame.call(quote)} "#{quote["excerpt"]}"])
+      end
+
+      def relay_copy?(meta)
+        meta["kind"].to_s == RELAY_KIND && meta["source"].to_s == "relay_copy"
       end
 
       # The person's turn. A plain text message stays a bare string so the vast

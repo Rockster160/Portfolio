@@ -38,16 +38,21 @@ module Buddy
       # 2555-2569: a note set for Chelsea two minutes out arrived exactly as
       # asked, Rocco had no way to see that it had, asked "did it send?", got a
       # guess for an answer, and a second copy went out for real.
-      def pass_along!(from:, to:, text:, from_conversation: nil)
+      #
+      # `from_message:` is for the one case where the sender's words are ALREADY
+      # a row in their thread - they long-pressed a relayed message and typed a
+      # reply (Buddy::ThreadReply). Handed over, bridge! adopts that row as the
+      # outgoing record instead of writing a second bubble saying the same thing.
+      def pass_along!(from:, to:, text:, from_conversation: nil, from_message: nil)
         relay = BuddyRelay.create!(
           from_user:         from,
           to_user:           to,
-          from_conversation: from_conversation || conversation_for(from),
+          from_conversation: from_conversation || from_message&.byte_conversation || conversation_for(from),
           kind:              :notify,
           body:              text.to_s,
           status:            :pending,
         )
-        deliver!(relay)
+        deliver!(relay, from_message: from_message)
         # The row we made, not whatever delivery handed back. The record exists
         # either way, and a caller that wants its id shouldn't depend on how the
         # send went.
@@ -84,9 +89,9 @@ module Buddy
       end
 
       # Dispatch by kind. Returns the relay.
-      def deliver!(relay)
+      def deliver!(relay, from_message: nil)
         case relay.kind.to_sym
-        when :notify   then send_notify(relay)
+        when :notify   then send_notify(relay, from_message: from_message)
         when :ask_open then send_open_question(relay)
         else                send_choice_question(relay)
         end
@@ -98,10 +103,11 @@ module Buddy
       # attributed to the RECIPIENT's Buddy (see #bridge!). Open questions get
       # answered later when the recipient replies (their Buddy sees the still-open
       # relay in context and emits [[relay_answer]]).
-      def send_notify(relay)
+      def send_notify(relay, from_message: nil)
         res = bridge!(
           from_user: relay.from_user, to_user: relay.to_user,
-          from_conversation: relay.from_conversation, text: relay.body
+          from_conversation: relay.from_conversation, text: relay.body,
+          relay: relay, from_message: from_message
         )
         relay.update!(to_conversation: res[:to_conversation], status: :delivered, delivered_at: Time.current)
       end
@@ -109,7 +115,7 @@ module Buddy
       def send_open_question(relay)
         res = bridge!(
           from_user: relay.from_user, to_user: relay.to_user,
-          from_conversation: relay.from_conversation, text: relay.body
+          from_conversation: relay.from_conversation, text: relay.body, relay: relay
         )
         relay.update!(to_conversation: res[:to_conversation], status: :delivered, delivered_at: Time.current)
       end
@@ -126,7 +132,7 @@ module Buddy
         # the thread and the options finally appeared (prod 2212).
         res = bridge!(
           from_user: relay.from_user, to_user: relay.to_user,
-          from_conversation: relay.from_conversation, text: choice_body(relay)
+          from_conversation: relay.from_conversation, text: choice_body(relay), relay: relay
         ) { |message| action = attach_answer_action(relay, message) }
         relay.update!(
           to_conversation: res[:to_conversation],
@@ -142,11 +148,11 @@ module Buddy
       # Records the recipient's answer (a String for open/choice, an Array for
       # multi) and hands it back to the asker's Buddy. Idempotent: a relay that
       # is no longer awaiting an answer is left untouched.
-      def record_answer!(relay, answer)
+      def record_answer!(relay, answer, from_message: nil)
         return relay unless relay.delivered? && relay.question?
 
         relay.update!(answer: answer, status: :answered, answered_at: Time.current)
-        relay_answer_back(relay)
+        relay_answer_back(relay, from_message: from_message)
         resume_sequence(relay)
         relay
       end
@@ -177,10 +183,11 @@ module Buddy
       # the asker (relay.from_user). Same bridge — the asker sees the answer
       # attributed to the answerer's Buddy, the answerer gets a copy attributed to
       # the asker's. Delivered into the asker's original conversation.
-      def relay_answer_back(relay)
+      def relay_answer_back(relay, from_message: nil)
         res = bridge!(
           from_user: relay.to_user, to_user: relay.from_user,
-          to_conversation: relay.from_conversation, text: formatted_answer(relay)
+          to_conversation: relay.from_conversation, text: formatted_answer(relay),
+          relay: relay, from_message: from_message
         )
         relay.update!(status: :relayed, from_conversation: res[:to_conversation])
       end
@@ -229,18 +236,25 @@ module Buddy
       # "yours → theirs" rather than as the partner talking. Recipient gets a
       # push; the sender copy is a silent record. No recompose — the text is
       # delivered verbatim in the sending Buddy's words.
-      def bridge!(from_user:, to_user:, text:, from_conversation: nil, to_conversation: nil)
-        to_convo   = to_conversation   || conversation_for(to_user)
-        from_convo = from_conversation || conversation_for(from_user)
+      def bridge!(from_user:, to_user:, text:, from_conversation: nil, to_conversation: nil, relay: nil, from_message: nil)
+        to_convo   = to_conversation || conversation_for(to_user)
+        from_convo = from_message&.byte_conversation || from_conversation || conversation_for(from_user)
         sender     = peer_identity(from_user)
         recipient  = peer_identity(to_user)
+
+        to_meta = { "kind" => "buddy_relay", "source" => "relay", "relay_peer" => sender }
+        # Which relay this bubble belongs to. Everything else about a bridged
+        # message describes the OTHER household's companion; nothing on it said
+        # which row it came from, so a reply typed straight at it had no way
+        # back to the person who sent it (Buddy::ThreadReply).
+        to_meta["relay_id"] = relay.id if relay
 
         to_msg = to_convo.byte_messages.create!(
           user:         to_user,
           direction:    :inbound,
           state:        :delivered,
           body:         text,
-          metadata:     { "kind" => "buddy_relay", "source" => "relay", "relay_peer" => sender },
+          metadata:     to_meta,
           delivered_at: Time.current,
         )
         # Whatever else belongs ON the recipient's copy - a choice question's
@@ -251,25 +265,34 @@ module Buddy
         broadcast(to_user, to_msg)
         push(to_user, "#{sender["name"]}: #{text}", conversation: to_convo)
 
-        from_msg = from_convo.byte_messages.create!(
+        from_meta = {
+          "kind"       => "buddy_relay",
+          "source"     => "relay_copy",
+          "relay_peer" => recipient,
+          "relay_from" => sender,
+          # Each copy points at the other, so a tapback on either one shows up
+          # on both (Buddy::Reactions). Only settable in this direction at
+          # create time — the recipient's copy is stamped below, once its twin
+          # exists. Invisible plumbing, so the earlier broadcast going out
+          # without it costs nothing.
+          "relay_twin" => to_msg.id,
+        }
+        from_meta["relay_id"] = relay.id if relay
+
+        # An adopted row is one the sender already typed and already sees. It
+        # keeps its own direction and state — it is still their message, sitting
+        # on their side of the thread — and only gains the attribution saying
+        # where it went. Creating a second bubble here instead would put their
+        # own words on the screen twice.
+        from_msg = from_message || from_convo.byte_messages.new(
           user:         from_user,
           direction:    :inbound,
           state:        :delivered,
           body:         text,
-          metadata:     {
-            "kind"       => "buddy_relay",
-            "source"     => "relay_copy",
-            "relay_peer" => recipient,
-            "relay_from" => sender,
-            # Each copy points at the other, so a tapback on either one shows up
-            # on both (Buddy::Reactions). Only settable in this direction at
-            # create time — the recipient's copy is stamped below, once its twin
-            # exists. Invisible plumbing, so the earlier broadcast going out
-            # without it costs nothing.
-            "relay_twin" => to_msg.id,
-          },
           delivered_at: Time.current,
         )
+        from_msg.metadata = from_msg.metadata.to_h.merge(from_meta)
+        from_msg.save!
         broadcast(from_user, from_msg)
         to_msg.update!(metadata: to_msg.metadata.merge("relay_twin" => from_msg.id))
 
