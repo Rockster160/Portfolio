@@ -113,7 +113,12 @@ class Tokenizer
 
       top = nest.zero?
       char = str[idx]
-      next_escaped = char == "\\" && idx < str.length && str[...(idx + 1)][/\\*$/].length.odd?
+      # `idx + 1`, not `idx`: the loop has already established there is a
+      # character HERE, and what this asks is whether there is one after it to
+      # escape. A trailing backslash — `payee:\` typed into any search box —
+      # read past the end and came back with a TypeError from a `nil + String`,
+      # which is a 500 rather than a search.
+      next_escaped = char == "\\" && idx + 1 < str.length && str[...(idx + 1)][/\\*$/].length.odd?
 
       if next_escaped
         # Remove the escape and add the next character instead

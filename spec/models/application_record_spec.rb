@@ -28,11 +28,28 @@ RSpec.describe ApplicationRecord do
         expect(resolved("2026-08-18", :<)).to start_with("2026-08-18 00:00:00")
       end
 
-      # Every line below the split reads `year`, so a value with no digits at all
-      # used to leave the method with a NoMethodError on nil instead of the
-      # "could not read it" answer the rescues already knew how to give.
-      it "hands back what it was given when there is no date in it" do
-        expect(User.timezone { described_class.parse_date("notadate") }).to eq("notadate")
+      # It used to hand the raw String back, which is the root of a whole family
+      # of failures: the caller then either did date arithmetic on it and raised
+      # NoMethodError, or handed it to Postgres as a timestamp and took the
+      # surrounding transaction down with it. A value that is not a date is not
+      # a date, and saying so is the only answer that composes.
+      it "refuses a value with no date in it" do
+        expect { User.timezone { described_class.parse_date("notadate") } }
+          .to raise_error(ApplicationRecord::UnreadableDate)
+      end
+
+      # Ruby will build the year 99999999999 quite happily; Postgres will not,
+      # and the failure used to land as invalid SQL four layers from the digits
+      # that caused it.
+      it "refuses a year no database could hold" do
+        expect { User.timezone { described_class.parse_date("99999999999") } }
+          .to raise_error(ApplicationRecord::UnreadableDate)
+      end
+
+      # The word forms still work — this is the path the digit split cannot read
+      # and `DateTime.parse` can, and it must survive the stricter fallback.
+      it "still reads a date written out in words" do
+        expect(resolved("August 19, 2026", :>=)).to start_with("2026-08-19")
       end
 
       # The unit is whatever the value names, not always a day.
@@ -68,6 +85,142 @@ RSpec.describe ApplicationRecord do
         }
 
         expect(found).to match_array(%w[TRN-1 TRN-2])
+      end
+    end
+  end
+
+  # The rule the whole search pipeline now follows: a term nobody can read
+  # matches NOTHING. The alternative — dropping it — is how a search silently
+  # widens, and a page full of rows looks like it worked.
+  describe "a term that cannot be read" do
+    let(:user) { User.me }
+
+    let!(:events) {
+      User.timezone {
+        [1.day.ago, 40.days.ago, 200.days.ago, 400.days.ago].each_with_index.map { |at, i|
+          ActionEvent.create!(user: user, name: "Coffee#{i}", timestamp: at)
+        }
+      }
+    }
+
+    def found(query) = User.timezone { ActionEvent.query(query).count }
+
+    # The one that cost the most. `timestamp>#{start}` is how thirteen Jil
+    # tasks scope themselves, and a blank interpolation used to leave
+    # `timestamp>` — which matched every row ever recorded. The calorie totals
+    # summed all of history; the nightly Whisper cleanup would have deleted
+    # every Whisper event rather than the ones older than a week.
+    it "does not widen when an operator has no value at all" do
+      expect(found("timestamp>")).to be_zero
+      expect(found("timestamp<")).to be_zero
+      expect(found("timestamp:")).to be_zero
+    end
+
+    # The shape that actually ships. A bare `timestamp>` is caught by the
+    # whole-search guard; this one is not — the other terms produce perfectly
+    # good SQL, so the search runs, and the empty term used to vanish out of
+    # the middle of it leaving a WIDER query that looked entirely healthy.
+    #
+    # Written the way the nightly Whisper cleanup writes it, because that one
+    # feeds the result to `bulk_destroy`.
+    it "does not widen when the empty term sits beside good ones" do
+      expect(found("name:Coffee0 AND timestamp<")).to be_zero
+      expect(found("name:Coffee0 timestamp>")).to be_zero
+    end
+
+    # Written out as the nightly Whisper cleanup writes it, grouped value and
+    # all, because that one feeds its result to `bulk_destroy` — and the two
+    # healthy terms in front are what made the missing third one invisible.
+    describe "the shape that deletes things" do
+      def whisper_query(cutoff)
+        "name::Coffee0 AND name::(Coffee0 OR Coffee1) AND timestamp<#{cutoff}"
+      end
+
+      it "still selects on a healthy run" do
+        expect(found(whisper_query(Date.current.to_s))).to eq(1)
+      end
+
+      it "selects nothing when the interpolated cutoff comes back blank" do
+        expect(found(whisper_query(""))).to be_zero
+      end
+    end
+
+    it "does not widen on a date nothing could be made of" do
+      expect(found("timestamp>=notadate")).to be_zero
+      expect(found("timestamp:notadate")).to be_zero
+    end
+
+    # Each of these took the whole page down before, on every search box in the
+    # app — none of them was rescued anywhere.
+    it "answers rather than raising on input nobody would call a search" do
+      ["payee:\\", "NOT", "-", "a AND", "AND", "(", ")"].each { |q|
+        expect { found(q) }.not_to raise_error, "#{q.inspect} raised"
+      }
+    end
+
+    # And answering is only half of it. Half-typed junk — an unclosed paren, a
+    # keyword on its own — must not come back with the whole table, which is
+    # what `where(nil)` does and what it looks like when it works.
+    it "does not answer half-typed junk with everything" do
+      ["NOT", "-", "AND", "(", ")"].each { |q|
+        expect(found(q)).to(be_zero, "#{q.inspect} matched everything")
+      }
+    end
+
+    it "says which part it could not read" do
+      found("timestamp:notadate")
+
+      expect(ActionEvent.search_notes.join).to include("notadate")
+    end
+
+    it "forgets the last search's complaints before starting the next" do
+      found("timestamp:notadate")
+      found("name:Coffee0")
+
+      expect(ActionEvent.search_notes).to be_empty
+    end
+
+    describe "how it composes" do
+      # Excluding an unreadable date excludes nothing, so NOT(FALSE) is the
+      # right answer and not an accident of the encoding.
+      it "negates to everything" do
+        expect(found("-timestamp:notadate")).to eq(events.size)
+      end
+
+      it "leaves the other side of an OR standing" do
+        expect(found("name:Coffee0 OR timestamp:notadate")).to eq(1)
+      end
+
+      it "takes an AND down with it, which is what an AND means" do
+        expect(found("name:Coffee0 AND timestamp:notadate")).to be_zero
+      end
+    end
+
+    # The failure mode of failing closed is refusing something valid, so these
+    # are the guard on the guard.
+    describe "what must keep working" do
+      it "still matches on a field" do
+        expect(found("name:Coffee0")).to eq(1)
+      end
+
+      it "still matches free text" do
+        expect(found("Coffee0")).to eq(1)
+      end
+
+      it "still reads an inclusive range" do
+        expect(found("timestamp>=#{2.days.ago.to_date} timestamp<=#{Date.current}")).to eq(1)
+      end
+
+      it "still ORs, and still negates" do
+        expect(found("name:Coffee0 OR name:Coffee1")).to eq(2)
+        expect(found("NOT name:Coffee0")).to eq(events.size - 1)
+      end
+
+      # An empty search is not a failed search — every page with a search box
+      # calls this with nothing in it on first load.
+      it "still returns everything for an empty search" do
+        expect(found("")).to eq(events.size)
+        expect(found(nil)).to eq(events.size)
       end
     end
   end

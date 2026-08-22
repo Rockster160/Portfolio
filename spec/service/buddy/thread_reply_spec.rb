@@ -71,6 +71,18 @@ RSpec.describe "Buddy thread replies" do
       expect(message.metadata["relay_id"]).to eq(BuddyRelay.last.id)
     end
 
+    it "needs the relay row itself to ANSWER, and passes a note along without it" do
+      relay, incoming = relayed(kind: :ask_open, body: "what do you want for dinner?")
+      incoming.update!(metadata: incoming.metadata.except("relay_id"))
+
+      reply!("tacos", to: incoming)
+
+      # The twin names the person, never the question. Their words still reach
+      # her; what is lost is the relay closing, which is the honest trade.
+      expect(relay.reload.status).to eq("delivered")
+      expect(BuddyRelay.where(from_user: rocco, to_user: chelsea).last.body).to eq("tacos")
+    end
+
     it "ANSWERS an open question rather than starting a new thread of its own" do
       relay, incoming = relayed(kind: :ask_open, body: "what do you want for dinner?")
 
@@ -124,14 +136,36 @@ RSpec.describe "Buddy thread replies" do
       expect(BuddyRelay.where(from_user: rocco, to_user: chelsea).last.body).to eq("about 20 minutes")
     end
 
-    it "falls through to an ordinary turn when the bridged row predates relay_id" do
+    # Prod 4376: "I love you the most!" typed straight at a note from Chelsea.
+    # The menu offered "Reply to Moss" off the peer identity on the bubble, the
+    # server read `relay_id` and found nothing, and Byte answered it instead.
+    # Every one of the 69 bridged messages in prod that day had a twin and not
+    # one had a relay_id.
+    it "still reaches them when the bridged row predates relay_id" do
       _relay, incoming = relayed
       incoming.update!(metadata: incoming.metadata.except("relay_id"))
 
+      reply!("I love you the most!", to: incoming)
+
+      expect(BuddyRelay.where(from_user: rocco, to_user: chelsea).last.body).to eq("I love you the most!")
+      expect(BuddyDeliverWorker.jobs).to be_empty
+    end
+
+    it "reads the peer off the twin's owner rather than inferring it" do
+      _relay, incoming = relayed
+      incoming.update!(metadata: incoming.metadata.except("relay_id"))
+
+      expect(Buddy::ThreadReply.route_for(rocco, incoming)).to include(peer: chelsea, relay: nil)
+    end
+
+    it "routes nowhere when the bridge left no partner at all" do
+      _relay, incoming = relayed
+      incoming.update!(metadata: incoming.metadata.except("relay_id", "relay_twin"))
+
       reply!("make it 6:30", to: incoming)
 
-      # Nobody to send it to, and guessing the peer from a household of two
-      # would be right until the day it wasn't.
+      # One of the pre-bridge singletons. It names nobody, so it is an ordinary
+      # turn - and the menu won't have offered "Reply to Moss" over it either.
       expect(BuddyRelay.where(from_user: rocco, to_user: chelsea)).to be_empty
       expect(BuddyDeliverWorker.jobs.size).to eq(1)
     end

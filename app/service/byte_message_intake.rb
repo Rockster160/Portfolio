@@ -81,9 +81,9 @@ class ByteMessageIntake
     if buddy? && (target = reply_target)
       @metadata = @metadata.to_h.merge(reply_to: ::Buddy::ThreadReply.quote(target))
 
-      if (relay = ::Buddy::ThreadReply.relay_for(@user, target))
+      if (route = ::Buddy::ThreadReply.route_for(@user, target))
         message = post!(state: :sent)
-        ::Buddy::ThreadReply.send_back!(user: @user, message: message, relay: relay)
+        ::Buddy::ThreadReply.send_back!(user: @user, message: message, route: route)
         return message
       end
     end

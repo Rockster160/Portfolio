@@ -36,20 +36,49 @@ module Buddy
       { "id" => message.id, "excerpt" => excerpt(message), "author" => author(message), "role" => role(message) }
     end
 
-    # The relay this message belongs to, when replying to it means replying to a
-    # PERSON. Nil for anything else, which is the ordinary-turn path.
+    # Where a reply to this message GOES, when replying to it means replying to a
+    # person: `{ peer:, relay: }`, or nil for the ordinary-turn path.
     #
-    # `relay_id` is stamped by CompanionRelay#bridge!, so messages bridged before
-    # that existed answer nil and fall through to a normal reply. That's the
-    # honest outcome: without the row there is nobody to send it to, and guessing
-    # the peer from a household of two would be right until the day it wasn't.
-    def relay_for(user, message)
+    # Two signals, and the OLDER one is the one that always answers.
+    #
+    # `relay_id` names the row outright, which is what lets an open question be
+    # answered rather than merely replied to - but bridge! only started stamping
+    # it alongside this feature. `relay_twin` has been on every bridged message
+    # since tapbacks shipped, and was backfilled behind itself; the twin is the
+    # other person's copy of the same message, so its OWNER is the peer, with
+    # nothing guessed.
+    #
+    # Reading relay_id alone is what broke prod 4376: "I love you the most!" was
+    # typed straight at a note from Chelsea, the menu offered "Reply to Moss"
+    # off the peer identity that was right there, and the send fell through to
+    # an ordinary turn because the row it came from had no relay_id. Byte
+    # answered it. Of the 69 bridged messages in prod that day, every one had a
+    # twin and NOT ONE had a relay_id.
+    def route_for(user, message)
       return nil unless metadata(message)["kind"].to_s == "buddy_relay"
 
+      relay = relay_for(user, message)
+      peer  = (peer_for(relay, user) if relay) || twin_owner(user, message)
+      return nil if peer.nil? || peer.id == user.id
+
+      { peer: peer, relay: relay }
+    end
+
+    def relay_for(user, message)
       relay = BuddyRelay.find_by(id: metadata(message)["relay_id"])
       return nil if relay.nil? || [relay.from_user_id, relay.to_user_id].exclude?(user.id)
 
       relay
+    end
+
+    # The person on the other end, read off the twin rather than inferred. A
+    # twin owned by this same user is one of the pre-bridge singletons whose
+    # partner was never written; it names nobody, so it routes nowhere.
+    def twin_owner(user, message)
+      twin = ByteMessage.find_by(id: metadata(message)["relay_twin"])
+      return nil if twin.nil? || twin.user_id == user.id
+
+      twin.user
     end
 
     def peer_for(relay, user)
@@ -64,13 +93,16 @@ module Buddy
     # `from_message:` is the row they already typed, so their own words appear
     # once, on their own side of the thread, wearing the attribution that says
     # where they went.
-    def send_back!(user:, message:, relay:)
-      text = message.body.to_s
-      return Buddy::CompanionRelay.record_answer!(relay, text, from_message: message) if answerable?(relay, user)
+    def send_back!(user:, message:, route:)
+      text  = message.body.to_s
+      relay = route[:relay]
+      if relay && answerable?(relay, user)
+        return Buddy::CompanionRelay.record_answer!(relay, text, from_message: message)
+      end
 
       Buddy::CompanionRelay.pass_along!(
         from:         user,
-        to:           peer_for(relay, user),
+        to:           route[:peer],
         text:         text,
         from_message: message,
       )

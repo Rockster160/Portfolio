@@ -579,7 +579,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     // house. Stamped on the node so the menu and the reply bar read one answer
     // instead of each deriving its own from metadata.
     node.dataset.replyAuthor = replyAuthorFor(message);
-    const replyPeer = kind === "buddy_relay" ? peer?.name || "" : "";
+    // Gated on the SAME linkage the server routes by (Buddy::ThreadReply), not
+    // just on there being a peer identity to name. A bubble carrying Moss's
+    // name but neither link is one the server can't send anywhere, and offering
+    // "Reply to Moss" over it is a promise it then quietly breaks — which is
+    // exactly what happened to prod 4376.
+    const routable = Boolean(
+      message?.metadata?.relay_twin || message?.metadata?.relay_id,
+    );
+    const replyPeer =
+      kind === "buddy_relay" && routable ? peer?.name || "" : "";
     if (replyPeer) node.dataset.replyPeer = replyPeer;
     else delete node.dataset.replyPeer;
 

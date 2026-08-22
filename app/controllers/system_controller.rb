@@ -498,8 +498,8 @@ class SystemController < ApplicationController
         to = (operator == "<" ? at - 1.second : at) if at
       else
         # A bare `timestamp:2026-07` names a whole unit, so it sets both ends.
-        span = ::BankTransaction.parse_date(value, range: true)
-        next unless span.is_a?(::Range)
+        span = date_span(value)
+        next if span.nil?
 
         from = span.first
         to = span.last
@@ -509,12 +509,22 @@ class SystemController < ApplicationController
     [from&.to_date, to&.to_date]
   end
 
-  # Nil rather than whatever was typed. `parse_date` hands back the raw string
-  # when it cannot read one, and doing date arithmetic on that raises — a typo
-  # in the search box must not take the page down.
+  # Nil rather than a guess. The pickers describe the range the search is
+  # actually applying, and a term that names no readable date applies none — so
+  # there is nothing to show, and a typo in the box must not take the page down
+  # on its way to saying so.
+  def date_span(value)
+    span = ::BankTransaction.parse_date(value, range: true)
+    span.is_a?(::Range) ? span : nil
+  rescue ::BankTransaction::UnreadableDate
+    nil
+  end
+
   def boundary(value, operator)
     parsed = ::BankTransaction.parse_date(value, operator: operator)
     parsed.acts_like?(:time) ? parsed : nil
+  rescue ::BankTransaction::UnreadableDate
+    nil
   end
 
   # Every row can hold a category now, so the only way this fails is a value
@@ -529,7 +539,13 @@ class SystemController < ApplicationController
   def filtered_transactions
     return ::BankTransaction.all if @query.blank?
 
-    ::BankTransaction.query(@query)
+    scope = ::BankTransaction.query(@query)
+    # What the pipeline could not do anything with. A term it cannot read now
+    # narrows to nothing rather than quietly disappearing, which is the right
+    # answer but an invisible one — an empty page and no idea why. Copied out
+    # here because the next `.query` on this page resets them.
+    @search_notes = ::BankTransaction.search_notes.dup
+    scope
   rescue ::StandardError => e
     @search_error = e.message
     ::BankTransaction.none

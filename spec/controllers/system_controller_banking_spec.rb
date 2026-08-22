@@ -286,6 +286,29 @@ RSpec.describe SystemController, type: :controller do
         expect(response).to have_http_status(:ok)
       end
 
+      # Failing closed is the right answer and an invisible one: an empty page
+      # and no idea why. The page says which part it could not read, so the
+      # zero is readable rather than baffling.
+      it "says which part of the search it could not read" do
+        get :banking, params: { q: "timestamp>=notadate" }
+
+        expect(response.body).to include("Could not read the date")
+        expect(response.body).to include("notadate")
+      end
+
+      it "says so for a term left with no value at all" do
+        get :banking, params: { q: "payee:amazon timestamp>" }
+
+        expect(response.body).to include("matched nothing it could be read as")
+      end
+
+      it "stays quiet when the whole search was readable" do
+        get :banking, params: { q: "payee:amazon" }
+
+        expect(response.body).not_to include("matched nothing it could be read as")
+        expect(response.body).not_to include("Could not read the date")
+      end
+
       # In the search row, not above it — the dates are part of the search. And
       # `basic`, which is what opts them out of the global input rule that
       # forces width:100% and gave each picker a line of its own.

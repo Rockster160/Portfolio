@@ -70,7 +70,13 @@ class Tokenizing::Node
 
   # ALWAYS returns a single Tokenizing::Node
   def self.parse(tokens)
-    node = tokenize(tokens).compact(compress: true, top: true)
+    parsed = tokenize(tokens)
+    # `a AND` — a keyword with nothing on the far side of it — leaves tokenize
+    # holding the bare string it started from rather than a node, and `compact`
+    # is not a thing a String does. Treated as the one word it is, which is
+    # what someone halfway through typing `a AND b` meant by it.
+    parsed = Tokenizing::Node.new(operator: :AND, conditions: [parsed]) if parsed.is_a?(::String)
+    node = parsed.compact(compress: true, top: true)
     return node if node.is_a?(Tokenizing::Node)
 
     Tokenizing::Node.new(operator: :AND, conditions: node)
@@ -194,7 +200,11 @@ class Tokenizing::Node
       idx = tokens.index(:NOT) || tokens.index(:-) || tokens.index(:!)
       min, max = idx, idx + 1
       max += 1 while max < tokens.length && tokens[max].is_a?(Symbol) # Other Keyword
-      next tokens.delete_at(idx) if idx >= tokens.length
+      # `max`, not `idx`: the question is whether the NOT has anything left to
+      # negate, and `idx` is where the NOT itself is — always in range, so this
+      # never fired. A trailing `NOT` then read `tokens[max]` off the end and
+      # handed nil to the parser, which is a 500 on every search box in the app.
+      next tokens.delete_at(idx) if max >= tokens.length
 
       tokens[min..max] = Tokenizing::Node.new(operator: :NOT, conditions: unwrap_parse(tokens[max]))
     end

@@ -389,6 +389,17 @@
       <p class="bank-error">Could not parse that search: <%= @search_error %></p>
     <% end %>
 
+    <%# A term that could not be read matches nothing, on purpose — the
+        alternative is dropping it, which silently WIDENS the search and
+        returns a page that looks like it worked. Saying so is what makes an
+        empty result readable instead of baffling. %>
+    <% if @search_notes.present? %>
+      <p class="bank-warn">
+        <%= @search_notes.to_sentence.upcase_first %> — that part of the search matched nothing
+        rather than being ignored.
+      </p>
+    <% end %>
+
     <div class="bank-totals">
       <div><span class="bank-totals-label">Results</span><%= number_with_delimiter(@result_count) %></div>
       <div><span class="bank-totals-label">Spent</span>

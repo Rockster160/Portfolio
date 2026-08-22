@@ -4,6 +4,47 @@ class ApplicationRecord < ActiveRecord::Base
 
   include Jsonable, Jilable
 
+  # A date term nothing could be made of. Raised rather than handed back as the
+  # raw string it came in as — see `parse_date`.
+  class UnreadableDate < ::StandardError; end
+
+  # What a term becomes when it cannot be turned into a comparison.
+  #
+  # FAIL CLOSED, never open. The alternative — dropping the term — is how a
+  # search silently WIDENS: `timestamp>` with a blank value used to match every
+  # row, so a Jil task summing a day of calories summed all of history, and the
+  # nightly Whisper cleanup would have deleted every Whisper event rather than
+  # the ones older than a week. Nothing about the output said so.
+  #
+  # Zero rows reads as "that cannot be right" to a person. A full list reads as
+  # a page that worked. Where the two have to differ, be wrong in the direction
+  # that gets noticed.
+  #
+  # Composes the way it should: `-timestamp:junk` is NOT (FALSE), which is
+  # everything — excluding an unreadable date excludes nothing.
+  NO_MATCH_SQL = "FALSE".freeze
+
+  # Why a term did not do what it looked like it would. Collected while a query
+  # is built and read straight afterwards by whoever asked, so a search box can
+  # say "I could not read that date" rather than showing an empty page and
+  # leaving you to guess.
+  #
+  # Fiber-isolated rather than a class variable: these are class-level scopes
+  # on a threaded server, and two requests searching at once must not read each
+  # other's complaints.
+  def self.search_notes
+    ::ActiveSupport::IsolatedExecutionState[:search_notes] ||= []
+  end
+
+  def self.reset_search_notes
+    ::ActiveSupport::IsolatedExecutionState[:search_notes] = []
+  end
+
+  def self.note_search_problem(message)
+    search_notes << message unless search_notes.include?(message)
+    NO_MATCH_SQL
+  end
+
   # TODO: Support `started_at: :start` to tweak the helper methods to be `start!` instead of `started!`
   def self.timestamp_bool(*cols)
     cols.map(&:to_sym).each do |col|
@@ -81,9 +122,13 @@ class ApplicationRecord < ActiveRecord::Base
     # intact so the rescue below is worth something.
     transaction(requires_new: true) { sql.any? }
     sql.stripped_sql
-  rescue ActiveRecord::StatementInvalid
-    # puts sql.to_sql unless Rails.env.production?
-    raise unless Rails.env.production?
+  rescue ActiveRecord::StatementInvalid => e
+    # The same answer in every environment, deliberately. It used to raise
+    # outside production and swallow inside it, which meant the specs proved
+    # something production did not do — the one behaviour nobody could see was
+    # the only one that ran.
+    ::Rails.logger.error("[#{name}.raw_sql] #{e.message.lines.first.to_s.strip} -- #{q}")
+    note_search_problem("could not apply #{q.to_s.split(/\s+/).first}")
   end
 
   def self.node_sql(node, parent_node=nil)
@@ -141,14 +186,7 @@ class ApplicationRecord < ActiveRecord::Base
         when *%i[!:: !=] then raw_sql("#{column} NOT ILIKE ?", value)
         end
       elsif column_data.type.in?(%i[datetime date])
-        case operator
-        when *%i[= : ::] then raw_sql("(#{column} >= ? AND #{column} <= ?)", *parse_date(value, range: true).minmax)
-        when *%i[!= !: !::] then raw_sql("(#{column} < ? OR #{column} > ?)", *parse_date(value, range: true).minmax)
-        when *%i[<] then raw_sql("#{column} < ?", parse_date(value, operator: operator))
-        when *%i[>] then raw_sql("#{column} > ?", parse_date(value, operator: operator))
-        when *%i[<=] then raw_sql("#{column} <= ?", parse_date(value, operator: operator))
-        when *%i[>=] then raw_sql("#{column} >= ?", parse_date(value, operator: operator))
-        end
+        date_node_sql(column, operator, value)
       elsif column_data.type.in?(%i[integer float decimal])
         numeric = column_data.type == :integer ? value.to_i : value.to_f
         case operator
@@ -161,6 +199,12 @@ class ApplicationRecord < ActiveRecord::Base
         end
       end
     }.compact_blank.then { |values|
+      # Nothing survived: an operator this column cannot use, a value nothing
+      # could be made of, or — the one that bit — a term with an operator and
+      # NO VALUE AT ALL. `timestamp>` tokenizes to no conditions, and dropping
+      # it turned "since this morning" into "since the beginning of time"
+      # without a word. It says no instead.
+      next no_match_for(field, node) if values.empty?
       next values.first unless values.many?
 
       case node.operator
@@ -171,6 +215,32 @@ class ApplicationRecord < ActiveRecord::Base
     }
   end
   # rubocop:enable Lint/RedundantSplatExpansion
+
+  # A date names a unit and each operator resolves to one end of it, so this is
+  # six near-identical calls rather than one. Split out from `node_sql` for the
+  # rescue: `parse_date` raises on a value it cannot read, and the whole term
+  # becomes a no-match rather than invalid SQL or — worse — nothing at all.
+  # rubocop:disable Lint/RedundantSplatExpansion -- reads as one list per branch
+  def self.date_node_sql(column, operator, value)
+    case operator
+    when *%i[= : ::] then raw_sql("(#{column} >= ? AND #{column} <= ?)", *parse_date(value, range: true).minmax)
+    when *%i[!= !: !::] then raw_sql("(#{column} < ? OR #{column} > ?)", *parse_date(value, range: true).minmax)
+    when *%i[<] then raw_sql("#{column} < ?", parse_date(value, operator: operator))
+    when *%i[>] then raw_sql("#{column} > ?", parse_date(value, operator: operator))
+    when *%i[<=] then raw_sql("#{column} <= ?", parse_date(value, operator: operator))
+    when *%i[>=] then raw_sql("#{column} >= ?", parse_date(value, operator: operator))
+    end
+  rescue UnreadableDate => e
+    note_search_problem("could not read the date #{e.message}")
+  end
+  # rubocop:enable Lint/RedundantSplatExpansion
+
+  # Says which term went nowhere, so the complaint names something the person
+  # can actually see in the box they typed it into.
+  def self.no_match_for(field, node)
+    term = [field, node.operator].compact.join
+    note_search_problem("#{term} matched nothing it could be read as")
+  end
 
   JSON_NUMERIC_RX = '^-?[0-9]+(\.[0-9]+)?$'.freeze
 
@@ -209,6 +279,10 @@ class ApplicationRecord < ActiveRecord::Base
         )
       end
     }.then { |values|
+      # Same rule as `node_sql`: a jsonb term that produced no comparison — an
+      # operator with no value, or one this path does not handle — must narrow
+      # to nothing rather than quietly disappear.
+      next note_search_problem("#{key} matched nothing it could be read as") if values.empty?
       next values.first unless values.many?
 
       "((#{values.join(") OR (")}))"
@@ -279,10 +353,22 @@ class ApplicationRecord < ActiveRecord::Base
     where(sql)
   }
   scope :query, ->(q) {
+    # One search, one set of complaints. Reset here rather than in the caller:
+    # this is where a search begins, and every path into the pipeline —
+    # controller, Jil, Buddy — comes through it.
+    reset_search_notes
+    next search_scope.all if q.to_s.strip.blank?
+
     breaker = ::Tokenizing::Node.parse(q)
+    sql = search_scope.query_by_node(breaker).stripped_sql
+
+    # Something was typed and none of it became a filter — a lone `AND`, an
+    # unclosed `(`, a bare `NOT`. Returning every row is the one answer that
+    # cannot be right: it is a page that looks like it worked.
+    sql = note_search_problem("could not read that search") if sql.blank?
 
     # NOTE! This removes current scope! This will lose user filtering!!!
-    search_scope.where(search_scope.query_by_node(breaker).stripped_sql)
+    search_scope.where(sql)
     # Will this work to fix the above?
     # where(search_scope.query_by_node(breaker).stripped_sql)
   }
@@ -362,8 +448,14 @@ class ApplicationRecord < ActiveRecord::Base
           vals = [year, mth, day, hr, mn, sec].compact
         end
 
+        full_year = (year ||= now.year) < 1000 ? year + 2000 : year
+        # Ruby will happily build the year 99999999999; Postgres will not, and
+        # the failure lands as invalid SQL four layers away from the digits
+        # that caused it. Rejected here, where the value is still legible.
+        raise ::ArgumentError, "year out of range in #{value.inspect}" unless full_year.between?(1000, 9999)
+
         date_str = [
-          (year ||= now.year) < 1000 ? year + 2000 : year,
+          full_year,
           (mth ||= now.month),
           (day ||= now.day),
         ].join("-")
@@ -401,7 +493,19 @@ class ApplicationRecord < ActiveRecord::Base
           date.send("beginning_of_#{unit}")
         end
       rescue ArgumentError, Date::Error
-        DateTime.parse(value).then { |dt| range ? dt.all_day : dt } rescue value
+        # `DateTime.parse` still gets its turn — it reads the shapes the digit
+        # split cannot, like "August 19, 2026".
+        begin
+          DateTime.parse(value).then { |dt| range ? dt.all_day : dt }
+        rescue ArgumentError, Date::Error, TypeError
+          # It used to hand back the raw string here, which is the root of the
+          # whole mess: `timestamp:notadate` then reached `.minmax` on a String
+          # and took the page down with a NoMethodError, while
+          # `timestamp>=notadate` reached Postgres as a timestamp and took the
+          # surrounding transaction with it. A value that is not a date is not
+          # a date, and saying so is the only answer that composes.
+          raise UnreadableDate, value.inspect
+        end
       end
     }
   end
