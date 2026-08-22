@@ -429,11 +429,32 @@ RSpec.describe "Buddy Today forward-looking" do
     # and said nothing about the weather at all. The block was worded as an
     # option ("weave it in naturally", "skip the today line if it's
     # unremarkable") and that is how it was taken.
-    it "asks for the figures rather than leaving it to taste" do
+    #
+    # Rewording it to "Give me the high and the low, in one short line" did not
+    # hold either: three more briefings dropped it on 21-22 Aug, one of them a
+    # day carrying an 89% chance of rain with a named window, to two people.
+    # It was the only must-say section in that prompt phrased as a description
+    # while every other one was phrased as a rule, so it now reads as a rule -
+    # and it is named again in the closing check, because the middle of a prompt
+    # that long is where an instruction goes to be forgotten.
+    it "asks for the figures as a rule rather than leaving it to taste" do
       travel_to(tz.parse("2026-07-28 08:00")) do
         block = Buddy::TodayBriefing.weather_block(user)
-        expect(block).to include("Give me the high and the low")
+        expect(block).to include("THE HIGH AND THE LOW GO IN")
         expect(block).not_to include("weave it in naturally")
+      end
+    end
+
+    # The three rules that have each gone out missing, restated where a long
+    # prompt actually lands. Asserted on the whole seed rather than the weather
+    # block, since that is the thing being read back.
+    it "names the three dropped rules again at the end, where they get read" do
+      travel_to(tz.parse("2026-07-28 08:00")) do
+        closing = Buddy::TodayBriefing.seed(user).split("BEFORE YOU SEND").last
+
+        expect(closing).to include("high and the low")
+        expect(closing).to include("called by its name")
+        expect(closing).to include("still ahead")
       end
     end
 

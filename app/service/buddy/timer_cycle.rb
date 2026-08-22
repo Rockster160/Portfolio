@@ -201,7 +201,15 @@ module Buddy
         match:             condition.match || {},
         body:              condition.human.to_s.presence || "That's done",
         one_shot:          true,
-        metadata:          { "cancels_cycle" => id_for(cycle), "human_when" => condition.human.to_s },
+        metadata:          {
+          "cancels_cycle" => id_for(cycle),
+          "human_when"    => condition.human.to_s,
+          # The same condition in the tense it will be READ in. See
+          # WatchCondition.past_phrase - without it the sentence announcing the
+          # thing was over said "when the print finishes - I've stopped the
+          # check-ins."
+          "human_past"    => condition.past.to_s,
+        }.compact_blank,
       )
     end
 
@@ -218,7 +226,7 @@ module Buddy
       Buddy::CompanionDelivery.deliver_plain(
         user:         user,
         conversation: conversation,
-        text:         "#{said.to_s.strip.presence || "That's done"} - I've stopped the check-ins.",
+        text:         "#{said.to_s.strip.presence || "That's done"}, so I've stopped the check-ins.",
         metadata:     { "kind" => "buddy", "source" => "timer_cycle", "cycle_id" => cycle_id },
         push_title:   "Stopped",
       )

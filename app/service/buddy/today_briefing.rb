@@ -137,7 +137,7 @@ module Buddy
         lines << "Today: #{summary}"
         lines << "Notable today: #{notable}." if notable.present?
         lines += [
-          "Give me the high and the low, in one short line.",
+          "THE HIGH AND THE LOW GO IN, in one short line. Every other must-say section here is written as a rule and this one was written as a description, which is how it came to be the one that got dropped three briefings running - including a day carrying an 89% chance of rain with a named window, to two people, neither of whom heard about it.",
           "Anything above that is worth its own mention with its odds: rain, wind, storms, snow. Only ever what's in the lines just above - an ordinary sunny day is the baseline, and the baseline is already covered by the figures.",
           "Weather gets reported here, not acted on.",
         ]
@@ -274,6 +274,11 @@ module Buddy
         - Never say the briefing is ready, sent, up, out, done or on its way. You are writing it; saying so instead of doing it is the one failure that leaves them with nothing.
         - No filler adjectives about the day's general shape in place of a fact.
         - No "based on what I have" / "your context shows" / any scaffolding-talk.
+
+        BEFORE YOU SEND, read it back against these three. Each one is stated above, and each one has still gone out missing on a day it mattered - they are here at the end because the middle of a prompt this long is where a rule goes to be forgotten:
+        - The high and the low are in it, and anything above the baseline carries its odds.
+        - Every item is called by its name, never by its type.
+        - Everything in it is still ahead of me.
 
         #{TONE}
       PROMPT

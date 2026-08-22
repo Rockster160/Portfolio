@@ -123,6 +123,30 @@ RSpec.describe "Buddy undo" do
         expect(restored.day_key).to eq(done.day_key)
       end
 
+      # Agenda item 1009 was undone by a mistap, and "I tapped it by mistake!"
+      # was answered with "Easy sorted" - nothing put back. Cancelling is a soft
+      # remove, so putting one back is a flip of the two columns it moved; on
+      # the `recreated` branch it fell to before, the cancelled original would
+      # have been left sitting beside a fresh duplicate.
+      it "un-cancels the agenda item it cancelled, rather than making a second one" do
+        agenda = create(:agenda, user: user)
+        item   = agenda.agenda_items.create!(
+          name: "Cover tomatoes", kind: :event, start_at: 2.hours.from_now, end_at: 4.hours.from_now,
+        )
+        action = executed_action(
+          { "op" => "created", "model" => "AgendaItem", "id" => item.id, "summary" => "removed Cover tomatoes" },
+          tool: "add_agenda_item",
+        )
+
+        out = Buddy::Reverter.perform!(action.id, 1)
+        expect(item.reload.cancelled_at).to be_present
+
+        out[:reverts].each { |rv| Buddy::Reverter.call(rv) }
+
+        expect(item.reload.cancelled_at).to be_nil
+        expect(AgendaItem.where(name: "Cover tomatoes").count).to eq(1)
+      end
+
       # The snapshot has to be taken while the row still exists, so a descriptor
       # pointing at something already gone simply carries no way back rather than
       # blowing up the undo.

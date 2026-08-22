@@ -282,6 +282,58 @@ RSpec.describe Buddy::Compile do
       expect(described_class.send(:duplicate?, user, "She avoids the hose during the last nap of the day"))
         .to be(false)
     end
+
+    # Memories 92 and 99, both on the pile, one job. "watch" against "watching"
+    # was the whole of the difference and it put the overlap at 0.778, under
+    # the gate by a fifth of a word.
+    it "reads watch and watching as the same word" do
+      BuddyMemory.create!(user: user, kind: :stash, status: :active,
+                          content: "Go through the 2 bins of bathroom and first aid supplies later while we watch TV")
+
+      expect(
+        described_class.send(
+          :duplicate?, user,
+          "Two bins of bathroom and first aid supplies are set aside to sort later while watching TV",
+        ),
+      ).to be(true)
+    end
+
+    it "leaves a word alone when stripping -ing would gut it" do
+      expect(Buddy::SideEffects.stem("thing")).to eq("thing")
+      expect(Buddy::SideEffects.stem("watching")).to eq("watch")
+    end
+
+    # Memory 97, written half an hour after feature request 1 was created with
+    # a receipt chip saying so. A note about a row is not the row.
+    it "sees a feature request that already exists in its own table" do
+      FeatureRequest.create!(user: user, title: "Inventory access", body: "Wants to see what is in stock")
+
+      expect(described_class.send(:duplicate?, user, "Rocco needs a feature request for Inventory access"))
+        .to be(true)
+    end
+
+    it "does not read a shipped request as still standing" do
+      FeatureRequest.create!(user: user, title: "Inventory access", body: "x", status: :shipped)
+
+      expect(described_class.send(:duplicate?, user, "Rocco needs a feature request for Inventory access"))
+        .to be(false)
+    end
+
+    # Memory 91 was the single word "pantry", written off "Keep the pantry on
+    # the stash pile" - a sentence asking to KEEP memory 60. Too short for the
+    # string tests, which used to answer false and let it through.
+    it "catches a one-word restatement of something already held" do
+      BuddyMemory.create!(user: user, kind: :stash, status: :active,
+                          content: "Once the bedroom is sorted, clear out the entire pantry")
+
+      expect(described_class.send(:duplicate?, user, "pantry")).to be(true)
+    end
+
+    it "does not let a short entry collide with a word that merely contains it" do
+      BuddyMemory.create!(user: user, kind: :stash, status: :active, content: "Buy buttermilk for the pancakes")
+
+      expect(described_class.send(:duplicate?, user, "milk")).to be(false)
+    end
   end
 
   describe "what a row is allowed to be" do

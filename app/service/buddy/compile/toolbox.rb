@@ -115,7 +115,9 @@ module Buddy
           strict:      false,
           description: "Retire a row. `done` for something that happened or was resolved, " \
                        "`dropped` for something that stopped being worth holding - including " \
-                       "the redundant half of two rows saying one thing.",
+                       "the redundant half of two rows saying one thing. Not for anything on " \
+                       "their stash pile - that is theirs to close. `revise_memory` is what a " \
+                       "pile row takes.",
           parameters:  {
             type:       :object,
             properties: {
@@ -215,16 +217,32 @@ module Buddy
         "#{lines.join("\n")}\n\n(call again with before: #{rows.first.id} for what came before this)"
       end
 
+      # The three kinds this pass may write. `stash` is deliberately absent, and
+      # always has been - the schema above has never offered it. What was
+      # missing is the enforcement: `BuddyMemory.kinds` knows `stash`, so the
+      # fallback below waved it through, and rows 91, 97 and 99 all reached the
+      # person's pile that way inside two hours. The pile grows when THEY put
+      # something on it (`stash_idea`, or the armed latch), in front of them.
+      WRITABLE_KINDS = %w[concept preference followup].freeze
+
       def write_memory(args)
         content = args["content"].to_s.strip
+        kind    = args["kind"].to_s
         return "nothing to write" if content.empty?
+
+        if kind == "stash"
+          return "the pile is theirs to add to, so that one isn't yours to write - if it is " \
+                 "something TRUE ABOUT THEM rather than a job they mean to get to, hold it as " \
+                 "a concept or a preference instead."
+        end
+
         return "already held, near enough - revise it instead" if Buddy::Compile.duplicate?(@user, content)
 
         memory = BuddyMemory.new(
           user:           @user,
           source_message: Buddy::Compile.origin_message(@messages, content),
           relevant_at:    Buddy::Compile.days_from(args["relevant_days"], @now),
-          kind:           BuddyMemory.kinds.key?(args["kind"].to_s) ? args["kind"].to_s : "concept",
+          kind:           WRITABLE_KINDS.include?(kind) ? kind : "concept",
           content:        content.first(BuddyMemory::MAX_CONTENT),
           summary:        args["summary"].to_s.strip.presence&.first(BuddyMemory::MAX_SUMMARY),
           severity:       Buddy::Compile.clamp_severity(args["severity"]),
@@ -259,8 +277,29 @@ module Buddy
         "##{memory.id} rewritten"
       end
 
+      # THE PILE IS NOT YOURS TO CLEAR.
+      #
+      # `kind: stash` is the person's own list of things they mean to get to,
+      # and it changes when THEY say so - `finish_idea`, `drop_idea`,
+      # `move_idea`, each of them a tool called in front of them, each leaving a
+      # card they can undo. A compile pass reading a transcript half an hour
+      # later is not that, and it leaves no card and no receipt.
+      #
+      # Memory 95 ("Alexa fan and blind commands") went `dropped` at 12:54 with
+      # nothing in the thread at 12:54 about it and no `byte_actions` row. The
+      # person had asked 34 minutes earlier to ADD to that entry - the opposite
+      # of finishing with it - and ended the day with it gone off the pile and
+      # nothing anywhere saying it had happened.
+      #
+      # Buddy::SideEffects#apply_forget already draws this exact line for the
+      # same reason, in almost the same words.
       def close_memory(args)
         memory = find!(args)
+        if memory.kind_stash?
+          return "##{memory.id} is on their pile, so it is theirs to close - leave it active. " \
+                 "`revise_memory` if this stretch added to it or said it better."
+        end
+
         status = args["status"].to_s == "done" ? :done : :dropped
         memory.notes.create!(body: args["note"].to_s.strip, source: :companion) if args["note"].to_s.strip.present?
         memory.update!(status: status, check_in_at: nil)

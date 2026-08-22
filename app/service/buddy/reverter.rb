@@ -53,7 +53,14 @@ module Buddy
     # next to a fresh duplicate.
     SOFT_CREATE_UNDO = {
       "BuddyMemory" => %w[status],
-      "Chore"     => %w[archived_at],
+      "Chore"       => %w[archived_at],
+      # `remove` cancels an agenda item rather than destroying it, so putting
+      # one back has always been a flip of these two - it just wasn't listed,
+      # and the `recreated` branch it fell to would have left the cancelled
+      # original sitting beside a fresh duplicate. Item 1009 was undone by a
+      # mistap and the answer to "I tapped it by mistake!" was "Easy sorted",
+      # with nothing put back and nothing that could have.
+      "AgendaItem"  => %w[status cancelled_at],
     }.freeze
 
     def reversible?(revert)

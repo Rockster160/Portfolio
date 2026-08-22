@@ -312,7 +312,7 @@ module Buddy
       Buddy::CompanionDelivery.deliver_plain(
         user:         watch.user,
         conversation: watch.byte_conversation,
-        text:         "#{watch.body.to_s.strip.presence || "That's done"} - I've stopped the check-ins.",
+        text:         "#{Buddy::WatchCondition.past_phrase(watch) || "That's done"}, so I've stopped the check-ins.",
         metadata:     {
           "kind"        => "buddy",
           "source"      => "watch_cancel",
@@ -337,7 +337,10 @@ module Buddy
         watch.user,
         watch.cancels_cycle_id,
         watch.byte_conversation,
-        watch.body,
+        # The condition as something that HAPPENED, never `watch.body` - that
+        # holds the trigger phrasing, which is what put "when the print
+        # finishes - I've stopped the check-ins." in front of somebody.
+        Buddy::WatchCondition.past_phrase(watch),
       )
     rescue StandardError => e
       Buddy::Errors.report(

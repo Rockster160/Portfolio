@@ -128,6 +128,53 @@ RSpec.describe Buddy::Compile::Toolbox do
     end
   end
 
+  # Memory 95 went `dropped` at 12:54 with nothing in the thread about it, no
+  # receipt chip and no byte_actions row - 34 minutes after the person asked to
+  # ADD to it. The pile is theirs; `finish_idea` / `drop_idea` are how it gets
+  # closed, in front of them, with a card they can undo.
+  describe "a row on their stash pile" do
+    let!(:stashed) {
+      user.buddy_memories.create!(kind: :stash, status: :active, content: "Alexa fan and blind commands")
+    }
+
+    it "cannot be dropped, and says what to do instead" do
+      answer = box.call("close_memory", { "id" => stashed.id, "status" => "dropped" })
+
+      expect(stashed.reload).to be_status_active
+      expect(answer).to match(/theirs to close/)
+      expect(answer).to match(/revise_memory/)
+    end
+
+    it "cannot be closed as done either" do
+      box.call("close_memory", { "id" => stashed.id, "status" => "done" })
+
+      expect(stashed.reload).to be_status_active
+    end
+
+    # What should have happened to 95: the Jil/daytime note the person asked for
+    # 34 minutes earlier appended to it, and the row left standing.
+    it "can still be rewritten in place" do
+      box.call("revise_memory", { "id" => stashed.id, "content" => "Alexa fan and blind commands, plus Jil daytime" })
+
+      expect(stashed.reload).to have_attributes(status: "active", content: /Jil daytime/)
+    end
+
+    it "is not something this pass can add to" do
+      answer = box.call("write_memory", { "kind" => "stash", "content" => "Rocco needs a feature request for Inventory access" })
+
+      expect(answer).to match(/pile is theirs/)
+      expect(user.buddy_memories.kind_stash.count).to eq(1)
+    end
+
+    it "leaves an ordinary memory closable" do
+      other_row = user.buddy_memories.create!(kind: :concept, content: "Something finished and done with.")
+
+      box.call("close_memory", { "id" => other_row.id, "status" => "done" })
+
+      expect(other_row.reload).to be_status_done
+    end
+  end
+
   # Every tool reaches rows through the same guard, so one person's pass can
   # never touch another's record however an id arrives.
   describe "somebody else's memory" do

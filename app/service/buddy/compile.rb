@@ -634,11 +634,48 @@ module Buddy
     # and a followup grew its own second half (76/80). Buddy::SideEffects
     # already knew how to tell those apart for the inline path; this asks it.
     def duplicate?(user, content)
+      return true if restates_feature_request?(user, content)
+
       norm = normalize_memory(content)
-      return false if norm.length < 12
+      return subsumed?(user, content) if norm.length < 12
 
       BuddyMemory.where(user: user).unexpired.any? { |m|
         normalize_memory(m.content) == norm || Buddy::SideEffects.same_fact?(content, m.content)
+      }
+    end
+
+    # A record that already exists in a DIFFERENT table.
+    #
+    # `feature_requests` is the only one a compile pass can restate, because it
+    # is the only one the companion raises mid-conversation and then describes
+    # back in prose. Memory 97 - "Rocco needs a feature request for Inventory
+    # access" - was written half an hour after feature request 1 was created
+    # with a receipt chip saying so. A note about a row is not the row, and
+    # holding one keeps a finished job on the pile forever.
+    def restates_feature_request?(user, content)
+      words = Buddy::SideEffects.significant_words(content.to_s.downcase)
+      return false if words.size < 2
+
+      FeatureRequest.where(user: user).live.pluck(:title).any? { |title|
+        title_words = Buddy::SideEffects.significant_words(title.to_s.downcase)
+        title_words.any? && title_words.subset?(words)
+      }
+    end
+
+    # Content too short for the string tests above, which is where the floor
+    # used to give up and answer false.
+    #
+    # A one-word stash ("pantry") is almost never a new thing to do; it is
+    # somebody agreeing about one already on the pile - memory 91 was written
+    # off "Keep the pantry on the stash pile", which is a sentence asking to
+    # KEEP memory 60. Word containment rather than substring, so "milk" doesn't
+    # collide with "buttermilk", and it needs at least one word worth carrying.
+    def subsumed?(user, content)
+      words = Buddy::SideEffects.significant_words(content.to_s.downcase)
+      return false if words.empty?
+
+      BuddyMemory.where(user: user).unexpired.any? { |m|
+        words.subset?(Buddy::SideEffects.significant_words(m.content.to_s.downcase))
       }
     end
 

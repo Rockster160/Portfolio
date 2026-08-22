@@ -16,6 +16,17 @@ Buddy::Tools.register(
       the same words to find what the file is really called, then call this
       again with that exact name. Don't apologise your way out of it and don't
       ask them to spell it; looking it up is the whole point.
+
+      **A miss there does NOT mean the file doesn't exist.** `print_history` is
+      built from what has actually RUN, so a model the printer holds and has
+      never printed is invisible to it - which is exactly the case that produces
+      the miss you're recovering from. "tension para clip" came back with two
+      unrelated files matched on the word `clip` alone, and the person typed
+      "TensionParaClip" and it printed on the spot. Same characters. So when the
+      history is thin or the matches look nothing like what they asked for, try
+      the name with the spaces closed up before you go back to them, and if you
+      do go back, ask which of the ones you found they meant rather than telling
+      them it isn't there.
     - Anything else - relay what it actually said rather than deciding it worked.
 
     Never invent a filename to send. A wrong one either does nothing or ties the

@@ -200,6 +200,7 @@ Buddy::Tools.register(
     stop_target:   { type: :string, required: false, description: "Place / chore / event / calendar name the stop condition is about. With stop_when." },
     stop_listener: { type: :string, required: false, description: "Jil listener string, for stop_when=custom. Read read_listener_guide first." },
     stop_phrase:   { type: :string, required: false, description: "Plain-language meaning of the stop listener. Required for stop_when=custom." },
+    stop_past:     { type: :string, required: false, description: "The same stop condition written as something that HAS happened (\"The print finished\"), for the message saying the reminders have stopped. With stop_when=custom." },
     check:        { type: :enum,   required: false, values: ScheduleCondition.sets, description: "Records to search before firing" },
     check_query:  { type: :string, required: false, description: "Search that decides it. QUOTE any value with a space: name:\"Some Thing\"" },
     check_task:   { type: :string, required: false, description: "Jil function to ask instead of searching. Must only read/report." },
@@ -269,6 +270,7 @@ Buddy::Tools.register(
             target:      payload[:stop_target],
             listener:    payload[:stop_listener],
             when_phrase: payload[:stop_phrase],
+            past_phrase: payload[:stop_past],
           },
           ctx,
         )
@@ -367,6 +369,7 @@ Buddy::Tools.register(
         stop_match:     stop_condition&.match,
         stop_listener:  stop_condition&.listener,
         stop_human:     stop_condition&.human,
+        stop_past:      stop_condition&.past,
         stop_error:     stop_error,
       }.compact,
     }
@@ -412,7 +415,13 @@ Buddy::Tools.register(
         match:             payload[:stop_match] || {},
         body:              payload[:stop_human].to_s.presence || "That's done",
         one_shot:          true,
-        metadata:          { "cancels_reminder_id" => reminder.id, "human_when" => payload[:stop_human].to_s },
+        metadata:          {
+          "cancels_reminder_id" => reminder.id,
+          "human_when"          => payload[:stop_human].to_s,
+          # The condition in the tense the STOP message reads it in. See
+          # WatchCondition.past_phrase.
+          "human_past"          => payload[:stop_past].to_s,
+        }.compact_blank,
       )
     end
 

@@ -19,7 +19,7 @@ module Buddy
     # not settable, so the tool reports it and asks where the place is rather
     # than storing a name-only match that matches nothing.
     Resolved = Struct.new(
-      :scope, :match, :listener, :human, :owner, :place_known, :place_name,
+      :scope, :match, :listener, :human, :past, :owner, :place_known, :place_name,
       keyword_init: true
     )
 
@@ -47,6 +47,26 @@ module Buddy
       "until #{text.sub(/\A(?:when(?:ever)?|once|after)\s+/i, "")}"
     end
 
+    # The same condition read as something that HAS NOW HAPPENED.
+    #
+    # Third sense of one phrase, and the one that had no form. "when the print
+    # finishes" was being interpolated straight into the sentence announcing the
+    # thing was over: *"when the print finishes - I've stopped the check-ins."*
+    # (prod 4339) - a condition standing where a past-tense subject belongs.
+    #
+    # Written out per trigger rather than conjugated, because conjugating is
+    # where this would start being wrong: "the timer goes off" has no regular
+    # past, and a briefing that says "the timer goed off" is worse than one that
+    # says nothing. Every built-in already hand-writes its present phrase a line
+    # above, so the past one is the same work and is always right; `custom` is
+    # the only free-form case and the model writes both (`past_phrase`).
+    #
+    # nil is a legitimate answer - the caller has a neutral sentence for it.
+    def past_phrase(watch)
+      text = watch.metadata.to_h["human_past"].to_s.strip if watch.respond_to?(:metadata)
+      text.presence
+    end
+
     # Raises with a sentence the model can act on when the condition can't be
     # resolved - every raise here reaches the person as Buddy explaining what it
     # needs, so they read as questions rather than error text.
@@ -55,8 +75,8 @@ module Buddy
       target  = payload[:target].to_s.strip
 
       case trigger
-      when "arrive"  then place(ctx, target, action: "arrived", phrase: "when you get to")
-      when "depart"  then place(ctx, target, action: "departed", phrase: "when you leave")
+      when "arrive"  then place(ctx, target, action: "arrived", phrase: "when you get to", past: "You got to")
+      when "depart"  then place(ctx, target, action: "departed", phrase: "when you leave", past: "You left")
       when "chore"   then chore(ctx, target)
       when "event"   then event(ctx, target)
       when "agenda"  then agenda(ctx, target)
@@ -67,7 +87,7 @@ module Buddy
       end
     end
 
-    def place(ctx, target, action:, phrase:)
+    def place(ctx, target, action:, phrase:, past:)
       resolved = ctx.resolve_place_location(target)
       raise "#{action == "arrived" ? "arrive" : "depart"} needs a place (target)" if resolved["name"].blank?
 
@@ -75,6 +95,7 @@ module Buddy
         scope:       "travel",
         match:       { "action" => action, "place" => resolved.except("known") },
         human:       "#{phrase} #{resolved["name"]}",
+        past:        "#{past} #{resolved["name"]}",
         owner:       ctx.user,
         place_known: resolved["known"],
         place_name:  resolved["name"],
@@ -89,6 +110,7 @@ module Buddy
         scope:      "chore_completion",
         match:      { "action" => "completed", "chore_name" => name },
         human:      "next time you finish #{name}",
+        past:       "You finished #{name}",
         owner:      ctx.user,
         place_name: name,
       )
@@ -101,6 +123,7 @@ module Buddy
         scope:      "event",
         match:      { "action" => "added", "name" => target },
         human:      "next time you log #{target}",
+        past:       "You logged #{target}",
         owner:      ctx.user,
         place_name: target,
       )
@@ -116,6 +139,7 @@ module Buddy
         scope:      "agenda_item",
         match:      { "action" => "created", "agenda_id" => found.id },
         human:      "when something's added to #{found.name}",
+        past:       "Something was added to #{found.name}",
         owner:      found.user,
         place_name: found.name,
       )
@@ -133,11 +157,11 @@ module Buddy
     # every one of them - a watch on that fires on pees, poops, walks, baths and
     # dinners alike. The state lives in the notes.
     WHISPER_STATES = {
-      "up"      => { notes: "Up",    human: "when Whisper wakes up" },
-      "nap"     => { notes: "Nap",   human: "when Whisper goes down for a nap" },
-      "bedtime" => { notes: "Sleep", human: "when Whisper goes down for the night" },
-      "home"    => { notes: "Home",  human: "when Whisper gets home" },
-      "out"     => { notes: "Gone",  human: "when Whisper leaves the house" },
+      "up"      => { notes: "Up",    human: "when Whisper wakes up",             past: "Whisper woke up" },
+      "nap"     => { notes: "Nap",   human: "when Whisper goes down for a nap",  past: "Whisper went down for a nap" },
+      "bedtime" => { notes: "Sleep", human: "when Whisper goes down for the night", past: "Whisper went down for the night" },
+      "home"    => { notes: "Home",  human: "when Whisper gets home",            past: "Whisper got home" },
+      "out"     => { notes: "Gone",  human: "when Whisper leaves the house",     past: "Whisper left the house" },
     }.freeze
 
     # The words that mean BOTH, which have to be asked about rather than
@@ -203,6 +227,7 @@ module Buddy
         scope:      "event",
         match:      { "action" => "added", "name" => "Whisper", "notes" => state[:notes] },
         human:      state[:human],
+        past:       state[:past],
         owner:      owner,
         place_name: "Whisper",
       )
@@ -217,7 +242,10 @@ module Buddy
     def deploy(ctx)
       # Phrased without "next" so the repeating form reads "every time a deploy
       # finishes" rather than "every time the NEXT deploy finishes".
-      Resolved.new(scope: "deploy", match: {}, human: "when a deploy finishes", owner: ctx.user)
+      Resolved.new(
+        scope: "deploy", match: {}, human: "when a deploy finishes",
+        past: "A deploy finished", owner: ctx.user
+      )
     end
 
     def custom(ctx, payload)
@@ -238,6 +266,7 @@ module Buddy
         match:    {},
         listener: listener,
         human:    phrase.sub(/\A(when|whenever)\s+/i, "when "),
+        past:     payload[:past_phrase].to_s.strip.presence,
         owner:    ctx.user,
       )
     end

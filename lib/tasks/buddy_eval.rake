@@ -424,6 +424,33 @@ BUDDY_EDGE_PROBES = [
     note:  "went out as a reminder every 30 minutes ending at 11:59pm - an hour " \
            "the person never named, and a seventeen-hour overnight gap",
   },
+  {
+    case:  "prod 4332, the same cycle offered instead of built",
+    say:   "I need to check the printer every 10 minutes until the print finishes",
+    tool:  :set_timer,
+    avoid: %i[schedule_reminder],
+    args:  { set_timer: { repeat: true } },
+    once:  true,
+    note:  "the right mechanism, described accurately, and then parked: \"I can " \
+           "set the 10-minute check-in rhythm and stop it when the print " \
+           "finishes if you want\". The next message was \"Yes, that's what I " \
+           "asked for\" - a whole turn spent agreeing with themselves. A stated " \
+           "need with the interval and the stop condition both named has nothing " \
+           "left to ask about",
+  },
+
+  # --- a job to get to, versus a fact about them ----------------------------
+  {
+    case:  "prod 4340",
+    say:   "Also, need to remember that Jil needs things like daytime",
+    tool:  :stash_idea,
+    avoid: %i[remember define_term],
+    note:  "the opening words reach straight for `remember` and the sentence is " \
+           "about Jil - neither the person nor the companion - so it was filed " \
+           "as a preference, which is a rule about how to behave with nothing in " \
+           "it to do. Told plainly \"it's not for you\", the reply claimed it had " \
+           "been added to the existing pile entry and nothing was written at all",
+  },
 
   # --- who a message is for, and when it leaves -----------------------------
   {

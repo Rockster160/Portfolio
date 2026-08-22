@@ -351,13 +351,23 @@ module Buddy
       }.to_set
     end
 
-    # Enough of a stemmer to survive the two ways one fact gets typed twice:
-    # a possessive ("Ryker's soccer" vs "Ryker has soccer") and a plural
-    # ("Tuesdays" vs "Tuesday"). Lossy, and knowingly so - it's applied to both
-    # sides of every comparison, so a mangled stem still matches its own twin.
-    # `ss` is left alone or "glass" and "glas" would be the same word.
+    # Enough of a stemmer to survive the ways one fact gets typed twice: a
+    # possessive ("Ryker's soccer" vs "Ryker has soccer"), a plural ("Tuesdays"
+    # vs "Tuesday"), and a participle ("while we watch TV" vs "while watching
+    # TV"). Lossy, and knowingly so - it's applied to both sides of every
+    # comparison, so a mangled stem still matches its own twin.
+    #
+    # `ss` is left alone or "glass" and "glas" would be the same word. `-ing`
+    # only comes off when four letters are left standing, so "thing" survives
+    # intact rather than becoming "th".
+    #
+    # The participle case is why memories 92 and 99 both sit on the pile saying
+    # the same job: "watch" against "watching" and nothing else separating them
+    # put the overlap at 7/9 = 0.778, under the gate by a fifth of a word.
     def stem(word)
       base = word.delete("'")
+      return base[0..-4] if base.length > 6 && base.end_with?("ing")
+
       base.length > 3 && base.end_with?("s") && !base.end_with?("ss") ? base[0..-2] : base
     end
 

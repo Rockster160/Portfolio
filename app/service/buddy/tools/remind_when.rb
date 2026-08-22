@@ -95,6 +95,13 @@ Buddy::Tools.register(
     "when", and don't describe the syntax - "when item:action:added fires" tells
     them nothing they wanted to know.
 
+    `past_phrase` (custom only) is that same condition once it HAS happened:
+    "The print finished", "The car parked at home". It's read back in the
+    sentence saying whatever this was holding has now stopped, where the
+    "when..." form doesn't fit - prod 4339 went out as "when the print finishes
+    - I've stopped the check-ins." The built-in triggers already know their own
+    past tense; a custom listener only has the words you give it.
+
     `text` is what to remind them of. It fires ONCE by default (the next time
     the condition happens). Set `repeat` true only if they clearly want it
     every time ("every time I get home...").
@@ -183,6 +190,7 @@ Buddy::Tools.register(
     target:      { type: :string,  required: false, description: "Place / chore / event / calendar name the condition is about, or which of Whisper's states for trigger=whisper (omit for deploy and custom)" },
     listener:    { type: :string,  required: false, description: "Jil listener string. Required for trigger=custom, ignored otherwise. Read read_listener_guide first." },
     when_phrase: { type: :string,  required: false, description: "Plain-language meaning of the listener (\"when something is added to the Claude list\"). Required for trigger=custom." },
+    past_phrase: { type: :string,  required: false, description: "The same condition written as something that HAS happened (\"The print finished\", \"The car parked at home\"). Read back when the thing fires and whatever it was holding stops. With trigger=custom." },
     repeat:      { type: :boolean, required: false, default: false, description: "Fire every time (true) instead of just the next time (false)" },
     notify:      { type: :string,  required: false, description: "Household member to notify instead of the user (optional)" },
     run:         { type: :string,  required: false, description: "Jil task name to FIRE when the condition hits, instead of saying anything. Verbatim from jil_triggers." },
