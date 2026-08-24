@@ -237,6 +237,41 @@ RSpec.describe AgendaSchedule do
       end
     end
 
+    # It lived in AgendaItemsController#apply_agenda_move! as two lines that had
+    # to be remembered together. Buddy's edit_agenda_item is the second caller,
+    # and so is `undo` - a series move that leaves its rows behind puts them
+    # back on the old calendar the moment anything re-reads them.
+    describe "moving a series between calendars" do
+      let(:other) { create(:agenda, user: user, name: "Ours 💕") }
+
+      def filed_under(schedule)
+        AgendaItem.where(agenda_schedule_id: schedule.id).distinct.pluck(:agenda_id)
+      end
+
+      it "takes its occurrences with it" do
+        schedule = build_schedule
+        expect(filed_under(schedule)).to eq([agenda.id])
+
+        schedule.update!(agenda: other)
+
+        expect(filed_under(schedule)).to eq([other.id])
+      end
+
+      it "puts them back when the move is reverted" do
+        schedule = build_schedule
+        schedule.update!(agenda: other)
+
+        schedule.update!(agenda: agenda)
+
+        expect(filed_under(schedule)).to eq([agenda.id])
+      end
+
+      it "leaves them alone for an edit that isn't a move" do
+        schedule = build_schedule
+        expect { schedule.update!(name: "Renamed") }.not_to change { filed_under(schedule) }
+      end
+    end
+
     describe "#add_excluded_date!" do
       let(:sched) {
         build_schedule(

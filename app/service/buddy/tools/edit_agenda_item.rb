@@ -17,6 +17,13 @@ Buddy::Tools.register(
     adding it back is not the answer, and neither is telling them it can't be
     done.
 
+    **A repeating item is a SERIES, and moving one to another calendar means the
+    whole series unless they say otherwise.** Changing only the occurrence in
+    front of you leaves the rule pointing at the old calendar, so next week it
+    is back where it started - pass `series=true`. An occurrence that has no row
+    of its own yet (anything further out than about a day) can ONLY be changed
+    through the series, and this does that automatically.
+
     For v1, only edits local (non-Google-synced) items.
   TXT
   feature:     :agenda,
@@ -36,6 +43,7 @@ Buddy::Tools.register(
                    "`task` is a to-do at a single time and drops the span entirely",
     },
     cancelled: { type: :string,       required: false, description: "'true' to cancel" },
+    series:    { type: :string,       required: false, description: "'true' to change the whole repeating series rather than this one occurrence. Moving a repeating item to another calendar is almost always the series" },
   },
   confirm:     ->(payload, ctx) {
     item = ctx.resolve_agenda_item(payload[:item], hint_date: payload[:hint_date])
@@ -49,10 +57,17 @@ Buddy::Tools.register(
       raise "#{item.name} is an agenda trigger, not a task or an event - it can't be converted"
     end
 
+    # A phantom carries no id: the occurrence they named exists only as a rule,
+    # so the rule is the only thing there is to edit. Otherwise it is theirs to
+    # choose, and `series` is how they say so.
+    series = item.id.nil? || payload[:series].to_s == "true"
+    raise "#{item.name} isn't a repeating item" if series && item.agenda_schedule_id.blank?
+
     # `was_kind` is what the row IS, carried so the checklist can say "Edit
     # Task" rather than "Edit Event" on a to-do. `kind` is what it's BECOMING,
     # which is the same thing unless they asked to convert it.
     resolved = { agenda_item_id: item.id, was_kind: item.kind, kind: payload[:kind].presence || item.kind }
+    resolved[:agenda_schedule_id] = item.agenda_schedule_id if series
     # Resolved HERE rather than at execute so the row shows the time that
     # actually lands. This is the call that put a shower at 4:45 AM under a
     # reply announcing 4:45 PM — see ToolContext#resolve_calendar_time.
@@ -90,6 +105,8 @@ Buddy::Tools.register(
   # restores exactly what was there.
   level:       2,
   execute:     ->(payload, ctx) {
+    next Buddy::AgendaSeriesEdit.call(payload, ctx) if payload[:agenda_schedule_id].present?
+
     item = AgendaItem.find(payload[:agenda_item_id])
     attrs = {}
     attrs[:name]      = payload[:title]     if payload[:title].present?
@@ -135,6 +152,8 @@ Buddy::Tools.register(
     }
   },
   receipt:     ->(result, ctx) {
+    next Buddy::AgendaSeriesEdit.receipt(result, ctx) if result[:agenda_schedule_id].present?
+
     item   = AgendaItem.find_by(id: result[:agenda_item_id])
     name   = item&.name || "that item"
     fields = Array(result[:updated_fields]).map(&:to_s)

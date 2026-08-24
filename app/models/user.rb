@@ -289,9 +289,14 @@ class User < ApplicationRecord
   # Owned + editable-shared, minus read-only calendars (e.g. the synced
   # Birthdays agenda). Used to gate item/schedule mutations and the FE
   # editable flag.
+  #
+  # Both :editor and :owner — the permission hierarchy is cumulative, and a
+  # co-owner of a joint calendar is an editor of it. Matching only :editor
+  # locked co-owners out of the calendar they share. Keep in step with
+  # `Agenda#editable_by?`, the single-record form of the same question.
   def editable_agendas
     Agenda.where(user_id: id).or(
-      Agenda.where(id: agenda_shares.editor.select(:agenda_id)),
+      Agenda.where(id: agenda_shares.where(permission: [:editor, :owner]).select(:agenda_id)),
     ).where.not(read_only: true)
   end
 

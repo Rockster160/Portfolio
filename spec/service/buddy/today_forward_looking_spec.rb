@@ -218,13 +218,19 @@ RSpec.describe "Buddy Today forward-looking" do
         expect(seed).to include("How full their day is isn't a fact about mine")
       end
 
-      it "needs a concrete effect to be raised at all, not a hedge" do
-        expect(seed).to include("A hedge is not an effect")
-        expect(seed).to include("which is how you can tell it isn't a reason")
+      # The three paragraphs deciding WHICH of a partner's items to raise are
+      # gone, because the deciding is done before the model sees any of them -
+      # ContextTool::PARTNER_FILTERED keeps only the ones carrying `collides`.
+      # A rule about picking from a set that has already been picked from is
+      # the thing that makes a long prompt longer and no better.
+      it "explains the ones that do arrive rather than filtering them again" do
+        expect(seed).to include("they carry `collides`")
+        expect(seed).to include("has already been taken out")
       end
 
-      it "still keeps the departure-time rule that was already there" do
-        expect(seed).to include("Never give me a `leave_by` or a `drive_min` off an item tagged `mine: false`")
+      it "no longer argues about the ones it will never be handed" do
+        expect(seed).not_to include("A hedge is not an effect")
+        expect(seed).not_to include("`leave_by` or a `drive_min` off an item tagged `mine: false`")
       end
     end
 
@@ -334,11 +340,12 @@ RSpec.describe "Buddy Today forward-looking" do
     end
 
     # Prod 3951 led Rocco's briefing with Chelsea's 11:30 block AND its 10:50
-    # leave-by, then tagged her 4:00 correctly one sentence later. The awareness
-    # rule was already there and long; what it lacked was the concrete tell.
-    it "forbids a departure time for an item that isn't the person's" do
-      expect(seed).to match(/Never give me a `leave_by` or a `drive_min` off an item tagged `mine: false`/)
-      expect(seed).to match(/instruction about somebody else's calendar/)
+    # leave-by, then tagged her 4:00 correctly one sentence later. Both halves
+    # are answered in data now rather than in prose: `tag_ownership` strips the
+    # departure time off a shared-in item, and the item itself only reaches a
+    # briefing when it collides with something of theirs.
+    it "leaves the departure time to the pipe that already removes it" do
+      expect(seed).not_to match(/Never give me a `leave_by`/)
     end
 
     # Byte's briefing the same morning got this right by simply not raising the
@@ -442,6 +449,46 @@ RSpec.describe "Buddy Today forward-looking" do
         block = Buddy::TodayBriefing.weather_block(user)
         expect(block).to include("THE HIGH AND THE LOW GO IN")
         expect(block).not_to include("weave it in naturally")
+      end
+    end
+
+    # And then the rule failed too - three more briefings on 23 Aug, all three
+    # carrying the reworded block AND the closing check, eight running. So
+    # Buddy::GPT::Turn now composes the line and puts it on when the model
+    # didn't, and it decides whether weather was asked for by looking for this
+    # exact directive in the seed. The two have to stay in step: reword the
+    # block without the constant and the repair silently stops firing.
+    it "carries the directive the repair keys off" do
+      travel_to(tz.parse("2026-07-28 08:00")) do
+        expect(Buddy::TodayBriefing.weather_block(user)).to include(Buddy::TodayBriefing::WEATHER_DIRECTIVE)
+        expect(Buddy::TodayBriefing.weather_ordered?(Buddy::TodayBriefing.seed(user))).to be(true)
+      end
+    end
+
+    # Late in the day the block is empty on purpose, and a repair that fired
+    # anyway would put a high back onto the one briefing that decided the high
+    # no longer mattered.
+    it "does not carry it once the day's weather has been dropped" do
+      travel_to(tz.parse("2026-07-28 19:00")) do
+        expect(Buddy::TodayBriefing.weather_ordered?(Buddy::TodayBriefing.seed(user))).to be(false)
+      end
+    end
+
+    describe "the composed line" do
+      it "reads the high and the low off the figures" do
+        line = Buddy::TodayBriefing.weather_line(high: 93, low: 69, rain: 0, notable: nil)
+
+        expect(line).to eq("High of 93°F today, low of 69°F.")
+      end
+
+      it "carries the odds when the day is above the baseline" do
+        line = Buddy::TodayBriefing.weather_line(high: 93, low: 69, rain: 56, notable: "rain")
+
+        expect(line).to eq("High of 93°F today, low of 69°F, with a 56% chance of rain.")
+      end
+
+      it "says nothing at all without both figures" do
+        expect(Buddy::TodayBriefing.weather_line(high: 93, low: nil, rain: 0, notable: nil)).to be_nil
       end
     end
 

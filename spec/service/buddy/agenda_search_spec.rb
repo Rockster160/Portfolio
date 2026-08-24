@@ -112,6 +112,62 @@ RSpec.describe Buddy::AgendaSearch do
     end
   end
 
+  # Prod 4462-4471. Five dinners went on as weekly series at 18:40 Sunday;
+  # MATERIALIZE_WINDOW is 30 hours, so exactly one of them had a row. Buddy then
+  # told him three times over four turns that the other four weren't there -
+  # "I'd need you to point at that specific row" - while the browser rendered
+  # all five off the rules the whole time.
+  describe "a series with no rows yet" do
+    def series!(name, on: agenda, day: :mon, at: "18:00")
+      AgendaSchedule.create!(
+        agenda: on, name: name, kind: :event, duration_minutes: 60,
+        starts_on: Date.current, start_time: at,
+        recurrence: { "freq" => "weekly", "by_day" => [day.to_s] }
+      )
+    end
+
+    it "finds an occurrence that exists only as a rule" do
+      series!("Salmon soyaki bowls", day: :tue)
+
+      titles = described_class.call(user: user, query: "salmon")[:items].map(&:name)
+      expect(titles).to include("Salmon soyaki bowls")
+    end
+
+    it "counts it in the total, so nothing reads as no results" do
+      series!("Salmon soyaki bowls", day: :tue)
+
+      expect(described_class.call(user: user, query: "salmon")[:total]).to be_positive
+    end
+
+    it "does not list the same evening twice when one occurrence IS materialized" do
+      schedule = series!("Kevin's meal & pilaf")
+      schedule.reload
+      materialized = schedule.agenda_items.count
+      expect(materialized).to be_positive
+
+      found = described_class.call(user: user, query: "kevin")[:items]
+      starts = found.map { |i| i.start_at.to_i }
+      expect(starts.uniq.length).to eq(starts.length)
+    end
+
+    it "keeps a name that matches nothing out of it" do
+      series!("Salmon soyaki bowls", day: :tue)
+
+      expect(described_class.call(user: user, query: "pizza")[:items]).to be_empty
+    end
+
+    # A phantom has no id, and the id is the handle. The SERIES is what an edit
+    # has to act on anyway, so that is what the row carries.
+    it "hands back the series handle rather than a blank one" do
+      schedule = series!("Salmon soyaki bowls", day: :tue)
+      phantom  = described_class.call(user: user, query: "salmon")[:items].first
+
+      row = described_class.rows([phantom], user).first
+      expect(row).to start_with("#s#{schedule.id} · Salmon soyaki bowls · ")
+      expect(row).to include("repeats - part of a series")
+    end
+  end
+
   describe "the search_agenda tool" do
     def search(payload)
       Buddy::GPT::Turn.resolve_tool(

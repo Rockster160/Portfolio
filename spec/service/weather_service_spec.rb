@@ -63,6 +63,31 @@ RSpec.describe WeatherService do
     end
   end
 
+  describe ".today_figures" do
+    def figures(day)
+      allow(described_class).to receive(:data).and_return({ "daily" => [day] })
+      described_class.today_figures
+    end
+
+    it "hands back the numbers rather than the prose" do
+      day = { "temp" => { "max" => 92.6, "min" => 68.7 }, "pop" => 0.56, "weather" => [{ "main" => "Rain" }] }
+
+      expect(figures(day)).to eq(high: 93, low: 69, rain: 56, notable: "rain")
+    end
+
+    it "carries no notable label on an ordinary day" do
+      day = { "temp" => { "max" => 78.2, "min" => 55.4 }, "pop" => 0.05, "weather" => [{ "main" => "Clear" }] }
+
+      expect(figures(day)).to eq(high: 78, low: 55, rain: 5, notable: nil)
+    end
+
+    it "is nil when there's no forecast to read" do
+      allow(described_class).to receive(:data).and_return(nil)
+
+      expect(described_class.today_figures).to be_nil
+    end
+  end
+
   describe ".format_week_outlook" do
     it "flags notable days, grouped and ordered by severity, skipping calm days" do
       base = 1_700_000_000  # fixed so day names are deterministic-ish; \w{3} matches any

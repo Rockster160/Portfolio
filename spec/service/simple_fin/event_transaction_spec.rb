@@ -144,6 +144,121 @@ RSpec.describe SimpleFin::EventTransaction do
     end
   end
 
+  # The bank sends one alert twice down two delivery paths. On 23 Aug that made
+  # two events, two categorize prompts and two ledger rows for one $19.33
+  # charge, which is $19.33 off the projected balance until `balance_date`
+  # moves past it. Six such pairs since February, all alert-sourced.
+  describe "one alert delivered twice" do
+    let(:at) { Time.utc(2026, 8, 23, 3, 31, 18) }
+
+    def crunchy(second: 18)
+      alert(
+        amount: 19.33, account: "(...2363)", category: "subscriptions",
+        merchant: "CRUNCHYROLL.COM", at: Time.utc(2026, 8, 23, 3, 31, second)
+      )
+    end
+
+    it "lands one row, not two" do
+      described_class.sync(crunchy)
+      described_class.sync(crunchy(second: 19))
+
+      expect(BankTransaction.where(payee: "CRUNCHYROLL.COM").count).to eq(1)
+    end
+
+    it "leaves the projection carrying the charge once" do
+      described_class.sync(crunchy)
+      described_class.sync(crunchy(second: 19))
+
+      expect(BankTransaction.where(payee: "CRUNCHYROLL.COM").sum(:amount_cents)).to eq(-1933)
+    end
+
+    # The second alert annotates the row the first one landed rather than being
+    # thrown away, so answering either categorize prompt still lands somewhere.
+    it "lets the second copy annotate the row the first one made" do
+      first  = described_class.sync(crunchy)
+      second = described_class.sync(crunchy(second: 19))
+
+      expect(second.id).to eq(first.id)
+    end
+
+    it "keeps the row pointed at the alert that made it" do
+      first = described_class.sync(crunchy)
+      twin  = crunchy(second: 19)
+      described_class.sync(twin)
+
+      expect(first.reload.action_event_id).not_to eq(twin.id)
+    end
+  end
+
+  # Everything the twin guard must NOT swallow. A real second purchase is
+  # indistinguishable from a duplicate alert on every field except one, so each
+  # of these is the whole reason the window is a minute rather than a day.
+  describe "two charges that only look alike" do
+    def twice(first:, second:)
+      described_class.sync(alert(**first))
+      described_class.sync(alert(**second))
+      BankTransaction.count
+    end
+
+    it "keeps both when they are an hour apart" do
+      count = twice(
+        first:  { at: Time.utc(2026, 8, 10, 21, 15) },
+        second: { at: Time.utc(2026, 8, 10, 22, 15) },
+      )
+
+      expect(count).to eq(2)
+    end
+
+    it "keeps both when the amounts differ by a cent" do
+      count = twice(
+        first:  { amount: 24.99, at: Time.utc(2026, 8, 10, 21, 15) },
+        second: { amount: 25.00, at: Time.utc(2026, 8, 10, 21, 15, 20) },
+      )
+
+      expect(count).to eq(2)
+    end
+
+    it "keeps both when they are different merchants" do
+      count = twice(
+        first:  { merchant: "AMAZON MKTPLACE PMTS", at: Time.utc(2026, 8, 10, 21, 15) },
+        second: { merchant: "CRUNCHYROLL.COM", at: Time.utc(2026, 8, 10, 21, 15, 20) },
+      )
+
+      expect(count).to eq(2)
+    end
+
+    it "keeps both when they are on different cards" do
+      count = twice(
+        first:  { account: "(...7283)", at: Time.utc(2026, 8, 10, 21, 15) },
+        second: { account: "(...2363)", at: Time.utc(2026, 8, 10, 21, 15, 20) },
+      )
+
+      expect(count).to eq(2)
+    end
+
+    # One alert format names no merchant at all. An amount and a minute is the
+    # whole of what those two rows would agree on, which is not enough to
+    # decide one of them isn't real.
+    it "keeps both when neither alert named a merchant" do
+      count = twice(
+        first:  { merchant: nil, at: Time.utc(2026, 8, 10, 21, 15) },
+        second: { merchant: nil, at: Time.utc(2026, 8, 10, 21, 15, 20) },
+      )
+
+      expect(count).to eq(2)
+    end
+
+    # A row SimpleFIN has confirmed is the bank's own record of a purchase that
+    # already cleared, so a fresh alert beside it is a new charge.
+    it "does not annotate a row the bank has confirmed" do
+      row = described_class.sync(alert(at: Time.utc(2026, 8, 10, 21, 15)))
+      row.update!(simplefin_id: "sf-1")
+      described_class.sync(alert(at: Time.utc(2026, 8, 10, 21, 15, 20)))
+
+      expect(BankTransaction.count).to eq(2)
+    end
+  end
+
   describe ".forget" do
     it "takes the row with it when the row was only ever the alert" do
       event = alert

@@ -282,6 +282,46 @@ RSpec.describe Buddy::GPT::Turn do
       end
     end
 
+    # Prod 4467: "Ohhh, I found the one dinner item and moved it onto the right
+    # calendar name with the little trailing space!" - six model calls, a search
+    # among them, no byte_actions row, and agenda_items 1019 with an updated_at
+    # identical to its created_at. A move is the one shape this had no arm for,
+    # and it is the shape edit_agenda_item's own receipt uses.
+    it "retracts a move that never happened" do
+      run([{ text: "Ohhh, I found the one dinner item and moved it onto the right calendar!" }])
+
+      expect(reply.body).to eq(described_class::FALLBACK_BODY)
+      expect(reply.metadata["retracted_claim"]).to be(true)
+    end
+
+    it "retracts a move however it's worded" do
+      [
+        "Moved it to Ours 💕 for you.",
+        "I've shifted them over to the shared calendar.",
+        "Rescheduled that to Thursday.",
+        "Moved those back onto your own calendar.",
+      ].each do |faked|
+        run([{ text: faked }])
+
+        expect(reply.metadata["retracted_claim"]).to be(true), "not caught: #{faked}"
+      end
+    end
+
+    # The destination is what makes it a claim. Buddy relaying somebody else's
+    # change is an ordinary sentence, and a noun object is how those read.
+    it "leaves an ordinary sentence about something moving alone" do
+      [
+        "Chelsea moved the dentist to Thursday, so your afternoon is clear.",
+        "Your standup moved to 10 this week.",
+        "The whole trip moved to August.",
+        "That moved me, honestly.",
+      ].each do |honest|
+        run([{ text: honest }])
+
+        expect(reply.metadata["retracted_claim"]).to be_nil, "wrongly retracted: #{honest}"
+      end
+    end
+
     # `call_jil_function` acts, so a real Camera Snapshot sets @acted and the
     # true sentence — which is the function's own return value — survives.
     it "leaves the claim alone when the function actually ran" do
@@ -1178,6 +1218,161 @@ RSpec.describe Buddy::GPT::Turn do
       ].each { |body|
         expect(body).not_to match(described_class::GREETING_OPENER_RX), "#{body.inspect} read as a greeting"
       }
+    end
+  end
+
+  # `today_briefing.rb` says a hello has to land warm and lifted, never on a
+  # flat period, because "the line after it inherits that flatness for the whole
+  # briefing". Prod 4482 opened "Morning." Every line in Buddy::VoiceLines
+  # already passes that rule, so this only ever touches the model's own.
+  describe "a briefing that opens on a flat period" do
+    def briefing(rounds)
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing.seed(user),
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+      )
+      described_class.run!(message, client: FakeBuddyClient.new(rounds))
+    end
+
+    it "lifts it" do
+      briefing([{ text: "Morning. Not much on your plate today." }])
+
+      expect(reply.body).to start_with("Morning! Not much on your plate today.")
+    end
+
+    it "lifts one that named them too" do
+      briefing([{ text: "Good morning, Rocco. Quiet one." }])
+
+      expect(reply.body).to start_with("Good morning, Rocco! Quiet one.")
+    end
+
+    it "keeps a mood marker in front of it" do
+      briefing([{ text: "[[mood:happy]]Morning. Quiet one." }])
+
+      expect(reply.body).to include("Morning! Quiet one.")
+    end
+
+    it "leaves one that already landed warm alone" do
+      briefing([{ text: "Hey hey! Quiet one today." }])
+
+      expect(reply.body).to eq("Hey hey! Quiet one today.")
+    end
+
+    # The opener has to be a greeting BY ITSELF. A sentence that merely starts
+    # with the time of day is news, and news keeps its period.
+    it "leaves a first sentence that isn't an opener alone" do
+      briefing([{ text: "Morning meds are at 8. Then you're clear." }])
+
+      expect(reply.body).to start_with("Morning meds are at 8.")
+    end
+
+    it "leaves ordinary turns alone" do
+      run([{ text: "Morning. Nothing else on." }], text: "what's up")
+
+      expect(reply.body).to eq("Morning. Nothing else on.")
+    end
+  end
+
+  # Eight briefings running went out with no weather in them, across two rounds
+  # of prompt wording and a pre-send readback naming this exact line. The other
+  # two checks in that readback held every time over the same run, so the model
+  # is reading it - this one line is what keeps getting skipped. So the figures
+  # get composed in Ruby and put on, the same way a missing hello does.
+  describe "a briefing that came back with no weather in it" do
+    let(:figures) { { high: 93, low: 69, rain: 56, notable: "rain" } }
+
+    before { allow(WeatherService).to receive(:today_figures).and_return(figures) }
+
+    def briefing(rounds, seed: Buddy::TodayBriefing.seed(user))
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: seed,
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+      )
+      described_class.run!(message, client: FakeBuddyClient.new(rounds))
+    end
+
+    # The seed only carries the directive when there really were figures to
+    # give, so it stands in for "was weather asked for on this turn".
+    def weather_seed
+      "#{Buddy::TodayBriefing::WEATHER_DIRECTIVE}\n#{Buddy::TodayBriefing::GREET_DIRECTIVE}"
+    end
+
+    it "puts the high and the low on the end" do
+      briefing([{ text: "Hey! Just the noon supply run today." }], seed: weather_seed)
+
+      expect(reply.body).to include("High of 93°F today, low of 69°F")
+    end
+
+    it "carries the odds for anything above the baseline" do
+      briefing([{ text: "Hey! Just the noon supply run today." }], seed: weather_seed)
+
+      expect(reply.body).to include("56% chance of rain")
+    end
+
+    it "leaves an ordinary day at just the figures" do
+      allow(WeatherService).to receive(:today_figures).and_return(high: 78, low: 55, rain: 5, notable: nil)
+      briefing([{ text: "Hey! Just the noon supply run today." }], seed: weather_seed)
+
+      expect(reply.body).to end_with("High of 78°F today, low of 55°F.")
+    end
+
+    it "keeps the briefing it was given in front of the line" do
+      briefing([{ text: "Hey! Just the noon supply run today." }], seed: weather_seed)
+
+      expect(reply.body).to start_with("Hey! Just the noon supply run today.")
+    end
+
+    it "spends no extra round on it" do
+      client = FakeBuddyClient.new([{ text: "Hey! Just the noon supply run today." }])
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: weather_seed,
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+      )
+      described_class.run!(message, client: client)
+
+      expect(client.calls.length).to eq(1)
+    end
+
+    # The whole point is that the model's own sentence is better - it can put
+    # the figures where they belong instead of on the end.
+    it "leaves a briefing that already said it alone" do
+      briefing([{ text: "Hey! 93 out today, down to 69 tonight. Just the noon run." }], seed: weather_seed)
+
+      expect(reply.body).to eq("Hey! 93 out today, down to 69 tonight. Just the noon run.")
+    end
+
+    it "counts a degree sign as having said it" do
+      briefing([{ text: "Hey! Topping out around 93° later. Just the noon run." }], seed: weather_seed)
+
+      expect(reply.body).to eq("Hey! Topping out around 93° later. Just the noon run.")
+    end
+
+    it "counts the word degrees as having said it" do
+      briefing([{ text: "Hey! Low nineties, down to sixty-nine degrees overnight." }], seed: weather_seed)
+
+      expect(reply.body).to eq("Hey! Low nineties, down to sixty-nine degrees overnight.")
+    end
+
+    # After ~4pm `weather_block` is empty and the directive isn't in the seed at
+    # all. The repair has to stop there rather than invent a forecast the
+    # briefing was deliberately not given.
+    it "puts nothing on a briefing whose seed carried no forecast" do
+      briefing([{ text: "Evening! Nothing left tonight." }], seed: Buddy::TodayBriefing::GREET_DIRECTIVE)
+
+      expect(reply.body).to eq("Evening! Nothing left tonight.")
+    end
+
+    it "puts nothing on when there are no figures to put on" do
+      allow(WeatherService).to receive(:today_figures).and_return(nil)
+      briefing([{ text: "Hey! Just the noon supply run today." }], seed: weather_seed)
+
+      expect(reply.body).to eq("Hey! Just the noon supply run today.")
+    end
+
+    it "leaves ordinary turns alone" do
+      run([{ text: "Quiet one today." }], text: "how's the day looking")
+
+      expect(reply.body).to eq("Quiet one today.")
     end
   end
 

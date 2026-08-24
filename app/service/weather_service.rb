@@ -90,6 +90,23 @@ module WeatherService
     today && day_notable(today)
   end
 
+  # The bare figures behind `summary`, for a caller that has to COMPOSE a
+  # sentence rather than hand the prose over. Buddy::GPT::Turn puts the high and
+  # the low onto a briefing that went out without them, and it can't do that off
+  # a formatted string it would have to parse back apart.
+  def today_figures(lat: HOME_LAT, lng: HOME_LNG, user: nil)
+    payload = data(lat: lat, lng: lng, user: user)
+    today   = payload && Array(payload["daily"]).first
+    return nil if today.blank?
+
+    {
+      high:    today.dig("temp", "max")&.round,
+      low:     today.dig("temp", "min")&.round,
+      rain:    (today["pop"].to_f * 100).round,
+      notable: day_notable(today),
+    }
+  end
+
   def fetch(lat, lng, key)
     uri = URI("https://api.openweathermap.org/data/3.0/onecall")
     uri.query = URI.encode_www_form(

@@ -123,6 +123,23 @@ RSpec.describe AgendaShare do
       own = create(:agenda, user: other, name: "Own")
       expect(other.editable_agendas.pluck(:id)).to include(agenda.id, own.id)
     end
+
+    it "editable includes owner-permission shares" do
+      AgendaShare.create!(agenda: agenda, user: other, permission: :owner)
+      own = create(:agenda, user: other, name: "Own")
+      expect(other.editable_agendas.pluck(:id)).to include(agenda.id, own.id)
+    end
+
+    it "agrees with Agenda#editable_by? at every permission level" do
+      own = create(:agenda, user: other, name: "Own")
+      AgendaShare.permissions.each_key { |level|
+        share = AgendaShare.create!(agenda: agenda, user: other, permission: level)
+        editable = other.editable_agendas.pluck(:id).include?(agenda.id)
+        expect(editable).to eq(agenda.editable_by?(other)), "#{level} disagreed"
+        share.destroy!
+      }
+      expect(own.editable_by?(other)).to be(true)
+    end
   end
 
   describe "AgendaItem agenda_id change — combined per-user broadcast" do

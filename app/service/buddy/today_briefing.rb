@@ -88,6 +88,49 @@ module Buddy
       GREETING_KINDS.fetch(part, :greeting_morning)
     end
 
+    # The weather half of the same idea as GREET_DIRECTIVE: the exact wording, so
+    # Buddy::GPT::Turn can tell the seed really did carry a forecast before
+    # deciding a briefing came back without one. Absent whenever `weather_block`
+    # is empty, which is what keeps the repair off a late-in-the-day briefing
+    # that was never given figures.
+    WEATHER_DIRECTIVE = "THE HIGH AND THE LOW GO IN, in one short line.".freeze
+
+    def weather_ordered?(seed_body)
+      seed_body.to_s.include?(WEATHER_DIRECTIVE)
+    end
+
+    # The line, composed here rather than asked for.
+    #
+    # This is the third attempt and the first one that isn't a request. It went
+    # in as "Give me the high and the low, in one short line", was rewritten to
+    # THE HIGH AND THE LOW GO IN when that got dropped three briefings running,
+    # and gained a pre-send readback naming it - and the three briefings after
+    # that all carried the strongest wording yet and all went out with no
+    # weather in them, eight running. The readback is being READ: its other two
+    # checks held every time over those same three. It is this one line that
+    # keeps losing, so it stops being a line the model has to remember to write.
+    #
+    # Same trade as with_greeting, and the same limit: this only fills a
+    # silence. Whenever the model writes its own the model's is what ships,
+    # because it can put the figures in a sentence that belongs to the rest of
+    # the message and this can only put them on the end.
+    NOTABLE_CLAUSES = {
+      "rain"   => ->(pop) { "a #{pop}% chance of rain" },
+      "storms" => ->(pop) { "storms around, #{pop}% chance" },
+      "snow"   => ->(pop) { "snow, #{pop}% chance" },
+      "windy"  => ->(_pop) { "wind worth knowing about" },
+    }.freeze
+
+    def weather_line(figures)
+      figures = figures.to_h.symbolize_keys
+      high    = figures[:high]
+      low     = figures[:low]
+      return nil if high.nil? || low.nil?
+
+      clause = NOTABLE_CLAUSES[figures[:notable].to_s]&.call(figures[:rain].to_i)
+      "High of #{high}°F today, low of #{low}°F#{", with #{clause}" if clause}."
+    end
+
     def greet_lines
       [
         "#{GREET_DIRECTIVE} Not optional, not a judgement call, and not conditional on anything. It is the FIRST thing in the message, before any news. Every Today opens with a hello - it's part of the shape of the thing, the way a letter opens with a name.",
@@ -137,7 +180,7 @@ module Buddy
         lines << "Today: #{summary}"
         lines << "Notable today: #{notable}." if notable.present?
         lines += [
-          "THE HIGH AND THE LOW GO IN, in one short line. Every other must-say section here is written as a rule and this one was written as a description, which is how it came to be the one that got dropped three briefings running - including a day carrying an 89% chance of rain with a named window, to two people, neither of whom heard about it.",
+          WEATHER_DIRECTIVE,
           "Anything above that is worth its own mention with its odds: rain, wind, storms, snow. Only ever what's in the lines just above - an ordinary sunny day is the baseline, and the baseline is already covered by the figures.",
           "Weather gets reported here, not acted on.",
         ]
@@ -238,9 +281,8 @@ module Buddy
         #{chores_lead_lines(user)}
         - `today_notable` - today's events and meetings with times. This is NOT the whole calendar. Everything that repeats on an ordinary daily or weekday rhythm has already been taken out, because I know my own standing schedule and hearing it read back is what makes a briefing worthless. What's left is what makes today different from any other day.
         - `upcoming_reminders` is the OTHER HALF of the day and none of it is on the calendar. One that's still due is a thing that is going to happen to me, at a time, and it belongs here exactly as an agenda item does - a day with three of them on it is not an open day, however empty the calendar looks. Say what each is FOR, the way you would name an event: giving me the hour and leaving out the thing is that sentence with the useful half taken out.
-        - Agenda items tagged `mine: false` (with an `owner`) are on a partner's PERSONAL calendar shared with me - awareness only. They are NOT my tasks and they are NEVER the briefing. Default to leaving them out entirely. The ONLY reason to raise one is a concrete effect on my day - a conflict with something of mine, a hand-off, something I'm part of - and then you say whose it is and what that effect is. A hedge is not an effect: guessing it might matter if my afternoon gets busy is a sentence you can write about any item on anyone's calendar, which is how you can tell it isn't a reason. A briefing that names a partner's item while leaving out one of MINE is wrong, no matter how quiet my day looks: everything tagged `mine: false` could vanish and the briefing still has to be right.
-        - **My day is never described by comparison to theirs.** Framing it as light or busy next to somebody else's makes their calendar the subject of my briefing, and does it before naming a single thing of mine. How full their day is isn't a fact about mine. Tell me about mine.
-        - **Never give me a `leave_by` or a `drive_min` off an item tagged `mine: false`.** A departure time is an instruction, and an instruction about somebody else's calendar is telling me to go to their appointment. It is the clearest tell that an item has been read as mine, and it survives a sentence that hedges everything else correctly - if you are telling me when to walk out of the door for it, it was never yours to raise. This has gone out: a partner's block led the briefing with its leave-by attached while one of MINE went unmentioned. Check the tag on EVERY item, not the first one - the same briefing then handled a later item off that same calendar correctly, so getting it right once is no sign the next one is right.#{chores_hot_line(user)}
+        - An item tagged `mine: false` (with an `owner`) is on a partner's PERSONAL calendar, and the only ones that reach you at all are the ones that RUN INTO something of mine - they carry `collides`. Everything else off their calendar has already been taken out, so there is no judgement left here: say whose it is and what it clashes with, and stop. It is still never the subject of the message.
+        - **My day is never described by comparison to theirs.** Framing it as light or busy next to somebody else's makes their calendar the subject of my briefing, and does it before naming a single thing of mine. How full their day is isn't a fact about mine. Tell me about mine.#{chores_hot_line(user)}
 
         NAME THE THING, never just its category. Every item carries its real name, and the name is usually the entire reason it's worth mentioning: whose birthday, which meeting, who I'm collecting. Reducing one to its type strips out the only part I couldn't have guessed, and leaves me opening the agenda to find out what you meant - at which point the line did nothing but tell me I have plans. This goes just as hard for a one-line week mention as for today. Work in `where` whenever the place is the point, and a time whenever it changes what I'd do.
 

@@ -125,6 +125,7 @@ module BuddyEvalNeeds
     wind_down_routine:    { label: "a wind-down routine",          check: ->(u) { BuddyRoutine.where(user: u).any? { |r| r.name.to_s.match?(/wind.?down/i) } } },
     bakkie_defined:       { label: "bakkie in the glossary",       check: ->(u) { u.chore_household && HouseholdGlossaryTerm.where(chore_household: u.chore_household).any? { |t| t.term.to_s.casecmp?("bakkie") } } },
     dentist_on_calendar:  { label: "a dentist item on the calendar", check: ->(u) { AgendaItem.where(agenda_id: u.agendas.map(&:id), start_at: Time.current..1.month.from_now).any? { |i| i.name.to_s.match?(/dentist/i) } } },
+    pilaf_series:         { label: "a repeating pilaf dinner on the calendar", check: ->(u) { AgendaSchedule.where(agenda_id: u.agendas.map(&:id)).any? { |sc| sc.name.to_s.match?(/pilaf/i) } } },
     coffee_pairing:       { label: "the coffee-to-chore pairing",  check: ->(u) { RecordLink.where(user: u).any? { |l| l.source_name.to_s.match?(/coffee/i) } } },
     desk_delivery:        { label: "a desk on the delivery list",  check: ->(u) { delivery?(u, "desk") } },
     mattress_delivery:    { label: "a mattress on the delivery list", check: ->(u) { delivery?(u, "mattress") } },

@@ -960,6 +960,74 @@ module Buddy
         body
       end
 
+      # A temperature already in the body, in any of the shapes one gets written
+      # in. The figures themselves are in the check because the two most natural
+      # ways to say this - "high of 93" and "93 out today" - carry neither a
+      # degree sign nor the word.
+      #
+      # Deliberately generous: a stray number that happens to match a figure
+      # suppresses the repair, and that is the safe direction. Putting a second
+      # high on a briefing that already had one is worse than leaving a rare
+      # miss for the prompt.
+      TEMPERATURE_RX = /°|\bdegrees?\b/i
+
+      def weather_missing?(body, figures)
+        return true if body.blank?
+        return false if body.match?(TEMPERATURE_RX)
+
+        [figures[:high], figures[:low]].compact.none? { |t| body.match?(/(?<!\d)#{t}(?!\d)/) }
+      end
+
+      # Put the high and the low on, when the model didn't. See the note over
+      # Buddy::TodayBriefing.weather_line for why this stopped being a request.
+      def with_weather(body)
+        return body unless today_briefing?
+        return body unless Buddy::TodayBriefing.weather_ordered?(@inbound.body.to_s)
+
+        figures = WeatherService.today_figures(user: @user)
+        return body if figures.blank? || !weather_missing?(body, figures)
+
+        line = Buddy::TodayBriefing.weather_line(figures)
+        return body if line.blank?
+
+        "#{body.rstrip}\n\n#{line}"
+      rescue StandardError => e
+        # Missing weather is a worse briefing; a raise here is no briefing.
+        Rails.logger.warn("[Buddy::GPT::Turn] weather fallback failed: #{e.class}: #{e.message}")
+        body
+      end
+
+      # A hello that stops on a period, lifted.
+      #
+      # `today_briefing.rb` says it outright - end it on a `!`, a stretched
+      # vowel, or real warmth, never on a flat period - because "the line after
+      # it inherits that flatness for the whole briefing". Prod 4482 opened
+      # "Morning." Every line in Buddy::VoiceLines passes that rule and a spec
+      # holds them to it, so the fallback hello has never had this problem; it
+      # is only the model's own that does.
+      #
+      # Deliberately tiny: the opener has to be a greeting BY ITSELF - the
+      # regex that decides whether one is missing, four words at the outside,
+      # nothing else in the sentence. "Good morning, Rocco." lifts. "Morning
+      # meds are at 8." is not an opener and never matches, because the
+      # greeting arms of GREETING_OPENER_RX refuse the noun reading.
+      FLAT_HELLO_RX = /\A(\s*(?:\[\[mood:[^\]\n]*\]\])?\s*)([^.!?\n]{1,28})\.(?=\s|\z)/
+
+      def with_lifted_greeting(body)
+        return body unless today_briefing?
+
+        match = body.match(FLAT_HELLO_RX)
+        return body if match.nil?
+
+        hello = match[2].to_s.strip
+        return body unless hello.split(/\s+/).length <= 4 && hello.match?(GREETING_OPENER_RX)
+
+        "#{match[1]}#{hello}!#{body[match.end(0)..]}"
+      rescue StandardError => e
+        Rails.logger.warn("[Buddy::GPT::Turn] greeting lift failed: #{e.class}: #{e.message}")
+        body
+      end
+
       # What this thread was told last time, so the same opener doesn't land two
       # mornings running.
       def previous_briefing_body
@@ -1430,7 +1498,8 @@ module Buddy
       end
 
       def finalize_success(outcome)
-        body = with_greeting(without_briefing_claim(display_body(apply_leading_mood(outcome[:text]))))
+        body = display_body(apply_leading_mood(outcome[:text]))
+        body = with_lifted_greeting(with_greeting(with_weather(without_briefing_claim(body))))
         # Scrubbing can empty a reply outright: on prod 4202 the form marker WAS
         # the whole body. A blank bubble is worse than the marker was - it reads
         # as Buddy having nothing to say to something they typed - so the turn
@@ -1640,6 +1709,24 @@ module Buddy
         # retracted it. A pronoun can be trusted with the particle alone; a noun
         # has to be one of the things that actually gets scheduled.
         | \b(?:pulled|took)\s+(?:it|that|this|those|them)\s+(?:down|off)\b
+        # The MOVE shape. Prod 4467: "Ohhh, I found the one dinner item and
+        # moved it onto the right calendar name with the little trailing space!"
+        # - six model calls, a search among them, and no byte_actions row at
+        # all. agenda_items 1019 still read agenda_id 2, with an updated_at
+        # identical to its created_at.
+        #
+        # A move is not an add, a set, a log, a run or a removal, and it is not
+        # in the edit-verb list either - so the one shape edit_agenda_item's own
+        # receipt uses ("Moved X to Y") was the shape this couldn't see.
+        #
+        # The DESTINATION is what makes it a claim rather than a report. First
+        # person can't be required the way the edit shape requires it: the "I"
+        # here is nine words upstream, behind a whole other clause. A pronoun
+        # object instead, so "Chelsea moved the dentist to Thursday" - Buddy
+        # relaying somebody else's change - still survives.
+        # (No slashes in these comments - see the note above.)
+        | \b(?:moved|shifted|rescheduled|relocated)\s+(?:it|that|those|them)\s+
+            (?:to|onto|over\s+to|across\s+to|back\s+(?:to|onto))\b
         | \b(?:pulled|took)\s+(?:the|your)[^.!?\n]{0,40}?
             \b(?:reminder|alarm|timer|watch|event|chore|item|task|notification)s?\s+(?:down|off)\b
         | \b(?:it|that)(?:'|’)?s\s+(?:cancell?ed|removed|deleted|off\s+the\s+list)\b

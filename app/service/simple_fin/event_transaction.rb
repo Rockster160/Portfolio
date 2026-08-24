@@ -23,6 +23,11 @@ module SimpleFin
   class EventTransaction
     EVENT_NAME = ::SimpleFin::EventMatcher::EVENT_NAME
 
+    # How close two alert-sourced rows have to be before the second is read as
+    # a second copy of one alert rather than a second purchase. See
+    # `duplicate_alert_row`.
+    TWIN_WINDOW = 1.minute
+
     class << self
       # The one entry point, called from ActionEventNotifier for every add and
       # change. Idempotent, and a no-op for anything that is not a Transaction
@@ -36,7 +41,45 @@ module SimpleFin
         matched = ::SimpleFin::EventMatcher.link_event(event)
         return update!(matched, event) if matched.present?
 
+        twin = duplicate_alert_row(event)
+        return update!(twin, event) if twin.present?
+
         create!(event)
+      end
+
+      # The row an EARLIER alert already landed for this same purchase.
+      #
+      # The bank sometimes sends one alert twice, down two delivery paths. The
+      # $19.33 Crunchyroll charge on 23 Aug arrived as emails 51535 and 51536,
+      # same subject, same amount, same account, both quoting "Made on Aug 22,
+      # 2026 at 11:31 PM ET" - and became two events, two prompts and two rows,
+      # so the projected balance was $19.33 low until `balance_date` moved past
+      # them. Six pairs have come through since Feb (four Amazon, one Venmo,
+      # this one), every one of them alert-sourced and none from the feed.
+      #
+      # Same reasoning as `claim`, one step earlier: an alert that describes a
+      # purchase already in the table ANNOTATES that row rather than adding a
+      # second one. What makes it safe is the window - a second genuine charge
+      # at the same merchant, on the same card, for the same cent amount,
+      # inside a minute is not a thing a person does, while two copies of one
+      # alert land seconds apart by construction.
+      def duplicate_alert_row(event)
+        cents    = amount_cents_for(event)
+        occurred = event.timestamp
+        merchant = event.data&.dig("merchant").presence
+        # A named merchant is what makes two of these the SAME purchase rather
+        # than two purchases that agree on a number. One alert format names no
+        # merchant at all, and an amount and a minute is not enough to spend a
+        # row on - so those go through as they always have.
+        return nil if cents.nil? || occurred.blank? || merchant.blank?
+
+        scope = ::BankTransaction.event_sourced.linked.where(
+          amount_cents:    cents,
+          bank_account_id: account_for(event)&.id,
+          payee:           merchant,
+          occurred_at:     (occurred - TWIN_WINDOW)..(occurred + TWIN_WINDOW),
+        )
+        closest(scope.where.not(action_event_id: event.id), occurred)
       end
 
       # The alert-sourced row that this incoming SimpleFIN transaction is the

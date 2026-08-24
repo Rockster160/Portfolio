@@ -59,7 +59,10 @@ Buddy::Tools.register(
             "Answer from THIS, not from what you remember being on the calendar. Give the one they " \
             "asked about in your own words, with the day and time; don't read the list back. An " \
             "entry marked as somebody else's is on a shared calendar and is not theirs to do. To " \
-            "change one, call `edit_agenda_item` with its id."
+            "change one, call `edit_agenda_item` with its id. An entry marked `repeats - part of a " \
+            "series` is one date of a standing rule, and the ones carrying an `#s` handle have no " \
+            "row of their own at all - moving either to another calendar means the whole series, so " \
+            "pass `series=true` unless they said just this one."
         else
           "NOTHING across #{days} days. Tell them plainly that there's nothing on the calendar for " \
             "it - that is the real answer and they need it. Do not offer a nearby item as though it " \

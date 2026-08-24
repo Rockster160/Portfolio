@@ -89,6 +89,10 @@ module Buddy
       # morning it matters.
       BRIEFING_ALWAYS = %i[upcoming_reminders].freeze
 
+      # The two sections a briefing gets that can carry somebody else's
+      # calendar. See #without_uninvolved_partner_items.
+      PARTNER_FILTERED = %i[today_notable upcoming_notable].freeze
+
       # Sections this turn may not have, for any reason: a feature the person
       # doesn't use, or a briefing that has no business with the full roster.
       def self.withheld(user, briefing: false)
@@ -190,7 +194,8 @@ module Buddy
         payload = named_sections(args).empty? ? context : context.slice(*requested_sections(args))
         # Applied to the everything path too, which is the one a briefing takes.
         payload = payload.except(*self.class.withheld(@user, briefing: @briefing))
-        JSON.generate(without_own_reminder(payload))
+        payload = without_uninvolved_partner_items(without_own_reminder(payload))
+        JSON.generate(payload)
       rescue StandardError => e
         Buddy::Errors.report(
           section:   "gpt.context_tool",
@@ -226,6 +231,36 @@ module Buddy
         payload.merge(upcoming_reminders: payload[:upcoming_reminders].reject { |r| r[:own_briefing] })
       rescue StandardError => e
         Buddy::Errors.report(section: "gpt.context_tool.own_reminder", exception: e, user: @user)
+        payload
+      end
+
+      # A partner's calendar is not the briefing, and on a briefing turn the
+      # ones with no bearing on the day stop being shown at all.
+      #
+      # `today_briefing.rb` spends three paragraphs on this - NEVER the
+      # briefing, default to leaving them out, a briefing that names one while
+      # leaving out one of MINE is wrong - and prod 4482 opened "the calendar's
+      # busy around you", named five of Chelsea's items, and left his own
+      # Serenity out. Prod 4429 the morning before did the milder version. Same
+      # answer as the chore roster and as `leave_by`: what the model can't see,
+      # it can't read out.
+      #
+      # `collides` (Buddy::Context.collision_ids) is the exception and stays -
+      # a partner's block that runs into something of theirs is the one case
+      # the prompt says to raise, and now it arrives already knowing why.
+      #
+      # Briefing only. Ask "what's Chelsea got on today" on an ordinary turn and
+      # you still get all of it, because that time you asked.
+      def without_uninvolved_partner_items(payload)
+        return payload unless @briefing
+
+        PARTNER_FILTERED.each_with_object(payload.dup) { |key, out|
+          next unless out[key].is_a?(Array)
+
+          out[key] = out[key].reject { |i| i[:mine] == false && !i[:collides] }
+        }
+      rescue StandardError => e
+        Buddy::Errors.report(section: "gpt.context_tool.partner_items", exception: e, user: @user)
         payload
       end
 

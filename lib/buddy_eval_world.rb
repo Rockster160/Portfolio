@@ -289,6 +289,19 @@ class BuddyEvalWorld
         start_at: 1.day.from_now.change(hour: 15), end_at: 1.day.from_now.change(hour: 16)
       )
     }
+
+    # A REPEATING one, for the series probes. MATERIALIZE_WINDOW is 30 hours,
+    # so most of its occurrences exist only as the rule - which is the whole
+    # point of it being here. Its items are `dependent: :destroy`, so the
+    # manifest holding the schedule is enough to take the lot back down.
+    series = AgendaSchedule.where(agenda_id: agenda.id).to_a
+    reuse(series.detect { |sc| sc.name.to_s.match?(/pilaf/i) }) {
+      AgendaSchedule.create!(
+        agenda: agenda, kind: :event, name: "Kevin's meal & pilaf",
+        duration_minutes: 60, starts_on: Date.current, start_time: "18:00",
+        recurrence: { "freq" => "weekly", "by_day" => ["mon"] }
+      )
+    }
   end
 
   def ideas!

@@ -290,6 +290,127 @@ RSpec.describe "Buddy agenda tools" do
       end
     end
 
+    # The other half of prod 4462-4471: once Buddy CAN see the four dinners that
+    # exist only as rules, moving one has to move the rule. Changing the single
+    # materialized Monday leaves 167 pointing at Alchemibluum, and next Monday
+    # is back on the wrong calendar.
+    describe "a repeating item" do
+      def dinner!(on: personal, day: "mon")
+        AgendaSchedule.create!(
+          agenda: on, name: "Kevin's meal & pilaf", kind: :event, duration_minutes: 60,
+          starts_on: Date.current, start_time: "18:00",
+          recurrence: { "freq" => "weekly", "by_day" => [day] }
+        )
+      end
+
+      it "moves the rule, not just the one occurrence" do
+        schedule = dinner!
+
+        run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours", series: "true" })
+
+        expect(schedule.reload.agenda_id).to eq(ours.id)
+      end
+
+      it "takes the occurrences it had already made with it" do
+        schedule = dinner!
+        expect(schedule.reload.agenda_items.count).to be_positive
+
+        run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours", series: "true" })
+
+        expect(schedule.reload.agenda_items.pluck(:agenda_id).uniq).to eq([ours.id])
+      end
+
+      # Tue-Fri had no row at all, which is what made them unreachable. The rule
+      # is the only thing to edit, so `series` isn't something they have to say.
+      it "edits the rule for an occurrence that has no row" do
+        # A Friday series, asked about on the Monday: four days out, well past
+        # MATERIALIZE_WINDOW, so nothing has been written for it.
+        travel_to(Time.zone.parse("2026-08-24 09:00")) do
+          schedule = dinner!(day: "fri")
+          expect(schedule.agenda_items).to be_empty
+
+          run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours" })
+
+          expect(schedule.reload.agenda_id).to eq(ours.id)
+        end
+      end
+
+      it "says the series moved rather than an item" do
+        dinner!
+        result, = run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours", series: "true" })
+
+        expect(Buddy::Tools[:edit_agenda_item][:receipt].call(result, ctx))
+          .to include("Moved every Kevin's meal & pilaf to Ours 💕")
+      end
+
+      it "still changes just the one occurrence when they didn't ask for the series" do
+        schedule = dinner!
+        item = schedule.reload.agenda_items.first
+
+        run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours" })
+
+        expect(item.reload.agenda_id).to eq(ours.id)
+        expect(schedule.reload.agenda_id).to eq(personal.id)
+      end
+
+      it "refuses `series` on something that doesn't repeat" do
+        costco_on(personal)
+
+        expect {
+          run(:edit_agenda_item, { item: "Costco Run", calendar: "Ours", series: "true" })
+        }.to raise_error(/isn't a repeating item/)
+      end
+
+      # Ending a series is a different ask, and answering it here would take
+      # every future occurrence off the calendar under an "updated" receipt.
+      it "refuses to cancel a whole series" do
+        dinner!
+
+        expect {
+          run(:edit_agenda_item, { item: "Kevin's meal", cancelled: "true", series: "true" })
+        }.to raise_error(/cancelling a whole series/)
+      end
+    end
+
+    # Prod 4462-4463: "add the following to the agenda for dinners" put five
+    # dinners on Alchemibluum and the reply said "the Dinners calendar", because
+    # add fell back to the default for a name nobody has while edit refused.
+    # The confirm card DID name the right calendar; the person reads the prose.
+    describe "a calendar nobody has" do
+      it "refuses rather than landing on the default" do
+        expect {
+          run(:add_agenda_item, { title: "Kevin's meal & pilaf", at: at, calendar: "Dinners" })
+        }.to raise_error(/no calendar named "Dinners"/)
+      end
+
+      it "writes nothing while it refuses" do
+        expect {
+          run(:add_agenda_item, { title: "Kevin's meal & pilaf", at: at, calendar: "Dinners" }) rescue nil
+        }.not_to change(AgendaItem, :count)
+      end
+
+      it "still lands on the default when no calendar was named" do
+        run(:add_agenda_item, { title: "Dentist", at: at })
+
+        expect(AgendaItem.find_by(name: "Dentist").agenda_id).to eq(personal.id)
+      end
+
+      it "still reaches a calendar named loosely" do
+        run(:add_agenda_item, { title: "Dentist", at: at, calendar: "ours" })
+
+        expect(AgendaItem.find_by(name: "Dentist").agenda_id).to eq(ours.id)
+      end
+
+      # The raise in WatchCondition.agenda was unreachable for the same reason:
+      # the loose form answers with the default for any name it doesn't know, so
+      # a watch on a calendar nobody has quietly watched the first one.
+      it "refuses to watch one too" do
+        expect {
+          Buddy::WatchCondition.resolve({ trigger: :agenda, target: "Dinners" }, ctx)
+        }.to raise_error(/not sure which calendar/)
+      end
+    end
+
     describe "the default calendar" do
       it "lands on the oldest writable calendar when nothing is chosen" do
         expect(ctx.resolve_writable_agenda(nil)).to eq(personal)

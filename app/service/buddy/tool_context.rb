@@ -209,6 +209,10 @@ module Buddy
 
     # ---- agenda ----
 
+    # How far ahead to look for the next occurrence of a rule that has no rows.
+    # A weekly series answers inside a week; a monthly one needs the month.
+    SERIES_LOOKAHEAD = 45.days
+
     def resolve_agenda_item(title, hint_date: nil)
       return nil if title.blank?
 
@@ -229,7 +233,40 @@ module Buddy
           scope = scope.where(start_at: from...(from + 1.day))
         end
       end
-      scope.order(start_at: :asc).first
+      found = scope.order(start_at: :asc).first
+      found || unmaterialized_occurrence(agendas, needle, hint_date)
+    end
+
+    # A series occurrence that has no row yet.
+    #
+    # AgendaSchedule::MATERIALIZE_WINDOW only reaches 30 hours ahead, so four of
+    # the five dinners added on prod 4462 existed purely as rules - and this
+    # method's AgendaItem query is why "I'd need you to point at that specific
+    # row" was the answer three times running. There was no row to point at.
+    #
+    # Returns an UNSAVED phantom, the same one the calendar renders, carrying
+    # its `agenda_schedule`. edit_agenda_item reads that: an occurrence with no
+    # row can only be changed through the rule that generates it.
+    def unmaterialized_occurrence(agenda_ids, needle, hint_date)
+      day  = (Time.zone.parse(hint_date.to_s)&.to_date rescue nil) if hint_date.present?
+      from = day || Buddy::Day.today(user)
+      schedules = AgendaSchedule
+        .where(agenda_id: agenda_ids)
+        .where("LOWER(name) LIKE ?", "%#{needle}%")
+        .active_between(from, from + SERIES_LOOKAHEAD)
+        .order(:id)
+        .to_a
+      return nil if schedules.empty?
+
+      dates = day ? [day] : (from..(from + SERIES_LOOKAHEAD)).to_a
+      dates.each { |date|
+        hit = schedules.find { |sc| sc.matches?(date) }
+        return hit.build_phantom(date) if hit
+      }
+      nil
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::ToolContext] series lookup failed: #{e.class}: #{e.message}")
+      nil
     end
 
     # An item the person already has that looks like the one being added — same
@@ -339,10 +376,18 @@ module Buddy
       user.editable_agendas.reject(&:managed_externally?).sort_by(&:id)
     end
 
-    # `strict:` governs what an unmatched NAME does. Adding falls back to the
-    # default and shows the calendar on the confirm card, which is catchable.
-    # Moving can't do that: silently relocating something to the wrong calendar
-    # is worse than refusing, so edit_agenda_item asks for nil instead.
+    # `strict:` governs what an unmatched NAME does: nil, for the caller to
+    # raise on, rather than the default calendar.
+    #
+    # Both agenda tools pass it. Add used not to, on the reasoning that the
+    # fallback was catchable because the confirm card names the calendar - and
+    # that lost on prod 4463, where five dinners went to Alchemibluum under a
+    # reply saying "the Dinners calendar" because the model wrote back the
+    # argument it passed rather than the receipt it got. A name nobody has is a
+    # question, not a default.
+    #
+    # A BLANK name still resolves to the default, which is what "put it on the
+    # calendar" means and is unaffected by this.
     def resolve_writable_agenda(name, strict: false)
       agendas = writable_agendas
       return nil if agendas.empty?

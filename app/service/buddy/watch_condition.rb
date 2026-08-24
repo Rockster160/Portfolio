@@ -132,7 +132,10 @@ module Buddy
     def agenda(ctx, target)
       raise "agenda needs a calendar name (target)" if target.blank?
 
-      found = ctx.resolve_writable_agenda(target)
+      # `strict`, or the raise below is unreachable: the loose form answers with
+      # the default calendar for any name it doesn't know, so "watch Dinners"
+      # would quietly start watching whichever calendar happened to be first.
+      found = ctx.resolve_writable_agenda(target, strict: true)
       raise "not sure which calendar #{target} is" if found.nil?
 
       Resolved.new(

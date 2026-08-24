@@ -72,8 +72,16 @@ Buddy::Tools.register(
     until:    { type: :string,       required: false, description: "Stop repeating after this date (YYYY-MM-DD)" },
   },
   confirm:     ->(payload, ctx) {
-    agenda = ctx.resolve_writable_agenda(payload[:calendar])
-    raise "no writable calendar available" if agenda.nil?
+    # `strict` for the same reason edit_agenda_item uses it. The loose form
+    # falls back to the default calendar, and the argument that it is catchable
+    # on the confirm card lost on prod 4463: five dinners asked for on a
+    # "Dinners" calendar that does not exist landed on Alchemibluum, and the
+    # reply said Dinners because that is what the model had passed. A raise is
+    # recoverable in the same turn - 4465 did exactly that forty seconds later
+    # against the strict edit path - and a silent landing is not.
+    agenda = ctx.resolve_writable_agenda(payload[:calendar], strict: true)
+    raise "no writable calendar available" if agenda.nil? && payload[:calendar].blank?
+    raise "no calendar named #{payload[:calendar].inspect} that you can write to" if agenda.nil?
 
     start = ctx.resolve_calendar_time(payload[:at])
     raise "couldn't work out when to start" if start.nil?

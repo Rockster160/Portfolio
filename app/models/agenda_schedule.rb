@@ -66,6 +66,17 @@ class AgendaSchedule < ApplicationRecord
 
   before_save :sync_until_on_from_occurrence_count, if: -> { occurrence_count.present? }
   after_save :materialize_upcoming!, if: :saved_change_affecting_materialization?
+  # A series that moves calendar takes its occurrences with it. Not part of
+  # `saved_change_affecting_materialization?` because re-materializing is the
+  # wrong tool: the rows are correct, they are just filed under the old
+  # calendar, and rebuilding them would throw away any per-occurrence edits.
+  #
+  # It lived in AgendaItemsController#apply_agenda_move! as two lines that had
+  # to be remembered together, and the second caller (Buddy's edit_agenda_item)
+  # is what makes that a liability - a move that updates the rule alone puts
+  # the series back on the old calendar the moment it materializes again, and
+  # an UNDO of the move does it too.
+  after_save :move_items_with_series!, if: :saved_change_to_agenda_id?
   after_commit :fire_jil_trigger, on: [:create, :update]
 
   belongs_to :agenda
@@ -414,6 +425,13 @@ class AgendaSchedule < ApplicationRecord
     return true if saved_changes.empty?
 
     (saved_changes.keys - ["metadata", "updated_at"]).empty? && saved_change_to_metadata?
+  end
+
+  # `update_all` on purpose: AgendaItem#broadcast_agenda_change! would fire once
+  # per occurrence, and callers fan out a single Agenda.broadcast_changes! for
+  # both calendars instead.
+  def move_items_with_series!
+    agenda_items.where.not(agenda_id: agenda_id).update_all(agenda_id: agenda_id) # rubocop:disable Rails/SkipsModelValidations
   end
 
   def saved_change_affecting_materialization?

@@ -404,6 +404,37 @@ BUDDY_EDGE_PROBES = [
     needs: :whisper_sound_fn,
     note:  "it went off sixteen minutes early next to a sleeping dog",
   },
+  {
+    case:        "prod 4446",
+    say:         "play the Whisper nap sound at 9:40, and turn the office light on then too",
+    tool:        :schedule_function,
+    needs:       :whisper_sound_fn,
+    never_reply: /snag|immediate action|instead of something|put (?:it|them) on the clock|i.ll need to use/i,
+    note:        "both rows were created and both fired, and the reply said " \
+                 "\"tiny snag though - I found the Tesla tools, and they ran as " \
+                 "immediate actions\" and offered to do what it had already done",
+  },
+
+  # --- a repeating thing is a RULE, not the one date in front of you --------
+  {
+    case:  "prod 4462-4471",
+    say:   "move the pilaf dinner over to the shared calendar",
+    tool:  :edit_agenda_item,
+    args:  { edit_agenda_item: { series: true } },
+    needs: :pilaf_series,
+    note:  "five dinners went on as weekly series; moving the one materialized " \
+           "Monday leaves the rule on the old calendar and it is back there " \
+           "next week",
+  },
+  {
+    case:        "the same five dinners, the turn before",
+    say:         "add dinner to the Dinners calendar on Monday at 6",
+    tool:        :add_agenda_item,
+    never_reply: /added.{0,40}dinners calendar|on the dinners calendar/i,
+    note:        "there is no Dinners calendar - all five landed on the default " \
+                 "one and the reply named Dinners, because the model read back " \
+                 "the argument it passed instead of the receipt it got",
+  },
 
   # --- a rhythm they act on, versus a nudge on a clock ----------------------
   {

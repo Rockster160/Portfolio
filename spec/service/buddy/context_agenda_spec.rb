@@ -183,6 +183,66 @@ RSpec.describe Buddy::Context, ".build agenda" do
     expect(mine_row).not_to have_key(:mine)   # owned → no ownership tag
   end
 
+  # Prod 4482 named five of Chelsea's items and none of Rocco's own. The three
+  # prompt paragraphs saying not to were already there, so the answer is the one
+  # `leave_by` already got: don't show it. `collides` is what survives the cut,
+  # and it is computed here because this is the layer holding real timestamps.
+  describe "a partner's item that runs into one of theirs" do
+    let(:partner) { create(:user) }
+    let(:hers) {
+      create(:agenda, user: partner).tap { |a| AgendaShare.create!(agenda: a, user: user, permission: :viewer) }
+    }
+
+    def today
+      described_class.build(user, conversation)[:today_agenda]
+    end
+
+    def row(title)
+      today.find { |i| i[:title] == title }
+    end
+
+    it "marks the one that overlaps" do
+      item(name: "My Standup", start_at: Time.current + 1.hour, end_at: Time.current + 2.hours)
+      create(:agenda_item, agenda: hers, name: "Her Ortho",
+             start_at: Time.current + 90.minutes, end_at: Time.current + 150.minutes)
+
+      expect(row("Her Ortho")[:collides]).to be(true)
+    end
+
+    it "leaves the one that doesn't unmarked" do
+      item(name: "My Standup", start_at: Time.current + 1.hour, end_at: Time.current + 2.hours)
+      create(:agenda_item, agenda: hers, name: "Her Yoga",
+             start_at: Time.current + 4.hours, end_at: Time.current + 5.hours)
+
+      expect(row("Her Yoga")).not_to have_key(:collides)
+    end
+
+    it "never marks the person's own item" do
+      item(name: "My Standup", start_at: Time.current + 1.hour, end_at: Time.current + 2.hours)
+      item(name: "My Other",   start_at: Time.current + 90.minutes, end_at: Time.current + 150.minutes)
+
+      expect(row("My Standup")).not_to have_key(:collides)
+      expect(row("My Other")).not_to have_key(:collides)
+    end
+
+    # An all-day item on either side would otherwise run into everything, which
+    # would keep the whole calendar and mean nothing.
+    it "does not let an all-day item collide with the day" do
+      item(name: "My Standup", start_at: Time.current.beginning_of_day, all_day: true)
+      create(:agenda_item, agenda: hers, name: "Her Ortho",
+             start_at: Time.current + 90.minutes, end_at: Time.current + 150.minutes)
+
+      expect(row("Her Ortho")).not_to have_key(:collides)
+    end
+
+    it "marks nothing when they have nothing of their own that day" do
+      create(:agenda_item, agenda: hers, name: "Her Ortho",
+             start_at: Time.current + 90.minutes, end_at: Time.current + 150.minutes)
+
+      expect(row("Her Ortho")).not_to have_key(:collides)
+    end
+  end
+
   # Prod, twice: Moss told Chelsea "there's supper on the shared calendar at
   # 6:00 PM for Rocco" (17 Aug) and "Rocco's dinner is at 6:00" (19 Aug). Both
   # are item 985 on "Ours 💕 ", which Chelsea co-OWNS. A share at :owner means

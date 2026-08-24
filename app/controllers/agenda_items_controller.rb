@@ -553,10 +553,9 @@ class AgendaItemsController < ApplicationController
     end
 
     occurrence_date = @item.occurrence_date
+    # The occurrences follow the rule — AgendaSchedule#move_items_with_series!,
+    # which is where it has to live now that Buddy moves series too.
     sched.update!(agenda_id: target.id)
-    # Intentional callback skip: broadcast_agenda_change! would fire once per
-    # item — we fan out a single Agenda.broadcast_changes! below instead.
-    sched.agenda_items.update_all(agenda_id: target.id) # rubocop:disable Rails/SkipsModelValidations
     # The original @item row may have been destroyed by
     # `regenerate_future!` during the preceding series update — re-resolve
     # via the schedule + date so the action's downstream `@item.serialize`

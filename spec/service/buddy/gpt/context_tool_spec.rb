@@ -145,6 +145,50 @@ RSpec.describe Buddy::GPT::ContextTool do
       end
     end
 
+    # Prod 4482: Byte's briefing named five of Chelsea's items and none of
+    # Rocco's own - his Serenity on Thursday was in the window and went
+    # unmentioned. The prompt already said a partner's calendar is NEVER the
+    # briefing, in three paragraphs. So the ones with no bearing on his day
+    # stop arriving, the way the chore roster and `leave_by` already do.
+    describe "a partner's calendar" do
+      let(:partner) { create(:user) }
+      let(:hers) {
+        create(:agenda, user: partner).tap { |a| AgendaShare.create!(agenda: a, user: user, permission: :viewer) }
+      }
+      let(:mine) { user.agendas.order(:id).first }
+
+      def titles(tool, section = "today_notable")
+        JSON.parse(tool.call({ "sections" => [section] }))[section].to_a.pluck("title")
+      end
+
+      before do
+        AgendaItem.create!(agenda: mine, name: "Serenity", kind: :event,
+                           start_at: 3.hours.from_now, end_at: 4.hours.from_now, status: :confirmed)
+        AgendaItem.create!(agenda: hers, name: "Her Yoga", kind: :event,
+                           start_at: 6.hours.from_now, end_at: 7.hours.from_now, status: :confirmed)
+        AgendaItem.create!(agenda: hers, name: "Her IT Call", kind: :event,
+                           start_at: 3.hours.from_now + 30.minutes, end_at: 5.hours.from_now, status: :confirmed)
+      end
+
+      it "drops the one that has no bearing on their day" do
+        expect(titles(briefing)).not_to include("Her Yoga")
+      end
+
+      it "keeps the one that runs into something of theirs" do
+        expect(titles(briefing)).to include("Her IT Call")
+      end
+
+      it "never drops one of their own" do
+        expect(titles(briefing)).to include("Serenity")
+      end
+
+      # "What has Chelsea got on today" is a real question, and it gets asked on
+      # an ordinary turn.
+      it "hands over the whole lot on an ordinary turn" do
+        expect(titles(tool)).to include("Her Yoga", "Her IT Call", "Serenity")
+      end
+    end
+
     # Prod 3954: "a very open day ahead, with nothing pressing" at 8:30, with
     # two reminders due at 9:00 and one at 10:00. The seed said which reminders
     # to leave OUT and never said to go and get them, so a briefing that didn't

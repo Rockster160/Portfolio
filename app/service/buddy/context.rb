@@ -164,6 +164,44 @@ module Buddy
         hash.except(:leave_by, :drive_min).merge(mine: false, owner: source[:owner])
       end
 
+      # Which shared-in items actually touch the person's own day.
+      #
+      # `tag_ownership` already takes the departure time off a partner's item,
+      # because a number the model is never shown is a number it cannot hand
+      # over. This is the same lever one level up: the briefing prompt spends
+      # three paragraphs saying a partner's calendar is NEVER the briefing and
+      # to default to leaving it out, and prod 4482 opened "the calendar's busy
+      # around you" and then named five of Chelsea's items and none of his -
+      # his own Serenity went unmentioned. Prod 4429 the morning before was the
+      # milder version of it.
+      #
+      # So the ones with no effect on his day stop being shown at all (see
+      # ContextTool#without_uninvolved_partner_items), and a collision is what
+      # "an effect" means in data. A hand-off isn't computable and the prompt's
+      # own default for those is to leave them out.
+      #
+      # Timed items only. An all-day thing on either side would otherwise
+      # collide with the whole day, which would keep everything and mean
+      # nothing.
+      def collision_ids(items, sources)
+        mine, theirs = items.partition { |i| sources[i.agenda_id]&.dig(:mine) != false }
+        spans = mine.filter_map { |i| span_for(i) }
+        return Set.new if spans.empty?
+
+        theirs.filter_map { |i|
+          span = span_for(i)
+          next if span.nil?
+
+          i.id if spans.any? { |m| m.first < span.last && span.first < m.last }
+        }.to_set
+      end
+
+      def span_for(item)
+        return nil if item.all_day || item.start_at.blank?
+
+        [item.start_at, item.end_at.presence || (item.start_at + 1.minute)]
+      end
+
       def today_agenda(user, now)
         sources = agenda_source_map(user)
         return [] if sources.empty?
@@ -179,33 +217,40 @@ module Buddy
         # keeps one: a standing thing not happening today is a real heads-up,
         # and usually a more useful one than anything that is. A cancelled
         # one-off is just gone and stays out.
-        AgendaItem.where(agenda_id: sources.keys)
+        items = AgendaItem.where(agenda_id: sources.keys)
           .where("status != ? OR agenda_schedule_id IS NOT NULL", AgendaItem.statuses[:cancelled])
           .where(start_at: day_start.utc...day_end.utc)
           .includes(:agenda, :agenda_schedule)
           .order(:start_at)
           .limit(20)
-          .map { |i|
-            tag_ownership(
-              {
-                id:        i.id,
-                time:      (i.all_day ? "all day" : i.start_at.in_time_zone(user.timezone).strftime("%-I:%M %p")),
-                title:     i.name,
-                where:     i.location.to_s.strip.presence,
-                cancelled: (true if i.cancelled?),
-                cal:       i.agenda&.name,
-                kind:      i.kind,
-                cadence:   schedule_cadence(i),  # nil = one-off; "every weekday" / "monthly" / ...
-                drive_min: drive_minutes(i),     # known travel time, for a soon "leave by" nudge
-                leave_by:  leave_by(i, user),    # the clock time to walk out, already worked out
-                # Already happened — a forward-looking briefing skips these
-                # instead of recapping a day that's mostly over. `past?` is
-                # kind-aware: an event with hours left on it is NOT news that
-                # already broke just because it started.
-                passed:    (!i.all_day && i.past?(now: now) ? true : nil),
-              }.compact, sources[i.agenda_id]
-            )
-          }
+          .to_a
+        collides = collision_ids(items, sources)
+
+        items.map { |i|
+          tag_ownership(
+            {
+              id:        i.id,
+              time:      (i.all_day ? "all day" : i.start_at.in_time_zone(user.timezone).strftime("%-I:%M %p")),
+              title:     i.name,
+              where:     i.location.to_s.strip.presence,
+              cancelled: (true if i.cancelled?),
+              cal:       i.agenda&.name,
+              kind:      i.kind,
+              cadence:   schedule_cadence(i),  # nil = one-off; "every weekday" / "monthly" / ...
+              drive_min: drive_minutes(i),     # known travel time, for a soon "leave by" nudge
+              leave_by:  leave_by(i, user),    # the clock time to walk out, already worked out
+              # Already happened — a forward-looking briefing skips these
+              # instead of recapping a day that's mostly over. `past?` is
+              # kind-aware: an event with hours left on it is NOT news that
+              # already broke just because it started.
+              passed:    (!i.all_day && i.past?(now: now) ? true : nil),
+              # Only ever set on a partner's item, and only when it runs into
+              # something of theirs. It is both the reason to raise one and
+              # the thing a briefing filters on.
+              collides:  (true if collides.include?(i.id)),
+            }.compact, sources[i.agenda_id]
+          )
+        }
       rescue StandardError => e
         Buddy::Errors.report(section: "context.today_agenda", exception: e, user: user)
         []
@@ -226,29 +271,33 @@ module Buddy
         day_start = Buddy::Day.at(user, hour: 0, now: now)
         cancelled = AgendaItem.statuses[:cancelled]
 
-        AgendaItem.where(agenda_id: sources.keys)
+        items = AgendaItem.where(agenda_id: sources.keys)
           .where(start_at: (day_start + 1.day).utc...(day_start + UPCOMING_WEEK_WINDOW).utc)
           .where("status != ? OR agenda_schedule_id IS NOT NULL", cancelled)
           .includes(:agenda, :agenda_schedule)
           .order(:start_at)
           .limit(25)
-          .map { |i|
-            local = i.start_at.in_time_zone(user.timezone)
-            tag_ownership(
-              {
-                day:       day_label(local, user, now),
-                time:      (i.all_day ? "all day" : local.strftime("%-I:%M %p")),
-                title:     i.name,
-                # Often the difference between a mention that means something
-                # and one that doesn't: "a pickup Saturday" was `Pickup B and
-                # Saya`, 4pm, at the airport.
-                where:     i.location.to_s.strip.presence,
-                cadence:   schedule_cadence(i),  # nil = one-off
-                cancelled: i.cancelled?,
-                cal:       i.agenda&.name,
-              }.compact, sources[i.agenda_id]
-            )
-          }
+          .to_a
+        upcoming_collides = collision_ids(items, sources)
+
+        items.map { |i|
+          local = i.start_at.in_time_zone(user.timezone)
+          tag_ownership(
+            {
+              day:       day_label(local, user, now),
+              time:      (i.all_day ? "all day" : local.strftime("%-I:%M %p")),
+              title:     i.name,
+              # Often the difference between a mention that means something
+              # and one that doesn't: "a pickup Saturday" was `Pickup B and
+              # Saya`, 4pm, at the airport.
+              where:     i.location.to_s.strip.presence,
+              cadence:   schedule_cadence(i),  # nil = one-off
+              cancelled: i.cancelled?,
+              cal:       i.agenda&.name,
+              collides:  (true if upcoming_collides.include?(i.id)),
+            }.compact, sources[i.agenda_id]
+          )
+        }
       rescue StandardError => e
         Buddy::Errors.report(section: "context.upcoming_agenda", exception: e, user: user)
         []
