@@ -101,7 +101,11 @@ class AnoniconGenerator
       color = @middle_color
     elsif (color = @corner_color)
     end
-    @png.polygon(shape.relative_poly_coords.map { |rel_x, rel_y| [(rel_x * @chunk_size) + ox, (rel_y * @chunk_size) + oy] }, color, color)
+    # Flat [x, y, x, y] — ChunkyPNG's nested-pair branch calls Object#=~, gone in Ruby 3.2
+    coords = shape.relative_poly_coords.flat_map { |rel_x, rel_y|
+      [(rel_x * @chunk_size) + ox, (rel_y * @chunk_size) + oy]
+    }
+    @png.polygon(coords, color, color)
   end
 end
 
