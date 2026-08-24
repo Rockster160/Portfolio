@@ -1,48 +1,131 @@
+// The system UI stack — same one `pages/timers` uses. The card grid used to
+// render its descriptions in `gunny_rewrittenregular`, a handwriting face that
+// was unreadable at body size.
+$playground-font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
+
 .act-playground {
   padding-bottom: 50px;
+
   .app-card-container {
+    font-family: $playground-font;
+
+    .app-card-title {
+      .subtitle {
+        margin-top: 6px;
+        max-width: 60ch;
+        line-height: 1.5;
+      }
+    }
+
+    .project-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 10px;
+      align-items: stretch;
+    }
+
     .project-wrapper {
+      display: flex;
       position: relative;
-      transition: border-color 0.3s, border-width 0.3s, margin 0.3s, padding 0.3s;
-      display: block;
-      margin: 10px 0;
-      border: 1px solid black;
-      border-radius: 2px;
-      padding: 5px;
+      flex-direction: column;
+      // Border WIDTH and padding are constant in every state. Only paint
+      // properties and `transform` change on hover, so nothing here can
+      // reflow the grid or nudge the badges around.
+      transition: border-color 0.18s ease, background-color 0.18s ease,
+        box-shadow 0.18s ease, transform 0.18s ease;
+      border: 1px solid rgba($grey-blue, 0.4);
+      border-radius: 8px;
+      background: rgba(white, 0.55);
+      padding: 12px 14px;
+      color: inherit;
       text-decoration: none;
-      box-sizing: border-box;
 
-      .json-btn {
-        position: absolute;
-        top: 5px;
-        right: 5px;
-        background: #ECD63F;
-        color: #262724;
-        border-radius: 4px;
-        font-size: 10px;
-        padding: 7px 3px 7px 5px;
-        text-align: center;
-        font-weight: bold;
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba($blue-d5, 0.18);
+        border-color: $base-blue;
+        background: white;
 
-        &:hover {
-          cursor: pointer;
-          background: darken(#ECD63F, 10%);
+        .project-title {
+          color: $blue-d2;
         }
       }
-      &:hover {
-        padding: 3px;
-        border-color: $base-blue;
-        border-width: 3px;
+
+      .project-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 6px;
       }
+
       .project-title {
-        text-align: center;
-        font-size: 18px;
-        text-shadow: 0 0 2px $base-blue;
-        color: darken($grey-blue, 15%);
+        transition: color 0.18s ease;
+        color: darken($grey-blue, 30%);
+        font-weight: 600;
+        font-size: 16px;
+        line-height: 1.25;
       }
+
+      .project-meta {
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .project-year {
+        color: $grey-blue;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .project-tag {
+        border-radius: 4px;
+        background: rgba($grey-blue, 0.22);
+        padding: 2px 6px;
+        color: darken($grey-blue, 25%);
+        font-weight: 700;
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+
+        &.tag-wip {
+          background: rgba(#E8833A, 0.22);
+          color: darken(#E8833A, 25%);
+        }
+
+        &.tag-demo {
+          background: rgba($base-blue, 0.18);
+          color: $blue-d2;
+        }
+
+        &.tag-admin {
+          background: rgba(#C0392B, 0.18);
+          color: darken(#C0392B, 10%);
+        }
+      }
+
+      .json-btn {
+        border-radius: 4px;
+        background: #ECD63F;
+        padding: 2px 6px;
+        color: #262724;
+        font-weight: 700;
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        text-align: center;
+
+        &:hover {
+          background: darken(#ECD63F, 12%);
+          cursor: pointer;
+        }
+      }
+
       .project-description {
-        padding: 5px 25px;
-        font-family: "gunny_rewrittenregular", "claire_handregular", "Comic Sans MS", sans-serif;
+        color: $text-color;
+        font-size: 13px;
+        line-height: 1.5;
       }
     }
   }
@@ -52,9 +135,49 @@
   .act-playground {
     .app-card-container {
       .project-wrapper {
+        border-color: rgba($grey-light, 0.18);
+        background: rgba($blue-d5, 0.35);
+
+        &:hover {
+          box-shadow: 0 6px 16px rgba(black, 0.35);
+          border-color: $blue-l4;
+          background: rgba($blue-d5, 0.6);
+
+          .project-title {
+            color: white;
+          }
+        }
+
         .project-title {
-          text-shadow: 0 0 2px $blue-d3;
-          color: darken($grey-light, 15%);
+          color: $grey-light;
+        }
+
+        .project-year {
+          color: rgba($grey-light, 0.6);
+        }
+
+        .project-tag {
+          background: rgba($grey-light, 0.18);
+          color: $grey-light;
+
+          &.tag-wip {
+            background: rgba(#E8833A, 0.28);
+            color: lighten(#E8833A, 12%);
+          }
+
+          &.tag-demo {
+            background: rgba($blue-l4, 0.25);
+            color: $blue-l4;
+          }
+
+          &.tag-admin {
+            background: rgba(#C0392B, 0.3);
+            color: lighten(#C0392B, 20%);
+          }
+        }
+
+        .project-description {
+          color: rgba($grey-light, 0.85);
         }
       }
     }

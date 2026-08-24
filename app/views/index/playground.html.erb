@@ -4,142 +4,525 @@
   <script src="https://cdn.rawgit.com/google/code-prettify/master/loader/run_prettify.js?skin=desert"></script>
 <% end %>
 
-<div class="skinny-container">
+<div class="wide-container">
   <div class="app-card-container">
     <div class="app-card-title">
       Playground
+      <div class="subtitle">
+        Tools, games, and experiments. Many of these are scrappy one-offs or unfinished ideas, but they all have something interesting to show.
+      </div>
     </div>
     <div class="app-card-body">
       <div class="app-card-inner">
-        <a href="<%= lists_path %>" class="project-wrapper">
-          <div class="json-btn" data-modal="#code-example-list">API</div>
-          <%= render_modal "code-example-list", "Lists" do %>
-            <p class="italics">This is an authenticated resource, so all requests made must include basic authentication, using your `username:password`, base64 encoded and passed along in the Authorization Header.</p>
-            <p>`Authorization: Basic dXNlcm5hbWU6cGFzc3dvcmQ=`</p>
-            <p>`curl` will automatically encode your username and password when passed with the `-u` option.</p>
-            <hr>
-            <p>The List API currently allows for requesting all lists belonging to the authenticated user, or a specific list. Lists can also be modified using an English-like string.</p>
-            <h3>GET Index</h3>
-            <%= raw pretty(:bash, "requests/lists/index.json") %>
-            <%= raw pretty(:js, "response/lists/index.json") %>
-            <h3>GET Show</h3>
-            <%= raw pretty(:bash, "requests/lists/show.json") %>
-            <%= raw pretty(:js, "response/lists/show.json") %>
-            <h3>POST Update</h3>
-            <p>Multiple items can be included in the same request by splitting names with commas.</p>
-            <p>`add &lt;list of item names&gt;` is used for adding items to the list - does not return an error if one or more items already exist on the list.</p>
-            <p>`remove &lt;list of item names&gt;` is used for removing items from the list - does not return an error if one or more items are not found.</p>
-            <p>`clear` is used for removing all items from the list.</p>
-            <%= raw pretty(:bash, "requests/lists/update.json") %>
-            <%= raw pretty(:js, "response/lists/update.json") %>
-          <% end %>
-          <div class="project-title">Lists</div>
-          <div class="project-description">
-            <p>Create lists as a To-Do, grocery tracking, or any other reason.</p>
-            <p>Share these lists with others for live-collaboration.</p>
-            <p>Add, delete, and move list items from each of the lists easily.</p>
-            <p>In order to save lists, you must first create an account so that you are able to view lists on multiple devices and keep your lists attached to you.</p>
-          </div>
-        </a>
+        <div class="project-grid">
+          <a href="<%= day_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Agenda</div>
+              <div class="project-meta">
+                <span class="project-year">2026</span>
+              </div>
+            </div>
+            <div class="project-description">
+              An offline-first calendar PWA — day, week, and month views, travel-time chaining, fully connected to Jil for event starts, ends, and triggering pre-event scripts.
+            </div>
+          </a>
 
-        <a href="<%= surveys_path %>" class="project-wrapper">
-          <div class="project-title">Surveys</div>
-          <div class="project-description">
-            <p>Take a survey to see where you fall in each category!</p>
-          </div>
-        </a>
+          <a href="<%= chores_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Chores</div>
+              <div class="project-meta">
+                <span class="project-year">2026</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Household chores turned into a points economy — streaks, goals, multipliers, and a shared balance.
+            </div>
+          </a>
 
-        <a href="<%= recipes_path %>" class="project-wrapper">
-          <div class="project-title">Recipes</div>
-          <div class="project-description">
-            <p>Save your recipes online and quickly export them to your shopping lists.</p>
-          </div>
-        </a>
+          <a href="<%= timers_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Timers</div>
+              <div class="project-meta">
+                <span class="project-year">2026</span>
+                <span class="project-tag">Account</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Server-backed timers and alarms that fire whether or not the app is open — or the phone is even awake.
+            </div>
+          </a>
 
-        <a href="<%= colors_path %>" class="project-wrapper">
-          <div class="json-btn" data-modal="#code-example-colors">API</div>
-          <%= render_modal "code-example-colors", "Colors", "code-formatting" do %>
-            <p>The Colors endpoint allows you to request colors and an amount of steps between them to fade across.</p>
-            <%= raw pretty(:bash, "requests/colors/index.json") %>
-            <%= raw pretty(:js, "response/colors/index.json") %>
-          <% end %>
-          <div class="project-title">Colors</div>
-          <div class="project-description">
-            <p>Select 2 colors and fade between them to get a smooth transition or mid-way colors.</p>
-          </div>
-        </a>
+          <a href="<%= custom_charts_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Custom Charts</div>
+              <div class="project-meta">
+                <span class="project-year">2026</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Point a chart at your own logged data and configure the whole thing without writing any code.
+            </div>
+          </a>
 
-        <a href="<%= random_path %>" class="project-wrapper">
-          <div class="project-title">Random Number Generators</div>
-          <div class="project-description">
-            <p>Use dice notation, sets of data, or a preset to generate random numbers.</p>
-          </div>
-        </a>
+          <a href="<%= mtg_glossary_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">MTG Glossary</div>
+              <div class="project-meta">
+                <span class="project-year">2026</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Fuzzy search across every keyword action and ability in the Magic: The Gathering comprehensive rules.
+            </div>
+          </a>
 
-        <a href="<%= gcode_splitter_index_path %>" class="project-wrapper">
-          <div class="project-title">Gcode Splitter</div>
-          <div class="project-description">
-            <p>Generate a Gcode file from two previous files to add a command that allows you to pause and swap out the filament.</p>
-          </div>
-        </a>
+          <a href="<%= lorcana_glossary_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Lorcana Glossary</div>
+              <div class="project-meta">
+                <span class="project-year">2026</span>
+              </div>
+            </div>
+            <div class="project-description">
+              The same search, over Disney Lorcana's keywords and rules terms.
+            </div>
+          </a>
 
-        <a href="<%= anonicons_path %>" class="project-wrapper">
-          <div class="json-btn" data-modal="#code-example-anonicon">API</div>
-          <%= render_modal "code-example-anonicon", "Anonicons" do %>
-            <p>Pass any string to generate an Identicon. This is commonly an IP Address or an email, but can be any string or value.</p>
-            <p>The return is the binary for a PNG that is unique to the string passed.</p>
-            <p>This can be used as a default image for newly signed up users to a website.</p>
-            <%= raw pretty(:bash, "requests/anonicons/show.json") %>
-            <pre class="preformat text-center"><%= image_tag "/anonicons/#{Rails.env.development? ? "127.0.0.1" : request.ip}", width: 100 %></pre>
-          <% end %>
-          <div class="project-title">Anonicon Generator</div>
-          <div class="project-description">
-            <p>Generate random user icons based on IP addresses, strings, or anything else!</p>
-          </div>
-        </a>
+          <a href="<%= inventory_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Inventory</div>
+              <div class="project-meta">
+                <span class="project-year">2025</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Nested boxes for tracking what's packed where, with search that reaches all the way down. Connect QR labels to sticker onto boxes to quickly scan and see what's inside or find which room and box a specific item is located in.
+            </div>
+          </a>
 
-        <a href="<%= character_builder_little_world_path %>" class="project-wrapper">
-          <div class="project-title">Character Builder</div>
-          <div class="project-description">
-            <p>Design a character for use in Little World.</p>
-            <p>Character persists in your browser, but can also be saved to your account for use across devices.</p>
-          </div>
-        </a>
+          <a href="<%= jil_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">J.I.L.</div>
+              <div class="project-meta">
+                <span class="project-year">2024</span>
+                <span class="project-tag">Account</span>
+              </div>
+            </div>
+            <div class="project-description">
+              A visual language for automations. "No code" style workflow builder that connects the rest of the app all together. Every event has triggers and is queryable and creatable within Jil.
+            </div>
+          </a>
 
-        <a href="<%= little_world_path %>" class="project-wrapper">
-          <div class="project-title">Little World (Incomplete)</div>
-          <div class="project-description">
-            <p>Explore a small world with others. Slay monsters, collect coins, and chat with others that are playing!</p>
-          </div>
-        </a>
+          <!--
+          <a href="<%= prompts_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Questions</div>
+              <div class="project-meta">
+                <span class="project-year">2024</span>
+              </div>
+            </div>
+            <div class="project-description">
+              The queue of questions the automations want answered — reply here, or out loud, or by text.
+            </div>
+          </a>
+          -->
 
-        <a href="<%= deck_cards_path %>" class="project-wrapper">
-          <div class="project-title">Cards (Incomplete)</div>
-          <div class="project-description">
-            <p>Play around with a deck of cards. Deal, flip, and set rules for cards to follow to create any card game!</p>
-          </div>
-        </a>
+          <a href="<%= user_dashboard_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Dashboards</div>
+              <div class="project-meta">
+                <span class="project-year">2023</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Lay out a grid of buttons and widgets that fire your automations on tap, connect your own websockets to trigger updates or receive broadcasts.
+            </div>
+          </a>
 
-        <a href="<%= maze_path %>" class="project-wrapper">
-          <div class="json-btn" data-modal="#code-example-maze">API</div>
-          <%= render_modal "code-example-maze", "Mazes" do %>
-            <p>Generates an ASCII maze.</p>
-            <%= raw pretty(:bash, "requests/maze/show.json") %>
-            <%= raw pretty(:js, "response/maze/show.json") %>
-          <% end %>
-          <div class="project-title">Maze</div>
-          <div class="project-description">
-            Random maze generation for all of your maze-like needs!
-          </div>
-        </a>
+          <a href="<%= pages_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Notes &amp; Pages</div>
+              <div class="project-meta">
+                <span class="project-year">2023</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Rich-text notes organized into folders, shareable with anyone else on the site.
+            </div>
+          </a>
 
-        <a href="<%= summoners_war_path %>" class="project-wrapper">
-          <div class="project-title">Summoner's War Calculator</div>
-          <div class="project-description">
-            <p>Summoner's War player?</p>
-            <p>Use this calculator to see the effect your runes will have on the abilities of each of your monsters.</p>
-          </div>
-        </a>
+          <a href="<%= climbs_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Climbs Tracker</div>
+              <div class="project-meta">
+                <span class="project-year">2023</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Log bouldering sessions and track your all-time average, recents, and personal best by day. Quick integrations for tracking climbs by a single press on a smart watch.
+            </div>
+          </a>
+
+        <!--
+          <a href="<%= scheduled_tasks_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Schedules</div>
+              <div class="project-meta">
+                <span class="project-year">2023</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Everything queued to run, when it last fired, and what tripped it.
+            </div>
+          </a>
+
+          <a href="<%= icons_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Icon Browser</div>
+              <div class="project-meta">
+                <span class="project-year">2023</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Every icon in the site's set, fuzzy-searchable by name or keyword. Click one to copy its class.
+            </div>
+          </a>
+        -->
+
+          <a href="<%= surveys_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Surveys</div>
+              <div class="project-meta">
+                <span class="project-year">2022</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Build a survey or take one, and see where you land in each category.
+            </div>
+          </a>
+
+          <a href="<%= contacts_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Contacts</div>
+              <div class="project-meta">
+                <span class="project-year">2022</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Simply an address book for syncing and tracking your Contacts across devices and automations.
+            </div>
+          </a>
+
+          <!--
+          <a href="<%= blockly_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Blockly Sandbox</div>
+              <div class="project-meta">
+                <span class="project-year">2022</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Google's Blockly wired up as a visual scripting scratchpad — the prototype that became Jil's editor.
+            </div>
+          </a>
+        -->
+
+          <a href="<%= calc_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Calculator</div>
+              <div class="project-meta">
+                <span class="project-year">2021</span>
+              </div>
+            </div>
+            <div class="project-description">
+              A keypad calculator specifically built with measurements in mind. Convert units and compute fractions quickly and easily.
+            </div>
+          </a>
+
+          <a href="<%= bowling_leagues_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Bowling Tracker</div>
+              <div class="project-meta">
+                <span class="project-year">2021</span>
+              </div>
+            </div>
+            <div class="project-description">
+              League, series, and frame-by-frame game scoring, with per-throw stats for every bowler.
+            </div>
+          </a>
+
+          <!--
+          <a href="<%= money_buckets_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Money Buckets</div>
+              <div class="project-meta">
+                <span class="project-year">2021</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Split income across spending categories and watch each bucket fill and drain.
+            </div>
+          </a>
+        -->
+
+          <a href="<%= action_events_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Events</div>
+              <div class="project-meta">
+                <span class="project-year">2021</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Log meals, drinks, workouts, moods, or whatever else you want to track an event for. Then use charts to see progress over time or search for historical trends.
+            </div>
+          </a>
+
+          <a href="<%= gcode_splitter_index_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Gcode Splitter</div>
+              <div class="project-meta">
+                <span class="project-year">2020</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Splice two Gcode files together with a pause command, so you can swap filament part-way through a print.
+            </div>
+          </a>
+
+          <!--
+          <a href="<%= rlcraft_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">RLCraft Map</div>
+              <div class="project-meta">
+                <span class="project-year">2020</span>
+              </div>
+            </div>
+            <div class="project-description">
+              A shared, annotated coordinate map for an RLCraft world — drop a pin, name it, and everyone sees it.
+            </div>
+          </a>
+        -->
+
+          <a href="<%= recipes_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Recipes</div>
+              <div class="project-meta">
+                <span class="project-year">2019</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Keep recipes online and push their ingredients straight onto a shopping list.
+            </div>
+          </a>
+
+          <!--
+          <a href="<%= nfc_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">NFC Relay</div>
+              <div class="project-meta">
+                <span class="project-year">2019</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Scan an NFC tag and its payload is relayed straight into the site over a socket.
+            </div>
+          </a>
+        -->
+
+          <!--
+          <a href="<%= svg_editor_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">SVG Editor</div>
+              <div class="project-meta">
+                <span class="project-year">2018</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Write SVG markup on one side and watch it render on the other, with buttons that stub out each element.
+            </div>
+          </a>
+        -->
+
+          <a href="<%= random_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Random Numbers</div>
+              <div class="project-meta">
+                <span class="project-year">2018</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Dice notation, custom sets of data, or a preset — for rolling just about anything.
+            </div>
+          </a>
+
+          <!--
+          <a href="<%= emails_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Emails</div>
+              <div class="project-meta">
+                <span class="project-year">2018</span>
+                <span class="project-tag tag-admin">Admin</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Inbound mail, parsed and searchable, feeding the automation triggers that watch for it.
+            </div>
+          </a>
+        -->
+
+          <a href="<%= lists_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Lists</div>
+              <div class="project-meta">
+                <span class="project-year">2017</span>
+                <span class="json-btn" data-modal="#code-example-list">API</span>
+              </div>
+            </div>
+            <%= render_modal "code-example-list", "Lists" do %>
+              <p class="italics">This is an authenticated resource, so all requests made must include basic authentication, using your `username:password`, base64 encoded and passed along in the Authorization Header.</p>
+              <p>`Authorization: Basic dXNlcm5hbWU6cGFzc3dvcmQ=`</p>
+              <p>`curl` will automatically encode your username and password when passed with the `-u` option.</p>
+              <hr>
+              <p>The List API currently allows for requesting all lists belonging to the authenticated user, or a specific list. Lists can also be modified using an English-like string.</p>
+              <h3>GET Index</h3>
+              <%= raw pretty(:bash, "requests/lists/index.json") %>
+              <%= raw pretty(:js, "response/lists/index.json") %>
+              <h3>GET Show</h3>
+              <%= raw pretty(:bash, "requests/lists/show.json") %>
+              <%= raw pretty(:js, "response/lists/show.json") %>
+              <h3>POST Update</h3>
+              <p>Multiple items can be included in the same request by splitting names with commas.</p>
+              <p>`add &lt;list of item names&gt;` is used for adding items to the list - does not return an error if one or more items already exist on the list.</p>
+              <p>`remove &lt;list of item names&gt;` is used for removing items from the list - does not return an error if one or more items are not found.</p>
+              <p>`clear` is used for removing all items from the list.</p>
+              <%= raw pretty(:bash, "requests/lists/update.json") %>
+              <%= raw pretty(:js, "response/lists/update.json") %>
+            <% end %>
+            <div class="project-description">
+              To-do and grocery lists that sync live across every device and everyone you share them with.
+            </div>
+          </a>
+
+          <a href="<%= colors_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Colors</div>
+              <div class="project-meta">
+                <span class="project-year">2017</span>
+                <span class="json-btn" data-modal="#code-example-colors">API</span>
+              </div>
+            </div>
+            <%= render_modal "code-example-colors", "Colors", "code-formatting" do %>
+              <p>The Colors endpoint allows you to request colors and an amount of steps between them to fade across.</p>
+              <%= raw pretty(:bash, "requests/colors/index.json") %>
+              <%= raw pretty(:js, "response/colors/index.json") %>
+            <% end %>
+            <div class="project-description">
+              Pick two colors and fade between them to pull out a smooth gradient or a single mid-way shade.
+            </div>
+          </a>
+
+          <a href="<%= anonicons_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Anonicon Generator</div>
+              <div class="project-meta">
+                <span class="project-year">2017</span>
+                <span class="json-btn" data-modal="#code-example-anonicon">API</span>
+              </div>
+            </div>
+            <%= render_modal "code-example-anonicon", "Anonicons" do %>
+              <p>Pass any string to generate an Identicon. This is commonly an IP Address or an email, but can be any string or value.</p>
+              <p>The return is the binary for a PNG that is unique to the string passed.</p>
+              <p>This can be used as a default image for newly signed up users to a website.</p>
+              <%= raw pretty(:bash, "requests/anonicons/show.json") %>
+              <pre class="preformat text-center"><%= image_tag "/anonicons/#{Rails.env.development? ? "127.0.0.1" : request.ip}", width: 100 %></pre>
+            <% end %>
+            <div class="project-description">
+              Deterministic identicons from any string — an IP, an email, anything. Same input, same icon, every time.
+            </div>
+          </a>
+
+          <a href="<%= summoners_war_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Summoner's War Calculator</div>
+              <div class="project-meta">
+                <span class="project-year">2017</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Work out what a set of runes actually does to each of your monsters' abilities.
+            </div>
+          </a>
+
+          <a href="<%= little_world_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Little World</div>
+              <div class="project-meta">
+                <span class="project-year">2017</span>
+                <span class="project-tag tag-wip">WIP</span>
+              </div>
+            </div>
+            <div class="project-description">
+              A small multiplayer world — slay monsters, collect coins, and chat with whoever else is online.
+            </div>
+          </a>
+
+          <a href="<%= character_builder_little_world_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Character Builder</div>
+              <div class="project-meta">
+                <span class="project-year">2017</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Design a character for Little World. Kept in your browser, or saved to an account to use across devices.
+            </div>
+          </a>
+
+          <a href="<%= deck_cards_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Cards</div>
+              <div class="project-meta">
+                <span class="project-year">2017</span>
+                <span class="project-tag tag-wip">WIP</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Deal, flip, and set rules for a deck of cards to build out any card game.
+            </div>
+          </a>
+
+          <a href="<%= maze_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Maze</div>
+              <div class="project-meta">
+                <span class="project-year">2016</span>
+                <span class="json-btn" data-modal="#code-example-maze">API</span>
+              </div>
+            </div>
+            <%= render_modal "code-example-maze", "Mazes" do %>
+              <p>Generates an ASCII maze.</p>
+              <%= raw pretty(:bash, "requests/maze/show.json") %>
+              <%= raw pretty(:js, "response/maze/show.json") %>
+            <% end %>
+            <div class="project-description">
+              Random maze generation, addressable by seed and served as ASCII or JSON.
+            </div>
+          </a>
+
+          <!--
+          <a href="<%= map_path %>" class="project-wrapper">
+            <div class="project-head">
+              <div class="project-title">Map</div>
+              <div class="project-meta">
+                <span class="project-year">2016</span>
+              </div>
+            </div>
+            <div class="project-description">
+              Look up an address or a coordinate pair, with clustered markers and custom infoboxes.
+            </div>
+          </a>
+        -->
+        </div>
       </div>
     </div>
   </div>
