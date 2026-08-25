@@ -533,7 +533,7 @@
   #sayEvent("Event" Numeric|Hash|AgendaItem BR "Message" String)::Numeric
   #prompt(Text)::Boolean
   #photo("Image" String BR "Caption" String)::Boolean
-[Tesla]
+[Tesla]@me
   #start(content(TeslaStartOptions))::Boolean
   #stop::Boolean
   #honk::Boolean
@@ -551,7 +551,7 @@
   #heatDriver::Boolean
   #heatPassenger::Boolean
   #isAt(String:"Contact/Address")::Boolean
-*[TeslaStartOptions]
+*[TeslaStartOptions]@me
   #temp(Numeric)
   #navigate(Text)
   #heatDriver(Boolean)
@@ -562,6 +562,8 @@
   #title(String)
   #body(String)
   #silent(Boolean)
+[Mac]@me
+  #run(["dark_monitors" "mac_ping"])::Hash # Keep in sync with ByteLocal::MAC_COMMANDS
 [Trip]
   #start(AgendaItem)::Boolean
   #advance::Boolean

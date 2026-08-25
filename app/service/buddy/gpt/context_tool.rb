@@ -194,7 +194,7 @@ module Buddy
         payload = named_sections(args).empty? ? context : context.slice(*requested_sections(args))
         # Applied to the everything path too, which is the one a briefing takes.
         payload = payload.except(*self.class.withheld(@user, briefing: @briefing))
-        payload = without_uninvolved_partner_items(without_own_reminder(payload))
+        payload = without_settled_items(without_uninvolved_partner_items(without_own_reminder(payload)))
         JSON.generate(payload)
       rescue StandardError => e
         Buddy::Errors.report(
@@ -245,9 +245,17 @@ module Buddy
       # answer as the chore roster and as `leave_by`: what the model can't see,
       # it can't read out.
       #
-      # `collides` (Buddy::Context.collision_ids) is the exception and stays -
-      # a partner's block that runs into something of theirs is the one case
-      # the prompt says to raise, and now it arrives already knowing why.
+      # An overlap with something of theirs is what "an effect on my day" means
+      # in data, so it is still what decides WHICH of a partner's items survive.
+      # But the marker comes OFF the ones that do - two different people doing
+      # two different things at the same hour is not a clash, and a tag naming
+      # what it runs into is an invitation to write one. Prod 4524 read
+      # Chelsea's yoga out as Rocco's own; the answer is that a partner's item
+      # is background, and background has nothing to compare itself to.
+      #
+      # Briefing only. Ask "does her yoga run into my retro?" on an ordinary
+      # turn and `collides_with` is right there naming the item, because that
+      # time the comparison is the question.
       #
       # Briefing only. Ask "what's Chelsea got on today" on an ordinary turn and
       # you still get all of it, because that time you asked.
@@ -257,10 +265,47 @@ module Buddy
         PARTNER_FILTERED.each_with_object(payload.dup) { |key, out|
           next unless out[key].is_a?(Array)
 
-          out[key] = out[key].reject { |i| i[:mine] == false && !i[:collides] }
+          kept     = out[key].reject { |i| i[:mine] == false && i[:collides_with].blank? }
+          out[key] = kept.map { |i| i[:mine] == false ? i.except(:collides_with) : i }
         }
       rescue StandardError => e
         Buddy::Errors.report(section: "gpt.context_tool.partner_items", exception: e, user: @user)
+        payload
+      end
+
+      # Things that have already finished, on a briefing turn only.
+      #
+      # A briefing looks FORWARD. Both of these are named in `today_briefing.rb`
+      # as the thing not to do - passed items "not as a summary, not as a count,
+      # not as a passing note that the morning one already went", and a
+      # switched-off reminder sitting in context "so you can ANSWER about them
+      # when asked, and for no other reason" - and prose has now lost three
+      # times across three companions in two days. Prod 4490 opened with "Yoga
+      # already passed" and prod 4488 volunteered that a reminder cancelled six
+      # days earlier "is not coming at you today". Same answer as the partner
+      # filter above and as `leave_by`: what the model can't see, it can't read
+      # out. Nobody is asking a question on a briefing turn, so nothing is lost.
+      #
+      # Two things deliberately STAY:
+      # - a `cancelled` agenda item, which the prompt wants raised - a standing
+      #   thing not happening today is real news.
+      # - `already_rang`, which is history rather than a to-do. Prod 3255 is
+      #   what its absence costs: the swimming-lesson reminder rang at 7pm and
+      #   the next morning Buddy announced it as "set for this evening", read
+      #   off the thread and re-dated a day forward. Taking it out here would
+      #   hand the transcript back its only say, on the one turn that opens
+      #   with a summary of the day.
+      def without_settled_items(payload)
+        return payload unless @briefing
+
+        out = payload.dup
+        out[:today_notable] = out[:today_notable].reject { |i| i[:passed] } if out[:today_notable].is_a?(Array)
+        if out[:upcoming_reminders].is_a?(Array)
+          out[:upcoming_reminders] = out[:upcoming_reminders].reject { |r| r[:status].to_s == "off" }
+        end
+        out
+      rescue StandardError => e
+        Buddy::Errors.report(section: "gpt.context_tool.settled_items", exception: e, user: @user)
         payload
       end
 

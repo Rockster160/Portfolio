@@ -93,7 +93,11 @@ module Buddy
       day_start, = Buddy::Day.range(user, now: now)
       cutoff     = Buddy::Day.at(user, hour: CUTOFF_HR, now: now)
 
+      # A series they hid in the agenda's filters must not decide when the
+      # briefing goes out either - it would pull the morning forward for
+      # something they have said they don't want to see.
       scope = AgendaItem.where(agenda_id: agenda_ids).where.not(status: :cancelled)
+      scope = AgendaPreference.for(user).apply_visible_scope(scope)
       scope.where(all_day: [false, nil]).where(start_at: day_start.utc...cutoff.utc).order(:start_at).first
     end
 

@@ -58,6 +58,22 @@ RSpec.describe Buddy::PlungeAdvisor do
     expect(block).not_to include("plunge")           # but no plunge editorializing
   end
 
+  # An all-day row runs local midnight to midnight, so it overlaps EVERY window
+  # on its date. One birthday on the calendar and the whole day read as booked,
+  # which is how the plunge stopped being suggested for a reason nobody could
+  # see. The travel chain and the collision check both already exclude them.
+  it "does not let an all-day row book the whole day out" do
+    agenda = Agenda.create!(user: user, name: "Mine")
+    AgendaItem.create!(
+      agenda: agenda, name: "Marcos' Birthday", kind: :event, all_day: true,
+      start_at: tz.parse("2026-07-28 00:00"), end_at: tz.parse("2026-07-29 00:00")
+    )
+    allow(WeatherService).to receive(:data).and_return(payload(day: "2026-07-28", rain_hours: [12, 13]))
+
+    block = described_class.briefing_block(user, now: tz.parse("2026-07-28 07:00"))
+    expect(block).to include("Good plunge window")
+  end
+
   # Alpine is here for one question and it's whether the canyon is wet. A
   # forecast of dark cloud over a place nobody is standing in used to open the
   # block; it says nothing about the drive.

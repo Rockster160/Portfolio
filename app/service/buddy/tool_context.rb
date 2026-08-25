@@ -158,6 +158,38 @@ module Buddy
         "or ask them which. Never substitute another tool for the chore."
     end
 
+    # The failure to RAISE, which is the sentence above plus the candidates
+    # themselves.
+    #
+    # Prod 4495: "Log load dishwasher" could have been `Light Load Dishes` or
+    # `Medium~Normal Load Dishes`, and the old answer was a sentence asking
+    # which - so she had to type a chore name back at it. Buddy::Disambiguation
+    # puts them on screen and a tap runs the completion.
+    #
+    # ONE near miss gets a card too. "I couldn't find anything called X - did
+    # you mean Y?" with a button under it is one tap; the same sentence without
+    # one is a whole corrected message. The words still say what happened, so
+    # the button adds a shortcut rather than hiding anything.
+    def no_chore!(name, suffix: nil, arg: :chore)
+      message = no_chore_error(name, suffix: suffix)
+      near    = chore_suggestions(name)
+      raise message if near.empty?
+
+      raise ::Buddy::Ambiguous.new(
+        message,
+        arg:     arg,
+        prompt:  chore_prompt(name, near),
+        options: near.map { |chore_name| { value: chore_name, label: chore_name } },
+      )
+    end
+
+    def chore_prompt(name, near)
+      opener = "I couldn't find anything called #{name.to_s.strip.inspect}"
+      return "#{opener} - did you mean #{near.first}?" if near.length == 1
+
+      "#{opener}. Which one did you mean?"
+    end
+
     # Whole words worth matching on. Short ones are dropped rather than
     # stopworded: two-letter fragments match INSIDE longer words ("as" sits in
     # "wash"), which is how "add it as one more" came back suggesting a
@@ -190,7 +222,39 @@ module Buddy
     # ---- lists ----
 
     def resolve_list(name)
-      user.list_by_name(name.to_s)
+      found = user.list_by_name(name.to_s)
+      ambiguous_list!(name) if found.nil?
+      found
+    end
+
+    # A list name that MISSED, with more than one list it could have been.
+    #
+    # `List.by_name_for_user` matches one way only - the phrase they said has to
+    # CONTAIN the list's name - so "put it on the grocery list" resolves to
+    # nothing at all when the lists are called `Grocery Staples` and `Grocery
+    # Costco`, and the old answer was "no list matching \"grocery\"" with both
+    # of them sitting right there. Same shape as the chore resolver's near
+    # misses, and the same answer: put them on screen.
+    #
+    # Whole words on the LEADING edge, the rule `starts_on_a_word?` exists for,
+    # so `grocery` reaches `Grocery Staples` and `cery` reaches nothing.
+    def ambiguous_list!(name)
+      needle = name.to_s.downcase.strip
+      return if needle.blank?
+
+      hits = user.ordered_lists.select { |list| starts_on_a_word?(list.name, needle) }
+      return if hits.empty?
+
+      shown  = hits.first(::Buddy::Disambiguation::MAX_OPTIONS)
+      names  = shown.map { |list| list.name.to_s }
+      opener = "I couldn't find a list called #{name.to_s.strip.inspect}"
+      raise ::Buddy::Ambiguous.new(
+        "no list matching #{name.to_s.strip.inspect} - the closest are #{names.to_sentence}. " \
+        "Call again with one of those EXACTLY if one is what they meant, or ask them which",
+        arg:     :list,
+        prompt:  (names.length == 1 ? "#{opener} - did you mean #{names.first}?" : "#{opener}. Which one did you mean?"),
+        options: shown.map { |list| { value: list.name.to_s, label: list.name.to_s } },
+      )
     end
 
     def resolve_list_item(list_or_name, item_name)
@@ -253,8 +317,42 @@ module Buddy
           scope = scope.where(start_at: from...(from + 1.day))
         end
       end
-      found = scope.order(start_at: :asc).first
-      found || unmaterialized_occurrence(agendas, needle, hint_date)
+      found = scope.order(start_at: :asc).to_a
+      ambiguous_agenda_item!(found, title) if found.length > 1
+
+      found.first || unmaterialized_occurrence(agendas, needle, hint_date)
+    end
+
+    # Two DIFFERENT things whose names both carry what they said, which is a
+    # choice; the same thing on four dates is not - a recurring dentist matching
+    # its own next four occurrences has one right answer and it is the soonest.
+    # So this keys on the name, and only raises when the names actually differ.
+    #
+    # `edit_agenda_item` is the only caller, which is the one where landing on
+    # the wrong row rewrites something nobody asked about.
+    def ambiguous_agenda_item!(found, title)
+      by_name = found.group_by { |i| i.name.to_s.downcase }
+      return if by_name.length < 2
+
+      shown = by_name.values.map(&:first).first(::Buddy::Disambiguation::MAX_OPTIONS)
+      raise ::Buddy::Ambiguous.new(
+        "more than one thing on the calendar matches #{title.to_s.strip.inspect} - " \
+        "#{shown.map { |i| i.name.to_s }.to_sentence}. Ask which one",
+        arg:     :item,
+        prompt:  "More than one thing on the calendar matches #{title.to_s.strip.inspect}. Which one did you mean?",
+        options: shown.map { |item|
+          { value: item.name.to_s, label: item.name.to_s, description: agenda_when(item) }
+        },
+      )
+    end
+
+    # When it is, in their own words, so two items with similar names are told
+    # apart by the thing that actually separates them.
+    def agenda_when(item)
+      return nil if item.start_at.blank?
+
+      local = item.start_at.in_time_zone(user.timezone)
+      item.all_day ? local.strftime("%a %-d %b") : local.strftime("%a %-d %b, %-l:%M %p")
     end
 
     # A series occurrence that has no row yet.
@@ -730,19 +828,49 @@ module Buddy
     # person uses without thinking: the shorter name is the one that's ABOUT
     # the thing you said, the longer one merely mentions it.
     def best_contained(candidates, needle)
-      hits = candidates.select { |c| c.name.to_s.downcase.include?(needle) }
+      hits = candidates.select { |c| starts_on_a_word?(c.name, needle) }
       return nil if hits.empty?
 
       hits.max_by { |c| needle.length.to_f / c.name.to_s.length }
     end
 
+    # Does the name contain what they said STARTING at a word, rather than
+    # anywhere at all?
+    #
+    # A bare include? lets a negating prefix disappear. Prod 4495, 09:25:
+    # Chelsea said "Log load dishwasher" and `Unload Dishwasher` (78) was marked
+    # done, because "unload dishwasher" contains "load dishwasher". Loading and
+    # unloading are opposite jobs on the same appliance, and the two chores she
+    # plausibly meant - `Light Load Dishes` and `Medium~Normal Load Dishes` -
+    # were both in the roster. A completion written against the wrong chore is
+    # the false record FUZZY_TOLERANCE exists to prevent, six lines up.
+    #
+    # The LEADING edge only. What comes after is ordinary inflection - "dish"
+    # has to go on finding "Dishes" and "water" has to go on finding "Watering
+    # the Beds" - and a suffix has never changed what a chore IS. A prefix does:
+    # un-, re-, non-, dis- are the whole vocabulary of doing the opposite.
+    def starts_on_a_word?(name, needle)
+      name.to_s.downcase.match?(/(?<![a-z0-9])#{Regexp.escape(needle)}/)
+    end
+
     # Nearest name by edit distance, but only when it's near ENOUGH to be a
     # typo of what they said rather than the closest thing in an empty field.
+    #
+    # The boundary rule above has to hold here too, or it changes nothing:
+    # "unload dishwasher" is two edits from "load dishwasher" against a
+    # tolerance of five, so the row best_contained just refused comes straight
+    # back by the other route. A name carrying what they said with letters
+    # glued to the front of it is not a typo of it - it is a different word.
     def nearest_name(candidates, needle)
-      best = candidates.min_by { |c| levenshtein(c.name.to_s.downcase, needle) }
+      pool = candidates.reject { |c| glued_prefix?(c.name, needle) }
+      best = pool.min_by { |c| levenshtein(c.name.to_s.downcase, needle) }
       return nil if best.nil?
 
       best if levenshtein(best.name.to_s.downcase, needle) <= [(needle.length * FUZZY_TOLERANCE).round, 1].max
+    end
+
+    def glued_prefix?(name, needle)
+      name.to_s.downcase.include?(needle) && !starts_on_a_word?(name, needle)
     end
 
     # A watch's stored place: coordinates are what matching uses; name is for

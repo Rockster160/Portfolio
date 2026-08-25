@@ -164,7 +164,7 @@
 
 <script type="text/javascript">
   window.load_code = <%= raw @task.id.present? ? "String.raw`#{@task.code&.gsub(/\`/, "\\\\`")}`" : "undefined" %>;
-  window.load_schema = `<%= Task.schema(current_user) %>`
+  window.load_schema = `<%= Task.schema(current_user, keep: @task&.used_classes || []) %>`
   window.readonly = <%= @readonly || false %>;
 </script>
 <%= javascript_include_tag "jil", type: "module", defer: true %>

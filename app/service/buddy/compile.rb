@@ -344,7 +344,7 @@ module Buddy
       box = Buddy::Compile::Toolbox.new(
         user: user, conversation: conversation, messages: messages, now: now,
       )
-      converse!(conversation, user, messages, box)
+      converse!(conversation, user, messages, box, now)
 
       # Placing happens once, over everything pending, so a batch of three
       # follow-ups out of one message can't all land on the same evening.
@@ -370,9 +370,9 @@ module Buddy
     # Rounds are bounded and the tools are its own. There is nobody waiting on
     # this, so the cost of a loop that will not settle is a quiet bill rather
     # than a hang, which is why the ceiling is well under the turn's.
-    def converse!(conversation, user, messages, box)
+    def converse!(conversation, user, messages, box, now)
       client = Buddy::GPT::Client.new(model: MODEL, reasoning_effort: nil)
-      input  = [{ role: :user, content: brief(conversation, user, messages) }]
+      input  = [{ role: :user, content: brief(conversation, user, messages, now) }]
 
       Buddy::Compile::Toolbox::MAX_ROUNDS.times do
         result = client.stream(
@@ -478,9 +478,10 @@ module Buddy
       message.body.to_s.strip.empty?
     end
 
-    def brief(conversation, user, messages)
+    def brief(conversation, user, messages, now)
       <<~TXT
         PERSON: #{user.first_name}
+        TODAY: #{now.in_time_zone(Buddy::Day.zone(user)).strftime("%A %-d %b %Y")}
 
         THE COMPANION'S CURRENT FACE: #{conversation.buddy_expression.presence || "neutral"}
         AVAILABLE FACES: #{Buddy::Faces.selectable(conversation.buddy_theme).join(", ")}

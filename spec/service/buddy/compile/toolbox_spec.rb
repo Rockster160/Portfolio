@@ -20,6 +20,26 @@ RSpec.describe Buddy::Compile::Toolbox do
     )
   end
 
+  # `buddy_memories` 105, written 15:21 Mon 24 Aug: "Eve has a therapist
+  # appointment with Iberty tomorrow at 10:00 AM", with a check-in at 6pm the
+  # next evening and no expiry - so by the time it reads itself out, "tomorrow"
+  # is Wednesday and the appointment was that morning. Rows 44 and 71 had the
+  # same defect. Third occurrence in three weeks, and "stands alone" on its own
+  # was what every one of them passed.
+  describe "the argument a memory is written into" do
+    def content_description(tool)
+      described_class.schemas.find { |t| t[:name] == tool }.dig(:parameters, :properties, :content, :description)
+    end
+
+    it "names the words that stop a fact standing alone" do
+      expect(content_description("write_memory")).to include("tomorrow", "tonight", "next week")
+    end
+
+    it "says the same thing where a row is rewritten" do
+      expect(content_description("revise_memory")).to include("ABSOLUTELY")
+    end
+  end
+
   describe "writing" do
     it "holds something new and reports the id back" do
       answer = box.call("write_memory", { "kind" => "concept", "content" => "Their gate latch is bent.", "tags" => ["home"] })

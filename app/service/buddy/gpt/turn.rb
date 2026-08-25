@@ -293,6 +293,16 @@ module Buddy
           signature,
           opens,
         ]
+      # A resolve that found several records and no way to choose. The
+      # candidates go up as buttons and a tap runs the original call, so the
+      # question is answered without the person typing a name back and without
+      # a second model turn to read it. Falls through to the plain sentence
+      # when there is nowhere to put buttons - a routine, an eval sweep.
+      rescue Buddy::Ambiguous => e
+        asked = Buddy::Disambiguation.ask!(
+          user: user, conversation: conversation, tool: tool, payload: payload, error: e,
+        )
+        [resolve_failure(asked ? Buddy::Disambiguation::ASKED_NOTE : e.message), nil, nil]
       rescue StandardError => e
         [resolve_failure(e.message), nil, nil]
       end
@@ -1824,6 +1834,26 @@ module Buddy
         # first" open with a command verb and are conversation, so the thing
         # right after the verb is what separates an order from a turn of phrase.
         \b(?!\s+(?:with|by|from|about)\b)
+        # The VERBLESS imperative. Prod 4518: "Monitors off" got "Kk! Monitors
+        # are dark. *squish*" off a single API call with no `byte_actions` row
+        # behind it, and he had to answer "They are not. You didn't do anything"
+        # to get it done. Every alternative above needs a verb, and the shortest
+        # way to say a house command has none in it - a device and the state you
+        # want it in is the whole sentence.
+        #
+        # The reply cannot settle this one. "Kk! Monitors are dark. *squish*"
+        # and "Yep - lights are off. *click*" are the same words, and the second
+        # is an honest answer to a question; only the REQUEST says which. So it
+        # is read here, off the person's own message, where a question opens
+        # with "are" and an order opens with the thing itself.
+        #
+        # Anchored at both ends: "monitors off" is an order, "the monitors are
+        # off again" is a remark, and nothing between them is worth the risk of
+        # rewriting a good reply.
+        | \A\s*(?:hey[\s,]+\w+[\s,]+)?
+          (?:monitors?|screens?|displays?|lights?|lamps?|blinds?|shades?|tvs?|fans?)\s+
+          (?:on|off|up|down|dark|open|closed?|high|low|mid|medium)
+          (?:\s+please)?[\s.!,]*\z
       /xi
 
       # ---- a command that said WHEN ------------------------------------------

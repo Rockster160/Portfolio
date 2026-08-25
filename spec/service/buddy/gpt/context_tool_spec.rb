@@ -195,6 +195,76 @@ RSpec.describe Buddy::GPT::ContextTool do
       it "hands over the whole lot on an ordinary turn" do
         expect(titles(tool)).to include("Her Yoga", "Her IT Call", "Serenity")
       end
+
+      def row(tool, title)
+        JSON.parse(tool.call({ "sections" => ["today_notable"] }))["today_notable"]
+          .to_a.find { |i| i["title"] == title }
+      end
+
+      # Prod 4524 opened Byte's briefing with Chelsea's yoga as Rocco's own. Two
+      # people doing two different things at the same hour is not a clash, and
+      # a tag naming what it runs into is an invitation to write one.
+      it "does not tell a briefing what a partner's item runs into" do
+        expect(row(briefing, "Her IT Call")).not_to have_key("collides_with")
+      end
+
+      # "Does her thing run into my Serenity?" is a real question, and an
+      # ordinary turn is where it gets asked.
+      it "names it on an ordinary turn, where the comparison is the question" do
+        expect(row(tool, "Her IT Call")["collides_with"]).to eq("Serenity")
+      end
+    end
+
+    # Prod 4490 opened Moss's briefing with "Yoga already passed", and prod
+    # 4488 had Suki volunteer that a reminder cancelled six days earlier "is
+    # not coming at you today". Both are named in `today_briefing.rb` as the
+    # thing not to do - "not as a summary, not as a count, not as a passing
+    # note that the morning one already went", and a switched-off reminder is
+    # in context "so you can ANSWER about them when asked, and for no other
+    # reason". Three instances across three companions in two days, and prose
+    # was the only thing holding it.
+    describe "things that have already finished" do
+      around { |example| travel_to(Time.utc(2026, 8, 24, 20, 0)) { example.run } }
+
+      let(:mine) { user.agendas.order(:id).first }
+
+      def titles(tool)
+        JSON.parse(tool.call({ "sections" => ["today_notable"] }))["today_notable"].to_a.pluck("title")
+      end
+
+      def reminder_bodies(tool)
+        rows = JSON.parse(tool.call({ "sections" => ["upcoming_reminders"] }))["upcoming_reminders"]
+        rows.to_a.pluck("body")
+      end
+
+      before do
+        AgendaItem.create!(agenda: mine, name: "Morning Yoga", kind: :event,
+                           start_at: 5.hours.ago, end_at: 4.hours.ago, status: :confirmed)
+        AgendaItem.create!(agenda: mine, name: "Tech Retro", kind: :event,
+                           start_at: 2.hours.from_now, end_at: 3.hours.from_now, status: :confirmed)
+        BuddyReminder.create!(user: user, byte_conversation: convo, kind: :reminder,
+                              body: "Check the plants.", fire_at: 2.hours.from_now,
+                              cancelled_at: 6.days.ago)
+      end
+
+      it "leaves the one that already went out of the briefing" do
+        expect(titles(briefing)).not_to include("Morning Yoga")
+      end
+
+      it "keeps the rest of the day" do
+        expect(titles(briefing)).to include("Tech Retro")
+      end
+
+      it "leaves a switched-off reminder out of the briefing" do
+        expect(reminder_bodies(briefing)).not_to include("Check the plants.")
+      end
+
+      # "Did my yoga already happen?" and "is the plant check still on?" are
+      # real questions, and an ordinary turn is where they get asked.
+      it "hands both over on an ordinary turn" do
+        expect(titles(tool)).to include("Morning Yoga")
+        expect(reminder_bodies(tool)).to include("Check the plants.")
+      end
     end
 
     # Prod 3954: "a very open day ahead, with nothing pressing" at 8:30, with

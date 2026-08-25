@@ -185,7 +185,7 @@ RSpec.describe Buddy::Context, ".build agenda" do
 
   # Prod 4482 named five of Chelsea's items and none of Rocco's own. The three
   # prompt paragraphs saying not to were already there, so the answer is the one
-  # `leave_by` already got: don't show it. `collides` is what survives the cut,
+  # `leave_by` already got: don't show it. The clash is what survives the cut,
   # and it is computed here because this is the layer holding real timestamps.
   describe "a partner's item that runs into one of theirs" do
     let(:partner) { create(:user) }
@@ -206,7 +206,7 @@ RSpec.describe Buddy::Context, ".build agenda" do
       create(:agenda_item, agenda: hers, name: "Her Ortho",
              start_at: Time.current + 90.minutes, end_at: Time.current + 150.minutes)
 
-      expect(row("Her Ortho")[:collides]).to be(true)
+      expect(row("Her Ortho")[:collides_with]).to eq("My Standup")
     end
 
     it "leaves the one that doesn't unmarked" do
@@ -214,15 +214,15 @@ RSpec.describe Buddy::Context, ".build agenda" do
       create(:agenda_item, agenda: hers, name: "Her Yoga",
              start_at: Time.current + 4.hours, end_at: Time.current + 5.hours)
 
-      expect(row("Her Yoga")).not_to have_key(:collides)
+      expect(row("Her Yoga")).not_to have_key(:collides_with)
     end
 
     it "never marks the person's own item" do
       item(name: "My Standup", start_at: Time.current + 1.hour, end_at: Time.current + 2.hours)
       item(name: "My Other",   start_at: Time.current + 90.minutes, end_at: Time.current + 150.minutes)
 
-      expect(row("My Standup")).not_to have_key(:collides)
-      expect(row("My Other")).not_to have_key(:collides)
+      expect(row("My Standup")).not_to have_key(:collides_with)
+      expect(row("My Other")).not_to have_key(:collides_with)
     end
 
     # An all-day item on either side would otherwise run into everything, which
@@ -232,14 +232,116 @@ RSpec.describe Buddy::Context, ".build agenda" do
       create(:agenda_item, agenda: hers, name: "Her Ortho",
              start_at: Time.current + 90.minutes, end_at: Time.current + 150.minutes)
 
-      expect(row("Her Ortho")).not_to have_key(:collides)
+      expect(row("Her Ortho")).not_to have_key(:collides_with)
     end
 
     it "marks nothing when they have nothing of their own that day" do
       create(:agenda_item, agenda: hers, name: "Her Ortho",
              start_at: Time.current + 90.minutes, end_at: Time.current + 150.minutes)
 
-      expect(row("Her Ortho")).not_to have_key(:collides)
+      expect(row("Her Ortho")).not_to have_key(:collides_with)
+    end
+  end
+
+  # Prod 4524's real cause. `agenda_items` 1027 came off `agenda_schedules` 80,
+  # which sits in Rocco's `hidden_schedule_ids` — `BirthdaySync` put it there so
+  # the gmail copy wouldn't double the Birthdays calendar. Every screen in the
+  # app honours that list; Buddy never looked at it, so 24 hidden series and one
+  # hidden item were still reaching the model.
+  describe "things the person has hidden in the agenda filters" do
+    let(:pref) { AgendaPreference.for(user) }
+
+    def today_titles
+      described_class.build(user, conversation)[:today_agenda].pluck(:title)
+    end
+
+    def upcoming_titles
+      described_class.build(user, conversation)[:upcoming_agenda].pluck(:title)
+    end
+
+    it "leaves out a hidden series" do
+      schedule = create(:agenda_schedule, agenda: user.agendas.first, name: "Marcos' Birthday")
+      item(name: "Marcos' Birthday", start_at: Time.current + 2.hours, agenda_schedule: schedule)
+      item(name: "Tech Retro", start_at: Time.current + 3.hours)
+      expect(today_titles).to include("Marcos' Birthday")
+
+      pref.update!(hidden_schedule_ids: [schedule.id])
+
+      expect(today_titles).to include("Tech Retro")
+      expect(today_titles).not_to include("Marcos' Birthday")
+    end
+
+    it "leaves out a hidden one-off" do
+      hidden = item(name: "Dentist", start_at: Time.current + 2.hours)
+      expect(today_titles).to include("Dentist")
+
+      pref.update!(hidden_item_ids: [hidden.id])
+
+      expect(today_titles).not_to include("Dentist")
+    end
+
+    it "leaves out a whole hidden calendar, tomorrow as well as today" do
+      other = create(:agenda, user: user)
+      create(:agenda_item, agenda: other, name: "Payday", all_day: true,
+             start_at: (Date.current + 2).beginning_of_day)
+      pref.update!(hidden_agenda_ids: [other.id])
+
+      expect(upcoming_titles).not_to include("Payday")
+    end
+
+    it "leaves everything else where it is" do
+      item(name: "Tech Retro", start_at: Time.current + 3.hours)
+
+      expect(today_titles).to include("Tech Retro")
+    end
+  end
+
+  # Prod 4524: "Tomorrow's got a couple birthday all-days". There was one
+  # birthday - items 1027 (`Marcos' Birthday`, agenda 14) and 1028 (`Marcos
+  # Jones's Birthday`, agenda 32) are the same person on two of Rocco's own
+  # calendars - so the count counted rows and the name went missing.
+  describe "one all-day thing sitting on two calendars" do
+    let(:other) { create(:agenda, user: user) }
+
+    def upcoming
+      described_class.build(user, conversation)[:upcoming_agenda]
+    end
+
+    it "hands it over once, carrying the name" do
+      day = Date.current + 2
+      item(name: "Marcos' Birthday", start_at: day.beginning_of_day, all_day: true)
+      create(:agenda_item, agenda: other, name: "Marcos Jones's Birthday",
+             start_at: day.beginning_of_day, all_day: true)
+
+      titles = upcoming.pluck(:title)
+      expect(titles.grep(/Marcos/).length).to eq(1)
+      expect(titles).to include("Marcos' Birthday")
+    end
+
+    it "leaves two different all-days on one day alone" do
+      day = Date.current + 2
+      item(name: "Marcos' Birthday", start_at: day.beginning_of_day, all_day: true)
+      create(:agenda_item, agenda: other, name: "Trash Day", start_at: day.beginning_of_day, all_day: true)
+
+      expect(upcoming.pluck(:title)).to include("Marcos' Birthday", "Trash Day")
+    end
+
+    it "leaves the same name on two different days alone" do
+      item(name: "Marcos' Birthday", start_at: (Date.current + 2).beginning_of_day, all_day: true)
+      create(:agenda_item, agenda: other, name: "Marcos' Birthday",
+             start_at: (Date.current + 3).beginning_of_day, all_day: true)
+
+      expect(upcoming.pluck(:title).grep(/Marcos/).length).to eq(2)
+    end
+
+    # A timed thing on two calendars is two commitments until something says
+    # otherwise, and an all-day is the only shape this is safe for.
+    it "leaves timed items alone" do
+      at = (Date.current + 2).beginning_of_day + 9.hours
+      item(name: "Standup", start_at: at, end_at: at + 30.minutes)
+      create(:agenda_item, agenda: other, name: "Standup", start_at: at, end_at: at + 30.minutes)
+
+      expect(upcoming.pluck(:title).grep(/Standup/).length).to eq(2)
     end
   end
 

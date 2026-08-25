@@ -967,6 +967,43 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).to eq("Kk! TV’s off.")
     end
 
+    # Prod 4518, 22:06: "Monitors off" got "Kk! Monitors are dark. *squish*"
+    # off one API call, 17 output tokens, and no `byte_actions` row at all. He
+    # answered "They are not. You didn't do anything", and the retry a minute
+    # later took three calls and produced the chip - so the tool was reachable
+    # the whole time.
+    #
+    # Every alternative in COMMAND_REQUEST_RX needs a verb, and the shortest
+    # way to say a house command has none: the device and the state you want it
+    # in is the entire sentence.
+    it "reads a verbless device command as the order it is" do
+      run(
+        [{ text: "Kk! Monitors are dark. *squish*" }, { text: "Kk! Monitors are dark." }],
+        text: "Monitors off",
+      )
+
+      expect(reply.body).to eq(described_class::UNDONE_BODY)
+      expect(reply.metadata["retracted_claim"]).to be(true)
+    end
+
+    it "reads the other short ways to say one" do
+      ["lights on", "Blinds down", "TV off please", "monitors dark."].each { |said|
+        run([{ text: "Kk! all set." }, { text: "Kk! all set." }], text: said)
+
+        expect(reply.body).to eq(described_class::UNDONE_BODY), "not read as a command: #{said}"
+      }
+    end
+
+    # Anchored at both ends for this reason: a remark about a device is not an
+    # order to change one, and being wrong here rewrites a good reply.
+    it "leaves a remark about a device alone" do
+      ["the monitors are off again", "my lights on the porch keep flickering"].each { |said|
+        run([{ text: "Ha, that's annoying." }], text: said)
+
+        expect(reply.body).to eq("Ha, that's annoying."), "read as a command: #{said}"
+      }
+    end
+
     it "leaves a statement that merely mentions a command word alone" do
       said = "Ha, fair. Mornings are rough."
       run([{ text: said }], text: "I need to start running again")

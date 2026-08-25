@@ -207,6 +207,23 @@ RSpec.describe Buddy::Compile do
     end
   end
 
+  # A memory told to write dates absolutely needs a date to write them from.
+  # `buddy_memories` 105 froze "tomorrow at 10:00 AM" into a row with no expiry
+  # and a check-in the following evening; the pass runs an hour after the
+  # conversation ends and the only clock in the brief was the timestamp on each
+  # transcript line.
+  it "tells the pass what day it is" do
+    travel_to(Time.utc(2026, 8, 25, 18, 0)) do
+      say("Eve's therapist thing is tomorrow at 10.")
+      say("Noted.", direction: :inbound, meta: { "kind" => "buddy" })
+      client = stub_quiet
+
+      described_class.run!(convo)
+
+      expect(client.calls.first.input.first[:content]).to include("TODAY: Tuesday 25 Aug 2026")
+    end
+  end
+
   # Prod memory 67: Eve asked for a daily nudge, Suki set the reminder and
   # posted a receipt saying so, and the compile — which never sees receipts —
   # wrote "she wants a daily reminder to let things go" as a standing

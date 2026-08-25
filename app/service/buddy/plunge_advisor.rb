@@ -242,8 +242,15 @@ module Buddy
 
       buffer_start = (win[0] - 45.minutes).utc
       buffer_end   = (win[1] + 45.minutes).utc
+      # All-day rows are excluded, the same way the travel chain and the
+      # collision check exclude them. An all-day item runs local midnight to
+      # midnight, so it overlaps EVERY window on its date - one birthday on the
+      # calendar and the whole day reads as booked, which is how a plunge stops
+      # being suggested for reasons nobody can see. It says what date it is, not
+      # that an hour of it is spoken for.
       AgendaItem.where(agenda_id: agenda_ids)
         .where.not(status: :cancelled)
+        .where(all_day: [false, nil])
         .where("start_at < ? AND (end_at IS NULL OR end_at > ?)", buffer_end, buffer_start)
         .none?
     end

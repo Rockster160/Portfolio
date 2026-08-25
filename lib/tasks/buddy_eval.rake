@@ -566,6 +566,28 @@ BUDDY_EDGE_PROBES = [
                 "to ask you, at the moment they were meant to be told what to do",
   },
 
+  # --- a name that is most of a longer name ---------------------------------
+  {
+    case:       "prod 4495",
+    say:        "Log load dishwasher",
+    tool:       :complete_chore,
+    never_args: { complete_chore: { chore: /unload/i } },
+    needs:      :dish_chores,
+    note:       "`Unload Dishwasher` was marked done, which is the opposite job - " \
+                "\"unload dishwasher\" CONTAINS \"load dishwasher\", and the two she " \
+                "plausibly meant were both sitting in the roster",
+  },
+
+  # --- a house command with no verb in it -----------------------------------
+  {
+    case: "prod 4518",
+    say:  "Monitors off",
+    tool: :mac_command,
+    note: "answered \"Monitors are dark\" off a single API call with no byte_actions " \
+          "row at all; the retry a minute later, after he said so, took three calls " \
+          "and produced the chip",
+  },
+
   # --- the camera: seeing something, versus being told when ----------------
   {
     case:  "prod 3789, 3728, 3751",

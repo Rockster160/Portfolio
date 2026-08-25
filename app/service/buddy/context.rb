@@ -112,6 +112,31 @@ module Buddy
     # Public for the same reason as mood_vibe_for: Buddy::AgendaSearch looks at
     # exactly the same set of calendars, and two answers to "which calendars
     # count" is how a search starts reaching somewhere the briefing doesn't.
+    # What the person has already switched OFF in the agenda's own filters.
+    #
+    # Buddy has never looked at this. `AgendaPreference` holds four hide lists -
+    # whole calendars, recurring series, single items, and name patterns - and
+    # every screen in the app honours them; the briefing did not, so a series
+    # deliberately hidden months ago still went out loud every morning.
+    #
+    # Prod 4524 is the case: "Tomorrow's got a couple birthday all-days" was
+    # `agenda_items` 1027 and 1028, the same person on two calendars. 1027 comes
+    # off `agenda_schedules` 80, which is IN `hidden_schedule_ids` - put there by
+    # `BirthdaySync` itself, precisely so the gmail copy wouldn't double the
+    # Birthdays calendar. The app had already solved it. Twenty-four series and
+    # one item are hidden on that account and every one of them was reaching the
+    # model.
+    #
+    # Only what Buddy VOLUNTEERS. Asking for a hidden thing by name still finds
+    # it (`ToolContext#agenda_item_named`, `AgendaSearch`) - hiding it from the
+    # calendar view is not the same as saying it doesn't exist.
+    def visible_only(scope, user)
+      ::AgendaPreference.for(user).apply_visible_scope(scope)
+    rescue StandardError => e
+      Buddy::Errors.report(section: "context.visible_only", exception: e, user: user)
+      scope
+    end
+
     def agenda_source_map(user)
       map = {}
       Agenda.where(user_id: user.id).pluck(:id).each { |id| map[id] = { mine: true } }
@@ -183,17 +208,69 @@ module Buddy
       # Timed items only. An all-day thing on either side would otherwise
       # collide with the whole day, which would keep everything and mean
       # nothing.
-      def collision_ids(items, sources)
+      # Answers with the NAME of the thing it runs into, not a bare yes. The
+      # overlap is worked out here either way, and prod 4524 is what throwing it
+      # away costs: Chelsea's yoga arrived tagged `collides` and led Byte's
+      # briefing as Rocco's own, because the one sentence the prompt asks for -
+      # whose it is and what it clashes with - had to be reassembled from two
+      # other entries in the same list. It clashed with Tech Retro; that is
+      # knowable right here and nowhere cheaper.
+      def collisions(items, sources)
         mine, theirs = items.partition { |i| sources[i.agenda_id]&.dig(:mine) != false }
-        spans = mine.filter_map { |i| span_for(i) }
-        return Set.new if spans.empty?
+        spans = mine.filter_map { |i| ([i, span_for(i)] if span_for(i)) }
+        return {} if spans.empty?
 
-        theirs.filter_map { |i|
+        theirs.each_with_object({}) { |i, found|
           span = span_for(i)
           next if span.nil?
 
-          i.id if spans.any? { |m| m.first < span.last && span.first < m.last }
-        }.to_set
+          hit = spans.find { |_item, m| m.first < span.last && span.first < m.last }
+          found[i.id] = hit.first.name if hit
+        }
+      end
+
+      # One thing on two calendars is still one thing.
+      #
+      # Prod 4524: "Tomorrow's got a couple birthday all-days". There is one
+      # birthday - `agenda_items` 1027 (`Marcos' Birthday`, agenda 14) and 1028
+      # (`Marcos Jones's Birthday`, agenda 32) are the same person on two of
+      # Rocco's own calendars. So the count was a count of ROWS, and the name -
+      # the one thing a birthday mention exists to carry - was gone, because
+      # "a couple birthday all-days" is a fair reading of what it was handed.
+      # Every birthday that sits on both the Birthdays calendar and the gmail
+      # one has this shape.
+      #
+      # Deliberately narrow, because folding two real things into one loses
+      # more than a clumsy sentence does. All-day only, one date only, one
+      # ownership only - a partner's copy is a fact about a different person's
+      # day - and one title's words have to sit INSIDE the other's. Two
+      # all-days that merely fall on the same date stay two.
+      #
+      # The first one wins, which is the earlier id: both titles carry the
+      # name, and the shorter is the one a person would say out loud.
+      def fold_duplicate_all_days(items, sources)
+        items.each_with_object([]) { |item, kept|
+          kept << item unless kept.any? { |k| same_occasion?(k, item, sources) }
+        }
+      end
+
+      def same_occasion?(a, b, sources)
+        return false unless a.all_day && b.all_day
+        return false if a.start_at.blank? || b.start_at.blank?
+        return false unless a.start_at.to_date == b.start_at.to_date
+        return false unless sources[a.agenda_id]&.dig(:mine) == sources[b.agenda_id]&.dig(:mine)
+
+        x = title_words(a.name)
+        y = title_words(b.name)
+        return false if x.empty? || y.empty?
+
+        x.subset?(y) || y.subset?(x)
+      end
+
+      # Short tokens dropped so the "s" left behind by "Jones's" doesn't count
+      # as a word one title has and the other doesn't.
+      def title_words(name)
+        name.to_s.downcase.scan(/[a-z0-9]+/).select { |w| w.length >= 3 }.to_set
       end
 
       def span_for(item)
@@ -217,37 +294,38 @@ module Buddy
         # keeps one: a standing thing not happening today is a real heads-up,
         # and usually a more useful one than anything that is. A cancelled
         # one-off is just gone and stays out.
-        items = AgendaItem.where(agenda_id: sources.keys)
+        scope = AgendaItem.where(agenda_id: sources.keys)
           .where("status != ? OR agenda_schedule_id IS NOT NULL", AgendaItem.statuses[:cancelled])
           .where(start_at: day_start.utc...day_end.utc)
           .includes(:agenda, :agenda_schedule)
           .order(:start_at)
-          .limit(20)
-          .to_a
-        collides = collision_ids(items, sources)
+        items = visible_only(scope, user).limit(20).to_a
+        items    = fold_duplicate_all_days(items, sources)
+        collides = collisions(items, sources)
 
         items.map { |i|
           tag_ownership(
             {
-              id:        i.id,
-              time:      (i.all_day ? "all day" : i.start_at.in_time_zone(user.timezone).strftime("%-I:%M %p")),
-              title:     i.name,
-              where:     i.location.to_s.strip.presence,
-              cancelled: (true if i.cancelled?),
-              cal:       i.agenda&.name,
-              kind:      i.kind,
-              cadence:   schedule_cadence(i),  # nil = one-off; "every weekday" / "monthly" / ...
-              drive_min: drive_minutes(i),     # known travel time, for a soon "leave by" nudge
-              leave_by:  leave_by(i, user),    # the clock time to walk out, already worked out
+              id:            i.id,
+              time:          (i.all_day ? "all day" : i.start_at.in_time_zone(user.timezone).strftime("%-I:%M %p")),
+              title:         i.name,
+              where:         i.location.to_s.strip.presence,
+              cancelled:     (true if i.cancelled?),
+              cal:           i.agenda&.name,
+              kind:          i.kind,
+              cadence:       schedule_cadence(i),  # nil = one-off; "every weekday" / "monthly" / ...
+              drive_min:     drive_minutes(i),     # known travel time, for a soon "leave by" nudge
+              leave_by:      leave_by(i, user),    # the clock time to walk out, already worked out
               # Already happened — a forward-looking briefing skips these
               # instead of recapping a day that's mostly over. `past?` is
               # kind-aware: an event with hours left on it is NOT news that
               # already broke just because it started.
-              passed:    (!i.all_day && i.past?(now: now) ? true : nil),
+              passed:        (!i.all_day && i.past?(now: now) ? true : nil),
               # Only ever set on a partner's item, and only when it runs into
               # something of theirs. It is both the reason to raise one and
-              # the thing a briefing filters on.
-              collides:  (true if collides.include?(i.id)),
+              # the thing a briefing filters on, and it carries the name of
+              # what it runs into so that can be said without looking it up.
+              collides_with: collides[i.id],
             }.compact, sources[i.agenda_id]
           )
         }
@@ -271,30 +349,30 @@ module Buddy
         day_start = Buddy::Day.at(user, hour: 0, now: now)
         cancelled = AgendaItem.statuses[:cancelled]
 
-        items = AgendaItem.where(agenda_id: sources.keys)
+        scope = AgendaItem.where(agenda_id: sources.keys)
           .where(start_at: (day_start + 1.day).utc...(day_start + UPCOMING_WEEK_WINDOW).utc)
           .where("status != ? OR agenda_schedule_id IS NOT NULL", cancelled)
           .includes(:agenda, :agenda_schedule)
           .order(:start_at)
-          .limit(25)
-          .to_a
-        upcoming_collides = collision_ids(items, sources)
+        items = visible_only(scope, user).limit(25).to_a
+        items             = fold_duplicate_all_days(items, sources)
+        upcoming_collides = collisions(items, sources)
 
         items.map { |i|
           local = i.start_at.in_time_zone(user.timezone)
           tag_ownership(
             {
-              day:       day_label(local, user, now),
-              time:      (i.all_day ? "all day" : local.strftime("%-I:%M %p")),
-              title:     i.name,
+              day:           day_label(local, user, now),
+              time:          (i.all_day ? "all day" : local.strftime("%-I:%M %p")),
+              title:         i.name,
               # Often the difference between a mention that means something
               # and one that doesn't: "a pickup Saturday" was `Pickup B and
               # Saya`, 4pm, at the airport.
-              where:     i.location.to_s.strip.presence,
-              cadence:   schedule_cadence(i),  # nil = one-off
-              cancelled: i.cancelled?,
-              cal:       i.agenda&.name,
-              collides:  (true if upcoming_collides.include?(i.id)),
+              where:         i.location.to_s.strip.presence,
+              cadence:       schedule_cadence(i),  # nil = one-off
+              cancelled:     i.cancelled?,
+              cal:           i.agenda&.name,
+              collides_with: upcoming_collides[i.id],
             }.compact, sources[i.agenda_id]
           )
         }

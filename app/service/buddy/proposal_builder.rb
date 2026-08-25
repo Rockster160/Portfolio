@@ -168,12 +168,12 @@ module Buddy
     # tappable checklist on a new message. Rebuilds through the normal `create`
     # path (re-validates + re-confirms), so the resolved data is refreshed and a
     # target that's since vanished degrades to an honest note.
-    def reissue(user:, conversation:, button:)
+    def reissue(user:, conversation:, button:, body: "Here you go again:")
       msg = conversation.byte_messages.create!(
         user:         user,
         direction:    :inbound,
         state:        :delivered,
-        body:         "Here you go again:",
+        body:         body,
         metadata:     { "kind" => "buddy_reply", "source" => "reissue" },
         delivered_at: Time.current,
       )

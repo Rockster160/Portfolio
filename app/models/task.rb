@@ -225,7 +225,10 @@ class Task < ApplicationRecord
     /^\s*function(?:\((?<args>.*)\))(?:::(?<cast>[A-Z][_0-9A-Za-z|]*))?\s*$/i
   end
 
-  def self.schema(user=nil)
+  # `[Custom]` was always per-user — it's built from this person's own function
+  # tasks. `keep:` passes classes straight through Jil::Schema's access gates;
+  # see the note there for why the task on screen gets to name them.
+  def self.schema(user=nil, keep: [])
     tasks = user.present? ? user.tasks.active.enabled.functions : none
     funcs = "[Custom]\n" + tasks.filter_map { |task|
       match = task.listener.match(func_regex)
@@ -240,7 +243,14 @@ class Task < ApplicationRecord
       ].join
     }.join("\n")
 
-    (funcs + "\n" + File.read("app/service/jil/schema.txt")).html_safe
+    (funcs + "\n" + ::Jil::Schema.for(user, keep: keep)).html_safe
+  end
+
+  # Classes this task's code actually calls — the `Tesla` in
+  # `nav = Tesla.navigate(stop)::Boolean`. Instance calls (`stop.length()`) name
+  # a variable rather than a class and are correctly skipped by the capital.
+  def used_classes
+    code.to_s.scan(/^\s*\*?\w+\s*=\s*([A-Z]\w*)\./).flatten.uniq
   end
 
   def trigger_type

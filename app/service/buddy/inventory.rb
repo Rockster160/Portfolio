@@ -91,7 +91,7 @@ module Buddy
     # says back, so it carries the near misses: "there are two called Smellies"
     # with both paths beats picking one, because the wrong tote is a wrong
     # answer that looks exactly like a right one.
-    def resolve!(user, needle, verb: "find")
+    def resolve!(user, needle, verb: "find", arg: :item)
       found = matches(user, needle)
       raise "nothing in the inventory matching #{needle.to_s.strip.inspect}" if found.empty?
       return found.first if found.length == 1
@@ -99,14 +99,26 @@ module Buddy
       # Same name in two places is the ordinary shape of an inventory, so an
       # exact tie has to be handed back rather than guessed at.
       tied = found.select { |box| box.name.to_s.casecmp?(needle.to_s.strip.delete_prefix("#")) }
-      raise ambiguous(tied, needle, verb) if tied.length > 1
+      raise ambiguous(tied, needle, verb, arg: arg) if tied.length > 1
 
       found.first
     end
 
-    def ambiguous(tied, needle, verb)
-      where = tied.first(4).map { |box| "#{handle(box)} in #{location_of(box)}" }
-      "there's more than one #{needle.to_s.strip} - #{where.join(", ")}. Ask which one to #{verb}"
+    # The tie, as a choice rather than only a complaint. Each option answers
+    # with the box's #HANDLE, which is exact where the name was not, and says
+    # where it lives underneath - which is the only thing that tells two boxes
+    # called Smellies apart.
+    def ambiguous(tied, needle, verb, arg: :item)
+      shown = tied.first(Buddy::Disambiguation::MAX_OPTIONS)
+      where = shown.map { |box| "#{handle(box)} in #{location_of(box)}" }
+      ::Buddy::Ambiguous.new(
+        "there's more than one #{needle.to_s.strip} - #{where.join(", ")}. Ask which one to #{verb}",
+        arg:     arg,
+        prompt:  "There's more than one #{needle.to_s.strip} in the inventory. Which one?",
+        options: shown.map { |box|
+          { value: handle(box), label: box.name.to_s, description: "in #{location_of(box)}" }
+        },
+      )
     end
 
     def by_handle(pool, needle)
@@ -144,7 +156,7 @@ module Buddy
     # answer is that container's direct contents rather than everything under
     # it - "what's in the garage" wants the shelves, not 60 screws.
     def search(user:, query: nil, inside: nil, limit: LIMIT)
-      container = inside.present? ? resolve!(user, inside, verb: "look in") : nil
+      container = inside.present? ? resolve!(user, inside, verb: "look in", arg: :inside) : nil
       scope     = all_for(user)
       scope     = scope.within(container.param_key) if container
 

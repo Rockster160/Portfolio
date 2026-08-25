@@ -42,7 +42,7 @@ Buddy::Tools.register(
     name = payload[:item].to_s.strip
     raise "nothing to add" if name.blank?
 
-    parent = payload[:inside].present? ? Buddy::Inventory.resolve!(ctx.user, payload[:inside], verb: "add to") : nil
+    parent = payload[:inside].present? ? Buddy::Inventory.resolve!(ctx.user, payload[:inside], verb: "add to", arg: :inside) : nil
     where  = parent ? Buddy::Inventory.path_of(parent) : "the top level"
 
     {

@@ -407,6 +407,11 @@ class ByteController < ApplicationController
     # Undo restores it. Not a decision-recording flow — its own tiny path.
     return respond_buddy_reminders(action) if action.tool_name == Buddy::ReminderList::TOOL_NAME
 
+    # A "which one did you mean" card. The tapped option carries the exact
+    # record, so the original call is rebuilt with it and run - no model turn,
+    # because the answer was decided the moment they pressed it.
+    return respond_buddy_pick(action) if action.tool_name == Buddy::Disambiguation::TOOL_NAME
+
     # An editable form. Unlike every other shape here, this posts VALUES rather
     # than row ids, so it can't lean on the id-lookup safety the others get for
     # free — Buddy::FormAction rebuilds the field list from the tool and
@@ -520,6 +525,34 @@ class ByteController < ApplicationController
     Buddy::ProposalExecutorJob.perform_later(action.id, ids) if ids.any?
 
     render json: action.as_wire
+  end
+
+  # They picked which record they meant. Idempotent through `apply_decision!`,
+  # which stops being pending on the first tap — so a double tap can't run the
+  # tool twice.
+  def respond_buddy_pick(action)
+    return head(:conflict) unless action.pending? &&
+      (action.expires_at.nil? || action.expires_at.future?)
+
+    chosen = Array(params[:value]).first.to_s
+    # By VALUE, never by index: the button posts back what it was rendered
+    # with, and looking it up here is what keeps a stale card from running
+    # something the row no longer says.
+    button = Array(action.buttons).find { |b| b["value"].to_s == chosen }
+    return head(:unprocessable_entity) if button.nil?
+
+    action.apply_decision!(value: chosen, source: :user)
+    Buddy::Disambiguation.chose!(action, button)
+
+    if action.byte_message
+      MonitorChannel.broadcast_to(current_user, {
+        id:      MONITOR_CHANNEL,
+        channel: MONITOR_CHANNEL,
+        data:    { kind: :message, message: action.byte_message.reload.as_wire },
+      })
+    end
+
+    render json: action.reload.as_wire
   end
 
   # A tap on the reminders management list. `cancel` takes a row off (cancels

@@ -41,7 +41,7 @@ Buddy::Tools.register(
         resolved[:parent_key] = nil
         resolved[:moving_to]  = "the top level"
       else
-        parent = Buddy::Inventory.resolve!(ctx.user, payload[:into], verb: "move it into")
+        parent = Buddy::Inventory.resolve!(ctx.user, payload[:into], verb: "move it into", arg: :into)
         raise "#{box.name} can't go inside itself" if parent.param_key == box.param_key
         # `hierarchy_ids` is every ancestor of the target. If the thing being
         # moved is one of them, this is a box being filed into its own contents

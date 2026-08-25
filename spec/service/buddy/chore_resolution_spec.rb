@@ -45,6 +45,53 @@ RSpec.describe "Buddy chore resolution" do
     end
   end
 
+  # Prod 4495, 09:25. Chelsea said "Log load dishwasher" and Moss answered "I
+  # marked the dishwasher one off.. it landed on **Unload Dishwasher**" -
+  # `chore_completions` 2626, chore 78. Loading and unloading are opposite jobs
+  # and it wrote the opposite one, because "unload dishwasher" contains "load
+  # dishwasher".
+  describe "a name glued to the front of a longer word" do
+    it "does not read as the shorter word" do
+      chore!("Unload Dishwasher")
+      chore!("Light Load Dishes")
+      chore!("Medium~Normal Load Dishes")
+
+      expect(ctx.resolve_chore("load dishwasher")).to be_nil
+    end
+
+    # The Levenshtein fallback is the other route to the same row - two edits
+    # against a tolerance of five - so refusing it in one place only moves it.
+    it "does not come back by edit distance either" do
+      chore!("Unload Dishwasher")
+
+      expect(ctx.resolve_chore("load dishwasher")).to be_nil
+    end
+
+    it "names the ones she might have meant instead of guessing" do
+      chore!("Unload Dishwasher")
+      chore!("Light Load Dishes")
+      chore!("Medium~Normal Load Dishes")
+
+      expect(ctx.no_chore_error("load dishwasher")).to include("Light Load Dishes", "Medium~Normal Load Dishes")
+    end
+
+    it "still finds the row when they say the whole thing" do
+      unload = chore!("Unload Dishwasher")
+
+      expect(ctx.resolve_chore("unload dishwasher")).to eq(unload)
+    end
+
+    # Only the LEADING edge. What follows is ordinary inflection and has never
+    # changed what a chore is.
+    it "leaves a plural or a participle alone" do
+      dishes  = chore!("Dishes")
+      beds    = chore!("Watering the Beds")
+
+      expect(ctx.resolve_chore("dish")).to eq(dishes)
+      expect(ctx.resolve_chore("water")).to eq(beds)
+    end
+  end
+
   describe "when nothing contains it" do
     it "forgives a typo" do
       brush = chore!("Brush Teeth")

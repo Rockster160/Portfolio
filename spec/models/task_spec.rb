@@ -267,4 +267,61 @@ RSpec.describe Task, type: :model do
       end
     end
   end
+
+  # What the editor is allowed to offer this person. `keep:` is what stops a
+  # read-only shared task from being unrenderable for the person it's shared
+  # with — see the note on Jil::Schema.
+  describe ".schema" do
+    let(:other) { create(:user) }
+
+    it "gates the owner-only classes per user" do
+      expect(described_class.schema(User.me)).to include("[Tesla]")
+      expect(described_class.schema(other)).not_to include("[Tesla]")
+    end
+
+    it "still builds [Custom] from that person's own functions" do
+      described_class.create!(
+        user: other, name: "Do Thing", listener: "function(a:String)", code: "// noop", enabled: true,
+      )
+
+      expect(described_class.schema(other)).to include("#DoThing(a:String)")
+    end
+
+    it "passes kept classes through the gate" do
+      expect(described_class.schema(other, keep: %w[Mac])).to include("[Mac]")
+    end
+  end
+
+  describe "#used_classes" do
+    def build_task(code)
+      described_class.new(user: User.me, name: "T", listener: "", code: code)
+    end
+
+    it "names the classes a task calls" do
+      task = build_task(<<~'JIL')
+        active = Trip.active?()::Boolean
+        nav = Tesla.navigate(stop)::Boolean
+      JIL
+
+      expect(task.used_classes).to contain_exactly("Trip", "Tesla")
+    end
+
+    it "skips instance calls on variables" do
+      expect(build_task("len = stop.length()::Numeric").used_classes).to be_empty
+    end
+
+    it "reaches indented calls inside content blocks" do
+      task = build_task(<<~'JIL')
+        outer = Global.if({
+          inner = Tesla.stop()::Boolean
+        })::Any
+      JIL
+
+      expect(task.used_classes).to contain_exactly("Global", "Tesla")
+    end
+
+    it "is empty for a task with no code yet" do
+      expect(build_task(nil).used_classes).to eq([])
+    end
+  end
 end

@@ -13,6 +13,26 @@ module Buddy
     # this pass runs an hour after the conversation ended and answers to no
     # message.
     class Toolbox
+      # A memory outlives the day it was written on, so a word that means a
+      # different day tomorrow does not belong in one.
+      #
+      # `buddy_memories` 105, written 15:21 Mon 24 Aug: "Eve has a therapist
+      # appointment with Iberty tomorrow at 10:00 AM", `check_in_at` 6pm the
+      # NEXT evening and no expiry. By the time it reads itself out, "tomorrow"
+      # means Wednesday and the appointment was that morning. Rows 44 and 71
+      # carry the same defect ("...tomorrow, since it will be trash day",
+      # "...to tonight's agenda"); both have since been dropped, and the third
+      # occurrence in three weeks is what says prose is the wrong place for it.
+      #
+      # "Stands alone" was already there and is evidently not enough - a
+      # sentence with "tomorrow" in it reads as standing alone, right up until
+      # it is read on a different day. So the failures get named.
+      MEMORY_CONTENT_DATES = "Write every date and time ABSOLUTELY - " \
+                             "\"on Tue 25 Aug at 10:00 AM\", never \"tomorrow\", " \
+                             "\"tonight\", \"next week\" or \"today\". " \
+                             "This row will be read on a day that is not this one.".freeze
+      MEMORY_CONTENT = "The whole fact, as one sentence that stands alone. #{MEMORY_CONTENT_DATES}".freeze
+
       # What this run changed, so the caller can replan check-ins over the
       # result and report what it did.
       attr_reader :written, :touched
@@ -78,7 +98,7 @@ module Buddy
             type:       :object,
             properties: {
               kind:          { type: :string, enum: %w[concept preference followup] },
-              content:       { type: :string, description: "The whole fact, as one sentence that stands alone" },
+              content:       { type: :string, description: MEMORY_CONTENT },
               summary:       { type: :string, description: "Three to six words" },
               severity:      { type: :integer, description: "0-100" },
               tags:          { type: :array, items: { type: :string } },
@@ -100,7 +120,7 @@ module Buddy
             type:       :object,
             properties: {
               id:       { type: :integer },
-              content:  { type: :string, description: "The whole row, rewritten" },
+              content:  { type: :string, description: "The whole row, rewritten. #{MEMORY_CONTENT_DATES}" },
               summary:  { type: :string },
               tags:     { type: :array, items: { type: :string } },
               severity: { type: :integer },

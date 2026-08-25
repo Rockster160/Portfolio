@@ -220,11 +220,13 @@ RSpec.describe "Buddy Today forward-looking" do
 
       # The three paragraphs deciding WHICH of a partner's items to raise are
       # gone, because the deciding is done before the model sees any of them -
-      # ContextTool::PARTNER_FILTERED keeps only the ones carrying `collides`.
+      # ContextTool::PARTNER_FILTERED uses the overlap to decide which survive
+      # and then strips the marker, so what arrives is background with nothing
+      # to compare itself to.
       # A rule about picking from a set that has already been picked from is
       # the thing that makes a long prompt longer and no better.
       it "explains the ones that do arrive rather than filtering them again" do
-        expect(seed).to include("they carry `collides`")
+        expect(seed).to include("BACKGROUND, not a demand on me")
         expect(seed).to include("has already been taken out")
       end
 
