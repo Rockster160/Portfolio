@@ -109,7 +109,7 @@ export class Monitor {
   received(data) {
     this.#dispatch("received", [data]);
   }
-  do(action) {
+  do(action, data={}) {
     let monitor = this;
     monitor.loading = true;
 
@@ -123,8 +123,9 @@ export class Monitor {
     // clears on the next microtask, so anything a later turn asks for is a real
     // second request and still gets sent. The key carries everything the
     // payload does — two monitors on one channel with different ids are two
-    // questions, not one.
-    let key = `${action}:${monitor.channel}:${monitor.id ?? ""}`;
+    // questions, not one. `data` is in the key for the same reason — two asks
+    // carrying different payloads are different asks.
+    let key = `${action}:${monitor.channel}:${monitor.id ?? ""}:${JSON.stringify(data)}`;
     if (Monitor.#sent.has(key)) {
       return;
     }
@@ -132,18 +133,19 @@ export class Monitor {
     queueMicrotask(() => Monitor.#sent.delete(key));
 
     Monitor.socket.perform(action, {
+      ...data,
       id: monitor.id,
       channel: monitor.channel,
     });
   }
-  execute() {
-    this.do("execute");
+  execute(data={}) {
+    this.do("execute", data);
   } // Runs task with executing:true
-  refresh() {
-    this.do("refresh");
+  refresh(data={}) {
+    this.do("refresh", data);
   } // Runs task with executing:false
-  resync() {
-    this.do("resync");
+  resync(data={}) {
+    this.do("resync", data);
   } // Pulls most recent result without Running
 }
 // Defining after class to help race conditions

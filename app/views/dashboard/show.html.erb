@@ -20,6 +20,9 @@
 
 <script type="text/javascript">
   window.DASHBOARD_ISOLATED_CELL = <%= raw @isolated_cell.to_json %>;
+  // The build this page was SERVED with — `deploy_reload.js` compares it to the
+  // one the server wants it on. Same constant on both sides of that comparison.
+  window.DASHBOARD_SHA = <%= raw COMMIT_SHA.to_json %>;
   (function load() {
     if (!window.jQuery) { return setTimeout(load, 50); }
 
