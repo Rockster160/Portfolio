@@ -55,6 +55,13 @@ module BuddyEvalNeeds
     Chore.where(chore_household: household).active.any? { |c| c.name.to_s.match?(rx) }
   end
 
+  # A fresh query, not `user.boxes`: the association caches on first read and
+  # `User.me` is memoized process-wide, so a `needs:` checked after the world
+  # was built would answer off the rows that existed before it.
+  def box(user, rx)
+    Box.where(user: user).any? { |b| b.name.to_s.match?(rx) }
+  end
+
   # How many, for probes that count rather than ask whether.
   def completions(user, rx)
     ChoreCompletion.where(user: user, day_key: user.perceived_today).includes(:chore).count { |c|
@@ -126,6 +133,10 @@ module BuddyEvalNeeds
     bakkie_defined:       { label: "bakkie in the glossary",       check: ->(u) { u.chore_household && HouseholdGlossaryTerm.where(chore_household: u.chore_household).any? { |t| t.term.to_s.casecmp?("bakkie") } } },
     dentist_on_calendar:  { label: "a dentist item on the calendar", check: ->(u) { AgendaItem.where(agenda_id: u.agendas.map(&:id), start_at: Time.current..1.month.from_now).any? { |i| i.name.to_s.match?(/dentist/i) } } },
     pilaf_series:         { label: "a repeating pilaf dinner on the calendar", check: ->(u) { AgendaSchedule.where(agenda_id: u.agendas.map(&:id)).any? { |sc| sc.name.to_s.match?(/pilaf/i) } } },
+    camping_tote:         { label: "a camping tote in the inventory", check: ->(u) { box(u, /camping tote/i) } },
+    camp_stove_filed:     { label: "a camp stove filed in the inventory", check: ->(u) { box(u, /camp stove/i) } },
+    headlamp_filed:       { label: "a headlamp filed in the inventory", check: ->(u) { box(u, /headlamp/i) } },
+    tote_photo:           { label: "a photo on the camping tote", check: ->(u) { Box.where(user: u).select { |b| b.name.to_s.match?(/camping tote/i) }.any? { |b| BoxImage.where(box_key: b.param_key).any? } } },
     coffee_pairing:       { label: "the coffee-to-chore pairing",  check: ->(u) { RecordLink.where(user: u).any? { |l| l.source_name.to_s.match?(/coffee/i) } } },
     desk_delivery:        { label: "a desk on the delivery list",  check: ->(u) { delivery?(u, "desk") } },
     mattress_delivery:    { label: "a mattress on the delivery list", check: ->(u) { delivery?(u, "mattress") } },

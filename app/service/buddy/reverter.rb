@@ -36,6 +36,13 @@ module Buddy
       "ChoreCompletion"       => "ChoreCompletion",
       "ChoreWithdrawal"       => "ChoreWithdrawal",
       "ListItem"              => "ListItem",
+      # A box or an item in the physical inventory — the same row either way.
+      # Removing one takes everything inside it, so `remove_inventory_item`
+      # stashes a `reverts:` LIST covering the whole subtree, parents first.
+      "Box"                   => "Box",
+      # A photo of what's in a box. Recreating one needs its blob to still be
+      # around; see `recreate`.
+      "BoxImage"              => "BoxImage",
       # Vocabulary. Nothing hangs off a glossary entry, so a plain destroy is
       # the whole undo — and a mis-taught word is exactly the sort of thing
       # somebody unchecks a second after saying it.
@@ -98,7 +105,7 @@ module Buddy
       return nil unless r[:op].to_s == "created"
       return nil unless MODELS.key?(r[:model].to_s)
 
-      rec = klass(r[:model]).find_by(id: r[:id])
+      rec = find_record(r)
       return nil if rec.nil?
 
       summary = "put #{r[:summary].to_s.sub(/\Aunmarked\s+/i, "").presence || "it"} back"
@@ -141,10 +148,20 @@ module Buddy
     end
 
     def find!(r)
-      rec = klass(r[:model]).find_by(id: r[:id])
+      rec = find_record(r)
       raise "it's already gone" if rec.nil?
 
       rec
+    end
+
+    # By the model's PRIMARY KEY, which is not always the `id` column. Box
+    # declares `param_key` - the handle off the QR label - and also HAS an
+    # ordinary `id` column, so `find_by(id: "F4KJ")` doesn't raise, it compares
+    # a text handle against a bigint and quietly finds nothing. Every undo of a
+    # box came back "it's already gone" while the box sat there.
+    def find_record(r)
+      model = klass(r[:model])
+      model.find_by(model.primary_key => r[:id])
     end
 
     # Undo a create → remove what was just added (soft where the model allows).
@@ -177,6 +194,15 @@ module Buddy
       # gets the broadcast — not just a silent destroy.
       when "ChoreCompletion" then ChoreCompletionUndoer.call(rec.user, rec)
       when "ListItem" then rec.soft_destroy
+      # Contents are `dependent: :destroy`, so this would take them with it.
+      # Undoing "you just added the camping tote" is a gesture about the tote;
+      # if things have been put in it since, somebody meant to put them there
+      # and refusing loudly is the only answer that doesn't quietly eat them.
+      when "Box"
+        raise "there are things in #{rec.name} now - empty it first" if rec.boxes.any?
+
+        rec.destroy!
+      when "BoxImage" then rec.destroy!
       when "HouseholdGlossaryTerm" then rec.destroy!
       when "RecordLink"            then rec.destroy!
       when "ChoreWithdrawal"
@@ -226,6 +252,13 @@ module Buddy
 
       rec = klass(r[:model]).create!(attrs)
       case r[:model].to_s
+      # The row comes back either way; the picture only if its blob outlived
+      # the delete. ActiveStorage purges in a background job, so within the
+      # undo window it usually has — and when it hasn't, a box with no photo
+      # beats refusing to put the box back at all.
+      when "BoxImage"
+        blob = ::ActiveStorage::Blob.find_by(id: r[:blob_id])
+        rec.file.attach(blob) if blob
       # Re-adding a deleted event fires the :event trigger + broadcast, same as
       # a fresh log.
       when "ActionEvent"

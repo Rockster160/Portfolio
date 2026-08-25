@@ -146,8 +146,8 @@ BUDDY_EVAL_SCENARIOS = [
 #          of them is about the description.
 BUDDY_TOOL_PROBES = {
   # --- logging, chores, lists ---
-  log_event:             { say: "ate a sandwich", avoid: %i[complete_chore] },
-  complete_chore:        {
+  log_event:              { say: "ate a sandwich", avoid: %i[complete_chore] },
+  complete_chore:         {
     say:          "took the recycling out twice",
     avoid:        %i[log_event],
     needs:        :recycling_chore,
@@ -156,13 +156,13 @@ BUDDY_TOOL_PROBES = {
     effect_label: "the recycling chore didn't get marked twice",
     effect:       ->(u, before) { BuddyEvalNeeds.completions(u, /recycl/i) - before.to_i == 2 },
   },
-  create_chore:          "add a new chore for filling the kitty litter every Sunday",
-  edit_chore:            { say: "rename the recycling chore to bins", needs: :recycling_chore },
-  edit_chore_completion: { say: "add a note to the water chore I ticked off earlier - hint raspberry", needs: :water_completion },
+  create_chore:           "add a new chore for filling the kitty litter every Sunday",
+  edit_chore:             { say: "rename the recycling chore to bins", needs: :recycling_chore },
+  edit_chore_completion:  { say: "add a note to the water chore I ticked off earlier - hint raspberry", needs: :water_completion },
   # Runs for real and checks the row is gone. Resolving is not the same as the
   # completion going away, and prod 3171 is what the gap between those looks
   # like — reported as pulled down over something that was only ever proposed.
-  undo_chore_completion: {
+  undo_chore_completion:  {
     say:          "I marked the recycling done by mistake, take it back off",
     needs:        :recycling_completion,
     run:          true,
@@ -170,71 +170,71 @@ BUDDY_TOOL_PROBES = {
     effect_label: "the recycling completion is still there",
     effect:       ->(u, before) { BuddyEvalNeeds.completions(u, /recycl/i) == before.to_i - 1 },
   },
-  chore_progress:        "did I get all my dailies done yesterday?",
-  withdraw_pebbles:      "took 20 pebbles for the arcade",
+  chore_progress:         "did I get all my dailies done yesterday?",
+  withdraw_pebbles:       "took 20 pebbles for the arcade",
   # "this morning" is a claim about the clock, and asked at half past midnight
   # it's a claim about a morning that hasn't happened. The tool is what's being
   # tested, not time parsing.
-  delete_event:          { say: "I logged a Strawberry Celsius by accident earlier, get rid of it", needs: :celsius_today },
-  edit_event:            { say: "that sandwich I logged was actually at 1", needs: :sandwich_today },
-  search_events:         "how many celsius did I drink last month?",
-  add_list_item:         {
+  delete_event:           { say: "I logged a Strawberry Celsius by accident earlier, get rid of it", needs: :celsius_today },
+  edit_event:             { say: "that sandwich I logged was actually at 1", needs: :sandwich_today },
+  search_events:          "how many celsius did I drink last month?",
+  add_list_item:          {
     say:          "add hazelnut creamer to the groceries",
     run:          true,
     effect_label: "hazelnut creamer isn't on the list",
     effect:       ->(u) { ListItem.where(list_id: u.lists.reload.map(&:id)).any? { |i| i.name.to_s.match?(/hazelnut/i) } },
   },
-  remove_list_item:      { say: "take the oat milk off the groceries", needs: :oat_milk_listed },
-  edit_list_item:        { say: "flag the oat milk on the groceries as important", needs: :oat_milk_listed },
+  remove_list_item:       { say: "take the oat milk off the groceries", needs: :oat_milk_listed },
+  edit_list_item:         { say: "flag the oat milk on the groceries as important", needs: :oat_milk_listed },
 
   # --- time: the four that get confused with each other ---
-  set_timer:             {
+  set_timer:              {
     say:          "5m",
     avoid:        %i[schedule_reminder alarm],
     run:          true,
     effect_label: "no five-minute countdown was actually started",
     effect:       ->(u) { u.timers.exists?(kind: :countdown, duration_ms: 300_000) },
   },
-  alarm:                 { say: "wake me at 6:30 tomorrow", avoid: %i[schedule_reminder set_timer] },
-  schedule_reminder:     { say: "remind me to call mom at 6", avoid: %i[alarm add_agenda_item] },
-  remind_when:           { say: "remind me to grab my rx next time I'm at Costco", avoid: %i[schedule_reminder] },
-  move_reminder:         { say: "move the tomato reminder to 3", needs: :pending_reminder },
-  cancel_reminder:       { say: "never mind the vet reminder, drop it", needs: :vet_reminder },
-  list_reminders:        "what reminders do I have?",
-  cancel_timer:          "cancel all my timers",
-  check_anchor:          "when's sunset?",
+  alarm:                  { say: "wake me at 6:30 tomorrow", avoid: %i[schedule_reminder set_timer] },
+  schedule_reminder:      { say: "remind me to call mom at 6", avoid: %i[alarm add_agenda_item] },
+  remind_when:            { say: "remind me to grab my rx next time I'm at Costco", avoid: %i[schedule_reminder] },
+  move_reminder:          { say: "move the tomato reminder to 3", needs: :pending_reminder },
+  cancel_reminder:        { say: "never mind the vet reminder, drop it", needs: :vet_reminder },
+  list_reminders:         "what reminders do I have?",
+  cancel_timer:           "cancel all my timers",
+  check_anchor:           "when's sunset?",
 
   # --- calendar ---
-  add_agenda_item:       { say: "put dinner with Sam on the calendar Thursday at 7", avoid: %i[schedule_reminder] },
-  edit_agenda_item:      { say: "move my dentist appointment to 3", needs: :dentist_on_calendar },
-  search_agenda:         "when's my next dentist appointment?",
-  today_briefing:        "give me my Today briefing",
+  add_agenda_item:        { say: "put dinner with Sam on the calendar Thursday at 7", avoid: %i[schedule_reminder] },
+  edit_agenda_item:       { say: "move my dentist appointment to 3", needs: :dentist_on_calendar },
+  search_agenda:          "when's my next dentist appointment?",
+  today_briefing:         "give me my Today briefing",
 
   # --- the house, the printer, the Mac ---
   # Named down to the exact fan on purpose. Their house has a Great Fan and a
   # HASS Fan, and "the fan" between two of them is a question rather than a
   # call - which is its own probe, below, and a pass when it's asked.
-  call_jil_function:     { say: "turn the great room fan to low", needs: :fan_fn },
-  schedule_function:     { say: "play the Whisper nap sound at 11 tonight", avoid: %i[call_jil_function], needs: :light_fn },
-  trigger_jil_task:      { say: "chill mode", needs: :jil_trigger },
+  call_jil_function:      { say: "turn the great room fan to low", needs: :fan_fn },
+  schedule_function:      { say: "play the Whisper nap sound at 11 tonight", avoid: %i[call_jil_function], needs: :light_fn },
+  trigger_jil_task:       { say: "chill mode", needs: :jil_trigger },
   # A SCOPE, which is what this tool takes, and no `needs:` at all — a trigger
   # is an announcement, so it does not matter whether anything is listening.
   # Asked with a NAME it correctly reached for schedule_function instead.
-  schedule_trigger:      { say: "tomorrow at 8pm fire the villager:car:charged trigger" },
-  mac_command:           "turn the monitors off at the desk",
-  print_again:           { say: "print the vase again", needs: :printer_reachable },
-  print_history:         { say: "what did I print yesterday?", avoid: %i[print_again] },
-  printer_control:       { say: "preheat the printer", avoid: %i[print_again], needs: :printer_reachable },
+  schedule_trigger:       { say: "tomorrow at 8pm fire the villager:car:charged trigger" },
+  mac_command:            "turn the monitors off at the desk",
+  print_again:            { say: "print the vase again", needs: :printer_reachable },
+  print_history:          { say: "what did I print yesterday?", avoid: %i[print_again] },
+  printer_control:        { say: "preheat the printer", avoid: %i[print_again], needs: :printer_reachable },
 
   # --- other people ---
-  message_partner:       "let Chelsea know I fed the dog",
-  ask_partner:           { say: "ask Chelsea what she wants for dinner", avoid: %i[message_partner] },
-  ask_partner_choice:    { say: "ask Chelsea whether she'd rather do dishes or mop", avoid: %i[ask_partner] },
-  ask_partner_multi:     { say: "ask Chelsea which of these she's up for tonight - dishes, laundry, vacuuming - she can pick as many as she likes", avoid: %i[ask_partner ask_partner_choice] },
+  message_partner:        "let Chelsea know I fed the dog",
+  ask_partner:            { say: "ask Chelsea what she wants for dinner", avoid: %i[message_partner] },
+  ask_partner_choice:     { say: "ask Chelsea whether she'd rather do dishes or mop", avoid: %i[ask_partner] },
+  ask_partner_multi:      { say: "ask Chelsea which of these she's up for tonight - dishes, laundry, vacuuming - she can pick as many as she likes", avoid: %i[ask_partner ask_partner_choice] },
   # Seeds its own question one turn before reading it. A relay is answerable on
   # the NEXT thing the person says and passed over after that, so one built at
   # world time is already stale by the time this probe runs.
-  relay_answer:          {
+  relay_answer:           {
     say:   "tell her tacos",
     needs: :open_relay_question,
     seed:  ->(user, convo) {
@@ -248,48 +248,92 @@ BUDDY_TOOL_PROBES = {
       )
     },
   },
-  ask_me:                "add whatever I say next to my grocery list - ask me what it is first",
+  ask_me:                 "add whatever I say next to my grocery list - ask me what it is first",
 
   # --- deliveries ---
-  track_delivery:        "I ordered a bookshelf, should be here Friday",
-  check_deliveries:      "what packages are on their way?",
-  update_delivery:       { say: "the desk is coming Friday now", needs: :desk_delivery },
-  delivery_arrived:      { say: "the desk got here", needs: :desk_delivery },
+  track_delivery:         "I ordered a bookshelf, should be here Friday",
+  check_deliveries:       "what packages are on their way?",
+  update_delivery:        { say: "the desk is coming Friday now", needs: :desk_delivery },
+  delivery_arrived:       { say: "the desk got here", needs: :desk_delivery },
 
   # --- things held for them ---
   # Deliberately not the greenhouse: that one is already stashed, so "I keep
   # meaning to sort out the greenhouse" is a thing to READ back, and read_idea
   # was the right answer to a probe that scored it wrong.
-  stash_idea:            { say: "I keep meaning to redo the pantry shelves", avoid: %i[add_list_item schedule_reminder] },
-  elaborate_idea:        { say: "about that greenhouse - it should probably be solar", needs: :greenhouse_idea },
-  read_idea:             { say: "remind me what that greenhouse thing was about", needs: :greenhouse_idea },
-  finish_idea:           { say: "the greenhouse is sorted, I did it", needs: :greenhouse_idea },
-  drop_idea:             { say: "forget the greenhouse thing", needs: :greenhouse_idea },
-  defer_idea:            { say: "bring the greenhouse one back up next week", needs: :greenhouse_idea },
-  move_idea:             { say: "move the greenhouse one over to home", needs: :greenhouse_idea },
-  search_ideas:          "did I ever hand you anything about redoing the gutters?",
+  stash_idea:             { say: "I keep meaning to redo the pantry shelves", avoid: %i[add_list_item schedule_reminder] },
+  elaborate_idea:         { say: "about that greenhouse - it should probably be solar", needs: :greenhouse_idea },
+  read_idea:              { say: "remind me what that greenhouse thing was about", needs: :greenhouse_idea },
+  finish_idea:            { say: "the greenhouse is sorted, I did it", needs: :greenhouse_idea },
+  drop_idea:              { say: "forget the greenhouse thing", needs: :greenhouse_idea },
+  defer_idea:             { say: "bring the greenhouse one back up next week", needs: :greenhouse_idea },
+  move_idea:              { say: "move the greenhouse one over to home", needs: :greenhouse_idea },
+  search_ideas:           "did I ever hand you anything about redoing the gutters?",
 
   # --- what it knows ---
-  search_memories:       { say: "what do you know about my sister?", avoid: %i[search_conversations] },
-  search_conversations:  { say: "what did we actually say about the kitchen backsplash a few weeks back?", avoid: %i[search_memories search_ideas] },
-  define_term:           "when I say the plunge I mean the trailhead in Alpine",
-  forget_term:           { say: "bakkie doesn't mean that any more, drop it", needs: :bakkie_defined },
+  search_memories:        { say: "what do you know about my sister?", avoid: %i[search_conversations] },
+  search_conversations:   { say: "what did we actually say about the kitchen backsplash a few weeks back?", avoid: %i[search_memories search_ideas] },
+  define_term:            "when I say the plunge I mean the trailhead in Alpine",
+  forget_term:            { say: "bakkie doesn't mean that any more, drop it", needs: :bakkie_defined },
 
   # --- routines and wiring ---
-  save_routine:          "when I say prep my printer, turn it on, wait a minute, then preheat it",
-  run_routine:           { say: "run my wind-down", needs: :wind_down_routine },
-  edit_routine:          { say: "in my wind-down, make the timer 20 minutes instead of 10", avoid: %i[save_routine], needs: :wind_down_routine },
-  forget_routine:        { say: "delete my wind-down routine, I don't use it", needs: :wind_down_routine },
-  link_records:          { say: "from now on, whenever I log a Strawberry Celsius, tick off my water chore", needs: :water_chore },
-  unlink_records:        { say: "logging coffee shouldn't tick off the chore any more", needs: :coffee_pairing },
+  save_routine:           "when I say prep my printer, turn it on, wait a minute, then preheat it",
+  run_routine:            { say: "run my wind-down", needs: :wind_down_routine },
+  edit_routine:           { say: "in my wind-down, make the timer 20 minutes instead of 10", avoid: %i[save_routine], needs: :wind_down_routine },
+  forget_routine:         { say: "delete my wind-down routine, I don't use it", needs: :wind_down_routine },
+  link_records:           { say: "from now on, whenever I log a Strawberry Celsius, tick off my water chore", needs: :water_chore },
+  unlink_records:         { say: "logging coffee shouldn't tick off the chore any more", needs: :coffee_pairing },
+
+  # --- the inventory: physical things in labelled boxes ---
+  # The one this whole family gets confused with is `lists`. "Add batteries to
+  # the shopping list" and "the batteries are in the tool cubes" are the same
+  # three words about two different subsystems, so every probe here names the
+  # list tool it must not reach for.
+  search_inventory:       { say: "where did I put the camp stove?", avoid: %i[search_events search_memories], needs: :camp_stove_filed },
+  add_inventory_item:     {
+    say:          "the lantern lives in the camping tote now",
+    avoid:        %i[add_list_item stash_idea],
+    needs:        :camping_tote,
+    run:          true,
+    effect_label: "the lantern didn't get filed in the camping tote",
+    effect:       ->(u) { u.boxes.reload.any? { |b| b.name.to_s.match?(/lantern/i) } },
+  },
+  edit_inventory_item:    {
+    say:          "the headlamp isn't in the tote any more, it's out on the attic shelf",
+    avoid:        %i[add_inventory_item edit_list_item],
+    needs:        :headlamp_filed,
+    run:          true,
+    effect_label: "the headlamp is still filed inside the camping tote",
+    effect:       ->(u) { u.boxes.reload.detect { |b| b.name.to_s.match?(/headlamp/i) }&.hierarchy.to_s.match?(/attic shelf > headlamp/i) },
+  },
+  remove_inventory_item:  { say: "the camp stove is gone, we gave it away - take it off the inventory", avoid: %i[remove_list_item edit_inventory_item], needs: :camp_stove_filed },
+  show_inventory_image:   { say: "show me the photo of the camping tote", avoid: %i[search_inventory view_image], needs: :tote_photo },
+  # Seeds the photo one turn before asking, because "this is the camping tote"
+  # is only a sensible thing to say when a picture has just arrived. Without
+  # one the honest answer is a question, and the probe would be scoring the
+  # absence of an image rather than the tool.
+  attach_inventory_image: {
+    say:   "that one's the camping tote, hang onto it",
+    avoid: %i[view_image stash_idea],
+    needs: :camping_tote,
+    seed:  ->(user, convo) {
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: "",
+        metadata: { "kind" => "buddy" },
+      )
+      message.files.attach(
+        io: StringIO.new(BuddyEvalWorld::EVAL_JPEG), filename: "tote.jpg", content_type: "image/jpeg",
+      )
+      message
+    },
+  },
 
   # --- prompts, the app itself, the edges ---
-  answer_prompt:         { say: "answer my check-in for me - say I slept fine", needs: :pending_prompt },
-  skip_prompt:           { say: "skip that check-in for now", needs: :pending_prompt },
-  set_font_size:         "this text is too small, bump it up",
-  check_weather:         "how's the weather right now? I may take the bike",
-  undo:                  { say: "undo that", needs: :undoable_in_thread },
-  request_feature:       { say: "can you order me a pizza?", avoid: %i[call_jil_function trigger_jil_task] },
+  answer_prompt:          { say: "answer my check-in for me - say I slept fine", needs: :pending_prompt },
+  skip_prompt:            { say: "skip that check-in for now", needs: :pending_prompt },
+  set_font_size:          "this text is too small, bump it up",
+  check_weather:          "how's the weather right now? I may take the bike",
+  undo:                   { say: "undo that", needs: :undoable_in_thread },
+  request_feature:        { say: "can you order me a pizza?", avoid: %i[call_jil_function trigger_jil_task] },
 }.freeze
 
 # Tools an `effect:` probe is allowed to actually RUN.
@@ -311,6 +355,9 @@ BUDDY_EVAL_EXECUTABLE = %i[
   add_list_item
   remove_list_item
   edit_list_item
+  add_inventory_item
+  edit_inventory_item
+  remove_inventory_item
   set_timer
   cancel_timer
   alarm

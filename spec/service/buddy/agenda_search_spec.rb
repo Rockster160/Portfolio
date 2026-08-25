@@ -118,6 +118,14 @@ RSpec.describe Buddy::AgendaSearch do
   # "I'd need you to point at that specific row" - while the browser rendered
   # all five off the rules the whole time.
   describe "a series with no rows yet" do
+      # Every time here is placed relative to now, and the suite runs at
+    # whatever o'clock it runs at: late in the evening "3 hours from now" is
+    # tomorrow, and every one of these items fell out of today's window, so
+    # the block passed and failed by the clock rather than by the filter it
+    # is about. Pinned to a Monday morning, which is also what the weekly
+    # rules below need in order to have materialized anything.
+    around { |example| travel_to(Time.utc(2026, 8, 24, 15, 0)) { example.run } }
+
     def series!(name, on: agenda, day: :mon, at: "18:00")
       AgendaSchedule.create!(
         agenda: on, name: name, kind: :event, duration_minutes: 60,

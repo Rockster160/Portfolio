@@ -35,6 +35,15 @@ class BuddyEvalWorld
   # seeded per-conversation is invisible to the turn that asks about it.
   EVAL_THREAD = "Eval · Byte".freeze
 
+  # The smallest thing ByteImageNormalizer and every downstream reader accept as
+  # a JPEG: a real one-pixel image rather than a few magic bytes, so the photo
+  # probes are exercising storage rather than a string that starts with 0xFFD8.
+  EVAL_JPEG = Base64.decode64(
+    "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a" \
+    "HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAA" \
+    "AAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==",
+  ).freeze
+
   class << self
     def build!(user)
       unless Rails.env.local?
@@ -83,7 +92,12 @@ class BuddyEvalWorld
         order.destroy
         AmazonOrder.commit! if AmazonOrder.respond_to?(:commit!)
       else
-        record = klass.constantize.find_by(id: id)
+        # By the model's PRIMARY KEY, which is not always the `id` column: Box
+        # keys on `param_key` and also HAS an `id` column, so `find_by(id:)`
+        # compares the text handle the manifest recorded against a bigint,
+        # finds nothing, and leaves the box standing in their real inventory.
+        model  = klass.constantize
+        record = model.find_by(model.primary_key => id)
         return false if record.nil?
 
         record.destroy!
@@ -116,6 +130,7 @@ class BuddyEvalWorld
     deliveries!
     jil_tasks!
     prompts!
+    inventory!
     self
   end
 
@@ -315,6 +330,44 @@ class BuddyEvalWorld
         content: "Sort out the greenhouse - the glass on the north side needs replacing"
       )
     }
+  end
+
+  # The physical inventory: a shelf, a tote on it, and two things in the tote.
+  #
+  # Built rather than reused, and the names are chosen to be UNAMBIGUOUS in
+  # their real tree rather than merely plausible. Theirs already holds two boxes
+  # called "Garage", a "Rocco Big Camping Chair" and a "Stove counter tops", and
+  # a probe that says "the garage" against two of them is a question with two
+  # right answers - which reads as a description failure when it is nothing of
+  # the sort. `Buddy::Inventory` refuses an exact tie on purpose, so a probe
+  # worded onto one would fail for being correct.
+  #
+  # The tote carries a photo, because `show_inventory_image` has nothing to
+  # reach for without one.
+  def inventory!
+    # A fresh query every time, never `user.boxes` - see `reuse` above. The
+    # association caches on first read and `User.me` is memoized for the life
+    # of the process, so a second build in one process resolves these against
+    # the FIRST build's rows and hangs the photo off a param_key that is no
+    # longer in the table.
+    filed = ->(name) { Box.where(user: user).detect { |box| box.name.to_s.casecmp?(name) } }
+
+    shelf = reuse(filed.call("Attic Shelf")) { Box.create!(user: user, name: "Attic Shelf") }
+    tote  = reuse(filed.call("Camping Tote")) {
+      Box.create!(user: user, name: "Camping Tote", parent_key: shelf.param_key)
+    }
+    { "Camp Stove" => "the little green one", "Headlamp" => nil }.each { |name, note|
+      reuse(filed.call(name)) {
+        Box.create!(user: user, name: name, parent_key: tote.param_key, notes: note)
+      }
+    }
+
+    return if BoxImage.where(box_key: tote.param_key).any?
+
+    photo = track(BoxImage.create!(user: user, box_key: tote.param_key, caption: "packed for the season"))
+    photo.file.attach(
+      io: StringIO.new(EVAL_JPEG), filename: "camping-tote.jpg", content_type: "image/jpeg",
+    )
   end
 
   def glossary!

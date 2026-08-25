@@ -33,6 +33,26 @@ module Buddy
     # which makes Buddy ask instead of act.
     FUZZY_TOLERANCE = 0.34
 
+    # Edit distance, on the singleton because it belongs to nothing in
+    # particular - Buddy::Inventory ranks box names with the same one, and two
+    # copies of a Levenshtein is two places for a fuzzy match to drift.
+    def self.levenshtein(a, b)
+      m, n = a.length, b.length
+      return n if m.zero?
+      return m if n.zero?
+
+      d = Array.new(m + 1) { Array.new(n + 1, 0) }
+      (0..m).each { |i| d[i][0] = i }
+      (0..n).each { |j| d[0][j] = j }
+      (1..m).each { |i|
+        (1..n).each { |j|
+          cost = a[i - 1] == b[j - 1] ? 0 : 1
+          d[i][j] = [d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost].min
+        }
+      }
+      d[m][n]
+    end
+
     # Words that say HOW MANY, not WHICH.
     #
     # "another water" is water, again - the chore is `water` and the rest is the
@@ -785,20 +805,7 @@ module Buddy
     end
 
     def levenshtein(a, b)
-      m, n = a.length, b.length
-      return n if m.zero?
-      return m if n.zero?
-
-      d = Array.new(m + 1) { Array.new(n + 1, 0) }
-      (0..m).each { |i| d[i][0] = i }
-      (0..n).each { |j| d[0][j] = j }
-      (1..m).each { |i|
-        (1..n).each { |j|
-          cost = a[i - 1] == b[j - 1] ? 0 : 1
-          d[i][j] = [d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost].min
-        }
-      }
-      d[m][n]
+      self.class.levenshtein(a, b)
     end
   end
 end

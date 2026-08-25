@@ -51,6 +51,10 @@ module Buddy
       # No sections of its own: the delivery list is a lookup, not something
       # worth carrying in every prompt.
       deliveries: [],
+      # Same: eighty-odd boxes and items is a page of prompt to answer a
+      # question nobody asks most days, and `search_inventory` reaches all of
+      # it in one call when they do.
+      inventory:  [],
     }.freeze
 
     # Granted rather than assumed, for the same reason `mac` is: both reach
@@ -73,6 +77,7 @@ module Buddy
       prompts:    "the app's prompts and surveys",
       mac:        "commands on the Mac",
       deliveries: "packages on their way",
+      inventory:  "the inventory of boxes and where things are stored",
     }.freeze
 
     def all

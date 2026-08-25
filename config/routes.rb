@@ -332,6 +332,8 @@ Rails.application.routes.draw do
     get :export
     post :import
     post :restore
+    post :attach_image
+    delete :remove_image
   end
   get "/b/:id" => "inventory_management#box", as: :box
 

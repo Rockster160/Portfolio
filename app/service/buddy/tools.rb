@@ -47,6 +47,11 @@ module Buddy
     # Read in two places, which is the point of it being one list:
     # `function_schema` appends IMMEDIATE_NOTE to each of these descriptions,
     # and Buddy::GPT::Turn holds one back when the request named a time.
+    #
+    # The two inventory entries are here for the same reason as the two list
+    # ones: neither carries a time argument anywhere, so "put the tent in the
+    # tote when I get home" is a request to file it LATER, and filing it now
+    # tells the inventory the tent is somewhere it isn't yet.
     IMMEDIATE_ACTION_TOOLS = %i[
       call_jil_function
       trigger_jil_task
@@ -55,6 +60,8 @@ module Buddy
       print_again
       add_list_item
       remove_list_item
+      add_inventory_item
+      remove_inventory_item
     ].freeze
 
     # The one lesson none of their own descriptions can carry on its own,

@@ -389,7 +389,7 @@ RSpec.describe "Buddy commands that named a time" do
       it "gates every tool that acts on the world with no notion of when" do
         expect(Buddy::Tools::IMMEDIATE_ACTION_TOOLS).to contain_exactly(
           :call_jil_function, :trigger_jil_task, :run_routine, :mac_command, :print_again,
-          :add_list_item, :remove_list_item
+          :add_list_item, :remove_list_item, :add_inventory_item, :remove_inventory_item
         )
       end
 

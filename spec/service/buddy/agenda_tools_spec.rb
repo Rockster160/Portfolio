@@ -295,6 +295,14 @@ RSpec.describe "Buddy agenda tools" do
     # materialized Monday leaves 167 pointing at Alchemibluum, and next Monday
     # is back on the wrong calendar.
     describe "a repeating item" do
+      # Every time here is placed relative to now, and the suite runs at
+      # whatever o'clock it runs at: late in the evening "3 hours from now" is
+      # tomorrow, and every one of these items fell out of today's window, so
+      # the block passed and failed by the clock rather than by the filter it
+      # is about. Pinned to a Monday morning, which is also what the weekly
+      # rules below need in order to have materialized anything.
+      around { |example| travel_to(Time.utc(2026, 8, 24, 15, 0)) { example.run } }
+
       def dinner!(on: personal, day: "mon")
         AgendaSchedule.create!(
           agenda: on, name: "Kevin's meal & pilaf", kind: :event, duration_minutes: 60,
@@ -323,16 +331,15 @@ RSpec.describe "Buddy agenda tools" do
       # Tue-Fri had no row at all, which is what made them unreachable. The rule
       # is the only thing to edit, so `series` isn't something they have to say.
       it "edits the rule for an occurrence that has no row" do
-        # A Friday series, asked about on the Monday: four days out, well past
-        # MATERIALIZE_WINDOW, so nothing has been written for it.
-        travel_to(Time.zone.parse("2026-08-24 09:00")) do
-          schedule = dinner!(day: "fri")
-          expect(schedule.agenda_items).to be_empty
+        # A Friday series, asked about on the Monday the block is pinned to:
+        # four days out, well past MATERIALIZE_WINDOW, so nothing has been
+        # written for it.
+        schedule = dinner!(day: "fri")
+        expect(schedule.agenda_items).to be_empty
 
-          run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours" })
+        run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours" })
 
-          expect(schedule.reload.agenda_id).to eq(ours.id)
-        end
+        expect(schedule.reload.agenda_id).to eq(ours.id)
       end
 
       it "says the series moved rather than an item" do

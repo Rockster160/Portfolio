@@ -31,10 +31,22 @@ class Box < ApplicationRecord
   # belongs_to :parent, class_name: "Box", optional: true
   # has_many :boxes, dependent: :destroy, foreign_key: :parent_id, inverse_of: :parent
 
+  # Photos of what's actually in the box - see BoxImage for why they hang off a
+  # row of their own rather than `has_many_attached` here.
+  has_many :images, class_name: "BoxImage", primary_key: :param_key, foreign_key: :box_key, inverse_of: :box, dependent: :destroy
+
   before_save :set_param_key, if: :new_record?
   before_save :set_hierarchy, if: :reset_hierarchy?
   before_save :cascade_hierarchy, if: :hierarchy_ids_changed?
   before_save -> { self.parent_key = parent_key.presence }, if: :parent_key_changed?
+
+  # `empty` is what makes a row read as an item rather than a container, and
+  # `set_hierarchy` only ever clears it on the box being moved INTO. The box
+  # something moved out of kept claiming contents it no longer had - the
+  # Inventory app patched that from the outside with a `reset_empty` param on
+  # the request, so it only ever held for a move made through that one screen.
+  after_destroy :refresh_former_parent!
+  after_save :refresh_former_parent!, if: :saved_change_to_parent_key?
 
   orderable sort_order: :desc, scope: ->(box) {
     box.parent&.boxes || box.user.boxes.where(parent_key: nil)
@@ -51,6 +63,10 @@ class Box < ApplicationRecord
   search_terms :id, :name, :hierarchy, :description, :notes
 
   json_attributes :data, :hierarchy_data
+
+  # One extra pair of queries for a whole level of the tree instead of two per
+  # box. Every place that renders boxes carrying photos wants this.
+  scope :with_photos, -> { includes(images: { file_attachment: :blob }) }
 
   validates :name, presence: true
 
@@ -73,7 +89,25 @@ class Box < ApplicationRecord
   end
 
   def contents
-    boxes.ordered
+    boxes.ordered.with_photos
+  end
+
+  # Everything underneath, parents before children, which is the order they have
+  # to come BACK in - a child recreated before its parent has no hierarchy to
+  # compute. Reads the whole user's boxes once and walks them in memory rather
+  # than a query per level.
+  def descendants
+    pool = user.boxes.where.not(param_key: param_key).ordered.to_a
+    found = []
+    frontier = [param_key]
+    until frontier.empty?
+      children = pool.select { |b| frontier.include?(b.parent_key) }
+      break if children.empty?
+
+      found.concat(children)
+      frontier = children.map(&:param_key)
+    end
+    found
   end
 
   def level
@@ -88,7 +122,15 @@ class Box < ApplicationRecord
     result = super(opts.except(:include_hierarchy_ids))
     # Always include hierarchy_ids when requested (for search results with clickable breadcrumbs)
     result[:hierarchy_ids] = hierarchy_ids if opts[:include_hierarchy_ids]
+    result[:images] = images_wire
     result
+  end
+
+  # `sort_by` rather than the `ordered` scope: a scope on a preloaded
+  # association issues a fresh query per box, which is the N+1 `with_photos`
+  # exists to avoid.
+  def images_wire
+    images.sort_by(&:created_at).filter_map(&:wire)
   end
 
   def to_param
@@ -108,6 +150,19 @@ class Box < ApplicationRecord
   end
 
   private
+
+  # The box this one just left (or, on destroy, the one it was in) goes back to
+  # reading as an item when nothing is left inside it.
+  def refresh_former_parent!
+    key = destroyed? ? parent_key : saved_change_to_parent_key&.first
+    return if key.blank?
+
+    former = ::Box.find_by(param_key: key)
+    return if former.nil? || former.param_key == param_key
+
+    was_empty = former.boxes.none?
+    former.update!(empty: was_empty) if former.empty != was_empty
+  end
 
   def broadcast_create
     broadcast!(action: :create)
@@ -158,7 +213,13 @@ class Box < ApplicationRecord
   end
 
   def set_hierarchy
-    self.hierarchy_data = parent.hierarchy_data + [{ id: parent.param_key, name: parent.name }] if parent
+    # Cleared rather than left alone when there's no parent. Moving a box out to
+    # the top level ran this with `parent` nil, which skipped the assignment
+    # entirely and left the OLD crumbs in place - so `hierarchy_ids` emptied and
+    # `hierarchy` on the very next line rebuilt itself from the stale trail. A
+    # tote dragged out of the basement went on reading "Basement > Camping Tote"
+    # with nothing above it.
+    self.hierarchy_data = parent ? parent.hierarchy_data + [{ id: parent.param_key, name: parent.name }] : []
     self.hierarchy_ids = ((parent&.hierarchy_ids || []) + [parent&.param_key]).compact
     self.hierarchy = (hierarchy_data.pluck(:name) + [name]).join(" > ")
     parent.update!(empty: false) if parent && parent.empty?

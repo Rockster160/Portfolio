@@ -19,7 +19,7 @@
   <% @requests.each do |request| %>
     <div class="fr-row fr-status-<%= request.status %>" data-fr-row data-fr-id="<%= request.id %>">
       <div class="fr-head">
-        <div class="fr-title"><%= request.title %></div>
+        <div class="fr-title"><%= request.id %> <%= request.title %></div>
         <div class="fr-meta">
           <%= request.user&.first_name %>
           ·

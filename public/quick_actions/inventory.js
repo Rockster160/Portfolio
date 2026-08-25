@@ -3219,8 +3219,146 @@ const loadInventory = () => {
       editBoxForm.querySelector("input[name='notes']").value = boxNotes;
       editBoxForm.querySelector("textarea[name='description']").value =
         boxDescription;
+      renderPhotos(li);
     }
   }
+
+  // ============================================================================
+  // Photos
+  // ============================================================================
+
+  // The li carries its own photos in `data-images`, put there by the same
+  // partial that drew it, so opening the modal costs no request. Both writes
+  // below hand back the whole box, and that payload is what the attribute is
+  // reset from — one source for what the strip shows.
+  const photoWrapper = document.querySelector("#edit-modal .box-photos");
+  const photoStrip = photoWrapper?.querySelector(".photo-strip");
+  const photoInput = photoWrapper?.querySelector(".photo-input");
+
+  function selectedPhotoLi() {
+    const key = editBoxForm.querySelector("input[name='box_id']").value;
+    return key
+      ? document.querySelector(`li[data-key="${CSS.escape(key)}"]`)
+      : null;
+  }
+
+  function renderPhotos(li) {
+    if (!photoStrip) return;
+
+    photoStrip.innerHTML = "";
+    let images = [];
+    try {
+      images = JSON.parse(li?.dataset.images || "[]");
+    } catch (_err) {
+      images = [];
+    }
+
+    images.forEach((image) => {
+      const figure = document.createElement("figure");
+      figure.className = "photo";
+      figure.dataset.imageId = image.id;
+
+      const link = document.createElement("a");
+      link.href = image.url;
+      link.target = "_blank";
+      link.rel = "noopener";
+
+      const img = document.createElement("img");
+      img.src = image.url;
+      img.alt = image.caption || image.filename || "Box photo";
+      link.appendChild(img);
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "photo-remove";
+      remove.title = "Remove photo";
+      remove.innerText = "×";
+
+      figure.appendChild(link);
+      figure.appendChild(remove);
+      if (image.caption) {
+        const caption = document.createElement("figcaption");
+        caption.innerText = image.caption;
+        figure.appendChild(caption);
+      }
+      photoStrip.appendChild(figure);
+    });
+  }
+
+  // The camera on the row is the only sign a collapsed item has a photo at
+  // all, so it moves with the count rather than waiting for a reload.
+  function applyPhotos(li, images) {
+    if (!li) return;
+
+    li.dataset.images = JSON.stringify(images || []);
+    const summary = li.querySelector(":scope > details > summary");
+    let marker = summary?.querySelector(".item-photo");
+    if (images && images.length) {
+      if (!marker && summary) {
+        marker = document.createElement("span");
+        marker.className = "item-photo";
+        marker.innerText = "📷";
+        summary.appendChild(marker);
+      }
+      if (marker) {
+        marker.title = `${images.length} photo${images.length === 1 ? "" : "s"}`;
+      }
+    } else {
+      marker?.remove();
+    }
+    renderPhotos(li);
+  }
+
+  photoInput?.addEventListener("change", () => {
+    const li = selectedPhotoLi();
+    const files = Array.from(photoInput.files || []);
+    if (!li || files.length === 0) return;
+
+    const body = new FormData();
+    body.append("box_id", li.dataset.key);
+    files.forEach((file) => body.append("files[]", file));
+    photoInput.value = "";
+    photoWrapper.classList.add("uploading");
+
+    fetch("/inventory/attach_image", {
+      method: "POST",
+      headers: { accept: "application/json" },
+      body: body,
+    })
+      .then((r) => r.json().then((data) => ({ ok: r.ok, data: data })))
+      .then(({ ok, data }) => {
+        if (!ok) throw new Error(data.error || "Upload failed");
+
+        applyPhotos(li, (data.data || data).images);
+      })
+      .catch((err) => showFlash(err.message || "Upload failed"))
+      .finally(() => photoWrapper.classList.remove("uploading"));
+  });
+
+  photoStrip?.addEventListener("click", (evt) => {
+    const button = evt.target.closest(".photo-remove");
+    if (!button) return;
+
+    const li = selectedPhotoLi();
+    const imageId = button.closest(".photo").dataset.imageId;
+    if (!li || !imageId) return;
+
+    fetch("/inventory/remove_image", {
+      method: "DELETE",
+      headers: {
+        accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ box_id: li.dataset.key, image_id: imageId }),
+    })
+      .then((r) => r.json().then((data) => ({ ok: r.ok, data: data })))
+      .then(({ ok, data }) => {
+        if (!ok) throw new Error(data.error || "Couldn't remove that photo");
+
+        applyPhotos(li, (data.data || data).images);
+      })
+      .catch((err) => showFlash(err.message || "Couldn't remove that photo"));
+  });
 };
 
 document.addEventListener("DOMContentLoaded", () => {

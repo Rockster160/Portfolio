@@ -5,7 +5,7 @@ class InventoryManagementController < ApplicationController
   layout "quick_actions"
 
   def show
-    @boxes = current_user.boxes.where(parent_key: nil).ordered
+    @boxes = current_user.boxes.where(parent_key: nil).ordered.with_photos
   end
 
   def box # boxes#show
@@ -71,6 +71,35 @@ class InventoryManagementController < ApplicationController
     box.parent.update!(empty: true) if box.parent && box.parent.boxes.empty?
 
     serialize box, merge: { deleted: true }
+  end
+
+  # Photos of what's actually inside a box, so "which tote is the camping gear
+  # in" has an answer you can look at. Attaching goes through ByteImageIntake:
+  # an unreadable HEIC and a 30MB PNG are refused here on exactly the terms
+  # they're refused in Byte, rather than on a second set written out again.
+  def attach_image
+    box = current_user.boxes.from_key(params[:box_id])
+    images = ByteImageIntake.call(params[:files])
+    return render json: { error: images.error }, status: :unprocessable_entity unless images.ok?
+
+    images.blobs.each { |blob|
+      image = box.images.create!(user: current_user)
+      image.file.attach(blob)
+    }
+    box.broadcast!
+
+    serialize box.reload
+  end
+
+  def remove_image
+    box = current_user.boxes.from_key(params[:box_id])
+    image = box.images.find_by(id: params[:image_id])
+    return render json: { error: "no image #{params[:image_id]} on that box" }, status: :not_found if image.nil?
+
+    image.destroy!
+    box.broadcast!
+
+    serialize box.reload
   end
 
   def export

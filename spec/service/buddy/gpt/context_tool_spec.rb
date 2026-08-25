@@ -151,6 +151,14 @@ RSpec.describe Buddy::GPT::ContextTool do
     # briefing, in three paragraphs. So the ones with no bearing on his day
     # stop arriving, the way the chore roster and `leave_by` already do.
     describe "a partner's calendar" do
+      # Every time here is placed relative to now, and the suite runs at
+      # whatever o'clock it runs at: late in the evening "3 hours from now" is
+      # tomorrow, and every one of these items fell out of today's window, so
+      # the block passed and failed by the clock rather than by the filter it
+      # is about. Pinned to a Monday morning, which is also what the weekly
+      # rules below need in order to have materialized anything.
+      around { |example| travel_to(Time.utc(2026, 8, 24, 15, 0)) { example.run } }
+
       let(:partner) { create(:user) }
       let(:hers) {
         create(:agenda, user: partner).tap { |a| AgendaShare.create!(agenda: a, user: user, permission: :viewer) }

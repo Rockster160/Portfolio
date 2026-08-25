@@ -2,12 +2,15 @@
 <% open_box = @open.to_i >= box.level %>
 <% preload = open_box if preload.nil? %>
 
-<li data-type="<%= box.empty? ? :item : :box %>" data-id="<%= box.id %>" data-key="<%= box.param_key %>" data-parent-key="<%= box.parent_key %>" data-sort-order="<%= box.sort_order %>" data-hierarchy="<%= box.hierarchy %>">
+<li data-type="<%= box.empty? ? :item : :box %>" data-id="<%= box.id %>" data-key="<%= box.param_key %>" data-parent-key="<%= box.parent_key %>" data-sort-order="<%= box.sort_order %>" data-hierarchy="<%= box.hierarchy %>" data-images="<%= box.images_wire.to_json %>">
   <details <%= :open if open_box %>>
     <summary>
       <span class="item-name"><%= box.name %></span>
       <span class="item-notes"><%= box.notes %></span>
       <span class="item-description hidden"><%= box.description %></span>
+      <% if box.images.any? %>
+        <span class="item-photo" title="<%= pluralize(box.images.size, "photo") %>">📷</span>
+      <% end %>
     </summary>
     <ul data-box-id="<%= box.id %>">
       <% if preload %>
