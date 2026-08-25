@@ -525,6 +525,8 @@ module Buddy
       queasy:        "droopy half-lids, frown, big sigh — overwhelmed, stressed, uneasy, 'bleh', exasperated",
       dizzy:         "spiral eyes, wobbly mouth — dazed, spun-out, overwhelmed, frazzled, squirrel-brained, too much at once",
       unamused:      "flat half-lidded eyes, straight-line mouth — deadpan, skeptical, distinctly unimpressed",
+      # Moss + Glimmer
+      dismayed:      "worried brows, mouth open, hands up — caught out, put out, 'ah, that didn't work' (about the thing, never about them)",
       # Suki extras
       cheery:        "eyes-closed open-mouth beam, wing to a blushing cheek — warm, delighted, tickled, quietly pleased",
       offering:      "holding up a little tub of food — bringing you something, being helpful, the sugar-beak move",

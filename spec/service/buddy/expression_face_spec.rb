@@ -117,6 +117,27 @@ RSpec.describe Buddy::ExpressionState do
         targets = block.scan(/"[^"]+":\s*"([^"]+)"/).flatten.map(&:to_sym)
         expect(targets - Buddy::Faces.all(theme)).to be_empty
       end
+
+      # A face with no hint reaches the model as a bare name. It stays in the
+      # list, so it can still be picked — picked on the strength of the word
+      # alone, which is how a theme ends up wearing something nobody meant.
+      it "#{theme} describes every face it offers" do
+        missing = Buddy::Faces.selectable(theme).reject { |f| Buddy::Personality::FACE_HINTS[f] }
+        expect(missing).to be_empty
+      end
+    end
+
+    # The check-in is the one expression change with no model turn behind it:
+    # the person taps how they're doing and the pet's face answers. `set`
+    # validates against the art on disk and does nothing at all when it's
+    # missing, so a theme without one of these fails SILENTLY — Suki went
+    # without `sad` for weeks and a tap on "rough" moved nothing.
+    it "every theme can wear both check-in faces" do
+      %w[byte moss glimmer suki].each do |theme|
+        %i[happy sad].each do |face|
+          expect(Buddy::Faces.valid?(theme, face)).to be(true), "#{theme} cannot render #{face}"
+        end
+      end
     end
   end
 

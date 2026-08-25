@@ -4492,7 +4492,7 @@ $byte_full_body: focused confused surprised playful;
 // every face in the folder is wired so the debug picker can switch to any of
 // them. Each entry must have a matching face_#{name}.png or precompile fails.
 $byte_expressions: neutral neutral_blush happy uwu encouraging annoyed sad crying thinking nerd sleeping focused confused surprised playful;
-$moss_expressions: neutral happy grin star loving wink sad crying surprised shocked angry frustrated content queasy sleeping unamused thinking dizzy;
+$moss_expressions: neutral happy grin star loving wink sad crying surprised shocked angry frustrated content queasy sleeping unamused thinking dizzy confused focused dismayed;
 @each $expr in $byte_expressions {
   .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$expr}"]
     .byte-buddy-face {
@@ -4516,9 +4516,9 @@ $byte_expr_aliases: ("celebrating": "happy");
 }
 // Server-driven moods that Moss has no identically-named art for, aliased to
 // the closest expression: encouraging→grin (warm beam), celebrating→star
-// (starry-eyed), focused→surprised (alert/careful). neutral/happy/thinking/
-// sleeping map directly to same-named faces above.
-$moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "surprised");
+// (starry-eyed). `focused` used to sit here on top of surprised and is Moss's
+// own art now.
+$moss_expr_aliases: ("encouraging": "grin", "celebrating": "star");
 @each $mood, $face in $moss_expr_aliases {
   .byte-buddy-hero[data-buddy-theme="moss"][data-buddy-expression="#{$mood}"]
     .byte-buddy-face {
@@ -4529,28 +4529,27 @@ $moss_expr_aliases: ("encouraging": "grin", "celebrating": "star", "focused": "s
 // Glimmer (Chelsea's firefly) — spliced from a 9-pose sheet, so a smaller
 // raster set than Moss. Each name here must have a matching
 // buddy/glimmer/face_#{name}.png or precompile fails.
-$glimmer_expressions: neutral happy grin sad content surprised loving star sleeping;
+$glimmer_expressions: neutral happy grin sad content surprised loving star sleeping crying thinking focused dismayed;
 @each $expr in $glimmer_expressions {
   .byte-buddy-hero[data-buddy-theme="glimmer"][data-buddy-expression="#{$expr}"]
     .byte-buddy-face {
     background-image: image-url("buddy/glimmer/face_#{$expr}.png");
   }
 }
-// Moods Glimmer has no dedicated art for, aliased to the closest of her nine
-// faces: the harsher negatives fold into sad, alert/off-kilter into surprised,
-// thinking into her calm meditation (content), and the server's celebratory
-// moods into grin/star.
+// Moods Glimmer has no dedicated art for, aliased to the closest face she does
+// have: the harsher negatives fold into sad, alert/off-kilter into surprised,
+// puzzlement onto the hand-at-chin thinking pose (it already carries the
+// question mark), and the server's celebratory moods into grin/star.
+// crying/thinking/focused used to be aliases here and are her own art now.
 $glimmer_expr_aliases: (
   "wink": "happy",
-  "crying": "sad",
   "angry": "sad",
   "frustrated": "sad",
   "queasy": "sad",
   "unamused": "sad",
   "shocked": "surprised",
   "dizzy": "surprised",
-  "focused": "surprised",
-  "thinking": "content",
+  "confused": "thinking",
   "encouraging": "grin",
   "celebrating": "star",
 );
@@ -4563,7 +4562,7 @@ $glimmer_expr_aliases: (
 
 // Suki (Eve) — a full raster set of her purple sunbird. Each name here must
 // have a matching buddy/suki/face_#{name}.png or precompile fails.
-$suki_expressions: neutral happy cheery offering excited loving dizzy annoyed sleeping;
+$suki_expressions: neutral happy cheery offering excited loving dizzy annoyed sleeping surprised focused sad;
 @each $expr in $suki_expressions {
   .byte-buddy-hero[data-buddy-theme="suki"][data-buddy-expression="#{$expr}"]
     .byte-buddy-face {
@@ -4572,16 +4571,15 @@ $suki_expressions: neutral happy cheery offering excited loving dizzy annoyed sl
 }
 // Server- and system-driven expressions Suki has no identically-named art for,
 // aliased to the closest sunbird face so a proposal state, a check-in, the
-// thinking/sleeping system faces, or a stale stored mood always render. Her
-// set is relentlessly upbeat by design (no sad/crying face), so the down
-// moods fall back to her calm neutral. `overwhelmed` doubles onto dizzy.
+// thinking/sleeping system faces, or a stale stored mood always render.
+// `overwhelmed` doubles onto dizzy, `crying` onto her teary sad. sad/focused
+// were both parked on neutral for want of art — a check-in of "rough" moved
+// nothing at all — and are her own faces now.
 $suki_expr_aliases: (
   "thinking": "neutral",
-  "sad": "neutral",
-  "crying": "neutral",
+  "crying": "sad",
   "celebrating": "excited",
   "encouraging": "cheery",
-  "focused": "neutral",
   "overwhelmed": "dizzy",
 );
 @each $mood, $face in $suki_expr_aliases {

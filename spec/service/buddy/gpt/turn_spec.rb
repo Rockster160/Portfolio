@@ -1120,6 +1120,45 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
+  # The arm that stops "show me the backyard" being answered from memory. It
+  # hangs entirely off a lookahead for a camera noun, so a noun it can't see is
+  # the whole arm not firing — prod 4612 and 4618 both wrote "back yard" with a
+  # space, and Buddy answered from the thread's own history of failures rather
+  # than calling anything, twice more insisting it had.
+  describe "CAMERA_LOOK_RX on the nouns people actually type" do
+    [
+      "Show me the back yard",
+      "can you show me the back yard?",
+      "Show me the backyard",
+      "show me the drive way",
+      "Show me the driveway",
+      "show me the front door",
+      "pull up the door bell",
+      "who was at the doorbell",
+      "let me see the porch",
+    ].each do |asked|
+      it "sees a camera in #{asked.inspect}" do
+        expect(asked).to match(described_class::CAMERA_LOOK_RX)
+      end
+    end
+
+    # Still a lookup about a camera, not a request to watch for one later.
+    it "steps aside for a forward-looking watch" do
+      asked = "let me know the next time somebody comes to the back yard"
+      expect(asked).to match(described_class::CAMERA_WATCH_RX)
+    end
+
+    [
+      "show me the shopping list",
+      "what's on the calendar",
+      "show me how much I spent",
+    ].each do |asked|
+      it "stays out of #{asked.inspect}" do
+        expect(asked).not_to match(described_class::CAMERA_LOOK_RX)
+      end
+    end
+  end
+
   describe "the *click*" do
     before { allow(described_class).to receive(:resolve_call).and_return([{ status: "proposed" }, nil]) }
 

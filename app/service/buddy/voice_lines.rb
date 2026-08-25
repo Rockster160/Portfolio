@@ -231,11 +231,16 @@ module Buddy
     # `focused` earns its place on the ok side for the opposite reason: it is
     # the face for being MID-TASK, which is what a turn that just ran something
     # actually is, rather than a reaction to how it turned out.
+    #
+    # Moss and Glimmer have `dismayed` for it now — worried brows, mouth open —
+    # which is nearer the moment than anything either of them had. Glimmer was
+    # wearing `surprised` here for want of a better face, and startled is not
+    # the same thing as sorry.
     ACTED_MOODS = {
       byte:    { ok: %i[happy focused nerd encouraging], failed: %i[confused annoyed sad] },
-      moss:    { ok: %i[happy content], failed: %i[unamused queasy sad] },
+      moss:    { ok: %i[happy content], failed: %i[dismayed unamused queasy sad] },
       suki:    { ok: %i[cheery happy offering], failed: %i[annoyed dizzy] },
-      glimmer: { ok: %i[content happy], failed: %i[sad surprised] },
+      glimmer: { ok: %i[content happy], failed: %i[dismayed sad] },
     }.freeze
 
     # A line and the face that goes with it: `{ text:, mood: }`. `mood` is nil

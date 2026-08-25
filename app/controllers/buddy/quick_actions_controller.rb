@@ -168,9 +168,11 @@ module Buddy
     end
 
     def update_expression_for_mood(conversation, mood)
-      # Use only faces both themes render (Byte and Moss differ; celebrating/
-      # focused exist on neither now). Check-in reflects the person's mood
-      # back through Buddy's face.
+      # Check-in reflects the person's mood back through Buddy's face, so both
+      # faces have to exist on EVERY theme — `set` validates against the art on
+      # disk and silently does nothing when it doesn't. Suki had no `sad` until
+      # 2026-08-25, which meant a check-in of "low" or "rough" moved her face
+      # not at all: the one moment the pet most needed to look like it heard.
       expression = case mood
       when "great"        then :happy
       when "good", "okay" then :happy

@@ -35,13 +35,15 @@ RSpec.describe "Glimmer face assets" do
   end
 
   # The roster and the framing together, because they're one question asked of
-  # one set of files: are the nine poses the stylesheet wires up all here, and
-  # do they all sit in the middle of their canvas. Nine examples decoded nine
-  # PNGs one example at a time; the report is the same either way, because a
+  # one set of files: are the poses the stylesheet wires up all here, and do
+  # they all sit in the middle of their canvas. One example decoding thirteen
+  # PNGs rather than thirteen; the report is the same either way, because a
   # failure lists every pose that drifted and where it landed.
-  it "ships the nine poses the stylesheet wires up, each centered in its canvas" do
-    expect(faces.map { |p| p.basename(".png").to_s.delete_prefix("face_") })
-      .to match_array(%w[content grin happy loving neutral sad sleeping star surprised])
+  it "ships the poses the stylesheet wires up, each centered in its canvas" do
+    poses    = faces.map { |p| p.basename(".png").to_s.delete_prefix("face_") }
+    expected = "content crying dismayed focused grin happy loving neutral " \
+               "sad sleeping star surprised thinking"
+    expect(poses).to match_array(expected.split)
 
     drifted = faces.filter_map { |path|
       center = content_center(path, alpha_floor)

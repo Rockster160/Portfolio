@@ -1264,8 +1264,14 @@ module Buddy
       # `call_jil_function`'s own "never tell them you can't check something
       # that has a function for it". All landed, and 3790 broke the newest one
       # 26 minutes after it shipped. The description is not the lever.
+      # The nouns tolerate a space in the middle, because people write them that
+      # way and the whole arm hangs off this lookahead. Prod 4612/4618: "Show me
+      # the back yard" and "can you show me the back yard?" both missed on the
+      # space alone, the nudge never fired, and Buddy answered from the thread's
+      # own history of failures — twice more after that, claiming a call it had
+      # not made. One space cost four turns.
       CAMERA_LOOK_RX = /
-        (?=.*\b(?:camera|doorbell|door|driveway|backyard|porch)\b)
+        (?=.*\b(?:camera|door\s*bell|door|drive\s*way|back\s*yard|porch)\b)
         (?:
             \bshow\s+(?:me|us)\b
           | \b(?:let\s+me|let\s+us|can\s+i|could\s+i|wanna|want\s+to|lemme)\s+see\b

@@ -91,8 +91,11 @@ RSpec.describe Buddy::Personality do
       # allowed to use any of these words for its own reasons.
       faces = described_class.mood_block("suki")
       expect(faces).not_to include("`nerd`", "`uwu`", "`star`", "`wink`")
-      # Her set is deliberately upbeat — no sad/crying face at all.
-      expect(faces).not_to include("`sad`", "`crying`")
+      # She has her own sad face now (2026-08-25) — before it, a check-in of
+      # "rough" had nothing to move her with. `crying` is still only an alias
+      # onto it, and an alias renders without being selectable.
+      expect(faces).to include("`sad`")
+      expect(faces).not_to include("`crying`")
       # sleeping is system-driven, never a selectable mood.
       expect(faces).not_to include("`sleeping`")
       # dizzy carries the overwhelmed read for her.
