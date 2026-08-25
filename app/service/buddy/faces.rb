@@ -6,7 +6,11 @@ module Buddy
     module_function
 
     # Driven by connection / usage-cap state, not moods Buddy chooses.
-    SYSTEM = %i[sleeping sleeping_frown].freeze
+    #
+    # `sleeping_frown` was here too. Nothing ever set it — Buddy::SleepGuard
+    # reaches for `:sleeping` for both the usage cap and an outage — so it was a
+    # face only Byte had art for and nobody could ever see. Removed 2026-08-25.
+    SYSTEM = %i[sleeping].freeze
 
     # Transitional-only: the face shown WHILE a reply is being generated.
     # It's the pet's "working on it" state, not a delivered expression — by
@@ -43,12 +47,6 @@ module Buddy
     # it returns after a lull (see BuddyExpressionResetWorker).
     def default
       :neutral
-    end
-
-    # Faces every theme can render — safe for SERVER-driven expression sets
-    # (proposal states, check-in) that must show up on both Byte and Moss.
-    def common
-      %i[neutral happy sad crying thinking]
     end
 
     def valid?(theme, expression)

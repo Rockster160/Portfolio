@@ -274,11 +274,11 @@ RSpec.describe Buddy::VoiceLines do
     end
 
     it "wears the miss when the turn didn't land" do
-      20.times { expect(described_class.acted_mood(:byte, ok: false)).to be_in(%i[annoyed sad]) }
+      20.times { expect(described_class.acted_mood(:byte, ok: false)).to be_in(%i[confused annoyed sad]) }
     end
 
     it "wears something pleased when it did" do
-      20.times { expect(described_class.acted_mood(:byte)).to be_in(%i[happy nerd encouraging]) }
+      20.times { expect(described_class.acted_mood(:byte)).to be_in(%i[happy focused nerd encouraging]) }
     end
   end
 end

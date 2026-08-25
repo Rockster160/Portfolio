@@ -224,10 +224,15 @@ module Buddy
     # `failed` is for having done something that DIDN'T land. A pet that beams
     # while telling someone it couldn't do the thing is worse than one that sat
     # still, and "puzzled, put out, closer to a frown" is what the moment is.
-    # Byte has no confused face, so `annoyed` (furrowed brow, small scowl) and
-    # `sad` (downcast, a frown) are the honest ones it does have.
+    # Byte's `confused` was drawn for exactly this — small frown, uncertain
+    # eyes, a question mark — so it leads, with `annoyed` behind it for the
+    # times it's more exasperating than baffling.
+    #
+    # `focused` earns its place on the ok side for the opposite reason: it is
+    # the face for being MID-TASK, which is what a turn that just ran something
+    # actually is, rather than a reaction to how it turned out.
     ACTED_MOODS = {
-      byte:    { ok: %i[happy nerd encouraging], failed: %i[annoyed sad] },
+      byte:    { ok: %i[happy focused nerd encouraging], failed: %i[confused annoyed sad] },
       moss:    { ok: %i[happy content], failed: %i[unamused queasy sad] },
       suki:    { ok: %i[cheery happy offering], failed: %i[annoyed dizzy] },
       glimmer: { ok: %i[content happy], failed: %i[sad surprised] },

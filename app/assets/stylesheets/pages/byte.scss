@@ -4458,6 +4458,22 @@ dialog.byte-modal {
 .byte-buddy-hero[data-buddy-theme="byte"] .byte-buddy-body {
   background-image: image-url("buddy/byte/body.png");
 }
+// TRANSITIONAL. Byte is mid-move from the overlay system to the one every
+// other companion uses: the faces below are complete characters — body,
+// expression, bubbles, the lot — baked into one PNG, so the body layer has to
+// come off under them or the slime renders twice. The older faces are still
+// eyes-and-mouth over `body.png` and still need it.
+//
+// When the rest of Byte's set is redrawn as full characters, this block and
+// the `body.png` line above BOTH go, and Byte's rule becomes the one-liner
+// Moss/Suki/Glimmer already have.
+$byte_full_body: focused confused surprised playful;
+@each $expr in $byte_full_body {
+  .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$expr}"]
+    .byte-buddy-body {
+    background-image: none;
+  }
+}
 .byte-buddy-hero[data-buddy-theme="moss"] .byte-buddy-body {
   background-image: none;
 }
@@ -4475,7 +4491,7 @@ dialog.byte-modal {
 // Face per theme + expression. Both themes now ship a full raster set (PNG);
 // every face in the folder is wired so the debug picker can switch to any of
 // them. Each entry must have a matching face_#{name}.png or precompile fails.
-$byte_expressions: neutral neutral_blush happy uwu encouraging annoyed sad crying thinking nerd sleeping sleeping_frown;
+$byte_expressions: neutral neutral_blush happy uwu encouraging annoyed sad crying thinking nerd sleeping focused confused surprised playful;
 $moss_expressions: neutral happy grin star loving wink sad crying surprised shocked angry frustrated content queasy sleeping unamused thinking dizzy;
 @each $expr in $byte_expressions {
   .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$expr}"]
@@ -4483,11 +4499,9 @@ $moss_expressions: neutral happy grin star loving wink sad crying surprised shoc
     background-image: image-url("buddy/byte/face_#{$expr}.png");
   }
 }
-// Byte has no `focused`/`celebrating` faces of its own, but the server + a
-// stale stored expression can still ask for them. Map them to the closest
-// Byte face that reads right: focused→thinking (attentive, NOT the angry
-// annoyed face), celebrating→happy. Moss keeps its own dedicated SVGs above.
-$byte_expr_aliases: ("focused": "thinking", "celebrating": "happy");
+// `focused` is Byte's own art now. `celebrating` is not — nothing emits it any
+// more, but a stale stored expression can still ask, so it keeps a mapping.
+$byte_expr_aliases: ("celebrating": "happy");
 @each $mood, $face in $byte_expr_aliases {
   .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$mood}"]
     .byte-buddy-face {
@@ -4565,7 +4579,6 @@ $suki_expr_aliases: (
   "thinking": "neutral",
   "sad": "neutral",
   "crying": "neutral",
-  "sleeping_frown": "sleeping",
   "celebrating": "excited",
   "encouraging": "cheery",
   "focused": "neutral",

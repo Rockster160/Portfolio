@@ -74,7 +74,7 @@ RSpec.describe Buddy::ExpressionState do
 
       described_class.react!(convo, ok: false)
 
-      expect(convo.reload.buddy_expression).to be_in(%w[annoyed sad])
+      expect(convo.reload.buddy_expression).to be_in(%w[confused annoyed sad])
     end
 
     it "wears something pleased when it did" do
@@ -83,7 +83,7 @@ RSpec.describe Buddy::ExpressionState do
 
       described_class.react!(convo)
 
-      expect(convo.reload.buddy_expression).to be_in(%w[happy nerd encouraging])
+      expect(convo.reload.buddy_expression).to be_in(%w[happy focused nerd encouraging])
     end
 
     # A face the model picked is a read of the room. This is a floor under a
@@ -95,6 +95,49 @@ RSpec.describe Buddy::ExpressionState do
       described_class.react!(convo, ok: false)
 
       expect(convo.reload.buddy_expression).to eq("crying")
+    end
+  end
+
+  # `$<theme>_expressions` in byte.scss names each file explicitly, and asset
+  # precompile FAILS on a name with no image behind it. Buddy::Faces reads the
+  # same directory, so the two must agree in both directions: a face on disk and
+  # not in the list is unreachable, a face listed and not on disk breaks deploy.
+  describe "the SCSS lists and the art on disk" do
+    scss = Rails.root.join("app/assets/stylesheets/pages/byte.scss").read
+
+    %w[byte moss glimmer suki].each do |theme|
+      listed = scss[/\$#{theme}_expressions:\s*([^;]+);/, 1].to_s.split.map(&:to_sym)
+
+      it "#{theme} lists every face it has, and has every face it lists" do
+        expect(listed.sort).to eq(Buddy::Faces.all(theme).sort)
+      end
+
+      it "#{theme}'s aliases all point at art that exists" do
+        block = scss[/\$#{theme}_expr_aliases:\s*\((.*?)\);/m, 1].to_s
+        targets = block.scan(/"[^"]+":\s*"([^"]+)"/).flatten.map(&:to_sym)
+        expect(targets - Buddy::Faces.all(theme)).to be_empty
+      end
+    end
+  end
+
+  # The four drawn 2026-08-25. They are COMPLETE characters rather than the
+  # eyes-and-mouth overlays the rest of Byte's set still is, so the body layer
+  # is suppressed under them — and they were re-placed onto body.png's exact
+  # footprint, or the pet would visibly jump size and position mid-conversation.
+  describe "Byte's full-character faces" do
+    full_body = %w[focused confused surprised playful]
+
+    it "suppresses the body layer under each of them" do
+      scss = Rails.root.join("app/assets/stylesheets/pages/byte.scss").read
+      expect(scss[/\$byte_full_body:\s*([^;]+);/, 1].to_s.split).to match_array(full_body)
+    end
+
+    it "offers each of them as a mood the model can pick" do
+      full_body.each { |face| expect(Buddy::Faces.selectable?(:byte, face)).to be(true) }
+    end
+
+    it "describes each of them for the prompt, or the model gets a bare name" do
+      full_body.each { |face| expect(Buddy::Personality::FACE_HINTS[face.to_sym]).to be_present }
     end
   end
 end
