@@ -214,6 +214,12 @@ RSpec.describe Buddy::Compile do
   # transcript line.
   it "tells the pass what day it is" do
     travel_to(Time.utc(2026, 8, 25, 18, 0)) do
+      # Inside the travel, not in the `before` hook. Out there it is stamped
+      # from the real clock, so once the wall clock passed 8pm UTC the target
+      # sat in this example's FUTURE, run! returned early, and a test that had
+      # been green all day started failing for reasons that had nothing to do
+      # with it.
+      convo.update_columns(buddy_compile_after: 2.hours.ago)
       say("Eve's therapist thing is tomorrow at 10.")
       say("Noted.", direction: :inbound, meta: { "kind" => "buddy" })
       client = stub_quiet

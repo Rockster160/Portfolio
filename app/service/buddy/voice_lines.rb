@@ -209,14 +209,28 @@ module Buddy
     }.freeze
 
     # The face for having DONE something, when the pet has nothing better to
-    # wear (see Buddy::ExpressionState#react!). Pleased, curious, tickled —
-    # never neutral, which is the whole point, and never a face about the
-    # PERSON, since all we know here is that something ran.
+    # wear (see Buddy::ExpressionState#react!). Pleased, curious — never
+    # neutral, which is the whole point, and never a face about the PERSON,
+    # since all we know here is that something ran.
+    #
+    # **Nothing here has read the reply**, so every face on the list has to be
+    # mild enough to sit under any sentence a completed action could produce. A
+    # strong face is a claim about the moment and a dice roll cannot make one:
+    # `uwu` was on Byte's list and came up on prod 4594, an eyes-closed
+    # open-mouthed laugh over "I couldn't get a frame from the backyard camera,
+    # and it didn't say why." Moss's `star`/`grin`/`wink` and Suki's `excited`
+    # came off with it — starstruck, thrilled and cheeky are the same mistake
+    # waiting for a different sentence.
+    # `failed` is for having done something that DIDN'T land. A pet that beams
+    # while telling someone it couldn't do the thing is worse than one that sat
+    # still, and "puzzled, put out, closer to a frown" is what the moment is.
+    # Byte has no confused face, so `annoyed` (furrowed brow, small scowl) and
+    # `sad` (downcast, a frown) are the honest ones it does have.
     ACTED_MOODS = {
-      byte:    %i[happy uwu nerd encouraging],
-      moss:    %i[grin happy content star wink],
-      suki:    %i[cheery excited happy offering],
-      glimmer: %i[content happy grin star],
+      byte:    { ok: %i[happy nerd encouraging], failed: %i[annoyed sad] },
+      moss:    { ok: %i[happy content], failed: %i[unamused queasy sad] },
+      suki:    { ok: %i[cheery happy offering], failed: %i[annoyed dizzy] },
+      glimmer: { ok: %i[content happy], failed: %i[sad surprised] },
     }.freeze
 
     # A line and the face that goes with it: `{ text:, mood: }`. `mood` is nil
@@ -246,10 +260,10 @@ module Buddy
       text.to_s.lstrip.start_with?(line[:say])
     end
 
-    def acted_mood(theme)
+    def acted_mood(theme, ok: true)
       key   = key_for(theme)
-      moods = ACTED_MOODS.fetch(key, ACTED_MOODS[Buddy::Themes::DEFAULT])
-      mood_for(theme, moods.sample)
+      table = ACTED_MOODS.fetch(key, ACTED_MOODS[Buddy::Themes::DEFAULT])
+      mood_for(theme, table[ok ? :ok : :failed].sample)
     end
 
     def lines_for(theme, kind)

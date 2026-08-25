@@ -596,16 +596,31 @@ class WebhooksController < ApplicationController
     images = ByteImageIntake.call(params[:files])
     return render json: { error: images.error }, status: :unprocessable_entity unless images.ok?
 
+    meta = byte_metadata(params).symbolize_keys
+
+    # `source` means two different things on either side of this door. The frame
+    # shape uses it for live-vs-recording; Byte uses it for provenance — photo,
+    # cli, watch — and ByteDailyAudit queries that vocabulary directly, as does
+    # the client (api.js). A frame arrives carrying both senses at once, so the
+    # camera's is moved under its own key. Keyed off `camera` rather than off the
+    # value, so a caller labelling provenance by hand (`source: "hass"`, no
+    # camera) is left exactly as it was.
+    meta[:frame_source] = meta.delete(:source) if meta[:camera].present? && meta.key?(:source)
+
     # A caption is optional — an image on its own is a real message here, same
-    # as it is from the composer. The push still needs words, so it falls back
-    # to something that says what arrived.
-    caption = params[:body].to_s.strip
+    # as it is from the composer. The frame shape carries `note`, a sentence
+    # already written for a person ("Frame from 12:03:21 PM on Aug 24 (person
+    # event)."), and it knows things this side cannot see: whether the frame is
+    # live or pulled from a recording, and how far off the requested moment it
+    # landed. Preferring it to the generic fallback means a ring arrives saying
+    # what it is rather than "📷 New photo".
+    caption = params[:body].to_s.strip.presence || meta[:note].to_s.strip
     message = ::Buddy::CompanionDelivery.deliver_plain(
       user:         user,
       conversation: conversation,
       text:         caption,
       files:        images.blobs,
-      metadata:     byte_metadata(params).symbolize_keys.reverse_merge(kind: :buddy, source: :photo),
+      metadata:     meta.reverse_merge(kind: :buddy, source: :photo),
       push_title:   caption.presence || "📷 New photo",
     )
 
@@ -625,10 +640,21 @@ class WebhooksController < ApplicationController
   # those are different events. That distinction is one somebody spent two
   # messages drawing in prod (3743/3746), and waking the house for a person
   # walking past the door is exactly the ping that got rejected there.
+  # Three vocabularies say "somebody rang", and which one arrives depends on
+  # who built the payload. The sensor calls it `type: "rang"` off
+  # `binary_sensor.doorbell_visitor`; the automation sets `rang: true`; the frame
+  # shape calls it `event: "doorbell"`. All three are the same fact, and a ring
+  # that only carried the third would otherwise read as an ordinary photo and
+  # never reach the housemate it was meant for.
+  #
+  # The location check still gates it, so a PERSON seen at the door — same
+  # camera, `event: "person"` — stays what it is.
   def doorbell_ring?(meta)
     return false unless meta[:location].to_s.casecmp?("doorbell")
 
-    meta[:rang].to_s == "true" || meta[:type].to_s.casecmp?("rang")
+    meta[:rang].to_s == "true" ||
+      meta[:type].to_s.casecmp?("rang") ||
+      meta[:event].to_s.casecmp?("doorbell")
   end
 
   # Who a doorbell ring reaches besides whoever posted it.

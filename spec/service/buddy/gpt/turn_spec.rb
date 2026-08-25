@@ -162,6 +162,45 @@ RSpec.describe Buddy::GPT::Turn do
 
       run([{ error: "nope" }])
     end
+
+    # Prod 4594. The camera function ran to completion and came back "couldn't
+    # get a frame", which the tool layer cannot tell from a success — so the
+    # pet, resting because the model picked no face, was handed a random
+    # pleased one and drew `uwu`: an open-mouthed laugh over a shrug.
+    #
+    # Only the words know, so the words are what decide which way it reacts.
+    context "when the pet has no face of its own and something ran" do
+      before do
+        convo.update_columns(buddy_expression: "neutral")
+        allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+      end
+
+      def acts_then_says(text)
+        run([
+          { tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }] },
+          { text: text },
+        ])
+      end
+
+      it "wears the miss when the reply reports one" do
+        acts_then_says("Hmm. I couldn't get a frame from the backyard camera, and it didn't say why.")
+
+        expect(convo.reload.buddy_expression).to be_in(%w[annoyed sad])
+      end
+
+      it "still looks pleased when the reply says it worked" do
+        acts_then_says("Kitchen lights are on now.")
+
+        expect(convo.reload.buddy_expression).to be_in(%w[happy nerd encouraging])
+      end
+
+      # The one cheerful phrase that would otherwise read as a setback.
+      it "does not read looking forward to something as a miss" do
+        acts_then_says("Timer's set. I can't wait to hear how it goes!")
+
+        expect(convo.reload.buddy_expression).to be_in(%w[happy nerd encouraging])
+      end
+    end
   end
 
   # Prod 1144: "3 more water done tonight." came back as "Yesss, counting three

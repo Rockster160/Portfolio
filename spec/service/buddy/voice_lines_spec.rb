@@ -42,10 +42,12 @@ RSpec.describe Buddy::VoiceLines do
       end
     end
 
-    Buddy::VoiceLines::ACTED_MOODS.each do |theme, moods|
-      it "#{theme}'s acted faces are all renderable, and none of them is neutral" do
-        expect(moods).to all(satisfy { |m| Buddy::Faces.selectable?(theme, m) })
-        expect(moods).not_to include(Buddy::Faces.default)
+    Buddy::VoiceLines::ACTED_MOODS.each do |theme, sets|
+      sets.each do |outcome, moods|
+        it "#{theme}'s #{outcome} acted faces are all renderable, and none of them is neutral" do
+          expect(moods).to all(satisfy { |m| Buddy::Faces.selectable?(theme, m) })
+          expect(moods).not_to include(Buddy::Faces.default)
+        end
       end
     end
 
@@ -252,6 +254,31 @@ RSpec.describe Buddy::VoiceLines do
 
     it "no-ops on no conversation at all" do
       expect { described_class.react!(nil) }.not_to raise_error
+    end
+  end
+
+  # Prod 4594: "Hmm. I couldn't get a frame from the backyard camera, and it
+  # didn't say why." wore `uwu` — an eyes-closed open-mouthed laugh. Nothing
+  # picked it: the model chose no face, something had run, and this table was
+  # sampled blind.
+  describe "the face for having acted" do
+    # Picked without reading a word of the reply, so it has to be mild enough
+    # to sit under any sentence a completed action could produce. A laugh, a
+    # starstruck gaze or a cheeky wink is a claim about the moment, and a dice
+    # roll can't make one.
+    it "never reaches for a face too strong to be picked blind" do
+      strong = Buddy::VoiceLines::ACTED_MOODS.values.flat_map { |s| s[:ok] } &
+        %i[uwu star excited grin wink crying]
+
+      expect(strong).to be_empty
+    end
+
+    it "wears the miss when the turn didn't land" do
+      20.times { expect(described_class.acted_mood(:byte, ok: false)).to be_in(%i[annoyed sad]) }
+    end
+
+    it "wears something pleased when it did" do
+      20.times { expect(described_class.acted_mood(:byte)).to be_in(%i[happy nerd encouraging]) }
     end
   end
 end

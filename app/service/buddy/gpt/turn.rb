@@ -1554,7 +1554,7 @@ module Buddy
         @reply.update!(metadata: @reply.metadata.to_h.merge("kept" => true)) if @kept
 
         stamp_usage_rollup
-        settle_expression(acted: executed_anything?(result))
+        settle_expression(acted: executed_anything?(result), landed: landed?)
         broadcast(@reply.reload)
         ByteNotifier.notify(@user, @reply)
         queue_daily_audit
@@ -2119,6 +2119,39 @@ module Buddy
         buttons(result).any? { |b| b["status"].to_s == "executed" }
       end
 
+      # Did this turn get where it was going? Two signals, and the second is the
+      # one that matters most often.
+      #
+      # A call in `@failed` is machinery saying so. But a tool can run start to
+      # finish and STILL report a miss — a Jil function that returns "couldn't
+      # get a frame" completed perfectly as far as the tool layer can tell, and
+      # that is exactly the turn that wore the wrong face. Only the words know.
+      #
+      # Which is why this reads them, narrowly, and only ever to point the
+      # automatic face the other way. A false positive costs a `sad` where a
+      # `happy` was due on a turn the model declined to have an opinion about —
+      # the same size of mistake, not a new one — and the model leading with its
+      # own marker skips this entirely.
+      # Curly and straight apostrophes both, because the model writes curly ones
+      # and prod 4594 is "couldn\u2019t". `can\u2019t` excludes a following "wait" —
+      # "I can\u2019t wait to hear how it goes" is the opposite of a setback and the
+      # one cheerful phrase that would otherwise land in here.
+      SETBACK_RX = /
+          \bi\s+could\s*(?:not|n['\u2019]t)\b
+        | \bi\s+ca(?:nnot|n\s*not|n['\u2019]t)(?!\s+wait)\b
+        | \bwas\s*(?:not|n['\u2019]t)\s+able\b
+        | \b(?:did|does)\s*(?:not|n['\u2019]t)\s+(?:work|go\s+through)\b
+        | \bno\s+luck\b
+        | \bwent\s+wrong\b
+        | \bnothing\s+came\s+back\b
+      /xi
+
+      def landed?
+        return false if @failed.any?
+
+        !@reply&.body.to_s.match?(SETBACK_RX)
+      end
+
       # A posted form is a pending row in every sense that matters here: it's
       # visible, it's waiting on them, and the reply above it is allowed to say
       # so without being retracted.
@@ -2157,8 +2190,12 @@ module Buddy
       # on neutral after doing something for someone is the flat-faced machine
       # the persona's face rules are trying to avoid. react! leaves a mood the
       # model chose alone, so this only fills a silence.
-      def settle_expression(acted: false)
-        Buddy::ExpressionState.react!(@conversation) if acted
+      #
+      # `landed` decides which WAY it reacts. Filling that silence with a
+      # pleased face regardless of outcome is how prod 4594 got a gleeful laugh
+      # over "I couldn't get a frame from the backyard camera".
+      def settle_expression(acted: false, landed: true)
+        Buddy::ExpressionState.react!(@conversation, ok: landed) if acted
         Buddy::ExpressionState.settle!(@conversation)
       rescue StandardError => e
         Rails.logger.warn("[Buddy::GPT::Turn] settle failed: #{e.class}: #{e.message}")

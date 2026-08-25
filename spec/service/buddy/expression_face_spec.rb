@@ -62,4 +62,39 @@ RSpec.describe Buddy::ExpressionState do
 
     expect(convo.reload.buddy_expression).to eq("happy")   # unchanged — rejected
   end
+
+  # Prod 4594. Byte ran the camera function, the function came back "couldn't
+  # get a frame", and the pet — resting on neutral because the model chose no
+  # face — was handed a random pleased one. It drew `uwu`: an eyes-closed,
+  # open-mouthed laugh, over a shrug.
+  describe "reacting to an action" do
+    it "wears a miss when the turn didn't land" do
+      convo = buddy_convo(User.me, "byte")
+      convo.update_column(:buddy_expression, "neutral")
+
+      described_class.react!(convo, ok: false)
+
+      expect(convo.reload.buddy_expression).to be_in(%w[annoyed sad])
+    end
+
+    it "wears something pleased when it did" do
+      convo = buddy_convo(create(:user), "byte")
+      convo.update_column(:buddy_expression, "neutral")
+
+      described_class.react!(convo)
+
+      expect(convo.reload.buddy_expression).to be_in(%w[happy nerd encouraging])
+    end
+
+    # A face the model picked is a read of the room. This is a floor under a
+    # resting pet, never a correction of a deliberate choice.
+    it "leaves a face the model chose alone, either way" do
+      convo = buddy_convo(create(:user), "byte")
+      convo.update_column(:buddy_expression, "crying")
+
+      described_class.react!(convo, ok: false)
+
+      expect(convo.reload.buddy_expression).to eq("crying")
+    end
+  end
 end

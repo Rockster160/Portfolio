@@ -58,6 +58,20 @@ class ByteJarvisWorker
       return
     end
 
+    # Silence means a task ran and had nothing to say, and there is only one way
+    # to get here: a matched `tell:` task RETURNS from Jarvis#command directly,
+    # so the action chain never runs. Half the enabled ones never
+    # `Global.return` anything — "Alexa: Darkness", "Whisper In", "Do Laundry"
+    # just do the thing — and with a receipt above it naming what ran, a bubble
+    # reading "(no response)" under that reads as a failure of the thing that
+    # just worked. The chip IS the answer.
+    return broadcast(user, message.reload) if text.strip.empty? && ran.any?
+
+    # Backstop, not an expected case. When NO task matches, the fallback chain
+    # runs and Jarvis::Talk answers unconditionally — a question, a greeting, a
+    # thanks, or "I don't know how to X, sir." So nothing-ran-and-nothing-said
+    # shouldn't be reachable, and if it ever becomes reachable, saying so beats
+    # a message that vanished.
     text = "(no response)" if text.strip.empty?
 
     reply = conversation.byte_messages.create!(

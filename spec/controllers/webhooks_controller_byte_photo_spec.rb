@@ -72,6 +72,74 @@ RSpec.describe WebhooksController, type: :controller do
       )
     end
 
+    # The frame shape's `note` is written for a person and knows things this
+    # side can't see — live vs pulled from a recording, how far off the
+    # requested moment it landed. A ring with no body should say that rather
+    # than fall through to the generic title.
+    it "captions an uncaptioned frame with the note the shape carries" do
+      meta = {
+        ok:             true,
+        camera:         "camera.doorbell_fluent",
+        source:         "recording",
+        captured_at:    "2026-08-24T12:03:21",
+        event:          "person",
+        off_by_seconds: 159,
+        note:           "Frame from 12:03:21 PM on Aug 24 (person event).",
+      }
+      post :byte_photo, params: { files: [snapshot], metadata: meta.to_json }
+
+      message = ByteMessage.order(:id).last
+      expect(message.body).to eq("Frame from 12:03:21 PM on Aug 24 (person event).")
+      expect(WebPushNotifications).to have_received(:send_to_byte).with(
+        hash_including(title: "Frame from 12:03:21 PM on Aug 24 (person event)."),
+      )
+    end
+
+    it "keeps an explicit caption over the note" do
+      meta = { ok: true, note: "Frame from 12:03:21 PM on Aug 24 (person event)." }
+      post :byte_photo, params: { files: [snapshot], body: "🔔 Someone's at the door", metadata: meta.to_json }
+
+      expect(ByteMessage.order(:id).last.body).to eq("🔔 Someone's at the door")
+    end
+
+    it "keeps the whole frame shape on the message for later reading" do
+      meta = {
+        ok:             true,
+        camera:         "camera.doorbell_fluent",
+        source:         "live",
+        requested:      "now",
+        event:          "doorbell",
+        off_by_seconds: 0,
+        bytes:          397_994,
+        shrunk:         nil,
+      }
+      post :byte_photo, params: { files: [snapshot], metadata: meta.to_json }
+
+      stored = ByteMessage.order(:id).last.metadata
+      expect(stored).to include(
+        "camera" => "camera.doorbell_fluent", "event" => "doorbell",
+        "requested" => "now", "bytes" => 397_994
+      )
+    end
+
+    # Two vocabularies, one key. The audit reads `source` for provenance, so a
+    # frame calling itself "live" must not take a doorbell photo out of it.
+    it "keeps the frame's live-vs-recording sense without eating Byte's provenance" do
+      meta = { ok: true, camera: "camera.doorbell_fluent", source: "recording" }
+      post :byte_photo, params: { files: [snapshot], metadata: meta.to_json }
+
+      stored = ByteMessage.order(:id).last.metadata
+      expect(stored).to include("source" => "photo", "frame_source" => "recording")
+    end
+
+    it "leaves a hand-labelled source alone when there is no camera in the shape" do
+      post :byte_photo, params: { files: [snapshot], metadata: { source: "hass" }.to_json }
+
+      stored = ByteMessage.order(:id).last.metadata
+      expect(stored).to include("source" => "hass")
+      expect(stored).not_to have_key("frame_source")
+    end
+
     it "renders as the pet speaking rather than as a silent row" do
       post :byte_photo, params: { files: [snapshot] }
 
@@ -279,6 +347,28 @@ RSpec.describe WebhooksController, type: :controller do
           files:    [snapshot],
           body:     "Someone out front",
           metadata: { camera: "camera.doorbell_fluent", location: "doorbell", subject: "person", detected: true }.to_json,
+        }
+      }.not_to change(ByteMessageShare, :count)
+    end
+
+    # The frame shape's own word for a ring. A payload carrying only that —
+    # no `rang`, no `type` — is still a ring and still has to reach her.
+    it "shares a ring the shape only labelled as a doorbell event" do
+      expect {
+        post :byte_photo, params: {
+          files:    [snapshot],
+          metadata: { camera: "camera.doorbell_fluent", location: "doorbell", event: "doorbell" }.to_json,
+        }
+      }.to change(ByteMessageShare, :count).by(1)
+    end
+
+    # Same camera, same key, the other meaning. `event: "person"` is somebody
+    # SEEN at the door, which is the ping that got rejected in prod.
+    it "does not share a person the shape labelled as a person event" do
+      expect {
+        post :byte_photo, params: {
+          files:    [snapshot],
+          metadata: { camera: "camera.doorbell_fluent", location: "doorbell", event: "person" }.to_json,
         }
       }.not_to change(ByteMessageShare, :count)
     end

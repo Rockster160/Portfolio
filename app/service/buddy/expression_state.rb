@@ -64,11 +64,17 @@ module Buddy
     # quietly cancels an alarm - and a generic pleased-with-itself face
     # stamped over the top of that is the "face changed on its own" glitch this
     # module exists to prevent. So this is a FLOOR, not an override.
-    def react!(conversation)
+    #
+    # `ok:` is whether the turn LANDED. Without it every action wore a pleased
+    # face, including the ones that reported not managing the thing — prod 4594
+    # was a gleeful laugh over "I couldn't get a frame from the backyard
+    # camera". The face is picked without reading the words either way, so what
+    # this really buys is the direction being right.
+    def react!(conversation, ok: true)
       return if conversation.nil?
       return unless [nil, "", Buddy::Faces.default.to_s].include?(conversation.buddy_expression)
 
-      mood = Buddy::VoiceLines.acted_mood(conversation.buddy_theme)
+      mood = Buddy::VoiceLines.acted_mood(conversation.buddy_theme, ok: ok)
       set(conversation, mood) if mood
     end
 

@@ -72,6 +72,33 @@ RSpec.describe ByteJarvisWorker do
       expect(chip.id).to be < convo.byte_messages.where("metadata->>'kind' = ?", "jarvis").last.id
     end
 
+    # Half the enabled `tell:` tasks say nothing back — they just do the thing.
+    it "says nothing under the receipt when the task had nothing to say" do
+      allow(::Jarvis).to receive(:command) { |_u, _w, &blk|
+        blk&.call([task])
+        nil
+      }
+
+      described_class.new.perform(message.id)
+
+      expect(convo.byte_messages.where("metadata->>'kind' = ?", "jarvis")).to be_empty
+      expect(convo.byte_messages.where("metadata->>'kind' = ?", "buddy_activity").count).to eq(1)
+    end
+
+    # Backstop only. In the real chain no task matching means Jarvis::Talk
+    # answers unconditionally ("I don't know how to X, sir."), so this shape
+    # shouldn't occur — but a message that vanished is worse than an odd one.
+    it "still says something if Jarvis ever answers nothing with nothing run" do
+      allow(::Jarvis).to receive(:command) { |_u, _w, &blk|
+        blk&.call([])
+        nil
+      }
+
+      described_class.new.perform(message.id)
+
+      expect(convo.byte_messages.inbound.last.body).to eq("(no response)")
+    end
+
     it "files nothing when the words only reached Jarvis's own fallbacks" do
       allow(::Jarvis).to receive(:command) { |_u, _w, &blk|
         blk&.call([])
