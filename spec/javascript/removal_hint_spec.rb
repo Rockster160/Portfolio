@@ -82,4 +82,25 @@ RSpec.describe "Checklist removal hints" do
       expect(result["silent"]["no_options"]).to be_nil
     end
   end
+
+  # A card whose rows ARE a list - the before-bed checklist - is every row the
+  # same tool, and the tool's own words describe the mechanism ("Tap to remove
+  # it") rather than what the person thinks they're doing.
+  describe "a row that brought its own words" do
+    it "uses them in place of the tool's" do
+      expect(result["override"]["pending"]).to eq("Tap when it's done")
+      expect(result["override"]["executed"]).to eq("Done - untick to put it back")
+    end
+
+    it "can give words to a tool that has none" do
+      expect(result["override"]["additive"]).to eq("Tap when it's done")
+    end
+
+    # The override says the words, never when they apply — a locked or finished
+    # row is still silent, so it can't promise a way back that isn't there.
+    it "does not change which rows get a line at all" do
+      expect(result["override"]["locked"]).to be_nil
+      expect(result["override"]["undone"]).to be_nil
+    end
+  end
 end

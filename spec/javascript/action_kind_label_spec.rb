@@ -76,4 +76,29 @@ RSpec.describe "Checklist action labels" do
 
     expect(wrong).to eq([])
   end
+
+  # A card whose rows are ALL the same tool — the before-bed checklist — turns
+  # the chip off, because printing "Remove List Item" down every row says the
+  # mechanism eight times in the place the item names go.
+  it "lets a row override the chip, including turning it off entirely" do
+    module_path = Rails.root.join("app/javascript/src/pages/byte/message_actions/multi_select.js")
+    script = <<~JS
+      import { actionKindLabel } from "#{module_path}";
+      console.log(JSON.stringify({
+        off:       actionKindLabel("remove_list_item", {}, null) ?? null,
+        replaced:  actionKindLabel("remove_list_item", {}, "Before Bed") ?? null,
+        untouched: actionKindLabel("remove_list_item", {}) ?? null,
+        unknown:   actionKindLabel("some_future_tool", {}, "Bedtime") ?? null,
+      }));
+    JS
+    out, err, status = Open3.capture3("node", "--input-type=module", stdin_data: script)
+    raise "node failed: #{err}" unless status.success?
+
+    expect(JSON.parse(out)).to eq(
+      "off"       => nil,
+      "replaced"  => "Before Bed",
+      "untouched" => "Remove List Item",
+      "unknown"   => "Bedtime",
+    )
+  end
 end

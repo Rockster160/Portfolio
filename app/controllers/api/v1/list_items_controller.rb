@@ -45,15 +45,18 @@ class Api::V1::ListItemsController < Api::V1::BaseController
   end
 
   def update
+    was_deleted = current_item&.deleted?
     current_item.update(list_item_params)
-    trigger(:changed, current_item)
+    trigger(transition(was_deleted, current_item), current_item)
 
     serialize current_item
   end
 
   def destroy
-    current_item.soft_destroy unless current_item.permanent?
-    trigger(:removed, current_item)
+    # Only when something actually left. A permanent item can't be removed and
+    # a second DELETE removes nothing, and both used to announce a removal.
+    removed = !current_item.permanent? && current_item.soft_destroy
+    trigger(:removed, current_item) if removed
 
     serialize current_item
   end
@@ -65,6 +68,15 @@ class Api::V1::ListItemsController < Api::V1::BaseController
     return if item.blank?
 
     jil_trigger(:item, item.jil_serialize(action: action))
+  end
+
+  # Checking a box is a PATCH carrying `checked`, and it soft-deletes the item -
+  # the same act as DELETE on the same column. See ListItemsController#transition
+  # for why reporting that as `changed` was wrong.
+  def transition(was_deleted, item)
+    return :changed if item.blank? || was_deleted == item.deleted?
+
+    item.deleted? ? :removed : :added
   end
 
   def current_list

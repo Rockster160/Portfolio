@@ -150,8 +150,17 @@ const ACTION_KIND_LABELS = {
 };
 
 // The chip above a checklist row, or null for a tool that doesn't get one.
+//
+// A row may carry `kind_label` of its own, which wins — including an explicit
+// null, which is how a card whose rows are ALL the same tool turns the chip off
+// entirely. A before-bed list is that card: printing "Remove List Item" down
+// every row says the mechanism eight times in the place the item names go.
+// `undefined` means the row said nothing, so the per-tool default stands.
+//
 // Exported so it can be tested without a DOM.
-export function actionKindLabel(toolName, payload) {
+export function actionKindLabel(toolName, payload, override) {
+  if (override !== undefined) return override || null;
+
   const entry = ACTION_KIND_LABELS[toolName];
   return typeof entry === "function" ? entry(payload || {}) : entry || null;
 }
@@ -186,9 +195,14 @@ const REMOVAL_TOOLS = {
 // actually be unticked — otherwise it would promise a way back that the ✓ and
 // the locked box have already ruled out.
 //
+// A row may carry its own `{tap, done}` pair, for the same reason the chip can
+// be overridden: the tool's words describe the mechanism ("Tap to remove it"),
+// and on a checklist the person is ticking something OFF — the item leaving the
+// list is the consequence, not what they think they're doing.
+//
 // Exported so it can be tested without a DOM.
-export function removalHint(toolName, { status, undoable } = {}) {
-  const words = REMOVAL_TOOLS[toolName];
+export function removalHint(toolName, { status, undoable, override } = {}) {
+  const words = override || REMOVAL_TOOLS[toolName];
   if (!words) return null;
   if (status === "executed") return undoable ? words.done : null;
 
@@ -300,7 +314,7 @@ export function renderMultiSelect(container, message) {
     // secondary metadata, not the primary content.
     const body = document.createElement("span");
     body.className = "byte-msg-action-body";
-    const kindLabel = actionKindLabel(btn.tool_name, btn.payload);
+    const kindLabel = actionKindLabel(btn.tool_name, btn.payload, btn.kind_label);
     if (kindLabel) {
       const kind = document.createElement("span");
       kind.className = "byte-msg-action-kind";
@@ -320,7 +334,11 @@ export function renderMultiSelect(container, message) {
     // Spelled out only where a tick doesn't mean what a tick usually means.
     // Inside the row's <label>, so reading it and tapping it are the same
     // gesture and screen readers pick it up as part of the box's name.
-    const hint = removalHint(btn.tool_name, { status: effectiveStatus, undoable: undoable });
+    const hint = removalHint(btn.tool_name, {
+      status:   effectiveStatus,
+      undoable: undoable,
+      override: btn.hint,
+    });
     if (hint) {
       const note = document.createElement("span");
       note.className = "byte-msg-action-hint";

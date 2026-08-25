@@ -8,6 +8,7 @@ class Jil::Methods::Buddy < Jil::Methods::Base
   #   #sayEvent("Event" Numeric|Hash|AgendaItem BR "Message" String)::Numeric
   #   #prompt(Text)::Boolean
   #   #photo("Image" String BR "Caption" String)::Boolean
+  #   #checklist("List" String BR "Message" Text)::Numeric
 
   # Byte/Moss says the text verbatim — a fixed inbound message dropped into the
   # user's Buddy conversation, plus a push. Use when the wording is yours and
@@ -64,6 +65,22 @@ class Jil::Methods::Buddy < Jil::Methods::Base
     text = caption.to_s.strip
     deliver(text, files: images.blobs, push_title: text.presence || "📷 New photo")
     true
+  end
+
+  # The named list, put in front of them as a row of empty checkboxes - one per
+  # item - under `message`. Ticking one takes that item off the list, the same
+  # act as checking it off in the app; unticking puts it back.
+  #
+  # Returns how many boxes went up, so a task can tell "there was nothing left
+  # to do" from "sent". An empty list posts NOTHING and answers 0: a bedtime
+  # nudge listing no items is a buzz about nothing, and the caller is better
+  # placed to decide whether that deserves words of its own.
+  def checklist(list_name, message)
+    list = ::List.by_name_for_user(list_name.to_s, @jil.user)
+    text = message.to_s.strip
+    return 0 if list.nil? || text.empty?
+
+    ::Buddy::ListChecklist.post!(user: recipient, list: list, text: text)
   end
 
   # Re-dispatches a fresh in-character Buddy turn seeded by the text, so the

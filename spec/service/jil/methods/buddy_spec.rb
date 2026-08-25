@@ -33,8 +33,46 @@ RSpec.describe Jil::Methods::Buddy do
         a2 = Buddy.prompt("remind them trash night is tonight, keep it light")::Boolean
         img = String.new("abc")::String
         a3 = Buddy.photo(img, "Front door")::Boolean
+        a4 = Buddy.checklist("Before Bed", "Still to do:")::Numeric
       JIL
       expect { Jil::Validator.validate!(code) }.not_to raise_error
+    end
+
+    describe "#checklist" do
+      let!(:list) { create(:list, name: "Before Bed", user: owner) }
+
+      it "puts the list up as a box per item and answers with the count" do
+        create(:list_item, list: list, name: "Lock the back door")
+        create(:list_item, list: list, name: "Start the dishwasher")
+
+        ctx = run(<<~'JIL')
+          boxes = Buddy.checklist("Before Bed", "Still to do before bed:")::Numeric
+        JIL
+
+        expect(ctx.ctx[:vars][:boxes][:value]).to eq(2)
+        action = ByteAction.where(user: owner, tool_name: "buddy_proposals").last
+        expect(action.buttons.pluck("label")).to match_array(["Lock the back door", "Start the dishwasher"])
+        expect(owner_convo.byte_messages.last.body).to eq("Still to do before bed:")
+      end
+
+      # Nothing left to do is not a thing to buzz someone about, and the caller
+      # is better placed than this is to decide whether it deserves words.
+      it "posts nothing and answers 0 on an empty list" do
+        expect {
+          ctx = run(<<~'JIL')
+            boxes = Buddy.checklist("Before Bed", "Still to do before bed:")::Numeric
+          JIL
+          expect(ctx.ctx[:vars][:boxes][:value]).to eq(0)
+        }.not_to change(ByteMessage, :count)
+      end
+
+      it "answers 0 for a list that isn't theirs" do
+        ctx = run(<<~'JIL')
+          boxes = Buddy.checklist("Some Other List", "Still to do:")::Numeric
+        JIL
+
+        expect(ctx.ctx[:vars][:boxes][:value]).to eq(0)
+      end
     end
 
     describe "#say" do

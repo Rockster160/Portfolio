@@ -77,11 +77,23 @@ import { dash_colors } from "../vars"
         var lastIso = data[m.query]
         if (!lastIso) { return }
 
+        var dueColor = resolveColor(m.color, dash_colors.red)
+
+        // The occurrence itself, not just what it implies. The next due date is
+        // often months past the end of the grid — 4w out from a mid-month event
+        // lands in the following month — so plotting only future dues leaves a
+        // calendar with no dot at all and no way to see when it last happened.
+        // Independent of `period`, hence above that guard: when it last happened
+        // is a fact about the event, not about how often it's expected.
+        var last = new Date(lastIso)
+        if (last >= start && last <= end) {
+          upsertMarker(newMap, dateKey(last), dueColor, 2)
+        }
+
         var periodDays = parseIntervalDays(m.period)
         if (!periodDays) { return }
 
         var warnDays = parseIntervalDays(m.warn)
-        var dueColor = resolveColor(m.color, dash_colors.red)
         var warnColor = resolveColor(m.warn_color, dash_colors.orange)
 
         var due = new Date(lastIso)

@@ -48,9 +48,10 @@ class ListItemsController < ApplicationController
   def update
     current_list = List.find(params[:list_id])
     @existing_item = current_list_items.find_by(id: params[:id])
+    was_deleted = @existing_item&.deleted?
     @existing_item.update(list_item_params)
 
-    trigger(:changed, @existing_item)
+    trigger(transition(was_deleted, @existing_item), @existing_item)
 
     render json: @existing_item
   end
@@ -63,7 +64,9 @@ class ListItemsController < ApplicationController
       trigger(:removed, @list_item)
       redirect_to list_path(@list_item.list)
     else
-      @list_item.soft_destroy unless @list_item.permanent?
+      # `soft_destroy` answers falsy when the item was already gone, so a
+      # repeat DELETE says nothing rather than announcing a removal twice.
+      trigger(:removed, @list_item) if !@list_item.permanent? && @list_item.soft_destroy
       head :no_content
     end
   end
@@ -75,6 +78,22 @@ class ListItemsController < ApplicationController
     return if item.blank?
 
     jil_trigger(:item, item.jil_serialize(action: action))
+  end
+
+  # What actually happened to the item, which is not always what the ROUTE says.
+  #
+  # Checking a box in the app is a PUT carrying `checked: true`, and that
+  # soft-deletes the item - the same act, on the same column, as the API's
+  # DELETE and as Jil's `List.remove`, both of which report `removed`. Calling
+  # it `changed` meant a listener could watch an item arrive and never once
+  # hear it leave, with no second signal anywhere to make up for it.
+  #
+  # Unticking is the mirror: the item is back on the list, which is `added`,
+  # matching what `ListItem.toggle` has always fired for the same transition.
+  def transition(was_deleted, item)
+    return :changed if item.blank? || was_deleted == item.deleted?
+
+    item.deleted? ? :removed : :added
   end
 
   def current_list

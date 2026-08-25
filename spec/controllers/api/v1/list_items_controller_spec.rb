@@ -43,4 +43,42 @@ RSpec.describe Api::V1::ListItemsController, type: :controller do
       expect(item.reload.deleted_at).not_to be_nil
     end
   end
+
+  # Same rule as the app's controller: the trigger names what happened to the
+  # record, not which route did it.
+  describe "the item trigger's action" do
+    def fired
+      actions = []
+      allow(Jil).to receive(:trigger) { |_user, scope, data, **_opts|
+        actions << data[:action] if scope == :item
+      }
+      yield
+      actions
+    end
+
+    it "says removed when checked off through the API" do
+      actions = fired {
+        patch :update, params: { list_id: list.id, id: item.id, checked: true }, format: :json
+      }
+
+      expect(actions).to eq([:removed])
+    end
+
+    it "still says changed for a rename" do
+      actions = fired {
+        patch :update, params: { list_id: list.id, id: item.id, name: "Updated" }, format: :json
+      }
+
+      expect(actions).to eq([:changed])
+    end
+
+    it "says nothing when a permanent item can't be deleted" do
+      item.update!(permanent: true)
+
+      actions = fired { delete :destroy, params: { list_id: list.id, id: item.id }, format: :json }
+
+      expect(actions).to be_empty
+      expect(item.reload.deleted_at).to be_nil
+    end
+  end
 end

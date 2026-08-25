@@ -48,4 +48,20 @@ out.silent = {
   no_tool:            removalHint(undefined, { status: "pending" }),
 };
 
+// ---- a row that brought its own words -------------------------------------
+// A before-bed card is every row the same tool, and "Tap to remove it"
+// describes the mechanism rather than what the person is doing.
+const CHECK_OFF = { tap: "Tap when it's done", done: "Done - untick to put it back" };
+
+out.override = {
+  pending:  removalHint("remove_list_item", { status: "pending", override: CHECK_OFF }),
+  executed: removalHint("remove_list_item", { status: "executed", undoable: true, override: CHECK_OFF }),
+  // Locked and finished rows still get nothing — the override says the words,
+  // never when they apply.
+  locked:   removalHint("remove_list_item", { status: "executed", undoable: false, override: CHECK_OFF }),
+  undone:   removalHint("remove_list_item", { status: "undone", override: CHECK_OFF }),
+  // A tool with no words of its own can be given some.
+  additive: removalHint("log_event", { status: "pending", override: CHECK_OFF }),
+};
+
 console.log(JSON.stringify(out));

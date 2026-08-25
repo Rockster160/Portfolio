@@ -11,6 +11,8 @@ export class Monitor {
   static #connected = false;
   static #monitors = {};
   static #cells = new Set();
+  // Performs already sent in the current turn — see `do`.
+  static #sent = new Set();
 
   constructor(channel, callbacks) {
     this.channel = channel;
@@ -78,27 +80,57 @@ export class Monitor {
     // Monitor.all().forEach(item => item) // Do stuff
   }
 
-  connected() {
-    let callback = this.callbacks.connected;
-    if (callback && typeof callback === "function") {
-      callback.call(this);
+  // Every fan-out over this bus is a plain forEach — `received` walks the
+  // subscribers on one channel, the reconnect sweep walks all of them. A
+  // callback that threw took the rest of that loop down with it, so a broadcast
+  // "shared between" two subscribers reached only the one registered first, and
+  // one broken cell could swallow the reconnect for the entire page. Each
+  // subscriber is independent, so each gets its own frame; the error is still
+  // reported rather than swallowed.
+  #dispatch(name, args=[]) {
+    let callback = this.callbacks[name];
+    if (!callback || typeof callback !== "function") {
+      return;
     }
+
+    try {
+      callback.apply(this, args);
+    } catch (err) {
+      console.error(`Monitor[${this.channel}] ${name} handler failed:`, err);
+    }
+  }
+
+  connected() {
+    this.#dispatch("connected");
   }
   disconnected() {
-    let callback = this.callbacks.disconnected;
-    if (callback && typeof callback === "function") {
-      callback.call(this);
-    }
+    this.#dispatch("disconnected");
   }
   received(data) {
-    let callback = this.callbacks.received;
-    if (callback && typeof callback === "function") {
-      callback.call(this, data);
-    }
+    this.#dispatch("received", [data]);
   }
   do(action) {
     let monitor = this;
     monitor.loading = true;
+
+    // Subscribers on a channel are separate objects asking the server the same
+    // question, so anything that touches all of them at once — the reconnect
+    // sweep, or a cell whose reloader and `connected` both land in one pass —
+    // sent N identical performs and ran the Jil task N times over.
+    //
+    // Nothing is deferred: the first perform goes out synchronously, exactly as
+    // before. Only the copies raised in the SAME turn are dropped, and the key
+    // clears on the next microtask, so anything a later turn asks for is a real
+    // second request and still gets sent. The key carries everything the
+    // payload does — two monitors on one channel with different ids are two
+    // questions, not one.
+    let key = `${action}:${monitor.channel}:${monitor.id ?? ""}`;
+    if (Monitor.#sent.has(key)) {
+      return;
+    }
+    Monitor.#sent.add(key);
+    queueMicrotask(() => Monitor.#sent.delete(key));
+
     Monitor.socket.perform(action, {
       id: monitor.id,
       channel: monitor.channel,

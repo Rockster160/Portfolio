@@ -176,6 +176,21 @@ import { dash_colors } from "../vars";
     data: { events: [] },
     wrap: true,
     flash: false,
+    // The ticker only re-renders `cell.data.events`; the ONLY thing that puts
+    // new events in it is a push. Without a reloader this cell had no way back
+    // to the truth — a push that never landed (dead socket with no close event,
+    // so no `connected` and no resync) left it showing a moved event at its old
+    // time indefinitely, while Upcoming — same trigger, same task 345, same
+    // socket — healed itself on this exact timer.
+    //
+    // It also buys the load-time resync: `connected` fires from inside
+    // `Monitor.subscribe`, before its return value has been assigned to
+    // `cell.monitor`, so that `?.` is always a no-op. `Cell.init` calls the
+    // reloader right after `onload`, by which point the monitor exists.
+    refreshInterval: Time.hour(),
+    reloader: function () {
+      cell.monitor?.resync();
+    },
     onload: function () {
       cell.monitor = Monitor.subscribe("calendar", {
         connected: function () {

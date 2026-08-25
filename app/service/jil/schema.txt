@@ -533,6 +533,7 @@
   #sayEvent("Event" Numeric|Hash|AgendaItem BR "Message" String)::Numeric
   #prompt(Text)::Boolean
   #photo("Image" String BR "Caption" String)::Boolean
+  #checklist("List" String BR "Message" Text)::Numeric
 [Tesla]@me
   #start(content(TeslaStartOptions))::Boolean
   #stop::Boolean
