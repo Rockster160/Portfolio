@@ -415,4 +415,35 @@ RSpec.describe Buddy::GPT::History do
       expect(build.first[:content]).to eq("[image ##{msg.id}: chart.png]")
     end
   end
+
+  # A "." aside — said straight to Jarvis from inside a Buddy thread. Both halves
+  # replay, bracketed: without the answer, the person's turn sits there with
+  # nothing under it and the next vague message gets read as being about the last
+  # unanswered thing. That is how one laundry timer became two.
+  describe "a Jarvis aside" do
+    it "replays both halves, and neither as Buddy's" do
+      said("garage door open", kind: "jarvis")
+      said("Opening the garage.", direction: :inbound, kind: "jarvis")
+
+      expect(build).to eq([
+        { role: :user, content: "[asked Jarvis directly] garage door open" },
+        { role: :assistant, content: "[Jarvis] Opening the garage." },
+      ])
+    end
+
+    it "leaves an ordinary turn unbracketed" do
+      said("garage door open")
+
+      expect(build).to eq([{ role: :user, content: "garage door open" }])
+    end
+
+    # The receipts under it are chips, and chips have never been replayed.
+    it "does not replay the task receipt" do
+      said("garage door open", kind: "jarvis")
+      said("Called **Garage Door**", direction: :inbound, kind: "buddy_activity")
+      said("Opening the garage.", direction: :inbound, kind: "jarvis")
+
+      expect(build.length).to eq(2)
+    end
+  end
 end

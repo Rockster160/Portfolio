@@ -103,7 +103,13 @@ export function setupSlashAutocomplete({ input, popover, autosize, app }) {
 
   const render = () => {
     if (filtered.length === 0) {
-      popover.innerHTML = `<div class="byte-slash-empty">No matching commands.</div>`;
+      // A dot in front of something we don't know isn't a miss any more — it's
+      // a command on its way to Jarvis. Saying so is how the routing is
+      // discoverable at all; "No matching commands" read as a dead end.
+      popover.innerHTML =
+        activePrefix === "."
+          ? `<div class="byte-slash-empty">Goes straight to Jarvis.</div>`
+          : `<div class="byte-slash-empty">No matching commands.</div>`;
       return;
     }
     popover.innerHTML = filtered.map((c, i) => {
@@ -217,7 +223,11 @@ export function setupSlashAutocomplete({ input, popover, autosize, app }) {
       render();
       return;
     }
-    if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && filtered[highlight])) {
+    // Both need something to complete TO. Tab used not to check, and with a
+    // dot now able to precede any words at all, `insert(undefined)` went from
+    // unreachable to one keystroke away.
+    if (!filtered[highlight]) return;
+    if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
       // Tab always completes; Enter completes only when the input is
       // still just the verb (no args typed yet) — once the user is
       // typing args, Enter should send the message.

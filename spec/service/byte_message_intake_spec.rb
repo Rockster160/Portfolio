@@ -178,4 +178,95 @@ RSpec.describe ByteMessageIntake do
       end
     end
   end
+
+  # A "." in front of a message sends it straight to Jarvis, exactly as if it had
+  # been said out loud in the room — from any thread, whatever that thread is
+  # normally for.
+  describe ".jarvis_aside?" do
+    let(:user)  { User.me }
+    let(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy") }
+
+    before do
+      allow(MonitorChannel).to receive(:broadcast_to)
+      allow(BuddyDeliverWorker).to receive(:perform_async)
+      allow(ByteJarvisWorker).to receive(:perform_async)
+    end
+
+    def send!(body, as: user, conversation: convo)
+      ByteMessageIntake.call(user: as, conversation: conversation, body: body)
+    end
+
+    describe "what a prefix means" do
+      it "reads a dot in front of unknown words as Jarvis" do
+        expect(ByteMessageIntake).to be_jarvis_aside("  .garage door open")
+      end
+
+      # The mobile shortcut survives: the period is closer to the space bar than
+      # the slash, which is why it was made an alias in the first place.
+      it "leaves the known slash verbs alone" do
+        [".today", ".rename Foo", ".compact", ".fork", ".sessions", ".pwd"].each { |body|
+          expect(ByteMessageIntake).to be_slash_command(body)
+          expect(ByteMessageIntake).not_to be_jarvis_aside(body)
+        }
+      end
+
+      # An unknown verb after a slash is the Mac's to answer or refuse, and always
+      # has been. Only the dot changed meaning.
+      it "never reads a slash as Jarvis" do
+        expect(ByteMessageIntake).not_to be_jarvis_aside("/garage door open")
+        expect(ByteMessageIntake).to be_slash_command("/nonsense")
+      end
+
+      it "hands Jarvis the words without the marker" do
+        expect(ByteMessageIntake.jarvis_words(" .garage door open ")).to eq("garage door open")
+      end
+    end
+
+    describe "dispatch" do
+      it "sends it to Jarvis instead of Buddy" do
+        send!(".garage door open")
+
+        expect(ByteJarvisWorker).to have_received(:perform_async)
+        expect(BuddyDeliverWorker).not_to have_received(:perform_async)
+      end
+
+      it "marks the bubble so the thread and Buddy both know what it was" do
+        expect(send!(".garage door open").metadata["kind"]).to eq("jarvis")
+      end
+
+      it "still sends an ordinary message to Buddy" do
+        send!("garage door open")
+
+        expect(BuddyDeliverWorker).to have_received(:perform_async)
+        expect(ByteJarvisWorker).not_to have_received(:perform_async)
+      end
+
+      # Nothing gets first refusal on a "." — or the same words would do two
+      # different things depending on which thread they were typed in.
+      it "is not swallowed by the timer fast path" do
+        expect(::Buddy::Timers).not_to receive(:quick_set!)
+
+        send!(".5m pasta")
+        expect(ByteJarvisWorker).to have_received(:perform_async)
+      end
+
+      it "is not swallowed by the armed stash latch" do
+        allow(::Buddy::Stash).to receive(:armed_category).and_return("thought")
+        expect(::Buddy::Stash).not_to receive(:capture!)
+
+        send!(".garage door open")
+        expect(ByteJarvisWorker).to have_received(:perform_async)
+      end
+
+      # Jarvis drives the house, the car and the printer. /mode already refuses a
+      # buddy-only member a jarvis thread; a prefix must not be the way around it.
+      it "does nothing for anyone but the owner" do
+        other = create(:user)
+        theirs = other.byte_conversations.create!(mode: :buddy, name: "Theirs")
+
+        send!(".garage door open", as: other, conversation: theirs)
+        expect(ByteJarvisWorker).not_to have_received(:perform_async)
+      end
+    end
+  end
 end

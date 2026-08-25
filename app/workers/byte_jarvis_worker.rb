@@ -1,6 +1,7 @@
-# Handles a single Byte message whose conversation mode is :jarvis.
-# Sends the body through Jarvis and posts the response back as an inbound
-# message on the same conversation.
+# Handles a single Byte message bound for Jarvis: a whole conversation in
+# :jarvis mode, or a single "." aside typed into any other thread. Sends the
+# body through Jarvis and posts the response back as an inbound message on the
+# same conversation.
 #
 # Jarvis mode intentionally skips the Mac local server — Jarvis lives
 # entirely in Rails and doesn't need a shell / Claude CLI wrapper. Keeps
@@ -20,12 +21,19 @@ class ByteJarvisWorker
     # Mark the user's send as sent so the composer's pending state clears.
     message.update!(state: :sent) if message.state == "pending"
 
-    body = message.body.to_s.strip
+    # The dot is our routing marker, not part of what they said.
+    body = ByteMessageIntake.jarvis_words(message.body)
     return if body.empty?
 
-    response = ::Jarvis.command(user, body)
+    ran      = []
+    response = ::Jarvis.command(user, body) { |tasks| ran = tasks }
     text     = response.is_a?(Array) ? response.first.to_s : response.to_s
     data     = response.is_a?(Array) ? (response.last || {}) : {}
+
+    # Before the reply, in the order they ran: a spoken command leaves the same
+    # visible trail a Buddy tool call does, so "did that do anything?" is
+    # answered by the thread rather than by trusting the sentence underneath.
+    post_task_chips(user, conversation, ran)
 
     # If Jarvis emitted structured button data alongside its reply, render
     # an action-request bubble with tap targets instead of (or in addition
@@ -74,6 +82,22 @@ class ByteJarvisWorker
       metadata:     { kind: :system, error: true, in_reply_to: message&.id },
       delivered_at: Time.current,
     )&.then { |m| broadcast(user, m) }
+  end
+
+  # One receipt per Jil task the words set off. Jarvis's own fallbacks
+  # (Jarvis::Tesla, Jarvis::Say, the rest) are not tasks and get nothing — they
+  # have no name to show and the reply already says what they did.
+  private def post_task_chips(user, conversation, tasks)
+    Array(tasks).each { |task|
+      Buddy::ActivityChip.post!(
+        conversation: conversation,
+        user:         user,
+        tool_name:    :jarvis_task,
+        body:         "Called **#{task.name}**",
+        detail:       task.last_message.presence,
+        payload:      { "task_id" => task.id, "task_name" => task.name },
+      )
+    }
   end
 
   private def broadcast(user, message)

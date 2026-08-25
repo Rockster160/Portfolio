@@ -289,6 +289,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   // layout settling under it — and a flag would need something to clear it.
   let revealUntil = 0;
   const REVEAL_GUARD_MS = 1000;
+  // Until when the jump button stays hidden after being tapped. Mid-glide the
+  // thread is legitimately not at the bottom, so the button would reappear
+  // halfway through the journey it was asked for — which reads as the tap not
+  // having worked, and invites the second tap that started this. Cleared early
+  // by a real gesture (they took the wheel back) and made irrelevant by the
+  // glide landing.
+  let jumpingUntil = 0;
+  const JUMP_GUARD_MS = 1200;
   // Coalesces the growth-observer's re-pins into one write per frame (see the
   // MutationObserver in the scroll section). Declared here for the same TDZ
   // reason as stickRaf.
@@ -1511,8 +1519,18 @@ document.addEventListener("DOMContentLoaded", async () => {
   // The loop self-cancels the instant a real user scroll-up flips `atBottom`
   // false (the thread scroll listener recomputes it), so it never fights an
   // intentional scroll away from the bottom.
-  function scrollToBottom(behavior = "auto") {
+  //
+  // `force` marks the one case where none of that yielding applies: the person
+  // TAPPED the jump button. The smooth path waits two frames and re-checks
+  // `atBottom` so an inbound message can't yank a reader who is deliberately
+  // scrolling up — but a thread still in MOTION fires scroll events in that
+  // window too (momentum from the flick that revealed the button, the tail of
+  // an earlier glide), and those recompute the very flag being checked. Every
+  // tap made while the thread was moving was therefore dropped on the floor,
+  // which is exactly when the button is most likely to be tapped.
+  function scrollToBottom(behavior = "auto", { force = false } = {}) {
     atBottom = true;
+    if (force) jumpingUntil = Date.now() + JUMP_GUARD_MS;
     clearUnread();
     if (stickRaf) {
       cancelAnimationFrame(stickRaf);
@@ -1520,12 +1538,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     if (behavior === "smooth") {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (atBottom)
-            thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
-        });
-      });
+      const glide = () => {
+        if (!atBottom && !force) return;
+        atBottom = true;
+        thread.scrollTo({ top: thread.scrollHeight, behavior: "smooth" });
+      };
+      // A forced glide starts inside the gesture, before anything can veto it —
+      // issuing it now also supersedes a scroll already in flight rather than
+      // letting that one cancel us. The delayed pass still runs, for whatever
+      // laid out in the meantime.
+      if (force) glide();
+      requestAnimationFrame(() => requestAnimationFrame(glide));
       return;
     }
 
@@ -1627,13 +1650,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function updateJumpBtn() {
     if (!jumpBtn) return;
-    const shouldShow = !atBottom;
+    const shouldShow = !atBottom && Date.now() >= jumpingUntil;
     jumpBtn.classList.toggle("visible", shouldShow);
     if (jumpCount)
       jumpCount.textContent = unreadCount > 0 ? String(unreadCount) : "";
   }
 
-  jumpBtn?.addEventListener("click", () => scrollToBottom("smooth"));
+  jumpBtn?.addEventListener("click", () => scrollToBottom("smooth", { force: true }));
 
   thread.addEventListener("scroll", () => {
     atBottom = measureAtBottom();
@@ -1655,6 +1678,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       evt,
       () => {
         if (stickThroughLoad) releaseStickThroughLoad();
+        // They're steering again — the button belongs to them, not to the
+        // glide they've just overridden.
+        jumpingUntil = 0;
       },
       { passive: true },
     );
@@ -2963,6 +2989,24 @@ document.addEventListener("DOMContentLoaded", async () => {
         ) {
           applyBuddyTheme(convo);
         }
+        return;
+      }
+      if (data.kind === "conversation_read") {
+        // Another device opened this thread. One person reading one message is
+        // one event, so the count comes off here without anybody having to
+        // dismiss it a second time.
+        const readId = data.conversation_id;
+        if (readId == null) return;
+        drawerUnread.clear(readId);
+        if (readId === currentConversationId) {
+          // Includes the in-thread pip: the number on the jump button counts
+          // what arrived while they were scrolled up, and that has been read
+          // too now.
+          unseenInCurrent = false;
+          clearUnread();
+        }
+        convoManager?.render();
+        repaintAppBadge();
         return;
       }
       if (data.kind === "buddy_expression") {

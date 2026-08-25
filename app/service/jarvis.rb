@@ -73,10 +73,16 @@ class Jarvis
     PrettyLogger.log(*messages)
   end
 
-  def self.command(user, words)
+  # `on_tasks` hands back the Jil tasks the words actually set off, in the order
+  # they ran. Byte draws a receipt chip per task so a spoken command leaves the
+  # same visible trail a Buddy tool call does — everywhere else ignores it, and
+  # a caller that passes no block costs nothing.
+  def self.command(user, words, &on_tasks)
     return if words.blank?
 
-    res, res_data = new(user, words).command
+    jarvis = new(user, words)
+    res, res_data = jarvis.command
+    on_tasks&.call(jarvis.ran_tasks)
 
     if user.persisted? && res.present?
       JarvisChannel.broadcast_to(
@@ -162,9 +168,15 @@ class Jarvis
     ]
   end
 
+  # The Jil tasks this command ran. Empty until `command` has been through the
+  # :tell trigger, and empty for good if nothing listened — the Jarvis::Action
+  # fallbacks below aren't tasks and have nothing to show.
+  attr_reader :ran_tasks
+
   def initialize(user, words)
     @user = user
     @words = NumberParser.parse(words.to_s)
+    @ran_tasks = []
 
     Time.zone = "Mountain Time (US & Canada)"
   end
@@ -181,6 +193,9 @@ class Jarvis
       { words: tell_words, timestamp: timestamp, full: tell_full, has_time: scheduled_time.present? },
       auth: :words,
     )
+    # Recorded before the early returns below, which is the whole point: a task
+    # that stops propagation is the one most worth showing.
+    @ran_tasks = Array(tasks)
     return tasks.last.last_message if tasks.any?(&:stop_propagation?)
 
     tasks.select { |t| t.trigger_type == :tell }.last&.tap { |task|

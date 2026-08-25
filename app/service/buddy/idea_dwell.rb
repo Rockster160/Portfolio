@@ -101,7 +101,7 @@ module Buddy
     # quick action, the chip that renders one, a tool's own receipt, a watch
     # firing on its own. Counting those would let a doorbell notification vote
     # on what the conversation is about.
-    SKIP_KINDS = %w[action_chip buddy_activity buddy_trigger buddy_receipt].freeze
+    SKIP_KINDS = %w[action_chip buddy_activity buddy_trigger buddy_receipt jarvis].freeze
 
     # Sources that are the APP asking or announcing rather than the
     # conversation. `form` is the attribution prompt ("Who did: Puppy Up?") -

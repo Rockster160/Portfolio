@@ -10,9 +10,51 @@
 #
 # Slash commands are deliberately NOT here: they act on the conversation record
 # itself (rename, archive, fork) and belong to the surface that can render their
-# acknowledgement. ByteController handles those before it calls this.
+# acknowledgement. ByteController handles those before it calls this. What DOES
+# live here is the rule for what a leading "/" or "." means, because two callers
+# need the same answer and one of them is the Mac CLI, which never sees the
+# controller.
 class ByteMessageIntake
   MONITOR_CHANNEL = :byte
+
+  # Every verb a slash command can start with — the ones ByteController answers
+  # itself, plus the ones that fall through to the Mac's meta handler. It has to
+  # be the whole list, because of what it now gates: a "." in front of anything
+  # NOT on it goes to Jarvis, so a verb missing here is a slash command that
+  # silently turns into a spoken one. Mirrors COMMANDS in
+  # app/javascript/src/pages/byte/slash_commands.js.
+  SLASH_VERBS = (
+    "abort adopt archive buddy cd clear compact continue fork help join mode " \
+      "new pwd rename reset sessions switch today unwatch wait waits watch watches"
+  ).split.freeze
+
+  # "/" always means a slash command, known verb or not — an unknown one is the
+  # Mac's to answer or refuse. "." is the mobile-friendly prefix (the period is
+  # closer to the space bar than the slash) and it only counts for a verb we
+  # actually know, because everything else after a dot now belongs to Jarvis.
+  def self.slash_command?(body)
+    text = body.to_s.strip
+    return true if text.start_with?("/")
+    return false unless text.start_with?(".")
+
+    SLASH_VERBS.include?(verb_of(text))
+  end
+
+  # Straight to Jarvis, exactly as if it had been said out loud in the room.
+  def self.jarvis_aside?(body)
+    body.to_s.strip.start_with?(".") && !slash_command?(body)
+  end
+
+  # What Jarvis is actually given: the dot is our routing marker, not part of
+  # what they said. Stripped for the conversation-wide :jarvis mode too, where
+  # someone may well type one out of habit.
+  def self.jarvis_words(body)
+    body.to_s.strip.delete_prefix(".").strip
+  end
+
+  def self.verb_of(text)
+    text[1..].to_s.strip.split(/\s+/, 2).first.to_s.downcase
+  end
 
   # Returns the persisted outbound message, or nil for a blank body.
   def self.call(**)
@@ -67,6 +109,17 @@ class ByteMessageIntake
     # upgrades its queued bubble to this id and stops.
     if (already = existing_for_local_id)
       return already
+    end
+
+    # A "." command is Jarvis's, and nothing else gets first refusal on it — not
+    # the stash latch, not the alarm word, not the timer parser, not Buddy.
+    # That is what "as if I'd said it out loud" has to mean, or the same words
+    # would do two different things depending on which thread they were typed in.
+    if jarvis_aside?
+      @metadata = @metadata.to_h.merge(kind: :jarvis)
+      message = post!(state: :sent)
+      ByteJarvisWorker.perform_async(message.id)
+      return message
     end
 
     # They long-pressed one message and answered THAT. Above everything below
@@ -151,6 +204,13 @@ class ByteMessageIntake
 
   def buddy?
     @conversation.buddy?
+  end
+
+  # Owner only. Jarvis drives the house, the car, the printer and the lists, and
+  # a buddy-only household member has no business there — /mode already refuses
+  # them a jarvis thread, and a prefix must not be the way around that.
+  def jarvis_aside?
+    @user.me? && self.class.jarvis_aside?(@body)
   end
 
   def reply_target

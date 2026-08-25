@@ -48,4 +48,48 @@ RSpec.describe ByteJarvisWorker do
   it "is a no-op for a missing message id" do
     expect { described_class.new.perform(-1) }.not_to raise_error
   end
+
+  # A Jil task that ran leaves the same receipt a Buddy tool call does, so "did
+  # that actually do anything?" is answered by the thread rather than by trusting
+  # the sentence underneath it.
+  describe "receipts for the Jil tasks that ran" do
+    let(:task) {
+      Task.create!(user: user, name: "Garage Door", listener: "tell:garage", code: "", enabled: true)
+    }
+
+    it "files a chip per task, before the reply" do
+      allow(::Jarvis).to receive(:command) { |_u, _w, &blk|
+        blk&.call([task])
+        "Opening the garage."
+      }
+
+      described_class.new.perform(message.id)
+
+      chip = convo.byte_messages.where("metadata->>'kind' = ?", "buddy_activity").last
+      expect(chip.body).to eq("Called **Garage Door**")
+      expect(chip.metadata["tool_name"]).to eq("jarvis_task")
+      expect(chip.metadata["payload"]["task_name"]).to eq("Garage Door")
+      expect(chip.id).to be < convo.byte_messages.where("metadata->>'kind' = ?", "jarvis").last.id
+    end
+
+    it "files nothing when the words only reached Jarvis's own fallbacks" do
+      allow(::Jarvis).to receive(:command) { |_u, _w, &blk|
+        blk&.call([])
+        "Sure."
+      }
+
+      chips = -> { convo.byte_messages.where("metadata->>'kind' = ?", "buddy_activity").count }
+      expect { described_class.new.perform(message.id) }.not_to change(chips, :call)
+    end
+  end
+
+  # The dot is the routing marker, not part of what they said.
+  it "strips the prefix before Jarvis sees it" do
+    aside = convo.byte_messages.create!(
+      user: user, direction: :outbound, state: :sent, body: ".turn on the kitchen lights",
+    )
+    expect(::Jarvis).to receive(:command).with(user, "turn on the kitchen lights").and_return("k")
+
+    described_class.new.perform(aside.id)
+  end
 end

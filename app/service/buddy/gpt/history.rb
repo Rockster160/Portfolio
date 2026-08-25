@@ -35,6 +35,15 @@ module Buddy
       # model those brackets are system framing so it doesn't write them itself.
       RELAY_KIND = "buddy_relay".freeze
 
+      # A "." aside — said straight to Jarvis from inside a Buddy thread, and
+      # answered by Jarvis. A third voice again, and it has to be replayed for
+      # the same reason the relay bridges do: without it the person's turn sits
+      # there with no answer under it, and the next vague message gets read as
+      # being about the last unanswered thing. Both halves are bracketed so
+      # Buddy can see it happened, can answer "did that work?", and doesn't
+      # mistake either one for something it was asked or something it said.
+      JARVIS_KIND = "jarvis".freeze
+
       # The one receipt chip that DOES have to be replayed.
       #
       # A fast-pathed timer is served straight from Rails, so the model is never
@@ -156,6 +165,7 @@ module Buddy
 
         return nil if body.empty?
 
+        return { role: :assistant, content: "[Jarvis] #{body}" } if jarvis_aside?(message)
         return { role: :assistant, content: relay_content(message, body) } if relay?(message)
         return { role: :assistant, content: form_standin(message, body) } if form_card?(message)
 
@@ -215,6 +225,8 @@ module Buddy
       # turn that reads it as being addressed here answers a note meant for
       # somebody else.
       def outbound_body(message, body)
+        return "[asked Jarvis directly] #{body}" if jarvis_aside?(message)
+
         prefix = reply_prefix(message)
         prefix ? "#{prefix} #{body}".strip : body
       end
@@ -285,6 +297,10 @@ module Buddy
 
       def relay?(message)
         kind_of(message) == RELAY_KIND
+      end
+
+      def jarvis_aside?(message)
+        kind_of(message) == JARVIS_KIND
       end
 
       def fast_path?(message)

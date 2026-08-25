@@ -87,7 +87,11 @@ class ByteController < ApplicationController
     # the dispatcher strips whichever one was used. A command has no bubble to
     # hang an image on, so any attachment sent alongside one is deliberately
     # dropped; the blob it left behind is ActiveStorageSweepWorker's problem.
-    if (body.start_with?("/") || body.start_with?(".")) && (handled = handle_rails_slash_command(conversation, body))
+    #
+    # A "." only counts as a slash command for a verb we know — everything else
+    # after one is for Jarvis, and ByteMessageIntake owns that split so the Mac
+    # CLI reaches the same answer without coming through here.
+    if ByteMessageIntake.slash_command?(body) && (handled = handle_rails_slash_command(conversation, body))
       return render(json: handled.as_wire, status: :ok)
     end
 
@@ -322,10 +326,13 @@ class ByteController < ApplicationController
     render json: convo.as_wire, status: :created
   end
 
-  # Opening a thread marks it read. Separate from update_conversation on
-  # purpose: that one broadcasts a change to every client, and a read is a fact
-  # about ONE device's screen — telling the others to repaint over it would take
-  # the badge off a phone because a desk browser looked at the thread.
+  # Opening a thread marks it read on every device this person has open.
+  #
+  # It used to be deliberately local, on the reasoning that a read is a fact
+  # about ONE screen. In practice that meant dismissing the same Audit thread on
+  # the phone, then the tablet, then the desk browser, and the second and third
+  # dismissals said nothing the first one hadn't. One person reading one message
+  # is one event.
   #
   # Returns the new totals so the caller can repaint without a second fetch.
   def read_conversation
@@ -333,6 +340,7 @@ class ByteController < ApplicationController
     return head(:not_found) if convo.nil?
 
     convo.mark_read!
+    broadcast_convo_read(convo)
     render json: {
       id:           convo.id,
       unread_count: 0,
@@ -825,6 +833,23 @@ class ByteController < ApplicationController
       id:      MONITOR_CHANNEL,
       channel: MONITOR_CHANNEL,
       data:    { kind: :conversation, event: kind, conversation: convo.as_wire },
+    })
+  end
+
+  # A read goes out as its own kind rather than through broadcast_convo_change.
+  # The conversation record hasn't changed — nothing about the row wants
+  # repainting — and the only thing the other devices have to do is drop a
+  # count they're holding. Sending the whole wire object would invite a client
+  # that is LOOKING at this thread to redraw its header for someone else's tap.
+  def broadcast_convo_read(convo)
+    MonitorChannel.broadcast_to(current_user, {
+      id:      MONITOR_CHANNEL,
+      channel: MONITOR_CHANNEL,
+      data:    {
+        kind:            :conversation_read,
+        conversation_id: convo.id,
+        unread_total:    ByteConversation.unread_total_for(current_user),
+      },
     })
   end
 
