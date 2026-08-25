@@ -12,6 +12,7 @@ class Jil::Methods::Global < Jil::Methods::Base
     case line.methodname
     when :input_data then @jil.input_data
     when :params then @jil.input_data&.dig(:params)
+    when :commit_sha then ::COMMIT_SHA
     when :functionParams then splatParams(line)
     when :exit then @jil.ctx[:state] = :exit
     when :return
