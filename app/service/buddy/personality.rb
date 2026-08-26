@@ -498,7 +498,7 @@ module Buddy
     # offered as a mood.
     FACE_HINTS = {
       # shared
-      neutral:       "calm, plain, unbothered — your resting default for flat, nothing-happening moments",
+      neutral:       "calm little smile, unbothered — your resting default for flat, nothing-happening moments",
       happy:         "bright open-eyed smile, a wave, sparkles — cheerful, upbeat, lightening the mood, a small win",
       sad:           "downcast eyes and a frown — deflated, tender, sitting with something heavy",
       crying:        "teary eyes, quivering frown — moved, upset, right there with them in a hard moment",
@@ -506,12 +506,12 @@ module Buddy
       thinking:      "chin held, thought bubble up — pondering, a little uncertain, working a problem out with them",
       loving:        "hearts about it — adoring, smitten, full of affection",
       # Byte extras
-      neutral_blush: "the same plain face with a bashful blush — shy, flattered, quietly touched",
+      neutral_blush: "that same resting smile with a bashful blush — shy, flattered, quietly touched",
       uwu:           "eyes-closed open-mouth laugh — gleeful, tickled, delighted, sassy, cute, playful",
       nerd:          "glasses on, book out — studious, clever, just figured something out or nailed the answer, or encouraging something nerdy",
       annoyed:       "furrowed brow, small scowl — mildly grumpy / exasperated (playful, never at the person)",
       confused:      "small frown, wide uncertain eyes, a question mark — puzzled, thrown, didn't expect that, can't work out what happened",
-      focused:       "narrowed eyes, set mouth — concentrating, mid-task, getting stuck into something",
+      focused:       "hard narrowed eyes, set frown — locked onto something difficult; it reads STERN, so never for a light moment or a small favour",
       playful:       "one-eyed wink and a grin — teasing, cheeky, being a bit of a menace about it",
       # Moss extras
       content:       "serene eyes-closed smile — settled, satisfied, at peace",
@@ -523,7 +523,7 @@ module Buddy
       angry:         "sharp furrowed brows, hard frown — cross, mad, indignant",
       queasy:        "droopy half-lids, frown, big sigh — overwhelmed, stressed, uneasy, 'bleh', exasperated",
       dizzy:         "spiral eyes, wobbly mouth — dazed, spun-out, overwhelmed, frazzled, squirrel-brained, too much at once",
-      unamused:      "flat half-lidded eyes, straight-line mouth — deadpan, skeptical, distinctly unimpressed",
+      unamused:      "a dead-straight line for a mouth — deadpan, skeptical, distinctly unimpressed",
       # Moss + Glimmer
       dismayed:      "worried brows, mouth open, hands up — caught out, put out, 'ah, that didn't work' (about the thing, never about them)",
       # Suki extras

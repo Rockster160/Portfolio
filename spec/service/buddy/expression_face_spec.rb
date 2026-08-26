@@ -84,7 +84,7 @@ RSpec.describe Buddy::ExpressionState do
 
       described_class.react!(convo)
 
-      expect(convo.reload.buddy_expression).to be_in(%w[happy focused nerd])
+      expect(convo.reload.buddy_expression).to be_in(%w[happy neutral_blush nerd])
     end
 
     # A face the model picked is a read of the room. This is a floor under a

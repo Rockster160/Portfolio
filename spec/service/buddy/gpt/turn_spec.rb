@@ -191,14 +191,14 @@ RSpec.describe Buddy::GPT::Turn do
       it "still looks pleased when the reply says it worked" do
         acts_then_says("Kitchen lights are on now.")
 
-        expect(convo.reload.buddy_expression).to be_in(%w[happy focused nerd])
+        expect(convo.reload.buddy_expression).to be_in(%w[happy neutral_blush nerd])
       end
 
       # The one cheerful phrase that would otherwise read as a setback.
       it "does not read looking forward to something as a miss" do
         acts_then_says("Timer's set. I can't wait to hear how it goes!")
 
-        expect(convo.reload.buddy_expression).to be_in(%w[happy focused nerd])
+        expect(convo.reload.buddy_expression).to be_in(%w[happy neutral_blush nerd])
       end
     end
   end

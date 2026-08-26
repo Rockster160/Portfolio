@@ -35,7 +35,7 @@ module Buddy
           { say: "*squish* **%<name>s**, going now.", mood: :happy },
           { say: "On it. **%<name>s**. *boing*", mood: :uwu },
           { say: "**%<name>s** it is. Squish.", mood: :uwu },
-          { say: "Got it. **%<name>s** is in motion.", mood: :focused },
+          { say: "Got it. **%<name>s** is in motion.", mood: :neutral_blush },
           { say: "Bouncing over to **%<name>s**.", mood: :happy },
           { say: "Right then. Reshaping around **%<name>s**.", mood: :nerd },
           { say: "One **%<name>s**, coming through. *wobble*", mood: :uwu },
@@ -228,16 +228,18 @@ module Buddy
     # eyes, a question mark — so it leads, with `annoyed` behind it for the
     # times it's more exasperating than baffling.
     #
-    # `focused` earns its place on the ok side for the opposite reason: it is
-    # the face for being MID-TASK, which is what a turn that just ran something
-    # actually is, rather than a reaction to how it turned out.
+    # `focused` was on the ok side for a while on the theory that it's the face
+    # for being MID-TASK. It came off: Byte's is a hard slanted glare, and over
+    # "Kk! Tesla's off. *squish*" it read as cross at being asked. By the time a
+    # reply lands the task is DONE anyway — this slot is a reaction to how it
+    # went, and nothing here should be able to look annoyed by accident.
     #
     # Moss and Glimmer have `dismayed` for it now — worried brows, mouth open —
     # which is nearer the moment than anything either of them had. Glimmer was
     # wearing `surprised` here for want of a better face, and startled is not
     # the same thing as sorry.
     ACTED_MOODS = {
-      byte:    { ok: %i[happy focused nerd], failed: %i[confused annoyed sad] },
+      byte:    { ok: %i[happy neutral_blush nerd], failed: %i[confused annoyed sad] },
       moss:    { ok: %i[happy content], failed: %i[dismayed unamused queasy sad] },
       suki:    { ok: %i[cheery happy offering], failed: %i[annoyed dizzy] },
       glimmer: { ok: %i[content happy], failed: %i[dismayed sad] },

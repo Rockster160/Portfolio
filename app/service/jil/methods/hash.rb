@@ -3,8 +3,23 @@ class Jil::Methods::Hash < Jil::Methods::Base
     tz = ::Tokenizer.new(raw.to_s.gsub(/\\(["'\\])/, '\1'), only: { "\"" => "\"", "'" => "'" })
     # TODO: Deal with hash rocket syntax
     # Also make sure to handle symbols: `"[:a]"` → `"[\"a\"]"`
+    # The bare-key rule turns `{foo: 1}` into `{"foo": 1}`. A key that was
+    # ALREADY quoted is a token by this point, and tokens are word characters
+    # (`__TOKEN1__`), so it matched too and came back wrapped a second time —
+    # `""foo"": 1`, which is not JSON and parses to `{}`.
+    #
+    # It only bites when there is a SPACE after the colon, which is why it stood
+    # this long: Ruby's `to_json` writes `"foo":1` and never trips it, so every
+    # fixture and every spec here was written in the one form that can't. Python's
+    # `json.dumps` defaults to `", "` / `": "` separators and trips it on EVERY
+    # object. Prod 6194466, 25 Aug 2026: a 464KB camera frame from Home Assistant
+    # — well-formed, `"ok": true`, whole image present — parsed to `{}`, and the
+    # picture was reported missing four separate times.
     processed = tz.untokenize(
-      tz.tokenized_text.gsub(/(\w+): /, '"\1": ').gsub("nil", "null"),
+      tz.tokenized_text.gsub(/(\w+): /) { |match|
+        key = ::Regexp.last_match[1]
+        key.match?(/\A__TOKEN\d+__\z/) ? match : "\"#{key}\": "
+      }.gsub("nil", "null"),
     ) { |str|
       str.gsub(/^'(.*?)'$/, '"\1"')
         .gsub(/(\\*)\\\n/, "\\n") # TODO: negative lookbehind to make sure it's not escaped

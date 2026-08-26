@@ -60,6 +60,62 @@ RSpec.describe Jil::Methods::Hash do
     end
   end
 
+  # Standard JSON, quoted keys, space after the colon — what every non-Ruby
+  # producer emits. Python's `json.dumps` uses `", "` / `": "` by default, so
+  # anything coming back from Home Assistant looks like this. It parsed to `{}`
+  # until 25 Aug 2026: the bare-key rewrite (`{foo: 1}` → `{"foo": 1}`) also
+  # matched the TOKEN standing in for an already-quoted key and wrapped it a
+  # second time. The specs above all used bare keys or Ruby's compact `to_json`,
+  # neither of which has the space that triggers it.
+  describe ".parse on standard JSON" do
+    {
+      "spaced, quoted keys"  => '{"ok": true, "camera": "camera.doorbell_fluent", "note": ""}',
+      "compact, quoted keys" => '{"ok":true,"camera":"camera.doorbell_fluent","note":""}',
+      "mixed spacing"        => '{"ok": true,"camera":"camera.doorbell_fluent", "note": ""}',
+    }.each do |label, json|
+      it "reads #{label}" do
+        parsed = described_class.parse(json)
+
+        expect(parsed[:ok]).to be(true)
+        expect(parsed[:camera]).to eq("camera.doorbell_fluent")
+        expect(parsed[:note]).to eq("")
+      end
+    end
+
+    it "keeps nulls, numbers and nested objects intact" do
+      parsed = described_class.parse(
+        '{"off_by_seconds": 0, "shrunk": null, "inner": {"a": 1}, "list": [1, 2]}',
+      )
+
+      expect(parsed[:off_by_seconds]).to eq(0)
+      expect(parsed[:shrunk]).to be_nil
+      expect(parsed[:inner][:a]).to eq(1)
+      expect(parsed[:list]).to eq([1, 2])
+    end
+
+    # A value with a colon-space inside it must survive untouched — the rewrite
+    # applies to keys, and a quoted value is not one.
+    it "leaves a colon inside a value alone" do
+      parsed = described_class.parse('{"note": "Frame from 12:03:21 PM on Aug 24."}')
+
+      expect(parsed[:note]).to eq("Frame from 12:03:21 PM on Aug 24.")
+    end
+
+    it "still quotes a genuinely bare key" do
+      expect(described_class.parse("{foo: 1, bar: 2}")).to eq("foo" => 1, "bar" => 2)
+    end
+
+    # The payload that found this: base64 runs to hundreds of KB and is full of
+    # "/" and "+", and the whole thing sits inside one quoted value.
+    it "reads a frame carrying a large base64 image" do
+      b64 = Base64.strict_encode64("\xFF\xD8\xFF\xE0".b + Random.new(3).bytes(60_000))
+      parsed = described_class.parse(%({"ok": true, "bytes": 60004, "image_b64": "#{b64}"}))
+
+      expect(parsed[:ok]).to be(true)
+      expect(parsed[:image_b64]).to eq(b64)
+    end
+  end
+
   describe ".length" do
     before do
       code << "r817a = n7c03.length()::Numeric"
