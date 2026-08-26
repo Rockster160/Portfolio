@@ -131,6 +131,30 @@ module Buddy
       "High of #{high}°F today, low of #{low}°F#{", with #{clause}" if clause}."
     end
 
+    # The departure time, composed here for the same reason the weather line is.
+    #
+    # `leave_by` arrives already worked out and the prompt is explicit about it
+    # - "Both are figures; say the figures" - and it keeps losing to the shape
+    # that names the CATEGORY instead. Prod 4529: "You've got Yoga first this
+    # morning, with a pretty full drive time before it", sent at 8:25 to
+    # somebody who had to walk out at 8:46, and neither figure in it. The travel
+    # alert covered it eleven minutes later, which is the only reason nothing
+    # broke; the briefing is the one that arrives while there is still time.
+    #
+    # Same trade as weather_line: this only fills a silence. When the model puts
+    # the clock time in its own sentence, the model's is what ships.
+    def leave_line(items)
+      parts = Array(items).filter_map { |i|
+        next if i[:leave_by].blank?
+
+        drive = i[:drive_min].to_i
+        "#{i[:title]}: leave by #{i[:leave_by]}#{", about #{drive} minutes' drive" if drive.positive?}"
+      }
+      return nil if parts.empty?
+
+      "#{parts.join(". ")}."
+    end
+
     def greet_lines
       [
         "#{GREET_DIRECTIVE} Not optional, not a judgement call, and not conditional on anything. It is the FIRST thing in the message, before any news. Every Today opens with a hello - it's part of the shape of the thing, the way a letter opens with a name.",
@@ -293,6 +317,8 @@ module Buddy
         Being specific is the other half of that. A vague gesture at a busy morning, without naming what's in it, is the opposite failure and costs me just as much - I still have to go and look. And if the day genuinely holds nothing unusual, say so briefly and warmly and stop. That is a correct briefing, not a failed one, and padding it back out to length is the thing being avoided here.
 
         WHEN referring to a day: say "tomorrow" for the next day, not the weekday name. Weekday names only for two-plus days out.
+
+        AN `all_day` ITEM HAS NO TIME, so don't give it one. Saying that one runs all day makes a duration out of a day, and reads like a scheduling detail rather than a thing that's happening; it is simply on today. Name it, say today, and leave the clock out of it. Same for anything else that runs the whole date - a birthday, a holiday, a travel day, a deadline.
 
         WEIGHT BY HOW ROUTINE IT IS (the `cadence` tag):
         - A less-frequent cadence is something I may not have top of mind, so a light touch helps. Touch on it, don't dive into details.

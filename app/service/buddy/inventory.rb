@@ -156,15 +156,22 @@ module Buddy
     # answer is that container's direct contents rather than everything under
     # it - "what's in the garage" wants the shelves, not 60 screws.
     def search(user:, query: nil, inside: nil, limit: LIMIT)
-      container = inside.present? ? resolve!(user, inside, verb: "look in", arg: :inside) : nil
+      root      = top_level?(inside)
+      container = (resolve!(user, inside, verb: "look in", arg: :inside) if inside.present? && !root)
       scope     = all_for(user)
       scope     = scope.within(container.param_key) if container
 
       if query.blank?
-        raise "say what to look for" if container.nil?
+        raise "say what to look for" if container.nil? && !root
 
-        items = container.contents.to_a
-        return { items: items.first(limit), total: items.length, container: container }
+        items = root ? roots(user) : container.contents.to_a
+        return {
+          items:     items.first(limit),
+          total:     items.length,
+          container: container,
+          root:      (true if root),
+          counts:    (totals(user) if root),
+        }.compact
       end
 
       # Name, notes and description - the THING - and deliberately not
@@ -183,6 +190,28 @@ module Buddy
       items = rank(scope.to_a, query.to_s.strip)
 
       { items: items.first(limit), total: items.length, container: container }
+    end
+
+    # "What have I got" - the top of the tree, and the figures for the whole of
+    # it. There was no name for the root: `inside` took a box and nothing else,
+    # so a question about the inventory ITSELF ("what are my top level boxes",
+    # "how much is in there") raised "say what to look for" and there was no
+    # second thing to try. TOP_LEVEL_WORDS was already the vocabulary for it,
+    # wired only into moving something OUT of a box.
+    def top_level?(inside)
+      TOP_LEVEL_WORDS.include?(inside.to_s.strip.downcase.delete_prefix("the "))
+    end
+
+    def roots(user)
+      all_for(user).where(parent_key: nil).ordered.to_a
+    end
+
+    # A box and an item are the same row - `empty` is the whole difference (see
+    # the note at the top) - so this is the one place that reads it as a count
+    # of two kinds of thing rather than a flag on one.
+    def totals(user)
+      by_empty = ::Box.where(user_id: user.id).group(:empty).count
+      { boxes: by_empty[false].to_i, items: by_empty[true].to_i }
     end
 
     # ---- photos ----

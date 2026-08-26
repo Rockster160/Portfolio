@@ -215,6 +215,7 @@ module Buddy
 
       def self.unbacked_claim(body)
         return nil if body.blank?
+        return :call if body.match?(TRIED_CLAIM_RX)
         return :claim if body.match?(COMPLETION_CLAIM_RX)
         return :promise if body.match?(ACTION_PROMISE_RX) && !body.match?(SOLICITS_INFO_RX)
 
@@ -401,6 +402,27 @@ module Buddy
       # thing is built and sitting on screen waiting to be tapped, so throwing
       # the reply away would be as wrong as leaving the claim standing.
       PENDING_BODY = "Almost - I've got that ready right below, it just needs your tap.".freeze
+
+      # What to say when the claim was about the CALL rather than a record.
+      # "I did try now" and "the snapshot call came back clean" are not a wrong
+      # tense over a real row - there is nothing under them at all - and the
+      # person is mid-argument about whether it happened by the time one lands.
+      # Saying which way it actually went is the only useful thing left.
+      NO_CALL_BODY = "Actually, no - I didn't run anything just then, so I've got nothing to " \
+                     "report back. Let me go and do it properly.".freeze
+
+      # What to APPEND when a turn did the work and then said it hadn't.
+      #
+      # Prod 4661, 25 Aug: three inventory edits, all executed, under "I didn't
+      # actually get the merge done cleanly, and I'm not going to pretend I
+      # did." He was left believing a correct inventory was broken, and the
+      # remedy offered underneath would have re-merged two rows that no longer
+      # existed. The mirror of a false claim and the more expensive one, because
+      # nothing about it looks like a failure - it looks like honesty.
+      #
+      # Appended rather than swapped in: the reply may be right about everything
+      # else in it, and the correction is one fact it got wrong.
+      DENIAL_CORRECTION = "(Correction from me: that did go through - %s.)".freeze
 
       # The model leads a reply with `[[mood:NAME]]` to set its face as the words
       # land (see the persona's "Your face"). Only a LEADING mood marker is the
@@ -739,6 +761,7 @@ module Buddy
         # already finished and the slowest part of the turn would still look
         # like nothing was happening.
         note_progress(name, call[:arguments])
+        @read_context ||= name == ContextTool::NAME
         @read_actions ||= name == ContextTool::NAME && ContextTool.serves?(call[:arguments], :recent_actions)
         reader = read_tools[name]
         return reader.call(call[:arguments]) if reader
@@ -829,6 +852,33 @@ module Buddy
         - If you meant to say the thing yourself, say it. In full, in this reply.
 
         A lead-in is never the whole message.
+      TXT
+
+      # An affirmation written without looking at anything.
+      #
+      # The seed asks for "something real and specific to ME, not a greeting-card
+      # line" and names the stock shape to avoid. Four running came back anyway -
+      # "You've got this. 💙", "Aww, lovely!! 💛", "Absolutely!! You've got
+      # this!", "You've got this, lovely!!" - each one a single sentence under
+      # thirty characters that could have gone to anybody. Against 25 Jul: "Six
+      # deploys in one night, pets cared for, and you still showed up to Serenity
+      # this morning."
+      #
+      # Every one of the four was a one-call turn: it never looked. So the
+      # mechanical half of "specific to ME" isn't the wording, it's whether
+      # anything was READ, and that is checkable.
+      AFFIRMATION_NUDGE = <<~TXT.freeze
+        STOP. They tapped Affirmation, and you wrote one without looking at
+        anything, so it could have gone to anyone.
+
+        Call `get_context` now - `recent_events`, `chores_done_today`,
+        `today_agenda`, `stashed_ideas` - and find one true thing from their
+        actual day or their week. Then say it.
+
+        Name what they DID. "You've got this" and "you showed up today" are the
+        shape to avoid; a specific effort, a stretch they've been keeping up, a
+        thing that went right this week, is the shape to write. Two sentences is
+        fine and usually better than one.
       TXT
 
       # What goes out when everything the model wrote was framing it had been
@@ -1005,6 +1055,60 @@ module Buddy
         # Missing weather is a worse briefing; a raise here is no briefing.
         Rails.logger.warn("[Buddy::GPT::Turn] weather fallback failed: #{e.class}: #{e.message}")
         body
+      end
+
+      # Departure times the briefing was handed and didn't say.
+      #
+      # See Buddy::TodayBriefing.leave_line for the miss and the reasoning. This
+      # is the with_weather shape: read what the model was SHOWN, check the
+      # figure against what it wrote, and put the figure on when it isn't there.
+      #
+      # Only items it NAMED. An item the briefing chose to leave out is a
+      # judgement it's allowed to make, and appending a departure time for
+      # something never mentioned would raise it in the worst possible way -
+      # a clock time with no idea what it belongs to.
+      def with_leave_times(body)
+        return body unless today_briefing?
+
+        missed = unsaid_departures(body)
+        return body if missed.empty?
+
+        line = Buddy::TodayBriefing.leave_line(missed)
+        return body if line.blank?
+
+        "#{body.rstrip}\n\n#{line}"
+      rescue StandardError => e
+        Rails.logger.warn("[Buddy::GPT::Turn] leave-time fallback failed: #{e.class}: #{e.message}")
+        body
+      end
+
+      def unsaid_departures(body)
+        items = served_context[:today_notable]
+        return [] unless items.is_a?(Array)
+
+        items.select { |i|
+          i.is_a?(::Hash) && i[:leave_by].present? && named_in?(body, i[:title]) &&
+            !body.include?(i[:leave_by].to_s.sub(/\s*[ap]\.?m\.?\z/i, "").strip)
+        }
+      end
+
+      # Did the reply name this item? Matched on the title as written, which is
+      # how the briefing says one - it reads the name off the same field.
+      def named_in?(body, title)
+        title = title.to_s.strip
+        return false if title.length < 2
+
+        body.downcase.include?(title.downcase)
+      end
+
+      # What get_context actually served this turn, or nothing if it was never
+      # called. Never builds the context itself: a turn that didn't look has
+      # nothing to be checked against, and paying for the whole of it at the end
+      # of every briefing to find that out would be the expensive way to learn it.
+      def served_context
+        read_tools[ContextTool::NAME].served
+      rescue StandardError
+        {}
       end
 
       # A hello that stops on a period, lifted.
@@ -1373,6 +1477,9 @@ module Buddy
         # worded. This one is invisible down there - the reply that goes out is
         # a refusal, and DENIAL_RX exempts those by design.
         return camera_nudge if camera_look_unanswered?
+        # Same footing as the camera arm: not about how the reply is worded, but
+        # about whether it was ever grounded in anything.
+        return AFFIRMATION_NUDGE if hollow_affirmation?
         return RETRY_NUDGE if unbacked_claim(spoken.to_s).present?
         # They asked for a thing to happen and nothing was called. Worth the
         # corrective round on its own — this is the half that gets the TV
@@ -1390,6 +1497,13 @@ module Buddy
 
       def unbacked_claim(body)
         self.class.unbacked_claim(body)
+      end
+
+      # They tapped Affirmation and nothing was read. See AFFIRMATION_NUDGE.
+      def hollow_affirmation?
+        return false if @read_context
+
+        quick_action == "affirmation"
       end
 
       # ---- cost accounting ---------------------------------------------------
@@ -1438,9 +1552,15 @@ module Buddy
       # chores do I have" and you still get the whole list, because that time
       # you asked for it.
       def today_briefing?
-        return false unless @inbound.metadata.is_a?(Hash)
+        quick_action == "today"
+      end
 
-        @inbound.metadata["buddy_action"].to_s == "today"
+      # Which quick action started this turn, if one did. Only the seeds carry
+      # the marker (Buddy::QuickActionsController#dispatch_trigger).
+      def quick_action
+        return "" unless @inbound.metadata.is_a?(Hash)
+
+        @inbound.metadata["buddy_action"].to_s
       end
 
       def tools
@@ -1515,7 +1635,7 @@ module Buddy
 
       def finalize_success(outcome)
         body = display_body(apply_leading_mood(outcome[:text]))
-        body = with_lifted_greeting(with_greeting(with_weather(without_briefing_claim(body))))
+        body = with_lifted_greeting(with_greeting(with_leave_times(with_weather(without_briefing_claim(body)))))
         # Scrubbing can empty a reply outright: on prod 4202 the form marker WAS
         # the whole body. A blank bubble is worse than the marker was - it reads
         # as Buddy having nothing to say to something they typed - so the turn
@@ -1551,6 +1671,7 @@ module Buddy
           @reply.update!(body: nothing ? FALLBACK_BODY : "Here you go:")
         else
           retract_false_claim!(result)
+          correct_false_denial!(result)
         end
 
         # A brain in the corner of the bubble. Writing to somebody's memory is
@@ -1755,7 +1876,40 @@ module Buddy
         | \b(?:told|messaged|pinged|texted)\s+(?:her|him|them)\b
         | \bin\s+the\s+loop\s+now\b
         | \b(?:she|he|they)\s+(?:knows?|has\s+it)\s+now\b
+        # The CALL shape. Every alternative above is a claim about a RECORD -
+        # added, logged, set, marked, running, moved, cancelled. Prod 4621 and
+        # 4623, 25 Aug, are a claim about the CALL ITSELF: "there's a camera
+        # snapshot call in the recent actions, and it came back clean", with no
+        # Camera Snapshot execution within four hours either side. He had to
+        # say it three times, ending on "Please do not pretend".
+        #
+        # The noun is what carries it. "Came back" and "went through" are
+        # ordinary English about anything ("the test came back", "the payment
+        # went through"), so one of the words for a thing Buddy RUNS has to be
+        # in the same sentence - no .!? between them.
+        # (No slashes in these comments - see the note above.)
+        | \b(?:call|snapshot|request|lookup|function|tool)\b[^.!?\n]{0,60}
+            \b(?:came\s+back|went\s+through|ran\s+(?:fine|clean|green|ok(?:ay)?))\b
         | #{RELAY_FRAMING_RX}
+      /xi
+
+      # The same fabrication in the FIRST PERSON, and the one shape that must
+      # not be excused by having read the action log.
+      #
+      # "I did try now" (prod 4623), "I hit the wrong kind of garage control
+      # just now" (prod 4672). Both name THIS turn - now, again, just - so
+      # what `recent_actions` holds about earlier turns cannot back either one.
+      # `retract_false_claim!`'s `@read_actions` carve-out exists for a
+      # completion sentence about an EARLIER turn ("yep, logged it at 6:03"),
+      # and these are the opposite of that.
+      #
+      # Past tense and a present-turn object, both load-bearing: "I'll try that"
+      # is an offer, "I tried calling her" names somebody rather than a call,
+      # and "I ran that by Chelsea" is a conversation.
+      TRIED_CLAIM_RX = /
+        \bi\s+(?:just\s+)?(?:did\s+)?(?:tried|try|fired|ran)\s+
+          (?:it|that|that\s+one|one|now|again)\b(?!\s+by\b)
+        | \bi\s+(?:just\s+)?hit\s+the\s+wrong\b
       /xi
 
       # Promises to act NOW that were never backed by a call. Different failure
@@ -2096,7 +2250,13 @@ module Buddy
         # makes for "did you turn the lights off?", extended to the case where
         # Buddy went and looked rather than being asked outright — which
         # CHECK_ACTIONS_NUDGE now pushes it into on every disputed action.
-        return if @read_actions
+        #
+        # `:call` is the one kind that does NOT get it. Those name this turn -
+        # "I did try now", "I hit the wrong one just now" - so the action log is
+        # what the sentence is misreading rather than what backs it. Prod 4621
+        # and 4623 both went out on a turn that had read `recent_actions` and
+        # described a call that was not in them.
+        return if @read_actions && kind != :call
 
         Rails.logger.warn(
           "[Buddy::GPT::Turn] retracted unbacked #{kind}#{" over a pending row" if pending} " \
@@ -2110,9 +2270,57 @@ module Buddy
 
       def retraction_body(kind, pending)
         return PENDING_BODY if pending
+        return NO_CALL_BODY if kind == :call
         return UNDONE_BODY if kind == :commanded
 
         FALLBACK_BODY
+      end
+
+      # A turn that DID the work and then said it hadn't. The mirror of
+      # `retract_false_claim!`, and see DENIAL_CORRECTION for what it cost.
+      #
+      # Narrow on purpose, because the PARTIAL turn is the ordinary shape and is
+      # honest - "timer's set, but I couldn't reach the TV" has a real miss in
+      # it, and a correction stapled to that would be the wrong fact. So every
+      # row on the card has to have executed, nothing may be waiting on a tap,
+      # and nothing may have failed to resolve. What's left is a turn where all
+      # of it landed and the words over the top deny it.
+      #
+      # Rows only. `@acted` and `auto_ran` also mean something ran, but an
+      # acting answering tool that RETURNS a miss ("couldn't get a frame") is
+      # a completed call reporting a failure, and that reply is correct.
+      SELF_DENIAL_RX = /
+          \bi\s+did\s*n['\u2019]?t\s+(?:actually\s+|quite\s+|really\s+)?
+            (?:get|do|manage|finish|land|pull|make)\b
+        | \bnot\s+going\s+to\s+pretend\b
+        | \bi\s+tripped\s+over\b
+        | \bnothing\s+(?:changed|happened|went\s+through|actually\s+ran)\b
+        | \b(?:did|does)\s*n['\u2019]?t\s+(?:go\s+through|land|take|stick)\b
+      /xi
+
+      def correct_false_denial!(result)
+        return if @failed.any? || pending_rows?(result)
+        return unless @reply.body.to_s.match?(SELF_DENIAL_RX)
+
+        ran = fully_executed_labels(result)
+        return if ran.empty?
+
+        Rails.logger.warn(
+          "[Buddy::GPT::Turn] corrected a false denial on message=#{@reply.id} " \
+          "user=#{@user.id} over #{ran.inspect}: #{@reply.body.to_s.truncate(160).inspect}",
+        )
+        @reply.update!(
+          body:     "#{@reply.body.to_s.rstrip}\n\n#{format(DENIAL_CORRECTION, ran.to_sentence)}",
+          metadata: (@reply.metadata || {}).merge("corrected_denial" => true),
+        )
+      end
+
+      # Every row on the action card, and only when every one of them ran.
+      def fully_executed_labels(result)
+        rows = buttons(result)
+        return [] if rows.empty? || rows.any? { |b| b["status"].to_s != "executed" }
+
+        rows.filter_map { |b| b["label"].to_s.strip.presence }.uniq
       end
 
       # Something genuinely ran: an acting answering tool settled inside the

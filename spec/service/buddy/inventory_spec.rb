@@ -88,6 +88,19 @@ RSpec.describe Buddy::Inventory do
     it "insists on something to look for with no container" do
       expect { described_class.search(user: user) }.to raise_error(/say what to look for/)
     end
+
+    it "answers what have I got, which had no name for the root before" do
+      found = described_class.search(user: user, inside: "everything")
+      expect(found[:items]).to contain_exactly(basement)
+      expect(found[:container]).to be_nil
+      expect(found[:root]).to be(true)
+    end
+
+    it "counts the boxes and the things in them apart" do
+      counts = described_class.search(user: user, inside: "top")[:counts]
+      expect(counts[:boxes]).to eq(3)   # Basement, Tool Cubes, Batteries
+      expect(counts[:items]).to eq(4)   # AA, C, Tent, Tent Stakes
+    end
   end
 
   describe ".rows" do

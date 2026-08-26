@@ -549,6 +549,135 @@ RSpec.describe Buddy::GPT::Turn do
       end
     end
 
+    # Prod 4621/4623, 25 Aug. "Did you even try?" got "There's a camera snapshot
+    # call in the recent actions, and it came back clean", and then "I did try
+    # now" - with no Camera Snapshot execution within four hours either side.
+    # Every alternative the claim regex had was about a RECORD; these are about
+    # the CALL, which nothing covered.
+    describe "a call it says it made" do
+      it "retracts a report of how the call went" do
+        [
+          "Yeah, I did. There's a camera snapshot call in the recent actions, and it came back clean.",
+          "The snapshot call came back clean again.",
+          "Your request went through fine on my side.",
+        ].each do |faked|
+          run([{ text: faked }])
+
+          expect(reply.metadata["retracted_claim"]).to be(true), "not caught: #{faked}"
+        end
+      end
+
+      it "retracts having tried it, in the words it used" do
+        [
+          "Ahh, that one I hadn't just tried. I did try now, and it came up empty.",
+          "I just fired that one again.",
+          "Ooh, good idea! I hit the wrong kind of garage control just now, so nothing changed yet.",
+        ].each do |faked|
+          run([{ text: faked }])
+
+          expect(reply.body).to eq(described_class::NO_CALL_BODY), "not caught: #{faked}"
+        end
+      end
+
+      # The one kind the `recent_actions` carve-out does not cover. That exists
+      # for a completion sentence about an EARLIER turn ("yep, logged it at
+      # 6:03"), and "I did try now" names this one - so the log is what the
+      # sentence is misreading rather than what backs it. Both prod messages
+      # went out on a turn that had just read it.
+      it "retracts it even though the turn read the action log" do
+        run(
+          [
+            { tool_calls: [{ name: :get_context, arguments: { "sections" => ["recent_actions"] } }] },
+            { text: "I did try that again just now." },
+          ],
+          text: "not recent. now.",
+        )
+
+        expect(reply.body).to eq(described_class::NO_CALL_BODY)
+      end
+
+      it "leaves the same words alone when a call really did run" do
+        action = instance_double(ByteAction, buttons: [{ "status" => "executed" }])
+        allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: action, auto_ran: false)
+
+        run([
+          { tool_calls: [{ name: :complete_chore, arguments: { "chore" => "dishes" } }] },
+          { text: "I did that one now." },
+        ])
+
+        expect(reply.body).to eq("I did that one now.")
+      end
+
+      # The verbs are ordinary English about anything; it's the pairing with a
+      # word for a thing Buddy RUNS that makes one a claim.
+      it "leaves ordinary sentences using those words alone" do
+        [
+          "The payment went through on Tuesday, so you're clear.",
+          "I ran that by Chelsea and she's fine with it.",
+          "I'll try that one now if you want.",
+          "Your test results came back, apparently.",
+        ].each do |innocent|
+          run([{ text: innocent }])
+
+          expect(reply.body).to eq(innocent), "false positive: #{innocent}"
+        end
+      end
+    end
+
+    # Prod 4661, 25 Aug. Three inventory edits, every one executed, under "I
+    # didn't actually get the merge done cleanly, and I'm not going to pretend I
+    # did." He was left believing a correct inventory was broken. The mirror of
+    # every example above, and the more expensive one - nothing about it looks
+    # like a failure, it looks like honesty.
+    describe "work it says it didn't do" do
+      def card(*statuses)
+        rows = statuses.each_with_index.map { |st, i| { "status" => st, "label" => "Row #{i + 1}" } }
+        instance_double(ByteAction, buttons: rows)
+      end
+
+      it "says which way it actually went, without throwing the reply away" do
+        allow(Buddy::ProposalBuilder).to receive(:create)
+          .and_return(action: card("executed", "executed"), auto_ran: false)
+
+        run([
+          { tool_calls: [{ name: :edit_inventory_item, arguments: { "item" => "#FBTP", "name" => "Pizza" } }] },
+          { text: "Hmm. I tripped over that one. I'm not going to pretend I did." },
+        ])
+
+        expect(reply.body).to start_with("Hmm. I tripped over that one.")
+        expect(reply.body).to include("Row 1 and Row 2")
+        expect(reply.metadata["corrected_denial"]).to be(true)
+      end
+
+      # The partial turn is the ordinary shape and is honest: a real miss in it
+      # means the sentence is right and a correction would be the wrong fact.
+      it "leaves a turn alone when one of the rows really did fail" do
+        allow(Buddy::ProposalBuilder).to receive(:create)
+          .and_return(action: card("executed", "failed"), auto_ran: false)
+
+        run([
+          { tool_calls: [{ name: :edit_inventory_item, arguments: { "item" => "#FBTP", "name" => "Pizza" } }] },
+          { text: "I didn't get the second one done." },
+        ])
+
+        expect(reply.metadata["corrected_denial"]).to be_nil
+      end
+
+      # An acting answering tool that RETURNS a miss is a completed call
+      # reporting a failure, and that reply is correct. Prod's camera is exactly
+      # this: the function ran start to finish and had no frame to give back.
+      it "leaves a function that ran and came back empty alone" do
+        allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+
+        run([
+          { tool_calls: [{ name: :call_jil_function, arguments: { "name" => "Camera Snapshot" } }] },
+          { text: "I couldn't get a frame from the backyard camera, and it didn't say why." },
+        ])
+
+        expect(reply.metadata["corrected_denial"]).to be_nil
+      end
+    end
+
     it "retracts when the row came back failed rather than executed" do
       action = instance_double(ByteAction, buttons: [{ "status" => "failed" }])
       allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: action, auto_ran: false)
@@ -1385,6 +1514,109 @@ RSpec.describe Buddy::GPT::Turn do
       run([{ text: "Morning. Nothing else on." }], text: "what's up")
 
       expect(reply.body).to eq("Morning. Nothing else on.")
+    end
+  end
+
+  # Four affirmations running came back as greeting-card lines - "You've got
+  # this. 💙", "Aww, lovely!! 💛" - against a seed that spends two paragraphs
+  # asking for the opposite. Every one was a one-call turn, so the checkable
+  # half of "specific to ME" is whether it looked at anything at all.
+  describe "an affirmation written without looking" do
+    def affirmation(rounds)
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: "Give me one warm affirmation.",
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "affirmation" }
+      )
+      client = FakeBuddyClient.new(rounds)
+      described_class.run!(message, client: client)
+      client
+    end
+
+    it "sends it back to look at their day" do
+      client = affirmation([{ text: "You've got this. 💙" }, { text: "Three days running on the dishes." }])
+
+      expect(client.calls.length).to eq(2)
+      expect(client.calls.last.input.last[:content]).to eq(described_class::AFFIRMATION_NUDGE)
+      expect(reply.body).to eq("Three days running on the dishes.")
+    end
+
+    it "leaves one that was built on something alone" do
+      client = affirmation([
+        { tool_calls: [{ name: :get_context, arguments: { "sections" => ["recent_events"] } }] },
+        { text: "You've got this. 💙" },
+      ])
+
+      expect(client.calls.length).to eq(2)
+      expect(reply.body).to eq("You've got this. 💙")
+    end
+
+    it "leaves an ordinary turn alone" do
+      client = run([{ text: "You've got this. 💙" }])
+
+      expect(client.calls.length).to eq(1)
+    end
+  end
+
+  # Prod 4529, 25 Aug: "You've got Yoga first this morning, with a pretty full
+  # drive time before it", sent at 8:25 to somebody who had to walk out at 8:46,
+  # and neither figure in it. The prompt says "Both are figures; say the
+  # figures" and it lost anyway, three times across three companions in two
+  # days. Same answer as the weather line below: compose it in Ruby.
+  describe "a briefing that named the item and not the clock" do
+    let(:yoga) { { id: 1, time: "9:20 AM", title: "Yoga", leave_by: "8:46 AM", drive_min: 33 } }
+
+    before { allow(Buddy::Context).to receive(:build).and_return(today_notable: [yoga]) }
+
+    def briefing(rounds)
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing.seed(user),
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+      )
+      described_class.run!(message, client: FakeBuddyClient.new(rounds))
+    end
+
+    def looked_then(text)
+      [
+        { tool_calls: [{ name: :get_context, arguments: { "sections" => ["today_notable"] } }] },
+        { text: text },
+      ]
+    end
+
+    it "puts the departure time on the end" do
+      briefing(looked_then("Morning! You've got Yoga first, with a pretty full drive before it."))
+
+      expect(reply.body).to include("Yoga: leave by 8:46 AM, about 33 minutes' drive.")
+    end
+
+    it "keeps what it wrote in front of the line" do
+      briefing(looked_then("Morning! You've got Yoga first, with a pretty full drive before it."))
+
+      expect(reply.body).to start_with("Morning! You've got Yoga first")
+    end
+
+    it "leaves a briefing that already gave the figure alone" do
+      briefing(looked_then("Morning! Yoga at 9:20 - out the door by 8:46 to make it."))
+
+      expect(reply.body).not_to include("leave by")
+    end
+
+    # An item it chose to leave out is a judgement it's allowed to make, and a
+    # clock time with nothing attached to it is worse than the omission.
+    it "says nothing about an item the briefing never raised" do
+      briefing(looked_then("Morning! Quiet one - nothing on the calendar until this evening."))
+
+      expect(reply.body).not_to include("8:46")
+    end
+
+    it "spends no extra round on it" do
+      client = FakeBuddyClient.new(looked_then("Morning! You've got Yoga first thing."))
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing.seed(user),
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+      )
+      described_class.run!(message, client: client)
+
+      expect(client.calls.length).to eq(2)
     end
   end
 

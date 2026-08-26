@@ -673,6 +673,18 @@ BUDDY_EDGE_PROBES = [
                  "never existed, with the real page sitting in app_pages",
   },
 
+  {
+    case:  "prod 4642-4646",
+    say:   "what are my top level boxes?",
+    tool:  :search_inventory,
+    args:  { search_inventory: { inside: /top|everything|root/i } },
+    needs: :camp_stove_filed,
+    note:  "\"I tried that and it needs a thing to look for, not just the box " \
+           "list\" - and it was right. TOP_LEVEL_WORDS existed and was wired " \
+           "only into moving something OUT of a box, so there was no name for " \
+           "the root and the whole inventory was unlistable",
+  },
+
   # --- correcting a record, rather than writing a second one ---------------
   {
     case:  "prod 2440",
@@ -863,6 +875,20 @@ BUDDY_EDGE_PROBES = [
     note:         "answered \"Done. Fan's on low now.\" with no tool use at all. " \
                   "With three fans, a reply that doesn't name one is unfalsifiable " \
                   "even when a call did happen",
+  },
+  {
+    case:         "prod 4556-4592",
+    say:          "I opened lists and found a list that names most items in groups, ex. Fruits, " \
+                  "veggies etc, so I went through that whole thing and checked the items I need " \
+                  "today, but now I can't find the list of items I checked!",
+    tool:         :none,
+    expect_reply: /\?/,
+    never_reply:  /(?:that|this)\s+(?:sounds\s+like|is|would\s+be|will\s+be)\s+(?:the|your)\b/i,
+    note:         "the same list under the same store section, six times over " \
+                  "twenty-five minutes, each one after a message contradicting it - " \
+                  "she was in the shop, and it was Listonic on her phone the whole " \
+                  "time. Nothing here groups by food type or has pictures, and both " \
+                  "of those were in her first two messages",
   },
   {
     case: "Whisper sleeps twice a day",

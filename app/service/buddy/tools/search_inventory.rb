@@ -21,6 +21,13 @@ Buddy::Tools.register(
     everything under it. On its OWN it means "what's in here" and lists what
     that box directly contains.
 
+    `inside: "everything"` is the WHOLE inventory rather than any one box: the
+    boxes at the top of the tree, plus how many boxes and how many things there
+    are altogether. That is the call for "what can you tell me about my
+    inventory", "what are my top level boxes", "how much have I got filed" -
+    anything asking about the inventory ITSELF rather than a thing in it. Start
+    there when they want to dig down, and open a box from the answer.
+
     Every row comes back with a `#HANDLE` off its label, where it lives, how
     many things it holds if it's a container, and whether it has photos. The
     handle is what the other inventory tools take, so answer or act in this
@@ -35,7 +42,7 @@ Buddy::Tools.register(
   feature:     :inventory,
   args:        {
     query:  { type: :string, required: false, description: "What to find, in their words" },
-    inside: { type: :string, required: false, description: "Name of a box to look in, or to list the contents of" },
+    inside: { type: :string, required: false, description: "Name of a box to look in, or \"everything\" for the top of the tree" },
   },
   auto:        true,
   answers:     true,
@@ -48,11 +55,17 @@ Buddy::Tools.register(
 
     {
       searched: payload[:query].presence,
-      inside:   found[:container]&.name,
+      inside:   (found[:container]&.name || ("the top level" if found[:root])),
       items:    rows,
       total:    found[:total],
+      counts:   found[:counts],
       how:      (
-        if rows.any? && listed
+        if found[:root]
+          "The boxes at the TOP of the tree#{" - #{rows.length} of #{found[:total]}" if found[:total] > rows.length}, " \
+            "and `counts` is the whole inventory: #{found.dig(:counts, :boxes)} boxes holding " \
+            "#{found.dig(:counts, :items)} things. Give them the shape of it - the figures and the " \
+            "top-level names - and open any one of them with `inside` again."
+        elsif rows.any? && listed
           "What's directly inside #{found[:container].name}#{" - #{rows.length} of #{found[:total]}" if found[:total] > rows.length}. " \
             "Anything marked as holding things is a box with more inside it, which you can open " \
             "with `inside` again. Tell them in your own words; don't read the list back."

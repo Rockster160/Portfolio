@@ -297,6 +297,24 @@ document.addEventListener("DOMContentLoaded", async () => {
   // glide landing.
   let jumpingUntil = 0;
   const JUMP_GUARD_MS = 1200;
+  // Until when the keyboard is still arriving, and a reader who was at the
+  // bottom when it started should be kept there.
+  //
+  // This used to be `composerFocused()` — a STATE, and one that lasts until
+  // something takes focus away. Type a message, then scroll up to read: the
+  // composer still holds focus, and every rule below that consulted it pinned
+  // the thread back to the bottom. On iOS that fires constantly, because
+  // visualViewport emits a scroll event as you scroll, which re-measures the
+  // app height, which re-pins. Clicking a message to select text landed there
+  // too. That is the phantom scroll.
+  //
+  // It is a MOMENT, the way revealUntil and jumpingUntil are, and it is only
+  // ever opened for somebody already at the bottom — see the focus handler.
+  // Nothing here moves a reader who wasn't; the keyboard animation is the only
+  // thing it exists to survive.
+  let composePinUntil = 0;
+  const COMPOSE_PIN_MS = 700;
+  const pinningToCompose = () => Date.now() < composePinUntil;
   // Coalesces the growth-observer's re-pins into one write per frame (see the
   // MutationObserver in the scroll section). Declared here for the same TDZ
   // reason as stickRaf.
@@ -1698,14 +1716,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     // They just asked to be taken to a specific message. Nothing gets to drag
     // them off it — not even the composer being focused.
     if (Date.now() < revealUntil) return;
-    // While composing, pin even if the atBottom heuristic momentarily reads
-    // false (a long message rendering while the keyboard animates) — otherwise
-    // its tail strands below the fold.
-    if ((!atBottom && !composerFocused() && !stickThroughLoad) || pinRaf)
+    // Through the keyboard arriving, pin even if the atBottom heuristic
+    // momentarily reads false (a long message rendering while it animates) —
+    // otherwise its tail strands below the fold.
+    if ((!atBottom && !pinningToCompose() && !stickThroughLoad) || pinRaf)
       return;
     pinRaf = requestAnimationFrame(() => {
       pinRaf = 0;
-      if (atBottom || composerFocused() || stickThroughLoad)
+      if (atBottom || pinningToCompose() || stickThroughLoad)
         thread.scrollTop = thread.scrollHeight;
     });
   }
@@ -1735,10 +1753,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!isNew) return;
     if (wasAtBottom) {
       scrollToBottom("smooth");
-    } else if (message.direction === "inbound") {
-      unreadCount += 1;
-      updateJumpBtn();
+      return;
     }
+    // They are reading further up, so nothing moves - the arrow counts instead.
+    // `countsAsUnread` rather than a bare direction check, so this number means
+    // the same thing the drawer's does: a receipt chip and a reply still being
+    // streamed are not something to come back and read.
+    if (!countsAsUnread(message)) return;
+
+    unreadCount += 1;
+    updateJumpBtn();
   }
 
   // ---------- conversation switch / hydrate ----------
@@ -2710,19 +2734,28 @@ document.addEventListener("DOMContentLoaded", async () => {
   // stranding the newest message off-screen. Re-pin to the bottom when the
   // transition settles, and directly on focus/blur.
   const repinIfAtBottom = () => {
-    if (atBottom || composerFocused()) scrollToBottom("auto");
+    if (atBottom || pinningToCompose()) scrollToBottom("auto");
   };
   heroEl?.addEventListener("transitionend", (e) => {
     if (e.propertyName === "min-height" || e.propertyName === "max-height")
       repinIfAtBottom();
   });
-  // Reaching for the composer (keyboard opening) snaps to the bottom, no matter
-  // where the reader was — that's the whole point of tapping to type. Focus
-  // picked up incidentally from a click in the thread does NOT: they clicked a
-  // message they were reading, and yanking them away from it is the bug.
+  // Reaching for the composer does NOT take them anywhere. They are often
+  // typing FROM something further up - answering it, or copying pieces of
+  // several messages into one reply - and moving the thread out from under
+  // that is the whole complaint.
+  //
+  // What the window is for is the reader who was ALREADY at the bottom: on
+  // mobile the keyboard shoves the viewport around for a few hundred
+  // milliseconds after focus, `atBottom` reads false partway through it, and
+  // without the pin they end up a message or two above the newest one having
+  // asked for nothing. It holds a position; it never travels to one.
   input.addEventListener("focus", () => {
-    if (composerFocused()) scrollToBottom("auto");
     armIdleFaceReset(); // interacting with the composer is activity
+    if (!composerFocused() || !measureAtBottom()) return;
+
+    composePinUntil = Date.now() + COMPOSE_PIN_MS;
+    scrollToBottom("auto");
   });
   input.addEventListener("blur", repinIfAtBottom);
 
@@ -2856,10 +2889,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       // newest one. iOS fires these visualViewport events repeatedly across
       // the keyboard animation, so each one re-pins and the bottom tracks
       // the shrink smoothly. Gated on atBottom so a scrolled-up reader is
-      // left where they are — EXCEPT while composing, where we force the pin
-      // so the keyboard shrinking the viewport can't strand the thread above
+      // left where they are — EXCEPT through the keyboard arriving, where we
+      // force the pin so the shrinking viewport can't strand the thread above
       // it (the bug: keyboard covering the messages / long message below view).
-      if (atBottom || composerFocused()) scrollToBottom("auto");
+      if (atBottom || pinningToCompose()) scrollToBottom("auto");
     });
   };
   setAppHeight();

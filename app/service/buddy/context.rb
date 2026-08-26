@@ -307,7 +307,13 @@ module Buddy
           tag_ownership(
             {
               id:            i.id,
-              time:          (i.all_day ? "all day" : i.start_at.in_time_zone(user.timezone).strftime("%-I:%M %p")),
+              # "all day" was the value here, and prod 4684 read it straight
+              # back as a predicate: "Marcos Jones's birthday is all day". It
+              # is a duration where the sentence wanted a day. Everything in
+              # this list IS today, so that's what the field says, and the flag
+              # below is where "no clock time" lives now.
+              time:          (i.all_day ? "today" : i.start_at.in_time_zone(user.timezone).strftime("%-I:%M %p")),
+              all_day:       (true if i.all_day),
               title:         i.name,
               where:         i.location.to_s.strip.presence,
               cancelled:     (true if i.cancelled?),

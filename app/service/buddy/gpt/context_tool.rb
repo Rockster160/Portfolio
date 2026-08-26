@@ -183,7 +183,14 @@ module Buddy
         @user         = user
         @conversation = conversation
         @briefing     = briefing
+        @served       = {}
       end
+
+      # What the model was actually SHOWN, after every filter above. Kept so a
+      # pre-send repair can check the reply against it without running the whole
+      # context a second time - see Buddy::GPT::Turn#with_leave_times. Merged
+      # across calls because a turn may ask for two different slices.
+      attr_reader :served
 
       # Returns the JSON string handed back as the function_call_output.
       def call(args)
@@ -195,6 +202,7 @@ module Buddy
         # Applied to the everything path too, which is the one a briefing takes.
         payload = payload.except(*self.class.withheld(@user, briefing: @briefing))
         payload = without_settled_items(without_uninvolved_partner_items(without_own_reminder(payload)))
+        @served = @served.merge(payload)
         JSON.generate(payload)
       rescue StandardError => e
         Buddy::Errors.report(

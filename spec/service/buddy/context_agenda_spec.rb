@@ -163,6 +163,20 @@ RSpec.describe Buddy::Context, ".build agenda" do
     expect(tomorrow[:time]).to eq("all day")
   end
 
+  # Prod 4684: "Marcos Jones's birthday is all day". The field said "all day"
+  # and the briefing used it as a predicate, which makes a duration out of a
+  # day. Everything in today_agenda IS today, so that's what it says now, and
+  # the flag is where "no clock time" lives.
+  it "gives an all-day item today rather than a duration" do
+    midnight = Time.current.in_time_zone(user.timezone).beginning_of_day
+    item(name: "Marcos Jones's birthday", all_day: true, start_at: midnight, end_at: midnight + 1.day)
+
+    today = described_class.build(user, conversation)[:today_agenda].find { |i| i[:title].include?("Marcos") }
+
+    expect(today[:time]).to eq("today")
+    expect(today[:all_day]).to be(true)
+  end
+
   it "tags a partner's shared PERSONAL item as not-mine, but treats an owned item as mine" do
     partner = create(:user)  # first_name falls back to username for a non-mapped id
 

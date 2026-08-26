@@ -31,6 +31,19 @@ RSpec.describe "Buddy inventory tools" do
   end
 
   describe "search_inventory" do
+    # Prod 4642-4646: "What can you tell me about my inventory?" got "I need a
+    # thing or a box to look for", and "What are my top level boxes?" got "I
+    # tried that and it needs a thing to look for". Byte was right about the
+    # tool - `inside` took a box and there was no name for the root.
+    it "answers a question about the inventory itself" do
+      result, = run(:search_inventory, { inside: "everything" })
+
+      expect(result[:inside]).to eq("the top level")
+      expect(result[:items].map { |r| r.split(" · ").second }).to contain_exactly("Basement", "Garage")
+      expect(result[:counts]).to eq(boxes: 3, items: 3)
+      expect(result[:how]).to include("TOP of the tree")
+    end
+
     it "says where a thing actually is" do
       result, = run(:search_inventory, { query: "camp stove" })
 

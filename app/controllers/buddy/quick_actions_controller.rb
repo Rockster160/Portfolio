@@ -87,6 +87,8 @@ module Buddy
       body = <<~PROMPT.strip
         Give me one warm affirmation. 1 or 2 sentences. Something real and specific to ME, not a greeting-card line.
 
+        LOOK FIRST. Call `get_context` - `recent_events`, `chores_done_today`, `today_agenda`, `stashed_ideas` - and find one true thing out of my actual day or week to build it on. An affirmation written without looking is one that could have gone to anybody, and four in a row have been.
+
         Do NOT fall back on the stock "you showed up today and that's enough" shape - if every affirmation sounds the same it stops meaning anything. Vary the angle each time: something concrete from the day, a trait of mine, effort I've been putting in, or just a genuinely kind thing said a new way. When something real from context fits, use it. If nothing honest comes to mind, keep it small and plain rather than reaching for a platitude.
 
         #{TONE_REMINDER}
