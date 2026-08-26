@@ -360,8 +360,13 @@ RSpec.describe "Buddy idea threads" do
       expect(rule).not_to include("Whisper", "Glimmer", "prod 3350")
     end
 
+    # This asserted the sample reply that used to sit here. It went with every
+    # other quoted Buddy sentence in the prompts — see the sweep in
+    # `spec/service/buddy/personality_spec.rb`. The rule is the two moves, and
+    # the two moves survive being named.
     it "asks for the near miss to be named rather than offered as the answer" do
-      expect(block).to match(/not this, but here's what I've got/i)
+      expect(block).to include("the near miss offered as an answer is the failure")
+      expect(block).to include("the same near miss offered AS a near miss is useful")
     end
 
     it "points at search_ideas, which answers a miss the same way" do

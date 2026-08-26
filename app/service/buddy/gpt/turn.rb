@@ -1396,11 +1396,39 @@ module Buddy
            |remind\s+me|whenever|from\s+now\s+on|going\s+forward)\b
       /xi
 
+      # The same request with no verb of seeing in it at all. "What's going on
+      # in the backyard?" (prod 4721) is asking for the VIEW - there is no
+      # event in it, no time, and no record anywhere that could answer it. Only
+      # the picture can.
+      #
+      # It missed CAMERA_LOOK_RX completely, because that arm hangs off a word
+      # that already means a picture. Nothing was called, and the answer came
+      # off the thread's own history of failures - "The backyard camera still
+      # isn't handing over a frame" - eighteen hours after the backyard camera
+      # started working again.
+      #
+      # Tighter nouns than CAMERA_LOOK_RX, deliberately. There, the verb is
+      # already a request to see, so a bare `door` is safe next to it. Here the
+      # verbs are ordinary and the noun is carrying the whole thing: "what's
+      # going on with the garage door" is a broken door, not a frame. So only
+      # the places a camera POINTS AT count.
+      CAMERA_SCENE_RX = /
+        (?=.*\b(?:back\s*yard|drive\s*way|porch|front\s+door|door\s*step|camera)\b)
+        (?:
+            \bwhat(?:'|’)?s\s+(?:going\s+on|happening|up)\b
+          | \bwhat\s+is\s+(?:going\s+on|happening)\b
+          | \bwhat\s+do\s+you\s+see\b
+          | \banything\s+(?:going\s+on|happening|out\s+there)\b
+          | \b(?:take\s+a\s+)?look\s+(?:at|in|outside)\b
+          | \bcheck\s+(?:on\s+)?the\b
+        )
+      /xi
+
       def camera_look_unanswered?
         return false if self_initiated?
 
         body = @inbound.body.to_s
-        return false unless body.match?(CAMERA_LOOK_RX)
+        return false unless body.match?(CAMERA_LOOK_RX) || body.match?(CAMERA_SCENE_RX)
         return false if body.match?(CAMERA_WATCH_RX)
 
         camera_functions.any?

@@ -98,6 +98,52 @@ RSpec.describe "a camera question that called nothing" do
     end
   end
 
+  # Prod 4721, and the shape with no verb of seeing in it anywhere. "What's
+  # going on in the backyard?" has no event in it, no time, and no record that
+  # could answer it - only the picture can. It missed the arm entirely, nothing
+  # was called, and the answer came off the thread's own history: "The backyard
+  # camera still isn't handing over a frame", eighteen hours after that camera
+  # started working again.
+  describe "asking what's out there right now" do
+    [
+      "What's going on in the backyard?",       # 4721
+      "What\u2019s happening out on the porch?",
+      "Anything going on in the driveway?",
+      "Take a look at the backyard for me",
+      "Check the driveway",
+      "What do you see on the porch?",
+    ].each do |question|
+      it "sends it back to look, on #{question.inspect}" do
+        client = run(
+          [
+            { text: "The backyard camera still isn't handing over a frame." },
+            { text: "Quiet - just the fence and the grass." },
+          ],
+          text: question,
+        )
+
+        expect(nudged?(client)).to be(true)
+      end
+    end
+
+    # The nouns are what carries this arm - the verbs are ordinary English and
+    # match half of everything. A thing that is BROKEN is not a thing to look at.
+    [
+      "What's going on with the garage door?",
+      "Check the laundry when you get a sec",
+      "What's happening today?",
+    ].each do |question|
+      it "leaves it alone, on #{question.inspect}" do
+        client = run(
+          [{ text: "Nothing on my side about that." }, { text: "ok" }],
+          text: question,
+        )
+
+        expect(nudged?(client)).to be(false)
+      end
+    end
+  end
+
   # THE distinction, and the one this got wrong first time round. A question
   # about WHEN something happened is answered by the time it happened. There is
   # no picture in it, so sending it to a camera would be spending a round to

@@ -917,8 +917,15 @@ RSpec.describe Buddy::Personality do
       expect(prompt).to include("take the likeliest reading, act on it, and name the assumption")
     end
 
-    it "shows the assumption as a clause, paired against the question it replaces" do
-      expect(prompt).to include('"Set for 4 — assuming today." NOT "Did you mean today or tomorrow?"')
+    # This used to assert the four sample pairs that stood here — "Set for 4 —
+    # assuming today", a named list, a named door. They went with every other
+    # quoted sample reply in the prompt: a model handed a sentence uses it, and
+    # each of those four carried a time, a record name or a device state for it
+    # to carry out with it. The rule is the shape, and the shape survives
+    # describing.
+    it "shows the assumption as a clause rather than handing over one to copy" do
+      expect(prompt).to include("as a clause, not a paragraph and not a question")
+      expect(prompt).to include("short enough that they can push back on one word of it")
       expect(prompt).to include("the sentence IS the invitation to correct you")
     end
 
@@ -950,6 +957,104 @@ RSpec.describe Buddy::Personality do
     it "stops short of filing everything" do
       expect(prompt).to include("This is not a licence to file everything")
       expect(prompt).to include("The test is whether it's still open when the message ends")
+    end
+  end
+
+  # THE rule for this prompt, and it is `today_forward_looking_spec`'s rule
+  # arriving where it should have been all along: **naming a thing in order to
+  # forbid it still puts the name in front of the model.** That file cleaned the
+  # Today seed of every quoted sample sentence after two agenda items, written
+  # in purely as what-NOT-to-say illustrations, were read out by name on the
+  # days they came round. The always-on prompt was never swept, and it carried
+  # about thirty-five of them.
+  #
+  # What it cost: the mood rules used "I couldn't get a frame from the backyard
+  # camera" as the worked example of when to wear a frown, and prod 4722
+  # answered "what's going on in the backyard?" with "The backyard camera still
+  # isn't handing over a frame" — no tool called, eighteen hours after the
+  # camera was fixed. It was one of a set. "119 chores left", a car started and
+  # set to 72, a gate shut since about 9, a 1-1 on Wednesday at 11:00 AM, a
+  # deploy watcher that wasn't wired up: every one a whole sentence in Buddy's
+  # own voice, asserting something about the world, sitting in front of the
+  # model on every single turn.
+  #
+  # The line this file holds is between two kinds of quote:
+  #
+  #   THEIRS stays. "remind me at 6", "did you do X?", "that's too late" are
+  #   what a person says, and the prompt quotes them so the model RECOGNISES
+  #   them. They're inputs. The routing rules and the tool evals both need them.
+  #
+  #   BUDDY'S goes, whenever it asserts anything — a time, a count, a device
+  #   state, a record, a capability. Those are outputs, and an output written
+  #   out in full is a template. It does not matter that the surrounding prose
+  #   says never to say it.
+  #
+  # Bare tone ("Got it, noted.", "Mooooorning!") is deliberately still allowed:
+  # it asserts nothing, the voice is the point, and it lives mostly in the
+  # persona files anyway.
+  describe ".for sample sentences it could echo" do
+    let(:prompt) { described_class.for(User.me, conversation: buddy_convo(User.me, "byte")) }
+
+    # Every rule whose illustration was removed. If one comes back as prose,
+    # these still pass; if one comes back as a quoted sentence, the sweep below
+    # catches it.
+    it "keeps the rules the examples used to carry" do
+      expect(prompt).to include("When you're telling them something DIDN'T work, wear it")
+      expect(prompt).to include("Numeric counts you didn't verify")
+      expect(prompt).to include("Past/present tense is CORRECT and expected here")
+      expect(prompt).to include("Never name a record to explain why you left it alone")
+      expect(prompt).to include("Say how old the reading is whenever it isn't fresh")
+      expect(prompt).to include("Conceding is one sentence, never a story")
+    end
+
+    it "asserts nothing about a piece of the house" do
+      broken = /\b(?:camera|doorbell|printer|thermostat|blinds?|tv|garage|gate)\b[^.\n]{0,60}\b(?:didn(?:'|’)?t|couldn(?:'|’)?t|isn(?:'|’)?t|won(?:'|’)?t|failed|broken|offline|unavailable)\b/i
+
+      expect(prompt.scan(broken)).to be_empty
+    end
+
+    # A general sweep for "a quoted sentence carrying a fact" was written first
+    # and thrown away: it cannot tell whose voice a quote is in, and every
+    # recognition target in the prompt is a person asking for something at a
+    # time. "remind me at 3:35 to uncover the tomatoes" and "Set for 4 —
+    # assuming today" are the same shape and opposite jobs. A heuristic that
+    # fires on both would be deleted the first week.
+    #
+    # So this is the list, by hand: the reply Buddy was shown, and the record it
+    # went and asserted. Adding a new illustration is not something this can
+    # stop — the two above are what a reviewer has to hold. What it stops is
+    # these coming back, and three of them had already come back once wearing
+    # different words.
+    echoed = [
+      "I couldn't get a frame from the backyard camera",   # prod 4722
+      "119 chores left",
+      "Wednesday at 11:00 AM",                              # prod: the wrong 1-1
+      "Starting the car and setting it to 72.",
+      "Lights are off.",
+      "Reminder's set for 6.",
+      "The gate's been shut since about 9",
+      "I don't have a deploy watcher wired up",
+      "I can't verify the gate from here",
+      "I can't check that from here",
+      "I can't change that now that it's marked",
+      "I can't make a sound",
+      "I've put the person doorbell watch on the remove-row",
+      "I parked your tomatoes reminder",
+      "the flower bed one is tomorrow at 8",
+      "lined up to pop in every half hour until 6:30 PM",
+      "I've got a watch on the dryer stop call already",
+      "Set for 4 — assuming today.",
+      "Put it on the Shopping list, since that's where the food usually goes.",
+      "Read that as the front door.",
+      "I don't have a `prep printer` routine",
+    ]
+
+    it "hands the model none of the replies it went and echoed" do
+      still_there = echoed.select { |line| prompt.include?(line) }
+
+      expect(still_there).to be_empty,
+        "a sentence in Buddy's own voice, quoted in the always-on prompt, comes " \
+        "back out of it — that is what each of these did: #{still_there.inspect}"
     end
   end
 end

@@ -604,6 +604,15 @@ BUDDY_EDGE_PROBES = [
     avoid: %i[call_jil_function],
     note:  "the same nouns pointed forward are a watch, not a look",
   },
+  {
+    case:  "prod 4721",
+    say:   "what's going on in the backyard?",
+    tool:  :call_jil_function,
+    needs: :camera_fn,
+    note:  "no verb of seeing anywhere in it, so the camera arm never fired; " \
+           "answered \"the backyard camera still isn't handing over a frame\" " \
+           "with nothing called, off a thread full of yesterday's failures",
+  },
 
   # --- a receipt for something that never ran ------------------------------
   {
@@ -1521,7 +1530,9 @@ namespace :buddy do
   end
 
   def camera_look?(asked, user)
-    return false unless asked.to_s.match?(Buddy::GPT::Turn::CAMERA_LOOK_RX)
+    looked = Buddy::GPT::Turn::CAMERA_LOOK_RX.match?(asked.to_s)
+    scened = Buddy::GPT::Turn::CAMERA_SCENE_RX.match?(asked.to_s)
+    return false unless looked || scened
     return false if asked.to_s.match?(Buddy::GPT::Turn::CAMERA_WATCH_RX)
 
     camera_functions(user).any?

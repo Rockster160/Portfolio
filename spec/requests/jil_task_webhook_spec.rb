@@ -39,6 +39,34 @@ RSpec.describe "Running a Jil task over HTTP" do
     expect(get_task(task.uuid).dig("task", "name")).to eq("Answer Something")
   end
 
+  # A POST body does NOT arrive where a `/jil/trigger/<scope>` body arrives.
+  # `execute_task` wraps it — `match_run(:webhook, { params: json_params })` —
+  # so a task written for the trigger door reads nil here, and nil casts to ""
+  # rather than raising. Every way that goes wrong is silent, so it's pinned.
+  it "delivers a POST body nested under params, alongside the uuid" do
+    seen = nil
+    allow_any_instance_of(Jil::Methods::Global).to(
+      receive(:execute).and_wrap_original { |orig, line|
+        seen ||= orig.receiver.instance_variable_get(:@jil).input_data if line.methodname == :input_data
+        orig.call(line)
+      },
+    )
+    task.update!(code: "data = Global.input_data()::Hash\n")
+
+    post(
+      "/jil/#{task.uuid}",
+      params:  { direction: "open" }.to_json,
+      headers: {
+        "HTTP_AUTHORIZATION" => "Bearer #{api_key.key}",
+        "CONTENT_TYPE"       => "application/json",
+      },
+    )
+
+    expect(seen[:direction]).to be_nil
+    expect(seen.dig(:params, :direction)).to eq("open")
+    expect(seen.dig(:params, :uuid)).to eq(task.uuid)
+  end
+
   it "says so rather than guessing when the uuid names nothing" do
     body = get_task(SecureRandom.uuid)
 
