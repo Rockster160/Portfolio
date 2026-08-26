@@ -22,11 +22,110 @@
   <div class="btn-container">
     <a href="<%= system_path %>" class="btn">System Index</a>
     <a href="<%= request.path %>" class="btn btn-refresh">Refresh</a>
+    <%# OUTSIDE the has-accounts branch, deliberately. An institution SimpleFIN
+        cannot reach has no account here until its first statement is uploaded,
+        so putting this alongside the accounts table hides it in exactly the
+        case it exists for. %>
+    <%# A div, not an anchor — the documented usage in _modal.html.erb. An
+        `href=""` trigger navigates to the current URL if the click handler
+        ever fails to bind, which reads as the button reloading the page for
+        no reason. %>
+    <div class="btn" data-modal="#bank-import">Import a statement</div>
   </div>
 
   <div class="lists-title">
     <small>System:</small> Banking
   </div>
+
+  <%# A modal rather than an inline drawer. The mapping form grows with the
+      file — a twenty-category export makes it taller than the screen — and
+      expanded in place it pushed the accounts table and every transaction
+      below the fold, with no clear bottom edge to tell you where it ended.
+      The modal scrolls in its own box and leaves the page where it was. %>
+  <%= render_modal("bank-import", "Import a statement", "bank-import") do %>
+    <div data-import>
+    <%= form_with(url: system_bank_import_path, method: :post, multipart: true,
+          class: "basic bank-import-form", data: { import_form: true }) do |f| %>
+      <div class="bank-import-file">
+        <%= f.file_field(:file, accept: ".csv,text/csv", class: "basic",
+              data: { import_file: true }) %>
+        <span class="bank-import-status" data-import-status></span>
+      </div>
+
+      <%# Drawn from the file itself, once one is chosen — there is no honest
+          guess to show before the columns are known.
+
+          ONLY these two panels are hidden. The destination and the Import
+          button below stay in the page whatever happens, because a form whose
+          submit button is behind a script is a form that vanishes when the
+          script breaks — which reads as the feature doing nothing at all. With
+          no mapping posted the server falls back to its own guess, so pressing
+          Import without ever seeing these still works. %>
+      <div class="bank-import-panels hidden" data-import-panels>
+        <section class="bank-import-panel">
+          <h4>Columns</h4>
+          <p class="bank-import-hint">Which column in your file holds each field.</p>
+          <div class="bank-import-grid" data-import-columns></div>
+        </section>
+
+        <%# Only rendered when a category column was mapped. A file without one
+            skips this entirely rather than showing an empty box. %>
+        <section class="bank-import-panel hidden" data-import-category-panel>
+          <h4>Categories</h4>
+          <p class="bank-import-hint">
+            Your file's own labels, mapped onto ours. Leave one blank to let the
+            merchant rules decide from the payee instead — better for anything
+            that names a direction rather than a purpose.
+          </p>
+          <div class="bank-import-grid" data-import-categories></div>
+        </section>
+      </div>
+
+      <div class="bank-import-always">
+        <section class="bank-import-panel">
+          <h4>Destination</h4>
+          <p class="bank-import-hint">
+            Where rows go when the file names no account, or names one nothing
+            matches.
+          </p>
+          <div class="bank-import-grid">
+            <label for="bank-import-account">Account</label>
+            <%= f.select(:bank_account_id,
+                  @accounts.map { |account| [account.display_name, account.id] },
+                  { include_blank: "New account…" },
+                  id: "bank-import-account", data: { import_account: true }) %>
+
+            <%# `required` in the markup, not only from JS: the select starts
+                blank, so a new name is genuinely required on arrival, and the
+                browser must refuse the submit even if the script never runs.
+                syncAccount() clears it the moment an account is picked. %>
+            <label for="bank-import-new" data-import-new-label>New account name</label>
+            <%= f.text_field(:new_account_name, id: "bank-import-new", required: true,
+                  placeholder: "e.g. MACU Checking (7937)", class: "basic") %>
+
+            <%# The dedupe namespace. Guessed from the file's column signature so
+                a re-export lands on the same one without anybody remembering
+                what they typed; editable because a guess can be wrong. %>
+            <label for="bank-import-source">Source</label>
+            <%= f.text_field(:source, id: "bank-import-source", class: "basic",
+                  data: { import_source: true }) %>
+          </div>
+        </section>
+
+        <div class="bank-import-actions">
+          <%= f.submit("Import", class: "btn") %>
+          <span class="bank-import-hint" data-import-summary></span>
+        </div>
+      </div>
+    <% end %>
+
+    <p class="bank-import-note">
+      Deduped on the file's own transaction id, so re-uploading an overlapping
+      export updates those rows instead of doubling them. A new account starts
+      unclassified and stays out of the dashboard figure until you set its kind.
+    </p>
+    </div>
+  <% end %>
 
   <% if @accounts.none? %>
     <p class="bank-empty">
@@ -666,6 +765,161 @@
 
 <%= content_for :after_body do %>
   <script>
+    // Statement import. Choosing a file posts it to /import/inspect, which
+    // reads it and answers with its real column names plus a proposed mapping;
+    // this draws the form from that answer. Nothing is written until Import.
+    //
+    // Drawn here rather than server-rendered because the mapping depends on a
+    // file the server has not seen yet, and a round trip to a separate page
+    // would lose the file selection — the input cannot be re-populated.
+    (function () {
+      var root = document.querySelector("[data-import]");
+      if (!root) { return; }
+
+      var input = root.querySelector("[data-import-file]");
+      var panels = root.querySelector("[data-import-panels]");
+      var status = root.querySelector("[data-import-status]");
+      var columns = root.querySelector("[data-import-columns]");
+      var categoryPanel = root.querySelector("[data-import-category-panel]");
+      var categories = root.querySelector("[data-import-categories]");
+      var summary = root.querySelector("[data-import-summary]");
+      var source = root.querySelector("[data-import-source]");
+      var accountPicker = root.querySelector("[data-import-account]");
+      var newName = document.getElementById("bank-import-new");
+
+      function say(message, isError) {
+        status.textContent = message || "";
+        status.classList.toggle("err", !!isError);
+      }
+
+      function option(value, label, selected) {
+        var el = document.createElement("option");
+        el.value = value;
+        el.textContent = label;
+        if (selected) { el.selected = true; }
+        return el;
+      }
+
+      function field(grid, name, label, required) {
+        var id = "bank-import-" + name.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+        var tag = document.createElement("label");
+        tag.setAttribute("for", id);
+        tag.textContent = label;
+        if (required) { tag.className = "req"; }
+
+        var select = document.createElement("select");
+        select.id = id;
+        select.name = name;
+        grid.appendChild(tag);
+        grid.appendChild(select);
+        return select;
+      }
+
+      function drawColumns(data) {
+        columns.textContent = "";
+        Object.keys(data.fields).forEach(function (key) {
+          var required = data.required.indexOf(key) !== -1;
+          var select = field(columns, "mapping[" + key + "]", data.fields[key], required);
+          var chosen = data.mapping[key] || "";
+
+          // A blank is a real answer for every field but the three required
+          // ones: plenty of exports carry no payee or category column at all.
+          if (!required) { select.appendChild(option("", "— none —", !chosen)); }
+          data.headers.forEach(function (header) {
+            select.appendChild(option(header, header, header === chosen));
+          });
+          if (!chosen) { select.setAttribute("data-unset", "true"); }
+          select.addEventListener("change", function () {
+            select.removeAttribute("data-unset");
+          });
+        });
+      }
+
+      function drawCategories(data) {
+        var labels = Object.keys(data.categories);
+        categoryPanel.classList.toggle("hidden", labels.length === 0);
+        categories.textContent = "";
+
+        labels.forEach(function (label) {
+          var select = field(categories, "categories[" + label + "]", label, false);
+          var chosen = data.categories[label] || "";
+          select.appendChild(option("", "— merchant rules —", !chosen));
+          data.vocabulary.forEach(function (name) {
+            select.appendChild(option(name, name, name === chosen));
+          });
+        });
+      }
+
+      function inspect(file) {
+        var body = new FormData();
+        body.append("file", file);
+        say("Reading " + file.name + "…");
+
+        // Defensive: a missing meta tag would otherwise throw here, BEFORE the
+        // promise chain exists to catch it — leaving the status line stuck on
+        // "Reading…" with no clue why. Rails rejects a bad token loudly, which
+        // is the failure worth having.
+        var token = document.querySelector('meta[name="csrf-token"]');
+
+        fetch("<%= system_bank_import_inspect_path %>", {
+          method: "POST",
+          body: body,
+          headers: token ? { "X-CSRF-Token": token.content } : {},
+          credentials: "same-origin"
+        }).then(function (response) {
+          return response.json().then(function (data) {
+            if (!response.ok) { throw new Error(data.error || "Could not read that file."); }
+            return data;
+          });
+        }).then(function (data) {
+          drawColumns(data);
+          drawCategories(data);
+          if (source && !source.value) { source.value = data.source; }
+          summary.textContent = data.rows + " rows, " + data.headers.length + " columns";
+          panels.classList.remove("hidden");
+          say("");
+        }).catch(function (error) {
+          panels.classList.add("hidden");
+          // Says so AND says what still works. Import is outside the hidden
+          // panel and the server guesses its own mapping, so the file is still
+          // importable — the person just does not get to correct the guess.
+          say(error.message + " Import will use its best guess.", true);
+        });
+      }
+
+      // Anything thrown out here would kill the handler silently and leave a
+      // file picker that appears to do nothing when clicked.
+      input.addEventListener("change", function () {
+        try {
+          if (input.files && input.files.length) { inspect(input.files[0]); }
+        } catch (error) {
+          say(error.message + " Import will use its best guess.", true);
+        }
+      });
+
+      // Naming a new account and picking an existing one are alternatives, and
+      // a form offering both at once invites filling in both and wondering
+      // which won.
+      // Picking an existing account and naming a new one are alternatives, and
+      // exactly one has to be answered. Submitting with NEITHER filled is what
+      // made a real import silently do nothing: the server bounced it back with
+      // "Choose an account", which is correct and was still missed, because the
+      // form let it be sent at all.
+      //
+      // `required` on the name field whenever no account is picked hands that
+      // to the browser, which refuses to submit and points at the empty box.
+      function syncAccount() {
+        var picking = accountPicker.value !== "";
+        var label = root.querySelector("[data-import-new-label]");
+        newName.disabled = picking;
+        newName.required = !picking;
+        newName.classList.toggle("dim", picking);
+        if (label) { label.classList.toggle("dim", picking); }
+      }
+      accountPicker.addEventListener("change", syncAccount);
+      syncAccount();
+    })();
+
     (function () {
       // The checkboxes live inside the table, not the bulk form, so they are
       // associated by `form=`. Give that form the id the inputs point at.
@@ -907,6 +1161,67 @@
     .bank-drawer > summary:hover { color: #CBD5E1; }
     /* How much is behind the summary, so it is worth deciding about unopened. */
     .bank-drawer-note { color: #475569; margin-left: 6px; }
+
+    /* Wider than the 500px default, because the mapping is a two-column grid
+       of label + control and 500 wraps every account name. The body scrolls
+       rather than the wrapper, so the title and close button stay put while a
+       twenty-category export scrolls underneath them — which is the whole
+       reason this is a modal and not an inline drawer. */
+    .modal-wrapper.bank-import .modal-content { width: 760px; margin: 4vh auto; }
+    .modal-wrapper.bank-import .app-card-body { max-height: 76vh; overflow-y: auto; }
+
+    .bank-import-form { margin: 0; }
+    .bank-import-file { display: flex; align-items: center; gap: 10px; }
+    .bank-import-status { font-size: 12px; color: #64748B; }
+    .bank-import-status.err { color: #F5B041; }
+
+    /* Both get the gap, because either can be the first thing under the file
+       picker — the panels are hidden until a file is read. */
+    .bank-import-panels,
+    .bank-import-always { margin-top: 14px; }
+    .bank-import-panel { margin-bottom: 16px; }
+    .bank-import-panel h4 {
+      margin: 0 0 2px; font-size: 13px; font-weight: 600; color: #CBD5E1;
+    }
+    .bank-import-hint { margin: 0 0 8px; font-size: 12px; color: #64748B; max-width: 62ch; }
+
+    /* A label column that hugs its text and a control column that takes what is
+       left. The page's global form rules put `width: 100%` on every select and
+       unclassed input, which is why the first version of this ran the full
+       width of the screen — the grid track is what bounds them now, not the
+       control. */
+    .bank-import-grid {
+      display: grid; grid-template-columns: max-content minmax(0, 1fr);
+      gap: 6px 12px; align-items: center;
+    }
+    .bank-import-grid > label { font-size: 13px; color: #94A3B8; }
+    .bank-import-grid select,
+    .bank-import-grid input[type="text"] {
+      margin: 0; font-size: 13px; padding: 5px 24px 5px 8px; min-height: 0;
+    }
+    .bank-import-grid input[type="text"] {
+      padding: 5px 8px; border: 2px solid rgba(148, 163, 184, 0.5);
+      border-radius: 4px; background: transparent; color: #E2E8F0; width: 100%;
+      box-sizing: border-box;
+    }
+    /* A field nothing was found for still has to be answerable, but it should
+       not look as settled as one that was. */
+    .bank-import-grid select[data-unset] { opacity: 0.6; }
+    /* Naming a new account and picking an existing one are alternatives, so
+       the one not in play recedes rather than sitting there inviting input. */
+    .bank-import-grid .dim { opacity: 0.35; }
+    .bank-import-grid label.req::after { content: " *"; color: #F5B041; }
+
+    .bank-import-actions {
+      display: flex; align-items: center; gap: 12px; margin-top: 4px;
+    }
+    .bank-import-actions .bank-import-hint { margin: 0; }
+    .bank-import-note { margin: 8px 0 0; font-size: 12px; color: #64748B; max-width: 68ch; }
+
+    @media (max-width: 620px) {
+      .bank-import-grid { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+      .bank-import-grid > label { margin-top: 6px; }
+    }
 
     .bank-syntax { margin: 12px 0; font-size: 12px; color: #94A3B8; }
     .bank-syntax code {

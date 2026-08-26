@@ -564,6 +564,9 @@ Rails.application.routes.draw do
     get "/system/connections" => "system#connections", as: :system_connections
     get "/system/gpt_spending" => "system#gpt_spending", as: :system_gpt_spending
     get "/system/banking" => "system#banking", as: :system_banking
+    post "/system/banking/import" => "system#import_statement", as: :system_bank_import
+    post "/system/banking/import/inspect" => "system#inspect_statement",
+      as: :system_bank_import_inspect
     # Above the `:id` patch so "transactions" can't be read as an account id.
     patch "/system/banking/transactions" => "system#bulk_update_transactions",
       as: :system_bank_transactions_bulk

@@ -120,6 +120,59 @@ class SystemController < ApplicationController
     @transactions = listing.page(params[:page]).per(TRANSACTION_PAGE)
   end
 
+  # Folds a downloaded statement CSV in, for an institution SimpleFIN cannot
+  # reach. Redirects rather than answering JSON: an import writes hundreds of
+  # rows and changes every total on the page, so re-rendering it is the honest
+  # response — there is no small in-place update that would be true.
+  #
+  # The account is picked or named on the form. Naming a new one creates it
+  # `unknown`, which keeps it out of the dashboard figure until it is
+  # classified — an upload must never silently move the headline number.
+  def import_statement
+    file = params[:file]
+    return redirect_to(system_banking_path, alert: "Choose a CSV to import.") if file.blank?
+
+    account = import_account
+    if account.nil?
+      return redirect_to(system_banking_path, alert: "Choose an account, or name a new one.")
+    end
+
+    result = ::BankStatementImporter.call(
+      file,
+      account:    account,
+      mapping:    loose_hash(params[:mapping]),
+      categories: loose_hash(params[:categories]),
+      source:     params[:source],
+      filename:   file.original_filename,
+    )
+    redirect_to(system_banking_path, notice: import_notice(result))
+  rescue ::BankStatementImporter::MissingMapping => e
+    redirect_to(system_banking_path, alert: e.message)
+  end
+
+  # Reads an uploaded file WITHOUT writing anything, so the upload screen can
+  # draw a mapping form from the file's real columns. Answered as JSON because
+  # the drawer fills itself in on the client the moment a file is chosen —
+  # a round trip to a separate page would lose the file selection.
+  #
+  # The file is uploaded twice, once here and once on submit. That is the price
+  # of holding no server-side state between the two steps, and for a statement
+  # export it is a few hundred kilobytes.
+  def inspect_statement
+    file = params[:file]
+    return render(json: { error: "Choose a CSV to import." }, status: :bad_request) if file.blank?
+
+    render(json: ::BankStatementImporter.inspect_file(
+      file, filename: file.original_filename
+    ).merge(
+      fields:     ::BankStatementImporter::FIELD_LABELS,
+      required:   ::BankStatementImporter::REQUIRED,
+      vocabulary: ::TransactionCategory::ALL,
+    ))
+  rescue ::CSV::MalformedCSVError => e
+    render(json: { error: "That file will not parse as CSV: #{e.message}" }, status: :bad_request)
+  end
+
   # One field, answered as JSON, exactly as a transaction row is. The accounts
   # edit in place, so a redirect would throw the whole page away to rename one
   # thing.
@@ -418,6 +471,61 @@ class SystemController < ApplicationController
   # be matched on that cannot also match another account, and a name the search
   # would find two of would silently widen the filter. An account without one
   # gets no filter at all rather than a guess — see the missing-over-wrong rule.
+  # The account an upload lands in: one already on the page, or a new one named
+  # on the form. Nil when neither was given, which the action reports rather
+  # than inventing a destination for several hundred rows.
+  #
+  # A new account is created with a name only. `kind` stays `unknown` so it is
+  # excluded from the dashboard figure until classified, and `simplefin_id`
+  # stays nil because no Bridge account corresponds to it — both columns are
+  # nullable for exactly this case.
+  def import_account
+    existing = params[:bank_account_id].presence
+    return ::BankAccount.find_by(id: existing) if existing
+
+    name = params[:new_account_name].to_s.strip
+    return nil if name.blank?
+
+    ::BankAccount.find_or_create_by!(name: name) { |account|
+      account.last4 = ::BankAccount.last4_from(name)
+    }
+  end
+
+  # Says what actually happened to the file, in the terms that matter for a
+  # surface whose whole point is that you can upload the same export twice:
+  # `created` is new history, `updated` is rows that were already here.
+  # The import mapping and its category table, as a plain hash.
+  #
+  # `permit` cannot enumerate these: the category keys are the institution's
+  # own labels, which are whatever that bank happens to call things, and the
+  # mapping's values are the file's column names. Unpermitted is safe here
+  # because the importer treats both as untrusted — the mapping is sliced to
+  # its known fields and every column name is checked against the file's real
+  # headers, and every category target goes through TransactionCategory.cast.
+  # Nothing reaches a model attribute by name.
+  def loose_hash(value)
+    return {} if value.blank?
+
+    value.respond_to?(:to_unsafe_h) ? value.to_unsafe_h.to_h : value.to_h
+  end
+
+  def import_notice(result)
+    parts = ["#{result.created} new", "#{result.updated} already present"]
+    parts << "#{result.skipped} skipped" if result.skipped.positive?
+    notice = "Imported #{result.rows} rows from #{result.source}: #{parts.join(", ")}."
+    # Where they went, when it is not all one place. A file spread across
+    # accounts should say so — otherwise the only way to find out is to search.
+    if result.accounts.size > 1
+      spread = result.accounts.map { |name, count| "#{count} to #{name}" }
+      notice = "#{notice} (#{spread.join(", ")})"
+    end
+    # Named, not swallowed. A row the importer could not read is the thing you
+    # most need told about, and the count alone would not say which.
+    return notice if result.errors.blank?
+
+    "#{notice} #{result.errors.first(3).join(" ")}"
+  end
+
   def account_filters
     options = @accounts.filter_map(&:last4)
     picked = selected_values(:account)

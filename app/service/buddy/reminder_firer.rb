@@ -20,12 +20,12 @@ module Buddy
       # routine and it goes back to being a nudge rather than running the
       # nearest match.
       command = reminder.command
-      action  = reminder.action_call
+      calls   = reminder.action_calls
 
       return skip!(reminder) unless condition_met?(reminder)
 
-      if action
-        run_action(reminder, action)
+      if calls.any?
+        run_action(reminder, calls)
       elsif command
         run_command(reminder, command)
       elsif reminder.notify_user_id
@@ -211,15 +211,18 @@ module Buddy
       # "Today briefing" sitting above a message that opens with its own
       # greeting lands directly on the line that briefing's prompt works hardest
       # to get right.
-      def run_action(reminder, action)
+      def run_action(reminder, calls)
         conversation = reminder.byte_conversation
         return if conversation.nil?
 
-        speaks = Buddy::Tools.speaks?(Buddy::Tools[action[:tool_name]])
+        # `speaks` is read off the FIRST call. A tool that posts its own whole
+        # message is a one-call reminder in practice - the briefing is the only
+        # one - and a line above it is the thing that would be wrong.
+        speaks = Buddy::Tools.speaks?(Buddy::Tools[calls.first[:tool_name]])
         Buddy::ProposalBuilder.run_markers!(
           user:         reminder.user,
           conversation: conversation,
-          markers:      [action],
+          markers:      calls,
           body:         (reminder.body.to_s.presence || "Running that now." unless speaks),
         )
       end

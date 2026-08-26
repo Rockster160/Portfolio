@@ -22,6 +22,7 @@
 #  bank_account_id         :bigint
 #  simplefin_id            :string
 #  transfer_counterpart_id :bigint
+#  upstream_id             :string
 #
 class BankTransaction < ApplicationRecord
   # Absent on a row the bank has not reported. A Chase alert names an account
@@ -41,6 +42,10 @@ class BankTransaction < ApplicationRecord
   # same purchase and the two are merged. Uniqueness still holds for the ones
   # that have one — Postgres treats NULLs as distinct.
   validates :simplefin_id, uniqueness: true, allow_nil: true
+  # The institution's own id on a row that came from a statement CSV rather
+  # than the Bridge. Same NULLs-are-distinct story as simplefin_id, and it is a
+  # separate column for a reason — see BankStatementImporter.
+  validates :upstream_id, uniqueness: true, allow_nil: true
   validates :amount_cents, presence: true
   # The one timestamp every row is guaranteed to carry, whichever side it came
   # from. `posted_at` cannot be it: an alert fires when the purchase is made
@@ -72,7 +77,7 @@ class BankTransaction < ApplicationRecord
   # other searchable thing here is: it is what ActionEvent calls the same idea.
   # It reads the column the table DISPLAYS — when the purchase happened —
   # whereas posted_at is when it cleared, a different day on most rows.
-  search_terms :id, :simplefin_id, :payee, :description, :memo, :mcc,
+  search_terms :id, :simplefin_id, :upstream_id, :payee, :description, :memo, :mcc,
     :posted_at, :transacted_at,
     timestamp: :occurred_at,
     amount:    :amount_abs,
@@ -105,6 +110,11 @@ class BankTransaction < ApplicationRecord
   # what says whether a row has been confirmed by anyone but the alert email.
   scope :bank_confirmed, -> { where.not(simplefin_id: nil) }
   scope :event_sourced, -> { where(simplefin_id: nil) }
+  # Came from a statement upload. Kept apart from `bank_confirmed` on purpose:
+  # the institution has confirmed these, but the Bridge has never seen them and
+  # never will, so anything asking "has SimpleFIN caught up yet" must not count
+  # them as a yes.
+  scope :imported, -> { where.not(upstream_id: nil) }
   scope :paired, -> { where.not(transfer_counterpart_id: nil) }
   scope :unpaired, -> { where(transfer_counterpart_id: nil) }
 
@@ -356,6 +366,10 @@ class BankTransaction < ApplicationRecord
     parts = ["BankTransaction##{id}"]
     parts << "ActionEvent##{action_event_id}" if action_event_id.present?
     parts << "Email##{source_email_id}" if source_email_id.present?
+    # Which upload put it here, for the same reason the rest of this exists: an
+    # imported row and a Bridge row for the same purchase look identical on
+    # screen, and that is precisely the pair worth telling apart.
+    parts << upstream_id if upstream_id.present?
     parts.join(" ")
   end
 

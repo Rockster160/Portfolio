@@ -258,6 +258,9 @@ RSpec.describe Buddy::GPT::Turn do
       }])
 
       expect(reply.body).not_to match(/checking that off/i)
+      # The prose came in on the tool call and the call was dropped, so there is
+      # no reply left to retract — this is the EMPTY-body path, which is what
+      # FALLBACK_BODY was written for.
       expect(reply.body).to eq(described_class::FALLBACK_BODY)
     end
 
@@ -293,7 +296,7 @@ RSpec.describe Buddy::GPT::Turn do
       # Real prod bug: "5m" produced this with no set_timer call.
       run([{ text: "Kk! Timer's set for 5 minutes." }])
 
-      expect(reply.body).to eq(described_class::FALLBACK_BODY)
+      expect(reply.body).to eq(described_class::SILENT_BODY)
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 
@@ -304,7 +307,7 @@ RSpec.describe Buddy::GPT::Turn do
     it "retracts a posted-picture claim with no call behind it" do
       run([{ text: "Posted a live doorbell frame." }])
 
-      expect(reply.body).to eq(described_class::FALLBACK_BODY)
+      expect(reply.body).to eq(described_class::SILENT_BODY)
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 
@@ -329,7 +332,7 @@ RSpec.describe Buddy::GPT::Turn do
     it "retracts a move that never happened" do
       run([{ text: "Ohhh, I found the one dinner item and moved it onto the right calendar!" }])
 
-      expect(reply.body).to eq(described_class::FALLBACK_BODY)
+      expect(reply.body).to eq(described_class::SILENT_BODY)
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 
@@ -484,7 +487,7 @@ RSpec.describe Buddy::GPT::Turn do
 
         run([{ text: faked }, { text: faked }])
 
-        expect(reply.body).to eq(described_class::FALLBACK_BODY)
+        expect(reply.body).to eq(described_class::SILENT_BODY)
         expect(reply.metadata["retracted_claim"]).to be(true)
       end
 
@@ -687,7 +690,7 @@ RSpec.describe Buddy::GPT::Turn do
         { text: "That's logged." },
       ])
 
-      expect(reply.body).to eq(described_class::FALLBACK_BODY)
+      expect(reply.body).to eq(described_class::SILENT_BODY)
     end
 
     # Prod 1146: "Turn the fan to low" came back "Done. Fan's on low now." off a
@@ -719,7 +722,7 @@ RSpec.describe Buddy::GPT::Turn do
       ])
 
       expect(client.calls.length).to eq(2)
-      expect(reply.body).to eq(described_class::FALLBACK_BODY)
+      expect(reply.body).to eq(described_class::SILENT_BODY)
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 
@@ -777,14 +780,14 @@ RSpec.describe Buddy::GPT::Turn do
     it "retracts a bare Done with nothing behind it" do
       run([{ text: "Done. Fan's on low now." }])
 
-      expect(reply.body).to eq(described_class::FALLBACK_BODY)
+      expect(reply.body).to eq(described_class::SILENT_BODY)
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 
     it "retracts a device reported in its new state" do
       run([{ text: "Yesss, lights are off now. 😊" }])
 
-      expect(reply.body).to eq(described_class::FALLBACK_BODY)
+      expect(reply.body).to eq(described_class::SILENT_BODY)
     end
 
     it "leaves an OFFER to change a device alone" do
@@ -801,14 +804,14 @@ RSpec.describe Buddy::GPT::Turn do
       it "retracts the one from prod" do
         run([{ text: "Yep. Running the last print again." }])
 
-        expect(reply.body).to eq(described_class::FALLBACK_BODY)
+        expect(reply.body).to eq(described_class::SILENT_BODY)
         expect(reply.metadata["retracted_claim"]).to be(true)
       end
 
       it "retracts the doubled-down follow-up too" do
         run([{ text: "Yep, it’s running again now." }])
 
-        expect(reply.body).to eq(described_class::FALLBACK_BODY)
+        expect(reply.body).to eq(described_class::SILENT_BODY)
       end
 
       it "leaves it alone once the function actually fired" do
@@ -859,7 +862,7 @@ RSpec.describe Buddy::GPT::Turn do
         it "retracts #{label}" do
           run([{ text: text }])
 
-          expect(reply.body).to eq(described_class::FALLBACK_BODY)
+          expect(reply.body).to eq(described_class::SILENT_BODY)
           expect(reply.metadata["retracted_claim"]).to be(true)
         end
       end
@@ -916,7 +919,7 @@ RSpec.describe Buddy::GPT::Turn do
         it "retracts #{label}" do
           run([{ text: text }])
 
-          expect(reply.body).to eq(described_class::FALLBACK_BODY)
+          expect(reply.body).to eq(described_class::SILENT_BODY)
           expect(reply.metadata["retracted_claim"]).to be(true)
         end
       end
@@ -950,6 +953,107 @@ RSpec.describe Buddy::GPT::Turn do
       end
     end
 
+    # THE prod 4745 turn, and the reason the arm below it exists.
+    #
+    #   "Every night at 9pm, can you add these items to that list:
+    #    Pickup Whisper Dinner / Kitchen & Living 90% Reset / Dish washer running/delay"
+    #   → "Kk! I added those three to **Before Bed**."
+    #
+    # Nothing ran. He answered "I don't see any tool use. Did you actually do
+    # anything?" and got "Yep. I didn't do anything for that list."
+    #
+    # It walked past every guard for reasons that are each, individually,
+    # trivial: `added (it|that|them) to` doesn't cover THREE ITEMS, and
+    # COMMAND_REQUEST_RX wanted the verb at the start of the message (it opened
+    # on "Every night at 9pm,") and didn't carry `add` as a verb at all.
+    describe "a multi-item add that never ran" do
+      it "retracts the prod wording" do
+        run([{ text: "Kk! I added those three to **Before Bed**." }])
+
+        expect(reply.metadata["retracted_claim"]).to be(true)
+      end
+
+      it "reads the command through a leading schedule clause" do
+        client = FakeBuddyClient.new([{ text: "Sounds good, that's handled." }])
+        described_class.run!(
+          user_says("Every night at 9pm, can you add these items to that list:\nOne\nTwo\nThree"),
+          client: client,
+        )
+
+        expect(reply.metadata["retracted_claim"]).to be(true)
+      end
+    end
+
+    # The backstop, and the point of it: these are turns where NOTHING ran, so
+    # there is no phrasing of "I did it" that can be true. None of these has an
+    # alternative of its own in COMPLETION_CLAIM_RX and none needs one.
+    describe "the silent turn" do
+      [
+        "Kk! I added those three to **Before Bed**.",
+        "I put all three on there for you.",
+        "I've slotted those into the evening list.",
+        "I stuck them on Before Bed just now.",
+        "I filed that under home.",
+        "I booked that in for Thursday.",
+        "They're added.",
+        "All three are on your list.",
+        "That's scheduled.",
+        "I've queued that up for you.",
+        "I noted that down.",
+      ].each do |faked|
+        it "catches #{faked.inspect}" do
+          run([{ text: faked }])
+
+          expect(reply.metadata["retracted_claim"]).to be(true), "not caught: #{faked}"
+          expect(reply.body).to eq(described_class::SILENT_BODY)
+        end
+      end
+
+      # The retraction has to be worth reading. FALLBACK_BODY ("I don't quite
+      # follow") reads as not having understood a request that was perfectly
+      # clear, which is the wrong apology for the wrong failure.
+      it "says what the receipts hold rather than asking them to rephrase" do
+        run([{ text: "I put all three on there for you." }])
+
+        expect(reply.body).to include("Nothing ran on this one")
+        expect(reply.body).to include("no receipt")
+      end
+    end
+
+    # A broad verb list is only safe because of the gate in front of it. These
+    # are the sentences a silent turn is genuinely allowed to contain.
+    describe "what the silent turn must not eat" do
+      [
+        "I couldn't get that one added, sorry.",
+        "I don't have a way to put that on a schedule.",
+        "I started to look and there's nothing there yet.",
+        "I made sure to check - nothing on it.",
+        "Want me to add those three?",
+        "Did you add those already?",
+        "Chelsea added those to the list earlier.",
+        "I've changed my mind about that one.",
+        "That changed everything, honestly.",
+        "The list is set up the way you like it.",
+      ].each do |honest|
+        it "leaves #{honest.inspect} alone" do
+          run([{ text: honest }])
+
+          expect(reply.body).to eq(honest)
+        end
+      end
+
+      it "leaves it alone the moment something actually ran" do
+        allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+
+        run([
+          { tool_calls: [{ name: :add_list_item, arguments: { "list" => "Before Bed", "item" => "One" } }] },
+          { text: "Kk! I added those three to **Before Bed**." },
+        ])
+
+        expect(reply.body).to eq("Kk! I added those three to **Before Bed**.")
+      end
+    end
+
     it "leaves a question about a device alone" do
       run([{ text: "Is the fan on right now?" }])
 
@@ -961,14 +1065,14 @@ RSpec.describe Buddy::GPT::Turn do
       # category" with this, and called nothing.
       run([{ text: "Ah, gotcha. I'll fix that. Sanitizer for hike, in Harmon's." }])
 
-      expect(reply.body).to eq(described_class::FALLBACK_BODY)
+      expect(reply.body).to eq(described_class::SILENT_BODY)
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 
     it "retracts 'let me re-add it' with nothing behind it" do
       run([{ text: "Oh no, let me re-add that for you." }])
 
-      expect(reply.body).to eq(described_class::FALLBACK_BODY)
+      expect(reply.body).to eq(described_class::SILENT_BODY)
     end
 
     it "leaves a promise alone when the call actually accompanied it" do
@@ -995,20 +1099,20 @@ RSpec.describe Buddy::GPT::Turn do
     it "retracts a promise to watch for something that set no watch" do
       run([{ text: "You got it - I'll keep an eye on that." }])
 
-      expect(reply.body).to eq(described_class::FALLBACK_BODY)
+      expect(reply.body).to eq(described_class::SILENT_BODY)
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 
     it "retracts 'I'm watching for' with no watch behind it" do
       run([{ text: "Yep, I'm watching for the next deploy to finish." }])
 
-      expect(reply.body).to eq(described_class::FALLBACK_BODY)
+      expect(reply.body).to eq(described_class::SILENT_BODY)
     end
 
     it "retracts a promise to notify when a future event happens" do
       run([{ text: "Sure thing, I'll let you know when it lands." }])
 
-      expect(reply.body).to eq(described_class::FALLBACK_BODY)
+      expect(reply.body).to eq(described_class::SILENT_BODY)
     end
 
     it "leaves the watch promise alone once remind_when actually fired" do
@@ -1039,7 +1143,7 @@ RSpec.describe Buddy::GPT::Turn do
     it "still retracts a past-tense claim even when a question trails it" do
       run([{ text: "Logged that for you. Anything else on your mind?" }])
 
-      expect(reply.body).to eq(described_class::FALLBACK_BODY)
+      expect(reply.body).to eq(described_class::SILENT_BODY)
     end
 
     it "does not touch ordinary conversation that claims nothing" do
@@ -1093,7 +1197,7 @@ RSpec.describe Buddy::GPT::Turn do
     it "says it didn't happen rather than that it didn't understand" do
       run([{ text: "Kk! lights are off." }, { text: "Kk! lights are off." }], text: "turn the lights off")
 
-      expect(reply.body).not_to eq(described_class::FALLBACK_BODY)
+      expect(reply.body).not_to eq(described_class::SILENT_BODY)
       expect(reply.body).to include("wasn't")
     end
 

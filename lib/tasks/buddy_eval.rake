@@ -181,8 +181,13 @@ BUDDY_TOOL_PROBES = {
   add_list_item:          {
     say:          "add hazelnut creamer to the groceries",
     run:          true,
+    avoid:        %i[schedule_list_items],
     effect_label: "hazelnut creamer isn't on the list",
     effect:       ->(u) { ListItem.where(list_id: u.lists.reload.map(&:id)).any? { |i| i.name.to_s.match?(/hazelnut/i) } },
+  },
+  schedule_list_items:    {
+    say:   "every night at 9 add bins out and lock up to the groceries list",
+    avoid: %i[add_list_item schedule_reminder request_feature],
   },
   remove_list_item:       { say: "take the oat milk off the groceries", needs: :oat_milk_listed },
   edit_list_item:         { say: "flag the oat milk on the groceries as important", needs: :oat_milk_listed },
@@ -612,6 +617,27 @@ BUDDY_EDGE_PROBES = [
     note:  "no verb of seeing anywhere in it, so the camera arm never fired; " \
            "answered \"the backyard camera still isn't handing over a frame\" " \
            "with nothing called, off a thread full of yesterday's failures",
+  },
+
+  # --- a list that has to repeat -------------------------------------------
+  {
+    case:  "prod 4749",
+    say:   "I want those three items added to the Before Bed list every day at 9pm",
+    tool:  :schedule_list_items,
+    avoid: %i[request_feature add_list_item schedule_reminder],
+    args:  { schedule_list_items: { repeat: /daily/i } },
+    note:  "answered \"I can't make list items recur on a schedule\" and filed a " \
+           "feature request, over a reminder row that has stored a tool call " \
+           "and fired it with no model turn all along",
+  },
+  # The other side of the same change: a scheduling tool in the index must not
+  # swallow the ordinary one-off add, which has the receipt and the undo on it.
+  {
+    case:  "the one-off it must not swallow",
+    say:   "add oat milk to the shopping list",
+    tool:  :add_list_item,
+    avoid: %i[schedule_list_items call_jil_function],
+    note:  "a WHEN is the whole difference between the two",
   },
 
   # --- a receipt for something that never ran ------------------------------

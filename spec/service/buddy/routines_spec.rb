@@ -623,14 +623,14 @@ RSpec.describe "Buddy routines" do
       )
 
       expect(user.buddy_routines.count).to eq(0)
-      expect(reply.body).to eq(Buddy::GPT::Turn::FALLBACK_BODY)
+      expect(reply.body).to eq(Buddy::GPT::Turn::SILENT_BODY)
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 
     it "retracts a claim that a routine is running when it doesn't exist" do
       turn!("prep my printer", [run_call("Prep")], text: "Yesss, running **prep my printer** now.")
 
-      expect(reply.body).to eq(Buddy::GPT::Turn::FALLBACK_BODY)
+      expect(reply.body).to eq(Buddy::GPT::Turn::SILENT_BODY)
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 
@@ -646,7 +646,7 @@ RSpec.describe "Buddy routines" do
     it "retracts a count nothing recorded" do
       says!("drank water cup", "Yesss, I counted **drank water cup** as **8oz Water**.")
 
-      expect(reply.body).to eq(Buddy::GPT::Turn::FALLBACK_BODY)
+      expect(reply.body).to eq(Buddy::GPT::Turn::SILENT_BODY)
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 

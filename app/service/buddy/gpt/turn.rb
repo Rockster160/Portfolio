@@ -213,6 +213,68 @@ module Buddy
         body.to_s.match?(OFFER_TO_NOTE_RX)
       end
 
+      # THE backstop, and the reason the list above stopped growing.
+      #
+      # Every alternative in COMPLETION_CLAIM_RX is a PHRASING, and there is
+      # always one more phrasing. "I marked `Make Meal` off" walked past it
+      # because the record was named instead of pronouned. "Posted a live
+      # doorbell frame" walked past it because the verb was a delivery verb.
+      # "Kk! I added those three to **Before Bed**" (prod 4745) walked past
+      # `added (it|that|them) to` because THREE ITEMS ARE NOT "IT". Each one got
+      # its own alternative afterwards, each one shipped, and the next sentence
+      # was already on its way. He is right that this is ridiculous.
+      #
+      # What makes the list necessary at all is that it runs on every reply,
+      # including turns where plenty ran and only the claimed part didn't - and
+      # there, a broad rule would retract honest replies constantly.
+      #
+      # This one is not for those turns. It is only ever consulted once the
+      # machinery has already established that **NOTHING EXECUTED, NOTHING IS
+      # PENDING, AND NOTHING WAS PROPOSED** - a turn on which Buddy did not
+      # touch the world at all. On that turn there is no true sentence in the
+      # first person past tense about having done something, so this doesn't
+      # have to guess which words the model chose. It only has to notice that
+      # the reply is written in the voice of having acted.
+      #
+      # Which is why it's a verb list rather than a shape list: the shapes are
+      # unbounded, the verbs are not.
+      SILENT_TURN_CLAIM_RX = /
+        \bi(?:(?:'|\u2019)ve)?\s+
+          (?:just\s+|already\s+|now\s+|gone\s+ahead\s+and\s+)?
+          (?:added|set|made|created|put|logged|saved|scheduled|started|sent|
+             moved|removed|deleted|cancell?ed|canceled|updated|changed|fixed|
+             marked|filed|stashed|booked|queued|renamed|swapped|turned|
+             switched|dropped|popped|slotted|stuck|noted)
+          # Not a verb of INTENDING, of LOOKING, or of having a thought. "I
+          # started to look", "I made sure", "I set out to" and "I've changed my
+          # mind" are all silent-turn-legal sentences, and the last of those is
+          # in the turn spec precisely because a bare verb match eats it.
+          \b(?!\s+(?:to|sure|out|my\s+mind)\b)
+        # The passive half, which is the same claim with Buddy taken out of it.
+        # "They're added", "that's on the list", "those are set" - all of them
+        # report a record that does not exist, in a voice that never says "I".
+        | \b(?:they|those|these|it|that|both|all\s+\w+)
+            (?:(?:'|\u2019)re|(?:'|\u2019)s|\s+are|\s+is)\s+
+            (?:(?:now|all)\s+)?
+            (?:added|set|logged|saved|scheduled|done|in\s+there|
+               on\s+(?:the|your)\s+\w+)\b
+      /xi
+
+      # A reply on a turn that touched nothing, written as though it had.
+      #
+      # Deliberately NOT part of `unbacked_claim`: that one is asked on every
+      # turn and has to survive the ones where something really did run. This is
+      # only asked behind the "nothing executed" gate, and its whole value is
+      # being broad enough that a new phrasing doesn't need a new release.
+      def self.silent_turn_claim?(body)
+        return false if body.blank?
+        # An honest refusal and an honest question both survive, for the same
+        # reasons they survive everywhere else in here.
+        return false if body.match?(DENIAL_RX)
+
+        body.match?(SILENT_TURN_CLAIM_RX)
+      end
+
       def self.unbacked_claim(body)
         return nil if body.blank?
         return :call if body.match?(TRIED_CLAIM_RX)
@@ -402,6 +464,17 @@ module Buddy
       # thing is built and sitting on screen waiting to be tapped, so throwing
       # the reply away would be as wrong as leaving the claim standing.
       PENDING_BODY = "Almost - I've got that ready right below, it just needs your tap.".freeze
+
+      # What to say when NOTHING ran and the reply spoke as though something had.
+      #
+      # Distinct from UNDONE_BODY, which infers the failure from the request
+      # being an imperative and so can afford to be tentative about it. This one
+      # is read off the turn's own machinery - no tool executed, nothing is
+      # waiting on a tap - so the record is not in doubt and the sentence
+      # shouldn't sound like it is. Say what the receipts hold, which is
+      # nothing, and go again.
+      SILENT_BODY = "Hold on - I said that as though I'd done it, and I hadn't. Nothing ran on " \
+                    "this one, so there's no receipt for it. Let me actually do it.".freeze
 
       # What to say when the claim was about the CALL rather than a record.
       # "I did try now" and "the snapshot call came back clean" are not a wrong
@@ -1509,6 +1582,11 @@ module Buddy
         # about whether it was ever grounded in anything.
         return AFFIRMATION_NUDGE if hollow_affirmation?
         return RETRY_NUDGE if unbacked_claim(spoken.to_s).present?
+        # The broad arm, on the same footing as the narrow one above it and for
+        # the same purpose: get the call MADE, rather than only stopping the
+        # sentence about it. `proposals` is already empty by the guard at the
+        # top of this method, so `@acted` is the whole of "did anything happen".
+        return RETRY_NUDGE if !@acted && self.class.silent_turn_claim?(spoken.to_s)
         # They asked for a thing to happen and nothing was called. Worth the
         # corrective round on its own — this is the half that gets the TV
         # actually turned off, rather than only stopping the lie about it.
@@ -1791,7 +1869,14 @@ module Buddy
             (?:\*\*|`)[^*`\n]{1,60}(?:\*\*|`)\s*(?:off|done)\b
         | \b(?:logged|recorded|credited|crediting)\b
         | \b(?:timer(?:'|’)?s\s+set|reminder(?:'|’)?s\s+set|set\s+(?:a|the)\s+timer)\b
-        | \b(?:added\s+(?:it|that|them)\s+to)\b
+        # "those three", "both of them", "the three items" - a COUNT is how a
+        # multi-item add gets referred to, and prod 4745 is what the pronoun-only
+        # form costs. Bounded to a short phrase so "I added milk to what you
+        # asked me about earlier" doesn't drag a sentence in behind it.
+        | \bi(?:(?:'|\u2019)ve)?\s+(?:just\s+)?added\s+
+            (?:it|that|them|those|these|both|all)\b[^.!?\n]{0,30}?\bto\b
+        | \bi(?:(?:'|\u2019)ve)?\s+(?:just\s+)?added\s+
+            (?:the\s+)?(?:\w+\s+){0,2}(?:items?|things?|entries|lines)\s+to\b
         | \b(?:it(?:'|’)?s\s+(?:on\s+the\s+list|done|logged|set))\b
         | \b(?:that(?:'|’)?s\s+(?:done|logged|counted))\b
         | \A\s*(?:done|all\s+set|got\s+it\s+done)\b[.!,]
@@ -2014,10 +2099,25 @@ module Buddy
       # rewrites a good reply, which is worse than a missed catch.
       COMMAND_REQUEST_RX = /
         \A\s*(?:hey[\s,]+\w+[\s,]+)?
+        # A leading WHEN or IF clause, which does not stop a sentence being an
+        # order. Prod 4744: "Every night at 9pm, can you add these items to that
+        # list:" is as plain a command as exists, and it missed this arm on the
+        # anchor alone - `\A` wanted the verb first and got a schedule. Bounded
+        # to one short clause ending in a comma, so this stays an anchor rather
+        # than becoming a search for a verb anywhere in a paragraph.
+        (?:(?:every|each|at|on|in|by|when|whenever|after|before|tomorrow|tonight|
+             today|this|next|starting)\b[^,\n]{0,40},\s*)?
         (?:(?:please|can\s+you|could\s+you|would\s+you|go\s+ahead\s+and|go|just)\s+)*
         (?:turn|switch|toggle|set|start|stop|shut|open|close|lock|unlock|play|pause|
            resume|dim|brighten|run|fire|launch|restart|reboot|enable|disable|mute|unmute|
-           print|reprint|queue|preheat|cancel|remind|schedule|undo)
+           print|reprint|queue|preheat|cancel|remind|schedule|undo|
+           # The RECORD verbs. Everything above moves something physical, and
+           # the list read like the house rather than the app: "add these items
+           # to that list" is the single most common order there is and none of
+           # these words was in here.
+           add|put|create|make|log|mark|check|tick|complete|delete|remove|clear|
+           move|rename|edit|update|change|rewrite|file|stash|save|send|text|tell|
+           message|ask|track|watch|note)
         # An object, not a preposition. "start with the milk" and "run by me
         # first" open with a command verb and are conversation, so the thing
         # right after the verb is what separates an order from a turn of phrase.
@@ -2268,8 +2368,19 @@ module Buddy
         body    = @reply.body.to_s
         pending = pending_rows?(result)
         kind    = unbacked_claim(body) || (:commanded if !pending && commanded_action_unanswered?(body))
-        return if kind.nil?
+
+        # The gate FIRST, so the broad arm below only ever sees a turn that
+        # touched nothing. Everything under here already assumed that; it was
+        # just being asked after the phrasing rather than before it, which meant
+        # the phrasing was doing work the machinery had already done.
         return if executed_anything?(result)
+
+        # Nothing ran, nothing is waiting on a tap, and the reply is written in
+        # the voice of having acted. See SILENT_TURN_CLAIM_RX - this is the arm
+        # that doesn't need a new alternative every time the model finds a new
+        # way to say it.
+        kind ||= (:silent if !pending && self.class.silent_turn_claim?(body))
+        return if kind.nil?
         # Everything below assumes the claim is about THIS turn, which is why
         # "nothing executed" reads as "nothing happened". A turn that fetched
         # `recent_actions` is answering from the record instead, and the true
@@ -2296,12 +2407,19 @@ module Buddy
         )
       end
 
+      # Every branch below is on a turn where nothing executed - `retract_false_claim!`
+      # gates on that before it gets here - so FALLBACK_BODY ("I don't quite
+      # follow, can you give me a little more to go on?") was the wrong apology
+      # in every one of them. The request was understood perfectly; it just
+      # didn't happen, and asking them to rephrase puts the failure on them.
+      # It stays the fallback for an EMPTY reply, which is what it was written
+      # for.
       def retraction_body(kind, pending)
         return PENDING_BODY if pending
         return NO_CALL_BODY if kind == :call
         return UNDONE_BODY if kind == :commanded
 
-        FALLBACK_BODY
+        SILENT_BODY
       end
 
       # A turn that DID the work and then said it hadn't. The mirror of

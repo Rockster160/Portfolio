@@ -80,14 +80,29 @@ class BuddyReminder < ApplicationRecord
   #
   # The tool NAME is stored, never a resolved id, so this degrades the same way
   # a routine step does: the function is looked up again every time it fires.
+  # One row, or SEVERAL. `action` accepts either a single `{tool:, payload:}` or
+  # an array of them, and a scheduled thing that is genuinely more than one call
+  # is ordinary rather than exotic: three items onto a list every night at 9 is
+  # three `add_list_item` calls, exactly as it would be if they'd asked for it
+  # now. Storing one call per reminder would have meant three reminders on three
+  # rows for one sentence, three receipts to read, and three things to cancel
+  # separately when they change their mind about the sentence.
+  #
+  # `Buddy::ProposalBuilder.run_markers!` has always taken an array, so the
+  # firing side needed nothing.
+  def action_calls
+    Array.wrap(action).filter_map { |row|
+      next unless row.is_a?(Hash)
+
+      tool = row["tool"].presence
+      next if tool.blank? || Buddy::Tools[tool].nil?
+
+      { tool_name: tool.to_sym, payload: (row["payload"] || {}).transform_keys(&:to_sym) }
+    }
+  end
+
   def action_call
-    row = action
-    return nil unless row.is_a?(Hash)
-
-    tool = row["tool"].presence
-    return nil if tool.blank? || Buddy::Tools[tool].nil?
-
-    { tool_name: tool.to_sym, payload: (row["payload"] || {}).transform_keys(&:to_sym) }
+    action_calls.first
   end
 
   # Is this reminder a note to them, or something to actually DO?
