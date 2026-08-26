@@ -131,6 +131,10 @@ module Buddy
       auto_ran = false
       action   = nil
       posted   = []
+      # What the steps SAID, as opposed to that they ran. Only collected from
+      # the head: a step behind a gate finishes minutes later, long after the
+      # message these would go on has been read.
+      answers  = []
       # Whether the queue found something to ride on. A gate that refuses to
       # materialize (every form's target gone, a countdown that won't start)
       # leaves nothing to advance it, so it runs below rather than being dropped.
@@ -140,7 +144,7 @@ module Buddy
         deferred = (step.equal?(gate) ? queued : [])
         case step[:kind]
         when :autos
-          auto_ran = run_auto(user, byte_message, step[:calls]) || auto_ran
+          auto_ran = run_auto(user, byte_message, step[:calls]) { |r| answers.concat(spoken(r)) } || auto_ran
         when :timer
           ran, holding = run_wait!(user, byte_message, step[:calls], deferred: deferred)
           auto_ran ||= ran
@@ -160,7 +164,7 @@ module Buddy
 
       run_steps!(user, conversation, byte_message, queued) unless carried
 
-      { action: action, auto_ran: auto_ran, forms: posted }
+      { action: action, auto_ran: auto_ran, forms: posted, answers: answers }
     end
 
     # Re-materialize a proposal from an EXPIRED row so the person doesn't have to
@@ -218,6 +222,21 @@ module Buddy
       )
 
       result = create(user: user, byte_message: msg, markers: markers)
+
+      # A step that ANSWERED gets its answer said. There is no model turn behind
+      # a routine, so nothing else is left to read it back: Chelsea's Garage
+      # routine posted "Running **Garage**" and a receipt, which is the same
+      # message whether it just opened or just closed. The task itself has known
+      # all along — `Toggle Garage` returns "Closing the garage now" — and this
+      # is only a matter of not dropping it on the floor. Verbatim, deliberately:
+      # rephrasing it costs a model turn to say something the task already said.
+      if result[:answers].present?
+        msg.update!(
+          body:     [(msg.body.presence unless silent), *result[:answers]].compact.join("\n\n"),
+          metadata: msg.metadata.to_h.except("hidden"),
+        )
+      end
+
       # Every step dropped out - each one's target is gone, or the whole thing is
       # feature-gated away. Say so on the same message rather than leaving a
       # bare heading over nothing, in the same voice the heading was written in
@@ -971,8 +990,8 @@ module Buddy
       # receipt chip for it. Returns true if any ran. Failures degrade to a
       # short "couldn't" chip rather than blowing up the whole reply.
       #
-      # Yields each raw dispatch result, for the one caller that needs what the
-      # tool returned rather than just that it went (see run_wait!).
+      # Yields each raw dispatch result, for the callers that need what the tool
+      # returned rather than just that it went (see run_wait! and `spoken`).
       def run_auto(user, byte_message, autos)
         return false if autos.empty?
 
@@ -1038,6 +1057,17 @@ module Buddy
           })
         end
         true
+      end
+
+      # What a tool reported back in words. A Jil task is the one that has any:
+      # `Toggle Garage` answers "Closing the garage now", and that sentence is
+      # the entire difference between a receipt someone can act on and one they
+      # can't. Everything else returns bookkeeping, so this is empty for it.
+      def spoken(result)
+        return [] unless result.is_a?(Hash) && result[:ok]
+
+        answer = result[:data].is_a?(Hash) ? result[:data][:answer] : nil
+        [answer.to_s.strip].compact_blank
       end
 
       # A receipt that returns nil OPTED OUT; a receipt that raises did not, and

@@ -346,6 +346,26 @@ RSpec.describe Buddy::ProposalBuilder do
         expect(chip.metadata["tool_name"]).to eq("trigger_jil_task")
       end
 
+      # A fired scope hands back every task it ran, each one's execution already
+      # finished — the same thing a spoken command is answered with. Nothing
+      # read it, so a routine firing a scope could only ever say that it fired.
+      it "carries up what the tasks it fired actually said" do
+        allow(::Jil).to receive(:trigger).and_return([fan])
+        allow(fan).to receive(:last_message).and_return("Fan's on high in the great room")
+
+        result = build([{ tool_name: :trigger_jil_task, payload: { name: "Fan High" } }])
+
+        expect(result[:answers]).to eq(["Fan's on high in the great room"])
+      end
+
+      # Most tasks just do the thing. An empty answer is not an answer, and a
+      # blank line under the receipt is worse than nothing.
+      it "carries nothing up when they said nothing" do
+        result = build([{ tool_name: :trigger_jil_task, payload: { name: "Fan High" } }])
+
+        expect(result[:answers]).to eq([])
+      end
+
       # CSS puts a ✓ in front of every chip, and most receipts end with one of
       # their own - together they rendered "✓ Fired Fan High ✓".
       it "does not leave a second checkmark on the end of the receipt" do

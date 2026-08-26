@@ -84,6 +84,60 @@ RSpec.describe "Routines that call answering tools" do
     end
   end
 
+  # Chelsea's Garage routine. One step, `call_jil_function` on Toggle Garage,
+  # which returns "Closing the garage now" or "Opening the garage now" depending
+  # on where the door already was — and the routine posted the same "Running
+  # **Garage**" either way, so a tap told her nothing about which just happened.
+  # There is no model turn behind a routine to read the answer back, so unless
+  # the runner carries it up, the one thing worth knowing is thrown away.
+  describe "an answer the person needs" do
+    let!(:task) {
+      user.tasks.create!(
+        name:          "Toggle Garage",
+        listener:      %(function("Direction" TAB ["open" "close" "toggle"])::String),
+        code:          "",
+        enabled:       true,
+        buddy_enabled: true,
+      )
+    }
+    let(:markers) {
+      [{ tool_name: :call_jil_function, payload: { name: "Toggle Garage", direction: "toggle" } }]
+    }
+
+    def answering(text)
+      allow_any_instance_of(Task).to receive(:execute).and_return(instance_double(Execution, result: text))
+    end
+
+    it "says what the task said, on the routine's own message" do
+      answering("Closing the garage now. It takes a few seconds.")
+
+      run(markers)
+
+      expect(reply.body).to include("Lighting up **Yoga Lamp**")
+      expect(reply.body).to include("Closing the garage now. It takes a few seconds.")
+    end
+
+    # Verbatim. The task wrote a sentence for a person to read; re-wording it
+    # would cost a model turn to say what has already been said.
+    it "doesn't reword it" do
+      answering("The garage was already closed, so nothing was sent.")
+
+      run(markers)
+
+      expect(reply.body).to end_with("The garage was already closed, so nothing was sent.")
+    end
+
+    # Most tools return bookkeeping, not words. Nothing to add is not the same
+    # as something to add that happens to be empty.
+    it "leaves the line alone when the task returned nothing" do
+      answering("")
+
+      run(markers)
+
+      expect(reply.body).to eq("Lighting up **Yoga Lamp**")
+    end
+  end
+
   # The half of the guard that was right, and has to stay right: with no model
   # turn there is nobody for a lookup to report to, and a chip saying a query
   # ran tells the person nothing they can act on.

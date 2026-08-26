@@ -100,9 +100,21 @@ Buddy::Tools.register(
     # trigger source. auth_id records WHO asked; each resulting Execution runs
     # as its own task's owner, so (execution.user_id, auth_type_id) is the
     # on-behalf-of trail.
-    data = payload[:data].present? ? ::Tokenizing::TriggerData.parse(payload[:data], as: ctx.user) : {}
-    ::Jil.trigger(ctx.user, payload[:scope].to_sym, data, auth: :buddy, auth_id: ctx.user.id)
-    { fired: true, task_id: payload[:task_id], scope: payload[:scope], data: payload[:data] }
+    data  = payload[:data].present? ? ::Tokenizing::TriggerData.parse(payload[:data], as: ctx.user) : {}
+    tasks = ::Jil.trigger(ctx.user, payload[:scope].to_sym, data, auth: :buddy, auth_id: ctx.user.id)
+    # What the tasks that matched actually SAID. `trigger` hands back every task
+    # it ran and each one's execution is already finished, so this is the same
+    # value a spoken command comes back with (Jarvis#command reads exactly this).
+    # A routine has no model turn to read it, so passing it up is the only way
+    # it reaches the person — see ProposalBuilder#run_markers!.
+    answer = Array(tasks).filter_map { |t| t.try(:last_message).presence }.last
+    {
+      fired:   true,
+      task_id: payload[:task_id],
+      scope:   payload[:scope],
+      data:    payload[:data],
+      answer:  (::Buddy::RawOutput.localize(answer, ctx.user) if answer),
+    }.compact
   },
   receipt:     ->(_result, ctx) {
     name = ctx.proposal["payload"]&.dig("task_name") || "task"

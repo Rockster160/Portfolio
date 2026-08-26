@@ -32,4 +32,22 @@ RSpec.describe CatchMalformedRequestMiddleware do
     expect(status).to eq(405)
     expect(body).to eq(["Not a valid MIME type"])
   end
+
+  it "refuses a POST whose body stops short of its Content-Length" do
+    # What Puma hands the app when the client hangs up mid-body: the declared
+    # Content-Length is never delivered, so the read raises instead of returning.
+    severed = Class.new(StringIO) {
+      def read(*) = raise(EOFError)
+    }.new("")
+    truncated = env_for("POST").merge(
+      "CONTENT_TYPE"   => "application/x-www-form-urlencoded",
+      "CONTENT_LENGTH" => "64",
+      "rack.input"     => severed,
+    )
+    reading_app = ->(env) { Rack::Request.new(env).params && [200, {}, ["ok"]] }
+    status, _headers, body = described_class.new(reading_app).call(truncated)
+
+    expect(status).to eq(400)
+    expect(body).to eq(["Incomplete request body"])
+  end
 end
