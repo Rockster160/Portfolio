@@ -1,5 +1,5 @@
 # Handles a single Byte message bound for Jarvis: a whole conversation in
-# :jarvis mode, or a single "." aside typed into any other thread. Sends the
+# :jarvis mode, a "/j" from any thread, or a "." aside in a Buddy one. Sends the
 # body through Jarvis and posts the response back as an inbound message on the
 # same conversation.
 #
@@ -21,7 +21,7 @@ class ByteJarvisWorker
     # Mark the user's send as sent so the composer's pending state clears.
     message.update!(state: :sent) if message.state == "pending"
 
-    # The dot is our routing marker, not part of what they said.
+    # The prefix is our routing marker, not part of what they said.
     body = ByteMessageIntake.jarvis_words(message.body)
     return if body.empty?
 

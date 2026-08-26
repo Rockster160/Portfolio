@@ -49,6 +49,11 @@ const COMMANDS = [
   { name: "reset",    modes: ["buddy"], description: "Fresh start here — stop sending everything above as history" },
   { name: "compact",  modes: ["buddy"], alias: true, description: "Alias for /reset" },
 
+  // Jarvis. Everywhere, because the house doesn't care which thread you're
+  // standing in — the bare-dot shortcut for the same thing is Buddy-only.
+  { name: "jarvis",   owner: true, description: "Say this to Jarvis",                  args: "<command>" },
+  { name: "j",        owner: true, alias: true, description: "Alias for /jarvis",      args: "<command>" },
+
   // Conversation
   { name: "rename",   description: "Rename this conversation",                         args: "<new name>" },
   { name: "archive",  description: "Archive this conversation" },
@@ -103,11 +108,14 @@ export function setupSlashAutocomplete({ input, popover, autosize, app }) {
 
   const render = () => {
     if (filtered.length === 0) {
-      // A dot in front of something we don't know isn't a miss any more — it's
-      // a command on its way to Jarvis. Saying so is how the routing is
-      // discoverable at all; "No matching commands" read as a dead end.
+      // In a Buddy thread a dot in front of something we don't know isn't a
+      // miss — it's a command on its way to Jarvis, and saying so is how that
+      // routing is discoverable at all ("No matching commands" read as a dead
+      // end). Anywhere else the dot is only ever a slash-command alias, so the
+      // dead end is the truth and `/j` is the way to the house.
+      const { mode, owner } = context();
       popover.innerHTML =
-        activePrefix === "."
+        activePrefix === "." && mode === "buddy" && owner
           ? `<div class="byte-slash-empty">Goes straight to Jarvis.</div>`
           : `<div class="byte-slash-empty">No matching commands.</div>`;
       return;

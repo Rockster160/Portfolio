@@ -431,6 +431,15 @@ RSpec.describe Buddy::GPT::History do
       ])
     end
 
+    # The prefix is how the message was ADDRESSED. Replaying it teaches the
+    # model a syntax it has no business writing, and the bracket already says
+    # where the words went.
+    it "replays what was said, without the marker it was sent with" do
+      said("/j garage door open", kind: "jarvis")
+
+      expect(build.first[:content]).to eq("[asked Jarvis directly] garage door open")
+    end
+
     it "leaves an ordinary turn unbracketed" do
       said("garage door open")
 

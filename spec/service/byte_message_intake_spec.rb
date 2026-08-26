@@ -179,9 +179,8 @@ RSpec.describe ByteMessageIntake do
     end
   end
 
-  # A "." in front of a message sends it straight to Jarvis, exactly as if it had
-  # been said out loud in the room — from any thread, whatever that thread is
-  # normally for.
+  # "/j" says the rest to Jarvis from any thread, and in a Buddy one a bare "."
+  # does the same — exactly as if it had been said out loud in the room.
   describe ".jarvis_aside?" do
     let(:user)  { User.me }
     let(:convo) { user.byte_conversations.create!(mode: :buddy, name: "Buddy") }
@@ -219,6 +218,20 @@ RSpec.describe ByteMessageIntake do
 
       it "hands Jarvis the words without the marker" do
         expect(ByteMessageIntake.jarvis_words(" .garage door open ")).to eq("garage door open")
+      end
+
+      it "reads /j and /jarvis as Jarvis, with the verb dropped too" do
+        ["/j garage door open", "/jarvis garage door open", ".j garage door open"].each { |body|
+          expect(ByteMessageIntake).to be_jarvis_command(body)
+          expect(ByteMessageIntake.jarvis_words(body)).to eq("garage door open")
+        }
+      end
+
+      # There is nothing to say. ByteController answers this one with a usage
+      # line rather than sending Jarvis an empty command.
+      it "is not a Jarvis command with no words after it" do
+        expect(ByteMessageIntake).not_to be_jarvis_command("/j")
+        expect(ByteMessageIntake).not_to be_jarvis_command("/jarvis  ")
       end
     end
 
@@ -265,7 +278,25 @@ RSpec.describe ByteMessageIntake do
         theirs = other.byte_conversations.create!(mode: :buddy, name: "Theirs")
 
         send!(".garage door open", as: other, conversation: theirs)
+        send!("/j garage door open", as: other, conversation: theirs)
         expect(ByteJarvisWorker).not_to have_received(:perform_async)
+      end
+
+      # A shell is full of leading dots — `./bin/setup`, `.env`, any relative
+      # path — and not one of them is a house command. The aside is for the
+      # thread you're having a conversation in; everywhere else, ask by name.
+      it "leaves a dot alone outside a Buddy thread" do
+        shell = user.byte_conversations.create!(mode: :bash, name: "Shell")
+
+        send!("./bin/setup", conversation: shell)
+        expect(ByteJarvisWorker).not_to have_received(:perform_async)
+      end
+
+      it "still reaches Jarvis by name from a shell thread" do
+        shell = user.byte_conversations.create!(mode: :bash, name: "Shell")
+
+        expect(send!("/j garage door open", conversation: shell).metadata["kind"]).to eq("jarvis")
+        expect(ByteJarvisWorker).to have_received(:perform_async)
       end
     end
   end

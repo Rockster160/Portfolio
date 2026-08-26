@@ -88,9 +88,10 @@ class ByteController < ApplicationController
     # hang an image on, so any attachment sent alongside one is deliberately
     # dropped; the blob it left behind is ActiveStorageSweepWorker's problem.
     #
-    # A "." only counts as a slash command for a verb we know — everything else
-    # after one is for Jarvis, and ByteMessageIntake owns that split so the Mac
-    # CLI reaches the same answer without coming through here.
+    # A "." only counts as a slash command for a verb we know — in a Buddy
+    # thread everything else after one is for Jarvis, and ByteMessageIntake owns
+    # that split so the Mac CLI reaches the same answer without coming through
+    # here. Elsewhere Jarvis is reached by name, with `/j`.
     if ByteMessageIntake.slash_command?(body) && (handled = handle_rails_slash_command(conversation, body))
       return render(json: handled.as_wire, status: :ok)
     end
@@ -914,6 +915,14 @@ class ByteController < ApplicationController
       conversation.update!(mode: new_mode)
       broadcast_convo_change(conversation, :updated)
       ack(conversation, "Mode set to **#{new_mode}** for this conversation.")
+    when "j", "jarvis"
+      # Not ours to answer: ByteMessageIntake routes the words to Jarvis, the
+      # same way it does for the Mac CLI, which never comes through here. Only
+      # the empty one stops, because there is nothing to say.
+      return ack(conversation, "Jarvis is the owner's.") if buddy_only?
+      return ack(conversation, "usage: `/j COMMAND`") if arg.empty?
+
+      nil
     when "today"
       send_today_briefing(conversation)
     when "buddy"

@@ -225,7 +225,12 @@ module Buddy
       # turn that reads it as being addressed here answers a note meant for
       # somebody else.
       def outbound_body(message, body)
-        return "[asked Jarvis directly] #{body}" if jarvis_aside?(message)
+        # Without the routing marker: "/j" and the bare "." are how the message
+        # was ADDRESSED, not part of what was said, and the bracket already says
+        # who it went to.
+        if jarvis_aside?(message)
+          return "[asked Jarvis directly] #{ByteMessageIntake.jarvis_words(body)}"
+        end
 
         prefix = reply_prefix(message)
         prefix ? "#{prefix} #{body}".strip : body

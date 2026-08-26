@@ -19,19 +19,26 @@ class ByteMessageIntake
 
   # Every verb a slash command can start with — the ones ByteController answers
   # itself, plus the ones that fall through to the Mac's meta handler. It has to
-  # be the whole list, because of what it now gates: a "." in front of anything
-  # NOT on it goes to Jarvis, so a verb missing here is a slash command that
-  # silently turns into a spoken one. Mirrors COMMANDS in
+  # be the whole list, because of what it gates in a Buddy thread: a "." in
+  # front of anything NOT on it goes to Jarvis, so a verb missing here is a
+  # slash command that silently turns into a spoken one. Mirrors COMMANDS in
   # app/javascript/src/pages/byte/slash_commands.js.
   SLASH_VERBS = (
-    "abort adopt archive buddy cd clear compact continue fork help join mode " \
-      "new pwd rename reset sessions switch today unwatch wait waits watch watches"
+    "abort adopt archive buddy cd clear compact continue fork help j jarvis " \
+      "join mode new pwd rename reset sessions switch today unwatch wait " \
+      "waits watch watches"
   ).split.freeze
+
+  # Say the rest of this to Jarvis, from any thread. The explicit form, and
+  # outside a Buddy thread the only one: a terminal is full of leading dots
+  # (`./deploy`, `.env`, a relative path) and none of them are house commands.
+  JARVIS_VERBS = %w[j jarvis].freeze
 
   # "/" always means a slash command, known verb or not — an unknown one is the
   # Mac's to answer or refuse. "." is the mobile-friendly prefix (the period is
   # closer to the space bar than the slash) and it only counts for a verb we
-  # actually know, because everything else after a dot now belongs to Jarvis.
+  # actually know, because in a Buddy thread everything else after a dot
+  # belongs to Jarvis.
   def self.slash_command?(body)
     text = body.to_s.strip
     return true if text.start_with?("/")
@@ -40,20 +47,43 @@ class ByteMessageIntake
     SLASH_VERBS.include?(verb_of(text))
   end
 
-  # Straight to Jarvis, exactly as if it had been said out loud in the room.
+  # "/j garage door open". A bare "/j" is NOT one — there is nothing to say, and
+  # ByteController answers that with a usage line instead.
+  def self.jarvis_command?(body)
+    verb, rest = split_command(body)
+    JARVIS_VERBS.include?(verb) && rest.present?
+  end
+
+  # A dot in front of ordinary words: straight to Jarvis, exactly as if it had
+  # been said out loud in the room. BUDDY THREADS ONLY (see #for_jarvis?) — the
+  # shortcut is for talking to the house mid-conversation, and a Claude, cursor
+  # or bash thread is somewhere a dot means something else entirely.
   def self.jarvis_aside?(body)
     body.to_s.strip.start_with?(".") && !slash_command?(body)
   end
 
-  # What Jarvis is actually given: the dot is our routing marker, not part of
-  # what they said. Stripped for the conversation-wide :jarvis mode too, where
-  # someone may well type one out of habit.
+  # What Jarvis is actually given: our routing marker, whichever one was used,
+  # is not part of what they said. The bare dot is stripped for the
+  # conversation-wide :jarvis mode too, where someone may well type one out of
+  # habit.
   def self.jarvis_words(body)
+    verb, rest = split_command(body)
+    return rest if JARVIS_VERBS.include?(verb)
+
     body.to_s.strip.delete_prefix(".").strip
   end
 
+  # The verb and everything after it, for a "/" or "." prefixed line.
+  def self.split_command(body)
+    text = body.to_s.strip
+    return ["", ""] unless text.start_with?("/") || text.start_with?(".")
+
+    verb, rest = text[1..].to_s.strip.split(/\s+/, 2)
+    [verb.to_s.downcase, rest.to_s.strip]
+  end
+
   def self.verb_of(text)
-    text[1..].to_s.strip.split(/\s+/, 2).first.to_s.downcase
+    split_command(text).first
   end
 
   # Returns the persisted outbound message, or nil for a blank body.
@@ -111,11 +141,12 @@ class ByteMessageIntake
       return already
     end
 
-    # A "." command is Jarvis's, and nothing else gets first refusal on it — not
-    # the stash latch, not the alarm word, not the timer parser, not Buddy.
-    # That is what "as if I'd said it out loud" has to mean, or the same words
-    # would do two different things depending on which thread they were typed in.
-    if jarvis_aside?
+    # A command aimed at Jarvis is Jarvis's, and nothing else gets first refusal
+    # on it — not the stash latch, not the alarm word, not the timer parser, not
+    # Buddy. That is what "as if I'd said it out loud" has to mean, or the same
+    # words would do two different things depending on which thread they were
+    # typed in.
+    if for_jarvis?
       @metadata = @metadata.to_h.merge(kind: :jarvis)
       message = post!(state: :sent)
       ByteJarvisWorker.perform_async(message.id)
@@ -209,8 +240,17 @@ class ByteMessageIntake
   # Owner only. Jarvis drives the house, the car, the printer and the lists, and
   # a buddy-only household member has no business there — /mode already refuses
   # them a jarvis thread, and a prefix must not be the way around that.
-  def jarvis_aside?
-    @user.me? && self.class.jarvis_aside?(@body)
+  #
+  # "/j" and "/jarvis" work from any thread. The bare dot only works in a Buddy
+  # one: it was made a Jarvis marker for the aside said mid-conversation, and
+  # everywhere else it costs more than it buys — a claude, cursor or bash thread
+  # is a terminal, where `./bin/setup` and `.env` are what a leading dot means,
+  # and sending those to the house was never an aside anyone intended.
+  def for_jarvis?
+    return false unless @user.me?
+    return true if self.class.jarvis_command?(@body)
+
+    buddy? && self.class.jarvis_aside?(@body)
   end
 
   def reply_target
