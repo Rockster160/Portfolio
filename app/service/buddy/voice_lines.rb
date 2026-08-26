@@ -35,12 +35,12 @@ module Buddy
           { say: "*squish* **%<name>s**, going now.", mood: :happy },
           { say: "On it. **%<name>s**. *boing*", mood: :uwu },
           { say: "**%<name>s** it is. Squish.", mood: :uwu },
-          { say: "Got it. **%<name>s** is in motion.", mood: :encouraging },
+          { say: "Got it. **%<name>s** is in motion.", mood: :focused },
           { say: "Bouncing over to **%<name>s**.", mood: :happy },
           { say: "Right then. Reshaping around **%<name>s**.", mood: :nerd },
           { say: "One **%<name>s**, coming through. *wobble*", mood: :uwu },
-          { say: "Rolling into **%<name>s** for you.", mood: :encouraging },
-          { say: "Happy to. Starting **%<name>s**.", mood: :neutral_blush },
+          { say: "Rolling into **%<name>s** for you.", mood: :happy },
+          { say: "Happy to. Starting **%<name>s**.", mood: :loving },
           { say: "*click* Spinning up **%<name>s**.", mood: :nerd },
         ],
         routine_empty:       [
@@ -52,26 +52,26 @@ module Buddy
         greeting_morning:    [
           { say: "Mooooorning!", mood: :uwu },
           { say: "Morning!", mood: :happy },
-          { say: "Hey, morning!", mood: :encouraging },
-          { say: "Mornin'!", mood: :neutral_blush },
+          { say: "Hey, morning!", mood: :playful },
+          { say: "Mornin'!", mood: :loving },
         ],
         greeting_afternoon:  [
           { say: "Afternoon!", mood: :happy },
-          { say: "Hey there!", mood: :encouraging },
+          { say: "Hey there!", mood: :playful },
           { say: "Hellooooooo there!", mood: :uwu },
-          { say: "Hey hey!", mood: :neutral_blush },
+          { say: "Hey hey!", mood: :loving },
         ],
         greeting_evening:    [
           { say: "Evening!", mood: :happy },
-          { say: "Hey, evening!", mood: :encouraging },
+          { say: "Hey, evening!", mood: :playful },
           { say: "Heyyy!", mood: :uwu },
-          { say: "Well hello!", mood: :neutral_blush },
+          { say: "Well hello!", mood: :loving },
         ],
         greeting_late_night: [
           { say: "Hey!", mood: :happy },
           { say: "Heyyy!", mood: :uwu },
-          { say: "Hi there!", mood: :encouraging },
-          { say: "Well hello!", mood: :neutral_blush },
+          { say: "Hi there!", mood: :playful },
+          { say: "Well hello!", mood: :loving },
         ],
       },
       moss:    {
@@ -237,7 +237,7 @@ module Buddy
     # wearing `surprised` here for want of a better face, and startled is not
     # the same thing as sorry.
     ACTED_MOODS = {
-      byte:    { ok: %i[happy focused nerd encouraging], failed: %i[confused annoyed sad] },
+      byte:    { ok: %i[happy focused nerd], failed: %i[confused annoyed sad] },
       moss:    { ok: %i[happy content], failed: %i[dismayed unamused queasy sad] },
       suki:    { ok: %i[cheery happy offering], failed: %i[annoyed dizzy] },
       glimmer: { ok: %i[content happy], failed: %i[dismayed sad] },

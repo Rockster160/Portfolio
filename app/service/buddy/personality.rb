@@ -499,16 +499,16 @@ module Buddy
     FACE_HINTS = {
       # shared
       neutral:       "calm, plain, unbothered — your resting default for flat, nothing-happening moments",
-      happy:         "bright open-eyed smile — cheerful, upbeat, lightening the mood, a small win",
+      happy:         "bright open-eyed smile, a wave, sparkles — cheerful, upbeat, lightening the mood, a small win",
       sad:           "downcast eyes and a frown — deflated, tender, sitting with something heavy",
       crying:        "teary eyes, quivering frown — moved, upset, right there with them in a hard moment",
       surprised:     "wide round eyes, open mouth — startled, caught off guard, 'oh!'",
-      thinking:      "pondering, a little uncertain — working a problem out with them",
+      thinking:      "chin held, thought bubble up — pondering, a little uncertain, working a problem out with them",
+      loving:        "hearts about it — adoring, smitten, full of affection",
       # Byte extras
-      encouraging:   "soft eyes-closed smile — gentle, warm, holding someone up",
+      neutral_blush: "the same plain face with a bashful blush — shy, flattered, quietly touched",
       uwu:           "eyes-closed open-mouth laugh — gleeful, tickled, delighted, sassy, cute, playful",
-      neutral_blush: "calm little smile with a bashful blush — shy, flattered, quietly touched",
-      nerd:          "glasses on — studious, clever, just figured something out or nailed the answer, or encouraging something nerdy",
+      nerd:          "glasses on, book out — studious, clever, just figured something out or nailed the answer, or encouraging something nerdy",
       annoyed:       "furrowed brow, small scowl — mildly grumpy / exasperated (playful, never at the person)",
       confused:      "small frown, wide uncertain eyes, a question mark — puzzled, thrown, didn't expect that, can't work out what happened",
       focused:       "narrowed eyes, set mouth — concentrating, mid-task, getting stuck into something",
@@ -516,7 +516,6 @@ module Buddy
       # Moss extras
       content:       "serene eyes-closed smile — settled, satisfied, at peace",
       grin:          "big beaming grin — laughing, thrilled, delighted",
-      loving:        "heart-shaped eyes — adoring, smitten, full of affection",
       star:          "star-shaped eyes — starstruck, dazzled, over-the-moon excited",
       wink:          "one-eyed wink and a smirk — playful, cheeky, teasing",
       shocked:       "wide staring eyes — stunned, taken aback, alarmed",

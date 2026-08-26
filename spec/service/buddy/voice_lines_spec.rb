@@ -278,7 +278,7 @@ RSpec.describe Buddy::VoiceLines do
     end
 
     it "wears something pleased when it did" do
-      20.times { expect(described_class.acted_mood(:byte)).to be_in(%i[happy focused nerd encouraging]) }
+      20.times { expect(described_class.acted_mood(:byte)).to be_in(%i[happy focused nerd]) }
     end
   end
 end

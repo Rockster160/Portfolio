@@ -4451,47 +4451,23 @@ dialog.byte-modal {
   }
 }
 
-// Body layer. Byte uses a faceless slime body with the face as a transparent
-// overlay. Each Moss expression is a COMPLETE character — the mossy ball, its
-// expression, AND the sprout leaf (composited behind the ball) all baked into
-// the face image — so Moss needs no separate body layer.
-.byte-buddy-hero[data-buddy-theme="byte"] .byte-buddy-body {
-  background-image: image-url("buddy/byte/body.png");
-}
-// TRANSITIONAL. Byte is mid-move from the overlay system to the one every
-// other companion uses: the faces below are complete characters — body,
-// expression, bubbles, the lot — baked into one PNG, so the body layer has to
-// come off under them or the slime renders twice. The older faces are still
-// eyes-and-mouth over `body.png` and still need it.
-//
-// When the rest of Byte's set is redrawn as full characters, this block and
-// the `body.png` line above BOTH go, and Byte's rule becomes the one-liner
-// Moss/Suki/Glimmer already have.
-$byte_full_body: focused confused surprised playful;
-@each $expr in $byte_full_body {
-  .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$expr}"]
-    .byte-buddy-body {
-    background-image: none;
-  }
-}
-.byte-buddy-hero[data-buddy-theme="moss"] .byte-buddy-body {
-  background-image: none;
-}
-// Suki (like Moss) bakes the whole sunbird — body, expression, and any
-// sparkles/hearts/zzz — into each face PNG, so no separate body layer.
-.byte-buddy-hero[data-buddy-theme="suki"] .byte-buddy-body {
-  background-image: none;
-}
-// Glimmer (like Moss/Suki) bakes the whole firefly — body, wings, expression,
-// glowing belly, and any sparkles/zzz — into each face PNG, so no body layer.
-.byte-buddy-hero[data-buddy-theme="glimmer"] .byte-buddy-body {
+// Body layer: nobody uses it any more. Every companion bakes the WHOLE
+// character into each face PNG — Moss's ball and sprout, Suki's sunbird,
+// Glimmer's wings and glowing belly, and now Byte's slime, bubbles and puddle.
+// Byte was the last one on the old split (a faceless `body.png` with the eyes
+// and mouth as a transparent overlay on top), which is why this layer exists
+// at all; it stays as an empty layer so a future companion drawn that way has
+// somewhere to go.
+.byte-buddy-hero .byte-buddy-body {
   background-image: none;
 }
 
-// Face per theme + expression. Both themes now ship a full raster set (PNG);
-// every face in the folder is wired so the debug picker can switch to any of
-// them. Each entry must have a matching face_#{name}.png or precompile fails.
-$byte_expressions: neutral neutral_blush happy uwu encouraging annoyed sad crying thinking nerd sleeping focused confused surprised playful;
+// Face per theme + expression. Every companion ships a full raster set (PNG),
+// and every face in the folder is wired so the debug picker can switch to any
+// of them. Each entry must have a matching face_#{name}.png or precompile
+// fails — spec/service/buddy/expression_face_spec.rb checks these lists against
+// the art on disk in both directions so that lands in a spec, not a deploy.
+$byte_expressions: neutral neutral_blush happy uwu loving annoyed sad crying thinking nerd sleeping focused confused surprised playful;
 $moss_expressions: neutral happy grin star loving wink sad crying surprised shocked angry frustrated content queasy sleeping unamused thinking dizzy confused focused dismayed;
 @each $expr in $byte_expressions {
   .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$expr}"]
@@ -4499,9 +4475,10 @@ $moss_expressions: neutral happy grin star loving wink sad crying surprised shoc
     background-image: image-url("buddy/byte/face_#{$expr}.png");
   }
 }
-// `focused` is Byte's own art now. `celebrating` is not — nothing emits it any
-// more, but a stale stored expression can still ask, so it keeps a mapping.
-$byte_expr_aliases: ("celebrating": "happy");
+// Names nothing emits any more, kept because a stale stored expression can
+// still ask for one. `encouraging` was Byte's own art until the full-character
+// redraw, which has no soft eyes-closed smile to give it.
+$byte_expr_aliases: ("celebrating": "happy", "encouraging": "happy");
 @each $mood, $face in $byte_expr_aliases {
   .byte-buddy-hero[data-buddy-theme="byte"][data-buddy-expression="#{$mood}"]
     .byte-buddy-face {

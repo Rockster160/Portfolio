@@ -1,4 +1,5 @@
 require "rails_helper"
+require "chunky_png"
 
 RSpec.describe Buddy::ExpressionState do
   before { allow(MonitorChannel).to receive(:broadcast_to) }
@@ -83,7 +84,7 @@ RSpec.describe Buddy::ExpressionState do
 
       described_class.react!(convo)
 
-      expect(convo.reload.buddy_expression).to be_in(%w[happy focused nerd encouraging])
+      expect(convo.reload.buddy_expression).to be_in(%w[happy focused nerd])
     end
 
     # A face the model picked is a read of the room. This is a floor under a
@@ -141,24 +142,55 @@ RSpec.describe Buddy::ExpressionState do
     end
   end
 
-  # The four drawn 2026-08-25. They are COMPLETE characters rather than the
-  # eyes-and-mouth overlays the rest of Byte's set still is, so the body layer
-  # is suppressed under them — and they were re-placed onto body.png's exact
-  # footprint, or the pet would visibly jump size and position mid-conversation.
+  # Byte used to be drawn in two layers: a faceless `body.png` slime with the
+  # eyes and mouth as a small transparent overlay on top. Every face is a
+  # COMPLETE character now — slime, expression, bubbles, puddle, the lot — which
+  # is what Moss, Suki and Glimmer always were, and the body layer is gone.
+  #
+  # Two things have to hold for a set drawn that way, and neither is visible in
+  # a filename. A face that still carries only the eyes and mouth would render
+  # as features floating on nothing; and a face placed anywhere but on the
+  # others\' footprint makes the pet jump size and position as its mood changes.
   describe "Byte's full-character faces" do
-    full_body = %w[focused confused surprised playful]
+    faces = Rails.root.glob("app/assets/images/buddy/byte/face_*.png")
 
-    it "suppresses the body layer under each of them" do
+    def alpha_rows(image)
+      (0...image.height).select { |y|
+        (0...image.width).any? { |x| ChunkyPNG::Color.a(image[x, y]) > 128 }
+      }
+    end
+
+    it "draws a whole character in every one, not an overlay" do
+      # Measured on a downsample — the question is 3% of the frame versus 30%,
+      # and decoding half a million pixels a face to answer it is a waste.
+      thin = faces.filter_map { |path|
+        small = ChunkyPNG::Image.from_file(path).resample_nearest_neighbor(180, 180)
+        cover = small.pixels.count { |px| ChunkyPNG::Color.a(px) > 128 } / (180.0 * 180)
+        next if cover >= 0.25
+
+        "#{path.basename} covers #{(cover * 100).round(1)}% of its frame"
+      }
+
+      expect(thin).to eq([]), "these look like the old eyes-and-mouth overlays:\n#{thin.join("\n")}"
+    end
+
+    it "stands every one on the same baseline" do
+      # 555 on the 720 canvas, inherited from the `body.png` the first four were
+      # aligned to. The number matters less than every face sharing it.
+      off = faces.filter_map { |path|
+        bottom = alpha_rows(ChunkyPNG::Image.from_file(path)).last
+        next if (553..559).cover?(bottom)
+
+        "#{path.basename} sits its puddle at y=#{bottom}"
+      }
+
+      expect(off).to eq([]), "these make the pet hop when the mood changes:\n#{off.join("\n")}"
+    end
+
+    it "keeps the body layer empty for every theme" do
       scss = Rails.root.join("app/assets/stylesheets/pages/byte.scss").read
-      expect(scss[/\$byte_full_body:\s*([^;]+);/, 1].to_s.split).to match_array(full_body)
-    end
-
-    it "offers each of them as a mood the model can pick" do
-      full_body.each { |face| expect(Buddy::Faces.selectable?(:byte, face)).to be(true) }
-    end
-
-    it "describes each of them for the prompt, or the model gets a bare name" do
-      full_body.each { |face| expect(Buddy::Personality::FACE_HINTS[face.to_sym]).to be_present }
+      body = scss.scan(/\.byte-buddy-body\s*\{[^}]*\}/m).join
+      expect(body).not_to include("image-url")
     end
   end
 end
