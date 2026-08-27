@@ -83,9 +83,10 @@ class WebhooksController < ApplicationController
   # /jil/trigger/:trigger?
   def jil
     if params.key?(:trigger)
+      scope, from_scope = parse_trigger_string(params[:trigger])
       jil_trigger(
-        params[:trigger],
-        json_params[:data].presence || json_params.except(:trigger),
+        scope,
+        json_params[:data].presence || json_params.except(:trigger).deep_merge(from_scope),
       )
     else
       json_params.each do |trigger, data|
@@ -996,6 +997,48 @@ class WebhooksController < ApplicationController
   # through this controller — pushes with identical framing and presence rules.
   def byte_notify(user, message)
     ByteNotifier.notify(user, message)
+  end
+
+  # The listener grammar, read backwards: `garage:direction:open` is the
+  # trigger a task listening on `garage:direction:open` would want.
+  #
+  # It exists because a Shortcut has no other way to say it. The "Jil Trigger"
+  # shortcut hands over exactly one string, and until now that whole string
+  # became the scope — so `garage:direction:open` triggered a scope literally
+  # named "garage:direction:open" and matched nothing, silently, with a 200
+  # back. Anything with a payload had to go through the dictionary branch and
+  # know the scope twice, once in the path and once in the body.
+  #
+  #   garage                      -> "garage",       {}
+  #   garage:direction:open       -> "garage",       { "direction" => "open" }
+  #   garage direction:open       -> "garage",       { "direction" => "open" }
+  #   watch-action a:b:c d:e      -> "watch-action", { "a" => { "b" => "c" }, "d" => "e" }
+  #
+  # A scope with no colons parses to itself and an empty payload, which is what
+  # every current caller sends — including the path form, where `trigger` comes
+  # off the URL and can't contain a colon in the first place.
+  def parse_trigger_string(str)
+    terms = ::Tokenizer.split(str.to_s.strip)
+    scope, *rest = ::Tokenizer.unescaped_split(terms.first.to_s, ":")
+    paths = [rest, *rest_paths(terms.drop(1))]
+
+    [scope, paths.reduce({}) { |data, path| data.deep_merge(nest_path(path)) }]
+  end
+
+  def rest_paths(terms)
+    terms.map { |term| ::Tokenizer.unescaped_split(term, ":") }
+  end
+
+  # ["a", "b", "c"] -> { "a" => { "b" => "c" } }. A term with no value at all
+  # ("garage open") names no key, so there is nothing to write it under and it
+  # is dropped rather than guessed at.
+  def nest_path(path)
+    return {} if path.length < 2
+
+    # `url:https\://example.com` — the escape is what kept the split off it, so
+    # it has done its job and the value keeps the colon, not the backslash.
+    value = ::Tokenizing::Breaker.unwrap(path.last).gsub("\\:", ":")
+    path[..-2].reverse.reduce(value) { |nested, key| { key => nested } }
   end
 
   def json_params
