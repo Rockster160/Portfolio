@@ -1827,6 +1827,143 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
+  # The other half of the same rule, which had no fallback at all. 26 Aug: every
+  # seed carried "This week to flag: rain Thu, Fri, Sat & Sun", Byte's carried an
+  # Alpine block reading 99%, 100%, 100% on top of that, and all three briefings
+  # went out without a word of it - on a day with three near-certain wet days
+  # ahead. All three also ended on the identical composed today-line, which is
+  # what says none of the models wrote weather at all.
+  describe "a briefing that dropped the week's rain" do
+    before { allow(WeatherService).to receive(:week_outlook).and_return("rain Thu & Fri") }
+
+    def briefing(rounds)
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+      )
+      described_class.run!(message, client: FakeBuddyClient.new(rounds))
+    end
+
+    it "puts the flagged days on the end" do
+      briefing([{ text: "Morning! Quiet one - just the noon run." }])
+
+      expect(reply.body).to include("Rain Thu & Fri this week.")
+    end
+
+    it "keeps what the model wrote in front of it" do
+      briefing([{ text: "Morning! Quiet one - just the noon run." }])
+
+      expect(reply.body).to start_with("Morning! Quiet one - just the noon run.")
+    end
+
+    it "leaves a briefing that flagged a day itself alone" do
+      briefing([{ text: "Morning! Quiet one, though Thu is looking wet." }])
+
+      expect(reply.body).not_to include("this week.")
+    end
+
+    it "is not satisfied by today's own rain odds" do
+      briefing([{ text: "Morning! 20% chance of rain today, otherwise quiet." }])
+
+      expect(reply.body).to include("Rain Thu & Fri this week.")
+    end
+
+    it "says nothing on an unremarkable week" do
+      allow(WeatherService).to receive(:week_outlook).and_return(nil)
+      briefing([{ text: "Morning! Quiet one." }])
+
+      expect(reply.body).to eq("Morning! Quiet one.")
+    end
+
+    it "spends no extra round on it" do
+      client  = FakeBuddyClient.new([{ text: "Morning! Quiet one." }])
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+      )
+      described_class.run!(message, client: client)
+
+      expect(client.calls.length).to eq(1)
+    end
+
+    it "leaves ordinary turns alone" do
+      run([{ text: "Quiet one today." }], text: "how's the week looking")
+
+      expect(reply.body).to eq("Quiet one today.")
+    end
+  end
+
+  # Prod 4684, 08:00: "Nothing showing up as due on chores right now." The seed
+  # is explicit - "If the list is empty, default to leaving the subject out
+  # entirely: no count, no note that nothing is sitting there" - and the report
+  # the morning before had already quoted the same sentence off the morning
+  # before that. Telling them the list is empty still makes the list the subject
+  # of a sentence, and an empty one has nothing in it to be worth one.
+  describe "a briefing that raised chores in order to say there were none" do
+    before { allow(Buddy::Context).to receive(:build).and_return(chores_due_today: []) }
+
+    def briefing(text)
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+      )
+      described_class.run!(message, client: FakeBuddyClient.new([
+        { tool_calls: [{ name: :get_context, arguments: { "sections" => ["chores_due_today"] } }] },
+        { text: text },
+      ]))
+    end
+
+    it "drops the sentence" do
+      briefing("Morning! Serenity at 11:20. Nothing showing up as due on chores right now.")
+
+      expect(reply.body).to eq("Morning! Serenity at 11:20.")
+    end
+
+    it "keeps the paragraph break after it" do
+      briefing("Morning! Serenity at 11:20. Nothing on chores right now.\n\nHigh of 91°F today.")
+
+      expect(reply.body).to eq("Morning! Serenity at 11:20.\n\nHigh of 91°F today.")
+    end
+
+    # The hello fallback then puts an opener on what's left, which is the right
+    # outcome: what it dropped was the first sentence.
+    it "drops it when it opens the message" do
+      briefing("No chores due today. Serenity at 11:20 over in Lehi.")
+
+      expect(reply.body).to include("Serenity at 11:20 over in Lehi.")
+      expect(reply.body).not_to include("No chores due today")
+    end
+
+    # A sentence that joins the absence to something else HAS that something
+    # else in it, and losing a real item is worse than leaving a note in.
+    it "leaves a sentence carrying anything else alone" do
+      briefing("Morning! Nothing on chores and the bins go out tonight.")
+
+      expect(reply.body).to eq("Morning! Nothing on chores and the bins go out tonight.")
+    end
+
+    it "leaves a chore it actually named alone" do
+      briefing("Morning! Refill Kitty Food is the one chore sitting there today.")
+
+      expect(reply.body).to eq("Morning! Refill Kitty Food is the one chore sitting there today.")
+    end
+
+    # The count is only a non-fact when the list really was empty. A briefing
+    # for someone with chores on it must never lose a true one.
+    it "leaves it alone when the list wasn't empty" do
+      allow(Buddy::Context).to receive(:build).and_return(chores_due_today: [{ name: "Wipe Mirror" }])
+      briefing("Morning! Nothing showing up as due on chores right now.")
+
+      expect(reply.body).to include("Nothing showing up as due on chores")
+    end
+
+    it "leaves ordinary turns alone" do
+      run([{ text: "Nothing on chores right now." }], text: "anything due?")
+
+      expect(reply.body).to eq("Nothing on chores right now.")
+    end
+  end
+
   # Prod 3229 again, the other half: the same sentence twice in one bubble.
   describe "a reply that repeats itself" do
     it "says it once when the model wrote it twice in one part" do

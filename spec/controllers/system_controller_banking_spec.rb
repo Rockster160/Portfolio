@@ -599,13 +599,20 @@ RSpec.describe SystemController, type: :controller do
       # It can only carry forward what it can attribute to an account. For
       # eighteen months every paycheque named none, because the deposit alert
       # writes its account on a line of its own.
+      # Scoped to the warning itself. The statement uploader's help text
+      # explains where a row goes when the FILE names no account, which is a
+      # different thing wearing the same words, and it renders on every load.
+      def attribution_warning
+        response.body[%r{<p class="bank-warn">.*?</p>}m].to_s
+      end
+
       it "names the rows it could not attribute rather than dropping them" do
         since(437_070, account: nil)
 
         get :banking
 
-        expect(response.body).to include("names no account")
-        expect(response.body).to include("$4,370.70")
+        expect(attribution_warning).to include("names no account")
+        expect(attribution_warning).to include("$4,370.70")
         expect(accounts_table).not_to include("$22,690.94")
       end
 
@@ -614,7 +621,7 @@ RSpec.describe SystemController, type: :controller do
 
         get :banking
 
-        expect(response.body).not_to include("names no account")
+        expect(attribution_warning).to eq("")
       end
     end
 

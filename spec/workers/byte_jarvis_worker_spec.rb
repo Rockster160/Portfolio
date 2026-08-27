@@ -49,6 +49,94 @@ RSpec.describe ByteJarvisWorker do
     expect { described_class.new.perform(-1) }.not_to raise_error
   end
 
+  # Prod, 26 Aug 16:49: ".close blinds" reached a Home Assistant that was down,
+  # the POST sat on RestClient's 60-second read timeout, and the thread showed
+  # nothing at all for a full minute - no receipt, no pending state, no face.
+  # The reply when it finally came was correct, but for that minute there was no
+  # way to tell a stalled command from one that never sent. Buddy's own turns
+  # have always shown a thinking face; a Jarvis aside is the one route into a
+  # Buddy thread that didn't, and it's the route with the longest wait on it.
+  describe "while the command is still running" do
+    it "shows that it's in hand before Jarvis is called" do
+      order = []
+      allow(Buddy::ExpressionState).to receive(:thinking!) { order << :thinking }
+      allow(::Jarvis).to receive(:command) { order.push(:command) && "k" }
+
+      described_class.new.perform(message.id)
+
+      expect(order).to eq(%i[thinking command])
+    end
+
+    # The face says the companion is busy; the bubble says which command it's
+    # busy with, sitting in the thread under the words they typed.
+    it "opens the reply bubble before Jarvis is called" do
+      seen = nil
+      allow(::Jarvis).to receive(:command) {
+        seen = convo.byte_messages.inbound.last
+        "k"
+      }
+
+      described_class.new.perform(message.id)
+
+      expect(seen).to have_attributes(state: "streaming", body: "")
+      expect(seen.metadata["kind"]).to eq("jarvis")
+    end
+
+    it "fills that same row in rather than posting a second one" do
+      allow(::Jarvis).to receive(:command).and_return("done — kitchen on")
+
+      expect { described_class.new.perform(message.id) }
+        .to change { convo.byte_messages.inbound.count }.by(1)
+
+      expect(convo.byte_messages.inbound.last).to have_attributes(
+        state: "delivered", body: "done — kitchen on",
+      )
+    end
+
+    it "takes the bubble away when the chip is the whole answer" do
+      task = Task.create!(user: user, name: "Darkness", listener: "tell:dark", code: "", enabled: true)
+      allow(::Jarvis).to receive(:command) { |_u, _w, &blk|
+        blk&.call([task])
+        ""
+      }
+
+      described_class.new.perform(message.id)
+
+      expect(convo.byte_messages.inbound.where(state: :streaming)).to be_empty
+      expect(convo.byte_messages.inbound.pluck(:body)).to eq(["Called **Darkness**"])
+    end
+
+    # A bubble left spinning next to an error message reads as two things
+    # having gone wrong.
+    it "takes the bubble away when Jarvis raises" do
+      allow(::Jarvis).to receive(:command).and_raise(StandardError, "boom")
+
+      described_class.new.perform(message.id)
+
+      expect(convo.byte_messages.inbound.where(state: :streaming)).to be_empty
+      expect(convo.byte_messages.inbound.last.body).to include("Jarvis error")
+    end
+
+    it "settles the face again once the reply is out" do
+      allow(::Jarvis).to receive(:command).and_return("k")
+      allow(Buddy::ExpressionState).to receive(:settle!)
+
+      described_class.new.perform(message.id)
+
+      expect(Buddy::ExpressionState).to have_received(:settle!).with(convo)
+    end
+
+    # Otherwise a command that blows up leaves the pet thinking forever.
+    it "settles it even when Jarvis raises" do
+      allow(::Jarvis).to receive(:command).and_raise(StandardError, "boom")
+      allow(Buddy::ExpressionState).to receive(:settle!)
+
+      described_class.new.perform(message.id)
+
+      expect(Buddy::ExpressionState).to have_received(:settle!).with(convo)
+    end
+  end
+
   # A Jil task that ran leaves the same receipt a Buddy tool call does, so "did
   # that actually do anything?" is answered by the thread rather than by trusting
   # the sentence underneath it.
@@ -69,7 +157,11 @@ RSpec.describe ByteJarvisWorker do
       expect(chip.body).to eq("Called **Garage Door**")
       expect(chip.metadata["tool_name"]).to eq("jarvis_task")
       expect(chip.metadata["payload"]["task_name"]).to eq("Garage Door")
-      expect(chip.id).to be < convo.byte_messages.where("metadata->>'kind' = ?", "jarvis").last.id
+      # By created_at, not by id. The reply row is opened BEFORE the command
+      # runs so the thread can show a thinking bubble, which puts its id below
+      # every chip; its created_at moves to now as it settles, and created_at
+      # is what the thread sorts on.
+      expect(chip.created_at).to be < convo.byte_messages.where("metadata->>'kind' = ?", "jarvis").last.created_at
     end
 
     # Half the enabled `tell:` tasks say nothing back — they just do the thing.

@@ -304,6 +304,7 @@ module RecordLinks
       # The bus can deliver `added` twice for one row (a retried job, a fan-out),
       # and a second identical prompt is a second thing to dismiss.
       return false if asked_about?(user, event)
+      return false if open_question_about?(user, link.target_name)
 
       prompt = user.prompts.create!(
         question: "Who did: #{link.target_name}?",
@@ -337,6 +338,30 @@ module RecordLinks
 
     def asked_about?(user, event)
       user.prompts.unanswered.exists?(["params->>'event_id' = ?", event.id.to_s])
+    end
+
+    # How long one open "who did it" covers the next event for the same chore.
+    # Long enough for a mis-press and its correction, short enough that a
+    # question left unanswered on Monday isn't still swallowing Tuesday's.
+    SAME_QUESTION_WINDOW = 15.minutes
+
+    # The guard above is keyed on the EVENT, so two events ask twice - which is
+    # right when they're two separate doings and wrong when they're one.
+    #
+    # Prod, 26 Aug 22:00: two Whisper events nineteen seconds apart, 51790 and
+    # 51791, put up two identical `Who did: Puppy Down?` forms. It was one press
+    # for a nap corrected by a hold for sleep, which is the intended way to fix
+    # it - and the device sends the same nameless event either way, so nothing
+    # downstream can tell the correction from a second bedtime. He skipped one
+    # form and answered the other.
+    #
+    # Answering EITHER writes the same completion, so a second open copy adds
+    # nothing whichever way it got there. Scoped to still-open ones and to a
+    # window: a genuine second doing later in the day still gets asked about.
+    def open_question_about?(user, chore_name)
+      user.prompts.unanswered
+        .where(created_at: SAME_QUESTION_WINDOW.ago..)
+        .exists?(["params->>'source' = ? AND params->>'chore_name' = ?", "ambiguous_chore", chore_name.to_s])
     end
 
     def on_prompt(user, prompt, attrs)

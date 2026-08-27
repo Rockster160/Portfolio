@@ -8,8 +8,71 @@ RSpec.describe "Buddy chore resolution" do
   let!(:household) { ChoreHousehold.create!(name: "Home", owner_user: user) }
   let(:ctx)        { Buddy::ToolContext.new(user) }
 
-  def chore!(name)
-    create(:chore, created_by_user: user, chore_household: household, name: name)
+  def chore!(name, aliases: [])
+    create(:chore, created_by_user: user, chore_household: household, name: name, aliases: aliases)
+  end
+
+  # Prod 4705, 11:51. "Mark refill drinks done an hour ago" wrote chore_completions
+  # 2671 against chore 83, `Refill Item`. He meant 42, `Restock Soda`, and its
+  # `aliases` column reads ["refill", "drinks", "fridge"] - both of his words, in
+  # the column, verbatim. The column has been on the model, in the serializer and
+  # in the chore form the whole time and the matcher only ever looked at `name`.
+  describe "the other names a chore goes by" do
+    let!(:soda)    { chore!("Restock Soda", aliases: %w[refill drinks fridge]) }
+    let!(:refill)  { chore!("Refill Item", aliases: ["refill", "stock", "restock", "replace items"]) }
+    let!(:protein) { chore!("Restock Protein", aliases: ["refill", "protein drinks", "coffee"]) }
+
+    it "finds the chore whose aliases account for every word they said" do
+      expect(ctx.resolve_chore("refill drinks")).to eq(soda)
+    end
+
+    it "reaches one by a single alias nothing else answers to" do
+      expect(ctx.resolve_chore("fridge")).to eq(soda)
+    end
+
+    it "matches an alias that is itself two words" do
+      expect(ctx.resolve_chore("replace items")).to eq(refill)
+    end
+
+    # An alias is an extra door, not a replacement for the front one: "refill"
+    # is the name of one chore and an alias of three, and the name still wins.
+    it "leaves a name match where it was" do
+      expect(ctx.resolve_chore("refill")).to eq(refill)
+    end
+
+    # `protein` answers to "refill" and to "protein drinks", so a word-overlap
+    # score puts it level with `soda` on "refill drinks". The covering test is
+    # what makes the near miss LOSE rather than rank second.
+    it "does not settle for the chore that only half answers" do
+      expect(ctx.resolve_chore("refill drinks")).not_to eq(protein)
+    end
+
+    # "refill" alone is an alias of three of these in prod. Picking the lowest
+    # id out of a tie is the false record FUZZY_TOLERANCE exists to prevent, so
+    # a shared alias resolves to nothing and comes out as the pick-one card.
+    it "declines rather than picking one when several answer to the same word" do
+      soda.update!(aliases: soda.aliases_array + ["pop"])
+      chore!("Buy Snacks", aliases: %w[pop chips])
+
+      expect(ctx.resolve_chore("pop")).to be_nil
+    end
+
+    it "puts an alias match in the near misses when nothing resolved" do
+      soda.update!(aliases: soda.aliases_array + ["pop"])
+      chore!("Buy Snacks", aliases: %w[pop chips])
+
+      expect(ctx.chore_suggestions("pop")).to include("Restock Soda", "Buy Snacks")
+    end
+
+    it "ranks a two-word alias hit above a one-word name hit" do
+      expect(ctx.chore_suggestions("refill drinks").first).to eq("Restock Soda")
+    end
+
+    it "is unbothered by a chore carrying no aliases at all" do
+      plain = chore!("Sweep Porch")
+
+      expect(ctx.resolve_chore("sweep porch")).to eq(plain)
+    end
   end
 
   it "takes an exact name over anything else" do

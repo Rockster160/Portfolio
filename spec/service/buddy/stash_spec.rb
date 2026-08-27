@@ -357,6 +357,85 @@ RSpec.describe "Buddy brain-dump (stash)" do
 
         expect(user.buddy_memories.live.count).to eq(1)
       end
+
+      # Prod 4723 / 4739, 26 Aug. The vobot dock link went onto the pile at
+      # 14:47 as BuddyMemory 113. Eighty-two minutes later a message about the
+      # Before Bed list - nothing to do with docks - stashed it again as 115,
+      # reworded: "a cool Dock/Clock/Hub I may want to buy" the first time, "a
+      # Dock/Clock/Hub to probably buy" the second. Content equality was the
+      # whole dedupe, so both doors missed. Rocco said twice that it didn't
+      # belong and got two apologies; neither turn removed anything.
+      describe "the same link, described differently" do
+        let(:first)  { "https://dock.myvobot.com/ — a cool Dock/Clock/Hub I may want to buy and integrate into HASS at some point." }
+        let(:second) { "https://dock.myvobot.com/ - a Dock/Clock/Hub to probably buy and integrate into HASS later." }
+
+        it "does not start a second pile entry" do
+          catch!({ idea: first, summary: "Possible HASS dock integration" })
+
+          expect { catch!({ idea: second, summary: "Dock/Clock/Hub for HASS" }) }
+            .not_to change { user.buddy_memories.live.count }
+        end
+
+        it "keeps the wording that was there first" do
+          catch!({ idea: first })
+          catch!({ idea: second })
+
+          expect(user.buddy_memories.live.first.content).to eq(first)
+        end
+
+        it "fills in a label the first telling didn't carry" do
+          catch!({ idea: first })
+          catch!({ idea: second, summary: "Dock/Clock/Hub for HASS" })
+
+          expect(user.buddy_memories.live.first.summary).to eq("Dock/Clock/Hub for HASS")
+        end
+
+        it "ignores a trailing slash and a query string" do
+          catch!({ idea: "https://dock.myvobot.com/ - worth a look" })
+
+          expect { catch!({ idea: "https://dock.myvobot.com?ref=twitter - worth a look, actually" }) }
+            .not_to change { user.buddy_memories.live.count }
+        end
+
+        it "still holds a DIFFERENT link" do
+          catch!({ idea: first })
+
+          expect { catch!({ idea: "https://shop.pimoroni.com/ - this one instead" }) }
+            .to change { user.buddy_memories.live.count }.by(1)
+        end
+
+        # The link is what can't drift; two link-less thoughts that merely share
+        # a subject are still two thoughts.
+        it "leaves two unlinked thoughts about one subject alone" do
+          catch!({ idea: "a dock for HASS would be nice" })
+
+          expect { catch!({ idea: "some sort of clock hub for HASS, maybe" }) }
+            .to change { user.buddy_memories.live.count }.by(1)
+        end
+
+        it "collapses two of the same link inside one turn" do
+          msg = convo.byte_messages.create!(
+            user: user, direction: :inbound, state: :delivered, body: "ok", delivered_at: Time.current,
+          )
+          Buddy::ProposalBuilder.create(
+            user:         user,
+            byte_message: msg,
+            markers:      [
+              { tool_name: :stash_idea, payload: { idea: first } },
+              { tool_name: :stash_idea, payload: { idea: second } },
+            ],
+          )
+
+          expect(user.buddy_memories.live.count).to eq(1)
+        end
+
+        it "does not reach a dropped one and resurrect it" do
+          catch!({ idea: first })
+          user.buddy_memories.last.update!(status: :dropped)
+
+          expect { catch!({ idea: second }) }.to change { user.buddy_memories.live.count }.by(1)
+        end
+      end
     end
 
     # A held item behind a get_context call only surfaces on a turn where Buddy

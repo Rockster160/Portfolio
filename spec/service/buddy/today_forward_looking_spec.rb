@@ -494,6 +494,72 @@ RSpec.describe "Buddy Today forward-looking" do
       end
     end
 
+    # 26 Aug: all three seeds carried "This week to flag: rain Thu, Fri, Sat &
+    # Sun", Byte's carried an Alpine block reading 99%, 100%, 100% on top of it,
+    # and all three briefings went out with no mention of any of it. All three
+    # also ended on the identical weather_line string, which is the tell - none
+    # of the models wrote weather at all, and only today's half had a fallback.
+    describe "the week's flagged days" do
+      it "composes a line off the outlook it was given" do
+        expect(Buddy::TodayBriefing.week_line("rain Thu, Fri, Sat & Sun"))
+          .to eq("Rain Thu, Fri, Sat & Sun this week.")
+      end
+
+      it "carries more than one kind of weather" do
+        expect(Buddy::TodayBriefing.week_line("snow Mon, windy Fri"))
+          .to eq("Snow Mon, windy Fri this week.")
+      end
+
+      it "says nothing on an unremarkable week" do
+        expect(Buddy::TodayBriefing.week_line(nil)).to be_nil
+      end
+
+      it "reads the days back out of the outlook" do
+        expect(Buddy::TodayBriefing.flagged_days("rain Thu, Fri, Sat & Sun")).to eq(%w[Thu Fri Sat Sun])
+      end
+
+      describe "whether the briefing already said it" do
+        let(:days)  { Buddy::TodayBriefing.flagged_days("rain Thu & Fri") }
+        let(:today) { Date.new(2026, 8, 26) } # a Wednesday
+
+        def said?(body)
+          Buddy::TodayBriefing.week_said?(body, days, today: today)
+        end
+
+        it "counts the abbreviation" do
+          expect(said?("Rain rolling in Thu, so get the plunge in early.")).to be(true)
+        end
+
+        it "counts the whole weekday name" do
+          expect(said?("Friday looks wet.")).to be(true)
+        end
+
+        # The prompt asks for that word instead of the weekday name for the next
+        # day out, so a correct briefing may never write the abbreviation at all.
+        it "counts tomorrow, for the day that is tomorrow" do
+          expect(said?("Wet one tomorrow, so an early start is worth it.")).to be(true)
+        end
+
+        it "counts the weekend for a Saturday or Sunday flag" do
+          weekend = Buddy::TodayBriefing.flagged_days("rain Sat & Sun")
+
+          expect(Buddy::TodayBriefing.week_said?("Rain over the weekend.", weekend, today: today)).to be(true)
+        end
+
+        it "is not satisfied by today's own forecast" do
+          expect(said?("High of 91°F today, low of 69°F, with a 20% chance of rain.")).to be(false)
+        end
+
+        it "is not fooled by a day nobody flagged" do
+          expect(said?("Serenity is Monday this week.")).to be(false)
+        end
+
+        it "leaves an unremarkable week alone" do
+          expect(Buddy::TodayBriefing.week_said?("Quiet one.", [], today: today)).to be(true)
+        end
+      end
+    end
+
     # The three rules that have each gone out missing, restated where a long
     # prompt actually lands. Asserted on the whole seed rather than the weather
     # block, since that is the thing being read back.

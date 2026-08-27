@@ -96,7 +96,49 @@ module Buddy
       exact = candidates.find { |c| c.name.to_s.downcase == needle }
       return exact if exact
 
-      best_contained(candidates, needle) || nearest_name(candidates, needle)
+      best_contained(candidates, needle) || by_alias(candidates, needle) ||
+        nearest_name(candidates, needle)
+    end
+
+    # The other names a chore goes by, which until now nothing read.
+    #
+    # Prod 4705, 11:51: "Mark refill drinks done an hour ago" wrote a completion
+    # against chore 83, `Refill Item`. He meant 42, `Restock Soda`, whose
+    # `aliases` column is ["refill", "drinks", "fridge"] - both of his words, in
+    # the column, verbatim. `aliases_array` has existed on the model, been
+    # serialized, and been editable in the chore form the whole time; the
+    # matcher only ever looked at `name`, so the one chore he could not have
+    # named more clearly was the one chore that could not be found.
+    #
+    # BELOW `best_contained`, so nothing that resolves today changes: an alias
+    # is an extra door, not a replacement for the front one. "refill" still
+    # reaches `Refill Item` by its name.
+    #
+    # ONE match or none. "refill" alone is an alias of four different chores,
+    # and picking the lowest id out of those is the false-record `FUZZY_TOLERANCE`
+    # exists to prevent - so several matches declines, falls through, and comes
+    # out as the disambiguation card `no_chore!` already builds.
+    def by_alias(candidates, needle)
+      hits = candidates.select { |c| handles_cover?(c, needle) }
+      hits.one? ? hits.first : nil
+    end
+
+    # Is what they said made up ENTIRELY of this chore's own handles?
+    #
+    # Greedy, longest handle first, and whole-word: each one that appears in
+    # what they said is struck out, and it matches only if nothing meaningful
+    # survives. "refill drinks" against 42 strikes "refill" and then "drinks"
+    # and comes out empty. Against 121 (`Restock Protein`, aliases "refill" and
+    # "protein drinks") it strikes "refill" and leaves "drinks" standing, which
+    # is the whole reason this is a covering test rather than a word-overlap
+    # score - the near miss has to LOSE, not merely rank second.
+    def handles_cover?(chore, needle)
+      handles = (chore.aliases_array + [chore.name.to_s]).filter_map { |h| h.to_s.downcase.strip.presence }
+      rest    = needle.dup
+      handles.sort_by { |h| -h.length }.each { |h|
+        rest = rest.gsub(/(?<![a-z0-9])#{Regexp.escape(h)}(?![a-z0-9])/, " ")
+      }
+      rest != needle && significant_words(rest).empty?
     end
 
     # Words that carry no chore in them, so a needle made only of these has
@@ -135,7 +177,13 @@ module Buddy
       return [] if words.empty?
 
       scored = user.accessible_chores.to_a.filter_map { |c|
-        parts  = significant_words(c.name)
+        # Aliases count here for the same reason they count in `by_alias`: a
+        # chore whose alias list holds both of the words they used cannot be
+        # allowed to sit outside the near-miss list while one sharing a single
+        # word tops it. Prod 4705 - `Restock Soda` was unreachable from
+        # "refill drinks" by NAME, so the list it wasn't in is what the model
+        # picked its second guess from, and it picked wrong.
+        parts  = significant_words("#{c.name} #{c.aliases_array.join(' ')}")
         shared = words.count { |w| parts.any? { |p| p.start_with?(w) || w.start_with?(p) } }
         [shared, c.name.to_s] if shared.positive?
       }

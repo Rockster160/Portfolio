@@ -25,6 +25,29 @@ class ByteJarvisWorker
     body = ByteMessageIntake.jarvis_words(message.body)
     return if body.empty?
 
+    # Say that it's in hand, before it is.
+    #
+    # `Jarvis.command` runs the whole Jil chain inline, so a house command takes
+    # exactly as long as the house takes to answer. Prod, 26 Aug 16:49: ".close
+    # blinds" reached a Home Assistant that was down, the POST sat on
+    # RestClient's 60-second read timeout, and the thread showed NOTHING for a
+    # full minute - no receipt, no pending state, no face. The reply when it
+    # came was correct ("the house didn't take that one"), but for that minute
+    # there was no way to tell a stalled command from one that never sent.
+    #
+    # Both halves, because they answer different questions. The face says the
+    # companion is busy; the BUBBLE says this particular command is what it's
+    # busy with, and it sits in the thread under the words they typed. Buddy's
+    # own turns have always had both; a Jarvis aside is the one route into a
+    # Buddy thread that had neither, and it's the route with the longest wait
+    # on it.
+    #
+    # The bubble is the reply itself, opened early rather than a second row that
+    # would have to be reconciled: every path below either fills it in or drops
+    # it. Settled in the ensure so a raise can't leave the pet thinking forever.
+    Buddy::ExpressionState.thinking!(conversation)
+    reply = open_reply(user, conversation, message)
+
     ran      = []
     response = ::Jarvis.command(user, body) { |tasks| ran = tasks }
     text     = response.is_a?(Array) ? response.first.to_s : response.to_s
@@ -54,6 +77,9 @@ class ByteJarvisWorker
         buttons:      buttons.map { |b| b.is_a?(Hash) ? b : { "label" => b.to_s, "value" => b.to_s } },
         multi_select: !!multi,
       )
+      # The reply text is the request's own subtitle, so the bubble would be
+      # the same words twice.
+      drop_reply(user, reply)
       broadcast(user, message.reload)
       return
     end
@@ -65,7 +91,10 @@ class ByteJarvisWorker
     # just do the thing — and with a receipt above it naming what ran, a bubble
     # reading "(no response)" under that reads as a failure of the thing that
     # just worked. The chip IS the answer.
-    return broadcast(user, message.reload) if text.strip.empty? && ran.any?
+    if text.strip.empty? && ran.any?
+      drop_reply(user, reply)
+      return broadcast(user, message.reload)
+    end
 
     # Backstop, not an expected case. When NO task matches, the fallback chain
     # runs and Jarvis::Talk answers unconditionally — a question, a greeting, a
@@ -74,20 +103,21 @@ class ByteJarvisWorker
     # a message that vanished.
     text = "(no response)" if text.strip.empty?
 
-    reply = conversation.byte_messages.create!(
-      user:         user,
-      direction:    :inbound,
-      state:        :delivered,
-      body:         text,
-      metadata:     { kind: :jarvis, in_reply_to: message.id },
-      delivered_at: Time.current,
-    )
+    # `created_at` moves to now as it settles. The row was opened before the
+    # task chips existed, so leaving it where it was created would slot the
+    # answer ABOVE the receipts for the work it is reporting on - the same
+    # re-timestamp a finalised Claude turn does for the cards it spawned.
+    reply.update!(state: :delivered, body: text, delivered_at: Time.current, created_at: Time.current)
 
     broadcast(user, message.reload)
     broadcast(user, reply)
   rescue => e
     Rails.logger.warn("[ByteJarvis] #{e.class}: #{e.message}")
     fail_body = "Jarvis error: #{e.class}: #{e.message}"
+    # The thinking bubble becomes the error, rather than being left spinning
+    # above one - a stuck bubble next to an error message reads as two things
+    # having gone wrong.
+    drop_reply(user, reply)
     conversation&.byte_messages&.create!(
       user:         user,
       direction:    :inbound,
@@ -96,6 +126,40 @@ class ByteJarvisWorker
       metadata:     { kind: :system, error: true, in_reply_to: message&.id },
       delivered_at: Time.current,
     )&.then { |m| broadcast(user, m) }
+  ensure
+    Buddy::ExpressionState.settle!(conversation)
+  end
+
+  # The reply, opened before there's anything to put in it.
+  #
+  # `streaming` with an empty body is what the thread renders as the pulsing
+  # "Thinking" bubble - the same one a Buddy turn shows while it works. The row
+  # is the real reply from the start, so the answer lands by filling this in
+  # rather than by posting a second message next to it.
+  private def open_reply(user, conversation, message)
+    conversation.byte_messages.create!(
+      user:      user,
+      direction: :inbound,
+      state:     :streaming,
+      body:      "",
+      metadata:  { kind: :jarvis, in_reply_to: message.id },
+    ).tap { |reply| broadcast(user, reply) }
+  end
+
+  # For the two endings that have no words in them. Leaving the bubble to be
+  # tidied up on the next reload would mean a thread that reads as still
+  # thinking, forever, about something that already finished.
+  private def drop_reply(user, reply)
+    return if reply.nil?
+
+    id              = reply.id
+    conversation_id = reply.byte_conversation_id
+    reply.destroy!
+    MonitorChannel.broadcast_to(user, {
+      id:      :byte,
+      channel: :byte,
+      data:    { kind: :message_deleted, message_id: id, byte_conversation_id: conversation_id },
+    })
   end
 
   # One receipt per Jil task the words set off. Jarvis's own fallbacks

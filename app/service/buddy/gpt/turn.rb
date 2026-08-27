@@ -1130,6 +1130,78 @@ module Buddy
         body
       end
 
+      # The week's flagged days the briefing was handed and didn't say.
+      #
+      # See Buddy::TodayBriefing.week_line. The half of the weather rule that
+      # had no fallback, and it went out missing from all three briefings on a
+      # day carrying three 99-100% days.
+      def with_week_weather(body)
+        return body unless today_briefing?
+
+        outlook = WeatherService.week_outlook(user: @user)
+        days    = Buddy::TodayBriefing.flagged_days(outlook)
+        return body if Buddy::TodayBriefing.week_said?(body, days, today: Buddy::Day.now(@user).to_date)
+
+        line = Buddy::TodayBriefing.week_line(outlook)
+        return body if line.blank?
+
+        "#{body.rstrip}\n\n#{line}"
+      rescue StandardError => e
+        Rails.logger.warn("[Buddy::GPT::Turn] week weather fallback failed: #{e.class}: #{e.message}")
+        body
+      end
+
+      # Chores, mentioned in order to say there aren't any.
+      #
+      # `today_briefing.rb` is explicit: "Naming none of them is a perfectly
+      # good briefing. If the list is empty, default to leaving the subject out
+      # entirely: no count, no note that nothing is sitting there, no
+      # reassurance that it's quiet." Prod 4684 ended on a sentence doing
+      # exactly that, and the day before's report had already quoted the same
+      # sentence off the day before that.
+      #
+      # Only when the list really was empty, so this can never delete a true
+      # count, and only the one sentence. What's left is the briefing the rule
+      # asked for, which is the same briefing with the subject not raised.
+      # A whole sentence, not a phrase inside one - the opposite call from
+      # BRIEFING_CLAIM_RX above, and for the opposite reason. There, cutting the
+      # sentence would have eaten a real briefing wrapped around the claim.
+      # Here the sentence IS the thing: there is no other content in "nothing on
+      # chores", and lifting the phrase out would leave a stump behind.
+      #
+      # Three conditions, all of them narrowing. It names chores, it says there
+      # are none, and it carries no conjunction - because a sentence that joins
+      # the absence to something else has that something else in it, and the
+      # safe direction here is leaving a sentence in.
+      CHORE_SUBJECT_RX = /\b(?:chores?|to-?dos?)\b/i
+      NOTHING_DUE_RX   = /\b(?:nothing|none|nothing’s|nothings|no|nada|empty|clear|zero|not\s+a\s+(?:thing|one))\b/i
+      CONJUNCTION_RX   = /\b(?:and|but|though|although|however|except|plus|while)\b/i
+      MAX_NOTE_CHARS   = 90
+
+      def empty_chore_note?(sentence)
+        sentence.length <= MAX_NOTE_CHARS &&
+          sentence.match?(CHORE_SUBJECT_RX) &&
+          sentence.match?(NOTHING_DUE_RX) &&
+          !sentence.match?(CONJUNCTION_RX)
+      end
+
+      def without_empty_chore_note(body)
+        return body unless today_briefing?
+        return body unless Array(served_context[:chores_due_today]).empty?
+
+        kept = []
+        # The capture group keeps the separators in the list, so the paragraph
+        # breaks around a dropped sentence survive - the whitespace that led
+        # INTO it leaves with it, and the one after it stays where it was.
+        body.split(/((?<=[.!?])\s+)/).each { |part|
+          empty_chore_note?(part) ? kept.pop : kept << part
+        }
+        kept.join.strip.presence || body
+      rescue StandardError => e
+        Rails.logger.warn("[Buddy::GPT::Turn] empty-chore-note strip failed: #{e.class}: #{e.message}")
+        body
+      end
+
       # Departure times the briefing was handed and didn't say.
       #
       # See Buddy::TodayBriefing.leave_line for the miss and the reasoning. This
@@ -1741,7 +1813,9 @@ module Buddy
 
       def finalize_success(outcome)
         body = display_body(apply_leading_mood(outcome[:text]))
-        body = with_lifted_greeting(with_greeting(with_leave_times(with_weather(without_briefing_claim(body)))))
+        body = without_briefing_claim(body)
+        body = without_empty_chore_note(body)
+        body = with_lifted_greeting(with_greeting(with_leave_times(with_week_weather(with_weather(body)))))
         # Scrubbing can empty a reply outright: on prod 4202 the form marker WAS
         # the whole body. A blank bubble is worse than the marker was - it reads
         # as Buddy having nothing to say to something they typed - so the turn

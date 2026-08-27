@@ -433,6 +433,57 @@ RSpec.describe RecordLinks::Propagator do
       expect(user.prompts.count).to eq(1)
     end
 
+    # Prod, 26 Aug 22:00: two Whisper events nineteen seconds apart, 51790 and
+    # 51791, put up two identical `Who did: Puppy Down?` forms. It was one press
+    # for a nap corrected by a hold for sleep - the intended way to fix it - and
+    # the device sends the same nameless event either way, so nothing downstream
+    # can tell a correction from a second bedtime. He skipped one and answered
+    # the other.
+    describe "a second event while the first question is still open" do
+      it "does not ask the same question twice" do
+        log_event!("Whisper", notes: "Down")
+        RecordLinks::Guard.reset!
+
+        expect { log_event!("Whisper", notes: "Down") }.not_to(change { user.prompts.count })
+      end
+
+      # Answering either one writes the same completion, so nothing is lost by
+      # only asking once.
+      it "still writes the completion off the question it did ask" do
+        log_event!("Whisper", notes: "Down")
+        RecordLinks::Guard.reset!
+        log_event!("Whisper", notes: "Down")
+        answer!(user.prompts.last, user.username, 1.hour.ago.change(usec: 0))
+
+        expect(chore.reload.chore_completions.count).to eq(1)
+      end
+
+      it "asks again once the open one has been answered" do
+        log_event!("Whisper", notes: "Down")
+        answer!(user.prompts.last, user.username, 1.hour.ago.change(usec: 0))
+
+        expect { log_event!("Whisper", notes: "Down") }.to change { user.prompts.count }.by(1)
+      end
+
+      # A question left sitting unanswered must not swallow tomorrow's.
+      it "asks again for a doing well after the window" do
+        log_event!("Whisper", notes: "Down")
+        user.prompts.last.update!(created_at: 3.hours.ago)
+        RecordLinks::Guard.reset!
+
+        expect { log_event!("Whisper", notes: "Down") }.to change { user.prompts.count }.by(1)
+      end
+
+      it "leaves a question about a DIFFERENT chore alone" do
+        chore!("Puppy Up")
+        link!(:event, "Whisper", :chore, "Puppy Up", source_scope: "Up", ask_who: true)
+        log_event!("Whisper", notes: "Down")
+        RecordLinks::Guard.reset!
+
+        expect { log_event!("Whisper", notes: "Up") }.to change { user.prompts.count }.by(1)
+      end
+    end
+
     # `datetime-local` renders an EMPTY box for a value it can't read, and an
     # offset on the end is enough to make it unreadable. The question arrives
     # with the time already rubbed off it, which is worse than not defaulting.

@@ -112,6 +112,41 @@ module Buddy
       body.to_s.strip.match?(PLEASANTRY_RX)
     end
 
+    # Every http(s) link in a body, normalized enough that the same page written
+    # twice compares equal: case folded, and the trailing slash and any query
+    # string dropped, since neither changes which page it is.
+    LINK_RX = %r{https?://[^\s<>"'\]),]+}i
+
+    def links_in(body)
+      body.to_s.scan(LINK_RX).map { |url| url.downcase.split("?").first.sub(%r{/+\z}, "") }.uniq
+    end
+
+    # Is this thought already on the pile?
+    #
+    # Content equality was the whole test, and it is exact - so the SAME thought
+    # said twice in different words starts a second pile entry. Prod 4723/4739,
+    # 26 Aug: the vobot dock link went in at 14:47 as BuddyMemory 113, and 82
+    # minutes later came back as 115, reworded ("a cool Dock/Clock/Hub I may
+    # want to buy" against "a Dock/Clock/Hub to probably buy") off a message
+    # that was about the Before Bed list and mentioned no dock at all. Rocco
+    # said twice that it didn't belong, got two apologies, and both rows are
+    # still sitting there.
+    #
+    # A LINK is the part that can't drift. Prose is the model's each time, but
+    # the URL was pasted, and two stashes carrying the same one are the same
+    # find however differently they're described. Content equality stays as the
+    # first test, for everything with no link in it.
+    def already_held(user, body)
+      live  = user.buddy_memories.kind_stash.live
+      exact = live.where("LOWER(content) = ?", body.to_s.downcase).first
+      return exact if exact
+
+      urls = links_in(body)
+      return nil if urls.empty?
+
+      live.find { |held| (links_in(held.content) & urls).any? }
+    end
+
     # Capture the just-sent message as an idea. Clears the latch first (one-shot)
     # so a failure can't leave the person permanently stuck in capture mode.
     def capture!(user, conversation, message, category)

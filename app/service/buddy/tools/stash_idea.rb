@@ -47,7 +47,12 @@ Buddy::Tools.register(
     { title: "📥 #{payload[:summary].presence || payload[:idea]}", sub: bucket }
   },
   # Two dumps of the same thought in one turn is one thing to hold, not two.
-  merge_key:   ->(payload) { "stash_idea:#{payload[:idea].to_s.downcase.strip}" },
+  # Keyed on the LINK when there is one, for the reason Buddy::Stash.already_held
+  # gives: the prose is written fresh each time and the URL isn't.
+  merge_key:   ->(payload) {
+    link = Buddy::Stash.links_in(payload[:idea]).first
+    "stash_idea:#{link || payload[:idea].to_s.downcase.strip}"
+  },
   # "no, file that under work" is a correction of what was just caught, so the
   # first row retires rather than leaving two copies of one thought.
   supersedes:  true,
@@ -66,7 +71,7 @@ Buddy::Tools.register(
     # the same breath or three days apart - and someone who talks to empty their
     # head circles the same loose end constantly. A second telling fills in
     # whatever the first one didn't carry rather than starting a second pile.
-    held = ctx.user.buddy_memories.kind_stash.live.where("LOWER(content) = ?", body.downcase).first
+    held = Buddy::Stash.already_held(ctx.user, body)
     if held
       held.update!(category: held.category || category, summary: held.summary.presence || payload[:summary].presence)
       return { idea_id: held.id, label: held.summary.presence || held.content }

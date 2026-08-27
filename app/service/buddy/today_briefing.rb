@@ -131,6 +131,56 @@ module Buddy
       "High of #{high}°F today, low of #{low}°F#{", with #{clause}" if clause}."
     end
 
+    # The week's flagged days, composed here for the same reason the line above
+    # it is - and it is the same rule, losing the same way.
+    #
+    # 26 Aug: every seed carried "This week to flag: rain Thu, Fri, Sat & Sun.
+    # Give a short heads-up for any day with rain / wind / snow", and Byte's
+    # additionally carried a whole Alpine block reading 99%, 100%, 100%. All
+    # THREE briefings went out with no mention of any of it. All three also
+    # ended on the identical `weather_line` string, which is the tell: none of
+    # the models wrote weather at all, the fallback filled today's figures, and
+    # the week half had no fallback to fill it.
+    #
+    # Same trade as weather_line, again: this only fills a silence.
+    def week_line(outlook)
+      outlook = outlook.to_s.strip
+      return nil if outlook.blank?
+
+      "#{outlook[0].upcase}#{outlook[1..]} this week."
+    end
+
+    DAY_ABBREVS = %w[Mon Tue Wed Thu Fri Sat Sun].freeze
+
+    # The days `week_outlook` flagged, as the abbreviations it wrote them in.
+    def flagged_days(outlook)
+      outlook.to_s.scan(/\b(#{DAY_ABBREVS.join('|')})\b/).flatten.uniq
+    end
+
+    # Did the briefing already say one of them?
+    #
+    # Generous on purpose, in the same direction weather_missing? is: a flagged
+    # day named in ANY of the ways a person writes one suppresses the repair,
+    # because a second heads-up under one the model wrote itself reads worse
+    # than a rare miss. "tomorrow" is in the list because the prompt asks for
+    # that word rather than the weekday name for the next day out, so a correct
+    # briefing is one that never writes the abbreviation at all.
+    def week_said?(body, days, today: Date.current)
+      return true if body.blank? || days.empty?
+
+      day_words(days, today).any? { |word| body.match?(/\b#{Regexp.escape(word)}\b/i) }
+    end
+
+    def day_words(days, today)
+      days.flat_map { |abbrev|
+        wday  = (DAY_ABBREVS.index(abbrev).to_i + 1) % 7
+        names = [abbrev, Date::DAYNAMES[wday]]
+        names << "tomorrow" if today.tomorrow.wday == wday
+        names << "weekend" if [0, 6].include?(wday)
+        names
+      }.uniq
+    end
+
     # The departure time, composed here for the same reason the weather line is.
     #
     # `leave_by` arrives already worked out and the prompt is explicit about it

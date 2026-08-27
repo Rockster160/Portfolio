@@ -639,7 +639,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else if (kind === "shell") {
       bodyEl.innerHTML = message.body || "";
     } else if (kind === "jarvis") {
-      bodyEl.textContent = message.body || "";
+      // A Jarvis reply is opened empty and `streaming` while the command runs,
+      // because `Jarvis.command` executes the whole Jil chain inline and a
+      // house command takes as long as the house takes. Same pulsing bubble a
+      // Buddy turn shows, for the same reason: a stalled command and one that
+      // never sent look identical otherwise. It carries no steps, and
+      // renderSteps with none is exactly the bare "Thinking".
+      if (message.state === "streaming") {
+        bodyEl.innerHTML = renderSteps(null);
+        node.classList.add("byte-msg-stepping");
+      } else {
+        bodyEl.textContent = message.body || "";
+      }
     } else if (kind === "action-request") {
       renderActionRequest(bodyEl, message);
     } else if (kind === "action_chip") {

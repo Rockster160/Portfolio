@@ -66,7 +66,10 @@ RSpec.describe "Slash command scoping" do
   end
 
   it "gives every command a home, so a new one can't default to showing everywhere" do
-    everywhere = %w[rename archive fork clear mode]
+    # `/jarvis` and its `/j` alias are deliberately homeless: the bare-dot aside
+    # is Buddy-only, because a terminal is full of leading dots, so these are
+    # how a command reaches Jarvis from anywhere else.
+    everywhere = %w[rename archive fork clear mode jarvis j]
     scoped     = offered(mode: :claude, owner: true) | offered(mode: :buddy, owner: true)
     jarvis     = offered(mode: :jarvis, owner: true)
 
