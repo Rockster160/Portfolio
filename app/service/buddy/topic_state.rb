@@ -44,6 +44,17 @@ module Buddy
     # a model call on someone saying "hey" and being answered.
     MIN_MESSAGES = 6
 
+    # Messages OF THEIRS at the end of the window carrying nothing of the topic
+    # before it counts as moved on.
+    #
+    # Buddy::IdeaDwell::MOVED_ON_TAIL is four, and its header calls that "two
+    # full exchanges". That arithmetic assumed a thread made of two people
+    # taking turns, and this one isn't: a travel alert, a "Who did: Puppy Down?"
+    # form and a reminder firing all land in the window as messages, and three
+    # of those in a row would satisfy a tail of four while nobody had said a
+    # word. Counting only the half that is evidence makes two mean two again.
+    MOVED_ON_TAIL = 2
+
     MODEL = "gpt-5.4-mini".freeze
 
     INSTRUCTIONS = <<~TXT.freeze
@@ -125,6 +136,24 @@ module Buddy
     # Same substring-over-significant-words test Buddy::IdeaDwell uses to decide
     # a stretch is over, pointed at the topic line rather than a held idea. No
     # stored topic means anything is a change.
+    #
+    # THEIR messages only, and that is the whole thing rather than a refinement.
+    # A stored topic goes into the prompt for every turn, so the reply written
+    # under it reaches for its vocabulary; reading that reply back as evidence
+    # the subject hasn't changed is asking the topic whether the topic is still
+    # current, and the answer is always yes. Prod conversation 21, 27 Aug: the
+    # topic settled at 16:23 on a recurring-list problem and was still there at
+    # 17:09 through a memory, two travel alerts, a chore form and a completely
+    # unrelated question about product ideas - because Byte's own answer to that
+    # question said "recurring", "list" and "already", so the tail matched and
+    # nothing refreshed. Every reply after it was written under a description of
+    # a conversation that had finished three quarters of an hour earlier.
+    #
+    # What this gate decides is whether to PAY for a re-distill, not whether the
+    # topic is right, and the two failures are not the same size: a needless
+    # refresh costs one cheap call and usually lands on the same topic again,
+    # while a refusal leaves a wrong line in the prompt indefinitely. So it
+    # leans toward re-reading.
     def changed?(conversation, messages)
       stored = conversation.buddy_topic.to_s
       return true if stored.strip.empty?
@@ -132,8 +161,8 @@ module Buddy
       terms = terms_for(stored)
       return true if terms.empty?
 
-      tail = messages.last(Buddy::IdeaDwell::MOVED_ON_TAIL)
-      return false if tail.size < Buddy::IdeaDwell::MOVED_ON_TAIL
+      tail = messages.select { |m| m.direction == "outbound" }.last(MOVED_ON_TAIL)
+      return false if tail.size < MOVED_ON_TAIL
 
       tail.none? { |m|
         text = m.body.to_s.downcase

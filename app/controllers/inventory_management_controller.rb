@@ -87,6 +87,13 @@ class InventoryManagementController < ApplicationController
       image.file.attach(blob)
     }
     box.broadcast!
+    # A photo uploaded straight onto a box never passed through a conversation,
+    # so this is the only chance to say what it is. Without it the picture is
+    # findable only by already knowing which box it is in, which is the half of
+    # the question somebody searching does not have.
+    DescribeImageWorker.enqueue_for(
+      user: current_user, blobs: images.blobs, taken_at: Time.current, box_key: box.param_key,
+    )
 
     serialize box.reload
   end

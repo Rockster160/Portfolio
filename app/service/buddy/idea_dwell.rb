@@ -115,9 +115,32 @@ module Buddy
     # the work Buddy needs done quietly.
     MODEL = "gpt-5.4-mini".freeze
 
-    # What the model says instead of a note when the stretch added nothing that
-    # isn't already on the thread. An escape hatch the heuristic needs: six
-    # messages can touch an idea without any of them taking it anywhere.
+    # What the model says instead of a note. Two things reach it, and until
+    # 27 Aug only one of them was asked about.
+    #
+    # The first is novelty: six messages can touch an idea without any of them
+    # taking it anywhere. The second is SUBJECT, and it is the one that was
+    # missing - the heuristic below hands over stretches that merely share
+    # vocabulary with an idea, and the model was only ever asked whether there
+    # was anything new in them.
+    #
+    # Prod, 26 Aug 02:41. A conversation about filing photos into inventory
+    # (msgs 4642-4655: what's in my boxes, here's a picture of the garage
+    # freezer, add it as a box, file the items) was written up as a note on
+    # BuddyMemory 46, "automatic kennel open/close and treat dispenser with an
+    # inside sensor to tell if Whisper is in there". The four words that carried
+    # it were `tell`, `open`, `close` and `inside`: five of the seven matching
+    # messages were somebody saying "tell me", and the other two came from an
+    # unrelated camera refusal of Buddy's saying it couldn't `open` a live feed.
+    #
+    # Handed the kennel idea and a transcript about freezers, "is there anything
+    # NEW here" has an obliging answer and it is yes. "Is this about my idea"
+    # does not. That question is the fix, and it has to be the model's rather
+    # than the heuristic's: tightening the score to reject the kennel case also
+    # rejects the notes it gets right - the 27 Aug avatar-layering note, which
+    # is correct, has no message in its stretch carrying two of that idea's
+    # words either. The overlap simply does not separate them. What can tell the
+    # difference is the call that is already being paid for, reading both.
     NOTHING = "NOTHING".freeze
 
     INSTRUCTIONS = <<~TXT.freeze
@@ -127,6 +150,23 @@ module Buddy
       on it - and a stretch of conversation. Write the one note that stretch was
       worth: what they settled on, what they ruled out and why, a constraint or
       a correction that turned up, where the thinking got to.
+
+      BEFORE ANY OF THAT: was this stretch ABOUT your idea?
+
+      It reaches you because some of your idea's words turned up in the
+      transcript, and that is all. Ordinary words turn up everywhere, so a
+      conversation can share several of them with an idea it has nothing to do
+      with - a run of people saying "tell me" is not a conversation about a
+      sensor that tells you something. Read what they were actually working on.
+      If it is a different subject, reply with exactly: #{NOTHING}
+
+      That is a correct answer and a common one, not a last resort. A note filed
+      on the wrong thread is read back months later as a decision that was made
+      about it, so it is worse than no note at all. Nothing else you can write
+      here costs as much as getting this wrong, and no amount of the stretch
+      being interesting makes it yours.
+
+      Once you are sure it is yours:
 
       - Only what is NEW. Never restate the seed or anything already in a note.
       - Keep the reasons. "Ruled out a pressure mat" is half of it; "ruled out a
@@ -141,8 +181,8 @@ module Buddy
       - Write it so either of you could pick this thought up cold in a month.
       - Prose, no headers, no bullets, under 600 characters, no em dashes.
       - It is YOUR note, not a quote of theirs. Don't write it as their words.
-      - If the stretch genuinely added nothing to YOUR idea that isn't already
-        saved, reply with exactly: #{NOTHING}
+      - If the stretch was yours but genuinely added nothing that isn't already
+        saved, same answer: #{NOTHING}
     TXT
 
     # Write a note on every held idea this conversation has been building on and

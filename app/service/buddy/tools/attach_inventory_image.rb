@@ -62,12 +62,24 @@ Buddy::Tools.register(
   execute:     ->(payload, ctx) {
     box     = Buddy::Inventory.find!(ctx.user, payload[:box_key])
     message = ctx.conversation.byte_messages.with_attached_files.find(payload[:message_id])
-    added   = Buddy::Inventory.images_on(message).map { |file|
+    files   = Buddy::Inventory.images_on(message)
+    added   = files.map { |file|
       image = box.images.create!(user: ctx.user, caption: payload[:caption].presence)
       image.file.attach(Buddy::Inventory.copy_blob(file.blob))
       image
     }
     box.broadcast!
+    # Against the ORIGINAL blobs, not the copies. Filing a photo makes a second
+    # blob of the same picture, and describing that would put a second sentence
+    # on one photo and return it twice; what this does instead is add the box to
+    # the row the chat message already has, so it can be found either way.
+    DescribeImageWorker.enqueue_for(
+      user:         ctx.user,
+      blobs:        files.map(&:blob),
+      taken_at:     message.created_at,
+      byte_message: message,
+      box_key:      box.param_key,
+    )
 
     {
       box_key: box.param_key,

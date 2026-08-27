@@ -41,7 +41,12 @@ class BuddyUsage < ApplicationRecord
   # stretch and writes memories and follow-ups off it. Its own kind rather than
   # folded into `idea_note`, so the first time either number looks wrong it's
   # possible to tell which one moved.
-  enum :kind, { turn: 0, compaction: 1, eval: 2, idea_note: 3, compile: 4 }
+  # `image_describe` is Buddy::ImageDescriber writing what a picture is of, once,
+  # when it arrives. Separable because it is the only one that scales with
+  # PHOTOS rather than with turns: a day of sending twenty pictures and barely
+  # talking looks nothing like a day of talking, and folded in it would read as
+  # a conversation that cost a fortune.
+  enum :kind, { turn: 0, compaction: 1, eval: 2, idea_note: 3, compile: 4, image_describe: 5 }
 
   # Where the call was made. Prod only ever saw its own rows until local spend
   # started syncing in, and without this the bill reads as if the laptop were

@@ -1408,6 +1408,9 @@ html.html-ctr-byte body {
         // Shrink-wrap to the picture: the attachments column stretches its
         // items by default, which would stretch the frame across the bubble.
         align-self: flex-start;
+        // The waiting caption below is absolute, so the frame has to be what
+        // it positions against.
+        position: relative;
         height: 300px;
         // The EMPTY frame is 4:3, so what's waiting looks picture-shaped rather
         // than like a sliver. Inherits the tint above as its fill.
@@ -1426,10 +1429,34 @@ html.html-ctr-byte body {
         // narrow photo sits against the bubble instead of inside a letterboxed
         // slab. The height is untouched, which is the whole point — nothing on
         // screen moves at this moment.
+        // What the picture is of, sitting in the frame until the picture
+        // itself lands. Read off `data-description` so it costs no DOM, and
+        // absolutely positioned so it can't affect the frame's size — the
+        // whole point of the frame is that nothing moves when the bytes
+        // arrive. Only ever present on a photo that has a description; one
+        // from before those existed keeps the plain waiting tint.
+        &[data-description]::after {
+          content: attr(data-description);
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          padding: 14px 16px;
+          font-size: 12.5px;
+          line-height: 1.5;
+          color: var(--bs-muted);
+          overflow: hidden;
+        }
+
         &.byte-attachment-loaded {
           width: auto;
           background: none;
           animation: none;
+
+          // Gone the instant there's a picture to look at instead.
+          &::after {
+            content: none;
+          }
 
           img {
             width: auto;

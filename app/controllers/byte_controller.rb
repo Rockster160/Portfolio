@@ -1014,6 +1014,13 @@ class ByteController < ApplicationController
       "buddy_recap_at" => Time.current.iso8601(6),
     ).compact
     conversation.update!(metadata: metadata)
+    # The topic line goes with it. This command exists for "Buddy answering from
+    # the shape of the last few turns rather than from the request in front of
+    # it", and the topic is that shape in one sentence, sitting in the prompt
+    # under a heading that says it is what's happening right now. Clearing the
+    # history and leaving it behind removes the transcript and keeps the
+    # summary of it, which is the half that was doing the steering.
+    Buddy::TopicState.clear!(conversation)
 
     # Worded as the APP reporting, not the companion talking. A slash ack is a
     # `kind: :system` message that happens to sit in the same bubble the pet

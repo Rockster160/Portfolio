@@ -134,6 +134,13 @@ class ByteMessage < ApplicationRecord
     model_images.map { |f| f.filename.to_s }
   end
 
+  # The same list with the blob each name points at, because the faded marker in
+  # Buddy::GPT::History carries what the picture was OF and that is stored per
+  # BLOB (see ImageDescription). Still no URL signing.
+  def model_image_refs
+    model_images.map { |f| { filename: f.filename.to_s, blob_id: f.blob_id } }
+  end
+
   private
 
   # Only formats every model reads. Normalization means a fresh upload is always
@@ -166,6 +173,7 @@ class ByteMessage < ApplicationRecord
   def attachments_wire
     return [] unless files.attached?
 
+    described = ImageDescription.where(blob_id: files.map(&:blob_id)).pluck(:blob_id, :body).to_h
     files.map { |f|
       {
         id:           f.id,
@@ -173,7 +181,12 @@ class ByteMessage < ApplicationRecord
         content_type: f.content_type,
         byte_size:    f.byte_size,
         url:          Rails.application.routes.url_helpers.rails_blob_path(f),
-      }
+        # What the picture is of, for the alt text and for the frame that sits
+        # there while the bytes are still coming. The frame already reserves the
+        # space; this is what fills it with something worth reading instead of a
+        # pulsing rectangle.
+        description:  described[f.blob_id],
+      }.compact
     }
   end
 end

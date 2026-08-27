@@ -138,6 +138,7 @@ module BuddyEvalNeeds
     camp_stove_filed:     { label: "a camp stove filed in the inventory", check: ->(u) { box(u, /camp stove/i) } },
     headlamp_filed:       { label: "a headlamp filed in the inventory", check: ->(u) { box(u, /headlamp/i) } },
     tote_photo:           { label: "a photo on the camping tote", check: ->(u) { Box.where(user: u).select { |b| b.name.to_s.match?(/camping tote/i) }.any? { |b| BoxImage.where(box_key: b.param_key).any? } } },
+    described_photo:      { label: "a photo with a description on it", check: ->(u) { ImageDescription.where(user: u).where("body ILIKE ?", "%router%").exists? } },
     coffee_pairing:       { label: "the coffee-to-chore pairing",  check: ->(u) { RecordLink.where(user: u).any? { |l| l.source_name.to_s.match?(/coffee/i) } } },
     desk_delivery:        { label: "a desk on the delivery list",  check: ->(u) { delivery?(u, "desk") } },
     mattress_delivery:    { label: "a mattress on the delivery list", check: ->(u) { delivery?(u, "mattress") } },

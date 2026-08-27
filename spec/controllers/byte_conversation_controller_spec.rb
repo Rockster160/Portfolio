@@ -249,6 +249,21 @@ RSpec.describe ByteController, type: :controller do
       expect(convo.byte_messages.where(direction: :outbound)).to be_empty
     end
 
+    # The command exists for Buddy answering from the shape of the last few
+    # turns instead of from the request in front of it, and Buddy::TopicState is
+    # that shape in one sentence, riding in the prompt under a heading saying it
+    # is what's happening right now. Clearing the transcript and keeping the
+    # summary of it leaves behind the half that was doing the steering.
+    it "takes the topic line with it, not just the transcript" do
+      convo.update_columns(buddy_topic: "planning the greenhouse refit", buddy_topic_at: 1.hour.ago)
+      say("one")
+
+      compact!
+
+      expect(convo.reload.buddy_topic).to be_nil
+      expect(Buddy::Personality.for(rocco, conversation: convo)).not_to include("What you're on right now")
+    end
+
     it "answers with what it dropped, and says the thread itself is still there" do
       say("one")
       say("two")

@@ -85,12 +85,39 @@ module Buddy
       # every turn, so replaying it would mean one photo is re-fetched by OpenAI
       # and re-billed as vision tokens on every turn for the rest of the thread.
       #
-      # Afterwards it stays in the thread as `[image #id: name]`, so Buddy still
-      # knows a picture was there and can refer back to it — and can call
-      # `view_image` with that id to actually look again when it matters.
+      # Afterwards it stays in the thread as a bracket carrying the id, the name
+      # and WHAT IT WAS OF, so Buddy still knows a picture was there, knows what
+      # was in it, and can call `view_image` with that id to actually look again
+      # when the detail matters.
+      #
+      # The description is the point of the bracket rather than a decoration on
+      # it. A filename is not something anybody remembers, so for the whole life
+      # of a thread past the first turn a photo used to be an assertion that a
+      # picture had existed - which meant every question touching it cost a tool
+      # call to answer, and the ones that didn't obviously touch it got answered
+      # without the picture at all. A sentence costs a few dozen tokens once and
+      # carries forward for nothing.
       def build(conversation, upto:)
         rows = drop_stale_quick_actions(scope(conversation, upto), upto)
-        rows.filter_map { |msg| item_for(msg, replay_images: upto.present? && msg.id == upto.id) }
+        described = descriptions_for(rows)
+        rows.filter_map { |msg|
+          item_for(msg, replay_images: upto.present? && msg.id == upto.id, described: described)
+        }
+      end
+
+      # Every description in one query, keyed by blob. Built here rather than
+      # looked up per message for the same reason `scope` preloads attachments:
+      # a hundred replayed rows is a hundred queries otherwise, on every turn.
+      def descriptions_for(rows)
+        blob_ids = rows.flat_map { |msg| msg.model_image_refs.pluck(:blob_id) }.uniq
+        return {} if blob_ids.empty?
+
+        ImageDescription.where(blob_id: blob_ids).index_by(&:blob_id)
+      rescue StandardError => e
+        # A thread that loses its picture captions is the thread as it was
+        # before any of this existed. It is never a reason to fail the turn.
+        Rails.logger.warn("[Buddy::GPT::History] image descriptions failed: #{e.class}: #{e.message}")
+        {}
       end
 
       # Old quick-action exchanges come out of history entirely.
@@ -158,10 +185,12 @@ module Buddy
         [at, upto.created_at].min
       end
 
-      def item_for(message, replay_images: false)
+      def item_for(message, replay_images: false, described: {})
         body = seed_standin(message.metadata) || message.body.to_s.strip
 
-        return user_item(message, outbound_body(message, body), replay_images) if message.direction == "outbound"
+        if message.direction == "outbound"
+          return user_item(message, outbound_body(message, body), replay_images, described)
+        end
 
         return nil if body.empty?
 
@@ -267,8 +296,8 @@ module Buddy
       # block when there's a caption, plus one input_image per image). An
       # image with no caption is still a real turn — we send the images with no
       # text rather than dropping it, which the old bare-body guard did.
-      def user_item(message, body, replay_images)
-        return faded_item(message, body) unless replay_images
+      def user_item(message, body, replay_images, described={})
+        return faded_item(message, body, described) unless replay_images
 
         images = message.model_image_sources
         return nil if body.empty? && images.empty?
@@ -284,11 +313,55 @@ module Buddy
       # re-sending. The turn stays in the thread as text with each image named
       # and carrying its message id, which is both what lets "that photo I sent"
       # land on something and what Buddy passes to `view_image` to see it again.
-      def faded_item(message, body)
-        names = message.model_image_names.map { |name| "[image ##{message.id}: #{name}]" }
+      def faded_item(message, body, described={})
+        names = message.model_image_refs.map { |ref| "[image ##{message.id}: #{marker(ref, described)}]" }
         return nil if body.empty? && names.empty?
 
         { role: :user, content: [body, *names].compact_blank.join(" ") }
+      end
+
+      # What goes inside the bracket. The filename stays because it is sometimes
+      # the only meaningful thing about a screenshot, and because a photo sent
+      # before descriptions existed still has to render as something.
+      #
+      # Pipes rather than prose: this is the system talking, and it has to be
+      # unmistakably not a sentence the person wrote. Same reasoning as the
+      # relay brackets and the form standins above.
+      #
+      # EVERY PART OF THIS IS UNTRUSTED. The filename is whatever their phone
+      # or a share sheet called the file; the description is a model's reading
+      # of a picture, and a picture can contain writing. Either could carry a
+      # bracket, a pipe or a newline and split one marker into what reads as
+      # two, or close the marker and continue as though the rest were the
+      # person talking. So the delimiters are stripped out of the contents
+      # rather than escaped: there is nothing inside a marker that needs a
+      # bracket, and taking them out cannot be got wrong the way an escape
+      # scheme can.
+      def marker(ref, described)
+        found = described[ref[:blob_id]]
+        name  = safe_in_marker(ref[:filename], MAX_MARKER_NAME)
+        return name.presence || "image" if found.nil?
+
+        tags = found.tag_list.filter_map { |tag| safe_in_marker(tag, MAX_MARKER_TAG).presence }.first(MAX_MARKER_TAGS)
+        parts = [name, safe_in_marker(found.body, MAX_MARKER_BODY), tags.join(", ")]
+        parts.compact_blank.presence&.join(" | ") || "image"
+      end
+
+      # Room for a real sentence and a real filename, and a ceiling on both.
+      # `ImageDescription::MAX_BODY` already bounds what gets stored; this is
+      # the second gate, for a row written before that cap or edited past it.
+      MAX_MARKER_NAME = 80
+      MAX_MARKER_BODY = 400
+      MAX_MARKER_TAG  = 30
+      MAX_MARKER_TAGS = 8
+
+      # Anything that could end the marker early or start a second one, plus
+      # every kind of line break. Replaced with a space rather than deleted so
+      # two words don't fuse into one that means something else.
+      MARKER_UNSAFE_RX = /[\[\]|\r\n\t]+/
+
+      def safe_in_marker(text, limit)
+        text.to_s.gsub(MARKER_UNSAFE_RX, " ").squish.truncate(limit)
       end
 
       # Buddy's own replies only, and only once settled. A `streaming` or

@@ -99,6 +99,57 @@ RSpec.describe Buddy::TopicState do
       expect(convo.reload.buddy_topic).to include("delivery")
     end
 
+    # Prod conversation 21, 27 Aug. The topic settled at 16:23 on a
+    # recurring-list problem and was still in the prompt at 17:09, through a
+    # memory, two travel alerts, a chore form and an unrelated question about
+    # product ideas - because Byte's OWN answer to that question said
+    # "recurring", "list" and "already", the tail matched, and nothing
+    # refreshed. A topic in the prompt is what the reply reaches for its
+    # vocabulary from, so reading the reply back as proof the subject is still
+    # live is asking the topic about itself.
+    describe "the companion's own words" do
+      it "does not keep a topic alive by echoing it" do
+        convo.update_columns(buddy_topic: "whether Byte can add items to the Before Bed list on a recurring schedule")
+        exchange(greenhouse)
+        say("what features would make you more useful?")
+        say(
+          "Smarter recurring routines, and clearer lookups so I stop guessing about what's already on a list.",
+          direction: :inbound, meta: { "kind" => "buddy" },
+        )
+        stub_client("They're asking what would make the companion more useful.")
+
+        described_class.settle!(convo)
+
+        expect(convo.reload.buddy_topic).to include("more useful")
+      end
+
+      it "still holds when THEY are the ones staying on it" do
+        convo.update_columns(buddy_topic: "whether Byte can add items to the Before Bed list on a recurring schedule")
+        exchange(greenhouse)
+        say("did the recurring list thing ever run?")
+        say("Not yet, no.", direction: :inbound, meta: { "kind" => "buddy" })
+        expect(Buddy::GPT::Client).not_to receive(:new)
+
+        expect(described_class.settle!(convo)).to be_nil
+      end
+
+      # Three machine messages in a row used to satisfy a tail of four while
+      # nobody had said a word, which is what made the tail worth re-counting
+      # in the half that is evidence.
+      it "is not moved on by a run of alerts and forms nobody typed" do
+        convo.update_columns(buddy_topic: "whether Byte can add items to the Before Bed list on a recurring schedule")
+        exchange(greenhouse)
+        say("is the recurring list bit sorted?")
+        say("Not yet.", direction: :inbound, meta: { "kind" => "buddy" })
+        say("🚙 Leave by 10:55am for Serenity.", direction: :inbound, meta: { "kind" => "buddy" })
+        say("➡️ Time to go - Serenity.", direction: :inbound, meta: { "kind" => "buddy" })
+        say("Who did: Puppy Down?", direction: :inbound, meta: { "kind" => "buddy_reply" })
+        expect(Buddy::GPT::Client).not_to receive(:new)
+
+        expect(described_class.settle!(convo)).to be_nil
+      end
+    end
+
     # A compaction knows the exchange is about to leave Buddy's view, so it is
     # the last moment the topic can be captured at all.
     it "settles regardless when the caller already knows the stretch is over" do

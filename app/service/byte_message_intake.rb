@@ -305,7 +305,21 @@ class ByteMessageIntake
     return if @attachment_signed_ids.empty?
 
     blobs = @attachment_signed_ids.filter_map { |sid| ActiveStorage::Blob.find_signed(sid) }
-    message.files.attach(blobs) if blobs.any?
+    return if blobs.empty?
+
+    message.files.attach(blobs)
+    # Say what each picture is OF, behind the turn. The pixels are in front of
+    # the model exactly once (Buddy::GPT::History fades the message to
+    # `[image #1234: IMG_4821.jpeg]` afterwards), so without this a photo stops
+    # being findable the moment it scrolls past the replay depth - and a
+    # filename is not a thing anybody remembers.
+    #
+    # Here rather than in a model callback: this is the one place a chat photo
+    # is attached, so it can't fire for a message with no images and can't race
+    # the attach.
+    DescribeImageWorker.enqueue_for(
+      user: @user, blobs: blobs, taken_at: message.created_at, byte_message: message,
+    )
   end
 
   def dispatch!(message)

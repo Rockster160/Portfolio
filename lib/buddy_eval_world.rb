@@ -131,6 +131,7 @@ class BuddyEvalWorld
     jil_tasks!
     prompts!
     inventory!
+    photos!
     self
   end
 
@@ -367,6 +368,31 @@ class BuddyEvalWorld
     photo = track(BoxImage.create!(user: user, box_key: tote.param_key, caption: "packed for the season"))
     photo.file.attach(
       io: StringIO.new(EVAL_JPEG), filename: "camping-tote.jpg", content_type: "image/jpeg",
+    )
+  end
+
+  # A described photo, so `find_photo` has something to find.
+  #
+  # Deliberately NOT the camping tote: that picture is already the subject of
+  # the `show_inventory_image` probe, and a second right answer to "the photo of
+  # the camping tote" would turn a description problem into an ambiguous
+  # question - which then gets read as a miss.
+  def photos!
+    return if ImageDescription.where(user: user).exists?(["body ILIKE ?", "%router%"])
+
+    blob = ActiveStorage::Blob.create_and_upload!(
+      io: StringIO.new(EVAL_JPEG), filename: "router-label.jpg", content_type: "image/jpeg",
+    )
+    track(blob)
+    track(
+      ImageDescription.create!(
+        user:     user,
+        blob:     blob,
+        body:     "A close-up of the white label on the underside of a router, showing the model number " \
+                  "and the default wifi password printed under a barcode.",
+        tags:     %w[router label wifi password barcode],
+        taken_at: 3.days.ago,
+      ),
     )
   end
 

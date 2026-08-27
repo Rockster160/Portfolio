@@ -151,6 +151,40 @@ RSpec.describe Buddy::IdeaDwell do
       expect(idea.reload.notes).to be_empty
     end
 
+    # Prod, 26 Aug 02:41. A conversation about filing photos into inventory -
+    # what's in my boxes, here's a picture of the garage freezer, add it as a
+    # box, file the items - was written up as a note on the kennel idea. Four
+    # words carried it: `tell`, `open`, `close` and `inside`, five of the seven
+    # matching messages being somebody saying "tell me" and two of the words
+    # donated by an unrelated camera refusal of Buddy's.
+    #
+    # The score can't be tightened out of this: the notes it gets RIGHT look the
+    # same by term overlap, so anything that rejects the kennel case rejects
+    # those too. The question belongs to the model, which is holding both the
+    # idea and the transcript - and it was only ever asked whether there was
+    # anything NEW in the stretch, which has an obliging answer when the stretch
+    # is about something else entirely.
+    describe "a stretch that only shares words with the idea" do
+      it "asks whether it was the subject before asking what is new" do
+        instructions = described_class::INSTRUCTIONS
+
+        expect(instructions).to match(/was this stretch ABOUT your idea/i)
+        expect(instructions.index(/ABOUT your idea/i)).to be < instructions.index(/Only what is NEW/)
+      end
+
+      it "says a wrong thread is worse than no note at all" do
+        expect(described_class::INSTRUCTIONS).to match(/worse than no note at all/i)
+      end
+
+      it "writes nothing when the model says it wasn't the subject" do
+        lay_down(kennel + elsewhere)
+        stub_client([{ text: described_class::NOTHING }])
+
+        expect(described_class.settle!(conversation)).to be_empty
+        expect(idea.reload.notes).to be_empty
+      end
+    end
+
     it "writes nothing when the model call fails" do
       lay_down(kennel + elsewhere)
       stub_client([{ error: "rate limited" }])

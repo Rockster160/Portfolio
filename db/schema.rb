@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_26_213809) do
+ActiveRecord::Schema[7.1].define(version: 2026_08_27_175218) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1135,6 +1135,23 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_26_213809) do
     t.index ["uploaded_by_user_id"], name: "index_household_icons_on_uploaded_by_user_id"
   end
 
+  create_table "image_descriptions", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "blob_id", null: false
+    t.bigint "byte_message_id"
+    t.string "box_key"
+    t.text "body", null: false
+    t.jsonb "tags", default: [], null: false
+    t.datetime "taken_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["blob_id"], name: "index_image_descriptions_on_blob_id", unique: true
+    t.index ["byte_message_id"], name: "index_image_descriptions_on_byte_message_id"
+    t.index ["tags"], name: "index_image_descriptions_on_tags", using: :gin
+    t.index ["user_id", "taken_at"], name: "index_image_descriptions_on_user_id_and_taken_at"
+    t.index ["user_id"], name: "index_image_descriptions_on_user_id"
+  end
+
   create_table "ip_visits", force: :cascade do |t|
     t.string "ip_address", null: false
     t.integer "visit_count", default: 0, null: false
@@ -1859,6 +1876,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_26_213809) do
   add_foreign_key "google_accounts", "users"
   add_foreign_key "household_icons", "chore_households", on_delete: :cascade
   add_foreign_key "household_icons", "users", column: "uploaded_by_user_id"
+  add_foreign_key "image_descriptions", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "image_descriptions", "users"
   add_foreign_key "list_builders", "lists"
   add_foreign_key "list_builders", "users"
   add_foreign_key "list_items", "sections"

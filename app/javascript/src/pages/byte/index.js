@@ -1455,8 +1455,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       // frame honest for every aspect ratio — a portrait photo and a doorbell
       // still both fit it uncropped, and a change in width moves nothing.
       wrap.classList.add("byte-attachment-image");
+      // What the picture is of, written when it arrived. The frame already
+      // reserves the space so nothing moves; this is what sits IN it while the
+      // bytes are coming, instead of a pulsing rectangle. It's also the alt
+      // text, which is the same sentence doing the same job for anyone who
+      // never gets the picture at all.
+      if (a.description) wrap.dataset.description = a.description;
       const img = document.createElement("img");
-      img.alt = a.filename || "";
+      img.alt = a.description || a.filename || "";
       img.loading = "lazy";
       const settle = () => {
         wrap.classList.add("byte-attachment-loaded");

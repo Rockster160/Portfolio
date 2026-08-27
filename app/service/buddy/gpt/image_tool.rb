@@ -18,16 +18,19 @@ module Buddy
 
       DESCRIPTION = <<~TXT.freeze
         Look at an image the person sent earlier in this conversation. Their
-        messages show past images as `[image #1234: chart.png]` - that number is
-        the id to pass here, and it means the picture is in the thread but not
-        currently in front of you.
+        messages show past images as `[image #1234: chart.png | what was in it |
+        tags]` - that number is the id to pass here, and it means the picture is
+        in the thread but not currently in front of you.
 
-        Call this whenever answering needs you to actually SEE it again: they
-        ask about a detail you didn't note, they refer back to "that photo" or
-        "the screenshot", or you're about to log or add something based on
-        what's in it. Don't call it to re-confirm something you already
-        described this turn, and don't guess at contents you can't see - if the
-        image matters, open it.
+        The note in the bracket holds the scene, which is enough to know what
+        the picture was and to talk about it. This is for when the answer turns
+        on something finer: a value to read, a count, a state to check, wording
+        to quote. Also before you log, file or add anything off a photo. Talk
+        from the note, act from the image - and when the note doesn't reach far
+        enough, that IS the signal to open it.
+
+        One look lasts the rest of the turn: once it's in front of you, answer
+        from what you can see.
 
         Pass `message_id` from the bracket. Leave it null for the most recent
         image in the thread.

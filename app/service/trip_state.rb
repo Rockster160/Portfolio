@@ -161,16 +161,22 @@ class TripState
     # to skip a redundant car-start when the driver's already there. Same
     # threshold + coord source as `arrived_at_current_stop?`, but takes any
     # destination string rather than being tied to the active trip's leg.
+    #
+    # Tests EVERY address the destination could mean, not just the primary
+    # one: a chain has branches, and the one you're standing in is often not
+    # the one saved first. Checking only the primary made the Car Wash
+    # auto-complete miss every visit to the second Quick Quack.
     def car_at?(destination, user: ::User.me)
       return false if destination.blank?
 
-      dest = geocode_destination(destination, user)
-      return false if dest.blank?
+      dests = destination_coords(destination, user)
+      return false if dests.blank?
 
       coord = car_coord(user)
       return false unless coord?(coord)
 
-      distance(coord.map(&:to_f), dest) <= ARRIVAL_THRESHOLD
+      here = coord.map(&:to_f)
+      dests.any? { |dest| distance(here, dest) <= ARRIVAL_THRESHOLD }
     end
 
     # Geofence cross-check. Returns true when the car's reported coord
@@ -198,19 +204,36 @@ class TripState
 
     private
 
-    # Resolve a destination string to `[lat, lng]`. Mirrors how Tesla
-    # navigation resolves it: a saved contact name ("Home", "Mom",
-    # "Sarah's House") wins over a raw geocode. Without this, `car_at?("Home")`
-    # would geocode the literal word "Home" — which never lands on the user's
-    # actual house — so the "already there" guard failed and the car started
-    # navigating home while already parked at home.
-    def geocode_destination(destination, user)
+    # Every `[lat, lng]` a destination string could mean, primary first.
+    # Mirrors how Tesla navigation resolves it: a saved contact name
+    # ("Home", "Mom", "Sarah's House") wins over a raw geocode. Without
+    # this, `car_at?("Home")` would geocode the literal word "Home" — which
+    # never lands on the user's actual house — so the "already there" guard
+    # failed and the car started navigating home while already parked there.
+    #
+    # A contact can hold more than one address, which is why this returns a
+    # list: "Quick Quack" is a chain, and asking whether the car is at one
+    # of them means asking about all of them.
+    def destination_coords(destination, user)
       ab = user.address_book
-      contact_loc = ab.match_contact(destination.to_s)&.primary_address&.loc
-      return contact_loc.map(&:to_f) if coord?(contact_loc)
+      saved = contact_coords(ab.match_contact(destination.to_s))
+      return saved if saved.present?
 
       geo = ab.geocode(destination.to_s)
-      coord?(geo) ? geo.map(&:to_f) : nil
+      coord?(geo) ? [geo.map(&:to_f)] : []
+    end
+
+    def contact_coords(contact)
+      return [] if contact.nil?
+
+      locs = contact.addresses.ordered.map(&:loc)
+      locs.select { |loc| coord?(loc) }.map { |loc| loc.map(&:to_f) }
+    end
+
+    # A single point for callers that can only act on one — navigation has
+    # to pick a destination, so it takes the primary.
+    def geocode_destination(destination, user)
+      destination_coords(destination, user).first
     end
 
     def coord?(value)

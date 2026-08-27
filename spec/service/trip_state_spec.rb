@@ -190,15 +190,50 @@ RSpec.describe TripState do
       allow(address_book).to receive(:match_contact).and_return(nil)
     end
 
+    # `street` is only a label here — the geofence reads lat/lng.
+    def saved_contact(name, *locs)
+      user.contacts.create!(name: name).tap { |contact|
+        locs.each_with_index do |(lat, lng), idx|
+          contact.addresses.create!(
+            user: user, primary: idx.zero?, street: "#{name} #{idx}", lat: lat, lng: lng,
+          )
+        end
+      }
+    end
+
     it "resolves a saved contact name (e.g. 'Home') to its address, not a raw geocode" do
-      home_addr = instance_double("Address", loc: [40.5, -111.9])
-      home = instance_double("Contact", primary_address: home_addr)
+      home = saved_contact("Home", [40.5, -111.9])
       allow(address_book).to receive(:match_contact).with("Home").and_return(home)
       # A contact-resolved destination must NOT hit geocode (geocode("Home")
       # never lands on the actual house — the bug this guards).
       expect(address_book).not_to receive(:geocode)
       user.caches.set(:car_data, { location: { lat: 40.5001, lng: -111.9001 } })
       expect(described_class.car_at?("Home", user: user)).to be(true)
+    end
+
+    it "matches a non-primary address, so a chain's other branch still counts" do
+      # Quick Quack has two branches. The primary is Herriman; the wash
+      # actually driven to is the Lehi one, ~9mi away. Testing only the
+      # primary is what made the Car Wash auto-complete miss every visit.
+      wash = saved_contact("CarWash", [40.508319, -112.026813], [40.413689, -111.908874])
+      allow(address_book).to receive(:match_contact).with("Quick Quack").and_return(wash)
+      user.caches.set(:car_data, { location: { lat: 40.413712, lng: -111.908876 } })
+      expect(described_class.car_at?("Quick Quack", user: user)).to be(true)
+    end
+
+    it "is false when the car is at neither branch of a multi-address contact" do
+      wash = saved_contact("CarWash", [40.508319, -112.026813], [40.413689, -111.908874])
+      allow(address_book).to receive(:match_contact).with("Quick Quack").and_return(wash)
+      user.caches.set(:car_data, { location: { lat: 40.480398, lng: -111.998186 } })
+      expect(described_class.car_at?("Quick Quack", user: user)).to be(false)
+    end
+
+    it "ignores a contact address with no coords rather than counting it as a match" do
+      contact = saved_contact("Vets", [40.5, -111.9])
+      contact.addresses.create!(user: user, street: "No coords", lat: nil, lng: nil)
+      allow(address_book).to receive(:match_contact).with("Vets").and_return(contact)
+      user.caches.set(:car_data, { location: { lat: 42.0, lng: -112.0 } })
+      expect(described_class.car_at?("Vets", user: user)).to be(false)
     end
 
     it "is true when the car's cached coord is within ~500m of the geocoded destination" do

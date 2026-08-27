@@ -312,6 +312,14 @@ BUDDY_TOOL_PROBES = {
   },
   remove_inventory_item:  { say: "the camp stove is gone, we gave it away - take it off the inventory", avoid: %i[remove_list_item edit_inventory_item], needs: :camp_stove_filed },
   show_inventory_image:   { say: "show me the photo of the camping tote", avoid: %i[search_inventory view_image], needs: :tote_photo },
+  # `view_image` is the one it gets confused with, and the difference is whether
+  # the picture is still in the thread. `view_image` opens one it can see a
+  # bracket for; this searches the ones it can't.
+  find_photo:             {
+    say:   "did I ever send you a picture of the router label?",
+    avoid: %i[view_image show_inventory_image search_inventory search_memories],
+    needs: :described_photo,
+  },
   # Seeds the photo one turn before asking, because "this is the camping tote"
   # is only a sensible thing to say when a picture has just arrived. Without
   # one the honest answer is a question, and the probe would be scoring the
