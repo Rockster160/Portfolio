@@ -650,7 +650,7 @@ module Buddy
             break if nudge.nil?
 
             nudged = true
-            input += [{ role: :developer, content: nudge }]
+            input += draft_item(round_text) + [{ role: :developer, content: nudge }]
             next
           end
 
@@ -898,6 +898,47 @@ module Buddy
       # a second print.
       def proposal?(name)
         Buddy::Tools.known?(name) && !Buddy::Tools.answers?(Buddy::Tools[name])
+      end
+
+      # Every nudge opens on "the reply you just wrote" — and until this existed,
+      # there was no reply there to read.
+      #
+      # `input` IS the model's whole context: the client sends `store: false`
+      # and never passes `previous_response_id`, so a round sees exactly what
+      # this loop put in the array. The round's own text was never appended, so
+      # the corrective round was handed a critique of a message it could not
+      # see, on a turn that otherwise looked identical to the first one.
+      #
+      # That is the difference between the automatic retry and the person
+      # asking for one. Their retry starts a NEW turn, where History.build
+      # rebuilds the thread from ByteMessage rows and the reply is right there
+      # in it. Same model, same request, coherent context — which is why the
+      # one they ask for lands when the one it does for itself doesn't.
+      #
+      # It goes back as a DEVELOPER item saying outright that it was not sent,
+      # never as an assistant turn. An assistant turn reads as delivered, and
+      # the next round then writes a continuation of it: prod 1144 is "Yesss,
+      # counting three more waters. Let me match that up." followed by "Yessss,
+      # three waters counted," where only the second half reached anyone. The
+      # tool-call branch feeds nothing back for that same reason.
+      #
+      # "Carry over the parts that were right" is the other half. The last
+      # round wins outright, so a first draft that answered three things and
+      # fumbled one used to lose the three as well.
+      DRAFT_PREFACE = <<~TXT.freeze
+        Here is the draft you just produced. It has NOT been sent and they have
+        not seen it. Whatever you write next REPLACES it in full, so carry over
+        the parts of it that were right.
+
+        --- draft, not sent ---
+        %<draft>s
+        --- end draft ---
+      TXT
+
+      def draft_item(text)
+        return [] if text.blank?
+
+        [{ role: :developer, content: format(DRAFT_PREFACE, draft: text) }]
       end
 
       RETRY_NUDGE = <<~TXT.freeze
@@ -1662,7 +1703,14 @@ module Buddy
         # They asked for a thing to happen and nothing was called. Worth the
         # corrective round on its own — this is the half that gets the TV
         # actually turned off, rather than only stopping the lie about it.
-        return RETRY_NUDGE if commanded_action_unanswered?(spoken.to_s)
+        #
+        # `!@acted` for the same reason the arm above it carries one, and it
+        # matters more here: this arm reads the REQUEST rather than the reply,
+        # so without it a turn that silently wrote a memory gets sent a nudge
+        # opening "you called no tool, so nothing happened" - which is simply
+        # untrue, and the model's job is then to reconcile a correct reply with
+        # being told it was wrong. Prod 4805 spent two rounds doing that.
+        return RETRY_NUDGE if !@acted && commanded_action_unanswered?(spoken.to_s)
         return POINTER_NUDGE if spoken.to_s.strip.match?(DANGLING_POINTER_RX)
         # The mirror of the unbacked claim, and the quieter failure of the two:
         # that one says a thing happened when it didn't, this one says a thing
@@ -2395,6 +2443,34 @@ module Buddy
                   how|what|when|where|why|which|who)\b
       /xi
 
+      # An order to HAND SOMETHING OVER, aimed at the person already being
+      # spoken to. The reply IS the delivery, so there is no call to miss and
+      # nothing for a retraction to be right about.
+      #
+      # Prod 4829, 27 Aug: "Can you send me a link to my Doctor list?" was
+      # answered with the link, and the answer was replaced by "Nothing
+      # actually ran. Want me to have another go at it?" It cost two extra
+      # rounds on the way there too, because the same predicate arms the
+      # corrective nudge — which told the model to call a tool for something no
+      # tool does.
+      #
+      # `send`, `tell` and `show` are in COMMAND_REQUEST_RX for "text Chelsea"
+      # and "tell Eve I'm running late", where the recipient is somebody else
+      # and a tool really is the only way it reaches them. **`me` is the whole
+      # difference**, which is why this reads the object rather than the verb.
+      #
+      # Nothing is lost by standing down here. This arm never reads the reply
+      # for an assertion - it infers the failure from the request alone - so a
+      # reply that genuinely lies about a delivery ("sent that to your phone")
+      # is still caught by SILENT_TURN_CLAIM_RX, which has `sent` in it.
+      #
+      # `text` and `message` stay OUT: those name a channel rather than an act
+      # of telling, and "text me the address" really does want an SMS.
+      HANDOVER_REQUEST_RX = /
+        \b(?:send|give|show|tell|read|share|link)\s+
+        (?:me|us)\b
+      /xi
+
       # Did they order something done, and did the reply act like it happened?
       #
       # Two ways in. Either the REQUEST was an imperative, or the reply carries
@@ -2407,6 +2483,7 @@ module Buddy
         return false if self_initiated?
         return false if body.to_s.strip.empty?
         return false if body.match?(SOLICITS_INFO_RX) || body.match?(DENIAL_RX)
+        return false if @inbound.body.to_s.match?(HANDOVER_REQUEST_RX)
         return true if @inbound.body.to_s.match?(COMMAND_REQUEST_RX)
 
         body.match?(CLICK_RX) && !@inbound.body.to_s.match?(QUESTION_RX)

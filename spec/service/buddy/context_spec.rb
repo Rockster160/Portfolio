@@ -584,4 +584,51 @@ RSpec.describe Buddy::Context do
       expect(Buddy::Personality.for(user, conversation: convo)).to include("`status: already_rang`")
     end
   end
+
+  # Prod 4831, 27 Aug: "send me a link to my Doctor list" came back as
+  # `[Doctor!](https://ardesian.com/lists)` - the index, because `app_pages` was
+  # the only place a list URL existed and it only has the index.
+  describe "a list's own link" do
+    let(:user) { create(:user) }
+
+    def entry(name)
+      described_class.send(:lists, user.reload).detect { |l| l[:name] == name }
+    end
+
+    def list!(name)
+      List.create!(name: name).tap { |list| user.user_lists.create!(list: list, is_owner: true) }
+    end
+
+    it "carries an absolute url built from the list's id" do
+      list = list!("Doctor!")
+
+      expect(entry("Doctor!")[:url]).to eq("#{Buddy::AppPages.host}/lists/#{list.id}")
+    end
+
+    # The id rather than the slug, because a slug is derived from the name and
+    # a name gets renamed - and the link is already sitting in the thread.
+    it "keeps working after the list is renamed" do
+      list = list!("Doctor!")
+      was  = entry("Doctor!")[:url]
+      list.update!(name: "Health stuff")
+
+      expect(entry("Health stuff")[:url]).to eq(was)
+    end
+
+    # A name of pure emoji parameterizes to nothing, which as a slug would make
+    # `/lists/` - the index again.
+    it "handles a name that would leave no slug at all" do
+      list = list!("💧")
+
+      expect(list.parameterized_name).to be_blank
+      expect(entry("💧")[:url]).to end_with("/lists/#{list.id}")
+    end
+
+    it "still carries the sections" do
+      list = list!("Grocery")
+      list.sections.create!(name: "Produce", color: "#ffffff")
+
+      expect(entry("Grocery")[:sections]).to eq(["Produce"])
+    end
+  end
 end

@@ -984,9 +984,16 @@ html.html-ctr-byte body {
 
   // A turn that wrote to long-term memory. `remember` and `forget` are silent
   // tools — nothing about them reaches the prose, which is deliberate — so the
-  // only sign the person's record just changed is this. Small and in the
-  // corner: it is a receipt, not an announcement, and it must not compete with
-  // what was actually said.
+  // only sign the person's record just changed is this. It is a receipt, not an
+  // announcement, and it must not compete with what was actually said.
+  //
+  // It sits ON the corner rather than inside it: the negative offsets straddle
+  // the bubble's 16px radius, so it reads as a stamp on the edge instead of a
+  // glyph competing with the first line of text for the same space. Nothing
+  // clips it — `.byte-thread` has 12px of side padding for it to sit in, and a
+  // later bubble paints over an earlier one, so it can't slide under the gap
+  // above. Bigger and fainter together: larger to be legible out at the edge,
+  // fainter so growing it doesn't make it louder.
   &.byte-msg-kept {
     position: relative;
 
@@ -994,11 +1001,11 @@ html.html-ctr-byte body {
       content: "\e28c"; // .ti-fae-brain
       font-family: "terminess";
       position: absolute;
-      top: 2px;
-      left: 6px;
-      font-size: 11px;
+      top: -6px;
+      left: -2px;
+      font-size: 13px;
       line-height: 1;
-      opacity: 0.45;
+      opacity: 0.3;
       pointer-events: none;
     }
   }

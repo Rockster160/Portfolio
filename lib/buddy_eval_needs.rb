@@ -129,6 +129,7 @@ module BuddyEvalNeeds
     celsius_today:        { label: "a Celsius logged today",       check: ->(u) { event_today(u, /celsius/i) } },
     sandwich_today:       { label: "a sandwich logged today",      check: ->(u) { event_today(u, /sandwich/i) } },
     oat_milk_listed:      { label: "oat milk on a list",           check: ->(u) { list_item(u, /oat milk/i) } },
+    grocery_list:         { label: "a grocery list",               check: ->(u) { u.lists.reload.any? { |l| l.name.to_s.match?(/grocer/i) } } },
     greenhouse_idea:      { label: "a stashed greenhouse idea",    check: ->(u) { stash(u, /greenhouse/i) } },
     wind_down_routine:    { label: "a wind-down routine",          check: ->(u) { BuddyRoutine.where(user: u).any? { |r| r.name.to_s.match?(/wind.?down/i) } } },
     bakkie_defined:       { label: "bakkie in the glossary",       check: ->(u) { u.chore_household && HouseholdGlossaryTerm.where(chore_household: u.chore_household).any? { |t| t.term.to_s.casecmp?("bakkie") } } },

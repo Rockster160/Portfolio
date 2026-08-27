@@ -48,28 +48,35 @@ module Buddy
     # in Turn could see no evidence for such a claim and stood ready to erase a
     # true sentence as unbacked.
     #
-    # Only `sort_stash` answers it so far, because only it can answer honestly:
-    # it knows whether the row actually moved. The rest return false meaning
-    # NOT REPORTED rather than nothing-happened, and `remember`/`forget`/
-    # `add_note` would each need to distinguish a write from a no-op before
-    # they could join in. Under-reporting is the safe direction: it leaves
-    # today's behaviour exactly as it was, where over-reporting would hand a
-    # fabricated claim a free pass.
+    # `sort_stash` answered first, and under-reporting was called the safe
+    # direction for the rest: it left behaviour unchanged, where over-reporting
+    # would hand a fabricated claim a free pass. That reasoning only held while
+    # the retraction needed a CLAIM to fire on. It doesn't — the `:commanded`
+    # arm infers the failure from the request being an imperative and never
+    # reads the reply for an assertion at all.
+    #
+    # Prod 4805, 27 Aug: "Note that my eye issue flared up badly on August
+    # 20th..." wrote BuddyMemory 117 five seconds later, and the reply saying
+    # so was replaced with "Nothing actually ran. Want me to have another go at
+    # it?" He had to ask a second time for a thing that was already saved. A
+    # write that reports nothing is indistinguishable from a turn that did
+    # nothing, and this is the half that knows.
+    #
+    # `set_mood` stays out: a face is not a change to the world, and a reply
+    # claiming an action must not be backed by having looked pleased about it.
     def call(conversation, name, args)
       user = conversation.user
       args = (args || {}).transform_keys(&:to_sym)
 
       case name.to_sym
-      when :sort_stash
-        Buddy::Stash.apply_sort(user, args, conversation: conversation)
-      else
-        case name.to_sym
-        when :set_mood then apply_mood(conversation, args[:expression])
-        when :add_note then apply_note(conversation, args[:fact])
-        when :remember then apply_remember(user, args[:fact], args[:expires_in])
-        when :forget   then apply_forget(user, args[:match])
-        end
+      when :sort_stash then Buddy::Stash.apply_sort(user, args, conversation: conversation)
+      when :add_note   then apply_note(conversation, args[:fact])
+      when :remember   then apply_remember(user, args[:fact], args[:expires_in])
+      when :forget     then apply_forget(user, args[:match])
+      when :set_mood
+        apply_mood(conversation, args[:expression])
         false
+      else false
       end
     rescue StandardError => e
       Rails.logger.warn("[Buddy::SideEffects] #{name} failed: #{e.class}: #{e.message}")
@@ -182,8 +189,11 @@ module Buddy
     # block (byte_conversations.buddy_memories). Per-conversation and
     # short-lived by nature ("keep this thread strictly work"); durable global
     # facts go through `[[remember:]]` instead. Fires silently.
-    def apply_note(conversation, body)
+    def apply_note(conversation, body) # rubocop:disable Naming/PredicateMethod -- it writes; `?` would imply a query
+      return false if body.to_s.strip.empty?
+
       Buddy::ConversationNotes.append(conversation, body)
+      true
     end
 
     # Writes a durable BuddyMemory row. Bounded to 500 chars (matches the model
@@ -194,9 +204,14 @@ module Buddy
     # fact that's only true for a while, so it self-prunes. Nil means durable.
     # Reinforcement: if we already hold this fact (near-duplicate), bump it
     # instead of storing a copy, so re-mentions keep it fresh and high.
-    def apply_remember(user, fact, expires_in=nil)
+    #
+    # Returns whether the fact is now HELD, which is what a reply saying so
+    # claims. A reinforced near-duplicate counts: the person asked for it to be
+    # remembered and it is remembered, and answering that with a retraction is
+    # the wrong fact twice over.
+    def apply_remember(user, fact, expires_in=nil) # rubocop:disable Naming/PredicateMethod -- it writes; `?` would imply a query
       fact = fact.to_s.strip
-      return if fact.empty?
+      return false if fact.empty?
 
       ttl = parse_duration(expires_in, user) || implied_ttl(fact, user)
 
@@ -210,7 +225,7 @@ module Buddy
         attrs[:content]    = fact.first(500) if elaborates?(fact, existing.content)
         attrs[:expires_at] = ttl if ttl
         existing.update_columns(attrs.merge(updated_at: Time.current)) if attrs.any?
-        return
+        return true
       end
 
       # `preference`, which is the kind that still ships inline in every prompt.
@@ -232,6 +247,7 @@ module Buddy
         expires_at:   ttl,
         last_used_at: Time.current,
       )
+      true
     end
 
     # A fact that says "today" in it is about today, whatever expiry the model
@@ -396,9 +412,13 @@ module Buddy
     # whose content contains the substring (case-insensitive). Cap the
     # damage at 5 rows per marker so a stray "forget everything" can't
     # nuke the whole history.
-    def apply_forget(user, body)
+    #
+    # Returns whether anything was actually let go. A `forget` that matched
+    # nothing is a no-op, and a reply saying it's gone is as unbacked as any
+    # other claim about a record that didn't move.
+    def apply_forget(user, body) # rubocop:disable Naming/PredicateMethod -- it writes; `?` would imply a query
       needle = body.to_s.strip
-      return if needle.empty?
+      return false if needle.empty?
 
       # Facts only, for the same reason find_similar_memory is: `drop_idea` is
       # how a held thought gets let go, and a substring "forget" that reached
@@ -409,7 +429,7 @@ module Buddy
       else
         scope.where("LOWER(content) LIKE ?", "%#{needle.downcase}%")
       end
-      matches.order(created_at: :desc).limit(5).destroy_all
+      matches.order(created_at: :desc).limit(5).destroy_all.any?
     end
   end
 end

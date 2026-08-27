@@ -822,11 +822,22 @@ module Buddy
       # the section NAMES ship - that's all the add/edit tools need to match.
       # Lists with no sections still appear (bare name) so Buddy knows the
       # roster of lists that exist.
+      #
+      # `url` ships because the alternative is a guess. `app_pages` carries
+      # `/lists`, the INDEX, and that was the only list link Buddy had - so
+      # prod 4831 answered "send me a link to my Doctor list" with
+      # `[Doctor!](https://ardesian.com/lists)`, which is a correct link to the
+      # wrong page and reads as a working one until it's tapped.
+      #
+      # BY ID, not by slug. `ListsController#set_list` takes either, and the
+      # manifest already builds `/lists/<id>` - but a slug is derived from the
+      # NAME, and a name gets renamed. A link Buddy handed over last week is
+      # still sitting in the thread, and the id is what keeps it working.
       def lists(user)
         return [] unless user.respond_to?(:ordered_lists)
 
         user.ordered_lists.includes(:sections).map { |list|
-          entry = { name: list.name }
+          entry = { name: list.name, url: Buddy::AppPages.url_for("/lists/#{list.id}") }
           section_names = list.sections.map(&:name).compact_blank
           entry[:sections] = section_names if section_names.any?
           entry

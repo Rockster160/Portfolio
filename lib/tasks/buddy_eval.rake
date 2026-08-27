@@ -933,6 +933,24 @@ BUDDY_EDGE_PROBES = [
                   "time. Nothing here groups by food type or has pictures, and both " \
                   "of those were in her first two messages",
   },
+  # --- the answer is the link, and it has to be the RIGHT link -------------
+  {
+    case:         "prod 4831",
+    say:          "can you send me a link to my grocery list?",
+    # Nothing to call: handing over a link is prose, and the retraction guard
+    # standing down on this shape is half the fix. The other half is the URL.
+    tool:         :none,
+    needs:        :grocery_list,
+    # Anything AFTER `/lists/` is the whole assertion, and the old behaviour
+    # has nothing there: an index link is `.../lists` and stops. Deliberately
+    # NOT a `never_reply` on the bare index - offering both is a fine answer,
+    # and a harness that fails one is reporting a problem nobody has.
+    expect_reply: %r{/lists/\d+},
+    note:         "answered with the list INDEX - `[Doctor!](https://ardesian.com/lists)` - " \
+                  "because app_pages carried the index and nothing carried the " \
+                  "list's own page. A wrong link looks exactly like a working " \
+                  "one until it's tapped",
+  },
   {
     case: "Whisper sleeps twice a day",
     say:  "let me know when Whisper goes to bed",

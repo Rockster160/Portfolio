@@ -552,6 +552,134 @@ RSpec.describe Buddy::GPT::Turn do
       end
     end
 
+    # Prod 4829, 27 Aug: "Can you send me a link to my Doctor list?" was
+    # answered with the link and then had the answer replaced by UNDONE_BODY.
+    # The :commanded arm reads the REQUEST, and `can you send` is an imperative
+    # - but the reply IS the delivery, so there was never a call to miss.
+    describe "an order to hand something over" do
+      it "leaves the answer standing when the reply is the delivery" do
+        client = run([{ text: "Yep! Here you go: [Doctor!](https://ardesian.com/lists/doctor)" }])
+
+        expect(reply.body).to eq("Yep! Here you go: [Doctor!](https://ardesian.com/lists/doctor)")
+        expect(reply.metadata["retracted_claim"]).to be_nil
+        # ...and it doesn't burn a corrective round telling the model to call a
+        # tool for something no tool does.
+        expect(client.calls.length).to eq(1)
+      end
+
+      it "leaves the other ways of asking to be told something alone" do
+        [
+          "Can you show me what's on the Grocery list?",
+          "tell me what I've got left today",
+          "give me the address for tomorrow",
+          "read me the last few off Before Bed",
+        ].each do |asked|
+          run([{ text: "Sure - milk, eggs, and bread." }], text: asked)
+
+          expect(reply.metadata["retracted_claim"]).to be_nil, "wrongly retracted: #{asked}"
+        end
+      end
+
+      # `me` is the whole carve-out. A delivery aimed at somebody ELSE really
+      # does need a tool, and nothing about that changes.
+      it "still retracts a delivery to someone else that never happened" do
+        run([{ text: "Sent! She'll see it in a sec." }], text: "tell Chelsea I'm running late")
+
+        expect(reply.metadata["retracted_claim"]).to be(true)
+      end
+
+      # The arm being stood down is the one that INFERS a failure from the
+      # request. A reply that lies outright is still read for the claim.
+      it "still retracts a lie about the delivery itself" do
+        run([{ text: "I've sent that over to your phone." }], text: "can you send me the address")
+
+        expect(reply.body).to eq(described_class::SILENT_BODY)
+        expect(reply.metadata["retracted_claim"]).to be(true)
+      end
+    end
+
+    # Prod 4805, 27 Aug. "Note that my eye issue flared up badly on August
+    # 20th..." wrote BuddyMemory 117 five seconds later, and the reply saying
+    # so was replaced with UNDONE_BODY - so he asked a second time for a thing
+    # that was already saved. `remember` reported false unconditionally, which
+    # is indistinguishable from a turn that did nothing.
+    describe "a silent tool that really wrote something" do
+      it "counts a remembered fact as having acted" do
+        run(
+          [{ tool_calls: [{ name: :remember, arguments: { "fact" => "Rocco's eye flared up on 20 Aug" } }], text: "Got it, noting that down." }],
+          text: "Note that my eye issue flared up badly on August 20th",
+        )
+
+        expect(reply.body).to eq("Got it, noting that down.")
+        expect(reply.metadata["retracted_claim"]).to be_nil
+        expect(BuddyMemory.where(user: user).where("content LIKE ?", "%eye flared%")).to exist
+      end
+
+      # The nudge would have opened "you called no tool, so nothing happened",
+      # which is untrue once the row is written - and the model then has to
+      # reconcile a correct reply with being told it was wrong.
+      it "does not send the nudge to a turn that wrote one" do
+        client = run(
+          [
+            { tool_calls: [{ name: :remember, arguments: { "fact" => "Rocco's eye flared up on 20 Aug" } }] },
+            { text: "Got it, noting that down." },
+          ],
+          text: "Note that my eye issue flared up badly on August 20th",
+        )
+
+        nudged = client.calls.any? { |c| c.input.any? { |i| i[:content].to_s.include?("nothing happened") } }
+        expect(nudged).to be(false)
+      end
+
+      # A near-duplicate is reinforced rather than stored twice, and the fact
+      # is held either way - which is what the sentence claims.
+      it "counts a reinforced fact too" do
+        Buddy::SideEffects.call(convo, :remember, { fact: "Rocco takes his coffee black" })
+
+        run(
+          [{ tool_calls: [{ name: :remember, arguments: { "fact" => "Rocco takes his coffee black" } }], text: "Yep, that's saved." }],
+          text: "remember I take my coffee black",
+        )
+
+        expect(reply.body).to eq("Yep, that's saved.")
+        expect(reply.metadata["retracted_claim"]).to be_nil
+      end
+
+      it "counts a fact that was actually let go" do
+        Buddy::SideEffects.call(convo, :remember, { fact: "Rocco is allergic to shellfish" })
+
+        run(
+          [{ tool_calls: [{ name: :forget, arguments: { "match" => "shellfish" } }], text: "Done, dropped it." }],
+          text: "forget that I'm allergic to shellfish",
+        )
+
+        expect(reply.body).to eq("Done, dropped it.")
+        expect(reply.metadata["retracted_claim"]).to be_nil
+      end
+
+      # The mirror. A forget that matched nothing moved nothing, and a reply
+      # saying it's gone is as unbacked as any other claim.
+      it "does not count a forget that matched nothing" do
+        run(
+          [{ tool_calls: [{ name: :forget, arguments: { "match" => "nothing we hold" } }], text: "Done, dropped it." }],
+          text: "forget that I'm allergic to shellfish",
+        )
+
+        expect(reply.metadata["retracted_claim"]).to be(true)
+      end
+
+      # A face is not a change to the world, and a claim about an action must
+      # never be backed by having looked pleased about it.
+      it "does not count a mood" do
+        run(
+          [{ tool_calls: [{ name: :set_mood, arguments: { "expression" => "excited" } }], text: "Done. Fan's on high now." }],
+          text: "set the fan to high",
+        )
+
+        expect(reply.metadata["retracted_claim"]).to be(true)
+      end
+    end
+
     # Prod 4621/4623, 25 Aug. "Did you even try?" got "There's a camera snapshot
     # call in the recent actions, and it came back clean", and then "I did try
     # now" - with no Camera Snapshot execution within four hours either side.
@@ -713,6 +841,71 @@ RSpec.describe Buddy::GPT::Turn do
       expect(client.calls.length).to eq(3)
       expect(client.calls[1].input.any? { |i| i[:content].to_s.include?("nothing happened") }).to be(true)
       expect(reply.body).to eq("Yep, fan's on high.")
+    end
+
+    # `input` IS the model's whole context - `store: false`, no
+    # `previous_response_id` - and the round's own text was never appended to
+    # it. So the corrective round opened on "the reply you just wrote" with
+    # that reply nowhere in sight. It saw two items: the person's message, and
+    # a critique of something invisible.
+    describe "what the corrective round can see" do
+      it "hands the draft back so the critique has something to point at" do
+        client = run([
+          { text: "Done. Fan's on high now." },
+          { tool_calls: [{ name: :log_event, arguments: { "name" => "Fan high" } }] },
+          { text: "Yep, fan's on high." },
+        ])
+
+        expect(client.calls[1].input.any? { |i| i[:content].to_s.include?("Done. Fan's on high now.") }).to be(true)
+      end
+
+      # Never as an assistant turn: that reads as already delivered, and the
+      # next round writes a continuation the person only sees the tail of.
+      it "marks it as a draft that was not sent, from the developer" do
+        client = run([
+          { text: "Done. Fan's on high now." },
+          { text: "Yep, fan's on high." },
+        ])
+
+        carrying = client.calls[1].input.detect { |i| i[:content].to_s.include?("Done. Fan's on high now.") }
+
+        expect(carrying[:role]).to eq(:developer)
+        expect(carrying[:content]).to include("NOT been sent")
+        expect(client.calls[1].input.none? { |i| i[:role] == :assistant }).to be(true)
+      end
+
+      # The last round wins outright, so a draft that answered three things and
+      # fumbled one used to lose the three along with it.
+      it "tells it to keep the parts that were right" do
+        client = run([
+          { text: "Done. Fan's on high now." },
+          { text: "Yep, fan's on high." },
+        ])
+
+        expect(client.calls[1].input.any? { |i| i[:content].to_s.squish.include?("carry over the parts of it that were right") }).to be(true)
+      end
+
+      # A percent sign in the draft would blow up `format` if the draft were
+      # the template rather than the argument.
+      it "survives a draft full of format tokens" do
+        client = run([
+          { text: "Battery's at 80%, and I've set %<it>s going." },
+          { text: "Sorted." },
+        ])
+
+        expect(client.calls[1].input.any? { |i| i[:content].to_s.include?("80%") }).to be(true)
+      end
+
+      it "sends no draft item when the round said nothing at all" do
+        client = run([
+          { text: "Here's what you've got." },
+          { text: "" },
+          { tool_calls: [{ name: :list_reminders, arguments: {} }] },
+          { text: "Two on the books." },
+        ])
+
+        expect(client.calls[1].input.count { |i| i[:content].to_s.include?("draft, not sent") }).to eq(1)
+      end
     end
 
     it "retracts when the corrective round still calls nothing" do
