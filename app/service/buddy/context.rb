@@ -19,6 +19,11 @@ module Buddy
     # this particular day — see notable?.
     ROUTINE_CADENCES = ["daily", "every weekday"].freeze
 
+    # One link for the whole `lists` section, filled in per row from `id`. See
+    # `lists` below for why it is one template rather than a url on every row,
+    # and why it carries the host.
+    LIST_URL_TEMPLATE = "%<host>s/lists/{id}".freeze
+
     # Sections belonging to a feature this person doesn't have are dropped
     # rather than returned empty — an empty `chores_pending_today` reads as "you
     # have nothing due today", which is a different (and wrong) statement from
@@ -840,7 +845,7 @@ module Buddy
       # Lists with no sections still appear (bare name) so Buddy knows the
       # roster of lists that exist.
       #
-      # `url` ships because the alternative is a guess. `app_pages` carries
+      # A link ships because the alternative is a guess. `app_pages` carries
       # `/lists`, the INDEX, and that was the only list link Buddy had - so
       # prod 4831 answered "send me a link to my Doctor list" with
       # `[Doctor!](https://ardesian.com/lists)`, which is a correct link to the
@@ -850,11 +855,28 @@ module Buddy
       # manifest already builds `/lists/<id>` - but a slug is derived from the
       # NAME, and a name gets renamed. A link Buddy handed over last week is
       # still sitting in the thread, and the id is what keeps it working.
+      #
+      # ONE `url` TEMPLATE for the section, not an absolute url per row. This
+      # shipped as a url on all 147 rows, of which the model uses exactly one:
+      # 9,961 bytes to say `https://ardesian.com/lists/` a hundred and
+      # forty-seven times, against 1,767 bytes of actual list names. The
+      # template plus an id per row is 5,591 - the same information, 44%
+      # smaller, on every turn that reads this section.
+      #
+      # The template sits INSIDE the section rather than in `app_pages`,
+      # because the two are fetched independently and a model holding the ids
+      # with the host somewhere it didn't ask for is a model that writes
+      # `/lists/151` - which is relative, resolves against the `byte.`
+      # subdomain, and 404s without saying so.
       def lists(user)
-        return [] unless user.respond_to?(:ordered_lists)
+        return { url: nil, items: [] } unless user.respond_to?(:ordered_lists)
 
+        { url: format(LIST_URL_TEMPLATE, host: Buddy::AppPages.host), items: list_items(user) }
+      end
+
+      def list_items(user)
         user.ordered_lists.includes(:sections).map { |list|
-          entry = { name: list.name, url: Buddy::AppPages.url_for("/lists/#{list.id}") }
+          entry = { id: list.id, name: list.name }
           section_names = list.sections.map(&:name).compact_blank
           entry[:sections] = section_names if section_names.any?
           entry
@@ -1051,6 +1073,14 @@ module Buddy
       # is reachable by supplying `add name::Transaction` as data. We ship the
       # FULL listener (not just the scope) because that pattern is what tells
       # Buddy which data the task is filtering on.
+      #
+      # And the full listener ONLY. A `scope` field rode alongside it, which was
+      # `listener.split(":").first` - always a prefix of the string printed
+      # immediately after it, and on 24 of the 60 rows that ship, the entire
+      # string a second time (a listener with no colon is its own scope:
+      # `goodMorning`, `watch-action`, `SyncOfflineTriggers`). 1,307 bytes of
+      # the section's 10,127 to repeat what was already there. Nothing read it -
+      # `ToolContext#resolve_jil_trigger` computes its own, off the row.
       def jil_triggers(user)
         return [] unless defined?(Task)
 
@@ -1062,7 +1092,6 @@ module Buddy
             {
               id:          id,
               name:        name,
-              scope:       listener.to_s.strip.split(":").first,
               listener:    listener.to_s.strip,
               description: desc.to_s.strip.presence,
             }.compact

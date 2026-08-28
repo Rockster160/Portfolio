@@ -622,40 +622,92 @@ RSpec.describe Buddy::Context do
   # Prod 4831, 27 Aug: "send me a link to my Doctor list" came back as
   # `[Doctor!](https://ardesian.com/lists)` - the index, because `app_pages` was
   # the only place a list URL existed and it only has the index.
-  describe "a list's own link" do
+  # `scope` was `listener.split(":").first` — always a prefix of the listener
+  # shipped right beside it, and on 24 of the 60 rows that reach prod, the whole
+  # string twice. The prompt didn't even name it correctly: it described the
+  # entry as `{ id, name, scope, description }`, which named the derived field
+  # and left out the real one.
+  describe "a Jil trigger's listener" do
     let(:user) { create(:user) }
 
     def entry(name)
-      described_class.send(:lists, user.reload).detect { |l| l[:name] == name }
+      described_class.send(:jil_triggers, user.reload).detect { |t| t[:name] == name }
+    end
+
+    # `buddy_visible` is a scope, not a column: enabled + active + buddy_enabled.
+    def task!(name, listener)
+      Task.create!(user: user, name: name, listener: listener, code: "", buddy_enabled: true)
+    end
+
+    it "ships the full listener, which is what says what the task filters on" do
+      task!("Transactions", "event:add name::Transaction")
+
+      expect(entry("Transactions")[:listener]).to eq("event:add name::Transaction")
+    end
+
+    it "does not ship a scope alongside it" do
+      task!("Transactions", "event:add name::Transaction")
+
+      expect(entry("Transactions")).not_to have_key(:scope)
+    end
+
+    # The 40% case: a listener with no colon IS its own scope, so the field was
+    # the same string printed a second time.
+    it "does not repeat a listener that has no scope prefix" do
+      task!("Good Morning", "goodMorning")
+
+      expect(entry("Good Morning").values).to contain_exactly(
+        entry("Good Morning")[:id], "Good Morning", "goodMorning"
+      )
+    end
+  end
+
+  describe "a list's own link" do
+    let(:user) { create(:user) }
+
+    def section
+      described_class.send(:lists, user.reload)
+    end
+
+    def entry(name)
+      section[:items].detect { |l| l[:name] == name }
     end
 
     def list!(name)
       List.create!(name: name).tap { |list| user.user_lists.create!(list: list, is_owner: true) }
     end
 
-    it "carries an absolute url built from the list's id" do
+    # ONE template for the section rather than a url on all 147 rows, of which
+    # the model uses exactly one. Same information, 44% fewer bytes.
+    it "carries one absolute url template for the whole section" do
+      expect(section[:url]).to eq("#{Buddy::AppPages.host}/lists/{id}")
+    end
+
+    # Absolute is the whole point. Byte is on its own subdomain, so a template
+    # starting at `/` would produce links that resolve against `byte.` and 404
+    # without saying so.
+    it "makes the template absolute, host and all" do
+      expect(section[:url]).to start_with("http")
+    end
+
+    it "carries the id every row needs to fill it in" do
       list = list!("Doctor!")
 
-      expect(entry("Doctor!")[:url]).to eq("#{Buddy::AppPages.host}/lists/#{list.id}")
+      expect(entry("Doctor!")[:id]).to eq(list.id)
     end
 
     # The id rather than the slug, because a slug is derived from the name and
-    # a name gets renamed - and the link is already sitting in the thread.
-    it "keeps working after the list is renamed" do
-      list = list!("Doctor!")
-      was  = entry("Doctor!")[:url]
-      list.update!(name: "Health stuff")
-
-      expect(entry("Health stuff")[:url]).to eq(was)
-    end
-
-    # A name of pure emoji parameterizes to nothing, which as a slug would make
-    # `/lists/` - the index again.
-    it "handles a name that would leave no slug at all" do
+    # a name gets renamed - and the link is already sitting in the thread. A
+    # pure-emoji name parameterizes to nothing at all, which as a slug would
+    # make `/lists/`, the index again.
+    it "keeps the same link after the list is renamed" do
       list = list!("💧")
-
       expect(list.parameterized_name).to be_blank
-      expect(entry("💧")[:url]).to end_with("/lists/#{list.id}")
+
+      was = entry("💧")[:id]
+      list.update!(name: "Water log")
+
+      expect(entry("Water log")[:id]).to eq(was)
     end
 
     it "still carries the sections" do
@@ -663,6 +715,14 @@ RSpec.describe Buddy::Context do
       list.sections.create!(name: "Produce", color: "#ffffff")
 
       expect(entry("Grocery")[:sections]).to eq(["Produce"])
+    end
+
+    # A row carrying its own absolute url is what this replaced; leaving one
+    # behind would put the repetition straight back.
+    it "puts no url on the rows themselves" do
+      list!("Grocery")
+
+      expect(entry("Grocery")).not_to have_key(:url)
     end
   end
 end

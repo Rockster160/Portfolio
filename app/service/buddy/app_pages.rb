@@ -22,7 +22,7 @@ module Buddy
       { name: :chores_balance, path: "/chores/balance",  about: "Pebble balance and what's been earned" },
       { name: :chores_history, path: "/chores/history",  about: "What's been completed, and by whom" },
       { name: :links,          path: "/chores/links",    about: "Record links - which record follows which. Add, edit, and remove them here" },
-      { name: :lists,          path: "/lists",           about: "The index of every list. ONE list has its own url on its entry in the `lists` block - link that, not this" },
+      { name: :lists,          path: "/lists",           about: "The index of every list. ONE list is linked from the `lists` block instead - its `url` template with that list's id - so link that, not this" },
       { name: :agenda,         path: "/agenda",          about: "The calendar and agenda items" },
       { name: :prompts,        path: "/prompts",         about: "Survey and question history" },
       { name: :jil_tasks,      path: "/jil",             about: "Jil automation tasks - the editor" },

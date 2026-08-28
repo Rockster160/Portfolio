@@ -39,7 +39,7 @@ RSpec.describe "Buddy list sections + completion notes" do
       create(:section, list: groceries, name: "Dairy",   sort_order: 1)
       create(:list, user: user, name: "Todos") # no sections
 
-      lists = Buddy::Context.send(:lists, user)
+      lists = Buddy::Context.send(:lists, user)[:items]
       groceries_entry = lists.find { |l| l[:name] == "Groceries" }
       todos_entry     = lists.find { |l| l[:name] == "Todos" }
 

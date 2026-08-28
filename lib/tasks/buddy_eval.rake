@@ -945,7 +945,14 @@ BUDDY_EDGE_PROBES = [
     # has nothing there: an index link is `.../lists` and stops. Deliberately
     # NOT a `never_reply` on the bare index - offering both is a fine answer,
     # and a harness that fails one is reporting a problem nobody has.
-    expect_reply: %r{/lists/\d+},
+    #
+    # The HOST is in the pattern on purpose. The `lists` section stopped
+    # carrying an absolute url per row on 28 Aug and now carries one template
+    # for the section, so the model fills the id in itself - and the way that
+    # goes wrong is `/lists/151`, which matches a bare `/lists/\d+` perfectly,
+    # looks right in the message, and resolves against the `byte.` subdomain
+    # into a 404. The composition is the new risk; this is what watches it.
+    expect_reply: %r{https?://[^/\s]+/lists/\d+},
     note:         "answered with the list INDEX - `[Doctor!](https://ardesian.com/lists)` - " \
                   "because app_pages carried the index and nothing carried the " \
                   "list's own page. A wrong link looks exactly like a working " \
