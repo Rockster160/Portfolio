@@ -84,6 +84,17 @@ class TeslaCacheStore
     rl: :TpmsPressureRl, rr: :TpmsPressureRr,
   }.freeze
 
+  # Tesla stamps each state section of a vehicle_data response itself. Those
+  # stamps are the only endpoint timestamps that describe the DATA — the poll's
+  # own wall-clock stamp describes the REQUEST, and advances on every hourly
+  # poll whether or not the car said anything new.
+  ENDPOINT_TS_PATHS = [
+    %i[charge_state timestamp],
+    %i[climate_state timestamp],
+    %i[drive_state timestamp],
+    %i[vehicle_state timestamp],
+  ].freeze
+
   class << self
     def record_telemetry(payload)
       store_telemetry(payload)
@@ -203,7 +214,7 @@ class TeslaCacheStore
         tires:      compose_tires(ep, tel, sec_ts),
         odometer:   compose_odometer(ep, tel, sec_ts),
 
-        updated_at: max_ts(endpoint_cache_hash[:timestamp], *sec_ts.values),
+        updated_at: max_ts(*endpoint_data_ts(ep), *sec_ts.values),
       }.compact
     end
 
@@ -421,6 +432,16 @@ class TeslaCacheStore
     end
 
     def max_ts(*values) = values.compact.max
+
+    # `updated_at` answers "when did Tesla last tell us something", so only data
+    # that actually arrived may move it. A poll that reaches Tesla and comes back
+    # with the same asleep-car snapshot is not an update, and stamping it with
+    # the request clock made a stream that had been dead for 18 hours read as
+    # minutes old. Telemetry's `section_ts` already means "a record arrived";
+    # these are the endpoint's equivalent.
+    def endpoint_data_ts(ep)
+      ENDPOINT_TS_PATHS.map { |path| ep.dig(*path) }
+    end
 
     # True when the telemetry section is at least as fresh as the endpoint
     # snapshot. Nil telemetry ts (no push received for this section) → endpoint

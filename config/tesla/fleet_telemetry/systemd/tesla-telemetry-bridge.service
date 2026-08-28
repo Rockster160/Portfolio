@@ -9,7 +9,11 @@ User=deploy
 Group=deploy
 WorkingDirectory=/home/deploy/apps/portfolio/current
 
-ExecStart=/usr/bin/ruby bin/tesla_telemetry_bridge.rb
+# Ubuntu 24.04 ships no /usr/bin/ruby, so the interpreter comes from deploy's
+# rbenv. The version is pinned the same way puma_portfolio_production.service
+# pins it; a Ruby upgrade has to touch both. Called directly rather than via
+# `rbenv exec` because the bridge is stdlib-only — no gems, no bundler.
+ExecStart=/home/deploy/.rbenv/versions/3.2.2/bin/ruby bin/tesla_telemetry_bridge.rb
 
 Environment=TELEMETRY_FEED=/var/log/tesla-telemetry/feed.jsonl
 Environment=TELEMETRY_WEBHOOK=http://localhost:3141/webhooks/tesla_telemetry

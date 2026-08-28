@@ -287,4 +287,50 @@ RSpec.describe TeslaCacheStore do
       expect(car_data.dig(:location, :name)).to eq("Salt Lake City")
     end
   end
+
+  # `updated_at` is what the dashboard renders as "x ago". It has to mean "when
+  # Tesla last told us something" — a poll that asks and learns nothing is not
+  # an update, and reporting it as one hid an 18-hour telemetry outage behind a
+  # timestamp that never read older than the hourly poll interval.
+  describe "updated_at freshness" do
+    it "uses Tesla's own section timestamps, not the clock at poll time" do
+      travel_to(Time.zone.at(2_000)) {
+        described_class.record_endpoint(climate_state: { is_climate_on: true, timestamp: 1_000 })
+      }
+      expect(car_data[:updated_at]).to eq(1_000)
+    end
+
+    it "does not advance when a later poll returns the same stale snapshot" do
+      snapshot = { charge_state: { battery_level: 80, battery_range: 200.0, timestamp: 1_000 } }
+      described_class.record_endpoint(snapshot)
+      travel_to(Time.zone.at(9_999)) { described_class.record_endpoint(snapshot) }
+      expect(car_data[:updated_at]).to eq(1_000)
+    end
+
+    it "advances when the poll comes back with a newer section timestamp" do
+      described_class.record_endpoint(charge_state: { battery_level: 80, timestamp: 1_000 })
+      described_class.record_endpoint(charge_state: { battery_level: 81, timestamp: 5_000 })
+      expect(car_data[:updated_at]).to eq(5_000)
+    end
+
+    it "takes the newest section when the poll's sections disagree" do
+      described_class.record_endpoint(
+        charge_state:  { battery_level: 80, timestamp: 1_000 },
+        climate_state: { is_climate_on: true, timestamp: 7_000 },
+        drive_state:   { shift_state: "P", timestamp: 3_000 },
+      )
+      expect(car_data[:updated_at]).to eq(7_000)
+    end
+
+    it "still counts an arriving telemetry record as an update" do
+      described_class.record_endpoint(charge_state: { battery_level: 80, timestamp: 1_000 })
+      travel_to(Time.zone.at(8)) { described_class.record_telemetry(HvacPower: "HvacPowerStateOn") }
+      expect(car_data[:updated_at]).to eq(8_000)
+    end
+
+    it "reports no freshness at all rather than a fake one when nothing has arrived" do
+      described_class.record_endpoint(state: "online", vin: "5YJ3E1EA9NF355991")
+      expect(car_data).not_to have_key(:updated_at)
+    end
+  end
 end

@@ -176,7 +176,10 @@ module TeslaCommand
     end
 
     res = @response # Local variable since modules share ivars
-    Jarvis.ping(@response) unless quick
+    # Say, not ping. A car command is either something the person just asked for
+    # out loud or automation doing its job — neither is worth a push. Matches
+    # how Jil::Methods::Tesla#announce already reports every command it sends.
+    Jarvis.say(@response) unless quick
     TeslaCommandWorker.perform_async(cmd.to_s, opt&.to_s) if quick && !@cancel
     @cancel = false
     res

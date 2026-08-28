@@ -184,7 +184,23 @@ The minimum reproducible setup is steps 1–7 above plus:
 
 - Same domain on the new server with its own LE cert
 - Same Rails deploy at `/home/deploy/apps/portfolio/current`
-- Re-run `Oauth::TeslaApi.me.request_telemetry` to point Tesla at the new server
+
+Nothing needs re-registering with Tesla as long as the hostname is unchanged —
+the config Tesla holds names `ardesian.com:4443`, so DNS carries it over and the
+car reconnects on its own. `Oauth::TeslaApi.me.request_telemetry` is only for a
+change of hostname or of the requested field set.
+
+Two things bit the Aug 2026 move to Ubuntu 24.04 that steps 1–7 don't mention:
+
+- **UFW.** It's active on the new box and only allows 22/80/443, so step 7 is
+  mandatory now, not conditional.
+- **There is no `/usr/bin/ruby`.** 24.04 ships no system Ruby, so the bridge
+  unit runs deploy's rbenv interpreter by absolute path.
+
+Stop `fleet-telemetry` on the old server once the new one is receiving. The car
+holds a long-lived TLS connection, so it keeps feeding the old box across the
+cutover — where the bridge POSTs into a stopped Rails and the records are lost.
+That is what "telemetry stopped working" looks like.
 
 ## Troubleshooting
 
