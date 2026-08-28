@@ -1171,6 +1171,58 @@ module Buddy
         body
       end
 
+      # A high or a low that's in the briefing and is the WRONG NUMBER.
+      #
+      # `with_weather` above only fires when there is no temperature in the
+      # body at all, so a line with the right shape and a wrong figure walks
+      # straight through it. Prod 4790, 27 Aug: the seed said "currently 70°F
+      # ... high 93°F / low 69°F" and the briefing said "High of 93°F today,
+      # low of 70°F" - it printed the CURRENT temperature as the low, which is
+      # the one confusion the three figures sitting together invite. The
+      # readback at the end of the seed names this exact line ("The high and
+      # the low are in it") and it still went out wrong.
+      #
+      # The number is corrected in place rather than a second weather sentence
+      # appended, which is what `with_weather` would have done: two lines of
+      # figures disagreeing with each other is worse than the one that was
+      # wrong, because now neither can be trusted.
+      #
+      # Deliberately narrow. It only touches digits immediately governed by the
+      # word `high` or `low`, so a temperature quoted anywhere else in the
+      # message is left alone, and it does nothing at all when the figure is
+      # already right.
+      #
+      # The trailing `(?!s)` is what keeps "in the low 70s" out of it. That is
+      # a BAND, not the day's low, and rewriting it to "low 69s" would turn a
+      # true sentence into a broken one - the one way a repair like this can
+      # cost more than the miss it fixes.
+      HIGH_FIGURE_RX = /\b(high)(\s+(?:of|at|around|near|about)\s+|\s+)(\d{1,3})(?!\d|s)/i
+      LOW_FIGURE_RX  = /\b(low)(\s+(?:of|at|around|near|about)\s+|\s+)(\d{1,3})(?!\d|s)/i
+
+      def with_corrected_temperatures(body)
+        return body unless today_briefing?
+        return body unless Buddy::TodayBriefing.weather_ordered?(@inbound.body.to_s)
+        return body if body.blank?
+
+        figures = WeatherService.today_figures(user: @user)
+        return body if figures.blank?
+
+        body = correct_figure(body, HIGH_FIGURE_RX, figures[:high])
+        correct_figure(body, LOW_FIGURE_RX, figures[:low])
+      rescue StandardError => e
+        Rails.logger.warn("[Buddy::GPT::Turn] temperature correction failed: #{e.class}: #{e.message}")
+        body
+      end
+
+      def correct_figure(body, regexp, actual)
+        return body if actual.blank?
+
+        body.gsub(regexp) { |match|
+          said = Regexp.last_match(3)
+          said.to_i == actual.to_i ? match : "#{Regexp.last_match(1)}#{Regexp.last_match(2)}#{actual}"
+        }
+      end
+
       # The week's flagged days the briefing was handed and didn't say.
       #
       # See Buddy::TodayBriefing.week_line. The half of the weather rule that
@@ -1189,6 +1241,32 @@ module Buddy
         "#{body.rstrip}\n\n#{line}"
       rescue StandardError => e
         Rails.logger.warn("[Buddy::GPT::Turn] week weather fallback failed: #{e.class}: #{e.message}")
+        body
+      end
+
+      # Today's Alpine rain hours the briefing was handed and didn't give.
+      #
+      # See Buddy::TodayBriefing.rain_hours_line. The third piece of the same
+      # weather rule to need a fallback, and the one whose instruction in the
+      # seed is the most literal of the three.
+      #
+      # Alpine is Rocco's alone (Buddy::TodayBriefing.alpine_week_block), so
+      # this asks PlungeAdvisor rather than the user - off-prod, for anyone
+      # else, or on a day with no rain in the canyon, it hands back nothing and
+      # the repair doesn't run.
+      def with_rain_hours(body)
+        return body unless today_briefing?
+        return body unless @user&.me?
+
+        windows = Buddy::PlungeAdvisor.today_rain_windows(@user)
+        return body if Buddy::TodayBriefing.rain_hours_said?(body, windows)
+
+        line = Buddy::TodayBriefing.rain_hours_line(windows)
+        return body if line.blank?
+
+        "#{body.rstrip}\n\n#{line}"
+      rescue StandardError => e
+        Rails.logger.warn("[Buddy::GPT::Turn] rain hours fallback failed: #{e.class}: #{e.message}")
         body
       end
 
@@ -1863,7 +1941,16 @@ module Buddy
         body = display_body(apply_leading_mood(outcome[:text]))
         body = without_briefing_claim(body)
         body = without_empty_chore_note(body)
-        body = with_lifted_greeting(with_greeting(with_leave_times(with_week_weather(with_weather(body)))))
+        # The weather repairs run today's figures first, then today's hours,
+        # then the week, so what gets appended reads in the order a person
+        # would say it. Each one only fills its own silence; see
+        # Buddy::TodayBriefing.
+        body = with_weather(body)
+        body = with_corrected_temperatures(body)
+        body = with_rain_hours(body)
+        body = with_week_weather(body)
+        body = with_leave_times(body)
+        body = with_lifted_greeting(with_greeting(body))
         # Scrubbing can empty a reply outright: on prod 4202 the form marker WAS
         # the whole body. A blank bubble is worse than the marker was - it reads
         # as Buddy having nothing to say to something they typed - so the turn

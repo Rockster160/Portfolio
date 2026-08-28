@@ -267,6 +267,58 @@ RSpec.describe Buddy::GPT::ContextTool do
       end
     end
 
+    # Rocco, 2026-08-28: "We don't want Byte to include all of the every-day
+    # reminders in the briefing as it fills it with extra text that's not
+    # needed." The calendar half of the day has always been narrowed to the
+    # exceptions; the reminder half never was, so the same standing nudges came
+    # back every morning with a clock time on each.
+    describe "the standing daily nudges" do
+      def reminder_bodies(tool)
+        rows = JSON.parse(tool.call({ "sections" => ["upcoming_reminders"] }))["upcoming_reminders"]
+        rows.to_a.pluck("body")
+      end
+
+      before do
+        BuddyReminder.create!(user: user, byte_conversation: convo, kind: :reminder,
+                              body: "Do Dishes.", fire_at: 4.hours.from_now,
+                              recurrence: { "freq" => "daily", "at" => "15:00" })
+        BuddyReminder.create!(user: user, byte_conversation: convo, kind: :reminder,
+                              body: "Stand up and stretch.", fire_at: 5.hours.from_now,
+                              recurrence: { "freq" => "weekdays", "at" => "11:00" })
+        BuddyReminder.create!(user: user, byte_conversation: convo, kind: :reminder,
+                              body: "Water the ferns.", fire_at: 6.hours.from_now,
+                              recurrence: { "freq" => "weekly", "at" => "18:00", "by_day" => ["sunday"] })
+        BuddyReminder.create!(user: user, byte_conversation: convo, kind: :reminder,
+                              body: "Call the vet back.", fire_at: 7.hours.from_now)
+      end
+
+      it "leaves a daily one out of the briefing" do
+        expect(reminder_bodies(briefing)).not_to include("Do Dishes.")
+      end
+
+      it "leaves an every-weekday one out too" do
+        expect(reminder_bodies(briefing)).not_to include("Stand up and stretch.")
+      end
+
+      # The whole point of the cut. A weekly or monthly nudge is exactly the
+      # thing somebody doesn't have top of mind, which is what makes it news.
+      it "keeps a weekly one, which is not something anybody knows cold" do
+        expect(reminder_bodies(briefing)).to include("Water the ferns.")
+      end
+
+      it "keeps a one-off" do
+        expect(reminder_bodies(briefing)).to include("Call the vet back.")
+      end
+
+      # "What reminders do I have?" and "move the dishes one to 9" both need
+      # the row. The narrowing is the briefing's, not the person's.
+      it "hands every one of them over on an ordinary turn" do
+        expect(reminder_bodies(tool)).to include(
+          "Do Dishes.", "Stand up and stretch.", "Water the ferns.", "Call the vet back."
+        )
+      end
+    end
+
     # Prod 3954: "a very open day ahead, with nothing pressing" at 8:30, with
     # two reminders due at 9:00 and one at 10:00. The seed said which reminders
     # to leave OUT and never said to go and get them, so a briefing that didn't

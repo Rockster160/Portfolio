@@ -254,15 +254,84 @@ RSpec.describe "schedule_reminder auto-run" do
 
       # A daily that went off this morning and a live one-off tonight can share
       # a word; the one still coming is what they mean.
+      #
+      # `last_fired_at` is stamped alongside `fired_at` here because
+      # Buddy::ReminderFirer stamps both on a one-shot. Without it this passed
+      # for a reason production never reproduces, and it is the exact row the
+      # just-rang tie-break below has to NOT pick.
       it "prefers a still-pending match over a fired one" do
         fired = existing!("Water the tomatoes", 20.minutes.ago)
-        fired.update!(fired_at: 20.minutes.ago)
+        fired.update!(fired_at: 20.minutes.ago, last_fired_at: 20.minutes.ago)
         live = existing!("Water the tomatoes tonight")
 
         move("tomatoes", later)
 
         expect(live.reload.fire_at).to be_within(1.minute).of(later)
         expect(fired.reload.fire_at).to be_within(1.minute).of(20.minutes.ago)
+      end
+    end
+
+    # Daily audit 2026-08-28, §4. Two daily "Do Dishes." rows, 3 PM and 8 PM.
+    # The 3 PM one fired, and twenty seconds later "change that Dishes reminder
+    # to go off at 9am instead" moved the 8 PM one. Byte reported it done, which
+    # was true about the wrong row, so nothing looked wrong until the 8 PM nudge
+    # simply stopped arriving.
+    #
+    # A recurring reminder never stamps `fired_at` - it stamps `last_fired_at`
+    # and rolls `fire_at` a day forward - so every candidate looked equally
+    # live and the pick collapsed to whichever `fire_at` sorted first.
+    describe "answering the one that just went off" do
+      def daily!(text, at, last_fired: nil)
+        reminder = BuddyReminder.create!(
+          user: user, byte_conversation: convo, body: text, fire_at: at,
+          recurrence: { "freq" => "daily", "at" => at.strftime("%H:%M") }
+        )
+        reminder.update!(last_fired_at: last_fired) if last_fired
+        reminder
+      end
+
+      it "moves the one that rang, not the one whose next fire sorts first" do
+        rang   = daily!("Do Dishes.", 23.hours.from_now, last_fired: 20.seconds.ago)
+        other  = daily!("Do Dishes.", 5.hours.from_now)
+        target = 30.minutes.from_now.in_time_zone(user.timezone)
+
+        move("Dishes", target)
+
+        expect(rang.reload.recurrence["at"]).to eq(target.strftime("%H:%M"))
+        expect(other.reload.recurrence["at"]).to eq(5.hours.from_now.strftime("%H:%M"))
+      end
+
+      # The half that hurt: the row nobody touched has to still be running on
+      # its own hour afterwards.
+      it "leaves the other one's schedule exactly where it was" do
+        daily!("Do Dishes.", 23.hours.from_now, last_fired: 20.seconds.ago)
+        other = daily!("Do Dishes.", 5.hours.from_now)
+
+        expect { move("Dishes", 30.minutes.from_now.in_time_zone(user.timezone)) }
+          .not_to(change { other.reload.fire_at })
+      end
+
+      # Nothing rang, so there is nothing to prefer and the old ordering stands.
+      it "falls back to the soonest when neither has gone off recently" do
+        soon = daily!("Do Dishes.", 5.hours.from_now)
+        daily!("Do Dishes.", 23.hours.from_now)
+        target = 30.minutes.from_now.in_time_zone(user.timezone)
+
+        move("Dishes", target)
+
+        expect(soon.reload.recurrence["at"]).to eq(target.strftime("%H:%M"))
+      end
+
+      # Well outside SNOOZE_WINDOW: that firing is history, not the thing
+      # they're replying to.
+      it "ignores one that rang yesterday" do
+        daily!("Do Dishes.", 23.hours.from_now, last_fired: 20.hours.ago)
+        soon   = daily!("Do Dishes.", 5.hours.from_now)
+        target = 30.minutes.from_now.in_time_zone(user.timezone)
+
+        move("Dishes", target)
+
+        expect(soon.reload.recurrence["at"]).to eq(target.strftime("%H:%M"))
       end
     end
   end

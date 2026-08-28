@@ -208,6 +208,16 @@ RSpec.describe "Buddy Today forward-looking" do
       expect(seed).to include("a day with three of them on it is not an open day")
     end
 
+    # Rocco, 2026-08-28: "We don't want Byte to include all of the every-day
+    # reminders in the briefing as it fills it with extra text that's not
+    # needed." The cut itself is in Buddy::GPT::ContextTool; this only tells the
+    # model that what it's holding has already been narrowed, so it doesn't
+    # spend a sentence explaining an absence.
+    it "says the everyday reminders have already been taken out" do
+      expect(seed).to include("Everything that goes off every day or every weekday has been taken out")
+      expect(seed).to include("the standing repeats, the everyday reminders and the everyday chores")
+    end
+
     # Prod 3951 opened by weighing his calendar against his partner's, and named
     # her 4pm meeting on the strength of it maybe mattering later. The rules
     # already forbade naming her items; they said nothing about framing his day

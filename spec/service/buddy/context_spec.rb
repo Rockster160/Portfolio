@@ -572,6 +572,40 @@ RSpec.describe Buddy::Context do
       expect(rows.first[:last_fired]).to be_present
     end
 
+    # How often a reminder repeats, in the same words an agenda item says it
+    # in, from the same mapping. The briefing drops the everyday ones on this
+    # tag (Buddy::GPT::ContextTool.without_routine_reminders) and it had no way
+    # to tell them apart before, so the same standing nudges came back every
+    # morning.
+    describe "how often it repeats" do
+      it "says daily for a daily one" do
+        reminder!(body: "Do Dishes.", fire_at: 4.hours.from_now,
+                  recurrence: { "freq" => "daily", "at" => "15:00" })
+
+        expect(find("Do Dishes")[:cadence]).to eq("daily")
+      end
+
+      it "reads the legacy shape too, so a row written before the vocabularies merged still says it" do
+        reminder!(body: "Grab my Loops", fire_at: 4.hours.from_now,
+                  recurrence: { "kind" => "daily", "at" => "07:54" })
+
+        expect(find("Grab my Loops")[:cadence]).to eq("daily")
+      end
+
+      it "keeps a weekly one distinguishable from a daily one" do
+        reminder!(body: "Water the ferns", fire_at: 4.hours.from_now,
+                  recurrence: { "freq" => "weekly", "at" => "18:00", "by_day" => ["sunday"] })
+
+        expect(find("Water the ferns")[:cadence]).to eq("weekly (Sun)")
+      end
+
+      it "says nothing at all for a one-off" do
+        reminder!(body: "Call the vet back", fire_at: 4.hours.from_now)
+
+        expect(find("Call the vet back")).not_to have_key(:cadence)
+      end
+    end
+
     it "leaves a cancelled one to the off list rather than calling it rung" do
       reminder!(body: "Nevermind this", fire_at: 3.hours.ago, cancelled_at: 4.hours.ago)
 

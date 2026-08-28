@@ -139,7 +139,14 @@ class Oauth::VenmoApi < Oauth::Base
     user ||= search(contact.raw[:name])
     user ||= search(contact.name)
     user ||= search(contact.nickname)
-    return Jarvis.ping("Unable to find Venmo id for #{contact.name}.") if user.blank?
+    # Ping for the side effect, then return nil. Returning the ping's result
+    # hands back "Push success", which is not blank, so charge_money's
+    # `id.blank?` guard passes and Venmo is POSTed `user_id: "Push success"` —
+    # surfacing as an opaque 400 instead of "no id found".
+    if user.blank?
+      Jarvis.ping("Unable to find Venmo id for #{contact.name}.")
+      return
+    end
 
     contact_mapping.merge!(contact.id => user[:id])
     cache_set(:contact_ids, contact_mapping)

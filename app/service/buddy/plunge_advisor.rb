@@ -65,6 +65,20 @@ module Buddy
       lines.join("\n")
     end
 
+    # Today's Alpine rain windows on their own, as the formatted strings
+    # `briefing_block` puts in the seed. For Buddy::GPT::Turn, which has to
+    # know what it asked for before it can tell that the briefing didn't say
+    # it. Empty whenever the block itself would be.
+    def today_rain_windows(user, now: Time.current)
+      data = WeatherService.data(lat: ALPINE[:lat], lng: ALPINE[:lng])
+      return [] if data.blank?
+
+      a = analyze(data, user, Buddy::Day.zone(user).name, now)
+      return [] unless a[:notable]
+
+      Array(a[:rain_windows])
+    end
+
     # Every daytime rain window in Alpine between tomorrow and the end of the
     # week. TODAY is deliberately absent: `briefing_block` above already lists
     # today's windows whenever there are any, and both blocks land in the same

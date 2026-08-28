@@ -201,6 +201,7 @@ module Buddy
         payload = named_sections(args).empty? ? context : context.slice(*requested_sections(args))
         # Applied to the everything path too, which is the one a briefing takes.
         payload = payload.except(*self.class.withheld(@user, briefing: @briefing))
+        payload = without_routine_reminders(payload)
         payload = without_settled_items(without_uninvolved_partner_items(without_own_reminder(payload)))
         @served = @served.merge(payload)
         JSON.generate(payload)
@@ -239,6 +240,41 @@ module Buddy
         payload.merge(upcoming_reminders: payload[:upcoming_reminders].reject { |r| r[:own_briefing] })
       rescue StandardError => e
         Buddy::Errors.report(section: "gpt.context_tool.own_reminder", exception: e, user: @user)
+        payload
+      end
+
+      # The standing daily nudges, on a briefing turn only.
+      #
+      # Rocco, 2026-08-28: "We don't want Byte to include all of the every-day
+      # reminders in the briefing as it fills it with extra text that's not
+      # needed." A reminder that goes off every single day is the shape of an
+      # ordinary week, not news about this particular one — the same thing
+      # `notable?` has always said about an agenda item, and the briefing
+      # prompt has said out loud since it was written: "Everything that repeats
+      # on an ordinary daily or weekday rhythm has already been taken out,
+      # because I know my own standing schedule and hearing it read back is
+      # what makes a briefing worthless." That was only ever true of the
+      # calendar half. `upcoming_reminders` is the other half of the same day
+      # and the filter had never been applied to it, so two Do Dishes and a
+      # nightly bin nudge came back every morning.
+      #
+      # Same answer as the partner filter and the passed items below: what the
+      # model can't see, it can't read out. The prompt asking for it in prose
+      # has lost repeatedly on all three of those.
+      #
+      # Only `daily` and `every weekday` go (Buddy::Context::ROUTINE_CADENCES).
+      # A weekly or monthly one is exactly the thing somebody doesn't have top
+      # of mind, which is what makes it worth a line.
+      def without_routine_reminders(payload)
+        return payload unless @briefing
+        return payload unless payload[:upcoming_reminders].is_a?(Array)
+
+        kept = payload[:upcoming_reminders].reject { |r|
+          Buddy::Context::ROUTINE_CADENCES.include?(r[:cadence])
+        }
+        payload.merge(upcoming_reminders: kept)
+      rescue StandardError => e
+        Buddy::Errors.report(section: "gpt.context_tool.routine_reminders", exception: e, user: @user)
         payload
       end
 

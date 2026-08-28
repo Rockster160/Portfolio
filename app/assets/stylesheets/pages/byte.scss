@@ -523,6 +523,24 @@ html.html-ctr-byte body {
     max-width: 22vw;
   }
 
+  // A swipe asks the server to cancel; it doesn't cancel. Until the DELETE
+  // comes back the chip stays put and reads as on its way out, because a chip
+  // that leaves on the gesture is indistinguishable from one that leaves on a
+  // failure — and the failure means a live timer nobody expects (prod timer 94,
+  // swiped away and rang an hour later).
+  &[data-pending="cancel"] {
+    opacity: 0.32;
+    pointer-events: none;
+    filter: grayscale(1);
+  }
+  // It came back. There is no toast in Byte, so the chip returning IS the
+  // message, and it has to be impossible to miss in the corner of an eye.
+  &[data-pending="cancel-failed"] {
+    border-color: var(--bs-danger, #f26b6b);
+    border-left-color: var(--bs-danger, #f26b6b);
+    animation: byte-timer-flash 0.5s steps(1) 4;
+  }
+
   &[data-state="paused"] { opacity: 0.6; }
   &[data-state="fired"] {
     border-color: var(--bs-danger, #f26b6b);

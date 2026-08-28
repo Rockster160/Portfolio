@@ -47,10 +47,41 @@ Buddy::Tools.register(
     reminder = if needle.match?(/\A\d+\z/)
       recent.find_by(id: needle.to_i)
     else
-      # Still-pending ones win a tie: a daily that fired this morning and a
-      # one-off tonight can share a word, and the live one is what they mean.
-      matches = recent.where("LOWER(body) LIKE ?", "%#{needle.downcase}%").order(:fire_at).to_a
-      matches.find { |r| r.fired_at.nil? } || matches.first
+      # The one that JUST WENT OFF wins, then still-pending ones, then the
+      # soonest. A daily that fired this morning and a one-off tonight can
+      # share a word, and normally the live one is what they mean - but a
+      # reminder landing and a sentence about it arriving twenty seconds later
+      # is the snooze this tool's own description is written around, and there
+      # the one they mean is the one they're looking at.
+      #
+      # `fired_at` can't express that for a RECURRING row: firing stamps
+      # `last_fired_at` and rolls `fire_at` forward a day, leaving `fired_at`
+      # nil forever. So `find { fired_at.nil? }` matched every candidate and
+      # the whole thing collapsed to `order(:fire_at).first` - which, for
+      # reminders whose next fire is a day out, is arbitrary. Prod 4841/4842,
+      # 27 Aug: two daily "Do Dishes." rows, the 3 PM one fired, "change that
+      # Dishes reminder to go off at 9am" twenty seconds later moved the 8 PM
+      # one instead. Byte said "Moved Do Dishes to 9:00 AM" and it was true
+      # about the wrong row, so nothing looked wrong until the 8 PM nudge
+      # stopped coming.
+      #
+      # The recency test runs INSIDE the pending set rather than across all
+      # matches, which is what keeps it from undoing the rule above it: a
+      # one-shot stamps `last_fired_at` alongside `fired_at`
+      # (Buddy::ReminderFirer), so ranking on it globally would hand a terminal
+      # row that went off twenty minutes ago the win over a live one. Pending
+      # still beats fired; this only decides which of several PENDING rows is
+      # the one in front of them, where `fire_at` had no way to say.
+      #
+      # SNOOZE_WINDOW is reused rather than a tighter reply window invented:
+      # it is already the tool's answer to "recent enough that they might be
+      # answering it", and a second threshold would be a guess with nothing
+      # behind it.
+      matches   = recent.where("LOWER(body) LIKE ?", "%#{needle.downcase}%").order(:fire_at).to_a
+      window    = Buddy::Tools::SNOOZE_WINDOW.ago
+      live      = matches.select { |r| r.fired_at.nil? }
+      just_rang = live.select { |r| r.last_fired_at.present? && r.last_fired_at >= window }
+      just_rang.max_by(&:last_fired_at) || live.first || matches.first
     end
     raise "no reminder matching #{needle.inspect}" if reminder.nil?
 

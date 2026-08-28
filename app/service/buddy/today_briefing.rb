@@ -181,6 +181,46 @@ module Buddy
       }.uniq
     end
 
+    # Today's Alpine rain hours, composed here for the third time this rule has
+    # needed composing.
+    #
+    # `weather_line` covers today's figures and `week_line` covers the week's
+    # day names; the HOURS were the one piece of the weather rule with nothing
+    # behind them, and they are the piece the seed asks for most directly -
+    # "Rain windows today (give these times)". Dropped by all three briefings
+    # on 27 Aug, and dropped again on 28 Aug by the briefing that got both of
+    # the other two fallbacks right, which is what says it isn't a phrasing
+    # problem.
+    #
+    # Same trade as the two above: this only fills a silence.
+    def rain_hours_line(windows)
+      windows = Array(windows).compact_blank
+      return nil if windows.empty?
+
+      "Rain in Alpine #{windows.to_sentence}."
+    end
+
+    # The start of a window as `PlungeAdvisor.format_window` writes one:
+    # "8pm-9pm", "11pm-12am", "6pm-8pm".
+    RAIN_WINDOW_RX = /\A(?<hour>\d{1,2})(?::\d{2})?(?<mer>am|pm)/i
+
+    # Did the briefing already give one of the hours?
+    #
+    # Generous in the same direction `week_said?` is: an hour named in any of
+    # the ways a person writes a clock time suppresses the repair, because a
+    # second set of hours under ones the model wrote itself reads worse than a
+    # rare miss. Only the START of each window is looked for - "rain from 6
+    # tonight" is the sentence the rule wanted and it never names the end.
+    def rain_hours_said?(body, windows)
+      starts = Array(windows).filter_map { |w| RAIN_WINDOW_RX.match(w.to_s) }
+      return true if body.blank? || starts.empty?
+
+      starts.any? { |m|
+        mer = m[:mer].downcase.chars.join("\\.?")
+        body.match?(/(?<!\d)#{m[:hour]}\s*(?::\d{2})?\s*#{mer}\.?/i)
+      }
+    end
+
     # The departure time, composed here for the same reason the weather line is.
     #
     # `leave_by` arrives already worked out and the prompt is explicit about it
@@ -354,7 +394,7 @@ module Buddy
         LEAD WITH what still needs to happen today, and open on whatever is most unlike an ordinary day.
         #{chores_lead_lines(user)}
         - `today_notable` - today's events and meetings with times. This is NOT the whole calendar. Everything that repeats on an ordinary daily or weekday rhythm has already been taken out, because I know my own standing schedule and hearing it read back is what makes a briefing worthless. What's left is what makes today different from any other day.
-        - `upcoming_reminders` is the OTHER HALF of the day and none of it is on the calendar. One that's still due is a thing that is going to happen to me, at a time, and it belongs here exactly as an agenda item does - a day with three of them on it is not an open day, however empty the calendar looks. Say what each is FOR, the way you would name an event: giving me the hour and leaving out the thing is that sentence with the useful half taken out.
+        - `upcoming_reminders` is the OTHER HALF of the day and none of it is on the calendar. One that's still due is a thing that is going to happen to me, at a time, and it belongs here exactly as an agenda item does - a day with three of them on it is not an open day, however empty the calendar looks. Say what each is FOR, the way you would name an event: giving me the hour and leaving out the thing is that sentence with the useful half taken out. Everything that goes off every day or every weekday has been taken out of this one too, for the same reason it's taken out of the calendar: my standing nudges are the ones I know cold, and reading them back is padding with a clock time on it. What's here repeats rarely or not at all.
         - An item tagged `mine: false` (with an `owner`) is on a partner's PERSONAL calendar. The ones with no bearing on my day have already been taken out, so there is no judgement left here - but what reaches you is BACKGROUND, not a demand on me. Say whose it is and when it runs, in one clause, and stop. Never call it a clash, a conflict or an overlap, never work out what of mine it lands on, and never let it lead the message or read as mine. Somebody else being busy is not a thing on my plate. It is still never the subject of the message.
         - **My day is never described by comparison to theirs.** Framing it as light or busy next to somebody else's makes their calendar the subject of my briefing, and does it before naming a single thing of mine. How full their day is isn't a fact about mine. Tell me about mine.#{chores_hot_line(user)}
 
@@ -362,7 +402,7 @@ module Buddy
 
         EVERY item you name has to be one that is actually in the lists above, on the day you put it on. Don't round a memory up into a plan. A briefing that adds one thing I don't have is worse than one that leaves out three that I do: the missing ones I'll find, and the invented one I'll act on. If it isn't in front of you, it isn't happening.
 
-        SAY EVERYTHING UNUSUAL. Brevity is about the WORDS, never about how many things get named: cut the padding around an item, never the item. Everything in front of you has already been narrowed to the exceptions - the standing repeats and the everyday chores were taken out before you saw any of it - so what's left is the day itself, and nothing in it is safely droppable. A quiet day is two lines because the day is quiet. A day with seven real things is longer, and that is the correct briefing for that day. Deciding to leave one out to hit a length is the one failure I can't spot: I'd have to already know what was missing.
+        SAY EVERYTHING UNUSUAL. Brevity is about the WORDS, never about how many things get named: cut the padding around an item, never the item. Everything in front of you has already been narrowed to the exceptions - the standing repeats, the everyday reminders and the everyday chores were all taken out before you saw any of it - so what's left is the day itself, and nothing in it is safely droppable. A quiet day is two lines because the day is quiet. A day with seven real things is longer, and that is the correct briefing for that day. Deciding to leave one out to hit a length is the one failure I can't spot: I'd have to already know what was missing.
 
         Being specific is the other half of that. A vague gesture at a busy morning, without naming what's in it, is the opposite failure and costs me just as much - I still have to go and look. And if the day genuinely holds nothing unusual, say so briefly and warmly and stop. That is a correct briefing, not a failed one, and padding it back out to length is the thing being avoided here.
 

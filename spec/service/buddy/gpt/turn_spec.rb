@@ -2086,6 +2086,157 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
+  # The third piece of the same weather rule, and the one the seed asks for
+  # most literally: "Rain windows today (give these times)". Dropped by all
+  # three briefings on 27 Aug, and dropped again on 28 Aug by the briefing that
+  # got both of the other fallbacks right - which is what says it isn't a
+  # phrasing problem.
+  describe "a briefing that dropped today's rain hours" do
+    before { allow(Buddy::PlungeAdvisor).to receive(:today_rain_windows).and_return(["6pm-8pm", "11pm-12am"]) }
+
+    def briefing(rounds)
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+      )
+      described_class.run!(message, client: FakeBuddyClient.new(rounds))
+    end
+
+    it "puts the hours on the end" do
+      briefing([{ text: "Morning! Quiet one - just the noon run." }])
+
+      expect(reply.body).to include("Rain in Alpine 6pm-8pm and 11pm-12am.")
+    end
+
+    it "keeps what the model wrote in front of them" do
+      briefing([{ text: "Morning! Quiet one - just the noon run." }])
+
+      expect(reply.body).to start_with("Morning! Quiet one - just the noon run.")
+    end
+
+    # The model's own sentence is better every time - it can put the hour in a
+    # line that belongs to the rest of the message.
+    it "leaves a briefing that gave an hour itself alone" do
+      briefing([{ text: "Morning! Rain moving through Alpine from 6pm." }])
+
+      expect(reply.body).not_to include("Rain in Alpine 6pm-8pm")
+    end
+
+    it "counts a spaced-out clock time as having said it" do
+      briefing([{ text: "Morning! Alpine gets wet around 6 PM." }])
+
+      expect(reply.body).not_to include("Rain in Alpine 6pm-8pm")
+    end
+
+    # Only the START of a window is looked for, so an end hour on its own is
+    # not the sentence the rule asked for.
+    it "is not satisfied by the odds without an hour" do
+      briefing([{ text: "Morning! 80% chance of rain in Alpine today." }])
+
+      expect(reply.body).to include("Rain in Alpine 6pm-8pm and 11pm-12am.")
+    end
+
+    it "says nothing on a dry day" do
+      allow(Buddy::PlungeAdvisor).to receive(:today_rain_windows).and_return([])
+      briefing([{ text: "Morning! Quiet one." }])
+
+      expect(reply.body).to eq("Morning! Quiet one.")
+    end
+
+    it "spends no extra round on it" do
+      client  = FakeBuddyClient.new([{ text: "Morning! Quiet one." }])
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent, body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+      )
+      described_class.run!(message, client: client)
+
+      expect(client.calls.length).to eq(1)
+    end
+
+    it "leaves ordinary turns alone" do
+      run([{ text: "Quiet one today." }], text: "is it raining in alpine")
+
+      expect(reply.body).to eq("Quiet one today.")
+    end
+  end
+
+  # Prod 4790, 27 Aug. The seed said "currently 70°F ... today high 93°F / low
+  # 69°F" and the briefing said "High of 93°F today, low of 70°F" - it printed
+  # the CURRENT temperature as the low, which is the one confusion three
+  # figures sitting together invite. The fallback above only fires when there
+  # is no temperature in the body at all, so a right-shaped line with a wrong
+  # number walked straight through it.
+  describe "a briefing that gave the wrong figure" do
+    let(:figures) { { high: 93, low: 69, rain: 56, notable: "rain" } }
+
+    before { allow(WeatherService).to receive(:today_figures).and_return(figures) }
+
+    def briefing(text)
+      message = convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent,
+        body: "#{Buddy::TodayBriefing::WEATHER_DIRECTIVE}\n#{Buddy::TodayBriefing::GREET_DIRECTIVE}",
+        metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+      )
+      described_class.run!(message, client: FakeBuddyClient.new([{ text: text }]))
+    end
+
+    it "corrects a low that isn't the day's low" do
+      briefing("Morning! High of 93°F today, low of 70°F.")
+
+      expect(reply.body).to eq("Morning! High of 93°F today, low of 69°F.")
+    end
+
+    it "corrects a wrong high the same way" do
+      briefing("Morning! High of 88°F today, low of 69°F.")
+
+      expect(reply.body).to eq("Morning! High of 93°F today, low of 69°F.")
+    end
+
+    # In place, never a second line. Two sets of figures disagreeing with each
+    # other is worse than the one that was wrong, because then neither can be
+    # trusted.
+    it "does not append a second weather sentence" do
+      briefing("Morning! High of 93°F today, low of 70°F.")
+
+      expect(reply.body.scan(/High of/).length).to eq(1)
+    end
+
+    it "leaves a correct line completely alone" do
+      briefing("Morning! High of 93°F today, low of 69°F. Just the noon run.")
+
+      expect(reply.body).to eq("Morning! High of 93°F today, low of 69°F. Just the noon run.")
+    end
+
+    it "handles the phrasings a person writes it in" do
+      briefing("Morning! Topping out at 93, with a low around 70 tonight.")
+
+      expect(reply.body).to eq("Morning! Topping out at 93, with a low around 69 tonight.")
+    end
+
+    # A BAND, not the day's low. Rewriting this to "low 69s" turns a true
+    # sentence into a broken one, which is the one way this repair could cost
+    # more than the miss it fixes.
+    it "does not touch a range like the low 70s" do
+      briefing("Morning! High of 93°F, sitting in the low 70s until the afternoon.")
+
+      expect(reply.body).to include("the low 70s until the afternoon")
+      expect(reply.body).not_to include("low 69s")
+    end
+
+    it "leaves a temperature that isn't a high or a low alone" do
+      briefing("Morning! It's 70°F out there right now. High of 93°F today, low of 69°F.")
+
+      expect(reply.body).to include("It's 70°F out there right now")
+    end
+
+    it "leaves ordinary turns alone" do
+      run([{ text: "High of 70 today." }], text: "what's the weather")
+
+      expect(reply.body).to eq("High of 70 today.")
+    end
+  end
+
   # Prod 4684, 08:00: "Nothing showing up as due on chores right now." The seed
   # is explicit - "If the list is empty, default to leaving the subject out
   # entirely: no count, no note that nothing is sitting there" - and the report

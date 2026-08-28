@@ -425,8 +425,25 @@ module Buddy
         sched = item.agenda_schedule
         return nil unless sched
 
-        data = (sched.recurrence || {}).with_indifferent_access
-        case (data[:freq].to_s.presence || "daily")
+        # An empty recurrence on a row that HAS a schedule still repeats; daily
+        # is the reading that keeps it out of `notable?`, and it predates this
+        # being shared.
+        cadence_label(sched.recurrence, default: "daily")
+      end
+
+      # A recurrence hash as the label `notable?` reads, or `default` when the
+      # hash names no frequency at all.
+      #
+      # Split out of `schedule_cadence` because a REMINDER needs the same
+      # answer and had no way to give one. The two vocabularies are already the
+      # same — BuddyReminder#rule and AgendaSchedule both speak Recurrence — so
+      # the only thing keeping "daily" from meaning daily on both was which
+      # file the case statement lived in.
+      def cadence_label(recurrence, default: nil)
+        data = (recurrence || {}).with_indifferent_access
+        return default if data[:freq].blank?
+
+        case data[:freq].to_s
         when "daily"    then "daily"
         when "weekdays" then "every weekday"
         when "weekly"
@@ -876,6 +893,12 @@ module Buddy
             # went off looks like it never did. Prod 2761 announced the flower
             # bed "tomorrow at 8:00 AM" half an hour after it rang that morning.
             last_fired:   (r.last_fired_at && Buddy::TimeParser.friendly(r.last_fired_at, user: conversation.user)),
+            # nil for a one-off, "daily" / "every weekday" / "monthly" / ...
+            # for a repeat — the same labels an agenda item carries, from the
+            # same mapping. A BRIEFING drops the everyday ones on this tag
+            # (Buddy::GPT::ContextTool.without_routine_reminders); everywhere
+            # else it just says how often, which is worth knowing when asked.
+            cadence:      cadence_label(r.normalized_recurrence),
             # The row that FIRES the briefing, which is an ordinary recurring
             # reminder on purpose (Buddy::TodaySchedule) so it can be moved and
             # cancelled like any other. Unmarked it reads as something on their
