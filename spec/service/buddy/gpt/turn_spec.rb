@@ -1905,6 +1905,45 @@ RSpec.describe Buddy::GPT::Turn do
       expect(reply.body).not_to include("8:46")
     end
 
+    # Prod 4860, 28 Aug: `Pick up chai from LOC` was written as "chai pickup at
+    # 12:00 PM", the substring test never saw it, and a 34-minute drive with an
+    # 11:21 walk-out went out with no departure time at all. The item beside it
+    # got its figures only because the model happened to type that title
+    # verbatim. A briefing that names an item prints its clock time.
+    describe "an item the briefing called by a different name" do
+      let(:chai) {
+        { id: 2, time: "12:00 PM", title: "Pick up chai from LOC", leave_by: "11:21 AM", drive_min: 34 }
+      }
+
+      before { allow(Buddy::Context).to receive(:build).and_return(today_notable: [chai]) }
+
+      it "counts the item's own start time as naming it" do
+        briefing(looked_then("Morning! You've got chai pickup at 12:00 PM, so the midday is busy."))
+
+        expect(reply.body).to include("Pick up chai from LOC: leave by 11:21 AM, about 34 minutes' drive.")
+      end
+
+      it "counts the hour written without its minutes" do
+        briefing(looked_then("Morning! Chai pickup at 12 PM, then the afternoon is yours."))
+
+        expect(reply.body).to include("leave by 11:21 AM")
+      end
+
+      # The guard is still a guard: a time that isn't this item's doesn't name
+      # it, or every briefing with a clock in it would collect every departure.
+      it "is not satisfied by some other item's time" do
+        briefing(looked_then("Morning! Swim's at 12:30 PM and that's the lot."))
+
+        expect(reply.body).not_to include("11:21")
+      end
+
+      it "still leaves a briefing that gave the figure alone" do
+        briefing(looked_then("Morning! Chai at 12:00 PM - out the door by 11:21 to make it."))
+
+        expect(reply.body).not_to include("leave by")
+      end
+    end
+
     it "spends no extra round on it" do
       client = FakeBuddyClient.new(looked_then("Morning! You've got Yoga first thing."))
       message = convo.byte_messages.create!(
@@ -2158,6 +2197,31 @@ RSpec.describe Buddy::GPT::Turn do
       run([{ text: "Quiet one today." }], text: "is it raining in alpine")
 
       expect(reply.body).to eq("Quiet one today.")
+    end
+
+    # It shipped gated `@user&.me?`, reasoning from `alpine_week_block`, which
+    # IS his alone. Wrong sibling: today's windows come from `plunge_block`,
+    # which is gated on nothing and goes into every companion's seed. Suki's
+    # and Moss's briefings carried the instruction and dropped the hours for
+    # four mornings running (prod 4858/4860, then 4928/4930 after the deploy)
+    # while Byte's, on the identical block, held.
+    describe "for somebody who isn't the owner" do
+      let(:partner) { create(:user) }
+      let!(:her_convo) {
+        partner.byte_conversations.create!(mode: :buddy, name: "Moss", last_message_at: Time.current)
+      }
+
+      it "puts the hours on the end of hers too" do
+        message = her_convo.byte_messages.create!(
+          user: partner, direction: :outbound, state: :sent,
+          body: Buddy::TodayBriefing::GREET_DIRECTIVE,
+          metadata: { "kind" => "buddy_trigger", "hidden" => true, "buddy_action" => "today" }
+        )
+        described_class.run!(message, client: FakeBuddyClient.new([{ text: "Morning! Quiet one." }]))
+
+        expect(her_convo.byte_messages.where(direction: :inbound).order(:created_at).last.body)
+          .to include("Rain in Alpine 6pm-8pm and 11pm-12am.")
+      end
     end
   end
 

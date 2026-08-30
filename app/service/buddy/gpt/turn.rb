@@ -1250,13 +1250,19 @@ module Buddy
       # weather rule to need a fallback, and the one whose instruction in the
       # seed is the most literal of the three.
       #
-      # Alpine is Rocco's alone (Buddy::TodayBriefing.alpine_week_block), so
-      # this asks PlungeAdvisor rather than the user - off-prod, for anyone
-      # else, or on a day with no rain in the canyon, it hands back nothing and
-      # the repair doesn't run.
+      # It asks PlungeAdvisor rather than the user, because PlungeAdvisor is
+      # what put the windows in the seed: on a day with no rain in the canyon,
+      # or off-prod, `today_rain_windows` hands back nothing for the same reason
+      # `briefing_block` writes nothing, and the repair doesn't run.
+      #
+      # This was gated `@user&.me?` for its first two days, reasoning from
+      # `alpine_week_block`, which IS his alone. Wrong sibling: today's windows
+      # come from `plunge_block`, which is gated on nothing and goes into every
+      # companion's seed. Suki's and Moss's briefings carried the instruction
+      # and dropped the hours for four mornings running while Byte's held.
       def with_rain_hours(body)
         return body unless today_briefing?
-        return body unless @user&.me?
+        return body if @user.nil?
 
         windows = Buddy::PlungeAdvisor.today_rain_windows(@user)
         return body if Buddy::TodayBriefing.rain_hours_said?(body, windows)
@@ -1351,18 +1357,45 @@ module Buddy
         return [] unless items.is_a?(Array)
 
         items.select { |i|
-          i.is_a?(::Hash) && i[:leave_by].present? && named_in?(body, i[:title]) &&
+          i.is_a?(::Hash) && i[:leave_by].present? && named_in?(body, i) &&
             !body.include?(i[:leave_by].to_s.sub(/\s*[ap]\.?m\.?\z/i, "").strip)
         }
       end
 
-      # Did the reply name this item? Matched on the title as written, which is
-      # how the briefing says one - it reads the name off the same field.
-      def named_in?(body, title)
-        title = title.to_s.strip
-        return false if title.length < 2
+      # Did the reply name this item?
+      #
+      # The title as written is the first test, because that is how a briefing
+      # says one - it reads the name off the same field. It doesn't always,
+      # though, and the substring test has no give at all: prod 4860 wrote
+      # "chai pickup at 12:00 PM" for an item titled "Pick up chai from LOC",
+      # so a 34-minute drive and an 11:21 walk-out were never a candidate. The
+      # SHS item beside it got its figures only because the model happened to
+      # type that title verbatim.
+      #
+      # So the item's own start time counts as naming it. Every briefing that
+      # names an item prints its clock time, and the thing this guard exists to
+      # prevent - a leave-by for something the message never mentioned - can't
+      # happen when that item's time is already in the body.
+      def named_in?(body, item)
+        title = item[:title].to_s.strip
+        return true if title.length >= 2 && body.downcase.include?(title.downcase)
 
-        body.downcase.include?(title.downcase)
+        time_said?(body, item[:time])
+      end
+
+      # A start time as `Buddy::Context` writes one: "12:00 PM", "9:30 AM".
+      # `all_day` items carry the word "today" here instead and match nothing.
+      TIME_RX = /\A(?<hour>\d{1,2}):(?<min>\d{2})\s*(?<mer>[ap])\.?m\.?\z/i
+
+      # In any of the ways a person writes that time back: "12:00 PM", "12 PM",
+      # "12pm", "12 p.m.". The minutes are optional only on the hour, so 12:30
+      # never satisfies 12:00.
+      def time_said?(body, time)
+        parts = TIME_RX.match(time.to_s.strip)
+        return false if parts.nil?
+
+        minutes = parts[:min] == "00" ? "(?::00)?" : "(?::#{parts[:min]})"
+        body.match?(/(?<!\d)#{parts[:hour]}#{minutes}\s*#{parts[:mer]}\.?m\.?/i)
       end
 
       # What get_context actually served this turn, or nothing if it was never

@@ -564,6 +564,37 @@ RSpec.describe "Buddy Today forward-looking" do
           expect(said?("Serenity is Monday this week.")).to be(false)
         end
 
+        # Prod 4925 and 4930, 29 Aug: both seeds said "rain Sun, Mon, Tue & Wed,
+        # windy Fri" and both briefings went out with no forecast at all, on a
+        # Saturday carrying rain four days running. Byte wrote "Nyjah Dinner on
+        # Monday at 6:30 PM" and Moss "Monday's got Nyjah Dinner at Texas
+        # Roadhouse too"; Monday was flagged, the whole-body match counted it,
+        # and the repair stood down. 4860 lost its line the same way the
+        # morning before, on "a little art show tomorrow evening". The days
+        # worth flagging and the days with plans come out of the same week, so
+        # this is the ordinary case rather than the rare one.
+        it "does not count a day word carrying an appointment" do
+          expect(said?("Nyjah Dinner on Thu at 6:30 PM.")).to be(false)
+        end
+
+        it "does not count tomorrow when tomorrow is only when something is on" do
+          expect(said?("There's a little art show tomorrow evening.")).to be(false)
+        end
+
+        it "still counts the day when the weather is in the same sentence" do
+          expect(said?("Rain Thu, and there's a dinner that evening too.")).to be(true)
+        end
+
+        # The day and the forecast have to be the same claim. Split across two
+        # sentences, neither one is a heads-up for that day.
+        it "does not count a day and a forecast in separate sentences" do
+          expect(said?("Dinner is Thu. Bit of rain around at some point.")).to be(false)
+        end
+
+        it "reads a bullet as its own sentence" do
+          expect(said?("- Dinner Thu at 6:30\n- Groceries after")).to be(false)
+        end
+
         it "leaves an unremarkable week alone" do
           expect(Buddy::TodayBriefing.week_said?("Quiet one.", [], today: today)).to be(true)
         end

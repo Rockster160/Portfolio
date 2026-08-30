@@ -959,6 +959,20 @@ BUDDY_EDGE_PROBES = [
                   "one until it's tapped",
   },
   {
+    case: "prod 4868",
+    say:  "Venmo request B 94 🥓🥤🥤🥤",
+    tool: :request_feature,
+    note: "answered \"I can't send a Venmo request from here. If you want, I " \
+          "can tuck the amount and note into something for you to send later\" " \
+          "and called nothing. The \"can't\" was true - Venmo runs through a " \
+          "Jarvis action and no Buddy tool reaches it - but the offer with no " \
+          "row under it left no record anywhere that he'd asked, and he was " \
+          "still routing around it a day later. The personality section said " \
+          "\"offer the list, and stop... if they say yes, request_feature " \
+          "writes it down\" while the tool's own description said calling it " \
+          "IS the offer; the prompt-resident half won",
+  },
+  {
     case: "Whisper sleeps twice a day",
     say:  "let me know when Whisper goes to bed",
     tool: :none,

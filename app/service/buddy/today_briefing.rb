@@ -157,18 +157,51 @@ module Buddy
       outlook.to_s.scan(/\b(#{DAY_ABBREVS.join('|')})\b/).flatten.uniq
     end
 
+    # The words that make a day word a WEATHER mention rather than a date.
+    WEATHER_WORDS_RX = /
+      \b(?: rain|rainy|rains|shower|showers|wet|drizzle|downpour|
+            storm|storms|stormy|thunder|lightning|
+            snow|snowy|snowing|sleet|hail|
+            wind|winds|windy|gust|gusts|gusty|breezy|
+            sunny|forecast|weather|degrees )\b
+    /xi
+
     # Did the briefing already say one of them?
     #
-    # Generous on purpose, in the same direction weather_missing? is: a flagged
-    # day named in ANY of the ways a person writes one suppresses the repair,
-    # because a second heads-up under one the model wrote itself reads worse
-    # than a rare miss. "tomorrow" is in the list because the prompt asks for
-    # that word rather than the weekday name for the next day out, so a correct
-    # briefing is one that never writes the abbreviation at all.
+    # Generous inside a sentence, in the same direction weather_missing? is: a
+    # flagged day named in ANY of the ways a person writes one suppresses the
+    # repair, because a second heads-up under one the model wrote itself reads
+    # worse than a rare miss. "tomorrow" is in the list because the prompt asks
+    # for that word rather than the weekday name for the next day out, so a
+    # correct briefing is one that never writes the abbreviation at all.
+    #
+    # But the day word has to be doing WEATHER work. Matched against the whole
+    # body it wasn't: prod 4925 wrote "Nyjah Dinner on Monday at 6:30 PM" and
+    # 4930 "Monday's got Nyjah Dinner at Texas Roadhouse too", Monday was a
+    # flagged day, and both briefings went out with no forecast at all on a
+    # Saturday carrying rain four days running. 4860 lost its line the same way
+    # the morning before, on "a little art show tomorrow evening". An agenda
+    # item on a rainy day is the ordinary case, not the rare one - the days
+    # worth flagging and the days with plans are drawn from the same week.
+    #
+    # So the day word and a weather word have to be in the same sentence. The
+    # cost is the mirror of the old one: a heads-up phrased around a word not on
+    # the list ("Monday looks grim") earns a second line. That trade goes this
+    # way because a duplicate is visible and a silence isn't.
     def week_said?(body, days, today: Date.current)
       return true if body.blank? || days.empty?
 
-      day_words(days, today).any? { |word| body.match?(/\b#{Regexp.escape(word)}\b/i) }
+      words = day_words(days, today)
+      sentences(body).any? { |sentence|
+        sentence.match?(WEATHER_WORDS_RX) &&
+          words.any? { |word| sentence.match?(/\b#{Regexp.escape(word)}\b/i) }
+      }
+    end
+
+    # Sentences, and also lines: a briefing is half prose and half bullets, and
+    # a bullet ending without punctuation is one sentence's worth of claim.
+    def sentences(body)
+      body.to_s.split(/\n+|(?<=[.!?])\s+/).map(&:strip).compact_blank
     end
 
     def day_words(days, today)
