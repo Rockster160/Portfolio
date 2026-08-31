@@ -306,6 +306,17 @@ class BuddyEvalWorld
       )
     }
 
+    # Carries a LOCATION, and a wrong-ish one, so a correcting turn has
+    # something real to move and the relay that rides on it has a place to
+    # name. Prod 5057 is the probe.
+    reuse(upcoming.detect { |item| item.name.to_s.match?(/family party/i) }) {
+      AgendaItem.create!(
+        agenda: agenda, kind: :event, name: "Family Party and TG Point",
+        location: "Nyjah's Gifts",
+        start_at: 3.days.from_now.change(hour: 10), end_at: 3.days.from_now.change(hour: 12)
+      )
+    }
+
     # A REPEATING one, for the series probes. MATERIALIZE_WINDOW is 30 hours,
     # so most of its occurrences exist only as the rule - which is the whole
     # point of it being here. Its items are `dependent: :destroy`, so the

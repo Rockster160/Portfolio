@@ -579,6 +579,36 @@ BUDDY_EDGE_PROBES = [
                 "to ask you, at the moment they were meant to be told what to do",
   },
 
+  # --- a relay riding on an edit, which is about the thing, not the edit -----
+  {
+    case:       "prod 5057",
+    say:        "It's should be AT Thanksgiving Point FOR Nyjah's Gifts. Nyjah's " \
+                "Gifts can just be a note. Let Chelsea know about it once you " \
+                "finish the update, please.",
+    tool:       :message_partner,
+    with:       %i[edit_agenda_item],
+    args:       { message_partner: { message: /thanksgiving point/i } },
+    never_args: { message_partner: { message: /updat|chang|just a note|now a note/i } },
+    needs:      :family_party,
+    note:       "relayed the CORRECTION rather than the party - she was told a " \
+                "detail had moved on something she had never been told existed. " \
+                "\"once you finish\" is when to send, not what to say",
+    # The turn before it, so "it" has a referent. `steps:` would not do: each
+    # of those is a cold start, and this sentence only means anything as a
+    # follow-up.
+    seed:       ->(user, convo) {
+      convo.byte_messages.create!(
+        user: user, direction: :outbound, state: :sent,
+        body: "Add Family Party and TG Point on Sat at 10am for Nyjah's Gifts to Ours",
+      )
+      convo.byte_messages.create!(
+        user: user, direction: :inbound, state: :sent, metadata: { "kind" => "buddy" },
+        body: "Done. Family Party and TG Point is on Ours for Saturday at 10:00 AM " \
+              "at Nyjah's Gifts, and I set it for about 2 hours.",
+      )
+    },
+  },
+
   # --- a name that is most of a longer name ---------------------------------
   {
     case:       "prod 4495",

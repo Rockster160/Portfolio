@@ -22,6 +22,17 @@ Buddy::Tools.register(
     When in doubt, send it as they typed it. Nobody has ever been annoyed that
     their words arrived intact.
 
+    WHAT IT'S ABOUT, when the relay rides on work you just did. "Let her know
+    about it once you've made that change", "tell him once it's booked" - the
+    subject is the THING, never the edit. They know what changed, because they
+    asked for it; the person receiving it has never seen the old version, so a
+    note about what MOVED tells them about a correction to something they were
+    never told existed. Send the fact as it now stands - what it is, when,
+    where. Asked to let Chelsea know about a party after fixing its location,
+    the note that went was the fix rather than the party, and she had no idea
+    there was a party (prod 5057-5060). And "once you finish" is SEQUENCING: it
+    says WHEN to send, never what to say.
+
     `to` is who it's for (a first name like "Chelsea", or "my wife"/"Rocco").
     It must be someone in the user's household - if you don't recognize the
     name, say you're not sure who they mean rather than guessing.

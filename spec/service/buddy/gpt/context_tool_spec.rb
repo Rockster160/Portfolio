@@ -50,6 +50,7 @@ RSpec.describe Buddy::GPT::ContextTool do
     end
 
     it "hands over the due-today list and no other chore section" do
+      create(:chore, name: "Gutters", created_by_user: user, marked_due_at: Time.current)
       returned = briefing_sections([])
 
       expect(returned).to include("chores_due_today")
@@ -264,6 +265,68 @@ RSpec.describe Buddy::GPT::ContextTool do
       it "hands both over on an ordinary turn" do
         expect(titles(tool)).to include("Morning Yoga")
         expect(reminder_bodies(tool)).to include("Check the plants.")
+      end
+
+      # Prod 4980 opened on "Whisper nap sound just went off" — reminder 69, a
+      # one-off that had rung twenty hours earlier — and then named nothing
+      # still ahead. A rung one-off is the only row in `upcoming_reminders`
+      # shaped like an event, and on a quiet morning that is what gets reached
+      # for. It stays everywhere else: prod 3255 is a briefing re-dating one
+      # forward off the thread with nothing in context to argue.
+      describe "a one-off that already rang" do
+        let!(:rang) {
+          BuddyReminder.create!(user: user, byte_conversation: convo, kind: :reminder,
+                                body: "Whisper nap sound.", fire_at: 20.hours.ago,
+                                fired_at: 20.hours.ago)
+        }
+
+        it "is marked as history rather than dropped from the context" do
+          rows = JSON.parse(tool.call({ "sections" => ["upcoming_reminders"] }))["upcoming_reminders"]
+          mine = rows.to_a.find { |r| r["body"] == "Whisper nap sound." }
+
+          expect(mine["status"]).to eq("already_rang")
+        end
+
+        it "is not in front of a briefing" do
+          expect(reminder_bodies(briefing)).not_to include("Whisper nap sound.")
+        end
+
+        it "is still there on an ordinary turn, where the question gets asked" do
+          expect(reminder_bodies(tool)).to include("Whisper nap sound.")
+        end
+
+        it "does not take the still-due ones with it" do
+          BuddyReminder.create!(user: user, byte_conversation: convo, kind: :reminder,
+                                body: "Collect the parcel.", fire_at: 2.hours.from_now)
+
+          expect(reminder_bodies(briefing)).to include("Collect the parcel.")
+        end
+      end
+    end
+
+    # Prod 4985: "Nothing's due today, so your morning looks pretty open for
+    # now", on a day Chelsea logged three chore completions. `chores_due_today`
+    # is the exceptions list — the daily rotation is deliberately not in it — so
+    # empty means "nothing unusual", never "nothing to do", and the seed says so
+    # in bold twice. Buddy::GPT::Turn#without_empty_chore_note needs the
+    # sentence to NAME chores and this one named nothing.
+    describe "an empty due-today chore list" do
+      def chore_rows(tool)
+        JSON.parse(tool.call({ "sections" => ["chores_due_today"] }))
+      end
+
+      it "is not handed to a briefing at all" do
+        expect(chore_rows(briefing)).not_to have_key("chores_due_today")
+      end
+
+      it "still arrives on an ordinary turn" do
+        expect(chore_rows(tool)).to have_key("chores_due_today")
+      end
+
+      it "leaves a list with something in it alone" do
+        create(:chore, name: "Gutters", created_by_user: user, marked_due_at: Time.current)
+
+        expect(chore_rows(briefing)["chores_due_today"].to_a.pluck("name")).to eq(["Gutters"])
       end
     end
 

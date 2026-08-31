@@ -50,6 +50,9 @@ RSpec.describe Buddy::GPT::Turn do
     end
 
     it "hands the same narrowing to the tool that answers the call" do
+      # Something actually due, because an EMPTY due-today list is withheld
+      # from a briefing in its own right — see ContextTool#without_empty_chores.
+      create(:chore, name: "Gutters", created_by_user: user, marked_due_at: Time.current)
       turn = turn_for({ "kind" => "buddy_trigger", "buddy_action" => "today" })
 
       returned = JSON.parse(turn.send(:read_tools)[Buddy::GPT::ContextTool::NAME].call({}))

@@ -203,6 +203,7 @@ module Buddy
         payload = payload.except(*self.class.withheld(@user, briefing: @briefing))
         payload = without_routine_reminders(payload)
         payload = without_settled_items(without_uninvolved_partner_items(without_own_reminder(payload)))
+        payload = without_empty_chores(payload)
         @served = @served.merge(payload)
         JSON.generate(payload)
       rescue StandardError => e
@@ -317,6 +318,34 @@ module Buddy
         payload
       end
 
+      # An EMPTY `chores_due_today`, on a briefing turn only.
+      #
+      # That list is the exceptions - the ones stamped for today and the ones
+      # flagged well above their usual value - and the daily rotation is
+      # deliberately not in it. Empty means "nothing unusual", never "nothing to
+      # do", and the seed says so twice, in bold: "It is NOT everything they
+      # have to do today, and you must never say it is... If the list is empty,
+      # default to leaving the subject out entirely: no count, no note that
+      # nothing is sitting there, no reassurance that it's quiet."
+      #
+      # Prod 4985 said "Nothing's due today, so your morning looks pretty open
+      # for now" on a day Chelsea logged three chore completions.
+      # Buddy::GPT::Turn#without_empty_chore_note is the repair written for that
+      # sentence and could not see this one: it requires the sentence to NAME
+      # chores, and this one named nothing. Widening that regex is chasing
+      # phrasings; a list the model never receives is one it cannot describe,
+      # which is the answer every other filter in this file reached.
+      def without_empty_chores(payload)
+        return payload unless @briefing
+        return payload unless payload[:chores_due_today].is_a?(Array)
+        return payload if payload[:chores_due_today].any?
+
+        payload.except(:chores_due_today)
+      rescue StandardError => e
+        Buddy::Errors.report(section: "gpt.context_tool.empty_chores", exception: e, user: @user)
+        payload
+      end
+
       # Things that have already finished, on a briefing turn only.
       #
       # A briefing looks FORWARD. Both of these are named in `today_briefing.rb`
@@ -330,22 +359,34 @@ module Buddy
       # filter above and as `leave_by`: what the model can't see, it can't read
       # out. Nobody is asking a question on a briefing turn, so nothing is lost.
       #
-      # Two things deliberately STAY:
-      # - a `cancelled` agenda item, which the prompt wants raised - a standing
-      #   thing not happening today is real news.
-      # - `already_rang`, which is history rather than a to-do. Prod 3255 is
-      #   what its absence costs: the swimming-lesson reminder rang at 7pm and
-      #   the next morning Buddy announced it as "set for this evening", read
-      #   off the thread and re-dated a day forward. Taking it out here would
-      #   hand the transcript back its only say, on the one turn that opens
-      #   with a summary of the day.
+      # One thing deliberately STAYS: a `cancelled` agenda item, which the
+      # prompt wants raised - a standing thing not happening today is real news.
+      #
+      # `already_rang` was the other one until 2026-08-31, kept because prod
+      # 3255 is what its absence costs: the swimming-lesson reminder rang at 7pm
+      # and the next morning Buddy announced it as "set for this evening", read
+      # off the thread and re-dated a day forward, with nothing in context to
+      # argue. That row still does that job on every other turn, which is where
+      # the question actually gets asked.
+      #
+      # On a briefing turn it does the opposite. Prod 4980 OPENED on "Whisper
+      # nap sound just went off" - reminder 69, a one-off that had fired twenty
+      # hours earlier - and then named nothing still ahead, on a morning whose
+      # one real item Moss found in the identical context. On a quiet day the
+      # model reaches for whatever is in front of it, and a rung reminder is the
+      # only row in that list shaped like an event. Holding 3255 shut here is
+      # the seed's own rule against inventing - "EVERY item you name has to be
+      # one that is actually in the lists above... If it isn't in front of you,
+      # it isn't happening" - which is the class of rule this model keeps.
       def without_settled_items(payload)
         return payload unless @briefing
 
         out = payload.dup
         out[:today_notable] = out[:today_notable].reject { |i| i[:passed] } if out[:today_notable].is_a?(Array)
         if out[:upcoming_reminders].is_a?(Array)
-          out[:upcoming_reminders] = out[:upcoming_reminders].reject { |r| r[:status].to_s == "off" }
+          out[:upcoming_reminders] = out[:upcoming_reminders].reject { |r|
+            %i[off already_rang].include?(r[:status].to_s.to_sym)
+          }
         end
         out
       rescue StandardError => e

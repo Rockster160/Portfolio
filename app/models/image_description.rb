@@ -1,4 +1,18 @@
-
+# == Schema Information
+#
+# Table name: image_descriptions
+#
+#  id              :bigint           not null, primary key
+#  body            :text             not null
+#  box_key         :string
+#  tags            :jsonb            not null
+#  taken_at        :datetime         not null
+#  created_at      :datetime         not null
+#  updated_at      :datetime         not null
+#  blob_id         :bigint           not null
+#  byte_message_id :bigint
+#  user_id         :bigint           not null
+#
 # What a picture is OF, written once, so it can be found again after it has
 # scrolled out of the thread.
 #
