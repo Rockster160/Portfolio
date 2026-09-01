@@ -107,6 +107,44 @@ RSpec.describe "edit_routine" do
         .to raise_error(/no list matching/)
       expect(steps[0]["payload"]["list"]).to eq("Groceries")
     end
+
+    # Prod 1 Sep, Puppy Window mode. The routine was right from the moment it
+    # was made — the blind moved wrongly because task 429 inverted the
+    # percentage downstream — and three turns rewrote it to the identical
+    # payload and called it fixed (5128, 5136, 5142).
+    describe "an edit that would change nothing" do
+      it "refuses rather than writing the same values again" do
+        expect { edit!(name: "shopping run", step: 1, set: '{"item":"milk"}') }
+          .to raise_error(/already set that way/)
+      end
+
+      it "tells the model to stop rather than retry, and to look elsewhere" do
+        expect { edit!(name: "shopping run", step: 1, set: '{"item":"milk"}') }
+          .to raise_error(/nothing to change.*somewhere other than this routine/m)
+      end
+
+      it "leaves the row untouched, updated_at included" do
+        was = routine.updated_at
+
+        expect { edit!(name: "shopping run", step: 1, set: '{"item":"milk"}') }.to raise_error(/already set/)
+        expect(routine.reload.updated_at).to eq(was)
+      end
+
+      # Restating one argument while genuinely changing another is a normal
+      # correction and has to go through.
+      it "still allows an edit that repeats one value and changes another" do
+        edit!(name: "shopping run", step: 1, set: '{"list":"Groceries","item":"oat milk"}')
+
+        expect(steps[0]["payload"]).to eq("list" => "Groceries", "item" => "oat milk", "category" => "weekly")
+      end
+
+      # The same values on a DIFFERENT step are a real change.
+      it "still allows setting a step to what a different step says" do
+        edit!(name: "shopping run", step: 2, set: '{"item":"milk"}')
+
+        expect(steps[1]["payload"]["item"]).to eq("milk")
+      end
+    end
   end
 
   describe "what it tells them" do

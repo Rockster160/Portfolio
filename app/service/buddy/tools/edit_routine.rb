@@ -34,6 +34,14 @@ Buddy::Tools.register(
     saying you fixed the wording without calling this leaves the routine armed
     with the value they just told you was wrong, and now they think it's
     handled. (This one really happened - prod routine 4, the lockdown scene.)
+
+    **A ROUTINE THEY SAY IS BROKEN MAY ALREADY BE RIGHT.** If this comes back
+    saying the step is already set that way, that is the answer: do not try
+    again with the same values, and do not report a fix. The routine stores what
+    they asked for, and the fault is downstream of it - the function it calls,
+    or the device on the end. Say the routine already reads correctly and that
+    the problem is elsewhere. Repeating the call is how one wrong blind became
+    three rounds of "fixed" against a routine that never changed.
   TXT
   args:        {
     name: { type: :string,  required: true, description: "Routine name, fuzzy" },
@@ -73,6 +81,29 @@ Buddy::Tools.register(
     # than the one step: check_var_flow! is a property of the routine, not of
     # any step in it, and an edit can break it.
     checked = Buddy::Routines.sanitize(steps, ctx)
+
+    # AN EDIT THAT CHANGES NOTHING IS NOT A FIX, and saying it was is worse
+    # than saying nothing: they stop looking at the routine, which was never
+    # the problem, and the thing that IS wrong keeps happening.
+    #
+    # Prod 1 Sep, Puppy Window mode. The routine read
+    # `great_bottom_right / open / 20` from the moment it was made and was
+    # right the whole time; the blind moved wrongly because task 429 inverted
+    # the percentage on its way to the house. Told the routine was broken,
+    # three separate turns rewrote it to the identical payload and reported it
+    # fixed (5128, 5136, 5142), and the person re-ran it and hit the same wall
+    # each time. The step PHRASE carries no arguments, so `was` and `now` were
+    # the same string and even the chip couldn't show there was no difference.
+    #
+    # Compared against what is stored, so this catches a no-op however it
+    # arises. It fails OPEN - if `sanitize` normalizes a stored step, the two
+    # won't match and the write goes ahead as before, which is the safe
+    # direction for a guard whose false positive would block a real correction.
+    if checked.as_json == Array(routine.steps).as_json
+      raise "step #{index} of #{routine.name} is already set that way, so there is nothing to change. " \
+            "Tell them it already reads what they asked for rather than reporting a fix, and that whatever " \
+            "is going wrong is happening somewhere other than this routine."
+    end
 
     {
       summary:  "Change step #{index} of **#{routine.name}**?",
