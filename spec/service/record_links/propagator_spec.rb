@@ -408,9 +408,14 @@ RSpec.describe RecordLinks::Propagator do
       }
     }
 
+    # Three links into ONE chore, as in prod (record_links 21-23): the button
+    # says `Nap`, `Sleep` or `Down` and all three mean the puppy went down.
+    # Which one it came through is what separates a correction from a repeat.
     before do
       Prompt.where(user_id: user.id).delete_all
       link!(:event, "Whisper", :chore, "Puppy Down", source_scope: "Down", ask_who: true)
+      link!(:event, "Whisper", :chore, "Puppy Down", source_scope: "Nap", ask_who: true)
+      link!(:event, "Whisper", :chore, "Puppy Down", source_scope: "Sleep", ask_who: true)
     end
 
     def answer!(prompt, who, at)
@@ -440,38 +445,100 @@ RSpec.describe RecordLinks::Propagator do
     # can tell a correction from a second bedtime. He skipped one and answered
     # the other.
     describe "a second event while the first question is still open" do
-      it "does not ask the same question twice" do
-        log_event!("Whisper", notes: "Down")
+      it "does not ask again when a nap is upgraded to sleep" do
+        log_event!("Whisper", notes: "Nap")
         RecordLinks::Guard.reset!
 
-        expect { log_event!("Whisper", notes: "Down") }.not_to(change { user.prompts.count })
+        expect { log_event!("Whisper", notes: "Sleep") }.not_to(change { user.prompts.count })
+      end
+
+      # The correction goes the other way just as often - a hold read as sleep
+      # when it was only a nap.
+      it "does not ask again when sleep is corrected to a nap" do
+        log_event!("Whisper", notes: "Sleep")
+        RecordLinks::Guard.reset!
+
+        expect { log_event!("Whisper", notes: "Nap") }.not_to(change { user.prompts.count })
+      end
+
+      # THE POINT OF THE SCOPE CHECK. There can be more than one nap in an
+      # afternoon, and a second one is a second doing no matter how soon it
+      # lands. Debouncing on the chore alone silently ate it.
+      it "asks again for a second nap however close together" do
+        log_event!("Whisper", notes: "Nap")
+        RecordLinks::Guard.reset!
+
+        expect { log_event!("Whisper", notes: "Nap") }.to change { user.prompts.count }.by(1)
       end
 
       # Answering either one writes the same completion, so nothing is lost by
       # only asking once.
       it "still writes the completion off the question it did ask" do
-        log_event!("Whisper", notes: "Down")
+        log_event!("Whisper", notes: "Nap")
         RecordLinks::Guard.reset!
-        log_event!("Whisper", notes: "Down")
+        log_event!("Whisper", notes: "Sleep")
         answer!(user.prompts.last, user.username, 1.hour.ago.change(usec: 0))
 
         expect(chore.reload.chore_completions.count).to eq(1)
       end
 
       it "asks again once the open one has been answered" do
-        log_event!("Whisper", notes: "Down")
+        log_event!("Whisper", notes: "Nap")
         answer!(user.prompts.last, user.username, 1.hour.ago.change(usec: 0))
 
-        expect { log_event!("Whisper", notes: "Down") }.to change { user.prompts.count }.by(1)
+        expect { log_event!("Whisper", notes: "Sleep") }.to change { user.prompts.count }.by(1)
       end
 
-      # A question left sitting unanswered must not swallow tomorrow's.
+      # A question left sitting unanswered must not swallow tomorrow's - and
+      # since the window is measured between the EVENTS, this is also the case
+      # where two genuinely distant doings arrive in the same instant. Both
+      # prompts get made now; only the event times say they are separate.
       it "asks again for a doing well after the window" do
-        log_event!("Whisper", notes: "Down")
-        user.prompts.last.update!(created_at: 3.hours.ago)
+        log_event!("Whisper", notes: "Nap", at: 3.hours.ago)
         RecordLinks::Guard.reset!
 
-        expect { log_event!("Whisper", notes: "Down") }.to change { user.prompts.count }.by(1)
+        expect { log_event!("Whisper", notes: "Sleep") }.to change { user.prompts.count }.by(1)
+      end
+
+      # Prod, 31 Aug 22:00: events 51933 and 51934 fifty seconds apart, but the
+      # second did not reach the database until 22:21:52 - so the prompts were
+      # 21m42s apart and a guard measuring prompt time asked twice about one
+      # bedtime. The events are what have to be close together.
+      #
+      # The backdated `created_at` IS the delivery gap: it puts the open prompt
+      # outside a 15-minute window on prompt time while its event stays a
+      # minute away from the one arriving now.
+      it "does not ask twice when the second event arrives late" do
+        log_event!("Whisper", notes: "Nap", at: 22.minutes.ago)
+        user.prompts.last.update!(created_at: 22.minutes.ago)
+        RecordLinks::Guard.reset!
+
+        expect {
+          log_event!("Whisper", notes: "Sleep", at: 21.minutes.ago)
+        }.not_to(change { user.prompts.count })
+      end
+
+      # The open prompt's event is gone - prod destroyed 51934 - so there is no
+      # timestamp to compare and it falls back to when the prompt was made. The
+      # scope survives on the prompt, which is why it is stored there.
+      it "still suppresses when the earlier event has been deleted" do
+        event = log_event!("Whisper", notes: "Nap")
+        RecordLinks::Guard.reset!
+        event.destroy!
+
+        expect { log_event!("Whisper", notes: "Sleep") }.not_to(change { user.prompts.count })
+      end
+
+      # Nothing to compare on, so it asks. Silence about a real second doing is
+      # the worse of the two mistakes.
+      it "asks again when the open question predates the stored scope" do
+        log_event!("Whisper", notes: "Nap")
+        prompt = user.prompts.last
+        prompt.update!(params: prompt.params.to_h.except("scope", :scope))
+        user.action_events.find(prompt.params["event_id"]).destroy!
+        RecordLinks::Guard.reset!
+
+        expect { log_event!("Whisper", notes: "Sleep") }.to change { user.prompts.count }.by(1)
       end
 
       it "leaves a question about a DIFFERENT chore alone" do

@@ -304,11 +304,14 @@ module RecordLinks
       # The bus can deliver `added` twice for one row (a retried job, a fan-out),
       # and a second identical prompt is a second thing to dismiss.
       return false if asked_about?(user, event)
-      return false if open_question_about?(user, link.target_name)
+      return false if open_question_about?(user, link, event)
 
       prompt = user.prompts.create!(
         question: "Who did: #{link.target_name}?",
-        params:   { source: "ambiguous_chore", chore_name: link.target_name, event_id: event.id },
+        # `scope` is what the question is later compared on: which of the links
+        # into this chore the doing arrived through. Kept on the prompt rather
+        # than re-derived, because the event behind it can be deleted.
+        params:   { source: "ambiguous_chore", chore_name: link.target_name, event_id: event.id, scope: link.source_scope },
         options:  [
           { type: :select, question: WHO_QUESTION, choices: names, default: "" },
           { type: :datetime, question: WHEN_QUESTION, default: local_datetime(user, event.timestamp) },
@@ -356,12 +359,58 @@ module RecordLinks
     # form and answered the other.
     #
     # Answering EITHER writes the same completion, so a second open copy adds
-    # nothing whichever way it got there. Scoped to still-open ones and to a
-    # window: a genuine second doing later in the day still gets asked about.
-    def open_question_about?(user, chore_name)
-      user.prompts.unanswered
-        .where(created_at: SAME_QUESTION_WINDOW.ago..)
-        .exists?(["params->>'source' = ? AND params->>'chore_name' = ?", "ambiguous_chore", chore_name.to_s])
+    # nothing whichever way it got there.
+    #
+    # ONLY A RECLASSIFICATION IS DEBOUNCED: the same doing arriving again
+    # through a DIFFERENT link. Whisper reaches `Puppy Down` by three of them -
+    # `Nap`, `Sleep` and `Down`, record_links 21-23 - so a press for a nap
+    # corrected by a hold for sleep is one bedtime described twice, and that is
+    # the whole case this exists for. Two NAPS are two doings and each has to be
+    # asked about however close together they land; there can easily be more
+    # than one in an afternoon. Keying on the chore alone made those
+    # indistinguishable and swallowed the second one, which is why the scope is
+    # compared and not just the name.
+    #
+    # The window is measured between the two EVENTS, and the first cut of this
+    # measured `prompts.created_at` instead - which is the same number only
+    # while events reach the database as fast as they happen. Prod, 31 Aug
+    # 22:00: events 51933 and 51934 were fifty seconds apart, but 51934 did not
+    # arrive until 22:21:52, so the two prompts were 21m42s apart and a
+    # 15-minute guard on prompt time let the duplicate through.
+    #
+    # An open prompt whose event has since been deleted falls back to its
+    # `created_at` for the timing - the deletion is real, 51934 no longer
+    # exists. A prompt with no scope recorded at all predates this and is left
+    # alone: asking twice is the recoverable mistake, and staying silent about a
+    # real second doing is not.
+    def open_question_about?(user, link, event)
+      open = user.prompts.unanswered.where(
+        ["params->>'source' = ? AND params->>'chore_name' = ?", "ambiguous_chore", link.target_name.to_s],
+      ).to_a
+      return false if open.empty?
+
+      facts = event_facts(open)
+      open.any? { |prompt|
+        params = prompt.params.to_h.with_indifferent_access
+        fact   = facts[params[:event_id].to_s] || {}
+        scope  = params[:scope].presence || fact[:notes]
+        next false if scope.blank? || scope.to_s.casecmp?(link.source_scope.to_s)
+
+        at = fact[:timestamp] || prompt.created_at
+        (event.timestamp - at).abs <= SAME_QUESTION_WINDOW
+      }
+    end
+
+    # One query for the lot rather than a lookup per open prompt. `notes` comes
+    # back too so a prompt written before `scope` was stored can still say which
+    # link it came through.
+    def event_facts(prompts)
+      ids = prompts.filter_map { |p| p.params.to_h.with_indifferent_access[:event_id].presence }
+      return {} if ids.empty?
+
+      ActionEvent.where(id: ids).pluck(:id, :timestamp, :notes).to_h { |id, at, notes|
+        [id.to_s, { timestamp: at, notes: notes }]
+      }
     end
 
     def on_prompt(user, prompt, attrs)
