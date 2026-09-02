@@ -45,6 +45,11 @@ class Execution < ApplicationRecord
                   #   Differs from execution.user_id whenever the task was
                   #   shared: the task runs as its owner, the actor is whoever
                   #   was talking to Buddy. See BuddyTaskRun for the full audit.
+    link:     12, # nil - RecordLinks::Propagator asked a question of its own
+                  #   accord (which chore, who did it) rather than relaying
+                  #   something the user did. Kept distinct from :trigger so a
+                  #   prompt the system invented is tellable from one a task
+                  #   asked for.
   }
 
   enum :status, {

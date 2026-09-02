@@ -377,7 +377,17 @@ CellWS = function (cell, init_data) {
   if (!init_data.url) {
     return;
   }
-  cell_ws.socket = new ReconnectingWebSocket(init_data.url);
+  // Every cell builds its own socket, and they are all constructed in the same
+  // tick — but the browser runs WebSocket handshakes to one host ONE AT A TIME,
+  // about 190ms apart. The library's timer starts at construction, not when the
+  // handshake gets its turn, so with the default 2000ms roughly the first
+  // eleven connect and everything after is closed while still CONNECTING:
+  // "WebSocket is closed before the connection is established". They were never
+  // refused — the queue just hadn't reached them. Long enough here to cover a
+  // dashboard's worth of cells draining at that rate.
+  cell_ws.socket = new ReconnectingWebSocket(init_data.url, null, {
+    timeoutInterval: 15000,
+  });
   cell.markWSConnected(false);
 
   cell_ws.socket.onopen = function () {
