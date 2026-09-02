@@ -700,5 +700,88 @@ RSpec.describe "Buddy agenda tools" do
         expect(tool[:receipt].call(result, ctx)).to include("7:00 PM")
       end
     end
+
+    # Prod 5144-5147: "Can you move the Orchard event today? We want to LEAVE at
+    # 4." The start went to 4:00 PM and the reply quoted "about 20 minutes of
+    # drive" for a 32-minute one; the correction then set the start to 4:28 PM,
+    # which was the OLD leave time, and called that a leave time. `at` is always
+    # a start, so there was no correct call available.
+    describe "a leave time, which is not a start time" do
+      let(:tool) { Buddy::Tools[:edit_agenda_item] }
+
+      # 31-minute drive, 0 arrive-early, exactly as agenda_items 1069.
+      let!(:orchard) {
+        user.agendas.first.agenda_items.create!(
+          name:                 "Orchard",
+          kind:                 :event,
+          start_at:             zone.local(2026, 8, 3, 17, 0),
+          end_at:               zone.local(2026, 8, 3, 18, 0),
+          location:             "Orchard",
+          arrive_early_minutes: 0,
+          metadata:             { "travel" => { "travel_seconds" => 1860 } },
+        )
+      }
+
+      def leave!(at_str, **extra)
+        payload = { item: "Orchard", leave_at: cast(at_str)[:at], **extra }
+        merged  = Timecop.freeze(now) { payload.merge(tool[:confirm].call(payload, ctx)[:resolved]) }
+        [merged, Timecop.freeze(now) { tool[:execute].call(merged, ctx) }]
+      end
+
+      it "works the start back from the drive time" do
+        merged, = leave!("2026-08-03T16:00:00")
+
+        expect(merged[:at].in_time_zone(zone).strftime("%-I:%M %p")).to eq("4:31 PM")
+      end
+
+      it "writes that start to the row" do
+        leave!("2026-08-03T16:00:00")
+
+        expect(orchard.reload.start_at.in_time_zone(zone).strftime("%-I:%M %p")).to eq("4:31 PM")
+      end
+
+      it "adds arrive-early on top of the drive" do
+        orchard.update!(arrive_early_minutes: 10)
+        merged, = leave!("2026-08-03T16:00:00")
+
+        expect(merged[:at].in_time_zone(zone).strftime("%-I:%M %p")).to eq("4:41 PM")
+      end
+
+      # The half the original reply got wrong: it named one time and called it
+      # the other.
+      it "names BOTH times in the receipt" do
+        _merged, result = leave!("2026-08-03T16:00:00")
+        receipt = tool[:receipt].call(result.symbolize_keys, ctx)
+
+        expect(receipt).to include("leave 4:00 PM")
+        expect(receipt).to include("4:31 PM")
+      end
+
+      it "shows both on the chip too" do
+        merged, = leave!("2026-08-03T16:00:00")
+
+        expect(tool[:label].call(merged, ctx)[:sub]).to include("leave 4:00 PM", "starts")
+      end
+
+      it "refuses when there is no drive time to work back from" do
+        orchard.update!(metadata: {})
+
+        expect { leave!("2026-08-03T16:00:00") }
+          .to raise_error(/don't have a drive time.*meant the start/m)
+      end
+
+      it "refuses a start and a leave time in the same call" do
+        expect { leave!("2026-08-03T16:00:00", at: cast("2026-08-03T16:00:00")[:at]) }
+          .to raise_error(/not both/)
+      end
+
+      it "leaves a plain `at` alone" do
+        payload = { item: "Orchard", at: cast("2026-08-03T16:00:00")[:at] }
+        merged  = Timecop.freeze(now) { payload.merge(tool[:confirm].call(payload, ctx)[:resolved]) }
+
+        expect(merged[:at].in_time_zone(zone).strftime("%-I:%M %p")).to eq("4:00 PM")
+        expect(merged[:leave_from]).to be_nil
+      end
+    end
   end
 end

@@ -313,6 +313,29 @@ RSpec.describe AgendaTravelChain::Service do
       expect(reset_count).to eq(0)
     end
 
+    # The other half of the short-circuit, and the one prod got wrong: a start
+    # that MOVED is not unchanged input. `leave_at` is read verbatim by
+    # Buddy::Context#leave_by and AgendaBriefing#travel_line, so a stale one is
+    # quoted to the person as fact — agenda_items 1069 ended up with a leave_at
+    # 34 seconds AFTER its own start.
+    it "rewrites leave_at when the start moves" do
+      evt = make_event(
+        name:     "Orchard",
+        start_at: Time.zone.parse("2026-06-18 17:00"),
+        end_at:   Time.zone.parse("2026-06-18 18:00"),
+        location: "Office",
+      )
+      described_class.new(user, Date.new(2026, 6, 18)).run
+      expect(evt.reload.metadata["travel"]["leave_at"]).to eq(evt.start_at.to_i - 600)
+
+      evt.update!(start_at: Time.zone.parse("2026-06-18 16:28"), end_at: Time.zone.parse("2026-06-18 17:28"))
+      described_class.new(user, Date.new(2026, 6, 18)).run
+
+      evt.reload
+      expect(evt.metadata["travel"]["leave_at"]).to eq(evt.start_at.to_i - 600)
+      expect(evt.metadata["travel"]["leave_at"]).to be < evt.start_at.to_i
+    end
+
     it "uses before: list's first entry as the incoming location for chain math" do
       a = make_event(
         name: "Stop on the way",

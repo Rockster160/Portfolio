@@ -101,9 +101,23 @@ module Buddy
       pending = pending.uniq.select(&:check_in_plannable?)
       return [] if pending.empty?
 
-      cursor = [last_check_in_at(user), now].compact.max
+      # Seeded from the LAST CHECK-IN only, never from the clock. MIN_GAP spaces
+      # check-ins relative to EACH OTHER - "never two in one sitting, and never
+      # two in a day" - and seeding with `now` turned it into a flat 20-hour
+      # delay on the first one in the queue, whether or not there was anything
+      # to be spaced from.
+      #
+      # Prod: Eve's dinner check-in (buddy_memories 128) was written 31 Aug at
+      # 2:05 PM, four hours before the 6:00 PM dinner it was about, and asked
+      # 1 Sep at 6:00 PM - the day after. Her previous check-in was 25 Aug, six
+      # days earlier, and hers still moved. Both check-ins that have ever fired
+      # landed after the thing they were about.
+      #
+      # `cursor = placed` at the end of the loop still spaces the rest, so the
+      # second and later ones in one pass are unaffected.
+      cursor = last_check_in_at(user)
       ordered(pending, now).each { |memory|
-        earliest = [cursor + MIN_GAP, memory.relevant_at, memory.check_in_at, now].compact.max
+        earliest = [cursor && (cursor + MIN_GAP), memory.relevant_at, memory.check_in_at, now].compact.max
         placed   = place(earliest, user: user, now: now)
         memory.update_columns(check_in_at: placed, updated_at: Time.current)
         # Scheduled per-record. A record whose time moved gets a second job; the
@@ -221,7 +235,7 @@ module Buddy
     def seed(memory, now)
       thread = memory.notes.any? ? "\n\nWhat you've got on it:\n#{memory.transcript(now)}" : ""
       <<~TXT
-        Something you noted #{memory.waiting_label(now.to_date)} to come back to:
+        Something you noted #{memory.waiting_label(now)} to come back to:
 
         #{memory.content}#{thread}
 

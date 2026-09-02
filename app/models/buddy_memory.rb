@@ -274,8 +274,18 @@ class BuddyMemory < ApplicationRecord
 
   # How long this has been sitting, at the resolution that matters for something
   # measured in days rather than minutes.
-  def waiting_label(now=Date.current)
-    days = (now - created_at.to_date).to_i
+  #
+  # BOTH ends are read in the person's timezone. There is no `config.time_zone`,
+  # so `Date.current` and `created_at.to_date` are both UTC dates, and in MDT
+  # every evening past 6pm has already rolled over - which is the whole band
+  # `Buddy::CheckIns::BANDS` calls "the common one" for a check-in, plus all of
+  # `night`. Prod: memory 128, created 31 Aug 2:05 PM and seeded 1 Sep 6:00 PM,
+  # 28 hours later, was announced as "2 days". Callers may pass a Time or a
+  # Date; a Date is taken as already-local and used as-is.
+  def waiting_label(now=Time.current)
+    zone  = ::ActiveSupport::TimeZone[user&.timezone.to_s] || ::Time.zone
+    today = now.is_a?(::Date) && !now.is_a?(::DateTime) ? now : now.in_time_zone(zone).to_date
+    days  = (today - created_at.in_time_zone(zone).to_date).to_i
     case days
     when ..0   then "today"
     when 1     then "since yesterday"
@@ -306,7 +316,7 @@ class BuddyMemory < ApplicationRecord
 
   # The seed plus everything added to it, oldest first, as one readable block.
   def transcript(now=Time.current)
-    lines = ["[seed, #{waiting_label(now.to_date)}] #{content.to_s.strip}"]
+    lines = ["[seed, #{waiting_label(now)}] #{content.to_s.strip}"]
     notes.each { |n| lines << "[#{"you, " if n.from_companion?}#{n.age_label(now)}] #{n.body.to_s.strip}" }
     lines.join("\n")
   end

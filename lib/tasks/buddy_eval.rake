@@ -609,6 +609,21 @@ BUDDY_EDGE_PROBES = [
     },
   },
 
+  # --- a LEAVE time, which is not a start time ------------------------------
+  {
+    case:       "prod 5144",
+    say:        "Can you move the Orchard event today? We want to LEAVE at 4.",
+    tool:       :edit_agenda_item,
+    once:       true,
+    args:       { edit_agenda_item: { leave_at: /(?:^|T)(?:16:00|4:00)/ } },
+    never_args: { edit_agenda_item: { at: /(?:^|T)(?:16:00|4:00)/ } },
+    needs:      :orchard_with_drive,
+    note:       "`at` is a START, so \"leave at 4\" set the event to 4:00 PM and the " \
+                "reply quoted \"about 20 minutes of drive\" for a 32-minute one. The " \
+                "correction after it then set the start to 4:28 PM - the OLD leave " \
+                "time - and announced that as a leave time (5145, 5147)",
+  },
+
   # --- a routine they say is broken, which is already right -----------------
   {
     case:         "prod 5127",

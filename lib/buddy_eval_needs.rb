@@ -136,6 +136,10 @@ module BuddyEvalNeeds
     dentist_on_calendar:  { label: "a dentist item on the calendar", check: ->(u) { AgendaItem.where(agenda_id: u.agendas.map(&:id), start_at: Time.current..1.month.from_now).any? { |i| i.name.to_s.match?(/dentist/i) } } },
     pilaf_series:         { label: "a repeating pilaf dinner on the calendar", check: ->(u) { AgendaSchedule.where(agenda_id: u.agendas.map(&:id)).any? { |sc| sc.name.to_s.match?(/pilaf/i) } } },
     family_party:         { label: "a family party on the calendar with a location to correct", check: ->(u) { AgendaItem.where(agenda_id: u.agendas.map(&:id), start_at: Time.current..1.month.from_now).any? { |i| i.name.to_s.match?(/family party/i) } } },
+    # The drive time is the precondition, not the event — `leave_at` refuses
+    # outright without one, so an Orchard with no travel hash is unanswerable
+    # for a different reason than the one the probe is testing.
+    orchard_with_drive:   { label: "an event with a drive time to work a leave time back from", check: ->(u) { AgendaItem.where(agenda_id: u.agendas.map(&:id), start_at: Time.current..1.month.from_now).any? { |i| i.name.to_s.match?(/orchard/i) && i.metadata.dig("travel", "travel_seconds").to_i.positive? } } },
     camping_tote:         { label: "a camping tote in the inventory", check: ->(u) { box(u, /camping tote/i) } },
     camp_stove_filed:     { label: "a camp stove filed in the inventory", check: ->(u) { box(u, /camp stove/i) } },
     headlamp_filed:       { label: "a headlamp filed in the inventory", check: ->(u) { box(u, /headlamp/i) } },

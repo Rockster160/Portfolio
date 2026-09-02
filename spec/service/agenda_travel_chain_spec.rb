@@ -10,8 +10,15 @@ RSpec.describe AgendaTravelChain do
       expect(described_class).to respond_to(:refresh_for)
     end
 
-    it "the worker loads with sidekiq dedup on" do
-      expect(AgendaTravelChainSyncWorker.sidekiq_options).to include("lock" => :until_executed)
+    # `until_executing`, deliberately, and not `until_executed`. The job
+    # recomputes to whatever the row says when it RUNS, so a lock held through
+    # execution discards any edit landing mid-run — the enqueue is coalesced
+    # into a pass that has already read the old row, and nothing recomputes it
+    # afterwards. Prod left two rows holding a leave_at for their old start:
+    # agenda_items 1069 (moved by the Buddy tool) and 1048 (moved by a PATCH
+    # from the UI). Two writers, one pipeline.
+    it "the worker dedups without discarding a change made mid-run" do
+      expect(AgendaTravelChainSyncWorker.sidekiq_options).to include("lock" => :until_executing)
     end
 
     it "the Custom Jil method dispatches to refresh_travel_time" do

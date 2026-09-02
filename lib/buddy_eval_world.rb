@@ -317,6 +317,19 @@ class BuddyEvalWorld
       )
     }
 
+    # Carries a real DRIVE TIME, which is what `leave_at` works back from. The
+    # travel hash is written here rather than left to the chain service: that
+    # would want a Google round-trip, and a probe about "leave at 4" only needs
+    # the number to exist. 31 minutes, as agenda_items 1069 had.
+    reuse(upcoming.detect { |item| item.name.to_s.match?(/orchard/i) }) {
+      AgendaItem.create!(
+        agenda: agenda, kind: :event, name: "Orchard for shakes",
+        location: "Rowley's Red Barn", arrive_early_minutes: 0,
+        start_at: 2.days.from_now.change(hour: 17), end_at: 2.days.from_now.change(hour: 18),
+        metadata: { "travel" => { "travel_seconds" => 1860, "travel_minutes" => 31 } }
+      )
+    }
+
     # A REPEATING one, for the series probes. MATERIALIZE_WINDOW is 30 hours,
     # so most of its occurrences exist only as the rule - which is the whole
     # point of it being here. Its items are `dependent: :destroy`, so the

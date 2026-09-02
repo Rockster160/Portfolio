@@ -78,6 +78,91 @@ RSpec.describe Buddy::CheckIns do
 
       expect(leg.reload.check_in_at).to be < cat.reload.check_in_at
     end
+
+    # MIN_GAP spaces check-ins from EACH OTHER. Seeding the cursor with `now`
+    # turned it into a flat 20-hour delay on the first one in the queue, so a
+    # check-in about a 6pm dinner, noted at 2pm the same day, was asked the
+    # NEXT evening (prod: Suki to Eve, buddy_memories 128, message 5157).
+    describe "the first one, with nothing to be spaced from" do
+      it "is not pushed a day out when there is no previous check-in" do
+        memory = followup("grandson's dinner tonight", check_in_at: 3.hours.from_now)
+
+        described_class.replan!(user)
+
+        expect(memory.reload.check_in_at).to be < 20.hours.from_now
+      end
+
+      it "is still not pushed out when the last check-in was days ago" do
+        BuddyMemory.where(user: user).destroy_all
+        followup("an old one", check_in_at: 6.days.ago, checked_in_at: 6.days.ago)
+        memory = followup("grandson's dinner tonight", check_in_at: 3.hours.from_now)
+
+        described_class.replan!(user)
+
+        expect(memory.reload.check_in_at).to be < 20.hours.from_now
+      end
+
+      # The spacing it DOES owe: a check-in an hour ago means the next waits.
+      it "still spaces off a check-in that just happened" do
+        followup("an earlier one", check_in_at: nil, checked_in_at: 1.hour.ago)
+        memory = followup("the new one", check_in_at: 2.hours.from_now)
+
+        described_class.replan!(user)
+
+        expect(memory.reload.check_in_at).to be >= 1.hour.ago + described_class::MIN_GAP
+      end
+    end
+  end
+
+  # No config.time_zone, so `Date.current` and `created_at.to_date` were both
+  # UTC. 6pm MDT is already midnight UTC, and BANDS puts `evening` at 18-20 and
+  # `night` at 22-23 local — so EVERY evening and night check-in counted a day
+  # too many. Prod memory 128: created 31 Aug 2:05 PM, seeded 1 Sep 6:00 PM,
+  # 28 hours apart, announced as "2 days".
+  # Every time here is UTC on purpose: that is what `Time.current` hands this
+  # code in production, because there is no `config.time_zone`. A user-zoned
+  # time would hide the whole bug — `.to_date` on one of those is already the
+  # local date.
+  describe "how long it says something has been waiting" do
+    let(:zone) { ActiveSupport::TimeZone[user.timezone] }
+
+    # 31 Aug 2:05 PM MDT = 1 Sep 20:05 UTC... no: 31 Aug 20:05 UTC.
+    # 1 Sep 6:00 PM MDT  = 2 Sep 00:00 UTC — already tomorrow, in UTC.
+    let(:created_utc) { Time.utc(2026, 8, 31, 20, 5) }
+    let(:seeded_utc)  { Time.utc(2026, 9, 2, 0, 0) }
+
+    it "the two really are one local day apart" do
+      expect(created_utc.in_time_zone(zone).to_date).to eq(Date.new(2026, 8, 31))
+      expect(seeded_utc.in_time_zone(zone).to_date).to eq(Date.new(2026, 9, 1))
+      expect(seeded_utc - created_utc).to be < 30.hours
+    end
+
+    it "calls 28 hours across one local midnight yesterday" do
+      memory = followup("the dinner", created_at: created_utc)
+
+      expect(memory.waiting_label(seeded_utc)).to eq("since yesterday")
+    end
+
+    it "does not roll over on the same local evening" do
+      memory = followup("the dinner", created_at: Time.utc(2026, 9, 1, 15, 0))  # 9am MDT
+
+      expect(memory.waiting_label(Time.utc(2026, 9, 2, 2, 0))).to eq("today")  # 8pm MDT same day
+    end
+
+    it "still counts real days" do
+      memory = followup("the dinner", created_at: Time.utc(2026, 8, 29, 20, 5))
+
+      expect(memory.waiting_label(seeded_utc)).to eq("3 days")
+    end
+
+    it "reads the same from the seed the model is handed" do
+      memory = followup("the dinner", created_at: created_utc)
+
+      seed = described_class.send(:seed, memory, seeded_utc)
+
+      expect(seed).to include("since yesterday")
+      expect(seed).not_to include("2 days")
+    end
   end
 
   describe "severity is not the running order" do

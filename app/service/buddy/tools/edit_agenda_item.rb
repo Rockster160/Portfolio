@@ -24,6 +24,23 @@ Buddy::Tools.register(
     of its own yet (anything further out than about a day) can ONLY be changed
     through the series, and this does that automatically.
 
+    **"LEAVE at 4" IS NOT "start at 4" - use `leave_at`, never `at`.** For
+    anywhere with a drive, the time they say out loud is usually the one they
+    walk out of the door, and `at` is always the START. Pass `leave_at` and the
+    start is worked back from the item's own drive time and how early they like
+    to arrive - which is a number this app HAS and you do not. Do not compute it
+    yourself and do not quote a drive time from memory: asked to move an event
+    so they could leave at 4, the reply said "about 20 minutes of drive" for a
+    32-minute one and set the start to 4:00, and the correction after it set the
+    start to the OLD leave time (prod 5144-5147).
+
+    "We want to leave at 4", "set it so I'm out the door by 8:30", "I need to
+    leave by quarter past" - all `leave_at`. "Move it to 4", "start at 4",
+    "put it at 4 o'clock" - all `at`. Never both in one call.
+
+    If there is no drive time on the item yet, this comes back and says so -
+    then ask whether they meant the start, rather than guessing.
+
     For v1, only edits local (non-Google-synced) items.
   TXT
   feature:     :agenda,
@@ -31,7 +48,8 @@ Buddy::Tools.register(
     item:      { type: :string,       required: true,  description: "Fuzzy title of the item to edit" },
     hint_date: { type: :string,       required: false, description: "Date hint (YYYY-MM-DD) for disambiguation" },
     title:     { type: :string,       required: false, description: "New title" },
-    at:        { type: :iso_time,     required: false, description: "New local wall-clock start, 24-hour. Moving something on today's calendar puts it AHEAD of the current time" },
+    at:        { type: :iso_time,     required: false, description: "New local wall-clock START, 24-hour. Moving something on today's calendar puts it AHEAD of the current time. If they said LEAVE, use `leave_at` instead" },
+    leave_at:  { type: :iso_time,     required: false, description: "The time they want to LEAVE, 24-hour local. The start is worked back from the item's own drive time and arrive-early minutes. Never pass this together with `at`" },
     duration:  { type: :duration_min, required: false, description: "New duration in minutes" },
     location:  { type: :string,       required: false, description: "New place/venue" },
     calendar:  { type: :string,       required: false, description: "Move it to this calendar, by name (e.g. 'Ours')" },
@@ -72,6 +90,31 @@ Buddy::Tools.register(
     # actually lands. This is the call that put a shower at 4:45 AM under a
     # reply announcing 4:45 PM — see ToolContext#resolve_calendar_time.
     resolved[:at] = ctx.resolve_calendar_time(payload[:at]) if payload[:at].present?
+
+    # A leave time is not a start time, and the difference is the drive. The
+    # app knows `travel_seconds` and `arrive_early_minutes`; the model does not,
+    # and when it guessed it was 12 minutes out (prod 5145). So it is worked
+    # back HERE and the start is what gets written.
+    #
+    # Refused rather than guessed when there is no drive time on the row - a
+    # virtual meeting, somewhere with no location, or an item the chain has not
+    # reached yet. Silently treating a leave time as a start is exactly the
+    # mistake this argument exists to stop.
+    if payload[:leave_at].present?
+      raise "give me either a start (`at`) or a leave time (`leave_at`), not both" if payload[:at].present?
+
+      leave  = ctx.resolve_calendar_time(payload[:leave_at])
+      drive  = item.metadata.dig("travel", "travel_seconds").to_i
+      early  = item.arrive_early_minutes.to_i * 60
+      if drive.zero?
+        raise "I don't have a drive time for #{item.name}, so I can't work back from a leave time - " \
+              "ask whether they meant the start instead"
+      end
+
+      resolved[:at]         = leave + drive + early
+      resolved[:leave_from] = leave
+      resolved[:drive_secs] = drive
+    end
     if payload[:calendar].present?
       # resolve_writable_agenda only ever returns LOCAL calendars the person can
       # write to, so the destination needs no Google guard of its own. `strict`
@@ -92,7 +135,16 @@ Buddy::Tools.register(
     base = item&.name || payload[:item].to_s
     diffs = []
     diffs << "title → #{payload[:title]}" if payload[:title].present?
-    diffs << "time → #{payload[:at].in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p")}" if payload[:at].respond_to?(:strftime)
+    # BOTH times when they asked to leave at one. Naming only the start reads
+    # as though their leave time was ignored, and naming only the leave time is
+    # what put "leave at 4:28" on a 4:28 start (prod 5147).
+    if payload[:leave_from].respond_to?(:strftime) && payload[:at].respond_to?(:strftime)
+      zone = ctx.user.timezone
+      diffs << "leave #{payload[:leave_from].in_time_zone(zone).strftime("%-I:%M %p")} → " \
+               "starts #{payload[:at].in_time_zone(zone).strftime("%a %-I:%M %p")}"
+    elsif payload[:at].respond_to?(:strftime)
+      diffs << "time → #{payload[:at].in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p")}"
+    end
     diffs << "duration → #{payload[:duration]}m" if payload[:duration].present?
     diffs << "@ #{payload[:location]}" if payload[:location].present?
     diffs << "📅 #{payload[:agenda_from]} → #{payload[:agenda_name]}" if payload[:agenda_name].present?
@@ -148,6 +200,9 @@ Buddy::Tools.register(
     {
       agenda_item_id: item.id,
       updated_fields: attrs.keys,
+      # Carried so the receipt can say the time they actually named. Without
+      # it the confirmation talks only about a start they never mentioned.
+      leave_from:     payload[:leave_from],
       revert:         { op: "updated", model: "AgendaItem", id: item.id, before: before, summary: "reverted #{prior_name}" },
     }
   },
@@ -169,6 +224,13 @@ Buddy::Tools.register(
     # on screen disagreed with the sentence.
     return "Updated #{name} ✓" unless fields.include?("start_at") && item&.start_at
 
-    "#{name} → #{item.start_at.in_time_zone(ctx.user.timezone).strftime("%a %-I:%M %p")} ✓"
+    zone  = ctx.user.timezone
+    start = item.start_at.in_time_zone(zone).strftime("%a %-I:%M %p")
+    # They asked to LEAVE at a time, so lead with that - it is the half they
+    # said and the half they act on. The start is the consequence.
+    leave = (ctx.resolve_time(result[:leave_from]) if result[:leave_from].present?)
+    return "#{name} - leave #{leave.in_time_zone(zone).strftime("%-I:%M %p")}, starts #{start} ✓" if leave
+
+    "#{name} → #{start} ✓"
   },
 )

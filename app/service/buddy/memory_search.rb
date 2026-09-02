@@ -102,7 +102,7 @@ module Buddy
       out << memory.category_label.downcase if memory.category.present?
       out << memory.status unless memory.status_active?
       out.concat(memory.tag_list)
-      out << (memory.thread_label(now) || "held #{memory.waiting_label(now.to_date)}")
+      out << (memory.thread_label(now) || "held #{memory.waiting_label(now)}")
       out
     end
   end
