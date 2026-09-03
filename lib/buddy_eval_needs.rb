@@ -160,6 +160,7 @@ module BuddyEvalNeeds
     camera_fn:            { label: "the Camera Last Seen function", check: ->(u) { jil(u, /camera/i) } },
     fan_fn:               { label: "a fan function",               check: ->(u) { jil(u, /fan/i) } },
     light_fn:             { label: "an office light function",     check: ->(u) { jil(u, /office light/i) } },
+    blinds_fn:            { label: "the blinds function",          check: ->(u) { jil(u, /blind/i) } },
     jil_trigger:          { label: "a matching jil trigger",       check: ->(u) { jil(u, /chill/i, kind: :trigger) } },
     # The point of the probe is that the wiring EXISTS and didn't fire. With no
     # trigger hung off a list, filing a feature request is the correct answer

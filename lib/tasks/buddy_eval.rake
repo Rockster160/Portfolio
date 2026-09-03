@@ -769,6 +769,33 @@ BUDDY_EDGE_PROBES = [
           "and produced the chip",
   },
 
+  # --- a blind that is on its way, and the one blind they named -------------
+  {
+    case:         "the reply the 3 Sep rewrite is for",
+    say:          "close the blinds",
+    tool:         :call_jil_function,
+    needs:        :blinds_fn,
+    # The house answers 200 the moment the script STARTS and the blind is then
+    # travelling for another half minute, so the true sentence is the garage
+    # one - it is happening. A finished state is the one claim the reply can't
+    # support, and it is the claim the old wording invited.
+    expect_reply: /closing|shutting|on (?:their|its) way|getting them (?:closed|down)/i,
+    never_reply:  /(?:are|is|they.re)\s+(?:all\s+)?(?:now\s+)?(?:closed|shut)\b|closed\s+now|all\s+(?:closed|shut)\s+up/i,
+    note:         "task 429 answers \"Closing the great room blinds\" and its " \
+                  "description now says to keep the reply there; nothing else " \
+                  "checks that the model doesn't upgrade it to a finished state",
+  },
+  {
+    case:  "prod 31 Aug",
+    say:   "open the bottom right blind to 20%",
+    tool:  :call_jil_function,
+    needs: :blinds_fn,
+    args:  { call_jil_function: { which: "great_bottom_right" } },
+    note:  "picked `great_bottom` and moved BOTH bottom blinds, because the " \
+           "six singles weren't in the enum yet - the model can only see the " \
+           "task's `listener` string. They are there now and nothing re-checks it",
+  },
+
   # --- the camera: seeing something, versus being told when ----------------
   {
     case:  "prod 3789, 3728, 3751",
