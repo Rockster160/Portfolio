@@ -376,6 +376,15 @@ class WebhooksController < ApplicationController
       buddy_process_reply(message.user, message.byte_conversation, message)
     end
 
+    # The pre-standup brief finished writing. It runs in its own claude thread
+    # because only a claude thread reaches the Mac, but it is read in the
+    # primary buddy one — settling to `delivered` is the only signal there is
+    # that the session is done, since the row is created as "…" and updated as
+    # it streams. Ignores anything that isn't that report; see #forward!.
+    if message.state == "delivered" && message.saved_change_to_state?
+      ::ByteStandupPrep.forward!(message)
+    end
+
     # Detect Anthropic usage-cap errors coming back through the failed-
     # message path. Mac's error text includes "out of usage / resets X".
     # If we can parse a reset time, flip the user to sleeping and rewrite

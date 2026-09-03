@@ -213,6 +213,14 @@ BUDDY_TOOL_PROBES = {
   add_agenda_item:        { say: "put dinner with Sam on the calendar Thursday at 7", avoid: %i[schedule_reminder] },
   edit_agenda_item:       { say: "move my dentist appointment to 3", needs: :dentist_on_calendar },
   search_agenda:          "when's my next dentist appointment?",
+  # `avoid: search_agenda` because looking the event UP is the near miss: it
+  # finds the row and reports what's already on it, which for something with no
+  # drive time yet is nothing at all.
+  check_travel_time:      {
+    say:   "how long does it take to get to the orchard?",
+    avoid: %i[search_agenda],
+    needs: :orchard_home_drive,
+  },
   today_briefing:         "give me my Today briefing",
 
   # --- the house, the printer, the Mac ---
@@ -641,6 +649,58 @@ BUDDY_EDGE_PROBES = [
                   "fix (5128, 5136, 5142), so he re-ran it and hit the same wall " \
                   "every time. The step phrase carries no arguments, so `was` and " \
                   "`now` were the same string and the chip couldn't show it either",
+  },
+
+  # --- when they are BACK, which is a number the app has ---------------------
+  {
+    case:         "prod 5266",
+    say:          "what time am I back from the orchard?",
+    tool:         :none,
+    allow:        %i[search_agenda get_context],
+    needs:        :orchard_home_drive,
+    expect_reply: /\d{1,2}:\d{2}|\d{1,2}\s?(?:am|pm)/i,
+    never_reply:  /don.t (?:have|know)|what time (?:does|is)|not sure when|need .{0,20}end time/i,
+    note:         "\"I want to leave only once Chelsea gets back from her yoga " \
+                  "that day\" - the drive home had been computed since 30 Jul " \
+                  "and read by nothing but the renderer, so Byte asked him for " \
+                  "the end time and then for the drive, both of which were on " \
+                  "the row. `home_by` is in the context and the search rows now",
+  },
+
+  # --- a one-off is not a series, and asking for one is not an error --------
+  {
+    case:        "prod 5270",
+    say:         "can you switch the orchard over to the Ours calendar?",
+    tool:        :edit_agenda_item,
+    args:        { edit_agenda_item: { calendar: /ours/i } },
+    needs:       :ours_calendar,
+    never_reply: /not repeating|isn.t a repeating|whole series|single event version/i,
+    note:        "the description says to pass `series=true` for a calendar " \
+                 "move and the tool then raised \"isn't a repeating item\" on " \
+                 "anything that doesn't repeat, so \"I moved it to 3. Can you " \
+                 "switch that to the Ours calendar?\" dead-ended on \"I need " \
+                 "the single event version\" with nothing moved. `series` on a " \
+                 "one-off is redundant, not wrong",
+  },
+
+  # --- a thing that failed, which is not a thing that is missing ------------
+  {
+    case:        "prod 5244",
+    say:         "Those didn't trigger the after effects - should have triggered " \
+                 "HASS since the list is now empty.",
+    tool:        :none,
+    allow:       %i[read_listener_guide],
+    avoid:       %i[request_feature],
+    needs:       :before_bed_trigger,
+    never_reply: /don.t have|isn.t something i can|can.t do that yet|put (?:it|that) on the list/i,
+    note:        "he was reporting a BUG in something that had been running " \
+                 "since 25 Aug - tasks 497/498/255 keep input_boolean.before_bed " \
+                 "in step with the list - and it was written down as a missing " \
+                 "feature instead (FeatureRequest 3, \"Trigger HASS when a list " \
+                 "empties\"). One removal path out of four had stopped calling " \
+                 "them. So the wish got recorded and the fault didn't, and " \
+                 "`jil_triggers` had the answer sitting in the context the " \
+                 "whole time",
   },
 
   # --- a name that is most of a longer name ---------------------------------

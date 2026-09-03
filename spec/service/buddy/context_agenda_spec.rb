@@ -442,6 +442,43 @@ RSpec.describe Buddy::Context, ".build agenda" do
 
       expect(row("Dinner Out")).to include(:leave_by, :drive_min)
     end
+
+    # The mirror image, and the reason the two are not the same rule. Her
+    # DEPARTURE is an instruction to go to her appointment. Her ARRIVAL HOME is
+    # a fact about his evening, and prod 5266 — "I want to leave only once
+    # Chelsea gets back from her yoga that day" — is a question nothing in the
+    # context could answer, so Byte asked him for a time the app already had.
+    it "keeps the way HOME on a partner's item, where the departure is stripped" do
+      # The chain recomputes a located event on commit and would rewrite the
+      # fixture out from under this. What's being pinned is the READ.
+      allow(AgendaTravelChainSyncWorker).to receive(:perform_async)
+      partner = create(:user)
+      hers = create(:agenda, user: partner)
+      AgendaShare.create!(agenda: hers, user: user, permission: :viewer)
+      create(
+        :agenda_item,
+        agenda:   hers,
+        name:     "Her Yoga",
+        kind:     :event,
+        location: "Mountain Yoga Sandy",
+        start_at: 3.hours.from_now,
+        end_at:   4.hours.from_now,
+        metadata: {
+          "travel" => {
+            "travel_minutes"      => 27,
+            "leave_at"            => 2.hours.from_now.to_i,
+            "post_travel_seconds" => 1860,
+            "post_travel_minutes" => 31,
+          },
+        },
+      )
+
+      expect(row("Her Yoga")).not_to include(:leave_by)
+      expect(row("Her Yoga")[:home_by]).to eq(
+        4.hours.from_now.advance(minutes: 31).in_time_zone(user.timezone).strftime("%-I:%M %p"),
+      )
+      expect(row("Her Yoga")[:drive_home_min]).to eq(31)
+    end
   end
 
   # An editor can add to somebody's calendar without it being theirs. Only

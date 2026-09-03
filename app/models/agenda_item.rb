@@ -281,6 +281,66 @@ class AgendaItem < ApplicationRecord
     fired_at.present?
   end
 
+  # The OUTGOING leg, as the two figures anything downstream actually wants:
+  # how long the drive home takes, and what time they are through the door.
+  #
+  # The incoming leg has had `travel["leave_at"]` ready-made since the chain
+  # was built, and everything reads it verbatim. The outgoing leg has been
+  # computed just as long and was only ever rendered — `presentation_attrs` was
+  # the single Ruby-side reader — so "when is she back from yoga?" had no
+  # answer anywhere but the screen. These are that answer.
+  #
+  # `post_arrive_at` is stamped only on a MATERIALIZED row. The schedule mirrors
+  # the baseline (`post_travel_seconds` / `post_travel_minutes`) and not the
+  # per-date epoch, so a phantom derives it off its own end — the same
+  # arithmetic `recurrence.js#buildPhantom` does on the front end. Without that,
+  # every occurrence beyond the 30-hour materialize window reads as having no
+  # way home, which is most of them.
+  # The INCOMING drive in seconds, falling back to the minute figure.
+  #
+  # Not every writer produces both. The legacy pair — `travel_minutes` +
+  # `travel_location`, which is what the Jil refresh task writes — carries no
+  # seconds at all, and an item that has only ever been touched by that has a
+  # perfectly good drive time that reads as zero. Item 1081 ("Plunge with Wil")
+  # was created by Buddy and held `travel_minutes: 47` and nothing else, so
+  # asked to set a leave time on it the tool answered that it had no drive time
+  # for it (prod 5268-5269) — with 47 minutes sitting right there.
+  def travel_seconds
+    secs = travel_hash["travel_seconds"].to_i
+    return secs if secs.positive?
+
+    mins = travel_hash["travel_minutes"].to_i
+    mins.positive? ? mins * 60 : nil
+  end
+
+  def travel_home_seconds
+    secs = travel_hash["post_travel_seconds"].to_i
+    secs.positive? ? secs : nil
+  end
+
+  def travel_home_minutes
+    mins = travel_hash["post_travel_minutes"].to_i
+    return mins if mins.positive?
+
+    secs = travel_home_seconds
+    secs && (secs / 60.0).ceil
+  end
+
+  def home_at
+    stamped = travel_hash["post_arrive_at"].to_i
+    return Time.zone.at(stamped) if stamped.positive?
+
+    secs = travel_home_seconds
+    return nil if secs.nil? || end_at.blank?
+
+    Time.zone.at(end_at.to_i + secs)
+  end
+
+  def travel_hash
+    hash = metadata.is_a?(Hash) ? metadata["travel"] : nil
+    hash.is_a?(Hash) ? hash : {}
+  end
+
   # Google attendee metadata, hydrated from sync.rb into the JSONB
   # `metadata` column. `attendees` is an array of hashes with stringified
   # keys (default for JSONB reads); `self_response` is the connected

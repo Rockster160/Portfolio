@@ -69,7 +69,17 @@ module WebPushNotifications
     # }
 
     payload = payload.deep_symbolize_keys
-    return if payload[:title].blank? && !payload[:dismiss]
+    # A payload with no title is a SILENT push, and there are two kinds worth
+    # sending: a dismissal, and a bare count.
+    #
+    # The count is how a badge gets cleared on a device that isn't running.
+    # Reading a thread on the desk browser broadcasts over the socket, and a
+    # phone in a pocket receives nothing at all — so its icon kept the number
+    # for something already read, sometimes for days. `byte_worker.js` has
+    # always handled this shape correctly: it calls `clearAppBadge` on a zero
+    # and shows no banner without a title. Nothing ever reached it, because
+    # this line dropped every count-only push before it was sent.
+    return if payload[:title].blank? && !payload[:dismiss] && !payload.key?(:count) && payload[:data].blank?
 
     message = format_payload(user, payload, channel).to_json
     urgency = payload[:dismiss] ? DISMISS_URGENCY : URGENCY

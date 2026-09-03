@@ -62,6 +62,86 @@ RSpec.describe AgendaItem do
       end
     end
 
+    # The outgoing leg. It has been computed since 30 Jul and, until now, read
+    # on the Ruby side by exactly one method — `presentation_attrs`, for the
+    # screen. Prod 5266 asked "when does she get back from yoga" and got a
+    # question back, because nothing else could reach it.
+    describe "the drive home" do
+      def item_with(travel, ends: Time.zone.local(2026, 9, 8, 13, 0))
+        build(
+          :agenda_item, agenda: agenda, kind: "event",
+          start_at: ends - 90.minutes, end_at: ends, metadata: { "travel" => travel }
+        )
+      end
+
+      it "reads the stamped arrival when there is one" do
+        stamped = Time.zone.local(2026, 9, 8, 13, 31).to_i
+        item = item_with({ "post_travel_seconds" => 1860, "post_arrive_at" => stamped })
+
+        expect(item.home_at.to_i).to eq(stamped)
+      end
+
+      # A phantom carries the SCHEDULE's metadata, which mirrors the baseline
+      # and not the per-date epoch — so every occurrence past the 30-hour
+      # materialize window has a drive home and no arrival stamped on it. That
+      # is most of them, and it is the case prod 5266 actually hit.
+      it "works the arrival out from its own end when nothing is stamped" do
+        item = item_with({ "post_travel_seconds" => 1860 })
+
+        expect(item.home_at).to eq(Time.zone.local(2026, 9, 8, 13, 31))
+      end
+
+      it "has no arrival when there is no drive home" do
+        expect(item_with({ "travel_seconds" => 900 }).home_at).to be_nil
+      end
+
+      it "has no arrival when it has no end to measure from" do
+        item = build(
+          :agenda_item, agenda: agenda, kind: "task", end_at: nil,
+          metadata: { "travel" => { "post_travel_seconds" => 1860 } }
+        )
+
+        expect(item.home_at).to be_nil
+      end
+
+      it "rounds the minutes up rather than reporting a drive as shorter" do
+        expect(item_with({ "post_travel_seconds" => 1812 }).travel_home_minutes).to eq(31)
+      end
+
+      it "prefers the stored minutes when they are there" do
+        item = item_with({ "post_travel_seconds" => 1812, "post_travel_minutes" => 31 })
+
+        expect(item.travel_home_minutes).to eq(31)
+      end
+    end
+
+    # The legacy pair — `travel_minutes` + `travel_location`, which is what the
+    # Jil refresh task writes — carries no seconds. Reading the key directly
+    # made a 47-minute drive read as no drive at all (prod 5268).
+    describe "#travel_seconds" do
+      it "falls back to the minute figure" do
+        item = build(
+          :agenda_item, agenda: agenda,
+          metadata: { "travel" => { "travel_minutes" => 47, "travel_location" => "Horsetail Falls" } }
+        )
+
+        expect(item.travel_seconds).to eq(2820)
+      end
+
+      it "prefers the seconds when both are there" do
+        item = build(
+          :agenda_item, agenda: agenda,
+          metadata: { "travel" => { "travel_minutes" => 47, "travel_seconds" => 2793 } }
+        )
+
+        expect(item.travel_seconds).to eq(2793)
+      end
+
+      it "is nil when there is no travel at all" do
+        expect(build(:agenda_item, agenda: agenda, metadata: {}).travel_seconds).to be_nil
+      end
+    end
+
     describe "#crossed_out?" do
       let(:now) { Time.zone.local(2026, 5, 13, 12, 0) }
 

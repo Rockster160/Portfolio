@@ -51,4 +51,37 @@ RSpec.describe "Byte conversation read", type: :request do
     post byte_read_conversation_path(id: other.id)
     expect(response).to have_http_status(:not_found)
   end
+
+  # The socket only reaches screens that are RUNNING. A phone in a pocket gets
+  # nothing, so its home-screen badge kept the number for a message already read
+  # at the desk — the complaint that came back after the broadcast above was
+  # already working. Only a push can paint the icon of a closed app.
+  describe "the badge on a device that isn't running" do
+    let!(:phone) {
+      UserPushSubscription.create!(
+        user: user, channel: :byte, endpoint: "https://push/phone",
+        p256dh: "k", auth: "a", registered_at: Time.current
+      )
+    }
+
+    def pushed
+      sent = []
+      allow(WebPush).to receive(:payload_send) { |args| sent << JSON.parse(args[:message]) }
+      post byte_read_conversation_path(id: conversation.id)
+      sent
+    end
+
+    it "pushes the new count so the badge can clear" do
+      expect(pushed.first&.dig("data", "count")).to eq(0)
+    end
+
+    # A banner every time another device is opened would be worse than the
+    # stale badge.
+    it "says nothing out loud" do
+      sent = pushed.first
+
+      expect(sent["title"]).to be_blank
+      expect(sent["body"]).to be_blank
+    end
+  end
 end

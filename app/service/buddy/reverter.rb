@@ -84,6 +84,7 @@ module Buddy
       when "created"   then remove(r)
       when "updated"   then revert_update(r)
       when "recreated" then recreate(r)
+      when "reattached" then reattach(r)
       else raise "nothing here to undo"
       end
       r[:summary].to_s.presence || "Undone."
@@ -167,6 +168,16 @@ module Buddy
     # Undo a create → remove what was just added (soft where the model allows).
     # Event mutations fire the :event trigger + broadcast (ActionEvent has no
     # model callback for it), the SAME as an in-app change.
+    # Undo an edit to a date of a repeat that had no row of its own until the
+    # edit made one. Reverting the FIELDS would leave a detached row holding the
+    # rule's own values beside an excluded date — invisible, and skipped by the
+    # next change to the series. Putting it back in the cycle is what actually
+    # returns the calendar to how it looked.
+    def reattach(r)
+      rec = find!(r)
+      raise "that one is back on its normal schedule already" unless AgendaOccurrence.reattach!(rec)
+    end
+
     def remove(r)
       rec = find!(r)
       case r[:model].to_s
@@ -193,7 +204,12 @@ module Buddy
       # Go through the shared undoer so the streak rebuilds AND the Chores app
       # gets the broadcast — not just a silent destroy.
       when "ChoreCompletion" then ChoreCompletionUndoer.call(rec.user, rec)
-      when "ListItem" then rec.soft_destroy
+      # `soft_destroy` on its own is a bare `update(deleted_at:)` and fires
+      # nothing. Everything downstream of a list — the Before Bed HASS flag most
+      # of all — hangs off the `:removed` Jil trigger, so an undo that skips it
+      # empties the list and leaves the house believing it is still full. Same
+      # shape as `ListItem.remove`, which is the door every other caller uses.
+      when "ListItem"        then rec.notify_jil(:removed) if rec.soft_destroy
       # Contents are `dependent: :destroy`, so this would take them with it.
       # Undoing "you just added the camping tote" is a gesture about the tote;
       # if things have been put in it since, somebody meant to put them there

@@ -22,8 +22,12 @@ for i in $(seq 1 20); do
   sleep 0.25
 done
 
-# Run query
-PGPASSWORD="$PROD_DB_PASS" psql -h localhost -p "$LOCAL_PORT" -U "$PROD_DB_USER" -d "$PROD_DB_NAME" -c "$QUERY" 2>&1
+# Run query. PROD_QUERY_FLAGS is for callers that want raw output rather than
+# the aligned box — `-A -t` to print one bare value, which is the only readable
+# way to get a markdown document back out. Empty by default, so nothing changes
+# for anyone who doesn't set it.
+PGPASSWORD="$PROD_DB_PASS" psql -h localhost -p "$LOCAL_PORT" -U "$PROD_DB_USER" -d "$PROD_DB_NAME" \
+  ${PROD_QUERY_FLAGS:-} -c "$QUERY" 2>&1
 
 # Kill the tunnel
 pkill -f "ssh.*-L ${LOCAL_PORT}:localhost:5432.*${PROD_SSH_HOST}" 2>/dev/null

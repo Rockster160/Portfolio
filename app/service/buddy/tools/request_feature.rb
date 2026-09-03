@@ -32,6 +32,22 @@ Buddy::Tools.register(
     fix), a job for a list, a thought for the stash, or anything you could do
     and would rather not.
 
+    **"IT DIDN'T HAPPEN" IS NOT "IT DOESN'T EXIST."** When they report that
+    something FAILED, they are telling you about a thing that already works.
+    Filing that here converts a bug report into a wish: the list grows a row
+    for a feature that shipped months ago, and the actual fault - the one they
+    just handed you - goes unrecorded. It is the expensive direction of this
+    mistake, because the row looks like diligence.
+
+    So before writing down anything that sounds like it ought to be there
+    already, **go and look: `jil_functions`, `jil_triggers`, and
+    `read_listener_guide`.** Told that emptying a list hadn't triggered the
+    house, a companion filed "trigger HASS when a list empties" - three tasks
+    had been doing exactly that since August, and one way of removing an item
+    out of four had quietly stopped calling them. If you find the thing, say
+    you found it and that it didn't fire this time. That sentence is worth
+    more than the row, and it is the only one that gets it fixed.
+
     TWO THAT LOOK LIKE WALLS AND AREN'T. Both have been filed as a feature
     request with the tool for it sitting in the list:
 

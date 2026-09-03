@@ -326,7 +326,17 @@ class BuddyEvalWorld
         agenda: agenda, kind: :event, name: "Orchard for shakes",
         location: "Rowley's Red Barn", arrive_early_minutes: 0,
         start_at: 2.days.from_now.change(hour: 17), end_at: 2.days.from_now.change(hour: 18),
-        metadata: { "travel" => { "travel_seconds" => 1860, "travel_minutes" => 31 } }
+        # BOTH legs. The way out is what `leave_at` works back from; the way
+        # HOME is what somebody schedules the next thing behind, and it had no
+        # reader outside the renderer until prod 5266 asked for it.
+        metadata: {
+          "travel" => {
+            "travel_seconds"      => 1860,
+            "travel_minutes"      => 31,
+            "post_travel_seconds" => 1860,
+            "post_travel_minutes" => 31,
+          },
+        }
       )
     }
 
@@ -492,6 +502,10 @@ class BuddyEvalWorld
       [/camera last seen/i, "Camera Last Seen", "function(camera::String)"],
       [/fan/i,              "Great Fan",        "function(mode::String)"],
       [/chill|zen/i,        "Chill Mode",       "chill-mode"],
+      # A trigger hung off a LIST, which is the shape "that should have fired"
+      # is about. Without it the honest answer to prod 5244 really is a feature
+      # request, and the probe would be testing the opposite of the lesson.
+      [/before bed/i,       "Before Bed Flag",  %(item:list:name::"Before Bed")],
     ].each { |rx, name, listener|
       wanted_function = listener.start_with?("function")
       found = mine.detect { |task|

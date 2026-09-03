@@ -197,7 +197,9 @@ RSpec.describe Buddy::PromptDelivery do
       expect(form_of(action)["fields"].pluck("key")).to eq(["Who did it?", "When?"])
     end
 
-    it "closes it as skipped, with nothing filled in, when it's dismissed there" do
+    # Every skip door destroys the prompt and THEN fires the trigger, so the
+    # destroy callback gets there first and its wording is the one that shows.
+    it "closes it with nothing filled in when it's dismissed there" do
       action = described_class.post!(user, prompt)
       fields = action.buttons
 
@@ -206,7 +208,7 @@ RSpec.describe Buddy::PromptDelivery do
 
       form = form_of(action)
       expect(form["status"]).to eq("submitted")
-      expect(form["receipt"]).to eq("Skipped in the app ✓")
+      expect(form["receipt"]).to eq(described_class::DISCARDED)
       # No answer exists, so none is invented onto the fields.
       expect(form["fields"]).to eq(fields)
     end
@@ -261,6 +263,69 @@ RSpec.describe Buddy::PromptDelivery do
 
       expect(action.reload).not_to be_pending
       expect(form_of(action)["receipt"]).to eq("Answered in the app ✓")
+    end
+  end
+
+  # The one ending the trigger bus can't carry. `lib/scripts/
+  # fix_whisper_stray_nap_20260902.rb` destroyed prompt 5196 on 2 Sep because
+  # the nap it asked about never happened, and byte_action 756 stayed pending
+  # in the thread with three days left to expire — a "Who did: Puppy Down?"
+  # card whose "Send it" would answer a prompt that no longer existed.
+  describe "a prompt that is deleted rather than answered" do
+    def form_of(action)
+      action.byte_message.reload.metadata["form"]
+    end
+
+    it "settles the open form instead of leaving it pointing at nothing" do
+      action = described_class.post!(user, prompt)
+
+      prompt.destroy!
+
+      expect(action.reload).not_to be_pending
+      expect(form_of(action)["status"]).to eq("submitted")
+      expect(form_of(action)["receipt"]).to eq(described_class::DISCARDED)
+    end
+
+    it "reaches a destroy that fires no trigger at all" do
+      action = described_class.post!(user, prompt)
+      # Nothing on the bus: this is a script or a console, which is exactly how
+      # 5196 went.
+      expect(::Jil).not_to receive(:trigger)
+
+      prompt.destroy!
+
+      expect(action.reload).not_to be_pending
+    end
+
+    it "leaves other people's forms alone" do
+      other = user.prompts.create!(question: "How was it?", options: [
+        { type: :text, question: "Notes", default: "" },
+      ])
+      action = described_class.post!(user, prompt)
+      spared = described_class.post!(user, other)
+
+      prompt.destroy!
+
+      expect(action.reload).not_to be_pending
+      expect(spared.reload).to be_pending
+    end
+
+    it "leaves the question in the thread to read" do
+      action  = described_class.post!(user, prompt)
+      message = action.byte_message
+
+      prompt.destroy!
+
+      expect(ByteMessage.find_by(id: message.id)).to be_present
+      expect(message.reload.body).to eq("Who did: Puppy Down?")
+    end
+
+    # A prompt nobody posted is the common case, and a callback that raised on
+    # one would take the destroy down with it.
+    it "is a no-op when there was never a form" do
+      loose = user.prompts.create!(question: "Anything?", options: [])
+
+      expect { loose.destroy! }.not_to raise_error
     end
   end
 end

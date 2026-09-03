@@ -147,4 +147,46 @@ RSpec.describe WebPushNotifications do
       expect(phone.reload.registered_at).to be_present
     end
   end
+
+  # A push with no title is SILENT, and there are two worth sending: a
+  # dismissal, and a bare count. The count is the only thing that can paint the
+  # home-screen icon of an app that isn't running — so reading a thread on the
+  # desk browser left the phone wearing a badge for a message already read,
+  # sometimes for days. `byte_worker.js` has always handled this shape (clears
+  # on zero, shows no banner without a title); nothing ever reached it, because
+  # the titleless guard dropped every one before it was sent.
+  describe "a silent count-only push" do
+    def payload_sent
+      sent = nil
+      allow(WebPush).to receive(:payload_send) { |args| sent = JSON.parse(args[:message]) }
+      yield
+      sent
+    end
+
+    it "goes out at all" do
+      sent = payload_sent { described_class.send_to(user, { data: { count: 0 } }, channel: :byte) }
+
+      expect(sent).to be_present
+    end
+
+    it "carries the count the worker reads" do
+      sent = payload_sent { described_class.send_to(user, { data: { count: 3 } }, channel: :byte) }
+
+      expect(sent.dig("data", "count")).to eq(3)
+    end
+
+    # Or the phone shows a banner every time another device is opened.
+    it "carries nothing to draw a notification with" do
+      sent = payload_sent { described_class.send_to(user, { data: { count: 0 } }, channel: :byte) }
+
+      expect(sent["title"]).to be_blank
+      expect(sent["body"]).to be_blank
+    end
+
+    it "still drops a push with nothing in it at all" do
+      sent = payload_sent { described_class.send_to(user, {}, channel: :byte) }
+
+      expect(sent).to be_nil
+    end
+  end
 end

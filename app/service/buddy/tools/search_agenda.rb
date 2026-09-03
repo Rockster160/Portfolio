@@ -58,11 +58,12 @@ Buddy::Tools.register(
           "Nearest first#{" - #{rows.length} of #{found[:total]} shown" if found[:total] > rows.length}. " \
             "Answer from THIS, not from what you remember being on the calendar. Give the one they " \
             "asked about in your own words, with the day and time; don't read the list back. An " \
-            "entry marked as somebody else's is on a shared calendar and is not theirs to do. To " \
-            "change one, call `edit_agenda_item` with its id. An entry marked `repeats - part of a " \
-            "series` is one date of a standing rule, and the ones carrying an `#s` handle have no " \
-            "row of their own at all - moving either to another calendar means the whole series, so " \
-            "pass `series=true` unless they said just this one."
+            "entry marked as somebody else's is on a shared calendar and is not theirs to do - but " \
+            "its `home by` is still the answer to \"when is she back\", and to anything they want " \
+            "to line up behind it. To change one, call `edit_agenda_item` with its id - every " \
+            "entry here is editable and they all work the same way. An entry marked `repeats` is " \
+            "one date of a standing rule: changing it changes THAT DATE, which is almost always " \
+            "what they meant. Pass `series=true` only when they said every one of them."
         else
           "NOTHING across #{days} days. Tell them plainly that there's nothing on the calendar for " \
             "it - that is the real answer and they need it. Do not offer a nearby item as though it " \

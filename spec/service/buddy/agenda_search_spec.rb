@@ -110,6 +110,57 @@ RSpec.describe Buddy::AgendaSearch do
 
       expect(described_class.rows([item], user)).to all(include("Chelsea's, not theirs"))
     end
+
+    # Prod 5266: "I want to leave only once Chelsea gets back from her yoga that
+    # day." The search found the yoga and handed back a start time and nothing
+    # else, so Byte asked him for the end time — and then for a drive home —
+    # both of which were on the row.
+    describe "the figures somebody schedules around" do
+      it "says when it ends" do
+        item = item!("Yoga", at: 3.days.from_now)
+
+        expect(described_class.rows([item], user).first).to include("until ")
+      end
+
+      # A to-do happens at a moment. "until" on one would invent a span.
+      it "says nothing about the end of a task" do
+        item = AgendaItem.create!(
+          agenda: agenda, name: "Pay rent", kind: :task, start_at: 3.days.from_now, end_at: nil,
+        )
+
+        expect(described_class.rows([item], user).first).not_to include("until ")
+      end
+
+      it "says when they are back through the door" do
+        at   = 3.days.from_now
+        item = item!("Yoga", at: at)
+        item.update!(metadata: { "travel" => { "post_travel_seconds" => 1860 } })
+
+        home = (item.end_at + 31.minutes).in_time_zone(user.timezone).strftime("%-I:%M%P").sub(":00", "")
+        expect(described_class.rows([item], user).first).to include("home by #{home}")
+      end
+
+      # The half that is about the ASKER's day even on somebody else's calendar,
+      # and the reason it is not stripped the way `leave_by` is.
+      it "keeps the way home on a partner's item" do
+        partner = create(:user)
+        theirs  = Agenda.create!(user: partner, name: "Chelsea")
+        item    = item!("Yoga", at: 3.days.from_now, on: theirs)
+        item.update!(metadata: { "travel" => { "post_travel_seconds" => 1860 } })
+        allow(Buddy::Context).to receive(:agenda_source_map)
+          .and_return({ theirs.id => { mine: false, owner: "Chelsea" } })
+
+        row = described_class.rows([item], user).first
+        expect(row).to include("home by ")
+        expect(row).to include("Chelsea's, not theirs")
+      end
+
+      it "says nothing about a way home it doesn't have" do
+        item = item!("Yoga", at: 3.days.from_now)
+
+        expect(described_class.rows([item], user).first).not_to include("home by")
+      end
+    end
   end
 
   # Prod 4462-4471. Five dinners went on as weekly series at 18:40 Sunday;
@@ -164,15 +215,30 @@ RSpec.describe Buddy::AgendaSearch do
       expect(described_class.call(user: user, query: "pizza")[:items]).to be_empty
     end
 
-    # A phantom has no id, and the id is the handle. The SERIES is what an edit
-    # has to act on anyway, so that is what the row carries.
-    it "hands back the series handle rather than a blank one" do
+    # One handle shape for everything. It used to hand back `#s<schedule_id>`
+    # and say the occurrence had no row of its own — an implementation detail
+    # of how repeats are stored, wired into an instruction that the date could
+    # only be changed as a whole series.
+    it "hands back an ordinary handle, the same as any other occurrence" do
       schedule = series!("Salmon soyaki bowls", day: :tue)
       phantom  = described_class.call(user: user, query: "salmon")[:items].first
 
       row = described_class.rows([phantom], user).first
-      expect(row).to start_with("#s#{schedule.id} · Salmon soyaki bowls · ")
-      expect(row).to include("repeats - part of a series")
+      expect(row).to start_with("##{phantom.display_id} · Salmon soyaki bowls · ")
+      expect(row).to include("repeats")
+      expect(row).not_to include("#s#{schedule.id}")
+    end
+
+    # And that handle has to be one `edit_agenda_item` can act on, or the row
+    # is naming something unreachable.
+    it "hands back a handle that resolves to the occurrence" do
+      series!("Salmon soyaki bowls", day: :tue)
+      phantom = described_class.call(user: user, query: "salmon")[:items].first
+
+      found = AgendaItem.locate_for_user(phantom.display_id, user, editable: true)
+
+      expect(found.start_at).to eq(phantom.start_at)
+      expect(found.name).to eq("Salmon soyaki bowls")
     end
   end
 

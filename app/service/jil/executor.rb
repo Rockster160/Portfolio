@@ -66,6 +66,12 @@ class Jil::Executor
     # that's already been dealt with. One trigger-name comparison otherwise.
     ::Buddy::PromptDelivery.dispatch(user, trigger, raw_trigger_data)
 
+    # The -15 minute pre-standup brief. A Jil task hangs the ScheduledTrigger
+    # off the Tech Stand-Up agenda item so it follows the meeting when it moves;
+    # what it fires is a Claude session, which is Rails' side of the fence.
+    # One string comparison for every other trigger on the bus.
+    ::ByteStandupPrep.dispatch(user, trigger, raw_trigger_data)
+
     user_tasks = user.accessible_tasks.active.enabled.ordered
     stopped = false
     user_tasks.by_listener(trigger).filter_map { |task|

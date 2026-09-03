@@ -56,6 +56,26 @@ module ByteNotifier
     )
   end
 
+  # Reading a thread clears the badge on every OTHER device.
+  #
+  # `mark_read!` broadcasts over the socket, which reaches screens that are
+  # running. A phone in a pocket is not running, so its home-screen badge kept
+  # the number for a message already read on the desk — and the only thing that
+  # can paint an icon for a closed app is a push. Silent: no title, no body, so
+  # `byte_worker.js` sets the badge and shows nothing.
+  #
+  # Sent to every subscription including the reader's own. On the device doing
+  # the reading the app is in the foreground, and the worker leaves the badge
+  # alone there because the open page owns it (see `paintAppBadge`).
+  def notify_read(user)
+    return if user.blank?
+
+    WebPushNotifications.send_to_byte(
+      users: [user],
+      data:  { count: ByteConversation.unread_total_for(user) },
+    )
+  end
+
   # The wall tablet never pushes, and no exception in `always_notify?` gets to
   # override it. It's a screen that is always on and always in one room: it
   # renders everything live over the socket, so a push adds nothing THERE, and

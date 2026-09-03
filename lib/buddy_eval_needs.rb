@@ -140,6 +140,12 @@ module BuddyEvalNeeds
     # outright without one, so an Orchard with no travel hash is unanswerable
     # for a different reason than the one the probe is testing.
     orchard_with_drive:   { label: "an event with a drive time to work a leave time back from", check: ->(u) { AgendaItem.where(agenda_id: u.agendas.map(&:id), start_at: Time.current..1.month.from_now).any? { |i| i.name.to_s.match?(/orchard/i) && i.metadata.dig("travel", "travel_seconds").to_i.positive? } } },
+    # The way HOME, which is a different key from the way out. A world built
+    # before 3 Sep has an Orchard carrying the outgoing leg only, and `reuse`
+    # leaves a record it finds alone — so this checks the post keys rather than
+    # taking the event's existence as proof.
+    orchard_home_drive:   { label: "an event with a drive home to be back from", check: ->(u) { AgendaItem.where(agenda_id: u.agendas.map(&:id), start_at: Time.current..1.month.from_now).any? { |i| i.name.to_s.match?(/orchard/i) && i.travel_home_seconds.present? } } },
+    ours_calendar:        { label: "a second calendar to move something to", check: ->(u) { u.agendas.reload.any? { |a| a.name.to_s.match?(/ours/i) } } },
     camping_tote:         { label: "a camping tote in the inventory", check: ->(u) { box(u, /camping tote/i) } },
     camp_stove_filed:     { label: "a camp stove filed in the inventory", check: ->(u) { box(u, /camp stove/i) } },
     headlamp_filed:       { label: "a headlamp filed in the inventory", check: ->(u) { box(u, /headlamp/i) } },
@@ -154,6 +160,10 @@ module BuddyEvalNeeds
     fan_fn:               { label: "a fan function",               check: ->(u) { jil(u, /fan/i) } },
     light_fn:             { label: "an office light function",     check: ->(u) { jil(u, /office light/i) } },
     jil_trigger:          { label: "a matching jil trigger",       check: ->(u) { jil(u, /chill/i, kind: :trigger) } },
+    # The point of the probe is that the wiring EXISTS and didn't fire. With no
+    # trigger hung off a list, filing a feature request is the correct answer
+    # and the probe would pass for the wrong reason.
+    before_bed_trigger:   { label: "a trigger hung off a list",    check: ->(u) { jil(u, /before bed/i, kind: :trigger) } },
     open_relay_question:  { label: "an open question from someone else", check: ->(u) { BuddyRelay.open_questions_for(u).exists? } },
 
     # Live state, not rows. Nothing to seed and nothing to check.

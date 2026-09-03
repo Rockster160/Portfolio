@@ -345,14 +345,18 @@ module Buddy
     # A weekly series answers inside a week; a monthly one needs the month.
     SERIES_LOOKAHEAD = 45.days
 
-    def resolve_agenda_item(title, hint_date: nil)
+    # `editable: false` for a LOOK. A partner's calendar is shared in as a viewer,
+    # so it is out of `editable_agendas` — correct for a write, and wrong for
+    # "how long does it take her to get home from yoga", which is a question
+    # about the asker's own evening. See check_travel_time.
+    def resolve_agenda_item(title, hint_date: nil, editable: true)
       return nil if title.blank?
 
       needle = title.to_s.downcase.strip
       # Editable rather than owned: a jointly-run calendar like "Ours" belongs to
       # one of the two people, so scoping to ownership meant the other one could
       # never edit anything on it — including something they'd just moved there.
-      agendas = user.editable_agendas.pluck(:id)
+      agendas = (editable ? user.editable_agendas : user.accessible_agendas).pluck(:id)
       scope = AgendaItem.where(agenda_id: agendas)
       scope = scope.where("LOWER(name) LIKE ?", "%#{needle}%")
       if hint_date.present?

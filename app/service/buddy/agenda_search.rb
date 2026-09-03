@@ -110,24 +110,50 @@ module Buddy
       items.map { |item| row(item, user, sources[item.agenda_id]) }
     end
 
-    # A series occurrence has no row and so no id. It gets the SERIES handle
-    # instead, which is what edit_agenda_item has to act on anyway: moving one
-    # materialized Monday and leaving the rule pointing at the old calendar
-    # puts it straight back there next week.
+    # One handle shape for every occurrence, whether or not it has been written
+    # down yet. `display_id` is `p-<schedule>-<date>` for one that hasn't, and
+    # every door that takes an id — `AgendaItem.locate_for_user`,
+    # `edit_agenda_item` — accepts it exactly like a number.
+    #
+    # It used to hand back `#s<schedule_id>` and say so, and the whole apparatus
+    # around that told the model an occurrence past the materialize window
+    # could only be changed as a SERIES. That is how the calendar happens to be
+    # stored; the person looking at their Tuesday cannot see it and should not
+    # be asked to care.
     def handle(item)
-      return "##{item.id}" if item.id.present?
-
-      item.agenda_schedule_id.present? ? "#s#{item.agenda_schedule_id}" : "#new"
+      item.display_id.present? ? "##{item.display_id}" : "#new"
     end
 
     def row(item, user, source=nil)
       local = item.start_at.in_time_zone(user.timezone)
       when_str = item.all_day ? local.strftime("%a %b %-e, %Y (all day)") : local.strftime("%a %b %-e, %Y at %-I:%M%P")
       parts = [handle(item), item.name, when_str.sub(":00", "")]
+      parts << "until #{clock(item.end_at, user)}" if ends_later?(item)
+      # When they are back through the door, which for somebody else's item is
+      # the ONLY figure on it that is about the asker's day. Prod 5266: "I want
+      # to leave once Chelsea gets back from her yoga that day" - the search
+      # found the yoga and handed back a start time and nothing else, so Byte
+      # asked him for an end time the app had, and then for a drive home it had
+      # too. Both were one line away the whole time.
+      parts << "home by #{clock(item.home_at, user)}" if item.home_at
       parts << "on #{item.agenda&.name}" if item.agenda&.name.present?
       parts << "#{source[:owner]}'s, not theirs" if source && source[:mine] == false
-      parts << "repeats - part of a series" if item.agenda_schedule_id.present?
+      parts << "repeats" if item.agenda_schedule_id.present?
       parts.compact.join(" · ")
+    end
+
+    # An end worth printing: a real span, on a timed item. A task carries an
+    # end equal to its start and an all-day covers the date already.
+    def ends_later?(item)
+      return false if item.all_day || item.end_at.blank? || item.start_at.blank?
+
+      item.end_at > item.start_at
+    end
+
+    def clock(time, user)
+      return nil if time.blank?
+
+      time.in_time_zone(user.timezone).strftime("%-I:%M%P").sub(":00", "")
     end
   end
 end

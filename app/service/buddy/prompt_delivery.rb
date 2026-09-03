@@ -24,6 +24,15 @@ module Buddy
       "skip"     => "Skipped in the app ✓",
     }.freeze
 
+    # A prompt that is GONE. Not an ENDING, because a destroy reaches no trigger
+    # bus — and it wins the race against the `skip` that `PromptsController` and
+    # `skip_prompt` fire immediately afterwards, since `after_destroy_commit`
+    # runs first. So this has to be true of every door that deletes one: the
+    # person dismissing it, Buddy skipping it for them, and a script removing a
+    # question that turned out to be about something that never happened.
+    # "Skipped in the app" would be a guess in the third case.
+    DISCARDED = "No longer needed ✓".freeze
+
     # A prompt Buddy posted can also be answered on its own page, and until it
     # settles here the thread still shows an open form for a question that has
     # no answer left to give. Tapping it got a bare "no pending prompt" — the
@@ -48,6 +57,23 @@ module Buddy
       open_forms(user, id).each { |action| Buddy::FormAction.settle!(action, receipt: receipt, values: values) }
     rescue StandardError => e
       Rails.logger.warn("[Buddy::PromptDelivery] settle failed: #{e.class}: #{e.message}")
+      nil
+    end
+
+    # The one door `dispatch` can't cover. Destroying a record fires no Jil
+    # trigger, so a deleted prompt leaves its form open in the thread pointing
+    # at a row that is gone, and tapping it runs `answer_prompt` against nothing.
+    # Byte action 756 sat like that from 2 Sep with three days left to expire,
+    # after its event was deleted by hand from the Jil editor.
+    #
+    # Hangs off a Prompt callback for the same reason `dispatch` refuses to:
+    # this is the ending that has no trigger to ride.
+    def discard!(user, prompt_id)
+      return if user.nil? || prompt_id.blank?
+
+      open_forms(user, prompt_id).each { |action| Buddy::FormAction.settle!(action, receipt: DISCARDED) }
+    rescue StandardError => e
+      Rails.logger.warn("[Buddy::PromptDelivery] discard failed: #{e.class}: #{e.message}")
       nil
     end
 

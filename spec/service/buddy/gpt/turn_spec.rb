@@ -249,6 +249,33 @@ RSpec.describe Buddy::GPT::Turn do
     end
   end
 
+  # `PLACEHOLDER` is the bubble minted at turn start and the client draws it as
+  # a live pulse, so a finished reply of exactly that is a typing indicator that
+  # never resolves. Eve got three in one afternoon (prod 5213/5227/5233), each a
+  # five-token answer to a one-word "Dealeo!" — delivered, `delivered_at` set,
+  # and indistinguishable on her screen from Suki still thinking.
+  describe "when the model answers with nothing but the typing indicator" do
+    it "does not deliver a reply that reads as still thinking" do
+      run([{ text: described_class::PLACEHOLDER }], text: "Dealeo!")
+
+      expect(reply.body).not_to eq(described_class::PLACEHOLDER)
+      expect(reply.body).to eq(described_class::NOTHING_TO_SAY)
+      expect(reply.reload).to be_delivered
+    end
+
+    it "counts it as empty however it is spaced" do
+      run([{ text: " #{described_class::PLACEHOLDER}\n" }], text: "Excellent!")
+
+      expect(reply.body).to eq(described_class::NOTHING_TO_SAY)
+    end
+
+    it "leaves a reply that merely ENDS in one alone" do
+      run([{ text: "Getting to that now…" }], text: "and the bins?")
+
+      expect(reply.body).to eq("Getting to that now…")
+    end
+  end
+
   describe "when every proposal is discarded" do
     # ProposalBuilder drops a call whose target can't be resolved — an archived
     # chore, a name that matches nothing. That is silent, and the model has

@@ -342,6 +342,10 @@ class ByteController < ApplicationController
 
     convo.mark_read!
     broadcast_convo_read(convo)
+    # The socket reaches screens that are running; the push reaches the phone
+    # that isn't, which is the one still wearing the badge. See
+    # ByteNotifier.notify_read.
+    ByteNotifier.notify_read(current_user)
     render json: {
       id:           convo.id,
       unread_count: 0,

@@ -188,6 +188,15 @@ module Buddy
       # Only viewer shares. A JOINT calendar comes back mine: true from
       # agenda_source_map's co-owner pass and keeps its leave_by, because a
       # dinner they are both going to is one they both leave for.
+      #
+      # `home_by` and `drive_home_min` deliberately SURVIVE. They are the exact
+      # opposite case: her drive home is a fact about when she is back, which is
+      # a fact about HIS day, and it is the thing people plan around out loud.
+      # Prod 5266 — "I want to leave only once Chelsea gets back from her yoga
+      # that day" — was unanswerable, and Byte asked him for a time the app
+      # already had. Stripping a partner's `leave_by` stops Buddy telling him to
+      # go to her appointment; stripping her arrival home would only stop it
+      # answering the question he actually asked.
       def tag_ownership(hash, source)
         return hash if source.nil? || source[:mine] != false
 
@@ -252,7 +261,10 @@ module Buddy
       # all-days that merely fall on the same date stay two.
       #
       # The first one wins, which is the earlier id: both titles carry the
-      # name, and the shorter is the one a person would say out loud.
+      # name, and the shorter is the one a person would say out loud. The
+      # queries feeding this tie-break on `:id` for that reason — two all-days
+      # share a `start_at` exactly, so ordering on the timestamp alone leaves
+      # Postgres to pick, and which name survived changed between runs.
       def fold_duplicate_all_days(items, sources)
         items.each_with_object([]) { |item, kept|
           kept << item unless kept.any? { |k| same_occasion?(k, item, sources) }
@@ -303,7 +315,7 @@ module Buddy
           .where("status != ? OR agenda_schedule_id IS NOT NULL", AgendaItem.statuses[:cancelled])
           .where(start_at: day_start.utc...day_end.utc)
           .includes(:agenda, :agenda_schedule)
-          .order(:start_at)
+          .order(:start_at, :id)
         items = visible_only(scope, user).limit(20).to_a
         items    = fold_duplicate_all_days(items, sources)
         collides = collisions(items, sources)
@@ -311,32 +323,36 @@ module Buddy
         items.map { |i|
           tag_ownership(
             {
-              id:            i.id,
+              id:             i.id,
               # "all day" was the value here, and prod 4684 read it straight
               # back as a predicate: "Marcos Jones's birthday is all day". It
               # is a duration where the sentence wanted a day. Everything in
               # this list IS today, so that's what the field says, and the flag
               # below is where "no clock time" lives now.
-              time:          (i.all_day ? "today" : i.start_at.in_time_zone(user.timezone).strftime("%-I:%M %p")),
-              all_day:       (true if i.all_day),
-              title:         i.name,
-              where:         i.location.to_s.strip.presence,
-              cancelled:     (true if i.cancelled?),
-              cal:           i.agenda&.name,
-              kind:          i.kind,
-              cadence:       schedule_cadence(i),  # nil = one-off; "every weekday" / "monthly" / ...
-              drive_min:     drive_minutes(i),     # known travel time, for a soon "leave by" nudge
-              leave_by:      leave_by(i, user),    # the clock time to walk out, already worked out
+              time:           (i.all_day ? "today" : i.start_at.in_time_zone(user.timezone).strftime("%-I:%M %p")),
+              all_day:        (true if i.all_day),
+              title:          i.name,
+              where:          i.location.to_s.strip.presence,
+              cancelled:      (true if i.cancelled?),
+              cal:            i.agenda&.name,
+              kind:           i.kind,
+              cadence:        schedule_cadence(i),  # nil = one-off; "every weekday" / "monthly" / ...
+              drive_min:      drive_minutes(i),     # known travel time, for a soon "leave by" nudge
+              leave_by:       leave_by(i, user),    # the clock time to walk out, already worked out
+              # The way back. Kept on a PARTNER's item where leave_by is not —
+              # see tag_ownership.
+              home_by:        home_by(i, user),
+              drive_home_min: drive_home_minutes(i),
               # Already happened — a forward-looking briefing skips these
               # instead of recapping a day that's mostly over. `past?` is
               # kind-aware: an event with hours left on it is NOT news that
               # already broke just because it started.
-              passed:        (!i.all_day && i.past?(now: now) ? true : nil),
+              passed:         (!i.all_day && i.past?(now: now) ? true : nil),
               # Only ever set on a partner's item, and only when it runs into
               # something of theirs. It is both the reason to raise one and
               # the thing a briefing filters on, and it carries the name of
               # what it runs into so that can be said without looking it up.
-              collides_with: collides[i.id],
+              collides_with:  collides[i.id],
             }.compact, sources[i.agenda_id]
           )
         }
@@ -364,7 +380,7 @@ module Buddy
           .where(start_at: (day_start + 1.day).utc...(day_start + UPCOMING_WEEK_WINDOW).utc)
           .where("status != ? OR agenda_schedule_id IS NOT NULL", cancelled)
           .includes(:agenda, :agenda_schedule)
-          .order(:start_at)
+          .order(:start_at, :id)
         items = visible_only(scope, user).limit(25).to_a
         items             = fold_duplicate_all_days(items, sources)
         upcoming_collides = collisions(items, sources)
@@ -383,6 +399,13 @@ module Buddy
               cadence:       schedule_cadence(i),  # nil = one-off
               cancelled:     i.cancelled?,
               cal:           i.agenda&.name,
+              # No `leave_by` out here — a departure time five days out is noise
+              # in a week list. `home_by` earns its place because it is what
+              # somebody schedules AROUND: "leave once she's back from yoga
+              # Tuesday" is a question about a day this list covers and nothing
+              # else in the context can answer it. Dropped by `.compact` on
+              # everything without a drive, which is most of it.
+              home_by:       home_by(i, user),
               collides_with: upcoming_collides[i.id],
             }.compact, sources[i.agenda_id]
           )
@@ -493,6 +516,18 @@ module Buddy
         return nil unless epoch.positive?
 
         Time.zone.at(epoch).in_time_zone(user.timezone).strftime("%-I:%M %p")
+      end
+
+      # The other end of the same drive: what time they are back through the
+      # door. `leave_by` answers "when do I go", this answers "when am I free
+      # again", and lining one thing up behind another needs the second one.
+      def home_by(item, user)
+        item.home_at&.in_time_zone(user.timezone)&.strftime("%-I:%M %p")
+      end
+
+      def drive_home_minutes(item)
+        mins = item.travel_home_minutes.to_i
+        mins.positive? ? mins : nil
       end
 
       # Five buckets with sharply distinct meanings. The primary "what's

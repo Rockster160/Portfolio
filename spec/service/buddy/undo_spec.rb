@@ -29,6 +29,59 @@ RSpec.describe "Buddy undo" do
         expect(event.reload.name).to eq("Coffee")
       end
 
+      # Everything hung off a list watches the `:item` Jil trigger, and the
+      # Before Bed HASS flag is the one that shows when it's missed: three undo
+      # taps at 1:41 AM on 2 Sep emptied the list and left `input_boolean.
+      # before_bed` on, because `soft_destroy` alone is a bare
+      # `update(deleted_at:)`. It went off 72 seconds later only because he
+      # happened to open the list page. Third silent door found on this loop.
+      describe "undo of a list item" do
+        let(:list) { create(:list, user: user) }
+        let(:fired) { [] }
+
+        before {
+          allow(::Jil).to receive(:trigger) { |u, scope, data, **|
+            fired << [u, scope, data.with_indifferent_access]
+          }
+        }
+
+        def undo!(item)
+          described_class.call({ "op" => "created", "model" => "ListItem", "id" => item.id })
+        end
+
+        it "fires :item removed, the same as every other way of taking one off" do
+          item = list.list_items.add("Turn off the lamp")
+          fired.clear
+
+          undo!(item)
+
+          u, scope, data = fired.last
+          expect(u).to eq(user)
+          expect(scope).to eq(:item)
+          expect(data[:action]).to eq(:removed)
+          expect(data[:name]).to eq("Turn off the lamp")
+        end
+
+        it "still takes the item off the list" do
+          item = list.list_items.add("Lock the door")
+
+          undo!(item)
+
+          expect(list.list_items.reload.map(&:name)).to be_empty
+        end
+
+        # `find!` gets there first — `default_scope` hides a soft-deleted item,
+        # so an undo tapped twice says so rather than firing `:removed` again.
+        it "says nothing twice when the item was already gone" do
+          item = list.list_items.add("Bins out")
+          item.soft_destroy
+          fired.clear
+
+          expect { undo!(item) }.to raise_error(/already gone/)
+          expect(fired).to be_empty
+        end
+      end
+
       it "undo of a DELETE recreates from the snapshot" do
         expect {
           described_class.call({

@@ -1988,7 +1988,13 @@ module Buddy
         # the whole body. A blank bubble is worse than the marker was - it reads
         # as Buddy having nothing to say to something they typed - so the turn
         # goes down the same road as a reply whose proposals all died.
-        body = NOTHING_TO_SAY if body.blank? && outcome[:text].present?
+        #
+        # A body of exactly `PLACEHOLDER` counts as empty too, and is worse than
+        # empty: it is byte-identical to the pulsing bubble minted at turn start,
+        # so the reply lands as a typing indicator that never resolves. Eve got
+        # three of those in one afternoon (prod 5213/5227/5233), each one a
+        # five-token answer to a one-word "Dealeo!" with nothing to say back.
+        body = NOTHING_TO_SAY if (body.blank? || body.strip == PLACEHOLDER) && outcome[:text].present?
         @reply.update!(state: :delivered, body: body, delivered_at: Time.current)
 
         proposals = outcome[:proposals]

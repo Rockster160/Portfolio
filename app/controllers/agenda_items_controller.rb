@@ -713,21 +713,10 @@ class AgendaItemsController < ApplicationController
     source.managed_externally? != target.managed_externally?
   end
 
+  # Shared with Buddy's `edit_agenda_item`, so a change made by asking lands the
+  # same row as one made by dragging. See AgendaOccurrence.
   def materialize_with(attrs)
-    original_schedule = @item.agenda_schedule
-    original_date = @item.occurrence_date
-    # We're detaching on this save iff the row is currently attached and
-    # the incoming attrs flip detached_at on. Capture the original date
-    # now so we can exclude it on the parent schedule after the save.
-    newly_detaching = original_schedule.present? && !@item.detached? && attrs[:detached_at].present?
-
-    if @item.phantom?
-      @item.materialize!(attrs)
-    else
-      @item.update!(attrs)
-    end
-
-    original_schedule.add_excluded_date!(original_date) if newly_detaching
+    AgendaOccurrence.apply!(@item, attrs)
   end
 
   def occurrence_update_attrs
@@ -737,10 +726,7 @@ class AgendaItemsController < ApplicationController
     # the row back on. Keep agenda_schedule_id intact for the historical
     # link — items_for_range honors detached_at to avoid suppressing the
     # parent schedule's phantom on the row's current date.
-    if @item.recurring? && !@item.detached?
-      attrs[:detached_at] = Time.current
-      attrs[:original_start_at] = @item.start_at
-    end
+    attrs.merge!(AgendaOccurrence.detach_stamps(@item))
 
     # Externally-synced item: send name/time/location/etc to Google via
     # patch_event AND apply them locally so the UI reflects the change

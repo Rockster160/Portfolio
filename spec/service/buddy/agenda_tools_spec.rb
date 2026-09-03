@@ -328,18 +328,61 @@ RSpec.describe "Buddy agenda tools" do
         expect(schedule.reload.agenda_items.pluck(:agenda_id).uniq).to eq([ours.id])
       end
 
-      # Tue-Fri had no row at all, which is what made them unreachable. The rule
-      # is the only thing to edit, so `series` isn't something they have to say.
-      it "edits the rule for an occurrence that has no row" do
+      # An occurrence past MATERIALIZE_WINDOW has no row yet, and that used to
+      # force the edit onto the whole SERIES — so "move Friday's dinner" moved
+      # every dinner, and asking to move one to another calendar came back
+      # wanting "the single event version". The person cannot see which dates
+      # have rows and must never be asked to.
+      describe "a date that hasn't been written down yet" do
         # A Friday series, asked about on the Monday the block is pinned to:
-        # four days out, well past MATERIALIZE_WINDOW, so nothing has been
-        # written for it.
-        schedule = dinner!(day: "fri")
-        expect(schedule.agenda_items).to be_empty
+        # four days out, so nothing has been materialized for it.
+        let!(:friday) { dinner!(day: "fri") }
 
-        run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours" })
+        it "changes THAT DATE and leaves the rule alone" do
+          expect(friday.agenda_items).to be_empty
 
-        expect(schedule.reload.agenda_id).to eq(ours.id)
+          run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours" })
+
+          expect(friday.reload.agenda_id).to eq(personal.id)
+          expect(AgendaItem.where(agenda_schedule_id: friday.id).pluck(:agenda_id)).to eq([ours.id])
+        end
+
+        it "writes the row down as an exception to its rule" do
+          run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours" })
+
+          made = AgendaItem.find_by(agenda_schedule_id: friday.id)
+          expect(made.detached_at).to be_present
+          expect(made.original_start_at).to be_present
+        end
+
+        # Or the rule keeps drawing an occurrence on the date the row moved off
+        # and the evening shows up twice.
+        it "takes the original date off the rule" do
+          run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours" })
+
+          made = AgendaItem.find_by(agenda_schedule_id: friday.id)
+          excluded = friday.reload.recurrence["excluded_dates"]
+          expect(excluded).to include(made.original_start_at.in_time_zone(user.timezone).to_date.iso8601)
+        end
+
+        it "still moves every one of them when they ask for the series" do
+          run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours", series: "true" })
+
+          expect(friday.reload.agenda_id).to eq(ours.id)
+        end
+
+        # Undoing has to put it back in the cycle. Rewinding the FIELDS would
+        # leave a detached row holding the rule's own values beside an excluded
+        # date — invisible, and skipped by the next change to the series.
+        it "goes back on its normal schedule when undone" do
+          result, = run(:edit_agenda_item, { item: "Kevin's meal", calendar: "Ours" })
+          made = AgendaItem.find_by(agenda_schedule_id: friday.id)
+
+          Buddy::Reverter.call(result[:revert])
+
+          expect(AgendaItem.exists?(made.id)).to be(false)
+          expect(friday.reload.recurrence["excluded_dates"].to_a).to be_empty
+        end
       end
 
       it "says the series moved rather than an item" do
@@ -360,12 +403,27 @@ RSpec.describe "Buddy agenda tools" do
         expect(schedule.reload.agenda_id).to eq(personal.id)
       end
 
-      it "refuses `series` on something that doesn't repeat" do
+      # This used to raise "isn't a repeating item", and the description above
+      # tells the model to pass `series=true` for a calendar move - so the two
+      # together dead-ended "I moved it to 3. Can you switch that to the Ours
+      # calendar?" on "that one's not repeating, so I couldn't move the whole
+      # series", with nothing moved and nothing the person could do about it
+      # (prod 5270-5271). On a one-off there is no rule, so `series` is
+      # redundant rather than wrong: the single row IS everything there is.
+      it "just moves a one-off when they ask for the series of something that doesn't repeat" do
+        item = costco_on(personal)
+
+        run(:edit_agenda_item, { item: "Costco Run", calendar: "Ours", series: "true" })
+
+        expect(item.reload.agenda_id).to eq(ours.id)
+      end
+
+      it "says it moved the item, not the series" do
         costco_on(personal)
 
-        expect {
-          run(:edit_agenda_item, { item: "Costco Run", calendar: "Ours", series: "true" })
-        }.to raise_error(/isn't a repeating item/)
+        result, = run(:edit_agenda_item, { item: "Costco Run", calendar: "Ours", series: "true" })
+
+        expect(result[:receipt].to_s).not_to match(/every/i)
       end
 
       # Ending a series is a different ask, and answering it here would take
@@ -706,6 +764,104 @@ RSpec.describe "Buddy agenda tools" do
     # drive" for a 32-minute one; the correction then set the start to 4:28 PM,
     # which was the OLD leave time, and called that a leave time. `at` is always
     # a start, so there was no correct call available.
+    # Prod 5268: asked to move an event so they could leave at 4, a companion
+    # said "I don't have a drive time for that" and stopped — on an event it had
+    # put on the calendar itself ninety seconds earlier. There was no way to go
+    # and get one, so the turn dead-ended on a number the app could have
+    # measured.
+    # Prod 5268: asked to move an event so they could leave at 4, a companion
+    # said "I don't have a drive time for that" and stopped — on an event it had
+    # put on the calendar itself ninety seconds earlier. There was no way to go
+    # and get one, so the turn dead-ended on a number the app could measure.
+    describe "looking a drive time up" do
+      let(:tool)     { Buddy::Tools[:check_travel_time] }
+      let(:personal) { user.agendas.order(:id).first }
+      let(:starts)   { zone.local(2026, 8, 4, 13, 0) }
+
+      def orchard!(travel: nil, agenda: personal, location: "Rowley's Red Barn")
+        agenda.agenda_items.create!(
+          name: "Orchard", kind: :event, location: location, arrive_early_minutes: 0,
+          start_at: starts, end_at: starts + 1.hour,
+          metadata: travel ? { "travel" => travel } : {}
+        )
+      end
+
+      def check
+        payload = { item: "Orchard" }
+        merged  = payload.merge(tool[:confirm].call(payload, ctx)[:resolved])
+        tool[:execute].call(merged, ctx)
+      end
+
+      def clock(time) = time.in_time_zone(zone).strftime("%-I:%M %p")
+
+      it "reports a drive it already knows without going back out for it" do
+        orchard!(travel: { "travel_seconds" => 1860, "travel_minutes" => 31 })
+        expect(AgendaTravelChain).not_to receive(:refresh_for)
+
+        expect(check[:drive_min]).to eq(31)
+      end
+
+      it "goes and measures one it hasn't got" do
+        item = orchard!
+        allow(AgendaTravelChain).to receive(:refresh_for) { |i|
+          i.update!(metadata: { "travel" => { "travel_seconds" => 1200 } })
+        }
+
+        result = check
+
+        expect(AgendaTravelChain).to have_received(:refresh_for).with(item)
+        expect(result[:drive_min]).to eq(20)
+      end
+
+      # The whole point of the tool: what comes back is enough for the very next
+      # call to set a leave time, which used to be refused outright.
+      it "hands back a leave time edit_agenda_item can use" do
+        orchard!(travel: { "travel_seconds" => 1860, "leave_at" => (starts - 31.minutes).to_i })
+
+        expect(check[:leave_by]).to eq(clock(starts - 31.minutes))
+      end
+
+      # Spaced and rounded, so nothing downstream has to do the arithmetic that
+      # went wrong in prod 5145.
+      it "hands back a follow-on that is already spaced and rounded" do
+        orchard!(travel: { "travel_seconds" => 1860, "post_travel_seconds" => 1860 })
+        home = starts + 1.hour + 31.minutes
+
+        result = check
+
+        expect(result[:home_by]).to eq(clock(home))
+        expect(result[:follow_on]).to eq(clock(Buddy::FollowUp.after(home)))
+      end
+
+      it "refuses something with nowhere to drive to" do
+        orchard!(location: "")
+
+        expect { check }.to raise_error(/no location/)
+      end
+
+      it "says so plainly when the address can't be placed" do
+        orchard!
+        allow(AgendaTravelChain).to receive(:refresh_for)
+
+        result = check
+
+        expect(result[:unresolved]).to be(true)
+        expect(tool[:receipt].call(result, ctx)).to match(/couldn.t place/i)
+      end
+
+      # Her drive home is a fact about when the house is his again. A viewer
+      # share is out of `editable_agendas`, which is right for a write and wrong
+      # for a look.
+      it "reads an item on a calendar shared in as a viewer" do
+        partner = create(:user)
+        hers = create(:agenda, user: partner)
+        AgendaShare.create!(agenda: hers, user: user, permission: :viewer)
+        orchard!(travel: { "travel_seconds" => 1860 }, agenda: hers)
+
+        expect(check[:drive_min]).to eq(31)
+      end
+    end
+
     describe "a leave time, which is not a start time" do
       let(:tool) { Buddy::Tools[:edit_agenda_item] }
 
@@ -768,6 +924,19 @@ RSpec.describe "Buddy agenda tools" do
 
         expect { leave!("2026-08-03T16:00:00") }
           .to raise_error(/don't have a drive time.*meant the start/m)
+      end
+
+      # The legacy pair — `travel_minutes` + `travel_location` — is what the Jil
+      # refresh task writes, and it has no seconds in it. Reading the seconds key
+      # directly turned a real 47-minute drive into "I don't have a drive time
+      # for that", on an item Buddy had created itself minutes earlier
+      # (agenda_items 1081, prod 5268-5269).
+      it "works back from a minutes-only drive time" do
+        orchard.update!(metadata: { "travel" => { "travel_minutes" => 47, "travel_location" => "Orchard" } })
+
+        merged, = leave!("2026-08-03T16:00:00")
+
+        expect(merged[:at].in_time_zone(zone).strftime("%-I:%M %p")).to eq("4:47 PM")
       end
 
       it "refuses a start and a leave time in the same call" do
