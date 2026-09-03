@@ -20,9 +20,19 @@ RSpec.describe AgendaTravelChain::OverrideParser do
       expect(p.parse(anchored)[:nonav]).to be(true)
     end
 
+    it "parses bike as a start-of-line bool flag" do
+      expect(p.parse("bike")[:bike]).to be(true)
+      expect(p.parse("bike\nbring the lock")[:bike]).to be(true)
+      # Prose mentioning a bike isn't a directive — same anchoring rule the
+      # other flags follow, so "remember to bike next time" stays a note.
+      expect(p.parse("remember to bike next time")[:bike]).to be(false)
+      expect(p.parse("bikes for sale")[:bike]).to be(false)
+    end
+
     it "is case-insensitive" do
       expect(p.parse("NoNaV")[:nonav]).to be(true)
       expect(p.parse("NOTME")[:notme]).to be(true)
+      expect(p.parse("BiKe")[:bike]).to be(true)
       expect(p.parse("Before:Costco")[:before]).to eq([{ location: "Costco", dwell_seconds: 0 }])
     end
 

@@ -40,6 +40,15 @@ class AgendaItem < ApplicationRecord
   KINDS = AgendaSchedule::KINDS
   PHANTOM_ID_RE = /\Ap-(\d+)-(\d{4}-\d{2}-\d{2})\z/
 
+  # How early to be, when nobody has said. The COLUMN default is 0 because it
+  # is NOT NULL and every synced row has to land somewhere; this is what a
+  # person creating something means by "no answer", and it is 5.
+  #
+  # Rocco, 3 Sep 2026: *"The default is 5 and it should always be 5 unless the
+  # user specifically says a different amount of time."* Said of Buddy, which
+  # was writing 0 onto anything with no place attached.
+  DEFAULT_ARRIVE_EARLY_MINUTES = 5
+
   attr_accessor :phantom
 
   enum :kind, { task: 0, event: 1, trigger: 2 }

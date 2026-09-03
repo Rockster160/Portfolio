@@ -134,6 +134,25 @@ function fillCheckbox(node, item, attrs, ctx) {
   }
 }
 
+// How the travel band reads, off the row's own attributes.
+//
+// **A buffer with nowhere to be is not a buffer.** Every item carries the
+// "min early" setting and it is 5 unless they said otherwise — kept on the row
+// so that an address added later already has one, rather than needing to be
+// remembered separately. Until there IS somewhere to go, though, there is
+// nothing to leave for and no band to draw. The stored setting is untouched;
+// this is only what gets SHOWN.
+//
+// "Somewhere to go" is the same test the location chrome uses, so a Zoom link
+// is not a place here either.
+function travelBand(attrs) {
+  const travelMin     = Number(attrs["travel-minutes"]) || 0;
+  const location      = String(attrs.location || "").trim();
+  const somewhereToGo = location !== "" && !locationLooksLikeUrl(location);
+  const arriveMin     = somewhereToGo ? (Number(attrs["arrive-early-minutes"]) || 0) : 0;
+  return { travelMin, arriveMin, visible: travelMin > 0 || arriveMin > 0 };
+}
+
 function fillBody(node, attrs) {
   // Time span — `data-time-hydrate` triggers JS to fill from start/end epochs.
   // We seed the hydration attrs so the existing hydrator (time_hydration.js)
@@ -176,9 +195,8 @@ function fillBody(node, attrs) {
   // independently otherwise (matches the inline conditionals in ERB).
   const travelSpan = node.querySelector(".agenda-item-travel");
   if (!travelSpan) return;
-  const travelMin = Number(attrs["travel-minutes"]) || 0;
-  const arriveEarlyMin = Number(attrs["arrive-early-minutes"]) || 0;
-  if (travelMin <= 0 && arriveEarlyMin <= 0) {
+  const { travelMin, arriveMin: arriveEarlyMin, visible } = travelBand(attrs);
+  if (!visible) {
     travelSpan.remove();
     return;
   }
@@ -471,10 +489,9 @@ function patchPostTravelBlock(node, attrs) {
 function patchTravelBlock(node, attrs) {
   const textWrap = node.querySelector(".agenda-item-text");
   if (!textWrap) return;
-  const travelMin = Number(attrs["travel-minutes"]) || 0;
-  const arriveMin = Number(attrs["arrive-early-minutes"]) || 0;
+  const { travelMin, arriveMin, visible } = travelBand(attrs);
   let block = textWrap.querySelector(".agenda-item-travel");
-  if (travelMin <= 0 && arriveMin <= 0) {
+  if (!visible) {
     if (block) block.remove();
     return;
   }
@@ -561,7 +578,7 @@ function setAttrIfChanged(el, name, value) {
   if (el.getAttribute(name) !== value) el.setAttribute(name, value);
 }
 
-const AgendaItemRenderer = { buildAgendaItem, patchAgendaItem, fmtMinutes };
+const AgendaItemRenderer = { buildAgendaItem, patchAgendaItem, fmtMinutes, travelBand };
 
 if (typeof module !== "undefined" && module.exports) module.exports = AgendaItemRenderer;
 if (typeof window !== "undefined") window.AgendaItemRenderer = AgendaItemRenderer;

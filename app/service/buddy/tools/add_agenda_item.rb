@@ -28,6 +28,14 @@ Buddy::Tools.register(
     person tells you how long a thing runs (e.g. "the plunge is ~2 hours"),
     use that. It's ignored on a task; tasks are a single moment.
 
+    **"Let's be 10 minutes early" is `arrive_early`, and nothing else.** It is a
+    plain number of minutes on the row, it needs no drive time and no address,
+    and it is what the app's own "min early" setting holds. Leave it out and
+    they get 5, which is the default a person means by not saying. Asked to
+    "add an Eye Follow Up tomorrow at 11:40, and let's be 10 minutes early",
+    the reply added it and then asked whether 11:40 was the check-in or the
+    appointment (prod 5338-5339) - there was no argument to put the 10 in.
+
     `calendar`: which calendar to add to, by name ("Ours", "Tasks", etc.).
     Matches the person's own + shared-editable LOCAL calendars. Omit for
     their default. (Google-synced calendars still need the app's add flow.)
@@ -61,15 +69,21 @@ Buddy::Tools.register(
   TXT
   feature:     :agenda,
   args:        {
-    title:    { type: :string,       required: true,  description: "What is it (the activity, WITHOUT the place)" },
-    at:       { type: :iso_time,     required: true,  description: "Local wall-clock start, 24-hour. Something happening today goes AHEAD of the current time" },
-    duration: { type: :duration_min, required: false, default: 30, description: "Minutes - the activity's real length, not always 30. Events only; ignored on a task" },
-    location: { type: :string,       required: false, description: "Place/venue/address, if one was mentioned" },
-    kind:     { type: :enum,         required: false, default: :event, values: %i[event task trigger] },
-    all_day:  { type: :string,       required: false, description: "'true' for all-day" },
-    calendar: { type: :string,       required: false, description: "Which calendar/agenda to add to, by name (e.g. 'Ours'); omit for default" },
-    repeat:   { type: :string,       required: false, description: "Recurrence spec, making this a series: daily / weekdays / weekly:<days> / monthly:<dom> / monthly:<nth>-<weekday> / every:<n>-<unit> / yearly" },
-    until:    { type: :string,       required: false, description: "Stop repeating after this date (YYYY-MM-DD)" },
+    title:        { type: :string,       required: true,  description: "What is it (the activity, WITHOUT the place)" },
+    at:           { type: :iso_time,     required: true,  description: "Local wall-clock start, 24-hour. Something happening today goes AHEAD of the current time" },
+    duration:     { type: :duration_min, required: false, default: 30, description: "Minutes - the activity's real length, not always 30. Events only; ignored on a task" },
+    location:     { type: :string,       required: false, description: "Place/venue/address, if one was mentioned" },
+    arrive_early: {
+      type:        :duration_min,
+      required:    false,
+      description: "Minutes to be there BEFORE it starts. Leave it out and it is #{AgendaItem::DEFAULT_ARRIVE_EARLY_MINUTES}; " \
+                   "pass a number only when they name one (\"let's be 10 minutes early\"), or 0 for \"no need to be early\"",
+    },
+    kind:         { type: :enum,         required: false, default: :event, values: %i[event task trigger] },
+    all_day:      { type: :string,       required: false, description: "'true' for all-day" },
+    calendar:     { type: :string,       required: false, description: "Which calendar/agenda to add to, by name (e.g. 'Ours'); omit for default" },
+    repeat:       { type: :string,       required: false, description: "Recurrence spec, making this a series: daily / weekdays / weekly:<days> / monthly:<dom> / monthly:<nth>-<weekday> / every:<n>-<unit> / yearly" },
+    until:        { type: :string,       required: false, description: "Stop repeating after this date (YYYY-MM-DD)" },
   },
   confirm:     ->(payload, ctx) {
     # `strict` for the same reason edit_agenda_item uses it. The loose form
@@ -196,10 +210,18 @@ Buddy::Tools.register(
       kind:     kind,
       status:   :confirmed,
     }
-    # Arrive 5 minutes early for anything with a place to be, so the travel /
-    # leave-by chain builds in a small buffer. No location → leave the column's
-    # default (0) alone (it's NOT NULL).
-    attrs[:arrive_early_minutes] = 5 if payload[:location].present?
+    # Five minutes early unless they said otherwise, place or no place.
+    #
+    # It used to be five ONLY with a location, on the reasoning that there is
+    # no travel to be early for otherwise - so "add Jake's birthday at 6" got a
+    # zero, and so did every appointment whose address nobody mentioned out
+    # loud. From the person's side that is Buddy overwriting the setting rather
+    # than declining to guess at it. An explicit 0 still means 0: `present?` is
+    # true of it, which is the whole reason this reads the key rather than
+    # `.presence`.
+    attrs[:arrive_early_minutes] = (
+      payload[:arrive_early].present? ? payload[:arrive_early].to_i : AgendaItem::DEFAULT_ARRIVE_EARLY_MINUTES
+    )
 
     # A repeat is a SERIES, not a row: AgendaSchedule owns the rule and
     # materializes occurrences forward on save (and rolls the window on from

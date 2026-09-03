@@ -31,7 +31,9 @@ module Buddy
         # Required on an event, meaningless on a task - the same split
         # add_agenda_item makes when deciding whether to set `end_at`.
         duration_minutes:     (duration if attrs[:kind].to_sym == :event),
-        arrive_early_minutes: attrs[:arrive_early_minutes].to_i,
+        # `.to_i` on a missing key is 0, which is a real setting rather than an
+        # absent one - so the rule's own default is spelled out.
+        arrive_early_minutes: (attrs[:arrive_early_minutes] || ::AgendaItem::DEFAULT_ARRIVE_EARLY_MINUTES).to_i,
       )
     end
   end

@@ -617,6 +617,32 @@ BUDDY_EDGE_PROBES = [
     },
   },
 
+  # --- being early is a SETTING, not a leave time ---------------------------
+  {
+    case:  "prod 5338",
+    say:   "Now add an Eye Follow Up appointment to tomorrow at 11:40, and let's be 10 minutes early.",
+    tool:  :add_agenda_item,
+    once:  true,
+    args:  { add_agenda_item: { arrive_early: 10 } },
+    note:  "there was no argument for it, so it added the row at 11:40 and then " \
+           "asked whether 11:40 was the check-in time or the appointment - " \
+           "offering to \"adjust it\" for a thing it could not set either way (5339)",
+  },
+  {
+    case:       "prod 5341",
+    say:        "I want to arrive 10 minutes early for the plunge with Wil. There is a setting for that.",
+    tool:       :edit_agenda_item,
+    once:       true,
+    args:       { edit_agenda_item: { arrive_early: 10 } },
+    never_args: { edit_agenda_item: { leave_at: /./ } },
+    needs:      :plunge_to_move,
+    note:       "`leave_at` was the only lever there was, and it works back through " \
+                "a drive time - so on an item with no location the answer was " \
+                "\"it doesn't have a drive time on it yet, so I can't set the " \
+                "10-minute-early part from here\", asking for a start time instead. " \
+                "Being early needs no drive, no address and no arithmetic",
+  },
+
   # --- the only date in the sentence is the one it is moving TO -------------
   {
     case:       "prod 5333",

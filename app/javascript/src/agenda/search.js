@@ -239,7 +239,12 @@
       const attrs = rep.presentation_attrs || {};
       const row = document.createElement("div");
       row.className = "agenda-search-hit";
-      row.setAttribute("data-readonly", "");
+      // Readonly only when the item genuinely is — `editable` is stamped
+      // on every item by the aggregate payload and the search endpoint,
+      // same convention month_view.js uses. Hardcoding it here hid the
+      // details modal's Edit / Follow up buttons, leaving a hit with
+      // "Go to date" as its only affordance.
+      if (rep.editable === false) row.setAttribute("data-readonly", "");
       Object.keys(attrs).forEach((k) => {
         const v = attrs[k];
         row.setAttribute(`data-${k}`, v == null ? "" : String(v));

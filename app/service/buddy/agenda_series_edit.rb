@@ -44,6 +44,9 @@ module Buddy
       attrs = {}
       attrs[:name]      = payload[:title]    if payload[:title].present?
       attrs[:location]  = payload[:location] if payload[:location].present?
+      # `present?` rather than `presence`: an explicit 0 is "no need to be
+      # early", which is a change like any other.
+      attrs[:arrive_early_minutes] = payload[:arrive_early].to_i if payload[:arrive_early].present?
       attrs[:agenda_id] = payload[:agenda_id] if payload[:agenda_id].present?
 
       # The schedule stores a wall-clock TIME OF DAY, not an instant: `at` names

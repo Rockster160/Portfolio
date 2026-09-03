@@ -14,6 +14,7 @@ inside the value: `"3rd, St"` stays one entry.
 |-------|-------|--------|
 | `nonav` | bool flag | Treats this event as if it had no location — no travel band, no chain participation. |
 | `notme` | bool flag | Mark the event as "not me driving"; cars / trip-build side effects fire silently. |
+| `bike` | bool flag | You're riding, not driving. Travel band and leave-by reminders are unchanged, but the event never chains to a neighbour and the car is never started. |
 | `before:A,B,"3rd St"` | comma list | Waypoints inserted on the **incoming** leg; the first entry becomes the drive's destination instead of the event's location. |
 | `after:A,B,"3rd St"` | comma list | Waypoints on the **outgoing** leg; the last entry becomes the chain's outgoing endpoint instead of the event's location. |
 | `from:123 Main St` | single value | Explicit **incoming origin** (overrides Home / chained predecessor). Also breaks the inbound chain — the event is declared to start from somewhere other than the previous event. |
@@ -48,6 +49,31 @@ them is too tight to fit a natural reset between the two:
 
 `from:` on B always breaks the inbound chain (B is asserting its own
 origin, independent of A).
+
+`bike` on either side breaks the link in **both** directions. The car
+never goes to a ride, so the next event can't roll forward from the
+ride's location and the previous event can't hand off to it — each falls
+back to Home. Note this differs from `nonav`: a `nonav` event drops out
+of the day entirely, so its neighbours can still chain to each other
+*through* it, whereas a bike event stays in the ordering and isolates
+both sides.
+
+### Riding instead of driving
+
+```
+bike
+```
+
+Keeps everything you'd want from the event — the travel band, the
+leave-by reminder, the drive-time estimate — and stops the car being part
+of it. The Jil travel tasks (390 "Agenda Travel Prepare", 392 "Agenda
+Travel Nav Home") read `overrides.bike` off the item at fire time and skip
+`Tesla.start`.
+
+That skip is about more than a wasted preheat. `Tesla.start` loads a
+**route**, and both tasks pass `keepRoute(true)` — so a route for a ride
+the car never takes sits there and makes the *next* event's nav decide
+the car is already going somewhere and leave it alone.
 
 ## Examples
 

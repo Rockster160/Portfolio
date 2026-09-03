@@ -211,7 +211,13 @@ class AgendaItemsController < ApplicationController
     scope = scope.where("start_at < ?", before) if before
     items = scope.order(start_at: :desc).limit(50)
 
-    render json: { items: items.map(&:serialize) }
+    # `editable` mirrors the aggregate payload — the client decides whether a
+    # hit gets the details modal's Edit / Follow up buttons off this flag, and
+    # a hit that arrived here instead of from the store must answer the same.
+    editable_ids = current_user.editable_agendas.pluck(:id).to_set
+    render json: {
+      items: items.map { |i| i.serialize.merge(editable: editable_ids.include?(i.agenda_id)) },
+    }
   end
 
   def restore

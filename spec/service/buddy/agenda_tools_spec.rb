@@ -263,6 +263,86 @@ RSpec.describe "Buddy agenda tools" do
       end
     end
 
+    # Prod 5338-5341, 3 Sep. "Add an Eye Follow Up appointment to tomorrow at
+    # 11:40, and let's be 10 minutes early." went on at 11:40 with a 0, and the
+    # reply asked whether 11:40 was the check-in or the appointment - because
+    # neither tool HAD an argument for being early. Told "yes, I want to arrive
+    # 10 minutes early. There is a setting for that", it reached for `leave_at`,
+    # found no drive time and gave up.
+    describe "how early to be" do
+      def early_of(name)
+        AgendaItem.find_by(name: name).arrive_early_minutes
+      end
+
+      it "is five by default, with no place attached" do
+        run(:add_agenda_item, { title: "Eye Follow Up", at: at })
+
+        expect(early_of("Eye Follow Up")).to eq(5)
+      end
+
+      it "is five by default with a place too" do
+        run(:add_agenda_item, { title: "Coffee", at: at, location: "Lucky Ones" })
+
+        expect(early_of("Coffee")).to eq(5)
+      end
+
+      it "takes the number they named" do
+        run(:add_agenda_item, { title: "Eye Follow Up", at: at, arrive_early: 10 })
+
+        expect(early_of("Eye Follow Up")).to eq(10)
+      end
+
+      # "No need to be early" is an answer, not a missing argument, and 0 is
+      # `present?` - which is why nothing here reads `.presence`.
+      it "takes an explicit nought" do
+        run(:add_agenda_item, { title: "Eye Follow Up", at: at, arrive_early: 0 })
+
+        expect(early_of("Eye Follow Up")).to eq(0)
+      end
+
+      it "carries the default onto a series rather than zeroing it" do
+        run(:add_agenda_item, { title: "Standup", at: at, repeat: "weekdays" })
+
+        expect(AgendaSchedule.find_by(name: "Standup").arrive_early_minutes).to eq(5)
+      end
+
+      # The one he actually asked for twice. No location, no drive time,
+      # nothing to work back through - and none of that matters.
+      it "sets it on an item that has no drive time at all" do
+        item = personal.agenda_items.create!(
+          name: "Eye Follow Up", start_at: at, end_at: at + 30.minutes, kind: :event, status: :confirmed
+        )
+
+        expect {
+          run(:edit_agenda_item, { item: "Eye Follow Up", arrive_early: 10 })
+        }.not_to raise_error
+
+        expect(item.reload.arrive_early_minutes).to eq(10)
+      end
+
+      it "says the number back rather than a bare 'updated'" do
+        personal.agenda_items.create!(
+          name: "Eye Follow Up", start_at: at, end_at: at + 30.minutes, kind: :event, status: :confirmed
+        )
+        tool   = Buddy::Tools[:edit_agenda_item]
+        result, = run(:edit_agenda_item, { item: "Eye Follow Up", arrive_early: 10 })
+
+        expect(tool[:receipt].call(result, ctx)).to include("10m early")
+      end
+
+      it "changes it on the whole rule when they asked for the series" do
+        schedule = personal.agenda_schedules.create!(
+          name: "Standup", kind: :event, duration_minutes: 15,
+          starts_on: Date.current, start_time: "09:00",
+          recurrence: { "freq" => "weekly", "by_day" => ["mon"] }, arrive_early_minutes: 5
+        )
+
+        run(:edit_agenda_item, { item: "Standup", arrive_early: 20, series: "true" })
+
+        expect(schedule.reload.arrive_early_minutes).to eq(20)
+      end
+    end
+
     describe "add_agenda_item when the thing already exists" do
       it "warns that this looks like a move so the model can switch tools" do
         costco_on(personal)
@@ -943,6 +1023,17 @@ RSpec.describe "Buddy agenda tools" do
         merged, = leave!("2026-08-03T16:00:00")
 
         expect(merged[:at].in_time_zone(zone).strftime("%-I:%M %p")).to eq("4:41 PM")
+      end
+
+      # Both in one sentence - "leave at 4 and let's be 10 minutes early" - so
+      # the buffer being written this turn is the one to work back through.
+      # Reading the row instead gives a start 10 minutes late and a reply that
+      # misquotes it.
+      it "works back through the arrive-early it is being given, not the old one" do
+        merged, = leave!("2026-08-03T16:00:00", arrive_early: 10)
+
+        expect(merged[:at].in_time_zone(zone).strftime("%-I:%M %p")).to eq("4:41 PM")
+        expect(orchard.reload.arrive_early_minutes).to eq(10)
       end
 
       # The half the original reply got wrong: it named one time and called it

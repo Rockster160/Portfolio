@@ -34,7 +34,12 @@ module AgendaTravelChain
   #   post_travel_minutes    (int)     — ceil-rounded minutes for the outgoing leg
   #   post_arrive_at         (int)     — epoch: end_at + post_travel_seconds
   #                                       (when the user arrives at post_travel_to)
-  #   overrides              (hash)    — { nonav, notme, before, after, from, to }
+  #   overrides              (hash)    — { nonav, notme, bike, before, after, from, to }
+  #                                       Echoed verbatim so the Jil travel tasks
+  #                                       read the SAME parse the chain used —
+  #                                       task 390/392 gate `Tesla.start` on
+  #                                       `overrides.bike` rather than re-matching
+  #                                       the notes text themselves.
   #   input_fingerprint      (sha)     — full chain-input hash; skip recompute when matched
   class Service
     FROM_KIND_HOME = "home".freeze
@@ -209,6 +214,12 @@ module AgendaTravelChain
       # `from:` on B asserts an explicit start that isn't A's location — chain
       # detection no longer applies because B isn't rolling forward from A.
       return false if overrides_for(b)[:from].present?
+      # `bike` on either side breaks the link in both directions. The car never
+      # goes to a bike event, so B can't roll forward from A's location (the car
+      # is still at Home), and A can't hand off to a ride it isn't part of. Each
+      # side falls back to the Home default: A gets its return-home leg, B leaves
+      # from Home.
+      return false if overrides_for(a)[:bike] || overrides_for(b)[:bike]
 
       a_out = outgoing_last_location(a)
       b_in  = incoming_first_location(b)
@@ -314,6 +325,7 @@ module AgendaTravelChain
       pred_id = links.dig(evt.id, :predecessor_id)
       succ_id = links.dig(evt.id, :successor_id)
       prev_pred_id = evt.metadata.dig("travel", "chain_predecessor_id")
+      prev_succ_id = evt.metadata.dig("travel", "chain_successor_id")
 
       pred = pred_id ? prev : nil # candidates are ordered; pred is always prev when linked
       override_from = overrides_for(evt)[:from].presence
@@ -402,21 +414,29 @@ module AgendaTravelChain
       travel["input_fingerprint"] = fp
       write_metadata(evt, travel.compact)
 
-      maybe_notify_chain_flip(evt, prev_pred_id, pred_id)
+      maybe_notify_chain_flip(evt, [prev_pred_id, prev_succ_id], [pred_id, succ_id])
     end
 
-    # When an occurrence's chain predecessor changes (linked ↔ unlinked, or
-    # re-linked to a different predecessor), Task 388 ("Agenda Travel
-    # Schedule") needs to re-evaluate whether to schedule prepare/go for
-    # this item. write_metadata uses update_columns to avoid recursive
-    # self-fire, which also bypasses after_commit — so we emit an explicit
-    # :agenda_item :updated here for the case where Task 388's downstream
-    # state needs to update. Fingerprint short-circuit already guarantees
-    # we only land here when something materially changed; this just narrows
-    # the broadcast to chain-state flips so we don't re-run Task 388 on
-    # every pure travel-seconds tweak.
-    def maybe_notify_chain_flip(evt, prev_pred_id, new_pred_id)
-      return if prev_pred_id == new_pred_id
+    # When an occurrence's chain pointers change (linked ↔ unlinked, or
+    # re-linked to a different neighbour), Task 388 ("Agenda Travel
+    # Schedule") needs to re-evaluate which triggers this item should have.
+    # write_metadata uses update_columns to avoid recursive self-fire, which
+    # also bypasses after_commit — so we emit an explicit :agenda_item
+    # :updated here for the case where Task 388's downstream state needs to
+    # update. Fingerprint short-circuit already guarantees we only land here
+    # when something materially changed; this just narrows the broadcast to
+    # chain-state flips so we don't re-run Task 388 on every pure
+    # travel-seconds tweak.
+    #
+    # BOTH pointers, not just the predecessor. Task 388 keys prepare/go/refresh
+    # off `chain_predecessor_id` and the drive-home trigger off
+    # `chain_successor_id` — it REMOVES the drive-home while a successor exists.
+    # An item that only loses its successor therefore has a nav-home to
+    # re-create and, watching the predecessor alone, was never told to. Marking
+    # the following event `bike` is exactly that shape: the ride breaks the
+    # link, and the event before it would have been left with no drive home.
+    def maybe_notify_chain_flip(evt, prev_ids, new_ids)
+      return if prev_ids == new_ids
 
       ::Jil.trigger(@user, :agenda_item, evt.with_jil_attrs(action: :updated))
     end

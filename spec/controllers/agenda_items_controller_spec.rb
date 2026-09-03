@@ -1186,6 +1186,24 @@ RSpec.describe AgendaItemsController, type: :controller do
         ids = body["items"].map { |i| i["id"] }
         expect(ids).to eq([completed.id.to_s])
       end
+
+      # The search modal reads `editable` off each hit to decide whether the
+      # details modal offers Edit / Follow up. Store-sourced hits get it from
+      # the aggregate payload; these have to answer the same.
+      it "stamps editable on each hit" do
+        own = create(:agenda_item, agenda: agenda, name: "Dentist mine",
+          kind: :task, start_at: 2.months.ago)
+        viewer_agenda = create(:agenda, user: create(:user))
+        AgendaShare.create!(agenda: viewer_agenda, user: user, permission: :viewer)
+        readonly = create(:agenda_item, agenda: viewer_agenda, name: "Dentist theirs",
+          kind: :task, start_at: 2.months.ago)
+
+        get :search, params: { q: "dentist" }, format: :json
+        body = JSON.parse(response.body)
+        flags = body["items"].to_h { |i| [i["id"], i["editable"]] }
+        expect(flags[own.id.to_s]).to eq(true)
+        expect(flags[readonly.id.to_s]).to eq(false)
+      end
     end
   end
 

@@ -1021,14 +1021,14 @@
       };
 
       const location = $(".add-location", form)?.value || null;
-      // The form prefills arrive-early to a sensible default for events
-      // that actually have a location to travel to, but a location-less
-      // task/event has no "travel" to be early for — gate the field's
-      // value behind a present location so phantom 5-minute pre-travel
-      // bands don't show up on every location-less item.
-      const arriveEarlyMinutes = location
-        ? (parseInt($(".add-arrive-early", form)?.value, 10) || 0)
-        : 0;
+      // Whatever the field says, location or no location.
+      //
+      // It used to be zeroed without one, so that a location-less item got no
+      // phantom pre-travel band. But the field is right there showing 5, and
+      // saving a 0 under it is the form disagreeing with itself — an
+      // appointment whose address simply wasn't typed in lost the setting.
+      // The default is 5 and it stays 5 unless they change the number.
+      const arriveEarlyMinutes = parseInt($(".add-arrive-early", form)?.value, 10) || 0;
       const notes = $(".add-notes", form)?.value || null;
 
       const agendaId = agendaPicker?.value() ? parseInt(agendaPicker.value(), 10) : null;
@@ -1366,6 +1366,38 @@
       if (!target) return;
       if (window.hideModal) window.hideModal("#agenda-item-details");
       openModal(target);
+    });
+
+    // Follow up straight from details — the same day picker the edit
+    // modal's "Follow up" opens, sourced from the row's data-* instead of
+    // the edit form's live values. Saves a hop through the edit modal for
+    // the common "put this on another day too" move, which matters most
+    // from search: there the row isn't on screen to click a second time.
+    detailsModalEl?.querySelector("[data-follow-up-from-details]")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const target = detailsModalItem;
+      if (!target || !followUpAPI) return;
+      const d = target.dataset;
+      const isAllDay = d.allDay === "true";
+      const [startDate, startTime] = splitEpochToDateAndTime(d.startAt);
+      const [endDateFromEnd, endTime] = splitEpochToDateAndTime(d.endAt);
+      if (window.hideModal) window.hideModal("#agenda-item-details");
+      followUpAPI.open({
+        agendaId:          d.agendaId,
+        name:              d.name,
+        kind:              d.kind || "task",
+        color:             d.color || "#0160FF",
+        allDay:            isAllDay,
+        date:              startDate,
+        endDate:           isAllDay ? (epochToIsoDate(d.endDate) || startDate) : (endDateFromEnd || startDate),
+        startTime:         startTime || "09:00",
+        endTime:           endTime || "10:00",
+        location:          d.location || "",
+        notes:             d.notes || "",
+        triggerExpression: d.triggerExpression || "",
+        month:             (startDate || "").slice(0, 7),
+      });
     });
 
     // Hide / unhide. Recurring rows toggle their schedule_id (the whole
@@ -2377,11 +2409,9 @@
     const modal = document.getElementById("agenda-item-details");
     if (!modal) return;
     detailsModalItem = dataEl;
-    const editBtn = modal.querySelector("[data-edit-from-details]");
-    if (editBtn) {
-      const canEdit = !dataEl.hasAttribute("data-readonly");
-      editBtn.classList.toggle("hidden", !canEdit);
-    }
+    const canEdit = !dataEl.hasAttribute("data-readonly");
+    modal.querySelector("[data-edit-from-details]")?.classList.toggle("hidden", !canEdit);
+    modal.querySelector("[data-follow-up-from-details]")?.classList.toggle("hidden", !canEdit);
     const d = dataEl.dataset;
     const set = (sel, val) => {
       const node = modal.querySelector(sel);
@@ -2459,8 +2489,16 @@
 
     const travelRow = modal.querySelector("[data-travel-row]");
     if (travelRow) {
-      const travelMin = parseInt(d.travelMinutes, 10) || 0;
-      const arriveEarlyMin = parseInt(d.arriveEarlyMinutes, 10) || 0;
+      // Same rule the agenda row uses, from the one place it's written down:
+      // the "min early" setting is on every item, and it only means something
+      // once there is somewhere to go. See AgendaItemRenderer.travelBand.
+      const band = window.AgendaItemRenderer?.travelBand?.({
+        "travel-minutes":       d.travelMinutes,
+        "arrive-early-minutes": d.arriveEarlyMinutes,
+        location:               d.location,
+      });
+      const travelMin = band ? band.travelMin : (parseInt(d.travelMinutes, 10) || 0);
+      const arriveEarlyMin = band ? band.arriveMin : (parseInt(d.arriveEarlyMinutes, 10) || 0);
       const visible = travelMin > 0 || arriveEarlyMin > 0;
       travelRow.classList.toggle("hidden", !visible);
       // Same condensed `[clock] Nm + [car] Mm` shape the agenda row uses —

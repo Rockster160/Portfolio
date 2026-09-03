@@ -1332,6 +1332,9 @@ body.ctr-agendas {
   .agenda-details-foot {
     display: flex;
     justify-content: flex-end;
+    // Close / Go to date / Follow up / Edit is more than a phone-width
+    // modal fits on one line when all four are showing.
+    flex-wrap: wrap;
     gap: 10px;
     margin-top: 12px;
 

@@ -6,6 +6,15 @@ module AgendaTravelChain
   # Recognized forms:
   #   nonav                      → bool: treat the event as if it had no location
   #   notme                      → bool: kick the car / build the trip silently
+  #   bike                       → bool: you're riding, not driving. Travel time
+  #                                 and the leave-by reminders are unchanged, but
+  #                                 the event never chains to a neighbour (the car
+  #                                 stays at Home, so the next event's drive still
+  #                                 starts there) and the Jil travel tasks skip
+  #                                 `Tesla.start` — otherwise the car would load a
+  #                                 route it never drives, and `keepRoute` would
+  #                                 let that stale route suppress the NEXT event's
+  #                                 nav.
   #   before:Foo,Bar,"3rd, St"   → array of waypoints inserted on the incoming
   #                                 leg. Each entry may carry a trailing dwell
   #                                 duration ("Costco 15m", "Office 1h30m");
@@ -36,6 +45,7 @@ module AgendaTravelChain
     EMPTY = {
       nonav:  false,
       notme:  false,
+      bike:   false,
       before: [].freeze,
       after:  [].freeze,
       from:   nil,
@@ -49,6 +59,7 @@ module AgendaTravelChain
       {
         nonav:  text.match?(/^nonav\b/i),
         notme:  text.match?(/^notme\b/i),
+        bike:   text.match?(/^bike\b/i),
         before: extract_list(text, "before"),
         after:  extract_list(text, "after"),
         from:   extract_single(text, "from"),

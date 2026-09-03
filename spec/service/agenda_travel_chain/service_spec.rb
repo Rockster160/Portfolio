@@ -204,6 +204,84 @@ RSpec.describe AgendaTravelChain::Service do
       expect(c_meta["chain_predecessor_id"]).to eq(a.id)
     end
 
+    # `bike` keeps the event and its travel band — the leave-by reminders are
+    # the whole point — but never links it to a neighbour. The car stays at
+    # Home, so every leg around a ride resolves to Home rather than rolling
+    # forward from a location the car never reached.
+    it "keeps a bike event's own travel band but never chains it to a neighbour" do
+      ride = make_event(
+        name: "Ride to the gym",
+        start_at: Time.zone.parse("2026-06-18 14:00"),
+        end_at:   Time.zone.parse("2026-06-18 15:00"),
+        location: "Gym",
+        notes:    "bike",
+      )
+      after = make_event(
+        name: "Meeting",
+        start_at: Time.zone.parse("2026-06-18 15:15"),
+        end_at:   Time.zone.parse("2026-06-18 16:15"),
+        location: "Office",
+      )
+      described_class.new(user, Date.new(2026, 6, 18)).run
+
+      ride_meta = ride.reload.metadata["travel"]
+      after_meta = after.reload.metadata["travel"]
+      # Same gap that chains in the "wouldn't fit" case above.
+      expect(ride_meta["chain_successor_id"]).to be_nil
+      expect(after_meta["chain_predecessor_id"]).to be_nil
+      # Still travels from Home, and still gets a leave-by.
+      expect(ride_meta["travel_from_kind"]).to eq("home")
+      expect(ride_meta["travel_seconds"]).to eq(1200)  # Home St→Gym
+      expect(ride_meta["leave_at"]).to eq(ride.start_at.to_i - 1200)
+      # And back to Home afterwards rather than handing off to the next event.
+      expect(ride_meta["post_travel_to"]).to eq("Home St")
+      expect(ride_meta["post_travel_to_kind"]).to eq("home")
+      # The neighbour leaves from Home too — the car never went to the Gym.
+      expect(after_meta["travel_from_kind"]).to eq("home")
+      expect(after_meta["travel_seconds"]).to eq(600)  # Home St→Office
+    end
+
+    it "breaks the chain when a bike event sits between two drives" do
+      a = make_event(
+        name: "Office",
+        start_at: Time.zone.parse("2026-06-18 14:00"),
+        end_at:   Time.zone.parse("2026-06-18 15:00"),
+        location: "Office",
+      )
+      make_event(
+        name: "Quick ride",
+        start_at: Time.zone.parse("2026-06-18 15:05"),
+        end_at:   Time.zone.parse("2026-06-18 15:15"),
+        location: "Gym",
+        notes:    "bike",
+      )
+      c = make_event(
+        name: "Gym session",
+        start_at: Time.zone.parse("2026-06-18 15:20"),
+        end_at:   Time.zone.parse("2026-06-18 16:20"),
+        location: "Gym",
+      )
+      described_class.new(user, Date.new(2026, 6, 18)).run
+
+      # Unlike `nonav` — which drops out and lets A chain straight to C — a
+      # bike event stays in the ordering and isolates both sides.
+      expect(a.reload.metadata.dig("travel", "chain_successor_id")).to be_nil
+      expect(c.reload.metadata.dig("travel", "chain_predecessor_id")).to be_nil
+    end
+
+    it "echoes bike into the stored overrides so the Jil travel tasks can read it" do
+      ride = make_event(
+        name: "Ride",
+        start_at: Time.zone.parse("2026-06-18 14:00"),
+        end_at:   Time.zone.parse("2026-06-18 15:00"),
+        location: "Gym",
+        notes:    "bike",
+      )
+      described_class.new(user, Date.new(2026, 6, 18)).run
+
+      expect(ride.reload.metadata.dig("travel", "overrides", "bike")).to be(true)
+    end
+
     it "skips all_day events from chain candidacy" do
       make_event(
         name: "Holiday",
@@ -798,7 +876,7 @@ RSpec.describe AgendaTravelChain::Service do
         }
       end
 
-      it "fires :agenda_item :updated when an occurrence becomes chained (predecessor appears)" do
+      it "fires :agenda_item :updated on BOTH sides when a link forms" do
         a = make_event(
           name: "Prep",
           start_at: Time.zone.parse("2026-06-22 13:40"),
@@ -825,10 +903,40 @@ RSpec.describe AgendaTravelChain::Service do
         triggers = collect_triggers
         described_class.new(user, Date.new(2026, 6, 22)).run
 
-        # A goes from nil-pred to nil-pred (no flip), B goes from nil-pred
-        # to a.id (flip → :agenda_item :updated).
+        # B gains a predecessor, A gains a successor. Both are Task 388's
+        # business: the predecessor decides B's prepare/go, the successor
+        # decides whether A keeps its drive-home. Watching only the
+        # predecessor left A's nav-home un-reconsidered.
         expect(flips_for(triggers, b)).to eq(1)
-        expect(flips_for(triggers, a)).to eq(0)
+        expect(flips_for(triggers, a)).to eq(1)
+      end
+
+      it "fires for the event BEFORE one that just became a bike ride" do
+        a = make_event(
+          name: "Meeting",
+          start_at: Time.zone.parse("2026-06-22 13:00"),
+          end_at:   Time.zone.parse("2026-06-22 14:00"),
+          location: "Office",
+        )
+        b = make_event(
+          name: "Ride",
+          start_at: Time.zone.parse("2026-06-22 14:15"),
+          end_at:   Time.zone.parse("2026-06-22 15:00"),
+          location: "Gym",
+        )
+        described_class.new(user, Date.new(2026, 6, 22)).run
+        expect(a.reload.metadata.dig("travel", "chain_successor_id")).to eq(b.id)
+
+        triggers = collect_triggers
+        b.update_columns(notes: "bike")
+        described_class.new(user, Date.new(2026, 6, 22)).run
+
+        # A only loses a successor — nothing about its predecessor changes —
+        # but Task 388 has to put back the drive-home it removed while the
+        # link existed.
+        expect(a.reload.metadata.dig("travel", "chain_successor_id")).to be_nil
+        expect(flips_for(triggers, a)).to eq(1)
+        expect(flips_for(triggers, b)).to eq(1)
       end
 
       it "does NOT refire when chain state is unchanged across runs" do

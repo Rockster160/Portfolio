@@ -46,6 +46,16 @@ Buddy::Tools.register(
     If there is no drive time on the item yet, this comes back and says so -
     then ask whether they meant the start, rather than guessing.
 
+    **"I want to arrive 10 minutes early" is `arrive_early`, NOT `leave_at`.**
+    They are different things: `leave_at` is a clock time to walk out of the
+    door and is worked back through the drive, while `arrive_early` is a plain
+    number of minutes stored on the row - the app's own "min early" setting -
+    and it needs no drive time, no address, and no arithmetic. Told "yes, I
+    want to arrive 10 minutes early. There is a setting for that", the reply
+    was *"it doesn't have a drive time on it yet, so I can't set the
+    10-minute-early part from here"* and asked for a start time instead (prod
+    5341). Nothing about being early depends on knowing the drive.
+
     **"Once she's back from X" is a LEAVE time you can work out.** Items carry
     `home_by` - the clock time that thing puts them back through their own front
     door, the drive home already added to its end. It is there on a partner's
@@ -59,23 +69,29 @@ Buddy::Tools.register(
   TXT
   feature:     :agenda,
   args:        {
-    item:      { type: :string,       required: true,  description: "Fuzzy title of the item to edit" },
-    hint_date: { type: :string,       required: false, description: "YYYY-MM-DD, the date the item is on NOW, only to tell two of the same name apart. NEVER the date you are moving it to - that goes in `at`. Leave it out if you aren't sure where the item currently sits" },
-    title:     { type: :string,       required: false, description: "New title" },
-    at:        { type: :iso_time,     required: false, description: "New local wall-clock START, 24-hour. Moving something on today's calendar puts it AHEAD of the current time. If they said LEAVE, use `leave_at` instead" },
-    leave_at:  { type: :iso_time,     required: false, description: "The time they want to LEAVE, 24-hour local. The start is worked back from the item's own drive time and arrive-early minutes. Never pass this together with `at`" },
-    duration:  { type: :duration_min, required: false, description: "New duration in minutes" },
-    location:  { type: :string,       required: false, description: "New place/venue" },
-    calendar:  { type: :string,       required: false, description: "Move it to this calendar, by name (e.g. 'Ours')" },
-    kind:      {
+    item:         { type: :string,       required: true,  description: "Fuzzy title of the item to edit" },
+    hint_date:    { type: :string,       required: false, description: "YYYY-MM-DD, the date the item is on NOW, only to tell two of the same name apart. NEVER the date you are moving it to - that goes in `at`. Leave it out if you aren't sure where the item currently sits" },
+    title:        { type: :string,       required: false, description: "New title" },
+    at:           { type: :iso_time,     required: false, description: "New local wall-clock START, 24-hour. Moving something on today's calendar puts it AHEAD of the current time. If they said LEAVE, use `leave_at` instead" },
+    leave_at:     { type: :iso_time,     required: false, description: "The time they want to LEAVE, 24-hour local. The start is worked back from the item's own drive time and arrive-early minutes. Never pass this together with `at`" },
+    duration:     { type: :duration_min, required: false, description: "New duration in minutes" },
+    location:     { type: :string,       required: false, description: "New place/venue" },
+    arrive_early: {
+      type:        :duration_min,
+      required:    false,
+      description: "Minutes to be there BEFORE it starts - the app's \"min early\" setting. A plain number on the row; " \
+                   "it needs no drive time. 0 means no need to be early. Not the same as `leave_at`",
+    },
+    calendar:     { type: :string, required: false, description: "Move it to this calendar, by name (e.g. 'Ours')" },
+    kind:         {
       type:        :enum,
       required:    false,
       values:      %i[task event],
       description: "Change WHAT IT IS. `event` occupies a span (pass `duration` too, or it takes 30 minutes); " \
                    "`task` is a to-do at a single time and drops the span entirely",
     },
-    cancelled: { type: :string,       required: false, description: "'true' to cancel" },
-    series:    { type: :string,       required: false, description: "'true' to change the whole repeating series rather than this one occurrence. Moving a repeating item to another calendar is almost always the series" },
+    cancelled:    { type: :string,       required: false, description: "'true' to cancel" },
+    series:       { type: :string,       required: false, description: "'true' to change the whole repeating series rather than this one occurrence. Moving a repeating item to another calendar is almost always the series" },
   },
   confirm:     ->(payload, ctx) {
     item = ctx.resolve_agenda_item(payload[:item], hint_date: payload[:hint_date])
@@ -138,10 +154,16 @@ Buddy::Tools.register(
       # the legacy refresh task has minutes and no seconds, and reading the key
       # directly turned a 47-minute drive into "I don't have a drive time".
       drive  = item.travel_seconds.to_i
-      early  = item.arrive_early_minutes.to_i * 60
+      # The value being SET this turn, if they set one. "Leave at 4 and let's be
+      # 10 minutes early" arrives as one call, and reading the row would work
+      # back through the old buffer and write a start the reply then misquotes.
+      # `.presence` is safe on a nought here: 0 is `present?`, so "no need to be
+      # early" survives it and only a missing argument falls through to the row.
+      early  = (payload[:arrive_early].presence || item.arrive_early_minutes).to_i * 60
       if drive.zero?
         raise "I don't have a drive time for #{item.name}, so I can't work back from a leave time - " \
-              "ask whether they meant the start instead"
+              "ask whether they meant the start instead. If what they actually asked for was to be " \
+              "there a few minutes EARLY, that's `arrive_early` and it needs no drive time"
       end
 
       resolved[:at]         = leave + drive + early
@@ -180,6 +202,7 @@ Buddy::Tools.register(
     end
     diffs << "duration → #{payload[:duration]}m" if payload[:duration].present?
     diffs << "@ #{payload[:location]}" if payload[:location].present?
+    diffs << "arrive #{payload[:arrive_early].to_i}m early" if payload[:arrive_early].present?
     diffs << "📅 #{payload[:agenda_from]} → #{payload[:agenda_name]}" if payload[:agenda_name].present?
     diffs << "#{payload[:was_kind]} → #{payload[:kind]}" if payload[:kind].to_s != payload[:was_kind].to_s
     diffs << "cancel" if payload[:cancelled] == "true"
@@ -208,6 +231,9 @@ Buddy::Tools.register(
     attrs = {}
     attrs[:name]      = payload[:title]     if payload[:title].present?
     attrs[:location]  = payload[:location]  if payload[:location].present?
+    # `present?` rather than `presence`, so an explicit 0 ("no need to be
+    # early") is a change and not a missing argument.
+    attrs[:arrive_early_minutes] = payload[:arrive_early].to_i if payload[:arrive_early].present?
     # Reassigning agenda_id IS the move. Undo comes free: `before` below snapshots
     # every attr being written, so Reverter#revert_update puts it back.
     attrs[:agenda_id] = payload[:agenda_id] if payload[:agenda_id].present?
@@ -281,6 +307,13 @@ Buddy::Tools.register(
     if fields.include?("kind") && item
       span = ("#{((item.end_at - item.start_at) / 60).round}m" if item.event? && item.end_at)
       return ["#{name} is #{item.event? ? "an" : "a"} #{item.kind} now", span].compact.join(" - ") + " ✓"
+    end
+    # When being early IS the change, say the number. "Updated Eye Follow Up ✓"
+    # over a 10-minute setting they had to ask for twice says nothing about
+    # whether it took.
+    if fields.include?("arrive_early_minutes") && fields.exclude?("start_at") && item
+      early = item.arrive_early_minutes.to_i
+      return "#{name} - #{early.positive? ? "arrive #{early}m early" : "no early buffer"} ✓"
     end
     # When the change IS the time, say the time. A bare "Updated Shower ✓" sat
     # under a reply claiming 4:45 PM while the row went to 4:45 AM, and nothing
