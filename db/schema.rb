@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_08_27_175218) do
+ActiveRecord::Schema[7.1].define(version: 2026_09_03_194155) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_stat_statements"
   enable_extension "plpgsql"
@@ -1176,6 +1176,41 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_27_175218) do
     t.index ["user_id", "scope"], name: "index_jil_trigger_shapes_on_user_id_and_scope", unique: true
   end
 
+  create_table "job_applications", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "company", null: false
+    t.string "role"
+    t.integer "status", default: 0, null: false
+    t.string "color", null: false
+    t.text "logo"
+    t.string "source"
+    t.string "url"
+    t.datetime "last_activity_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id", "last_activity_at"], name: "index_job_applications_on_user_id_and_last_activity_at"
+    t.index ["user_id", "status"], name: "index_job_applications_on_user_id_and_status"
+    t.index ["user_id"], name: "index_job_applications_on_user_id"
+  end
+
+  create_table "job_notes", force: :cascade do |t|
+    t.bigint "job_application_id", null: false
+    t.text "body", null: false
+    t.integer "tag", default: 0, null: false
+    t.datetime "occurred_at", null: false
+    t.string "source"
+    t.string "url"
+    t.string "spoke_to"
+    t.integer "duration_minutes"
+    t.datetime "follow_up_at"
+    t.bigint "agenda_item_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["agenda_item_id"], name: "index_job_notes_on_agenda_item_id"
+    t.index ["job_application_id", "occurred_at"], name: "index_job_notes_on_job_application_id_and_occurred_at"
+    t.index ["job_application_id"], name: "index_job_notes_on_job_application_id"
+  end
+
   create_table "lines", id: :serial, force: :cascade do |t|
     t.integer "flash_card_id"
     t.string "text", limit: 255
@@ -1878,6 +1913,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_08_27_175218) do
   add_foreign_key "household_icons", "users", column: "uploaded_by_user_id"
   add_foreign_key "image_descriptions", "active_storage_blobs", column: "blob_id"
   add_foreign_key "image_descriptions", "users"
+  add_foreign_key "job_applications", "users"
+  add_foreign_key "job_notes", "job_applications"
   add_foreign_key "list_builders", "lists"
   add_foreign_key "list_builders", "users"
   add_foreign_key "list_items", "sections"

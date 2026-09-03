@@ -1,0 +1,33 @@
+<%# The little typable square — the same widget the chores form has, as a
+   partial anything can render. Wired by `src/icon_stack.js`, which reads and
+   writes the hidden input below.
+
+   Four ways in: type one emoji, paste (emoji, image, image URL, SVG), drag an
+   image onto it, or the search chip, which opens the shared picker modal over
+   the household's uploads as well as emoji and Tabler icons.
+
+   Locals:
+     name    — the hidden input's name, e.g. "job_application[logo]"
+     value   — the reference currently stored, if any
+     label   — what a screen reader calls the square
+     size    — extra class on the cell ("lg" on a detail page) %>
+<div class="icon-cell <%= local_assigns[:size] %>" data-icon-stack>
+  <button type="button" class="icon-upload-btn" data-icon-upload title="Upload an image">
+    <i class="fa fa-camera" aria-hidden="true"></i>
+  </button>
+  <button type="button" class="icon-pick-btn" data-icon-pick title="Search emoji &amp; icons">
+    <i class="fa fa-search" aria-hidden="true"></i>
+  </button>
+  <button type="button" class="icon-clear-btn<%= " hidden" if value.blank? %>" data-icon-clear title="Clear">
+    &times;
+  </button>
+
+  <%# Rendered server-side as well as by the JS, so an existing icon is there
+     on first paint rather than appearing a beat later. %>
+  <div class="icon-preview" data-icon-preview contenteditable="true" spellcheck="false"
+       role="textbox" aria-label="<%= label %>"><%= icon_ref_tag(value) %></div>
+
+  <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
+         data-icon-file hidden>
+  <%= hidden_field_tag name, value, data: { icon_hidden: true } %>
+</div>

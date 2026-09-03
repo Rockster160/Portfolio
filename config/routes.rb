@@ -339,6 +339,13 @@ Rails.application.routes.draw do
 
   resources :scheduled_tasks, path: :schedules
 
+  # Interview tracker — one row per place you applied, a timeline of notes
+  # under each. `/interviews` rather than `/job_applications` because the page
+  # is the thing you open during a search, not the record it stores.
+  resources :interviews, controller: :job_applications, except: [:new, :edit] do
+    resources :notes, controller: :job_notes, only: [:create, :update, :destroy]
+  end
+
   resource :summoners_war do
     get :runes
     resources :monsters

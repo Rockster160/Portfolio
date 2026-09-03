@@ -1,0 +1,12 @@
+<%# A company's mark on a card. An emoji, a Tabler icon, one of the household's
+   uploads, or a cropped image — whatever the square was set to. With nothing
+   set it falls back to the company's initials over the colour it was given at
+   creation, so a wall of applications is still scannable before anybody has
+   picked anything. %>
+<%
+  mark = icon_ref_tag(job.logo)
+%>
+<span class="job-logo <%= size %><%= " has-mark" if mark %>"
+      style="<%= "background: #{job.color};" unless mark %>">
+  <%= mark || job.initials %>
+</span>

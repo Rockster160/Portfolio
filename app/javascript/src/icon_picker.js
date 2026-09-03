@@ -48,6 +48,27 @@ export function renderIconValue(container, value) {
     container.appendChild(i);
     return;
   }
+  // An uploaded or linked picture. A pick from the grid is never one of these
+  // — they arrive by paste, drop or crop — but a field that STORES one has to
+  // be able to show it back, and there should be one renderer, not two.
+  if (v.startsWith("data:image/") || v.startsWith("http://") || v.startsWith("https://")) {
+    const img = document.createElement("img");
+    img.className = "icon-img";
+    img.src = v;
+    img.alt = "";
+    img.draggable = false;
+    container.appendChild(img);
+    return;
+  }
+  // Parsed through a detached <template> rather than assigned to innerHTML on
+  // the live node, so pasted markup never executes on the way in.
+  if (v.startsWith("<svg")) {
+    const parser = document.createElement("template");
+    parser.innerHTML = v;
+    const root = parser.content.firstElementChild;
+    if (root) container.appendChild(root);
+    return;
+  }
   container.textContent = v;
 }
 

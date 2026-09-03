@@ -1,0 +1,36 @@
+<%
+  latest = job.notes.max_by(&:occurred_at)
+  # No floor, for the same reason the strip on the index has none: a missed
+  # chase is the one most worth showing.
+  next_follow_up = job.notes.filter_map(&:follow_up_at).min unless job.dead?
+%>
+<a class="interview-card status-<%= job.status %>" href="<%= interview_path(job) %>"
+   style="--job-color: <%= job.color %>;">
+  <div class="card-head">
+    <%= render "logo", job: job, size: "md" %>
+    <div class="card-title">
+      <span class="card-company"><%= job.company %></span>
+      <% if job.role.present? %>
+        <span class="card-role"><%= job.role %></span>
+      <% end %>
+    </div>
+    <span class="status-pill"><%= job.status.humanize %></span>
+  </div>
+
+  <% if latest.present? %>
+    <div class="card-latest">
+      <span class="note-tag note-tag-<%= latest.tag %>"><%= latest.tag_label %></span>
+      <%= truncate(latest.body, length: 110) %>
+    </div>
+  <% end %>
+
+  <div class="card-foot">
+    <span><%= pluralize(job.notes.size, "note") %></span>
+    <% if job.last_activity_at.present? %>
+      <span>· <%= time_ago_in_words(job.last_activity_at) %> ago</span>
+    <% end %>
+    <% if next_follow_up.present? %>
+      <span class="card-followup">· follow up <%= next_follow_up.strftime("%b %-d") %></span>
+    <% end %>
+  </div>
+</a>

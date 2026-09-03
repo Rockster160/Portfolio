@@ -1,0 +1,49 @@
+<%# One entry in an application's timeline. The edit form is collapsed behind
+   the timestamp rather than sitting open, because the overwhelmingly common
+   thing to do with a note is read it. %>
+<li class="interview-note" id="note-<%= note.id %>">
+  <div class="note-head">
+    <span class="note-tag note-tag-<%= note.tag %>"><%= note.tag_label %></span>
+    <span class="note-when"><%= note.occurred_at.strftime("%b %-d, %Y · %-I:%M %p") %></span>
+    <% if note.spoke_to.present? %>
+      <span class="note-meta">with <%= note.spoke_to %></span>
+    <% end %>
+    <% if note.duration_label.present? %>
+      <span class="note-meta"><%= note.duration_label %></span>
+    <% end %>
+    <% if note.source.present? %>
+      <span class="note-meta">via <%= note.source %></span>
+    <% end %>
+  </div>
+
+  <div class="note-body"><%= simple_format(note.body) %></div>
+
+  <% if note.url.present? %>
+    <a class="note-link" href="<%= note.url %>" target="_blank" rel="noopener"><%= note.url %></a>
+  <% end %>
+
+  <% if note.follow_up_at.present? %>
+    <div class="note-followup">
+      Follow up <%= note.follow_up_at.strftime("%b %-d at %-I:%M %p") %>
+      <% if note.follow_up_item.present? %>
+        <span class="field-hint">· on your agenda</span>
+      <% end %>
+    </div>
+  <% end %>
+
+  <details class="note-edit">
+    <summary>Edit</summary>
+    <%# `namespace` prefixes every generated id. Without it each note's edit
+       form emits the same `job_note_body` as the add form below, and every
+       label on the page points at whichever one the browser found first. %>
+    <%= form_with model: note, url: interview_note_path(job, note), method: :patch, local: true,
+          namespace: "note#{note.id}" do |f| %>
+      <%= render "note_fields", f: f, note_extras_open: true %>
+      <div class="form-submission">
+        <%= submit_tag "Save note" %>
+        <%= link_to "Delete", interview_note_path(job, note), method: :delete, class: "btn danger",
+              data: { confirm: "Delete this note? Any follow-up it put on your agenda goes too." } %>
+      </div>
+    <% end %>
+  </details>
+</li>

@@ -1,0 +1,597 @@
+// The interview tracker at /interviews.
+//
+// The page sits inside the standard `.app-card-container` shell, so the forms
+// pick up their field layout from `components/forms.scss` for free. What is
+// here is layout and the timeline — plus a small palette of local custom
+// properties, because everything below has to read on both the light default
+// and `html.dark-mode`, and hard-coding either one is how a panel ends up
+// showing text the same colour as what's behind it.
+.interviews-page {
+  --iv-surface: #{rgba(white, 0.55)};
+  --iv-line: #{rgba($grey-blue, 0.35)};
+  --iv-muted: #{$grey-blue};
+  --iv-text: #{$text-color};
+
+  h3 {
+    margin: 22px 0 10px;
+    color: var(--iv-text);
+    font-size: 17px;
+  }
+
+  label {
+    color: var(--iv-muted);
+  }
+
+  .field-hint {
+    display: inline-block;
+    color: var(--iv-muted);
+    font-size: 12px;
+  }
+
+  // The shell already provides the outer card; a nested form shouldn't push
+  // itself another 30px down from whatever it follows.
+  form:not(.basic) {
+    margin-top: 10px;
+  }
+
+  details > summary {
+    cursor: pointer;
+    padding: 8px 0;
+    color: var(--iv-text);
+    font-weight: bold;
+    user-select: none;
+  }
+
+  // ---- Follow-ups ------------------------------------------------------
+  .interview-followups {
+    margin-bottom: 6px;
+    border: 1px solid var(--iv-line);
+    border-radius: 10px;
+    background: var(--iv-surface);
+    padding: 10px 14px;
+
+    h3 {
+      margin: 0 0 6px;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    li {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 3px 0;
+      font-size: 14px;
+    }
+
+    .followup-when {
+      flex: 0 0 auto;
+      min-width: 54px;
+      color: var(--iv-muted);
+      font-variant-numeric: tabular-nums;
+
+      &.is-due {
+        color: $base-complementary;
+        font-weight: bold;
+      }
+    }
+  }
+
+  // ---- Filters ---------------------------------------------------------
+  .interview-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 16px 0 12px;
+  }
+
+  .interview-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--iv-line);
+    border-radius: 999px;
+    background: var(--iv-surface);
+    padding: 4px 12px;
+    color: var(--iv-text);
+    font-size: 13px;
+    text-decoration: none;
+
+    &.is-on {
+      border-color: $base-blue;
+      background: $base-blue;
+      color: white;
+    }
+
+    .chip-count {
+      opacity: 0.65;
+      font-size: 11px;
+    }
+  }
+
+  .interview-empty {
+    border: 1px dashed var(--iv-line);
+    border-radius: 10px;
+    padding: 24px;
+    color: var(--iv-muted);
+    font-size: 14px;
+    text-align: center;
+  }
+
+  // ---- The wall of applications ----------------------------------------
+  .interview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+  }
+
+  .interview-card {
+    display: block;
+    position: relative;
+    border: 1px solid var(--iv-line);
+    border-left: 4px solid var(--job-color, #{$base-blue});
+    border-radius: 10px;
+    background: var(--iv-surface);
+    padding: 12px 14px;
+    color: var(--iv-text);
+    text-decoration: none;
+
+    &:hover {
+      border-color: $base-blue;
+    }
+
+    // A rejected or closed application is history. It stays fully readable —
+    // it just stops competing with the live ones for attention.
+    &.status-rejected,
+    &.status-closed {
+      opacity: 0.62;
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-title {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .card-company {
+      display: block;
+      overflow: hidden;
+      font-weight: bold;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .card-role {
+      display: block;
+      overflow: hidden;
+      color: var(--iv-muted);
+      font-size: 12px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .status-pill {
+      flex: 0 0 auto;
+      border: 1px solid var(--iv-line);
+      border-radius: 999px;
+      padding: 1px 8px;
+      color: var(--iv-muted);
+      font-size: 11px;
+    }
+
+    .card-latest {
+      margin-top: 10px;
+      color: var(--iv-text);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .card-foot {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 10px;
+      color: var(--iv-muted);
+      font-size: 12px;
+    }
+
+    .card-followup {
+      color: $base-complementary;
+    }
+  }
+
+  // ---- Company mark ----------------------------------------------------
+  // What a card shows. `has-mark` means the square was actually set to
+  // something — an emoji, an icon, a picture — so the colour block and the
+  // initials underneath it step aside.
+  .job-logo {
+    display: inline-flex;
+    flex: 0 0 auto;
+    justify-content: center;
+    align-items: center;
+    border-radius: 8px;
+    color: white;
+    font-weight: bold;
+    overflow: hidden;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    &.has-mark {
+      color: inherit;
+    }
+
+    &.md {
+      width: 34px;
+      height: 34px;
+      font-size: 13px;
+
+      .icon-glyph,
+      .icon-ti {
+        font-size: 22px;
+        line-height: 1;
+      }
+    }
+
+    &.lg {
+      width: 64px;
+      height: 64px;
+      font-size: 22px;
+
+      .icon-glyph,
+      .icon-ti {
+        font-size: 40px;
+        line-height: 1;
+      }
+    }
+  }
+
+  // ---- The icon square -------------------------------------------------
+  // Logo first, then the name. The widget itself is shared with the chores
+  // form (`src/icon_stack.js`); what is here is only how it looks on this
+  // page.
+  .identity-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .identity-names {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .icon-cell {
+    position: relative;
+    flex: 0 0 auto;
+    width: 72px;
+
+    &.lg {
+      width: 88px;
+    }
+
+    // The square IS the input — contenteditable, hence `cursor: text` rather
+    // than a pointer, and the browser's focus ring swapped for something
+    // quieter.
+    .icon-preview {
+      display: grid;
+      position: relative;
+      place-items: center;
+      outline: none;
+      border: 1px solid var(--iv-line);
+      border-radius: 12px;
+      background: var(--iv-surface);
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      overflow: hidden;
+      cursor: text;
+      font-size: 34px;
+      line-height: 1;
+      text-align: center;
+
+      &:focus {
+        border-color: $base-blue;
+      }
+
+      // A hint at what belongs here that doesn't occupy the value.
+      &:empty:before {
+        opacity: 0.3;
+        content: "🏢";
+        pointer-events: none;
+      }
+
+      img,
+      > svg {
+        width: 76%;
+        height: 76%;
+        object-fit: contain;
+        pointer-events: none;
+        user-select: none;
+      }
+    }
+
+    &.lg .icon-preview {
+      font-size: 42px;
+    }
+
+    &.is-dropping .icon-preview {
+      border-style: dashed;
+      border-color: $base-blue;
+    }
+
+    // Chips pinned to the corners, semi-transparent so they never compete
+    // with the mark itself.
+    .icon-upload-btn,
+    .icon-pick-btn,
+    .icon-clear-btn {
+      display: grid;
+      position: absolute;
+      z-index: 2;
+      place-items: center;
+      border: 1px solid var(--iv-line);
+      border-radius: 6px;
+      background: var(--iv-surface);
+      padding: 0;
+      width: 22px;
+      height: 22px;
+      color: var(--iv-muted);
+      font-size: 11px;
+      line-height: 1;
+      cursor: pointer;
+
+      &:hover {
+        border-color: $base-blue;
+        color: var(--iv-text);
+      }
+    }
+
+    .icon-upload-btn { top: 3px; left: 3px; }
+    .icon-pick-btn { top: 3px; right: 3px; }
+    .icon-clear-btn { right: 3px; bottom: 3px; font-size: 14px; }
+  }
+
+  // In the title bar the square sits on the header's blue, so it borrows
+  // white rather than the page's own surface tokens.
+  .app-card-title {
+    .job-identity {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .job-identity-names {
+      min-width: 0;
+    }
+
+    .icon-cell {
+      .icon-preview,
+      .icon-upload-btn,
+      .icon-pick-btn,
+      .icon-clear-btn {
+        border-color: rgba(white, 0.35);
+        background: rgba(white, 0.15);
+        color: white;
+      }
+
+      .icon-preview:focus,
+      .icon-upload-btn:hover,
+      .icon-pick-btn:hover,
+      .icon-clear-btn:hover {
+        border-color: white;
+      }
+    }
+  }
+
+  // Status control and the facts beside it. The logo used to live here; it
+  // moved up into the title, which is where a logo goes.
+  .job-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 20px;
+    margin-bottom: 4px;
+  }
+
+  .job-status-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .job-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    color: var(--iv-muted);
+    font-size: 13px;
+  }
+
+
+  // ---- Logo picker -----------------------------------------------------
+  .logo-picker {
+    margin-top: 12px;
+    border: 1px solid var(--iv-line);
+    border-radius: 10px;
+    background: var(--iv-surface);
+    padding: 14px;
+
+    .logo-picker-drop {
+      border: 1px dashed var(--iv-line);
+      border-radius: 8px;
+      padding: 16px;
+      color: var(--iv-muted);
+      font-size: 13px;
+      text-align: center;
+
+      &.is-over {
+        border-color: $base-blue;
+      }
+
+      input[type="url"] {
+        display: block;
+        margin: 10px auto 0;
+        max-width: 380px;
+      }
+    }
+
+    .logo-picker-stage {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-top: 12px;
+
+      canvas {
+        border: 1px solid var(--iv-line);
+        border-radius: 8px;
+        cursor: grab;
+        touch-action: none;
+      }
+    }
+
+    .logo-zoom {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      color: var(--iv-muted);
+      font-size: 12px;
+    }
+
+    .logo-picker-error {
+      margin: 8px 0 0;
+      color: $danger;
+      font-size: 13px;
+    }
+
+    .logo-picker-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+  }
+
+  // ---- Timeline --------------------------------------------------------
+  .interview-notes {
+    margin: 0;
+    border-left: 2px solid var(--iv-line);
+    padding: 0 0 0 16px;
+    list-style: none;
+  }
+
+  .interview-note {
+    position: relative;
+    margin-bottom: 16px;
+
+    // The bead on the line. Sits on the border the list draws, so a timeline
+    // reads as one thread rather than a stack of boxes.
+    &:before {
+      position: absolute;
+      top: 6px;
+      left: -22px;
+      border-radius: 50%;
+      background: var(--job-color, #{$base-blue});
+      width: 9px;
+      height: 9px;
+      content: "";
+    }
+
+    .note-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .note-when {
+      color: var(--iv-muted);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .note-meta {
+      color: var(--iv-muted);
+      font-size: 12px;
+    }
+
+    .note-body {
+      margin-top: 2px;
+      font-size: 14px;
+      line-height: 1.5;
+
+      p {
+        margin: 0 0 6px;
+      }
+    }
+
+    .note-link {
+      font-size: 12px;
+      word-break: break-all;
+    }
+
+    .note-followup {
+      margin-top: 4px;
+      color: $base-complementary;
+      font-size: 12px;
+    }
+
+    .note-edit > summary {
+      padding: 2px 0;
+      color: var(--iv-muted);
+      font-size: 12px;
+      font-weight: normal;
+    }
+  }
+
+  // Type chips. Colour carries the shape of an application at a glance — the
+  // beats that move it forward read warm, the ones that end it read flat.
+  .note-tag {
+    display: inline-block;
+    border-radius: 4px;
+    background: var(--iv-muted);
+    padding: 1px 7px;
+    color: white;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  .note-tag-applied { background: $base-blue; }
+  .note-tag-heard_back { background: #34d0e0; }
+  .note-tag-recruiter_call { background: #a371f7; }
+  .note-tag-interview { background: #3fb950; }
+  .note-tag-take_home { background: #e3b341; color: $grey-dark; }
+  .note-tag-offer { background: $base-complementary; }
+  .note-tag-rejected { background: $danger; }
+  .note-tag-withdrew { background: $grey-dark; }
+
+}
+
+.dark-mode .interviews-page {
+  --iv-surface: #{rgba(black, 0.18)};
+  --iv-line: #{rgba($grey-light, 0.22)};
+  --iv-muted: #{rgba($grey-light, 0.62)};
+  --iv-text: #{$grey-light};
+}
+
+// Sits above the card rather than inside it, so it can't be styled from within
+// `.interviews-page`. The card carries its own 30px top margin; this only has
+// to clear the top of the page.
+.interview-back-row {
+  margin-top: 20px;
+}

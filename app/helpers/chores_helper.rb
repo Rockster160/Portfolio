@@ -71,28 +71,11 @@ module ChoresHelper
 
   private
 
+  # The shapes themselves live in ApplicationHelper#icon_ref_tag — they stopped
+  # being a chores idea the moment a second feature stored an icon. What stays
+  # here is the broom: a `hicon:` whose upload has since been deleted resolves
+  # to nothing, and a chore card still has to draw something.
   def rendered_icon(value)
-    if value.start_with?("<svg")
-      value.html_safe
-    elsif value.start_with?("hicon:")
-      resolve_hicon_ref(value)
-    elsif value.start_with?("data:image/", "http://", "https://")
-      image_tag(value, class: "icon-img", alt: "", loading: "lazy")
-    elsif value.start_with?("ti-")
-      content_tag(:i, "", class: "ti #{value} icon-ti", "aria-hidden": "true")
-    else
-      content_tag(:span, value, class: "icon-glyph")
-    end
-  end
-
-  # `hicon:<id>` refs point at a HouseholdIcon row whose image_data is a
-  # base64 data URL. Dangling ref (icon deleted) collapses to a broom
-  # glyph so the page still renders.
-  def resolve_hicon_ref(ref)
-    id = ref.delete_prefix("hicon:").to_i
-    icon = HouseholdIcon.find_by(id: id)
-    return content_tag(:span, "🧹", class: "icon-placeholder") if icon&.image_data.blank?
-
-    image_tag(icon.image_data, class: "icon-img", alt: "", loading: "lazy")
+    icon_ref_tag(value) || content_tag(:span, "🧹", class: "icon-placeholder")
   end
 end

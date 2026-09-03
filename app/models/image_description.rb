@@ -13,6 +13,7 @@
 #  byte_message_id :bigint
 #  user_id         :bigint           not null
 #
+
 # What a picture is OF, written once, so it can be found again after it has
 # scrolled out of the thread.
 #

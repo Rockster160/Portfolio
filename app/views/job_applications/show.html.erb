@@ -1,0 +1,131 @@
+<%= meta_title @job.label %>
+<%= meta_description "Interview tracker — #{@job.company}." %>
+
+<%# The only way back — this app has no global nav — so it goes above the card
+   where a back link goes, not under the timeline. `btn` at the top is what the
+   other detail pages here use for exactly this. %>
+<div class="wide-container interview-back-row">
+  <%= link_to "← All applications", interviews_path, class: :btn %>
+</div>
+
+<%# The whole page is the logo scope: the square lives up in the title bar, in
+   front of the company name, and the cropper it can open is down in the body.
+   `data-logo-url` is what says there's a record to save to — a change to the
+   square PATCHes rather than waiting for a submit. %>
+<div class="wide-container interviews-page interview-show" data-interviews
+     data-logo-scope data-logo-url="<%= interview_path(@job) %>"
+     data-interview-job="<%= @job.id %>"
+     style="--job-color: <%= @job.color %>;">
+  <div class="app-card-container">
+    <div class="app-card-title">
+      <div class="job-identity">
+        <%= render "shared/icon_stack",
+              name: "job_application[logo]",
+              value: @job.logo,
+              size: "lg",
+              label: "Company logo — type an emoji, paste or drop an image" %>
+
+        <div class="job-identity-names">
+          <%= @job.company %>
+          <div class="subtitle">
+            <%= @job.role.presence || "No role recorded" %>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="app-card-body">
+      <div class="app-card-inner">
+        <%= render "logo_picker", save_label: "Use this crop" %>
+
+        <div class="job-header">
+          <%= form_with model: @job, url: interview_path(@job), method: :patch, local: true,
+                class: "basic job-status-form" do |f| %>
+            <%= f.label :status, "Status" %>
+            <%= f.select :status,
+                  JobApplication.statuses.keys.map { |status| [status.humanize, status] },
+                  {}, data: { status_select: true } %>
+            <%= submit_tag "Update", class: "btn", data: { status_submit: true } %>
+          <% end %>
+
+          <div class="job-meta">
+            <% if @job.source.present? %>
+              <span>via <%= @job.source %></span>
+            <% end %>
+            <% if @job.url.present? %>
+              <a href="<%= @job.url %>" target="_blank" rel="noopener">the listing</a>
+            <% end %>
+            <span>tracked since <%= @job.created_at.strftime("%b %-d, %Y") %></span>
+          </div>
+        </div>
+
+        <details class="job-details">
+          <summary>Edit details</summary>
+          <%= form_with model: @job, url: interview_path(@job), method: :patch, local: true do |f| %>
+            <div class="form-fields">
+              <div class="split-fields">
+                <div class="form-field">
+                  <%= f.label :company %>
+                  <%= f.text_field :company %>
+                </div>
+
+                <div class="form-field">
+                  <%= f.label :role, "Role" %>
+                  <%= f.text_field :role %>
+                </div>
+              </div>
+
+              <div class="split-fields">
+                <div class="form-field">
+                  <%= f.label :source, "Source" %>
+                  <%= f.text_field :source %>
+                </div>
+
+                <div class="form-field">
+                  <%= f.label :url, "Listing URL" %>
+                  <%= f.url_field :url %>
+                </div>
+              </div>
+
+              <div class="form-field">
+                <%= f.label :color, "Calendar colour" %>
+                <%= f.color_field :color %>
+                <span class="field-hint">Follow-ups from this job wear this colour on your agenda.</span>
+              </div>
+
+              <div class="form-submission">
+                <%= submit_tag "Save" %>
+                <%= link_to "Delete application", interview_path(@job), method: :delete, class: "btn danger",
+                      data: { confirm: "Delete #{@job.company} and all #{pluralize(@notes.size, "note")}? This cannot be undone." } %>
+              </div>
+            </div>
+          <% end %>
+        </details>
+
+        <h3 class="notes-heading">Timeline</h3>
+
+        <% if @notes.empty? %>
+          <div class="interview-empty">Nothing logged yet. Write the first note below.</div>
+        <% else %>
+          <ul class="interview-notes">
+            <% @notes.each do |note| %>
+              <%= render "note", note: note, job: @job %>
+            <% end %>
+          </ul>
+        <% end %>
+
+        <details class="note-new" open>
+          <summary>+ Add a note</summary>
+          <%= form_with model: @note, url: interview_notes_path(@job), method: :post, local: true do |f| %>
+            <div class="form-fields">
+              <%= render "note_fields", f: f, note_extras_open: false %>
+              <div class="form-submission">
+                <%= submit_tag "Add note" %>
+              </div>
+            </div>
+          <% end %>
+        </details>
+      </div>
+    </div>
+  </div>
+</div>

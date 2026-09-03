@@ -8,6 +8,10 @@
   # `planned` stops needing a decision without becoming unseen again.
   open_requests   = FeatureRequest.status_open.count
   unseen_requests = FeatureRequest.where(seen_at: nil).count
+  # Follow-ups owed today or already missed, on applications still in play.
+  # Same idea as the requests blip: a number that means "go and do something",
+  # not a count of how much is stored.
+  due_follow_ups  = JobNote.follow_ups_for(current_user).due_now.count
 
   links = [
     {
@@ -22,6 +26,13 @@
     { title: "Banking", path: system_banking_path, desc: "SimpleFIN accounts, balances, transactions", icon: :bank },
     { title: "Buddy Memories", path: system_memories_path, desc: "Everything the companions are holding, and their check-ins", svg: "buddy/byte/silhouette" },
     { title: "Custom Charts", path: custom_charts_path, desc: "Saved charts over logged events", icon: :"bar-chart" },
+    {
+      title: "Interview Tracker",
+      path:  interviews_path,
+      desc:  "Applications, their timelines, and what's owed a follow-up",
+      icon:  :briefcase,
+      blip:  due_follow_ups,
+    },
     { title: "Tasks", path: jil_tasks_path, desc: "Jil automation task list", icon: :code },
     { title: "Cache", path: jil_user_cache_index_path, desc: "User cache key/value store", icon: :archive },
     { title: "All Executions", path: jil_executions_path, desc: "Recent run history with filters", icon: :history },

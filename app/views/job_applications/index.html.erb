@@ -1,0 +1,158 @@
+<%= meta_title "Interview Tracker" %>
+<%= meta_description "Every place you applied, and everything that happened after." %>
+
+<%
+  # Chips are links carrying the same page with one filter written in, so the
+  # bar always says exactly what is on screen. `live` is the default and the
+  # reason rejections don't pile up in your face.
+  live_count = (@counts["active"].to_i + @counts["offer"].to_i)
+  filters = [
+    { key: "live", label: "Live", count: live_count },
+    { key: "active", label: "Active", count: @counts["active"].to_i },
+    { key: "offer", label: "Offers", count: @counts["offer"].to_i },
+    { key: "rejected", label: "Rejected", count: @counts["rejected"].to_i },
+    { key: "closed", label: "Closed", count: @counts["closed"].to_i },
+    { key: "all", label: "All", count: @counts.values.sum },
+  ]
+%>
+
+<div class="wide-container interviews-page" data-interviews>
+  <div class="app-card-container">
+    <div class="app-card-title">
+      Interview Tracker
+      <div class="subtitle">
+        Every place you applied, and everything that happened after.
+      </div>
+    </div>
+
+    <div class="app-card-body">
+      <div class="app-card-inner">
+        <% if @follow_ups.any? %>
+          <%# What you owe someone, across every application. Each one is also
+             a task on the calendar — that answers "what's today", not "what am
+             I chasing". %>
+          <div class="interview-followups">
+            <h3>Following up</h3>
+            <ul>
+              <% @follow_ups.each do |note| %>
+                <li>
+                  <span class="followup-when <%= "is-due" if note.follow_up_at <= Time.current.end_of_day %>">
+                    <%= note.follow_up_at.strftime("%b %-d") %>
+                  </span>
+                  <%= link_to note.job_application.company, interview_path(note.job_application) %>
+                  <span class="field-hint"><%= truncate(note.body, length: 70) %></span>
+                </li>
+              <% end %>
+            </ul>
+          </div>
+        <% end %>
+
+        <%# One form for both halves of "pick a job, or name a new one, then
+           write the note". The controller decides which happened, so this
+           still works if the fieldset toggle never runs. %>
+        <details class="interview-capture" <%= "open" if @live_jobs.empty? %>>
+          <summary>+ Log something</summary>
+
+          <%= form_with url: interviews_path, method: :post, local: true, data: { capture_form: true } do %>
+            <div class="form-fields">
+              <div class="form-field">
+                <%= label_tag :job_application_id, "Which job" %>
+                <%= select_tag :job_application_id,
+                      options_for_select(@live_jobs.map { |job| [job.label, job.id] }),
+                      include_blank: "+ A new one…",
+                      data: { capture_picker: true } %>
+              </div>
+
+              <%# Only shown when "a new one" is selected. Source and url are
+                 the initial application's, which is why they sit here and not
+                 in the note below. %>
+              <div class="capture-new" data-capture-new>
+                <%= fields_for :job_application, @new_job do |f| %>
+                  <%# Logo first, then the name — where a logo goes. The square
+                     takes an emoji typed straight into it, a paste, a dropped
+                     image, or a pick from the shared icon modal; an image
+                     detours through the cropper so what gets stored is a 128px
+                     square.
+
+                     The scope wraps the row AND that cropper: `.identity-row`
+                     is a flex row, and a panel opened inside it would be
+                     squeezed in beside the name rather than sitting under the
+                     pair. %>
+                  <div class="logo-control" data-logo-scope>
+                    <div class="identity-row">
+                      <%= render "shared/icon_stack",
+                            name: "job_application[logo]",
+                            value: @new_job.logo,
+                            label: "Company logo — type an emoji, paste or drop an image" %>
+
+                      <div class="identity-names">
+                        <div class="form-field">
+                          <%= f.label :company %>
+                          <%= f.text_field :company, placeholder: "Acme", data: { capture_company: true } %>
+                        </div>
+
+                        <div class="form-field">
+                          <%= f.label :role, "Role" %>
+                          <%= f.text_field :role, placeholder: "Staff Engineer" %>
+                        </div>
+                      </div>
+                    </div>
+
+                    <%= render "logo_picker", save_label: "Use this crop" %>
+                  </div>
+
+                  <div class="split-fields">
+                    <div class="form-field">
+                      <%= f.label :source, "Source" %>
+                      <%= f.text_field :source, placeholder: "LinkedIn" %>
+                    </div>
+
+                    <div class="form-field">
+                      <%= f.label :url, "Listing URL" %>
+                      <%= f.url_field :url, placeholder: "https://…" %>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+
+              <%= fields_for :job_note, JobNote.new(occurred_at: Time.current) do |f| %>
+                <%= render "note_fields", f: f, note_extras_open: false %>
+              <% end %>
+
+              <div class="form-submission">
+                <%= submit_tag "Save" %>
+                <span class="field-hint">A new company with no note is fine — the timeline can start later.</span>
+              </div>
+            </div>
+          <% end %>
+        </details>
+
+        <div class="interview-filters">
+          <% filters.each do |filter| %>
+            <%= link_to interviews_path(status: (filter[:key] unless filter[:key] == "live")),
+                  class: "interview-chip #{"is-on" if @filter == filter[:key]}" do %>
+              <%= filter[:label] %> <span class="chip-count"><%= filter[:count] %></span>
+            <% end %>
+          <% end %>
+        </div>
+
+        <% if @jobs.empty? %>
+          <div class="interview-empty">
+            Nothing here yet.
+            <% if @filter != "all" && @counts.values.sum.positive? %>
+              Try <%= link_to "all applications", interviews_path(status: :all) %>.
+            <% else %>
+              Log the first one above.
+            <% end %>
+          </div>
+        <% else %>
+          <div class="interview-grid">
+            <% @jobs.each do |job| %>
+              <%= render "job_card", job: job %>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  </div>
+</div>

@@ -93,6 +93,46 @@ module ApplicationHelper
     end
   end
 
+  # Render an icon reference — the shared vocabulary the IconPool speaks, in
+  # Ruby. One of:
+  #
+  #   * an emoji (or any short glyph)  — "🏢"
+  #   * a Tabler icon class            — "ti-flame"
+  #   * a household upload             — "hicon:12"
+  #   * inline SVG markup              — "<svg …>"
+  #   * an image                       — a data: URL or an https: one
+  #
+  # This was `ChoresHelper#rendered_icon` and moved here the moment a second
+  # feature needed it. Blank gives back nil so the caller decides what an
+  # absent icon looks like — a broom on a chore, a company's initials on an
+  # application.
+  def icon_ref_tag(value)
+    icon = value.to_s.strip
+    return nil if icon.blank?
+
+    if icon.start_with?("<svg")
+      icon.html_safe
+    elsif icon.start_with?("hicon:")
+      household_icon_tag(icon)
+    elsif icon.start_with?("data:image/", "http://", "https://")
+      image_tag(icon, class: "icon-img", alt: "", loading: :lazy)
+    elsif icon.start_with?("ti-")
+      content_tag(:i, "", class: "ti #{icon} icon-ti", "aria-hidden": "true")
+    else
+      content_tag(:span, icon, class: "icon-glyph")
+    end
+  end
+
+  # `hicon:<id>` points at a HouseholdIcon row whose image_data is a base64
+  # data URL. A dangling ref — someone deleted the icon — gives back nil, so
+  # the caller's own fallback takes over rather than a broken image.
+  def household_icon_tag(ref)
+    icon = ::HouseholdIcon.find_by(id: ref.delete_prefix("hicon:").to_i)
+    return nil if icon&.image_data.blank?
+
+    image_tag(icon.image_data, class: "icon-img", alt: "", loading: :lazy)
+  end
+
   def safeparse_time(time, fallback=::Time.current)
     return fallback if time.blank?
 

@@ -55,6 +55,7 @@ class User < ApplicationRecord
   has_many :user_survey_responses
   has_many :push_subs, class_name: "UserPushSubscription", dependent: :destroy
   has_many :timers, dependent: :destroy
+  has_many :job_applications, dependent: :destroy
   has_many :byte_messages, dependent: :destroy
   has_many :byte_conversations, dependent: :destroy
   has_many :byte_actions, dependent: :destroy

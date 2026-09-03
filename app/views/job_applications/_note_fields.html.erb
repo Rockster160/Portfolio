@@ -1,0 +1,61 @@
+<%# The fields of a note, shared by the index's capture form, the show page's
+   add form, and each note's own edit form. Everything below the body is
+   optional and lives behind a <details> — a note is usually a sentence and a
+   date, and a wall of empty inputs above it makes it feel like paperwork. %>
+<div class="note-fields">
+  <div class="form-field">
+    <%= f.label :body, "What happened" %>
+    <%= f.text_area :body, rows: 3, placeholder: "Applied through their careers page. Job looks like mostly Rails." %>
+  </div>
+
+  <div class="split-fields">
+    <div class="form-field">
+      <%= f.label :tag, "Type" %>
+      <%= f.select :tag, JobNote::TAG_LABELS.map { |value, label| [label, value] } %>
+    </div>
+
+    <div class="form-field">
+      <%= f.label :occurred_at, "When" %>
+      <%= f.datetime_field :occurred_at,
+            value: (f.object.occurred_at || Time.current).strftime("%Y-%m-%dT%H:%M") %>
+    </div>
+  </div>
+
+  <details class="note-extras" <%= "open" if note_extras_open %>>
+    <summary>Details &amp; follow-up</summary>
+
+    <div class="split-fields">
+      <div class="form-field">
+        <%= f.label :spoke_to, "Spoke to" %>
+        <%= f.text_field :spoke_to, placeholder: "Dana, recruiter" %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :duration_minutes, "Duration (minutes)" %>
+        <%= f.number_field :duration_minutes, min: 1, max: 1440, placeholder: "30" %>
+      </div>
+    </div>
+
+    <div class="split-fields">
+      <div class="form-field">
+        <%= f.label :source, "Source" %>
+        <%= f.text_field :source, placeholder: "LinkedIn" %>
+      </div>
+
+      <div class="form-field">
+        <%= f.label :url, "Link" %>
+        <%= f.url_field :url, placeholder: "https://…" %>
+      </div>
+    </div>
+
+    <%# A follow-up is written straight onto the calendar as a task, so the
+       agenda's own notifications do the reminding. Clearing the field takes
+       the task back off. %>
+    <div class="form-field">
+      <%= f.label :follow_up_at, "Follow up on" %>
+      <%= f.datetime_field :follow_up_at,
+            value: f.object.follow_up_at&.strftime("%Y-%m-%dT%H:%M") %>
+      <span class="field-hint">Optional. Goes on your agenda as a task.</span>
+    </div>
+  </details>
+</div>

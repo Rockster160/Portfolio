@@ -1,0 +1,35 @@
+<%# The cropper — "opened up for more customization" behind the icon square.
+   An emoji or a picked icon needs none of this and never opens it; an IMAGE
+   does, because what gets stored has to be a small square and not whatever
+   came off the clipboard. Dropping or pasting a picture onto the square opens
+   this with the picture already loaded.
+
+   Every hook is a `data-` attribute rather than an id, so rendering it more
+   than once on a page doesn't collide. %>
+<div class="logo-picker hidden" data-logo-panel>
+  <div class="logo-picker-drop" data-logo-drop>
+    Drop an image, paste one, or
+    <button type="button" class="btn basic" data-logo-file-btn>choose a file</button>
+    <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+           data-logo-file hidden>
+    <input type="url" placeholder="…or paste an image URL" data-logo-url-input
+           autocomplete="off" data-1p-ignore="true" data-lpignore="true">
+  </div>
+
+  <div class="logo-picker-stage hidden" data-logo-stage>
+    <canvas data-logo-canvas width="192" height="192"></canvas>
+    <label class="logo-zoom">
+      <span>Zoom</span>
+      <input type="range" min="0.1" max="4" step="0.01" value="1" data-logo-zoom>
+    </label>
+  </div>
+
+  <p class="logo-picker-error hidden" data-logo-error></p>
+
+  <%# No "remove" here — clearing is the × on the square itself, which is
+     where the value lives. %>
+  <div class="logo-picker-actions">
+    <button type="button" class="btn" data-logo-save disabled><%= save_label %></button>
+    <button type="button" class="btn basic" data-logo-cancel>Cancel</button>
+  </div>
+</div>
