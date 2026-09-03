@@ -938,21 +938,150 @@ RSpec.describe Buddy::GPT::Turn do
       end
     end
 
-    it "retracts when the corrective round still calls nothing" do
+    it "retracts when neither the corrective round nor the second attempt calls anything" do
       client = run([
         { text: "Done. Fan's on high now." },
         { text: "Done. Really this time." },
+        { text: "Done. Promise." },
+        { text: "Done. Promise." },
       ])
 
-      expect(client.calls.length).to eq(2)
+      expect(client.calls.length).to eq(4)
       expect(reply.body).to eq(described_class::SILENT_BODY)
       expect(reply.metadata["retracted_claim"]).to be(true)
     end
 
-    it "only ever spends one corrective round" do
-      client = run(Array.new(5) { { text: "Done. Fan's on high now." } })
+    # One corrective round inside an attempt, and one attempt after that.
+    # Everything past those two is the same model reading the same wreckage.
+    it "spends one corrective round per attempt and stops at two attempts" do
+      client = run(Array.new(8) { { text: "Done. Fan's on high now." } })
 
-      expect(client.calls.length).to eq(2)
+      expect(client.calls.length).to eq(4)
+    end
+
+    # Prod 5333, 3 Sep. "Move the plunge with Wil to the 14th." came back
+    # "Nothing actually ran. Want me to have another go at it?", he typed
+    # "Yes", and the very next turn moved it first time. Rocco: *"I thought we
+    # had fixed that issue where the internal retry wasn't working but the
+    # external/manual 'yes' to retry worked."*
+    #
+    # It never was the words. The nudge APPENDS, so the corrective round reads
+    # the failed call and the error under it and reasons on from there; a turn
+    # the person starts is built fresh from the thread and never sees any of
+    # it. So the second attempt is now a fresh build too, and it happens
+    # without asking.
+    describe "going again from a clean slate" do
+      before { allow(described_class).to receive(:resolve_call).and_return([{ status: "proposed" }, nil]) }
+
+      def second_attempt?(client)
+        client.calls.any? { |c| c.input.any? { |i| i[:content] == described_class::SECOND_ATTEMPT_NUDGE } }
+      end
+
+      it "makes the call itself instead of asking whether to try again" do
+        allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+
+        run(
+          [
+            { text: "Moved. Plunge with Wil is on the 14th now." },
+            { text: "Moved, honest." },
+            { tool_calls: [{ name: :edit_agenda_item, arguments: { "item" => "Plunge with Wil" } }] },
+            { text: "Moved - Plunge with Wil is on the 14th." },
+          ],
+          text: "Move the plunge with Wil to the 14th.",
+        )
+
+        expect(reply.body).to eq("Moved - Plunge with Wil is on the 14th.")
+        expect(reply.metadata["retracted_claim"]).to be_nil
+      end
+
+      # The whole point. Appending the wreckage is what the corrective round
+      # already does, and it is the thing that doesn't work.
+      it "rebuilds the input rather than appending to the round trips that failed" do
+        allow(described_class).to receive(:resolve_call).and_return([{ status: "failed" }, nil])
+
+        client = run([
+          { tool_calls: [{ name: :edit_agenda_item, arguments: { "item" => "Plunge" } }] },
+          { text: "Done. Fan's on high now." },
+          { text: "Done. Really this time." },
+        ])
+
+        expect(client.calls[2].input.any? { |i| i[:type] == :function_call }).to be(true)
+        expect(client.calls[3].input.none? { |i| i[:type] == :function_call }).to be(true)
+        expect(client.calls[3].input.last[:content]).to eq(described_class::SECOND_ATTEMPT_NUDGE)
+      end
+
+      # The draft still rides along, labelled unsent, exactly as it does for
+      # the corrective round - the last thing written replaces it in full, and
+      # a draft that got three things right must not lose them.
+      it "carries the draft over as something never sent" do
+        client = run([
+          { text: "Done. Fan's on high now." },
+          { text: "Done. Fan's on high now." },
+        ])
+
+        carrying = client.calls[2].input.detect { |i| i[:content].to_s.include?("Done. Fan's on high now.") }
+
+        expect(carrying[:role]).to eq(:developer)
+        expect(carrying[:content]).to include("NOT been sent")
+      end
+
+      # A second attempt that comes back silent must still leave the first
+      # attempt's claim to be retracted, not a blank bubble.
+      it "keeps the words it went back to correct when the retry says nothing" do
+        run([{ text: "Timer's set for 5 minutes." }])
+
+        expect(reply.body).to eq(described_class::SILENT_BODY)
+        expect(reply.metadata["retracted_claim"]).to be(true)
+      end
+
+      it "does not go again when the turn actually did something" do
+        allow(Buddy::ProposalBuilder).to receive(:create).and_return(action: nil, auto_ran: true)
+
+        client = run([
+          { tool_calls: [{ name: :log_event, arguments: { "name" => "Coffee" } }] },
+          { text: "Nice, that's logged." },
+        ])
+
+        expect(second_attempt?(client)).to be(false)
+      end
+
+      it "does not go again on ordinary conversation" do
+        client = run([{ text: "Not much on my end, how's your night?" }])
+
+        expect(second_attempt?(client)).to be(false)
+      end
+
+      # Nothing ran and nothing was proposed, which is the shape of a lost turn
+      # - but the question IS on screen, and going again would post it twice.
+      describe "when the choice is already up as buttons" do
+        before {
+          allow(described_class).to receive(:resolve_call)
+            .and_return([{ status: "failed", asked_choice: true }, nil])
+        }
+
+        it "leaves the person to tap one" do
+          client = run([
+            { tool_calls: [{ name: :edit_agenda_item, arguments: { "item" => "Plunge" } }] },
+            { text: "I've put the options up for you." },
+          ])
+
+          expect(second_attempt?(client)).to be(false)
+        end
+
+        # The marker is for start_over? and has no business in the model's
+        # context, where it reads as a field of the tool result.
+        it "does not hand the marker to the model" do
+          client = run([
+            { tool_calls: [{ name: :edit_agenda_item, arguments: { "item" => "Plunge" } }] },
+            { text: "I've put the options up for you." },
+          ])
+
+          outputs = client.calls[1].input.select { |i| i[:type] == :function_call_output }
+
+          expect(outputs).to be_present
+          expect(outputs.pluck(:output).join).not_to include("asked_choice")
+        end
+      end
     end
 
     it "does not spend a round on ordinary conversation" do
@@ -1238,8 +1367,19 @@ RSpec.describe Buddy::GPT::Turn do
       it "says what the receipts hold rather than asking them to rephrase" do
         run([{ text: "I put all three on there for you." }])
 
-        expect(reply.body).to include("Nothing ran on this one")
+        expect(reply.body).to include("nothing ran")
         expect(reply.body).to include("no receipt")
+      end
+
+      # The draft is never delivered - the bubble holds PLACEHOLDER until the
+      # finished body is written once, and the retraction IS that write. So
+      # "I said that as though I'd done it" apologised for a sentence nobody
+      # had read. Prod 5333: "The user never saw that message, so that's just
+      # annoying/confusing."
+      it "never describes the reply it is replacing" do
+        run([{ text: "I put all three on there for you." }])
+
+        expect(reply.body).not_to match(/i said|said that/i)
       end
     end
 
@@ -1421,7 +1561,18 @@ RSpec.describe Buddy::GPT::Turn do
       run([{ text: "Kk! lights are off." }, { text: "Kk! lights are off." }], text: "turn the lights off")
 
       expect(reply.body).not_to eq(described_class::SILENT_BODY)
-      expect(reply.body).to include("wasn't")
+      expect(reply.body).to include("didn't go through")
+    end
+
+    # Same rule as the silent arm's, and this is the arm it was reported on.
+    # It also stopped ASKING: "Want me to have another go at it?" is a request
+    # for permission to do the thing they already asked for, and start_over?
+    # has been and gone by the time this is written.
+    it "neither describes the unseen reply nor asks to try again" do
+      run([{ text: "Kk! lights are off." }, { text: "Kk! lights are off." }], text: "turn the lights off")
+
+      expect(reply.body).not_to match(/i said|said that/i)
+      expect(reply.body).not_to match(/another go|want me to/i)
     end
 
     # The three ways a command legitimately ends with nothing run.

@@ -15,7 +15,11 @@ class JobApplicationsController < ApplicationController
   # `all`, or any single status, opens it back up.
   def index
     @filter = params[:status].presence&.to_s || "live"
-    @jobs = filtered_jobs.includes(:notes).to_a
+    @query = params[:q].to_s.strip
+    # Search RANKS, the status chips NARROW, and they compose — JobSearch takes
+    # whatever relation the filter left and orders it by how well each row
+    # answers the query.
+    @jobs = JobSearch.call(filtered_jobs.includes(:notes), @query)
     @counts = current_user.job_applications.group(:status).count
     @live_jobs = current_user.job_applications.live.order(:company).to_a
     @follow_ups = upcoming_follow_ups
@@ -110,10 +114,14 @@ class JobApplicationsController < ApplicationController
   end
 
   # The index's one form does both jobs at once, so the note fields arrive
-  # alongside the application's. Blank body means they only wanted the company.
+  # alongside the application's — and they arrive whether or not anybody filled
+  # them in. Nothing written and no tag chosen means they only wanted the
+  # company. Picking a tag is itself the note, though: "Applied", on a date,
+  # says everything without a sentence under it.
   def build_note(job)
     attrs = note_params
-    return nil if attrs[:body].to_s.strip.blank?
+    tagged = attrs[:tag].present? && attrs[:tag].to_s != "note"
+    return nil if attrs[:body].to_s.strip.blank? && !tagged
 
     job.notes.new(attrs)
   end

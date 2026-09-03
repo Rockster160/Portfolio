@@ -617,6 +617,24 @@ BUDDY_EDGE_PROBES = [
     },
   },
 
+  # --- the only date in the sentence is the one it is moving TO -------------
+  {
+    case:       "prod 5333",
+    say:        "Move the plunge with Wil to the 14th.",
+    tool:       :edit_agenda_item,
+    once:       true,
+    args:       { edit_agenda_item: { item: /plunge/i, at: /-14T/ } },
+    never_args: { edit_agenda_item: { hint_date: /-?14\z/ } },
+    needs:      :plunge_to_move,
+    note:       "`hint_date` narrows the lookup to one day, and the only date in " \
+                "\"move it to the 14th\" is the DESTINATION - so hinting with it asks " \
+                "for the item on a day it is not on yet, the resolve found nothing, " \
+                "and the reply was retracted. He typed \"Yes\" to \"want me to have " \
+                "another go?\" and the very next turn moved it first time (5334-5335). " \
+                "The lookup falls back to the unhinted match now, and the turn goes " \
+                "again by itself - this is the half that keeps the argument right",
+  },
+
   # --- a LEAVE time, which is not a start time ------------------------------
   {
     case:       "prod 5144",

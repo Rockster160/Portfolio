@@ -34,7 +34,7 @@ Buddy::Tools.register(
   feature:     :agenda,
   args:        {
     item:      { type: :string, required: true,  description: "Fuzzy title of the calendar item to measure" },
-    hint_date: { type: :string, required: false, description: "Date hint (YYYY-MM-DD) for disambiguation" },
+    hint_date: { type: :string, required: false, description: "YYYY-MM-DD, the date the item is on, only to tell two of the same name apart" },
   },
   # A read. Nothing is written but the travel figures on the row itself, which
   # is a cache of something already true.

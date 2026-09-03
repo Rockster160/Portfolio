@@ -294,6 +294,48 @@ RSpec.describe "Buddy agenda tools" do
     # exist only as rules, moving one has to move the rule. Changing the single
     # materialized Monday leaves 167 pointing at Alchemibluum, and next Monday
     # is back on the wrong calendar.
+    # Prod 5333: "Move the plunge with Wil to the 14th." The only date in that
+    # sentence is the one it is moving TO, and passed as `hint_date` it narrows
+    # the lookup to a day the item is not on yet - so the resolve found nothing,
+    # the reply was retracted, and the event sat where it was until he typed
+    # "Yes" to a "want me to have another go?"
+    #
+    # The argument now says which date it wants. This is the half that doesn't
+    # depend on the model reading it.
+    describe "a date hint that matches nothing" do
+      it "still finds the item the hint was meant to tell apart" do
+        item = costco_on(personal)
+
+        found = ctx.resolve_agenda_item("Costco Run", hint_date: (at + 5.days).to_date.to_s)
+
+        expect(found&.id).to eq(item.id)
+      end
+
+      it "moves it rather than reporting there is no such thing" do
+        item   = costco_on(personal)
+        moved  = at + 5.days
+        expect {
+          run(:edit_agenda_item, { item: "Costco Run", hint_date: moved.to_date.to_s, at: moved })
+        }.not_to raise_error
+
+        expect(item.reload.start_at).to be_within(1.minute).of(moved)
+      end
+
+      # The fallback is a second pass with one filter fewer, so a hint that
+      # DOES match still decides - it is only ever reached when the first pass
+      # came back empty.
+      it "leaves a hint that matches doing its job" do
+        early = costco_on(personal)
+        late  = personal.agenda_items.create!(
+          name: "Costco Run", start_at: at + 5.days, end_at: at + 5.days + 30.minutes,
+          kind: :event, status: :confirmed
+        )
+
+        expect(ctx.resolve_agenda_item("Costco Run", hint_date: late.start_at.to_date.to_s)&.id).to eq(late.id)
+        expect(ctx.resolve_agenda_item("Costco Run", hint_date: early.start_at.to_date.to_s)&.id).to eq(early.id)
+      end
+    end
+
     describe "a repeating item" do
       # Every time here is placed relative to now, and the suite runs at
       # whatever o'clock it runs at: late in the evening "3 hours from now" is

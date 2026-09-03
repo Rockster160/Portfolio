@@ -49,12 +49,90 @@ RSpec.describe "Interview tracker", type: :request do
       expect(response.body).not_to include("data-logo-url=")
     end
 
+    # The chip already says APPLIED. A bodyless note used to print its own
+    # label underneath as a sentence, so the card said it twice.
+    it "says a tag once on a card whose note has no body" do
+      job = user.job_applications.create!(company: "Samsara")
+      job.notes.create!(tag: :applied, occurred_at: 1.day.ago)
+
+      get interviews_path
+
+      card = response.body[/<a class="interview-card[^>]*href="#{interview_path(job)}".*?<\/a>/m]
+      text = ActionController::Base.helpers.strip_tags(card).gsub(/\s+/, " ")
+      expect(text.scan(/Applied/i).size).to eq(1)
+    end
+
     it "never shows someone else's applications" do
       create(:user).job_applications.create!(company: "SomeoneElseCo")
 
       get interviews_path(status: :all)
 
       expect(response.body).not_to include("SomeoneElseCo")
+    end
+  end
+
+  describe "GET /interviews?q=" do
+    let!(:netflix) { user.job_applications.create!(company: "Netflix") }
+    let!(:anrok) { user.job_applications.create!(company: "Anrok") }
+
+    def card_order
+      response.body.scan(/<a class="interview-card[^>]*href="\/interviews\/(\d+)"/).flatten.map(&:to_i)
+    end
+
+    it "narrows the wall to what matches" do
+      get interviews_path(q: "netflix")
+
+      expect(card_order).to eq([netflix.id])
+      expect(response.body).to include("1 match")
+    end
+
+    it "ranks the company above one that only mentions it in a note" do
+      anrok.notes.create!(tag: :note, body: "Recruiter came from Netflix.", occurred_at: 1.hour.ago)
+      anrok.touch_activity!
+      netflix.notes.create!(tag: :applied, occurred_at: 20.days.ago)
+      netflix.touch_activity!
+
+      get interviews_path(q: "netflix")
+
+      expect(card_order).to eq([netflix.id, anrok.id])
+    end
+
+    it "forgives a typo" do
+      get interviews_path(q: "netflx")
+
+      expect(card_order).to eq([netflix.id])
+    end
+
+    # The chips narrow, the query ranks, and clicking either keeps the other.
+    it "carries the query onto the status chips" do
+      get interviews_path(q: "netflix")
+
+      expect(response.body).to include(CGI.escapeHTML(interviews_path(status: :all, q: "netflix")))
+    end
+
+    it "searches inside the chosen status only" do
+      user.job_applications.create!(company: "Netflix Games", status: :rejected)
+
+      get interviews_path(q: "netflix")
+      expect(card_order).to eq([netflix.id])
+
+      get interviews_path(q: "netflix", status: :all)
+      expect(card_order.size).to eq(2)
+    end
+
+    it "offers the wider search when a narrowed one finds nothing" do
+      user.job_applications.create!(company: "Zillow", status: :rejected)
+
+      get interviews_path(q: "zillow")
+
+      expect(response.body).to include("Nothing matches")
+      expect(response.body).to include(CGI.escapeHTML(interviews_path(q: "zillow", status: :all)))
+    end
+
+    it "shows everything again once the query is cleared" do
+      get interviews_path(q: "")
+
+      expect(card_order).to contain_exactly(netflix.id, anrok.id)
     end
   end
 
@@ -91,10 +169,23 @@ RSpec.describe "Interview tracker", type: :request do
       expect(user.job_applications.last.logo).to eq("🏢")
     end
 
+    # Picking a tag IS the note — an application logged on a date needs no
+    # sentence under it.
+    it "logs a tagged note even with nothing written" do
+      post interviews_path, params: {
+        job_application: { company: "Acme" },
+        job_note:        { body: "", tag: :applied },
+      }
+
+      note = user.job_applications.last.notes.sole
+      expect(note.tag).to eq("applied")
+      expect(note.body).to be_nil
+    end
+
     it "creates an application on its own when no note was written" do
       post interviews_path, params: {
         job_application: { company: "Acme" },
-        job_note:        { body: "  " },
+        job_note:        { body: "  ", tag: :note },
       }
 
       job = user.job_applications.last

@@ -365,7 +365,12 @@ module Buddy
         asked = Buddy::Disambiguation.ask!(
           user: user, conversation: conversation, tool: tool, payload: payload, error: e,
         )
-        [resolve_failure(asked ? Buddy::Disambiguation::ASKED_NOTE : e.message), nil, nil]
+        failure = resolve_failure(asked ? Buddy::Disambiguation::ASKED_NOTE : e.message)
+        # Read and removed by tool_output before the hash goes to the model:
+        # it's for `start_over?`, which must not re-run a turn whose question is
+        # already sitting in front of them.
+        failure[:asked_choice] = true if asked
+        [failure, nil, nil]
       rescue StandardError => e
         [resolve_failure(e.message), nil, nil]
       end
@@ -455,8 +460,21 @@ module Buddy
       # is wrong here: it reads as not having understood, and the request was
       # perfectly clear - we just didn't do it. Owning that is the whole point,
       # since the alternative is them believing the TV is off.
-      UNDONE_BODY = "Ah - I said that like it was done, and it wasn't. Nothing actually ran. " \
-                    "Want me to have another go at it?".freeze
+      #
+      # **It must not describe the reply it is replacing.** The draft is never
+      # delivered - the bubble holds PLACEHOLDER until the finished body is
+      # written once, and the retraction IS that one write - so "I said that
+      # like it was done" apologises for a sentence nobody has read. Rocco, on
+      # prod 5333: *"The user never saw that message, so that's just
+      # annoying/confusing."* Say what is true about the WORLD (it didn't
+      # happen), never about the draft.
+      #
+      # And it no longer asks. "Want me to have another go at it?" is a request
+      # for permission to do the thing already asked for, and the "Yes" under it
+      # worked first time - which is what start_over? now does instead, before
+      # any of this is reached.
+      UNDONE_BODY = "That didn't go through - nothing actually ran on my end. Give me another " \
+                    "angle on it and I'll keep at it.".freeze
 
       # What to say when the row is REAL and only the tense was wrong.
       #
@@ -472,9 +490,14 @@ module Buddy
       # is read off the turn's own machinery - no tool executed, nothing is
       # waiting on a tap - so the record is not in doubt and the sentence
       # shouldn't sound like it is. Say what the receipts hold, which is
-      # nothing, and go again.
-      SILENT_BODY = "Hold on - I said that as though I'd done it, and I hadn't. Nothing ran on " \
-                    "this one, so there's no receipt for it. Let me actually do it.".freeze
+      # nothing.
+      #
+      # Same rule as UNDONE_BODY about not describing the draft, and for the
+      # same reason. "Let me actually do it" went with it: by the time this is
+      # reached, start_over? has already been and gone, so it was a promise the
+      # turn had no round left to keep.
+      SILENT_BODY = "This one hasn't actually happened - nothing ran, so there's no receipt for " \
+                    "it. I don't want you thinking it's done.".freeze
 
       # What to say when the claim was about the CALL rather than a record.
       # "I did try now" and "the snapshot call came back clean" are not a wrong
@@ -482,7 +505,7 @@ module Buddy
       # person is mid-argument about whether it happened by the time one lands.
       # Saying which way it actually went is the only useful thing left.
       NO_CALL_BODY = "Actually, no - I didn't run anything just then, so I've got nothing to " \
-                     "report back. Let me go and do it properly.".freeze
+                     "report back on it.".freeze
 
       # What to APPEND when a turn did the work and then said it hadn't.
       #
@@ -574,6 +597,84 @@ module Buddy
 
       # ---- the model loop ----------------------------------------------------
 
+      # Two attempts, and the second one starts CLEAN. See start_over?.
+      #
+      # One deadline across both: TURN_BUDGET_SECONDS is how long the person is
+      # willing to watch a pulsing bubble, and that doesn't double because the
+      # first attempt went nowhere.
+      def converse
+        @deadline = Time.current + TURN_BUDGET_SECONDS
+        attempt   = 0
+        outcome   = nil
+
+        loop do
+          previous = (outcome if attempt.positive?)
+          attempt += 1
+          outcome  = attempt_turn(previous: previous)
+          break unless outcome[:ok]
+          break unless start_over?(outcome, attempt)
+
+          Rails.logger.warn(
+            "[Buddy::GPT::Turn] nothing landed on attempt #{attempt} for message=#{@inbound.id} " \
+            "user=#{@user.id}: #{outcome[:text].to_s.truncate(160).inspect} - going again",
+          )
+        end
+
+        outcome
+      end
+
+      # Go again from a clean slate rather than telling them it didn't happen
+      # and asking whether to try.
+      #
+      # **The person's own "yes, try again" has always worked where the in-turn
+      # corrective round didn't, and the words are not the difference.** A
+      # nudge APPENDS to the input, so the model rereads its own failed call and
+      # the error under it and reasons on from there; the retry they type starts
+      # a new turn, where History.build rebuilds the thread from the message
+      # rows and none of that wreckage is in front of it. Prod 5333: "Move the
+      # plunge with Wil to the 14th" ended "Nothing actually ran. Want me to
+      # have another go at it?", and the "Yes" underneath it moved the event on
+      # the first try. Asking a person to type that is asking them to do
+      # something we can do.
+      #
+      # Only ever on a turn that is ALREADY lost - nothing ran, nothing is
+      # waiting on a tap, and the reply is about to be retracted - so the worst
+      # case is a second attempt at words that were going to be thrown away.
+      #
+      # `@read_actions` stands it down for the same reason the retraction does:
+      # a turn that went and read the action log is answering about an EARLIER
+      # one, and "logged it at 6:03" is then true.
+      def start_over?(outcome, attempt)
+        return false if attempt > 1
+        return false if @acted || @asked_choice || @read_actions
+        return false if outcome[:proposals].any?
+        return false if Time.current > @deadline
+
+        body = outcome[:text].to_s
+        unbacked_claim(body).present? ||
+          self.class.silent_turn_claim?(body) ||
+          commanded_action_unanswered?(body)
+      end
+
+      # What the second attempt is told. The draft rides along through
+      # `draft_item`, which already says it was never sent and that whatever
+      # comes next replaces it.
+      SECOND_ATTEMPT_NUDGE = <<~TXT.freeze
+        That attempt is finished and NOTHING ran: no tool call landed, so there
+        is no record of it and nothing for them to tap. This is a fresh start on
+        the same message, and the calls that went wrong are deliberately not in
+        front of you any more.
+
+        Do the thing they asked for. Call the tool. If you need a record's real
+        name or the date it's actually on, look it up first rather than guessing
+        at arguments - a guessed argument is the usual reason the first attempt
+        found nothing.
+
+        If it genuinely can't be done, say what stopped you and what you'd need.
+        Say it as a plain answer: they have not seen a word of the last attempt,
+        so an apology for it reads as an apology for nothing.
+      TXT
+
       # Runs the model until it stops calling tools, accumulating its prose.
       #
       # Call, resolve, speak. Emitting a function call ENDS the model's turn - it
@@ -589,16 +690,29 @@ module Buddy
       # Marker-era Buddy didn't have this problem because the marker was embedded
       # in the text, so words and action arrived together. Structured calls split
       # them across turns, and this loop is what stitches them back into one reply.
-      def converse
+      def attempt_turn(previous: nil)
         input     = History.build(@conversation, upto: @inbound)
         input    += [{ role: :developer, content: routine_directive }] if routine_directive
-        spoken    = nil
+        if previous
+          input += draft_item(previous[:text]) + [{ role: :developer, content: SECOND_ATTEMPT_NUDGE }]
+        end
+        # Seeded with the words the last attempt ended on, under the same rule
+        # that governs rounds: the LAST thing said wins, and a round that says
+        # nothing doesn't get to be it. Without this, a second attempt that came
+        # back silent left the turn with no text at all - so a claim it was
+        # started over to correct went out as a blank-reply fallback instead of
+        # being retracted.
+        spoken    = previous&.dig(:text).presence
         proposals = []
         rounds    = 0
-        @deadline = Time.current + TURN_BUDGET_SECONDS
         @failed   = Set.new
         @seen     = Set.new
         @acted    = false
+        # Whether a resolve found several records and put the choice up as
+        # buttons. Nothing ran and nothing is proposed on such a turn, which
+        # looks exactly like a lost one - but the question IS on screen and
+        # going again would post it twice. See start_over?.
+        @asked_choice = false
         # Set to the kind of the turn's FIRST gate (:rows / :forms) once one
         # resolves; everything asked for after that point is queued behind it
         # rather than going out with this reply.
@@ -869,6 +983,13 @@ module Buddy
         end
 
         @seen << signature if signature
+        # Read off, then stripped so it never reaches the model - and `except`
+        # rather than `delete` because half the acks in here are frozen
+        # constants and mutating one takes the whole turn down.
+        if result[:asked_choice]
+          @asked_choice = true
+          result = result.except(:asked_choice)
+        end
         @failed << call[:call_id] if result[:status].to_s == "failed"
         # "Do this now and that at 11" is a real sentence. Once the model has
         # actually put something on the clock this turn, it has understood the

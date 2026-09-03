@@ -4,6 +4,31 @@ RSpec.describe JobNote do
   let(:user) { create(:user) }
   let(:job) { user.job_applications.create!(company: "Acme") }
 
+  describe "the body" do
+    # The tag and the timestamp are a whole fact on their own. Requiring words
+    # as well is what put "Applied." underneath a chip already saying APPLIED.
+    it "is optional once the note carries a tag" do
+      note = job.notes.create!(tag: :applied, occurred_at: 1.day.ago)
+
+      expect(note.body).to be_nil
+      expect(note.tag_label).to eq("Applied")
+    end
+
+    # An untagged note IS its words. Without them there is nothing there.
+    it "is required for an untagged note" do
+      note = job.notes.new(tag: :note)
+
+      expect(note).not_to be_valid
+      expect(note.errors[:body]).to be_present
+    end
+
+    it "stores blank as nothing rather than an empty string" do
+      note = job.notes.create!(tag: :interview, body: "   ")
+
+      expect(note.body).to be_nil
+    end
+  end
+
   describe "defaults" do
     it "stamps occurred_at with now when nobody said" do
       note = job.notes.create!(body: "Applied.")
@@ -160,6 +185,12 @@ RSpec.describe JobNote do
       note.destroy!
 
       expect(AgendaItem.count).to be_zero
+    end
+
+    it "carries no calendar notes when the note had no body" do
+      note = job.notes.create!(tag: :interview, follow_up_at: 3.days.from_now)
+
+      expect(AgendaItem.find(note.reload.agenda_item_id).notes).to be_nil
     end
 
     it "writes nothing when there is no follow-up" do

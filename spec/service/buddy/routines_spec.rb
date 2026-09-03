@@ -112,7 +112,9 @@ RSpec.describe "Buddy routines" do
       client = turn!("do the morning thing", [run_call("Morning Sweep")])
 
       expect(chips).to be_empty
-      output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
+      # Across every call, not the last one: a turn that runs nothing gets a
+      # second attempt built fresh from the thread. See Turn#start_over?.
+      output = JSON.parse(client.calls.flat_map(&:input).select { |i| i[:type] == :function_call_output }.last[:output])
       expect(output["status"]).to eq("failed")
       expect(output["error"]).to match(/no routine called/i)
     end
@@ -123,7 +125,7 @@ RSpec.describe "Buddy routines" do
       client = turn!("prep the printer", [run_call("prep printer")])
 
       expect(chips).to be_empty
-      output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
+      output = JSON.parse(client.calls.flat_map(&:input).select { |i| i[:type] == :function_call_output }.last[:output])
       expect(output["error"]).to match(/no routine called/i)
     end
 
@@ -250,7 +252,7 @@ RSpec.describe "Buddy routines" do
     it "tells the model why, instead of running none of it quietly" do
       client = turn!("water cup", [run_call("Water Cup")])
 
-      output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
+      output = JSON.parse(client.calls.flat_map(&:input).select { |i| i[:type] == :function_call_output }.last[:output])
       expect(output["status"]).to eq("failed")
       expect(output["error"]).to match(/no chore matching/i)
     end
@@ -324,7 +326,7 @@ RSpec.describe "Buddy routines" do
     it "tells the model the held step happens on its own, so it won't offer it" do
       client = turn!("prep my printer", [run_call("Prep Printer")])
 
-      output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
+      output = JSON.parse(client.calls.flat_map(&:input).select { |i| i[:type] == :function_call_output }.last[:output])
       expect(output["status"]).to eq("waiting")
     end
   end
@@ -398,7 +400,7 @@ RSpec.describe "Buddy routines" do
       client = turn!("save this", [save_call("Nope", [{ name: "message_partner" }])])
 
       expect(user.buddy_routines.count).to eq(0)
-      output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
+      output = JSON.parse(client.calls.flat_map(&:input).select { |i| i[:type] == :function_call_output }.last[:output])
       expect(output["error"]).to match(/missing required arg/i)
     end
 
@@ -412,7 +414,7 @@ RSpec.describe "Buddy routines" do
       ])
 
       expect(user.buddy_routines.count).to eq(0)
-      output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
+      output = JSON.parse(client.calls.flat_map(&:input).select { |i| i[:type] == :function_call_output }.last[:output])
       expect(output["error"]).to match(/no chore matching/i)
     end
 
@@ -447,7 +449,7 @@ RSpec.describe "Buddy routines" do
       ])
 
       expect(user.buddy_routines.count).to eq(0)
-      output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
+      output = JSON.parse(client.calls.flat_map(&:input).select { |i| i[:type] == :function_call_output }.last[:output])
       expect(output["error"]).to match(/no tool called/i)
     end
 
@@ -457,7 +459,7 @@ RSpec.describe "Buddy routines" do
       ])
 
       expect(user.buddy_routines.count).to eq(0)
-      output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
+      output = JSON.parse(client.calls.flat_map(&:input).select { |i| i[:type] == :function_call_output }.last[:output])
       expect(output["error"]).to match(/missing required arg/i)
     end
 
@@ -467,7 +469,7 @@ RSpec.describe "Buddy routines" do
       ])
 
       expect(user.buddy_routines.count).to eq(0)
-      output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
+      output = JSON.parse(client.calls.flat_map(&:input).select { |i| i[:type] == :function_call_output }.last[:output])
       expect(output["error"]).to match(/can't be saved in a routine/i)
     end
   end
@@ -536,7 +538,7 @@ RSpec.describe "Buddy routines" do
       client = turn!("save that", [capture_call("Nightly", 2)])
 
       expect(user.buddy_routines.count).to eq(0)
-      output = JSON.parse(client.calls.last.input.select { |i| i[:type] == :function_call_output }.last[:output])
+      output = JSON.parse(client.calls.flat_map(&:input).select { |i| i[:type] == :function_call_output }.last[:output])
       expect(output["error"]).to match(/can't find anything/i)
     end
 

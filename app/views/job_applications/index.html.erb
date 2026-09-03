@@ -40,7 +40,11 @@
                     <%= note.follow_up_at.strftime("%b %-d") %>
                   </span>
                   <%= link_to note.job_application.company, interview_path(note.job_application) %>
-                  <span class="field-hint"><%= truncate(note.body, length: 70) %></span>
+                  <%# A follow-up usually has words on it; when it doesn't, its
+                     tag is what there is to say. %>
+                  <span class="field-hint">
+                    <%= note.body.present? ? truncate(note.body, length: 70) : note.tag_label %>
+                  </span>
                 </li>
               <% end %>
             </ul>
@@ -127,9 +131,27 @@
           <% end %>
         </details>
 
+        <%# Ranked, not just filtered: the company you typed comes first even when
+           something touched more recently mentions it in a note. Carries the
+           status chip along so the two narrow together. %>
+        <form class="basic interview-search" method="get" action="<%= interviews_path %>">
+          <% if @filter != "live" %>
+            <input type="hidden" name="status" value="<%= @filter %>">
+          <% end %>
+          <input type="search" name="q" value="<%= @query %>"
+                 placeholder="Search companies, notes, people, links…"
+                 autocomplete="off" data-1p-ignore="true" data-lpignore="true">
+          <button type="submit">Search</button>
+          <% if @query.present? %>
+            <span class="interview-search-count"><%= pluralize(@jobs.size, "match") %></span>
+            <%= link_to "clear", interviews_path(status: (@filter unless @filter == "live")),
+                  class: "interview-search-clear" %>
+          <% end %>
+        </form>
+
         <div class="interview-filters">
           <% filters.each do |filter| %>
-            <%= link_to interviews_path(status: (filter[:key] unless filter[:key] == "live")),
+            <%= link_to interviews_path(status: (filter[:key] unless filter[:key] == "live"), q: @query.presence),
                   class: "interview-chip #{"is-on" if @filter == filter[:key]}" do %>
               <%= filter[:label] %> <span class="chip-count"><%= filter[:count] %></span>
             <% end %>
@@ -138,11 +160,13 @@
 
         <% if @jobs.empty? %>
           <div class="interview-empty">
-            Nothing here yet.
-            <% if @filter != "all" && @counts.values.sum.positive? %>
-              Try <%= link_to "all applications", interviews_path(status: :all) %>.
+            <% if @query.present? %>
+              Nothing matches &ldquo;<%= @query %>&rdquo;<%= " among #{@filter} applications" unless @filter == "live" %>.
+              <%= link_to "Search them all", interviews_path(q: @query, status: :all) %>.
+            <% elsif @filter != "all" && @counts.values.sum.positive? %>
+              Nothing here yet. Try <%= link_to "all applications", interviews_path(status: :all) %>.
             <% else %>
-              Log the first one above.
+              Nothing here yet. Log the first one above.
             <% end %>
           </div>
         <% else %>

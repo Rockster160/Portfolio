@@ -16,7 +16,9 @@
     <% end %>
   </div>
 
-  <div class="note-body"><%= simple_format(note.body) %></div>
+  <% if note.body.present? %>
+    <div class="note-body"><%= simple_format(note.body) %></div>
+  <% end %>
 
   <% if note.url.present? %>
     <a class="note-link" href="<%= note.url %>" target="_blank" rel="noopener"><%= note.url %></a>

@@ -538,7 +538,7 @@ RSpec.describe "Buddy commands that named a time" do
     it "tells the model the follow-up is queued, not done" do
       _message, client = move_then_tell
 
-      outputs = client.calls.last.input.select { |i| i[:type] == :function_call_output }
+      outputs = client.calls.flat_map(&:input).select { |i| i[:type] == :function_call_output }
       queued  = JSON.parse(outputs.find { |o| o[:call_id] == "c2" }[:output])
 
       expect(queued["status"]).to eq("queued")
@@ -618,8 +618,12 @@ RSpec.describe "Buddy commands that named a time" do
     end
 
     # What the model was told about the call it made.
+    #
+    # Across every call rather than the last one: a turn that ends with nothing
+    # run gets a second attempt, and that attempt is built fresh from the
+    # thread, so the outputs are not in its input. See Turn#start_over?.
     def output_for(client, call_id)
-      outputs = client.calls.last.input.select { |i| i[:type] == :function_call_output }
+      outputs = client.calls.flat_map(&:input).select { |i| i[:type] == :function_call_output }
       JSON.parse(outputs.find { |o| o[:call_id] == call_id }[:output])
     end
 

@@ -3,7 +3,7 @@
 # Table name: job_notes
 #
 #  id                 :bigint           not null, primary key
-#  body               :text             not null
+#  body               :text
 #  duration_minutes   :integer
 #  follow_up_at       :datetime
 #  occurred_at        :datetime         not null
@@ -59,7 +59,12 @@ class JobNote < ApplicationRecord
 
   before_validation :normalize_fields
 
-  validates :body, presence: true, length: { maximum: MAX_BODY }
+  # An untagged note IS its words, so it needs some. Every other tag already
+  # says what happened — "logged an interview on the 14th" is a whole fact —
+  # and demanding a sentence beside it is what produced notes reading "Applied."
+  # underneath a chip reading APPLIED.
+  validates :body, presence: true, if: :note?
+  validates :body, length: { maximum: MAX_BODY }
   validates :occurred_at, presence: true
   validates :source, :spoke_to, length: { maximum: 120 }
   validates :url, length: { maximum: 2_000 }
@@ -114,7 +119,7 @@ class JobNote < ApplicationRecord
 
   def normalize_fields
     self.occurred_at ||= Time.current
-    self.body     = body.to_s.strip
+    self.body     = body.to_s.strip.presence
     self.source   = source.to_s.strip.presence
     self.url      = url.to_s.strip.presence
     self.spoke_to = spoke_to.to_s.strip.presence
@@ -158,7 +163,7 @@ class JobNote < ApplicationRecord
     {
       name:     "Follow up: #{job_application.company}",
       start_at: follow_up_at,
-      notes:    body.to_s.truncate(500),
+      notes:    body.to_s.truncate(500).presence,
       color:    job_application.color,
     }
   end

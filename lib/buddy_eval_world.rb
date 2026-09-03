@@ -340,6 +340,18 @@ class BuddyEvalWorld
       )
     }
 
+    # Something to MOVE, sitting on a date nobody is going to name. Prod 5333
+    # asked to move it "to the 14th" and the only date in that sentence is the
+    # destination, so the day it is currently on has to be a different one or
+    # the probe can't tell a right hint from a wrong one.
+    reuse(upcoming.detect { |item| item.name.to_s.match?(/plunge/i) }) {
+      on = [4.days.from_now, 5.days.from_now].detect { |t| t.to_date.day != 14 }
+      AgendaItem.create!(
+        agenda: agenda, kind: :event, name: "Plunge with Wil",
+        start_at: on.change(hour: 15), end_at: on.change(hour: 17)
+      )
+    }
+
     # A REPEATING one, for the series probes. MATERIALIZE_WINDOW is 30 hours,
     # so most of its occurrences exist only as the rule - which is the whole
     # point of it being here. Its items are `dependent: :destroy`, so the

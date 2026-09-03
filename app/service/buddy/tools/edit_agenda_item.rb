@@ -60,7 +60,7 @@ Buddy::Tools.register(
   feature:     :agenda,
   args:        {
     item:      { type: :string,       required: true,  description: "Fuzzy title of the item to edit" },
-    hint_date: { type: :string,       required: false, description: "Date hint (YYYY-MM-DD) for disambiguation" },
+    hint_date: { type: :string,       required: false, description: "YYYY-MM-DD, the date the item is on NOW, only to tell two of the same name apart. NEVER the date you are moving it to - that goes in `at`. Leave it out if you aren't sure where the item currently sits" },
     title:     { type: :string,       required: false, description: "New title" },
     at:        { type: :iso_time,     required: false, description: "New local wall-clock START, 24-hour. Moving something on today's calendar puts it AHEAD of the current time. If they said LEAVE, use `leave_at` instead" },
     leave_at:  { type: :iso_time,     required: false, description: "The time they want to LEAVE, 24-hour local. The start is worked back from the item's own drive time and arrive-early minutes. Never pass this together with `at`" },

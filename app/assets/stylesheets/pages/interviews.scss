@@ -84,6 +84,35 @@
     }
   }
 
+  // ---- Search ----------------------------------------------------------
+  .interview-search {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+
+    input[type="search"] {
+      flex: 1;
+      min-width: 200px;
+      margin: 0;
+    }
+
+    button {
+      margin: 0;
+    }
+  }
+
+  .interview-search-count {
+    color: var(--iv-muted);
+    font-size: 12px;
+  }
+
+  .interview-search-clear {
+    color: var(--iv-muted);
+    font-size: 12px;
+  }
+
   // ---- Filters ---------------------------------------------------------
   .interview-filters {
     display: flex;

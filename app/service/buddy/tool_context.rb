@@ -357,6 +357,28 @@ module Buddy
       # one of the two people, so scoping to ownership meant the other one could
       # never edit anything on it — including something they'd just moved there.
       agendas = (editable ? user.editable_agendas : user.accessible_agendas).pluck(:id)
+      item = agenda_item_on(agendas, needle, title, hint_date)
+      return item if item || hint_date.blank?
+
+      # A DATE HINT IS A HINT. Narrowing to nothing means the date was wrong,
+      # not that the thing doesn't exist, so the lookup runs again without it
+      # rather than reporting "no agenda item matching X" over a row sitting
+      # right there.
+      #
+      # The date that is wrong is usually the one they SAID: "move the plunge
+      # with Wil to the 14th" is a request whose only date is the destination,
+      # and passing that as the hint asks for an item already on a day it is
+      # being moved off. Prod 5333 answered it with nothing done. The tool's
+      # own argument now says which date it wants, and this is the half that
+      # doesn't depend on the model reading it.
+      #
+      # Safe because the second pass is the same lookup with one filter fewer:
+      # if it now matches two different things, `ambiguous_agenda_item!` asks,
+      # exactly as it would have without a hint at all.
+      agenda_item_on(agendas, needle, title, nil)
+    end
+
+    def agenda_item_on(agendas, needle, title, hint_date)
       scope = AgendaItem.where(agenda_id: agendas)
       scope = scope.where("LOWER(name) LIKE ?", "%#{needle}%")
       if hint_date.present?

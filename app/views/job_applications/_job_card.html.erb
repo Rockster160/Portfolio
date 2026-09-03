@@ -17,10 +17,15 @@
     <span class="status-pill"><%= job.status.humanize %></span>
   </div>
 
+  <%# Chip, then whatever was actually written. A tagged note often has nothing
+     beside the tag, and printing an empty body left the chip stranded next to
+     its own label repeated as a sentence. %>
   <% if latest.present? %>
     <div class="card-latest">
       <span class="note-tag note-tag-<%= latest.tag %>"><%= latest.tag_label %></span>
-      <%= truncate(latest.body, length: 110) %>
+      <% if latest.body.present? %>
+        <%= truncate(latest.body, length: 110) %>
+      <% end %>
     </div>
   <% end %>
 
