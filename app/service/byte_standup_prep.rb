@@ -8,22 +8,19 @@
 # purpose — but half of what gets said in a standup is work you did and stopped
 # thinking about the moment it merged.
 #
-# Two threads are involved and they do different jobs:
+# The brief is read in ONE place, the primary buddy thread, and that is the only
+# place it should ever turn up.
 #
-#   "Standup Prep" (mode: claude)  the working session. Every tool call, every
-#                                  dead end, the transcript. Nobody reads it on
-#                                  an ordinary morning; it's where you look when
-#                                  the report says something wrong.
-#   the PRIMARY buddy thread       where the report itself lands, via
-#                                  #forward!, because that's where everything
-#                                  nobody asked for lands (the briefing, a
-#                                  reminder, a watch) and it's what the person
-#                                  actually has open at 9am.
+# It can't be written there directly: a buddy thread is a GPT turn in Rails, and
+# the Mac only ever runs `claude -p` for a claude-mode one. So there is a second
+# thread, and it is plumbing rather than a place — it exists because that is the
+# only handle on a local Claude session, it is created ARCHIVED so it stays out
+# of the list and out of the unread count, and the prompt into it is `hidden`.
+# Rails carries the finished text across when it settles
+# (WebhooksController#byte_update -> forward!), which is what the person reads.
 #
-# The report can't be written straight into the primary thread: a buddy thread
-# is a GPT turn, and the Mac only ever runs `claude -p` for a claude-mode one.
-# So the session runs in its own thread and Rails carries the finished text
-# across when it settles (WebhooksController#byte_update -> forward!).
+# Unarchive it when the brief says something wrong and you want the transcript —
+# every tool call and every dead end is in there.
 #
 # READ-ONLY, and enforced by the machine rather than by the prompt: the
 # conversation sits in `permission_mode: "read"`, and the Mac's PreToolUse hook
@@ -67,20 +64,26 @@ module ByteStandupPrep
     user.byte_conversations.create!(
       name:            NAME,
       mode:            :claude,
+      archived:        true,
       last_message_at: Time.current,
       metadata:        base_metadata,
     )
   end
 
-  # Reasserted every run, and `permission_mode` is the reason why. The pwd bar's
-  # toggle only knows two states — it reads anything that isn't "auto" as "ask"
-  # and writes back one of those two — so a single tap on this thread would
-  # quietly downgrade it to a mode that can be widened by an allow rule. Cheaper
-  # to write it again each morning than to make the toggle three-state for a
-  # thread nobody is meant to be tapping.
+  # Reasserted every run. Two of these matter:
+  #
+  # `permission_mode`, because the pwd bar's toggle only knows two states — it
+  # reads anything that isn't "auto" as "ask" and writes back one of those two —
+  # so a single tap would quietly downgrade this to a mode an allow rule can
+  # widen.
+  #
+  # `archived`, because this thread is machinery and the person has a place they
+  # read the brief. Unarchived it sits in the list with an unread count for a
+  # report they have already read somewhere else.
   def sync!(convo)
     wanted = convo.metadata.to_h.merge(base_metadata)
     convo.update!(mode: :claude) unless convo.claude?
+    convo.update!(archived: true) unless convo.archived?
     convo.update!(metadata: wanted) if convo.metadata.to_h != wanted
     convo
   end

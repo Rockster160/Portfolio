@@ -154,15 +154,19 @@ RSpec.describe ByteDailyAudit do
 
       # The whole read-only guarantee rests on this one value, and it's togglable
       # from the pwd bar - an audit left in "auto" overnight can rewrite the app.
-      it "sits in ask mode so a Write has to be tapped" do
-        expect(described_class.conversation(user).metadata["permission_mode"]).to eq("ask")
+      # "ask" is not the safe answer either: it consults `permissions.allow` and
+      # nothing else, so it is as wide as whatever has ever been tapped "always
+      # allow" - and it stops dead on anything that hasn't, at 2am, for ten
+      # minutes, with nobody there to tap it.
+      it "sits in read mode, which nothing can widen and which never asks" do
+        expect(described_class.conversation(user).metadata["permission_mode"]).to eq("read")
       end
 
-      it "reasserts ask mode if the thread was flipped to auto by hand" do
+      it "reasserts read mode if the thread was flipped by hand" do
         convo = described_class.conversation(user)
         convo.update!(metadata: convo.metadata.merge("permission_mode" => "auto"))
 
-        expect(described_class.conversation(user).metadata["permission_mode"]).to eq("ask")
+        expect(described_class.conversation(user).metadata["permission_mode"]).to eq("read")
       end
 
       it "reuses the one thread rather than making a new one each day" do

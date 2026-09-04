@@ -65,6 +65,34 @@ RSpec.describe "pretooluse_byte.rb read mode" do
       expect(decide("Grep", { "pattern" => "def foo" })).to eq("allow")
       expect(decide("Glob", { "pattern" => "**/*.rb" })).to eq("allow")
     end
+
+    # The daily audit's whole method. A `>` inside the SQL is a comparison, and
+    # reading it as a redirect refused most of the queries it runs.
+    it "allows a prod query whose SQL contains the shell's own metacharacters" do
+      expect(bash(%(bash .claude/prod-query.sh "COPY (SELECT id FROM byte_messages WHERE created_at > now() - interval '1 day'; ) TO STDOUT"))).to eq("allow")
+    end
+
+    # It reads production in loops — splitting on `;` turns the keywords into
+    # segments of their own, and the whole loop used to die on the word `do`.
+    it "allows a shell loop whose body is all reads" do
+      expect(bash("for id in 5010 5015; do echo \"== $id\"; bash .claude/prod-query.sh \"COPY (SELECT body FROM byte_messages WHERE id=$id) TO STDOUT\"; done")).to eq("allow")
+    end
+
+    it "allows the pipelines a report is actually built out of" do
+      expect(bash("sed -n '930,1010p' app/service/buddy/context.rb")).to eq("allow")
+      expect(bash("awk -F',' '{print $4}' /tmp/lt.csv | sort | uniq -c")).to eq("allow")
+      expect(bash("TZ=America/Denver date -r 1788451191 '+%Y-%m-%d %H:%M'")).to eq("allow")
+    end
+
+    # A report accumulates — a CSV out of production, a list of ids to grep back
+    # through. With nowhere to put one the audit re-ran the same query instead.
+    it "allows a scratch file, and only under a scratch root" do
+      expect(bash("bash .claude/prod-query.sh \"COPY (SELECT 1) TO STDOUT\" > /tmp/lt.csv")).to eq("allow")
+      expect(decide("Write", { "file_path" => "/tmp/lt.csv", "content" => "x" })).to eq("allow")
+      expect(decide("Write", { "file_path" => "/private/tmp/x/y.csv", "content" => "x" })).to eq("allow")
+      expect(decide("Write", { "file_path" => "/Users/zoro/code/Portfolio/app/x.rb", "content" => "x" })).to eq("deny")
+      expect(decide("Edit", { "file_path" => "/Users/zoro/code/Portfolio/Gemfile" })).to eq("deny")
+    end
   end
 
   describe "what it refuses" do
@@ -99,8 +127,8 @@ RSpec.describe "pretooluse_byte.rb read mode" do
       expect(bash("git commit -am wip")).to eq("deny")
       expect(bash("git push origin main")).to eq("deny")
       expect(bash("rm -rf /tmp/x")).to eq("deny")
-      expect(decide("Write", { "file_path" => "/tmp/x", "content" => "y" })).to eq("deny")
-      expect(decide("Edit", { "file_path" => "/tmp/x" })).to eq("deny")
+      expect(decide("Write", { "file_path" => "/Users/zoro/code/ocs-backend/x.rb", "content" => "y" })).to eq("deny")
+      expect(decide("Edit", { "file_path" => "/Users/zoro/code/ocs-backend/x.rb" })).to eq("deny")
     end
 
     # A prefix match only ever looks at the front of the string, so an allowed
@@ -111,22 +139,38 @@ RSpec.describe "pretooluse_byte.rb read mode" do
       expect(bash("git status | xargs rm")).to eq("deny")
     end
 
-    it "refuses a redirect, which is a write however the line starts" do
-      expect(bash("git log > /tmp/out.txt")).to eq("deny")
+    it "refuses a redirect that lands outside a scratch root" do
+      expect(bash("git log > ~/notes.txt")).to eq("deny")
       expect(bash("echo hi >> ~/.zshrc")).to eq("deny")
+      expect(bash("git log > out.txt")).to eq("deny")
     end
 
     it "refuses command substitution, which hides the real command" do
       expect(bash("ls $(git checkout main)")).to eq("deny")
       expect(bash("ls `rm -rf /tmp/x`")).to eq("deny")
+      expect(bash("cat <(git stash)")).to eq("deny")
     end
 
-    # Both take a program that can open a file for writing, so allowing them
-    # would put the guarantee inside an argument parser.
-    it "refuses the tools whose arguments are programs" do
-      expect(bash("awk '{print $1}' file")).to eq("deny")
-      expect(bash("sed -n 1,5p file")).to eq("deny")
-      expect(bash("perl -i -pe s/a/b/ file")).to eq("deny")
+    # sed and awk are allowed because a report is built out of pipelines, so the
+    # two ways either one writes by accident are refused by name. A `>` inside
+    # an awk program is invisible to the scan — it's inside quotes — so `>`
+    # anywhere in one of these is refused rather than only an unquoted one.
+    it "refuses the write forms of the tools whose arguments are programs" do
+      expect(bash("sed -i '' 's/a/b/' file")).to eq("deny")
+      expect(bash("sed -i.bak s/a/b/ file")).to eq("deny")
+      expect(bash("awk '{print > \"/Users/zoro/.zshrc\"}' file")).to eq("deny")
+      expect(bash("perl -pe s/a/b/ file")).to eq("deny")
+    end
+
+    # An unclosed quote means the scan has lost track of what is text and what
+    # is shell, so it stops being able to answer the question at all.
+    it "refuses a command it cannot parse" do
+      expect(bash("grep 'unterminated /tmp/x")).to eq("deny")
+    end
+
+    it "refuses a loop whose body is not a read" do
+      expect(bash("for f in a b; do rm $f; done")).to eq("deny")
+      expect(bash("if true; then git checkout main; fi")).to eq("deny")
     end
 
     it "still refuses a secret it would otherwise be able to read" do

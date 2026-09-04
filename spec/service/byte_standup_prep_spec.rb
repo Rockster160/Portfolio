@@ -73,6 +73,27 @@ RSpec.describe ByteStandupPrep do
       expect(described_class.conversation(user).metadata["permission_mode"]).to eq("read")
     end
 
+    # The brief is read in the primary thread. This one is the machinery that
+    # produces it, and unarchived it sits in the list carrying an unread count
+    # for a report the person has already read somewhere else.
+    it "stays out of the thread list" do
+      expect(described_class.conversation(user)).to be_archived
+    end
+
+    it "puts it back when the thread has been unarchived" do
+      described_class.conversation(user).update!(archived: false)
+
+      expect(described_class.conversation(user)).to be_archived
+    end
+
+    # `for_self_initiated` reads `active`, so an archived thread can never
+    # become the place a briefing or a reminder lands.
+    it "is not somewhere a self-initiated message could land" do
+      described_class.conversation(user)
+
+      expect(ByteConversation.for_self_initiated(user)&.name).not_to eq(described_class::NAME)
+    end
+
     it "reuses the one thread rather than making a new one each morning" do
       first = described_class.conversation(user)
 

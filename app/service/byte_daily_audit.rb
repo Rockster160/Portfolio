@@ -9,19 +9,20 @@
 # to it turns the report into a working session on the spot.
 #
 # READ-ONLY is enforced by the machine, not by the prompt. The conversation sits
-# in `permission_mode: "ask"`, so the Mac's PreToolUse hook checks each call
-# against the project's `permissions.allow` list and turns anything else into an
-# action-request card. Reads, greps and prod-query run unattended; a Write or an
-# Edit stops dead until it's tapped. `prodExec`, `git commit`, `git push` and
-# `cap production` are refused by that hook in either mode.
+# in `permission_mode: "read"`, and the Mac's PreToolUse hook answers every call
+# itself from a fixed list — reads, greps, shell pipelines, read-only git/gh,
+# `prod-query.sh`, and a scratch file under /tmp — and DENIES everything else
+# outright. It never posts an action-request card, because there is nobody in
+# front of a 2am run to tap one.
 #
-# That only became true on 2026-08-11. The hook's `load_allow_patterns`
-# documented reading the PROJECT's `.claude/settings.local.json` and never did
-# it — it opened the two global files only — so every in-project "always allow"
-# was invisible and `ask` prompted for things that were plainly already
-# permitted. Fixing it took the merged list from 26 patterns to 87, which is
-# what makes an unattended read-only run possible at all. If this thread starts
-# stalling on ordinary reads again, check that first.
+# It sat in `ask` until 2026-09-04, which was never read-only and was only ever
+# quiet by accident. `ask` consults `permissions.allow` and nothing else, so it
+# was exactly as wide as whatever had been tapped "always allow" — and what had
+# accumulated was a bare `"Bash"`, a wildcard for every shell command there is.
+# Removing that (it belonged to nothing) is what made the audit start carding
+# `sed -n '1,200p'` five times a run. `read` is the answer to both halves: it
+# ignores the allow list, so nothing can widen it, and it recognises the
+# pipelines an audit is actually built out of, so nothing has to be tapped.
 module ByteDailyAudit
   module_function
 
@@ -52,8 +53,11 @@ module ByteDailyAudit
   end
 
   # Settings the audit depends on, reasserted every run. `permission_mode` is
-  # the one that matters: it's togglable from the pwd bar, and an audit left in
-  # `auto` overnight is one that can rewrite the app while nobody's looking.
+  # the one that matters: it's togglable from the pwd bar, which only knows
+  # `auto`/`ask` and writes back one of them — so a single tap leaves the next
+  # unattended run in a mode that can rewrite the app while nobody's looking.
+  # Reply in this thread and work in it by all means; the morning run puts it
+  # back.
   def sync!(convo)
     wanted = convo.metadata.to_h.merge(base_metadata)
     convo.update!(mode: :claude) unless convo.claude?
@@ -62,7 +66,7 @@ module ByteDailyAudit
   end
 
   def base_metadata
-    { "cwd" => CWD, "permission_mode" => "ask", "daily_audit" => true }
+    { "cwd" => CWD, "permission_mode" => "read", "daily_audit" => true }
   end
 
   # The last 24 hours, ending right now.
@@ -131,7 +135,7 @@ module ByteDailyAudit
     <<~TXT
       You are the daily audit for this app. Review the #{span_length(span)} from **#{stamp(span.first)}** to **#{stamp(span.last)}** (America/Denver) and write up what didn't work quite as desired. #{reach}
 
-      REPORT ONLY. Do not change any code, and do not offer to until asked. If a fix is obvious, describe it precisely enough that it could be applied in one step, and stop there. Reads, greps and prod queries are yours to run freely; a Write or an Edit will stop and wait for a tap, so don't reach for one.
+      REPORT ONLY, and enforced rather than asked: every tool call is answered by a hook against a fixed read-only list, and anything else is refused on the spot rather than queued — there is nobody awake to approve it. Reads, greps, shell pipelines and prod queries are yours to run freely, and you can leave a scratch file under `/tmp`. A Write or an Edit anywhere else is refused; do not retry one and do not ask a question. Do not change any code, and do not offer to until asked. If a fix is obvious, describe it precisely enough that it could be applied in one step, and stop there.
 
       WHERE THE DAY IS
       - `bash .claude/prod-query.sh "SQL"` is read-only and is how you reach production. Use `COPY (SELECT ... ) TO STDOUT (FORMAT csv)` for anything wide - the default table output wraps and becomes unreadable.
